@@ -1,0 +1,298 @@
+#!/usr/bin/python -i
+from helpers import *
+from numpy.random import normal, random, poisson, exponential
+
+
+recordTime = 15
+sampleRate = 1000
+pspTau = 1.0e-3
+caDecayTau = 0.2
+numCells = 100
+connectRate = 0.08
+interconnectRate = 0.00
+visibility = 0.5
+cellNoise = 1e-3
+pspStrength = 20e-3
+spontRate = 5.
+cellSize = 10.
+
+width = 256
+expTime = 0.01
+frameRate = 35
+imageNoise = 0.003
+
+
+class Cell:
+  def __init__(self):
+    global sampleRate, recordTime
+    self.spontRate = 0.
+    self.connected = False
+    self.pspStrength = 0
+    self.cells = []
+    self.spikes = []
+    self.mpot = -60e-3
+    self.visible = False
+    self.trace = zeros((sampleRate*recordTime,), dtype=float32)
+    self.caTrace = zeros((sampleRate*recordTime,), dtype=float32)
+    self.caSignal = 0.03
+
+# decide on network topology, cell properties
+
+print "Generating network..."
+cells = []
+for i in range(0, numCells):
+  cell = Cell()
+  cell.spontRate = abs(normal(loc=spontRate, scale=spontRate))
+  cell.connected = (random() < connectRate)
+  cell.visible = (random() < visibility)
+  cell.pos = (random(), random())
+  cell.pspStrength = normal(scale=pspStrength)
+  cell.caSignal = 1.0
+  cell.caDS = normal(1.03, 0.01)
+  cell.size = normal(cellSize)
+  cell.image = generateSphere(cell.size)
+  cells.append(cell)
+  
+
+for i in range(0, numCells):
+  for j in range(0, numCells):
+    if random() < interconnectRate:
+      cells[i].cells.append(cells[j])
+
+# generate list of AP times for each cell
+
+print "Generating spike trains..."
+t = 0.0
+dt = 1.0 / sampleRate
+for i in range(0, sampleRate * recordTime):
+  for c in range(0, numCells):
+    cells[c].spike = False
+    if cells[c].mpot > 0.:
+      cells[c].mpot = -90e-3
+    #cells[c].prob += (1.0 - cells[c].prob) * 100. * dt
+    cells[c].mpot += (-60e-3 - cells[c].mpot) * 100. * dt
+    cells[c].caSignal += (1.0-cells[c].caSignal) * (dt / caDecayTau) 
+    cells[c].mpot += normal(scale=cellNoise)
+    prob = (cells[c].spontRate * dt)
+    prob += (1.0-prob)  / (1.0 + exp(-4000 * (cells[c].mpot + 30e-3)))
+    if random() < prob:
+      cells[c].spikes.append(t)
+      cells[c].mpot = 20e-3
+      cells[c].caSignal *= cells[c].caDS
+      cells[c].spike = True
+    cells[c].trace[i] = cells[c].mpot
+    cells[c].caTrace[i] = cells[c].caSignal
+    
+  for c in range(0, numCells):
+    if cells[c].spike:
+      for cell in cells[c].cells:
+        cell.mpot += cells[c].pspStrength
+  t += dt
+
+# generate recording traces
+print "Generating traces..."
+
+vcTrace = zeros((2,sampleRate*recordTime), dtype=float32)
+#cameraTrace = zeros((2,sampleRate*recordTime), dtype=float32)
+image = zeros(((frameRate*recordTime) - 1, width, width), dtype=float32)
+
+t = 0.0
+dt = 1.0 / sampleRate
+v = 0
+lastShutter = 0.
+frame = 0
+intFrames = 0
+
+
+for i in range(0, sampleRate * recordTime):
+  v += - v * 100. * dt
+  v += normal(scale=cellNoise)
+  for cell in cells:
+    if cell.connected:
+      for spike in cell.spikes:
+        if spike > t-dt and spike <= t:
+          v += cell.pspStrength
+  vcTrace[0,i] = v
+  #vcTrace[1,i] = t
+  #cameraTrace[1,i] = t
+  
+  if t-lastShutter > 1.0/frameRate:
+    lastShutter = t
+    image[frame] /= intFrames
+    intFrames = 0
+    frame += 1
+  elif t-lastShutter > expTime:
+    vcTrace[1,i] = 0.0
+  elif frame < image.shape[0]:
+    vcTrace[1,i] = 1.0
+    for cell in cells:
+      if cell.visible:
+        cell.x = cell.pos[0]*(width-cell.image.shape[0])
+        cell.y = cell.pos[1]*(width-cell.image.shape[1])
+        image[frame, cell.x:cell.x+cell.image.shape[0], cell.y:cell.y+cell.image.shape[1]] += cell.image * (cell.caTrace[i]-0.99)
+        intFrames += 1
+  t += dt
+  
+vcTrace[1,0] = 0.0
+  
+if frame < image.shape[0]:
+  image[frame] /= intFrames
+  
+bg = blur(abs(normal(size=(1, image.shape[1], image.shape[2]))), [0, 15, 15])
+bg -= bg.min() * 0.9
+image2 = (blur(image, (0, 2, 2)) + 1.) * bg
+image2 *= normal(loc=1.0, scale=imageNoise, size=image.shape)
+
+imgWin = showImg(image2, title="Raw data")
+images[0].trace()
+vcPlot = showPlot(vcTrace[0], title="Physiology")
+vcPlot.drawData(vcTrace[1] * 0.5 * vcTrace[0].max())
+
+# circle connected neurons
+print "Cell connections:"
+conCells = []
+for cell in cells:
+  if cell.connected:
+    if cell.visible:
+      if cell.pspStrength > 0:
+        print "  %d: visible excitatory at (%f, %f), strength=%f, SR=%f" % (len(conCells), cell.x, cell.y, cell.pspStrength, cell.spontRate)
+        conCells.append(cell)
+        pen = QtGui.QPen(QtGui.QColor(100, 255, 100))
+      else:
+        print "  %d: visible inhibitory at (%f, %f), strength=%f, SR=%f" % (len(conCells), cell.x, cell.y, cell.pspStrength, cell.spontRate)
+        conCells.append(cell)
+        pen = QtGui.QPen(QtGui.QColor(100, 100, 255))
+      e = imgWin.scene.addEllipse(cell.x, cell.y, cell.image.shape[0], cell.image.shape[1], pen)
+      e.setZValue(1)
+    else:
+      if cell.pspStrength > 0:
+        print "  %d: invisible excitatory, strength=%f, SR=%f" % (len(conCells), cell.pspStrength, cell.spontRate)
+        conCells.append(cell)
+      else:
+        print "  %d: invisible inhibitory, strength=%f, SR=%f" % (len(conCells), cell.pspStrength, cell.spontRate)
+        conCells.append(cell)
+
+
+
+
+
+
+
+
+
+####################################### analyze ########################################
+
+
+print "Analyzing data..."
+now = time.time()
+
+## Find triggers in phys data
+
+dvc = vcTrace[0, 1:] - vcTrace[0, :-1]
+print "VC trace derivative: %0.3f" % (time.time() - now); now = time.time()
+(exTrigs, inTrigs) = findTriggers(dvc, 40)
+print "VC trigger find: %0.3f" % (time.time() - now); now = time.time()
+
+
+# Draw selected triggers
+for t in exTrigs:
+  vcPlot.scene.addLine(t, vcTrace[0].max(), t, vcTrace[0].max() * 0.9, QtGui.QPen(QtGui.QColor(100, 255, 100)))
+for t in inTrigs:
+  vcPlot.scene.addLine(t, vcTrace[0].min(), t, vcTrace[0].min() * 0.9, QtGui.QPen(QtGui.QColor(100, 100, 255)))
+print "draw triggers: %0.3f" % (time.time() - now); now = time.time()
+
+
+
+## Convert triggers to frame numbers
+frames = triggers(vcTrace[1], 0.5)
+exPtr = 0
+inPtr = 0
+exTrigs2 = []
+inTrigs2 = []
+for i in range(0, len(frames)):
+  while exPtr < len(exTrigs) and frames[i] > exTrigs[exPtr]:
+    exTrigs2.append(i)
+    exPtr += 1
+  while inPtr < len(inTrigs) and frames[i] > inTrigs[inPtr]:
+    inTrigs2.append(i)
+    inPtr += 1
+print "convert triggers->frame numbers: %0.3f" % (time.time() - now); now = time.time()
+#print "Excitatory triggered frames: ", exTrigs2
+#print "Inhibitory triggered frames: ", inTrigs2
+
+
+## clean up imaging
+imgMin = image2.min(axis=0)
+print "Normalize image data [minimum_filter]: %0.3f" % (time.time() - now); now = time.time()
+imgMin.shape = (1,) + imgMin.shape
+norm = image2 / imgMin
+print "Normalize image data [divide]: %0.3f" % (time.time() - now); now = time.time()
+
+## trigger-average
+exAverage = triggerStack(norm, exTrigs2, axis=0, window=[-1,4]).mean(axis=0)
+inAverage = triggerStack(norm, inTrigs2, axis=0, window=[-1,4]).mean(axis=0)
+print "Triggered averages: %0.3f" % (time.time() - now); now = time.time()
+
+#showImg(norm, title="Normalized image")
+now = time.time()
+#showImg(exAverage[2]-exAverage[0], title="Predicted excitatory connections")
+#showImg(inAverage[2]-inAverage[0], title="Predicted inhibitory connections")
+showImg(make3Color(g=exAverage[2]-exAverage[0], b=inAverage[2]-inAverage[0]), title="Method 1 prediction")
+print "Calculate and display predicted connections: %0.3f" % (time.time() - now); now = time.time()
+
+
+
+
+
+
+######################################## Analysis Method 2 #####################
+
+
+# scale down phys. data
+physScale = 0.5
+tracez = zoom(vcTrace[0], physScale)
+
+# scale down calcium signal image
+normz = zoom(norm, (1.0, 0.25, 0.25))
+#showImg(normz, title="Scaled/Normalized")
+
+# Deconvolve with exponential decay template
+ex = fromfunction(lambda x: exp(-x*caDecayTau), (100,))
+dec = imgDeconvolve(normz, ex)[0][1:]
+
+# Subtract out minimum from each pixel
+decmin = dec.min(axis=0)
+decmin.shape = (1,) + decmin.shape
+dec -= decmin
+#showImg(dec, title="Deconvolved")
+
+# generate a list of triggers for each pixel
+trigs = empty(dec.shape[1:], object)
+for i in range(0, dec.shape[1]):
+  for j in range(0, dec.shape[2]):
+    trigs[i,j] = findTriggers(dec[:,i,j], spacing=50, devs=1.0)[0]
+
+# convert triggers into times
+times = empty(dec.shape[1:], object)
+for i in range(0, dec.shape[1]):
+  for j in range(0, dec.shape[2]):
+    times[i,j] = []
+    for f in trigs[i,j]:
+      if f+1 < len(frames):
+        times[i,j].append(int(physScale * frames[f+1]))
+
+# make an image of triggered averages for each pixel
+window = [-10,40]
+trigAvg = empty((window[1]-window[0],) + dec.shape[1:])
+for i in range(0, trigAvg.shape[1]):
+  for j in range(0, trigAvg.shape[2]):
+    trigAvg[:,i,j] = triggerStack(tracez, times[i,j], window=window).mean(axis=0)
+
+showImg(trigAvg, title="Method 2 prediction")
+
+
+
+
+
+
+

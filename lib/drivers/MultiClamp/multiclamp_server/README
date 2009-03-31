@@ -1,0 +1,49 @@
+Network interface for Axon MultiClamp Commander
+Luke Campagnola <lcampagn@email.unc.edu>
+2008.01.05
+
+
+To run:
+  Start up MultiClamp Commander software first
+  run command: python multiClampServer.py [port_number]
+
+
+Communication:
+  Connect using TCP/IP from remote host and send strings looking like:
+  functionName(arg1,arg2,...)
+
+  You can test this using netcat with a command like:
+    echo "getNumDevices()" | nc hostname port
+
+  The server will always respond with a comma-separated list of values, 
+the first of which is always 1 (meaning success) or 0 (meaning failure). 
+If the first value is 0, then the second value will be a string error 
+message.
+
+  A typical session will look like:
+    getNumDevices()
+    getDeviceInfo(deviceNumber)
+    getSomeParameter(deviceNumber)
+    setSomeParameter(deviceNumber,value)
+
+  You can see the full list of requests accepted by reading server.cpp. 
+These functions are translated by the server into the ones described in 
+AxMultiClampMsg.pdf, so read there for more information.
+  
+  There are some special functions defined to hide the differences between
+MultiClamp model types:
+  
+  getPrimarySignalInfo(deviceNumber)
+  getSecondarySignalInfo(deviceNumber)
+    Returns: Signal name, 
+             gain applied to signal _before_ the SignalGain value,
+             units of signal
+    Example: 
+      To find the actual membrane potential, use
+      voltage * getPrimarySignalInfo(num)[1] * getPrimarySignalGain(num)[0]
+
+  setPrimarySignalByName(deviceNumber, name)
+  setSecondarySignalByName(deviceNumber, name)
+    Sets the signal from a string name. This is important because the
+    values used in setPrimarySignal() do not always match the actual signal.
+    The names used are the same as returned by getPrimarySignalInfo()

@@ -1,0 +1,271 @@
+# -*- coding: utf-8 -*-
+from lib.drivers.pvcam import PVCam as PVCDriver
+from lib.devices.Device import *
+from PyQt4 import QtCore
+import time, sys, traceback
+
+class PVCam(Device):
+    def __init__(self, dm, config, name):
+        self.dm = dm
+        self.name = name
+        self.pvc = PVCDriver
+        self.config = config
+        self.cam = None
+        self.acqThread = AcquireThread(self)
+        print "Created PVCam device. Cameras are:", self.pvc.listCameras()
+    
+    def quit(self):
+        if self.acqThread.isRunning():
+            self.stopAcquire()
+            self.acqThread.wait()
+        
+        
+        
+    def devName(self):
+        return self.name
+    
+    def getCamera(self):
+        if self.cam is None:
+            cams = self.pvc.listCameras()
+            if len(cams) < 1:
+                raise Exception('No cameras found by pvcam driver')
+            
+            if self.config['serial'] is None:  ## Just pick first camera
+                ind = 0
+            else:
+                if self.config['serial'] in cams:
+                    ind = cams.index(self.config['serial'])
+                else:
+                    raise Exception('Can not find pvcam camera "%s"' % str(self.config['serial']))
+            self.cam = self.pvc.getCamera(cams[ind])
+        return self.cam
+    
+    def createTask(self, cmd):
+        return Task(self, cmd)
+    
+    def getTriggerChannel(self):
+        return self.config['triggerChannel'][1]
+        
+    def startAcquire(self):
+        self.acqThread.start()
+        
+    def stopAcquire(self, block=True):
+        self.acqThread.stop(block)
+        
+class Task(DeviceTask):
+    def __init__(self, dev, cmd):
+        self.dev = dev
+        self.cmd = cmd
+        self.recordHandle = None
+        
+        
+    def configure(self, tasks, startOrder):
+        ## If we are triggering, stop acquisition now and request that we start after the DAQ
+        name = self.dev.devName()
+        if self.cmd['trigger']:
+            #print "Stopping camera before task start.."
+            self.dev.stopAcquire(block=True)  
+            #print "done"
+            #print "running:", self.dev.acqThread.isRunning()
+            daqName = self.dev.config['triggerChannel'][0]
+            startOrder.remove(name)
+            startOrder.insert(startOrder.index(daqName)+1, name)
+            
+        
+        ## If we are not triggering, request that we start before everyone else
+        ## (no need to stop, we will simply record frames as they are collected)
+        else:
+            startOrder.remove(name)
+            startOrder.insert(0, name)
+            
+        
+    def createChannels(self, daqTask):
+        ## Are we interested in recording the expose signal?
+        if ('recordExposeChannel' not in self.cmd) or (not self.cmd['recordExposeChannel']):
+            return
+            
+        ## Is this the correct DAQ device to record the expose signal? 
+        if daqTask.devName() != self.dev.config['exposeChannel'][0]:
+            return
+        
+        ## Then: create DI channel
+        daqTask.addChannel(self.dev.config['exposeChannel'][1], 'di')
+        
+        self.daqTask = daqTask
+        
+    def reserve(self):
+        pass
+        
+    def start(self):
+        ## arm recording
+        self.recordHandle = self.dev.acqThread.startRecord()
+        ## start acquisition if needed
+        self.dev.startAcquire()
+        
+    def isDone(self):
+        ## should return false if recording is required to run for a specific time.
+        return True
+        
+    def stop(self):
+        self.recordHandle.stop()
+        
+    def getResult(self):
+        
+        ## generate MeatArray of expose channel if it was recorded
+        if ('recordExposeChannel' in self.cmd) and self.cmd['recordExposeChannel']:
+            expose = self.daqTask.getData(self.dev.config['exposeChannel'][1])
+            timeVals = linspace(0, d['info']['nPts'] / d['info']['rate'], d['info']['nPts'])
+            info = [axis(name=Time, values=timeVals), d['info']]
+            expose = MetaArray(expose, info=info)
+            
+        ## generate MetaArray of images collected during recording
+        data = self.recordHandle.data()
+        arr = concatenate([atleast_3d(f[0]) for f in data])
+        times = array([f[1]['time'] for f in data])
+        times -= times[0]
+        info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), data[0][1]]
+        marr = MetaArray(arr, info=info)
+        
+        return {'frames': marr, 'expose': expose}
+        
+        
+class AcquireThread(QtCore.QThread):
+    def __init__(self, dev):
+        QtCore.QThread.__init__(self)
+        self.dev = dev
+        self.cam = self.dev.getCamera()
+        self.state = {'binning': 1, 'exposure': .01, 'region': None}
+        self.stopThread = False
+        self.lock = QtCore.QMutex()
+        self.acqBuffer = None
+        self.frameId = 0
+        self.bufferTime = 5.0
+        self.ringSize = 20
+        self.tasks = []
+    
+    def __del__(self):
+      self.cam.stop()
+    
+    def startRecord(self, maxTime=None):
+        rec = CameraTask(self, maxTime)
+        l = QtCore.QMutexLocker(self.lock)
+        self.tasks.append(rec)
+        return rec
+        
+    def removeTask(self, task):
+        l = QtCore.QMutexLocker(self.lock)
+        if task in self.tasks:
+            self.tasks.remove(task)
+    
+    def run(self):
+        #print "Starting up camera acquisition thread."
+        binning = self.state['binning']
+        exposure = self.state['exposure']
+        region = self.state['region']
+        lastFrame = None
+        lastFrameTime = None
+        self.lock.lock()
+        self.stopThread = False
+        self.lock.unlock()
+        self.fps = None
+        
+        try:
+            self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region)
+            lastFrameTime = self.dev.dm.time()  #time.clock()  # Use time.time() on Linux
+            
+            while True:
+                frame = self.cam.lastFrame()
+                now = self.dev.dm.time() #time.clock()
+                
+                ## If a new frame is available, process it and inform other threads
+                if frame is not None and frame != lastFrame:
+                    
+                    if lastFrame is not None and frame - lastFrame > 1:
+                        print "Dropped frames between %d and %d" % (lastFrame, frame)
+                        self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped frame!")
+                    lastFrame = frame
+                    
+                    ## compute FPS
+                    dt = now - lastFrameTime
+                    if dt > 0.:
+                        if self.fps is None:
+                            self.fps = 1.0/dt
+                        else:
+                            self.fps = self.fps * 0.9 + 0.1 / dt
+                    
+                    ## Build meta-info for this frame
+                    ## Use lastFrameTime because the current frame _began_ exposing when the previous frame arrived.
+                    info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region, 'fps': self.fps}
+                    
+                    lastFrameTime = now
+                    
+                    ## Inform that new frame is ready
+                    outFrame = (self.acqBuffer[frame].copy(), info)
+                    self.emit(QtCore.SIGNAL("newFrame"), outFrame)
+                    
+                    ## Lock task array before tinkering with it
+                    self.lock.lock()
+                    for t in self.tasks:
+                        t.addFrame(outFrame)
+                    self.lock.unlock()
+                        
+                    self.frameId += 1
+                time.sleep(10e-6)
+                
+                self.lock.lock()
+                if self.stopThread and frame is not None:
+                    self.lock.unlock()
+                    #print "Camera acquisition thread stopping."
+                    break
+                self.lock.unlock()
+            ## Inform that we have stopped (?)
+            #self.ui.stop()
+            self.cam.stop()
+            #print "camera stopped"
+        except:
+            try:
+                self.cam.stop()
+            except:
+                pass
+            msg = "ERROR Starting acquisition:", sys.exc_info()[0], sys.exc_info()[1]
+            print traceback.print_exception(*sys.exc_info())
+            self.emit(QtCore.SIGNAL("showMessage"), msg)
+        
+    def stop(self, block=False):
+        l = QtCore.QMutexLocker(self.lock)
+        self.stopThread = True
+        l.unlock()
+        if block:
+          self.wait()
+
+    def reset(self):
+        if self.isRunning():
+            self.stop()
+            self.wait()
+            self.start()
+
+
+class CameraTask:
+    def __init__(self, cam, maxTime=None):
+        self.cam = cam
+        self.maxTime = maxTime
+        self.lock = QtCore.QMutex()
+        self.frames = []
+        self.recording = True
+    
+    def addFrame(self, frame):
+        print "Add frame"
+        l = QtCore.QMutexLocker(self.lock)
+        self.frames.append(frame)
+        if not self.recording:
+            self.cam.removeTask(self)
+    
+    def data(self):
+        l = QtCore.QMutexLocker(self.lock)
+        return self.frames
+    
+    def stop(self):
+        print "Stop cam record"
+        l = QtCore.QMutexLocker(self.lock)
+        self.recording = False
+    

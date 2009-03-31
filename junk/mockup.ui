@@ -1,0 +1,270 @@
+<ui version="4.0" >
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow" >
+  <property name="geometry" >
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>789</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle" >
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget" />
+  <widget class="QDockWidget" name="dockWidget" >
+   <property name="floating" >
+    <bool>false</bool>
+   </property>
+   <property name="features" >
+    <set>QDockWidget::DockWidgetFeatureMask</set>
+   </property>
+   <property name="windowTitle" >
+    <string>Device0</string>
+   </property>
+   <attribute name="dockWidgetArea" >
+    <number>1</number>
+   </attribute>
+   <widget class="QWidget" name="dockWidgetContents" >
+    <layout class="QGridLayout" name="gridLayout_4" >
+     <item row="0" column="0" >
+      <widget class="QSpinBox" name="spinBox" />
+     </item>
+     <item row="0" column="1" >
+      <widget class="QSpinBox" name="spinBox_3" />
+     </item>
+     <item rowspan="2" row="0" column="2" >
+      <widget class="QTextEdit" name="textEdit" />
+     </item>
+     <item rowspan="2" row="0" column="3" >
+      <widget class="QDial" name="dial_5" />
+     </item>
+     <item rowspan="2" row="0" column="4" >
+      <widget class="QDial" name="dial_7" />
+     </item>
+     <item row="1" column="0" >
+      <widget class="QSpinBox" name="spinBox_2" />
+     </item>
+     <item row="1" column="1" >
+      <widget class="QDoubleSpinBox" name="doubleSpinBox" />
+     </item>
+     <item row="2" column="3" >
+      <widget class="QDial" name="dial_6" />
+     </item>
+     <item row="2" column="4" >
+      <widget class="QDial" name="dial_8" />
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="dockWidget_2" >
+   <property name="features" >
+    <set>QDockWidget::DockWidgetFeatureMask</set>
+   </property>
+   <property name="windowTitle" >
+    <string>Device1</string>
+   </property>
+   <attribute name="dockWidgetArea" >
+    <number>1</number>
+   </attribute>
+   <widget class="QWidget" name="dockWidgetContents_2" >
+    <layout class="QGridLayout" name="gridLayout" >
+     <item row="0" column="0" >
+      <widget class="QPushButton" name="pushButton" >
+       <property name="text" >
+        <string>PushButton</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1" >
+      <widget class="QPushButton" name="pushButton_2" >
+       <property name="text" >
+        <string>PushButton</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="2" >
+      <widget class="QPushButton" name="pushButton_3" >
+       <property name="text" >
+        <string>PushButton</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="3" colspan="2" >
+      <widget class="QPushButton" name="pushButton_4" >
+       <property name="text" >
+        <string>PushButton</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="5" >
+      <widget class="QPushButton" name="pushButton_5" >
+       <property name="text" >
+        <string>PushButton</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0" >
+      <widget class="QCheckBox" name="checkBox" >
+       <property name="text" >
+        <string>CheckBox</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1" >
+      <widget class="QCheckBox" name="checkBox_3" >
+       <property name="text" >
+        <string>CheckBox</string>
+       </property>
+      </widget>
+     </item>
+     <item rowspan="2" row="1" column="2" >
+      <widget class="QDial" name="dial" />
+     </item>
+     <item rowspan="2" row="1" column="3" >
+      <widget class="QDial" name="dial_2" />
+     </item>
+     <item rowspan="2" row="1" column="4" >
+      <widget class="QDial" name="dial_3" />
+     </item>
+     <item rowspan="2" row="1" column="5" >
+      <widget class="QDial" name="dial_4" />
+     </item>
+     <item row="2" column="0" >
+      <widget class="QCheckBox" name="checkBox_2" >
+       <property name="text" >
+        <string>CheckBox</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1" >
+      <widget class="QCheckBox" name="checkBox_4" >
+       <property name="text" >
+        <string>CheckBox</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="dockWidget_3" >
+   <property name="features" >
+    <set>QDockWidget::DockWidgetFeatureMask</set>
+   </property>
+   <property name="windowTitle" >
+    <string>Device2</string>
+   </property>
+   <attribute name="dockWidgetArea" >
+    <number>1</number>
+   </attribute>
+   <widget class="QWidget" name="dockWidgetContents_3" >
+    <layout class="QGridLayout" name="gridLayout_2" >
+     <item row="0" column="0" >
+      <widget class="QPushButton" name="pushButton_6" >
+       <property name="text" >
+        <string>PushButton</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1" >
+      <widget class="QRadioButton" name="radioButton" >
+       <property name="text" >
+        <string>RadioButton</string>
+       </property>
+      </widget>
+     </item>
+     <item rowspan="5" row="0" column="2" >
+      <widget class="QTableView" name="tableView" />
+     </item>
+     <item row="1" column="1" >
+      <widget class="QRadioButton" name="radioButton_2" >
+       <property name="text" >
+        <string>RadioButton</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="0" >
+      <widget class="QPushButton" name="pushButton_7" >
+       <property name="text" >
+        <string>PushButton</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1" >
+      <widget class="QRadioButton" name="radioButton_3" >
+       <property name="text" >
+        <string>RadioButton</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="0" >
+      <widget class="QPushButton" name="pushButton_8" >
+       <property name="text" >
+        <string>PushButton</string>
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="0" >
+      <widget class="QPushButton" name="pushButton_9" >
+       <property name="text" >
+        <string>PushButton</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="dockWidget_4" >
+   <property name="features" >
+    <set>QDockWidget::DockWidgetFeatureMask</set>
+   </property>
+   <property name="windowTitle" >
+    <string>Device3</string>
+   </property>
+   <attribute name="dockWidgetArea" >
+    <number>1</number>
+   </attribute>
+   <widget class="QWidget" name="dockWidgetContents_4" >
+    <layout class="QGridLayout" name="gridLayout_3" >
+     <item row="0" column="0" >
+      <widget class="QPushButton" name="pushButton_10" >
+       <property name="text" >
+        <string>PushButton</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1" >
+      <widget class="QPushButton" name="pushButton_12" >
+       <property name="text" >
+        <string>PushButton</string>
+       </property>
+      </widget>
+     </item>
+     <item rowspan="2" row="0" column="2" >
+      <widget class="QListView" name="listView" />
+     </item>
+     <item rowspan="2" row="0" column="3" >
+      <widget class="QListView" name="listView_2" />
+     </item>
+     <item row="1" column="0" >
+      <widget class="QPushButton" name="pushButton_11" >
+       <property name="text" >
+        <string>PushButton</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1" >
+      <widget class="QPushButton" name="pushButton_13" >
+       <property name="text" >
+        <string>PushButton</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
