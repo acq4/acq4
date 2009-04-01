@@ -338,7 +338,7 @@ class MetaArray(ndarray):
                     
                 ## x[Axis:columnIndex]
                 else:
-                    index = ind.stop
+                    index = slice(ind.stop, ind.step)
                 return (axis, index, True)
             else:
                 return (pos, ind, False)
