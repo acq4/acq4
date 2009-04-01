@@ -3,6 +3,9 @@ from lib.drivers.pvcam import PVCam as PVCDriver
 from lib.devices.Device import *
 from PyQt4 import QtCore
 import time, sys, traceback
+from numpy import *
+from lib.util.MetaArray import *
+
 
 class PVCam(Device):
     def __init__(self, dm, config, name):
@@ -15,10 +18,13 @@ class PVCam(Device):
         print "Created PVCam device. Cameras are:", self.pvc.listCameras()
     
     def quit(self):
+        print "In camera quit"
         if self.acqThread.isRunning():
             self.stopAcquire()
+            print "Waiting for camera acquisition thread to exit.."
             self.acqThread.wait()
-        
+            print "Camera acquisition thread exited."
+        print "finished camera quit"
         
         
     def devName(self):
@@ -114,9 +120,9 @@ class Task(DeviceTask):
         ## generate MeatArray of expose channel if it was recorded
         if ('recordExposeChannel' in self.cmd) and self.cmd['recordExposeChannel']:
             expose = self.daqTask.getData(self.dev.config['exposeChannel'][1])
-            timeVals = linspace(0, d['info']['nPts'] / d['info']['rate'], d['info']['nPts'])
-            info = [axis(name=Time, values=timeVals), d['info']]
-            expose = MetaArray(expose, info=info)
+            timeVals = linspace(0, expose['info']['numPts'] / expose['info']['rate'], expose['info']['numPts'])
+            info = [axis(name='Time', values=timeVals), expose['info']]
+            expose = MetaArray(expose['data'], info=info)
             
         ## generate MetaArray of images collected during recording
         data = self.recordHandle.data()
@@ -204,20 +210,25 @@ class AcquireThread(QtCore.QThread):
                     self.emit(QtCore.SIGNAL("newFrame"), outFrame)
                     
                     ## Lock task array before tinkering with it
+                    print "Locking task array"
                     self.lock.lock()
                     for t in self.tasks:
                         t.addFrame(outFrame)
                     self.lock.unlock()
+                    print "Unlocked task array"
                         
                     self.frameId += 1
                 time.sleep(10e-6)
                 
+                #print "Locking thread"
                 self.lock.lock()
                 if self.stopThread and frame is not None:
+                    print "Unlocking thread for exit"
                     self.lock.unlock()
                     #print "Camera acquisition thread stopping."
                     break
                 self.lock.unlock()
+                #print "Unlocking thread"
             ## Inform that we have stopped (?)
             #self.ui.stop()
             self.cam.stop()
@@ -232,11 +243,15 @@ class AcquireThread(QtCore.QThread):
             self.emit(QtCore.SIGNAL("showMessage"), msg)
         
     def stop(self, block=False):
+        print "Requesting thread stop, acquiring lock first.."
         l = QtCore.QMutexLocker(self.lock)
         self.stopThread = True
+        print "got lock, requested stop."
         l.unlock()
+        print "Unlocked, waiting for thread exit"
         if block:
           self.wait()
+        print "thread exited"
 
     def reset(self):
         if self.isRunning():

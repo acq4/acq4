@@ -89,9 +89,12 @@ class Task(DeviceTask):
         """
         
         res = self.st.getResult(channel)
-        res['info']['rate'] = self.cmd['rate']
-        res['info']['nPts'] = self.cmd['nPts']
-        res['info']['time'] = self.st.startTime
+        # if type(res['info']) is not dict:
+          # res['info'] = {'info': res['info']}
+        # res['info'] = {}
+        # res['info']['rate'] = self.cmd['rate']
+        # res['info']['nPts'] = self.cmd['numPts']
+        # res['info']['time'] = self.st.startTime
         return res
         
     def devName(self):

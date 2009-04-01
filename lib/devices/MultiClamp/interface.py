@@ -2,6 +2,7 @@
 from lib.drivers.MultiClamp import MultiClamp as MultiClampDriver
 from lib.devices.Device import *
 from lib.util.MetaArray import MetaArray, axis
+from numpy import *
 
 class MultiClamp(Device):
     def __init__(self, dm, config, name):
@@ -126,13 +127,13 @@ class Task(DeviceTask):
         for ch in self.usedChannels:
             if self.dev.config[ch][0] == daqTask.devName():
                 if ch == 'cmd':
-                    daqTask.addChannel(self.dev.config['cmd'][1], 'ao', info='cmd')
+                    daqTask.addChannel(self.dev.config['cmd'][1], 'ao')
                     scale = self.dev.config['cmdScale'][self.cmd['mode']]
                     cmdData = self.cmd['cmd'] * scale
                     daqTask.setWaveform(self.dev.config['cmd'][1], cmdData)
                     self.daqTasks['cmd'] = daqTask
                 else:
-                    daqTask.addChannel(self.dev.config[ch][1], 'ai', info=ch)
+                    daqTask.addChannel(self.dev.config[ch][1], 'ai')
                     self.daqTasks[ch] = daqTask
         
     def start(self):
@@ -152,8 +153,9 @@ class Task(DeviceTask):
         #result['info'] = self.state
         for ch in self.usedChannels:
             result[ch] = self.daqTasks[ch].getData(self.dev.config[ch][1])
+            # print result[ch]
             if ch == 'cmd':
-                result[ch]['data'] = result[ch]['data'] * scale
+                result[ch]['data'] = result[ch]['data'] * self.dev.config['cmdScale'][self.cmd['mode']]
                 result[ch]['name'] = 'Command'
                 if self.cmd['mode'] == 'VC':
                     result[ch]['units'] = 'V'
@@ -164,15 +166,22 @@ class Task(DeviceTask):
                 result[ch]['data'] = result[ch]['data'] * scale
                 result[ch]['units'] = self.state[ch + 'Signal'][2]
                 result[ch]['name'] = self.state[ch + 'Signal'][0]
-                
-        ## Copy state from first channel (assume this is the same for all channels)
-        for k,v in result[self.usedChannels[0]]['info']:
-            self.state[k] = v
             
-        timeVals = linspace(0, self.state['nPts'] / self.state['rate'], self.state['nPts'])
-        arr = concatenate([atleast_2d(x['data']) for x in result])
-        cols = [(x['name'], x['units']) for x in result]
-        info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', vals=timeVals)] + [self.state]
+        # print result
+            
+        ## Copy state from first channel (assume this is the same for all channels)
+        firstChInfo = result[self.usedChannels[0]]['info']
+        for k in firstChInfo:
+            self.state[k] = firstChInfo[k]
+            
+        timeVals = linspace(0, self.state['numPts'] / self.state['rate'], self.state['numPts'])
+        chanList = [atleast_2d(result[x]['data']) for x in result]
+        # for l in chanList:
+          # print l.shape
+        cols = [(result[x]['name'], result[x]['units']) for x in result]
+        # print cols
+        arr = concatenate(chanList)
+        info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [self.state]
         marr = MetaArray(arr, info=info)
             
         return marr

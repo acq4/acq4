@@ -63,17 +63,17 @@ class Task:
         self.command = command
         self.result = None
         
-        self.cfg = cmd['protocol']
+        self.cfg = command['protocol']
 
         ## TODO:  set up data storage with cfg['storeData'] and ['writeLocation']
         
-        self.devNames = cmd.keys()
+        self.devNames = command.keys()
         self.devNames.remove('protocol')
         self.devs = {}
         
         ## Create task objects. Each task object is a handle to the device which is unique for this protocol run.
         self.tasks = {}
-        for devName in devNames:
+        for devName in self.devNames:
             self.devs[devName] = self.dm.getDevice(devName)
             self.tasks[devName] = self.devs[devName].createTask(self.command[devName])
         

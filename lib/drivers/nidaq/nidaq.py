@@ -389,7 +389,7 @@ class SuperTask:
             self.taskInfo[key] = {'cache': None, 'chans': [], 'dataWritten': False}
         return self.tasks[key]
         
-    def addChannel(self, chan, typ, mode=None, vRange=[-10., 10.], info=None):
+    def addChannel(self, chan, typ, mode=None, vRange=[-10., 10.]):
         chan = self.absChanName(chan)
         (dev, typ) = self.getTaskKey(chan, typ)
         t = self.getTask(chan, typ)
@@ -417,14 +417,13 @@ class SuperTask:
         self.channelInfo[chan] = {
             'task': (dev, typ),
             'index': t.GetTaskNumChans()-1,
-            'info': info
         }
 
-    def setChannelInfo(self, chan, info):
-        chan = self.absChanName(chan)
-        self.channelInfo[chan] = info
+    # def setChannelInfo(self, chan, info):
+        # chan = self.absChanName(chan)
+        # self.channelInfo[chan] = info
 
-    def setWaveform(self, chan, data, info=None):
+    def setWaveform(self, chan, data):
         chan = self.absChanName(chan)
         if chan not in self.channelInfo:
             raise Exception('Must create channel (%s) before setting waveform.' % chan)
@@ -432,8 +431,8 @@ class SuperTask:
         key = self.getTaskKey(chan)
         self.taskInfo[key]['dataWritten'] = False
 
-        if info is not None:
-            self.channelInfo[chan]['info'] = info
+        # if info is not None:
+            # self.channelInfo[chan]['info'] = info
         
     def getTaskData(self, key):
         #key = self.getTaskKey(key)
@@ -457,6 +456,8 @@ class SuperTask:
         """Configure sample clock and triggering for all tasks"""
         clkSource = None
         keys = self.tasks.keys()
+        self.numPts = nPts
+        self.rate = rate
         
         ## Make sure we're only using 1 DAQ device (not sure how to tie 2 together yet)
         ndevs = len(set([k[0] for k in keys]))
@@ -577,8 +578,11 @@ class SuperTask:
                 if self.tasks[k].isOutputTask():
                     #print "    output task"
                     d = self.getTaskData(k)
+                    # print "output data set to:"
+                    # print d
                 else:
-                    d = readData[k]
+                    d = readData[k][0]
+                    # print "input data set to:", d
                     #print "    input task, read"
                     #print "    done"
                 self.result[k] = {
@@ -592,11 +596,14 @@ class SuperTask:
             return self.result
         else:
             res = self.result[self.channelInfo[channel]['task']]
-            return {
-                'data': res['data'][0][self.channelInfo[channel]['index']],
-                'info': self.channelInfo[channel]['info']
+            ret = {
+                'data': res['data'][self.channelInfo[channel]['index']],
+                'info': {'startTime': res['start'], 'numPts': self.numPts, 'rate': self.rate}
             }
-
+            # print "=== result for channel %s=====" % channel
+            # print ret 
+            return ret 
+# 
     def run(self):
         #print "Start..", time.time()
         self.start()

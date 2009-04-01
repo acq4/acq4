@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-import threading, os, fcntl, time, re, types
-from functions import strncmp
-from MetaArray import MetaArray
+import threading, os, time, re, types
+##  import fcntl  ## linux only?
+from lib.util.functions import strncmp
+from lib.util.MetaArray import MetaArray
 
 class Locker:
     def __init__(self, lock):
@@ -86,7 +87,8 @@ class DataHandler:
         l = Locker(self.lock)
         fd = open(self.indexFile)
         if lock:
-            fcntl.flock(fd, fcntl.LOCK_EX)
+            pass
+            #fcntl.flock(fd, fcntl.LOCK_EX)
         try:
             self.index = eval(fd.read())
         except:
@@ -98,7 +100,8 @@ class DataHandler:
         l = Locker(self.lock)
         fd = open(self.indexFile, 'w')
         if lock:
-            fcntl.flock(fd, fcntl.LOCK_EX)
+            pass
+#            fcntl.flock(fd, fcntl.LOCK_EX)
         fd.write(str(self.index))
         fd.close()
     
@@ -107,7 +110,7 @@ class DataHandler:
         l = Locker(self.lock)
         t = time.strftime('[20%y.%m.%d %H:%m:%S]')
         fd = open(self.logFile, 'a')
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        #fcntl.flock(fd, fcntl.LOCK_EX)
         fd.write('%s %s\n' % (t, msg))
         fd.close()
     
@@ -187,7 +190,7 @@ class DataHandler:
                     break
                 d += 1
         fd = open(fn, 'w')
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        #fcntl.flock(fd, fcntl.LOCK_EX)
         obj.write(fn)
         fd.close()
         if not info.has_key('__object_type__'):
@@ -209,7 +212,7 @@ class DataHandler:
     def setFileInfo(self, file, info):
         l = Locker(self.lock)
         fd = open(self.indexFile, 'r')
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        #fcntl.flock(fd, fcntl.LOCK_EX)
         self._readIndex(lock=False)
         self.index[file] = info
         self._writeIndex(lock=False)
@@ -221,7 +224,7 @@ class DataHandler:
             self.setFileInfo(file, {attr: value})
         else:
             fd = open(self.indexFile, 'r')
-            fcntl.flock(fd, fcntl.LOCK_EX)
+            #fcntl.flock(fd, fcntl.LOCK_EX)
             self._readIndex(lock=False)
             self.index[file][attr] = value
             self._writeIndex(lock=False)

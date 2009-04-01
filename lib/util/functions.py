@@ -1,4 +1,4 @@
-import os, re, math, time, threading, qt
+import os, re, math, time, threading
 from MetaArray import *
 from scipy import *
 from scipy.optimize import leastsq

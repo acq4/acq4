@@ -12,7 +12,7 @@ if len(sys.argv) > 1:
 config = os.path.abspath(config)
 
 dm = DeviceManager(config)
-datam = DataManager.createDataHandler('junk/data')
+datam = DataManager.createDataHandler('junk/data', create=True)
 
 duration = 0.25
 protoSettings = {'mode': 'single', 'time': duration, 'name': 'TestProtocol', 'storeData': True, 'writeLocation': '...'}
@@ -43,27 +43,25 @@ cmd = {
 print "\nRunning protocol.."
 data = dm.runProtocol(cmd)
 
-dataDir = datam.getDir('protocol', autoIncrement=True)
-dataDir.write(data, info={'protocol': 'test'})
+dataDir = datam.mkdir('protocol', autoIndex=True)
+#dataDir.writeFile(data, info={'protocol': 'test'})
 
 print "\n== Results =="
+
 for dev in ['Clamp0', 'Clamp1']:
     print "\n", dev, ":"
-    print "Command:"
-    print data[dev]['cmd']['data'][::100].round()
-    print "Input:"
-    print data[dev]['inp']['data'][::100].round()
-    print "Raw:"
-    print data[dev]['raw']['data'][::100].round()
-    print "MultiClamp state:"
-    print data[dev]['info']
-    print "Start time:"
-    print data[dev]['startTime'] + dm.startTime
-
+    for col in data[dev]._info[0]['cols']:
+        cn = col['name']
+        print cn, ":"
+        print data[dev][cn][::100].round()
+    print "STATE:"
+    print data[dev]._info[-1]
+    
 print "\nCamera:"
 print "Acquired %d frames" % len(data['Camera']['frames'])
 print "Frame 0 info:", data['Camera']['frames'][0][1]
-print "Expose signal:", data['Camera']['expose']['data'][::10]
+print "Expose signal:", data['Camera']['expose'][::10]
+
 #ui.plot(data['clamp0'], pos=0)
 #ui.plot(cellSig, pos=1)
 
