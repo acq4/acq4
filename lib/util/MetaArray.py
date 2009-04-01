@@ -337,8 +337,15 @@ class MetaArray(ndarray):
                     index = mask
                     
                 ## x[Axis:columnIndex]
-                else:
+                elif type(ind.stop) is int or type(ind.step) is int:
                     index = slice(ind.stop, ind.step)
+                    
+                ## x[Axis: [list]]
+                else:
+                    index = ind.stop
+                #print "Axis %s (%d) : %s" % (ind.start, axis, str(type(index)))
+                #if type(index) is ndarray:
+                    #print "    ", index.shape
                 return (axis, index, True)
             else:
                 return (pos, ind, False)
