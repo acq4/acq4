@@ -154,14 +154,18 @@ class AcquireThread(QtCore.QThread):
     
     def startRecord(self, maxTime=None):
         rec = CameraTask(self, maxTime)
+        print "lock to create task"
         l = QtCore.QMutexLocker(self.lock)
         self.tasks.append(rec)
+        print "..unlock from create task"
         return rec
         
     def removeTask(self, task):
+        print "Lock to remove task"
         l = QtCore.QMutexLocker(self.lock)
         if task in self.tasks:
             self.tasks.remove(task)
+        print "..unlock from remove task"
     
     def run(self):
         #print "Starting up camera acquisition thread."
@@ -170,9 +174,11 @@ class AcquireThread(QtCore.QThread):
         region = self.state['region']
         lastFrame = None
         lastFrameTime = None
+        print "Lock for startup.."
         self.lock.lock()
         self.stopThread = False
         self.lock.unlock()
+        print "..unlocked from startup"
         self.fps = None
         
         try:
@@ -209,18 +215,20 @@ class AcquireThread(QtCore.QThread):
                     outFrame = (self.acqBuffer[frame].copy(), info)
                     self.emit(QtCore.SIGNAL("newFrame"), outFrame)
                     
-                    ## Lock task array before tinkering with it
-                    print "Locking task array"
+                    ## Lock task array and copy before tinkering with it
+                    print "*Locking task array"
                     self.lock.lock()
-                    for t in self.tasks:
-                        t.addFrame(outFrame)
+                    tasks = self.tasks[:]
                     self.lock.unlock()
-                    print "Unlocked task array"
+                    print "*Unlocked task array"
+                    
+                    for t in tasks:
+                        t.addFrame(outFrame)
                         
                     self.frameId += 1
                 time.sleep(10e-6)
                 
-                #print "Locking thread"
+                print "*Locking thread"
                 self.lock.lock()
                 if self.stopThread and frame is not None:
                     print "Unlocking thread for exit"
@@ -228,7 +236,7 @@ class AcquireThread(QtCore.QThread):
                     #print "Camera acquisition thread stopping."
                     break
                 self.lock.unlock()
-                #print "Unlocking thread"
+                print "*Unlocking thread"
             ## Inform that we have stopped (?)
             #self.ui.stop()
             self.cam.stop()
