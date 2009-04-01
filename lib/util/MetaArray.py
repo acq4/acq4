@@ -321,8 +321,22 @@ class MetaArray(ndarray):
         elif type(ind) == types.SliceType:
             if type(ind.start) == types.StringType or type(ind.stop) == types.StringType:  ## Not an actual slice!
                 axis = self._interpretAxis(ind.start)
+                
+                ## x[Axis:Column]
                 if type(ind.stop) == types.StringType:
                     index = self._getIndex(axis, ind.stop)
+                    
+                ## x[Axis:min:max]
+                elif (type(ind.stop) is float or type(ind.step) is float) and ('values' in self._info[axis]):
+                    if ind.stop is None:
+                        mask = self.xvals(axis) < ind.step
+                    elif ind.step is None:
+                        mask = self.xvals(axis) > ind.stop
+                    else:
+                        mask = (self.xvals(axis) > ind.stop) * (self.xvals(axis) < ind.step)
+                    index = mask
+                    
+                ## x[Axis:columnIndex]
                 else:
                     index = ind.stop
                 return (axis, index, True)
