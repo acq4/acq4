@@ -18,13 +18,13 @@ class PVCam(Device):
         print "Created PVCam device. Cameras are:", self.pvc.listCameras()
     
     def quit(self):
-        print "In camera quit"
+        #print "In camera quit"
         if self.acqThread.isRunning():
             self.stopAcquire()
-            print "Waiting for camera acquisition thread to exit.."
+            #print "Waiting for camera acquisition thread to exit.."
             self.acqThread.wait()
-            print "Camera acquisition thread exited."
-        print "finished camera quit"
+            #print "Camera acquisition thread exited."
+        #print "finished camera quit"
         
         
     def devName(self):
@@ -120,13 +120,13 @@ class Task(DeviceTask):
         ## generate MeatArray of expose channel if it was recorded
         if ('recordExposeChannel' in self.cmd) and self.cmd['recordExposeChannel']:
             expose = self.daqTask.getData(self.dev.config['exposeChannel'][1])
-            timeVals = linspace(0, expose['info']['numPts'] / expose['info']['rate'], expose['info']['numPts'])
+            timeVals = linspace(0, float(expose['info']['numPts']-1) / float(expose['info']['rate']), expose['info']['numPts'])
             info = [axis(name='Time', values=timeVals), expose['info']]
             expose = MetaArray(expose['data'], info=info)
             
         ## generate MetaArray of images collected during recording
         data = self.recordHandle.data()
-        arr = concatenate([atleast_3d(f[0]) for f in data])
+        arr = concatenate([f[0][newaxis,...] for f in data])
         times = array([f[1]['time'] for f in data])
         times -= times[0]
         info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), data[0][1]]
@@ -154,18 +154,18 @@ class AcquireThread(QtCore.QThread):
     
     def startRecord(self, maxTime=None):
         rec = CameraTask(self, maxTime)
-        print "lock to create task"
+        #print "lock to create task"
         l = QtCore.QMutexLocker(self.lock)
         self.tasks.append(rec)
-        print "..unlock from create task"
+        #print "..unlock from create task"
         return rec
         
     def removeTask(self, task):
-        print "Lock to remove task"
+        #print "Lock to remove task"
         l = QtCore.QMutexLocker(self.lock)
         if task in self.tasks:
             self.tasks.remove(task)
-        print "..unlock from remove task"
+        #print "..unlock from remove task"
     
     def run(self):
         #print "Starting up camera acquisition thread."
@@ -174,11 +174,11 @@ class AcquireThread(QtCore.QThread):
         region = self.state['region']
         lastFrame = None
         lastFrameTime = None
-        print "Lock for startup.."
+        #print "Lock for startup.."
         self.lock.lock()
         self.stopThread = False
         self.lock.unlock()
-        print "..unlocked from startup"
+        #print "..unlocked from startup"
         self.fps = None
         
         try:
@@ -216,11 +216,11 @@ class AcquireThread(QtCore.QThread):
                     self.emit(QtCore.SIGNAL("newFrame"), outFrame)
                     
                     ## Lock task array and copy before tinkering with it
-                    print "*Locking task array"
+                    #print "*Locking task array"
                     self.lock.lock()
                     tasks = self.tasks[:]
                     self.lock.unlock()
-                    print "*Unlocked task array"
+                    #print "*Unlocked task array"
                     
                     for t in tasks:
                         t.addFrame(outFrame)
@@ -228,15 +228,15 @@ class AcquireThread(QtCore.QThread):
                     self.frameId += 1
                 time.sleep(10e-6)
                 
-                print "*Locking thread"
+                #print "*Locking thread"
                 self.lock.lock()
                 if self.stopThread and frame is not None:
-                    print "Unlocking thread for exit"
+                    #print "Unlocking thread for exit"
                     self.lock.unlock()
                     #print "Camera acquisition thread stopping."
                     break
                 self.lock.unlock()
-                print "*Unlocking thread"
+                #print "*Unlocking thread"
             ## Inform that we have stopped (?)
             #self.ui.stop()
             self.cam.stop()
@@ -251,15 +251,15 @@ class AcquireThread(QtCore.QThread):
             self.emit(QtCore.SIGNAL("showMessage"), msg)
         
     def stop(self, block=False):
-        print "Requesting thread stop, acquiring lock first.."
+        #print "Requesting thread stop, acquiring lock first.."
         l = QtCore.QMutexLocker(self.lock)
         self.stopThread = True
-        print "got lock, requested stop."
+        #print "got lock, requested stop."
         l.unlock()
-        print "Unlocked, waiting for thread exit"
+        #print "Unlocked, waiting for thread exit"
         if block:
           self.wait()
-        print "thread exited"
+        #print "thread exited"
 
     def reset(self):
         if self.isRunning():
@@ -277,7 +277,7 @@ class CameraTask:
         self.recording = True
     
     def addFrame(self, frame):
-        print "Add frame"
+        #print "Add frame"
         l = QtCore.QMutexLocker(self.lock)
         self.frames.append(frame)
         if not self.recording:
@@ -288,7 +288,7 @@ class CameraTask:
         return self.frames
     
     def stop(self):
-        print "Stop cam record"
+        #print "Stop cam record"
         l = QtCore.QMutexLocker(self.lock)
         self.recording = False
     

@@ -174,7 +174,7 @@ class Task(DeviceTask):
         for k in firstChInfo:
             self.state[k] = firstChInfo[k]
             
-        timeVals = linspace(0, self.state['numPts'] / self.state['rate'], self.state['numPts'])
+        timeVals = linspace(0, float(self.state['numPts']-1) / float(self.state['rate']), self.state['numPts'])
         chanList = [atleast_2d(result[x]['data']) for x in result]
         # for l in chanList:
           # print l.shape

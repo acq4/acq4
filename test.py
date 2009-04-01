@@ -24,8 +24,8 @@ daqSettings = {'rate': rate, 'numPts': nPts, 'triggerDevice': 'Camera'}
 
 #cellSig = stim(t=[0.0, 0.01, 0.2], v=[0.0, 10e-3, 0.0])
 cellSig = zeros((nPts))
-cellSig[3000:5000] = 100.0e-12
-cellSig[5000:7000] = 200.0e-12
+cellSig[1000:1500] = 100.0e-12
+cellSig[1700:2000] = 200.0e-12
 clampSettings = {'mode': 'IC', 'bridge': 10e6, 'recordState': True, 'cmd': cellSig, 'inp': 'MembranePotential', 'raw': 'MembraneCurrent'}
 
 #stimSig = stim(t=[0.0, 0.009, 0.0091], v=[0.0, 0.1, 0.0])
@@ -53,7 +53,7 @@ for dev in ['Clamp0', 'Clamp1']:
     for col in data[dev]._info[0]['cols']:
         cn = col['name']
         print cn, ":"
-        print data[dev][cn][::100].round()
+        print data[dev][cn][::100]
     print "STATE:"
     print data[dev]._info[-1]
     

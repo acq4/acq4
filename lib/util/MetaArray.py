@@ -163,7 +163,11 @@ class MetaArray(ndarray):
         except:
             print self, nInd, val
             raise
-
+        
+    #def __getattr__(self, attr):
+        #if attr in ['round']:
+            #return lambda *args, **kwargs: MetaArray(getattr(a.view(ndarray), attr)(*args, **kwargs)
+        
   
     def axisValues(self, axis):
         """Return the list of values for an axis"""
