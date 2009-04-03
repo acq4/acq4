@@ -3,8 +3,8 @@ from lib.modules.Module import *
 from Camera import QtCam
 
 class Camera(Module):
-    def __init__(self, manager, config):
-        Module.__init__(self, manager, config)
+    def __init__(self, manager, name, config):
+        Module.__init__(self, manager, name, config)
         camDev = self.config['camera']
         self.cam = self.manager.getDevice(camDev)
         self.ui = QtCam(self)

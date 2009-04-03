@@ -17,10 +17,23 @@ class DeviceManager():
             self.time = self.unixTime
     
     def getDevice(self, name):
-        if not self.devices.has_key(name):
+        if name not in self.devices:
             raise Exception("No device named %s" % name)
         return self.devices[name]
+
+    def loadModule(self, module, name, config={}):
+        mod = __import__('lib.modules.%s.interface' % module, fromlist=['*'])
+        modclass = getattr(mod, module)
+        self.modules[name] = modclass(self, name, config)
+        return self.modules[name]
+        
+    def getModule(self, name):
+        if name not in self.modules:
+            raise Exception("No module named %s" % name)
+        return self.modules[name]
+        
     
+        
     def winTime(self):
         """Return the current time in seconds with high precision (windows version)."""
         return time.clock() + self.startTime

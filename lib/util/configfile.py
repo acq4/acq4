@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import re
+import re, os
 
 def writeConfigFile(data, fname):
     s = genString(data)
@@ -8,14 +8,22 @@ def writeConfigFile(data, fname):
     fd.close()
     
 def readConfigFile(fname):
-    fd = open(fname)
-    s = fd.read()
-    fd.close()
-    data = parseString(s)[1]
+    cwd = os.getcwd()
+    (newDir, fname) = os.path.split(os.path.abspath(fname))
+    try:
+        os.chdir(newDir)
+        fd = open(fname)
+        s = fd.read()
+        fd.close()
+        data = parseString(s)[1]
+    finally:
+        os.chdir(cwd)
     return data
 
 
 class OrderedDict(dict):
+    """extends dict so that elements are iterated in the order that they were added"""
+    
     def __init__(self):
         self.order = []
     
