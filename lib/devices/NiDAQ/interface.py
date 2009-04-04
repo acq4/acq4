@@ -68,7 +68,7 @@ class Task(DeviceTask):
         pass
         
     def getResult(self):
-        ## Results should be collected by individual devices
+        ## Results should be collected by individual devices using getData
         return None
         
         ### Make sure all tasks are finished
