@@ -11,7 +11,7 @@ class DAQGeneric(Device):
         ## Do some sanity checks here on the configuration
     
     def createTask(self, cmd):
-        return Task(self, cmd)
+        return DAQGenericTask(self, cmd)
     
         
     def setHolding(self, mode=None):
@@ -32,7 +32,7 @@ class DAQGeneric(Device):
     def quit(self):
         pass
 
-class Task(DeviceTask):
+class DAQGenericTask(DeviceTask):
     def __init__(self, dev, cmd):
         self.dev = dev
         self.cmd = cmd
