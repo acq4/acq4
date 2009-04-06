@@ -1,0 +1,296 @@
+from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
+from numpy import array, vstack
+import time
+from vector import *
+
+
+#class GraphicsScene(QtGui.QGraphicsScene):
+  #def __init__(self, *args):
+    #QtGui.QGraphicsScene.__init__(self, *args)
+    
+  #def mousePressEvent(self, ev):
+    #print "press"
+    
+  #def mouseMoveEvent(self, ev):
+    #print "move"
+    
+  #def mouseReleaseEvent(self, ev):
+    #print "release"
+    
+  #def wheelEvent(self, ev):
+    #print "wheel"
+     
+  #def mouseDoubleClickEvent(self, ev):
+    #print "dbl-click"
+   
+
+
+    
+  
+
+class GraphicsView(QtGui.QGraphicsView):
+  def __init__(self, *args):
+    QtGui.QGraphicsView.__init__(self, *args)
+    palette = QtGui.QPalette()
+    brush = QtGui.QBrush(QtGui.QColor(0,0,0))
+    brush.setStyle(QtCore.Qt.SolidPattern)
+    palette.setBrush(QtGui.QPalette.Active,QtGui.QPalette.Base,brush)
+    brush = QtGui.QBrush(QtGui.QColor(0,0,0))
+    brush.setStyle(QtCore.Qt.SolidPattern)
+    palette.setBrush(QtGui.QPalette.Inactive,QtGui.QPalette.Base,brush)
+    brush = QtGui.QBrush(QtGui.QColor(244,244,244))
+    brush.setStyle(QtCore.Qt.SolidPattern)
+    palette.setBrush(QtGui.QPalette.Disabled,QtGui.QPalette.Base,brush)
+    self.setPalette(palette)
+    self.setProperty("cursor",QtCore.QVariant(QtCore.Qt.ArrowCursor))
+    self.setFocusPolicy(QtCore.Qt.StrongFocus)
+    self.setFrameShape(QtGui.QFrame.NoFrame)
+    self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+    self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+    self.setTransformationAnchor(QtGui.QGraphicsView.NoAnchor)
+    self.setResizeAnchor(QtGui.QGraphicsView.NoAnchor)
+    self.setViewportUpdateMode(QtGui.QGraphicsView.SmartViewportUpdate)
+    self.setSceneRect(QtCore.QRectF(-1e100, -1e100, 1e100, 1e100))
+    self.setInteractive(False)
+    self.lastMousePos = None
+    self.setMouseTracking(False)
+    self.aspectLocked = False
+    self.scale = array([1.0, -1.0])
+    self.yInverted = False
+    self.translate = array([0.0, 0.0])
+    self.currentItem = None
+    self.clearMouse()
+    self.updateMatrix()
+    
+  def clearMouse(self):
+    self.mouseTrail = []
+    self.lastButtonReleased = None
+  
+  def resizeEvent(self, ev):
+    self.updateMatrix()
+  
+  def updateMatrix(self):
+    #m = QtGui.QTransform()
+    m = QtGui.QMatrix()
+    self.resetMatrix()
+    center = self.mapToScene(self.width()/2., self.height()/2.)
+    #if self.yInverted:
+      #m.translate(-self.width()/2., -self.height()/2.)
+    #else:
+      #m.translate(-self.width()/2., self.height()/2.)
+    if self.yInverted:
+      m.translate(center.x(), center.y())
+    else:
+      m.translate(center.x(), -center.y())
+    m.scale(self.scale[0], self.scale[1])
+    st = self.translate
+    m.translate(st[0], -st[1])
+    #self.setTransform(m)
+    self.setMatrix(m)
+    
+  def wheelEvent(self, ev):
+    QtGui.QGraphicsView.wheelEvent(self, ev)
+    sc = 1.001 ** ev.delta()
+    self.scale *= sc
+    self.updateMatrix()
+    
+    
+  def setAspectLocked(self, s):
+    self.aspectLocked = s
+    
+  ## All mouse events must be caught; if they are passed on, really weird things happen..
+  #def mouseDoubleClickEvent(self, ev):
+    #QtGui.QGraphicsView.mouseDoubleClickEvent(self, ev)
+    #pass
+    
+  ## This function is here because interactive mode is disabled due to bugs.
+  def graphicsSceneEvent(self, ev, pev=None, fev=None):
+    ev1 = GraphicsSceneMouseEvent()
+    ev1.setPos(QtCore.QPointF(ev.pos().x(), ev.pos().y()))
+    ev1.setButtons(ev.buttons())
+    ev1.setButton(ev.button())
+    ev1.setModifiers(ev.modifiers())
+    ev1.setScenePos(self.mapToScene(QtCore.QPoint(ev.pos())))
+    if pev is not None:
+      ev1.setLastPos(pev.pos())
+      ev1.setLastScenePos(pev.scenePos())
+      ev1.setLastScreenPos(pev.screenPos())
+    if fev is not None:
+      ev1.setButtonDownPos(fev.pos())
+      ev1.setButtonDownScenePos(fev.scenePos())
+      ev1.setButtonDownScreenPos(fev.screenPos())
+    return ev1
+    
+  def mousePressEvent(self, ev):
+    QtGui.QGraphicsView.mousePressEvent(self, ev)
+    self.lastMousePos = qPtArr(ev.pos())
+    if ev.buttons() == QtCore.Qt.LeftButton:
+      self.currentItem = None
+      maxZ = None
+      for i in self.items(ev.pos()):
+        if maxZ is None or maxZ < i.zValue():
+          self.currentItem = i
+          maxZ = i.zValue()
+        #print i, i.zValue()
+      self.pev = self.graphicsSceneEvent(ev)
+      self.fev = self.pev
+      if self.currentItem is not None:
+        self.currentItem.mousePressEvent(self.pev)
+        #print "All items:", self.items(ev.pos())
+        #print "Current: ", self.currentItem
+      #else:
+        #print "Nothing under click"
+      self.clearMouse()
+      self.mouseTrail.append(qPtArr(self.mapToScene(ev.pos())))
+      self.emit(QtCore.SIGNAL("mousePressed(PyQt_PyObject)"), self.mouseTrail)
+        
+  def mouseReleaseEvent(self, ev):
+    QtGui.QGraphicsView.mouseReleaseEvent(self, ev)
+    if ev.button() == QtCore.Qt.LeftButton:
+      self.mouseTrail.append(qPtArr(self.mapToScene(ev.pos())))
+      self.emit(QtCore.SIGNAL("mouseReleased(PyQt_PyObject)"), self.mouseTrail)
+      if self.currentItem is not None:
+        pev = self.graphicsSceneEvent(ev, self.pev, self.fev)
+        self.pev = pev
+        self.currentItem.mouseReleaseEvent(pev)
+    self.lastButtonReleased = ev.button()
+
+  def mouseMoveEvent(self, ev):
+    QtGui.QGraphicsView.mouseMoveEvent(self, ev)
+    self.emit(QtCore.SIGNAL("sceneMouseMoved(PyQt_PyObject)"), self.mapToScene(ev.pos()))
+    
+    if ev.buttons() == QtCore.Qt.LeftButton:
+      self.mouseTrail.append(qPtArr(self.mapToScene(ev.pos())))
+      if self.currentItem is not None:
+        pev = self.graphicsSceneEvent(ev, self.pev, self.fev)
+        self.pev = pev
+        self.currentItem.mouseMoveEvent(pev)
+    
+    if self.lastMousePos is None:
+      self.lastMousePos = qPtArr(ev.pos())
+    delta = (qPtArr(ev.pos()) - self.lastMousePos) * array([1., -1.])
+    
+    self.lastMousePos = qPtArr(ev.pos())
+    
+    if ev.buttons() == QtCore.Qt.RightButton:
+      scale = 1.01 ** delta
+      if self.aspectLocked:
+        scale[0] = scale[1]
+      self.scale *= scale
+      self.updateMatrix()
+    elif ev.buttons() == QtCore.Qt.MidButton:
+      self.translate += delta.astype(float) / self.scale
+      self.updateMatrix()
+
+  def setRange(self, rect, padding=0.1, lockAspect=None):
+    if lockAspect is None:
+      lockAspect = self.aspectLocked
+    a = array([rect.width(), rect.height()])
+    c = qPtArr(rect.center())
+    self.translate = array([-c[0], c[1]], dtype=float)
+    s = array([self.width(), self.height()], dtype=float) / a
+    s *= 1.0 - padding
+    if lockAspect:
+      s[:] = s.min()
+    if not self.yInverted:
+      s *= array([1.0, -1.0])
+    self.scale = s
+    #print self.translate, rect.x(), rect.y(), rect.width(), rect.height(), rect.center().x(), rect.center().y()
+    self.updateMatrix()
+    
+  def invertY(self, invert=True):
+    if self.yInverted != invert:
+      self.scale[1] *= -1.
+    self.yInverted = invert
+    self.updateMatrix()
+    
+    
+  def writeSvg(self, fileName=None):
+    if fileName is None:
+      fileName = str(QtGui.QFileDialog.getSaveFileName())
+    self.svg = QtSvg.QSvgGenerator()
+    self.svg.setFileName(fileName)
+    self.svg.setSize(self.size())
+    self.svg.setResolution(600)
+    painter = QtGui.QPainter(self.svg)
+    self.render(painter)
+    
+  def writeImage(self, fileName=None):
+    if fileName is None:
+      fileName = str(QtGui.QFileDialog.getSaveFileName())
+    self.png = QtGui.QImage(self.size(), QtGui.QImage.Format_ARGB32)
+    painter = QtGui.QPainter(self.png)
+    rh = self.renderHints()
+    self.setRenderHints(QtGui.QPainter.Antialiasing)
+    self.render(painter)
+    self.setRenderHints(rh)
+    self.png.save(fileName)
+    
+  def getFreehandLine(self):
+    
+    # Wait for click
+    self.clearMouse()
+    while self.lastButtonReleased != QtCore.Qt.LeftButton:
+      QtGui.qApp.sendPostedEvents()
+      QtGui.qApp.processEvents()
+      time.sleep(0.01)
+    fl = vstack(self.mouseTrail)
+    return fl
+  
+  def getClick(self):
+    fl = self.getFreehandLine()
+    return fl[-1]
+  
+
+class GraphicsSceneMouseEvent(QtGui.QGraphicsSceneMouseEvent):
+  """Stand-in class for QGraphicsSceneMouseEvent"""
+  def __init__(self):
+    QtGui.QGraphicsSceneMouseEvent.__init__(self)
+      
+  def setPos(self, p):
+    self.vpos = p
+  def setButtons(self, p):
+    self.vbuttons = p
+  def setButton(self, p):
+    self.vbutton = p
+  def setModifiers(self, p):
+    self.vmodifiers = p
+  def setScenePos(self, p):
+    self.vscenePos = p
+  def setLastPos(self, p):
+    self.vlastPos = p
+  def setLastScenePos(self, p):
+    self.vlastScenePos = p
+  def setLastScreenPos(self, p):
+    self.vlastScreenPos = p
+  def setButtonDownPos(self, p):
+    self.vbuttonDownPos = p
+  def setButtonDownScenePos(self, p):
+    self.vbuttonDownScenePos = p
+  def setButtonDownScreenPos(self, p):
+    self.vbuttonDownScreenPos = p
+  
+  def pos(self):
+    return self.vpos
+  def buttons(self):
+    return self.vbuttons
+  def button(self):
+    return self.vbutton
+  def modifiers(self):
+    return self.vmodifiers
+  def scenePos(self):
+    return self.vscenePos
+  def lastPos(self):
+    return self.vlastPos
+  def lastScenePos(self):
+    return self.vlastScenePos
+  def lastScreenPos(self):
+    return self.vlastScreenPos
+  def buttonDownPos(self):
+    return self.vbuttonDownPos
+  def buttonDownScenePos(self):
+    return self.vbuttonDownScenePos
+  def buttonDownScreenPos(self):
+    return self.vbuttonDownScreenPos
+  
+  

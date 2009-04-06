@@ -19,10 +19,14 @@ class MultiClamp(Device):
             args = (self.host,)
         self.mc = MultiClampDriver(*args)
         
-        mcs = self.mc.listDevices()
-        print "Connected to host %s, devices are %s" % (self.host, repr(mcs))
-        self.channelID = self.config['channelID']
-        self.index = None ## Avoid probing the MC devices until later on
+        try:
+            mcs = self.mc.listDevices()
+            print "Connected to host %s, devices are %s" % (self.host, repr(mcs))
+            self.channelID = self.config['channelID']
+            self.index = None ## Avoid probing the MC devices until later on
+        except:
+            print "Error connecting to MultiClamp commander, will try again when needed."
+        
         print "Created MultiClamp device"
     
     def createTask(self, cmd):
@@ -163,7 +167,7 @@ class Task(DeviceTask):
             result[ch] = self.daqTasks[ch].getData(chConf[1])
             # print result[ch]
             if ch == 'command':
-                result[ch]['data'] = result[ch]['data'] * self.dev.config['cmdScale'][self.cmd['mode']]
+                result[ch]['data'] = result[ch]['data'] / self.dev.config['cmdScale'][self.cmd['mode']]
                 result[ch]['name'] = 'Command'
                 if self.cmd['mode'] == 'VC':
                     result[ch]['units'] = 'V'

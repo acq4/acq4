@@ -12,7 +12,7 @@
 #sys.path = ["libs", "../pvcam", "../nidaq", "../cheader"] + sys.path
 
 
-from QtCamTemplate import Ui_MainWindow
+from CameraTemplate import Ui_MainWindow
 #from ROPing import ROPWindow
 from lib.util.qtgraph.GraphicsView import *
 from lib.util.qtgraph.graphicsItems import *

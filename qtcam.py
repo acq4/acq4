@@ -13,7 +13,7 @@ config = os.path.abspath(config)
 dm = DeviceManager(config)
 datam = DataManager.createDataHandler('junk/data')
 
-qtcam = dm.loadModule(module='Camera', name='Camera', {'camDev': 'Camera'})
+qtcam = dm.loadModule(module='Camera', name='Camera', config={'camDev': 'Camera'})
 
 ## If running interactively, just return to the prompt and let python call the qt event loop for us.
 ## Otherwise, we need to run it ourselves:

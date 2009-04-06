@@ -56,7 +56,7 @@ for dev in ['Clamp0', 'Clamp1']:
     for col in data[dev]._info[0]['cols']:
         cn = col['name']
         print cn, ":"
-        print data[dev][cn][::100]
+        print data[dev][cn][::100].view(ndarray)
     print "STATE:"
     print data[dev]._info[-1]
     
