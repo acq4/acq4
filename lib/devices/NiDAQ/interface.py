@@ -52,6 +52,7 @@ class Task(DeviceTask):
             self.st.setTrigger(tDev.getTriggerChannel())
         
     def addChannel(self, *args, **kwargs):
+        print "Adding channel:", args
         return self.st.addChannel(*args, **kwargs)
         
     def setWaveform(self, *args, **kwargs):

@@ -26,7 +26,7 @@ daqSettings = {'rate': rate, 'numPts': nPts, 'triggerDevice': 'Camera'}
 cellSig = zeros((nPts))
 cellSig[1000:1500] = 100.0e-12
 cellSig[1700:2000] = 200.0e-12
-clampSettings = {'mode': 'IC', 'bridge': 10e6, 'recordState': True, 'cmd': cellSig, 'inp': 'MembranePotential', 'raw': 'MembraneCurrent'}
+clampSettings = {'mode': 'IC', 'bridge': 10e6, 'recordState': True, 'command': cellSig, 'scaled': 'MembranePotential', 'raw': 'MembraneCurrent'}
 
 #stimSig = stim(t=[0.0, 0.009, 0.0091], v=[0.0, 0.1, 0.0])
 stimSig = zeros((nPts))
@@ -40,7 +40,7 @@ cmd = {
     #'stim': {'cmd': stimSig},
     'Camera': {'record': True, 'trigger': True, 'recordExposeChannel': True},
     'LED-Blue': {'Command': {'preset': 1}},
-    'Stim0': {'Command': {'cmd': stimSig}}
+    'Stim0': {'Command': {'command': stimSig}}
 }
 
 print "\nRunning protocol.."

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: windows-1252 -*-
 from lib.devices.Device import *
 from lib.util.MetaArray import MetaArray, axis
 from numpy import *
@@ -69,18 +69,13 @@ class DAQGenericTask(DeviceTask):
                 if 'cmd' not in self.cmd[ch]:
                     continue
             
-            self.bufferedChannels.append[ch]
+            self.bufferedChannels.append(ch)
             daqTask.addChannel(chConf['channel'][1], chConf['type'])
+            self.cmd[ch]['task'] = daqTask
             if chConf['type'] in ['ao', 'do']:
-                daqTask.addChannel(self.dev.config['cmd'][1], 'ao')
-                
                 scale = self.getChanScale(ch)
                 cmdData = self.cmd[ch]['command'] * scale
-                daqTask.setWaveform(self.dev.config['cmd'][1], cmdData)
-                self.cmd[ch].task = daqTask
-            else:
-                daqTask.addChannel(self.dev.config[ch][1], 'ai')
-                self.daqTasks[ch] = daqTask
+                daqTask.setWaveform(chConf['channel'][1], cmdData)
         
     def getChanScale(self, chan):
         ## Scale defaults to 1.0
@@ -89,8 +84,8 @@ class DAQGenericTask(DeviceTask):
         scale = 1.0
         if scale in self.dev.config[chan]:
             scale = self.dev.config[chan]['scale']
-        if scale in self.cmd[ch]:
-            scale = self.cmd[ch]['scale']
+        if scale in self.cmd[chan]:
+            scale = self.cmd[chan]['scale']
         return scale
         
     def start(self):
@@ -108,8 +103,8 @@ class DAQGenericTask(DeviceTask):
         
         ## Collect data and info for each channel in the command
         result = {}
-        for ch in self.cmd:
-            result[ch] = self.cmd[ch].task.getData(self.dev.config[ch][1])
+        for ch in self.bufferedChannels:
+            result[ch] = self.cmd[ch]['task'].getData(self.dev.config[ch][1])
             
             result[ch]['data'] = result[ch]['data'] / self.getChanScale(ch)
             if 'units' in self.dev.config[ch]:
@@ -117,18 +112,23 @@ class DAQGenericTask(DeviceTask):
             else:
                 result[ch]['units'] = None
             
-        ## Create an array of time values
-        meta = result[result.keys()[0]]
-        rate = meta['rate']
-        nPts = meta['numPts']
-        timeVals = linspace(0, float(nPts-1) / float(rate), nPts)
-        
-        ## Concatenate all channels together into a single array, generate MetaArray info
-        chanList = [atleast_2d(result[x]['data']) for x in result]
-        cols = [(x, result[x]['units']) for x in result]
-        # print cols
-        arr = concatenate(chanList)
-        info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'rate': rate, 'numPts': nPts, 'startTime': meta['startTime']}]
-        marr = MetaArray(arr, info=info)
+        ## Todo: Add meta-info about channels that were used but unbuffered
+        if len(result) > 0:
+            ## Create an array of time values
+            meta = result[result.keys()[0]]
+            rate = meta['rate']
+            nPts = meta['numPts']
+            timeVals = linspace(0, float(nPts-1) / float(rate), nPts)
             
-        return marr
+            ## Concatenate all channels together into a single array, generate MetaArray info
+            chanList = [atleast_2d(result[x]['data']) for x in result]
+            cols = [(x, result[x]['units']) for x in result]
+            # print cols
+            arr = concatenate(chanList)
+            info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'rate': rate, 'numPts': nPts, 'startTime': meta['startTime']}]
+            marr = MetaArray(arr, info=info)
+                
+            return marr
+            
+        else:
+            return None

@@ -87,7 +87,8 @@ class Task(DeviceTask):
         self.dev = dev
         self.cmd = cmd
         self.recordParams = ['Holding', 'HoldingEnable', 'PipetteOffset', 'FastCompCap', 'SlowCompCap', 'FastCompTau', 'SlowCompTau', 'NeutralizationEnable', 'NeutralizationCap', 'WholeCellCompEnable', 'WholeCellCompCap', 'WholeCellCompResist', 'RsCompEnable', 'RsCompBandwidth', 'RsCompCorrection', 'PrimarySignalGain', 'PrimarySignalLPF', 'PrimarySignalHPF', 'OutputZeroEnable', 'OutputZeroAmplitude', 'LeakSubEnable', 'LeakSubResist', 'BridgeBalEnable', 'BridgeBalResist']
-  
+        self.usedChannels = None
+        self.daqTasks = {}
         
     def configure(self, tasks, startOrder):
         ## set MC state, record state
@@ -97,8 +98,8 @@ class Task(DeviceTask):
         
         ## Set state of clamp
         self.dev.setMode(self.cmd['mode'])
-        if 'inp' in self.cmd:
-            self.dev.mc.setPrimarySignalByName(ch, self.cmd['inp'])
+        if 'scaled' in self.cmd:
+            self.dev.mc.setPrimarySignalByName(ch, self.cmd['scaled'])
         if 'raw' in self.cmd:
             self.dev.mc.setSecondarySignalByName(ch, self.cmd['raw'])
         
@@ -110,31 +111,37 @@ class Task(DeviceTask):
         if self.cmd.has_key('recordState') and self.cmd['recordState']:
             self.state = self.dev.mc.readParams(ch, self.recordParams)
             
-        self.state['inpSignal'] = self.dev.mc.getSignalInfo(ch, 'Primary')
+        self.state['scaledSignal'] = self.dev.mc.getSignalInfo(ch, 'Primary')
         self.state['rawSignal'] = self.dev.mc.getSignalInfo(ch, 'Secondary')
         
-        self.usedChannels = []
-        for ch in ['inp', 'raw', 'cmd']:
-            if ch in self.cmd:
-                self.usedChannels.append(ch)
-        self.daqTasks = {}
+                
+    def getUsedChannels(self):
+        """Return a list of the channels this task uses"""
+        if self.usedChannels is None:
+            self.usedChannels = []
+            for ch in ['scaled', 'raw', 'command']:
+                if ch in self.cmd:
+                    self.usedChannels.append(ch)
+                    
+        return self.usedChannels
+        
                 
     def createChannels(self, daqTask):
         ## Is this the correct DAQ device for any of my channels?
         ## create needed channels + info
         ## write waveform to command channel if needed
         
-        for ch in self.usedChannels:
-            if self.dev.config[ch][0] == daqTask.devName():
-                if ch == 'cmd':
-                    daqTask.addChannel(self.dev.config['cmd'][1], 'ao')
+        for ch in self.getUsedChannels():
+            chConf = self.dev.config[ch+'Channel']
+            if chConf[0] == daqTask.devName():
+                if ch == 'command':
+                    daqTask.addChannel(chConf[1], 'ao')
                     scale = self.dev.config['cmdScale'][self.cmd['mode']]
-                    cmdData = self.cmd['cmd'] * scale
-                    daqTask.setWaveform(self.dev.config['cmd'][1], cmdData)
-                    self.daqTasks['cmd'] = daqTask
+                    cmdData = self.cmd['command'] * scale
+                    daqTask.setWaveform(chConf[1], cmdData)
                 else:
-                    daqTask.addChannel(self.dev.config[ch][1], 'ai')
-                    self.daqTasks[ch] = daqTask
+                    daqTask.addChannel(chConf[1], 'ai')
+                self.daqTasks[ch] = daqTask
         
     def start(self):
         ## possibly nothing required here, DAQ will start recording.
@@ -152,9 +159,10 @@ class Task(DeviceTask):
         result = {}
         #result['info'] = self.state
         for ch in self.usedChannels:
-            result[ch] = self.daqTasks[ch].getData(self.dev.config[ch][1])
+            chConf = self.dev.config[ch+'Channel']
+            result[ch] = self.daqTasks[ch].getData(chConf[1])
             # print result[ch]
-            if ch == 'cmd':
+            if ch == 'command':
                 result[ch]['data'] = result[ch]['data'] * self.dev.config['cmdScale'][self.cmd['mode']]
                 result[ch]['name'] = 'Command'
                 if self.cmd['mode'] == 'VC':
