@@ -38,7 +38,7 @@ class PlotROI(ROI):
         ROI.__init__(self, pos=[0,0], size=size, scaleSnap=True, translateSnap=True)
         self.addScaleHandle([1, 1], [0, 0])
 
-class Camera(QtGui.QMainWindow):
+class PVCamera(QtGui.QMainWindow):
     def __init__(self, module):
         self.module = module ## handle to the rest of the application
         
@@ -312,7 +312,7 @@ class Camera(QtGui.QMainWindow):
             #self.ui.spinRegionS2.setMinimum(1)
             #self.ui.spinRegionP2.setMinimum(1)
             self.setRegion()
-            self.ui.statusbar.showMessage("Opened camera %s" % cams[ind], 5000)
+            self.ui.statusbar.showMessage("Opened camera %s" % self.cam, 5000)
             tmodes = self.cam.listTransferModes()
             tmode = self.cam.getTransferMode()
             self.ui.comboTransferMode.addItems(tmodes)
@@ -763,11 +763,11 @@ class RecordThread(QtCore.QThread):
         self.stopThread = True
 
 
-def main():
-    global app, qc
-    app = QtGui.QApplication(sys.argv)
-    qc = QtCam()
-    app.exec_()
+#def main():
+    #global app, qc
+    #app = QtGui.QApplication(sys.argv)
+    #qc = QtCam()
+    #app.exec_()
     
     
-main()
+#main()

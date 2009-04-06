@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 from util import configfile
-import time, sys
+import time, sys, atexit
 
 class DeviceManager():
     """DeviceManager class is responsible for loading device modules and instantiating device
     objects as they are needed. This class is the global repository for device handles."""
     
     def __init__(self, configFile=None):
+        self.alreadyQuit = False
+        atexit.register(self.quit)
         self.devices = {}
+        self.modules = {}
         self.readConfig(configFile)
         if 'win' in sys.platform:
             time.clock()  ### Required to start the clock in windows
@@ -15,6 +18,9 @@ class DeviceManager():
             self.time = self.winTime
         else:
             self.time = self.unixTime
+    
+    def __del__(self):
+        self.quit()
     
     def getDevice(self, name):
         if name not in self.devices:
@@ -66,10 +72,12 @@ class DeviceManager():
 
     def quit(self):
         """Nicely request that all devices shut down"""
-        for d in self.devices:
-            print "Requesting %s quit.." % d
-            self.devices[d].quit()
-
+        if not self.alreadyQuit:
+            for d in self.devices:
+                print "Requesting %s quit.." % d
+                self.devices[d].quit()
+            self.alreadyQuit = True
+            
 class Task:
     def __init__(self, dm, command):
         self.dm = dm

@@ -3,7 +3,7 @@ from PyQt4 import QtGui, QtCore
 from numpy import *
 import scipy.weave as weave
 from scipy.weave import converters
-from MetaArray import MetaArray
+from lib.util.MetaArray import MetaArray
 import types
 
 ## Multiple inheritance not allowed in PyQt. Retarded workaround:
@@ -29,7 +29,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
     #self.pixmapItem = QtGui.QGraphicsPixmapItem(self)
     if image is not None:
       self.updateImage(image, copy, autoRange=True)
-    self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
+    #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
     
     
   #def boundingRect(self):
@@ -447,7 +447,7 @@ class Grid(UIGraphicsItem):
     UIGraphicsItem.__init__(self, view, bounds)
     #QtGui.QGraphicsItem.__init__(self, *args)
     self.setFlag(QtGui.QGraphicsItem.ItemClipsToShape)
-    self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
+    #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
     
     self.picture = None
     

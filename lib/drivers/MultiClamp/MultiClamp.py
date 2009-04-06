@@ -35,7 +35,8 @@ class MultiClamp:
       self.disconnect()
   
   def disconnect(self):
-      self.socket.close()
+      if self.socket is not None:
+        self.socket.close()
       
   
   def setUseCache(self, bool):
