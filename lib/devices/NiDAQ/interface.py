@@ -15,7 +15,12 @@ class NiDAQ(Device):
     def createTask(self, cmd):
         return Task(self, cmd)
         
-
+    def setChannelValue(self, chan, value):
+        if 'ao' in chan:
+            self.n.writeAnalogSample(chan, value)
+        else:
+            self.n.writeDigitalSample(chan, value)
+        
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):

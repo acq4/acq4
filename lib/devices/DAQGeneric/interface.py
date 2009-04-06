@@ -36,10 +36,16 @@ class DAQGenericTask(DeviceTask):
     def __init__(self, dev, cmd):
         self.dev = dev
         self.cmd = cmd
-
+        
+        ## Stores the list of channels that will generate or acquire buffered samples
+        self.bufferedChannels = []
         
     def configure(self, tasks, startOrder):
         self.daqTasks = {}
+        for ch in self.cmd:
+            if 'preset' in self.cmd[ch]:
+                dev = self.dev.dm.getDevice(self.dev.config[ch]['channel'][0])
+                dev.setChannelValue(self.dev.config[ch]['channel'][1], self.cmd[ch]['preset'])
                 
     def createChannels(self, daqTask):
         ## Is this the correct DAQ device for any of my channels?
@@ -53,6 +59,17 @@ class DAQGenericTask(DeviceTask):
             if chConf['channel'][0] != daqTask.devName():
                 continue
             
+            ## Input channels are only used if the command has record: True
+            if chConf['type'] in ['ai', 'di']:
+                if ('record' not in self.cmd[ch]) or (not self.cmd[ch]['record']):
+                    continue
+                
+            ## Output channels are only added if they have a command waveform specified
+            elif chConf['type'] in ['ao', 'do']:
+                if 'cmd' not in self.cmd[ch]:
+                    continue
+            
+            self.bufferedChannels.append[ch]
             daqTask.addChannel(chConf['channel'][1], chConf['type'])
             if chConf['type'] in ['ao', 'do']:
                 daqTask.addChannel(self.dev.config['cmd'][1], 'ao')

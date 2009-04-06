@@ -29,6 +29,8 @@ cellSig[1700:2000] = 200.0e-12
 clampSettings = {'mode': 'IC', 'bridge': 10e6, 'recordState': True, 'cmd': cellSig, 'inp': 'MembranePotential', 'raw': 'MembraneCurrent'}
 
 #stimSig = stim(t=[0.0, 0.009, 0.0091], v=[0.0, 0.1, 0.0])
+stimSig = zeros((nPts))
+stimSig[1000:1100] = 10e-6
 
 cmd = {
     'protocol': protoSettings,
@@ -37,7 +39,8 @@ cmd = {
     'Clamp1': clampSettings,
     #'stim': {'cmd': stimSig},
     'Camera': {'record': True, 'trigger': True, 'recordExposeChannel': True},
-    #'led-blue': {'on': True, 'duty': 0.6},
+    'LED-Blue': {'Command': {'preset': 1}},
+    'Stim0': {'Command': {'cmd': stimSig}}
 }
 
 print "\nRunning protocol.."
