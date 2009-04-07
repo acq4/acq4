@@ -5,12 +5,6 @@ import os, sys
 from numpy import *
 from PyQt4 import QtGui
 
-## Make sure QApplication is created
-app = QtGui.QApplication.instance()
-if app is None:
-    app = QtGui.QApplication(sys.argv)
-
-
 config = 'config/default.cfg'
 if len(sys.argv) > 1:
     config = sys.argv[1]
