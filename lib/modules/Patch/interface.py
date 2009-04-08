@@ -5,5 +5,5 @@ from Patch import *
 class Patch(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
-        self.ui = PatchWindow()
+        self.ui = PatchWindow(manager, config['clampDev'])
     

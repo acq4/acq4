@@ -93,18 +93,35 @@ class Task(DeviceTask):
         self.recordParams = ['Holding', 'HoldingEnable', 'PipetteOffset', 'FastCompCap', 'SlowCompCap', 'FastCompTau', 'SlowCompTau', 'NeutralizationEnable', 'NeutralizationCap', 'WholeCellCompEnable', 'WholeCellCompCap', 'WholeCellCompResist', 'RsCompEnable', 'RsCompBandwidth', 'RsCompCorrection', 'PrimarySignalGain', 'PrimarySignalLPF', 'PrimarySignalHPF', 'OutputZeroEnable', 'OutputZeroAmplitude', 'LeakSubEnable', 'LeakSubResist', 'BridgeBalEnable', 'BridgeBalResist']
         self.usedChannels = None
         self.daqTasks = {}
+
+        ## Sanity checks and default values for command:
         
+        if ('mode' not in self.cmd) or (self.cmd['mode'] not in ['ic', 'vc', 'i=0']):
+            raise Exception("Multiclamp command must specify clamp mode (ic, vc, or i=0)")
+        
+        ## If scaled and raw modes are not specified, use default values
+        defaultModes = {
+            'vc': {'scaled': 'MembraneCurrent', 'raw': 'MembanePotential'},
+            'ic': {'scaled': 'MembranePotential', 'raw': 'MembaneCurrent'},
+            'i=0': {'scaled': 'MembranePotential', 'raw': None},
+        }
+        for ch in ['scaled', 'raw']:
+            if ch not in self.cmd:
+                self.cmd[ch] = defaultModes[self.cmd['mode']][ch]
+
+        if 'command' not in self.cmd:
+            self.cmd['command'] = None
+
     def configure(self, tasks, startOrder):
-        ## set MC state, record state
         """Sets the state of a remote multiclamp to prepare for a program run."""
             
         ch = self.dev.getChanIndex()
         
         ## Set state of clamp
         self.dev.setMode(self.cmd['mode'])
-        if 'scaled' in self.cmd:
+        if self.cmd['scaled'] is not None:
             self.dev.mc.setPrimarySignalByName(ch, self.cmd['scaled'])
-        if 'raw' in self.cmd:
+        if self.cmd['raw'] is not None:
             self.dev.mc.setSecondarySignalByName(ch, self.cmd['raw'])
         
         if self.cmd.has_key('parameters'):
@@ -124,7 +141,7 @@ class Task(DeviceTask):
         if self.usedChannels is None:
             self.usedChannels = []
             for ch in ['scaled', 'raw', 'command']:
-                if ch in self.cmd:
+                if self.cmd[ch] is not None:
                     self.usedChannels.append(ch)
                     
         return self.usedChannels
@@ -177,8 +194,8 @@ class Task(DeviceTask):
                 scale = 1.0 / self.state[ch + 'Signal'][1]
                 result[ch]['data'] = result[ch]['data'] * scale
                 result[ch]['units'] = self.state[ch + 'Signal'][2]
-                result[ch]['name'] = self.state[ch + 'Signal'][0]
-            
+                #result[ch]['name'] = self.state[ch + 'Signal'][0]
+                result[ch]['name'] = ch
         # print result
             
         ## Copy state from first channel (assume this is the same for all channels)
