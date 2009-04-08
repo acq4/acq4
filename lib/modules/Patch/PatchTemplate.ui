@@ -5,135 +5,14 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>816</width>
-    <height>574</height>
+    <width>918</width>
+    <height>724</height>
    </rect>
   </property>
   <property name="windowTitle" >
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout" >
-   <item rowspan="2" row="0" column="1" >
-    <widget class="QwtPlot" name="qwtPlot" >
-     <property name="sizePolicy" >
-      <sizepolicy vsizetype="MinimumExpanding" hsizetype="MinimumExpanding" >
-       <horstretch>7</horstretch>
-       <verstretch>10</verstretch>
-      </sizepolicy>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="0" >
-    <widget class="QGroupBox" name="groupBox" >
-     <property name="sizePolicy" >
-      <sizepolicy vsizetype="Preferred" hsizetype="Preferred" >
-       <horstretch>3</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="title" >
-      <string/>
-     </property>
-     <layout class="QGridLayout" name="gridLayout_3" >
-      <item row="0" column="0" colspan="2" >
-       <widget class="QRadioButton" name="radioButton_3" >
-        <property name="text" >
-         <string>Input Resistance</string>
-        </property>
-        <property name="checked" >
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="2" >
-       <widget class="QLabel" name="label_3" >
-        <property name="font" >
-         <font>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="text" >
-         <string>0 MOhm</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0" colspan="2" >
-       <widget class="QRadioButton" name="radioButton_4" >
-        <property name="text" >
-         <string>Resting Potential</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="2" >
-       <widget class="QLabel" name="label_4" >
-        <property name="font" >
-         <font>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="text" >
-         <string>0 mV</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="0" colspan="2" >
-       <widget class="QRadioButton" name="radioButton_5" >
-        <property name="text" >
-         <string>Time constant</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="2" >
-       <widget class="QLabel" name="label_5" >
-        <property name="font" >
-         <font>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="text" >
-         <string>0 ms</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="0" >
-       <widget class="QLabel" name="label_6" >
-        <property name="text" >
-         <string>Averaging:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="1" colspan="2" >
-       <widget class="QDoubleSpinBox" name="doubleSpinBox_3" />
-      </item>
-      <item row="4" column="1" >
-       <spacer name="verticalSpacer_2" >
-        <property name="orientation" >
-         <enum>Qt::Vertical</enum>
-        </property>
-        <property name="sizeHint" stdset="0" >
-         <size>
-          <width>20</width>
-          <height>40</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="2" column="0" colspan="2" >
-    <widget class="QwtPlot" name="qwtPlot_2" >
-     <property name="sizePolicy" >
-      <sizepolicy vsizetype="MinimumExpanding" hsizetype="MinimumExpanding" >
-       <horstretch>0</horstretch>
-       <verstretch>3</verstretch>
-      </sizepolicy>
-     </property>
-    </widget>
-   </item>
    <item row="0" column="0" >
     <widget class="QGroupBox" name="groupBox_2" >
      <property name="sizePolicy" >
@@ -153,7 +32,7 @@
        <number>0</number>
       </property>
       <item row="0" column="0" >
-       <widget class="QPushButton" name="pushButton" >
+       <widget class="QPushButton" name="startBtn" >
         <property name="text" >
          <string>Start</string>
         </property>
@@ -163,7 +42,7 @@
        </widget>
       </item>
       <item row="0" column="1" >
-       <widget class="QPushButton" name="pushButton_2" >
+       <widget class="QPushButton" name="recordPlot" >
         <property name="text" >
          <string>Record</string>
         </property>
@@ -173,7 +52,7 @@
        </widget>
       </item>
       <item row="1" column="0" >
-       <widget class="QRadioButton" name="radioButton" >
+       <widget class="QRadioButton" name="vcModeRadio" >
         <property name="text" >
          <string>VC</string>
         </property>
@@ -183,7 +62,7 @@
        </widget>
       </item>
       <item row="1" column="1" >
-       <widget class="QCheckBox" name="checkBox" >
+       <widget class="QCheckBox" name="pulseCheck" >
         <property name="text" >
          <string>Pulse</string>
         </property>
@@ -193,34 +72,34 @@
        </widget>
       </item>
       <item row="1" column="2" >
-       <widget class="QDoubleSpinBox" name="doubleSpinBox" />
+       <widget class="QDoubleSpinBox" name="pulseSpin" />
       </item>
       <item row="1" column="3" >
-       <widget class="QLabel" name="label" >
+       <widget class="QLabel" name="pulseLabel" >
         <property name="text" >
          <string>mV</string>
         </property>
        </widget>
       </item>
       <item row="2" column="0" >
-       <widget class="QRadioButton" name="radioButton_2" >
+       <widget class="QRadioButton" name="icModeRadio" >
         <property name="text" >
          <string>IC</string>
         </property>
        </widget>
       </item>
       <item row="2" column="1" >
-       <widget class="QCheckBox" name="checkBox_2" >
+       <widget class="QCheckBox" name="holdCheck" >
         <property name="text" >
          <string>Hold</string>
         </property>
        </widget>
       </item>
       <item row="2" column="2" >
-       <widget class="QDoubleSpinBox" name="doubleSpinBox_2" />
+       <widget class="QDoubleSpinBox" name="holdSpin" />
       </item>
       <item row="2" column="3" >
-       <widget class="QLabel" name="label_2" >
+       <widget class="QLabel" name="holdLabel" >
         <property name="text" >
          <string>mV</string>
         </property>
@@ -242,11 +121,131 @@
      </layout>
     </widget>
    </item>
+   <item rowspan="2" row="0" column="1" >
+    <widget class="QwtPlot" name="patchPlot" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="MinimumExpanding" hsizetype="MinimumExpanding" >
+       <horstretch>7</horstretch>
+       <verstretch>10</verstretch>
+      </sizepolicy>
+     </property>
+    </widget>
+   </item>
+   <item rowspan="2" row="1" column="0" >
+    <widget class="QGroupBox" name="groupBox" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="Preferred" hsizetype="Preferred" >
+       <horstretch>3</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="title" >
+      <string/>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_3" >
+      <item row="0" column="0" colspan="2" >
+       <widget class="QRadioButton" name="inputResistanceRadio" >
+        <property name="text" >
+         <string>Input Resistance</string>
+        </property>
+        <property name="checked" >
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="2" >
+       <widget class="QLabel" name="inputResistanceLabel" >
+        <property name="font" >
+         <font>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text" >
+         <string>0 MOhm</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0" colspan="2" >
+       <widget class="QRadioButton" name="restingPotentialRadio" >
+        <property name="text" >
+         <string>Resting Potential</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2" >
+       <widget class="QLabel" name="restingPotentialLabel" >
+        <property name="font" >
+         <font>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text" >
+         <string>0 mV</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0" colspan="2" >
+       <widget class="QRadioButton" name="timeConstantRadio" >
+        <property name="text" >
+         <string>Time constant</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="2" >
+       <widget class="QLabel" name="timeConstantLabel" >
+        <property name="font" >
+         <font>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text" >
+         <string>0 ms</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0" >
+       <widget class="QLabel" name="label_6" >
+        <property name="text" >
+         <string>Averaging:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1" colspan="2" >
+       <widget class="QDoubleSpinBox" name="averagingSpin" />
+      </item>
+      <item row="4" column="1" >
+       <spacer name="verticalSpacer_2" >
+        <property name="orientation" >
+         <enum>Qt::Vertical</enum>
+        </property>
+        <property name="sizeHint" stdset="0" >
+         <size>
+          <width>20</width>
+          <height>40</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="2" column="1" >
+    <widget class="QwtPlot" name="commandPlot" />
+   </item>
+   <item row="3" column="0" colspan="2" >
+    <widget class="QwtPlot" name="analysisPlot" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="MinimumExpanding" hsizetype="MinimumExpanding" >
+       <horstretch>0</horstretch>
+       <verstretch>3</verstretch>
+      </sizepolicy>
+     </property>
+    </widget>
+   </item>
   </layout>
-  <zorder>qwtPlot</zorder>
-  <zorder>qwtPlot_2</zorder>
-  <zorder>groupBox</zorder>
-  <zorder>groupBox_2</zorder>
  </widget>
  <customwidgets>
   <customwidget>

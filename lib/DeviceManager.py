@@ -18,13 +18,7 @@ class DeviceManager():
             self.time = self.winTime
         else:
             self.time = self.unixTime
-
-        ## Make sure QApplication is created
-        self.app = QtGui.QApplication.instance()
-        if self.app is None:
-            self.app = QtGui.QApplication(sys.argv)
-
-
+    
     def __del__(self):
         self.quit()
     
@@ -75,6 +69,9 @@ class DeviceManager():
         t = Task(self, cmd)
         t.execute()
         return t.getResult()
+
+    def createTask(self, cmd):
+        return Task(self, cmd)
 
     def quit(self):
         """Nicely request that all devices shut down"""
