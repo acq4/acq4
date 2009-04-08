@@ -12,7 +12,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.params = {
             'mode': 'vc',
             'rate': 40000,
-            'cycleTime': 0.25,
+            'cycleTime': 1.0,
             'recordTime': 0.05,
             'delayTime': 0.01,
             'pulseTime': 0.02,
@@ -48,8 +48,8 @@ class PatchWindow(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.startBtn, QtCore.SIGNAL('clicked()'), self.startClicked)
         QtCore.QObject.connect(self.thread, QtCore.SIGNAL('finished()'), self.threadStopped)
         QtCore.QObject.connect(self.thread, QtCore.SIGNAL('newFrame(PyQt_PyObject)'), self.handleNewFrame)
-        QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('toggled()'), self.updateMode)
-        QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('toggled()'), self.updateMode)
+        QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.updateMode)
+        QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.updateMode)
         #QtCore.QObject.connect(self.ui.cycleTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('cycleTime', x))
         #QtCore.QObject.connect(self.ui.recordTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('recordTime', x))
         #QtCore.QObject.connect(self.ui.delayTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('delayTime', x))
@@ -71,7 +71,7 @@ class PatchWindow(QtGui.QMainWindow):
             self.ui.holdSpin.setValue(self.params['vcHolding'])
             
         l.unlock()
-        self.thread.paramsUpdated()
+        self.thread.updateParams()
         
     def setParameter(self, param, value):
         if param in ['cycleTime', 'recordTime', 'delayTime', 'pulseTime']:
@@ -79,7 +79,7 @@ class PatchWindow(QtGui.QMainWindow):
             l = QtCore.QMutexLocker(self.paramLock)
             self.params[param] = value
             l.unlock()
-        self.thread.paramsUpdated()
+        self.thread.updateParams()
         
         
     def handleNewFrame(self, frame):
@@ -129,7 +129,7 @@ class PatchThread(QtCore.QThread):
         self.stopThread = True
         self.paramsUpdated = True
                 
-    def paramsUpdated(self):
+    def updateParams(self):
         l = QtCore.QMutexLocker(self.lock)
         self.paramsUpdated = True
         
@@ -140,7 +140,7 @@ class PatchThread(QtCore.QThread):
             clamp = self.dm.getDevice(self.clampName)
             daqName = clamp.config['commandChannel'][0]
             clampName = self.clampName
-            
+            self.paramsUpdated = True
             l.unlock()
             
             lastTime = None
@@ -152,6 +152,7 @@ class PatchThread(QtCore.QThread):
                 if self.paramsUpdated:
                     pl = QtCore.QMutexLocker(self.ui.paramLock)
                     params = self.ui.params.copy()
+                    self.paramsUpdated = False
                     pl.unlock()
                     updateCommand = True
                 l.unlock()
