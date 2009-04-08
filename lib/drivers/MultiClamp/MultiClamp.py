@@ -25,7 +25,7 @@ class MultiClamp:
   #recordParams = ['Holding', 'HoldingEnable', 'PipetteOffset', 'FastCompCap', 'SlowCompCap', 'FastCompTau', 'SlowCompTau', 'NeutralizationEnable', 'NeutralizationCap', 'WholeCellCompEnable', 'WholeCellCompCap', 'WholeCellCompResist', 'RsCompEnable', 'RsCompBandwidth', 'RsCompCorrection', 'PrimarySignalGain', 'PrimarySignalLPF', 'PrimarySignalHPF', 'OutputZeroEnable', 'OutputZeroAmplitude', 'LeakSubEnable', 'LeakSubResist', 'BridgeBalEnable', 'BridgeBalResist']
   
   ## translate between RTXI modes and multiclamp modes
-  modeTrans = {'vc': 'VC', 'ic': 'IC', 'dc': 'IC', 'i=0': 'I=0'}
+  #modeTrans = {'vc': 'VC', 'ic': 'IC', 'dc': 'IC', 'i=0': 'I=0'}
   
   def __init__(self, host, port=34567):
       self.host = host

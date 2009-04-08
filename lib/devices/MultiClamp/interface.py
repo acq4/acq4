@@ -18,6 +18,7 @@ class MultiClamp(Device):
         else:
             args = (self.host,)
         self.mc = MultiClampDriver(*args)
+        self.mc.setUseCache(True)
         
         try:
             mcs = self.mc.listDevices()
@@ -96,14 +97,15 @@ class Task(DeviceTask):
 
         ## Sanity checks and default values for command:
         
-        if ('mode' not in self.cmd) or (self.cmd['mode'] not in ['ic', 'vc', 'i=0']):
-            raise Exception("Multiclamp command must specify clamp mode (ic, vc, or i=0)")
+        if ('mode' not in self.cmd) or (type(self.cmd['mode']) is not str) or (self.cmd['mode'].upper() not in ['IC', 'VC', 'I=0']):
+            raise Exception("Multiclamp command must specify clamp mode (IC, VC, or I=0)")
+        self.cmd['mode'] = self.cmd['mode'].upper()
         
         ## If scaled and raw modes are not specified, use default values
         defaultModes = {
-            'vc': {'scaled': 'MembraneCurrent', 'raw': 'MembanePotential'},
-            'ic': {'scaled': 'MembranePotential', 'raw': 'MembaneCurrent'},
-            'i=0': {'scaled': 'MembranePotential', 'raw': None},
+            'VC': {'scaled': 'MembraneCurrent', 'raw': 'PipettePotential'},  ## MC700A does not have MembranePotential signal
+            'IC': {'scaled': 'MembranePotential', 'raw': 'MembraneCurrent'},
+            'I=0': {'scaled': 'MembranePotential', 'raw': None},
         }
         for ch in ['scaled', 'raw']:
             if ch not in self.cmd:

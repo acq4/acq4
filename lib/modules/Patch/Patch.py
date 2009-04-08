@@ -2,7 +2,8 @@
 from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
 from PyQt4 import Qwt5 as Qwt
-import traceback, sys
+import traceback, sys, time
+from numpy import *
 
 class PatchWindow(QtGui.QMainWindow):
     def __init__(self, dm, clampName):
@@ -38,20 +39,21 @@ class PatchWindow(QtGui.QMainWindow):
         self.patchCurve.attach(self.ui.patchPlot)
         self.commandCurve = Qwt.QwtPlotCurve('command')
         self.commandCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        self.commandCurve.attach(self.ui.patchPlot)
+        self.commandCurve.attach(self.ui.commandPlot)
         self.analysisCurve = Qwt.QwtPlotCurve('analysis')
         self.analysisCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        self.analysisCurve.attach(self.ui.patchPlot)
+        self.analysisCurve.attach(self.ui.analysisPlot)
         self.analysisData = {'mr': [], 'rmp': [], 'tau': [], 'time': []}
         
         QtCore.QObject.connect(self.ui.startBtn, QtCore.SIGNAL('clicked()'), self.startClicked)
         QtCore.QObject.connect(self.thread, QtCore.SIGNAL('finished()'), self.threadStopped)
+        QtCore.QObject.connect(self.thread, QtCore.SIGNAL('newFrame(PyQt_PyObject)'), self.handleNewFrame)
         QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('toggled()'), self.updateMode)
         QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('toggled()'), self.updateMode)
-        QtCore.QObject.connect(self.ui.cycleTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('cycleTime', x))
-        QtCore.QObject.connect(self.ui.recordTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('recordTime', x))
-        QtCore.QObject.connect(self.ui.delayTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('delayTime', x))
-        QtCore.QObject.connect(self.ui.pulseTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('pulseTime', x))
+        #QtCore.QObject.connect(self.ui.cycleTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('cycleTime', x))
+        #QtCore.QObject.connect(self.ui.recordTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('recordTime', x))
+        #QtCore.QObject.connect(self.ui.delayTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('delayTime', x))
+        #QtCore.QObject.connect(self.ui.pulseTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('pulseTime', x))
         
         self.show()
         
@@ -81,25 +83,26 @@ class PatchWindow(QtGui.QMainWindow):
         
         
     def handleNewFrame(self, frame):
-        self.patchCurve.setData(frame['data']['scaled'], frame['data'].xvals('Time'))
-        self.commandCurve.setData(frame['data']['raw'], frame['data'].xvals('Time'))
+        data = frame['data'][self.clampName]
+        self.patchCurve.setData(data.xvals('Time'), data['scaled'])
+        self.commandCurve.setData(data.xvals('Time'), data['raw'])
         self.ui.patchPlot.replot()
         self.ui.commandPlot.replot()
         
         for k in ['mr', 'rmp', 'tau']:
             self.analysisData[k].append(frame['analysis'][k])
-        self.analysisData['time'].append(frame['data']._info[-1]['startTime'])
+        self.analysisData['time'].append(data._info[-1]['startTime'])
         self.updateAnalysisPlot()
         
     def updateAnalysisPlot(self):
-        if self.ui.membraneResistanceRadio.isChecked():
+        if self.ui.inputResistanceRadio.isChecked():
             p = 'mr'
         elif self.ui.restingMembranePotentialRadio.isChecked():
             p = 'rmp'
         elif self.ui.timeConstantRadio.isChecked():
             p = 'tau'
-        self.analysisCurve.setData(self.analysisData[p], self.analysisData['time'])
-        self.analysisPlot.replot()
+        self.analysisCurve.setData(self.analysisData['time'], self.analysisData[p])
+        self.ui.analysisPlot.replot()
     
     def startClicked(self):
         if self.ui.startBtn.isChecked():
@@ -117,17 +120,13 @@ class PatchWindow(QtGui.QMainWindow):
         
         
 class PatchThread(QtCore.QThread):
-    def __init__(self, ui, params):
+    def __init__(self, ui):
         self.ui = ui
         self.dm = ui.dm
         self.clampName = ui.clampName
         QtCore.QThread.__init__(self)
         self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
         self.stopThread = True
-        
-        ## Note that params is the same dict as held by the GUI thread, so accessing it is NOT thread safe.
-        self.params = params
-        
         self.paramsUpdated = True
                 
     def paramsUpdated(self):
@@ -145,14 +144,14 @@ class PatchThread(QtCore.QThread):
             l.unlock()
             
             lastTime = None
-            while true:
+            while True:
                 lastTime = time.clock()
                 
                 updateCommand = False
-                l.lock()
+                l.relock()
                 if self.paramsUpdated:
-                    pl = QtCore.QMutexLocker(self.ui.paramsLock)
-                    params = self.params.copy()
+                    pl = QtCore.QMutexLocker(self.ui.paramLock)
+                    params = self.ui.params.copy()
                     pl.unlock()
                     updateCommand = True
                 l.unlock()
@@ -190,7 +189,7 @@ class PatchThread(QtCore.QThread):
                 (mr, rmp, tau) = self.analyze(res, params)
                 frame = {'data': res, 'analysis': {'mr': mr, 'rmp': rmp, 'tau': tau}}
                 
-                self.emit(QtCore.SIGNAL('newFrame'), frame)
+                self.emit(QtCore.SIGNAL('newFrame(PyQt_PyObject)'), frame)
                 
                 ## sleep until it is time for the next run
                 while True:
@@ -198,7 +197,7 @@ class PatchThread(QtCore.QThread):
                     if now < (lastTime+params['cycleTime']):
                         break
                     time.sleep(100e-6)
-                l.lock()
+                l.relock()
                 if self.stopThread:
                     l.unlock()
                     break
