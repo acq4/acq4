@@ -6,236 +6,320 @@
     <x>0</x>
     <y>0</y>
     <width>918</width>
-    <height>724</height>
+    <height>728</height>
    </rect>
   </property>
   <property name="windowTitle" >
    <string>Form</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout" >
-   <item row="0" column="0" >
-    <widget class="QGroupBox" name="groupBox_2" >
-     <property name="sizePolicy" >
-      <sizepolicy vsizetype="Preferred" hsizetype="Preferred" >
-       <horstretch>3</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="title" >
-      <string/>
-     </property>
-     <layout class="QGridLayout" name="gridLayout_2" >
-      <property name="margin" >
-       <number>0</number>
-      </property>
-      <property name="spacing" >
-       <number>0</number>
-      </property>
-      <item row="0" column="0" >
-       <widget class="QPushButton" name="startBtn" >
-        <property name="text" >
-         <string>Start</string>
-        </property>
-        <property name="checkable" >
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="1" >
-       <widget class="QPushButton" name="recordPlot" >
-        <property name="text" >
-         <string>Record</string>
-        </property>
-        <property name="checkable" >
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0" >
-       <widget class="QRadioButton" name="vcModeRadio" >
-        <property name="text" >
-         <string>VC</string>
-        </property>
-        <property name="checked" >
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1" >
-       <widget class="QCheckBox" name="pulseCheck" >
-        <property name="text" >
-         <string>Pulse</string>
-        </property>
-        <property name="checked" >
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="2" >
-       <widget class="QDoubleSpinBox" name="pulseSpin" />
-      </item>
-      <item row="1" column="3" >
-       <widget class="QLabel" name="pulseLabel" >
-        <property name="text" >
-         <string>mV</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="0" >
-       <widget class="QRadioButton" name="icModeRadio" >
-        <property name="text" >
-         <string>IC</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1" >
-       <widget class="QCheckBox" name="holdCheck" >
-        <property name="text" >
-         <string>Hold</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="2" >
-       <widget class="QDoubleSpinBox" name="holdSpin" />
-      </item>
-      <item row="2" column="3" >
-       <widget class="QLabel" name="holdLabel" >
-        <property name="text" >
-         <string>mV</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="1" >
-       <spacer name="verticalSpacer" >
-        <property name="orientation" >
-         <enum>Qt::Vertical</enum>
-        </property>
-        <property name="sizeHint" stdset="0" >
-         <size>
-          <width>20</width>
-          <height>40</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-     </layout>
-    </widget>
+  <layout class="QVBoxLayout" name="verticalLayout_3" >
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout" >
+     <item>
+      <layout class="QVBoxLayout" name="verticalLayout" >
+       <item>
+        <widget class="QGroupBox" name="groupBox_2" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Preferred" hsizetype="Preferred" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="title" >
+          <string/>
+         </property>
+         <layout class="QGridLayout" name="gridLayout_2" >
+          <property name="margin" >
+           <number>0</number>
+          </property>
+          <property name="spacing" >
+           <number>0</number>
+          </property>
+          <item row="0" column="0" >
+           <widget class="QPushButton" name="startBtn" >
+            <property name="text" >
+             <string>Start</string>
+            </property>
+            <property name="checkable" >
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1" >
+           <widget class="QPushButton" name="recordPlot" >
+            <property name="text" >
+             <string>Record</string>
+            </property>
+            <property name="checkable" >
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0" >
+           <widget class="QRadioButton" name="vcModeRadio" >
+            <property name="text" >
+             <string>VC</string>
+            </property>
+            <property name="checked" >
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1" >
+           <widget class="QCheckBox" name="vcPulseCheck" >
+            <property name="text" >
+             <string>Pulse</string>
+            </property>
+            <property name="checked" >
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2" >
+           <widget class="QDoubleSpinBox" name="vcPulseSpin" >
+            <property name="minimum" >
+             <double>-100.000000000000000</double>
+            </property>
+            <property name="maximum" >
+             <double>100.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="3" >
+           <widget class="QLabel" name="pulseLabel" >
+            <property name="text" >
+             <string>mV</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1" >
+           <widget class="QCheckBox" name="vcHoldCheck" >
+            <property name="text" >
+             <string>Hold</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="2" >
+           <widget class="QDoubleSpinBox" name="vcHoldSpin" >
+            <property name="minimum" >
+             <double>-100.000000000000000</double>
+            </property>
+            <property name="maximum" >
+             <double>100.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="3" >
+           <widget class="QLabel" name="holdLabel" >
+            <property name="text" >
+             <string>mV</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0" >
+           <widget class="QRadioButton" name="icModeRadio" >
+            <property name="text" >
+             <string>IC</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1" >
+           <widget class="QCheckBox" name="icPulseCheck" >
+            <property name="text" >
+             <string>Pulse</string>
+            </property>
+            <property name="checked" >
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="2" >
+           <widget class="QDoubleSpinBox" name="icPulseSpin" >
+            <property name="minimum" >
+             <double>-1000.000000000000000</double>
+            </property>
+            <property name="maximum" >
+             <double>1000.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item rowspan="2" row="3" column="3" >
+           <widget class="QLabel" name="pulseLabel_2" >
+            <property name="text" >
+             <string>pA</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="1" >
+           <widget class="QCheckBox" name="icHoldCheck" >
+            <property name="text" >
+             <string>Hold</string>
+            </property>
+           </widget>
+          </item>
+          <item rowspan="2" row="4" column="2" >
+           <widget class="QDoubleSpinBox" name="icHoldSpin" >
+            <property name="minimum" >
+             <double>-1000.000000000000000</double>
+            </property>
+            <property name="maximum" >
+             <double>1000.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="3" >
+           <widget class="QLabel" name="holdLabel_2" >
+            <property name="text" >
+             <string>pA</string>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="1" >
+           <spacer name="verticalSpacer" >
+            <property name="orientation" >
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0" >
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="groupBox" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Preferred" hsizetype="Preferred" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="title" >
+          <string/>
+         </property>
+         <layout class="QGridLayout" name="gridLayout_3" >
+          <item row="0" column="0" colspan="2" >
+           <widget class="QRadioButton" name="inputResistanceRadio" >
+            <property name="text" >
+             <string>Input Resistance</string>
+            </property>
+            <property name="checked" >
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="2" >
+           <widget class="QLabel" name="inputResistanceLabel" >
+            <property name="font" >
+             <font>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="text" >
+             <string>0 MOhm</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0" colspan="2" >
+           <widget class="QRadioButton" name="restingPotentialRadio" >
+            <property name="text" >
+             <string>Resting Potential</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2" >
+           <widget class="QLabel" name="restingPotentialLabel" >
+            <property name="font" >
+             <font>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="text" >
+             <string>0 mV</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0" colspan="2" >
+           <widget class="QRadioButton" name="timeConstantRadio" >
+            <property name="text" >
+             <string>Time constant</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="2" >
+           <widget class="QLabel" name="timeConstantLabel" >
+            <property name="font" >
+             <font>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="text" >
+             <string>0 ms</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0" >
+           <widget class="QLabel" name="label_6" >
+            <property name="text" >
+             <string>Averaging:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1" colspan="2" >
+           <widget class="QDoubleSpinBox" name="averagingSpin" />
+          </item>
+          <item row="4" column="1" >
+           <spacer name="verticalSpacer_2" >
+            <property name="orientation" >
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0" >
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <layout class="QVBoxLayout" name="verticalLayout_2" >
+       <item>
+        <widget class="QwtPlot" name="patchPlot" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="MinimumExpanding" hsizetype="MinimumExpanding" >
+           <horstretch>0</horstretch>
+           <verstretch>10</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QwtPlot" name="commandPlot" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="MinimumExpanding" hsizetype="MinimumExpanding" >
+           <horstretch>0</horstretch>
+           <verstretch>5</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+    </layout>
    </item>
-   <item rowspan="2" row="0" column="1" >
-    <widget class="QwtPlot" name="patchPlot" >
-     <property name="sizePolicy" >
-      <sizepolicy vsizetype="MinimumExpanding" hsizetype="MinimumExpanding" >
-       <horstretch>7</horstretch>
-       <verstretch>10</verstretch>
-      </sizepolicy>
-     </property>
-    </widget>
-   </item>
-   <item rowspan="2" row="1" column="0" >
-    <widget class="QGroupBox" name="groupBox" >
-     <property name="sizePolicy" >
-      <sizepolicy vsizetype="Preferred" hsizetype="Preferred" >
-       <horstretch>3</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="title" >
-      <string/>
-     </property>
-     <layout class="QGridLayout" name="gridLayout_3" >
-      <item row="0" column="0" colspan="2" >
-       <widget class="QRadioButton" name="inputResistanceRadio" >
-        <property name="text" >
-         <string>Input Resistance</string>
-        </property>
-        <property name="checked" >
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="2" >
-       <widget class="QLabel" name="inputResistanceLabel" >
-        <property name="font" >
-         <font>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="text" >
-         <string>0 MOhm</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0" colspan="2" >
-       <widget class="QRadioButton" name="restingPotentialRadio" >
-        <property name="text" >
-         <string>Resting Potential</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="2" >
-       <widget class="QLabel" name="restingPotentialLabel" >
-        <property name="font" >
-         <font>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="text" >
-         <string>0 mV</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="0" colspan="2" >
-       <widget class="QRadioButton" name="timeConstantRadio" >
-        <property name="text" >
-         <string>Time constant</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="2" >
-       <widget class="QLabel" name="timeConstantLabel" >
-        <property name="font" >
-         <font>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="text" >
-         <string>0 ms</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="0" >
-       <widget class="QLabel" name="label_6" >
-        <property name="text" >
-         <string>Averaging:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="1" colspan="2" >
-       <widget class="QDoubleSpinBox" name="averagingSpin" />
-      </item>
-      <item row="4" column="1" >
-       <spacer name="verticalSpacer_2" >
-        <property name="orientation" >
-         <enum>Qt::Vertical</enum>
-        </property>
-        <property name="sizeHint" stdset="0" >
-         <size>
-          <width>20</width>
-          <height>40</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="2" column="1" >
-    <widget class="QwtPlot" name="commandPlot" />
-   </item>
-   <item row="3" column="0" colspan="2" >
+   <item>
     <widget class="QwtPlot" name="analysisPlot" >
      <property name="sizePolicy" >
       <sizepolicy vsizetype="MinimumExpanding" hsizetype="MinimumExpanding" >
@@ -246,6 +330,11 @@
     </widget>
    </item>
   </layout>
+  <zorder>patchPlot</zorder>
+  <zorder>groupBox</zorder>
+  <zorder>commandPlot</zorder>
+  <zorder>analysisPlot</zorder>
+  <zorder>groupBox_2</zorder>
  </widget>
  <customwidgets>
   <customwidget>
