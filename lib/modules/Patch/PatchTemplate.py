@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'PatchTemplate.ui'
 #
-# Created: Wed Apr  8 23:24:25 2009
+# Created: Thu Apr  9 10:50:36 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(918, 728)
+        Form.resize(918, 724)
         self.verticalLayout_3 = QtGui.QVBoxLayout(Form)
         self.verticalLayout_3.setObjectName("verticalLayout_3")
         self.horizontalLayout = QtGui.QHBoxLayout()
@@ -147,7 +147,7 @@ class Ui_Form(object):
         self.verticalLayout_2 = QtGui.QVBoxLayout()
         self.verticalLayout_2.setObjectName("verticalLayout_2")
         self.patchPlot = QwtPlot(Form)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.MinimumExpanding)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(10)
         sizePolicy.setHeightForWidth(self.patchPlot.sizePolicy().hasHeightForWidth())
@@ -155,7 +155,7 @@ class Ui_Form(object):
         self.patchPlot.setObjectName("patchPlot")
         self.verticalLayout_2.addWidget(self.patchPlot)
         self.commandPlot = QwtPlot(Form)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.MinimumExpanding)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(5)
         sizePolicy.setHeightForWidth(self.commandPlot.sizePolicy().hasHeightForWidth())
@@ -165,7 +165,7 @@ class Ui_Form(object):
         self.horizontalLayout.addLayout(self.verticalLayout_2)
         self.verticalLayout_3.addLayout(self.horizontalLayout)
         self.analysisPlot = QwtPlot(Form)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.MinimumExpanding)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(3)
         sizePolicy.setHeightForWidth(self.analysisPlot.sizePolicy().hasHeightForWidth())

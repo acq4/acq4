@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from lib.drivers.nidaq import NIDAQ, SuperTask
 from lib.devices.Device import *
-
+import threading, time, traceback, sys
 
 class NiDAQ(Device):
     def __init__(self, dm, config, name):
@@ -11,6 +11,7 @@ class NiDAQ(Device):
         ## make local copy of device handle
         self.n = NIDAQ
         print "Created NiDAQ handle, devices are %s" % repr(self.n.listDevices())
+        self.lock = threading.RLock()
     
     def createTask(self, cmd):
         return Task(self, cmd)
@@ -21,6 +22,23 @@ class NiDAQ(Device):
         else:
             self.n.writeDigitalSample(chan, value)
         
+    def reserve(self, timeout=20):
+        lock = False
+        count = 0
+        interval = 1e-3
+        while not lock:
+            lock = self.lock.acquire(blocking=0)
+            time.sleep(interval)
+            if count > timeout*interval:
+                raise Exception("Timed out waiting for DAQ lock")
+            count += 1
+        
+    def release(self):
+        try:
+            self.lock.release()
+        except:
+            print "WARNING: Failed to release DAQ hardware lock"
+            traceback.print_exception(sys.exc_info())
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
@@ -59,7 +77,7 @@ class Task(DeviceTask):
         return self.st.setWaveform(*args, **kwargs)
         
     def reserve(self):
-        pass
+        self.dev.reserve()
         
     def start(self):
         self.st.start()
@@ -71,7 +89,7 @@ class Task(DeviceTask):
         self.st.stop(wait=True)
         
     def release(self):
-        pass
+        self.dev.release()
         
     def getResult(self):
         ## Results should be collected by individual devices using getData

@@ -128,6 +128,10 @@ class Task:
         for t in self.tasks:
             self.tasks[t].stop()
         
+        ## Release all hardware for use elsewhere
+        for t in self.tasks:
+            self.tasks[t].release()
+        
     def getResult(self):
         if self.result is None:
             ## Let each device generate its own output structure.

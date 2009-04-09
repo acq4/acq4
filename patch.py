@@ -20,7 +20,8 @@ dm = DeviceManager(config)
 datam = DataManager.createDataHandler('junk/data')
 
 print "Loading patch module.."
-qtcam = dm.loadModule(module='Patch', name='Patch0', config={'clampDev': 'Clamp0'})
+p1 = dm.loadModule(module='Patch', name='Patch0', config={'clampDev': 'Clamp0'})
+p2 = dm.loadModule(module='Patch', name='Patch1', config={'clampDev': 'Clamp1'})
 
 ## If running interactively, just return to the prompt and let python call the qt event loop for us.
 ## Otherwise, we need to run it ourselves:

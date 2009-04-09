@@ -24,25 +24,36 @@ class MultiClamp(Device):
             mcs = self.mc.listDevices()
             print "Connected to host %s, devices are %s" % (self.host, repr(mcs))
             self.channelID = self.config['channelID']
-            self.index = None ## Avoid probing the MC devices until later on
+            if 'settings' in self.config:
+                self.setParams(self.config['settings'])
         except:
-            print "Error connecting to MultiClamp commander, will try again when needed."
+            print "Error connecting to MultiClamp commander, will try again when needed. (default settings not loaded)"
         
+        self.index = None ## Avoid probing the MC devices until later on
         print "Created MultiClamp device"
+    
+        self.holding = {
+            'vc': -50e-3,
+            'ic': 0.0
+        }
+        if 'vcHolding' in self.config:
+            self.holding['vc'] = self.config['vcHolding']
+        if 'icHolding' in self.config:
+            self.holding['ic'] = self.config['icHolding']
+    
+    def setParams(self, params):
+        ind = self.getChanIndex()
+        self.mc.setParams(ind, params)
     
     def createTask(self, cmd):
         return Task(self, cmd)
     
         
-    def setHolding(self, mode=None):
-        """Set all channel for this device to its configured holding level. If mode is None, then
-        the level is chosen based on the current mode of the channel."""
-        chan = self.getChanIndex()
-
-        if mode is None:
-            mode = self.mc.runFunction('getMode', [chan])[0]
-    
-        ### Set correct holding level here...
+    def setHolding(self, mode, value):
+        """Define the holding values for this device"""
+        self.holding[mode] = value
+        
+        ## If the DAQ is free, set the holding level now
         
         
     def getChanIndex(self):

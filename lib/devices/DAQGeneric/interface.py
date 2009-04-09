@@ -1,4 +1,4 @@
-# -*- coding: windows-1252 -*-
+# -*- coding: utf-8 -*-
 from lib.devices.Device import *
 from lib.util.MetaArray import MetaArray, axis
 from numpy import *

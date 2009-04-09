@@ -72,13 +72,8 @@ class PatchWindow(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.vcHoldSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateParams)
         QtCore.QObject.connect(self.ui.vcPulseCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
         QtCore.QObject.connect(self.ui.vcHoldCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
-        #QtCore.QObject.connect(self.ui.cycleTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('cycleTime', x))
-        #QtCore.QObject.connect(self.ui.recordTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('recordTime', x))
-        #QtCore.QObject.connect(self.ui.delayTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('delayTime', x))
-        #QtCore.QObject.connect(self.ui.pulseTimeSpin, QtCore.SIGNAL('changed(double)'), lambda x: self.setParameter('pulseTime', x))
-        
+                
         self.show()
-        
         
     def updateParams(self, *args):
         l = QtCore.QMutexLocker(self.paramLock)
@@ -108,9 +103,19 @@ class PatchWindow(QtGui.QMainWindow):
         
         
     def handleNewFrame(self, frame):
+        l = QtCore.QMutexLocker(self.paramLock)
+        mode = self.params['mode']
+        l.unlock()
+        
         data = frame['data'][self.clampName]
-        self.patchCurve.setData(data.xvals('Time'), data['scaled'])
-        self.commandCurve.setData(data.xvals('Time'), data['raw'])
+        if mode == 'vc':
+            scale1 = 1e12
+            scale2 = 1e3
+        else:
+            scale1 = 1e3
+            scale2 = 1e12
+        self.patchCurve.setData(data.xvals('Time'), data['scaled']*scale1)
+        self.commandCurve.setData(data.xvals('Time'), data['raw']*scale2)
         self.ui.patchPlot.replot()
         self.ui.commandPlot.replot()
         
@@ -122,7 +127,7 @@ class PatchWindow(QtGui.QMainWindow):
     def updateAnalysisPlot(self):
         if self.ui.inputResistanceRadio.isChecked():
             p = 'mr'
-        elif self.ui.restingMembranePotentialRadio.isChecked():
+        elif self.ui.restingPotentialRadio.isChecked():
             p = 'rmp'
         elif self.ui.timeConstantRadio.isChecked():
             p = 'tau'
@@ -240,10 +245,29 @@ class PatchThread(QtCore.QThread):
         #self.emit(QtCore.SIGNAL('threadStopped'))
             
     def analyze(self, data, params):
+        base = data['Time': 0.0:params['delayTime']]
+        pulse = data['Time': params['delayTime']:params['delayTime']+params['pulseTime']]
+        pulseEnd = data['Time': params['delayTime']+(params['pulseTime']*2./3.):params['delayTime']+params['pulseTime']]
         
-        
-        
-        return (0,0,0)
+        if params['mode'] == 'vc':
+            iBase = base['Channel': 'scaled'].mean()
+            iPulse = pulseEnd['Channel': 'scaled'].mean() 
+            vBase = base['Channel': 'raw'].mean()
+            vPulse = pulse['Channel': 'raw'].mean() 
+            ir = (vPulse-vBase) / (iPulse-iBase)
+        if params['mode'] == 'ic':
+            rmp = base['Channel':'scaled'].mean()
+            iBase = base['Channel': 'raw'].mean()
+            iPulse = pulse['Channel': 'raw'].mean() 
+            vBase = base['Channel': 'scaled'].mean()
+            vPulse = pulseEnd['Channel': 'scaled'].mean() 
+            ir = (vPulse-vBase) / (iPulse-iBase)
+            # exponential fit starting point: y = est[0] + est[1] * exp(-x*est[2])
+            #estimate = [rmp
+            ## Exponential fit
+            #fit = leastsq(lambda v, x, y: y - (v[0] - v[1]*exp(-x * v[2])), [10, 2, 3], args=(array(x), array(y)))
+            
+        return (ir,rmp,0)
             
     def stop(self, block=False):
         l = QtCore.QMutexLocker(self.lock)

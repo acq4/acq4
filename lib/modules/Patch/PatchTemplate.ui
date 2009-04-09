@@ -6,7 +6,7 @@
     <x>0</x>
     <y>0</y>
     <width>918</width>
-    <height>728</height>
+    <height>724</height>
    </rect>
   </property>
   <property name="windowTitle" >
@@ -298,7 +298,7 @@
        <item>
         <widget class="QwtPlot" name="patchPlot" >
          <property name="sizePolicy" >
-          <sizepolicy vsizetype="MinimumExpanding" hsizetype="MinimumExpanding" >
+          <sizepolicy vsizetype="Expanding" hsizetype="MinimumExpanding" >
            <horstretch>0</horstretch>
            <verstretch>10</verstretch>
           </sizepolicy>
@@ -308,7 +308,7 @@
        <item>
         <widget class="QwtPlot" name="commandPlot" >
          <property name="sizePolicy" >
-          <sizepolicy vsizetype="MinimumExpanding" hsizetype="MinimumExpanding" >
+          <sizepolicy vsizetype="Expanding" hsizetype="MinimumExpanding" >
            <horstretch>0</horstretch>
            <verstretch>5</verstretch>
           </sizepolicy>
@@ -322,7 +322,7 @@
    <item>
     <widget class="QwtPlot" name="analysisPlot" >
      <property name="sizePolicy" >
-      <sizepolicy vsizetype="MinimumExpanding" hsizetype="MinimumExpanding" >
+      <sizepolicy vsizetype="Expanding" hsizetype="MinimumExpanding" >
        <horstretch>0</horstretch>
        <verstretch>3</verstretch>
       </sizepolicy>

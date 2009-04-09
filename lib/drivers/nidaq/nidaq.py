@@ -427,7 +427,17 @@ class SuperTask:
         chan = self.absChanName(chan)
         if chan not in self.channelInfo:
             raise Exception('Must create channel (%s) before setting waveform.' % chan)
-        self.channelInfo[chan]['data'] = data
+        ## For now, all ao waveforms must be between -10 and 10
+        
+        typ = self.channelInfo[chan]['task'][1]
+        if typ == 'ao':
+            if any(data > 10.0) or any(data < -10.0):
+                self.channelInfo[chan]['data'] = clip(data, -10.0, 10.0)
+                self.channelInfo[chan]['clipped'] = True
+            else:
+                self.channelInfo[chan]['data'] = data
+                self.channelInfo[chan]['clipped'] = False
+            
         key = self.getTaskKey(chan)
         self.taskInfo[key]['dataWritten'] = False
 
@@ -600,6 +610,9 @@ class SuperTask:
                 'data': res['data'][self.channelInfo[channel]['index']],
                 'info': {'startTime': res['start'], 'numPts': self.numPts, 'rate': self.rate}
             }
+            if 'clipped' in res:
+                ret['info']['clipped'] = res['clipped']
+
             # print "=== result for channel %s=====" % channel
             # print ret 
             return ret 

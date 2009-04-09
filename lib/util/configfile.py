@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import re, os
+from advancedTypes import OrderedDict
 
 def writeConfigFile(data, fname):
     s = genString(data)
@@ -21,28 +22,6 @@ def readConfigFile(fname):
     return data
 
 
-class OrderedDict(dict):
-    """extends dict so that elements are iterated in the order that they were added"""
-    
-    def __init__(self):
-        self.order = []
-    
-    def __setitem__(self, k, v):
-        if not self.has_key(k):
-            self.order.append(k)
-        dict.__setitem__(self, k, v)
-    
-    def keys(self):
-        return self.order
-    
-    def items(self):
-        it = []
-        for k in self.keys():
-            it.append(k, self[k])
-    
-    def __iter__(self):
-        for k in self.keys():
-            yield k
 
 
 
