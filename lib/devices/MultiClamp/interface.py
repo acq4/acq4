@@ -3,10 +3,13 @@ from lib.drivers.MultiClamp import MultiClamp as MultiClampDriver
 from lib.devices.Device import *
 from lib.util.MetaArray import MetaArray, axis
 from numpy import *
+import sys, traceback
 
 class MultiClamp(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.index = None
+        
         if not config.has_key('host') or config['host'] is None:
             raise Exception("Must specify host running MultiClamp server. (Direct connections not yet supported..)")
         self.host = self.config['host']
@@ -22,23 +25,30 @@ class MultiClamp(Device):
             mcs = self.mc.listDevices()
             print "Connected to host %s, devices are %s" % (self.host, repr(mcs))
             self.channelID = self.config['channelID']
-            if 'settings' in self.config:
-                self.setParams(self.config['settings'])
         except:
+            traceback.print_exception(*(sys.exc_info()))
             print "Error connecting to MultiClamp commander, will try again when needed. (default settings not loaded)"
         
-        self.index = None ## Avoid probing the MC devices until later on
         print "Created MultiClamp device"
     
         self.holding = {
-            'vc': -50e-3,
-            'ic': 0.0
+            'VC': -50e-3,
+            'IC': 0.0
         }
         if 'vcHolding' in self.config:
-            self.holding['vc'] = self.config['vcHolding']
+            self.holding['VC'] = self.config['vcHolding']
         if 'icHolding' in self.config:
-            self.holding['ic'] = self.config['icHolding']
-    
+            self.holding['IC'] = self.config['icHolding']
+
+        ## Set up default MC settings for each mode, then leave MC in I=0 mode
+        if 'settings' in self.config:
+            for mode in ['IC', 'VC']:
+                if mode in self.config['settings']:
+                    self.setMode(mode)
+                    self.setParams(self.config['settings'][mode])
+        self.setMode('i=0')
+
+
     def setParams(self, params):
         ind = self.getChanIndex()
         self.mc.setParams(ind, params)
@@ -46,13 +56,21 @@ class MultiClamp(Device):
     def createTask(self, cmd):
         return Task(self, cmd)
     
-        
-    def setHolding(self, mode, value):
-        """Define the holding values for this device"""
-        self.holding[mode] = value
+    def getMode(self):
+        ind = self.getChanIndex()
+        return self.mc.runFunction('getMode', [ind])[0]
+    
+    def setHolding(self, mode=None, value=None):
+        """Define and set the holding values for this device"""
+        if mode is not None:
+            self.holding[mode] = value
         
         ## If the DAQ is free, set the holding level now
-        
+        mode = self.getMode()
+        holding = self.holding[mode]
+        daq, chan = self.config['commandChannel']
+        daqDev = self.dm.getDevice(daq)
+        daqDev.setChannelValue(chan, holding, block=False)
         
     def getChanIndex(self):
         """Given a channel name (as defined in the configuration), return the device index to use when making calls to the MC"""
@@ -89,7 +107,7 @@ class MultiClamp(Device):
         
         if mcMode=='I=0':
             ## Set holding level before leaving I=0 mode
-            self.setHolding(mode=mode)
+            self.setHolding()
         
         self.mc.runFunction('setMode', [chan, mode])
 
@@ -224,3 +242,6 @@ class Task(DeviceTask):
         marr = MetaArray(arr, info=info)
             
         return marr
+        
+    def stop(self):
+        self.dev.setHolding()

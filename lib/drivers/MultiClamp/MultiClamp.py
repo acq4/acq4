@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import socket
+import socket, traceback, sys
 
 class MultiClamp:
   """Class used to interface with remote multiclamp server"""
@@ -163,9 +163,15 @@ class MultiClamp:
     res = {}
     #devId = self.getDevId(chan, cache=cache)
     #print "setParams cache=", cache
-    for p in params.keys():
-      v = self.runFunction('set'+p, [chan, params[p]], cache=cache)
-      res[p] = v
+    for p in params:
+      print "Setting", p, params[p]
+      try:
+        v = self.runFunction('set'+p, [chan, params[p]], cache=cache)
+      except:
+        traceback.print_exception(*sys.exc_info())
+        print "Error while setting parameter %s=%s" % (p, str(params[p]))
+      finally:
+        res[p] = v
     return res
     
 
@@ -261,7 +267,7 @@ class MultiClamp:
       raise Exception("get returned no data: %s = %s <%s>" % (cmd, resp, str(data)))
     if data[0] == '0':
       self._invalidateCache(func, strArgs)
-      raise Exception('MultiClamp communication error: %s' % data[1])
+      raise Exception('MultiClamp communication error: %s' % ', '.join(data[1:]))
     else:
       self._updateCache(func, strArgs, data[1:])
       return data[1:]
@@ -278,9 +284,9 @@ class MultiClamp:
     if cache is None: cache = self.useCache
     #dID = self.getDevId(chan, cache=cache)
     (name, gain, units) = self.runFunction('get%sSignalInfo' % outputChan, [chan], cache=cache)
-    if outputChan == 'Primary':
-        xGain = float(self.runFunction('get%sSignalGain' % outputChan, [chan], cache=cache)[0])
-    else:
+    xGain = float(self.runFunction('get%sSignalGain' % outputChan, [chan], cache=cache)[0])
+    ## Silly workaround-- MC700A likes to tell us that secondary signal gain is 0
+    if xGain < 1e-10:
         xGain = 1.0
     gain2 = float(gain) * xGain
     #print "%s gain = %f * %f = %f" % (outputChan, float(gain), float(xGain[0]), gain2)
