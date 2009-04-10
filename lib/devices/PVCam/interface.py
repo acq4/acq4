@@ -9,10 +9,8 @@ from lib.util.MetaArray import *
 
 class PVCam(Device):
     def __init__(self, dm, config, name):
-        self.dm = dm
-        self.name = name
+        Device.__init__(self, dm, config, name)
         self.pvc = PVCDriver
-        self.config = config
         self.cam = None
         self.acqThread = AcquireThread(self)
         print "Created PVCam device. Cameras are:", self.pvc.listCameras()
@@ -60,8 +58,7 @@ class PVCam(Device):
         
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
-        self.dev = dev
-        self.cmd = cmd
+        DeviceTask.__init__(self, dev, cmd)
         self.recordHandle = None
         
         
@@ -98,9 +95,6 @@ class Task(DeviceTask):
         daqTask.addChannel(self.dev.config['exposeChannel'][1], 'di')
         
         self.daqTask = daqTask
-        
-    def reserve(self):
-        pass
         
     def start(self):
         ## arm recording

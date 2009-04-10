@@ -6,9 +6,7 @@ from numpy import *
 
 class MultiClamp(Device):
     def __init__(self, dm, config, name):
-        self.dm = dm
-        self.config = config.copy()
-        self.name = name
+        Device.__init__(self, dm, config, name)
         if not config.has_key('host') or config['host'] is None:
             raise Exception("Must specify host running MultiClamp server. (Direct connections not yet supported..)")
         self.host = self.config['host']
@@ -100,8 +98,7 @@ class MultiClamp(Device):
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
-        self.dev = dev
-        self.cmd = cmd
+        DeviceTask.__init__(self, dev, cmd)
         self.recordParams = ['Holding', 'HoldingEnable', 'PipetteOffset', 'FastCompCap', 'SlowCompCap', 'FastCompTau', 'SlowCompTau', 'NeutralizationEnable', 'NeutralizationCap', 'WholeCellCompEnable', 'WholeCellCompCap', 'WholeCellCompResist', 'RsCompEnable', 'RsCompBandwidth', 'RsCompCorrection', 'PrimarySignalGain', 'PrimarySignalLPF', 'PrimarySignalHPF', 'OutputZeroEnable', 'OutputZeroAmplitude', 'LeakSubEnable', 'LeakSubResist', 'BridgeBalEnable', 'BridgeBalResist']
         self.usedChannels = None
         self.daqTasks = {}

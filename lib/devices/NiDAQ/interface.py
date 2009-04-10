@@ -5,9 +5,7 @@ import threading, time, traceback, sys
 
 class NiDAQ(Device):
     def __init__(self, dm, config, name):
-        self.dm = dm
-        self.config = config
-        self.name = name
+        Device.__init__(self, dm, config, name)
         ## make local copy of device handle
         self.n = NIDAQ
         print "Created NiDAQ handle, devices are %s" % repr(self.n.listDevices())
@@ -22,28 +20,10 @@ class NiDAQ(Device):
         else:
             self.n.writeDigitalSample(chan, value)
         
-    def reserve(self, timeout=20):
-        lock = False
-        count = 0
-        interval = 1e-3
-        while not lock:
-            lock = self.lock.acquire(blocking=0)
-            time.sleep(interval)
-            if count > timeout*interval:
-                raise Exception("Timed out waiting for DAQ lock")
-            count += 1
-        
-    def release(self):
-        try:
-            self.lock.release()
-        except:
-            print "WARNING: Failed to release DAQ hardware lock"
-            traceback.print_exception(sys.exc_info())
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
-        self.dev = dev
-        self.cmd = cmd
+        DeviceTask.__init__(self, dev, cmd)
         
         ## get DAQ device
         #daq = self.devm.getDevice(...)
@@ -76,9 +56,6 @@ class Task(DeviceTask):
     def setWaveform(self, *args, **kwargs):
         return self.st.setWaveform(*args, **kwargs)
         
-    def reserve(self):
-        self.dev.reserve()
-        
     def start(self):
         self.st.start()
         
@@ -87,9 +64,7 @@ class Task(DeviceTask):
         
     def stop(self):
         self.st.stop(wait=True)
-        
-    def release(self):
-        self.dev.release()
+        print "DAQ task stopped."
         
     def getResult(self):
         ## Results should be collected by individual devices using getData

@@ -1,9 +1,16 @@
 # -*- coding: utf-8 -*-
+import time, traceback, sys
+#import threading
+from PyQt4 import QtCore
 
 class Device:
     """Abstract class defining the standard interface for Device subclasses."""
     def __init__(self, deviceManager, config, name):
-        pass
+        #self._lock_ = threading.Lock()
+        self._lock_ = QtCore.QMutex()
+        self.dm = deviceManager
+        self.config = config
+        self.name = name
     
     def createTask(self):
         pass
@@ -32,16 +39,50 @@ class Device:
         """Return a widget with a UI to put in the protocol rack"""
         raise Exception("Function protocolInterface() not defined in this subclass!")
 
+    def reserve(self, block=True, timeout=20):
+        #lock = False
+        #count = 0
+        #interval = 1e-3
+        #lock = self._lock_.acquire(False)  ## We'll do our own blocking
+        #if not lock and not block:
+            #raise Exception("Could not acquire lock")
+        #while not lock:
+            #if timeout is not None and (count*interval > timeout):
+                #raise Exception("Timed out waiting for device lock for %s" % self.name)
+            #time.sleep(interval)
+            #lock = self._lock_.acquire(False)  ## We'll do our own blocking
+            #count += 1
+        #return True
+        
+        if block:
+            l = self._lock_.tryLock(int(timeout*1000))
+            if not l:
+                raise Exception("Timed out waiting for device lock for %s" % self.name)
+        else:
+            l = self._lock_.tryLock()
+            if not l:
+                raise Exception("Could not acquire lock")
+        return True
+        
+    def release(self):
+        try:
+            #self.lock.release()
+            self._lock_.unlock()
+        except:
+            print "WARNING: Failed to release device lock for %s" % self.name
+            traceback.print_exception(sys.exc_info())
+
 
 class DeviceTask:
-    def __init__(self, command):
-        pass
+    def __init__(self, dev, cmd):
+        self.dev = dev
+        self.cmd = cmd
     
     def configure(self, tasks):
         pass
     
-    def reserve(self):
-        pass
+    def reserve(self, block=True, timeout=20):
+        self.dev.reserve(block=block, timeout=timeout)
     
     def start(self):
         pass
@@ -52,8 +93,8 @@ class DeviceTask:
     def stop(self):
         pass
     
-    def release():
-        pass
+    def release(self):
+        self.dev.release()
     
     def getResult(self):
         pass

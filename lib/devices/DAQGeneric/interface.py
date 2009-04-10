@@ -5,9 +5,7 @@ from numpy import *
 
 class DAQGeneric(Device):
     def __init__(self, dm, config, name):
-        self.dm = dm
-        self.config = config.copy()
-        self.name = name
+        Device.__init__(self, dm, config, name)
         ## Do some sanity checks here on the configuration
     
     def createTask(self, cmd):
@@ -34,8 +32,7 @@ class DAQGeneric(Device):
 
 class DAQGenericTask(DeviceTask):
     def __init__(self, dev, cmd):
-        self.dev = dev
-        self.cmd = cmd
+        DeviceTask.__init__(self, dev, cmd)
         
         ## Stores the list of channels that will generate or acquire buffered samples
         self.bufferedChannels = []

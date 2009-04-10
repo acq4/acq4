@@ -219,11 +219,14 @@ class PatchThread(QtCore.QThread):
                 task = self.dm.createTask(cmd)
                 
                 ## Execute task
+                print clampName, "starting task.."
                 task.execute()
+                print clampName, "task complete."
+
                 
                 ## measure resistance, RMP, and tau 
                 res = task.getResult()
-                (mr, rmp, tau) = self.analyze(res, params)
+                (mr, rmp, tau) = self.analyze(res[clampName], params)
                 frame = {'data': res, 'analysis': {'mr': mr, 'rmp': rmp, 'tau': tau}}
                 
                 self.emit(QtCore.SIGNAL('newFrame(PyQt_PyObject)'), frame)
@@ -255,12 +258,13 @@ class PatchThread(QtCore.QThread):
             vBase = base['Channel': 'raw'].mean()
             vPulse = pulse['Channel': 'raw'].mean() 
             ir = (vPulse-vBase) / (iPulse-iBase)
+            rmp = vBase.mean()
         if params['mode'] == 'ic':
-            rmp = base['Channel':'scaled'].mean()
             iBase = base['Channel': 'raw'].mean()
             iPulse = pulse['Channel': 'raw'].mean() 
             vBase = base['Channel': 'scaled'].mean()
             vPulse = pulseEnd['Channel': 'scaled'].mean() 
+            rmp = vBase.mean()
             ir = (vPulse-vBase) / (iPulse-iBase)
             # exponential fit starting point: y = est[0] + est[1] * exp(-x*est[2])
             #estimate = [rmp
