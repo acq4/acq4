@@ -12,7 +12,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.params = {
             'mode': 'vc',
             'rate': 40000,
-            'cycleTime': 0.25,
+            'cycleTime': 1.0,
             'recordTime': 0.05,
             'delayTime': 0.01,
             'pulseTime': 0.02,

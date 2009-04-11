@@ -46,7 +46,7 @@ class MultiClamp(Device):
                 if mode in self.config['settings']:
                     self.setMode(mode)
                     self.setParams(self.config['settings'][mode])
-        self.setMode('i=0')
+        self.setMode('I=0')
 
 
     def setParams(self, params):
@@ -67,6 +67,8 @@ class MultiClamp(Device):
         
         ## If the DAQ is free, set the holding level now
         mode = self.getMode()
+        if mode not in self.holding:
+            return
         holding = self.holding[mode]
         daq, chan = self.config['commandChannel']
         daqDev = self.dm.getDevice(daq)
@@ -92,7 +94,7 @@ class MultiClamp(Device):
 
     def setMode(self, mode):
         """Set the mode for a multiclamp channel, gracefully switching between VC and IC modes."""
-
+        mode = mode.upper()
         if mode not in ['VC', 'IC', 'I=0']:
             raise Exception('MultiClamp mode "%s" not recognized.' % mode)
         

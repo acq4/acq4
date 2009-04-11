@@ -577,6 +577,8 @@ class SuperTask:
         for t in self.tasks:
             #print "Stopping task", t
             self.tasks[t].stop()
+            # unreserve hardware
+            self.tasks[t].TaskControl(Val_Task_Unreserve)
 
     def getResult(self, channel=None):
         #print "getresult"

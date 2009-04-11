@@ -16,13 +16,9 @@ class PVCam(Device):
         print "Created PVCam device. Cameras are:", self.pvc.listCameras()
     
     def quit(self):
-        #print "In camera quit"
         if self.acqThread.isRunning():
             self.stopAcquire()
-            #print "Waiting for camera acquisition thread to exit.."
             self.acqThread.wait()
-            #print "Camera acquisition thread exited."
-        #print "finished camera quit"
         
         
     def devName(self):
@@ -144,7 +140,8 @@ class AcquireThread(QtCore.QThread):
         self.tasks = []
     
     def __del__(self):
-      self.cam.stop()
+        if hasattr(self, 'cam'):
+            self.cam.stop()
     
     def startRecord(self, maxTime=None):
         rec = CameraTask(self, maxTime)

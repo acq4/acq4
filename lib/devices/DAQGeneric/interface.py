@@ -7,12 +7,13 @@ class DAQGeneric(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         ## Do some sanity checks here on the configuration
+        
     
     def createTask(self, cmd):
         return DAQGenericTask(self, cmd)
     
         
-    def setHolding(self, mode=None):
+    def setHolding(self, channel, level=None):
         """Set all channel for this device to its configured holding level. If mode is None, then
         the level is chosen based on the current mode of the channel."""
         ### Set correct holding level here...

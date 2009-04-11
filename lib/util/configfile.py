@@ -24,7 +24,6 @@ def readConfigFile(fname):
 
 
 
-
 def genString(data, indent=''):
     s = ''
     for k in data:
