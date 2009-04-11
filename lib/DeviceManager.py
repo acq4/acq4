@@ -110,10 +110,8 @@ class Task:
             self.tasks[devName].configure(self.tasks, self.startOrder)
         
         ## Reserve all hardware before starting any
-        print "Reserving hardware..."
         for devName in self.tasks:
             self.tasks[devName].reserve()
-        print "Reserved."
         
         self.result = None
         
@@ -133,7 +131,6 @@ class Task:
         ## Release all hardware for use elsewhere
         for t in self.tasks:
             self.tasks[t].release()
-        print "Released."
         
     def getResult(self):
         if self.result is None:

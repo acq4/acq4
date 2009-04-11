@@ -65,7 +65,6 @@ class Task(DeviceTask):
         
     def stop(self):
         self.st.stop(wait=True)
-        print "DAQ task stopped."
         
     def getResult(self):
         ## Results should be collected by individual devices using getData

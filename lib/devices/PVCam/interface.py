@@ -51,7 +51,10 @@ class PVCam(Device):
         
     def stopAcquire(self, block=True):
         self.acqThread.stop(block)
+
         
+
+
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
@@ -143,6 +146,13 @@ class AcquireThread(QtCore.QThread):
         if hasattr(self, 'cam'):
             self.cam.stop()
     
+    def setParam(self, param, value):
+        self.stop()
+        l = QtCore.QMutexLocker(self.lock)
+        self.state[param] = value
+        l.unlock()
+        self.start()
+        
     def startRecord(self, maxTime=None):
         rec = CameraTask(self, maxTime)
         #print "lock to create task"

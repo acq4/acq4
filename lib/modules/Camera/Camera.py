@@ -216,7 +216,8 @@ class PVCamera(QtGui.QMainWindow):
         newRegion = [int(r.left()), int(r.top()), int(r.right())-1, int(r.bottom())-1]
         if self.region != newRegion:
             self.region = newRegion
-            self.acquireThread.reset()
+            self.acquireThread.setParam('region', self.region)
+            #self.acquireThread.reset()
         
         
     def closeEvent(self, ev):
@@ -287,13 +288,15 @@ class PVCamera(QtGui.QMainWindow):
     def setBinning(self, b):
         self.backgroundFrame = None
         self.binning = b
-        self.acquireThread.reset()
+        self.acquireThread.setParam('binning', self.binning)
+        #self.acquireThread.reset()
         self.clearFrameBuffer()
         self.updateRgnLabel()
         
     def setExposure(self, e):
         self.exposure = e
-        self.acquireThread.reset()
+        self.acquireThread.setParam('exposure', self.exposure)
+        #self.acquireThread.reset()
         
     def openCamera(self, ind=0):
         try:
