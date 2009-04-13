@@ -164,7 +164,7 @@ class MultiClamp:
     #devId = self.getDevId(chan, cache=cache)
     #print "setParams cache=", cache
     for p in params:
-      print "Setting", p, params[p]
+      #print "Setting", p, params[p]
       try:
         v = self.runFunction('set'+p, [chan, params[p]], cache=cache)
       except:

@@ -17,6 +17,8 @@ if len(sys.argv) > 1:
 config = os.path.abspath(config)
 
 dm = DeviceManager(config)
+dm.showDeviceRack()
+
 datam = DataManager.createDataHandler('junk/data')
 
 print "Loading patch module.."

@@ -20,13 +20,13 @@ class DAQGeneric(Device):
         pass
         
         
-    def devRackInterface(self):
-        """Return a widget with a UI to put in the device rack"""
-        pass
+    #def devRackInterface(self):
+        #"""Return a widget with a UI to put in the device rack"""
+        #pass
         
-    def protocolInterface(self):
-        """Return a widget with a UI to put in the protocol rack"""
-        pass
+    #def protocolInterface(self):
+        #"""Return a widget with a UI to put in the protocol rack"""
+        #pass
 
     def quit(self):
         pass

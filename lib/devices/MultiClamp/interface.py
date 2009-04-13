@@ -4,11 +4,14 @@ from lib.devices.Device import *
 from lib.util.MetaArray import MetaArray, axis
 from numpy import *
 import sys, traceback
+from DeviceGui import *
+
 
 class MultiClamp(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.index = None
+        self.devRackGui = None
         
         if not config.has_key('host') or config['host'] is None:
             raise Exception("Must specify host running MultiClamp server. (Direct connections not yet supported..)")
@@ -48,6 +51,10 @@ class MultiClamp(Device):
                     self.setParams(self.config['settings'][mode])
         self.setMode('I=0')
 
+    def deviceInterface(self):
+        if self.devRackGui is None:
+            self.devRackGui = MCRackGui()
+        return self.devRackGui
 
     def setParams(self, params):
         ind = self.getChanIndex()
@@ -84,13 +91,13 @@ class MultiClamp(Device):
         return self.index
         
 
-    def devRackInterface(self):
-        """Return a widget with a UI to put in the device rack"""
-        pass
+    #def devRackInterface(self):
+        #"""Return a widget with a UI to put in the device rack"""
+        #pass
         
-    def protocolInterface(self):
-        """Return a widget with a UI to put in the protocol rack"""
-        pass
+    #def protocolInterface(self):
+        #"""Return a widget with a UI to put in the protocol rack"""
+        #pass
 
     def setMode(self, mode):
         """Set the mode for a multiclamp channel, gracefully switching between VC and IC modes."""

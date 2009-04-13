@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from util import configfile
 import time, sys, atexit
+from PyQt4 import QtCore, QtGui
 
 class DeviceManager():
     """DeviceManager class is responsible for loading device modules and instantiating device
@@ -11,6 +12,7 @@ class DeviceManager():
         atexit.register(self.quit)
         self.devices = {}
         self.modules = {}
+        self.devRack = None
         self.readConfig(configFile)
         if 'win' in sys.platform:
             time.clock()  ### Required to start the clock in windows
@@ -80,6 +82,20 @@ class DeviceManager():
                 print "Requesting %s quit.." % d
                 self.devices[d].quit()
             self.alreadyQuit = True
+            
+    def showDeviceRack(self):
+        if self.devRack is None:
+            self.devRackDocks = {}
+            self.devRack = QtGui.QMainWindow()
+            for d in self.devices:
+                dw = self.devices[d].deviceInterface()
+                dock = QtGui.QDockWidget(d)
+                dock.setFeatures(dock.AllDockWidgetFeatures)
+                dock.setWidget(dw)
+                
+                self.devRackDocks[d] = dock
+                self.devRack.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+        self.devRack.show()
             
 class Task:
     def __init__(self, dm, command):

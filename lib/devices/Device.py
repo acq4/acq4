@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import time, traceback, sys
 #import threading
-from PyQt4 import QtCore
+from PyQt4 import QtCore, QtGui
 
 class Device:
     """Abstract class defining the standard interface for Device subclasses."""
@@ -33,11 +33,11 @@ class Device:
 
     def deviceInterface(self):
         """Return a widget with a UI to put in the device rack"""
-        raise Exception("Function devRackInterface() not defined in this subclass!")
+        return QtGui.QLabel(self.name)
         
     def protocolInterface(self):
         """Return a widget with a UI to put in the protocol rack"""
-        raise Exception("Function protocolInterface() not defined in this subclass!")
+        return QtGui.QLabel(self.name)
 
     def reserve(self, block=True, timeout=20):
         #lock = False
