@@ -8,7 +8,7 @@ from numpy import *
 class PatchWindow(QtGui.QMainWindow):
     def __init__(self, dm, clampName):
         QtGui.QMainWindow.__init__(self)
-
+        self.setWindowTitle(clampName)
         self.params = {
             'mode': 'vc',
             'rate': 40000,

@@ -147,11 +147,15 @@ class AcquireThread(QtCore.QThread):
             self.cam.stop()
     
     def setParam(self, param, value):
-        self.stop()
+        start = False
+        if self.isRunning():
+            start = True
+            self.stop(block=True)
         l = QtCore.QMutexLocker(self.lock)
         self.state[param] = value
         l.unlock()
-        self.start()
+        if start:
+            self.start()
         
     def startRecord(self, maxTime=None):
         rec = CameraTask(self, maxTime)

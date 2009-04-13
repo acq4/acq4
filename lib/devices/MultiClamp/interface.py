@@ -120,6 +120,10 @@ class MultiClamp(Device):
         
         self.mc.runFunction('setMode', [chan, mode])
 
+    def clearCache(self):
+        self.mc.clearCache()
+        print "Cleared MultiClamp configuration cache."
+
     def quit(self):
         self.mc.disconnect()
 

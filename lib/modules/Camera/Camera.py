@@ -84,6 +84,7 @@ class PVCamera(QtGui.QMainWindow):
         self.gv.setScene(self.scene)
         self.gv.setAspectLocked(True)
         self.gv.invertY()
+        self.AGCLastMax = None
         
         #self.plotScene.addItem(QtGui.QGraphicsRectItem(-1, -1, 2, 2))
         self.grid = Grid(self.pgv)
