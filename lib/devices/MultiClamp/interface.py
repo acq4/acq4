@@ -53,7 +53,7 @@ class MultiClamp(Device):
 
     def deviceInterface(self):
         if self.devRackGui is None:
-            self.devRackGui = MCRackGui()
+            self.devRackGui = MCRackGui(self)
         return self.devRackGui
 
     def setParams(self, params):
