@@ -21,7 +21,11 @@ def readConfigFile(fname):
         os.chdir(cwd)
     return data
 
-
+def appendConfigFile(data, fname):
+    s = genString(data)
+    fd = open(fname, 'a')
+    fd.write(s)
+    fd.close()
 
 
 def genString(data, indent=''):

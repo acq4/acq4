@@ -17,9 +17,10 @@ from CameraTemplate import Ui_MainWindow
 from lib.util.qtgraph.GraphicsView import *
 from lib.util.qtgraph.graphicsItems import *
 from lib.util.qtgraph.widgets import ROI
+from lib.filetypes.TiffFile import *
 from PyQt4 import QtGui, QtCore
 import scipy.ndimage
-import time, types, Image, os.path, re, sys
+import time, types, os.path, re, sys
 #if '--mock' in sys.argv:
     #sys.path = ['mock'] + sys.path
 #import pvcam
@@ -555,23 +556,25 @@ class RecordThread(QtCore.QThread):
     def __init__(self, ui):
         QtCore.QThread.__init__(self)
         self.ui = ui
-        self.dialog = QtGui.QFileDialog()
-        self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
+        self.m = ui.m
+        #self.dialog = QtGui.QFileDialog()
+        #self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
         QtCore.QObject.connect(self.ui.acquireThread, QtCore.SIGNAL('newFrame'), self.newCamFrame)
         #QtCore.QObject.connect(self.ui.ropWindow.acquireThread, QtCore.SIGNAL('newFrame'), self.newDaqFrame)
         
         QtCore.QObject.connect(ui.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
         QtCore.QObject.connect(ui.ui.btnSnap, QtCore.SIGNAL('clicked()'), self.snapClicked)
-        QtCore.QObject.connect(ui.ui.btnSelectDir, QtCore.SIGNAL('clicked()'), self.showFileDialog)
-        QtCore.QObject.connect(ui.ui.txtStorageDir, QtCore.SIGNAL('textEdited(const QString)'), self.selectDir)
-        QtCore.QObject.connect(self.dialog, QtCore.SIGNAL('filesSelected(const QStringList)'), self.selectDir)
+        #QtCore.QObject.connect(ui.ui.btnSelectDir, QtCore.SIGNAL('clicked()'), self.showFileDialog)
+        #QtCore.QObject.connect(ui.ui.txtStorageDir, QtCore.SIGNAL('textEdited(const QString)'), self.selectDir)
+        #QtCore.QObject.connect(self.dialog, QtCore.SIGNAL('filesSelected(const QStringList)'), self.selectDir)
         self.recording = False
         self.takeSnap = False
-        self.currentRecord = 0
-        self.nextRecord = 0
+        #self.currentRecord = 0
+        #self.nextRecord = 0
+        self.currentDir = None
         self.currentCamFrame = 0
         #self.currentDaqFrame = 0
-        self.storageDir = None
+        #self.storageDir = None
         
         self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
         #self.daqLock = QtCore.QMutex()
@@ -638,32 +641,36 @@ class RecordThread(QtCore.QThread):
         
         if recording:
             fileName = 'camFrame_%05d_%f.tif' % (self.currentCamFrame, info['time'])
-            fileName = os.path.join(self.currentDir(), fileName)
+            #fileName = os.path.join(self.currentDir(), fileName)
             self.showMessage("Recording %03d - %d" % (self.currentRecord, self.currentCamFrame))
-            self.writeFile(data, fileName)
-            infoFile = os.path.join(self.currentDir(), '.info')
-            if self.currentCamFrame == 0:
-                fd = open(infoFile, 'a')
-                fd.write("info['camera'] = " + str(info) + "\n")
-                fd.close()
+            self.currentDir.writeFile(TiffFile(data), fileName, info)
+            #infoFile = os.path.join(self.currentDir(), '.info')
+            #if self.currentCamFrame == 0:
+                #fd = open(infoFile, 'a')
+                #fd.write("info['camera'] = " + str(info) + "\n")
+                #fd.close()
             self.currentCamFrame += 1
         
         if takeSnap:
-            fileName = 'image_%03d_%f.tif' % (self.nextRecord, info['time'])
-            fileName = os.path.join(storageDir, fileName)
-            self.writeFile(data, fileName)
+            fileName = 'image_%03d.tif' % (self.nextRecord, info['time'])
+            #fileName = os.path.join(storageDir, fileName)
+            self.m.getCurrentDir().writeFile(TiffFile(data), fileName, info, autoIncrement=True)
             self.showMessage("Saved image %03d" % self.nextRecord)
-            self.nextRecord += 1
+            #self.nextRecord += 1
             
-            infoFile = os.path.join(storageDir, '.info')
-            fd = open(infoFile, 'a')
-            fd.write("info['%s'] = " % os.path.split(fileName)[1])
-            fd.write(str(info) + "\n")
-            fd.close()
+            #infoFile = os.path.join(storageDir, '.info')
+            #fd = open(infoFile, 'a')
+            #fd.write("info['%s'] = " % os.path.split(fileName)[1])
+            #fd.write(str(info) + "\n")
+            #fd.close()
             
             l = QtCore.QMutexLocker(self.lock)
             self.takeSnap = False
-    
+
+        #img = Image.fromarray(data.transpose())
+        #img.save(fileName)
+
+
     #def handleDaqFrame(self, frame):
     #  l = QtCore.QMutexLocker(self.lock)
     #  recording = self.recording
@@ -698,32 +705,36 @@ class RecordThread(QtCore.QThread):
     def toggleRecord(self, b):
         l = QtCore.QMutexLocker(self.lock)
         if b:
+            self.currentDir = self.m.getCurrentDir().getDir('record', autoIncrement=True)
             self.currentCamFrame = 0
       #   self.currentDaqFrame = 0
-            self.currentRecord = self.nextRecord
-            self.nextRecord += 1
+            #self.currentRecord = self.nextRecord
+            #self.nextRecord += 1
             self.recording = True
-            os.mkdir(self.currentDir())
+            #os.mkdir(self.currentDir())
         else:
             if self.recording:
                 self.recording = False
                 self.showMessage('Finished recording %03d' % self.currentRecord) 
 
-    def currentDir(self):
-        l = QtCore.QMutexLocker(self.lock)
-        storageDir = self.storageDir
-        l.unlock()
-        return os.path.normpath(os.path.join(storageDir, 'record_%03d' % self.currentRecord))
+    #def currentDir(self):
+        ##l = QtCore.QMutexLocker(self.lock)
+        ##storageDir = self.storageDir
+        ##l.unlock()
+        #baseDir = self.m.getCurrentDir()
+        #return baseDir.getDir('record_%03d' % self.currentRecord, create=True)
+        ##return os.path.normpath(os.path.join(storageDir, 'record_%03d' % self.currentRecord))
 
-    def writeFile(self, data, fileName):
-        origName = fileName
-        ind = 0
-        while os.path.isfile(fileName):
-            parts = os.path.splitext(origName)
-            fileName = parts[0] + '_%d'%ind + parts[1]
-            ind += 1
-        img = Image.fromarray(data.transpose())
-        img.save(fileName)
+        ## How do we differentiate between record images and snap images?
+    #def writeFile(self, data, fileName):
+        #origName = fileName
+        #ind = 0
+        #while os.path.isfile(fileName):
+            #parts = os.path.splitext(origName)
+            #fileName = parts[0] + '_%d'%ind + parts[1]
+            #ind += 1
+        #img = Image.fromarray(data.transpose())
+        #img.save(fileName)
 
     #def writeDaqFile(self, data, fileName):
     #  origName = fileName
@@ -734,33 +745,33 @@ class RecordThread(QtCore.QThread):
     #    ind += 1
     #  data.tofile(fileName)
 
-    def showFileDialog(self):
-        self.dialog.show()
+    #def showFileDialog(self):
+        #self.dialog.show()
 
-    def selectDir(self, dirName=None):
-        if dirName is None:
-            dirName = QtGui.QFileDialog.getExistingDirectory()
-        elif type(dirName) is QtCore.QStringList:
-            dirName = str(dirName[0])
-        elif type(dirName) is QtCore.QString:
-            dirName = str(dirName)
-        if dirName is None:
-            return
-        if os.path.isdir(dirName):
-            l = QtCore.QMutexLocker(self.lock)
-            self.storageDir = dirName
-            self.nextRecord = 0
-            self.emit(QtCore.SIGNAL("recordStatusChanged"), True)
-            self.emit(QtCore.SIGNAL("storageDirChanged"), self.storageDir)
-            for f in os.listdir(dirName):
-                m = re.match(r'\D+_(\d+).*', f)
-                if m is not None:
-                    num = int(m.groups()[0]) + 1
-                    self.nextRecord = max(self.nextRecord, num)
-            self.showMessage("Next record number is %d" % self.nextRecord) 
-        else:
-            self.emit(QtCore.SIGNAL("recordStatusChanged"), False)
-            self.showMessage("Storage directory is invalid")
+    #def selectDir(self, dirName=None):
+        #if dirName is None:
+            #dirName = QtGui.QFileDialog.getExistingDirectory()
+        #elif type(dirName) is QtCore.QStringList:
+            #dirName = str(dirName[0])
+        #elif type(dirName) is QtCore.QString:
+            #dirName = str(dirName)
+        #if dirName is None:
+            #return
+        #if os.path.isdir(dirName):
+            #l = QtCore.QMutexLocker(self.lock)
+            #self.storageDir = dirName
+            #self.nextRecord = 0
+            #self.emit(QtCore.SIGNAL("recordStatusChanged"), True)
+            #self.emit(QtCore.SIGNAL("storageDirChanged"), self.storageDir)
+            #for f in os.listdir(dirName):
+                #m = re.match(r'\D+_(\d+).*', f)
+                #if m is not None:
+                    #num = int(m.groups()[0]) + 1
+                    #self.nextRecord = max(self.nextRecord, num)
+            #self.showMessage("Next record number is %d" % self.nextRecord) 
+        #else:
+            #self.emit(QtCore.SIGNAL("recordStatusChanged"), False)
+            #self.showMessage("Storage directory is invalid")
 
     def stop(self):
         l = QtCore.QMutexLocker(self.lock)
