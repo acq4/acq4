@@ -22,7 +22,8 @@ dm.setCurrentDir('junk')
 
 print "Loading camera module.."
 qtcam = dm.loadModule(module='Camera', name='Camera', config={'camDev': 'Camera'})
-dm.loadModule(module='DataManagerUI', name='DM', config={})
+print "Loading dataManager module.."
+dm.loadModule(module='DataManager', name='DM', config={})
 
 ## If running interactively, just return to the prompt and let python call the qt event loop for us.
 ## Otherwise, we need to run it ourselves:

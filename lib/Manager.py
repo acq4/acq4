@@ -28,7 +28,30 @@ class Manager():
             self.time = self.winTime
         else:
             self.time = self.unixTime
-    
+
+    def readConfig(self, configFile):
+        """Read configuration file, create device objects, add devices to list"""
+        print "============= Starting Manager configuration from %s =================" % configFile
+        cfg = configfile.readConfigFile(configFile)
+        if not cfg.has_key('devices'):
+            raise Exception('configuration file %s has no "devices" section.' % configFile)
+        for k in cfg['devices']:
+            print "\n=== Configuring device %s ===" % k
+            conf = None
+            if cfg['devices'][k].has_key('config'):
+                conf = cfg['devices'][k]['config']
+            modName = cfg['devices'][k]['module']
+            self.loadDevice(modName, conf, k)
+        if 'users' in cfg:
+            user = 'Luke'
+            baseDir = cfg['users'][user]['storageDir']
+            self.dataManager = DataManager(self, baseDir)
+        else:
+            raise Exception("No configuration found for data management!")
+        print "\n============= Manager configuration complete =================\n"
+
+
+
     def __del__(self):
         self.quit()
     
@@ -62,27 +85,6 @@ class Manager():
         """Return the current time in seconds with high precision (unix version, use Manager.time() to stay platform independent)."""
         return time.time()
     
-    def readConfig(self, configFile):
-        """Read configuration file, create device objects, add devices to list"""
-        print "============= Starting Manager configuration from %s =================" % configFile
-        cfg = configfile.readConfigFile(configFile)
-        if not cfg.has_key('devices'):
-            raise Exception('configuration file %s has no "devices" section.' % configFile)
-        for k in cfg['devices']:
-            print "\n=== Configuring device %s ===" % k
-            conf = None
-            if cfg['devices'][k].has_key('config'):
-                conf = cfg['devices'][k]['config']
-            modName = cfg['devices'][k]['module']
-            self.loadDevice(modName, conf, k)
-        if 'users' in cfg:
-            user = 'Default'
-            baseDir = cfg['users'][user]['storageDir']
-            self.dataManager = DataManager(baseDir)
-        else:
-            raise Exception("No configuration found for data management!")
-        print "\n============= Manager configuration complete =================\n"
-
     def runProtocol(self, cmd):
         t = Task(self, cmd)
         t.execute()

@@ -2,7 +2,7 @@
 from DataManagerTemplate import *
 from lib.modules.Module import *
 
-class DataManagerUI(Module):
+class DataManager(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.dm = self.manager.dataManager
@@ -16,16 +16,16 @@ class DataManagerUI(Module):
         self.baseDirChanged()
         
         ## Make all connections needed
-        QtCore.QObject.connect(self.dm, QtCore.SIGNAL("baseDirChanged()"), self.baseDirChanged)
+        #QtCore.QObject.connect(self.dm, QtCore.SIGNAL("baseDirChanged()"), self.baseDirChanged)
         QtCore.QObject.connect(self.ui.selectDirBtn, QtCore.SIGNAL("clicked()"), self.showFileDialog)
-        QtCore.QObject.connect(ui.ui.txtStorageDir, QtCore.SIGNAL('textEdited(const QString)'), self.selectDir)
+        QtCore.QObject.connect(self.ui.storageDirText, QtCore.SIGNAL('textEdited(const QString)'), self.selectDir)
         QtCore.QObject.connect(self.dialog, QtCore.SIGNAL('filesSelected(const QStringList)'), self.selectDir)
         
         self.win.show()
         
     def baseDirChanged(self):
         newDir = self.dm.getBaseDir()
-        self.ui.storageDirText.setText(newDir)
+        self.ui.storageDirText.setText(QtCore.QString(newDir.dirName()))
         
         # refresh file tree view
         
