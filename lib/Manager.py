@@ -2,10 +2,17 @@
 from util import configfile
 import time, sys, atexit
 from PyQt4 import QtCore, QtGui
+from DataManager import *
 
-class DeviceManager():
-    """DeviceManager class is responsible for loading device modules and instantiating device
-    objects as they are needed. This class is the global repository for device handles."""
+class Manager():
+    """Manager class is responsible for:
+      - Loading/configuring device modules and storing their handles
+      - Managing the device rack GUI
+      - Creating protocol task handles
+      - Loading interface modules and storing their handles
+      - Creating and managing DirectoryHandle objects
+      - Providing unified timestamps
+      - Making sure all devices/modules are properly shut down at the end of the program"""
     
     def __init__(self, configFile=None):
         self.alreadyQuit = False
@@ -13,6 +20,7 @@ class DeviceManager():
         self.devices = {}
         self.modules = {}
         self.devRack = None
+        self.dataManager = None
         self.readConfig(configFile)
         if 'win' in sys.platform:
             time.clock()  ### Required to start the clock in windows
@@ -23,6 +31,13 @@ class DeviceManager():
     
     def __del__(self):
         self.quit()
+    
+    def loadDevice(self, conf, name):
+        modName = cfg['devices'][k]['module']
+        mod = __import__('lib.devices.%s.interface' % modName, fromlist=['*'])
+        devclass = getattr(mod, modName)
+        self.devices[k] = devclass(self, conf, k)
+        return self.devices[k]
     
     def getDevice(self, name):
         if name not in self.devices:
@@ -40,32 +55,31 @@ class DeviceManager():
             raise Exception("No module named %s" % name)
         return self.modules[name]
         
-    
-        
     def winTime(self):
-        """Return the current time in seconds with high precision (windows version)."""
+        """Return the current time in seconds with high precision (windows version, use Manager.time() to stay platform independent)."""
         return time.clock() + self.startTime
     
     def unixTime(self):
-        """Return the current time in seconds with high precision (unix version)."""
+        """Return the current time in seconds with high precision (unix version, use Manager.time() to stay platform independent)."""
         return time.time()
     
     def readConfig(self, configFile):
         """Read configuration file, create device objects, add devices to list"""
-        print "============= Starting DeviceManager configuration from %s =================" % configFile
+        print "============= Starting Manager configuration from %s =================" % configFile
         cfg = configfile.readConfigFile(configFile)
         if not cfg.has_key('devices'):
             raise Exception('configuration file %s has no "devices" section.' % configFile)
         for k in cfg['devices']:
             print "\n=== Configuring device %s ===" % k
-            modName = cfg['devices'][k]['module']
-            mod = __import__('lib.devices.%s.interface' % modName, fromlist=['*'])
             conf = None
             if cfg['devices'][k].has_key('config'):
                 conf = cfg['devices'][k]['config']
-            devclass = getattr(mod, modName)
-            self.devices[k] = devclass(self, conf, k)
-        print "\n============= DeviceManager configuration complete =================\n"
+            self.loadDevice(self, conf, k)
+        if 'users' in cfg:
+            user = 'default'
+            baseDir = cfg['users'][user]['storageDir']
+            self.dataManager = DataManager(baseDir)
+        print "\n============= Manager configuration complete =================\n"
 
     def runProtocol(self, cmd):
         t = Task(self, cmd)
@@ -75,14 +89,7 @@ class DeviceManager():
     def createTask(self, cmd):
         return Task(self, cmd)
 
-    def quit(self):
-        """Nicely request that all devices shut down"""
-        if not self.alreadyQuit:
-            for d in self.devices:
-                print "Requesting %s quit.." % d
-                self.devices[d].quit()
-            self.alreadyQuit = True
-            
+    
     def showDeviceRack(self):
         if self.devRack is None:
             self.devRackDocks = {}
@@ -96,7 +103,26 @@ class DeviceManager():
                 self.devRackDocks[d] = dock
                 self.devRack.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
         self.devRack.show()
-            
+    
+    def getCurrentDir(self):
+        return self.dataManager.getCurrentDir()
+
+    def setCurrentDir(self, newDir):
+        return self.dataManager.setCurrentDir(newDir)
+
+    def logMsg(self, msg, tags={}):
+        cd = self.getCurrentDir()
+        cd.logMsg(msg, tags)
+
+    def quit(self):
+        """Nicely request that all devices shut down"""
+        if not self.alreadyQuit:
+            for d in self.devices:
+                print "Requesting %s quit.." % d
+                self.devices[d].quit()
+            self.alreadyQuit = True
+
+
 class Task:
     def __init__(self, dm, command):
         self.dm = dm

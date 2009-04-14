@@ -1,8 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from lib.DeviceManager import *
-import lib.DataManager as DataManager
+from lib.Manager import *
 import os, sys
 from numpy import *
 
@@ -11,8 +10,10 @@ if len(sys.argv) > 1:
     config = sys.argv[1]
 config = os.path.abspath(config)
 
-dm = DeviceManager(config)
-datam = DataManager.createDataHandler('junk/data', create=True)
+dm = Manager(config)
+bd = dm.getCurrentDir()
+cd = bd.getDir('junk', create=True)
+dm.setCurrentDir(cd)
 
 duration = 0.25
 protoSettings = {'mode': 'single', 'time': duration, 'name': 'TestProtocol', 'storeData': True, 'writeLocation': '...'}
@@ -45,8 +46,8 @@ cmd = {
 
 print "\nRunning protocol.."
 data = dm.runProtocol(cmd)
-
-dataDir = datam.mkdir('protocol', autoIndex=True)
+curDir = dm.getCurrentDir()
+dataDir = curDir.mkdir('protocol', autoIndex=True)
 #dataDir.writeFile(data, info={'protocol': 'test'})
 
 print "\n== Results =="
@@ -70,4 +71,4 @@ print "Expose signal:", data['Camera']['expose'][::10]
 
 
 print "\nShutting down.."
-dm.quit()
+#dm.quit()

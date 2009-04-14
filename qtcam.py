@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-from lib.DeviceManager import *
-import lib.DataManager as DataManager
+from lib.Manager import *
 import os, sys
 from numpy import *
 from PyQt4 import QtGui
@@ -16,8 +15,10 @@ if len(sys.argv) > 1:
     config = sys.argv[1]
 config = os.path.abspath(config)
 
-dm = DeviceManager(config)
-datam = DataManager.createDataHandler('junk/data')
+dm = Manager(config)
+dm.showDeviceRack()
+
+Manager.setCurrentDir('junk')
 
 print "Loading camera module.."
 qtcam = dm.loadModule(module='Camera', name='Camera', config={'camDev': 'Camera'})
@@ -34,4 +35,4 @@ else:
 ## isatty is broken for cygwin shell. This should not be needed for regular windows shell..
 app.exec_()
 
-dm.quit()
+#dm.quit()
