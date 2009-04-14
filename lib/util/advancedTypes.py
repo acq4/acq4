@@ -182,7 +182,7 @@ def makeThreadsafe(obj):
         raise Exception("Not sure how to make object of type %s thread-safe" % str(type(obj)))
         
         
-class MutexLocker:
+class Locker:
     def __init__(self, lock):
         self.lock = lock
         self.lock.acquire()

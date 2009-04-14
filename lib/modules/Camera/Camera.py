@@ -58,7 +58,7 @@ class PVCamera(QtGui.QMainWindow):
         QtGui.QMainWindow.__init__(self)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
-        self.recordThread = RecordThread(self)
+        self.recordThread = RecordThread(self, self.module.manager)
         self.recordThread.start()
         
         ## Set up camera graphicsView
@@ -553,10 +553,10 @@ class AcquireThread(QtCore.QThread):
 
 
 class RecordThread(QtCore.QThread):
-    def __init__(self, ui):
+    def __init__(self, ui, manager):
         QtCore.QThread.__init__(self)
         self.ui = ui
-        self.m = ui.m
+        self.m = manager
         #self.dialog = QtGui.QFileDialog()
         #self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
         QtCore.QObject.connect(self.ui.acquireThread, QtCore.SIGNAL('newFrame'), self.newCamFrame)

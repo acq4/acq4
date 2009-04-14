@@ -2,8 +2,9 @@
 import threading, os, time, re, types
 ##  import fcntl  ## linux only?
 from lib.util.functions import strncmp
-from lib.util.configFile import *
+from lib.util.configfile import *
 from lib.util.MetaArray import MetaArray
+from lib.util.advancedTypes import Locker
 
 class DataManager:
     """Class for creating and caching DirHandle objects to make sure there is only one manager object per directory. 

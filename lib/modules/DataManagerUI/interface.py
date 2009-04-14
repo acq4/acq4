@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 from DataManagerTemplate import *
-from lib.modules import Module
+from lib.modules.Module import *
 
-class DataManager(Module):
-    def __init__(self, dm):
-        Module.__init__(self)
-        self.dm = dm
+class DataManagerUI(Module):
+    def __init__(self, manager, name, config):
+        Module.__init__(self, manager, name, config)
+        self.dm = self.manager.dataManager
         self.win = QtGui.QMainWindow()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)

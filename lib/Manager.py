@@ -32,12 +32,11 @@ class Manager():
     def __del__(self):
         self.quit()
     
-    def loadDevice(self, conf, name):
-        modName = cfg['devices'][k]['module']
+    def loadDevice(self, modName, conf, name):
         mod = __import__('lib.devices.%s.interface' % modName, fromlist=['*'])
         devclass = getattr(mod, modName)
-        self.devices[k] = devclass(self, conf, k)
-        return self.devices[k]
+        self.devices[name] = devclass(self, conf, name)
+        return self.devices[name]
     
     def getDevice(self, name):
         if name not in self.devices:
@@ -74,11 +73,14 @@ class Manager():
             conf = None
             if cfg['devices'][k].has_key('config'):
                 conf = cfg['devices'][k]['config']
-            self.loadDevice(self, conf, k)
+            modName = cfg['devices'][k]['module']
+            self.loadDevice(modName, conf, k)
         if 'users' in cfg:
-            user = 'default'
+            user = 'Default'
             baseDir = cfg['users'][user]['storageDir']
             self.dataManager = DataManager(baseDir)
+        else:
+            raise Exception("No configuration found for data management!")
         print "\n============= Manager configuration complete =================\n"
 
     def runProtocol(self, cmd):
