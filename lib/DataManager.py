@@ -127,31 +127,32 @@ class DirHandle:
         fd.write('%s %s\n' % (t, msg))
         fd.close()
     
-    def mkdir(self, name, autoIndex=False, info={}):
+    def mkdir(self, name, autoIncrement=False, info={}):
         """Create a new subdirectory, return a new DirHandle object. If autoIndex is true, add a number to the end of the dir name if it already exists."""
         l = Locker(self.lock)
-        newDir = os.path.join(self.baseDir, name)
         
-        if autoIndex:
+        if autoIncrement:
             fullName = name+"_000"
         else:
             fullName = name
             
-        if os.path.isdir(newDir):
-            if autoIndex:
-                files = os.listdir(self.baseDir)
-                files = filter(lambda f: re.match(name + r'_\d+$', f), files)
+        if autoIncrement:
+            files = os.listdir(self.baseDir)
+            files = filter(lambda f: re.match(name + r'_\d+$', f), files)
+            if len(files) > 0:
                 files.sort()
                 maxVal = int(files[-1][-3:])
                 fullName = name + "_%03d" % (maxVal+1)
-            else:
-                raise Exception("Directory %s already exists." % newDir)
+            
+        newDir = os.path.join(self.baseDir, fullName)
+        if os.path.isdir(newDir):
+            raise Exception("Directory %s already exists." % newDir)
         
-        ndm = self.manager.getDirHandle(os.path.join(self.baseDir, fullName), create=True)
+        ndm = self.manager.getDirHandle(newDir, create=True)
         self.addFile(fullName, info)
         return ndm
     
-    def getDir(self, subdir, create=False):
+    def getDir(self, subdir, create=False, autoIncrement=False):
         """Return a DirHandle for the specified subdirectory. If the subdir does not exist, it will be created only if create==True"""
         l = Locker(self.lock)
         ndir = os.path.join(self.baseDir, subdir)
@@ -159,7 +160,7 @@ class DirHandle:
             return self.manager.getDirHandle(ndir)
         else:
             if create:
-                return self.mkdir(subdir)
+                return self.mkdir(subdir, autoIncrement=autoIncrement)
             else:
                 raise Exception('Directory %s does not exist.' % ndir)
         
@@ -194,21 +195,24 @@ class DirHandle:
         """Write a file to this directory using obj.write(fileName), store info in the index."""
         t = self.manager.time()
         l = Locker(self.lock)
-        fn = os.path.join(self.baseDir, fileName)
+        name = fileName
+        fullFn = os.path.join(self.baseDir, name)
         appendInfo = False
+
         if autoIncrement:
+            appendInfo = True
             d = 0
+            base, ext = os.path.splitext(name)
             while True:
-                fn1 = "%s_%04d" % (fn, d)
-                if not os.path.exists(fn1):
-                    fn = fn1
-                    appendInfo = True
+                name = "%s_%04d%s" % (base, d, ext)
+                fullFn = os.path.join(self.baseDir, name)
+                if not os.path.exists(fullFn):
                     break
                 d += 1
         #fd = open(fn, 'w')
         #fcntl.flock(fd, fcntl.LOCK_EX)
         
-        obj.write(fn)
+        obj.write(fullFn)
         
         #fd.close()
         
@@ -216,7 +220,8 @@ class DirHandle:
             info['__object_type__'] = obj.typeName()
         if not info.has_key('__timestamp__'):
             info['__timestamp__'] = t
-        self.setFileInfo(fileName, info, append=appendInfo)
+        self.setFileInfo(name, info, append=appendInfo)
+        return name
     
     def addFile(self, fileName, info={}, protect=False):
         """Add a pre-existing file into the index. Overwrites any pre-existing info for the file unless protect is True"""
@@ -233,22 +238,22 @@ class DirHandle:
         #fd = open(self.indexFile, 'r')
         #fcntl.flock(fd, fcntl.LOCK_EX)
         if append:
-            appendConfigFile(info, self.indexFile)
+            appendConfigFile({fileName: info}, self.indexFile)
         else:
             self._readIndex(lock=False)
-            self.index[file] = info
+            self.index[fileName] = info
             self._writeIndex(lock=False)
         #fd.close()
         
-    def setFileAttr(file, attr, value):
+    def setFileAttr(fileName, attr, value):
         l = Locker(self.lock)
         if not self.index.has_key('file'):
-            self.setFileInfo(file, {attr: value}, append=True)
+            self.setFileInfo(fileName, {attr: value}, append=True)
         else:
             #fd = open(self.indexFile, 'r')
             #fcntl.flock(fd, fcntl.LOCK_EX)
             self._readIndex(lock=False)
-            self.index[file][attr] = value
+            self.index[fileName][attr] = value
             self._writeIndex(lock=False)
             #fd.close()
         
@@ -262,7 +267,7 @@ class DirHandle:
         info = self.fileInfo(fileName)
         typ = info['__object_type__']
         cls = self.getFileClass(typ)
-        return cls(file=os.path.join(self.baseDir, fileName))
+        return cls.fromFile(fileName=os.path.join(self.baseDir, fileName))
         #return MetaArray(file=os.path.join(self.baseDir, fileName))
 
     def getFileClass(self, className):

@@ -17,7 +17,7 @@ from CameraTemplate import Ui_MainWindow
 from lib.util.qtgraph.GraphicsView import *
 from lib.util.qtgraph.graphicsItems import *
 from lib.util.qtgraph.widgets import ROI
-from lib.filetypes.TiffFile import *
+from lib.filetypes.ImageFile import *
 from PyQt4 import QtGui, QtCore
 import scipy.ndimage
 import time, types, os.path, re, sys
@@ -137,8 +137,8 @@ class PVCamera(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.btnFullFrame, QtCore.SIGNAL('clicked()'), self.setRegion)
         QtCore.QObject.connect(self.ui.spinBinning, QtCore.SIGNAL('valueChanged(int)'), self.setBinning)
         QtCore.QObject.connect(self.ui.spinExposure, QtCore.SIGNAL('valueChanged(double)'), self.setExposure)
-        QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('storageDirChanged'), self.updateStorageDir)
-        QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('recordStatusChanged'), self.updateRecordStatus)
+        #QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('storageDirChanged'), self.updateStorageDir)
+        #QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('recordStatusChanged'), self.updateRecordStatus)
         QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
         QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('newFrame'), self.newFrame)
         QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('finished()'), self.acqThreadStopped)
@@ -177,12 +177,12 @@ class PVCamera(QtGui.QMainWindow):
 
     def toggleRecord(self, b):
         if b:
-            self.ui.txtStorageDir.setEnabled(False)
-            self.ui.btnSelectDir.setEnabled(False)
+            #self.ui.txtStorageDir.setEnabled(False)
+            #self.ui.btnSelectDir.setEnabled(False)
             self.ui.btnRecord.setChecked(True)
         else:
-            self.ui.txtStorageDir.setEnabled(True)
-            self.ui.btnSelectDir.setEnabled(True)
+            #self.ui.txtStorageDir.setEnabled(True)
+            #self.ui.btnSelectDir.setEnabled(True)
             self.ui.btnRecord.setChecked(False)
 
     #def toggleROPing(self, b):
@@ -191,13 +191,13 @@ class PVCamera(QtGui.QMainWindow):
     #  else:
     #    self.ropWindow.hide()
 
-    def updateRecordStatus(self, ready):
-        if ready:
-            self.ui.btnRecord.setEnabled(True)
-            self.ui.btnSnap.setEnabled(True)
-        else:
-            self.ui.btnRecord.setEnabled(False)
-            self.ui.btnSnap.setEnabled(False)
+    #def updateRecordStatus(self, ready):
+        #if ready:
+            #self.ui.btnRecord.setEnabled(True)
+            #self.ui.btnSnap.setEnabled(True)
+        #else:
+            #self.ui.btnRecord.setEnabled(False)
+            #self.ui.btnSnap.setEnabled(False)
 
     def divideClicked(self):
         self.AGCLastMax = None
@@ -206,8 +206,8 @@ class PVCamera(QtGui.QMainWindow):
         if self.ui.btnDivideBackground.isChecked() and not self.ui.btnLockBackground.isChecked():
             self.backgroundFrame = None
             
-    def updateStorageDir(self, newDir):
-        self.ui.txtStorageDir.setText(newDir)
+    #def updateStorageDir(self, newDir):
+        #self.ui.txtStorageDir.setText(newDir)
 
     def showMessage(self, msg):
         self.ui.statusbar.showMessage(msg)
@@ -224,10 +224,15 @@ class PVCamera(QtGui.QMainWindow):
         
     def closeEvent(self, ev):
         #self.ropWindow.stop()
-        self.acquireThread.stop()
-        self.acquireThread.wait()
-        self.recordThread.stop()
-        self.recordThread.wait()
+        if self.acquireThread.isRunning():
+            print "Stopping acquisition thread.."
+            self.acquireThread.stop()
+            self.acquireThread.wait()
+        if self.recordThread.isRunning():
+            print "Stopping recording thread.."
+            self.recordThread.stop()
+            self.recordThread.wait()
+        print "Exiting."
 
         
     def setTransferMode(self, mode):
@@ -608,18 +613,26 @@ class RecordThread(QtCore.QThread):
             #handleDaqFrames = self.newDaqFrames[:]
             #self.newDaqFrames = []
             #dlock.unlock()
-            
-            cLock = QtCore.QMutexLocker(self.camLock)
-            handleCamFrames = self.newCamFrames[:]
-            self.newCamFrames = []
-            cLock.unlock()
+            try:
+                cLock = QtCore.QMutexLocker(self.camLock)
+                handleCamFrames = self.newCamFrames[:]
+                self.newCamFrames = []
+            except:
+                sys.excepthook(*sys.exc_info())
+                break
+            finally:
+                cLock.unlock()
             
             #while len(handleDaqFrames) > 0:
             #  self.handleDaqFrame(handleDaqFrames.pop(0))
             
-            while len(handleCamFrames) > 0:
-                self.handleCamFrame(handleCamFrames.pop(0))
-            
+            try:
+                while len(handleCamFrames) > 0:
+                    self.handleCamFrame(handleCamFrames.pop(0))
+            except:
+                sys.excepthook(*sys.exc_info())
+                break
+                
             time.sleep(10e-6)
             
             l = QtCore.QMutexLocker(self.lock)
@@ -627,14 +640,15 @@ class RecordThread(QtCore.QThread):
                 break
             l.unlock()
 
+
     def handleCamFrame(self, frame):
         l = QtCore.QMutexLocker(self.lock)
         recording = self.recording
         takeSnap = self.takeSnap
-        storageDir = self.storageDir
+        #storageDir = self.storageDir
         l.unlock()
         
-        if storageDir is None or not (recording or takeSnap):
+        if not (recording or takeSnap):
             return
         
         (data, info) = frame
@@ -642,8 +656,8 @@ class RecordThread(QtCore.QThread):
         if recording:
             fileName = 'camFrame_%05d_%f.tif' % (self.currentCamFrame, info['time'])
             #fileName = os.path.join(self.currentDir(), fileName)
-            self.showMessage("Recording %03d - %d" % (self.currentRecord, self.currentCamFrame))
-            self.currentDir.writeFile(TiffFile(data), fileName, info)
+            self.showMessage("Recording %s - %d" % (self.currentDir.dirName(), self.currentCamFrame))
+            self.currentDir.writeFile(ImageFile(data), fileName, info)
             #infoFile = os.path.join(self.currentDir(), '.info')
             #if self.currentCamFrame == 0:
                 #fd = open(infoFile, 'a')
@@ -652,10 +666,10 @@ class RecordThread(QtCore.QThread):
             self.currentCamFrame += 1
         
         if takeSnap:
-            fileName = 'image_%03d.tif' % (self.nextRecord, info['time'])
+            fileName = 'image.tif'
             #fileName = os.path.join(storageDir, fileName)
-            self.m.getCurrentDir().writeFile(TiffFile(data), fileName, info, autoIncrement=True)
-            self.showMessage("Saved image %03d" % self.nextRecord)
+            fn = self.m.getCurrentDir().writeFile(ImageFile(data), fileName, info, autoIncrement=True)
+            self.showMessage("Saved image %s" % fn)
             #self.nextRecord += 1
             
             #infoFile = os.path.join(storageDir, '.info')
@@ -704,18 +718,21 @@ class RecordThread(QtCore.QThread):
 
     def toggleRecord(self, b):
         l = QtCore.QMutexLocker(self.lock)
-        if b:
-            self.currentDir = self.m.getCurrentDir().getDir('record', autoIncrement=True)
-            self.currentCamFrame = 0
-      #   self.currentDaqFrame = 0
-            #self.currentRecord = self.nextRecord
-            #self.nextRecord += 1
-            self.recording = True
-            #os.mkdir(self.currentDir())
-        else:
-            if self.recording:
-                self.recording = False
-                self.showMessage('Finished recording %03d' % self.currentRecord) 
+        try:
+            if b:
+                self.currentDir = self.m.getCurrentDir().mkdir('record', autoIncrement=True)
+                self.currentCamFrame = 0
+        #   self.currentDaqFrame = 0
+                #self.currentRecord = self.nextRecord
+                #self.nextRecord += 1
+                self.recording = True
+                #os.mkdir(self.currentDir())
+            else:
+                if self.recording:
+                    self.recording = False
+                    self.showMessage('Finished recording %s' % self.currentDir.dirName()) 
+        finally:
+            l.unlock()
 
     #def currentDir(self):
         ##l = QtCore.QMutexLocker(self.lock)
@@ -776,6 +793,7 @@ class RecordThread(QtCore.QThread):
     def stop(self):
         l = QtCore.QMutexLocker(self.lock)
         self.stopThread = True
+        l.unlock()
 
 
 #def main():

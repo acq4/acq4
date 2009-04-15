@@ -10,20 +10,20 @@ if app is None:
     app = QtGui.QApplication(sys.argv)
 
 
-config = 'config/default.cfg'
+config = 'config/camonly.cfg'
 if len(sys.argv) > 1:
     config = sys.argv[1]
 config = os.path.abspath(config)
 
 dm = Manager(config)
-dm.showDeviceRack()
+#dm.showDeviceRack()
 
 dm.setCurrentDir('junk')
 
 print "Loading camera module.."
 qtcam = dm.loadModule(module='Camera', name='Camera', config={'camDev': 'Camera'})
-print "Loading dataManager module.."
-dm.loadModule(module='DataManager', name='DM', config={})
+#print "Loading dataManager module.."
+#dm.loadModule(module='DataManager', name='DM', config={})
 
 ## If running interactively, just return to the prompt and let python call the qt event loop for us.
 ## Otherwise, we need to run it ourselves:

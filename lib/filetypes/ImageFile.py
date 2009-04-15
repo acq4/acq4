@@ -2,12 +2,12 @@
 
 import Image
 
-class TiffFile:
+class ImageFile:
     def __init__(self, data):
         self.data = data
         
     def typeName(self):
-        return 'TiffFile'
+        return 'ImageFile'
         
     def write(self, fileName):
         img = Image.fromarray(self.data.transpose())
