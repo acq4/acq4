@@ -178,64 +178,74 @@ def makeThumbs():
 
 
 def seqparse(sequence):
-# parse the list of the format:
-# 12;23/10 etc... like nxtrec in datac
-# now also parses matlab functions and array formats, using eval
-#
-# first arg is starting number for output array
-# second arg is final number
-# / indicates the skip arg type
-# basic: /n means skip n : e.g., 1;10/2 = 1,3,5,7,9
-# special: /##:r means randomize order (/##rn means use seed n for randomization)
-# special: /##:l means spacing of elements is logarithmic
-# special: /##:s means spacing is logarithmic, and order is randomized. (/##sn means use seed n for randomization)
-# special: /:a## means alternate with a number
-# multiple sequences are returned in a list... just like single sequences...
-
-# 3 ways for list to be structured:
-# 1. standard datac record parses. List is enclosed inbetween single quotes
-# 2. matlab : (array) operator expressions. [0:10:100], for example
-# 3. matlab functions (not enclosed in quotes). Each function generates a new list
-# note that matlab functions and matrices are treated identically
-#
-# Updated 9/07/2000, 11/13/2000, 4/7/2004 (arbitrary matlab function argument with '=')
-# converted to python 3/2/2009
-# Paul B. Manis, Ph.D.
-# pmanis@med.unc.edu
+    """ parse the list of the format:
+     12;23/10 etc... like nxtrec in datac    
+     first arg is starting number for output array
+     second arg is final number
+     / indicates the skip arg type
+     basic: /n means skip n : e.g., 1;10/2 = 1,3,5,7,9
+     special: /##*r means randomize order (/##rn means use seed n for randomization)
+     special: /##*l means spacing of elements is logarithmic
+     special: /##*s means spacing is logarithmic, and order is randomized. (/##sn means use seed n for randomization)
+     special: /##*a means alternate with a number
+     multiple sequences are returned in a list... just like single sequences...
+    
+     3 ways for list to be structured:
+     1. standard datac record parses.
+     
+     Updated 9/07/2000, 11/13/2000, 4/7/2004 (arbitrary matlab function argument with '=')
+     converted to python 3/2/2009
+     Paul B. Manis, Ph.D.
+     pmanis@med.unc.edu
+     """
 
     seq=[]
+    target=[]
+    sequence.replace(' ', '') # remove all spaces - nice to read, not needed to calculate
+    sequence = str(sequence) #make sure we have a nice string
     (seq2, sep, remain) = sequence.partition('&') # find  and returnnested sequences
-    print sequence
     while seq2 is not '':
-        print seq2
         try:
-            seq.append(recparse(seq2))
+            (oneseq, onetarget) = recparse(seq2)
+            seq.append(oneseq)
+            target.append(onetarget)
         except:
             pass
         (seq2, sep, remain) = remain.partition('&') # find  and returnnested sequences
-    return (seq)
+    return (seq, target)
 
     
 def recparse(cmdstr):
-    # function to parse basic word unit of the list - a;b/c or the like
-    #
-    # syntax is:
-    # a;b/c:n
-    # where a, b and c are numbers, and if present :n implies a "mode"
-    # such as linear, log, randomized, etc.
-    #
-    recs=[]
+    """ function to parse basic word unit of the list - a;b/c or the like
+    syntax is:
+    [target:]a;b[/c][*n]
+    where:
+    target is a parameter target identification (if present)
+    the target can be anything - a step, a duration, a level....
+    it just needs to be in a form that will be interepreted by the PyStim
+    sequencer; it may include a number to indicate which step duration, etc is the
+    target.
+    a, b and c are numbers
+    n, and if present *n implies a "mode"
+    such as linear, log, randomized, etc.
+    """
     
+    recs=[]
+    target=[]
     seed=0
     skip = 1.0
-    (sfn, sep, rest) = cmdstr.partition(';')
-    (sln, sep, rest2) = rest.partition('/')
-    (sskip, sep, mo) = rest2.partition(':')
+    (target, sep, rest) = cmdstr.partition(':') # get the target
+    if rest is '':
+        rest = target # no : found, so no target designated.
+        target=''
+    (sfn, sep, rest1) = rest.partition(';')
+    (sln, sep, rest2) = rest1.partition('/')
+    (sskip, sep, mo) = rest2.partition('*') # look for mode
     fn = float(sfn)
     ln = float(sln)
     skip = float(sskip)
     ln = ln + 0.01*skip
-    print mo
+#    print "mo: %s" % (mo)
     if mo is '': # linear spacing; skip is size of step
         recs=eval('arange(%f,%f,%f)' % (fn, ln, skip))
 
@@ -267,7 +277,7 @@ def recparse(cmdstr):
         c = [val]*len(recs)*2 # double the length of the sequence
         c[0:len(c):2] = recs # fill the alternate positions with the sequence
         recs = c # copy back
-    return(recs)        
+    return((recs, target))        
     
 
 

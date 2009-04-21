@@ -3,10 +3,14 @@
 Python class Wrapper for Qwt library for simple plots.
 Includes the following methods:
 PlotClear clears the selected plat
+PlotReset... 
 PlotLine is a matlab-like plotting routine for drawing lines, with
 optional symbols, colors, etc. This is only to access the most common
 plotting attributes for simple data plots, by mapping from the Qwt names
-to the matlab names. 
+to the matlab names.
+Key routines start around line 600.
+Multiple plots in a matrix can be made using the subPlot command, with a matlab-
+like syntax.
 """
 # January, 2009
 # Paul B. Manis, Ph.D.
@@ -33,7 +37,7 @@ to the matlab names.
     Additional Terms:
     The author(s) would appreciate that any modifications to this program, or
     corrections of erros, be reported to the principal author, Paul Manis, at
-    pmanis@med.unc.edu, with the subject line "PySounds Modifications". 
+    pmanis@med.unc.edu, with the subject line "MPlot Modifications". 
     
     Note: This program also relies on the TrollTech Qt libraries for the GUI.
     You must obtain these libraries from TrollTech directly, under their license
@@ -47,13 +51,13 @@ from PyQt4.Qwt5.anynumpy import *
 from sets import *
 import ctypes
 import urllib
-from grace import GracePlotter
+#from grace import GracePlotter
 import time
 
-if os.name is not 'nt':
-    import appscript # support applescript talk to Igor etc.
-else:
-    import win32com.client # allow active x talk to Igor etc.
+#if os.name is not 'nt':
+#    import appscript # support applescript talk to Igor etc.
+#else:
+#    import win32com.client # allow active x talk to Igor etc.
 
 class MPlot:
     
@@ -195,20 +199,22 @@ class MPlot:
         self.mainUi = []
         self.linkTable={}
             
-# remove all the children of the current widget - usually to clear out a tabbed
-# widget's traces.
-# ruthless...
+
     def Erase(self, thiswidget):
+        """remove all the children of the current widget - usually to clear out a tabbed
+            widget's traces.
+            ruthless..."""
         for ch in thiswidget.children():
             if ch in self.plotList:
                 self.plotList.remove(ch)
-            ch.destroy()
- 
-# insert a new QwtPlot canvas in the current widget, at positions x and y, with
-# witdth w and h, which are relative to x(0,1) and y(0,1) in the widget space.
-# keep track of the plots that were added
+                ch.destroy()
+# 
     def newPlot(self, thiswidget, possize=(0.2, 0.5, 0.2, 0.5), title = None):
         newplot = Qwt.QwtPlot(thiswidget)
+        """insert a new QwtPlot canvas in the current widget, at positions x and y, with
+        width w and h, which are relative to x(0,1) and y(0,1) in the widget space.
+        keep track of the plots that were added
+        """
         if title is not None:
             newplot.setTitle(title)
         wsize =  thiswidget.size() # get the bounds of the outer widget
@@ -224,9 +230,11 @@ class MPlot:
             self.plotList.append(newplot) # keep track of the plots 
         return(newplot)
         
-# Insert a subplot (new QwtPlot) into the widget space matrix with automatic position
-# much like the matlab subplot command. 
+#  
     def subPlot(self, thiswidget, rows, cols, index, sptitle=None):
+        """Insert a subplot (new QwtPlot) into the widget space matrix with automatic position
+            much like the matlab subplot command.
+        """
         xwid = (1.0/(cols))
         yht = (1.0/(rows))
         xi = index % (cols) # get the row, column index
@@ -236,31 +244,40 @@ class MPlot:
         pl = self.newPlot(thiswidget, possize=(xp, yp, xwid, yht), title=sptitle)
         return(pl)
 
-    def sameScale(self, plts):
+    def sameScale(self, plts, xsame = True, ysame = True):
+        """ force all the plots in the plot list plts to have the same scale.
+        by default, both x and yaxes are scaled, but this can be also be done
+        selectively.
+        """
         minY = 1.0e6
         maxY = -1.0e6
         minX = 1.0e6
         maxX = -1.0e6
         for p in plts:
-            axisL = p.axisScaleDiv(Qwt.QwtPlot.yLeft)
-            axisB = p.axisScaleDiv(Qwt.QwtPlot.xBottom)
-            if axisL.lBound() < minY:
-                minY = axisL.lBound()
-            if axisL.hBound() > maxY:
-                maxY = axisL.hBound()
-            if axisB.lBound() < minX:
-                minX = axisB.lBound()
-            if axisB.hBound() > maxX:
-                maxX = axisB.hBound()
+            if ysame:
+                axisL = p.axisScaleDiv(Qwt.QwtPlot.yLeft)
+                if axisL.lBound() < minY:
+                    minY = axisL.lBound()
+                if axisL.hBound() > maxY:
+                    maxY = axisL.hBound()
+            if xsame:
+                axisB = p.axisScaleDiv(Qwt.QwtPlot.xBottom)
+                if axisB.lBound() < minX:
+                    minX = axisB.lBound()
+                if axisB.hBound() > maxX:
+                    maxX = axisB.hBound()
         
         for p in plts:
-            p.setAxisScale(Qwt.QwtPlot.yLeft, minY, maxY)
-            p.enableAxis(Qwt.QwtPlot.yLeft, False)
-            p.setAxisScale(Qwt.QwtPlot.xBottom, minX, maxX)
-            p.enableAxis(Qwt.QwtPlot.xBottom, False)
+            if ysame:
+                p.setAxisScale(Qwt.QwtPlot.yLeft, minY, maxY)
+                p.enableAxis(Qwt.QwtPlot.yLeft, False)
+            if xsame:
+                p.setAxisScale(Qwt.QwtPlot.xBottom, minX, maxX)
+                p.enableAxis(Qwt.QwtPlot.xBottom, False)
             
-    
     def linkSelection(self, taba, tabb):
+        """ link graphs together - useful when you need to control I and V display
+        at the same time """
         self.linkTable[taba] = tabb
         self.linkTable[tabb] = taba # make links both ways
         
@@ -297,8 +314,8 @@ class MPlot:
         ht = (geo.height())/float(grgeo.height())
         return((x0, y0, wid, ht))
         
-# set the objects that serve as labels for the mouse coordinates
     def setXYReport(self, xlabel, ylabel):
+        """set the objects that serve as labels for the mouse coordinates."""
         if xlabel != None:
             self.xlabel = xlabel
         else:
@@ -307,9 +324,9 @@ class MPlot:
             self.ylabel = ylabel
         else:
             self.ylabel = None
-
-# set the objects that serve as labels for the Saved mouse coordinates
+ 
     def setTReport(self, t0label, t1label, mousewindow=None):
+        """set the objects that serve as labels for the Saved mouse coordinates."""
         if t0label != None:
             self.t0label = t0label
         else:
@@ -326,9 +343,9 @@ class MPlot:
     def setHooks(self, ui):
         self.mainUi = ui
         
-# enable tracking of the mouse
     def PlotTracking(self, theplot):
-        if not hasattr(theplot, 'mouseconnect'): # prevent connecting more than once
+        """Enable tracking of the mouse in the selected plot."""
+        if not hasattr(theplot, 'mouseconnect'): # prevent connecting more than once to any plot
             theplot.connect(Spy(theplot.canvas()),
                      Qt.SIGNAL("MouseMove"),
                         self.showCoordinates) # watch the mouse move
@@ -344,6 +361,7 @@ class MPlot:
             theplot.mouseconnect = 1
             
     def Selected(self, curve):
+        """ select the given curve, and any of it's linked compatriots """
         curve.setPen(curve.my_Qpen)
         curve.setSymbol(curve.my_Qmarker)
         curve.setZ(0.0) # bring selection to the front
@@ -358,8 +376,8 @@ class MPlot:
                 curve2.selected = True # add selection to our list
                 p2.replot() # force replot of linked plot as well
 
-
     def deSelect(self, curve):
+        """ delselect the curve and it's compatriots - setting colors appropriately"""
         curve.setPen(self.deselectPen)
         sym = curve.symbol()
         curve.setSymbol(Qwt.QwtSymbol(sym.style(), # keep symbol and size, just hide colors
@@ -367,7 +385,7 @@ class MPlot:
                     Qt.QPen(self.deselectColor),
                     Qt.QSize(sym.size())))
         curve.selected = False
-        curve.setZ(-1)
+        curve.setZ(-1) # move back
         if self.linkTable.has_key(curve.mother_plot): # see if we have linked stuff
             p2 = self.linkTable[curve.mother_plot] # get linked plot
             if curve.plotCount in p2.plotDict: # p2.plotCount.has_key(curve.plotCount):
@@ -383,6 +401,7 @@ class MPlot:
                 p2.replot()
 
     def getSelectedTraces(self, plot):
+        """ return all the selected traces in the current plot """
         # pl = thecanvas.plot()
         sellist = []
         for cu in plot.itemList():
@@ -391,8 +410,8 @@ class MPlot:
                     sellist.append(cu.plotCount-1)
         return(sellist)
         
-        
     def selectOneTrace(self, thecanvas, event):
+        """ find the closest trace to the last mouse position in the current canvas """
         mindist = None
         closest = None
         pl = thecanvas.plot()
@@ -426,7 +445,8 @@ class MPlot:
         pl.replot()
         
     def selectMultipleTraces(self, thecanvas, event):
-        # control A (command A) to select or deselect all the traces
+        """Control A (command A) to select or Control D (command D) to
+        deselect all the traces. """
         if (event.key() == Qt.Qt.Key_A) and (event.modifiers() & Qt.Qt.ControlModifier): # select EVERYTHING or Nothing
             pl = thecanvas.plot()
             sel = 0
@@ -448,8 +468,9 @@ class MPlot:
             pl.selectState = 0 # we don't change the flag until we are done
             pl.replot()        
 
-# on mouse clicks with SHIFT key, save the coordinates in an array (save plot also)
     def saveCoordinates(self, thecanvas, event):
+        """ on mouse clicks with SHIFT key, save the coordinates in an array (save plot also)
+        """
         pl = thecanvas.plot() # the plot from the canvas
         self.LastClickedPlot = pl # save the last clicked plot, regardless
         if event.modifiers() & Qt.Qt.ShiftModifier: # then save the position
@@ -477,8 +498,8 @@ class MPlot:
                 self.t0label.setText(self.makeLabel(min(pl.MTimesX), pl.unitsX))
                 self.t1label.setText(self.makeLabel(max(pl.MTimesX), pl.unitsY))
         
-# method to request the last 2 coordinates clicked on the current graph
     def getCoordinates(self, last = None):
+        """ method to request the last 2 coordinates clicked on the current graph """
         x=None
         y=None
         if last is None:
@@ -507,8 +528,9 @@ class MPlot:
                     
         return (label)
         
-# display the coordinates in the label boxes        
     def showCoordinates(self, thecanvas, position):
+        """" display the coordinates in the label boxes - you did define
+        some label boxes ? if not, well, we just won't fail"""      
         pl = thecanvas.plot() # the plot from the canvas    
         pl.MouseLastPos = position # save the last hit position _always_
         try:
@@ -527,16 +549,17 @@ class MPlot:
             pass # it is possible that pl.units is not set if graph built but not
         # initialized by us
 
-# get clipped curve data between t0 and t1 from the selected QwtCurve
     def getClipCurveData(self, curve, t0, t1):
+        """ get clipped curve data between t0 and t1 from the selected QwtCurve """
         x = curve.x
         print x
         dat = curve.data()
         print "what about it?"
         return (0,0)
         
-# initiate plot zooming        
+      
     def PlotZooming(self, theplot):
+        """ initiate plot zooming """
         if not hasattr(theplot, 'zoomer'): # only attach the zoomer to the plot at the start
             theplot.zoomer = Qwt.QwtPlotZoomer(Qwt.QwtPlot.xBottom,
                                         Qwt.QwtPlot.yLeft,
@@ -582,12 +605,17 @@ class MPlot:
     def getPlotList(self): # provide plot list to main program for management
         return(self.plotList)
 
-# PlotReset clears the plot data and sets some of the basics about the plot:
-# labels, mouse and zoom capability, and x, y scaling modes
+##########################################################################
+
     def PlotReset(self, plot, bkcolor=None, mouse=True, zoom=True, xlabel=None, ylabel=None,
                                  xscale = 'linear', yscale = 'linear' , textName=None,
                                  unitsX = None, unitsY = None,
-                                 gridX = False, gridY = False):
+                                 gridX = False, gridY = False,
+                                 linemode = 'lines',
+                                 xAxisOn = True, yAxisOn = True):
+        """ PlotReset clears the plot data and sets some of the basics about the plot:
+        labels, mouse and zoom capability, and x, y scaling modes
+        """
         if plot not in self.plotList:
             self.plotList.append(plot) # keep track of the plots 
         plot.clear()
@@ -601,6 +629,7 @@ class MPlot:
         plot.unitsY=unitsY
         plot.nPoints = 0 # reset number of points stored in the mouse
         plot.textualName = textName
+        plot.linemode = linemode
         plot.data = [] # plot has no data in it.
         if bkcolor != None:
             plot.setCanvasBackground(self.getColor(bkcolor))
@@ -633,18 +662,24 @@ class MPlot:
             plot.setAxisScaleEngine(Qwt.QwtPlot.xBottom, Qwt.QwtLinearScaleEngine())
         if yscale == 'linear':
             plot.setAxisScaleEngine(Qwt.QwtPlot.yLeft, Qwt.QwtLinearScaleEngine())
+        if not xAxisOn:
+            plot.enableAxis(Qwt.QwtPlot.xBottom, False)
+        if not yAxisOn:
+            plot.enableAxis(Qwt.QwtPlot.yLeft, False)
+        
         plot.replot()
         if mouse:
             self.PlotTracking(plot)
         if zoom:
             self.PlotZooming(plot) # attach a zoomer
 
-# display a line in the plot with selected colors etc.        
     def PlotLine(self, plot, x, y, color='k', linestyle = '-', linethick = 1,
                  symbol=None, symbolsize = 9, symbolcolor = None, symbolthick = 1,
                  dataID = None, dataShape=None):
-        cu = Qwt.QwtPlotCurve() # make a curve instance
-        
+
+        """ display a line in the plot with selected colors etc.        
+        """
+        cu = Qwt.QwtPlotCurve() # make a curve instance 
         lcolor = self.getColor(color)
         lstyle = self.getLineStyle(linestyle)
         
@@ -654,13 +689,22 @@ class MPlot:
             cp.setColor(lcolor)
             cp.setWidth(0) # no width
         else:
-            cu.setStyle(Qwt.QwtPlotCurve.Lines)
+            if plot.linemode == 'lines':
+                cu.setStyle(Qwt.QwtPlotCurve.Lines)
+            elif plot.linemode == 'sticks':
+                cu.setStyle(Qwt.QwtPlotCurve.Sticks)
+            elif plot.linemode == 'steps':
+                cu.setStyle(Qwt.QwtPlotCurve.Steps)
+                cu.setCurveAttribute(Qwt.QwtPlotCurve.Inverted, True)
+            elif plot.linemode == 'dots':
+                cu.setStyle(Qwt.QwtPlotCurve.Dots)
+            else:
+                cu.setStyle(Qwt.QwtPlotCurve.Lines)
             cp = Qt.QPen(lstyle)
             cp.setColor(lcolor)
             cp.setWidth(linethick)
         cu.setPen(cp)
         cpp={'style':lstyle, 'color': lcolor, 'width': linethick} # store for future ref
-        
         scolor = self.getColor(symbolcolor)
         lsymbol = self.getSymbol(symbol)
         if lsymbol is None:
@@ -676,7 +720,6 @@ class MPlot:
         csp={'symbol': lsymbol, 'brushcolor': scolor, 'pencolor': scolor, 'penthick': symbolthick,
             'size':symbolsize}
         cu.setSymbol(cs)
-            
         cu.attach(plot) # add curve to the plot
         cu.setData(x, y) # set the data in the curve
 # the following attributes are ones that we add to the QwtCurve type for our reference
@@ -742,8 +785,11 @@ class MPlot:
             plot.zoomer.setZoomerBase()
         else:
             plot.replot()
-   
+
+    # PlotSpec()
+    
     def fillTextBox(self, textbox, textlabel=None, font='Helvetica', size=11, wrap=True):
+        """ write a text string, possible wrapped, into a text box in the display """
         if textlabel is not None:
             textbox.setText(textlabel)
             textbox.setWordWrap(wrap)
@@ -751,12 +797,10 @@ class MPlot:
             if textbox not in self.plotList:
                 self.plotList.append(textbox) # keep track of the text boxes too
 
-        
-    # PlotSpec()
-    
-# printGraph does just what it says.Open a printer dialog and dump the grap in
-# in the current plot widget to the printer.
     def printGraph(self, plotwidget):
+        """ printGraph does just what it says.Open a printer dialog and dump the grap in
+         in the current plot widget to the printer.
+        """
         printer = Qt.QPrinter(Qt.QPrinter.HighResolution)
         dialog = Qt.QPrintDialog(printer)
 
@@ -841,7 +885,6 @@ class MPlot:
 
     def gracePlot(self, topwin, lName='datac', pause=0.3):
         """Clone the plot into Grace for very high quality hard copy output.
-
         Know bug: Grace does not scale the data correctly when Grace cannot
         cannot keep up with gracePlot.  This happens when it takes too long
         to load Grace in memory (exit the Grace process and try again) or
@@ -863,7 +906,6 @@ class MPlot:
         for pl in topwin.list(lName): # for all the plots on the page
             if hasattr(pl, 'textualName'): # skip if we have no name - graph is probably not implemented fully
                 ngraphs = ngraphs + 1
-                
         g('arrange ( %d, 1, .1, .1, .1,ON,ON,ON)' % ngraphs) # build an array of the graphs
         # we position them below. rows, columns, offset, vgap, hgap, 
         gno = 0
@@ -878,8 +920,6 @@ class MPlot:
             if gno is 0:
                 g('title "%s"; title font 4; title size 0.8' % (texts1))
                 g('subtitle "%s"; subtitle font 4; subtitle size .6' % (texts2))
-#            print "original coords: %g, %g, %g, %g" % (plpos[0], plpos[1],
-#                                                plpos[2], plpos[3])
             # set the plot area for this plot by setting the viewport
             # squeeze the frame size down a little:
             xmin = plpos[0] + 0.15
@@ -928,7 +968,6 @@ class MPlot:
                 g('xaxes scale Normal')
               #  g('xaxis tick major %12.6f; xaxis tick minor %12.6f'
               #    % (majStep, minStep))
-
             # y-axes
             axisScale = pl.axisScaleDiv(yAxis)
             gymin = axisScale.lBound()
@@ -1021,7 +1060,6 @@ class MPlot:
                                                              layoutRect[2]+layoutRect[0],
                                                              layoutRect[3]+layoutRect[1])) # create the new layout
         pn = 0  
-
         for pl in topwin.list(lName): # for all the plots on the page
             if not hasattr(pl, 'textualName'): # skip if we have no name - graph is probably not implemented fully
                 continue
@@ -1064,8 +1102,7 @@ class MPlot:
                     self.IgorCmd(igor, 'Label left, "%s"; DelayUpdate' %
                                  (str(pl.axisTitle(Qwt.QwtPlot.yLeft).text())))
                     self.IgorCmd(igor, 'Label bottom, "%s"; DelayUpdate' %
-                                 (str(pl.axisTitle(Qwt.QwtPlot.xBottom).text())))
-                    
+                                 (str(pl.axisTitle(Qwt.QwtPlot.xBottom).text())))    
                     self.IgorCmd(igor,"Silent 0")    
                     n = n + 1
             # now get the plot position and scale it into the layout
@@ -1245,12 +1282,12 @@ class TabPlotList:
         for gr in self.glist():
             print "Graph:",
             print gr
-            for pl in self.list(gr):
+            for pl in self.tlist(gr):
                 print "   plot:",
                 print dir(pl)
                 
 # list method is iterable, returns the plots in the current graph window    
-    def list(self, graph):
+    def tlist(self, graph):
         if self.Graph.has_key(graph):
             for index in range(0,len(self.Graph[graph][1])):
                 yield self.Graph[graph][1][index] 
