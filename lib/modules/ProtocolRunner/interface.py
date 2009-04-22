@@ -12,6 +12,7 @@ class ProtocolRunner(Module):
         self.ui.setupUi(self.win)
         
         self.protocolList = DirTreeModel(self.config['globalDir'])
+        self.ui.protocolList.setModel(self.protocolList)
         self.devList = {} ## Devices which currently exist in the system or the current protocol.
             ## The values are tuples: (Device is enabled in protocol, device is available for use)
         
@@ -19,6 +20,8 @@ class ProtocolRunner(Module):
         
         self.devListItems = {}
         self.updateDeviceList()
+        
+        self.newProtocol()
         
         QtCore.QObject.connect(self.ui.newProtocolBtn, QtCore.SIGNAL('clicked()'), self.newProtocol)
         QtCore.QObject.connect(self.ui.saveProtocolBtn, QtCore.SIGNAL('clicked()'), self.saveProtocol)
@@ -38,7 +41,7 @@ class ProtocolRunner(Module):
             protList = self.currentProtocol.devices
             
         ## Remove all devices that do not exist and are not referenced by the protocol
-        for d in devListItems:
+        for d in self.devListItems:
             if d not in devList and d not in protList:
                 self.ui.takeItem(self.ui.row(self.devListItems[d]))
                 del self.devListItems[d]
@@ -49,11 +52,17 @@ class ProtocolRunner(Module):
                 self.devListItems[d] = QtGui.QListWidgetItem(d, self.ui.deviceList)
             self.devListItems[d].setForeground(QtGui.QBrush(QtGui.QColor(0,0,0)))
             
+            
         ## Add all devices that are referenced by the protocol but do not exist
         for d in protList:
             if d not in self.devListItems:
                 self.devListItems[d] = QtGui.QListWidgetItem(d, self.ui.deviceList)
             self.devListItems[d].setForeground(QtGui.QBrush(QtGui.QColor(150,0,0)))
+            
+        ## Make sure flags and checkState are correct for all items
+        for d in self.devListItems:
+            self.devListItems[d].setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsUserCheckable)
+            self.devListItems[d].setCheckState(QtCore.Qt.Unchecked)
         
     def updateDocks(self):
         self.docks = {}
@@ -69,14 +78,14 @@ class ProtocolRunner(Module):
     def clearDocks(self):
         pass
         
-    def newProtocol(self, protocol):
+    def newProtocol(self):
         ## Remove all docks
         ## Clear extra devices in dev list
         ## Clear sequence parameters, disable sequence dock
         ## Create new empty protocol object
         pass
     
-    def loadProtocol(self, protocol):
+    def loadProtocol(self):
         ## Create protocol object from requested file
         ## Remove all docks
         ## Update dev list

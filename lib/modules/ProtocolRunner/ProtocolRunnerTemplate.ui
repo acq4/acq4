@@ -35,21 +35,21 @@ QMainWindow::separator {background-color: #666}</string>
    </attribute>
    <widget class="QWidget" name="dockWidgetContents" >
     <layout class="QGridLayout" name="gridLayout_5" >
-     <item row="0" column="1" >
+     <item row="1" column="1" >
       <widget class="QPushButton" name="newProtocolBtn" >
        <property name="text" >
         <string>New</string>
        </property>
       </widget>
      </item>
-     <item row="1" column="1" >
+     <item row="2" column="1" >
       <widget class="QPushButton" name="loadProtocolBtn" >
        <property name="text" >
         <string>Load</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="1" >
+     <item row="3" column="1" >
       <widget class="QPushButton" name="saveProtocolBtn" >
        <property name="enabled" >
         <bool>false</bool>
@@ -59,17 +59,17 @@ QMainWindow::separator {background-color: #666}</string>
        </property>
       </widget>
      </item>
-     <item row="3" column="1" >
+     <item row="4" column="1" >
       <widget class="QPushButton" name="saveAsProtocolBtn" >
        <property name="enabled" >
-        <bool>false</bool>
+        <bool>true</bool>
        </property>
        <property name="text" >
         <string>Save As..</string>
        </property>
       </widget>
      </item>
-     <item row="5" column="1" >
+     <item row="6" column="1" >
       <spacer name="verticalSpacer_4" >
        <property name="orientation" >
         <enum>Qt::Vertical</enum>
@@ -82,7 +82,7 @@ QMainWindow::separator {background-color: #666}</string>
        </property>
       </spacer>
      </item>
-     <item row="4" column="1" >
+     <item row="5" column="1" >
       <widget class="QPushButton" name="deleteProtocolBtn" >
        <property name="enabled" >
         <bool>false</bool>
@@ -92,8 +92,18 @@ QMainWindow::separator {background-color: #666}</string>
        </property>
       </widget>
      </item>
-     <item rowspan="6" row="0" column="0" >
+     <item rowspan="5" row="2" column="0" >
       <widget class="QTreeView" name="protocolList" />
+     </item>
+     <item row="1" column="0" >
+      <widget class="QLabel" name="label_3" >
+       <property name="text" >
+        <string>Protocols</string>
+       </property>
+       <property name="alignment" >
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
      </item>
     </layout>
    </widget>
@@ -113,27 +123,27 @@ QMainWindow::separator {background-color: #666}</string>
    </attribute>
    <widget class="QWidget" name="dockWidgetContents_5" >
     <layout class="QGridLayout" name="gridLayout" >
-     <item rowspan="5" row="0" column="0" colspan="2" >
+     <item rowspan="3" row="3" column="0" colspan="2" >
       <widget class="QListWidget" name="deviceList" />
      </item>
-     <item row="1" column="2" >
+     <item row="2" column="2" >
       <widget class="QLabel" name="label_8" >
        <property name="text" >
         <string>Duration</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="2" >
+     <item row="3" column="2" >
       <widget class="QDoubleSpinBox" name="protoDurationSpin" />
      </item>
-     <item row="3" column="2" >
+     <item row="4" column="2" >
       <widget class="QCheckBox" name="protoContinuousCheck" >
        <property name="text" >
         <string>Continuous</string>
        </property>
       </widget>
      </item>
-     <item row="4" column="2" >
+     <item row="5" column="2" >
       <spacer name="verticalSpacer_2" >
        <property name="orientation" >
         <enum>Qt::Vertical</enum>
@@ -146,7 +156,7 @@ QMainWindow::separator {background-color: #666}</string>
        </property>
       </spacer>
      </item>
-     <item row="5" column="0" >
+     <item row="6" column="0" >
       <widget class="QPushButton" name="testSingleBtn" >
        <property name="enabled" >
         <bool>false</bool>
@@ -156,7 +166,7 @@ QMainWindow::separator {background-color: #666}</string>
        </property>
       </widget>
      </item>
-     <item row="5" column="1" >
+     <item row="6" column="1" >
       <spacer name="horizontalSpacer_2" >
        <property name="orientation" >
         <enum>Qt::Horizontal</enum>
@@ -169,13 +179,23 @@ QMainWindow::separator {background-color: #666}</string>
        </property>
       </spacer>
      </item>
-     <item row="5" column="2" >
+     <item row="6" column="2" >
       <widget class="QPushButton" name="runProtocolBtn" >
        <property name="enabled" >
         <bool>false</bool>
        </property>
        <property name="text" >
         <string>Run Protocol</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="0" colspan="2" >
+      <widget class="QLabel" name="label" >
+       <property name="text" >
+        <string>Devices</string>
+       </property>
+       <property name="alignment" >
+        <set>Qt::AlignCenter</set>
        </property>
       </widget>
      </item>

@@ -66,6 +66,9 @@ class Manager():
             raise Exception("No device named %s" % name)
         return self.devices[name]
 
+    def listDevices(self):
+        return self.devices.keys()
+
     def loadModule(self, module, name, config={}):
         mod = __import__('lib.modules.%s.interface' % module, fromlist=['*'])
         modclass = getattr(mod, module)
