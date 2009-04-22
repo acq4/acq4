@@ -1,0 +1,233 @@
+<ui version="4.0" >
+ <class>Form</class>
+ <widget class="QWidget" name="Form" >
+  <property name="geometry" >
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1027</width>
+    <height>377</height>
+   </rect>
+  </property>
+  <property name="windowTitle" >
+   <string>Form</string>
+  </property>
+  <layout class="QHBoxLayout" name="horizontalLayout" >
+   <item>
+    <widget class="QSplitter" name="splitter_2" >
+     <property name="orientation" >
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <widget class="QWidget" name="layoutWidget" >
+      <layout class="QVBoxLayout" name="verticalLayout_2" >
+       <item>
+        <layout class="QGridLayout" name="gridLayout_4" >
+         <item row="0" column="0" >
+          <widget class="QFrame" name="frame_2" >
+           <property name="frameShape" >
+            <enum>QFrame::StyledPanel</enum>
+           </property>
+           <property name="frameShadow" >
+            <enum>QFrame::Raised</enum>
+           </property>
+           <layout class="QHBoxLayout" name="horizontalLayout_2" >
+            <item>
+             <widget class="QRadioButton" name="radioButton_3" >
+              <property name="text" >
+               <string>IC</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QRadioButton" name="radioButton_5" >
+              <property name="text" >
+               <string>I=0</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QRadioButton" name="radioButton_4" >
+              <property name="text" >
+               <string>VC</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item row="0" column="1" >
+          <layout class="QHBoxLayout" name="horizontalLayout_6" >
+           <item>
+            <widget class="QLabel" name="label_5" >
+             <property name="text" >
+              <string>Holding</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QDoubleSpinBox" name="doubleSpinBox_4" />
+           </item>
+          </layout>
+         </item>
+         <item row="1" column="0" >
+          <layout class="QHBoxLayout" name="horizontalLayout_3" >
+           <item>
+            <widget class="QLabel" name="label_7" >
+             <property name="text" >
+              <string>Scaled:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="comboBox" >
+             <property name="sizePolicy" >
+              <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
+               <horstretch>3</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <item>
+              <property name="text" >
+               <string>MembranePotential</string>
+              </property>
+             </item>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item row="1" column="1" >
+          <layout class="QHBoxLayout" name="horizontalLayout_5" >
+           <item>
+            <widget class="QCheckBox" name="checkBox_6" >
+             <property name="text" >
+              <string>Set Gain</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QDoubleSpinBox" name="doubleSpinBox_5" />
+           </item>
+          </layout>
+         </item>
+         <item row="2" column="0" >
+          <layout class="QHBoxLayout" name="horizontalLayout_4" >
+           <item>
+            <widget class="QLabel" name="label_9" >
+             <property name="text" >
+              <string>Raw:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="comboBox_2" >
+             <item>
+              <property name="text" >
+               <string>MembraneCurrent</string>
+              </property>
+             </item>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item row="2" column="1" >
+          <spacer name="verticalSpacer_5" >
+           <property name="orientation" >
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0" >
+            <size>
+             <width>20</width>
+             <height>18</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QFrame" name="frame" >
+         <property name="frameShape" >
+          <enum>QFrame::StyledPanel</enum>
+         </property>
+         <property name="frameShadow" >
+          <enum>QFrame::Raised</enum>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout" >
+          <item>
+           <widget class="QLabel" name="label_6" >
+            <property name="sizePolicy" >
+             <sizepolicy vsizetype="Preferred" hsizetype="Preferred" >
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text" >
+             <string>Function</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QTextEdit" name="textEdit" >
+            <property name="html" >
+             <string>&lt;!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN" "http://www.w3.org/TR/REC-html40/strict.dtd">
+&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">
+p, li { white-space: pre-wrap; }
+&lt;/style>&lt;/head>&lt;body style=" font-family:'Sans Serif'; font-size:7pt; font-weight:400; font-style:normal;">
+&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">steps(&lt;/p>
+&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">  t = [0, 10, 100],&lt;/p>
+&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">  v = [0, seq(-10), 0]&lt;/p>
+&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">)&lt;/p>&lt;/body>&lt;/html></string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QTextEdit" name="textEdit_2" >
+            <property name="html" >
+             <string>&lt;!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN" "http://www.w3.org/TR/REC-html40/strict.dtd">
+&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">
+p, li { white-space: pre-wrap; }
+&lt;/style>&lt;/head>&lt;body style=" font-family:'Sans Serif'; font-size:7pt; font-weight:400; font-style:normal;">
+&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">seq = -100;100/10&lt;/p>&lt;/body>&lt;/html></string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QSplitter" name="splitter" >
+      <property name="orientation" >
+       <enum>Qt::Vertical</enum>
+      </property>
+      <widget class="QwtPlot" name="qwtPlot" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+         <horstretch>10</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+      </widget>
+      <widget class="QwtPlot" name="qwtPlot_2" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+         <horstretch>10</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+      </widget>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QwtPlot</class>
+   <extends>QFrame</extends>
+   <header>qwt_plot.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

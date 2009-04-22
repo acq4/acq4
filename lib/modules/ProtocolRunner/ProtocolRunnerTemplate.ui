@@ -13,7 +13,7 @@
    <string>MainWindow</string>
   </property>
   <property name="styleSheet" >
-   <string notr="true" >QDockWidget::title { background-color: #446; color: #DDD }
+   <string>QDockWidget::title { background-color: #446; color: #DDD }
 QDockWidget > QWidget { background-color: #BBB }
 QMainWindow { background-color: #000 }
 QSplitter::handle {background-color: #666}
@@ -25,7 +25,7 @@ QMainWindow::separator {background-color: #666}</string>
   <widget class="QWidget" name="centralwidget" />
   <widget class="QDockWidget" name="LoaderDock" >
    <property name="features" >
-    <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetVerticalTitleBar</set>
+    <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetVerticalTitleBar|QDockWidget::NoDockWidgetFeatures</set>
    </property>
    <property name="windowTitle" >
     <string>Loader</string>
@@ -34,7 +34,7 @@ QMainWindow::separator {background-color: #666}</string>
     <number>4</number>
    </attribute>
    <widget class="QWidget" name="dockWidgetContents" >
-    <layout class="QGridLayout" name="gridLayout_5" >
+    <layout class="QGridLayout" >
      <item row="1" column="1" >
       <widget class="QPushButton" name="newProtocolBtn" >
        <property name="text" >
@@ -70,11 +70,11 @@ QMainWindow::separator {background-color: #666}</string>
       </widget>
      </item>
      <item row="6" column="1" >
-      <spacer name="verticalSpacer_4" >
+      <spacer>
        <property name="orientation" >
         <enum>Qt::Vertical</enum>
        </property>
-       <property name="sizeHint" stdset="0" >
+       <property name="sizeHint" >
         <size>
          <width>20</width>
          <height>77</height>
@@ -93,7 +93,17 @@ QMainWindow::separator {background-color: #666}</string>
       </widget>
      </item>
      <item rowspan="5" row="2" column="0" >
-      <widget class="QTreeView" name="protocolList" />
+      <widget class="QTreeView" name="protocolList" >
+       <property name="acceptDrops" >
+        <bool>true</bool>
+       </property>
+       <property name="dragEnabled" >
+        <bool>true</bool>
+       </property>
+       <property name="dragDropMode" >
+        <enum>QAbstractItemView::InternalMove</enum>
+       </property>
+      </widget>
      </item>
      <item row="1" column="0" >
       <widget class="QLabel" name="label_3" >
@@ -113,7 +123,7 @@ QMainWindow::separator {background-color: #666}</string>
     <bool>true</bool>
    </property>
    <property name="features" >
-    <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetVerticalTitleBar</set>
+    <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetVerticalTitleBar|QDockWidget::NoDockWidgetFeatures</set>
    </property>
    <property name="windowTitle" >
     <string>Protocol</string>
@@ -122,7 +132,7 @@ QMainWindow::separator {background-color: #666}</string>
     <number>4</number>
    </attribute>
    <widget class="QWidget" name="dockWidgetContents_5" >
-    <layout class="QGridLayout" name="gridLayout" >
+    <layout class="QGridLayout" >
      <item rowspan="3" row="3" column="0" colspan="2" >
       <widget class="QListWidget" name="deviceList" />
      </item>
@@ -144,11 +154,11 @@ QMainWindow::separator {background-color: #666}</string>
       </widget>
      </item>
      <item row="5" column="2" >
-      <spacer name="verticalSpacer_2" >
+      <spacer>
        <property name="orientation" >
         <enum>Qt::Vertical</enum>
        </property>
-       <property name="sizeHint" stdset="0" >
+       <property name="sizeHint" >
         <size>
          <width>20</width>
          <height>91</height>
@@ -167,11 +177,11 @@ QMainWindow::separator {background-color: #666}</string>
       </widget>
      </item>
      <item row="6" column="1" >
-      <spacer name="horizontalSpacer_2" >
+      <spacer>
        <property name="orientation" >
         <enum>Qt::Horizontal</enum>
        </property>
-       <property name="sizeHint" stdset="0" >
+       <property name="sizeHint" >
         <size>
          <width>13</width>
          <height>20</height>
@@ -207,7 +217,7 @@ QMainWindow::separator {background-color: #666}</string>
     <bool>false</bool>
    </property>
    <property name="features" >
-    <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetVerticalTitleBar</set>
+    <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetVerticalTitleBar|QDockWidget::NoDockWidgetFeatures</set>
    </property>
    <property name="windowTitle" >
     <string>Sequence</string>
@@ -216,7 +226,7 @@ QMainWindow::separator {background-color: #666}</string>
     <number>4</number>
    </attribute>
    <widget class="QWidget" name="dockWidgetContents_7" >
-    <layout class="QGridLayout" name="gridLayout_2" >
+    <layout class="QGridLayout" >
      <item rowspan="6" row="0" column="0" colspan="2" >
       <widget class="QListWidget" name="sequenceParamList" />
      </item>
@@ -256,11 +266,11 @@ QMainWindow::separator {background-color: #666}</string>
       </widget>
      </item>
      <item row="5" column="2" >
-      <spacer name="verticalSpacer_3" >
+      <spacer>
        <property name="orientation" >
         <enum>Qt::Vertical</enum>
        </property>
-       <property name="sizeHint" stdset="0" >
+       <property name="sizeHint" >
         <size>
          <width>20</width>
          <height>77</height>
@@ -276,11 +286,11 @@ QMainWindow::separator {background-color: #666}</string>
       </widget>
      </item>
      <item row="6" column="1" >
-      <spacer name="horizontalSpacer" >
+      <spacer>
        <property name="orientation" >
         <enum>Qt::Horizontal</enum>
        </property>
-       <property name="sizeHint" stdset="0" >
+       <property name="sizeHint" >
         <size>
          <width>146</width>
          <height>20</height>
