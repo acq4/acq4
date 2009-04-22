@@ -1,7 +1,6 @@
 duration: 0.2
 continuous: False
 devices:
-    Stim:
     Clamp0:
 sequence:
     params: ['Step']
