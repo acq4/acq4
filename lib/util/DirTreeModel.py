@@ -175,6 +175,7 @@ class DirTreeModel(QtCore.QAbstractItemModel):
             try:
                 os.rename(fn, fn2)
                 self.clearCache(dirName)
+                self.emit(QtCore.SIGNAL('fileRenamed(PyQt_PyObject, PyQt_PyObject)'), fn, fn2)
                 self.emit(QtCore.SIGNAL('dataChanged(const QModelIndex &, const QModelIndex &)'), index, index)
                 #print "Data changed, editable:", int(self.flags(index))
                 return True
@@ -220,6 +221,7 @@ class DirTreeModel(QtCore.QAbstractItemModel):
                 #os.rename(fullName, newName)
                 if action == QtCore.Qt.MoveAction:
                     os.rename(fullName, newName)
+                    self.emit(QtCore.SIGNAL('fileRenamed(PyQt_PyObject, PyQt_PyObject)'), fullName, newName)
                 elif action == QtCore.Qt.CopyAction:
                     os.copy(fullName, newName)
                 self.clearCache()
