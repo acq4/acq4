@@ -16,11 +16,15 @@ class DirTreeModel(QtCore.QAbstractItemModel):
     def clearCache(self, path=None):
         if path is None:
             self.dirCache = {}
+            self.emit(QtCore.SIGNAL('layoutChanged()'))
+            #self.reset()
             return
         if path in self.dirCache:
             del self.dirCache[path]
         else:
             self.dirCache = {}
+            self.emit(QtCore.SIGNAL('layoutChanged()'))
+            #self.reset()
         
     def pathKey(self, path):
         ## This function is very important.
@@ -43,6 +47,14 @@ class DirTreeModel(QtCore.QAbstractItemModel):
         
     def getFileName(self, index):
         return os.path.join(self.baseDir, index.internalPointer())
+        
+    def findIndex(self, fileName):
+        fileName = os.path.normpath(fileName)
+        if self.baseDir in fileName:
+            fileName = fileName.replace(self.baseDir, '')
+        while fileName[0] in ['/', '\\']:
+            fileName = fileName[1:]
+        return self.dirIndex(fileName)
         
     def index(self, row, column, parent=QtCore.QModelIndex()):
         if not self.hasIndex(row, column, parent):
@@ -213,6 +225,7 @@ class DirTreeModel(QtCore.QAbstractItemModel):
                 self.clearCache()
                 self.emitTreeChanged(os.path.split(f)[0])
                 self.emitTreeChanged(parent.internalPointer())
+                self.emit(QtCore.SIGNAL('layoutChanged()'))
             return True
         except:
             sys.excepthook(*sys.exc_info())

@@ -125,14 +125,14 @@ class ProtocolRunner(Module):
         
     def protParamsChanged(self):
         self.currentProtocol.conf['duration'] = self.ui.protoDurationSpin.value()
-        if self.ui.protoContinuousCheck.isChecked()
         self.currentProtocol.conf['continuous'] = self.ui.protoContinuousCheck.isChecked()
         self.currentIsModified(True)
         
     def currentIsModified(self, v):
         ## Inform the module whether the current protocol is modified from its stored state
         self.currentProtocol.modified = v
-        self.ui.saveProtocolBtn.setEnabled(v)
+        if (not v) or (self.currentProtocol.fileName is not None):
+            self.ui.saveProtocolBtn.setEnabled(v)
         
     def newProtocol(self):
         ## Remove all docks
@@ -196,14 +196,35 @@ class ProtocolRunner(Module):
     
     def saveProtocol(self):
         ## Write protocol config to file
-        
+        self.currentProtocol.write()
         self.currentIsModified(False)
     
     def saveProtocolAs(self):
-        ## Request new file name
-        ## update file name in protocol
-        ## Write protocol config to file
-        ## update protocol list
+        ## Decide on new file name
+        if self.currentProtocol.fileName is not None:
+            baseFile = self.currentProtocol.fileName
+        else:
+            baseFile = os.path.join(self.protocolList.baseDir, 'protocol')
+            
+        c = 2
+        newFile = None
+        while True:
+            newFile = baseFile + '_%02d' % c
+            if not os.path.exists(newFile):
+                break
+            c += 1
+            
+        ## write
+        self.currentProtocol.write(newFile)
+        
+        ## refresh protocol list
+        self.protocolList.clearCache()
+        
+        ## Start editing new file name
+        index = self.protocolList.findIndex(newFile)
+        #self.ui.protocolList.update(index)
+        self.ui.protocolList.edit(index)
+        
         self.currentIsModified(False)
     
     def deleteProtocol(self):
@@ -232,10 +253,12 @@ class Protocol:
         
         if fileName is not None:
             self.name = os.path.split(fileName)[1]
+            self.fileName = fileName
             self.conf = readConfigFile(fileName)
             for d in self.conf['devices']:
                 self.conf['devices'][d]['enabled'] = True
         else:
+            self.fileName = None
             self.name = None
             self.conf = {'devices': {}, 'duration': 0.2, 'continuous': False}
         
@@ -243,8 +266,13 @@ class Protocol:
         """Generate the configuration data that will execute this protocol"""
         pass
     
-    def write(self, fileName):
-        pass
+    def write(self, fileName=None):
+        if fileName is None:
+            if self.fileName is None:
+                raise Exception("Can not write protocol--no file name specified")
+            fileName = self.fileName
+        self.fileName = fileName
+        writeConfigFile(self.conf, fileName)
     
     def enabledDevices(self):
         return [i for i in self.conf['devices'] if self.conf['devices'][i]['enabled']]
