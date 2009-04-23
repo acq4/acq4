@@ -62,8 +62,10 @@ class Manager():
         return self.devices[name]
     
     def getDevice(self, name):
+        name = str(name)
         if name not in self.devices:
-            raise Exception("No device named %s" % name)
+            print self.devices
+            raise Exception("No device named %s. Options are %s" % (name, str(self.devices.keys())))
         return self.devices[name]
 
     def listDevices(self):

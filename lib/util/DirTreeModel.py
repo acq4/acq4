@@ -41,6 +41,9 @@ class DirTreeModel(QtCore.QAbstractItemModel):
         row = self.pathRow(dirName)
         return self.createIndex(row, 0, self.pathKey(dirName))
         
+    def getFileName(self, index):
+        return os.path.join(self.baseDir, index.internalPointer())
+        
     def index(self, row, column, parent=QtCore.QModelIndex()):
         if not self.hasIndex(row, column, parent):
             return QtCore.QModelIndex()
@@ -220,24 +223,24 @@ class DirTreeModel(QtCore.QAbstractItemModel):
         ch1 = self.index(0,0,root)
         numc = self.rowCount(root)
         ch2 = self.index(numc-1, 0, root)
-        print "emit changed:", dirName, ch1, ch2
+        #print "emit changed:", dirName, ch1, ch2
         self.emit(QtCore.SIGNAL('dataChanged(const QModelIndex &, const QModelIndex &)'), ch1, ch2)
         
         
     def insertRows(self, row, count, parent):
-        print "Not inserting row"
+        #print "Not inserting row"
         return False
         
     def removeRows(self, row, count, parent):
-        print "not removing row"
+        #print "not removing row"
         return False
 
     def insertRow(self, row, parent):
-        print "Not inserting row"
+        #print "Not inserting row"
         return False
         
     def removeRow(self, row, parent):
-        print "not removing row"
+        #print "not removing row"
         return False
 
 
