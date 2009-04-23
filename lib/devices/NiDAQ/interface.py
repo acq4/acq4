@@ -2,6 +2,7 @@
 from lib.drivers.nidaq import NIDAQ, SuperTask
 from lib.devices.Device import *
 import threading, time, traceback, sys
+from protoGUI import *
 
 class NiDAQ(Device):
     def __init__(self, dm, config, name):
@@ -21,6 +22,9 @@ class NiDAQ(Device):
         else:
             self.n.writeDigitalSample(chan, value)
         self.release()
+        
+    def protocolInterface(self):
+        return NiDAQProto(self)
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
