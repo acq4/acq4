@@ -31,6 +31,8 @@ class ProtocolRunner(Module):
         QtCore.QObject.connect(self.ui.testSingleBtn, QtCore.SIGNAL('clicked()'), self.testSingle)
         QtCore.QObject.connect(self.ui.runProtocolBtn, QtCore.SIGNAL('clicked()'), self.runSingle)
         QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.deviceItemChanged)
+        QtCore.QObject.connect(self.ui.protoDurationSpin, QtCore.SIGNAL('editingFinished()'), self.protParamsChanged)
+        
         
         self.win.show()
         
@@ -121,6 +123,16 @@ class ProtocolRunner(Module):
         ## Clear sequence list
         self.ui.sequenceList.clearItems()
         
+    def protParamsChanged(self):
+        self.currentProtocol.conf['duration'] = self.ui.protoDurationSpin.value()
+        if self.ui.protoContinuousCheck.isChecked()
+        self.currentProtocol.conf['continuous'] = self.ui.protoContinuousCheck.isChecked()
+        self.currentIsModified(True)
+        
+    def currentIsModified(self, v):
+        ## Inform the module whether the current protocol is modified from its stored state
+        self.currentProtocol.modified = v
+        self.ui.saveProtocolBtn.setEnabled(v)
         
     def newProtocol(self):
         ## Remove all docks
@@ -135,6 +147,9 @@ class ProtocolRunner(Module):
         self.updateProtParams()
         
         ## Clear sequence parameters, disable sequence dock
+        
+        
+        self.currentIsModified(False)
     
     def updateProtParams(self, prot=None):
         if prot is None:
@@ -177,18 +192,19 @@ class ProtocolRunner(Module):
             self.win.restoreState(prot.conf['winState'])
             
         self.currentProtocol = prot
+        self.currentIsModified(False)
     
     def saveProtocol(self):
         ## Write protocol config to file
         
-        pass
+        self.currentIsModified(False)
     
     def saveProtocolAs(self):
         ## Request new file name
         ## update file name in protocol
         ## Write protocol config to file
         ## update protocol list
-        pass
+        self.currentIsModified(False)
     
     def deleteProtocol(self):
         
@@ -219,16 +235,8 @@ class Protocol:
             self.conf = readConfigFile(fileName)
             for d in self.conf['devices']:
                 self.conf['devices'][d]['enabled'] = True
-            #self.duration = self.conf['duration']
-            #self.continuous = self.conf['continuous']
-            #self.devList = self.conf['devices'].keys()
-            #self.winState = self.conf['winState']
         else:
-            self.name = ""
-            #self.devList = []
-            #self.duration = 1.0
-            #self.continuous = False
-            #self.winState = None
+            self.name = None
             self.conf = {'devices': {}, 'duration': 0.2, 'continuous': False}
         
     def generateProtocol(self, **args):
