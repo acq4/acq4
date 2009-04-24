@@ -23,8 +23,8 @@ class NiDAQ(Device):
             self.n.writeDigitalSample(chan, value)
         self.release()
         
-    def protocolInterface(self):
-        return NiDAQProto(self)
+    def protocolInterface(self, prot):
+        return NiDAQProto(self, prot)
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):

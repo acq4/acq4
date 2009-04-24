@@ -123,7 +123,7 @@ class ProtocolRunner(Module):
                 if d not in self.manager.listDevices():
                     continue
                 dev = self.manager.getDevice(d)
-                dw = dev.protocolInterface()
+                dw = dev.protocolInterface(self)
                 dock = QtGui.QDockWidget(d)
                 dock.setFeatures(dock.AllDockWidgetFeatures)
                 dock.setObjectName(d)
@@ -226,6 +226,10 @@ class ProtocolRunner(Module):
         ## Create new docks
         self.updateDocks(prot)
         
+        ## Configure docks
+        for d in prot.conf['devices']:
+            self.docks[d].widget().restoreState(prot.conf['devices'][d])
+            
         ## Configure dock positions
         if 'winState' in prot.conf:
             self.win.restoreState(QtCore.QByteArray.fromPercentEncoding(prot.conf['winState']))
@@ -240,6 +244,11 @@ class ProtocolRunner(Module):
         ## store window state
         ws = str(self.win.saveState().toPercentEncoding())
         self.currentProtocol.conf['winState'] = ws
+        
+        ## store individual dock states
+        for d in self.docks:
+            if prot.conf['devices'][d]['enabled']:
+                prot.conf['devices'][d] = self.docks[d].widget().saveState()
         
         ## Write protocol config to file
         self.currentProtocol.write(fileName)

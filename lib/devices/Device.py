@@ -35,7 +35,7 @@ class Device:
         """Return a widget with a UI to put in the device rack"""
         return QtGui.QLabel(self.name)
         
-    def protocolInterface(self):
+    def protocolInterface(self, prot):
         """Return a widget with a UI to put in the protocol rack"""
         return QtGui.QLabel(self.name)
 
@@ -98,3 +98,24 @@ class DeviceTask:
     
     def getResult(self):
         pass
+    
+    
+class ProtocolGui(QtGui.QWidget):
+    def __init__(self, dev, prot):
+        QtGui.QWidget.__init__(self)
+        self.dev = dev
+        self.prot = prot
+        
+    def saveState(self):
+        return {}
+        
+        
+    def restoreState(self, state):
+        pass
+        
+    def listSequence(self):
+        ## returns sequence parameter names and lengths
+        return []
+        
+    def generateProtocol(self):
+        return {}
