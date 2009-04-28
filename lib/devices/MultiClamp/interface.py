@@ -5,7 +5,7 @@ from lib.util.MetaArray import MetaArray, axis
 from numpy import *
 import sys, traceback
 from DeviceGui import *
-
+from protoGUI import *
 
 class MultiClamp(Device):
     def __init__(self, dm, config, name):
@@ -90,15 +90,22 @@ class MultiClamp(Device):
             self.index = devs.index(self.channelID)
         return self.index
         
-
-    #def devRackInterface(self):
-        #"""Return a widget with a UI to put in the device rack"""
-        #pass
+    def listModeSignals(self):
+        ## Todo: move this upstream to the multiclamp driver (and make it actually correct)
+        sig = {
+            'scaled': {
+                'IC': ['MembranePotential'],
+                'I=0': ['MembranePotential'],
+                'VC': ['MembraneCurrent']
+            },
+            'raw': {
+                'IC': ['MembranePotential', 'MembraneCurrent'],
+                'I=0': ['MembranePotential', 'MembraneCurrent'],
+                'VC': ['MembraneCurrent', 'MembranePotential']
+            }
+        }
+        return sig
         
-    #def protocolInterface(self):
-        #"""Return a widget with a UI to put in the protocol rack"""
-        #pass
-
     def setMode(self, mode):
         """Set the mode for a multiclamp channel, gracefully switching between VC and IC modes."""
         mode = mode.upper()
@@ -123,6 +130,14 @@ class MultiClamp(Device):
     def clearCache(self):
         self.mc.clearCache()
         print "Cleared MultiClamp configuration cache."
+
+    def protocolInterface(self, prot):
+        return MultiClampProtoGui(self, prot)
+
+    def getDAQName(self):
+        """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
+        daq, chan = self.config['commandChannel']
+        return daq
 
     def quit(self):
         self.mc.disconnect()

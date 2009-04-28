@@ -8,7 +8,6 @@ import traceback, os, sys
 class DirTreeModel(QtCore.QAbstractItemModel):
     def __init__(self, baseDir, parent=None):
         QtCore.QAbstractItemModel.__init__(self, parent)
-        print "dirTree", baseDir
         self.baseDir = baseDir
         self.paths = {}
         self.dirCache = {}

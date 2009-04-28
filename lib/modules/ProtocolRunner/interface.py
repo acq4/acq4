@@ -5,9 +5,10 @@ from PyQt4 import QtGui, QtCore
 from lib.util.DirTreeModel import *
 from lib.util.configfile import *
 
-class ProtocolRunner(Module):
+class ProtocolRunner(Module, QtCore.QObject):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
+        QtCore.QObject.__init__(self)
         self.devListItems = {}
         self.docks = {}
         self.deleteState = 0
@@ -39,6 +40,11 @@ class ProtocolRunner(Module):
         
         self.win.show()
         
+    def getDevice(self, dev):
+        return self.docks[dev].widget()
+        
+    def getParam(self, param):
+        return self.currentProtocol.conf[param]
         
     def updateDeviceList(self, protocol=None):
         """Read the list of devices from the device manager"""
@@ -55,7 +61,7 @@ class ProtocolRunner(Module):
         rem = []
         for d in self.devListItems:
             if d not in devList and d not in protList:
-                print "    ", d
+                #print "    ", d
                 self.ui.deviceList.takeItem(self.ui.deviceList.row(self.devListItems[d]))
                 rem.append(d)
         for d in rem:
@@ -128,6 +134,7 @@ class ProtocolRunner(Module):
                 dock.setFeatures(dock.AllDockWidgetFeatures)
                 dock.setObjectName(d)
                 dock.setWidget(dw)
+                dock.setAutoFillBackground(True)
                 
                 self.docks[d] = dock
                 self.win.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
@@ -247,8 +254,8 @@ class ProtocolRunner(Module):
         
         ## store individual dock states
         for d in self.docks:
-            if prot.conf['devices'][d]['enabled']:
-                prot.conf['devices'][d] = self.docks[d].widget().saveState()
+            if self.currentProtocol.deviceEnabled(d):
+                self.currentProtocol.conf['devices'][d] = self.docks[d].widget().saveState()
         
         ## Write protocol config to file
         self.currentProtocol.write(fileName)
@@ -310,9 +317,27 @@ class ProtocolRunner(Module):
     
     def runSingle(self, store=True):
         ## Generate executable conf from protocol object
+        prot = {'protocol': {
+            'duration': self.currentProtocol.conf['duration'], 
+            'storeData': store,
+            'mode': 'single',
+            'name': self.currentProtocol.fileName,
+        }}
+        
+        for d in self.currentProtocol.conf['devices']:
+            if self.currentProtocol.deviceEnabled(d):
+                prot[d] = self.docks[d].widget().generateProtocol()
+        
+        
         ## Send conf to devicemanager for execution
         ## Request each dock handle the results with/without storage
-        prot = self.generateProtocol()
+        #prot = self.currentProtocol.generateProtocol()
+        
+        print "== Run Protocol =="
+        print prot
+        print "=================="
+        return
+        
         result = self.manager.runProtocol(prot)
         self.handleResult(result)
    
@@ -329,38 +354,46 @@ class Protocol:
             self.name = os.path.split(fileName)[1]
             self.fileName = fileName
             self.conf = readConfigFile(fileName)
-            for d in self.conf['devices']:
-                self.conf['devices'][d]['enabled'] = True
+            self.enabled = self.conf['devices'].keys()
         else:
             self.fileName = None
             self.name = None
             self.conf = {'devices': {}, 'duration': 0.2, 'continuous': False}
+            self.enabled = []
         
     def generateProtocol(self, **args):
         """Generate the configuration data that will execute this protocol"""
+        
         pass
     
+    def deviceEnabled(self, dev):
+        return dev in self.enabled
+        
+        
     def write(self, fileName=None):
+        conf = self.conf.copy()
+        
         ## Remove unused devices before writing
-        rem = [d for d in self.conf['devices'] if not self.conf['devices'][d]['enabled']]
+        rem = [d for d in conf['devices'] if not self.deviceEnabled(d)]
         for d in rem:
-            del self.conf['devices'][d]
+            del conf['devices'][d]
                 
         if fileName is None:
             if self.fileName is None:
                 raise Exception("Can not write protocol--no file name specified")
             fileName = self.fileName
         self.fileName = fileName
-        writeConfigFile(self.conf, fileName)
+        writeConfigFile(conf, fileName)
     
     def enabledDevices(self):
-        return [i for i in self.conf['devices'] if self.conf['devices'][i]['enabled']]
+        return self.enabled[:]
         
     def removeDevice(self, dev):
-        if dev in self.conf['devices']:
-            self.conf['devices'][dev]['enabled'] = False
+        if dev in self.enabled:
+            self.enabled.remove(dev)
         
     def addDevice(self, dev):
         if dev not in self.conf['devices']:
             self.conf['devices'][dev] = {}
-        self.conf['devices'][dev]['enabled'] = True
+        if dev not in self.enabled:
+            self.enabled.append(dev)

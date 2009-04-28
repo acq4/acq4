@@ -1,53 +1,60 @@
-<ui version="4.0" >
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
  <class>Form</class>
- <widget class="QWidget" name="Form" >
-  <property name="geometry" >
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1027</width>
+    <width>809</width>
     <height>377</height>
    </rect>
   </property>
-  <property name="windowTitle" >
+  <property name="windowTitle">
    <string>Form</string>
   </property>
-  <layout class="QHBoxLayout" name="horizontalLayout" >
+  <property name="autoFillBackground">
+   <bool>true</bool>
+  </property>
+  <layout class="QHBoxLayout" name="horizontalLayout">
    <item>
-    <widget class="QSplitter" name="splitter_2" >
-     <property name="orientation" >
+    <widget class="QSplitter" name="splitter_2">
+     <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
-     <widget class="QWidget" name="layoutWidget" >
-      <layout class="QVBoxLayout" name="verticalLayout_2" >
+     <widget class="QWidget" name="layoutWidget">
+      <layout class="QVBoxLayout" name="verticalLayout_2">
        <item>
-        <layout class="QGridLayout" name="gridLayout_4" >
-         <item row="0" column="0" >
-          <widget class="QFrame" name="frame_2" >
-           <property name="frameShape" >
+        <layout class="QGridLayout" name="gridLayout_2">
+         <item row="0" column="0">
+          <widget class="QFrame" name="frame_2">
+           <property name="frameShape">
             <enum>QFrame::StyledPanel</enum>
            </property>
-           <property name="frameShadow" >
+           <property name="frameShadow">
             <enum>QFrame::Raised</enum>
            </property>
-           <layout class="QHBoxLayout" name="horizontalLayout_2" >
+           <layout class="QHBoxLayout" name="horizontalLayout_2">
             <item>
-             <widget class="QRadioButton" name="radioButton_3" >
-              <property name="text" >
+             <widget class="QRadioButton" name="icModeRadio">
+              <property name="text">
                <string>IC</string>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QRadioButton" name="radioButton_5" >
-              <property name="text" >
+             <widget class="QRadioButton" name="i0ModeRadio">
+              <property name="text">
                <string>I=0</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QRadioButton" name="radioButton_4" >
-              <property name="text" >
+             <widget class="QRadioButton" name="vcModeRadio">
+              <property name="text">
                <string>VC</string>
               </property>
              </widget>
@@ -55,73 +62,55 @@
            </layout>
           </widget>
          </item>
-         <item row="0" column="1" >
-          <layout class="QHBoxLayout" name="horizontalLayout_6" >
+         <item row="0" column="1">
+          <layout class="QHBoxLayout" name="horizontalLayout_6">
            <item>
-            <widget class="QLabel" name="label_5" >
-             <property name="text" >
-              <string>Holding</string>
+            <widget class="QCheckBox" name="holdingCheck">
+             <property name="text">
+              <string>Holding (mV)</string>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QDoubleSpinBox" name="doubleSpinBox_4" />
+            <widget class="QDoubleSpinBox" name="holdingSpin"/>
            </item>
           </layout>
          </item>
-         <item row="1" column="0" >
-          <layout class="QHBoxLayout" name="horizontalLayout_3" >
-           <item>
-            <widget class="QLabel" name="label_7" >
-             <property name="text" >
-              <string>Scaled:</string>
+         <item row="1" column="0" rowspan="2">
+          <layout class="QGridLayout" name="gridLayout">
+           <item row="0" column="0">
+            <widget class="QCheckBox" name="scaledSignalCheck">
+             <property name="text">
+              <string>Scaled Signal:</string>
              </property>
             </widget>
            </item>
-           <item>
-            <widget class="QComboBox" name="comboBox" >
-             <property name="sizePolicy" >
-              <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
+           <item row="0" column="1">
+            <widget class="QComboBox" name="scaledSignalCombo">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                <horstretch>3</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
              </property>
              <item>
-              <property name="text" >
+              <property name="text">
                <string>MembranePotential</string>
               </property>
              </item>
             </widget>
            </item>
-          </layout>
-         </item>
-         <item row="1" column="1" >
-          <layout class="QHBoxLayout" name="horizontalLayout_5" >
-           <item>
-            <widget class="QCheckBox" name="checkBox_6" >
-             <property name="text" >
-              <string>Set Gain</string>
+           <item row="1" column="0">
+            <widget class="QCheckBox" name="rawSignalCheck">
+             <property name="text">
+              <string>Raw Signal:</string>
              </property>
             </widget>
            </item>
-           <item>
-            <widget class="QDoubleSpinBox" name="doubleSpinBox_5" />
-           </item>
-          </layout>
-         </item>
-         <item row="2" column="0" >
-          <layout class="QHBoxLayout" name="horizontalLayout_4" >
-           <item>
-            <widget class="QLabel" name="label_9" >
-             <property name="text" >
-              <string>Raw:</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QComboBox" name="comboBox_2" >
+           <item row="1" column="1">
+            <widget class="QComboBox" name="rawSignalCombo">
              <item>
-              <property name="text" >
+              <property name="text">
                <string>MembraneCurrent</string>
               </property>
              </item>
@@ -129,89 +118,107 @@
            </item>
           </layout>
          </item>
-         <item row="2" column="1" >
-          <spacer name="verticalSpacer_5" >
-           <property name="orientation" >
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0" >
-            <size>
-             <width>20</width>
-             <height>18</height>
-            </size>
-           </property>
-          </spacer>
+         <item row="1" column="1">
+          <layout class="QHBoxLayout" name="horizontalLayout_5">
+           <item>
+            <widget class="QCheckBox" name="setScaledGainCheck">
+             <property name="text">
+              <string>Set Gain</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QDoubleSpinBox" name="scaledGainSpin"/>
+           </item>
+          </layout>
+         </item>
+         <item row="2" column="1">
+          <layout class="QHBoxLayout" name="horizontalLayout_7">
+           <item>
+            <widget class="QCheckBox" name="setRawGainCheck">
+             <property name="text">
+              <string>Set Gain</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QDoubleSpinBox" name="rawGainSpin"/>
+           </item>
+          </layout>
          </item>
         </layout>
        </item>
        <item>
-        <widget class="QFrame" name="frame" >
-         <property name="frameShape" >
+        <widget class="QFrame" name="frame">
+         <property name="frameShape">
           <enum>QFrame::StyledPanel</enum>
          </property>
-         <property name="frameShadow" >
+         <property name="frameShadow">
           <enum>QFrame::Raised</enum>
          </property>
-         <layout class="QVBoxLayout" name="verticalLayout" >
+         <layout class="QVBoxLayout" name="verticalLayout">
           <item>
-           <widget class="QLabel" name="label_6" >
-            <property name="sizePolicy" >
-             <sizepolicy vsizetype="Preferred" hsizetype="Preferred" >
+           <widget class="QLabel" name="waveGeneratorLabel">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
-            <property name="text" >
-             <string>Function</string>
+            <property name="text">
+             <string>Function (values in mV)</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QTextEdit" name="textEdit" >
-            <property name="html" >
-             <string>&lt;!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN" "http://www.w3.org/TR/REC-html40/strict.dtd">
-&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">
-p, li { white-space: pre-wrap; }
-&lt;/style>&lt;/head>&lt;body style=" font-family:'Sans Serif'; font-size:7pt; font-weight:400; font-style:normal;">
-&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">steps(&lt;/p>
-&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">  t = [0, 10, 100],&lt;/p>
-&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">  v = [0, seq(-10), 0]&lt;/p>
-&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">)&lt;/p>&lt;/body>&lt;/html></string>
+           <widget class="StimGenerator" name="waveGeneratorWidget" native="true">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QTextEdit" name="textEdit_2" >
-            <property name="html" >
-             <string>&lt;!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN" "http://www.w3.org/TR/REC-html40/strict.dtd">
-&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">
-p, li { white-space: pre-wrap; }
-&lt;/style>&lt;/head>&lt;body style=" font-family:'Sans Serif'; font-size:7pt; font-weight:400; font-style:normal;">
-&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">seq = -100;100/10&lt;/p>&lt;/body>&lt;/html></string>
-            </property>
-           </widget>
+           <layout class="QHBoxLayout" name="horizontalLayout_3">
+            <item>
+             <widget class="QCheckBox" name="autoUpdateCheck">
+              <property name="text">
+               <string>Auto Update</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="updateBtn">
+              <property name="text">
+               <string>Update</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </item>
          </layout>
         </widget>
        </item>
       </layout>
      </widget>
-     <widget class="QSplitter" name="splitter" >
-      <property name="orientation" >
+     <widget class="QSplitter" name="splitter">
+      <property name="orientation">
        <enum>Qt::Vertical</enum>
       </property>
-      <widget class="QwtPlot" name="qwtPlot" >
-       <property name="sizePolicy" >
-        <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
-         <horstretch>10</horstretch>
+      <widget class="QwtPlot" name="topPlotWidget" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
       </widget>
-      <widget class="QwtPlot" name="qwtPlot_2" >
-       <property name="sizePolicy" >
-        <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
-         <horstretch>10</horstretch>
+      <widget class="QwtPlot" name="bottomPlotWidget" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+         <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
@@ -223,9 +230,16 @@ p, li { white-space: pre-wrap; }
  </widget>
  <customwidgets>
   <customwidget>
+   <class>StimGenerator</class>
+   <extends>QWidget</extends>
+   <header>lib.util.generator.StimGenerator</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
    <class>QwtPlot</class>
-   <extends>QFrame</extends>
-   <header>qwt_plot.h</header>
+   <extends>QWidget</extends>
+   <header>PyQt4.Qwt5</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources/>

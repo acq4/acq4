@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Thu Apr 23 15:16:10 2009
+# Created: Mon Apr 27 11:10:16 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -14,7 +14,6 @@ class Ui_MainWindow(object):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(1118, 593)
         MainWindow.setStyleSheet("""QDockWidget::title { background-color: #446; color: #DDD }
-QDockWidget > QWidget { background-color: #BBB }
 QMainWindow { background-color: #000 }
 QSplitter::handle {background-color: #666}
 QMainWindow::separator {background-color: #666}""")
@@ -108,13 +107,13 @@ QMainWindow::separator {background-color: #666}""")
         spacerItem1 = QtGui.QSpacerItem(20, 91, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.gridlayout1.addItem(spacerItem1, 5, 2, 1, 1)
         self.testSingleBtn = QtGui.QPushButton(self.dockWidgetContents_5)
-        self.testSingleBtn.setEnabled(False)
+        self.testSingleBtn.setEnabled(True)
         self.testSingleBtn.setObjectName("testSingleBtn")
         self.gridlayout1.addWidget(self.testSingleBtn, 6, 0, 1, 1)
         spacerItem2 = QtGui.QSpacerItem(13, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.gridlayout1.addItem(spacerItem2, 6, 1, 1, 1)
         self.runProtocolBtn = QtGui.QPushButton(self.dockWidgetContents_5)
-        self.runProtocolBtn.setEnabled(False)
+        self.runProtocolBtn.setEnabled(True)
         self.runProtocolBtn.setObjectName("runProtocolBtn")
         self.gridlayout1.addWidget(self.runProtocolBtn, 6, 2, 1, 1)
         self.label = QtGui.QLabel(self.dockWidgetContents_5)

@@ -25,7 +25,7 @@ class NiDAQProto(ProtocolGui):
         else:
             self.ui.triggerDevList.setCurrentIndex(0)
         
-    def generateProtocol(self):
+    def generateProtocol(self, params={}):
         return self.currentState()
         
     def currentState(self):
@@ -39,11 +39,14 @@ class NiDAQProto(ProtocolGui):
         
     def updateNPts(self, *args):
         dur = self.prot.getParam('duration')
-        self.nPts = dur * self.ui.rateSpin.value()
-        self.ui.numPtsLabel.setText(str(self.nPts))
-    
-    def udpateDevList(self):
-        self.devs = self.dev.manager.listDevices()
+        nPts = dur * self.ui.rateSpin.value()
+        if nPts != self.nPts:
+            self.nPts = nPts
+            self.ui.numPtsLabel.setText(str(self.nPts))
+            self.emit(QtCore.SIGNAL('changed(PyQt_PyObject)'), self.currentState())
+        
+    def updateDevList(self):
+        self.devs = self.dev.dm.listDevices()
         self.ui.triggerDevList.clear()
         self.ui.triggerDevList.addItem('No Trigger')
         for d in self.devs:

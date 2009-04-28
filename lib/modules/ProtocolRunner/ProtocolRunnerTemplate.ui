@@ -1,7 +1,8 @@
-<ui version="4.0" >
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
  <class>MainWindow</class>
- <widget class="QMainWindow" name="MainWindow" >
-  <property name="geometry" >
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
@@ -9,72 +10,71 @@
     <height>593</height>
    </rect>
   </property>
-  <property name="windowTitle" >
+  <property name="windowTitle">
    <string>MainWindow</string>
   </property>
-  <property name="styleSheet" >
-   <string notr="true" >QDockWidget::title { background-color: #446; color: #DDD }
-QDockWidget > QWidget { background-color: #BBB }
+  <property name="styleSheet">
+   <string notr="true">QDockWidget::title { background-color: #446; color: #DDD }
 QMainWindow { background-color: #000 }
 QSplitter::handle {background-color: #666}
 QMainWindow::separator {background-color: #666}</string>
   </property>
-  <property name="dockNestingEnabled" >
+  <property name="dockNestingEnabled">
    <bool>true</bool>
   </property>
-  <widget class="QWidget" name="centralwidget" />
-  <widget class="QDockWidget" name="LoaderDock" >
-   <property name="features" >
+  <widget class="QWidget" name="centralwidget"/>
+  <widget class="QDockWidget" name="LoaderDock">
+   <property name="features">
     <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetVerticalTitleBar</set>
    </property>
-   <property name="windowTitle" >
+   <property name="windowTitle">
     <string>Loader</string>
    </property>
-   <attribute name="dockWidgetArea" >
+   <attribute name="dockWidgetArea">
     <number>4</number>
    </attribute>
-   <widget class="QWidget" name="dockWidgetContents" >
-    <layout class="QGridLayout" >
-     <item row="1" column="1" >
-      <widget class="QPushButton" name="newProtocolBtn" >
-       <property name="text" >
+   <widget class="QWidget" name="dockWidgetContents">
+    <layout class="QGridLayout">
+     <item row="1" column="1">
+      <widget class="QPushButton" name="newProtocolBtn">
+       <property name="text">
         <string>New</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="1" >
-      <widget class="QPushButton" name="loadProtocolBtn" >
-       <property name="text" >
+     <item row="2" column="1">
+      <widget class="QPushButton" name="loadProtocolBtn">
+       <property name="text">
         <string>Load</string>
        </property>
       </widget>
      </item>
-     <item row="3" column="1" >
-      <widget class="QPushButton" name="saveProtocolBtn" >
-       <property name="enabled" >
+     <item row="3" column="1">
+      <widget class="QPushButton" name="saveProtocolBtn">
+       <property name="enabled">
         <bool>false</bool>
        </property>
-       <property name="text" >
+       <property name="text">
         <string>Save</string>
        </property>
       </widget>
      </item>
-     <item row="4" column="1" >
-      <widget class="QPushButton" name="saveAsProtocolBtn" >
-       <property name="enabled" >
+     <item row="4" column="1">
+      <widget class="QPushButton" name="saveAsProtocolBtn">
+       <property name="enabled">
         <bool>true</bool>
        </property>
-       <property name="text" >
+       <property name="text">
         <string>Save As..</string>
        </property>
       </widget>
      </item>
-     <item row="6" column="1" >
+     <item row="6" column="1">
       <spacer>
-       <property name="orientation" >
+       <property name="orientation">
         <enum>Qt::Vertical</enum>
        </property>
-       <property name="sizeHint" stdset="0" >
+       <property name="sizeHint" stdset="0">
         <size>
          <width>20</width>
          <height>77</height>
@@ -82,72 +82,72 @@ QMainWindow::separator {background-color: #666}</string>
        </property>
       </spacer>
      </item>
-     <item row="5" column="1" >
-      <widget class="QPushButton" name="deleteProtocolBtn" >
-       <property name="enabled" >
+     <item row="5" column="1">
+      <widget class="QPushButton" name="deleteProtocolBtn">
+       <property name="enabled">
         <bool>false</bool>
        </property>
-       <property name="text" >
+       <property name="text">
         <string>Delete</string>
        </property>
       </widget>
      </item>
-     <item rowspan="5" row="2" column="0" >
-      <widget class="QTreeView" name="protocolList" >
-       <property name="acceptDrops" >
+     <item row="2" column="0" rowspan="5">
+      <widget class="QTreeView" name="protocolList">
+       <property name="acceptDrops">
         <bool>true</bool>
        </property>
-       <property name="editTriggers" >
+       <property name="editTriggers">
         <set>QAbstractItemView::SelectedClicked</set>
        </property>
-       <property name="dragEnabled" >
+       <property name="dragEnabled">
         <bool>true</bool>
        </property>
-       <property name="dragDropMode" >
+       <property name="dragDropMode">
         <enum>QAbstractItemView::InternalMove</enum>
        </property>
       </widget>
      </item>
-     <item row="1" column="0" >
-      <widget class="QLabel" name="label_3" >
-       <property name="text" >
+     <item row="1" column="0">
+      <widget class="QLabel" name="label_3">
+       <property name="text">
         <string>Protocols</string>
        </property>
-       <property name="alignment" >
+       <property name="alignment">
         <set>Qt::AlignCenter</set>
        </property>
       </widget>
      </item>
-     <item row="7" column="0" colspan="2" >
-      <layout class="QHBoxLayout" name="horizontalLayout" >
+     <item row="7" column="0" colspan="2">
+      <layout class="QHBoxLayout" name="horizontalLayout">
        <item>
-        <widget class="QLabel" name="label_5" >
-         <property name="sizePolicy" >
-          <sizepolicy vsizetype="Preferred" hsizetype="Preferred" >
+        <widget class="QLabel" name="label_5">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
-         <property name="text" >
+         <property name="text">
           <string>Current Protocol:</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QLabel" name="currentProtocolLabel" >
-         <property name="sizePolicy" >
-          <sizepolicy vsizetype="Preferred" hsizetype="MinimumExpanding" >
+        <widget class="QLabel" name="currentProtocolLabel">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
-         <property name="font" >
+         <property name="font">
           <font>
            <weight>75</weight>
            <bold>true</bold>
           </font>
          </property>
-         <property name="text" >
+         <property name="text">
           <string/>
          </property>
         </widget>
@@ -157,47 +157,47 @@ QMainWindow::separator {background-color: #666}</string>
     </layout>
    </widget>
   </widget>
-  <widget class="QDockWidget" name="ProtocolDock" >
-   <property name="enabled" >
+  <widget class="QDockWidget" name="ProtocolDock">
+   <property name="enabled">
     <bool>true</bool>
    </property>
-   <property name="features" >
+   <property name="features">
     <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetVerticalTitleBar</set>
    </property>
-   <property name="windowTitle" >
+   <property name="windowTitle">
     <string>Protocol</string>
    </property>
-   <attribute name="dockWidgetArea" >
+   <attribute name="dockWidgetArea">
     <number>4</number>
    </attribute>
-   <widget class="QWidget" name="dockWidgetContents_5" >
-    <layout class="QGridLayout" >
-     <item rowspan="3" row="3" column="0" colspan="2" >
-      <widget class="QListWidget" name="deviceList" />
+   <widget class="QWidget" name="dockWidgetContents_5">
+    <layout class="QGridLayout">
+     <item row="3" column="0" rowspan="3" colspan="2">
+      <widget class="QListWidget" name="deviceList"/>
      </item>
-     <item row="2" column="2" >
-      <widget class="QLabel" name="label_8" >
-       <property name="text" >
+     <item row="2" column="2">
+      <widget class="QLabel" name="label_8">
+       <property name="text">
         <string>Duration</string>
        </property>
       </widget>
      </item>
-     <item row="3" column="2" >
-      <widget class="QDoubleSpinBox" name="protoDurationSpin" />
+     <item row="3" column="2">
+      <widget class="QDoubleSpinBox" name="protoDurationSpin"/>
      </item>
-     <item row="4" column="2" >
-      <widget class="QCheckBox" name="protoContinuousCheck" >
-       <property name="text" >
+     <item row="4" column="2">
+      <widget class="QCheckBox" name="protoContinuousCheck">
+       <property name="text">
         <string>Continuous</string>
        </property>
       </widget>
      </item>
-     <item row="5" column="2" >
+     <item row="5" column="2">
       <spacer>
-       <property name="orientation" >
+       <property name="orientation">
         <enum>Qt::Vertical</enum>
        </property>
-       <property name="sizeHint" stdset="0" >
+       <property name="sizeHint" stdset="0">
         <size>
          <width>20</width>
          <height>91</height>
@@ -205,22 +205,22 @@ QMainWindow::separator {background-color: #666}</string>
        </property>
       </spacer>
      </item>
-     <item row="6" column="0" >
-      <widget class="QPushButton" name="testSingleBtn" >
-       <property name="enabled" >
-        <bool>false</bool>
+     <item row="6" column="0">
+      <widget class="QPushButton" name="testSingleBtn">
+       <property name="enabled">
+        <bool>true</bool>
        </property>
-       <property name="text" >
+       <property name="text">
         <string>Test</string>
        </property>
       </widget>
      </item>
-     <item row="6" column="1" >
+     <item row="6" column="1">
       <spacer>
-       <property name="orientation" >
+       <property name="orientation">
         <enum>Qt::Horizontal</enum>
        </property>
-       <property name="sizeHint" stdset="0" >
+       <property name="sizeHint" stdset="0">
         <size>
          <width>13</width>
          <height>20</height>
@@ -228,22 +228,22 @@ QMainWindow::separator {background-color: #666}</string>
        </property>
       </spacer>
      </item>
-     <item row="6" column="2" >
-      <widget class="QPushButton" name="runProtocolBtn" >
-       <property name="enabled" >
-        <bool>false</bool>
+     <item row="6" column="2">
+      <widget class="QPushButton" name="runProtocolBtn">
+       <property name="enabled">
+        <bool>true</bool>
        </property>
-       <property name="text" >
+       <property name="text">
         <string>Run Protocol</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="0" colspan="2" >
-      <widget class="QLabel" name="label" >
-       <property name="text" >
+     <item row="2" column="0" colspan="2">
+      <widget class="QLabel" name="label">
+       <property name="text">
         <string>Devices</string>
        </property>
-       <property name="alignment" >
+       <property name="alignment">
         <set>Qt::AlignCenter</set>
        </property>
       </widget>
@@ -251,65 +251,65 @@ QMainWindow::separator {background-color: #666}</string>
     </layout>
    </widget>
   </widget>
-  <widget class="QDockWidget" name="SequenceDock" >
-   <property name="enabled" >
+  <widget class="QDockWidget" name="SequenceDock">
+   <property name="enabled">
     <bool>true</bool>
    </property>
-   <property name="features" >
+   <property name="features">
     <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetVerticalTitleBar</set>
    </property>
-   <property name="windowTitle" >
+   <property name="windowTitle">
     <string>Sequence</string>
    </property>
-   <attribute name="dockWidgetArea" >
+   <attribute name="dockWidgetArea">
     <number>4</number>
    </attribute>
-   <widget class="QWidget" name="dockWidgetContents_7" >
-    <layout class="QGridLayout" >
-     <item rowspan="6" row="0" column="0" colspan="2" >
-      <widget class="QListWidget" name="sequenceParamList" />
+   <widget class="QWidget" name="dockWidgetContents_7">
+    <layout class="QGridLayout">
+     <item row="0" column="0" rowspan="6" colspan="2">
+      <widget class="QListWidget" name="sequenceParamList"/>
      </item>
-     <item row="0" column="2" >
-      <widget class="QPushButton" name="seqParamUpBtn" >
-       <property name="text" >
+     <item row="0" column="2">
+      <widget class="QPushButton" name="seqParamUpBtn">
+       <property name="text">
         <string>Up</string>
        </property>
       </widget>
      </item>
-     <item row="1" column="2" >
-      <widget class="QPushButton" name="seqParamDnBtn" >
-       <property name="text" >
+     <item row="1" column="2">
+      <widget class="QPushButton" name="seqParamDnBtn">
+       <property name="text">
         <string>Dn</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="2" >
-      <widget class="QPushButton" name="seqParamGroupBtn" >
-       <property name="text" >
+     <item row="2" column="2">
+      <widget class="QPushButton" name="seqParamGroupBtn">
+       <property name="text">
         <string>Group</string>
        </property>
       </widget>
      </item>
-     <item row="3" column="2" >
-      <widget class="QLabel" name="label_2" >
-       <property name="text" >
+     <item row="3" column="2">
+      <widget class="QLabel" name="label_2">
+       <property name="text">
         <string>Parameter Space: </string>
        </property>
       </widget>
      </item>
-     <item row="4" column="2" >
-      <widget class="QLabel" name="paramSpaceLabel" >
-       <property name="text" >
+     <item row="4" column="2">
+      <widget class="QLabel" name="paramSpaceLabel">
+       <property name="text">
         <string/>
        </property>
       </widget>
      </item>
-     <item row="5" column="2" >
+     <item row="5" column="2">
       <spacer>
-       <property name="orientation" >
+       <property name="orientation">
         <enum>Qt::Vertical</enum>
        </property>
-       <property name="sizeHint" stdset="0" >
+       <property name="sizeHint" stdset="0">
         <size>
          <width>20</width>
          <height>77</height>
@@ -317,19 +317,19 @@ QMainWindow::separator {background-color: #666}</string>
        </property>
       </spacer>
      </item>
-     <item row="6" column="0" >
-      <widget class="QPushButton" name="testSequenceBtn" >
-       <property name="text" >
+     <item row="6" column="0">
+      <widget class="QPushButton" name="testSequenceBtn">
+       <property name="text">
         <string>Test</string>
        </property>
       </widget>
      </item>
-     <item row="6" column="1" >
+     <item row="6" column="1">
       <spacer>
-       <property name="orientation" >
+       <property name="orientation">
         <enum>Qt::Horizontal</enum>
        </property>
-       <property name="sizeHint" stdset="0" >
+       <property name="sizeHint" stdset="0">
         <size>
          <width>146</width>
          <height>20</height>
@@ -337,9 +337,9 @@ QMainWindow::separator {background-color: #666}</string>
        </property>
       </spacer>
      </item>
-     <item row="6" column="2" >
-      <widget class="QPushButton" name="runSequenceBtn" >
-       <property name="text" >
+     <item row="6" column="2">
+      <widget class="QPushButton" name="runSequenceBtn">
+       <property name="text">
         <string>Run Sequence</string>
        </property>
       </widget>

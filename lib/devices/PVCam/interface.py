@@ -5,7 +5,7 @@ from PyQt4 import QtCore
 import time, sys, traceback
 from numpy import *
 from lib.util.MetaArray import *
-
+from protoGUI import *
 
 class PVCam(Device):
     def __init__(self, dm, config, name):
@@ -52,6 +52,8 @@ class PVCam(Device):
     def stopAcquire(self, block=True):
         self.acqThread.stop(block)
 
+    def protocolInterface(self, prot):
+        return PVCamProto(self, prot)
         
 
 

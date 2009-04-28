@@ -37,7 +37,8 @@ class Device:
         
     def protocolInterface(self, prot):
         """Return a widget with a UI to put in the protocol rack"""
-        return QtGui.QLabel(self.name)
+        return ProtocolGui(self, prot)
+        
 
     def reserve(self, block=True, timeout=20):
         #lock = False
