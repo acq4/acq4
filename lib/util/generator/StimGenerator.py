@@ -92,7 +92,7 @@ class StimGenerator(QtGui.QWidget):
         for i in dir(waveforms):
             obj = getattr(waveforms, i)
             if type(obj) is types.FunctionType:
-                ns[i] = lambda *args, **kwargs: obj(arg, *args, **kwargs)
+                ns[i] = self.makeWaveFunction(i, arg)
         
         ## add parameter values into namespace
         seq = self.paramSpace()
@@ -104,6 +104,12 @@ class StimGenerator(QtGui.QWidget):
                 
         ## evaluate and return
         return eval(self.functionString(), globals(), ns)
+        
+    def makeWaveFunction(self, name, arg):
+        ## Creates a copy of a wave function (such as steps or pulses) with the first parameter filled in
+        ## Must be in its own function so that obj is properly scoped to the lambda function.
+        obj = getattr(waveforms, name)
+        return lambda *args, **kwargs: obj(arg, *args, **kwargs)
         
     def paramSpace(self):
         """Return an ordered dict describing the parameter space"""
@@ -162,8 +168,6 @@ def seqParse(seqStr):
             seq = logSpace(v1, v2, n)
         else:
             seq = arange(v1, v2, v3)
-    print "seq:", seq
     if 'r' in opts:
         random.shuffle(seq)
-    print "seqr:", seq
     return (name, single, seq)

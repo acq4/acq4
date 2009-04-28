@@ -8,6 +8,7 @@ import numpy
 
 
 def pulses(params, times, widths, values, base=0.0):
+    nPts = params['nPts']
     rate = params['rate']
     if type(times) not in [list, tuple]:
         raise Exception('times argument must be a list')
@@ -15,7 +16,7 @@ def pulses(params, times, widths, values, base=0.0):
         widths = [widths] * len(times)
     if type(values) not in [list, tuple]:
         values = [values] * len(times)
-    d = numpy.empty(params['nPts'])
+    d = numpy.empty(nPts)
     d[:] = base
     for i in range(len(times)):
         t1 = int(times[i] * rate)
