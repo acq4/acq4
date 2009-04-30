@@ -65,7 +65,7 @@ class StimGenerator(QtGui.QWidget):
     def sequenceString(self):
         return str(self.sequenceText.toPlainText())
     
-    def storeState(self):
+    def saveState(self):
         """ Return a dict structure with the state of the widget """
         return ({'waveform': self.functionString(), 'sequence': self.sequenceString()})
     
@@ -77,10 +77,21 @@ class StimGenerator(QtGui.QWidget):
             self.sequenceText.setPlainText(state['sequence'])            
     
     def listSequences(self):
-        """ return a list of the sequence parameter names in the same order as that
+        """ return an ordered dict of the sequence parameter names and lengths in the same order as that
         of the axes returned by get Sequence"""
         ps = self.paramSpace()
-        return [(k, len(ps[k][1])) for k in ps.keys() if ps[k][1] != None]
+        l = [(k, len(ps[k][1])) for k in ps.keys() if ps[k][1] != None]
+        d = OrderedDict(l)
+        
+        ## d should look like: { 'param1': length,  'param2': length, ...  }
+        return d
+        
+    def flatParamSpace(self):
+        """return a list of every point in the parameter space"""
+        l = self.listSequences()
+        shape = tuple(l.values())
+        ar = ones(shape)
+        return argwhere(ar)
         
     def getSingle(self, rate, nPts, params={}):
         if not re.search(r'\w', self.functionString()):
@@ -113,6 +124,13 @@ class StimGenerator(QtGui.QWidget):
         
     def paramSpace(self):
         """Return an ordered dict describing the parameter space"""
+        ## return looks like:
+        ## {
+        ##   'param1': (singleVal, [sequence]),
+        ##   'param2': (singleVal, [sequence]),
+        ##   ...
+        ## }
+        
         if not self.cacheOk:
             self.pSpace = seqListParse(self.sequenceString()) # get the sequence(s) and the targets
             self.cacheOk = True

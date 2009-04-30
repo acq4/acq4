@@ -219,10 +219,7 @@ class PatchThread(QtCore.QThread):
                 task = self.dm.createTask(cmd)
                 
                 ## Execute task
-                #print clampName, "starting task.."
                 task.execute()
-                #print clampName, "task complete."
-
                 
                 ## measure resistance, RMP, and tau 
                 res = task.getResult()

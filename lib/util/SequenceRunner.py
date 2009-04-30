@@ -2,9 +2,9 @@
 from MetaArray import *
 from numpy import zeros
 
-def runSequence(func, params, order, dtype=None):
+def runSequence(func, params, order, dtype=None, passHash=False):
     """Convenience function that iterates a function over a given parameter space, inserting the function's return value into an array"""
-    seq = SequenceRunner(params, order, dtype=None)
+    seq = SequenceRunner(params, order, dtype=dtype, passHash=passHash)
     return seq.start(func)
 
 

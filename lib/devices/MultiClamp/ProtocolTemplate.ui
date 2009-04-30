@@ -67,7 +67,7 @@
            <item>
             <widget class="QCheckBox" name="holdingCheck">
              <property name="text">
-              <string>Holding (mV)</string>
+              <string>Holding (pA)</string>
              </property>
             </widget>
            </item>
@@ -166,7 +166,7 @@
              </sizepolicy>
             </property>
             <property name="text">
-             <string>Function (values in mV)</string>
+             <string>Function (values in pA)</string>
             </property>
            </widget>
           </item>

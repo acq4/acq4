@@ -41,6 +41,13 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.win.show()
         
     def getDevice(self, dev):
+        try:
+            item = self.ui.deviceList.findItems(dev, QtCore.Qt.MatchExactly)[0]
+        except:
+            raise Exception('Requested device %s does not exist!' % dev)
+        item.setCheckState(QtCore.Qt.Checked)
+        self.deviceItemChanged(item)
+        #self.docks[dev].show()
         return self.docks[dev].widget()
         
     def getParam(self, param):
@@ -118,6 +125,8 @@ class ProtocolRunner(Module, QtCore.QObject):
         
         ## (un)hide docks as needed
         for d in self.docks:
+            if self.docks[d] is None:
+                continue
             if d not in protocol.enabledDevices():
                 self.docks[d].hide()
             else:
@@ -128,6 +137,8 @@ class ProtocolRunner(Module, QtCore.QObject):
             if d not in self.docks:
                 if d not in self.manager.listDevices():
                     continue
+                self.docks[d] = None  ## Instantiate to prevent endless loops!
+                
                 dev = self.manager.getDevice(d)
                 dw = dev.protocolInterface(self)
                 dock = QtGui.QDockWidget(d)
@@ -294,6 +305,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         #self.currentIsModified(False)
     
     def deleteProtocol(self):
+        ## Delete button must be clicked twice.
         if self.deleteState == 0:
             self.ui.deleteProtocolBtn.setText('Really?')
             self.deleteState = 1
@@ -338,7 +350,10 @@ class ProtocolRunner(Module, QtCore.QObject):
         print "=================="
         return
         
-        result = self.manager.runProtocol(prot)
+        self.currentTask = self.manager.createTask(prot)
+        self.currentTask.execute()
+        result = self.currentTask.getResult()
+        
         self.handleResult(result)
    
     def testSequence(self):
@@ -397,3 +412,54 @@ class Protocol:
             self.conf['devices'][dev] = {}
         if dev not in self.enabled:
             self.enabled.append(dev)
+            
+            
+class TaskThread(QtCore.QThread):
+    def __init__(self, ui):
+        QtCore.QThread.__init__(self)
+        self.ui = ui
+        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
+        self.stopThread = True
+                
+    def run(self):
+        try:
+            l = QtCore.QMutexLocker(self.lock)
+            self.stopThread = False
+            l.unlock()
+            
+            lastTime = None
+            while True:
+                lastTime = time.clock()
+                
+                
+                ## Create task
+                ## TODO: reuse tasks to improve efficiency
+                task = self.dm.createTask(cmd)
+                
+                ## Execute task
+                task.execute()
+                
+                self.emit(QtCore.SIGNAL('newFrame(PyQt_PyObject)'), frame)
+                
+                ## sleep until it is time for the next run
+                while True:
+                    now = time.clock()
+                    if now >= (lastTime+params['cycleTime']):
+                        break
+                    time.sleep(100e-6)
+                l.relock()
+                if self.stopThread:
+                    l.unlock()
+                    break
+                l.unlock()
+        except:
+            print "Error in patch acquisition thread, exiting."
+            traceback.print_exception(*sys.exc_info())
+        #self.emit(QtCore.SIGNAL('threadStopped'))
+                    
+    def stop(self, block=False):
+        l = QtCore.QMutexLocker(self.lock)
+        self.stopThread = True
+        l.unlock()
+        if block:
+            self.wait()
