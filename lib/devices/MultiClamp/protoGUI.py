@@ -74,7 +74,7 @@ class MultiClampProtoGui(ProtocolGui):
     def daqChanged(self, state):
         self.rate = state['rate']
         self.numPts = state['numPts']
-        self.timeVals = numpy.linspace(0, self.numPts/self.rate, self.numPts)
+        self.timeVals = numpy.linspace(0, float(self.numPts)/self.rate, self.numPts)
         self.updateWaves()
         
     def updateWaves(self):

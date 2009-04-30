@@ -39,7 +39,7 @@ class NiDAQProto(ProtocolGui):
         
     def updateNPts(self, *args):
         dur = self.prot.getParam('duration')
-        nPts = dur * self.ui.rateSpin.value()
+        nPts = int(dur * self.ui.rateSpin.value())
         if nPts != self.nPts:
             self.nPts = nPts
             self.ui.numPtsLabel.setText(str(self.nPts))

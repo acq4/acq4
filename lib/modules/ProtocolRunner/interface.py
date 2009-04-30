@@ -4,6 +4,7 @@ from ProtocolRunnerTemplate import *
 from PyQt4 import QtGui, QtCore
 from lib.util.DirTreeModel import *
 from lib.util.configfile import *
+import time
 
 class ProtocolRunner(Module, QtCore.QObject):
     def __init__(self, manager, name, config):
@@ -333,7 +334,7 @@ class ProtocolRunner(Module, QtCore.QObject):
     
     def runSingle(self, store=True):
         ## Disable all start buttons
-        self.enableStartBtns(False):
+        self.enableStartBtns(False)
         
         ## Generate executable conf from protocol object
         prot = {'protocol': {

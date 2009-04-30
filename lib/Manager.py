@@ -137,7 +137,6 @@ class Task:
         self.dm = dm
         self.command = command
         self.result = None
-        
         self.cfg = command['protocol']
 
         ## TODO:  set up data storage with cfg['storeData'] and ['writeLocation']
@@ -152,7 +151,9 @@ class Task:
             self.devs[devName] = self.dm.getDevice(devName)
             self.tasks[devName] = self.devs[devName].createTask(self.command[devName])
         
-    def execute(self):
+    def execute(self, block=True):
+        self.stopped = False
+        
         ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
         ## This is how we allow multiple devices to communicate and decide how to operate together.
         ## Each task may modify the startOrder array to suit its needs.
@@ -170,18 +171,32 @@ class Task:
         for devName in self.startOrder:
             self.tasks[devName].start()
             
-        ## Wait until all tasks are done
-        for t in self.tasks:
-            while not self.tasks[t].isDone():
-                time.sleep(10e-6)
+        if not block:
+            return
         
+        ## Wait until all tasks are done
+        while not self.isDone():
+            time.sleep(10e-6)
+        
+        self.stop()
+        
+        
+    def isDone(self):
+        for t in self.tasks:
+            if not self.tasks[t].isDone():
+                return False
+        return True
+        
+    def stop(self):
+        if self.stopped:
+            return
         ## Stop all tasks
         for t in self.tasks:
             self.tasks[t].stop()
-        
         ## Release all hardware for use elsewhere
         for t in self.tasks:
             self.tasks[t].release()
+        self.stopped = True
         
     def getResult(self):
         if self.result is None:
