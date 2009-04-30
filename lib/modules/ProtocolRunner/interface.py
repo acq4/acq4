@@ -25,6 +25,8 @@ class ProtocolRunner(Module, QtCore.QObject):
         
         self.newProtocol()
         
+        self.taskThread = TaskThread(self)
+        
         QtCore.QObject.connect(self.ui.newProtocolBtn, QtCore.SIGNAL('clicked()'), self.newProtocol)
         QtCore.QObject.connect(self.ui.saveProtocolBtn, QtCore.SIGNAL('clicked()'), self.saveProtocol)
         QtCore.QObject.connect(self.ui.loadProtocolBtn, QtCore.SIGNAL('clicked()'), self.loadProtocol)
@@ -37,6 +39,8 @@ class ProtocolRunner(Module, QtCore.QObject):
         QtCore.QObject.connect(self.ui.protocolList, QtCore.SIGNAL('doubleClicked(const QModelIndex &)'), self.loadProtocol)
         QtCore.QObject.connect(self.ui.protocolList, QtCore.SIGNAL('clicked(const QModelIndex &)'), self.protoListClicked)
         QtCore.QObject.connect(self.protocolList, QtCore.SIGNAL('fileRenamed(PyQt_PyObject, PyQt_PyObject)'), self.fileRenamed)
+        QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('finished()'), self.taskThreadStopped)
+        QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('newFrame(PyQt_PyObject)'), self.handleFrame)
         
         self.win.show()
         
@@ -328,6 +332,9 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.runSingle(store=False)
     
     def runSingle(self, store=True):
+        ## Disable all start buttons
+        self.enableStartBtns(False):
+        
         ## Generate executable conf from protocol object
         prot = {'protocol': {
             'duration': self.currentProtocol.conf['duration'], 
@@ -340,27 +347,35 @@ class ProtocolRunner(Module, QtCore.QObject):
             if self.currentProtocol.deviceEnabled(d):
                 prot[d] = self.docks[d].widget().generateProtocol()
         
+        self.taskThread.startProtocol(prot)
         
-        ## Send conf to devicemanager for execution
-        ## Request each dock handle the results with/without storage
-        #prot = self.currentProtocol.generateProtocol()
-        
-        print "== Run Protocol =="
-        print prot
-        print "=================="
-        return
-        
-        self.currentTask = self.manager.createTask(prot)
-        self.currentTask.execute()
-        result = self.currentTask.getResult()
-        
-        self.handleResult(result)
    
     def testSequence(self):
         self.runSequence(store=False)
        
     def runSequence(self):
         pass
+    
+    def enableStartBtns(self, v):
+        btns = [self.ui.testSingleBtn, self.ui.runProtocolBtn, self.ui.testSequenceBtn, self.ui.runSequenceBtn]
+        for b in btns:
+            b.setEnabled(v)
+            
+    def taskThreadStopped(self):
+        self.enableStartBtns(True)
+    
+    def handleFrame(self, frame):
+        print "Got frame"
+        dataManager = None
+        ## Should this data be stored?
+        if frame['protocol']['storeData']:
+            ## Create directory for storing 
+            pass
+            ## Store protocol command and parameter details
+        ## Request each device handles its own data
+        for d in frame['result']:
+            if d != 'protocol':
+                self.docks[d].widget().handleResult(frame['result'][d], dataManager)
     
 class Protocol:
     def __init__(self, fileName=None):
@@ -418,8 +433,19 @@ class TaskThread(QtCore.QThread):
     def __init__(self, ui):
         QtCore.QThread.__init__(self)
         self.ui = ui
+        self.dm = self.ui.manager
         self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
         self.stopThread = True
+                
+    def startProtocol(self, protocol, paramSpace=None):
+        l = QtCore.QMutexLocker(self.lock)
+        if self.isRunning():
+            raise Exception("Already running another protocol")
+        self.protocol = protocol
+        self.paramSpace = paramSpace
+        self.lastRunTime = None
+        self.start()
+    
                 
     def run(self):
         try:
@@ -427,35 +453,51 @@ class TaskThread(QtCore.QThread):
             self.stopThread = False
             l.unlock()
             
-            lastTime = None
-            while True:
-                lastTime = time.clock()
-                
-                
-                ## Create task
-                ## TODO: reuse tasks to improve efficiency
-                task = self.dm.createTask(cmd)
-                
-                ## Execute task
-                task.execute()
-                
-                self.emit(QtCore.SIGNAL('newFrame(PyQt_PyObject)'), frame)
-                
-                ## sleep until it is time for the next run
-                while True:
-                    now = time.clock()
-                    if now >= (lastTime+params['cycleTime']):
-                        break
-                    time.sleep(100e-6)
-                l.relock()
-                if self.stopThread:
-                    l.unlock()
-                    break
-                l.unlock()
+            if self.paramSpace is None:
+                result = self.runOnce()
+            else:
+                result = runSequence(self.runOnce, self.paramSpace, self.paramSpace.keys(), passHash=True)
+            
         except:
-            print "Error in patch acquisition thread, exiting."
-            traceback.print_exception(*sys.exc_info())
-        #self.emit(QtCore.SIGNAL('threadStopped'))
+            print "Error in protocol thread, exiting."
+            sys.excepthook(*sys.exc_info())
+        #finally:
+            #self.emit(QtCore.SIGNAL("protocolFinished()"))
+                    
+    def runOnce(self, params=None):
+        ## Select correct command to execute
+        cmd = self.protocol
+        if params is not None:
+            for p in params:
+                cmd = cmd[p]
+                
+        ## Todo: wait before starting if we've already run too recently
+        while (self.lastRunTime is not None) and (time.clock() < self.lastRunTime + cmd['protocol']['cycleTime']):
+            time.sleep(1e-3)
+        
+        ## Run
+        task = self.dm.createTask(cmd)
+        self.lastRunTime = time.clock()
+        task.execute()
+            
+        ## wait for finish, watch for abort requests
+        while True:
+            if not task.isRunning():
+                break
+            #if self.abort:
+                #task.abort()
+                #print "Protocol run aborted by user"
+                #return
+            ## Abort if protocol is taking too long
+            #if time.clock() >= (self.lastRunTime+(cmd['protocol']['duration']+0.2)):
+                #print "Protocol run aborted--timeout"
+                #task.abort()
+                #return
+            time.sleep(100e-6)
+        
+        frame = {'params': params, 'cmd': cmd, 'result': task.getResult()}
+        self.emit(QtCore.SIGNAL('newFrame(PyQt_PyObject)'), frame)
+        return result
                     
     def stop(self, block=False):
         l = QtCore.QMutexLocker(self.lock)

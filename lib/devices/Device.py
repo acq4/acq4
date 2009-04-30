@@ -120,3 +120,6 @@ class ProtocolGui(QtGui.QWidget):
         
     def generateProtocol(self):
         return {}
+        
+    def handleResult(self, result, dataManager):
+        pass
