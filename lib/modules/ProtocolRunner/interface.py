@@ -4,6 +4,7 @@ from ProtocolRunnerTemplate import *
 from PyQt4 import QtGui, QtCore
 from lib.util.DirTreeModel import *
 from lib.util.configfile import *
+from lib.util.advancedTypes import OrderedDict
 import time
 
 class ProtocolRunner(Module, QtCore.QObject):
@@ -11,6 +12,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         Module.__init__(self, manager, name, config)
         QtCore.QObject.__init__(self)
         self.devListItems = {}
+        self.seqListItems = OrderedDict()  ## Looks like {(device, param): listItem, ...}
         self.docks = {}
         self.deleteState = 0
         self.ui = Ui_MainWindow()
@@ -123,6 +125,37 @@ class ProtocolRunner(Module, QtCore.QObject):
             self.ui.currentProtocolLabel.setText(pn)
             return
             
+    def hideDock(self, dev):
+        self.docks[dev].hide()
+        for i in self.seqListItems:
+            if i[0] == dev
+                self.seqListItems[i].hide()
+        
+    def showDock(self, dev):
+        self.docks[dev].hide()
+        for i in self.seqListItems:
+            if i[0] == dev
+                self.seqListItems[i].show()
+        
+    def updateSeqParams(self, dev):
+        #if l not in self.seqListItems:
+            #self.seqListItems[dev] = []
+        #l = self.seqListItems[dev]
+        params = self.docks[dev].widget().listSequence()
+        
+        ## Add new sequence parameters, update old ones
+        for p in params:
+            item = (dev, p)
+            if item not in self.seqListItems:
+                self.seqListItems[item] = QListWidgetItem('%s.%s' % (dev, p))
+                self.ui.sequenceParamList.addItem(self.seqListItems[item])
+            self.seqListItems[item].setData(params[p])
+            
+        ## remove non-existent sequence parameters
+        for key in self.seqListItems:
+            if key[0] == dev and key[1] not in params:
+                self.ui.sequenceParamList.removeItem(self.seqListItems[key])
+                del self.seqListItems[key]
         
     def updateDocks(self, protocol = None):
         if protocol is None:
@@ -133,9 +166,9 @@ class ProtocolRunner(Module, QtCore.QObject):
             if self.docks[d] is None:
                 continue
             if d not in protocol.enabledDevices():
-                self.docks[d].hide()
+                self.hideDock(d)
             else:
-                self.docks[d].show()
+                self.showDock(d)
             
         ## Create docks that don't exist
         for d in protocol.enabledDevices():
@@ -154,6 +187,8 @@ class ProtocolRunner(Module, QtCore.QObject):
                 
                 self.docks[d] = dock
                 self.win.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+                
+                self.updateSeqParams(d)
         
     def deviceItemChanged(self, item):
         if item.checkState() == QtCore.Qt.Unchecked:
@@ -166,6 +201,9 @@ class ProtocolRunner(Module, QtCore.QObject):
         for d in self.docks:
             self.win.removeDockWidget(self.docks[d])
         self.docks = {}
+        self.ui.sequenceParamList.clear()
+        self.seqListItems = OrderedDict()
+                
         
     def closeProtocol(self):
         ## Remove all docks
@@ -348,6 +386,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             if self.currentProtocol.deviceEnabled(d):
                 prot[d] = self.docks[d].widget().generateProtocol()
         
+        self.emit(QtCore.SIGNAL('protocolStarted()'))
         self.taskThread.startProtocol(prot)
         
    
@@ -477,6 +516,8 @@ class TaskThread(QtCore.QThread):
             time.sleep(1e-3)
         
         ## Run
+        #print "Create task:"
+        #print cmd
         task = self.dm.createTask(cmd)
         self.lastRunTime = time.clock()
         task.execute()

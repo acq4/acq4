@@ -52,12 +52,12 @@ class StimGenerator(QtGui.QWidget):
         QtCore.QObject.connect(self.sequenceText, QtCore.SIGNAL('textChanged()'), self.seqChanged)
         
     def funcChanged(self):
-        self.emit(QtCore.SIGNAL('changed()'))
+        self.emit(QtCore.SIGNAL('functionChanged()'))
         
         
     def seqChanged(self):
         self.cacheOk = False
-        self.emit(QtCore.SIGNAL('changed()'))
+        self.emit(QtCore.SIGNAL('sequenceChanged()'))
         
     def functionString(self):
         return str(self.functionText.toPlainText())

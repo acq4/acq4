@@ -111,8 +111,8 @@ class Task(DeviceTask):
         self.recordHandle.stop()
         
     def getResult(self):
-        
-        ## generate MeatArray of expose channel if it was recorded
+        expose = None
+        ## generate MetaArray of expose channel if it was recorded
         if ('recordExposeChannel' in self.cmd) and self.cmd['recordExposeChannel']:
             expose = self.daqTask.getData(self.dev.config['exposeChannel'][1])
             timeVals = linspace(0, float(expose['info']['numPts']-1) / float(expose['info']['rate']), expose['info']['numPts'])

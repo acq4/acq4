@@ -14,6 +14,7 @@ class MultiClampProtoGui(ProtocolGui):
         daqDev = self.dev.getDAQName()
         daqUI = self.prot.getDevice(daqDev)
         self.cmdPlots = []
+        self.inpPlots = []
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.unitLabels = [self.ui.waveGeneratorLabel, self.ui.holdingCheck]
@@ -25,9 +26,14 @@ class MultiClampProtoGui(ProtocolGui):
             p.setCanvasBackground(QtGui.QColor(0,0,0))
             p.replot()
         QtCore.QObject.connect(daqUI, QtCore.SIGNAL('changed(PyQt_PyObject)'), self.daqChanged)
-        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed()'), self.waveChanged)
+        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('functionChanged()'), self.waveFuncChanged)
+        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('sequenceChanged()'), self.waveSeqChanged)
         QtCore.QObject.connect(self.ui.updateBtn, QtCore.SIGNAL('clicked()'), self.updateWaves)
-        
+        QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
+        QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
+        QtCore.QObject.connect(self.ui.i0ModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
+        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted()'), self.clearInpPlots)
+        self.updateWaves()
         
     def saveState(self):
         state = {}
@@ -66,10 +72,14 @@ class MultiClampProtoGui(ProtocolGui):
         except:
             sys.excepthook(*sys.exc_info())
         
-    def waveChanged(self):
+    def waveFuncChanged(self):
         if not self.ui.autoUpdateCheck.isChecked():
             return
         self.updateWaves()
+        
+    def waveSeqChanged(self):
+        self.waveFuncChanged()
+        self.emit(QtCore.SIGNAL('sequenceChanged()'))
         
     def daqChanged(self, state):
         self.rate = state['rate']
@@ -99,6 +109,12 @@ class MultiClampProtoGui(ProtocolGui):
     def clearCmdPlots(self):
         for i in self.cmdPlots:
             i.detach()
+        self.cmdPlots = []
+        
+    def clearInpPlots(self):
+        for i in self.inpPlots:
+            i.detach()
+        self.inpPlots = []
         
     def plotCmdWave(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
         plot = Qwt.QwtPlotCurve('cell')
@@ -119,7 +135,7 @@ class MultiClampProtoGui(ProtocolGui):
         if self.ui.rawSignalCheck.isChecked():
             prot['raw'] = self.ui.rawSignalCombo.currentText()
         if mode != 'I=0':
-            prot['cmd'] = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
+            prot['command'] = self.cmdScale * self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
         return prot
     
         
@@ -132,8 +148,11 @@ class MultiClampProtoGui(ProtocolGui):
             self.mode = 'VC'
         return self.mode
         
-    def setMode(self, mode):
+    def setMode(self, mode=None):
         if mode != self.mode:
+            oldMode = self.mode
+            if mode is None:
+                mode = self.getMode()
             # set radio button
             if mode == 'IC':
                 self.ui.icModeRadio.setChecked(True)
@@ -151,24 +170,26 @@ class MultiClampProtoGui(ProtocolGui):
                 self.ui.rawSignalCombo.addItem(s)
             
             # Disable signal, holding, and gain checks (only when switching between v and i modes)
-            if mode == 'VC' or self.mode == 'VC':
+            if mode == 'VC' or oldMode == 'VC':
                 self.ui.scaledSignalCheck.setChecked(False)
                 self.ui.rawSignalCheck.setChecked(False)
                 self.ui.holdingCheck.setChecked(False)
                 self.ui.setScaledGainCheck.setChecked(False)
                 self.ui.setRawGainCheck.setChecked(False)
             
-            # update unit labels
+            # update unit labels and scaling
             if mode == 'VC':
                 newUnit = 'mV'
                 oldUnit = 'pA'
+                self.cmdScale = 1e-3
             else:
                 newUnit = 'pA'
                 oldUnit = 'mV'
+                self.cmdScale = 1e-12
             for l in self.unitLabels:
                 text = str(l.text())
                 l.setText(text.replace(oldUnit, newUnit))
-        
+                
         
         self.mode = mode
         
@@ -187,5 +208,6 @@ class MultiClampProtoGui(ProtocolGui):
         plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         plot.setData(result.xvals('Time'), result['scaled'])
         plot.attach(self.ui.topPlotWidget)
+        self.inpPlots.append(plot)
         self.ui.topPlotWidget.replot()
         
