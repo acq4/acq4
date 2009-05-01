@@ -369,7 +369,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         print "Got frame"
         dataManager = None
         ## Should this data be stored?
-        if frame['protocol']['storeData']:
+        if frame['cmd']['protocol']['storeData']:
             ## Create directory for storing 
             pass
             ## Store protocol command and parameter details
@@ -483,7 +483,7 @@ class TaskThread(QtCore.QThread):
             
         ## wait for finish, watch for abort requests
         while True:
-            if not task.isRunning():
+            if task.isDone():
                 break
             #if self.abort:
                 #task.abort()
@@ -496,7 +496,8 @@ class TaskThread(QtCore.QThread):
                 #return
             time.sleep(100e-6)
         
-        frame = {'params': params, 'cmd': cmd, 'result': task.getResult()}
+        result = task.getResult()
+        frame = {'params': params, 'cmd': cmd, 'result': result}
         self.emit(QtCore.SIGNAL('newFrame(PyQt_PyObject)'), frame)
         return result
                     

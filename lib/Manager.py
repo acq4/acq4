@@ -199,6 +199,7 @@ class Task:
         self.stopped = True
         
     def getResult(self):
+        self.stop()
         if self.result is None:
             ## Let each device generate its own output structure.
             result = {}

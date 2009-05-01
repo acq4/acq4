@@ -185,7 +185,7 @@ class MultiClampProtoGui(ProtocolGui):
     def handleResult(self, result, dataManager):
         plot = Qwt.QwtPlotCurve('cell')
         plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        plot.setData(result.xvals('Time'), result['Scaled'])
+        plot.setData(result.xvals('Time'), result['scaled'])
         plot.attach(self.ui.topPlotWidget)
         self.ui.topPlotWidget.replot()
         

@@ -15,7 +15,6 @@
   </property>
   <property name="styleSheet">
    <string notr="true">QDockWidget::title { background-color: #446; color: #DDD }
-QMainWindow { background-color: #000 }
 QSplitter::handle {background-color: #666}
 QMainWindow::separator {background-color: #666}</string>
   </property>
