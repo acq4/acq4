@@ -33,7 +33,6 @@ class MultiClampProtoGui(ProtocolGui):
         QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.ui.i0ModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted()'), self.clearInpPlots)
-        self.updateWaves()
         
     def saveState(self):
         state = {}
@@ -71,6 +70,7 @@ class MultiClampProtoGui(ProtocolGui):
             self.ui.splitter_2.restoreState(QtCore.QByteArray.fromPercentEncoding(state['splitter2']))
         except:
             sys.excepthook(*sys.exc_info())
+        self.updateWaves()
         
     def waveFuncChanged(self):
         if not self.ui.autoUpdateCheck.isChecked():
@@ -79,7 +79,7 @@ class MultiClampProtoGui(ProtocolGui):
         
     def waveSeqChanged(self):
         self.waveFuncChanged()
-        self.emit(QtCore.SIGNAL('sequenceChanged()'))
+        #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
         
     def daqChanged(self, state):
         self.rate = state['rate']
@@ -87,6 +87,9 @@ class MultiClampProtoGui(ProtocolGui):
         self.timeVals = numpy.linspace(0, float(self.numPts)/self.rate, self.numPts)
         self.updateWaves()
         
+    def listSequence(self):
+        return self.ui.waveGeneratorWidget.listSequences()
+
     def updateWaves(self):
         self.clearCmdPlots()
         
@@ -105,6 +108,7 @@ class MultiClampProtoGui(ProtocolGui):
         single = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts)
         if single is not None:
             self.plotCmdWave(single, color=QtGui.QColor(200, 100, 100))
+        self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
         
     def clearCmdPlots(self):
         for i in self.cmdPlots:

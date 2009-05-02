@@ -308,7 +308,7 @@ class MetaArray(ndarray):
         return tuple(nInd)
       
     def _interpretAxis(self, axis):
-        if type(axis) == types.StringType:
+        if type(axis) in [types.StringType, types.TupleType]:
             return self._getAxis(axis)
         else:
             return axis
@@ -319,11 +319,11 @@ class MetaArray(ndarray):
                 raise Exception("string and integer indexes may not follow named indexes")
             return (pos, self._getIndex(pos, ind), False)
         elif type(ind) == types.SliceType:
-            if type(ind.start) == types.StringType or type(ind.stop) == types.StringType:  ## Not an actual slice!
+            if type(ind.start) in [str, tuple] or type(ind.stop) is str:  ## Not an actual slice!
                 axis = self._interpretAxis(ind.start)
                 
                 ## x[Axis:Column]
-                if type(ind.stop) == types.StringType:
+                if type(ind.stop) is str:
                     index = self._getIndex(axis, ind.stop)
                     
                 ## x[Axis:min:max]
@@ -338,12 +338,15 @@ class MetaArray(ndarray):
                     
                 ## x[Axis:columnIndex]
                 elif type(ind.stop) is int or type(ind.step) is int:
-                    index = slice(ind.stop, ind.step)
+                    if ind.step is None:
+                        index = ind.stop
+                    else:
+                        index = slice(ind.stop, ind.step)
                     
                 ## x[Axis: [list]]
                 else:
                     index = ind.stop
-                #print "Axis %s (%d) : %s" % (ind.start, axis, str(type(index)))
+                #print "Axis %s (%s) : %s" % (ind.start, str(axis), str(type(index)))
                 #if type(index) is ndarray:
                     #print "    ", index.shape
                 return (axis, index, True)

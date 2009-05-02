@@ -196,6 +196,13 @@ QMainWindow::separator {background-color: #666}</string>
      </item>
      <item row="0" column="1" colspan="2">
       <widget class="QCheckBox" name="protoContinuousCheck">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="toolTip">
+        <string>Protocol runs continuously without 
+gaps until stopped (not yet implemented).</string>
+       </property>
        <property name="text">
         <string>Continuous</string>
        </property>
@@ -212,7 +219,11 @@ QMainWindow::separator {background-color: #666}</string>
       </widget>
      </item>
      <item row="1" column="3">
-      <widget class="QDoubleSpinBox" name="protoDurationSpin"/>
+      <widget class="QDoubleSpinBox" name="protoDurationSpin">
+       <property name="toolTip">
+        <string>Duration of stimulus/acquisition in the protocol.</string>
+       </property>
+      </widget>
      </item>
      <item row="2" column="1" colspan="2">
       <widget class="QLabel" name="label_6">
@@ -222,10 +233,22 @@ QMainWindow::separator {background-color: #666}</string>
       </widget>
      </item>
      <item row="2" column="3">
-      <widget class="QDoubleSpinBox" name="protoLeadTimeSpin"/>
+      <widget class="QDoubleSpinBox" name="protoLeadTimeSpin">
+       <property name="toolTip">
+        <string>Duration of time to wait before acquisition starts 
+(the hardware is reserved so nothing else can 
+run during this time).</string>
+       </property>
+      </widget>
      </item>
      <item row="3" column="1">
       <widget class="QCheckBox" name="protoLoopCheck">
+       <property name="toolTip">
+        <string>Protocol will run repeatedly until stopped and 
+waits a minimum of Cycle Time between episodes.
+Not the same as continuous acquisition (there 
+will be a time gap between each recording).</string>
+       </property>
        <property name="text">
         <string>Loop</string>
        </property>
@@ -239,7 +262,12 @@ QMainWindow::separator {background-color: #666}</string>
       </widget>
      </item>
      <item row="4" column="3">
-      <widget class="QDoubleSpinBox" name="protoCycleTimeSpin"/>
+      <widget class="QDoubleSpinBox" name="protoCycleTimeSpin">
+       <property name="toolTip">
+        <string>The minimum time to wait between recordings 
+in loop mode.</string>
+       </property>
+      </widget>
      </item>
      <item row="5" column="2">
       <spacer>
@@ -329,95 +357,113 @@ QMainWindow::separator {background-color: #666}</string>
    </attribute>
    <widget class="QWidget" name="dockWidgetContents_7">
     <layout class="QGridLayout" name="gridLayout_2">
-     <item row="0" column="0" rowspan="7" colspan="3">
-      <widget class="QTableWidget" name="sequenceParamList"/>
-     </item>
-     <item row="0" column="3">
-      <widget class="QLabel" name="label_9">
+     <item row="0" column="0">
+      <widget class="QLabel" name="label_10">
        <property name="text">
-        <string>Cycle Time (ms)</string>
+        <string>Sequence Parameters</string>
        </property>
       </widget>
      </item>
-     <item row="0" column="4">
-      <widget class="QDoubleSpinBox" name="seqCycleTimeSpin"/>
+     <item row="0" column="1" rowspan="2">
+      <layout class="QVBoxLayout" name="verticalLayout">
+       <item>
+        <widget class="QLabel" name="label_9">
+         <property name="text">
+          <string>Cycle Time (ms)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QDoubleSpinBox" name="seqCycleTimeSpin"/>
+       </item>
+       <item>
+        <spacer>
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>17</width>
+           <height>18</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_2">
+         <property name="text">
+          <string>Parameter Space: </string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="paramSpaceLabel">
+         <property name="text">
+          <string>0</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_4">
+         <property name="text">
+          <string>Total time:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="seqTimeLabel">
+         <property name="text">
+          <string>0</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_2">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>13</width>
+           <height>13</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
      </item>
-     <item row="1" column="3" colspan="2">
-      <spacer>
-       <property name="orientation">
-        <enum>Qt::Vertical</enum>
+     <item row="1" column="0">
+      <widget class="QTreeWidget" name="sequenceParamList">
+       <property name="dragEnabled">
+        <bool>true</bool>
        </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>20</width>
-         <height>77</height>
-        </size>
+       <property name="dragDropMode">
+        <enum>QAbstractItemView::InternalMove</enum>
        </property>
-      </spacer>
-     </item>
-     <item row="2" column="3" colspan="2">
-      <widget class="QLabel" name="label_2">
-       <property name="text">
-        <string>Parameter Space: </string>
+       <property name="rootIsDecorated">
+        <bool>true</bool>
        </property>
+       <attribute name="headerDefaultSectionSize">
+        <number>50</number>
+       </attribute>
+       <column>
+        <property name="text">
+         <string>dev</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>param</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>len</string>
+        </property>
+       </column>
       </widget>
      </item>
-     <item row="3" column="3" colspan="2">
-      <widget class="QLabel" name="paramSpaceLabel">
-       <property name="text">
-        <string>0</string>
-       </property>
-      </widget>
-     </item>
-     <item row="4" column="3" colspan="2">
-      <widget class="QLabel" name="label_4">
-       <property name="text">
-        <string>Total time:</string>
-       </property>
-      </widget>
-     </item>
-     <item row="5" column="3" colspan="2">
-      <widget class="QLabel" name="seqTimeLabel">
-       <property name="text">
-        <string>0</string>
-       </property>
-      </widget>
-     </item>
-     <item row="6" column="3" rowspan="2" colspan="2">
-      <spacer name="verticalSpacer_2">
-       <property name="orientation">
-        <enum>Qt::Vertical</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>168</width>
-         <height>28</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item row="7" column="0">
-      <widget class="QPushButton" name="seqParamUpBtn">
-       <property name="text">
-        <string>Up</string>
-       </property>
-      </widget>
-     </item>
-     <item row="7" column="1">
-      <widget class="QPushButton" name="seqParamDnBtn">
-       <property name="text">
-        <string>Dn</string>
-       </property>
-      </widget>
-     </item>
-     <item row="7" column="2">
-      <widget class="QPushButton" name="seqParamGroupBtn">
-       <property name="text">
-        <string>Group</string>
-       </property>
-      </widget>
-     </item>
-     <item row="8" column="0" colspan="5">
+     <item row="2" column="0" colspan="2">
       <layout class="QHBoxLayout" name="horizontalLayout_3">
        <item>
         <widget class="QPushButton" name="testSequenceBtn">
