@@ -170,6 +170,7 @@ class Task:
         ## Start tasks in specific order
         for devName in self.startOrder:
             self.tasks[devName].start()
+        self.startTime = self.dm.time()
             
         if not block:
             return
@@ -182,6 +183,9 @@ class Task:
         
         
     def isDone(self):
+        t = self.dm.time()
+        if t - self.startTime < self.cfg['duration']:
+            return False
         for t in self.tasks:
             if not self.tasks[t].isDone():
                 return False

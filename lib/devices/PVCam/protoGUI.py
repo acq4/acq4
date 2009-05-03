@@ -2,30 +2,36 @@
 from PyQt4 import QtCore, QtGui
 from ProtocolTemplate import *
 from lib.devices.Device import ProtocolGui
+from lib.util.WidgetGroup import *
 
 class PVCamProto(ProtocolGui):
     def __init__(self, dev, prot):
         ProtocolGui.__init__(self, dev, prot)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        self.stateGroup = WidgetGroup([
+            (self.ui.recordCheck, 'record'),
+            (self.ui.triggerCheck, 'trigger'),
+            (self.ui.displayCheck, 'display'),
+            (self.ui.recordExposeCheck, 'recordExposeChannel')
+        ])
 
     def saveState(self):
-        return self.currentState()
+        s = self.currentState()
+        s['splitter'] = str(self.ui.splitter.saveState().toPercentEncoding())
+        return s
         
     def restoreState(self, state):
-        self.ui.recordCheck.setChecked(state['record'])
-        self.ui.triggerCheck.setChecked(state['trigger'])
-        self.ui.displayCheck.setChecked(state['display'])
-        self.ui.recordExposeCheck.setChecked(state['recordExposeChannel'])
+        self.stateGroup.setState(state)
+        self.ui.splitter.restoreState(QtCore.QByteArray.fromPercentEncoding(state['splitter']))
         
         
     def generateProtocol(self, params={}):
         return self.currentState()
         
     def currentState(self):
-        state = {}
-        state['record'] = self.ui.recordCheck.isChecked()
-        state['trigger'] = self.ui.triggerCheck.isChecked()
-        state['display'] = self.ui.displayCheck.isChecked()
-        state['recordExposeChannel'] = self.ui.recordExposeCheck.isChecked()
-        return state
+        return self.stateGroup.state()
+        
+    def handleResult(self, result, dataManager):
+        #print result
+        self.ui.imageView.setImage(result['frames'])

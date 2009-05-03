@@ -1,6 +1,31 @@
-duration: 0.2
-continuous: False
+winState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%00%00%00%04Z%00%00%01%84%FC%02%00%00%00%01%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%00%CD%00%00%01%84%00%00%01s%00%07%FF%FF%00%00%00%02%00%00%04%5E%00%00%00%C9%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%014%00%00%00%B7%00%07%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%018%00%00%01c%00%00%01%15%00%07%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02%9F%00%00%01%1F%00%00%01%1C%00%07%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%03%C2%00%00%00%9C%00%00%00%96%00%07%FF%FF%00%00%00%00%00%00%01%84%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
 devices:
-    Clamp0:
-sequence:
-    params: ['Step']
+    Clamp1:
+        splitter2: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%019%00%00%03%0A%01%00%00%00%05%01%00%00%00%01'
+        stim:
+            waveform: 'steps([0,0.01, 0.15], [0, i, 0])'
+            sequence: 'i = 5; -100:100/11'
+        holding: 0.0
+        splitter1: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%00%EA%00%00%00m%01%00%00%00%05%01%00%00%00%02'
+        setScaledGain: False
+        scaledGain: 0.0
+        rawSignal: 'MembranePotential'
+        rawGain: 0.0
+        mode: 'IC'
+        setRawSignal: False
+        setRawGain: False
+        setScaledSignal: False
+        scaledSignal: 'MembranePotential'
+        setHolding: False
+    DAQ:
+        numPts: 7999
+        rate: 40000
+conf:
+    storeData: False
+    cycleTime: 0.0
+    name: 'C:\\cygwin\\home\\Experimenters\\luke\\acq4\\config\\protocols\\CCIV'
+    continuous: False
+    loopCycleTime: 0.0
+    duration: 0.19999999999999996
+    leadTime: 0.0
+    loop: False

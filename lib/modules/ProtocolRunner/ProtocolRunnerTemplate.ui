@@ -214,7 +214,7 @@ gaps until stopped (not yet implemented).</string>
      <item row="1" column="1" colspan="2">
       <widget class="QLabel" name="label_8">
        <property name="text">
-        <string>Duration (ms)</string>
+        <string>Duration (s)</string>
        </property>
       </widget>
      </item>
@@ -223,12 +223,15 @@ gaps until stopped (not yet implemented).</string>
        <property name="toolTip">
         <string>Duration of stimulus/acquisition in the protocol.</string>
        </property>
+       <property name="singleStep">
+        <double>0.100000000000000</double>
+       </property>
       </widget>
      </item>
      <item row="2" column="1" colspan="2">
       <widget class="QLabel" name="label_6">
        <property name="text">
-        <string>Lead Time (ms)</string>
+        <string>Lead Time (s)</string>
        </property>
       </widget>
      </item>
@@ -238,6 +241,9 @@ gaps until stopped (not yet implemented).</string>
         <string>Duration of time to wait before acquisition starts 
 (the hardware is reserved so nothing else can 
 run during this time).</string>
+       </property>
+       <property name="singleStep">
+        <double>0.100000000000000</double>
        </property>
       </widget>
      </item>
@@ -257,7 +263,7 @@ will be a time gap between each recording).</string>
      <item row="4" column="1" colspan="2">
       <widget class="QLabel" name="label_7">
        <property name="text">
-        <string>Cycle Time (ms)</string>
+        <string>Cycle Time (s)</string>
        </property>
       </widget>
      </item>
@@ -266,6 +272,9 @@ will be a time gap between each recording).</string>
        <property name="toolTip">
         <string>The minimum time to wait between recordings 
 in loop mode.</string>
+       </property>
+       <property name="singleStep">
+        <double>0.100000000000000</double>
        </property>
       </widget>
      </item>
@@ -369,12 +378,16 @@ in loop mode.</string>
        <item>
         <widget class="QLabel" name="label_9">
          <property name="text">
-          <string>Cycle Time (ms)</string>
+          <string>Cycle Time (s)</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QDoubleSpinBox" name="seqCycleTimeSpin"/>
+        <widget class="QDoubleSpinBox" name="seqCycleTimeSpin">
+         <property name="singleStep">
+          <double>0.100000000000000</double>
+         </property>
+        </widget>
        </item>
        <item>
         <spacer>

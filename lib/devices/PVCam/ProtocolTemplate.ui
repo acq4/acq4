@@ -19,19 +19,19 @@
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
-     <widget class="QWidget" name="layoutWidget">
+     <widget class="QWidget" name="">
       <layout class="QVBoxLayout" name="verticalLayout">
        <item>
-        <widget class="QCheckBox" name="recordCheck">
+        <widget class="QLabel" name="label_2">
          <property name="text">
-          <string>Record</string>
+          <string>Camera</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QCheckBox" name="triggerCheck">
+        <widget class="QCheckBox" name="recordCheck">
          <property name="text">
-          <string>Trigger</string>
+          <string>Record</string>
          </property>
         </widget>
        </item>
@@ -43,9 +43,30 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="triggerCheck">
+         <property name="text">
+          <string>Trigger</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="label">
+         <property name="text">
+          <string>Exposure Channel</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QCheckBox" name="recordExposeCheck">
          <property name="text">
-          <string>Record Expose Channel</string>
+          <string>Record</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="checkBox">
+         <property name="text">
+          <string>Display</string>
          </property>
         </widget>
        </item>
@@ -64,52 +85,26 @@
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="layoutWidget">
-      <layout class="QGridLayout" name="gridLayout">
-       <item row="0" column="0">
-        <widget class="QWidget" name="widget" native="true"/>
-       </item>
-       <item row="0" column="1">
-        <widget class="QSlider" name="verticalSlider">
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="2">
-        <widget class="QSlider" name="verticalSlider_2">
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="0">
-        <widget class="QSlider" name="horizontalSlider">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="1">
-        <widget class="QLabel" name="label">
-         <property name="text">
-          <string>B</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="2">
-        <widget class="QLabel" name="label_2">
-         <property name="text">
-          <string>W</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
+     <widget class="ImageView" name="imageView" native="true">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
      </widget>
     </widget>
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ImageView</class>
+   <extends>QWidget</extends>
+   <header>lib.util.qtgraph.ImageView</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

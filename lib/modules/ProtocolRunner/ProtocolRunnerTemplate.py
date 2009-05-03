@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Sat May  2 14:43:47 2009
+# Created: Sun May  3 17:38:08 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -108,12 +108,14 @@ QMainWindow::separator {background-color: #666}""")
         self.label_8.setObjectName("label_8")
         self.gridLayout.addWidget(self.label_8, 1, 1, 1, 2)
         self.protoDurationSpin = QtGui.QDoubleSpinBox(self.dockWidgetContents_5)
+        self.protoDurationSpin.setSingleStep(0.1)
         self.protoDurationSpin.setObjectName("protoDurationSpin")
         self.gridLayout.addWidget(self.protoDurationSpin, 1, 3, 1, 1)
         self.label_6 = QtGui.QLabel(self.dockWidgetContents_5)
         self.label_6.setObjectName("label_6")
         self.gridLayout.addWidget(self.label_6, 2, 1, 1, 2)
         self.protoLeadTimeSpin = QtGui.QDoubleSpinBox(self.dockWidgetContents_5)
+        self.protoLeadTimeSpin.setSingleStep(0.1)
         self.protoLeadTimeSpin.setObjectName("protoLeadTimeSpin")
         self.gridLayout.addWidget(self.protoLeadTimeSpin, 2, 3, 1, 1)
         self.protoLoopCheck = QtGui.QCheckBox(self.dockWidgetContents_5)
@@ -123,6 +125,7 @@ QMainWindow::separator {background-color: #666}""")
         self.label_7.setObjectName("label_7")
         self.gridLayout.addWidget(self.label_7, 4, 1, 1, 2)
         self.protoCycleTimeSpin = QtGui.QDoubleSpinBox(self.dockWidgetContents_5)
+        self.protoCycleTimeSpin.setSingleStep(0.1)
         self.protoCycleTimeSpin.setObjectName("protoCycleTimeSpin")
         self.gridLayout.addWidget(self.protoCycleTimeSpin, 4, 3, 1, 1)
         spacerItem2 = QtGui.QSpacerItem(20, 91, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
@@ -164,6 +167,7 @@ QMainWindow::separator {background-color: #666}""")
         self.label_9.setObjectName("label_9")
         self.verticalLayout.addWidget(self.label_9)
         self.seqCycleTimeSpin = QtGui.QDoubleSpinBox(self.dockWidgetContents_7)
+        self.seqCycleTimeSpin.setSingleStep(0.1)
         self.seqCycleTimeSpin.setObjectName("seqCycleTimeSpin")
         self.verticalLayout.addWidget(self.seqCycleTimeSpin)
         spacerItem5 = QtGui.QSpacerItem(17, 18, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
@@ -226,9 +230,9 @@ QMainWindow::separator {background-color: #666}""")
         self.protoContinuousCheck.setToolTip(QtGui.QApplication.translate("MainWindow", "Protocol runs continuously without \n"
 "gaps until stopped (not yet implemented).", None, QtGui.QApplication.UnicodeUTF8))
         self.protoContinuousCheck.setText(QtGui.QApplication.translate("MainWindow", "Continuous", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_8.setText(QtGui.QApplication.translate("MainWindow", "Duration (ms)", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_8.setText(QtGui.QApplication.translate("MainWindow", "Duration (s)", None, QtGui.QApplication.UnicodeUTF8))
         self.protoDurationSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Duration of stimulus/acquisition in the protocol.", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_6.setText(QtGui.QApplication.translate("MainWindow", "Lead Time (ms)", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_6.setText(QtGui.QApplication.translate("MainWindow", "Lead Time (s)", None, QtGui.QApplication.UnicodeUTF8))
         self.protoLeadTimeSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Duration of time to wait before acquisition starts \n"
 "(the hardware is reserved so nothing else can \n"
 "run during this time).", None, QtGui.QApplication.UnicodeUTF8))
@@ -237,7 +241,7 @@ QMainWindow::separator {background-color: #666}""")
 "Not the same as continuous acquisition (there \n"
 "will be a time gap between each recording).", None, QtGui.QApplication.UnicodeUTF8))
         self.protoLoopCheck.setText(QtGui.QApplication.translate("MainWindow", "Loop", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_7.setText(QtGui.QApplication.translate("MainWindow", "Cycle Time (ms)", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_7.setText(QtGui.QApplication.translate("MainWindow", "Cycle Time (s)", None, QtGui.QApplication.UnicodeUTF8))
         self.protoCycleTimeSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "The minimum time to wait between recordings \n"
 "in loop mode.", None, QtGui.QApplication.UnicodeUTF8))
         self.testSingleBtn.setText(QtGui.QApplication.translate("MainWindow", "Test", None, QtGui.QApplication.UnicodeUTF8))
@@ -245,7 +249,7 @@ QMainWindow::separator {background-color: #666}""")
         self.stopProtocolBtn.setText(QtGui.QApplication.translate("MainWindow", "Stop Single", None, QtGui.QApplication.UnicodeUTF8))
         self.SequenceDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Sequence", None, QtGui.QApplication.UnicodeUTF8))
         self.label_10.setText(QtGui.QApplication.translate("MainWindow", "Sequence Parameters", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_9.setText(QtGui.QApplication.translate("MainWindow", "Cycle Time (ms)", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_9.setText(QtGui.QApplication.translate("MainWindow", "Cycle Time (s)", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("MainWindow", "Parameter Space: ", None, QtGui.QApplication.UnicodeUTF8))
         self.paramSpaceLabel.setText(QtGui.QApplication.translate("MainWindow", "0", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("MainWindow", "Total time:", None, QtGui.QApplication.UnicodeUTF8))
