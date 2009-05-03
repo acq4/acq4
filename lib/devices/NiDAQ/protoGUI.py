@@ -12,8 +12,8 @@ class NiDAQProto(ProtocolGui):
         self.updateNPts()
         self.updateDevList()
         self.devs = []
-        QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('valueChanged(int)'), self.updateNPts)
-        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('durationChanged(float)'), self.updateNPts)
+        QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('valueChanged(int)'), self.rateChanged)
+        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolChanged'), self.protocolChanged)
         
     def saveState(self):
         return self.currentState()
@@ -37,13 +37,23 @@ class NiDAQProto(ProtocolGui):
             state['triggerDevice'] = self.ui.triggerDevList.currentText()
         return state
         
-    def updateNPts(self, *args):
+    def rateChanged(self):
+        self.updateNPts()
+        self.emit(QtCore.SIGNAL('changed'), self.currentState())
+        
+    def protocolChanged(self, n, v):
+        #print "caught protocol change", n, v
+        if n == 'duration':
+            
+            self.updateNPts()
+        self.emit(QtCore.SIGNAL('changed'), self.currentState())
+        
+    def updateNPts(self):
         dur = self.prot.getParam('duration')
         nPts = int(dur * self.ui.rateSpin.value())
         if nPts != self.nPts:
             self.nPts = nPts
             self.ui.numPtsLabel.setText(str(self.nPts))
-            self.emit(QtCore.SIGNAL('changed(PyQt_PyObject)'), self.currentState())
         
     def updateDevList(self):
         self.devs = self.dev.dm.listDevices()

@@ -2,37 +2,63 @@
 from PyQt4 import QtCore, QtGui
 
 class WidgetGroup(QtCore.QObject):
+    """This class takes a list of widgets and keeps an internal record of their state which is always up to date. Allows reading and writing from groups of widgets simultaneously."""
+    
+    
     def __init__(self, widgetList):
-        self.widgetList = widgetList
+        QtCore.QObject.__init__(self)
+        self.widgetList = dict(widgetList)
         self.cache = {}
-        for w, n in widgetList:
-            QtCore.QObject.connect(w, QtCore.SIGNAL('changed()'), self.mkChangeCallback(w))
+        for w in self.widgetList:
+            self.readWidget(w)
+            if type(w) is QtGui.QDoubleSpinBox:
+                QtCore.QObject.connect(w, QtCore.SIGNAL('valueChanged(double)'), self.mkChangeCallback(w))
+            elif type(w) is QtGui.QSpinBox:
+                QtCore.QObject.connect(w, QtCore.SIGNAL('valueChanged(int)'), self.mkChangeCallback(w))
+            elif type(w) is QtGui.QCheckBox:
+                QtCore.QObject.connect(w, QtCore.SIGNAL('stateChanged(int)'), self.mkChangeCallback(w))
+            else:
+                raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
         
     def mkChangeCallback(self, w):
         return lambda *args: self.widgetChanged(w, *args)
         
     def widgetChanged(self, w, *args):
-        pass
+        n = self.widgetList[w]
+        v1 = self.cache[n]
+        v2 = self.readWidget(w)
+        if v1 != v2:
+            #print "widget", n, " = ", v2
+            self.emit(QtCore.SIGNAL('changed'), self.widgetList[w], v2)
         
     def state(self):
-        s = {}
-        for w, n in self.widgetList:
-            if type(w) is QtGui.QDoubleSpinBox:
-                s[n] = w.value()
-            elif type(w) is QtGui.QCheckBox:
-                s[n] = w.isChecked()
-            else:
-                raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
-        return s
+        return self.cache
 
     def setState(self, s):
-        for w, n in self.widgetList:
+        for w in self.widgetList:
+            n = self.widgetList[w]
             if n not in s:
                 continue
-            #print w, n, s[n]
-            if type(w) is QtGui.QDoubleSpinBox:
-                w.setValue(s[n])
-            elif type(w) is QtGui.QCheckBox:
-                w.setChecked(s[n])
-            else:
-                raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
+            self.setWidget(w, s[n])
+
+    def readWidget(self, w):
+        if type(w) in [QtGui.QDoubleSpinBox, QtGui.QSpinBox]:
+            val = w.value()
+        elif type(w) is QtGui.QCheckBox:
+            val = w.isChecked()
+        else:
+            raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
+        n = self.widgetList[w]
+        self.cache[n] = val
+        return val
+
+    def setWidget(self, w, v):
+        if type(w) in [QtGui.QDoubleSpinBox, QtGui.QSpinBox]:
+            w.setValue(v)
+        elif type(w) is QtGui.QCheckBox:
+            w.setChecked(v)
+        else:
+            raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
+        #self.readWidget(w)  ## should happen automatically
+
+

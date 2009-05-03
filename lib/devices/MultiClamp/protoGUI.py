@@ -25,7 +25,7 @@ class MultiClampProtoGui(ProtocolGui):
         for p in [self.ui.topPlotWidget, self.ui.bottomPlotWidget]:
             p.setCanvasBackground(QtGui.QColor(0,0,0))
             p.replot()
-        QtCore.QObject.connect(daqUI, QtCore.SIGNAL('changed(PyQt_PyObject)'), self.daqChanged)
+        QtCore.QObject.connect(daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('functionChanged()'), self.waveFuncChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('sequenceChanged()'), self.waveSeqChanged)
         QtCore.QObject.connect(self.ui.updateBtn, QtCore.SIGNAL('clicked()'), self.updateWaves)

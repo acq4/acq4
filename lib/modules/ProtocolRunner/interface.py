@@ -52,17 +52,22 @@ class ProtocolRunner(Module, QtCore.QObject):
         QtCore.QObject.connect(self.ui.testSequenceBtn, QtCore.SIGNAL('clicked()'), self.testSequence)
         QtCore.QObject.connect(self.ui.runSequenceBtn, QtCore.SIGNAL('clicked()'), self.runSequence)
         QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.deviceItemClicked)
-        QtCore.QObject.connect(self.ui.protoDurationSpin, QtCore.SIGNAL('editingFinished()'), self.protParamsChanged)
+        #QtCore.QObject.connect(self.ui.protoDurationSpin, QtCore.SIGNAL('editingFinished()'), self.protParamsChanged)
         QtCore.QObject.connect(self.ui.protocolList, QtCore.SIGNAL('doubleClicked(const QModelIndex &)'), self.loadProtocol)
         QtCore.QObject.connect(self.ui.protocolList, QtCore.SIGNAL('clicked(const QModelIndex &)'), self.protoListClicked)
         QtCore.QObject.connect(self.protocolList, QtCore.SIGNAL('fileRenamed(PyQt_PyObject, PyQt_PyObject)'), self.fileRenamed)
         QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('finished()'), self.taskThreadStopped)
-        QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('newFrame(PyQt_PyObject)'), self.handleFrame)
+        QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('newFrame'), self.handleFrame)
         #QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.deviceItemChanged)
-        
+        QtCore.QObject.connect(self.protoStateGroup, QtCore.SIGNAL('changed'), self.protoGroupChanged)
         self.win.show()
         
+    def protoGroupChanged(self, param, value):
+        #print "protoChanged", param, value
+        self.emit(QtCore.SIGNAL('protocolChanged'), param, value)
+        
     def getDevice(self, dev):
+        """Return the protocolGui for dev. Used by some devices to detect changes in others."""
         if dev not in self.docks:
             ## Create the device if needed
             try:
@@ -75,10 +80,11 @@ class ProtocolRunner(Module, QtCore.QObject):
         return self.docks[dev].widget()
         
     def getParam(self, param):
-        return self.currentProtocol.conf[param]
+        """Return the value of a named protocol parameter"""
+        return self.protoStateGroup.state()[param]
         
     def updateDeviceList(self, protocol=None):
-        """Read the list of devices from the device manager"""
+        """Update the device list to reflect only the devices that exist in the system or are referenced by the current protocol. Update the color and checkstate of each item as well."""
         devList = self.manager.listDevices()
         
         if protocol is not None:
@@ -161,7 +167,6 @@ class ProtocolRunner(Module, QtCore.QObject):
                 #self.win.restoreState(QtCore.QByteArray.fromPercentEncoding(self.currentProtocol.conf['winState']))
             
     def protoListClicked(self, ind):
-        ## Check to see if the selection has changed
         sel = list(self.ui.protocolList.selectedIndexes())
         if len(sel) == 1:
             self.ui.deleteProtocolBtn.setEnabled(True)
@@ -170,7 +175,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.resetDeleteState()
             
     def fileRenamed(self, fn1, fn2):
-        ## A file was renamed, we might need to act on this change..
+        """Update the current protocol state to follow a file that has been moved or renamed"""
         if fn1 == self.currentProtocol.fileName:
             self.currentProtocol.fileName = fn2
             pn = fn2.replace(self.protocolList.baseDir, '')
@@ -183,6 +188,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             return
             
     def updateSeqParams(self, dev):
+        """Update the list of available sequence parameters."""
         if dev not in self.currentProtocol.enabledDevices():
             return
         params = self.docks[dev].widget().listSequence()
@@ -204,7 +210,7 @@ class ProtocolRunner(Module, QtCore.QObject):
                 self.ui.sequenceParamList.addTopLevelItem(item)
             items[p].setData(2, QtCore.Qt.DisplayRole, QtCore.QVariant(str(params[p])))
             
-        ## remove non-existent sequence parameters
+        ## remove non-existent sequence parameters (but not their children)
         for key in items:
             if key not in params:
                 item = items[key]
@@ -222,20 +228,19 @@ class ProtocolRunner(Module, QtCore.QObject):
                         
         
     def hideDock(self, dev):
-        #print "hiding", dev
         self.docks[dev].hide()
         items = self.ui.sequenceParamList.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0)
         for i in items:
             i.setHidden(True)
         
     def showDock(self, dev):
-        #print "showing", dev
         self.docks[dev].show()
         items = self.ui.sequenceParamList.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0)
         for i in items:
             i.setHidden(False)
         
     def updateDocks(self, protocol = None):
+        """Create/unhide new docks if they are needed and hide old docks if they are not."""
         if protocol is None:
             protocol = self.currentProtocol
         #print "update docks", protocol.name
@@ -274,6 +279,7 @@ class ProtocolRunner(Module, QtCore.QObject):
                 self.updateSeqParams(d)
         
     def deviceItemClicked(self, item):
+        """Respond to clicks in the device list. Add/remove devices from the current protocol and update docks."""
         if item.checkState() == QtCore.Qt.Unchecked:
             self.currentProtocol.removeDevice(str(item.text()))
         else:
@@ -294,12 +300,12 @@ class ProtocolRunner(Module, QtCore.QObject):
         ## Clear sequence list
         self.ui.sequenceList.clearItems()
         
-    def protParamsChanged(self):
-        self.currentProtocol.conf = self.protoStateGroup.state()
-        #self.currentProtocol.conf['duration'] = self.ui.protoDurationSpin.value()
-        #self.currentProtocol.conf['continuous'] = self.ui.protoContinuousCheck.isChecked()
-        #self.currentProtocol.conf['cycleTime'] = self.ui.seqCycleTimeSpin.value()
-        #self.currentIsModified(True)
+    #def protParamsChanged(self):
+        #self.currentProtocol.conf = self.protoStateGroup.state()
+        ##self.currentProtocol.conf['duration'] = self.ui.protoDurationSpin.value()
+        ##self.currentProtocol.conf['continuous'] = self.ui.protoContinuousCheck.isChecked()
+        ##self.currentProtocol.conf['cycleTime'] = self.ui.seqCycleTimeSpin.value()
+        ##self.currentIsModified(True)
         
     #def currentIsModified(self, v):
         ### Inform the module whether the current protocol is modified from its stored state
@@ -312,7 +318,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.clearDocks()
         
         ## Create new empty protocol object
-        self.currentProtocol = Protocol()
+        self.currentProtocol = Protocol(self)
         
         self.protoStateGroup.setState({
             'continuous': False,
@@ -323,12 +329,12 @@ class ProtocolRunner(Module, QtCore.QObject):
             'cycleTime': 0.0
         })
         
-        self.currentProtocol.conf = self.protoStateGroup.state()
+        #self.currentProtocol.conf = self.protoStateGroup.state()
         
         ## Clear extra devices in dev list
         self.updateDeviceList()
         
-        self.updateProtParams()
+        #self.updateProtParams()
         
         ## Clear sequence parameters, disable sequence dock
         
@@ -337,20 +343,21 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.ui.saveProtocolBtn.setEnabled(False)
         #self.currentIsModified(False)
     
-    def updateProtParams(self, prot=None):
-        if prot is None:
-            prot = self.currentProtocol
+    #def updateProtParams(self, prot=None):
+        #if prot is None:
+            #prot = self.currentProtocol
             
-        self.protoStateGroup.setState(prot.conf)
-        #self.ui.protoDurationSpin.setValue(prot.conf['duration'])
-        #if 'cycleTime' in prot.conf:
-            #self.ui.seqCycleTimeSpin.setValue(prot.conf['cycleTime'])
-        #if prot.conf['continuous']:
-            #self.ui.protoContinuousCheck.setCheckState(QtCore.Qt.Checked)
-        #else:
-            #self.ui.protoContinuousCheck.setCheckState(QtCore.Qt.Unchecked)
+        #self.protoStateGroup.setState(prot.conf)
+        ##self.ui.protoDurationSpin.setValue(prot.conf['duration'])
+        ##if 'cycleTime' in prot.conf:
+            ##self.ui.seqCycleTimeSpin.setValue(prot.conf['cycleTime'])
+        ##if prot.conf['continuous']:
+            ##self.ui.protoContinuousCheck.setCheckState(QtCore.Qt.Checked)
+        ##else:
+            ##self.ui.protoContinuousCheck.setCheckState(QtCore.Qt.Unchecked)
     
     def getSelectedFileName(self):
+        """Return the file name of the selected protocol"""
         sel = list(self.ui.protocolList.selectedIndexes())
         if len(sel) == 1:
             index = sel[0]
@@ -369,26 +376,28 @@ class ProtocolRunner(Module, QtCore.QObject):
             
         fn = self.protocolList.getFileName(index)
         
-        ## Create protocol object from requested file
-        prot = Protocol(fileName=fn)
-        
         ## Remove all docks
         self.clearDocks()
+        
+        ## Create protocol object from requested file
+        prot = Protocol(self, fileName=fn)
+        ## Set current protocol
+        self.currentProtocol = prot
+        
         #print "Docks cleared."
         
         ## Update protocol parameters
-        self.updateProtParams(prot)
+        self.protoStateGroup.setState(prot.conf)
+        #self.updateProtParams(prot)
         
         ## update dev list
-        self.updateDeviceList(prot)
+        self.updateDeviceList()
         
         ## Update sequence parameters, dis/enable sequence dock
         
         ## Create new docks
-        self.updateDocks(prot)
+        self.updateDocks()
         
-        ## Set current protocol
-        self.currentProtocol = prot
         
         ## Configure docks
         for d in prot.devices:
@@ -397,8 +406,9 @@ class ProtocolRunner(Module, QtCore.QObject):
             
         
         ## Configure dock positions
-        if 'winState' in prot.conf:
-            self.win.restoreState(QtCore.QByteArray.fromPercentEncoding(prot.conf['winState']))
+        winState = prot.windowState()
+        if winState is not None:
+            self.win.restoreState(winState)
             
         pn = fn.replace(self.protocolList.baseDir, '')
         self.ui.currentProtocolLabel.setText(pn)
@@ -406,21 +416,8 @@ class ProtocolRunner(Module, QtCore.QObject):
         #self.currentIsModified(False)
     
     def saveProtocol(self, fileName=None):
-        self.currentProtocol.conf = self.protoStateGroup.state()
-        
-        ## store window state
-        ws = str(self.win.saveState().toPercentEncoding())
-        self.currentProtocol.conf['winState'] = ws
-        
-        ## store individual dock states
-        for d in self.docks:
-            if self.currentProtocol.deviceEnabled(d):
-                self.currentProtocol.devices[d] = self.docks[d].widget().saveState()
-        
-        
         ## Write protocol config to file
         self.currentProtocol.write(fileName)
-        #self.currentIsModified(False)
         
         ## refresh protocol list
         self.protocolList.clearCache()
@@ -553,7 +550,8 @@ class ProtocolRunner(Module, QtCore.QObject):
                 self.docks[d].widget().handleResult(frame['result'][d], dataManager)
     
 class Protocol:
-    def __init__(self, fileName=None):
+    def __init__(self, ui, fileName=None):
+        self.ui = ui
         
         if fileName is not None:
             self.name = os.path.split(fileName)[1]
@@ -561,6 +559,7 @@ class Protocol:
             conf = readConfigFile(fileName)
             self.conf = conf['conf']
             self.devices = conf['devices']
+            self.winState = conf['winState']
             self.enabled = self.devices.keys()
         else:
             self.fileName = None
@@ -574,6 +573,7 @@ class Protocol:
             self.enabled = []
             self.conf = {}
             self.devices = {}
+            self.winState = None
         
     def generateProtocol(self, **args):
         """Generate the configuration data that will execute this protocol"""
@@ -584,7 +584,22 @@ class Protocol:
         return dev in self.enabled
         
         
+    def updateFromUi(self):
+        self.conf = self.ui.protoStateGroup.state()
+        
+        ## store window state
+        ws = str(self.ui.win.saveState().toPercentEncoding())
+        self.winState = ws
+        
+        ## store individual dock states
+        for d in self.ui.docks:
+            if self.deviceEnabled(d):
+                self.devices[d] = self.ui.docks[d].widget().saveState()
+        
+        
     def write(self, fileName=None):
+        self.updateFromUi()
+        
         conf = self.conf.copy()
         devs = self.devices.copy()
         
@@ -598,7 +613,7 @@ class Protocol:
                 raise Exception("Can not write protocol--no file name specified")
             fileName = self.fileName
         self.fileName = fileName
-        writeConfigFile({'conf': conf, 'devices': devs}, fileName)
+        writeConfigFile({'conf': conf, 'devices': devs, 'winState': self.winState}, fileName)
     
     def enabledDevices(self):
         return self.enabled[:]
@@ -625,6 +640,12 @@ class Protocol:
             if newName in self.enabled:
                 self.enabled.remove(newName)
             
+    def windowState(self):
+        if self.winState is None:
+            return None
+        return QtCore.QByteArray.fromPercentEncoding(self.winState)        
+        
+        
 class TaskThread(QtCore.QThread):
     def __init__(self, ui):
         QtCore.QThread.__init__(self)
@@ -695,7 +716,7 @@ class TaskThread(QtCore.QThread):
         
         result = task.getResult()
         frame = {'params': params, 'cmd': cmd, 'result': result}
-        self.emit(QtCore.SIGNAL('newFrame(PyQt_PyObject)'), frame)
+        self.emit(QtCore.SIGNAL('newFrame'), frame)
         return result
                     
     def stop(self, block=False):
