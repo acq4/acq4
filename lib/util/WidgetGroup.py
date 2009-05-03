@@ -29,6 +29,7 @@ class WidgetGroup(QtCore.QObject):
         for w, n in self.widgetList:
             if n not in s:
                 continue
+            #print w, n, s[n]
             if type(w) is QtGui.QDoubleSpinBox:
                 w.setValue(s[n])
             elif type(w) is QtGui.QCheckBox:

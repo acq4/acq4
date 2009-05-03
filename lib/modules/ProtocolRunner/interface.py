@@ -406,6 +406,8 @@ class ProtocolRunner(Module, QtCore.QObject):
         #self.currentIsModified(False)
     
     def saveProtocol(self, fileName=None):
+        self.currentProtocol.conf = self.protoStateGroup.state()
+        
         ## store window state
         ws = str(self.win.saveState().toPercentEncoding())
         self.currentProtocol.conf['winState'] = ws
@@ -414,6 +416,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         for d in self.docks:
             if self.currentProtocol.deviceEnabled(d):
                 self.currentProtocol.devices[d] = self.docks[d].widget().saveState()
+        
         
         ## Write protocol config to file
         self.currentProtocol.write(fileName)
@@ -495,9 +498,9 @@ class ProtocolRunner(Module, QtCore.QObject):
             #'name': self.currentProtocol.fileName,
             #'cycleTime': self.currentProtocol.conf['cycleTime'], 
         #}}
-        prot = self.protoStateGroup.state()
-        prot['storeData'] = store
-        prot['name'] = self.currentProtocol.fileName
+        prot = {'protocol': self.protoStateGroup.state()}
+        prot['protocol']['storeData'] = store
+        prot['protocol']['name'] = self.currentProtocol.fileName
         
         for d in self.currentProtocol.devices:
             if self.currentProtocol.deviceEnabled(d):
@@ -556,12 +559,12 @@ class Protocol:
             self.name = os.path.split(fileName)[1]
             self.fileName = fileName
             conf = readConfigFile(fileName)
-            self.conf = conf['protocol']
+            self.conf = conf['conf']
             self.devices = conf['devices']
             self.enabled = self.devices.keys()
         else:
-            #self.fileName = None
-            #self.name = None
+            self.fileName = None
+            self.name = None
             #self.conf = {
                 #'devices': {}, 
                 #'duration': 0.2, 
@@ -583,7 +586,7 @@ class Protocol:
         
     def write(self, fileName=None):
         conf = self.conf.copy()
-        devs = delf.devices.copy()
+        devs = self.devices.copy()
         
         ## Remove unused devices before writing
         rem = [d for d in devs if not self.deviceEnabled(d)]
