@@ -265,7 +265,7 @@ class Task(DeviceTask):
           # print l.shape
         cols = [(result[x]['name'], result[x]['units']) for x in result]
         # print cols
-        print [a.shape for a in chanList]
+        #print [a.shape for a in chanList]
         arr = concatenate(chanList)
         info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [self.state]
         marr = MetaArray(arr, info=info)

@@ -17,6 +17,8 @@ class WidgetGroup(QtCore.QObject):
                 QtCore.QObject.connect(w, QtCore.SIGNAL('valueChanged(int)'), self.mkChangeCallback(w))
             elif type(w) is QtGui.QCheckBox:
                 QtCore.QObject.connect(w, QtCore.SIGNAL('stateChanged(int)'), self.mkChangeCallback(w))
+            elif type(w) is QtGui.QSplitter:
+                QtCore.QObject.connect(w, QtCore.SIGNAL('splitterMoved(int,int)'), self.mkChangeCallback(w))
             else:
                 raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
         
@@ -46,6 +48,8 @@ class WidgetGroup(QtCore.QObject):
             val = w.value()
         elif type(w) is QtGui.QCheckBox:
             val = w.isChecked()
+        elif type(w) is QtGui.QSplitter:
+            val = str(w.saveState().toPercentEncoding())
         else:
             raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
         n = self.widgetList[w]
@@ -57,6 +61,8 @@ class WidgetGroup(QtCore.QObject):
             w.setValue(v)
         elif type(w) is QtGui.QCheckBox:
             w.setChecked(v)
+        elif type(w) is QtGui.QSplitter:
+            w.restoreState(QtCore.QByteArray.fromPercentEncoding(v))
         else:
             raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
         #self.readWidget(w)  ## should happen automatically

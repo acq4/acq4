@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Sun May  3 17:38:08 2009
+# Created: Sun May  3 20:48:58 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -190,7 +190,7 @@ QMainWindow::separator {background-color: #666}""")
         self.sequenceParamList = QtGui.QTreeWidget(self.dockWidgetContents_7)
         self.sequenceParamList.setDragEnabled(True)
         self.sequenceParamList.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
-        self.sequenceParamList.setRootIsDecorated(True)
+        self.sequenceParamList.setRootIsDecorated(False)
         self.sequenceParamList.setObjectName("sequenceParamList")
         self.gridLayout_2.addWidget(self.sequenceParamList, 1, 0, 1, 1)
         self.horizontalLayout_3 = QtGui.QHBoxLayout()

@@ -63,8 +63,9 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.win.show()
         
     def protoGroupChanged(self, param, value):
-        #print "protoChanged", param, value
         self.emit(QtCore.SIGNAL('protocolChanged'), param, value)
+        if param in ['duration', 'cycleTime', 'leadTime']:
+            self.updateSeqReport()
         
     def getDevice(self, dev):
         """Return the protocolGui for dev. Used by some devices to detect changes in others."""
@@ -225,7 +226,24 @@ class ProtocolRunner(Module, QtCore.QObject):
                     p.removeChild(item)
                     for c in childs:
                         p.addChild(c)
-                        
+        
+        self.updateSeqReport()
+        
+    def updateSeqReport(self):
+        s = self.protoStateGroup.state()
+        period = max(s['duration']+s['leadTime'], s['cycleTime'])
+        items = []
+        for i in range(self.ui.sequenceParamList.topLevelItemCount()):
+            items.append(self.ui.sequenceParamList.topLevelItem(i))
+        if len(items) == 0:
+            self.ui.paramSpaceLabel.setText('0')
+            self.ui.seqTimeLabel.setText('0')
+        else:
+            ps = [str(i.text(2)) for i in items]
+            psi = [int(i) for i in ps]
+            tot = reduce(lambda x,y: x*y, psi)
+            self.ui.paramSpaceLabel.setText(' x '.join(ps) + ' = %d' % tot)
+            self.ui.seqTimeLabel.setText('%0.3f sec' % (period*tot))
         
     def hideDock(self, dev):
         self.docks[dev].hide()
@@ -481,7 +499,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         ## Generate executable conf from protocol object
         prot = self.generateProtocol(store)
         
-        self.emit(QtCore.SIGNAL('protocolStarted()'))
+        self.emit(QtCore.SIGNAL('protocolStarted'), {})
         self.taskThread.startProtocol(prot)
         
    
@@ -525,7 +543,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         ## Generate the complete array of command structures
         prot = runSequence(lambda p: self.generateProtocol(store, p), params, params.keys(), passHash=True)
         
-        self.emit(QtCore.SIGNAL('protocolStarted()'))
+        self.emit(QtCore.SIGNAL('protocolStarted'), {})
         self.taskThread.startProtocol(prot, params)
         
     
@@ -681,7 +699,8 @@ class TaskThread(QtCore.QThread):
         #finally:
             #self.emit(QtCore.SIGNAL("protocolFinished()"))
                     
-    def runOnce(self, params=None):
+    def runOnce(self, params={}):
+        
         ## Select correct command to execute
         cmd = self.protocol
         if params is not None:
@@ -697,6 +716,7 @@ class TaskThread(QtCore.QThread):
         #print cmd
         task = self.dm.createTask(cmd)
         self.lastRunTime = time.clock()
+        self.emit(QtCore.SIGNAL('protocolStarted'), params)
         task.execute()
             
         ## wait for finish, watch for abort requests

@@ -13,17 +13,16 @@ class PVCamProto(ProtocolGui):
             (self.ui.recordCheck, 'record'),
             (self.ui.triggerCheck, 'trigger'),
             (self.ui.displayCheck, 'display'),
-            (self.ui.recordExposeCheck, 'recordExposeChannel')
+            (self.ui.recordExposeCheck, 'recordExposeChannel'),
+            (self.ui.splitter, 'splitter')
         ])
 
     def saveState(self):
         s = self.currentState()
-        s['splitter'] = str(self.ui.splitter.saveState().toPercentEncoding())
         return s
         
     def restoreState(self, state):
         self.stateGroup.setState(state)
-        self.ui.splitter.restoreState(QtCore.QByteArray.fromPercentEncoding(state['splitter']))
         
         
     def generateProtocol(self, params={}):
@@ -34,4 +33,5 @@ class PVCamProto(ProtocolGui):
         
     def handleResult(self, result, dataManager):
         #print result
-        self.ui.imageView.setImage(result['frames'])
+        if self.stateGroup.state()['display']:
+            self.ui.imageView.setImage(result['frames'])

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Tue Apr 28 14:26:49 2009
+# Created: Sun May  3 23:23:02 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -15,6 +15,8 @@ class Ui_Form(object):
         Form.resize(809, 377)
         Form.setAutoFillBackground(True)
         self.horizontalLayout = QtGui.QHBoxLayout(Form)
+        self.horizontalLayout.setSpacing(0)
+        self.horizontalLayout.setMargin(0)
         self.horizontalLayout.setObjectName("horizontalLayout")
         self.splitter_2 = QtGui.QSplitter(Form)
         self.splitter_2.setOrientation(QtCore.Qt.Horizontal)
@@ -93,7 +95,7 @@ class Ui_Form(object):
         self.gridLayout_2.addLayout(self.horizontalLayout_7, 2, 1, 1, 1)
         self.verticalLayout_2.addLayout(self.gridLayout_2)
         self.frame = QtGui.QFrame(self.layoutWidget)
-        self.frame.setFrameShape(QtGui.QFrame.StyledPanel)
+        self.frame.setFrameShape(QtGui.QFrame.Box)
         self.frame.setFrameShadow(QtGui.QFrame.Raised)
         self.frame.setObjectName("frame")
         self.verticalLayout = QtGui.QVBoxLayout(self.frame)
@@ -114,15 +116,6 @@ class Ui_Form(object):
         self.waveGeneratorWidget.setSizePolicy(sizePolicy)
         self.waveGeneratorWidget.setObjectName("waveGeneratorWidget")
         self.verticalLayout.addWidget(self.waveGeneratorWidget)
-        self.horizontalLayout_3 = QtGui.QHBoxLayout()
-        self.horizontalLayout_3.setObjectName("horizontalLayout_3")
-        self.autoUpdateCheck = QtGui.QCheckBox(self.frame)
-        self.autoUpdateCheck.setObjectName("autoUpdateCheck")
-        self.horizontalLayout_3.addWidget(self.autoUpdateCheck)
-        self.updateBtn = QtGui.QPushButton(self.frame)
-        self.updateBtn.setObjectName("updateBtn")
-        self.horizontalLayout_3.addWidget(self.updateBtn)
-        self.verticalLayout.addLayout(self.horizontalLayout_3)
         self.verticalLayout_2.addWidget(self.frame)
         self.splitter = QtGui.QSplitter(self.splitter_2)
         self.splitter.setOrientation(QtCore.Qt.Vertical)
@@ -151,16 +144,14 @@ class Ui_Form(object):
         self.icModeRadio.setText(QtGui.QApplication.translate("Form", "IC", None, QtGui.QApplication.UnicodeUTF8))
         self.i0ModeRadio.setText(QtGui.QApplication.translate("Form", "I=0", None, QtGui.QApplication.UnicodeUTF8))
         self.vcModeRadio.setText(QtGui.QApplication.translate("Form", "VC", None, QtGui.QApplication.UnicodeUTF8))
-        self.holdingCheck.setText(QtGui.QApplication.translate("Form", "Holding (mV)", None, QtGui.QApplication.UnicodeUTF8))
+        self.holdingCheck.setText(QtGui.QApplication.translate("Form", "Holding (pA)", None, QtGui.QApplication.UnicodeUTF8))
         self.scaledSignalCheck.setText(QtGui.QApplication.translate("Form", "Scaled Signal:", None, QtGui.QApplication.UnicodeUTF8))
         self.scaledSignalCombo.setItemText(0, QtGui.QApplication.translate("Form", "MembranePotential", None, QtGui.QApplication.UnicodeUTF8))
         self.rawSignalCheck.setText(QtGui.QApplication.translate("Form", "Raw Signal:", None, QtGui.QApplication.UnicodeUTF8))
         self.rawSignalCombo.setItemText(0, QtGui.QApplication.translate("Form", "MembraneCurrent", None, QtGui.QApplication.UnicodeUTF8))
         self.setScaledGainCheck.setText(QtGui.QApplication.translate("Form", "Set Gain", None, QtGui.QApplication.UnicodeUTF8))
         self.setRawGainCheck.setText(QtGui.QApplication.translate("Form", "Set Gain", None, QtGui.QApplication.UnicodeUTF8))
-        self.waveGeneratorLabel.setText(QtGui.QApplication.translate("Form", "Function (values in mV)", None, QtGui.QApplication.UnicodeUTF8))
-        self.autoUpdateCheck.setText(QtGui.QApplication.translate("Form", "Auto Update", None, QtGui.QApplication.UnicodeUTF8))
-        self.updateBtn.setText(QtGui.QApplication.translate("Form", "Update", None, QtGui.QApplication.UnicodeUTF8))
+        self.waveGeneratorLabel.setText(QtGui.QApplication.translate("Form", "Function (values in pA)", None, QtGui.QApplication.UnicodeUTF8))
 
 from lib.util.generator.StimGenerator import StimGenerator
 from PyQt4.Qwt5 import QwtPlot

@@ -21,6 +21,7 @@ from numpy import *
 from PyQt4 import Qt, QtCore, QtGui
 from lib.util.advancedTypes import OrderedDict
 from lib.util.functions import logSpace
+from GeneratorTemplate import *
 import waveforms
 
 #import PyQt4.Qwt5 as Qwt
@@ -37,44 +38,88 @@ class StimGenerator(QtGui.QWidget):
         """ PyStim.__init__ defines standard variables, and initialzes the GUI interface
         """
         QtGui.QWidget.__init__(self, parent)
-        self.layout = QtGui.QVBoxLayout(self)
-        self.functionText = QtGui.QPlainTextEdit(self)
-        self.sequenceText = QtGui.QPlainTextEdit(self)
-        font = QtGui.QFont()
-        font.setFixedPitch(True)
-        self.functionText.setFont(font)
-        self.sequenceText.setFont(font)
-        self.layout.addWidget(self.functionText)
-        self.layout.addWidget(self.sequenceText)
-        
+        self.ui = Ui_Form()
+        self.ui.setupUi(self)
+        self.ui.functionText.setFontFamily('Courier')
+        self.ui.paramText.setFontFamily('Courier')
+        self.ui.errorText.setVisible(False)
         self.cacheOk = False
-        QtCore.QObject.connect(self.functionText, QtCore.SIGNAL('textChanged()'), self.funcChanged)
-        QtCore.QObject.connect(self.sequenceText, QtCore.SIGNAL('textChanged()'), self.seqChanged)
+        QtCore.QObject.connect(self.ui.functionText, QtCore.SIGNAL('textChanged()'), self.funcChanged)
+        QtCore.QObject.connect(self.ui.paramText, QtCore.SIGNAL('textChanged()'), self.paramChanged)
+        QtCore.QObject.connect(self.ui.updateBtn, QtCore.SIGNAL('clicked()'), self.update)
+        QtCore.QObject.connect(self.ui.autoUpdateCheck, QtCore.SIGNAL('clicked()'), self.autoUpdate)
+        QtCore.QObject.connect(self.ui.errorBtn, QtCore.SIGNAL('clicked()'), self.errorBtnClicked)
+        QtCore.QObject.connect(self.ui.helpBtn, QtCore.SIGNAL('clicked()'), self.helpBtnClicked)
+
+    def update(self):
+        if (self.testFunction() and self.testParameters()):
+            self.emit(QtCore.SIGNAL('changed'))
         
+    def autoUpdate(self):
+        if self.ui.autoUpdateCheck.isChecked():
+            self.update()
+        
+    def errorBtnClicked(self):
+        self.ui.errorText.setVisible(self.ui.errorBtn.isChecked())
+        
+    def helpBtnClicked(self):
+        if self.ui.helpBtn.isChecked():
+            self.ui.stack.setCurrentIndex(1)
+        else:
+            self.ui.stack.setCurrentIndex(0)
+
     def funcChanged(self):
-        self.emit(QtCore.SIGNAL('functionChanged()'))
+        # test function. If ok, auto-update
+        if self.testFunction():
+            self.autoUpdate()
+            #self.emit(QtCore.SIGNAL('functionChanged'))
         
         
-    def seqChanged(self):
+    def paramChanged(self):
+        # test params. If ok, auto-update
         self.cacheOk = False
-        self.emit(QtCore.SIGNAL('sequenceChanged()'))
+        if self.testParameters():
+            self.autoUpdate()
+        #self.emit(QtCore.SIGNAL('parametersChanged'))
         
     def functionString(self):
-        return str(self.functionText.toPlainText())
+        return str(self.ui.functionText.toPlainText())
         
-    def sequenceString(self):
-        return str(self.sequenceText.toPlainText())
+    def paramString(self):
+        return str(self.ui.paramText.toPlainText())
+    
+    
+    
+    def testFunction(self):
+        if not self.testParameters():
+            return False
+        try:
+            self.getSingle(1, 1)
+            self.setError()
+            return True
+        except:
+            self.setError("Error parsing function:\n" + str(sys.exc_info()[1]))
+            return False
+    
+    def testParameters(self):
+        try:
+            self.paramSpace()
+            self.setError()
+            return True
+        except:
+            self.setError("Error parsing parameters:\n" + str(sys.exc_info()[1]))
+            return False
     
     def saveState(self):
         """ Return a dict structure with the state of the widget """
-        return ({'waveform': self.functionString(), 'sequence': self.sequenceString()})
+        return ({'function': self.functionString(), 'params': self.paramString()})
     
     def loadState(self, state):
         """set the parameters with the new state"""
-        if 'waveform' in state:
-            self.functionText.setPlainText(state['waveform'])
-        if 'sequence' in state:
-            self.sequenceText.setPlainText(state['sequence'])            
+        if 'function' in state:
+            self.ui.functionText.setPlainText(state['function'])
+        if 'params' in state:
+            self.ui.paramText.setPlainText(state['params'])            
     
     def listSequences(self):
         """ return an ordered dict of the sequence parameter names and lengths in the same order as that
@@ -92,6 +137,15 @@ class StimGenerator(QtGui.QWidget):
         shape = tuple(l.values())
         ar = ones(shape)
         return argwhere(ar)
+        
+    def setError(self, msg=None):
+        if msg is None:
+            self.ui.errorText.setText('')
+            self.ui.errorBtn.setStyleSheet('')
+        else:
+            self.ui.errorText.setText(msg)
+            self.ui.errorBtn.setStyleSheet('QToolButton {border: 2px solid #F00; border-radius: 3px}')
+            
         
     def getSingle(self, rate, nPts, params={}):
         if not re.search(r'\w', self.functionString()):
@@ -114,7 +168,10 @@ class StimGenerator(QtGui.QWidget):
                 ns[k] = float(seq[k][0])
                 
         ## evaluate and return
-        return eval(self.functionString(), globals(), ns)
+        (ret, msg) = eval(self.functionString(), globals(), ns)
+        if msg is not None:
+            self.setError(msg)
+        return ret
         
     def makeWaveFunction(self, name, arg):
         ## Creates a copy of a wave function (such as steps or pulses) with the first parameter filled in
@@ -132,7 +189,7 @@ class StimGenerator(QtGui.QWidget):
         ## }
         
         if not self.cacheOk:
-            self.pSpace = seqListParse(self.sequenceString()) # get the sequence(s) and the targets
+            self.pSpace = seqListParse(self.paramString()) # get the sequence(s) and the targets
             self.cacheOk = True
         return self.pSpace
 
@@ -150,7 +207,7 @@ def seqParse(seqStr):
     seqStr = re.sub(r'\s', '', seqStr)
     
     ## Match like this: "varName=singleValue;sequenceString"
-    m = re.match(r'(\w+)=([\deE\-\.]+)(;(.*))?', seqStr)
+    m = re.match(r'(\w+)=([\deE\-\.]+)(;$|;(.*))?', seqStr)
     if m is None:
         raise Exception("Syntax error in variable definition '%s'" % seqStr)
     (name, single, junk, seqStr) = m.groups()

@@ -454,7 +454,7 @@ in loop mode.</string>
         <enum>QAbstractItemView::InternalMove</enum>
        </property>
        <property name="rootIsDecorated">
-        <bool>true</bool>
+        <bool>false</bool>
        </property>
        <attribute name="headerDefaultSectionSize">
         <number>50</number>
