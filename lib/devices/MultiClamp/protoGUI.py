@@ -88,7 +88,10 @@ class MultiClampProtoGui(ProtocolGui):
             self.stateGroup.setState(state)
         except:
             sys.excepthook(*sys.exc_info())
-        self.updateWaves()
+        self.ui.waveGeneratorWidget.update()
+        #try:
+            #self.updateWaves()
+        
         
     #def waveFuncChanged(self):
         #if not self.ui.autoUpdateCheck.isChecked():

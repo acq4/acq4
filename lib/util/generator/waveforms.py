@@ -7,9 +7,11 @@ import numpy
 ## These should be very robust with good error reporting since end users will be using them.
 
 
-def pulses(params, times, widths, values, base=0.0):
+def pulse(params, times, widths, values, base=0.0):
     nPts = params['nPts']
     rate = params['rate']
+    if type(times) in [float, int]:
+        times = [times]
     if type(times) not in [list, tuple]:
         raise Exception('times argument must be a list')
     if type(widths) not in [list, tuple]:

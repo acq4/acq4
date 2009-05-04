@@ -52,7 +52,7 @@ class StimGenerator(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.helpBtn, QtCore.SIGNAL('clicked()'), self.helpBtnClicked)
 
     def update(self):
-        if (self.testFunction() and self.testParameters()):
+        if self.test():
             self.emit(QtCore.SIGNAL('changed'))
         
     def autoUpdate(self):
@@ -70,7 +70,7 @@ class StimGenerator(QtGui.QWidget):
 
     def funcChanged(self):
         # test function. If ok, auto-update
-        if self.testFunction():
+        if self.test():
             self.autoUpdate()
             #self.emit(QtCore.SIGNAL('functionChanged'))
         
@@ -78,7 +78,7 @@ class StimGenerator(QtGui.QWidget):
     def paramChanged(self):
         # test params. If ok, auto-update
         self.cacheOk = False
-        if self.testParameters():
+        if self.test():
             self.autoUpdate()
         #self.emit(QtCore.SIGNAL('parametersChanged'))
         
@@ -90,8 +90,12 @@ class StimGenerator(QtGui.QWidget):
     
     
     
-    def testFunction(self):
-        if not self.testParameters():
+    def test(self):
+        try:
+            self.paramSpace()
+            self.setError()
+        except:
+            self.setError("Error parsing parameters:\n" + str(sys.exc_info()[1]))
             return False
         try:
             self.getSingle(1, 1)
@@ -99,15 +103,6 @@ class StimGenerator(QtGui.QWidget):
             return True
         except:
             self.setError("Error parsing function:\n" + str(sys.exc_info()[1]))
-            return False
-    
-    def testParameters(self):
-        try:
-            self.paramSpace()
-            self.setError()
-            return True
-        except:
-            self.setError("Error parsing parameters:\n" + str(sys.exc_info()[1]))
             return False
     
     def saveState(self):
@@ -168,10 +163,13 @@ class StimGenerator(QtGui.QWidget):
                 ns[k] = float(seq[k][0])
                 
         ## evaluate and return
-        ret = eval(self.functionString(), globals(), ns)
+        fn = self.functionString().replace('\n', '')
+        ret = eval(fn, globals(), ns)
         
         if 'message' in arg:
             self.setError(arg['message'])
+        else:
+            self.setError()
         return ret
         
     def makeWaveFunction(self, name, arg):
