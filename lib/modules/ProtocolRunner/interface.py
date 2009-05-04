@@ -597,7 +597,14 @@ class ProtocolRunner(Module, QtCore.QObject):
         if self.loopEnabled:
             ct = self.protoStateGroup.state()['loopCycleTime']
             t = max(0, ct - (time.clock() - self.lastProtoTime))
-            QtCore.QTimer.singleShot(int(t*1000.), self.testSingle)
+            QtCore.QTimer.singleShot(int(t*1000.), self.loop)
+            
+    def loop(self):
+        """Run one iteration when in loop mode"""
+        if not self.loopEnabled:
+            self.enableStartBtns(True)
+            return
+        self.testSingle()
             
     
 class Protocol:
