@@ -13,8 +13,10 @@ class ProtocolRunner(Module, QtCore.QObject):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         QtCore.QObject.__init__(self)
-        
+        self.lastProtoTime = None
+        self.loopEnabled = False
         self.devListItems = {}
+        
         #self.seqListItems = OrderedDict()  ## Looks like {(device, param): listItem, ...}
         self.docks = {}
         self.deleteState = 0
@@ -30,7 +32,6 @@ class ProtocolRunner(Module, QtCore.QObject):
             (self.ui.protoCycleTimeSpin, 'loopCycleTime'),
             (self.ui.seqCycleTimeSpin, 'cycleTime'),
         ])
-        
         self.protocolList = DirTreeModel(self.config['globalDir'])
         self.ui.protocolList.setModel(self.protocolList)
         
@@ -47,10 +48,12 @@ class ProtocolRunner(Module, QtCore.QObject):
         QtCore.QObject.connect(self.ui.loadProtocolBtn, QtCore.SIGNAL('clicked()'), self.loadProtocol)
         QtCore.QObject.connect(self.ui.saveAsProtocolBtn, QtCore.SIGNAL('clicked()'), self.saveProtocolAs)
         QtCore.QObject.connect(self.ui.deleteProtocolBtn, QtCore.SIGNAL('clicked()'), self.deleteProtocol)
-        QtCore.QObject.connect(self.ui.testSingleBtn, QtCore.SIGNAL('clicked()'), self.testSingle)
-        QtCore.QObject.connect(self.ui.runProtocolBtn, QtCore.SIGNAL('clicked()'), self.runSingle)
+        QtCore.QObject.connect(self.ui.testSingleBtn, QtCore.SIGNAL('clicked()'), self.testSingleClicked)
+        QtCore.QObject.connect(self.ui.runProtocolBtn, QtCore.SIGNAL('clicked()'), self.runSingleClicked)
         QtCore.QObject.connect(self.ui.testSequenceBtn, QtCore.SIGNAL('clicked()'), self.testSequence)
         QtCore.QObject.connect(self.ui.runSequenceBtn, QtCore.SIGNAL('clicked()'), self.runSequence)
+        QtCore.QObject.connect(self.ui.stopSingleBtn, QtCore.SIGNAL('clicked()'), self.stopSingle)
+        QtCore.QObject.connect(self.ui.stopSequenceBtn, QtCore.SIGNAL('clicked()'), self.stopSequence)
         QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.deviceItemClicked)
         #QtCore.QObject.connect(self.ui.protoDurationSpin, QtCore.SIGNAL('editingFinished()'), self.protParamsChanged)
         QtCore.QObject.connect(self.ui.protocolList, QtCore.SIGNAL('doubleClicked(const QModelIndex &)'), self.loadProtocol)
@@ -488,11 +491,22 @@ class ProtocolRunner(Module, QtCore.QObject):
     def resetDeleteState(self):
         self.deleteState = 0
         self.ui.deleteProtocolBtn.setText('Delete')
-    
+
+    def testSingleClicked(self):
+        self.runSingleClicked(store=False)
+
+    def runSingleClicked(self, store=True):
+        if self.protoStateGroup.state()['loop']:
+            self.loopEnabled = True
+        self.runSingle(store)
+        
+
     def testSingle(self):
         self.runSingle(store=False)
     
     def runSingle(self, store=True):
+        self.lastProtoTime = time.clock()
+        
         ## Disable all start buttons
         self.enableStartBtns(False)
         
@@ -530,6 +544,9 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.runSequence(store=False)
        
     def runSequence(self, store=True):
+        ## Disable all start buttons
+        self.enableStartBtns(False)
+        
         ## Find all top-level items in the sequence parameter list
         items = []
         for i in range(self.ui.sequenceParamList.topLevelItemCount()):
@@ -553,7 +570,16 @@ class ProtocolRunner(Module, QtCore.QObject):
             b.setEnabled(v)
             
     def taskThreadStopped(self):
-        self.enableStartBtns(True)
+        if not self.loopEnabled:
+            self.enableStartBtns(True)
+    
+    def stopSingle(self):
+        self.loopEnabled = False
+        self.taskThread.abort()
+        
+    def stopSequence(self):
+        self.loopEnabled = False
+        self.taskThread.stop()
     
     def handleFrame(self, frame):
         dataManager = None
@@ -566,6 +592,13 @@ class ProtocolRunner(Module, QtCore.QObject):
         for d in frame['result']:
             if d != 'protocol':
                 self.docks[d].widget().handleResult(frame['result'][d], dataManager)
+                
+        ## If this is a single-mode protocol and looping is turned on, schedule the next run
+        if self.loopEnabled:
+            ct = self.protoStateGroup.state()['loopCycleTime']
+            t = max(0, ct - (time.clock() - self.lastProtoTime))
+            QtCore.QTimer.singleShot(int(t*1000.), self.testSingle)
+            
     
 class Protocol:
     def __init__(self, ui, fileName=None):
@@ -671,6 +704,7 @@ class TaskThread(QtCore.QThread):
         self.dm = self.ui.manager
         self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
         self.stopThread = True
+        self.abortThread = False
                 
     def startProtocol(self, protocol, paramSpace=None):
         l = QtCore.QMutexLocker(self.lock)
@@ -686,11 +720,19 @@ class TaskThread(QtCore.QThread):
         try:
             l = QtCore.QMutexLocker(self.lock)
             self.stopThread = False
+            self.abortThread = False
             l.unlock()
             
             if self.paramSpace is None:
-                result = self.runOnce()
+                try:
+                    result = self.runOnce()
+                except Exception, e:
+                    if e.args[0] != 'stop':
+                        raise
             else:
+                #runner = SequenceRunner(self.paramSpace, self.paramSpace.keys(), passHash=True)
+                #runner.setEndFuncs([]*len(self.paramSpace) + [self.checkStop])
+                #result = runner.start(self.runOnce)
                 result = runSequence(self.runOnce, self.paramSpace, self.paramSpace.keys(), passHash=True)
             
         except:
@@ -700,6 +742,8 @@ class TaskThread(QtCore.QThread):
             #self.emit(QtCore.SIGNAL("protocolFinished()"))
                     
     def runOnce(self, params={}):
+        l = QtCore.QMutexLocker(self.lock)
+        l.unlock()
         
         ## Select correct command to execute
         cmd = self.protocol
@@ -707,8 +751,14 @@ class TaskThread(QtCore.QThread):
             for p in params:
                 cmd = cmd[p: params[p]]
                 
-        ## Todo: wait before starting if we've already run too recently
+        ## Wait before starting if we've already run too recently
         while (self.lastRunTime is not None) and (time.clock() < self.lastRunTime + cmd['protocol']['cycleTime']):
+            l.relock()
+            if self.abortThread or self.stopThread:
+                l.unlock()
+                print "Protocol run aborted by user"
+                return
+            l.unlock()
             time.sleep(1e-3)
         
         ## Run
@@ -723,10 +773,13 @@ class TaskThread(QtCore.QThread):
         while True:
             if task.isDone():
                 break
-            #if self.abort:
-                #task.abort()
-                #print "Protocol run aborted by user"
-                #return
+            l.relock()
+            if self.abortThread:
+                l.unlock()
+                task.abort()
+                print "Protocol run aborted by user"
+                return
+            l.unlock()
             ## Abort if protocol is taking too long
             #if time.clock() >= (self.lastRunTime+(cmd['protocol']['duration']+0.2)):
                 #print "Protocol run aborted--timeout"
@@ -737,11 +790,25 @@ class TaskThread(QtCore.QThread):
         result = task.getResult()
         frame = {'params': params, 'cmd': cmd, 'result': result}
         self.emit(QtCore.SIGNAL('newFrame'), frame)
+        if self.stopThread:
+            raise Exception('stop', result)
         return result
-                    
+        
+    def checkStop(self):
+        l = QtCore.QMutexLocker(self.lock)
+        if self.stopThread:
+            raise Exception('stop')
+        
+        
     def stop(self, block=False):
         l = QtCore.QMutexLocker(self.lock)
         self.stopThread = True
         l.unlock()
         if block:
             self.wait()
+            
+    def abort(self):
+        l = QtCore.QMutexLocker(self.lock)
+        self.abortThread = True
+        l.unlock()
+        

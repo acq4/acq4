@@ -340,7 +340,7 @@ in loop mode.</string>
         </spacer>
        </item>
        <item>
-        <widget class="QPushButton" name="stopProtocolBtn">
+        <widget class="QPushButton" name="stopSingleBtn">
          <property name="text">
           <string>Stop Single</string>
          </property>

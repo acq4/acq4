@@ -81,16 +81,29 @@ class SequenceRunner:
         """Recursively loop over all points in the parameter space"""
         if len(ind) == len(self._order):
             params = self.getParams(ind)
-            if self._passHash:
-                ret = func(params)
-            else:
-                ret = func(**params)
+            stop = False
+            try:
+                if self._passHash:
+                    ret = func(params)
+                else:
+                    ret = func(**params)
+            except Exception, e:
+                if e.args[0] == 'stop':
+                    stop = True
+                    if len(e.args) > 1:
+                        ret = e.args[1]
+                else:
+                    raise
         
             if self._return is None:
                 self.buildReturnArray(ret)
                 
             self._return[tuple(ind)] = ret
             self._runMask[tuple(ind)] = True
+            
+            if stop:
+                raise Exception('break', len(ind))
+            
         else:
             ax = self._order[len(ind)]
             params = self._paramSpace[ax]

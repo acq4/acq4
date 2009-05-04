@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Sun May  3 20:48:58 2009
+# Created: Mon May  4 09:50:45 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -144,9 +144,9 @@ QMainWindow::separator {background-color: #666}""")
         self.horizontalLayout_2.addWidget(self.runProtocolBtn)
         spacerItem4 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.horizontalLayout_2.addItem(spacerItem4)
-        self.stopProtocolBtn = QtGui.QPushButton(self.dockWidgetContents_5)
-        self.stopProtocolBtn.setObjectName("stopProtocolBtn")
-        self.horizontalLayout_2.addWidget(self.stopProtocolBtn)
+        self.stopSingleBtn = QtGui.QPushButton(self.dockWidgetContents_5)
+        self.stopSingleBtn.setObjectName("stopSingleBtn")
+        self.horizontalLayout_2.addWidget(self.stopSingleBtn)
         self.gridLayout.addLayout(self.horizontalLayout_2, 6, 0, 1, 4)
         self.ProtocolDock.setWidget(self.dockWidgetContents_5)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.ProtocolDock)
@@ -246,7 +246,7 @@ QMainWindow::separator {background-color: #666}""")
 "in loop mode.", None, QtGui.QApplication.UnicodeUTF8))
         self.testSingleBtn.setText(QtGui.QApplication.translate("MainWindow", "Test", None, QtGui.QApplication.UnicodeUTF8))
         self.runProtocolBtn.setText(QtGui.QApplication.translate("MainWindow", "Run Single", None, QtGui.QApplication.UnicodeUTF8))
-        self.stopProtocolBtn.setText(QtGui.QApplication.translate("MainWindow", "Stop Single", None, QtGui.QApplication.UnicodeUTF8))
+        self.stopSingleBtn.setText(QtGui.QApplication.translate("MainWindow", "Stop Single", None, QtGui.QApplication.UnicodeUTF8))
         self.SequenceDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Sequence", None, QtGui.QApplication.UnicodeUTF8))
         self.label_10.setText(QtGui.QApplication.translate("MainWindow", "Sequence Parameters", None, QtGui.QApplication.UnicodeUTF8))
         self.label_9.setText(QtGui.QApplication.translate("MainWindow", "Cycle Time (s)", None, QtGui.QApplication.UnicodeUTF8))
