@@ -168,9 +168,10 @@ class StimGenerator(QtGui.QWidget):
                 ns[k] = float(seq[k][0])
                 
         ## evaluate and return
-        (ret, msg) = eval(self.functionString(), globals(), ns)
-        if msg is not None:
-            self.setError(msg)
+        ret = eval(self.functionString(), globals(), ns)
+        
+        if 'message' in arg:
+            self.setError(arg['message'])
         return ret
         
     def makeWaveFunction(self, name, arg):
@@ -207,7 +208,7 @@ def seqParse(seqStr):
     seqStr = re.sub(r'\s', '', seqStr)
     
     ## Match like this: "varName=singleValue;sequenceString"
-    m = re.match(r'(\w+)=([\deE\-\.]+)(;$|;(.*))?', seqStr)
+    m = re.match(r'(\w+)=([\deE\-\.]+)(;$|;(.*))?$', seqStr)
     if m is None:
         raise Exception("Syntax error in variable definition '%s'" % seqStr)
     (name, single, junk, seqStr) = m.groups()
@@ -215,13 +216,13 @@ def seqParse(seqStr):
         return (name, single, None)
     
     ## Match list format: "[val1,val2,...]"
-    m = re.match(r'\[[\deE\-\.,]+\]', seqStr)
+    m = re.match(r'\[[\deE\-\.,]+\]$', seqStr)
     if m is not None:
         seq = eval(seqStr)
         return (name, single, seq)
     
     ## Match like this: "start:stop/length:opts" or "start:stop:step:opts"
-    m = re.match(r'([\deE\-\.]+):([\deE\-\.]+)(/|:)([\deE\-\.]+)(:(\w+))?', seqStr)
+    m = re.match(r'([\deE\-\.]+):([\deE\-\.]+)(/|:)([\deE\-\.]+)(:(\w+))?$', seqStr)
     if m is None:
         raise Exception("Syntax error in sequence string '%s'" % seqStr)
     

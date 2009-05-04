@@ -8,7 +8,6 @@ import numpy
 
 
 def pulses(params, times, widths, values, base=0.0):
-    message = None
     nPts = params['nPts']
     rate = params['rate']
     if type(times) not in [list, tuple]:
@@ -23,14 +22,13 @@ def pulses(params, times, widths, values, base=0.0):
         t1 = int(times[i] * rate)
         wid = int(widths[i] * rate)
         if wid == 0:
-            message = "WARNING: Pulse width %f is too short for rate %f" % (widths[i], rate)
+            params['message'] = "WARNING: Pulse width %f is too short for rate %f" % (widths[i], rate)
         if t1+wid >= nPts:
-            message = "WARNING: Function is longer than generated waveform."
+            params['message'] = "WARNING: Function is longer than generated waveform."
         d[t1:t1+wid] = values[i]
-    return (d, message)
+    return d
 
 def steps(params, times, values, base=0.0):
-    message = None
     rate = params['rate']
     nPts = params['nPts']
     if type(times) not in [list, tuple]:
@@ -44,12 +42,12 @@ def steps(params, times, values, base=0.0):
         t2 = int(times[i] * rate)
         
         if t1 == t2:
-            message = "WARNING: Step width %f is too short for rate %f" % (times[i]-times[i-1], rate)
+            params['message'] = "WARNING: Step width %f is too short for rate %f" % (times[i]-times[i-1], rate)
         if t2 >= nPts:
-            message = "WARNING: Function is longer than generated waveform."
+            params['message'] = "WARNING: Function is longer than generated waveform."
         d[t1:t2] = values[i-1]
     last = int(times[-1] * rate)
     d[last:] = values[-1]
-    return (d, message)
+    return d
     
     
