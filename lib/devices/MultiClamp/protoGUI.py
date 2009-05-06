@@ -19,6 +19,7 @@ class MultiClampProtoGui(ProtocolGui):
         self.currentCmdPlot = None
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        self.ui.waveGeneratorWidget.setTimeScale(1e-3)
         self.unitLabels = [self.ui.waveGeneratorLabel, self.ui.holdingCheck]
         self.modeSignalList = self.dev.listModeSignals()
         self.mode = None

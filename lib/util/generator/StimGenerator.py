@@ -38,6 +38,7 @@ class StimGenerator(QtGui.QWidget):
         """ PyStim.__init__ defines standard variables, and initialzes the GUI interface
         """
         QtGui.QWidget.__init__(self, parent)
+        self.timeScale = 1.0
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.ui.functionText.setFontFamily('Courier')
@@ -50,6 +51,9 @@ class StimGenerator(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.autoUpdateCheck, QtCore.SIGNAL('clicked()'), self.autoUpdate)
         QtCore.QObject.connect(self.ui.errorBtn, QtCore.SIGNAL('clicked()'), self.errorBtnClicked)
         QtCore.QObject.connect(self.ui.helpBtn, QtCore.SIGNAL('clicked()'), self.helpBtnClicked)
+
+    def setTimeScale(self, s):
+        self.timeScale = s
 
     def update(self):
         if self.test():
@@ -148,7 +152,7 @@ class StimGenerator(QtGui.QWidget):
             
         ## create namespace with generator functions
         ns = {}
-        arg = {'rate': rate, 'nPts': nPts}
+        arg = {'rate': rate * self.timeScale, 'nPts': nPts}
         for i in dir(waveforms):
             obj = getattr(waveforms, i)
             if type(obj) is types.FunctionType:

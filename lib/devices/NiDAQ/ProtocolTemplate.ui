@@ -1,60 +1,115 @@
-<ui version="4.0" >
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
  <class>Form</class>
- <widget class="QWidget" name="Form" >
-  <property name="geometry" >
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>204</width>
-    <height>71</height>
+    <width>202</width>
+    <height>125</height>
    </rect>
   </property>
-  <property name="windowTitle" >
+  <property name="windowTitle">
    <string>Form</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout" >
-   <item row="0" column="0" >
-    <widget class="QLabel" name="label" >
-     <property name="text" >
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
+    <widget class="QLabel" name="label">
+     <property name="text">
       <string>Rate</string>
      </property>
     </widget>
    </item>
-   <item row="0" column="1" >
-    <widget class="QSpinBox" name="rateSpin" >
-     <property name="maximum" >
-      <number>2000000</number>
+   <item row="0" column="1">
+    <widget class="QDoubleSpinBox" name="rateSpin">
+     <property name="minimum">
+      <double>0.010000000000000</double>
      </property>
-     <property name="singleStep" >
-      <number>1000</number>
+     <property name="maximum">
+      <double>2000.000000000000000</double>
      </property>
-     <property name="value" >
-      <number>40000</number>
+     <property name="value">
+      <double>40.000000000000000</double>
      </property>
     </widget>
    </item>
-   <item row="1" column="0" >
-    <widget class="QLabel" name="label_2" >
-     <property name="text" >
+   <item row="0" column="2">
+    <widget class="QLabel" name="label_5">
+     <property name="text">
+      <string>kHz</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QLabel" name="label_4">
+     <property name="text">
+      <string>Period</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QDoubleSpinBox" name="periodSpin">
+     <property name="minimum">
+      <double>1.000000000000000</double>
+     </property>
+     <property name="maximum">
+      <double>10000.000000000000000</double>
+     </property>
+     <property name="value">
+      <double>25.000000000000000</double>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="2">
+    <widget class="QLabel" name="label_6">
+     <property name="text">
+      <string>μs</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QLabel" name="label_3">
+     <property name="text">
+      <string>Points</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1" colspan="2">
+    <widget class="QLabel" name="numPtsLabel">
+     <property name="text">
+      <string>0</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="0">
+    <widget class="QLabel" name="label_2">
+     <property name="text">
       <string>Trigger</string>
      </property>
     </widget>
    </item>
-   <item row="1" column="1" colspan="2" >
-    <widget class="QComboBox" name="triggerDevList" >
+   <item row="3" column="1" colspan="2">
+    <widget class="QComboBox" name="triggerDevList">
      <item>
-      <property name="text" >
+      <property name="text">
        <string>No Trigger</string>
       </property>
      </item>
     </widget>
    </item>
-   <item row="0" column="2" >
-    <widget class="QLabel" name="numPtsLabel" >
-     <property name="text" >
-      <string>0 pts</string>
+   <item row="4" column="1">
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
      </property>
-    </widget>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
    </item>
   </layout>
  </widget>

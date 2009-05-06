@@ -1,7 +1,8 @@
-<ui version="4.0" >
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
  <class>MainWindow</class>
- <widget class="QMainWindow" name="MainWindow" >
-  <property name="geometry" >
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
@@ -9,95 +10,113 @@
     <height>600</height>
    </rect>
   </property>
-  <property name="windowTitle" >
+  <property name="windowTitle">
    <string>MainWindow</string>
   </property>
-  <widget class="QWidget" name="centralwidget" >
-   <layout class="QVBoxLayout" name="verticalLayout_2" >
-    <item>
-     <layout class="QHBoxLayout" name="horizontalLayout_2" >
-      <item>
-       <widget class="QLabel" name="label" >
-        <property name="text" >
-         <string>Storage Directory:</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLineEdit" name="storageDirText" />
-      </item>
-      <item>
-       <widget class="QPushButton" name="selectDirBtn" >
-        <property name="text" >
-         <string>...</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
+     <widget class="QLabel" name="label_2">
+      <property name="text">
+       <string>Top-level Directory:</string>
+      </property>
+     </widget>
     </item>
-    <item>
-     <widget class="QSplitter" name="splitter" >
-      <property name="orientation" >
+    <item row="0" column="1">
+     <widget class="QLineEdit" name="baseDirText"/>
+    </item>
+    <item row="0" column="2">
+     <widget class="QPushButton" name="selectDirBtn">
+      <property name="text">
+       <string>...</string>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="0">
+     <widget class="QLabel" name="label">
+      <property name="text">
+       <string>Storage Directory:</string>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="1">
+     <widget class="QLineEdit" name="currentDirText"/>
+    </item>
+    <item row="2" column="0" colspan="3">
+     <widget class="QSplitter" name="splitter">
+      <property name="orientation">
        <enum>Qt::Horizontal</enum>
       </property>
-      <widget class="QTreeView" name="fileTreeView" >
-       <property name="sizePolicy" >
-        <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+      <widget class="QTreeView" name="fileTreeView">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
          <horstretch>3</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
       </widget>
-      <widget class="QTabWidget" name="fileDisplayTabs" >
-       <property name="sizePolicy" >
-        <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+      <widget class="QTabWidget" name="fileDisplayTabs">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
          <horstretch>8</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
-       <property name="currentIndex" >
+       <property name="currentIndex">
         <number>0</number>
        </property>
-       <widget class="QWidget" name="tab" >
-        <attribute name="title" >
+       <widget class="QWidget" name="tab">
+        <attribute name="title">
          <string>Info</string>
         </attribute>
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <item>
+          <widget class="QTextBrowser" name="infoText"/>
+         </item>
+        </layout>
        </widget>
-       <widget class="QWidget" name="tab_3" >
-        <attribute name="title" >
+       <widget class="QWidget" name="tab_3">
+        <attribute name="title">
          <string>Data</string>
         </attribute>
        </widget>
-       <widget class="QWidget" name="tab_2" >
-        <attribute name="title" >
+       <widget class="QWidget" name="tab_2">
+        <attribute name="title">
          <string>Analysis</string>
         </attribute>
        </widget>
       </widget>
      </widget>
     </item>
+    <item row="1" column="2">
+     <widget class="QPushButton" name="setCurrentDirBtn">
+      <property name="text">
+       <string>Set</string>
+      </property>
+     </widget>
+    </item>
    </layout>
   </widget>
-  <widget class="QDockWidget" name="dockWidget" >
-   <property name="floating" >
+  <widget class="QDockWidget" name="dockWidget">
+   <property name="floating">
     <bool>false</bool>
    </property>
-   <property name="features" >
+   <property name="features">
     <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable</set>
    </property>
-   <property name="windowTitle" >
+   <property name="windowTitle">
     <string>Log</string>
    </property>
-   <attribute name="dockWidgetArea" >
+   <attribute name="dockWidgetArea">
     <number>8</number>
    </attribute>
-   <widget class="QWidget" name="dockWidgetContents" >
-    <layout class="QVBoxLayout" name="verticalLayout" >
+   <widget class="QWidget" name="dockWidgetContents">
+    <layout class="QVBoxLayout" name="verticalLayout">
      <item>
-      <widget class="QTextEdit" name="logDisplayText" />
+      <widget class="QTextBrowser" name="textBrowser"/>
      </item>
      <item>
-      <widget class="QLineEdit" name="logEntryText" />
+      <widget class="QLineEdit" name="logEntryText"/>
      </item>
     </layout>
    </widget>

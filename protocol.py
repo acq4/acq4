@@ -22,6 +22,7 @@ dm.setCurrentDir('junk')
 
 print "Loading patch module.."
 prm = dm.loadModule(module='ProtocolRunner', name='PR', config={'globalDir': os.path.abspath('config/protocols')})
+dm.loadModule(module='DataManager', name='DM', config={})
 
 ## If running interactively, just return to the prompt and let python call the qt event loop for us.
 ## Otherwise, we need to run it ourselves:

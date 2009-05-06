@@ -4,7 +4,7 @@ import time, sys, atexit
 from PyQt4 import QtCore, QtGui
 from DataManager import *
 
-class Manager():
+class Manager(QtCore.QObject):
     """Manager class is responsible for:
       - Loading/configuring device modules and storing their handles
       - Managing the device rack GUI
@@ -15,12 +15,15 @@ class Manager():
       - Making sure all devices/modules are properly shut down at the end of the program"""
     
     def __init__(self, configFile=None):
+        QtCore.QObject.__init__(self)
         self.alreadyQuit = False
         atexit.register(self.quit)
         self.devices = {}
         self.modules = {}
         self.devRack = None
-        self.dataManager = None
+        self.dataManager = DataManager()
+        self.currentDir = None
+        self.baseDir = None
         self.readConfig(configFile)
         if 'win' in sys.platform:
             time.clock()  ### Required to start the clock in windows
@@ -45,7 +48,8 @@ class Manager():
         if 'users' in cfg:
             user = 'Luke'
             baseDir = cfg['users'][user]['storageDir']
-            self.dataManager = DataManager(self, baseDir)
+            self.setBaseDir(baseDir)
+            self.setCurrentDir('')
         else:
             raise Exception("No configuration found for data management!")
         print "\n============= Manager configuration complete =================\n"
@@ -114,10 +118,22 @@ class Manager():
         self.devRack.show()
     
     def getCurrentDir(self):
-        return self.dataManager.getCurrentDir()
+        if self.currentDir is None:
+            raise Exception("CurrentDir has not been set!")
+        return self.currentDir
 
-    def setCurrentDir(self, newDir):
-        return self.dataManager.setCurrentDir(newDir)
+    def setCurrentDir(self, d):
+        self.currentDir = self.dataManager.getDirHandle(os.path.join(self.baseDir, d), create=True)
+        self.emit(QtCore.SIGNAL('currentDirChanged'))
+
+    def getBaseDir(self):
+        if self.baseDir is None:
+            raise Exception("BaseDir has not been set!")
+        return self.baseDir
+
+    def setBaseDir(self, d):
+        self.baseDir = d
+        self.emit(QtCore.SIGNAL('baseDirChanged'))
 
     def logMsg(self, msg, tags={}):
         cd = self.getCurrentDir()
