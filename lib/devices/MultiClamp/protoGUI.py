@@ -225,6 +225,11 @@ class MultiClampProtoGui(ProtocolGui):
                 text = str(l.text())
                 l.setText(text.replace(oldUnit, newUnit))
                 
+            ## Hide stim plot for I=0 mode
+            if mode == 'I=0':
+                self.ui.bottomPlotWidget.hide()
+            else:
+                self.ui.bottomPlotWidget.show()
         
         self.mode = mode
         

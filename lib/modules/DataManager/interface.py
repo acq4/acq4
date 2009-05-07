@@ -13,16 +13,16 @@ class DataManager(Module):
         self.dialog = QtGui.QFileDialog()
         self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
         ## Load values into GUI
-        self.baseDirChanged()
         self.model = DMModel(self.manager.getBaseDir())
         self.ui.fileTreeView.setModel(self.model)
+        self.baseDirChanged()
         
         
         ## Make all connections needed
         #QtCore.QObject.connect(self.dm, QtCore.SIGNAL("baseDirChanged()"), self.baseDirChanged)
         QtCore.QObject.connect(self.ui.selectDirBtn, QtCore.SIGNAL("clicked()"), self.showFileDialog)
         #QtCore.QObject.connect(self.ui.storageDirText, QtCore.SIGNAL('textEdited(const QString)'), self.selectDir)
-        QtCore.QObject.connect(self.dialog, QtCore.SIGNAL('filesSelected(const QStringList)'), self.showFileDialog)
+        QtCore.QObject.connect(self.dialog, QtCore.SIGNAL('filesSelected(const QStringList)'), self.setBaseDir)
         QtCore.QObject.connect(self.manager, QtCore.SIGNAL('baseDirChanged'), self.baseDirChanged)
         QtCore.QObject.connect(self.manager, QtCore.SIGNAL('currentDirChanged'), self.currentDirChanged)
         
@@ -31,7 +31,7 @@ class DataManager(Module):
     def baseDirChanged(self):
         newDir = self.manager.getBaseDir()
         self.ui.baseDirText.setText(QtCore.QString(newDir))
-        #self.model.setBaseDir(newDir)
+        self.model.setBaseDir(newDir)
 
     def currentDirChanged(self):
         newDir = self.manager.getCurrentDir()
@@ -40,6 +40,7 @@ class DataManager(Module):
         # refresh file tree view
         
     def showFileDialog(self):
+        self.dialog.setDirectory(self.manager.getBaseDir())
         self.dialog.show()
 
     def setBaseDir(self, dirName):
@@ -52,7 +53,6 @@ class DataManager(Module):
         if dirName is None:
             return
         if os.path.isdir(dirName):
-            l = QtCore.QMutexLocker(self.lock)
             self.manager.setBaseDir(dirName)
         else:
             raise Exception("Storage directory is invalid")
@@ -71,9 +71,14 @@ class DMModel(QtCore.QAbstractItemModel):
         self.paths = {}
         self.dirCache = {}
         
+    def setBaseDir(self, d):
+        self.baseDir = d
+        self.clearCache()
+        
     def clearCache(self, path=None):
         if path is None:
             self.dirCache = {}
+            self.paths = {}
             self.emit(QtCore.SIGNAL('layoutChanged()'))
             #self.reset()
             return
@@ -148,13 +153,13 @@ class DMModel(QtCore.QAbstractItemModel):
         return self.dirCache[path]
         
     def pathRow(self, path):
-        try:
-            base, last = os.path.split(os.path.normpath(path))
-            c = self.listdir(base)
-            return c.index(last)
-        except:
-            print "path", path, "base", base, "last", last
-            raise
+        #try:
+        base, last = os.path.split(os.path.normpath(path))
+        c = self.listdir(base)
+        return c.index(last)
+        #except:
+            #print "path", path, "base", base, "last", last
+            #raise
             
     def parent(self, index):
         if not index.isValid():
@@ -164,8 +169,12 @@ class DMModel(QtCore.QAbstractItemModel):
         if base == '/' or base == '':
             return QtCore.QModelIndex()
         pathStr = self.pathKey(base)
-        return self.createIndex(self.pathRow(pathStr), 0, pathStr)
-        
+        #print "Finding parent of", path, pathStr
+        try:
+            return self.createIndex(self.pathRow(pathStr), 0, pathStr)
+        except:
+            return QtCore.QModelIndex()
+            
     def rowCount(self, parent=QtCore.QModelIndex()):
         if parent.column() > 0:
             return 0
