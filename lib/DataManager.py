@@ -70,20 +70,21 @@ class DirHandle:
         self.baseDir = baseDir
         self.indexFile = os.path.join(self.baseDir, '.index')
         self.logFile = os.path.join(self.baseDir, '.log')
-        
+        self.index = None
         self.lock = threading.RLock()
         
         if not os.path.isdir(baseDir):
             if create:
                 os.mkdir(baseDir)
+                self.createIndex()
             else:
                 raise Exception("Directory %s does not exist." % baseDir)
         
         if os.path.isfile(self.indexFile):
             self._readIndex()
         else:
-            self.index = {}
-            self._writeIndex()
+            ## If directory is unmanaged, just leave it that way.
+            pass
         
     def __del__(self):
         pass
@@ -103,6 +104,9 @@ class DirHandle:
         #if lock:
             #pass
             #fcntl.flock(fd, fcntl.LOCK_EX)
+        if not os.path.isfile(self.indexFile):
+            raise Exception("Directory is not managed!")
+            
         try:
             #self.index = eval(fd.read())
             self.index = readConfigFile(self.indexFile)
@@ -113,6 +117,9 @@ class DirHandle:
         
     def _writeIndex(self, lock=True):
         l = Locker(self.lock)
+        
+        if self.index is None:
+            raise Exception("Directory is not managed!")
         #fd = open(self.indexFile, 'w')
         #if lock:
             #pass
@@ -121,6 +128,12 @@ class DirHandle:
         #fd.close()
         writeConfigFile(self.index, self.indexFile)
     
+    def createIndex(self):
+        if self.index is not None:
+            raise Exception("Directory is already managed!")
+        self.index = {'.': {}}
+        self._writeIndex()
+        
     def logMsg(self, msg, tags={}):
         """Write a message into the log for this directory."""
         l = Locker(self.lock)
@@ -152,7 +165,8 @@ class DirHandle:
             raise Exception("Directory %s already exists." % newDir)
         
         ndm = self.manager.getDirHandle(newDir, create=True)
-        self.addFile(fullName, info)
+        self.addFile(fullName, {})
+        ndm.setInfo('.', info)
         return ndm
     
     def getDir(self, subdir, create=False, autoIncrement=False):
@@ -170,11 +184,11 @@ class DirHandle:
     def dirExists(self, dirName):
         return os.path.isdir(os.path.join(self.baseDir, dirName))
             
-    def getToday(self):
-        #yr = self.getDir(time.strftime("20%y"), create=True)
-        #mo = yr.getDir(time.strftime("%m"), create=True)
-        #return mo.getDir(time.strftime("%d"), create=True)
-        return self.getDir(time.strftime("%Y.%m.%d"), create=True)
+    #def getToday(self):
+        ##yr = self.getDir(time.strftime("20%y"), create=True)
+        ##mo = yr.getDir(time.strftime("%m"), create=True)
+        ##return mo.getDir(time.strftime("%d"), create=True)
+        #return self.getDir(time.strftime("%Y.%m.%d"), create=True)
     
     
     def ls(self):
@@ -188,11 +202,25 @@ class DirHandle:
     def fileInfo(self, file):
         """Return a dict of the meta info stored for file"""
         l = Locker(self.lock)
+        if self.isDir(file):  ## directory meta-info is stored within the directory, not in the parent.
+            return self.getDir(file).fileInfo('.')
+            
         self._readIndex()
         if self.index.has_key(file):
             return self.index[file]
         else:
             raise Exception("File %s is not indexed" % file)
+    
+    def isDir(self, fileName):
+        l = Locker(self.lock)
+        fn = os.path.abspath(os.path.join(self.baseDir, fileName))
+        return os.path.isdir(fn)
+        
+    def isFile(self, fileName):
+        l = Locker(self.lock)
+        fn = os.path.abspath(os.path.join(self.baseDir, fileName))
+        return os.path.isfile(fn)
+        
     
     def writeFile(self, obj, fileName, info={}, autoIncrement=False):
         """Write a file to this directory using obj.write(fileName), store info in the index."""
@@ -232,41 +260,100 @@ class DirHandle:
         fn = os.path.join(self.baseDir, fileName)
         if not (os.path.isfile(fn) or os.path.isdir(fn)):
             raise Exception("File %s does not exist." % fn)
-        if protect and (fileName in self.index):
-            raise Exception("File %s is already indexed." % fileName)
-        self.setFileInfo(fileName, info, append=True)
+            
+        append = True
+        if fileName in self.index:
+            append = False
+            if protect:
+                raise Exception("File %s is already indexed." % fileName)
+
+        if self.isDir(fileName):
+            self.setFileInfo(fileName, {}, append=append)
+            self.getDir(fileName).setInfo('.', info)
+        else:
+            self.setFileInfo(fileName, info, append=append)
+    
+    def forget(self, fileName):
+        l = Locker(self.lock)
+        if not self.isManaged(fileName):
+            raise Exception("Can not forget %s, not managed" % fileName)
+        self._readIndex(lock=False)
+        del self.index[fileName]
+        self._writeIndex(lock=False)
+        
+    def delete(self, fileName):
+        pass
+
+    def move(self, fileName, newDir):
+        l = Locker(self.lock)
+        fn1 = os.path.join(self.baseDir, fileName)
+        fn2 = os.path.join(newDir.baseDir, fileName)
+        os.rename(fn1, fn2)
+        if self.isManaged(fileName) and newDir.isManaged():
+            newDir.addFile(fileName, info=self.fileInfo(fileName))
+        elif newDir.isManaged():
+            newDir.addFile(fileName)
+            
+    def isManaged(self, fileName=None):
+        l = Locker(self.lock)
+        if self.info is None:
+            return False
+        if fileName is None:
+            return True
+        else:
+            self._readIndex()
+            return (fileName in self.index)
+
+    def rename(self, fileName, newName):
+        l = Locker(self.lock)
+        fn1 = os.path.join(self.baseDir, fileName)
+        fn2 = os.path.join(self.baseDir, newName)
+        os.rename(fn1, fn2)
+        if self.isManaged(fileName):
+            self.addFile(newName, info=self.fileInfo(fileName))
+            self.forget(fileName)
     
     def setFileInfo(self, fileName, info, append=False):
+        """Set the entire meta-information array for fileName."""
         l = Locker(self.lock)
+        
         #fd = open(self.indexFile, 'r')
         #fcntl.flock(fd, fcntl.LOCK_EX)
-        if append:
-            appendConfigFile({fileName: info}, self.indexFile)
+        if self.isDir(fileName):
+            self.getDir(fileName).setFileInfo('.', info)
         else:
-            self._readIndex(lock=False)
-            self.index[fileName] = info
-            self._writeIndex(lock=False)
+            if append:
+                appendConfigFile({fileName: info}, self.indexFile)
+            else:
+                self._readIndex(lock=False)
+                self.index[fileName] = info
+                self._writeIndex(lock=False)
         #fd.close()
         
     def setFileAttr(fileName, attr, value):
+        """Set a single meta-info attribute for fileName"""
         l = Locker(self.lock)
-        if not self.index.has_key('file'):
-            self.setFileInfo(fileName, {attr: value}, append=True)
+        if self.isDir(fileName):
+            self.setFileAttr('.', attr, value)
         else:
-            #fd = open(self.indexFile, 'r')
-            #fcntl.flock(fd, fcntl.LOCK_EX)
-            self._readIndex(lock=False)
-            self.index[fileName][attr] = value
-            self._writeIndex(lock=False)
-            #fd.close()
+            if not self.index.has_key('file'):
+                self.setFileInfo(fileName, {attr: value}, append=True)
+            else:
+                #fd = open(self.indexFile, 'r')
+                #fcntl.flock(fd, fcntl.LOCK_EX)
+                self._readIndex(lock=False)
+                self.index[fileName][attr] = value
+                self._writeIndex(lock=False)
+                #fd.close()
         
     def parent(self):
+        l = Locker(self.lock)
         #pdir = re.sub(r'/[^/]+/$', '', self.baseDir)
         pdir = os.path.normpath(os.path.join(self.baseDir, '..'))
         return self.manager.getDirHandle(pdir)
 
     def getFile(self, fileName):
-        ## Todo: Make this function check __object_type__ and dynamically determine what kind of object to create
+        l = Locker(self.lock)
         info = self.fileInfo(fileName)
         typ = info['__object_type__']
         cls = self.getFileClass(typ)
@@ -278,7 +365,22 @@ class DirHandle:
         return getattr(mod, modName)
         
     def dirName(self):
+        l = Locker(self.lock)
         return os.path.abspath(self.baseDir)
+
+    def exists(self, name):
+        l = Locker(self.lock)
+        fn = os.path.abspath(os.path.join(self.baseDir, name))
+        return os.path.exists(fn)
+        
+
+#class FileHandle:
+    #def __init__(self, fileName, manager):
+        #self.manager = manager
+        #self.fileName = os.path.abspath(fileName)
+        #if 
+
+
 
 
 #class FakeDirHandle:

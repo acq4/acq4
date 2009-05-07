@@ -9,6 +9,8 @@ class NiDAQProto(ProtocolGui):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.nPts = 0
+        self.ignorePeriod = False
+        self.ignoreRate = False
         self.rate = 40e3
         self.updateNPts()
         self.updateDevList()
@@ -40,20 +42,28 @@ class NiDAQProto(ProtocolGui):
         return state
         
     def rateChanged(self):
+        if self.ignoreRate:
+            return
         self.rate = self.ui.rateSpin.value() * 1000.
         period = 1e6 / self.rate
-        self.ui.periodSpin.blockSignals(True)
+        #self.ui.periodSpin.blockSignals(True)
+        self.ignorePeriod = True
         self.ui.periodSpin.setValue(period)
-        self.ui.periodSpin.blockSignals(False)
+        self.ignorePeriod = False
+        #self.ui.periodSpin.blockSignals(False)
         self.updateNPts()
         self.emit(QtCore.SIGNAL('changed'), self.currentState())
         
     def periodChanged(self):
+        if self.ignorePeriod:
+            return
         period = self.ui.periodSpin.value()
         self.rate = 1e6 / period
-        self.ui.rateSpin.blockSignals(True)
+        #self.ui.rateSpin.blockSignals(True)
+        self.ignoreRate = True
         self.ui.rateSpin.setValue(self.rate / 1000.)
-        self.ui.rateSpin.blockSignals(False)
+        self.ignoreRate = False
+        #self.ui.rateSpin.blockSignals(False)
         self.updateNPts()
         self.emit(QtCore.SIGNAL('changed'), self.currentState())
         

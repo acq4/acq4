@@ -21,17 +21,27 @@ class DataManager(Module):
         ## Make all connections needed
         #QtCore.QObject.connect(self.dm, QtCore.SIGNAL("baseDirChanged()"), self.baseDirChanged)
         QtCore.QObject.connect(self.ui.selectDirBtn, QtCore.SIGNAL("clicked()"), self.showFileDialog)
+        QtCore.QObject.connect(self.ui.setCurrentDirBtn, QtCore.SIGNAL("clicked()"), self.setCurrentClicked)
         #QtCore.QObject.connect(self.ui.storageDirText, QtCore.SIGNAL('textEdited(const QString)'), self.selectDir)
         QtCore.QObject.connect(self.dialog, QtCore.SIGNAL('filesSelected(const QStringList)'), self.setBaseDir)
         QtCore.QObject.connect(self.manager, QtCore.SIGNAL('baseDirChanged'), self.baseDirChanged)
         QtCore.QObject.connect(self.manager, QtCore.SIGNAL('currentDirChanged'), self.currentDirChanged)
-        
+        QtCore.QObject.connect(self.ui.newFolderList, QtCore.SIGNAL('currentIndexChanged(int)'), self.newFolder)
         self.win.show()
+        
+    def updateNewFolderList(self):
+        conf = self.manager.conf['folderTypes']
+        self.ui.newFolderList.clear()
+        self.ui.newFolderList.addItems(['New...', 'Folder'] + conf.keys())
         
     def baseDirChanged(self):
         newDir = self.manager.getBaseDir()
         self.ui.baseDirText.setText(QtCore.QString(newDir))
         self.model.setBaseDir(newDir)
+
+    def setCurrentClicked(self):
+        newDir = self.model.selectedDir()
+        self.manager.setCurrentDir(newDir)
 
     def currentDirChanged(self):
         newDir = self.manager.getCurrentDir()
@@ -56,22 +66,37 @@ class DataManager(Module):
             self.manager.setBaseDir(dirName)
         else:
             raise Exception("Storage directory is invalid")
+            
+    
 
-        
-
-
+    def newFolder(self):
+        if self.ui.newFolderList.currentIndex() == 0:
+            return
+            
+        cdir = self.manager.getCurrentDir()
+        ftype = self.ui.newFolderList.currentText()
+        if ftype == 'Folder':
+            nd = cdir.mkdir('NewFolder', autoIncrement=True)
+            item = self.model.dirIndex(nd)
+            self.treeView.edit(item)
+        else:
+            spec = self.manager.conf['folderTypes'][ftype]
+            name = spec['name']
+            nd = cdir.mkdir('NewFolder', autoIncrement=True)
+            
+        self.manager.setCurrentDir(nd)
 
 
 
 class DMModel(QtCore.QAbstractItemModel):
     """Based on DirTreeModel, used for displaying the contents of directories created and managed by DataManager"""
-    def __init__(self, baseDir=None, parent=None):
+    def __init__(self, baseDirHandle=None, parent=None):
         QtCore.QAbstractItemModel.__init__(self, parent)
-        self.baseDir = baseDir
+        self.baseDir = baseDirHandle
         self.paths = {}
         self.dirCache = {}
         
-    def setBaseDir(self, d):
+    def setBaseDirHandle(self, d):
         self.baseDir = d
         self.clearCache()
         
@@ -101,20 +126,21 @@ class DMModel(QtCore.QAbstractItemModel):
         return self.paths[path]
         
     def dirIndex(self, dirName):
+        """Return the index for a specific directory"""
         if dirName == '' or dirName is None:
             return QtCore.QModelIndex()
-        if not os.path.exists(os.path.join(self.baseDir, dirName)):
+        if not self.baseDir.exists(dirName):
             raise Exception("Dir %s does not exist" % dirName)
         row = self.pathRow(dirName)
         return self.createIndex(row, 0, self.pathKey(dirName))
         
     def getFileName(self, index):
-        return os.path.join(self.baseDir, index.internalPointer())
+        return os.path.join(self.baseDir.dirName(), index.internalPointer())
         
     def findIndex(self, fileName):
         fileName = os.path.normpath(fileName)
-        if self.baseDir in fileName:
-            fileName = fileName.replace(self.baseDir, '')
+        if self.baseDir.dirName() in fileName:
+            fileName = fileName.replace(self.baseDir.dirName(), '')
         while fileName[0] in ['/', '\\']:
             fileName = fileName[1:]
         return self.dirIndex(fileName)
@@ -134,8 +160,8 @@ class DMModel(QtCore.QAbstractItemModel):
         return self.createIndex(row, column, pathStr)
             
     def cmp(self, path, a, b):
-        a1 = os.path.join(self.baseDir, path, a)
-        b1 = os.path.join(self.baseDir, path, b)
+        a1 = os.path.join(self.baseDir.dirName(), path, a)
+        b1 = os.path.join(self.baseDir.dirName(), path, b)
         aid = os.path.isdir(a1)
         bid = os.path.isdir(b1)
         if aid and not bid:
@@ -147,7 +173,7 @@ class DMModel(QtCore.QAbstractItemModel):
             
     def listdir(self, path):
         if path not in self.dirCache:
-            c = filter(lambda s: s[0] != '.', os.listdir(os.path.join(self.baseDir, path)))
+            c = filter(lambda s: s[0] != '.', os.listdir(os.path.join(self.baseDir.dirName(), path)))
             c.sort(lambda a,b: self.cmp(path, a, b))
             self.dirCache[path] = c
         return self.dirCache[path]
@@ -183,7 +209,7 @@ class DMModel(QtCore.QAbstractItemModel):
         else:
             p = parent.internalPointer()
         p = os.path.normpath(p)
-        if not os.path.isdir(os.path.join(self.baseDir, p)):
+        if not os.path.isdir(os.path.join(self.baseDir.dirName(), p)):
             return 0
         c = self.listdir(p)
         return len(c)
@@ -196,10 +222,14 @@ class DMModel(QtCore.QAbstractItemModel):
             return QtCore.QVariant()
         path = os.path.normpath(index.internalPointer())
         base, last = os.path.split(path)
-        fullPath = os.path.join(self.baseDir, path)
+        fullPath = os.path.join(self.baseDir.dirName(), path)
+        parent = self.baseDir.getDir(path)
+        
         if role == QtCore.Qt.DisplayRole or role == QtCore.Qt.EditRole:
             ret = last
         elif role == QtCore.Qt.TextColorRole:
+            if last not in parent.ls():
+                ret = QtGui.QColor(100,0,0)
             if os.path.isdir(fullPath):
                 ret = QtGui.QColor(0,0,100)
             else:
@@ -215,7 +245,7 @@ class DMModel(QtCore.QAbstractItemModel):
         if not index.isValid():
             return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsDropEnabled
         path = os.path.normpath(index.internalPointer())
-        fullPath = os.path.join(self.baseDir, path)
+        fullPath = os.path.join(self.baseDir.dirName(), path)
         if os.path.isdir(fullPath):
             return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsDragEnabled | QtCore.Qt.ItemIsDropEnabled
         else:
@@ -233,16 +263,25 @@ class DMModel(QtCore.QAbstractItemModel):
             newName = str(value.toString())
             if newName == '':
                 return False
-            fn = os.path.normpath(index.internalPointer())
-            fn = os.path.join(self.baseDir, fn)
-            dirName = os.path.split(fn)[0]
-            fn2 = os.path.join(dirName, newName)
-            if fn == fn2:
+            base, fn = os.path.split(os.path.normpath(index.internalPointer()))
+            #fn = os.path.join(self.baseDir.dirName(), fn)
+            #dirName = os.path.split(fn)[0]
+            #fn2 = os.path.join(dirName, newName)
+            if fn == newName:
                 return False
             try:
-                os.rename(fn, fn2)
-                self.clearCache(dirName)
-                self.emit(QtCore.SIGNAL('fileRenamed(PyQt_PyObject, PyQt_PyObject)'), fn, fn2)
+                dh = self.baseDir.getDir(base)
+                
+                ## request that the datahandler rename the file so meta info stays in sync
+                dh.rename(fn, newName)
+                #os.rename(fn, fn2)
+                
+                self.clearCache(base)
+                
+                ## Inform anyone interested that the file name has changed
+                fn1 = os.path.join(dh.dirName(), fn)
+                fn2 = os.path.join(dh.dirName(), newName)
+                self.emit(QtCore.SIGNAL('fileRenamed(PyQt_PyObject, PyQt_PyObject)'), fn1, fn2)
                 self.emit(QtCore.SIGNAL('dataChanged(const QModelIndex &, const QModelIndex &)'), index, index)
                 #print "Data changed, editable:", int(self.flags(index))
                 return True
@@ -271,7 +310,7 @@ class DMModel(QtCore.QAbstractItemModel):
         files = str(data.text()).split('\n')
         
         for f in files:
-            fn = os.path.join(self.baseDir, f)
+            fn = os.path.join(self.baseDir.dirName(), f)
             if not os.path.exists(fn):
                 print "Can not move %s (File does not exist)" % fn
                 return False
@@ -280,14 +319,18 @@ class DMModel(QtCore.QAbstractItemModel):
                 return False
         try:
             for f in files:
-                fullName = os.path.join(self.baseDir, f)
-                subDir = parent.internalPointer()
-                if subDir is None:
-                    subDir = ''
-                newName = os.path.join(self.baseDir, subDir, os.path.split(f)[1])
+                fullName = os.path.join(self.baseDir.dirName(), f)
+                oldDirName, name = os.path.split(f)
+                newDirName = parent.internalPointer()
+                if newDirName is None:  ## Move to baseDir
+                    newDirName = ''
+                newName = os.path.join(self.baseDir.dirName(), newDirName, os.path.split(f)[1])
                 #os.rename(fullName, newName)
                 if action == QtCore.Qt.MoveAction:
-                    os.rename(fullName, newName)
+                    oldDir = self.baseDir.getDir(oldDirName)
+                    newDir = self.baseDir.getDir(newDirName)
+                    oldDir.move(name, newDir)
+                    #os.rename(fullName, newName)
                     self.emit(QtCore.SIGNAL('fileRenamed(PyQt_PyObject, PyQt_PyObject)'), fullName, newName)
                 elif action == QtCore.Qt.CopyAction:
                     os.copy(fullName, newName)
