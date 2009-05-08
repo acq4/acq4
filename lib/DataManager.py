@@ -296,7 +296,7 @@ class DirHandle:
             
     def isManaged(self, fileName=None):
         l = Locker(self.lock)
-        if self.info is None:
+        if self.index is None:
             return False
         if fileName is None:
             return True

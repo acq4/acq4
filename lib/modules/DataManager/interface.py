@@ -36,12 +36,16 @@ class DataManager(Module):
         
     def baseDirChanged(self):
         newDir = self.manager.getBaseDir()
+        dh = self.manager.dirHandle(newDir)
         self.ui.baseDirText.setText(QtCore.QString(newDir))
-        self.model.setBaseDir(newDir)
+        self.model.setBaseDirHandle(dh)
 
     def setCurrentClicked(self):
-        newDir = self.model.selectedDir()
-        self.manager.setCurrentDir(newDir)
+        newDir = self.selectedFile()
+        if not os.path.isdir(newDir):
+            newDir = os.path.split(newDir)[0]
+        dh = self.manager.dirHandle(newDir)
+        self.manager.setCurrentDir(dh)
 
     def currentDirChanged(self):
         newDir = self.manager.getCurrentDir()
@@ -67,7 +71,13 @@ class DataManager(Module):
         else:
             raise Exception("Storage directory is invalid")
             
-    
+    def selectedFile(self):
+        sel = list(self.ui.fileTreeView.selectedIndexes())
+        if len(sel) == 1:
+            index = sel[0]
+        else:
+            raise Exception("Error - multiple items selected")
+        return self.model.getFileName(index)
 
     def newFolder(self):
         if self.ui.newFolderList.currentIndex() == 0:
@@ -223,12 +233,12 @@ class DMModel(QtCore.QAbstractItemModel):
         path = os.path.normpath(index.internalPointer())
         base, last = os.path.split(path)
         fullPath = os.path.join(self.baseDir.dirName(), path)
-        parent = self.baseDir.getDir(path)
+        parent = self.baseDir.getDir(os.path.join(self.baseDir.dirName(), base))
         
         if role == QtCore.Qt.DisplayRole or role == QtCore.Qt.EditRole:
             ret = last
         elif role == QtCore.Qt.TextColorRole:
-            if last not in parent.ls():
+            if parent.isManaged() and last not in parent.ls():
                 ret = QtGui.QColor(100,0,0)
             if os.path.isdir(fullPath):
                 ret = QtGui.QColor(0,0,100)

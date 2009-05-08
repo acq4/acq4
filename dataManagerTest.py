@@ -24,7 +24,7 @@ dm.loadModule(module='DataManager', name='DM', config={})
 
 
 win = QtGui.QMainWindow()
-b = QtGui.QPushButton()
+b = QtGui.QPushButton("Test")
 win.setCentralWidget(b)
 win.show()
 
