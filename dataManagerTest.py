@@ -18,7 +18,7 @@ config = os.path.abspath(config)
 dm = Manager(config)
 #dm.showDeviceRack()
 
-dm.setCurrentDir('junk')
+#dm.setCurrentDir('junk')
 
 dm.loadModule(module='DataManager', name='DM', config={})
 
@@ -30,10 +30,10 @@ win.show()
 
 def mkfiles():
     d = dm.getCurrentDir()
-    d1 = dm.mkdir("testDir", autoIncrement=True)
+    d1 = d.mkdir("testDir", autoIncrement=True)
     a = MetaArray((2,2))
-    d.write(a, 'testFile', autoIncrement=True)
-    d1.write(a, 'testFile')
+    d.writeFile(a, 'testFile', autoIncrement=True)
+    d1.writeFile(a, 'testFile')
 
 QtCore.QObject.connect(b, QtCore.SIGNAL('clicked()'), mkfiles)
 

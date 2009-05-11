@@ -25,12 +25,6 @@ class Manager(QtCore.QObject):
         self.currentDir = None
         self.baseDir = None
         self.readConfig(configFile)
-        if 'win' in sys.platform:
-            time.clock()  ### Required to start the clock in windows
-            self.startTime = time.time()
-            self.time = self.winTime
-        else:
-            self.time = self.unixTime
 
     def readConfig(self, configFile):
         """Read configuration file, create device objects, add devices to list"""
@@ -86,13 +80,6 @@ class Manager(QtCore.QObject):
             raise Exception("No module named %s" % name)
         return self.modules[name]
         
-    def winTime(self):
-        """Return the current time in seconds with high precision (windows version, use Manager.time() to stay platform independent)."""
-        return time.clock() + self.startTime
-    
-    def unixTime(self):
-        """Return the current time in seconds with high precision (unix version, use Manager.time() to stay platform independent)."""
-        return time.time()
     
     def runProtocol(self, cmd):
         t = Task(self, cmd)

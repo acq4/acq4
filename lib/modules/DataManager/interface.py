@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from DataManagerTemplate import *
 from lib.modules.Module import *
+from lib.DataManager import *
 import os, re
 
 class DataManager(Module):
@@ -16,6 +17,7 @@ class DataManager(Module):
         self.model = DMModel(self.manager.getBaseDir())
         self.ui.fileTreeView.setModel(self.model)
         self.baseDirChanged()
+        self.currentDirChanged()
         
         
         ## Make all connections needed
@@ -76,7 +78,7 @@ class DataManager(Module):
         if len(sel) == 1:
             index = sel[0]
         else:
-            raise Exception("Error - multiple items selected")
+            raise Exception("Error - multiple/no items selected")
         return self.model.getFileName(index)
 
     def newFolder(self):
@@ -88,7 +90,7 @@ class DataManager(Module):
         if ftype == 'Folder':
             nd = cdir.mkdir('NewFolder', autoIncrement=True)
             item = self.model.dirIndex(nd)
-            self.treeView.edit(item)
+            self.ui.fileTreeView.edit(item)
         else:
             spec = self.manager.conf['folderTypes'][ftype]
             name = spec['name']
@@ -118,7 +120,14 @@ class DMModel(QtCore.QAbstractItemModel):
             #self.reset()
             return
         if path in self.dirCache:
-            del self.dirCache[path]
+            #del self.dirCache[path]
+            rm = []
+            for k in self.paths:
+                if path == k[:len(path)]:
+                   rm.append(k)
+            for k in rm:
+                del self.paths[k]
+                del self.dirCache[k]
         else:
             self.dirCache = {}
             self.emit(QtCore.SIGNAL('layoutChanged()'))
@@ -136,7 +145,10 @@ class DMModel(QtCore.QAbstractItemModel):
         return self.paths[path]
         
     def dirIndex(self, dirName):
-        """Return the index for a specific directory"""
+        """Return the index for a specific directory relative to its siblings"""
+        if isinstance(dirName, DirHandle):
+            dirName = dirName.dirName()
+            
         if dirName == '' or dirName is None:
             return QtCore.QModelIndex()
         if not self.baseDir.exists(dirName):

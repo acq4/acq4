@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-import threading, os, time, re, types
+import threading, os, re, types
 ##  import fcntl  ## linux only?
 from lib.util.functions import strncmp
 from lib.util.configfile import *
 from lib.util.MetaArray import MetaArray
 from lib.util.advancedTypes import Locker
+import lib.util.ptime as ptime
 
 class DataManager:
     """Class for creating and caching DirHandle objects to make sure there is only one manager object per directory. 
@@ -224,7 +225,10 @@ class DirHandle:
     
     def writeFile(self, obj, fileName, info={}, autoIncrement=False):
         """Write a file to this directory using obj.write(fileName), store info in the index."""
-        t = self.manager.time()
+        if not hasattr(obj, 'write') or not callable(obj.write):
+            raise Exception("Can not create file from object of type %s" % str(type(obj)))
+        
+        t = ptime.time()
         l = Locker(self.lock)
         name = fileName
         fullFn = os.path.join(self.baseDir, name)
@@ -248,7 +252,10 @@ class DirHandle:
         #fd.close()
         
         if not info.has_key('__object_type__'):
-            info['__object_type__'] = obj.typeName()
+            if hasattr(obj, 'typeName'):
+                info['__object_type__'] = obj.typeName()
+            else:
+                info['__object_type__'] = type(obj).__name__
         if not info.has_key('__timestamp__'):
             info['__timestamp__'] = t
         self.setFileInfo(name, info, append=appendInfo)
@@ -313,13 +320,16 @@ class DirHandle:
             self.addFile(newName, info=self.fileInfo(fileName))
             self.forget(fileName)
     
+    def setInfo(self, *args):
+        self.setFileInfo('.', *args)
+    
     def setFileInfo(self, fileName, info, append=False):
         """Set the entire meta-information array for fileName."""
         l = Locker(self.lock)
         
         #fd = open(self.indexFile, 'r')
         #fcntl.flock(fd, fcntl.LOCK_EX)
-        if self.isDir(fileName):
+        if fileName != '.' and self.isDir(fileName):
             self.getDir(fileName).setFileInfo('.', info)
         else:
             if append:
@@ -370,7 +380,11 @@ class DirHandle:
 
     def exists(self, name):
         l = Locker(self.lock)
-        fn = os.path.abspath(os.path.join(self.baseDir, name))
+        try:
+            fn = os.path.abspath(os.path.join(self.baseDir, name))
+        except:
+            print self.baseDir, name
+            raise
         return os.path.exists(fn)
         
 
