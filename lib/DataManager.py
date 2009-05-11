@@ -6,6 +6,7 @@ from lib.util.configfile import *
 from lib.util.MetaArray import MetaArray
 from lib.util.advancedTypes import Locker
 import lib.util.ptime as ptime
+from PyQt4 import QtCore
 
 class DataManager:
     """Class for creating and caching DirHandle objects to make sure there is only one manager object per directory. 
@@ -65,8 +66,9 @@ class DataManager:
 
 
 
-class DirHandle:
+class DirHandle(QtCore.QObject):
     def __init__(self, manager, baseDir, create=False):
+        QtCore.QObject.__init__(self)
         self.manager = manager
         self.baseDir = baseDir
         self.indexFile = os.path.join(self.baseDir, '.index')
@@ -168,7 +170,11 @@ class DirHandle:
         ndm = self.manager.getDirHandle(newDir, create=True)
         self.addFile(fullName, {})
         ndm.setInfo('.', info)
+        self.emitChanged()
         return ndm
+        
+    def emitChanged(self, fileName=None):
+        self.emit(QtCore.SIGNAL('changed'), fileName)
     
     def getDir(self, subdir, create=False, autoIncrement=False):
         """Return a DirHandle for the specified subdirectory. If the subdir does not exist, it will be created only if create==True"""
@@ -259,6 +265,7 @@ class DirHandle:
         if not info.has_key('__timestamp__'):
             info['__timestamp__'] = t
         self.setFileInfo(name, info, append=appendInfo)
+        self.emitChanged(fileName)
         return name
     
     def addFile(self, fileName, info={}, protect=False):
@@ -279,6 +286,7 @@ class DirHandle:
             self.getDir(fileName).setInfo('.', info)
         else:
             self.setFileInfo(fileName, info, append=append)
+        self.emitChanged(fileName)
     
     def forget(self, fileName):
         l = Locker(self.lock)
@@ -287,8 +295,10 @@ class DirHandle:
         self._readIndex(lock=False)
         del self.index[fileName]
         self._writeIndex(lock=False)
+        self.emitChanged(fileName)
         
     def delete(self, fileName):
+        self.emitChanged(fileName)
         pass
 
     def move(self, fileName, newDir):
@@ -300,6 +310,7 @@ class DirHandle:
             newDir.addFile(fileName, info=self.fileInfo(fileName))
         elif newDir.isManaged():
             newDir.addFile(fileName)
+        self.emitChanged(fileName)
             
     def isManaged(self, fileName=None):
         l = Locker(self.lock)
@@ -319,6 +330,7 @@ class DirHandle:
         if self.isManaged(fileName):
             self.addFile(newName, info=self.fileInfo(fileName))
             self.forget(fileName)
+        self.emitChanged(fileName)
     
     def setInfo(self, *args):
         self.setFileInfo('.', *args)
@@ -339,6 +351,7 @@ class DirHandle:
                 self.index[fileName] = info
                 self._writeIndex(lock=False)
         #fd.close()
+        self.emitChanged(fileName)
         
     def setFileAttr(fileName, attr, value):
         """Set a single meta-info attribute for fileName"""
@@ -355,6 +368,7 @@ class DirHandle:
                 self.index[fileName][attr] = value
                 self._writeIndex(lock=False)
                 #fd.close()
+        self.emitChanged(fileName)
         
     def parent(self):
         l = Locker(self.lock)
