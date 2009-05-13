@@ -14,7 +14,7 @@ class DataManager(Module):
         self.dialog = QtGui.QFileDialog()
         self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
         ## Load values into GUI
-        self.model = DMModel(self.manager.getBaseDir())
+        self.model = DMModel(self.manager.dirHandle(self.manager.getBaseDir()))
         self.ui.fileTreeView.setModel(self.model)
         self.baseDirChanged()
         self.currentDirChanged()
@@ -85,8 +85,10 @@ class DataManager(Module):
         if self.ui.newFolderList.currentIndex() == 0:
             return
             
-        cdir = self.manager.getCurrentDir()
         ftype = self.ui.newFolderList.currentText()
+        self.ui.newFolderList.setCurrentIndex(0)
+        
+        cdir = self.manager.getCurrentDir()
         if ftype == 'Folder':
             nd = cdir.mkdir('NewFolder', autoIncrement=True)
             item = self.model.dirIndex(nd)
@@ -107,15 +109,33 @@ class DMModel(QtCore.QAbstractItemModel):
         self.baseDir = baseDirHandle
         self.paths = {}
         self.dirCache = {}
+        self.handles = {}
         
     def setBaseDirHandle(self, d):
+        if self.baseDir is not None:
+            self.unwatch(self.baseDir)
         self.baseDir = d
+        self.watch(self.baseDir)
         self.clearCache()
+        
+    def watch(self, d):
+        if not isinstance(d, QtCore.QObject):
+            raise Exception("Can not watch object of type %s" % str(type(d)))
+        print "watch", d, d.dirName()
+        QtCore.QObject.connect(d, QtCore.SIGNAL('changed'), self.dirChanged)
+        
+    def unwatch(self, d):
+        if not isinstance(d, QtCore.QObject):
+            raise Exception("Can not unwatch object of type %s" % str(type(d)))
+        QtCore.QObject.disconnect(d, QtCore.SIGNAL('changed'), self.dirChanged)
         
     def clearCache(self, path=None):
         if path is None:
+            for k in self.handles:
+                self.unwatch(self.handles[k])
             self.dirCache = {}
             self.paths = {}
+            self.handles = {}
             self.emit(QtCore.SIGNAL('layoutChanged()'))
             #self.reset()
             return
@@ -128,6 +148,8 @@ class DMModel(QtCore.QAbstractItemModel):
             for k in rm:
                 del self.paths[k]
                 del self.dirCache[k]
+                self.unwatch(self.handles[k])
+                del self.handles[k]
         else:
             self.dirCache = {}
             self.emit(QtCore.SIGNAL('layoutChanged()'))
@@ -142,7 +164,21 @@ class DMModel(QtCore.QAbstractItemModel):
         path = os.path.normpath(path)
         if path not in self.paths:
             self.paths[path] = path  ## Index key must be stored locally--Qt won't protect it for us!
+            if self.isDir(path):
+                self.handles[path] = self.baseDir.getDir(path)
+                self.watch(self.handles[path])
+            else:
+                self.handles[path] = None
         return self.paths[path]
+        
+    
+        
+    def isDir(self, path):
+        return os.path.isdir(os.path.join(self.baseDir.dirName(), path))
+        
+    def dirChanged(self, path):
+        self.clearCache(self.sender().dirName())
+        #print "dirChanged:", self.sender(), path
         
     def dirIndex(self, dirName):
         """Return the index for a specific directory relative to its siblings"""

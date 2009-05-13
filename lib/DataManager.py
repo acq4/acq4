@@ -32,8 +32,8 @@ class DataManager:
         l = Locker(self.lock)
         dirName = os.path.abspath(dirName)
         if dirName not in self.cache:
-            self.cache['dirName'] = DirHandle(self, dirName, create=create)
-        return self.cache['dirName']
+            self.cache[dirName] = DirHandle(self, dirName, create=create)
+        return self.cache[dirName]
         
     #def getBaseDir(self):
         #l = Locker(self.lock)
@@ -174,6 +174,7 @@ class DirHandle(QtCore.QObject):
         return ndm
         
     def emitChanged(self, fileName=None):
+        print "emit ", self, self.dirName(), fileName
         self.emit(QtCore.SIGNAL('changed'), fileName)
     
     def getDir(self, subdir, create=False, autoIncrement=False):
