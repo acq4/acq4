@@ -17,10 +17,8 @@ config = os.path.abspath(config)
 
 dm = Manager(config)
 #dm.showDeviceRack()
-
-#dm.setCurrentDir('junk')
-
 dm.loadModule(module='DataManager', name='DM', config={})
+#dm.setCurrentDir('junk')
 
 
 win = QtGui.QMainWindow()

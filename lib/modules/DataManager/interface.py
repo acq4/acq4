@@ -96,11 +96,59 @@ class DataManager(Module):
         else:
             spec = self.manager.conf['folderTypes'][ftype]
             name = spec['name']
-            nd = cdir.mkdir('NewFolder', autoIncrement=True)
+            
+            ## Determine where to put the new directory
+            parent = cdir
+            try:
+                checkDir = cdir
+                for i in range(3):
+                    inf = checkDir.fileInfo()
+                    if 'dirType' in inf and inf['dirType'] == spec:
+                        parent = checkDir.parent()
+                        break
+                    checkDir = checkDir.parent()
+            except:
+                sys.excepthook(*sys.exc_info())
+                print "Error while deciding where to put new folder (using currentDir by default)")
+            
+            ## make
+            nd = parent.mkdir('NewFolder', autoIncrement=True)
+            
+            ## Add meta-info
+            info = {'dirType': spec}
+            nd.setInfo(info)
+            
+            ## set display to info
+            self.showFileInfo(nd)
+            
             
         self.manager.setCurrentDir(nd)
 
 
+    def showFileInfo(self, f):
+        if type(f) is str:
+            
+            pass
+        elif isinstance(f, DirHandle):
+            if f.isManaged():
+                info = f.info()
+                if 'dirType' in info:
+                    ## generate form for this dirType
+                    pass
+                else:
+                    ## generate default form
+                    pass
+                    
+            else:
+                ## Unmanaged, display directory name and clear all widgets
+                pass
+                
+        
+        
+        
+        
+        
+        
 
 class DMModel(QtCore.QAbstractItemModel):
     """Based on DirTreeModel, used for displaying the contents of directories created and managed by DataManager"""

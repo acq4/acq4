@@ -131,7 +131,14 @@
         <attribute name="title">
          <string>Info</string>
         </attribute>
-        <layout class="QHBoxLayout" name="horizontalLayout">
+        <layout class="QVBoxLayout" name="verticalLayout_3">
+         <item>
+          <widget class="QLabel" name="infoFileNameLabel">
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
          <item>
           <widget class="QTextBrowser" name="infoText"/>
          </item>
