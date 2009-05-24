@@ -108,7 +108,7 @@ class DirHandle(QtCore.QObject):
             #pass
             #fcntl.flock(fd, fcntl.LOCK_EX)
         if not os.path.isfile(self.indexFile):
-            raise Exception("Directory is not managed!")
+            raise Exception("Directory '%s' is not managed!" % (self.dirName()))
             
         try:
             #self.index = eval(fd.read())
@@ -174,7 +174,7 @@ class DirHandle(QtCore.QObject):
         return ndm
         
     def emitChanged(self, fileName=None):
-        print "emit ", self, self.dirName(), fileName
+        #print "emit ", self, self.dirName(), fileName
         self.emit(QtCore.SIGNAL('changed'), fileName)
     
     def getDir(self, subdir, create=False, autoIncrement=False):
@@ -207,10 +207,13 @@ class DirHandle(QtCore.QObject):
         ls.sort(strncmp)
         return ls
     
+    def info(self):
+        return self.fileInfo('.')
+    
     def fileInfo(self, file):
         """Return a dict of the meta info stored for file"""
         l = Locker(self.lock)
-        if self.isDir(file):  ## directory meta-info is stored within the directory, not in the parent.
+        if file != '.' and self.isDir(file):  ## directory meta-info is stored within the directory, not in the parent.
             return self.getDir(file).fileInfo('.')
             
         self._readIndex()

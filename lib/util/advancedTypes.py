@@ -190,6 +190,8 @@ class Locker:
         try:
             self.lock.release()
         except:
-            sys.excepthook(*sys.exc_info())
-            print "WARNING: Tried to release unacquired mutex"
+            pass
+        #except:
+            #sys.excepthook(*sys.exc_info())
+            #print "WARNING: Tried to release unacquired mutex"
 

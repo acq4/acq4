@@ -2,7 +2,7 @@
 from DataManagerTemplate import *
 from lib.modules.Module import *
 from lib.DataManager import *
-import os, re
+import os, re, sys, time
 
 class DataManager(Module):
     def __init__(self, manager, name, config):
@@ -51,7 +51,12 @@ class DataManager(Module):
 
     def currentDirChanged(self):
         newDir = self.manager.getCurrentDir()
-        self.ui.currentDirText.setText(QtCore.QString(newDir.dirName()))
+        dirName = newDir.dirName()
+        self.ui.currentDirText.setText(QtCore.QString(dirName))
+        self.model.setCurrentDir(dirName)
+        dirIndex = self.model.findIndex(dirName)
+        self.ui.fileTreeView.setExpanded(dirIndex, True)
+        self.ui.fileTreeView.scrollTo(dirIndex)
         
         # refresh file tree view
         
@@ -85,7 +90,7 @@ class DataManager(Module):
         if self.ui.newFolderList.currentIndex() == 0:
             return
             
-        ftype = self.ui.newFolderList.currentText()
+        ftype = str(self.ui.newFolderList.currentText())
         self.ui.newFolderList.setCurrentIndex(0)
         
         cdir = self.manager.getCurrentDir()
@@ -96,23 +101,27 @@ class DataManager(Module):
         else:
             spec = self.manager.conf['folderTypes'][ftype]
             name = spec['name']
-            
+            if "%d" in name:
+                name = name.replace('%d', time.strftime('%Y.%m.%d'))
+                
             ## Determine where to put the new directory
             parent = cdir
             try:
                 checkDir = cdir
-                for i in range(3):
-                    inf = checkDir.fileInfo()
+                for i in range(5):
+                    if not checkDir.isManaged():
+                        break
+                    inf = checkDir.info()
                     if 'dirType' in inf and inf['dirType'] == spec:
                         parent = checkDir.parent()
                         break
                     checkDir = checkDir.parent()
             except:
                 sys.excepthook(*sys.exc_info())
-                print "Error while deciding where to put new folder (using currentDir by default)")
+                print "Error while deciding where to put new folder (using currentDir by default)"
             
             ## make
-            nd = parent.mkdir('NewFolder', autoIncrement=True)
+            nd = parent.mkdir(name, autoIncrement=True)
             
             ## Add meta-info
             info = {'dirType': spec}
@@ -155,6 +164,7 @@ class DMModel(QtCore.QAbstractItemModel):
     def __init__(self, baseDirHandle=None, parent=None):
         QtCore.QAbstractItemModel.__init__(self, parent)
         self.baseDir = baseDirHandle
+        self.currentDir = None
         self.paths = {}
         self.dirCache = {}
         self.handles = {}
@@ -166,10 +176,13 @@ class DMModel(QtCore.QAbstractItemModel):
         self.watch(self.baseDir)
         self.clearCache()
         
+    def setCurrentDir(self, d):
+        self.currentDir = d
+        
     def watch(self, d):
         if not isinstance(d, QtCore.QObject):
             raise Exception("Can not watch object of type %s" % str(type(d)))
-        print "watch", d, d.dirName()
+        #print "watch", d, d.dirName()
         QtCore.QObject.connect(d, QtCore.SIGNAL('changed'), self.dirChanged)
         
     def unwatch(self, d):
@@ -195,7 +208,8 @@ class DMModel(QtCore.QAbstractItemModel):
                    rm.append(k)
             for k in rm:
                 del self.paths[k]
-                del self.dirCache[k]
+                if k in self.dirCache:
+                    del self.dirCache[k]
                 self.unwatch(self.handles[k])
                 del self.handles[k]
         else:
@@ -218,8 +232,6 @@ class DMModel(QtCore.QAbstractItemModel):
             else:
                 self.handles[path] = None
         return self.paths[path]
-        
-    
         
     def isDir(self, path):
         return os.path.isdir(os.path.join(self.baseDir.dirName(), path))
@@ -247,7 +259,7 @@ class DMModel(QtCore.QAbstractItemModel):
         fileName = os.path.normpath(fileName)
         if self.baseDir.dirName() in fileName:
             fileName = fileName.replace(self.baseDir.dirName(), '')
-        while fileName[0] in ['/', '\\']:
+        while len(fileName) > 0 and fileName[0] in ['/', '\\']:
             fileName = fileName[1:]
         return self.dirIndex(fileName)
         
@@ -340,6 +352,11 @@ class DMModel(QtCore.QAbstractItemModel):
                 ret = QtGui.QColor(0,0,100)
             else:
                 ret = QtGui.QColor(0,0,0)
+        elif role == QtCore.Qt.BackgroundRole:
+            if fullPath == self.currentDir:
+                ret = QtGui.QBrush(QtGui.QColor(150, 220, 150))
+            else:
+                ret = QtCore.QVariant()
         else:
             ret = QtCore.QVariant()
         return QtCore.QVariant(ret)

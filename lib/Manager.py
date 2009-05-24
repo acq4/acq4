@@ -41,7 +41,8 @@ class Manager(QtCore.QObject):
             self.loadDevice(modName, conf, k)
         if 'users' in cfg:
             user = 'Luke'
-            baseDir = cfg['users'][user]['storageDir']
+            self.conf = cfg['users'][user]
+            baseDir = self.conf['storageDir']
             self.setBaseDir(baseDir)
             self.setCurrentDir('')
         else:
@@ -125,6 +126,9 @@ class Manager(QtCore.QObject):
 
     def setBaseDir(self, d):
         self.baseDir = d
+        dh = self.dirHandle(self.baseDir)
+        if not dh.isManaged():
+            dh.createIndex()
         self.emit(QtCore.SIGNAL('baseDirChanged'))
 
     def dirHandle(self, d):

@@ -10,7 +10,7 @@ if app is None:
     app = QtGui.QApplication(sys.argv)
 
 
-config = 'config/default.cfg'
+config = 'config/mock.cfg'
 if len(sys.argv) > 1:
     config = sys.argv[1]
 config = os.path.abspath(config)
@@ -24,7 +24,7 @@ dm.loadModule(module='DataManager', name='DM', config={})
 win = QtGui.QMainWindow()
 b = QtGui.QPushButton("Test")
 win.setCentralWidget(b)
-win.show()
+#win.show()
 
 def mkfiles():
     d = dm.getCurrentDir()
