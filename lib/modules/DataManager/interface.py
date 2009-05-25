@@ -14,7 +14,7 @@ class DataManager(Module):
         self.dialog = QtGui.QFileDialog()
         self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
         ## Load values into GUI
-        self.model = DMModel(self.manager.dirHandle(self.manager.getBaseDir()))
+        self.model = DMModel(self.manager.getBaseDir())
         self.ui.fileTreeView.setModel(self.model)
         self.baseDirChanged()
         self.currentDirChanged()
@@ -29,6 +29,7 @@ class DataManager(Module):
         QtCore.QObject.connect(self.manager, QtCore.SIGNAL('baseDirChanged'), self.baseDirChanged)
         QtCore.QObject.connect(self.manager, QtCore.SIGNAL('currentDirChanged'), self.currentDirChanged)
         QtCore.QObject.connect(self.ui.newFolderList, QtCore.SIGNAL('currentIndexChanged(int)'), self.newFolder)
+        QtCore.QObject.connect(self.ui.fileTreeView.selectionModel(), QtCore.SIGNAL('selectionChanged(const QItemSelection&, const QItemSelection&)'), self.fileSelectionChanged)
         self.win.show()
         
     def updateNewFolderList(self):
@@ -37,10 +38,11 @@ class DataManager(Module):
         self.ui.newFolderList.addItems(['New...', 'Folder'] + conf.keys())
         
     def baseDirChanged(self):
-        newDir = self.manager.getBaseDir()
-        dh = self.manager.dirHandle(newDir)
-        self.ui.baseDirText.setText(QtCore.QString(newDir))
+        dh = self.manager.getBaseDir()
+        self.baseDir = dh
+        self.ui.baseDirText.setText(QtCore.QString(dh.dirName()))
         self.model.setBaseDirHandle(dh)
+        self.currentDirChanged()
 
     def setCurrentClicked(self):
         newDir = self.selectedFile()
@@ -51,17 +53,17 @@ class DataManager(Module):
 
     def currentDirChanged(self):
         newDir = self.manager.getCurrentDir()
-        dirName = newDir.dirName()
+        dirName = newDir.dirName(relativeTo=self.baseDir)
         self.ui.currentDirText.setText(QtCore.QString(dirName))
-        self.model.setCurrentDir(dirName)
-        dirIndex = self.model.findIndex(dirName)
+        self.model.setCurrentDir(newDir.dirName())
+        dirIndex = self.model.findIndex(newDir.dirName())
         self.ui.fileTreeView.setExpanded(dirIndex, True)
         self.ui.fileTreeView.scrollTo(dirIndex)
         
         # refresh file tree view
         
     def showFileDialog(self):
-        self.dialog.setDirectory(self.manager.getBaseDir())
+        self.dialog.setDirectory(self.manager.getBaseDir().dirName())
         self.dialog.show()
 
     def setBaseDir(self, dirName):
@@ -134,23 +136,24 @@ class DataManager(Module):
         self.manager.setCurrentDir(nd)
 
 
-    def showFileInfo(self, f):
-        if type(f) is str:
+    def fileSelectionChanged(self):
+        self.ui.fileInfo.setCurrentFile(self.selectedFile())
+        #if type(f) is str:
             
-            pass
-        elif isinstance(f, DirHandle):
-            if f.isManaged():
-                info = f.info()
-                if 'dirType' in info:
-                    ## generate form for this dirType
-                    pass
-                else:
-                    ## generate default form
-                    pass
+            #pass
+        #elif isinstance(f, DirHandle):
+            #if f.isManaged():
+                #info = f.info()
+                #if 'dirType' in info:
+                    ### generate form for this dirType
+                    #pass
+                #else:
+                    ### generate default form
+                    #pass
                     
-            else:
-                ## Unmanaged, display directory name and clear all widgets
-                pass
+            #else:
+                ### Unmanaged, display directory name and clear all widgets
+                #pass
                 
         
         

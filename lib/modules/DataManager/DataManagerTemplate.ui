@@ -133,14 +133,7 @@
         </attribute>
         <layout class="QVBoxLayout" name="verticalLayout_3">
          <item>
-          <widget class="QLabel" name="infoFileNameLabel">
-           <property name="text">
-            <string/>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QTextBrowser" name="infoText"/>
+          <widget class="FileInfoView" name="fileInfo" native="true"/>
          </item>
         </layout>
        </widget>
@@ -187,6 +180,14 @@
    </widget>
   </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>FileInfoView</class>
+   <extends>QWidget</extends>
+   <header>FileInfoView</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

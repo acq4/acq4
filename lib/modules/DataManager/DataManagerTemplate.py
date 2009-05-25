@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'DataManagerTemplate.ui'
 #
-# Created: Thu May  7 16:29:18 2009
+# Created: Sun May 24 16:34:20 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -76,11 +76,11 @@ class Ui_MainWindow(object):
         self.fileDisplayTabs.setObjectName("fileDisplayTabs")
         self.tab = QtGui.QWidget()
         self.tab.setObjectName("tab")
-        self.horizontalLayout = QtGui.QHBoxLayout(self.tab)
-        self.horizontalLayout.setObjectName("horizontalLayout")
-        self.infoText = QtGui.QTextBrowser(self.tab)
-        self.infoText.setObjectName("infoText")
-        self.horizontalLayout.addWidget(self.infoText)
+        self.verticalLayout_3 = QtGui.QVBoxLayout(self.tab)
+        self.verticalLayout_3.setObjectName("verticalLayout_3")
+        self.fileInfo = FileInfoView(self.tab)
+        self.fileInfo.setObjectName("fileInfo")
+        self.verticalLayout_3.addWidget(self.fileInfo)
         self.fileDisplayTabs.addTab(self.tab, "")
         self.tab_3 = QtGui.QWidget()
         self.tab_3.setObjectName("tab_3")
@@ -129,3 +129,4 @@ class Ui_MainWindow(object):
         self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab_2), QtGui.QApplication.translate("MainWindow", "Analysis", None, QtGui.QApplication.UnicodeUTF8))
         self.dockWidget.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Log", None, QtGui.QApplication.UnicodeUTF8))
 
+from FileInfoView import FileInfoView

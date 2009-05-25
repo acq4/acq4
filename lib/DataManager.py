@@ -392,9 +392,16 @@ class DirHandle(QtCore.QObject):
         mod = __import__('lib.filetypes.%s' % modName, fromlist=['*'])
         return getattr(mod, modName)
         
-    def dirName(self):
+    def dirName(self, relativeTo=None):
         l = Locker(self.lock)
-        return os.path.abspath(self.baseDir)
+        path = os.path.abspath(self.baseDir)
+        if relativeTo is not None:
+            rpath = relativeTo.dirName()
+            if path[:len(rpath)] == rpath:
+                return path[len(rpath):]
+            else:
+                raise Exception("Path %s is not child of %s" % (path, rpath))
+        return path
 
     def exists(self, name):
         l = Locker(self.lock)

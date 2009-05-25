@@ -112,7 +112,7 @@ class Manager(QtCore.QObject):
 
     def setCurrentDir(self, d):
         if type(d) is str:
-            self.currentDir = self.dataManager.getDirHandle(os.path.join(self.baseDir, d), create=True)
+            self.currentDir = self.baseDir.getDir(d, create=True)
         elif isinstance(d, DirHandle):
             self.currentDir = d
         else:
@@ -125,14 +125,18 @@ class Manager(QtCore.QObject):
         return self.baseDir
 
     def setBaseDir(self, d):
-        self.baseDir = d
-        dh = self.dirHandle(self.baseDir)
-        if not dh.isManaged():
-            dh.createIndex()
+        if type(d) is str:
+            self.baseDir = self.dirHandle(d, create=False)
+        elif isinstance(d, DirHandle):
+            self.baseDir = d
+        else:
+            raise Exception("Invalid argument type: ", type(d), d)
+        if not self.baseDir.isManaged():
+            self.baseDir.createIndex()
         self.emit(QtCore.SIGNAL('baseDirChanged'))
 
-    def dirHandle(self, d):
-        return self.dataManager.getDirHandle(d)
+    def dirHandle(self, d, create=False):
+        return self.dataManager.getDirHandle(d, create)
 
     def logMsg(self, msg, tags={}):
         cd = self.getCurrentDir()
