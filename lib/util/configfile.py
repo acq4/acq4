@@ -87,14 +87,14 @@ def parseString(lines, start=0):
                 print "Error evaluating expression at config line %d" % (ln+1)
                 raise
         else:
-            if ln+1 >= len(lines) or measureIndent(lines[ln+1]) == indent:
+            if ln+1 >= len(lines) or measureIndent(lines[ln+1]) <= indent:
+                #print "blank dict"
                 val = {}
             else:
                 #print "Going deeper..", ln+1
                 (ln, val) = parseString(lines, start=ln+1)
         data[k] = val
         #print k, repr(val)
-        #data['__order__'].append(k)
     #print "Returning shallower..", ln+1
     return (ln, data)
     

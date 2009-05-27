@@ -13,8 +13,13 @@ class Manager(QtCore.QObject):
       - Creating and managing DirectoryHandle objects
       - Providing unified timestamps
       - Making sure all devices/modules are properly shut down at the end of the program"""
+    CREATED = False
+    single = None
     
     def __init__(self, configFile=None):
+        if Manager.CREATED:
+            raise Exception("Manager object already created!")
+        
         QtCore.QObject.__init__(self)
         self.alreadyQuit = False
         atexit.register(self.quit)
@@ -25,6 +30,8 @@ class Manager(QtCore.QObject):
         self.currentDir = None
         self.baseDir = None
         self.readConfig(configFile)
+        Manager.CREATED = True
+        Manager.single = self
 
     def readConfig(self, configFile):
         """Read configuration file, create device objects, add devices to list"""
@@ -233,3 +240,7 @@ class Task:
         return self.result
 
 
+def getManager():
+    if Manager.single is None:
+        raise Exception("No manager created yet")
+    return Manager.single

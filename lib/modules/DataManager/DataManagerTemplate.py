@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'DataManagerTemplate.ui'
 #
-# Created: Sun May 24 16:34:20 2009
+# Created: Wed May 27 01:31:48 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -15,9 +15,9 @@ class Ui_MainWindow(object):
         MainWindow.resize(800, 600)
         self.centralwidget = QtGui.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
-        self.gridLayout = QtGui.QGridLayout(self.centralwidget)
-        self.gridLayout.setMargin(0)
-        self.gridLayout.setSpacing(0)
+        self.verticalLayout_5 = QtGui.QVBoxLayout(self.centralwidget)
+        self.verticalLayout_5.setObjectName("verticalLayout_5")
+        self.gridLayout = QtGui.QGridLayout()
         self.gridLayout.setObjectName("gridLayout")
         self.label_2 = QtGui.QLabel(self.centralwidget)
         self.label_2.setObjectName("label_2")
@@ -37,6 +37,7 @@ class Ui_MainWindow(object):
         self.setCurrentDirBtn = QtGui.QPushButton(self.centralwidget)
         self.setCurrentDirBtn.setObjectName("setCurrentDirBtn")
         self.gridLayout.addWidget(self.setCurrentDirBtn, 1, 2, 1, 1)
+        self.verticalLayout_5.addLayout(self.gridLayout)
         self.splitter = QtGui.QSplitter(self.centralwidget)
         self.splitter.setOrientation(QtCore.Qt.Horizontal)
         self.splitter.setObjectName("splitter")
@@ -67,7 +68,24 @@ class Ui_MainWindow(object):
         self.fileTreeView.setSizePolicy(sizePolicy)
         self.fileTreeView.setObjectName("fileTreeView")
         self.verticalLayout_2.addWidget(self.fileTreeView)
-        self.fileDisplayTabs = QtGui.QTabWidget(self.splitter)
+        self.widget = QtGui.QWidget(self.splitter)
+        self.widget.setObjectName("widget")
+        self.verticalLayout_4 = QtGui.QVBoxLayout(self.widget)
+        self.verticalLayout_4.setObjectName("verticalLayout_4")
+        self.fileNameLabel = QtGui.QLabel(self.widget)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.fileNameLabel.sizePolicy().hasHeightForWidth())
+        self.fileNameLabel.setSizePolicy(sizePolicy)
+        font = QtGui.QFont()
+        font.setPointSize(7)
+        font.setWeight(75)
+        font.setBold(True)
+        self.fileNameLabel.setFont(font)
+        self.fileNameLabel.setObjectName("fileNameLabel")
+        self.verticalLayout_4.addWidget(self.fileNameLabel)
+        self.fileDisplayTabs = QtGui.QTabWidget(self.widget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(8)
         sizePolicy.setVerticalStretch(0)
@@ -88,7 +106,8 @@ class Ui_MainWindow(object):
         self.tab_2 = QtGui.QWidget()
         self.tab_2.setObjectName("tab_2")
         self.fileDisplayTabs.addTab(self.tab_2, "")
-        self.gridLayout.addWidget(self.splitter, 2, 0, 1, 3)
+        self.verticalLayout_4.addWidget(self.fileDisplayTabs)
+        self.verticalLayout_5.addWidget(self.splitter)
         MainWindow.setCentralWidget(self.centralwidget)
         self.dockWidget = QtGui.QDockWidget(MainWindow)
         self.dockWidget.setFloating(False)

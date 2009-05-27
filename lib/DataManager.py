@@ -21,12 +21,7 @@ class DataManager:
             raise Exception("Attempted to create more than one DataManager!")
         DataManager.CREATED = True
         self.cache = {}
-        #self.m = manager
         self.lock = threading.RLock()
-        #self.baseDir = baseDir
-        #self.currentDir = ""
-    #def time(self):
-        #return self.m.time()
         
     def getDirHandle(self, dirName, create=False):
         l = Locker(self.lock)
@@ -35,37 +30,6 @@ class DataManager:
             self.cache[dirName] = DirHandle(self, dirName, create=create)
         return self.cache[dirName]
         
-    #def getBaseDir(self):
-        #l = Locker(self.lock)
-        #return self.getDirHandle("")
-        
-    #def setBaseDir(self, d):
-        #l = Locker(self.lock)
-        #self.baseDir = d
-           
-
-    #def getCurrentDir(self):
-        #l = Locker(self.lock)
-        #return self.getDirHandle(self.currentDir, create=True)
-        
-    #def setCurrentDir(self, d):
-        #l = Locker(self.lock)
-        #if type(d) is str:
-            #self.currentDir = d
-        #elif type(d) is DirHandle:
-            #self.currentDir = d.baseDir
-        #else:
-            #raise Exception("Must specify either a directory name or a DirHandle object")
-
-#GLOBAL_DMFACTORY = DataManager("do not copy this password")
-
-#def createDirHandle(baseDir, create=False):
-    #global GLOBAL_DMFACTORY
-    #return GLOBAL_DMFACTORY.getDirHandle(baseDir, create=create)
-
-
-
-
 class DirHandle(QtCore.QObject):
     def __init__(self, manager, baseDir, create=False):
         QtCore.QObject.__init__(self)
