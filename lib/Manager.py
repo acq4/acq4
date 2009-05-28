@@ -143,8 +143,14 @@ class Manager(QtCore.QObject):
         self.emit(QtCore.SIGNAL('baseDirChanged'))
 
     def dirHandle(self, d, create=False):
+        """Return a directory handle for d."""
         return self.dataManager.getDirHandle(d, create)
 
+    def fileHandle(self, d):
+        """Return a file or directory handle for d"""
+        return self.dataManager.getHandle(d)
+        
+        
     def logMsg(self, msg, tags={}):
         cd = self.getCurrentDir()
         cd.logMsg(msg, tags)

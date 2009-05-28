@@ -41,7 +41,7 @@ class DataManager(Module):
     def baseDirChanged(self):
         dh = self.manager.getBaseDir()
         self.baseDir = dh
-        self.ui.baseDirText.setText(QtCore.QString(dh.dirName()))
+        self.ui.baseDirText.setText(QtCore.QString(dh.name()))
         self.model.setBaseDirHandle(dh)
         self.currentDirChanged()
 
@@ -54,17 +54,17 @@ class DataManager(Module):
 
     def currentDirChanged(self):
         newDir = self.manager.getCurrentDir()
-        dirName = newDir.dirName(relativeTo=self.baseDir)
+        dirName = newDir.name(relativeTo=self.baseDir)
         self.ui.currentDirText.setText(QtCore.QString(dirName))
-        self.model.setCurrentDir(newDir.dirName())
-        dirIndex = self.model.findIndex(newDir.dirName())
+        self.model.setCurrentDir(newDir.name())
+        dirIndex = self.model.findIndex(newDir.name())
         self.ui.fileTreeView.setExpanded(dirIndex, True)
         self.ui.fileTreeView.scrollTo(dirIndex)
         
         # refresh file tree view
         
     def showFileDialog(self):
-        self.dialog.setDirectory(self.manager.getBaseDir().dirName())
+        self.dialog.setDirectory(self.manager.getBaseDir().name())
         self.dialog.show()
 
     def setBaseDir(self, dirName):
@@ -113,9 +113,11 @@ class DataManager(Module):
                     if not checkDir.isManaged():
                         break
                     inf = checkDir.info()
-                    if 'dirType' in inf and inf['dirType'] == spec:
+                    if 'dirType' in inf and inf['dirType'] == ftype:
                         parent = checkDir.parent()
                         break
+                    #else:
+                        #print "dir no match:", spec, inf
                     checkDir = checkDir.parent()
             except:
                 sys.excepthook(*sys.exc_info())
@@ -138,12 +140,12 @@ class DataManager(Module):
 
     def fileSelectionChanged(self):
         f = self.selectedFile()
-        self.ui.fileInfo.setCurrentFile(self.manager.dirHandle(f))
+        self.ui.fileInfo.setCurrentFile(self.manager.fileHandle(f))
         if type(f) is str:
             fileName = f
         elif isinstance(f, DirHandle):
-            fileName = f.dirName()
-        self.ui.fileNameLabel.setText(fileName.replace(self.baseDir.dirName(), ''))
+            fileName = f.name()
+        self.ui.fileNameLabel.setText(fileName.replace(self.baseDir.name(), ''))
         #if type(f) is str:
             
             #pass
