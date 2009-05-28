@@ -118,14 +118,26 @@ class Manager(QtCore.QObject):
         return self.currentDir
 
     def setCurrentDir(self, d):
+        if self.currentDir is not None:
+            QtCore.QObject.disconnect(self.currentDir, QtCore.SIGNAL('changed'), self.currentDirChanged)
+            
+            
         if type(d) is str:
             self.currentDir = self.baseDir.getDir(d, create=True)
         elif isinstance(d, DirHandle):
             self.currentDir = d
         else:
             raise Exception("Invalid argument type: ", type(d), d)
+        QtCore.QObject.connect(self.currentDir, QtCore.SIGNAL('changed'), self.currentDirChanged)
         self.emit(QtCore.SIGNAL('currentDirChanged'))
 
+    def currentDirChanged(self, name, change, *args):
+        """Handle situation where currentDir is moved or renamed"""
+        #print "Changed:", change
+        if change in ['renamed', 'moved', 'parent']:
+            self.emit(QtCore.SIGNAL('currentDirChanged'))
+            
+            
     def getBaseDir(self):
         if self.baseDir is None:
             raise Exception("BaseDir has not been set!")
@@ -149,6 +161,8 @@ class Manager(QtCore.QObject):
     def fileHandle(self, d):
         """Return a file or directory handle for d"""
         return self.dataManager.getHandle(d)
+        
+            
         
         
     def logMsg(self, msg, tags={}):

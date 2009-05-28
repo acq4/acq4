@@ -60,16 +60,19 @@ class DataManager(QtCore.QObject):
         
     def _handleChanged(self, handle, change, *args):
         l = Locker(self.lock)
+        #print "Manager handling changes", handle, change
         if change == 'renamed' or change == 'moved':
             oldName = args[0]
             newName = args[1]
-
+            #print oldName, newName
             ## Inform all children that they have been moved and update cache
             tree = self._getTree(oldName)
+            #print "  Affected handles:", tree
             for h in tree:
                 newh = os.path.join(newName, h[len(oldName):])
                 self.cache[newh] = self.cache[h]
                 if h != oldName:
+                    #print "  Informing", h
                     self.cache[h]._parentMoved(oldName, newName)
                 del self.cache[h]
             
@@ -91,9 +94,11 @@ class DataManager(QtCore.QObject):
         if not self.cache[parent].hasChildren():
             return [parent]
         
-        tree = []
+        tree = [parent]
         for h in self.cache:
-            if h[len(parent):] == parent:
+            #print "    tree checking", h[:len(parent)], parent + os.path.sep
+            if h[:(len(parent)+1)] == parent + os.path.sep:
+                #print "        hit"
                 tree.append(h)
         return tree
 
@@ -173,7 +178,7 @@ class FileHandle(QtCore.QObject):
         fn1 = self.name()
         oldName = self.shortName()
         fn2 = os.path.join(parent.name(), newName)
-        print "rename", fn1, fn2
+        #print "rename", fn1, fn2
         os.rename(fn1, fn2)
         self.path = fn2
         if parent.isManaged():
@@ -206,13 +211,18 @@ class FileHandle(QtCore.QObject):
     
     def _parentMoved(self, oldDir, newDir):
         """Inform this object that it has been moved as a result of its (grand)parent having moved."""
-        if self.path[len(oldDir):] != oldDir:
+        if self.path[:len(oldDir)] != oldDir:
             raise Exception("File %s is not in moved tree %s, should not update!" % (self.path, oldDir))
         subName = self.path[len(oldDir):]
+        while subName[0] == os.path.sep:
+            subName = subName[1:]
         newName = os.path.join(newDir, subName)
-        if not os.path.isfile(newName):
+        #print "===", oldDir, newDir, subName, newName
+        if not os.path.exists(newName):
             raise Exception("File %s does not exist." % newName)
-        self.path = fileName
+        self.path = newName
+        #print "parent of %s changed" % self.name()
+        self.emitChanged('parent')
 
     def checkDeleted(self):
         if self.path is None:
@@ -514,14 +524,14 @@ class DirHandle(FileHandle):
         #if fileName != '.' and self.isDir(fileName):
             #self.getDir(fileName)._setFileInfo('.', info)
         #else:
-        print "setFileInfo", self.name(), fileName, info, append
+        #print "setFileInfo", self.name(), fileName, info, append
         if append:
-            print "appending"
+            #print "appending"
             appendConfigFile({fileName: info}, self._indexFile())
         else:
             self._readIndex(lock=False)
             if fileName not in self.index:
-                print fileName, "not in", self.index
+                #print fileName, "not in", self.index
                 self.index[fileName] = {}
             for k in info:
                 #print "%s Setting %s = %s for file %s"  % (self.name(), k, info[k], fileName)

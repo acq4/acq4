@@ -19,6 +19,7 @@ class DataManager(Module):
         self.ui.fileTreeView.setModel(self.model)
         self.baseDirChanged()
         self.currentDirChanged()
+        self.selFile = None
         
         
         ## Make all connections needed
@@ -139,8 +140,14 @@ class DataManager(Module):
 
 
     def fileSelectionChanged(self):
+        if self.selFile is not None:
+            QtCore.QObject.disconnect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
+        
+        
         f = self.selectedFile()
-        self.ui.fileInfo.setCurrentFile(self.manager.fileHandle(f))
+        self.selFile = self.manager.fileHandle(f)
+        QtCore.QObject.connect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
+        self.ui.fileInfo.setCurrentFile(self.selFile)
         if type(f) is str:
             fileName = f
         elif isinstance(f, DirHandle):
@@ -164,7 +171,8 @@ class DataManager(Module):
                 #pass
                 
         
-        
+    def selectedFileAltered(self):
+        self.fileSelectionChanged()
         
         
         
