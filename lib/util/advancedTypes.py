@@ -28,6 +28,10 @@ class OrderedDict(dict):
         for k in self.keys():
             it.append(k, self[k])
     
+    def remove(self, key):
+        del self[key]
+        self.order.remove(key)
+    
     def __iter__(self):
         for k in self.keys():
             yield k

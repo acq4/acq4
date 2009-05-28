@@ -67,7 +67,6 @@ def parseString(lines, start=0):
         ## Measure line indentation, make sure it is correct for this level
         lineInd = measureIndent(l)
         if lineInd < indent:
-            
             ln -= 1
             break
         if lineInd > indent:
