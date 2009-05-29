@@ -47,18 +47,21 @@ class DataManager(Module):
         self.currentDirChanged()
 
     def setCurrentClicked(self):
-        newDir = self.selectedFile()
-        if not os.path.isdir(newDir):
-            newDir = os.path.split(newDir)[0]
-        dh = self.manager.dirHandle(newDir)
-        self.manager.setCurrentDir(dh)
+        handle = self.selectedFile()
+        if handle is None:
+            return
+        if not handle.isDir():
+            handle = handle.parent()
+        #dh = self.manager.dirHandle(newDir)
+        self.manager.setCurrentDir(handle)
 
     def currentDirChanged(self):
         newDir = self.manager.getCurrentDir()
         dirName = newDir.name(relativeTo=self.baseDir)
         self.ui.currentDirText.setText(QtCore.QString(dirName))
-        self.model.setCurrentDir(newDir.name())
-        dirIndex = self.model.findIndex(newDir.name())
+        
+        self.model.setCurrentDir(newDir)
+        dirIndex = self.model.handleIndex(newDir)
         self.ui.fileTreeView.setExpanded(dirIndex, True)
         self.ui.fileTreeView.scrollTo(dirIndex)
         
@@ -84,11 +87,16 @@ class DataManager(Module):
             
     def selectedFile(self):
         sel = list(self.ui.fileTreeView.selectedIndexes())
+        if len(sel) == 0:
+            return None
         if len(sel) == 1:
             index = sel[0]
         else:
-            raise Exception("Error - multiple/no items selected")
-        return self.model.getFileName(index)
+            raise Exception("Error - multiple items selected")
+        #print "index:", index.internalPointer()
+        if index.internalPointer() is None:
+            return None
+        return self.model.handle(index)
 
     def newFolder(self):
         if self.ui.newFolderList.currentIndex() == 0:
@@ -100,7 +108,7 @@ class DataManager(Module):
         cdir = self.manager.getCurrentDir()
         if ftype == 'Folder':
             nd = cdir.mkdir('NewFolder', autoIncrement=True)
-            item = self.model.dirIndex(nd)
+            item = self.model.handleIndex(nd)
             self.ui.fileTreeView.edit(item)
         else:
             spec = self.manager.conf['folderTypes'][ftype]
@@ -133,7 +141,11 @@ class DataManager(Module):
             
             ## set display to info
             #self.showFileInfo(nd)
-            self.ui.fileInfo.setCurrentFile(nd)
+            
+            index = self.model.handleIndex(nd)
+            self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Clear)
+            self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Select)
+            #self.ui.fileInfo.setCurrentFile(nd)
             
             
         self.manager.setCurrentDir(nd)
@@ -144,32 +156,15 @@ class DataManager(Module):
             QtCore.QObject.disconnect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
         
         
-        f = self.selectedFile()
-        self.selFile = self.manager.fileHandle(f)
-        QtCore.QObject.connect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
-        self.ui.fileInfo.setCurrentFile(self.selFile)
-        if type(f) is str:
-            fileName = f
-        elif isinstance(f, DirHandle):
-            fileName = f.name()
-        self.ui.fileNameLabel.setText(fileName.replace(self.baseDir.name(), ''))
-        #if type(f) is str:
-            
-            #pass
-        #elif isinstance(f, DirHandle):
-            #if f.isManaged():
-                #info = f.info()
-                #if 'dirType' in info:
-                    ### generate form for this dirType
-                    #pass
-                #else:
-                    ### generate default form
-                    #pass
-                    
-            #else:
-                ### Unmanaged, display directory name and clear all widgets
-                #pass
-                
+        fh = self.selectedFile()
+        if fh is None:
+            self.ui.fileInfo.setCurrentFile(None)
+            self.ui.fileNameLabel.setText('')
+        else:
+            self.selFile = fh
+            QtCore.QObject.connect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
+            self.ui.fileInfo.setCurrentFile(self.selFile)
+            self.ui.fileNameLabel.setText(fh.name(relativeTo=self.baseDir))
         
     def selectedFileAltered(self):
         self.fileSelectionChanged()

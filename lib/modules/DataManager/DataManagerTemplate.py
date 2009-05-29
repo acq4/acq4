@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'DataManagerTemplate.ui'
 #
-# Created: Wed May 27 01:31:48 2009
+# Created: Thu May 28 12:59:10 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -66,13 +66,15 @@ class Ui_MainWindow(object):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.fileTreeView.sizePolicy().hasHeightForWidth())
         self.fileTreeView.setSizePolicy(sizePolicy)
+        self.fileTreeView.setDragEnabled(True)
+        self.fileTreeView.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
         self.fileTreeView.setObjectName("fileTreeView")
         self.verticalLayout_2.addWidget(self.fileTreeView)
-        self.widget = QtGui.QWidget(self.splitter)
-        self.widget.setObjectName("widget")
-        self.verticalLayout_4 = QtGui.QVBoxLayout(self.widget)
+        self.layoutWidget1 = QtGui.QWidget(self.splitter)
+        self.layoutWidget1.setObjectName("layoutWidget1")
+        self.verticalLayout_4 = QtGui.QVBoxLayout(self.layoutWidget1)
         self.verticalLayout_4.setObjectName("verticalLayout_4")
-        self.fileNameLabel = QtGui.QLabel(self.widget)
+        self.fileNameLabel = QtGui.QLabel(self.layoutWidget1)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -85,7 +87,7 @@ class Ui_MainWindow(object):
         self.fileNameLabel.setFont(font)
         self.fileNameLabel.setObjectName("fileNameLabel")
         self.verticalLayout_4.addWidget(self.fileNameLabel)
-        self.fileDisplayTabs = QtGui.QTabWidget(self.widget)
+        self.fileDisplayTabs = QtGui.QTabWidget(self.layoutWidget1)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(8)
         sizePolicy.setVerticalStretch(0)

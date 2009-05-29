@@ -161,6 +161,8 @@ class FileHandle(QtCore.QObject):
         fn1 = self.name()
         name = self.shortName()
         fn2 = os.path.join(newDir.name(), name)
+        if os.path.exists(fn2):
+            raise Exception("Destination file %s already exists." % fn2)
         os.rename(fn1, fn2)
         self.path = fn2
         if oldDir.isManaged() and newDir.isManaged():
@@ -178,6 +180,8 @@ class FileHandle(QtCore.QObject):
         fn1 = self.name()
         oldName = self.shortName()
         fn2 = os.path.join(parent.name(), newName)
+        if os.path.exists(fn2):
+            raise Exception("Destination file %s already exists." % fn2)
         #print "rename", fn1, fn2
         os.rename(fn1, fn2)
         self.path = fn2
@@ -228,6 +232,9 @@ class FileHandle(QtCore.QObject):
         if self.path is None:
             raise Exception("File has been deleted.")
 
+    def isDir(self, path=None):
+        return False
+        
     def _deleted(self):
         self.path = None
     
@@ -266,6 +273,9 @@ class DirHandle(FileHandle):
         else:
             ## If directory is unmanaged, just leave it that way.
             pass
+        
+    def __repr__(self):
+        return "<%s '%s'>" % (self.__class__.__name__, self.name())
         
     def __del__(self):
         pass
@@ -347,13 +357,16 @@ class DirHandle(FileHandle):
         return os.path.isdir(os.path.join(self.path, dirName))
             
     def ls(self):
-        """Return a list of all managed files in the directory"""
+        """Return a list of all files in the directory"""
         l = Locker(self.lock)
-        self._readIndex()
-        ls = self.index.keys()
-        ls.remove('.')
-        
-        ls.sort(self._cmpFileTimes)
+        #self._readIndex()
+        #ls = self.index.keys()
+        #ls.remove('.')
+        ls = os.listdir(self.name())
+        for i in ['.index', '.log']:
+            if i in ls:
+                ls.remove(i)
+        #ls.sort(self._cmpFileTimes)
         return ls
     
     def _cmpFileTimes(self, a, b):
@@ -384,10 +397,14 @@ class DirHandle(FileHandle):
         else:
             raise Exception("File %s is not indexed" % file)
     
-    def isDir(self, fileName):
+    def isDir(self, path=None):
         l = Locker(self.lock)
-        fn = os.path.abspath(os.path.join(self.path, fileName))
-        return os.path.isdir(fn)
+        #fn = os.path.abspath(os.path.join(self.path, fileName))
+        #return os.path.isdir(fn)
+        if path is None:
+            return True
+        else:
+            return self[path].isDir()
         
     def isFile(self, fileName):
         l = Locker(self.lock)

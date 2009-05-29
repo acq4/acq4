@@ -95,25 +95,57 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
     #im = ((self.image - black) * scale).clip(0.,255.).astype(ubyte)
     ## Same thing using weave to speed things up
     shape = self.image.shape
-    sim = ascontiguousarray(self.image)
-    sim.shape = sim.size
-    im = zeros(sim.shape, dtype=ubyte)
-    n = im.size
     black = float(self.blackLevel)
+    try:
+        if not self.useWeave:
+            raise Exception('Skipping weave compile')
+        sim = ascontiguousarray(self.image)
+        sim.shape = sim.size
+        im = zeros(sim.shape, dtype=ubyte)
+        n = im.size
+        
+        code = """
+        for( int i=0; i<n; i++ ) {
+            float a = (sim(i)-black) * (float)scale;
+            if( a > 255.0 )
+            a = 255.0;
+            else if( a < 0.0 )
+            a = 0.0;
+            im(i) = a;
+        }
+        """
+        
+        weave.inline(code, ['sim', 'im', 'n', 'black', 'scale'], type_converters=converters.blitz, compiler = 'gcc')
+        sim.shape = shape
+        im.shape = shape
+    except:
+        if self.useWeave:
+            self.useWeave = False
+            print "Weave compile failed, falling back to slower version."
+            sys.excepthook(*sys.exc_info())
+        self.image.shape = shape
+        im = ((self.image - black) * scale).clip(0.,255.).astype(ubyte)
+        
+    #shape = self.image.shape
+    #sim = ascontiguousarray(self.image)
+    #sim.shape = sim.size
+    #im = zeros(sim.shape, dtype=ubyte)
+    #n = im.size
+    #black = float(self.blackLevel)
     
-    code = """
-      for( int i=0; i<n; i++ ) {
-        float a = (sim(i)-black) * (float)scale;
-        if( a > 255.0 )
-          a = 255.0;
-        else if( a < 0.0 )
-          a = 0.0;
-        im(i) = a;
-      }
-    """
-    weave.inline(code, ['sim', 'im', 'n', 'black', 'scale'], type_converters=converters.blitz, compiler = 'gcc')
-    sim.shape = shape
-    im.shape = shape
+    #code = """
+      #for( int i=0; i<n; i++ ) {
+        #float a = (sim(i)-black) * (float)scale;
+        #if( a > 255.0 )
+          #a = 255.0;
+        #else if( a < 0.0 )
+          #a = 0.0;
+        #im(i) = a;
+      #}
+    #"""
+    #weave.inline(code, ['sim', 'im', 'n', 'black', 'scale'], type_converters=converters.blitz, compiler = 'gcc')
+    #sim.shape = shape
+    #im.shape = shape
     
     im1 = empty((im.shape[axh['y']], im.shape[axh['x']], 4), dtype=ubyte)
       
