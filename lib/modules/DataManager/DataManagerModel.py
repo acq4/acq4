@@ -114,7 +114,11 @@ class DMModel(QtCore.QAbstractItemModel):
         if handle not in self.handles:
             self.handles[handle] = None
             self.watch(handle)
-        row = handle.parent().ls().index(handle.shortName())
+        try:
+            row = handle.parent().ls().index(handle.shortName())
+        except:
+            print handle.name(), handle.parent().name(), handle.parent().ls(), handle.shortName()
+            raise
         return self.createIndex(row, 0, handle)
         
     def handle(self, index):
@@ -251,12 +255,11 @@ class DMModel(QtCore.QAbstractItemModel):
         return QtCore.QVariant(ret)
 
     def flags(self, index):
-        #return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEditable
         defaults = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEditable
         if index is None:
             return None
         if not index.isValid():
-            return defaults
+            return defaults  | QtCore.Qt.ItemIsDropEnabled
         dh = self.handle(index)
         #path = os.path.normpath(index.internalPointer())
         #fullPath = os.path.join(self.baseDir.name(), path)
@@ -352,7 +355,7 @@ class DMModel(QtCore.QAbstractItemModel):
                 #oldDirName, name = os.path.split(f)
                 #newDirName = os.path.join(self.baseDir.name(), parent.internalPointer())
                 oldName = handle.name()
-                print handle.name(), parent.name()
+                #print handle.name(), parent.name()
                 #raise Exception()
                 #if newDirName is None:  ## Move to baseDir
                     #newDirName = ''

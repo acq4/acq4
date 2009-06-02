@@ -12,6 +12,8 @@ class DataManager(Module):
         self.win = QtGui.QMainWindow()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
+        w = self.ui.splitter.width()
+        self.ui.splitter.setSizes([int(w*0.2), int(w*0.8)])
         self.dialog = QtGui.QFileDialog()
         self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
         ## Load values into GUI
@@ -166,8 +168,13 @@ class DataManager(Module):
             self.ui.fileInfo.setCurrentFile(self.selFile)
             self.ui.fileNameLabel.setText(fh.name(relativeTo=self.baseDir))
         
-    def selectedFileAltered(self):
-        self.fileSelectionChanged()
+    def selectedFileAltered(self, change, *args):
+        if change in ['parent', 'renamed', 'moved'] and self.selFile is not None:
+            index = self.model.handleIndex(self.selFile)
+            self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Clear)
+            self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Select)
+        
+        #self.fileSelectionChanged()
         
         
         

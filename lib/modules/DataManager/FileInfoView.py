@@ -69,6 +69,7 @@ class FileInfoView(QtGui.QWidget):
                 
             if ft == 'text':
                 w = QtGui.QTextEdit()
+                w.setTabChangesFocus(True)
                 if f in info:
                     w.setText(info[f])
             elif ft == 'string':
@@ -89,7 +90,7 @@ class FileInfoView(QtGui.QWidget):
         ## Add fields for any other keys that happen to be present
         for f in infoKeys:
             w = QtGui.QLabel(str(info[f]))
-            self.addRow(f, w)
+            self.addRow(f.replace('__', ''), w)
             
     #def currentDirChanged(self, name, change, *args):
         #if change in ['renamed', 'moved', 'parent']:

@@ -60,7 +60,7 @@ class DataManager(QtCore.QObject):
         
     def _handleChanged(self, handle, change, *args):
         l = Locker(self.lock)
-        #print "Manager handling changes", handle, change
+        #print "Manager handling changes", handle, change, args
         if change == 'renamed' or change == 'moved':
             oldName = args[0]
             newName = args[1]
@@ -69,10 +69,14 @@ class DataManager(QtCore.QObject):
             tree = self._getTree(oldName)
             #print "  Affected handles:", tree
             for h in tree:
-                newh = os.path.join(newName, h[len(oldName):])
+                ## Update key to cached handle
+                newh = os.path.abspath(os.path.join(newName, h[len(oldName+os.path.sep):]))
+                #print "update key %s, (newName=%s, )" % (newh, newName)
                 self.cache[newh] = self.cache[h]
+                
+                ## If the change originated from h's parent, inform it that this change has occurred.
                 if h != oldName:
-                    #print "  Informing", h
+                    #print "  Informing", h, oldName
                     self.cache[h]._parentMoved(oldName, newName)
                 del self.cache[h]
             
@@ -91,15 +95,20 @@ class DataManager(QtCore.QObject):
         """Return the entire list of cached handles which are children or grandchildren of this handle"""
         
         ## If handle has no children, then there is no need to search for its tree.
-        if not self.cache[parent].hasChildren():
-            return [parent]
-        
         tree = [parent]
-        for h in self.cache:
-            #print "    tree checking", h[:len(parent)], parent + os.path.sep
-            if h[:(len(parent)+1)] == parent + os.path.sep:
-                #print "        hit"
-                tree.append(h)
+        ph = self.cache[parent]
+        prefix = parent + os.path.sep
+        
+        if ph.hasChildren():
+            for h in self.cache:
+                #print "    tree checking", h[:len(parent)], parent + os.path.sep
+                #print "    tree checking:"
+                #print "       ", parent
+                #print "       ", h
+                #if self.cache[h].isGrandchildOf(ph):
+                if h[:len(prefix)] == prefix:
+                    #print "        hit"
+                    tree.append(h)
         return tree
 
 class FileHandle(QtCore.QObject):
@@ -114,12 +123,13 @@ class FileHandle(QtCore.QObject):
         self.checkDeleted()
         l = Locker(self.lock)
         path = self.path
-        if relativeTo is not None:
+        if relativeTo == self:
+            path = ''
+        elif relativeTo is not None:
             rpath = relativeTo.name()
-            if path[:len(rpath)] == rpath:
-                return path[len(rpath):]
-            else:
+            if not self.isGrandchildOf(relativeTo):
                 raise Exception("Path %s is not child of %s" % (path, rpath))
+            return path[len(rpath + os.path.sep):]
         return path
         
     def shortName(self):
@@ -215,11 +225,12 @@ class FileHandle(QtCore.QObject):
     
     def _parentMoved(self, oldDir, newDir):
         """Inform this object that it has been moved as a result of its (grand)parent having moved."""
-        if self.path[:len(oldDir)] != oldDir:
+        prefix = oldDir + os.path.sep
+        if self.path[:len(prefix)] != prefix:
             raise Exception("File %s is not in moved tree %s, should not update!" % (self.path, oldDir))
-        subName = self.path[len(oldDir):]
-        while subName[0] == os.path.sep:
-            subName = subName[1:]
+        subName = self.path[len(prefix):]
+        #while subName[0] == os.path.sep:
+            #subName = subName[1:]
         newName = os.path.join(newDir, subName)
         #print "===", oldDir, newDir, subName, newName
         if not os.path.exists(newName):
@@ -237,6 +248,11 @@ class FileHandle(QtCore.QObject):
         
     def _deleted(self):
         self.path = None
+    
+    def isGrandchildOf(self, grandparent):
+        """Return true if this files is anywhere in the tree beneath grandparent."""
+        gname = grandparent.name() + os.path.sep
+        return self.name()[:len(gname)] == gname
     
     #def getFile(self, fileName):
         #l = Locker(self.lock)
@@ -287,6 +303,9 @@ class DirHandle(FileHandle):
         return os.path.join(self.path, '.log')
     
     def __getitem__(self, item):
+        #print self.name(), " -> ", item
+        while item[0] == os.path.sep:
+            item = item[1:]
         fileName = os.path.join(self.name(), item)
         return self.manager.getHandle(fileName)
     
@@ -366,18 +385,28 @@ class DirHandle(FileHandle):
         for i in ['.index', '.log']:
             if i in ls:
                 ls.remove(i)
-        #ls.sort(self._cmpFileTimes)
+        ls.sort(self._cmpFileTimes)
         return ls
     
     def _cmpFileTimes(self, a, b):
         l = Locker(self.lock)
-        self._readIndex()
-        try:
-            return cmp(self.index[a]['__timestamp__'], self.index[b]['__timestamp__'])
-        except:
-            print "Error comparing file times: %s %s" % (a, b)
-            sys.excepthook(*sys.exc_info())
-            return 0
+        t1 = t2 = None
+        if self.isManaged():
+            self._readIndex()
+            if a in self.index:
+                t1 = self.index[a]['__timestamp__']
+            if b in self.index:
+                t2 = self.index[b]['__timestamp__']
+        if t1 is None:
+            t1 = os.path.getctime(os.path.join(self.name(), a))
+        if t2 is None:
+            t2 = os.path.getctime(os.path.join(self.name(), b))
+        #print "compare", a, b, t1, t2
+        return cmp(t1, t2)
+    
+    def isGrandparentOf(self, child):
+        """Return true if child is anywhere in the tree below this directory."""
+        return child.isGrandchildOf(self)
     
     def hasChildren(self):
         return len(self.ls()) > 0
@@ -556,7 +585,7 @@ class DirHandle(FileHandle):
             #self.index[fileName] = info   ## Update dict, do not completely overwrite.
             self._writeIndex(lock=False)
         #fd.close()
-        self.emitChanged(fileName)
+        self.emitChanged('meta', fileName)
         
     def _readIndex(self, lock=True):
         l = Locker(self.lock)
