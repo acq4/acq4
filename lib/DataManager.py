@@ -275,7 +275,7 @@ class FileHandle(QtCore.QObject):
 class DirHandle(FileHandle):
     def __init__(self, path, manager, create=False):
         FileHandle.__init__(self, path, manager)
-        self.index = None
+        self._index = None
         
         if not os.path.isdir(path):
             if create:
@@ -285,6 +285,7 @@ class DirHandle(FileHandle):
                 raise Exception("Directory %s does not exist." % path)
         
         if os.path.isfile(self._indexFile()):
+            ## read the index and cache it.
             self._readIndex()
         else:
             ## If directory is unmanaged, just leave it that way.
@@ -311,10 +312,9 @@ class DirHandle(FileHandle):
     
     
     def createIndex(self):
-        if self.index is not None:
+        if self.isManaged():
             raise Exception("Directory is already managed!")
-        self.index = {'.': {}}
-        self._writeIndex()
+        self._writeIndex({'.': {}})
         
     def logMsg(self, msg, tags={}):
         """Write a message into the log for this directory."""
@@ -392,11 +392,11 @@ class DirHandle(FileHandle):
         l = Locker(self.lock)
         t1 = t2 = None
         if self.isManaged():
-            self._readIndex()
-            if a in self.index:
-                t1 = self.index[a]['__timestamp__']
-            if b in self.index:
-                t2 = self.index[b]['__timestamp__']
+            index = self._readIndex()
+            if a in index:
+                t1 = index[a]['__timestamp__']
+            if b in index:
+                t2 = index[b]['__timestamp__']
         if t1 is None:
             t1 = os.path.getctime(os.path.join(self.name(), a))
         if t2 is None:
@@ -420,9 +420,9 @@ class DirHandle(FileHandle):
         #if file != '.' and self.isDir(file):  ## directory meta-info is stored within the directory, not in the parent.
             #return self.getDir(file).fileInfo('.')
         
-        self._readIndex()
-        if self.index.has_key(file):
-            return self.index[file]
+        index = self._readIndex()
+        if index.has_key(file):
+            return index[file]
         else:
             raise Exception("File %s is not indexed" % file)
     
@@ -488,12 +488,13 @@ class DirHandle(FileHandle):
         """Add a pre-existing file into the index. Overwrites any pre-existing info for the file unless protect is True"""
         #print "Adding file %s to index" % fileName
         l = Locker(self.lock)
+        index = self._readIndex()
         fn = os.path.join(self.path, fileName)
         if not (os.path.isfile(fn) or os.path.isdir(fn)):
             raise Exception("File %s does not exist." % fn)
             
         append = True
-        if fileName in self.index:
+        if fileName in index:
             append = False
             if protect:
                 raise Exception("File %s is already indexed." % fileName)
@@ -505,20 +506,19 @@ class DirHandle(FileHandle):
         l = Locker(self.lock)
         if not self.isManaged(fileName):
             raise Exception("Can not forget %s, not managed" % fileName)
-        self._readIndex(lock=False)
-        self.index.remove(fileName)
-        self._writeIndex(lock=False)
+        index = self._readIndex(lock=False)
+        index.remove(fileName)
+        self._writeIndex(index, lock=False)
         self.emitChanged('children', fileName)
         
     def isManaged(self, fileName=None):
         l = Locker(self.lock)
-        if self.index is None:
+        if self._index is None:
             return False
         if fileName is None:
             return True
         else:
-            self._readIndex()
-            return (fileName in self.index)
+            return (fileName in self._readIndex())
 
     
     def setInfo(self, *args):
@@ -575,15 +575,15 @@ class DirHandle(FileHandle):
             #print "appending"
             appendConfigFile({fileName: info}, self._indexFile())
         else:
-            self._readIndex(lock=False)
-            if fileName not in self.index:
+            index = self._readIndex(lock=False)
+            if fileName not in index:
                 #print fileName, "not in", self.index
-                self.index[fileName] = {}
+                index[fileName] = {}
             for k in info:
                 #print "%s Setting %s = %s for file %s"  % (self.name(), k, info[k], fileName)
-                self.index[fileName][k] = info[k]
+                index[fileName][k] = info[k]
             #self.index[fileName] = info   ## Update dict, do not completely overwrite.
-            self._writeIndex(lock=False)
+            self._writeIndex(index, lock=False)
         #fd.close()
         self.emitChanged('meta', fileName)
         
@@ -593,20 +593,25 @@ class DirHandle(FileHandle):
         #if lock:
             #pass
             #fcntl.flock(fd, fcntl.LOCK_EX)
-        if not os.path.isfile(self._indexFile()):
-            raise Exception("Directory '%s' is not managed!" % (self.name()))
+        indexFile = self._indexFile()
+        if self._index is None or os.path.getmtime(indexFile) != self._indexMTime:
+            if not os.path.isfile(indexFile):
+                raise Exception("Directory '%s' is not managed!" % (self.name()))
+            try:
+                #print "Reading index", indexFile
+                self._index = readConfigFile(indexFile)
+                self._indexMTime = os.path.getmtime(indexFile)
+            except:
+                print "***************Error while reading index file %s!*******************" % indexFile
+                raise
+        return self._index
             
-        try:
-            self.index = readConfigFile(self._indexFile())
-        except:
-            print "***************Error while reading index file %s!*******************" % self._indexFile()
-            raise
         #fd.close()
         
-    def _writeIndex(self, lock=True):
+    def _writeIndex(self, newIndex, lock=True):
         l = Locker(self.lock)
         
-        if self.index is None:
+        if not self.isManaged():
             raise Exception("Directory is not managed!")
         #fd = open(self.indexFile, 'w')
         #if lock:
@@ -614,7 +619,10 @@ class DirHandle(FileHandle):
 #            fcntl.flock(fd, fcntl.LOCK_EX)
         #fd.write(str(self.index))
         #fd.close()
-        writeConfigFile(self.index, self._indexFile())
+        writeConfigFile(newIndex, self._indexFile())
+        self._index = newIndex
+        self._indexMTime = os.path.getmtime(self._indexFile())
+        
         
     #def _parentMoved(self, oldDir, newDir):
         #"""Inform this object that it has been moved as a result of its (grand)parent having moved."""

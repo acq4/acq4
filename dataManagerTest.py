@@ -24,7 +24,7 @@ dm.loadModule(module='DataManager', name='DM', config={})
 win = QtGui.QMainWindow()
 b = QtGui.QPushButton("Test")
 win.setCentralWidget(b)
-win.show()
+#win.show()
 
 def mkfiles():
     d = dm.getCurrentDir()

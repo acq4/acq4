@@ -21,7 +21,7 @@ class OrderedDict(dict):
         dict.__setitem__(self, k, v)
     
     def keys(self):
-        return self.order
+        return self.order[:]
     
     def items(self):
         it = []
