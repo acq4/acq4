@@ -592,16 +592,10 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.taskThread.stop()
     
     def handleFrame(self, frame):
-        dataManager = None
-        ## Should this data be stored?
-        if frame['cmd']['protocol']['storeData']:
-            ## Create directory for storing 
-            pass
-            ## Store protocol command and parameter details
         ## Request each device handles its own data
         for d in frame['result']:
             if d != 'protocol':
-                self.docks[d].widget().handleResult(frame['result'][d], dataManager)
+                self.docks[d].widget().handleResult(frame['result'][d])
                 
         ## If this is a single-mode protocol and looping is turned on, schedule the next run
         if self.loopEnabled:

@@ -243,7 +243,7 @@ class MultiClampProtoGui(ProtocolGui):
             raise Exception('Signal %s does not exist' % sig)
         c.setCurrentIndex(ind)
         
-    def handleResult(self, result, dataManager):
+    def handleResult(self, result):
         plot = Qwt.QwtPlotCurve('cell')
         plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         plot.setData(result.xvals('Time'), result['scaled'])

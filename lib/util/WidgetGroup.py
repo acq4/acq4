@@ -4,23 +4,15 @@ from PyQt4 import QtCore, QtGui
 class WidgetGroup(QtCore.QObject):
     """This class takes a list of widgets and keeps an internal record of their state which is always up to date. Allows reading and writing from groups of widgets simultaneously."""
     
+    acceptedClasses = [QtGui.QSpinBox, QtGui.QDoubleSpinBox, QtGui.QSplitter, QtGui.QCheckBox]
+    
     
     def __init__(self, widgetList):
         QtCore.QObject.__init__(self)
-        self.widgetList = dict(widgetList)
+        self.widgetList = {}
         self.cache = {}
         for w in self.widgetList:
-            self.readWidget(w)
-            if type(w) is QtGui.QDoubleSpinBox:
-                QtCore.QObject.connect(w, QtCore.SIGNAL('valueChanged(double)'), self.mkChangeCallback(w))
-            elif type(w) is QtGui.QSpinBox:
-                QtCore.QObject.connect(w, QtCore.SIGNAL('valueChanged(int)'), self.mkChangeCallback(w))
-            elif type(w) is QtGui.QCheckBox:
-                QtCore.QObject.connect(w, QtCore.SIGNAL('stateChanged(int)'), self.mkChangeCallback(w))
-            elif type(w) is QtGui.QSplitter:
-                QtCore.QObject.connect(w, QtCore.SIGNAL('splitterMoved(int,int)'), self.mkChangeCallback(w))
-            else:
-                raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
+            self.addWidget(*w)
         
     def mkChangeCallback(self, w):
         return lambda *args: self.widgetChanged(w, *args)
@@ -67,4 +59,19 @@ class WidgetGroup(QtCore.QObject):
             raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
         #self.readWidget(w)  ## should happen automatically
 
+    def addWidget(self, w, name):
+        self.widgetList[w] = name
+        self.readWidget(w)
+        if type(w) is QtGui.QDoubleSpinBox:
+            QtCore.QObject.connect(w, QtCore.SIGNAL('valueChanged(double)'), self.mkChangeCallback(w))
+        elif type(w) is QtGui.QSpinBox:
+            QtCore.QObject.connect(w, QtCore.SIGNAL('valueChanged(int)'), self.mkChangeCallback(w))
+        elif type(w) is QtGui.QCheckBox:
+            QtCore.QObject.connect(w, QtCore.SIGNAL('stateChanged(int)'), self.mkChangeCallback(w))
+        elif type(w) is QtGui.QSplitter:
+            QtCore.QObject.connect(w, QtCore.SIGNAL('splitterMoved(int,int)'), self.mkChangeCallback(w))
+        else:
+            raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
 
+    def acceptsType(self, obj):
+        return (type(obj) in WidgetGroup.acceptedClasses)

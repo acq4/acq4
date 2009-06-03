@@ -125,5 +125,5 @@ class ProtocolGui(QtGui.QWidget):
     def generateProtocol(self):
         return {}
         
-    def handleResult(self, result, dataManager):
+    def handleResult(self, result):
         pass
