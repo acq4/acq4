@@ -131,11 +131,10 @@ class Manager(QtCore.QObject):
         QtCore.QObject.connect(self.currentDir, QtCore.SIGNAL('changed'), self.currentDirChanged)
         self.emit(QtCore.SIGNAL('currentDirChanged'))
 
-    def currentDirChanged(self, name, change, *args):
+    def currentDirChanged(self, *args):
         """Handle situation where currentDir is moved or renamed"""
-        #print "Changed:", change
-        if change in ['renamed', 'moved', 'parent']:
-            self.emit(QtCore.SIGNAL('currentDirChanged'))
+        #print "Changed:", args
+        self.emit(QtCore.SIGNAL('currentDirChanged'), *args)
             
             
     def getBaseDir(self):

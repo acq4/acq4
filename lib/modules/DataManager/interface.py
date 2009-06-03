@@ -24,6 +24,7 @@ class DataManager(Module):
         self.selFile = None
         
         
+        
         ## Make all connections needed
         #QtCore.QObject.connect(self.dm, QtCore.SIGNAL("baseDirChanged()"), self.baseDirChanged)
         QtCore.QObject.connect(self.ui.selectDirBtn, QtCore.SIGNAL("clicked()"), self.showFileDialog)
@@ -34,6 +35,8 @@ class DataManager(Module):
         QtCore.QObject.connect(self.manager, QtCore.SIGNAL('currentDirChanged'), self.currentDirChanged)
         QtCore.QObject.connect(self.ui.newFolderList, QtCore.SIGNAL('currentIndexChanged(int)'), self.newFolder)
         QtCore.QObject.connect(self.ui.fileTreeView.selectionModel(), QtCore.SIGNAL('selectionChanged(const QItemSelection&, const QItemSelection&)'), self.fileSelectionChanged)
+        QtCore.QObject.connect(self.ui.logEntryText, QtCore.SIGNAL('returnPressed()'), self.logEntry)
+        
         self.win.show()
         
     def updateNewFolderList(self):
@@ -57,18 +60,29 @@ class DataManager(Module):
         #dh = self.manager.dirHandle(newDir)
         self.manager.setCurrentDir(handle)
 
-    def currentDirChanged(self):
-        newDir = self.manager.getCurrentDir()
-        dirName = newDir.name(relativeTo=self.baseDir)
-        self.ui.currentDirText.setText(QtCore.QString(dirName))
-        
-        self.model.setCurrentDir(newDir)
-        dirIndex = self.model.handleIndex(newDir)
-        self.ui.fileTreeView.setExpanded(dirIndex, True)
-        self.ui.fileTreeView.scrollTo(dirIndex)
-        
-        # refresh file tree view
-        
+    def currentDirChanged(self, name=None, change=None, *args):
+        if change in [None, 'moved', 'renamed', 'parent']:
+            newDir = self.manager.getCurrentDir()
+            dirName = newDir.name(relativeTo=self.baseDir)
+            self.ui.currentDirText.setText(QtCore.QString(dirName))
+            
+            self.model.setCurrentDir(newDir)
+            dirIndex = self.model.handleIndex(newDir)
+            self.ui.fileTreeView.setExpanded(dirIndex, True)
+            self.ui.fileTreeView.scrollTo(dirIndex)
+        elif change == 'log':
+            self.updateLogView(*args)
+        if change == None:
+            self.loadLog()
+
+    def loadLog(self):
+        self.ui.logView.clear()
+        cd = self.manager.getCurrentDir()
+        log = cd.readLog()
+        for msg in log:
+            self.ui.logView.append(self.logRender(msg))
+            
+
     def showFileDialog(self):
         self.dialog.setDirectory(self.manager.getBaseDir().name())
         self.dialog.show()
@@ -176,7 +190,29 @@ class DataManager(Module):
         
         #self.fileSelectionChanged()
         
+    def logEntry(self):
+        text = str(self.ui.logEntryText.text())
+        cd = self.manager.getCurrentDir()
+        self.ui.logEntryText.setText('')
+        if text == '' or cd is None:
+            return
+        cd.logMsg(text, {'source': 'user'})
         
+    def updateLogView(self, *args):
+        msg = args[0]
+        self.ui.logView.append(self.logRender(msg))
+        #print "new log msg"
+        
+    def logRender(self, msg):
+        t = time.strftime('%Y.%m.%d %H:%m:%S', time.localtime(msg['__timestamp__']))
+        style = 'color: #000; font-style: normal'
+        sourceStyles = {
+            'user': 'color: #008; font-style: italic'
+        }
+        if 'source' in msg and msg['source'] in sourceStyles:
+            style = sourceStyles[msg['source']]
+        return "<span style='color: #888'>[%s]</span> <span style='%s'>%s</span>" % (t, style, msg['__message__'])
+            
         
         
 

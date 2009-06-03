@@ -319,11 +319,34 @@ class DirHandle(FileHandle):
     def logMsg(self, msg, tags={}):
         """Write a message into the log for this directory."""
         l = Locker(self.lock)
-        t = ptime.time()
+        if type(tags) is not dict:
+            raise Exception("tags argument must be a dict")
+        tags['__timestamp__'] = ptime.time()
+        tags['__message__'] = str(msg)
+        
         fd = open(self._logFile(), 'a')
         #fcntl.flock(fd, fcntl.LOCK_EX)
-        fd.write('%s %s\n' % (t, msg))
+        fd.write("%s\n" % repr(tags))
         fd.close()
+        self.emitChanged('log', tags)
+        
+    def readLog(self):
+        """Return a list containing one dict for each log line"""
+        l = Locker(self.lock)
+        logf = self._logFile()
+        if not os.path.exists(logf):
+            return []
+        try:
+            fd = open(logf, 'r')
+            lines = fd.readlines()
+            fd.close()
+            log = map(eval, lines)
+        except:
+            print "****************** Error reading log file! *********************"
+            raise
+        
+        return log
+        
     
     def mkdir(self, name, autoIncrement=False, info={}):
         """Create a new subdirectory, return a new DirHandle object. If autoIndex is true, add a number to the end of the dir name if it already exists."""

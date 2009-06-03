@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'DataManagerTemplate.ui'
 #
-# Created: Thu May 28 12:59:10 2009
+# Created: Wed Jun  3 10:59:33 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -48,7 +48,7 @@ class Ui_MainWindow(object):
         self.verticalLayout_2.setObjectName("verticalLayout_2")
         self.newFolderList = QtGui.QComboBox(self.layoutWidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Fixed)
-        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setHorizontalStretch(2)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.newFolderList.sizePolicy().hasHeightForWidth())
         self.newFolderList.setSizePolicy(sizePolicy)
@@ -62,7 +62,7 @@ class Ui_MainWindow(object):
         self.verticalLayout_2.addWidget(self.newFolderList)
         self.fileTreeView = QtGui.QTreeView(self.layoutWidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
-        sizePolicy.setHorizontalStretch(3)
+        sizePolicy.setHorizontalStretch(2)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.fileTreeView.sizePolicy().hasHeightForWidth())
         self.fileTreeView.setSizePolicy(sizePolicy)
@@ -76,7 +76,7 @@ class Ui_MainWindow(object):
         self.verticalLayout_4.setObjectName("verticalLayout_4")
         self.fileNameLabel = QtGui.QLabel(self.layoutWidget1)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Fixed)
-        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setHorizontalStretch(5)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.fileNameLabel.sizePolicy().hasHeightForWidth())
         self.fileNameLabel.setSizePolicy(sizePolicy)
@@ -89,7 +89,7 @@ class Ui_MainWindow(object):
         self.verticalLayout_4.addWidget(self.fileNameLabel)
         self.fileDisplayTabs = QtGui.QTabWidget(self.layoutWidget1)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
-        sizePolicy.setHorizontalStretch(8)
+        sizePolicy.setHorizontalStretch(5)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.fileDisplayTabs.sizePolicy().hasHeightForWidth())
         self.fileDisplayTabs.setSizePolicy(sizePolicy)
@@ -120,9 +120,10 @@ class Ui_MainWindow(object):
         self.verticalLayout = QtGui.QVBoxLayout(self.dockWidgetContents)
         self.verticalLayout.setMargin(0)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.textBrowser = QtGui.QTextBrowser(self.dockWidgetContents)
-        self.textBrowser.setObjectName("textBrowser")
-        self.verticalLayout.addWidget(self.textBrowser)
+        self.logView = QtGui.QTextEdit(self.dockWidgetContents)
+        self.logView.setReadOnly(True)
+        self.logView.setObjectName("logView")
+        self.verticalLayout.addWidget(self.logView)
         self.logEntryText = QtGui.QLineEdit(self.dockWidgetContents)
         self.logEntryText.setObjectName("logEntryText")
         self.verticalLayout.addWidget(self.logEntryText)
