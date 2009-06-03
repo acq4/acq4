@@ -187,7 +187,7 @@ class DataManager(Module):
             if fh.isDir():
                 self.loadLog(fh, self.ui.selectedLogView, recursive=3)
         
-    def selectedFileAltered(self, change, *args):
+    def selectedFileAltered(self, name, change, *args):
         if change in ['parent', 'renamed', 'moved'] and self.selFile is not None:
             index = self.model.handleIndex(self.selFile)
             self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Clear)
