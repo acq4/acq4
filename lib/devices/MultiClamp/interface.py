@@ -271,6 +271,6 @@ class Task(DeviceTask):
         marr = MetaArray(arr, info=info)
             
         return marr
-        
+    
     def stop(self):
         self.dev.setHolding()

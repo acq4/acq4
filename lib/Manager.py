@@ -226,6 +226,11 @@ class Task:
         
         self.stop()
         
+        ## Store data if requested
+        if self.cfg['storeData']:
+            for t in self.tasks:
+                t.storeResult(self.cfg['storageDir'])
+        
         
     def isDone(self):
         t = self.dm.time()

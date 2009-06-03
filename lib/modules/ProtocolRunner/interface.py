@@ -510,6 +510,9 @@ class ProtocolRunner(Module, QtCore.QObject):
         ## Disable all start buttons
         self.enableStartBtns(False)
         
+        ## Set storage dir
+        self.currentDir = self.manager.getCurrentDir()
+        
         ## Generate executable conf from protocol object
         prot = self.generateProtocol(store)
         
@@ -529,6 +532,10 @@ class ProtocolRunner(Module, QtCore.QObject):
         #}}
         prot = {'protocol': self.protoStateGroup.state()}
         prot['protocol']['storeData'] = store
+        if store:
+            name = '_'.join([self.currentProtocol.name] + params.values())
+            dh = self.currentDir.mkdir(name)
+            prot['protocol']['storageDir'] = dh
         prot['protocol']['name'] = self.currentProtocol.fileName
         
         for d in self.currentProtocol.devices:
@@ -556,6 +563,9 @@ class ProtocolRunner(Module, QtCore.QObject):
         for i in items:
             key = (str(i.text(0)), str(i.text(1)))
             params[key] = range(int(i.text(2)))
+        
+        ## Set storage dir
+        self.currentDir = self.manager.getCurrentDir()
         
         ## Generate the complete array of command structures
         prot = runSequence(lambda p: self.generateProtocol(store, p), params, params.keys(), passHash=True)

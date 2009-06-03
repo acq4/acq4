@@ -83,6 +83,9 @@ class Task(DeviceTask):
         
         #self.st.stop()
         
+    def storeResult(self, dirHandle):
+        pass
+        
     def getData(self, channel):
         """Return the data collected for a specific channel. Return looks like:
         {

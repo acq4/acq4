@@ -129,6 +129,12 @@ class Task(DeviceTask):
         
         return {'frames': marr, 'expose': expose}
         
+    def storeResult(self, dirHandle):
+        result = self.getResult()
+        dh = dirHandle.mkdir(self.dev.name)
+        for k in result:
+            if result[k] is not None:
+                dh.writeFile(result[k], k)
         
 class AcquireThread(QtCore.QThread):
     def __init__(self, dev):

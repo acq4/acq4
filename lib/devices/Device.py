@@ -100,6 +100,10 @@ class DeviceTask:
     def getResult(self):
         pass
     
+    def storeResult(self, dirHandle):
+        result = self.getResult()
+        dirHandle.writeFile(result, self.dev.name)
+    
     
 class ProtocolGui(QtGui.QWidget):
     def __init__(self, dev, prot):
