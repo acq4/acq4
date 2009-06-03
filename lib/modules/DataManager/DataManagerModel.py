@@ -250,6 +250,13 @@ class DMModel(QtCore.QAbstractItemModel):
                 ret = QtGui.QBrush(QtGui.QColor(150, 220, 150))
             else:
                 ret = QtCore.QVariant()
+        elif role == QtCore.Qt.FontRole:
+            info = dh.info()
+            if ('important' in info) and (info['important'] is True):
+                ret = QtGui.QFont()
+                ret.setWeight(QtGui.QFont.Bold)
+            else:
+                ret = QtCore.QVariant()
         else:
             ret = QtCore.QVariant()
         return QtCore.QVariant(ret)

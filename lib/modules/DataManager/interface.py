@@ -65,7 +65,7 @@ class DataManager(Module):
             newDir = self.manager.getCurrentDir()
             dirName = newDir.name(relativeTo=self.baseDir)
             self.ui.currentDirText.setText(QtCore.QString(dirName))
-            
+            self.ui.logDock.setWindowTitle(QtCore.QString('Current Log - ' + dirName))
             self.model.setCurrentDir(newDir)
             dirIndex = self.model.handleIndex(newDir)
             self.ui.fileTreeView.setExpanded(dirIndex, True)
@@ -73,14 +73,13 @@ class DataManager(Module):
         elif change == 'log':
             self.updateLogView(*args)
         if change == None:
-            self.loadLog()
+            self.loadLog(self.manager.getCurrentDir(), self.ui.logView)
 
-    def loadLog(self):
-        self.ui.logView.clear()
-        cd = self.manager.getCurrentDir()
-        log = cd.readLog()
-        for msg in log:
-            self.ui.logView.append(self.logRender(msg))
+    def loadLog(self, dirHandle, widget, recursive=0):
+        widget.clear()
+        log = dirHandle.readLog(recursive)
+        for line in self.logRender(log):
+            widget.append(line)
             
 
     def showFileDialog(self):
@@ -171,22 +170,29 @@ class DataManager(Module):
         if self.selFile is not None:
             QtCore.QObject.disconnect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
         
-        
         fh = self.selectedFile()
+        self.loadFile(fh)
+        self.selFile = fh
+        if fh is not None:
+            QtCore.QObject.connect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
+        
+    def loadFile(self, fh):
+        self.ui.selectedLogView.clear()
         if fh is None:
             self.ui.fileInfo.setCurrentFile(None)
             self.ui.fileNameLabel.setText('')
         else:
-            self.selFile = fh
-            QtCore.QObject.connect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
-            self.ui.fileInfo.setCurrentFile(self.selFile)
+            self.ui.fileInfo.setCurrentFile(fh)
             self.ui.fileNameLabel.setText(fh.name(relativeTo=self.baseDir))
+            if fh.isDir():
+                self.loadLog(fh, self.ui.selectedLogView, recursive=3)
         
     def selectedFileAltered(self, change, *args):
         if change in ['parent', 'renamed', 'moved'] and self.selFile is not None:
             index = self.model.handleIndex(self.selFile)
             self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Clear)
             self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Select)
+            self.ui.fileNameLabel.setText(self.selFile.name(relativeTo=self.baseDir))
         
         #self.fileSelectionChanged()
         
@@ -203,15 +209,32 @@ class DataManager(Module):
         self.ui.logView.append(self.logRender(msg))
         #print "new log msg"
         
-    def logRender(self, msg):
-        t = time.strftime('%Y.%m.%d %H:%m:%S', time.localtime(msg['__timestamp__']))
-        style = 'color: #000; font-style: normal'
-        sourceStyles = {
-            'user': 'color: #008; font-style: italic'
-        }
-        if 'source' in msg and msg['source'] in sourceStyles:
-            style = sourceStyles[msg['source']]
-        return "<span style='color: #888'>[%s]</span> <span style='%s'>%s</span>" % (t, style, msg['__message__'])
+    def logRender(self, log):
+        returnList = True
+        if type(log) is dict:
+            log = [log]
+            returnList = False
+        elif type(log) is not list:
+            raise Exception('logRender requires dict or list of dicts as argument')
+            
+        lines = []
+        for msg in log:
+            t = time.strftime('%Y.%m.%d %H:%m:%S', time.localtime(msg['__timestamp__']))
+            style = 'color: #000; font-style: normal'
+            sourceStyles = {
+                'user': 'color: #008; font-style: italic'
+            }
+            if 'source' in msg and msg['source'] in sourceStyles:
+                style = sourceStyles[msg['source']]
+            parts = ["<span style='color: #888'>[%s]</span>" % t]
+            if 'subdir' in msg:
+                parts.append(msg['subdir'])
+            parts.append("<span style='%s'>%s</span>" % (style, msg['__message__']))
+            lines.append('&nbsp;&nbsp;'.join(parts))
+        if returnList:
+            return lines
+        else:
+            return lines[0]
             
         
         

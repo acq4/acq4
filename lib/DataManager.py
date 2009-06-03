@@ -330,23 +330,40 @@ class DirHandle(FileHandle):
         fd.close()
         self.emitChanged('log', tags)
         
-    def readLog(self):
+    def readLog(self, recursive=0):
         """Return a list containing one dict for each log line"""
         l = Locker(self.lock)
         logf = self._logFile()
         if not os.path.exists(logf):
-            return []
-        try:
-            fd = open(logf, 'r')
-            lines = fd.readlines()
-            fd.close()
-            log = map(eval, lines)
-        except:
-            print "****************** Error reading log file! *********************"
-            raise
+            log = []
+        else:
+            try:
+                fd = open(logf, 'r')
+                lines = fd.readlines()
+                fd.close()
+                log = map(eval, lines)
+            except:
+                print "****************** Error reading log file! *********************"
+                raise
+        
+        if recursive > 0:
+            for d in self.subDirs():
+                dh = self[d]
+                subLog = dh.readLog(recursive=recursive-1)
+                for msg in subLog:
+                    if 'subdir' not in msg:
+                        msg['subdir'] = ''
+                    msg['subdir'] = os.path.join(dh.shortName(), msg['subdir'])
+                log  = log + subLog
+            log.sort(lambda a,b: cmp(a['__timestamp__'], b['__timestamp__']))
         
         return log
         
+    def subDirs(self):
+        l = Locker(self.lock)
+        ls = self.ls()
+        subdirs = filter(lambda d: os.path.isdir(os.path.join(self.name(), d)), ls)
+        return subdirs
     
     def mkdir(self, name, autoIncrement=False, info={}):
         """Create a new subdirectory, return a new DirHandle object. If autoIndex is true, add a number to the end of the dir name if it already exists."""
@@ -634,8 +651,8 @@ class DirHandle(FileHandle):
     def _writeIndex(self, newIndex, lock=True):
         l = Locker(self.lock)
         
-        if not self.isManaged():
-            raise Exception("Directory is not managed!")
+        #if not self.isManaged():
+            #raise Exception("Directory is not managed!")
         #fd = open(self.indexFile, 'w')
         #if lock:
             #pass

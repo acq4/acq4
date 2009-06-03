@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'DataManagerTemplate.ui'
 #
-# Created: Wed Jun  3 10:59:33 2009
+# Created: Wed Jun  3 13:01:38 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -102,6 +102,15 @@ class Ui_MainWindow(object):
         self.fileInfo.setObjectName("fileInfo")
         self.verticalLayout_3.addWidget(self.fileInfo)
         self.fileDisplayTabs.addTab(self.tab, "")
+        self.tab_4 = QtGui.QWidget()
+        self.tab_4.setObjectName("tab_4")
+        self.verticalLayout_6 = QtGui.QVBoxLayout(self.tab_4)
+        self.verticalLayout_6.setObjectName("verticalLayout_6")
+        self.selectedLogView = QtGui.QTextEdit(self.tab_4)
+        self.selectedLogView.setReadOnly(True)
+        self.selectedLogView.setObjectName("selectedLogView")
+        self.verticalLayout_6.addWidget(self.selectedLogView)
+        self.fileDisplayTabs.addTab(self.tab_4, "")
         self.tab_3 = QtGui.QWidget()
         self.tab_3.setObjectName("tab_3")
         self.fileDisplayTabs.addTab(self.tab_3, "")
@@ -111,10 +120,10 @@ class Ui_MainWindow(object):
         self.verticalLayout_4.addWidget(self.fileDisplayTabs)
         self.verticalLayout_5.addWidget(self.splitter)
         MainWindow.setCentralWidget(self.centralwidget)
-        self.dockWidget = QtGui.QDockWidget(MainWindow)
-        self.dockWidget.setFloating(False)
-        self.dockWidget.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable)
-        self.dockWidget.setObjectName("dockWidget")
+        self.logDock = QtGui.QDockWidget(MainWindow)
+        self.logDock.setFloating(False)
+        self.logDock.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable)
+        self.logDock.setObjectName("logDock")
         self.dockWidgetContents = QtGui.QWidget()
         self.dockWidgetContents.setObjectName("dockWidgetContents")
         self.verticalLayout = QtGui.QVBoxLayout(self.dockWidgetContents)
@@ -127,8 +136,8 @@ class Ui_MainWindow(object):
         self.logEntryText = QtGui.QLineEdit(self.dockWidgetContents)
         self.logEntryText.setObjectName("logEntryText")
         self.verticalLayout.addWidget(self.logEntryText)
-        self.dockWidget.setWidget(self.dockWidgetContents)
-        MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(8), self.dockWidget)
+        self.logDock.setWidget(self.dockWidgetContents)
+        MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(8), self.logDock)
 
         self.retranslateUi(MainWindow)
         self.fileDisplayTabs.setCurrentIndex(0)
@@ -147,8 +156,9 @@ class Ui_MainWindow(object):
         self.newFolderList.setItemText(4, QtGui.QApplication.translate("MainWindow", "Slice", None, QtGui.QApplication.UnicodeUTF8))
         self.newFolderList.setItemText(5, QtGui.QApplication.translate("MainWindow", "Cell", None, QtGui.QApplication.UnicodeUTF8))
         self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab), QtGui.QApplication.translate("MainWindow", "Info", None, QtGui.QApplication.UnicodeUTF8))
+        self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab_4), QtGui.QApplication.translate("MainWindow", "Log", None, QtGui.QApplication.UnicodeUTF8))
         self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab_3), QtGui.QApplication.translate("MainWindow", "Data", None, QtGui.QApplication.UnicodeUTF8))
         self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab_2), QtGui.QApplication.translate("MainWindow", "Analysis", None, QtGui.QApplication.UnicodeUTF8))
-        self.dockWidget.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Log", None, QtGui.QApplication.UnicodeUTF8))
+        self.logDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Current Log", None, QtGui.QApplication.UnicodeUTF8))
 
 from FileInfoView import FileInfoView

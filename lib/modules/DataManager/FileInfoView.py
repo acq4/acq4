@@ -3,6 +3,7 @@ from FileInfoViewTemplate import *
 from PyQt4 import QtCore, QtGui
 from lib.DataManager import *
 import lib.Manager as Manager
+import time
 
 class FocusEventCatcher(QtCore.QObject):
     def __init__(self):
@@ -55,6 +56,8 @@ class FileInfoView(QtGui.QWidget):
         
         if 'notes' not in fields:
             fields['notes'] = 'text', 5
+        if 'important' not in fields:
+            fields['important'] = 'bool'
             
         
         ## Generate fields, populate if data exists
@@ -82,6 +85,10 @@ class FileInfoView(QtGui.QWidget):
                 w.setEditable(True)
                 if f in info:
                     w.lineEdit().setText(info[f])
+            elif ft == 'bool':
+                w = QtGui.QCheckBox()
+                if f in info:
+                    w.setChecked(info[f])
             else:
                 raise Exception("Don't understand info type '%s' (parameter %s)" % (fields[f][0], f))
             self.addRow(f, w)
@@ -89,7 +96,10 @@ class FileInfoView(QtGui.QWidget):
         
         ## Add fields for any other keys that happen to be present
         for f in infoKeys:
-            w = QtGui.QLabel(str(info[f]))
+            s = str(info[f])
+            if f == '__timestamp__':
+                s = time.strftime("%Y.%m.%d   %H:%m:%S", time.localtime(float(s)))
+            w = QtGui.QLabel(s)
             self.addRow(f.replace('__', ''), w)
             
     #def currentDirChanged(self, name, change, *args):
@@ -110,6 +120,8 @@ class FileInfoView(QtGui.QWidget):
             val = str(obj.toPlainText())
         elif isinstance(obj, QtGui.QComboBox):
             val = str(obj.currentText())
+        elif isinstance(obj, QtGui.QCheckBox):
+            val = obj.isChecked()
         self.current.setInfo({field: val})
             
     def clear(self):
