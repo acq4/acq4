@@ -512,9 +512,10 @@ class ProtocolRunner(Module, QtCore.QObject):
         
         ## Set storage dir
         self.currentDir = self.manager.getCurrentDir()
-        dh = None
         if store:
             dh = self.currentDir.mkdir(self.currentProtocol.name, autoIncrement=True)
+        else:
+            dh = None
         
         ## Generate executable conf from protocol object
         prot = self.generateProtocol(dh)
@@ -523,32 +524,6 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.taskThread.startProtocol(prot)
         
    
-    def generateProtocol(self, dh, params={}):
-        ## params should be in the form {(dev, param): value, ...}
-        ## Generate executable conf from protocol object
-        #prot = {'protocol': {
-            #'duration': self.currentProtocol.conf['duration'], 
-            #'storeData': store,
-            #'mode': 'single',
-            #'name': self.currentProtocol.fileName,
-            #'cycleTime': self.currentProtocol.conf['cycleTime'], 
-        #}}
-        prot = {'protocol': self.protoStateGroup.state()}
-        store = (dh is not None)
-        prot['protocol']['storeData'] = store
-        if store:
-            name = '_'.join(map(lambda i: '%03d'%i, params.values()))
-            dh1 = dh.mkdir(name)
-            prot['protocol']['storageDir'] = dh1
-        prot['protocol']['name'] = self.currentProtocol.fileName
-        
-        for d in self.currentProtocol.devices:
-            if self.currentProtocol.deviceEnabled(d):
-                ## select out just the parameters needed for this device
-                p = dict([(i[1], params[i]) for i in params.keys() if i[0] == d])
-                ## Ask the device to generate its protocol command
-                prot[d] = self.docks[d].widget().generateProtocol(p)
-        return prot
         
    
     def testSequence(self):
@@ -570,9 +545,10 @@ class ProtocolRunner(Module, QtCore.QObject):
         
         ## Set storage dir
         self.currentDir = self.manager.getCurrentDir()
-        dh = None
         if store:
             dh = self.currentDir.mkdir(self.currentProtocol.name, autoIncrement=True)
+        else:
+            dh = None
         
         ## Generate the complete array of command structures
         prot = runSequence(lambda p: self.generateProtocol(dh, p), params, params.keys(), passHash=True)
@@ -580,6 +556,35 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.emit(QtCore.SIGNAL('protocolStarted'), {})
         self.taskThread.startProtocol(prot, params)
         
+    def generateProtocol(self, dh, params={}):
+        ## params should be in the form {(dev, param): value, ...}
+        ## Generate executable conf from protocol object
+        #prot = {'protocol': {
+            #'duration': self.currentProtocol.conf['duration'], 
+            #'storeData': store,
+            #'mode': 'single',
+            #'name': self.currentProtocol.fileName,
+            #'cycleTime': self.currentProtocol.conf['cycleTime'], 
+        #}}
+        prot = {'protocol': self.protoStateGroup.state()}
+        store = (dh is not None)
+        prot['protocol']['storeData'] = store
+        if store:
+            if params != {}:
+                name = '_'.join(map(lambda i: '%03d'%i, params.values()))
+                dh1 = dh.mkdir(name)
+            else:
+                dh1 = dh
+            prot['protocol']['storageDir'] = dh1
+        prot['protocol']['name'] = self.currentProtocol.fileName
+        
+        for d in self.currentProtocol.devices:
+            if self.currentProtocol.deviceEnabled(d):
+                ## select out just the parameters needed for this device
+                p = dict([(i[1], params[i]) for i in params.keys() if i[0] == d])
+                ## Ask the device to generate its protocol command
+                prot[d] = self.docks[d].widget().generateProtocol(p)
+        return prot
     
     def enableStartBtns(self, v):
         btns = [self.ui.testSingleBtn, self.ui.runProtocolBtn, self.ui.testSequenceBtn, self.ui.runSequenceBtn]

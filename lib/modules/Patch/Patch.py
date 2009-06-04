@@ -25,6 +25,20 @@ class PatchWindow(QtGui.QMainWindow):
             'vcHoldingEnabled': False,
             'vcPulseEnabled': True
         }
+        
+        self.stateGroup = WidgetGroup([
+            (self.ui.icPulseSpin, 'icPulse', 1e12),
+            (self.ui.vcPulseSpin, 'vcPulse', 1e3),
+            (self.ui.icHoldSpin, 'icHolding', 1e12),
+            (self.ui.vcHoldSpin, 'vcHolding', 1e3),
+            (self.ui.icPulseCheck, 'icPulseEnabled'),
+            (self.ui.vcPulseCheck, 'vcPulseEnabled'),
+            (self.ui.icHoldCheck, 'icHoldingEnabled'),
+            (self.ui.vcHoldCheck, 'vcHoldingEnabled'),
+            (self.ui.cycleTimeSpin, 'cycleTime', 1e3),
+        ])
+        self.stateGroup.restoreState(self.params)
+        
         self.paramLock = QtCore.QMutex(QtCore.QMutex.Recursive)
 
         self.dm = dm
@@ -35,14 +49,15 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui = Ui_Form()
         self.ui.setupUi(self.cw)
         
-        self.ui.icPulseSpin.setValue(self.params['icPulse']*1e12)
-        self.ui.vcPulseSpin.setValue(self.params['vcPulse']*1e3)
-        self.ui.icHoldSpin.setValue(self.params['icHolding']*1e12)
-        self.ui.vcHoldSpin.setValue(self.params['vcHolding']*1e3)
-        self.ui.icPulseCheck.setChecked(self.params['icPulseEnabled'])
-        self.ui.vcPulseCheck.setChecked(self.params['vcPulseEnabled'])
-        self.ui.icHoldCheck.setChecked(self.params['icHoldingEnabled'])
-        self.ui.vcHoldCheck.setChecked(self.params['vcHoldingEnabled'])
+        #self.ui.icPulseSpin.setValue(self.params['icPulse']*1e12)
+        #self.ui.vcPulseSpin.setValue(self.params['vcPulse']*1e3)
+        #self.ui.icHoldSpin.setValue(self.params['icHolding']*1e12)
+        #self.ui.vcHoldSpin.setValue(self.params['vcHolding']*1e3)
+        #self.ui.icPulseCheck.setChecked(self.params['icPulseEnabled'])
+        #self.ui.vcPulseCheck.setChecked(self.params['vcPulseEnabled'])
+        #self.ui.icHoldCheck.setChecked(self.params['icHoldingEnabled'])
+        #self.ui.vcHoldCheck.setChecked(self.params['vcHoldingEnabled'])
+        #self.ui.cycleTimeSpin.setValue(self.params['cycleTime']*1e3)
         
         
         for p in [self.ui.patchPlot, self.ui.commandPlot, self.ui.analysisPlot]:
@@ -64,14 +79,15 @@ class PatchWindow(QtGui.QMainWindow):
         QtCore.QObject.connect(self.thread, QtCore.SIGNAL('newFrame(PyQt_PyObject)'), self.handleNewFrame)
         QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.updateParams)
         QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.updateParams)
-        QtCore.QObject.connect(self.ui.icPulseSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateParams)
-        QtCore.QObject.connect(self.ui.icHoldSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateParams)
-        QtCore.QObject.connect(self.ui.icPulseCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
-        QtCore.QObject.connect(self.ui.icHoldCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
-        QtCore.QObject.connect(self.ui.vcPulseSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateParams)
-        QtCore.QObject.connect(self.ui.vcHoldSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateParams)
-        QtCore.QObject.connect(self.ui.vcPulseCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
-        QtCore.QObject.connect(self.ui.vcHoldCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
+        #QtCore.QObject.connect(self.ui.icPulseSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateParams)
+        #QtCore.QObject.connect(self.ui.icHoldSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateParams)
+        #QtCore.QObject.connect(self.ui.icPulseCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
+        #QtCore.QObject.connect(self.ui.icHoldCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
+        #QtCore.QObject.connect(self.ui.vcPulseSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateParams)
+        #QtCore.QObject.connect(self.ui.vcHoldSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateParams)
+        #QtCore.QObject.connect(self.ui.vcPulseCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
+        #QtCore.QObject.connect(self.ui.vcHoldCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
+        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.updateParams)
                 
         self.show()
         
@@ -82,24 +98,28 @@ class PatchWindow(QtGui.QMainWindow):
         else:
             mode = 'vc'
         self.params['mode'] = mode
-        self.params['icHoldingEnabled'] = self.ui.icHoldCheck.isChecked()
-        self.params['icPulseEnabled'] = self.ui.icPulseCheck.isChecked()
-        self.params['icHolding'] = self.ui.icHoldSpin.value() * 1e-12
-        self.params['icPulse'] = self.ui.icPulseSpin.value() * 1e-12
-        self.params['vcHoldingEnabled'] = self.ui.vcHoldCheck.isChecked()
-        self.params['vcPulseEnabled'] = self.ui.vcPulseCheck.isChecked()
-        self.params['vcHolding'] = self.ui.vcHoldSpin.value() * 1e-3
-        self.params['vcPulse'] = self.ui.vcPulseSpin.value() * 1e-3
+        state = self.stateGroup.state()
+        for p in self.params:
+            if p in state:
+                self.params[p] = state[p]
+        #self.params['icHoldingEnabled'] = self.ui.icHoldCheck.isChecked()
+        #self.params['icPulseEnabled'] = self.ui.icPulseCheck.isChecked()
+        #self.params['icHolding'] = self.ui.icHoldSpin.value() * 1e-12
+        #self.params['icPulse'] = self.ui.icPulseSpin.value() * 1e-12
+        #self.params['vcHoldingEnabled'] = self.ui.vcHoldCheck.isChecked()
+        #self.params['vcPulseEnabled'] = self.ui.vcPulseCheck.isChecked()
+        #self.params['vcHolding'] = self.ui.vcHoldSpin.value() * 1e-3
+        #self.params['vcPulse'] = self.ui.vcPulseSpin.value() * 1e-3
         l.unlock()
         self.thread.updateParams()
         
-    def setParameter(self, param, value):
-        if param in ['cycleTime', 'recordTime', 'delayTime', 'pulseTime']:
-            #w = getattr(self.ui, param+'Spin')
-            l = QtCore.QMutexLocker(self.paramLock)
-            self.params[param] = value
-            l.unlock()
-        self.thread.updateParams()
+    #def setParameter(self, param, value):
+        #if param in ['cycleTime', 'recordTime', 'delayTime', 'pulseTime']:
+            ##w = getattr(self.ui, param+'Spin')
+            #l = QtCore.QMutexLocker(self.paramLock)
+            #self.params[param] = value
+            #l.unlock()
+        #self.thread.updateParams()
         
         
     def handleNewFrame(self, frame):

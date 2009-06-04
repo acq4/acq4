@@ -33,6 +33,7 @@ class WidgetGroup(QtCore.QObject):
     def __init__(self, widgetList):
         QtCore.QObject.__init__(self)
         self.widgetList = {}
+        self.scales = {}
         self.cache = {}
         if isinstance(widgetList, QtCore.QObject):
             self.autoAdd(widgetList)
@@ -42,26 +43,17 @@ class WidgetGroup(QtCore.QObject):
         else:
             raise Exception("Wrong argument type %s" % type(widgetList))
         
-    def addWidget(self, w, name=None):
+    def addWidget(self, w, name=None, scale=None):
         if name is None:
             name = str(w.objectName())
         self.widgetList[w] = name
+        self.scales[w] = scale
         self.readWidget(w)
         if not self.acceptsType(w):
             raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
             
         signal = WidgetGroup.classes[type(w)][0]
         QtCore.QObject.connect(w, QtCore.SIGNAL(signal), self.mkChangeCallback(w))
-        #if type(w) is QtGui.QDoubleSpinBox:
-            #QtCore.QObject.connect(w, QtCore.SIGNAL('valueChanged(double)'), self.mkChangeCallback(w))
-        #elif type(w) is QtGui.QSpinBox:
-            #QtCore.QObject.connect(w, QtCore.SIGNAL('valueChanged(int)'), self.mkChangeCallback(w))
-        #elif type(w) is QtGui.QCheckBox:
-            #QtCore.QObject.connect(w, QtCore.SIGNAL('stateChanged(int)'), self.mkChangeCallback(w))
-        #elif type(w) is QtGui.QSplitter:
-            #QtCore.QObject.connect(w, QtCore.SIGNAL('splitterMoved(int,int)'), self.mkChangeCallback(w))
-        #else:
-            #raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
             
     def autoAdd(self, obj):
         ## Find all children of this object and add them if possible.
@@ -105,30 +97,17 @@ class WidgetGroup(QtCore.QObject):
     def readWidget(self, w):
         getFunc = WidgetGroup.classes[type(w)][1]
         val = getFunc(w)
-        #if type(w) in [QtGui.QDoubleSpinBox, QtGui.QSpinBox]:
-            #val = w.value()
-        #elif type(w) is QtGui.QCheckBox:
-            #val = w.isChecked()
-        #elif type(w) is QtGui.QSplitter:
-            #val = str(w.saveState().toPercentEncoding())
-        #else:
-            #raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
+        if self.scales[w] is not None:
+            val /= self.scales[w]
         n = self.widgetList[w]
         self.cache[n] = val
         return val
 
     def setWidget(self, w, v):
+        if self.scales[w] is not None:
+            v *= self.scales[w]
         setFunc = WidgetGroup.classes[type(w)][2]
         setFunc(w, v)
-        #if type(w) in [QtGui.QDoubleSpinBox, QtGui.QSpinBox]:
-            #w.setValue(v)
-        #elif type(w) is QtGui.QCheckBox:
-            #w.setChecked(v)
-        #elif type(w) is QtGui.QSplitter:
-            #w.restoreState(QtCore.QByteArray.fromPercentEncoding(v))
-        #else:
-            #raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
-        #self.readWidget(w)  ## should happen automatically
 
         
         
