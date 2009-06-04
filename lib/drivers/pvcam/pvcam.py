@@ -34,7 +34,8 @@ class _CameraClass:
         ##     are determined by setting PARAM_READOUT_PORT and PARAM_SPDTAB_INDEX 
         ##   - PARAM_GAIN_INDEX must be set AFTER setting PARAM_SPDTAB_INDEX
         self.setParam(PARAM_READOUT_PORT, 0)  ## Only option for Q57
-        self.setParam(PARAM_SPDTAB_INDEX, 2)  ## Fastest option for Q57
+        #self.setParam(PARAM_SPDTAB_INDEX, 2)  ## Fastest option for Q57
+        self.setParam(PARAM_SPDTAB_INDEX, 0)  ## Fastest option for QM512
         self.setParam(PARAM_GAIN_INDEX, 3)
         self.setParam(PARAM_PMODE, PMODE_NORMAL)  ## PMODE_FT ?
         self.setParam(PARAM_SHTR_OPEN_MODE, OPEN_PRE_SEQUENCE)
@@ -73,7 +74,7 @@ class _CameraClass:
 
     def close(self):
         if self.isOpen:
-            self.pvcam.pl_exp_abort(CCS_HALT_CLOSE_SHUTTER)
+            #self.pvcam.pl_exp_abort(CCS_HALT_CLOSE_SHUTTER)
             self.pvcam.pl_cam_close(self.hCam)
             self.isOpen = False
 

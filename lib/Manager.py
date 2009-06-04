@@ -228,7 +228,7 @@ class Task:
         self.stop()
         
         ## Store data if requested
-        if self.cfg['storeData']:
+        if 'storeData' in self.cfg and self.cfg['storeData'] is True:
             for t in self.tasks:
                 self.tasks[t].storeResult(self.cfg['storageDir'])
         

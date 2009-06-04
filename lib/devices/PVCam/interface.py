@@ -6,6 +6,7 @@ import time, sys, traceback
 from numpy import *
 from lib.util.MetaArray import *
 from protoGUI import *
+import lib.util.ptime as ptime
 
 class PVCam(Device):
     def __init__(self, dm, config, name):
@@ -16,7 +17,7 @@ class PVCam(Device):
         print "Created PVCam device. Cameras are:", self.pvc.listCameras()
     
     def quit(self):
-        if self.acqThread.isRunning():
+        if hasattr(self, 'acqThread') and self.acqThread.isRunning():
             self.stopAcquire()
             self.acqThread.wait()
         
@@ -27,6 +28,7 @@ class PVCam(Device):
     def getCamera(self):
         if self.cam is None:
             cams = self.pvc.listCameras()
+            print "Cameras:", cams
             if len(cams) < 1:
                 raise Exception('No cameras found by pvcam driver')
             
@@ -37,6 +39,7 @@ class PVCam(Device):
                     ind = cams.index(self.config['serial'])
                 else:
                     raise Exception('Can not find pvcam camera "%s"' % str(self.config['serial']))
+            print "Selected camera:", cams[ind]
             self.cam = self.pvc.getCamera(cams[ind])
         return self.cam
     
@@ -196,11 +199,11 @@ class AcquireThread(QtCore.QThread):
         
         try:
             self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region)
-            lastFrameTime = self.dev.dm.time()  #time.clock()  # Use time.time() on Linux
+            lastFrameTime = ptime.time() #time.clock()  # Use time.time() on Linux
             
             while True:
                 frame = self.cam.lastFrame()
-                now = self.dev.dm.time() #time.clock()
+                now = ptime.time() #time.clock()
                 
                 ## If a new frame is available, process it and inform other threads
                 if frame is not None and frame != lastFrame:

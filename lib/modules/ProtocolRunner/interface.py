@@ -523,7 +523,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.taskThread.startProtocol(prot)
         
    
-    def generateProtocol(self, store, params={}):
+    def generateProtocol(self, dh, params={}):
         ## params should be in the form {(dev, param): value, ...}
         ## Generate executable conf from protocol object
         #prot = {'protocol': {
@@ -534,7 +534,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             #'cycleTime': self.currentProtocol.conf['cycleTime'], 
         #}}
         prot = {'protocol': self.protoStateGroup.state()}
-        store = (dh is not False)
+        store = (dh is not None)
         prot['protocol']['storeData'] = store
         if store:
             name = '_'.join(map(lambda i: '%03d'%i, params.values()))

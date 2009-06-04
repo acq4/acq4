@@ -425,7 +425,7 @@ class PVCamera(QtGui.QMainWindow):
             
     def newFrame(self, frame):
         try:
-            self.addPlotFrame(frame)
+            #self.addPlotFrame(frame)
             
             (data, info) = frame
             
@@ -656,7 +656,7 @@ class RecordThread(QtCore.QThread):
         if recording:
             fileName = 'camFrame_%05d_%f.tif' % (self.currentCamFrame, info['time'])
             #fileName = os.path.join(self.currentDir(), fileName)
-            self.showMessage("Recording %s - %d" % (self.currentDir.dirName(), self.currentCamFrame))
+            self.showMessage("Recording %s - %d" % (self.currentDir.name(), self.currentCamFrame))
             self.currentDir.writeFile(ImageFile(data), fileName, info)
             #infoFile = os.path.join(self.currentDir(), '.info')
             #if self.currentCamFrame == 0:
@@ -730,7 +730,7 @@ class RecordThread(QtCore.QThread):
             else:
                 if self.recording:
                     self.recording = False
-                    self.showMessage('Finished recording %s' % self.currentDir.dirName()) 
+                    self.showMessage('Finished recording %s' % self.currentDir.name()) 
         finally:
             l.unlock()
 

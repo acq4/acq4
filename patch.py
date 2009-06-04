@@ -18,11 +18,11 @@ config = os.path.abspath(config)
 dm = Manager(config)
 dm.showDeviceRack()
 
-Manager.setCurrentDir('junk')
+#Manager.setCurrentDir('junk')
 
 print "Loading patch module.."
-p1 = dm.loadModule(module='Patch', name='Patch0', config={'clampDev': 'Clamp0'})
-p2 = dm.loadModule(module='Patch', name='Patch1', config={'clampDev': 'Clamp1'})
+p1 = dm.loadModule(module='Patch', name='Patch0', config={'clampDev': 'Clamp1'})
+p2 = dm.loadModule(module='Patch', name='Patch1', config={'clampDev': 'Clamp2'})
 
 ## If running interactively, just return to the prompt and let python call the qt event loop for us.
 ## Otherwise, we need to run it ourselves:

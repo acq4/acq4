@@ -70,7 +70,7 @@ class OutputChannelGui(DaqChannelGui):
             raise Exception("Unrecognized channel type '%s'" % self.config['type'])
         self.ui.setupUi(self)
         self.postUiInit()
-        
+        self.ui.waveGeneratorWidget.setTimeScale(1e-3)
         
         daqDev = self.dev.getDAQName(self.name)
         daqUI = self.prot.getDevice(daqDev)

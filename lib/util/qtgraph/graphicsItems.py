@@ -21,6 +21,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
   def __init__(self, image=None, copy=True, *args):
     self.qimage = QtGui.QImage()
     self.pixmap = None
+    self.useWeave = True
     self.blackLevel = None
     self.whiteLevel = None
     self.image = None
