@@ -433,9 +433,9 @@ class DirHandle(FileHandle):
         t1 = t2 = None
         if self.isManaged():
             index = self._readIndex()
-            if a in index:
+            if a in index and '__timestamp__' in index[a]:
                 t1 = index[a]['__timestamp__']
-            if b in index:
+            if b in index and '__timestamp__' in index[b]:
                 t2 = index[b]['__timestamp__']
         if t1 is None:
             t1 = os.path.getctime(os.path.join(self.name(), a))

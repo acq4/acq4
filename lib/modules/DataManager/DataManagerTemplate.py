@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'DataManagerTemplate.ui'
 #
-# Created: Wed Jun  3 13:01:38 2009
+# Created: Thu Jun  4 00:33:25 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -16,6 +16,8 @@ class Ui_MainWindow(object):
         self.centralwidget = QtGui.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.verticalLayout_5 = QtGui.QVBoxLayout(self.centralwidget)
+        self.verticalLayout_5.setSpacing(0)
+        self.verticalLayout_5.setMargin(0)
         self.verticalLayout_5.setObjectName("verticalLayout_5")
         self.gridLayout = QtGui.QGridLayout()
         self.gridLayout.setObjectName("gridLayout")
@@ -73,6 +75,7 @@ class Ui_MainWindow(object):
         self.layoutWidget1 = QtGui.QWidget(self.splitter)
         self.layoutWidget1.setObjectName("layoutWidget1")
         self.verticalLayout_4 = QtGui.QVBoxLayout(self.layoutWidget1)
+        self.verticalLayout_4.setSpacing(0)
         self.verticalLayout_4.setObjectName("verticalLayout_4")
         self.fileNameLabel = QtGui.QLabel(self.layoutWidget1)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Fixed)
@@ -97,6 +100,8 @@ class Ui_MainWindow(object):
         self.tab = QtGui.QWidget()
         self.tab.setObjectName("tab")
         self.verticalLayout_3 = QtGui.QVBoxLayout(self.tab)
+        self.verticalLayout_3.setSpacing(0)
+        self.verticalLayout_3.setMargin(0)
         self.verticalLayout_3.setObjectName("verticalLayout_3")
         self.fileInfo = FileInfoView(self.tab)
         self.fileInfo.setObjectName("fileInfo")
@@ -105,6 +110,8 @@ class Ui_MainWindow(object):
         self.tab_4 = QtGui.QWidget()
         self.tab_4.setObjectName("tab_4")
         self.verticalLayout_6 = QtGui.QVBoxLayout(self.tab_4)
+        self.verticalLayout_6.setSpacing(0)
+        self.verticalLayout_6.setMargin(0)
         self.verticalLayout_6.setObjectName("verticalLayout_6")
         self.selectedLogView = QtGui.QTextEdit(self.tab_4)
         self.selectedLogView.setReadOnly(True)

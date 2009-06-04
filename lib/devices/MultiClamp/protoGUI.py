@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import sys
-from ProtocolTemplate import *
 from lib.devices.Device import ProtocolGui
 from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
 #from lib.util.generator.StimGenerator import *
 from PyQt4 import Qwt5 as Qwt
 import numpy
+from ProtocolTemplate import *
 
 class MultiClampProtoGui(ProtocolGui):
     def __init__(self, dev, prot):

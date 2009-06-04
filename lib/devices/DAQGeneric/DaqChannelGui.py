@@ -1,10 +1,18 @@
 # -*- coding: utf-8 -*-
 
+from PyQt4 import QtGui, QtCore
+from PyQt4 import Qwt5 as Qwt
 import AOChannelTemplate, DOChannelTemplate, InputChannelTemplate
+from lib.util.SequenceRunner import *
+from lib.util.WidgetGroup import *
+import numpy
 
 class DaqChannelGui(QtGui.QWidget):
-    def __init__(self, parent, config, plot, dev, prot):
+    def __init__(self, parent, name, config, plot, dev, prot):
         QtGui.QWidget.__init__(self, parent)
+        
+        ## Name of this channel
+        self.name = name
         
         ## Configuration for this channel defined in the device configuration file
         self.config = config
@@ -17,17 +25,18 @@ class DaqChannelGui(QtGui.QWidget):
         
         ## plot widget
         self.plot = plot
-        p.setCanvasBackground(QtGui.QColor(0,0,0))
-        p.replot()
+        plot.setCanvasBackground(QtGui.QColor(0,0,0))
+        plot.replot()
         
         ## Curves displayed in self.plot
         self.plots = []
         
+            
+    def postUiInit(self):
         ## Automatically locate all read/writable widgets and group them together for easy 
         ## save/restore operations
         self.stateGroup = WidgetGroup(self)
-            
-    def postUiInit(self):
+        
         self.displayCheckChanged()
         QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('stateChanged(int)'), self.displayCheckChanged)
             
@@ -43,7 +52,7 @@ class DaqChannelGui(QtGui.QWidget):
         self.plots = []
 
     def displayCheckChanged(self):
-        if self.widgetGroup.state()['display']:
+        if self.stateGroup.state()['displayCheck']:
             self.plot.show()
         else:
             self.plot.hide()
@@ -51,20 +60,23 @@ class DaqChannelGui(QtGui.QWidget):
 class OutputChannelGui(DaqChannelGui):
     def __init__(self, *args):
         DaqChannelGui.__init__(self, *args)
+        
         self.currentPlot = None
-        daqDev = self.dev.getDAQName()
+        if self.config['type'] == 'ao':
+            self.ui = AOChannelTemplate.Ui_Form()
+        elif self.config['type'] == 'do':
+            self.ui = DOChannelTemplate.Ui_Form()
+        else:
+            raise Exception("Unrecognized channel type '%s'" % self.config['type'])
+        self.ui.setupUi(self)
+        self.postUiInit()
+        
+        
+        daqDev = self.dev.getDAQName(self.name)
         daqUI = self.prot.getDevice(daqDev)
         self.daqChanged(daqUI.currentState())
         
-        if config['type'] == 'ao':
-            self.ui = ProtocolAOTemplate.Ui_Form()
-        elif config['type'] == 'do':
-            self.ui = ProtocolDOTemplate.Ui_Form()
-        else:
-            raise Exception("Unrecognized channel type '%s'" % config['type'])
             
-        self.ui.setupUi(self)
-        self.postUiInit()
 
         QtCore.QObject.connect(daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
@@ -83,7 +95,7 @@ class OutputChannelGui(DaqChannelGui):
     
     def generateProtocol(self, params={}):
         prot = {}
-        state = self.widgetGroup.state()
+        state = self.stateGroup.state()
         if state['preSetCheck']:
             prot['preset'] = state['preSetSpin']
         if state['functionCheck']:
@@ -134,7 +146,7 @@ class OutputChannelGui(DaqChannelGui):
 class InputChannelGui(DaqChannelGui):
     def __init__(self, *args):
         DaqChannelGui.__init__(self, *args)
-        self.ui = ProtocolInputTemplate.Ui_Form()
+        self.ui = InputChannelTemplate.Ui_Form()
         self.ui.setupUi(self)
         QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.clearPlots)
         self.postUiInit()
@@ -143,11 +155,11 @@ class InputChannelGui(DaqChannelGui):
         return []
     
     def generateProtocol(self, params={}):
-        state = self.widgetGroup.state()
+        state = self.stateGroup.state()
         return {'record': state['recordCheck']}
     
     def handleResult(self, result):
-        if self.widgetGroup.state()['display']:
+        if self.stateGroup.state()['display']:
             plot = Qwt.QwtPlotCurve('cell')
             plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
             plot.setData(result.xvals('Time'), result['scaled'])

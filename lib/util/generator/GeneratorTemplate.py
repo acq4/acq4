@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'GeneratorTemplate.ui'
 #
-# Created: Sun May  3 23:39:37 2009
+# Created: Thu Jun  4 00:18:01 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -118,7 +118,7 @@ class Ui_Form(object):
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:600;\">Functions:</span> any valid Python expression is allowed. A few useful functions are provided:</p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"></p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">steps( <span style=\" font-style:italic;\">times</span>, <span style=\" font-style:italic;\">values</span>, [<span style=\" font-style:italic;\">base</span>=0.0] )</p>\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">pulses( <span style=\" font-style:italic;\">times</span>, <span style=\" font-style:italic;\">widths</span>, <span style=\" font-style:italic;\">values</span>, [<span style=\" font-style:italic;\">base</span>=0.0] )</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">pulse( <span style=\" font-style:italic;\">times</span>, <span style=\" font-style:italic;\">widths</span>, <span style=\" font-style:italic;\">values</span>, [<span style=\" font-style:italic;\">base</span>=0.0] )</p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"></p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">In each of these functions, <span style=\" font-style:italic;\">times</span> must be specified as a list of times in seconds. Lists are notated as numbers enclosed in brackets and separated by commas like [0.0, 0.2, ...]. The steps function also requires a list of <span style=\" font-style:italic;\">values.</span> The pulses function can accept either lists or single values for <span style=\" font-style:italic;\">widths</span> and <span style=\" font-style:italic;\">values</span>. The argument <span style=\" font-style:italic;\">base</span> is optional for both functions.</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
         self.textBrowser_2.setHtml(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"

@@ -31,11 +31,11 @@ class DAQGenericProtoGui(ProtocolGui):
             self.plots[ch] = p
             
             if conf['type'] in ['ao', 'do']:
-                w = OutputChannelGui(self.ui.controlSplitter, conf, p, dev, prot)
+                w = OutputChannelGui(self.ui.controlSplitter, ch, conf, p, dev, prot)
             elif conf['type'] in ['ai', 'di']:
-                w = InputChannelGui(self.ui.controlSplitter, conf, p, dev, prot)
+                w = InputChannelGui(self.ui.controlSplitter, ch, conf, p, dev, prot)
             else:
-                raise Exception("Unrecognized device type '%s'" % conf['type']
+                raise Exception("Unrecognized device type '%s'" % conf['type'])
             self.channels[ch] = w
         
         

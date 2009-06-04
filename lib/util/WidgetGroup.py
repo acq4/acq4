@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
-from lib.util.generator.StimGenerator import *
+from lib.util.generator.StimGenerator import StimGenerator
 class WidgetGroup(QtCore.QObject):
     """This class takes a list of widgets and keeps an internal record of their state which is always up to date. Allows reading and writing from groups of widgets simultaneously."""
     
@@ -13,8 +13,8 @@ class WidgetGroup(QtCore.QObject):
             QtGui.QSpinBox.setValue),
         QtGui.QDoubleSpinBox: 
             ('valueChanged(double)', 
-            QtGui.QSpinBox.value, 
-            QtGui.QSpinBox.setValue),
+            QtGui.QDoubleSpinBox.value, 
+            QtGui.QDoubleSpinBox.setValue),
         QtGui.QSplitter: 
             ('splitterMoved(int,int)', 
             lambda w: str(w.saveState().toPercentEncoding()),
@@ -37,14 +37,14 @@ class WidgetGroup(QtCore.QObject):
         if isinstance(widgetList, QtCore.QObject):
             self.autoAdd(widgetList)
         elif isinstance(widgetList, list):
-            for w in self.widgetList:
+            for w in widgetList:
                 self.addWidget(*w)
         else:
             raise Exception("Wrong argument type %s" % type(widgetList))
         
     def addWidget(self, w, name=None):
         if name is None:
-            name = w.objectName()
+            name = str(w.objectName())
         self.widgetList[w] = name
         self.readWidget(w)
         if not self.acceptsType(w):
@@ -66,6 +66,7 @@ class WidgetGroup(QtCore.QObject):
     def autoAdd(self, obj):
         ## Find all children of this object and add them if possible.
         if self.acceptsType(obj):
+            #print "%s  auto add %s" % (self.objectName(), obj.objectName())
             self.addWidget(obj)
         for c in obj.children():
             self.autoAdd(c)
@@ -92,10 +93,13 @@ class WidgetGroup(QtCore.QObject):
         return self.cache
 
     def setState(self, s):
+        #print "SET STATE", self, s
         for w in self.widgetList:
             n = self.widgetList[w]
+            #print "  restore %s?" % n
             if n not in s:
                 continue
+            #print "    restore state", w, n, s[n]
             self.setWidget(w, s[n])
 
     def readWidget(self, w):

@@ -3,6 +3,7 @@ from util import configfile
 import time, sys, atexit
 from PyQt4 import QtCore, QtGui
 from DataManager import *
+import lib.util.ptime as ptime
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
@@ -215,7 +216,7 @@ class Task:
         ## Start tasks in specific order
         for devName in self.startOrder:
             self.tasks[devName].start()
-        self.startTime = self.dm.time()
+        self.startTime = ptime.time()
             
         if not block:
             return
@@ -229,11 +230,11 @@ class Task:
         ## Store data if requested
         if self.cfg['storeData']:
             for t in self.tasks:
-                t.storeResult(self.cfg['storageDir'])
+                self.tasks[t].storeResult(self.cfg['storageDir'])
         
         
     def isDone(self):
-        t = self.dm.time()
+        t = ptime.time()
         if t - self.startTime < self.cfg['duration']:
             return False
         for t in self.tasks:

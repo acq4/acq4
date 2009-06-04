@@ -512,9 +512,12 @@ class ProtocolRunner(Module, QtCore.QObject):
         
         ## Set storage dir
         self.currentDir = self.manager.getCurrentDir()
+        dh = None
+        if store:
+            dh = self.currentDir.mkdir(self.currentProtocol.name, autoIncrement=True)
         
         ## Generate executable conf from protocol object
-        prot = self.generateProtocol(store)
+        prot = self.generateProtocol(dh)
         
         self.emit(QtCore.SIGNAL('protocolStarted'), {})
         self.taskThread.startProtocol(prot)
@@ -531,11 +534,12 @@ class ProtocolRunner(Module, QtCore.QObject):
             #'cycleTime': self.currentProtocol.conf['cycleTime'], 
         #}}
         prot = {'protocol': self.protoStateGroup.state()}
+        store = (dh is not False)
         prot['protocol']['storeData'] = store
         if store:
-            name = '_'.join([self.currentProtocol.name] + params.values())
-            dh = self.currentDir.mkdir(name)
-            prot['protocol']['storageDir'] = dh
+            name = '_'.join(map(lambda i: '%03d'%i, params.values()))
+            dh1 = dh.mkdir(name)
+            prot['protocol']['storageDir'] = dh1
         prot['protocol']['name'] = self.currentProtocol.fileName
         
         for d in self.currentProtocol.devices:
@@ -566,9 +570,12 @@ class ProtocolRunner(Module, QtCore.QObject):
         
         ## Set storage dir
         self.currentDir = self.manager.getCurrentDir()
+        dh = None
+        if store:
+            dh = self.currentDir.mkdir(self.currentProtocol.name, autoIncrement=True)
         
         ## Generate the complete array of command structures
-        prot = runSequence(lambda p: self.generateProtocol(store, p), params, params.keys(), passHash=True)
+        prot = runSequence(lambda p: self.generateProtocol(dh, p), params, params.keys(), passHash=True)
         
         self.emit(QtCore.SIGNAL('protocolStarted'), {})
         self.taskThread.startProtocol(prot, params)

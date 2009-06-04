@@ -2,6 +2,7 @@
 from lib.devices.Device import *
 from lib.util.MetaArray import MetaArray, axis
 from numpy import *
+from protoGUI import *
 
 class DAQGeneric(Device):
     def __init__(self, dm, config, name):
@@ -24,9 +25,12 @@ class DAQGeneric(Device):
         #"""Return a widget with a UI to put in the device rack"""
         #pass
         
-    #def protocolInterface(self):
-        #"""Return a widget with a UI to put in the protocol rack"""
-        #pass
+    def protocolInterface(self, prot):
+        """Return a widget with a UI to put in the protocol rack"""
+        return DAQGenericProtoGui(self, prot)
+
+    def getDAQName(self, channel):
+        return self.config[channel]['channel'][0]
 
     def quit(self):
         pass
