@@ -25,26 +25,25 @@ class MultiClampProtoGui(ProtocolGui):
         self.mode = None
         self.setMode('I=0')
         
-        self.stateGroup = WidgetGroup([
-            (self.ui.scaledSignalCheck, 'setScaledSignal'),
-            (self.ui.rawSignalCheck, 'setRawSignal'),
-            (self.ui.setScaledGainCheck, 'setScaledGain'),
-            (self.ui.scaledGainSpin, 'scaledGain'),
-            (self.ui.setRawGainCheck, 'setRawGain'),
-            (self.ui.rawGainSpin, 'rawGain'),
-            (self.ui.holdingCheck, 'setHolding'),
-            (self.ui.holdingSpin, 'holding'),
-            (self.ui.splitter, 'splitter1'),
-            (self.ui.splitter_2, 'splitter2')
-        ])
+        #self.stateGroup = WidgetGroup([
+            #(self.ui.scaledSignalCheck, 'setScaledSignal'),
+            #(self.ui.rawSignalCheck, 'setRawSignal'),
+            #(self.ui.setScaledGainCheck, 'setScaledGain'),
+            #(self.ui.scaledGainSpin, 'scaledGain'),
+            #(self.ui.setRawGainCheck, 'setRawGain'),
+            #(self.ui.rawGainSpin, 'rawGain'),
+            #(self.ui.holdingCheck, 'setHolding'),
+            #(self.ui.holdingSpin, 'holding'),
+            #(self.ui.splitter, 'splitter1'),
+            #(self.ui.splitter_2, 'splitter2')
+        #])
+        self.stateGroup = WidgetGroup(self)
         
         self.daqChanged(daqUI.currentState())
         for p in [self.ui.topPlotWidget, self.ui.bottomPlotWidget]:
             p.setCanvasBackground(QtGui.QColor(0,0,0))
             p.replot()
         QtCore.QObject.connect(daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
-        #QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('functionChanged'), self.waveFuncChanged)
-        #QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.waveSeqChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
         QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
@@ -57,17 +56,7 @@ class MultiClampProtoGui(ProtocolGui):
         state['mode'] = self.getMode()
         state['scaledSignal'] = str(self.ui.scaledSignalCombo.currentText())
         state['rawSignal'] = str(self.ui.rawSignalCombo.currentText())
-        #state['setScaledSignal'] = self.ui.scaledSignalCheck.isChecked()
-        #state['setRawSignal'] = self.ui.rawSignalCheck.isChecked()
-        #state['setScaledGain'] = self.ui.setScaledGainCheck.isChecked()
-        #state['scaledGain'] = self.ui.scaledGainSpin.value()
-        #state['setRawGain'] = self.ui.setRawGainCheck.isChecked()
-        #state['rawGain'] = self.ui.rawGainSpin.value()
-        #state['setHolding'] = self.ui.holdingCheck.isChecked()
-        #state['holding'] = self.ui.holdingSpin.value()
-        state['stim'] = self.ui.waveGeneratorWidget.saveState()
-        #state['splitter1'] = str(self.ui.splitter.saveState().toPercentEncoding())
-        #state['splitter2'] = str(self.ui.splitter_2.saveState().toPercentEncoding())
+        #state['stim'] = self.ui.waveGeneratorWidget.saveState()
         return state
         
     def restoreState(self, state):
@@ -75,33 +64,13 @@ class MultiClampProtoGui(ProtocolGui):
             self.setMode(state['mode'])
             self.setSignal('raw', state['rawSignal'])
             self.setSignal('scaled', state['scaledSignal'])
-            #self.ui.scaledSignalCheck.setChecked(state['setScaledSignal'])
-            #self.ui.rawSignalCheck.setChecked(state['setRawSignal'])
-            #self.ui.setScaledGainCheck.setChecked(state['setScaledGain'])
-            #self.ui.scaledGainSpin.setValue(state['scaledGain'])
-            #self.ui.setRawGainCheck.setChecked(state['setRawGain'])
-            #self.ui.rawGainSpin.setValue(state['rawGain'])
-            #self.ui.holdingCheck.setChecked(state['setHolding'])
-            #self.ui.holdingSpin.setValue(state['holding'])
-            self.ui.waveGeneratorWidget.loadState(state['stim'])
-            #self.ui.splitter.restoreState(QtCore.QByteArray.fromPercentEncoding(state['splitter1']))
-            #self.ui.splitter_2.restoreState(QtCore.QByteArray.fromPercentEncoding(state['splitter2']))
+            #self.ui.waveGeneratorWidget.loadState(state['stim'])
             self.stateGroup.setState(state)
         except:
             sys.excepthook(*sys.exc_info())
         self.ui.waveGeneratorWidget.update()
-        #try:
-            #self.updateWaves()
         
         
-    #def waveFuncChanged(self):
-        #if not self.ui.autoUpdateCheck.isChecked():
-            #return
-        #self.updateWaves()
-        
-    #def waveSeqChanged(self):
-        #self.waveFuncChanged()
-        #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
         
     def daqChanged(self, state):
         self.rate = state['rate']

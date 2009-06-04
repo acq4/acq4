@@ -9,11 +9,9 @@ from lib.util.WidgetGroup import *
 from PyQt4 import Qwt5 as Qwt
 import numpy
 
-class MultiClampProtoGui(ProtocolGui):
+class DAQGenericProtoGui(ProtocolGui):
     def __init__(self, dev, prot):
         ProtocolGui.__init__(self, dev, prot)
-        daqDev = self.dev.getDAQName()
-        daqUI = self.prot.getDevice(daqDev)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 
@@ -33,9 +31,9 @@ class MultiClampProtoGui(ProtocolGui):
             self.plots[ch] = p
             
             if conf['type'] in ['ao', 'do']:
-                w = OutputChannelGui(self.ui.controlSplitter, conf, p)
+                w = OutputChannelGui(self.ui.controlSplitter, conf, p, dev, prot)
             elif conf['type'] in ['ai', 'di']:
-                w = InputChannelGui(self.ui.controlSplitter, conf, p)
+                w = InputChannelGui(self.ui.controlSplitter, conf, p, dev, prot)
             else:
                 raise Exception("Unrecognized device type '%s'" % conf['type']
             self.channels[ch] = w
@@ -60,12 +58,19 @@ class MultiClampProtoGui(ProtocolGui):
         
     def listSequence(self):
         ## returns sequence parameter names and lengths
-        return []
+        l = []
+        for ch in self.channels:
+            l.extend(self.channels[ch].listSequence())
+        return l
         
-    def generateProtocol(self):
-        return {}
+    def generateProtocol(self, params={}):
+        p = {}
+        for ch in self.channels:
+            p[ch] = self.channels[ch].generateProtocol(params)
+        return p
         
     def handleResult(self, result):
         for ch in self.channels:
             self.channels[ch].handleResult(result[ch])
-        pass
+            
+            

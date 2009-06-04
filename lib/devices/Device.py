@@ -122,7 +122,7 @@ class ProtocolGui(QtGui.QWidget):
         ## returns sequence parameter names and lengths
         return []
         
-    def generateProtocol(self):
+    def generateProtocol(self, params={}):
         return {}
         
     def handleResult(self, result):
