@@ -93,7 +93,9 @@ class OutputChannelGui(DaqChannelGui):
     def listSequence(self):
         return self.ui.waveGeneratorWidget.listSequences()
     
-    def generateProtocol(self, params={}):
+    def generateProtocol(self, params=None):
+        if params is None:
+            params = {}
         prot = {}
         state = self.stateGroup.state()
         if state['preSetCheck']:
@@ -154,7 +156,9 @@ class InputChannelGui(DaqChannelGui):
     def listSequence(self):
         return []
     
-    def generateProtocol(self, params={}):
+    def generateProtocol(self, params=None):
+        if params is None:
+            params = {}
         state = self.stateGroup.state()
         return {'record': state['recordCheck']}
     

@@ -44,7 +44,9 @@ class ReverseDict(dict):
        d[[2]]
          'y'
     """
-    def __init__(self, data={}):
+    def __init__(self, data=None):
+        if data is None:
+            data = {}
         self.reverse = {}
         for k in data:
             self.reverse[data[k]] = k
@@ -63,7 +65,9 @@ class ReverseDict(dict):
 class BiDict(dict):
     """extends dict so that reverse lookups are possible by adding each reverse combination to the dict.
     This only works if all values and keys are unique."""
-    def __init__(self, data={}):
+    def __init__(self, data=None):
+        if data is None:
+            data = {}
         dict.__init__(self)
         for k in data:
             self[data[k]] = k

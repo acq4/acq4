@@ -317,8 +317,10 @@ class DirHandle(FileHandle):
             raise Exception("Directory is already managed!")
         self._writeIndex({'.': {}})
         
-    def logMsg(self, msg, tags={}):
+    def logMsg(self, msg, tags=None):
         """Write a message into the log for this directory."""
+        if tags is None:
+            tags = {}
         l = Locker(self.lock)
         if type(tags) is not dict:
             raise Exception("tags argument must be a dict")
@@ -366,8 +368,10 @@ class DirHandle(FileHandle):
         subdirs = filter(lambda d: os.path.isdir(os.path.join(self.name(), d)), ls)
         return subdirs
     
-    def mkdir(self, name, autoIncrement=False, info={}):
+    def mkdir(self, name, autoIncrement=False, info=None):
         """Create a new subdirectory, return a new DirHandle object. If autoIndex is true, add a number to the end of the dir name if it already exists."""
+        if info is None:
+            info = {}
         l = Locker(self.lock)
         
         if autoIncrement:
@@ -526,9 +530,11 @@ class DirHandle(FileHandle):
         self.emitChanged('children', fileName)
         return name
     
-    def addFile(self, fileName, info={}, protect=False):
+    def addFile(self, fileName, info=None, protect=False):
         """Add a pre-existing file into the index. Overwrites any pre-existing info for the file unless protect is True"""
         #print "Adding file %s to index" % fileName
+        if info is None:
+            info = {}
         l = Locker(self.lock)
         index = self._readIndex()
         fn = os.path.join(self.path, fileName)

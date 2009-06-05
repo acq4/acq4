@@ -25,7 +25,9 @@ class PVCamProto(ProtocolGui):
         self.stateGroup.setState(state)
         
         
-    def generateProtocol(self, params={}):
+    def generateProtocol(self, params=None):
+        if params is None:
+            params = {}
         return self.currentState()
         
     def currentState(self):

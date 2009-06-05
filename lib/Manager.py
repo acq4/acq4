@@ -78,7 +78,9 @@ class Manager(QtCore.QObject):
     def listDevices(self):
         return self.devices.keys()
 
-    def loadModule(self, module, name, config={}):
+    def loadModule(self, module, name, config=None):
+        if config is None:
+            config = {}
         mod = __import__('lib.modules.%s.interface' % module, fromlist=['*'])
         modclass = getattr(mod, module)
         self.modules[name] = modclass(self, name, config)
@@ -165,7 +167,9 @@ class Manager(QtCore.QObject):
             
         
         
-    def logMsg(self, msg, tags={}):
+    def logMsg(self, msg, tags=None):
+        if tags is None:
+            tags = {}
         cd = self.getCurrentDir()
         cd.logMsg(msg, tags)
 

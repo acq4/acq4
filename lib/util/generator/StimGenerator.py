@@ -146,7 +146,9 @@ class StimGenerator(QtGui.QWidget):
             self.ui.errorBtn.setStyleSheet('QToolButton {border: 2px solid #F00; border-radius: 3px}')
             
         
-    def getSingle(self, rate, nPts, params={}):
+    def getSingle(self, rate, nPts, params=None):
+        if params is None:
+            params = {}
         if not re.search(r'\w', self.functionString()):
             return None
             

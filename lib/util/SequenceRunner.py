@@ -77,8 +77,10 @@ class SequenceRunner:
         else:
             return self._return
     
-    def nloop(self, ind=[], func=None):
+    def nloop(self, ind=None, func=None):
         """Recursively loop over all points in the parameter space"""
+        if ind is None:
+            ind = []
         if len(ind) == len(self._order):
             params = self.getParams(ind)
             stop = False

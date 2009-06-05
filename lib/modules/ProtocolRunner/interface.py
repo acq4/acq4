@@ -779,7 +779,9 @@ class TaskThread(QtCore.QThread):
         #finally:
             #self.emit(QtCore.SIGNAL("protocolFinished()"))
                     
-    def runOnce(self, params={}):
+    def runOnce(self, params=None):
+        if params is None:
+            params = {}
         l = QtCore.QMutexLocker(self.lock)
         l.unlock()
         

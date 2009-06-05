@@ -2,6 +2,7 @@
 from lib.drivers.MultiClamp import MultiClamp as MultiClampDriver
 from lib.devices.Device import *
 from lib.util.MetaArray import MetaArray, axis
+from PyQt4 import QtCore
 from numpy import *
 import sys, traceback
 from DeviceGui import *
@@ -10,6 +11,7 @@ from protoGUI import *
 class MultiClamp(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
         self.index = None
         self.devRackGui = None
         
@@ -57,18 +59,22 @@ class MultiClamp(Device):
         return self.devRackGui
 
     def setParams(self, params):
+        l = QtCore.QMutexLocker(self.lock)
         ind = self.getChanIndex()
         self.mc.setParams(ind, params)
     
     def createTask(self, cmd):
+        l = QtCore.QMutexLocker(self.lock)
         return Task(self, cmd)
     
     def getMode(self):
+        l = QtCore.QMutexLocker(self.lock)
         ind = self.getChanIndex()
         return self.mc.runFunction('getMode', [ind])[0]
     
     def setHolding(self, mode=None, value=None):
         """Define and set the holding values for this device"""
+        l = QtCore.QMutexLocker(self.lock)
         if mode is not None:
             self.holding[mode] = value
         
@@ -83,6 +89,7 @@ class MultiClamp(Device):
         
     def getChanIndex(self):
         """Given a channel name (as defined in the configuration), return the device index to use when making calls to the MC"""
+        l = QtCore.QMutexLocker(self.lock)
         if self.index is None:
             devs = self.mc.listDevices()
             if self.channelID not in devs:
@@ -92,6 +99,7 @@ class MultiClamp(Device):
         
     def listModeSignals(self):
         ## Todo: move this upstream to the multiclamp driver (and make it actually correct)
+        l = QtCore.QMutexLocker(self.lock)
         sig = {
             'scaled': {
                 'IC': ['MembranePotential'],
@@ -108,6 +116,7 @@ class MultiClamp(Device):
         
     def setMode(self, mode):
         """Set the mode for a multiclamp channel, gracefully switching between VC and IC modes."""
+        l = QtCore.QMutexLocker(self.lock)
         mode = mode.upper()
         if mode not in ['VC', 'IC', 'I=0']:
             raise Exception('MultiClamp mode "%s" not recognized.' % mode)
@@ -128,23 +137,28 @@ class MultiClamp(Device):
         self.mc.runFunction('setMode', [chan, mode])
 
     def clearCache(self):
+        l = QtCore.QMutexLocker(self.lock)
         self.mc.clearCache()
         print "Cleared MultiClamp configuration cache."
 
     def protocolInterface(self, prot):
+        l = QtCore.QMutexLocker(self.lock)
         return MultiClampProtoGui(self, prot)
 
     def getDAQName(self):
         """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
+        l = QtCore.QMutexLocker(self.lock)
         daq, chan = self.config['commandChannel']
         return daq
 
     def quit(self):
+        l = QtCore.QMutexLocker(self.lock)
         self.mc.disconnect()
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
+        l = QtCore.QMutexLocker(self.dev.lock)
         self.recordParams = ['Holding', 'HoldingEnable', 'PipetteOffset', 'FastCompCap', 'SlowCompCap', 'FastCompTau', 'SlowCompTau', 'NeutralizationEnable', 'NeutralizationCap', 'WholeCellCompEnable', 'WholeCellCompCap', 'WholeCellCompResist', 'RsCompEnable', 'RsCompBandwidth', 'RsCompCorrection', 'PrimarySignalGain', 'PrimarySignalLPF', 'PrimarySignalHPF', 'OutputZeroEnable', 'OutputZeroAmplitude', 'LeakSubEnable', 'LeakSubResist', 'BridgeBalEnable', 'BridgeBalResist']
         self.usedChannels = None
         self.daqTasks = {}
@@ -170,6 +184,7 @@ class Task(DeviceTask):
 
     def configure(self, tasks, startOrder):
         """Sets the state of a remote multiclamp to prepare for a program run."""
+        l = QtCore.QMutexLocker(self.dev.lock)
             
         ch = self.dev.getChanIndex()
         
@@ -194,6 +209,7 @@ class Task(DeviceTask):
                 
     def getUsedChannels(self):
         """Return a list of the channels this task uses"""
+        l = QtCore.QMutexLocker(self.dev.lock)
         if self.usedChannels is None:
             self.usedChannels = []
             for ch in ['scaled', 'raw', 'command']:
@@ -207,6 +223,7 @@ class Task(DeviceTask):
         ## Is this the correct DAQ device for any of my channels?
         ## create needed channels + info
         ## write waveform to command channel if needed
+        l = QtCore.QMutexLocker(self.dev.lock)
         
         for ch in self.getUsedChannels():
             chConf = self.dev.config[ch+'Channel']
@@ -232,6 +249,7 @@ class Task(DeviceTask):
         ## Access data recorded from DAQ task
         ## create MetaArray and fill with MC state info
         #self.state['startTime'] = self.daqTasks[self.daqTasks.keys()[0]].getStartTime()
+        l = QtCore.QMutexLocker(self.dev.lock)
         
         result = {}
         #result['info'] = self.state
@@ -273,4 +291,5 @@ class Task(DeviceTask):
         return marr
     
     def stop(self):
+        l = QtCore.QMutexLocker(self.dev.lock)
         self.dev.setHolding()

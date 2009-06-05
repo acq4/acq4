@@ -29,7 +29,9 @@ class NiDAQProto(ProtocolGui):
         else:
             self.ui.triggerDevList.setCurrentIndex(0)
         
-    def generateProtocol(self, params={}):
+    def generateProtocol(self, params=None):
+        if params is None:
+            params = {}
         return self.currentState()
         
     def currentState(self):

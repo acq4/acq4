@@ -63,7 +63,9 @@ class DAQGenericProtoGui(ProtocolGui):
             l.extend(self.channels[ch].listSequence())
         return l
         
-    def generateProtocol(self, params={}):
+    def generateProtocol(self, params=None):
+        if params is None:
+            params = {}
         p = {}
         for ch in self.channels:
             p[ch] = self.channels[ch].generateProtocol(params)

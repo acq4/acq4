@@ -129,7 +129,9 @@ class MultiClampProtoGui(ProtocolGui):
             self.ui.bottomPlotWidget.replot()
         return plot
         
-    def generateProtocol(self, params={}):
+    def generateProtocol(self, params=None):
+        if params is None:
+            params = {}
         prot = {}
         mode = self.getMode()
         prot['mode'] = mode
