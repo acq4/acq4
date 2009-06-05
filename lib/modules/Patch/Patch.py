@@ -2,6 +2,7 @@
 from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
 from PyQt4 import Qwt5 as Qwt
+from lib.util.WidgetGroup import *
 import traceback, sys, time
 from numpy import *
 
@@ -16,9 +17,9 @@ class PatchWindow(QtGui.QMainWindow):
             'mode': 'vc',
             'rate': 40000,
             'cycleTime': .2,
-            'recordTime': 0.05,
-            'delayTime': 0.01,
-            'pulseTime': 0.02,
+            'recordTime': 0.1,
+            'delayTime': 0.03,
+            'pulseTime': 0.05,
             'icPulse': 10e-12,
             'vcPulse': 10e-3,
             'icHolding': 0,
@@ -29,18 +30,6 @@ class PatchWindow(QtGui.QMainWindow):
             'vcPulseEnabled': True
         }
         
-        self.stateGroup = WidgetGroup([
-            (self.ui.icPulseSpin, 'icPulse', 1e12),
-            (self.ui.vcPulseSpin, 'vcPulse', 1e3),
-            (self.ui.icHoldSpin, 'icHolding', 1e12),
-            (self.ui.vcHoldSpin, 'vcHolding', 1e3),
-            (self.ui.icPulseCheck, 'icPulseEnabled'),
-            (self.ui.vcPulseCheck, 'vcPulseEnabled'),
-            (self.ui.icHoldCheck, 'icHoldingEnabled'),
-            (self.ui.vcHoldCheck, 'vcHoldingEnabled'),
-            (self.ui.cycleTimeSpin, 'cycleTime', 1e3),
-        ])
-        self.stateGroup.restoreState(self.params)
         
         self.paramLock = QtCore.QMutex(QtCore.QMutex.Recursive)
 
@@ -52,6 +41,20 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui = Ui_Form()
         self.ui.setupUi(self.cw)
         
+        self.stateGroup = WidgetGroup([
+            (self.ui.icPulseSpin, 'icPulse', 1e12),
+            (self.ui.vcPulseSpin, 'vcPulse', 1e3),
+            (self.ui.icHoldSpin, 'icHolding', 1e12),
+            (self.ui.vcHoldSpin, 'vcHolding', 1e3),
+            (self.ui.icPulseCheck, 'icPulseEnabled'),
+            (self.ui.vcPulseCheck, 'vcPulseEnabled'),
+            (self.ui.icHoldCheck, 'icHoldingEnabled'),
+            (self.ui.vcHoldCheck, 'vcHoldingEnabled'),
+            (self.ui.cycleTimeSpin, 'cycleTime', 1),
+            (self.ui.pulseTimeSpin, 'pulseTime', 1e3),
+            (self.ui.delayTimeSpin, 'delayTime', 1e3),
+        ])
+        self.stateGroup.setState(self.params)
         #self.ui.icPulseSpin.setValue(self.params['icPulse']*1e12)
         #self.ui.vcPulseSpin.setValue(self.params['vcPulse']*1e3)
         #self.ui.icHoldSpin.setValue(self.params['icHolding']*1e12)
@@ -78,6 +81,7 @@ class PatchWindow(QtGui.QMainWindow):
         #self.analysisData = {'mr': [], 'rmp': [], 'tau': [], 'time': []}
         
         QtCore.QObject.connect(self.ui.startBtn, QtCore.SIGNAL('clicked()'), self.startClicked)
+        QtCore.QObject.connect(self.ui.resetBtn, QtCore.SIGNAL('clicked()'), self.resetClicked)
         QtCore.QObject.connect(self.thread, QtCore.SIGNAL('finished()'), self.threadStopped)
         QtCore.QObject.connect(self.thread, QtCore.SIGNAL('newFrame'), self.handleNewFrame)
         QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.updateParams)
@@ -106,6 +110,8 @@ class PatchWindow(QtGui.QMainWindow):
                 self.analysisCurves[n+suf].setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
                 self.analysisCurves[n+suf].attach(p)
                 self.analysisData[n+suf] = []
+        self.showPlots()
+        self.updateParams()
         self.show()
     
     def showPlots(self):
@@ -129,6 +135,7 @@ class PatchWindow(QtGui.QMainWindow):
         for p in self.params:
             if p in state:
                 self.params[p] = state[p]
+        self.params['recordTime'] = self.params['delayTime'] *2.0 + self.params['pulseTime']
         #self.params['icHoldingEnabled'] = self.ui.icHoldCheck.isChecked()
         #self.params['icPulseEnabled'] = self.ui.icPulseCheck.isChecked()
         #self.params['icHolding'] = self.ui.icHoldSpin.value() * 1e-12
@@ -139,6 +146,10 @@ class PatchWindow(QtGui.QMainWindow):
         #self.params['vcPulse'] = self.ui.vcPulseSpin.value() * 1e-3
         l.unlock()
         self.thread.updateParams()
+        
+    def resetClicked(self):
+        for n in self.analysisData:
+            self.analysisData[n] = []
         
     #def setParameter(self, param, value):
         #if param in ['cycleTime', 'recordTime', 'delayTime', 'pulseTime']:
@@ -169,6 +180,15 @@ class PatchWindow(QtGui.QMainWindow):
         for k in self.analysisItems:
             if k in frame['analysis']:
                 self.analysisData[k].append(frame['analysis'][k])
+                
+        if frame['analysis']['inputResistance'] > 1e9:
+            self.ui.inputResistanceLabel.setText('%0.2f GOhm' % (frame['analysis']['inputResistance']*1e-9))
+        else:
+            self.ui.inputResistanceLabel.setText('%0.2f MOhm' % (frame['analysis']['inputResistance']*1e-6))
+        self.ui.restingPotentialLabel.setText('%0.2f +/- %0.2f mV' % (frame['analysis']['restingPotential']*1e3, frame['analysis']['restingPotentialStd']*1e3))
+        self.ui.restingCurrentLabel.setText('%0.2f +/- %0.2f pA' % (frame['analysis']['restingCurrent']*1e9, frame['analysis']['restingCurrentStd']*1e9))
+        self.ui.timeConstantLabel.setText('%0.2f ms' % (frame['analysis']['timeConstant']*1e3))
+        
         self.analysisData['time'].append(data._info[-1]['startTime'])
         self.updateAnalysisPlots()
         
@@ -176,7 +196,7 @@ class PatchWindow(QtGui.QMainWindow):
         for n in self.analysisItems:
             p = getattr(self.ui, n+'Plot')
             if p.isVisible():
-                self.analysisCurves[p].setData(self.analysisData['time'], self.analysisData[n])
+                self.analysisCurves[n].setData(self.analysisData['time'], self.analysisData[n])
                 if len(self.analysisData[n+'Std']) > 0:
                     self.analysisCurves[p+'Std'].setData(self.analysisData['time'], self.analysisData[n+'Std'])
                 p.replot()
@@ -279,7 +299,7 @@ class PatchThread(QtCore.QThread):
                 ## analyze trace 
                 result = task.getResult()
                 analysis = self.analyze(result[clampName], params)
-                frame = {'data': res, 'analysis': analysis}
+                frame = {'data': result, 'analysis': analysis}
                 
                 self.emit(QtCore.SIGNAL('newFrame'), frame)
                 
@@ -305,28 +325,31 @@ class PatchThread(QtCore.QThread):
         pulseEnd = data['Time': params['delayTime']+(params['pulseTime']*2./3.):params['delayTime']+params['pulseTime']]
         
         if params['mode'] == 'vc':
-            iBase = base['Channel': 'scaled'].mean()
-            iPulse = pulseEnd['Channel': 'scaled'].mean() 
-            vBase = base['Channel': 'raw'].mean()
-            vPulse = pulse['Channel': 'raw'].mean() 
-            ir = (vPulse-vBase) / (iPulse-iBase)
-            rmp = vBase.mean()
+            iBase = base['Channel': 'scaled']
+            iPulse = pulseEnd['Channel': 'scaled'] 
+            vBase = base['Channel': 'Command']
+            vPulse = pulse['Channel': 'Command'] 
         if params['mode'] == 'ic':
-            iBase = base['Channel': 'raw'].mean()
-            iPulse = pulse['Channel': 'raw'].mean() 
-            vBase = base['Channel': 'scaled'].mean()
-            vPulse = pulseEnd['Channel': 'scaled'].mean() 
-            rmp = vBase.mean()
-            ir = (vPulse-vBase) / (iPulse-iBase)
+            iBase = base['Channel': 'Command']
+            iPulse = pulse['Channel': 'Command'] 
+            vBase = base['Channel': 'scaled']
+            vPulse = pulseEnd['Channel': 'scaled'] 
             # exponential fit starting point: y = est[0] + est[1] * exp(-x*est[2])
             #estimate = [rmp
             ## Exponential fit
             #fit = leastsq(lambda v, x, y: y - (v[0] - v[1]*exp(-x * v[2])), [10, 2, 3], args=(array(x), array(y)))
+        rmp = vBase.mean()
+        rmps = vBase.std()
+        rmc = iBase.mean()
+        rmcs = iBase.std()
+        
+        ir = (vPulse.mean()-rmp) / (iPulse.mean()-rmc)
+        
             
         return {
             'inputResistance': ir, 
-            'restingPotential': rmp, 'restingPotentialStd': 0,
-            'restingCurrent': 0, 'restingCurrentStd': 0,
+            'restingPotential': rmp, 'restingPotentialStd': rmps,
+            'restingCurrent': rmc, 'restingCurrentStd': rmcs,
             'timeConstant': 0
         }
             

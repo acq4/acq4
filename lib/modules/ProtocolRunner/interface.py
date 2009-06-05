@@ -511,17 +511,21 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.enableStartBtns(False)
         
         ## Set storage dir
-        self.currentDir = self.manager.getCurrentDir()
-        if store:
-            dh = self.currentDir.mkdir(self.currentProtocol.name, autoIncrement=True)
-        else:
-            dh = None
-        
-        ## Generate executable conf from protocol object
-        prot = self.generateProtocol(dh)
-        
-        self.emit(QtCore.SIGNAL('protocolStarted'), {})
-        self.taskThread.startProtocol(prot)
+        try:
+            self.currentDir = self.manager.getCurrentDir()
+            if store:
+                dh = self.currentDir.mkdir(self.currentProtocol.name, autoIncrement=True)
+            else:
+                dh = None
+            
+            ## Generate executable conf from protocol object
+            prot = self.generateProtocol(dh)
+            
+            self.emit(QtCore.SIGNAL('protocolStarted'), {})
+            self.taskThread.startProtocol(prot)
+        except:
+            self.enableStartButtons(True)
+            raise
         
    
         
@@ -534,30 +538,34 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.enableStartBtns(False)
         
         ## Find all top-level items in the sequence parameter list
-        items = []
-        for i in range(self.ui.sequenceParamList.topLevelItemCount()):
-            items.append(self.ui.sequenceParamList.topLevelItem(i))
-        ## Generate parameter space
-        params = OrderedDict()
-        for i in items:
-            key = (str(i.text(0)), str(i.text(1)))
-            params[key] = range(int(i.text(2)))
+        try:
+            items = []
+            for i in range(self.ui.sequenceParamList.topLevelItemCount()):
+                items.append(self.ui.sequenceParamList.topLevelItem(i))
+            ## Generate parameter space
+            params = OrderedDict()
+            for i in items:
+                key = (str(i.text(0)), str(i.text(1)))
+                params[key] = range(int(i.text(2)))
+            
+            ## Set storage dir
+            self.currentDir = self.manager.getCurrentDir()
+            if store:
+                dh = self.currentDir.mkdir(self.currentProtocol.name, autoIncrement=True)
+            else:
+                dh = None
+            
+            ## Generate the complete array of command structures
+            prot = runSequence(lambda p: self.generateProtocol(dh, p), params, params.keys(), passHash=True)
+            #print "==========Sequence Protocol=============="
+            #print prot
+            self.emit(QtCore.SIGNAL('protocolStarted'), {})
+            self.taskThread.startProtocol(prot, params)
+        except:
+            self.enableStartButtons(True)
+            raise
         
-        ## Set storage dir
-        self.currentDir = self.manager.getCurrentDir()
-        if store:
-            dh = self.currentDir.mkdir(self.currentProtocol.name, autoIncrement=True)
-        else:
-            dh = None
-        
-        ## Generate the complete array of command structures
-        prot = runSequence(lambda p: self.generateProtocol(dh, p), params, params.keys(), passHash=True)
-        #print "==========Sequence Protocol=============="
-        #print prot
-        self.emit(QtCore.SIGNAL('protocolStarted'), {})
-        self.taskThread.startProtocol(prot, params)
-        
-    def generateProtocol(self, dh, params={}):
+    def generateProtocol(self, dh, params=None):
         ## params should be in the form {(dev, param): value, ...}
         ## Generate executable conf from protocol object
         #prot = {'protocol': {
@@ -567,6 +575,10 @@ class ProtocolRunner(Module, QtCore.QObject):
             #'name': self.currentProtocol.fileName,
             #'cycleTime': self.currentProtocol.conf['cycleTime'], 
         #}}
+        
+        ## Never put {} in the function signature
+        if params is None:
+            params = {}
         prot = {'protocol': self.protoStateGroup.state()}
         store = (dh is not None)
         prot['protocol']['storeData'] = store

@@ -119,6 +119,9 @@ class FileHandle(QtCore.QObject):
         self.parentDir = None
         self.lock = threading.RLock()
         
+    def __repr__(self):
+        return "<%s '%s'>" % (self.__class__.__name__, self.name())
+        
     def name(self, relativeTo=None):
         self.checkDeleted()
         l = Locker(self.lock)
@@ -291,8 +294,6 @@ class DirHandle(FileHandle):
             ## If directory is unmanaged, just leave it that way.
             pass
         
-    def __repr__(self):
-        return "<%s '%s'>" % (self.__class__.__name__, self.name())
         
     def __del__(self):
         pass
@@ -464,7 +465,8 @@ class DirHandle(FileHandle):
         if index.has_key(file):
             return index[file]
         else:
-            raise Exception("File %s is not indexed" % file)
+            return {}
+            #raise Exception("File %s is not indexed" % file)
     
     def isDir(self, path=None):
         l = Locker(self.lock)

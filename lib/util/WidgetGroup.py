@@ -82,7 +82,7 @@ class WidgetGroup(QtCore.QObject):
             self.emit(QtCore.SIGNAL('changed'), self.widgetList[w], v2)
         
     def state(self):
-        return self.cache
+        return self.cache.copy()
 
     def setState(self, s):
         #print "SET STATE", self, s
