@@ -100,7 +100,8 @@ class SequenceRunner:
                 
             self._return[tuple(ind)] = ret
             self._runMask[tuple(ind)] = True
-            
+            #print "--------"
+            #print self._return
             if stop:
                 raise Exception('break', len(ind))
             

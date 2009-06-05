@@ -552,7 +552,8 @@ class ProtocolRunner(Module, QtCore.QObject):
         
         ## Generate the complete array of command structures
         prot = runSequence(lambda p: self.generateProtocol(dh, p), params, params.keys(), passHash=True)
-        
+        #print "==========Sequence Protocol=============="
+        #print prot
         self.emit(QtCore.SIGNAL('protocolStarted'), {})
         self.taskThread.startProtocol(prot, params)
         
@@ -573,6 +574,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             if params != {}:
                 name = '_'.join(map(lambda i: '%03d'%i, params.values()))
                 dh1 = dh.mkdir(name)
+                
             else:
                 dh1 = dh
             prot['protocol']['storageDir'] = dh1
@@ -584,6 +586,7 @@ class ProtocolRunner(Module, QtCore.QObject):
                 p = dict([(i[1], params[i]) for i in params.keys() if i[0] == d])
                 ## Ask the device to generate its protocol command
                 prot[d] = self.docks[d].widget().generateProtocol(p)
+        #print prot['protocol']['storageDir'].name()
         return prot
     
     def enableStartBtns(self, v):

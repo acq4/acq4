@@ -9,6 +9,9 @@ class PatchWindow(QtGui.QMainWindow):
     def __init__(self, dm, clampName):
         QtGui.QMainWindow.__init__(self)
         self.setWindowTitle(clampName)
+        
+        self.analysisItems = ['inputResistance', 'restingPotential', 'restingCurrent', 'timeConstant']
+        
         self.params = {
             'mode': 'vc',
             'rate': 40000,
@@ -60,7 +63,7 @@ class PatchWindow(QtGui.QMainWindow):
         #self.ui.cycleTimeSpin.setValue(self.params['cycleTime']*1e3)
         
         
-        for p in [self.ui.patchPlot, self.ui.commandPlot, self.ui.analysisPlot]:
+        for p in [self.ui.patchPlot, self.ui.commandPlot]:
             p.setCanvasBackground(QtGui.QColor(0,0,0))
             p.replot()
         self.patchCurve = Qwt.QwtPlotCurve('cell')
@@ -69,14 +72,14 @@ class PatchWindow(QtGui.QMainWindow):
         self.commandCurve = Qwt.QwtPlotCurve('command')
         self.commandCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         self.commandCurve.attach(self.ui.commandPlot)
-        self.analysisCurve = Qwt.QwtPlotCurve('analysis')
-        self.analysisCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        self.analysisCurve.attach(self.ui.analysisPlot)
-        self.analysisData = {'mr': [], 'rmp': [], 'tau': [], 'time': []}
+        #self.analysisCurve = Qwt.QwtPlotCurve('analysis')
+        #self.analysisCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
+        #self.analysisCurve.attach(self.ui.analysisPlot)
+        #self.analysisData = {'mr': [], 'rmp': [], 'tau': [], 'time': []}
         
         QtCore.QObject.connect(self.ui.startBtn, QtCore.SIGNAL('clicked()'), self.startClicked)
         QtCore.QObject.connect(self.thread, QtCore.SIGNAL('finished()'), self.threadStopped)
-        QtCore.QObject.connect(self.thread, QtCore.SIGNAL('newFrame(PyQt_PyObject)'), self.handleNewFrame)
+        QtCore.QObject.connect(self.thread, QtCore.SIGNAL('newFrame'), self.handleNewFrame)
         QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.updateParams)
         QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.updateParams)
         #QtCore.QObject.connect(self.ui.icPulseSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateParams)
@@ -89,8 +92,32 @@ class PatchWindow(QtGui.QMainWindow):
         #QtCore.QObject.connect(self.ui.vcHoldCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.updateParams)
                 
+        ## Configure analysis plots, curves, and data arrays
+        self.analysisCurves = {}
+        self.analysisData = {'time': []}
+        for n in self.analysisItems:
+            w = getattr(self.ui, n+'Check')
+            QtCore.QObject.connect(w, QtCore.SIGNAL('clicked()'), self.showPlots)
+            p = getattr(self.ui, n+'Plot')
+            p.setCanvasBackground(QtGui.QColor(0,0,0))
+            p.replot()
+            for suf in ['', 'Std']:
+                self.analysisCurves[n+suf] = Qwt.QwtPlotCurve(n+suf)
+                self.analysisCurves[n+suf].setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
+                self.analysisCurves[n+suf].attach(p)
+                self.analysisData[n+suf] = []
         self.show()
-        
+    
+    def showPlots(self):
+        """Show/hide analysis plot widgets"""
+        for n in self.analysisItems:
+            w = getattr(self.ui, n+'Check')
+            p = getattr(self.ui, n+'Plot')
+            if w.isChecked():
+                p.show()
+            else:
+                p.hide()
+    
     def updateParams(self, *args):
         l = QtCore.QMutexLocker(self.paramLock)
         if self.ui.icModeRadio.isChecked():
@@ -139,20 +166,28 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.patchPlot.replot()
         self.ui.commandPlot.replot()
         
-        for k in ['mr', 'rmp', 'tau']:
-            self.analysisData[k].append(frame['analysis'][k])
+        for k in self.analysisItems:
+            if k in frame['analysis']:
+                self.analysisData[k].append(frame['analysis'][k])
         self.analysisData['time'].append(data._info[-1]['startTime'])
-        self.updateAnalysisPlot()
+        self.updateAnalysisPlots()
         
-    def updateAnalysisPlot(self):
-        if self.ui.inputResistanceRadio.isChecked():
-            p = 'mr'
-        elif self.ui.restingPotentialRadio.isChecked():
-            p = 'rmp'
-        elif self.ui.timeConstantRadio.isChecked():
-            p = 'tau'
-        self.analysisCurve.setData(self.analysisData['time'], self.analysisData[p])
-        self.ui.analysisPlot.replot()
+    def updateAnalysisPlots(self):
+        for n in self.analysisItems:
+            p = getattr(self.ui, n+'Plot')
+            if p.isVisible():
+                self.analysisCurves[p].setData(self.analysisData['time'], self.analysisData[n])
+                if len(self.analysisData[n+'Std']) > 0:
+                    self.analysisCurves[p+'Std'].setData(self.analysisData['time'], self.analysisData[n+'Std'])
+                p.replot()
+        #if self.ui.inputResistanceRadio.isChecked():
+            #p = 'mr'
+        #elif self.ui.restingPotentialRadio.isChecked():
+            #p = 'rmp'
+        #elif self.ui.timeConstantRadio.isChecked():
+            #p = 'tau'
+        #self.analysisCurve.setData(self.analysisData['time'], self.analysisData[p])
+        #self.ui.analysisPlot.replot()
     
     def startClicked(self):
         if self.ui.startBtn.isChecked():
@@ -241,12 +276,12 @@ class PatchThread(QtCore.QThread):
                 ## Execute task
                 task.execute()
                 
-                ## measure resistance, RMP, and tau 
-                res = task.getResult()
-                (mr, rmp, tau) = self.analyze(res[clampName], params)
-                frame = {'data': res, 'analysis': {'mr': mr, 'rmp': rmp, 'tau': tau}}
+                ## analyze trace 
+                result = task.getResult()
+                analysis = self.analyze(result[clampName], params)
+                frame = {'data': res, 'analysis': analysis}
                 
-                self.emit(QtCore.SIGNAL('newFrame(PyQt_PyObject)'), frame)
+                self.emit(QtCore.SIGNAL('newFrame'), frame)
                 
                 ## sleep until it is time for the next run
                 while True:
@@ -288,7 +323,12 @@ class PatchThread(QtCore.QThread):
             ## Exponential fit
             #fit = leastsq(lambda v, x, y: y - (v[0] - v[1]*exp(-x * v[2])), [10, 2, 3], args=(array(x), array(y)))
             
-        return (ir,rmp,0)
+        return {
+            'inputResistance': ir, 
+            'restingPotential': rmp, 'restingPotentialStd': 0,
+            'restingCurrent': 0, 'restingCurrentStd': 0,
+            'timeConstant': 0
+        }
             
     def stop(self, block=False):
         l = QtCore.QMutexLocker(self.lock)
