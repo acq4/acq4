@@ -562,7 +562,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             self.emit(QtCore.SIGNAL('protocolStarted'), {})
             self.taskThread.startProtocol(prot, params)
         except:
-            self.enableStartButtons(True)
+            self.enableStartBtns(True)
             raise
         
     def generateProtocol(self, dh, params=None):
@@ -807,7 +807,7 @@ class TaskThread(QtCore.QThread):
         task = self.dm.createTask(cmd)
         self.lastRunTime = time.clock()
         self.emit(QtCore.SIGNAL('protocolStarted'), params)
-        task.execute()
+        task.execute(block=False)
             
         ## wait for finish, watch for abort requests
         while True:

@@ -183,12 +183,18 @@ class Manager(QtCore.QObject):
 
 
 class Task:
+    id = 0
+    
+    
     def __init__(self, dm, command):
         self.dm = dm
         self.command = command
         self.result = None
+        self.reserved = False
         self.cfg = command['protocol']
-
+        self.id = Task.id
+        Task.id += 1
+        
         ## TODO:  set up data storage with cfg['storeData'] and ['writeLocation']
         
         self.devNames = command.keys()
@@ -201,8 +207,13 @@ class Task:
             self.devs[devName] = self.dm.getDevice(devName)
             self.tasks[devName] = self.devs[devName].createTask(self.command[devName])
         
+        
     def execute(self, block=True):
         self.stopped = False
+        #print "======  Executing task %d:" % self.id
+        #print self.cfg
+        #print "======================="
+        
         
         ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
         ## This is how we allow multiple devices to communicate and decide how to operate together.
@@ -212,8 +223,14 @@ class Task:
             self.tasks[devName].configure(self.tasks, self.startOrder)
         
         ## Reserve all hardware before starting any
+        
+        ##### How do we make sure two tasks aren't waiting on hardware that the other has reserved already?
+        ## Add a mutex to Manager that makes sure only one task may reserve hardware at a time.
         for devName in self.tasks:
+            #print "  %d Reserving hardware" % self.id, devName
             self.tasks[devName].reserve()
+            #print "  %d reserved" % self.id, devName
+        self.reserved = True
         
         self.result = None
         
@@ -221,8 +238,10 @@ class Task:
         for devName in self.startOrder:
             self.tasks[devName].start()
         self.startTime = ptime.time()
+        #print "  %d Task started" % self.id
             
         if not block:
+            #print "  %d Not blocking; execute complete" % self.id
             return
         
         ## Wait until all tasks are done
@@ -230,11 +249,11 @@ class Task:
             time.sleep(10e-6)
         
         self.stop()
-        
+        #print "  %d execute complete" % self.id
         ## Store data if requested
-        if 'storeData' in self.cfg and self.cfg['storeData'] is True:
-            for t in self.tasks:
-                self.tasks[t].storeResult(self.cfg['storageDir'])
+        #if 'storeData' in self.cfg and self.cfg['storeData'] is True:
+            #for t in self.tasks:
+                #self.tasks[t].storeResult(self.cfg['storageDir'])
         
         
     def isDone(self):
@@ -247,25 +266,49 @@ class Task:
         return True
         
     def stop(self):
-        if self.stopped:
-            return
-        ## Stop all tasks
-        for t in self.tasks:
-            self.tasks[t].stop()
-        ## Release all hardware for use elsewhere
-        for t in self.tasks:
-            self.tasks[t].release()
-        self.stopped = True
+        self.getResult()
+        return
+        
+    #def stop(self):
+        #if self.stopped:
+            #return
+        ### Stop all tasks
+        #for t in self.tasks:
+            #self.tasks[t].stop()
+        #self.stopped = True
+            
+        #self.getResult()
+            
+        ### Release all hardware for use elsewhere
+        #for t in self.tasks:
+            #self.tasks[t].release()
+            #print "  %d released" % self.id, t
         
     def getResult(self):
-        self.stop()
+        if not self.isDone():
+            raise Exception("Cannot get result; task is still running.")
+        
+        if not self.stopped:
+            ## Stop all tasks
+            for t in self.tasks:
+                self.tasks[t].stop()
+            self.stopped = True
+        
         if self.result is None:
             ## Let each device generate its own output structure.
             result = {}
             for devName in self.tasks:
                 result[devName] = self.tasks[devName].getResult()
+            self.result = result
             
-            return result
+        ## Release all hardware for use elsewhere
+        if self.reserved:
+            for t in self.tasks:
+                #print "  %d releasing" % self.id, t
+                self.tasks[t].release()
+                #print "  %d released" % self.id, t
+        self.reserved = False
+            
         return self.result
 
 

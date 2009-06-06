@@ -201,12 +201,13 @@ class AcquireThread(QtCore.QThread):
             self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region)
             lastFrameTime = ptime.time() #time.clock()  # Use time.time() on Linux
             
+            loopCount = 0
             while True:
                 frame = self.cam.lastFrame()
-                now = ptime.time() #time.clock()
                 
                 ## If a new frame is available, process it and inform other threads
                 if frame is not None and frame != lastFrame:
+                    now = ptime.time() #time.clock()
                     
                     if lastFrame is not None and frame - lastFrame > 1:
                         print "Dropped frames between %d and %d" % (lastFrame, frame)
@@ -245,13 +246,17 @@ class AcquireThread(QtCore.QThread):
                 time.sleep(10e-6)
                 
                 #print "*Locking thread"
-                self.lock.lock()
-                if self.stopThread and frame is not None:
-                    #print "Unlocking thread for exit"
+                if loopCount > 1000:
+                    self.lock.lock()
+                    if self.stopThread and frame is not None:
+                        #print "Unlocking thread for exit"
+                        self.lock.unlock()
+                        #print "Camera acquisition thread stopping."
+                        break
                     self.lock.unlock()
-                    #print "Camera acquisition thread stopping."
-                    break
-                self.lock.unlock()
+                    loopCount = 0
+                
+                loopCount += 1
                 #print "*Unlocking thread"
             ## Inform that we have stopped (?)
             #self.ui.stop()

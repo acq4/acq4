@@ -475,86 +475,86 @@ class PVCamera(QtGui.QMainWindow):
             #print "Exception in QtCam::newFrame: %s (line %d)" % (str(sys.exc_info()[1]), sys.exc_info()[2].tb_lineno)
             sys.excepthook(*sys.exc_info())
 
-class AcquireThread(QtCore.QThread):
-    def __init__(self, ui):
-        QtCore.QThread.__init__(self)
-        self.ui = ui
-        self.stopThread = False
-        self.lock = QtCore.QMutex()
-        self.acqBuffer = None
-        self.frameId = 0
-        self.bufferTime = 5.0
-        self.ringSize = 20
-        time.clock()  ## On windows, this is needed to start the clock
+#class AcquireThread(QtCore.QThread):
+    #def __init__(self, ui):
+        #QtCore.QThread.__init__(self)
+        #self.ui = ui
+        #self.stopThread = False
+        #self.lock = QtCore.QMutex()
+        #self.acqBuffer = None
+        #self.frameId = 0
+        #self.bufferTime = 5.0
+        #self.ringSize = 20
+        #time.clock()  ## On windows, this is needed to start the clock
     
-    def run(self):
-        binning = self.ui.binning
-        exposure = self.ui.exposure
-        region = self.ui.region
-        lastFrame = None
-        lastFrameTime = None
-        self.lock.lock()
-        self.stopThread = False
-        self.lock.unlock()
-        self.fps = None
+    #def run(self):
+        #binning = self.ui.binning
+        #exposure = self.ui.exposure
+        #region = self.ui.region
+        #lastFrame = None
+        #lastFrameTime = None
+        #self.lock.lock()
+        #self.stopThread = False
+        #self.lock.unlock()
+        #self.fps = None
         
-        try:
-            self.acqBuffer = self.ui.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region)
-            lastFrameTime = time.clock()  # Use time.time() on Linux
+        #try:
+            #self.acqBuffer = self.ui.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region)
+            #lastFrameTime = time.clock()  # Use time.time() on Linux
             
-            while True:
-                frame = self.ui.cam.lastFrame()
-                now = time.clock()
+            #while True:
+                #frame = self.ui.cam.lastFrame()
+                #now = time.clock()
                 
-                ## If a new frame is available, process it and inform other threads
-                if frame is not None and frame != lastFrame:
+                ### If a new frame is available, process it and inform other threads
+                #if frame is not None and frame != lastFrame:
                     
-                    if lastFrame is not None and frame - lastFrame > 1:
-                        print "Dropped frames between %d and %d" % (lastFrame, frame)
-                        self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped frame!")
-                    lastFrame = frame
+                    #if lastFrame is not None and frame - lastFrame > 1:
+                        #print "Dropped frames between %d and %d" % (lastFrame, frame)
+                        #self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped frame!")
+                    #lastFrame = frame
                     
-                    ## compute FPS
-                    dt = now - lastFrameTime
-                    if dt > 0.:
-                        if self.fps is None:
-                            self.fps = 1.0/dt
-                        else:
-                            self.fps = self.fps * 0.9 + 0.1 / dt
+                    ### compute FPS
+                    #dt = now - lastFrameTime
+                    #if dt > 0.:
+                        #if self.fps is None:
+                            #self.fps = 1.0/dt
+                        #else:
+                            #self.fps = self.fps * 0.9 + 0.1 / dt
                     
-                    ## Build meta-info for this frame
-                    ## Use lastFrameTime because the current frame _began_ exposing when the previous frame arrived.
-                    info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region, 'fps': self.fps}
+                    ### Build meta-info for this frame
+                    ### Use lastFrameTime because the current frame _began_ exposing when the previous frame arrived.
+                    #info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region, 'fps': self.fps}
                     
-                    lastFrameTime = now
+                    #lastFrameTime = now
                     
-                    ## Inform that new frame is ready
-                    self.emit(QtCore.SIGNAL("newFrame"), (self.acqBuffer[frame].copy(), info))
-                    self.frameId += 1
-                time.sleep(10e-6)
+                    ### Inform that new frame is ready
+                    #self.emit(QtCore.SIGNAL("newFrame"), (self.acqBuffer[frame].copy(), info))
+                    #self.frameId += 1
+                #time.sleep(10e-6)
                 
-                self.lock.lock()
-                if self.stopThread and frame is not None:
-                    self.lock.unlock()
-                    break
-                self.lock.unlock()
-            self.ui.cam.stop()
-        except:
-            try:
-                self.ui.cam.stop()
-            except:
-                pass
-            self.emit(QtCore.SIGNAL("showMessage"), "ERROR Starting acquisition: %s" % str(sys.exc_info()[1]))
+                #self.lock.lock()
+                #if self.stopThread and frame is not None:
+                    #self.lock.unlock()
+                    #break
+                #self.lock.unlock()
+            #self.ui.cam.stop()
+        #except:
+            #try:
+                #self.ui.cam.stop()
+            #except:
+                #pass
+            #self.emit(QtCore.SIGNAL("showMessage"), "ERROR Starting acquisition: %s" % str(sys.exc_info()[1]))
         
-    def stop(self):
-        l = QtCore.QMutexLocker(self.lock)
-        self.stopThread = True
+    #def stop(self):
+        #l = QtCore.QMutexLocker(self.lock)
+        #self.stopThread = True
 
-    def reset(self):
-        if self.isRunning():
-            self.stop()
-            self.wait()
-            self.start()
+    #def reset(self):
+        #if self.isRunning():
+            #self.stop()
+            #self.wait()
+            #self.start()
 
 
 class RecordThread(QtCore.QThread):
@@ -633,7 +633,7 @@ class RecordThread(QtCore.QThread):
                 sys.excepthook(*sys.exc_info())
                 break
                 
-            time.sleep(10e-6)
+            time.sleep(10e-3)
             
             l = QtCore.QMutexLocker(self.lock)
             if self.stopThread:

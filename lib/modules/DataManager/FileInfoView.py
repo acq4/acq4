@@ -3,6 +3,7 @@ from FileInfoViewTemplate import *
 from PyQt4 import QtCore, QtGui
 from lib.DataManager import *
 import lib.Manager as Manager
+import sip
 import time
 
 class FocusEventCatcher(QtCore.QObject):
@@ -28,6 +29,7 @@ class FileInfoView(QtGui.QWidget):
         QtCore.QObject.connect(self.focusEventCatcher, QtCore.SIGNAL('lostFocus'), self.focusLost)
         
     def setCurrentFile(self, file):
+        #print "=============== set current file ============"
         if file is self.current:
             return
             
@@ -61,6 +63,7 @@ class FileInfoView(QtGui.QWidget):
             
         
         ## Generate fields, populate if data exists
+        #print "Add %d rows.." % len(fields)
         for f in fields:
             if f in infoKeys:
                 infoKeys.remove(f)
@@ -95,6 +98,7 @@ class FileInfoView(QtGui.QWidget):
         #self.ui.fileInfoLayout.setMinAndMaxSize()
         
         ## Add fields for any other keys that happen to be present
+        #print "Add %d rows.." % len(infoKeys)
         for f in infoKeys:
             s = str(info[f])
             if f == '__timestamp__':
@@ -107,7 +111,9 @@ class FileInfoView(QtGui.QWidget):
             #self.setCurrentFile
             
     def addRow(self, name, widget):
+        
         """Add a row to the layout with a label/widget pair."""
+        #print "addRow"
         self.widgets[widget] = name
         self.ui.fileInfoLayout.addRow(name, widget)
         widget.installEventFilter(self.focusEventCatcher)
@@ -125,10 +131,15 @@ class FileInfoView(QtGui.QWidget):
         self.current.setInfo({field: val})
             
     def clear(self):
+        #print "clear"
         ## remove all rows from layout
+        #count = 0
         while self.ui.fileInfoLayout.count() > 0:
             w = self.ui.fileInfoLayout.takeAt(0).widget()
-            w.setParent(None)
+            sip.delete(w)
+            #w.setParent(None)
+            #count += 1
+        #print "removed %d widgets" % count
             
     
     

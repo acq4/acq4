@@ -2,12 +2,15 @@
 import time, traceback, sys
 #import threading
 from PyQt4 import QtCore, QtGui
+import lib.util.ptime as ptime
+from lib.util.Mutex import Mutex
 
 class Device:
     """Abstract class defining the standard interface for Device subclasses."""
     def __init__(self, deviceManager, config, name):
         #self._lock_ = threading.Lock()
         self._lock_ = QtCore.QMutex()
+        #self._lock_ = Mutex()
         self.dm = deviceManager
         self.config = config
         self.name = name
@@ -56,8 +59,16 @@ class Device:
         #return True
         
         if block:
+            #if self._lock_.tryLock():
+                #self._lock_.unlock()
+                #print "    mutex is unlocked", self.name, "%0.9f"%ptime.time()
+            #else:
+                #print "    mutex is locked", self.name, "%0.9f"%ptime.time()
             l = self._lock_.tryLock(int(timeout*1000))
+            #print "    Reserved device", self.name, l, "%0.9f"%ptime.time()
+            #print "    mutex is locked:", not self._lock_.tryLock()
             if not l:
+                #print "**************************"
                 raise Exception("Timed out waiting for device lock for %s" % self.name)
         else:
             l = self._lock_.tryLock()
@@ -68,7 +79,9 @@ class Device:
     def release(self):
         try:
             #self.lock.release()
+            #print "Unlocking device", self.name, "%0.9f"%ptime.time()
             self._lock_.unlock()
+            #print "Released device", self.name, "%0.9f"%ptime.time()
         except:
             print "WARNING: Failed to release device lock for %s" % self.name
             traceback.print_exception(sys.exc_info())

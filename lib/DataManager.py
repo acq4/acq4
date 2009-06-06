@@ -178,6 +178,7 @@ class FileHandle(QtCore.QObject):
             raise Exception("Destination file %s already exists." % fn2)
         os.rename(fn1, fn2)
         self.path = fn2
+        self.parentDir = None
         if oldDir.isManaged() and newDir.isManaged():
             newDir.addFile(name, info=oldDir._fileInfo(name))
         elif newDir.isManaged():
@@ -239,6 +240,7 @@ class FileHandle(QtCore.QObject):
         if not os.path.exists(newName):
             raise Exception("File %s does not exist." % newName)
         self.path = newName
+        self.parentDir = None
         #print "parent of %s changed" % self.name()
         self.emitChanged('parent')
 
@@ -462,8 +464,6 @@ class DirHandle(FileHandle):
     def _fileInfo(self, file):
         """Return a dict of the meta info stored for file"""
         l = Locker(self.lock)
-        #if file != '.' and self.isDir(file):  ## directory meta-info is stored within the directory, not in the parent.
-            #return self.getDir(file).fileInfo('.')
         
         index = self._readIndex()
         if index.has_key(file):
@@ -474,8 +474,6 @@ class DirHandle(FileHandle):
     
     def isDir(self, path=None):
         l = Locker(self.lock)
-        #fn = os.path.abspath(os.path.join(self.path, fileName))
-        #return os.path.isdir(fn)
         if path is None:
             return True
         else:
@@ -511,13 +509,8 @@ class DirHandle(FileHandle):
                 if not os.path.exists(fullFn):
                     break
                 d += 1
-        #fd = open(fn, 'w')
-        #fcntl.flock(fd, fcntl.LOCK_EX)
         
         obj.write(fullFn)
-        #print "Wrote file %s" % fullFn
-        
-        #fd.close()
         
         if not info.has_key('__object_type__'):
             if hasattr(obj, 'typeName'):
@@ -575,26 +568,8 @@ class DirHandle(FileHandle):
         
         
         
-    #def _setFileAttr(self, fileName, attr, value):
-        #"""Set a single meta-info attribute for fileName"""
-        #l = Locker(self.lock)
-        #if fileName != '.' and self.isDir(fileName):
-            #self.setFileAttr('.', attr, value)
-        #else:
-            #if not self.index.has_key(fileName):
-                #self.setFileInfo(fileName, {attr: value}, append=True)
-            #else:
-                ##fd = open(self.indexFile, 'r')
-                ##fcntl.flock(fd, fcntl.LOCK_EX)
-                #self._readIndex(lock=False)
-                #self.index[fileName][attr] = value
-                #self._writeIndex(lock=False)
-                ##fd.close()
-        #self.emitChanged(fileName)
-        
     def parent(self):
         l = Locker(self.lock)
-        #pdir = re.sub(r'/[^/]+/$', '', self.path)
         pdir = os.path.normpath(os.path.join(self.path, '..'))
         return self.manager.getDirHandle(pdir)
 
@@ -613,73 +588,37 @@ class DirHandle(FileHandle):
         """Set or update meta-information array for fileName."""
         l = Locker(self.lock)
         
-        #fd = open(self.indexFile, 'r')
-        #fcntl.flock(fd, fcntl.LOCK_EX)
-        #if fileName != '.' and self.isDir(fileName):
-            #self.getDir(fileName)._setFileInfo('.', info)
-        #else:
-        #print "setFileInfo", self.name(), fileName, info, append
         if append:
-            #print "appending"
             appendConfigFile({fileName: info}, self._indexFile())
         else:
             index = self._readIndex(lock=False)
             if fileName not in index:
-                #print fileName, "not in", self.index
                 index[fileName] = {}
             for k in info:
-                #print "%s Setting %s = %s for file %s"  % (self.name(), k, info[k], fileName)
                 index[fileName][k] = info[k]
-            #self.index[fileName] = info   ## Update dict, do not completely overwrite.
             self._writeIndex(index, lock=False)
-        #fd.close()
         self.emitChanged('meta', fileName)
         
     def _readIndex(self, lock=True):
         l = Locker(self.lock)
-        #fd = open(self.indexFile)
-        #if lock:
-            #pass
-            #fcntl.flock(fd, fcntl.LOCK_EX)
         indexFile = self._indexFile()
         if self._index is None or os.path.getmtime(indexFile) != self._indexMTime:
             if not os.path.isfile(indexFile):
                 raise Exception("Directory '%s' is not managed!" % (self.name()))
             try:
-                #print "Reading index", indexFile
                 self._index = readConfigFile(indexFile)
                 self._indexMTime = os.path.getmtime(indexFile)
             except:
                 print "***************Error while reading index file %s!*******************" % indexFile
                 raise
         return self._index
-            
-        #fd.close()
         
     def _writeIndex(self, newIndex, lock=True):
         l = Locker(self.lock)
         
-        #if not self.isManaged():
-            #raise Exception("Directory is not managed!")
-        #fd = open(self.indexFile, 'w')
-        #if lock:
-            #pass
-#            fcntl.flock(fd, fcntl.LOCK_EX)
-        #fd.write(str(self.index))
-        #fd.close()
         writeConfigFile(newIndex, self._indexFile())
         self._index = newIndex
         self._indexMTime = os.path.getmtime(self._indexFile())
         
-        
-    #def _parentMoved(self, oldDir, newDir):
-        #"""Inform this object that it has been moved as a result of its (grand)parent having moved."""
-        #if self.path[len(oldDir):] != oldDir:
-            #raise Exception("File %s is not in moved tree %s, should not update!" % (self.path, oldDir))
-        #subName = self.path[len(oldDir):]
-        #newName = os.path.join(newDir, subName)
-        #if not os.path.isdir(newName):
-            #raise Exception("File %s does not exist." % newName)
-        #self.path = fileName
 
 
