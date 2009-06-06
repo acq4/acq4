@@ -23,6 +23,7 @@ class Manager(QtCore.QObject):
         
         QtCore.QObject.__init__(self)
         self.alreadyQuit = False
+        self.taskLock = QtCore.QMutex()
         atexit.register(self.quit)
         self.devices = {}
         self.modules = {}
@@ -164,8 +165,15 @@ class Manager(QtCore.QObject):
         """Return a file or directory handle for d"""
         return self.dataManager.getHandle(d)
         
-            
+    def lockReserv(self):
+        """Lock the reservation system so that only one task may reserve its set of devices at a time"""
+        if self.taskLock.tryLock(10e3):
+            return True
+        else:
+            raise Exception("Times out waiting for task reservation system")
         
+    def unlockReserv(self):
+        self.taskLock.unlock()
         
     def logMsg(self, msg, tags=None):
         if tags is None:
@@ -215,23 +223,29 @@ class Task:
         #print "======================="
         
         
+        
+        ## Reserve all hardware before starting any
+        self.dm.lockReserv()
+        try:
+            for devName in self.tasks:
+                #print "  %d Reserving hardware" % self.id, devName
+                self.tasks[devName].reserve()
+                #print "  %d reserved" % self.id, devName
+            self.reserved = True
+        finally:
+            self.dm.unlockReserv()
+
+
         ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
         ## This is how we allow multiple devices to communicate and decide how to operate together.
         ## Each task may modify the startOrder array to suit its needs.
         self.startOrder = self.devs.keys()
         for devName in self.tasks:
             self.tasks[devName].configure(self.tasks, self.startOrder)
-        
-        ## Reserve all hardware before starting any
-        
-        ##### How do we make sure two tasks aren't waiting on hardware that the other has reserved already?
-        ## Add a mutex to Manager that makes sure only one task may reserve hardware at a time.
-        for devName in self.tasks:
-            #print "  %d Reserving hardware" % self.id, devName
-            self.tasks[devName].reserve()
-            #print "  %d reserved" % self.id, devName
-        self.reserved = True
-        
+
+        if 'leadTime' in self.cfg:
+            time.sleep(self.cfg['leadTime'])
+
         self.result = None
         
         ## Start tasks in specific order

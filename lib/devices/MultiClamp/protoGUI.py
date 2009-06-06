@@ -19,6 +19,7 @@ class MultiClampProtoGui(ProtocolGui):
         self.currentCmdPlot = None
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        self.stateGroup = WidgetGroup(self)
         self.ui.waveGeneratorWidget.setTimeScale(1e-3)
         self.unitLabels = [self.ui.waveGeneratorLabel, self.ui.holdingCheck]
         self.modeSignalList = self.dev.listModeSignals()
@@ -37,7 +38,6 @@ class MultiClampProtoGui(ProtocolGui):
             #(self.ui.splitter, 'splitter1'),
             #(self.ui.splitter_2, 'splitter2')
         #])
-        self.stateGroup = WidgetGroup(self)
         
         self.daqChanged(daqUI.currentState())
         for p in [self.ui.topPlotWidget, self.ui.bottomPlotWidget]:
@@ -57,6 +57,7 @@ class MultiClampProtoGui(ProtocolGui):
         state['scaledSignal'] = str(self.ui.scaledSignalCombo.currentText())
         state['rawSignal'] = str(self.ui.rawSignalCombo.currentText())
         #state['stim'] = self.ui.waveGeneratorWidget.saveState()
+        print state['splitter'], state['splitter_2']
         return state
         
     def restoreState(self, state):
@@ -90,13 +91,15 @@ class MultiClampProtoGui(ProtocolGui):
         for k in ps:
             params[k] = range(ps[k])
         waves = []
-        runSequence(lambda p: waves.append(self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, p)), params, params.keys(), passHash=True)
+        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys(), passHash=True)
+        #runSequence(lambda p: waves.append(self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, p)), params, params.keys(), passHash=True)
         for w in waves:
             if w is not None:
                 self.plotCmdWave(w, color=QtGui.QColor(100, 100, 100), replot=False)
         
         ## display single-mode wave in red
-        single = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts)
+        #single = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts)
+        single = self.getSingleWave()
         if single is not None:
             self.plotCmdWave(single, color=QtGui.QColor(200, 100, 100))
         self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
@@ -116,7 +119,8 @@ class MultiClampProtoGui(ProtocolGui):
         if self.currentCmdPlot is not None:
             self.currentCmdPlot.detach()
         params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name])
-        cur = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
+        #cur = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
+        cur = self.getSingleWave(params)
         self.currentCmdPlot = self.plotCmdWave(cur, color=QtGui.QColor(100, 200, 100))
         
     def plotCmdWave(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
@@ -130,6 +134,7 @@ class MultiClampProtoGui(ProtocolGui):
         return plot
         
     def generateProtocol(self, params=None):
+        state = self.stateGroup.state()
         if params is None:
             params = {}
         prot = {}
@@ -141,9 +146,23 @@ class MultiClampProtoGui(ProtocolGui):
         if self.ui.rawSignalCheck.isChecked():
             prot['raw'] = self.ui.rawSignalCombo.currentText()
         if mode != 'I=0':
-            prot['command'] = self.cmdScale * self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
+            ## Must scale command to V or A before sending to protocol system.
+            prot['command'] = self.cmdScale * self.getSingleWave(params)
+            if state['holdingCheck']:
+                prot['holding'] = state['holdingSpin']
         return prot
     
+    def getSingleWave(self, params=None):
+        ## waveGenerator generates values in mV or pA
+        wave = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
+        
+        if wave is None:
+            return None
+        state = self.stateGroup.state()
+        if state['holdingCheck']:
+            wave += (state['holdingSpin'] / self.cmdScale)
+        return wave
+        
         
     def getMode(self):
         if self.ui.icModeRadio.isChecked():
@@ -180,6 +199,7 @@ class MultiClampProtoGui(ProtocolGui):
                 self.ui.scaledSignalCheck.setChecked(False)
                 self.ui.rawSignalCheck.setChecked(False)
                 self.ui.holdingCheck.setChecked(False)
+                self.ui.holdingSpin.setValue(0.0)
                 self.ui.setScaledGainCheck.setChecked(False)
                 self.ui.setRawGainCheck.setChecked(False)
             
@@ -192,6 +212,7 @@ class MultiClampProtoGui(ProtocolGui):
                 newUnit = 'pA'
                 oldUnit = 'mV'
                 self.cmdScale = 1e-12
+            self.stateGroup.setScale(self.ui.holdingSpin, 1./self.cmdScale)
             for l in self.unitLabels:
                 text = str(l.text())
                 l.setText(text.replace(oldUnit, newUnit))

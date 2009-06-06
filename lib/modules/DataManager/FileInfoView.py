@@ -104,7 +104,10 @@ class FileInfoView(QtGui.QWidget):
             if f == '__timestamp__':
                 s = time.strftime("%Y.%m.%d   %H:%m:%S", time.localtime(float(s)))
             w = QtGui.QLabel(s)
-            self.addRow(f.replace('__', ''), w)
+            if type(f) is tuple:
+                f = '.'.join(f)
+            f = str(f).replace('__', '')
+            self.addRow(f, w)
             
     #def currentDirChanged(self, name, change, *args):
         #if change in ['renamed', 'moved', 'parent']:

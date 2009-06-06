@@ -232,7 +232,7 @@ class PVCamera(QtGui.QMainWindow):
             print "Stopping recording thread.."
             self.recordThread.stop()
             self.recordThread.wait()
-        print "Exiting."
+        #print "Exiting."
 
         
     def setTransferMode(self, mode):

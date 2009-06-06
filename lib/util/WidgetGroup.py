@@ -1,6 +1,17 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 from lib.util.generator.StimGenerator import StimGenerator
+
+## Bug workaround; splitters do not report their own state correctly.
+#def splitterState(w):
+    #w.refresh()
+    #return str(w.saveState().toPercentEncoding())
+#def splitterState(w):
+    #if w.orientation == QtCore.Qt.Horizontal:
+        #return [w.widget(n).width() for n in range(w.count())]
+    #else:
+        #return [w.widget(n).height() for n in range(w.count())]
+
 class WidgetGroup(QtCore.QObject):
     """This class takes a list of widgets and keeps an internal record of their state which is always up to date. Allows reading and writing from groups of widgets simultaneously."""
     
@@ -17,8 +28,11 @@ class WidgetGroup(QtCore.QObject):
             QtGui.QDoubleSpinBox.setValue),
         QtGui.QSplitter: 
             ('splitterMoved(int,int)', 
-            lambda w: str(w.saveState().toPercentEncoding()),
-            lambda w,v: w.restoreState(QtCore.QByteArray.fromPercentEncoding(v))),
+            QtGui.QSplitter.sizes,
+            QtGui.QSplitter.setSizes),
+            #lambda w: str(w.saveState().toPercentEncoding()),
+            #splitterState,
+            #lambda w,v: w.restoreState(QtCore.QByteArray.fromPercentEncoding(v))),
         QtGui.QCheckBox: 
             ('stateChanged(int)',
             QtGui.QCheckBox.isChecked,
@@ -69,6 +83,13 @@ class WidgetGroup(QtCore.QObject):
                 return True
         return False
         #return (type(obj) in WidgetGroup.classes)
+
+    def setScale(self, widget, scale):
+        val = self.readWidget(widget)
+        self.scales[widget] = scale
+        self.setWidget(widget, val)
+        #print "scaling %f to %f" % (val, self.readWidget(widget))
+        
 
     def mkChangeCallback(self, w):
         return lambda *args: self.widgetChanged(w, *args)

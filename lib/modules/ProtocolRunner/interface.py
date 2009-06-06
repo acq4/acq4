@@ -514,7 +514,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         try:
             self.currentDir = self.manager.getCurrentDir()
             if store:
-                dh = self.currentDir.mkdir(self.currentProtocol.name, autoIncrement=True)
+                dh = self.currentDir.mkdir(self.currentProtocol.name, autoIncrement=True, info=self.protocolInfo())
             else:
                 dh = None
             
@@ -524,7 +524,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             self.emit(QtCore.SIGNAL('protocolStarted'), {})
             self.taskThread.startProtocol(prot)
         except:
-            self.enableStartButtons(True)
+            self.enableStartBtns(True)
             raise
         
    
@@ -551,7 +551,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             ## Set storage dir
             self.currentDir = self.manager.getCurrentDir()
             if store:
-                dh = self.currentDir.mkdir(self.currentProtocol.name, autoIncrement=True)
+                dh = self.currentDir.mkdir(self.currentProtocol.name, autoIncrement=True, info=self.protocolInfo(params))
             else:
                 dh = None
             
@@ -585,7 +585,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         if store:
             if params != {}:
                 name = '_'.join(map(lambda i: '%03d'%i, params.values()))
-                dh1 = dh.mkdir(name)
+                dh1 = dh.mkdir(name, info=params)
                 
             else:
                 dh1 = dh
@@ -600,6 +600,13 @@ class ProtocolRunner(Module, QtCore.QObject):
                 prot[d] = self.docks[d].widget().generateProtocol(p)
         #print prot['protocol']['storageDir'].name()
         return prot
+    
+    def protocolInfo(self, params=None):
+        info = self.currentProtocol.describe()
+        del info['winState']
+        if params is not None:
+            info['sequenceParams'] = params
+        return info
     
     def enableStartBtns(self, v):
         btns = [self.ui.testSingleBtn, self.ui.runProtocolBtn, self.ui.testSequenceBtn, self.ui.runSequenceBtn]
@@ -687,6 +694,16 @@ class Protocol:
         
         
     def write(self, fileName=None):
+        info = self.describe()
+                
+        if fileName is None:
+            if self.fileName is None:
+                raise Exception("Can not write protocol--no file name specified")
+            fileName = self.fileName
+        self.fileName = fileName
+        writeConfigFile(info, fileName)
+    
+    def describe(self):
         self.updateFromUi()
         
         conf = self.conf.copy()
@@ -696,13 +713,8 @@ class Protocol:
         rem = [d for d in devs if not self.deviceEnabled(d)]
         for d in rem:
             del devs[d]
-                
-        if fileName is None:
-            if self.fileName is None:
-                raise Exception("Can not write protocol--no file name specified")
-            fileName = self.fileName
-        self.fileName = fileName
-        writeConfigFile({'conf': conf, 'devices': devs, 'winState': self.winState}, fileName)
+        return {'conf': conf, 'devices': devs, 'winState': self.winState}
+        
     
     def enabledDevices(self):
         return self.enabled[:]
@@ -816,8 +828,8 @@ class TaskThread(QtCore.QThread):
             l.relock()
             if self.abortThread:
                 l.unlock()
-                task.abort()
-                print "Protocol run aborted by user"
+                task.stop()
+                #print "Protocol run aborted by user"
                 return
             l.unlock()
             ## Abort if protocol is taking too long

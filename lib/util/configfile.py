@@ -79,6 +79,13 @@ def parseString(lines, start=0):
         
         (k, p, v) = l.partition(':')
         k = k.lstrip()
+        if k[0] == '(' and k[-1] == ')':
+            try:
+                k1 = eval(k)
+                if type(k1) is tuple:
+                    k = k1
+            except:
+                pass
         if re.search(r'\S', v):
             try:
                 val = eval(v)

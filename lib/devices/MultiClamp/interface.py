@@ -75,11 +75,12 @@ class MultiClamp(Device):
     def setHolding(self, mode=None, value=None):
         """Define and set the holding values for this device"""
         l = QtCore.QMutexLocker(self.lock)
-        if mode is not None:
+        if mode is not None and value is not None:
             self.holding[mode] = value
-        
-        ## If the DAQ is free, set the holding level now
+            
         mode = self.getMode()
+        if mode == 'I=0':
+            mode = 'IC'
         if mode not in self.holding:
             return
         holding = self.holding[mode]
@@ -124,7 +125,9 @@ class MultiClamp(Device):
         chan = self.getChanIndex()
 
         mcMode = self.mc.runFunction('getMode', [chan])[0]
-        
+        if mcMode == mode:
+            return
+            
         ## If switching ic <-> vc, switch to i=0 first
         if (mcMode=='IC' and mode=='VC') or (mcMode=='VC' and mode=='IC'):
             self.mc.runFunction('setMode', [chan,'I=0'])
@@ -135,6 +138,9 @@ class MultiClamp(Device):
             self.setHolding()
         
         self.mc.runFunction('setMode', [chan, mode])
+        
+        ## Clamp should not be used until it has had time to settle after switching modes. (?)
+        #self.readyTime = ptime.time() + 0.1
 
     def clearCache(self):
         l = QtCore.QMutexLocker(self.lock)
@@ -205,6 +211,10 @@ class Task(DeviceTask):
             
         self.state['scaledSignal'] = self.dev.mc.getSignalInfo(ch, 'Primary')
         self.state['rawSignal'] = self.dev.mc.getSignalInfo(ch, 'Secondary')
+        
+        ## set holding level
+        if 'holding' in self.cmd:
+            self.dev.setHolding(self.cmd['mode'], self.cmd['holding'])
         
                 
     def getUsedChannels(self):

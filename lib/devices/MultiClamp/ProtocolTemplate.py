@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Sun May  3 23:23:02 2009
-#      by: PyQt4 UI code generator 4.4.4
+# Created: Sat Jun 06 17:23:04 2009
+#      by: PyQt4 UI code generator 4.4.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -50,6 +50,8 @@ class Ui_Form(object):
         self.holdingCheck.setObjectName("holdingCheck")
         self.horizontalLayout_6.addWidget(self.holdingCheck)
         self.holdingSpin = QtGui.QDoubleSpinBox(self.layoutWidget)
+        self.holdingSpin.setMinimum(-1000000.0)
+        self.holdingSpin.setMaximum(1000000.0)
         self.holdingSpin.setObjectName("holdingSpin")
         self.horizontalLayout_6.addWidget(self.holdingSpin)
         self.gridLayout_2.addLayout(self.horizontalLayout_6, 0, 1, 1, 1)
