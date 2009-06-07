@@ -9,7 +9,7 @@ class Device:
     """Abstract class defining the standard interface for Device subclasses."""
     def __init__(self, deviceManager, config, name):
         #self._lock_ = threading.Lock()
-        self._lock_ = QtCore.QMutex()
+        self._lock_ = QtCore.QMutex(QtCore.QMutex.Recursive)
         #self._lock_ = Mutex()
         self.dm = deviceManager
         self.config = config

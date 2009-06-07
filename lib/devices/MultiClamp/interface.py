@@ -70,23 +70,30 @@ class MultiClamp(Device):
     def getMode(self):
         l = QtCore.QMutexLocker(self.lock)
         ind = self.getChanIndex()
-        return self.mc.runFunction('getMode', [ind])[0]
+        m = self.mc.runFunction('getMode', [ind])
+        #print "getMode:", m
+        return m[0]
     
     def setHolding(self, mode=None, value=None):
         """Define and set the holding values for this device"""
+        #print "setHolding", mode, value
         l = QtCore.QMutexLocker(self.lock)
         if mode is not None and value is not None:
+            #print "   update holding value"
             self.holding[mode] = value
             
         mode = self.getMode()
         if mode == 'I=0':
             mode = 'IC'
         if mode not in self.holding:
+            #print "    mode %s not in %s" % (mode, str(self.holding))
             return
         holding = self.holding[mode]
         daq, chan = self.config['commandChannel']
         daqDev = self.dm.getDevice(daq)
-        daqDev.setChannelValue(chan, holding, block=False)
+        scale = self.config['cmdScale'][mode]
+        #print "     setChannelValue", chan, holding
+        daqDev.setChannelValue(chan, holding*scale, block=False)
         
     def getChanIndex(self):
         """Given a channel name (as defined in the configuration), return the device index to use when making calls to the MC"""
@@ -190,6 +197,7 @@ class Task(DeviceTask):
 
     def configure(self, tasks, startOrder):
         """Sets the state of a remote multiclamp to prepare for a program run."""
+        #print "mc configure"
         l = QtCore.QMutexLocker(self.dev.lock)
             
         ch = self.dev.getChanIndex()
@@ -215,6 +223,7 @@ class Task(DeviceTask):
         ## set holding level
         if 'holding' in self.cmd:
             self.dev.setHolding(self.cmd['mode'], self.cmd['holding'])
+        #print "mc configure complete"
         
                 
     def getUsedChannels(self):
@@ -302,4 +311,9 @@ class Task(DeviceTask):
     
     def stop(self):
         l = QtCore.QMutexLocker(self.dev.lock)
+        ## This is just a bit sketchy, but these tasks have to be stopped before the holding level can be reset.
+        for ch in self.daqTasks:
+            self.daqTasks[ch].stop()
         self.dev.setHolding()
+        
+        

@@ -26,11 +26,11 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.ui.sequenceParamList.header().setResizeMode(QtGui.QHeaderView.Stretch)
         self.protoStateGroup = WidgetGroup([
             (self.ui.protoContinuousCheck, 'continuous'),
-            (self.ui.protoDurationSpin, 'duration'),
-            (self.ui.protoLeadTimeSpin, 'leadTime'),
+            (self.ui.protoDurationSpin, 'duration', 1e3),
+            (self.ui.protoLeadTimeSpin, 'leadTime', 1e3),
             (self.ui.protoLoopCheck, 'loop'),
-            (self.ui.protoCycleTimeSpin, 'loopCycleTime'),
-            (self.ui.seqCycleTimeSpin, 'cycleTime'),
+            (self.ui.protoCycleTimeSpin, 'loopCycleTime', 1e3),
+            (self.ui.seqCycleTimeSpin, 'cycleTime', 1e3),
         ])
         self.protocolList = DirTreeModel(self.config['globalDir'])
         self.ui.protocolList.setModel(self.protocolList)
@@ -344,10 +344,10 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.protoStateGroup.setState({
             'continuous': False,
             'duration': 0.2,
-            'leadTime': 0.0,
+            'leadTime': 0.01,
             'loop': False,
-            'loopCycleTime': 1.0,
-            'cycleTime': 0.0
+            'loopCycleTime': 0.3,
+            'cycleTime': 0.3
         })
         
         #self.currentProtocol.conf = self.protoStateGroup.state()

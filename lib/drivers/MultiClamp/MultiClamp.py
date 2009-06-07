@@ -58,79 +58,6 @@ class MultiClamp:
     """
     self.useCache = bool
   
-  #def prepareMultiClamp(self, cmd, cache=None, returnState=False):
-    #"""Sets the state of a remote multiclamp to prepare for a program run. This is called automatically by rtxi.runRtProgram()."""
-    
-    #state = {}
-    #if cache is None: cache = self.useCache
-    #for chan in cmd.keys():
-      ##devId = self.getDevId(chan, cache=cache)
-      #if devId == None:
-        ### This channel has no remote counterpart to sync with
-        #continue
-      #mode = cmd[chan]["mode"]
-      #if mode in ['raw', 'off', 'cb']:
-        #continue
-      ##mcMode = ''
-      ##if mode in self.modeTrans.keys():
-        ##mcMode = self.modeTrans[mode]
-      ##else:
-        ##print "Not sure how to prepare multiclamp for mode '%s'" % mode
-        ##return False
-      #self.setMode(chan, mode, cache=cache)
-      ##self.runFunction('setMode', [devId, mcMode], cache=cache)
-      ##print "prepareMultiClamp cache=", cache
-      #self.runFunction('setPrimarySignalByName', (devId, cmd[chan]['signal']), cache=cache)
-      #if returnState:
-        #state[chan] = self.readParams(chan, self.recordParams, cache=cache)
-        
-    #return state
-        
-
-
-  ## Send small current/voltage signals and read to be sure the correct command was used
-  #def testMultiClamp(self, chan, cache=None):
-    #"""Sends small current/voltage signals to a remote multiclamp and analyzes the result to determine whether the multiclamp is properly configured. Should be run at the beginning of the day (at least)."""
-    
-    #tolerance = self.rtxi.getParam('rtxi.errorTolerance')
-    
-    #if cache is None: cache = self.useCache
-    #tests = [
-      #{'mode': 'vc', 'value': 10e-3, 'signal': 'MembranePotential'}, 
-      #{'mode': 'ic', 'value': 5e-11, 'signal': 'MembraneCurrent'}] 
-    #duration = 0.05
-    #leadTime = 0.02
-    
-    #failures = []
-    #errors = {}
-    #for test in tests:
-      
-      ### generate program command
-      #cmd = {chan: {
-        #"mode": test['mode'], 
-        #"data": [(0.0, 0.0), (leadTime+duration, test['value']), (leadTime+duration*2., 0.0)],
-        #"trigger": 1e-3, 
-        #"interpolate": False,
-        #"signal": test['signal']}}
-        
-      ### Run program
-      #data = self.rtxi.runRtProgram(cmd=cmd, runTime=2.*(leadTime+duration), useMCCache=False)
-      
-      ### Select out during and post-pulse ranges
-      #ranges = []
-      #ranges.append(data['Inp0', (data['Time'] > leadTime) * (data['Time'] < leadTime+duration)][1:])
-      #ranges.append(data['Inp0', (data['Time'] > leadTime+duration) * (data['Time'] < leadTime+duration*2.)][1:])
-      
-      ### calculate means and check against requested values
-      #avg = [x.mean() for x in ranges]
-      #if abs(avg - test['value']) > abs(test['value'] * (tolerance * 0.01)):
-        #test['avg'] = avg
-        #failures.append(test)
-      #errors[test['mode']] = (avg - test['value']) / test['value']
-    #if len(failures) > 0:
-      #l = ["%s(%g!=%g)" % (test['mode'], test['avg'], test['value']) for test in failures]
-      #raise Exception("Multiclamp gain tests failed: %s" % ', '.join(l))
-    #return errors
 
 
   def readParams(self, chan, params, cache=None):
@@ -177,26 +104,6 @@ class MultiClamp:
 
 
 
-  #def getDevId(self, chan, cache=None):
-    #"""Return the remote device ID for the device associated with channel. 
-    
-    #There must be a device identifier string (as returned by listRemoteDevices) in rtxi.chN.deviceDesc for this function to work. 
-    #"""
-    
-    #if cache is None: cache = self.useCache
-    ##print "getDevId cache=", cache
-    #desc = rtxi.getParam('rtxi.ch%d.deviceDesc' % chan)
-    #if len(desc) < 1:
-      #return None
-    
-    #devList = self.listDevices(cache=cache)
-    #try:
-      #devNum = devList.index(desc)
-      #return devNum
-    #except:
-      #print "Device description not found in current list"
-      #return None
-  
   def listDevices(self, cache=None):
     """Return a list of strings used to identify devices on a remote multiclamp server.
     
@@ -251,6 +158,7 @@ class MultiClamp:
       cval = self._searchCache(func, strArgs)
       if cval is not None:
         #print "  returning cached value:", str(cval)
+        #print "runFunction (cached)", cval
         return cval
       #else:
         #print "  cache missed"
@@ -270,6 +178,7 @@ class MultiClamp:
       raise Exception('MultiClamp communication error: %s' % ', '.join(data[1:]))
     else:
       self._updateCache(func, strArgs, data[1:])
+      #print "runFunction", data[1:]
       return data[1:]
         
   def __getattr__(self, attr):
@@ -307,7 +216,7 @@ class MultiClamp:
     #print "  caching %s" % cKey
     if len(result) < 1:
       raise Exception("Caught faulty set %s(%s) => %s=%s" % (func, str(args), cKey, str(result)));
-    #print "    setting cache[%s] = %s" % (cKey, str(result))
+    #print "    setting cache[%s] = %s" % (cKey, str(result))    
     self.stateCache[cKey] = result
     
   def _searchCache(self, func, args):
@@ -318,6 +227,7 @@ class MultiClamp:
         return []
     elif mode == 'get':
       if self.stateCache.has_key(cKey):
+        #print "returning from cache:", self.stateCache[cKey]
         return self.stateCache[cKey]
       #else:
         #print "    cache has no get key %s" % cKey
@@ -345,7 +255,7 @@ class MultiClamp:
     if func[:3] == 'set' and len(args) == 2:
       xKey = '_' + args[0]
       cKey = func[3:]
-      return ('set', cKey, xKey, args[1])
+      return ('set', cKey, xKey, [args[1]])
     elif func[:3] == 'get':
       xKey = '_' + '_'.join(args)
       cKey = func[3:]

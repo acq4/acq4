@@ -17,6 +17,7 @@ class NiDAQ(Device):
         
     def setChannelValue(self, chan, value, block=False):
         self.reserve(block=block)
+        #print "Setting channel %s to %f" % (chan, value)
         if 'ao' in chan:
             self.n.writeAnalogSample(chan, value)
         else:
@@ -38,7 +39,7 @@ class Task(DeviceTask):
         self.st = SuperTask(self.dev.n)
         
     def configure(self, tasks, startOrder):
-        
+        #print "daq configure"
         ## Request to all devices that they create the channels they use on this task
         for dName in tasks:
             if hasattr(tasks[dName], 'createChannels'):
@@ -53,6 +54,7 @@ class Task(DeviceTask):
         elif 'triggerDevice' in self.cmd:
             tDev = self.dev.dm.getDevice(self.cmd['triggerDevice'])
             self.st.setTrigger(tDev.getTriggerChannel())
+        #print "daq configure complete"
         
     def addChannel(self, *args, **kwargs):
         #print "Adding channel:", args

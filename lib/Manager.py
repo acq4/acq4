@@ -23,7 +23,7 @@ class Manager(QtCore.QObject):
         
         QtCore.QObject.__init__(self)
         self.alreadyQuit = False
-        self.taskLock = QtCore.QMutex()
+        self.taskLock = QtCore.QMutex(QtCore.QMutex.Recursive)
         atexit.register(self.quit)
         self.devices = {}
         self.modules = {}
