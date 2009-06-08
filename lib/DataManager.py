@@ -4,7 +4,7 @@ import threading, os, re, sys
 from lib.util.functions import strncmp
 from lib.util.configfile import *
 from lib.util.MetaArray import MetaArray
-from lib.util.advancedTypes import Locker
+#from lib.util.advancedTypes import Locker
 import lib.util.ptime as ptime
 from PyQt4 import QtCore
 
@@ -21,10 +21,11 @@ class DataManager(QtCore.QObject):
             raise Exception("Attempted to create more than one DataManager!")
         DataManager.CREATED = True
         self.cache = {}
-        self.lock = threading.RLock()
+        #self.lock = threading.RLock()
+        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
         
     def getDirHandle(self, dirName, create=False):
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         dirName = os.path.abspath(dirName)
         if not (create or os.path.isdir(dirName)):
             if not os.path.exists(dirName):
@@ -36,7 +37,7 @@ class DataManager(QtCore.QObject):
         return self.cache[dirName]
         
     def getFileHandle(self, fileName):
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         fileName = os.path.abspath(fileName)
         if not os.path.isfile(fileName):
             if not os.path.exists(fileName):
@@ -59,7 +60,7 @@ class DataManager(QtCore.QObject):
         QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self._handleChanged)
         
     def _handleChanged(self, handle, change, *args):
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         #print "Manager handling changes", handle, change, args
         if change == 'renamed' or change == 'moved':
             oldName = args[0]
@@ -117,14 +118,15 @@ class FileHandle(QtCore.QObject):
         self.manager = manager
         self.path = os.path.abspath(path)
         self.parentDir = None
-        self.lock = threading.RLock()
+        #self.lock = threading.RLock()
+        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
         
     def __repr__(self):
         return "<%s '%s'>" % (self.__class__.__name__, self.name())
         
     def name(self, relativeTo=None):
         self.checkDeleted()
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         path = self.path
         if relativeTo == self:
             path = ''
@@ -147,7 +149,7 @@ class FileHandle(QtCore.QObject):
         
     def parent(self):
         self.checkDeleted()
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         if self.parentDir is None:
             dirName = os.path.split(self.name())[0]
             self.parentDir = self.manager.getDirHandle(dirName)
@@ -169,7 +171,7 @@ class FileHandle(QtCore.QObject):
         
     def move(self, newDir):
         self.checkDeleted()
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         oldDir = self.parent()
         fn1 = self.name()
         name = self.shortName()
@@ -177,6 +179,8 @@ class FileHandle(QtCore.QObject):
         if os.path.exists(fn2):
             raise Exception("Destination file %s already exists." % fn2)
         os.rename(fn1, fn2)
+        oldDir._childChanged()
+        newDir._childChanged()
         self.path = fn2
         self.parentDir = None
         if oldDir.isManaged() and newDir.isManaged():
@@ -189,7 +193,7 @@ class FileHandle(QtCore.QObject):
         
     def rename(self, newName):
         self.checkDeleted()
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         parent = self.parent()
         fn1 = self.name()
         oldName = self.shortName()
@@ -198,6 +202,7 @@ class FileHandle(QtCore.QObject):
             raise Exception("Destination file %s already exists." % fn2)
         #print "rename", fn1, fn2
         os.rename(fn1, fn2)
+        self.parent()._childChanged()
         self.path = fn2
         if parent.isManaged():
             parent.addFile(newName, info=parent._fileInfo(oldName))
@@ -206,11 +211,12 @@ class FileHandle(QtCore.QObject):
         
     def delete(self):
         self.checkDeleted()
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         parent = self.parent()
         fn1 = self.name()
         oldName = self.shortName()
         os.remove(fn1)
+        self.parent()._childChanged()
         self.path = None
         if self.isManaged():
             parent.forget(oldName)
@@ -260,7 +266,7 @@ class FileHandle(QtCore.QObject):
         return self.name()[:len(gname)] == gname
     
     #def getFile(self, fileName):
-        #l = Locker(self.lock)
+        #l = QtCore.QMutexLocker(self.lock)
         
         #info = self.fileInfo(fileName)
         #typ = info['__object_type__']
@@ -281,6 +287,7 @@ class DirHandle(FileHandle):
     def __init__(self, path, manager, create=False):
         FileHandle.__init__(self, path, manager)
         self._index = None
+        self.lsCache = None
         
         if not os.path.isdir(path):
             if create:
@@ -323,7 +330,7 @@ class DirHandle(FileHandle):
         """Write a message into the log for this directory."""
         if tags is None:
             tags = {}
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         if type(tags) is not dict:
             raise Exception("tags argument must be a dict")
         tags['__timestamp__'] = ptime.time()
@@ -337,7 +344,7 @@ class DirHandle(FileHandle):
         
     def readLog(self, recursive=0):
         """Return a list containing one dict for each log line"""
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         logf = self._logFile()
         if not os.path.exists(logf):
             log = []
@@ -365,7 +372,7 @@ class DirHandle(FileHandle):
         return log
         
     def subDirs(self):
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         ls = self.ls()
         subdirs = filter(lambda d: os.path.isdir(os.path.join(self.name(), d)), ls)
         return subdirs
@@ -374,7 +381,7 @@ class DirHandle(FileHandle):
         """Create a new subdirectory, return a new DirHandle object. If autoIndex is true, add a number to the end of the dir name if it already exists."""
         if info is None:
             info = {}
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         
         if autoIncrement:
             fullName = name+"_000"
@@ -396,6 +403,7 @@ class DirHandle(FileHandle):
         ## Create directory
         ndm = self.manager.getDirHandle(newDir, create=True)
         t = ptime.time()
+        self._childChanged()
         
         ## Mark the creation time in the parent directory so it can sort its full list of files without 
         ## going into each subdir
@@ -409,7 +417,7 @@ class DirHandle(FileHandle):
         
     def getDir(self, subdir, create=False, autoIncrement=False):
         """Return a DirHandle for the specified subdirectory. If the subdir does not exist, it will be created only if create==True"""
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         ndir = os.path.join(self.path, subdir)
         if os.path.isdir(ndir):
             return self.manager.getDirHandle(ndir)
@@ -424,19 +432,20 @@ class DirHandle(FileHandle):
             
     def ls(self):
         """Return a list of all files in the directory"""
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         #self._readIndex()
         #ls = self.index.keys()
         #ls.remove('.')
-        ls = os.listdir(self.name())
-        for i in ['.index', '.log']:
-            if i in ls:
-                ls.remove(i)
-        ls.sort(self._cmpFileTimes)
-        return ls
+        if self.lsCache is None:
+            self.lsCache = os.listdir(self.name())
+            for i in ['.index', '.log']:
+                if i in self.lsCache:
+                    self.lsCache.remove(i)
+            self.lsCache.sort(self._cmpFileTimes)
+        return self.lsCache[:]
     
     def _cmpFileTimes(self, a, b):
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         t1 = t2 = None
         if self.isManaged():
             index = self._readIndex()
@@ -463,7 +472,7 @@ class DirHandle(FileHandle):
     
     def _fileInfo(self, file):
         """Return a dict of the meta info stored for file"""
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         
         index = self._readIndex()
         if index.has_key(file):
@@ -473,14 +482,14 @@ class DirHandle(FileHandle):
             #raise Exception("File %s is not indexed" % file)
     
     def isDir(self, path=None):
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         if path is None:
             return True
         else:
             return self[path].isDir()
         
     def isFile(self, fileName):
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         fn = os.path.abspath(os.path.join(self.path, fileName))
         return os.path.isfile(fn)
         
@@ -494,7 +503,7 @@ class DirHandle(FileHandle):
             raise Exception("Can not create file from object of type %s" % str(type(obj)))
         
         t = ptime.time()
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         name = fileName
         fullFn = os.path.join(self.path, name)
         appendInfo = False
@@ -511,6 +520,7 @@ class DirHandle(FileHandle):
                 d += 1
         
         obj.write(fullFn)
+        self._childChanged()
         
         if not info.has_key('__object_type__'):
             if hasattr(obj, 'typeName'):
@@ -528,7 +538,7 @@ class DirHandle(FileHandle):
         #print "Adding file %s to index" % fileName
         if info is None:
             info = {}
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         index = self._readIndex()
         fn = os.path.join(self.path, fileName)
         if not (os.path.isfile(fn) or os.path.isdir(fn)):
@@ -544,7 +554,7 @@ class DirHandle(FileHandle):
         self.emitChanged('children', fileName)
     
     def forget(self, fileName):
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         if not self.isManaged(fileName):
             raise Exception("Can not forget %s, not managed" % fileName)
         index = self._readIndex(lock=False)
@@ -553,7 +563,7 @@ class DirHandle(FileHandle):
         self.emitChanged('children', fileName)
         
     def isManaged(self, fileName=None):
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         if self._index is None:
             return False
         if fileName is None:
@@ -568,15 +578,15 @@ class DirHandle(FileHandle):
         
         
         
-    def parent(self):
-        l = Locker(self.lock)
-        pdir = os.path.normpath(os.path.join(self.path, '..'))
-        return self.manager.getDirHandle(pdir)
+    #def parent(self):
+        #l = QtCore.QMutexLocker(self.lock)
+        #pdir = os.path.normpath(os.path.join(self.path, '..'))
+        #return self.manager.getDirHandle(pdir)
 
         
 
     def exists(self, name):
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         try:
             fn = os.path.abspath(os.path.join(self.path, name))
         except:
@@ -586,7 +596,7 @@ class DirHandle(FileHandle):
 
     def _setFileInfo(self, fileName, info, append=False):
         """Set or update meta-information array for fileName."""
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         
         if append:
             appendConfigFile({fileName: info}, self._indexFile())
@@ -600,7 +610,7 @@ class DirHandle(FileHandle):
         self.emitChanged('meta', fileName)
         
     def _readIndex(self, lock=True):
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         indexFile = self._indexFile()
         if self._index is None or os.path.getmtime(indexFile) != self._indexMTime:
             if not os.path.isfile(indexFile):
@@ -614,11 +624,12 @@ class DirHandle(FileHandle):
         return self._index
         
     def _writeIndex(self, newIndex, lock=True):
-        l = Locker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
         
         writeConfigFile(newIndex, self._indexFile())
         self._index = newIndex
         self._indexMTime = os.path.getmtime(self._indexFile())
         
-
+    def _childChanged(self):
+        self.lsCache = None
 
