@@ -17,6 +17,7 @@ from CameraTemplate import Ui_MainWindow
 from lib.util.qtgraph.GraphicsView import *
 from lib.util.qtgraph.graphicsItems import *
 from lib.util.qtgraph.widgets import ROI
+import lib.util.ptime as ptime
 from lib.filetypes.ImageFile import *
 from PyQt4 import QtGui, QtCore
 import scipy.ndimage
@@ -48,12 +49,17 @@ class PVCamera(QtGui.QMainWindow):
         self.region = None
         #self.acquireThread = AcquireThread(self)
         self.acquireThread = self.module.cam.acqThread
-        self.backgroundFrame = None
         self.roi = None
         self.ROIs = []
         self.frameBuffer = []
         self.lastPlotTime = None
         #self.ropWindow = ROPWindow(self)
+        
+        self.nextFrame = None
+        self.currentFrame = None
+        self.currentClipMask = None
+        self.backgroundFrame = None
+        self.lastDrawTime = None
         
         QtGui.QMainWindow.__init__(self)
         self.ui = Ui_MainWindow()
@@ -152,8 +158,20 @@ class PVCamera(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.btnAddROI, QtCore.SIGNAL('clicked()'), self.addROI)
         QtCore.QObject.connect(self.ui.checkEnableROIs, QtCore.SIGNAL('valueChanged(bool)'), self.enableROIsChanged)
         QtCore.QObject.connect(self.ui.spinROITime, QtCore.SIGNAL('valueChanged(double)'), self.setROITime)
+        QtCore.QObject.connect(self.ui.sliderWhiteLevel, QtCore.SIGNAL('valueChanged(int)'), self.requestFrameUpdate)
+        QtCore.QObject.connect(self.ui.sliderBlackLevel, QtCore.SIGNAL('valueChanged(int)'), self.requestFrameUpdate)
+        QtCore.QObject.connect(self.ui.spinFlattenSize, QtCore.SIGNAL('valueChanged(int)'), self.requestFrameUpdate)
+        
+        
         
         self.ui.btnAutoGain.setChecked(True)
+        
+        ## Check for new frame updates every 1ms
+        ## Some checks may be skipped even if there is a new frame waiting to avoid drawing more than 
+        ## 60fps.
+        self.frameTimer = QtCore.QTimer()
+        QtCore.QObject.connect(self.frameTimer, QtCore.SIGNAL('timeout()'), self.updateFrame)
+        self.frameTimer.start(1)
 
     def addROI(self):
         roi = PlotROI(10)
@@ -198,6 +216,9 @@ class PVCamera(QtGui.QMainWindow):
         #else:
             #self.ui.btnRecord.setEnabled(False)
             #self.ui.btnSnap.setEnabled(False)
+            
+    def requestFrameUpdate(self):
+        self.updateFrame = True
 
     def divideClicked(self):
         self.AGCLastMax = None
@@ -205,6 +226,7 @@ class PVCamera(QtGui.QMainWindow):
         self.setLevelRange()
         if self.ui.btnDivideBackground.isChecked() and not self.ui.btnLockBackground.isChecked():
             self.backgroundFrame = None
+        self.requestFrameUpdate()
             
     #def updateStorageDir(self, newDir):
         #self.ui.txtStorageDir.setText(newDir)
@@ -371,6 +393,7 @@ class PVCamera(QtGui.QMainWindow):
         self.ui.labelLevelMax.setText(str(self.levelMax))
         self.ui.labelLevelMid.setText(str((self.levelMax+self.levelMin) * 0.5)[:4])
         self.ui.labelLevelMin.setText(str(self.levelMin))
+        #self.updateFrame = True
         
     def getLevels(self):
         w = self.ui.sliderWhiteLevel
@@ -424,29 +447,57 @@ class PVCamera(QtGui.QMainWindow):
     
             
     def newFrame(self, frame):
+        self.nextFrame = frame
+        
+    def updateFrame(self):
         try:
             #self.addPlotFrame(frame)
             
-            (data, info) = frame
+            ## If we last drew a frame < 1/60s ago, return.
+            t = ptime.time()
+            if (self.lastDrawTime is not None) and (t - self.lastDrawTime < .016666):
+                return
             
-            self.ui.sliderAvgLevel.setValue(int(data.mean()))
+            ## if there is no new frame and no controls have changed, just exit
+            if not self.updateFrame and self.nextFrame is None:
+                return
+            self.updateFrame = False
+            
+            ## If there are no new frames and no previous frames, then there is nothing to draw.
+            if self.currentFrame is None and self.nextFrame is None:
+                return
+            
+            ## We will now draw a new frame (even if the frame is unchanged)
+            self.lastDrawTime = t
+            
+            ## Handle the next available frame, if there is one.
+            if self.nextFrame is not None:
+                self.currentFrame = self.nextFrame
+                self.nextFrame = None
+                (data, info) = self.currentFrame
+                self.currentClipMask = (data >= (2**self.bitDepth - 1)) 
+                self.ui.sliderAvgLevel.setValue(int(data.mean()))
                 
-            clipMask = (data >= (2**self.bitDepth - 1)) 
+                ## If background division is enabled, mix the current frame into the background frame
+                if self.ui.btnDivideBackground.isChecked():
+                    if self.backgroundFrame is None:
+                        self.backgroundFrame = data.astype(float)
+                    if not self.ui.btnLockBackground.isChecked():
+                        s = 1.0 - 1.0 / (self.ui.spinFilterTime.value()+1.0)
+                        self.backgroundFrame *= s
+                        self.backgroundFrame += data * (1.0-s)
+
+            (data, info) = self.currentFrame
+            
+            ## divide the background out of the current frame if needed
             if self.ui.btnDivideBackground.isChecked():
                 b = self.ui.spinFlattenSize.value()
                 if b > 0.0:
-                    origData = scipy.ndimage.gaussian_filter(data.astype(float), (b, b))
+                    data = data / scipy.ndimage.gaussian_filter(self.backgroundFrame, (b, b))
                 else: 
-                    origData = data
-                if self.backgroundFrame is None:
-                    self.backgroundFrame = origData.astype(float)
-                data = data / self.backgroundFrame
-                if not self.ui.btnLockBackground.isChecked():
-                    s = 1.0 - 1.0 / (self.ui.spinFilterTime.value()+1.0)
-                    self.backgroundFrame *= s
-                    self.backgroundFrame += origData * (1.0-s)
+                    data = data / self.backgroundFrame
             
-            
+            ## determine black/white levels from level controls
             (bl, wl) = self.getLevels()
             if self.ui.btnAutoGain.isChecked():
                 if self.AGCLastMax is None:
@@ -461,12 +512,18 @@ class PVCamera(QtGui.QMainWindow):
                 
                 wl = minVal + (maxVal-minVal) * wl
                 bl = minVal + (maxVal-minVal) * bl
+                
+            ## Translate and scale image based on ROI and binning
             m = QtGui.QTransform()
             m.translate(self.region[0], self.region[1])
             m.scale(self.binning, self.binning)
+            
+            ## update image in viewport
             #self.imageItem.setLevels(white=wl, black=bl)
-            self.imageItem.updateImage(data, clipMask=clipMask, white=wl, black=bl)
+            self.imageItem.updateImage(data, clipMask=self.currentClipMask, white=wl, black=bl)
             self.imageItem.setTransform(m)
+            
+            ## update info for pixel under mouse pointer
             self.setMouse()
             if hasattr(self.acquireThread, 'fps') and self.acquireThread.fps is not None:
                 self.fpsLabel.setText('%02.2ffps' % self.acquireThread.fps)
