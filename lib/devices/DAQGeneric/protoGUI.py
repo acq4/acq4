@@ -15,11 +15,6 @@ class DAQGenericProtoGui(ProtocolGui):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 
-        self.stateGroup = WidgetGroup([
-            (self.ui.topSplitter, 'splitter1'),
-            (self.ui.controlSplitter, 'splitter2'),
-            (self.ui.plotSplitter, 'splitter3'),
-        ])
         
         self.plots = {}
         self.channels = {}
@@ -38,6 +33,11 @@ class DAQGenericProtoGui(ProtocolGui):
                 raise Exception("Unrecognized device type '%s'" % conf['type'])
             self.channels[ch] = w
         
+        self.stateGroup = WidgetGroup([
+            (self.ui.topSplitter, 'splitter1'),
+            (self.ui.controlSplitter, 'splitter2'),
+            (self.ui.plotSplitter, 'splitter3'),
+        ])
         
 
     def saveState(self):
@@ -45,6 +45,7 @@ class DAQGenericProtoGui(ProtocolGui):
         state['channels'] = {}
         for ch in self.channels:
             state['channels'][ch] = self.channels[ch].saveState()
+        return state
 
     def restoreState(self, state):
         try:

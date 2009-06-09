@@ -124,11 +124,14 @@ class Task(DeviceTask):
             
         ## generate MetaArray of images collected during recording
         data = self.recordHandle.data()
-        arr = concatenate([f[0][newaxis,...] for f in data])
-        times = array([f[1]['time'] for f in data])
-        times -= times[0]
-        info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), data[0][1]]
-        marr = MetaArray(arr, info=info)
+        if len(data) > 0:
+            arr = concatenate([f[0][newaxis,...] for f in data])
+            times = array([f[1]['time'] for f in data])
+            times -= times[0]
+            info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), data[0][1]]
+            marr = MetaArray(arr, info=info)
+        else:
+            marr = None
         
         return {'frames': marr, 'expose': expose}
         

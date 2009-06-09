@@ -57,7 +57,7 @@ class MultiClampProtoGui(ProtocolGui):
         state['scaledSignal'] = str(self.ui.scaledSignalCombo.currentText())
         state['rawSignal'] = str(self.ui.rawSignalCombo.currentText())
         #state['stim'] = self.ui.waveGeneratorWidget.saveState()
-        print state['splitter'], state['splitter_2']
+        #print state['splitter'], state['splitter_2']
         return state
         
     def restoreState(self, state):

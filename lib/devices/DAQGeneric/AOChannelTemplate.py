@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'AOChannelTemplate.ui'
 #
-# Created: Wed Jun  3 18:04:41 2009
-#      by: PyQt4 UI code generator 4.4.4
+# Created: Tue Jun 09 14:00:09 2009
+#      by: PyQt4 UI code generator 4.4.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -38,9 +38,9 @@ class Ui_Form(object):
         self.verticalLayout.setObjectName("verticalLayout")
         self.horizontalLayout = QtGui.QHBoxLayout()
         self.horizontalLayout.setObjectName("horizontalLayout")
-        self.functionCheck_2 = QtGui.QCheckBox(self.frame)
-        self.functionCheck_2.setObjectName("functionCheck_2")
-        self.horizontalLayout.addWidget(self.functionCheck_2)
+        self.functionCheck = QtGui.QCheckBox(self.frame)
+        self.functionCheck.setObjectName("functionCheck")
+        self.horizontalLayout.addWidget(self.functionCheck)
         self.displayCheck = QtGui.QCheckBox(self.frame)
         self.displayCheck.setChecked(True)
         self.displayCheck.setObjectName("displayCheck")
@@ -63,7 +63,7 @@ class Ui_Form(object):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
         self.preSetCheck.setText(QtGui.QApplication.translate("Form", "Pre-set", None, QtGui.QApplication.UnicodeUTF8))
         self.holdingCheck.setText(QtGui.QApplication.translate("Form", "Holding", None, QtGui.QApplication.UnicodeUTF8))
-        self.functionCheck_2.setText(QtGui.QApplication.translate("Form", "Enable Function", None, QtGui.QApplication.UnicodeUTF8))
+        self.functionCheck.setText(QtGui.QApplication.translate("Form", "Enable Function", None, QtGui.QApplication.UnicodeUTF8))
         self.displayCheck.setText(QtGui.QApplication.translate("Form", "Display", None, QtGui.QApplication.UnicodeUTF8))
 
 from lib.util.generator.StimGenerator import StimGenerator

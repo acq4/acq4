@@ -264,10 +264,6 @@ class Task:
         
         self.stop()
         #print "  %d execute complete" % self.id
-        ## Store data if requested
-        #if 'storeData' in self.cfg and self.cfg['storeData'] is True:
-            #for t in self.tasks:
-                #self.tasks[t].storeResult(self.cfg['storageDir'])
         
         
     def isDone(self):
@@ -315,6 +311,11 @@ class Task:
                 result[devName] = self.tasks[devName].getResult()
             self.result = result
             
+            ## Store data if requested
+            if 'storeData' in self.cfg and self.cfg['storeData'] is True:
+                for t in self.tasks:
+                    self.tasks[t].storeResult(self.cfg['storageDir'])
+            
         ## Release all hardware for use elsewhere
         if self.reserved:
             for t in self.tasks:
@@ -323,6 +324,7 @@ class Task:
                 #print "  %d released" % self.id, t
         self.reserved = False
             
+                
         return self.result
 
 

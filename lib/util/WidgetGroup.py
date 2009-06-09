@@ -3,14 +3,15 @@ from PyQt4 import QtCore, QtGui
 from lib.util.generator.StimGenerator import StimGenerator
 
 ## Bug workaround; splitters do not report their own state correctly.
-#def splitterState(w):
-    #w.refresh()
-    #return str(w.saveState().toPercentEncoding())
-#def splitterState(w):
-    #if w.orientation == QtCore.Qt.Horizontal:
-        #return [w.widget(n).width() for n in range(w.count())]
-    #else:
-        #return [w.widget(n).height() for n in range(w.count())]
+def splitterState(w):
+    s = w.sizes()
+    if len(s) < w.count():
+        s.extend([1]*(w.count()-len(s)))
+    if sum(s) == 0:
+        s = [1]*len(s)
+    #print "%s: %d %s" % (w.objectName(), w.count(), str(s))
+    return s
+        
 
 class WidgetGroup(QtCore.QObject):
     """This class takes a list of widgets and keeps an internal record of their state which is always up to date. Allows reading and writing from groups of widgets simultaneously."""
@@ -28,7 +29,8 @@ class WidgetGroup(QtCore.QObject):
             QtGui.QDoubleSpinBox.setValue),
         QtGui.QSplitter: 
             ('splitterMoved(int,int)', 
-            QtGui.QSplitter.sizes,
+            splitterState,
+            #QtGui.QSplitter.sizes,
             QtGui.QSplitter.setSizes),
             #lambda w: str(w.saveState().toPercentEncoding()),
             #splitterState,

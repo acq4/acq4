@@ -1,7 +1,46 @@
-duration: 0.2
-continuous: False
+winState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%00%00%00%04Z%00%00%02%29%FC%02%00%00%00%02%FB%00%00%00%0A%00S%00t%00i%00m%000%01%00%00%00%CD%00%00%01%0F%00%00%01%0F%00%07%FF%FF%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%01%E0%00%00%01%16%00%00%01%16%00%07%FF%FF%00%00%00%02%00%00%04%5E%00%00%00%C9%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01-%00%00%00%B7%00%07%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%011%00%00%01k%00%00%01%15%00%07%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02%A0%00%00%01%27%00%00%01%1C%00%07%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%03%CB%00%00%00%93%00%00%00%93%00%07%FF%FF%00%00%00%00%00%00%02%29%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
 devices:
     Stim0:
-    Clamp0:
-sequence:
-    params: ['Step']
+        splitter2: [1]
+        splitter3: [1]
+        splitter1: [1, 1]
+        channels:
+            Command:
+                holdingCheck: True
+                autoUpdateCheck: False
+                holdingSpin: 0.0
+                functionCheck: True
+                preSetCheck: True
+                displayCheck: True
+                preSetSpin: 0.0
+                waveGeneratorWidget:
+                    function: 'pulse(10, 10, 10)'
+                    params: ''
+    Clamp1:
+        splitter: [1, 1]
+        holdingCheck: False
+        rawGainSpin: 0.0
+        autoUpdateCheck: False
+        holdingSpin: 0.0
+        scaledGainSpin: 0.0
+        rawSignal: 'MembranePotential'
+        rawSignalCheck: False
+        mode: 'I=0'
+        setRawGainCheck: False
+        scaledSignalCheck: False
+        splitter_2: [1, 1]
+        scaledSignal: 'MembranePotential'
+        setScaledGainCheck: False
+        waveGeneratorWidget:
+            function: ''
+            params: ''
+    DAQ:
+        numPts: 8000
+        rate: 40000.0
+conf:
+    cycleTime: 0.29999999999999999
+    loopCycleTime: 0.29999999999999999
+    duration: 0.20000000000000001
+    continuous: False
+    leadTime: 0.01
+    loop: False

@@ -44,7 +44,7 @@ class DaqChannelGui(QtGui.QWidget):
         return self.stateGroup.state()
     
     def restoreState(self, state):
-        return self.stateGroup.restoreState()
+        return self.stateGroup.state()
 
     def clearPlots(self):
         for i in self.plots:
