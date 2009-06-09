@@ -144,7 +144,7 @@ class AcquireThread(QtCore.QThread):
         QtCore.QThread.__init__(self)
         self.dev = dev
         self.cam = self.dev.getCamera()
-        self.state = {'binning': 1, 'exposure': .01, 'region': None}
+        self.state = {'binning': 1, 'exposure': .001, 'region': None}
         self.stopThread = False
         self.lock = QtCore.QMutex()
         self.acqBuffer = None
@@ -186,6 +186,12 @@ class AcquireThread(QtCore.QThread):
     def run(self):
         #print "Starting up camera acquisition thread."
         binning = self.state['binning']
+        if 'maxBinning' in self.dev.config and binning > self.dev.config['maxBinning']:
+            msg = "Requested binning %d exceeds maximum, using %d instead" % (binning, self.dev.config['maxBinning'])
+            print msg
+            self.emit(QtCore.SIGNAL("showMessage"), msg)
+            binning = self.dev.config['maxBinning']
+        
         exposure = self.state['exposure']
         region = self.state['region']
         lastFrame = None
@@ -209,9 +215,11 @@ class AcquireThread(QtCore.QThread):
                 if frame is not None and frame != lastFrame:
                     now = ptime.time() #time.clock()
                     
-                    if lastFrame is not None and frame - lastFrame > 1:
-                        print "Dropped frames between %d and %d" % (lastFrame, frame)
-                        self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped frame!")
+                    if lastFrame is not None:
+                        diff = ((frame + self.ringSize) - lastFrame) % self.ringSize
+                        if diff > 1:
+                            print "Dropped %d frames after %d" % (diff-1, self.frameId)
+                            self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped %d frame(s) after %d!" % (diff-1, self.frameId))
                     lastFrame = frame
                     
                     ## compute FPS

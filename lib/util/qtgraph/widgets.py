@@ -374,12 +374,16 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
     p.drawRect(r)
     
   def getArrayRegion(self, data, img=None, axes=(0,1)):
+    #print "----------------------"
+    ## determine boundaries of image in scene coordinates
+    ##   assumes image is not rotated!
     dShape = (data.shape[axes[0]], data.shape[axes[1]])
     if img is None:
       bounds = QtCore.QRectF(0, 0, dShape[0], dShape[1])
     else:
       imr = QtCore.QRect(0, 0, img.width(), img.height())
       bounds = img.sceneTransform().mapRect(imr)
+      #print "imr, bounds", imr, bounds
     
     ## Determine shape of ROI in data coordinates
     scaleFactor = Point(dShape) / Point(bounds.width(), bounds.height())
@@ -387,15 +391,24 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
       paddedRgn = self.boundingRect()
     else:
       paddedRgn = self.boundingRect().adjusted(-scaleFactor[0], -scaleFactor[1], scaleFactor[0], scaleFactor[1])  ## pad by 1 pixel
+    #print "paddedRgn", paddedRgn
       
-    rgn = self.sceneTransform().mapRect(paddedRgn).adjusted(-bounds.x(), -bounds.y(), -bounds.x(), -bounds.y())
+    ## Determine region ROI covers in data
+    ##   paddedRgn (ROI local coords) -> scene coords -> img local coords
+    #rgn = self.sceneTransform().mapRect(paddedRgn).adjusted(-bounds.x(), -bounds.y(), -bounds.x(), -bounds.y())
+    rgn = img.sceneTransform().inverted()[0].mapRect(self.sceneTransform().mapRect(paddedRgn))
+    
     rgnPos = Point(rgn.x(), rgn.y())
     rgnSize = Point(rgn.width(), rgn.height())
+    #print "rgn", rgn
+    
     
     dataRect = QtCore.QRectF(0, 0, dShape[0], dShape[1])
+    #print "dataRect", dataRect
     
     ## Find intersection between image and ROI
     readRgn = rgn.intersected(dataRect)
+    #print "readRgn", readRgn
     
       
     ## convert readRegion to integer rect
@@ -404,8 +417,12 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
     
     ## if there is no intersection, bail out
     if readRgni.width() == 0 or readRgn.height() == 0:
-      print "No intersection"
+      #print "No intersection"
       return None
+    
+    
+    ### From here on, we extract data from the source array
+    ### and massage it into the return array
     
     writeRgn = readRgni.adjusted(int(-rgnPos[0]-dpix[0]), int(-rgnPos[1]-dpix[1]), round(-rgnPos[0]-dpix[0]), round(-rgnPos[1]-dpix[1]))
     

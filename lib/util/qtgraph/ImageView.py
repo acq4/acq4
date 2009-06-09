@@ -8,6 +8,7 @@ class ImageView(QtGui.QWidget):
         QtGui.QWidget.__init__(self, *args)
         self.levelMax = 4096
         self.levelMin = 0
+        self.image = None
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.scene = QtGui.QGraphicsScene()
@@ -28,6 +29,8 @@ class ImageView(QtGui.QWidget):
         self.autoRange()
         
     def updateImage(self):
+        if self.image is None:
+            return
         self.imageItem.updateImage(self.image[self.ui.timeSlider.value()], white=self.whiteLevel(), black=self.blackLevel())
         
     def autoRange(self):

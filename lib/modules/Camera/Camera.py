@@ -20,6 +20,7 @@ from lib.util.qtgraph.widgets import ROI
 import lib.util.ptime as ptime
 from lib.filetypes.ImageFile import *
 from PyQt4 import QtGui, QtCore
+from PyQt4 import Qwt5 as Qwt
 import scipy.ndimage
 import time, types, os.path, re, sys
 #if '--mock' in sys.argv:
@@ -44,15 +45,19 @@ class PVCamera(QtGui.QMainWindow):
     def __init__(self, module):
         self.module = module ## handle to the rest of the application
         
+        self.roi = None
         self.exposure = 0.001
         self.binning = 1
         self.region = None
         #self.acquireThread = AcquireThread(self)
         self.acquireThread = self.module.cam.acqThread
-        self.roi = None
-        self.ROIs = []
+        self.acquireThread.setParam('binning', self.binning)
+        self.acquireThread.setParam('exposure', self.exposure)
+        
         self.frameBuffer = []
         self.lastPlotTime = None
+        self.ROIs = []
+        self.plotCurves = []
         #self.ropWindow = ROPWindow(self)
         
         self.nextFrame = None
@@ -73,15 +78,20 @@ class PVCamera(QtGui.QMainWindow):
         self.gv = GraphicsView(self.ui.graphicsWidget)
         l.addWidget(self.gv)
 
+        self.ui.plotWidget.setCanvasBackground(QtGui.QColor(0,0,0))
+        self.ui.plotWidget.enableAxis(Qwt.QwtPlot.xBottom, False)
+        self.ui.plotWidget.replot()
+
+
         ## Set up plot graphicsView
-        l2 = QtGui.QVBoxLayout(self.ui.plotWidget)
-        l2.setMargin(0)
-        self.pgv = GraphicsView(self.ui.plotWidget)
-        l2.addWidget(self.pgv)
+        #l2 = QtGui.QVBoxLayout(self.ui.plotWidget)
+        #l2.setMargin(0)
+        #self.pgv = GraphicsView(self.ui.plotWidget)
+        #l2.addWidget(self.pgv)
 
         self.setCentralWidget(self.ui.centralwidget)
         self.scene = QtGui.QGraphicsScene(self)
-        self.plotScene = QtGui.QGraphicsScene(self)
+        #self.plotScene = QtGui.QGraphicsScene(self)
         #self.grid = Grid()
         #self.scene.addItem(self.grid)
         #self.grid.setZValue(-1)
@@ -94,11 +104,11 @@ class PVCamera(QtGui.QMainWindow):
         self.AGCLastMax = None
         
         #self.plotScene.addItem(QtGui.QGraphicsRectItem(-1, -1, 2, 2))
-        self.grid = Grid(self.pgv)
-        self.plotScene.addItem(self.grid)
-        self.grid.setZValue(-1)
-        self.pgv.setScene(self.plotScene)
-        self.pgv.setRange(QtCore.QRectF(0, 0, 100, 3000))
+        #self.grid = Grid(self.pgv)
+        #self.plotScene.addItem(self.grid)
+        #self.grid.setZValue(-1)
+        #self.pgv.setScene(self.plotScene)
+        #self.pgv.setRange(QtCore.QRectF(0, 0, 100, 3000))
         
         self.recLabel = QtGui.QLabel()
         self.fpsLabel = QtGui.QLabel()
@@ -177,8 +187,11 @@ class PVCamera(QtGui.QMainWindow):
         roi = PlotROI(10)
         roi.setZValue(20)
         self.scene.addItem(roi)
-        plot = Plot(array([]))
-        self.plotScene.addItem(plot)
+        #plot = Plot(array([]))
+        #self.plotScene.addItem(plot)
+        plot = Qwt.QwtPlotCurve('roi%d'%len(self.ROIs))
+        plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
+        plot.attach(self.ui.plotWidget)
         self.ROIs.append({'roi': roi, 'plot': plot, 'vals': [], 'times': []})
         
     def clearFrameBuffer(self):
@@ -415,8 +428,9 @@ class PVCamera(QtGui.QMainWindow):
             
     def addPlotFrame(self, frame):
         ## Get rid of old frames
+        minTime = None
         if len(self.frameBuffer) > 0:
-            now = time.clock()
+            now = ptime.time()
             while self.frameBuffer[0][1]['time'] < (now-self.ui.spinROITime.value()):
                 self.frameBuffer.pop(0)
             for r in self.ROIs:
@@ -425,6 +439,10 @@ class PVCamera(QtGui.QMainWindow):
                 while r['times'][0] < (now-self.ui.spinROITime.value()):
                     r['times'].pop(0)
                     r['vals'].pop(0)
+                if minTime is None or r['times'][0] < minTime:
+                    minTime = r['times'][0]
+        if minTime is None:
+            minTime = frame[1]['time']
                 
         ## add new frame
         draw = False
@@ -435,6 +453,8 @@ class PVCamera(QtGui.QMainWindow):
             return
         for r in self.ROIs:
             d = r['roi'].getArrayRegion(frame[0], self.imageItem, axes=(0,1))
+            if d is None:
+                continue
             if d.size < 1:
                 val = 0
             else:
@@ -442,8 +462,10 @@ class PVCamera(QtGui.QMainWindow):
             r['vals'].append(val)
             r['times'].append(frame[1]['time'])
             if draw:
-                r['plot'].updateData(array(r['vals']))
+                #r['plot'].updateData(array(r['vals']))
+                r['plot'].setData(array(r['times'])-minTime, r['vals'])
             
+        self.ui.plotWidget.replot()
     
             
     def newFrame(self, frame):
@@ -451,7 +473,6 @@ class PVCamera(QtGui.QMainWindow):
         
     def updateFrame(self):
         try:
-            #self.addPlotFrame(frame)
             
             ## If we last drew a frame < 1/60s ago, return.
             t = ptime.time()
@@ -470,12 +491,13 @@ class PVCamera(QtGui.QMainWindow):
             ## We will now draw a new frame (even if the frame is unchanged)
             self.lastDrawTime = t
             
+            
             ## Handle the next available frame, if there is one.
             if self.nextFrame is not None:
                 self.currentFrame = self.nextFrame
                 self.nextFrame = None
                 (data, info) = self.currentFrame
-                self.currentClipMask = (data >= (2**self.bitDepth - 1)) 
+                self.currentClipMask = (data >= (2**self.bitDepth * 0.99)) 
                 self.ui.sliderAvgLevel.setValue(int(data.mean()))
                 
                 ## If background division is enabled, mix the current frame into the background frame
@@ -489,8 +511,12 @@ class PVCamera(QtGui.QMainWindow):
 
             (data, info) = self.currentFrame
             
+            ## Update ROI plots, if any
+            if self.ui.checkEnableROIs.isChecked():
+                self.addPlotFrame(self.currentFrame)
+            
             ## divide the background out of the current frame if needed
-            if self.ui.btnDivideBackground.isChecked():
+            if self.ui.btnDivideBackground.isChecked() and self.backgroundFrame is not None:
                 b = self.ui.spinFlattenSize.value()
                 if b > 0.0:
                     data = data / scipy.ndimage.gaussian_filter(self.backgroundFrame, (b, b))
@@ -500,13 +526,20 @@ class PVCamera(QtGui.QMainWindow):
             ## determine black/white levels from level controls
             (bl, wl) = self.getLevels()
             if self.ui.btnAutoGain.isChecked():
+                cw = self.ui.spinAutoGainCenterWeight.value()
+                (w,h) = data.shape
+                center = data[w/2.-w/6.:w/2.+w/6., h/2.-h/6.:h/2.+h/6.]
+                minVal = data.min() * (1.0-cw) + center.min() * cw
+                maxVal = data.max() * (1.0-cw) + center.max() * cw
+                
+                
                 if self.AGCLastMax is None:
-                    minVal = data.min()
-                    maxVal = data.max()
+                    minVal = minVal
+                    maxVal = maxVal
                 else:
                     s = 1.0 - 1.0 / (self.ui.spinAutoGainSpeed.value()+1.0)
-                    minVal = self.AGCLastMin * s + data.min() * (1.0-s)
-                    maxVal = self.AGCLastMax * s + data.max() * (1.0-s)
+                    minVal = self.AGCLastMin * s + minVal * (1.0-s)
+                    maxVal = self.AGCLastMax * s + maxVal * (1.0-s)
                 self.AGCLastMax = maxVal
                 self.AGCLastMin = minVal
                 
@@ -515,8 +548,10 @@ class PVCamera(QtGui.QMainWindow):
                 
             ## Translate and scale image based on ROI and binning
             m = QtGui.QTransform()
-            m.translate(self.region[0], self.region[1])
-            m.scale(self.binning, self.binning)
+            #m.translate(self.region[0], self.region[1])
+            m.translate(info['region'][0], info['region'][1])
+            #m.scale(self.binning, self.binning)
+            m.scale(info['binning'], info['binning'])
             
             ## update image in viewport
             #self.imageItem.setLevels(white=wl, black=bl)

@@ -33,7 +33,7 @@ class PVCamProto(ProtocolGui):
     def currentState(self):
         return self.stateGroup.state()
         
-    def handleResult(self, result, dataManager):
+    def handleResult(self, result):
         #print result
         if self.stateGroup.state()['display']:
             self.ui.imageView.setImage(result['frames'])

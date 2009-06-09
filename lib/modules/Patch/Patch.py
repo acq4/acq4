@@ -340,12 +340,16 @@ class PatchThread(QtCore.QThread):
             #estimate = [rmp
             ## Exponential fit
             #fit = leastsq(lambda v, x, y: y - (v[0] - v[1]*exp(-x * v[2])), [10, 2, 3], args=(array(x), array(y)))
-        rmp = vBase.median()
+        #rmp = vBase.median()
+        #rmps = vBase.std()
+        #rmc = iBase.median()
+        #rmcs = iBase.std()
+        #ir = (vPulse.median()-rmp) / (iPulse.median()-rmc)
+        rmp = vBase.mean()
         rmps = vBase.std()
-        rmc = iBase.median()
+        rmc = iBase.mean()
         rmcs = iBase.std()
-        
-        ir = (vPulse.median()-rmp) / (iPulse.median()-rmc)
+        ir = (vPulse.mean()-rmp) / (iPulse.mean()-rmc)
         
             
         return {
