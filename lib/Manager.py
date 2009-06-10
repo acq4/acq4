@@ -204,7 +204,7 @@ class Task:
         Task.id += 1
         
         ## TODO:  set up data storage with cfg['storeData'] and ['writeLocation']
-        
+        #print "Task command", command
         self.devNames = command.keys()
         self.devNames.remove('protocol')
         self.devs = {}
@@ -223,7 +223,7 @@ class Task:
         #print "======================="
         
         
-        
+        #print "execute:", self.tasks
         ## Reserve all hardware before starting any
         self.dm.lockReserv()
         try:
@@ -270,6 +270,9 @@ class Task:
         t = ptime.time()
         if t - self.startTime < self.cfg['duration']:
             return False
+        return self.tasksDone()
+        
+    def tasksDone(self):
         for t in self.tasks:
             if not self.tasks[t].isDone():
                 return False
@@ -295,14 +298,15 @@ class Task:
             #print "  %d released" % self.id, t
         
     def getResult(self):
-        if not self.isDone():
-            raise Exception("Cannot get result; task is still running.")
         
         if not self.stopped:
             ## Stop all tasks
             for t in self.tasks:
                 self.tasks[t].stop()
             self.stopped = True
+            
+        if not self.tasksDone():
+            raise Exception("Cannot get result; task is still running.")
         
         if self.result is None:
             ## Let each device generate its own output structure.
@@ -310,6 +314,7 @@ class Task:
             for devName in self.tasks:
                 result[devName] = self.tasks[devName].getResult()
             self.result = result
+            #print "RESULT 1:", self.result
             
             ## Store data if requested
             if 'storeData' in self.cfg and self.cfg['storeData'] is True:
@@ -324,7 +329,8 @@ class Task:
                 #print "  %d released" % self.id, t
         self.reserved = False
             
-                
+        #print "tasks:", self.tasks
+        #print "RESULT:", self.result        
         return self.result
 
 

@@ -17,11 +17,20 @@ class DaqChannelGui(QtGui.QWidget):
         ## Configuration for this channel defined in the device configuration file
         self.config = config
         
+        if 'scale' in config:
+            self.scale = config['scale']
+        else:
+            self.scale = 1.0
+        
         ## The device handle for this channel's DAQGeneric device
         self.dev = dev
         
         ## The protocol GUI window which contains this object
         self.prot = prot
+        
+        ## Make sure protocol interface includes our DAQ device
+        self.daqDev = self.dev.getDAQName(self.name)
+        self.daqUI = self.prot.getDevice(self.daqDev)
         
         ## plot widget
         self.plot = plot
@@ -41,10 +50,13 @@ class DaqChannelGui(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('stateChanged(int)'), self.displayCheckChanged)
             
     def saveState(self):
+        #print "Requesting DAQ channel state:", self.stateGroup.state()
         return self.stateGroup.state()
     
     def restoreState(self, state):
-        return self.stateGroup.state()
+        self.stateGroup.setState(state)
+        if hasattr(self.ui, 'waveGeneratorWidget'):
+            self.ui.waveGeneratorWidget.update()
 
     def clearPlots(self):
         for i in self.plots:
@@ -72,13 +84,11 @@ class OutputChannelGui(DaqChannelGui):
         self.postUiInit()
         self.ui.waveGeneratorWidget.setTimeScale(1e-3)
         
-        daqDev = self.dev.getDAQName(self.name)
-        daqUI = self.prot.getDevice(daqDev)
-        self.daqChanged(daqUI.currentState())
+        self.daqChanged(self.daqUI.currentState())
         
             
 
-        QtCore.QObject.connect(daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
+        QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
         QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('protocolStarted'), self.protoStarted)
 
@@ -100,8 +110,12 @@ class OutputChannelGui(DaqChannelGui):
         state = self.stateGroup.state()
         if state['preSetCheck']:
             prot['preset'] = state['preSetSpin']
+        if state['holdingCheck']:
+            prot['holding'] = state['holdingSpin']
         if state['functionCheck']:
-            prot['command'] = self.cmdScale * self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)        
+            prot['command'] = self.scale * self.getSingleWave(params)
+            
+        #print prot
         return prot
     
     def handleResult(self, result):
@@ -116,24 +130,28 @@ class OutputChannelGui(DaqChannelGui):
         for k in ps:
             params[k] = range(ps[k])
         waves = []
-        runSequence(lambda p: waves.append(self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, p)), params, params.keys(), passHash=True)
+        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys(), passHash=True)
         for w in waves:
             if w is not None:
                 self.plotCurve(w, color=QtGui.QColor(100, 100, 100), replot=False)
         
         ## display single-mode wave in red
-        single = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts)
+        single = self.getSingleWave()
         if single is not None:
             self.plotCurve(single, color=QtGui.QColor(200, 100, 100))
         self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
         
     def protoStarted(self, params):
         ## Draw green trace for current command waveform
+        if not self.stateGroup.state()['displayCheck']:
+            return
         if self.currentPlot is not None:
             self.currentPlot.detach()
         params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name])
-        cur = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
-        self.currentPlot = self.plotCurve(cur, color=QtGui.QColor(100, 200, 100))
+        cur = self.getSingleWave(params)
+        #cur = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
+        if cur is not None:
+            self.currentPlot = self.plotCurve(cur, color=QtGui.QColor(100, 200, 100))
         
     def plotCurve(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
         plot = Qwt.QwtPlotCurve('cell')
@@ -145,6 +163,17 @@ class OutputChannelGui(DaqChannelGui):
             self.plot.replot()
         return plot
 
+    def getSingleWave(self, params=None):
+        ## waveGenerator generates values in mV or pA
+        wave = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
+        
+        if wave is None:
+            return None
+        state = self.stateGroup.state()
+        if state['holdingCheck']:
+            wave += (state['holdingSpin'] / self.scale)
+        return wave
+        
 class InputChannelGui(DaqChannelGui):
     def __init__(self, *args):
         DaqChannelGui.__init__(self, *args)
@@ -160,13 +189,13 @@ class InputChannelGui(DaqChannelGui):
         if params is None:
             params = {}
         state = self.stateGroup.state()
-        return {'record': state['recordCheck']}
+        return {'record': state['recordCheck'], 'recordInit': state['recordInitCheck']}
     
     def handleResult(self, result):
-        if self.stateGroup.state()['display']:
+        if self.stateGroup.state()['displayCheck']:
             plot = Qwt.QwtPlotCurve('cell')
             plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-            plot.setData(result.xvals('Time'), result['scaled'])
+            plot.setData(result.xvals('Time'), result)
             plot.attach(self.plot)
             self.plots.append(plot)
             self.plot.replot()

@@ -23,6 +23,7 @@ class DAQGenericProtoGui(ProtocolGui):
         for ch in self.dev.config:
             conf = self.dev.config[ch]
             p = Qwt.QwtPlot(self.ui.plotSplitter)
+            p.setMinimumHeight(100)
             self.plots[ch] = p
             
             if conf['type'] in ['ao', 'do']:
@@ -70,10 +71,18 @@ class DAQGenericProtoGui(ProtocolGui):
         p = {}
         for ch in self.channels:
             p[ch] = self.channels[ch].generateProtocol(params)
+        #print p
         return p
         
     def handleResult(self, result):
+        #print "handling result:", result
+        if result is None:
+            return
         for ch in self.channels:
+            #print "handle result for", ch
+            #if ch not in result:
+                #print "  no result"
+                #continue
             self.channels[ch].handleResult(result[ch])
             
             

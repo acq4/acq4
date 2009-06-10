@@ -24,6 +24,7 @@ class DAQGeneric(Device):
     def setHolding(self, channel, level=None):
         """Define and set the holding values for this channel"""
         l = QtCore.QMutexLocker(self.lock)
+        #print "set holding", channel, level
         ### Set correct holding level here...
         if level is not None:
             self.holding[channel] = level
@@ -59,43 +60,59 @@ class DAQGenericTask(DeviceTask):
     def configure(self, tasks, startOrder):
         l = QtCore.QMutexLocker(self.dev.lock)
         self.daqTasks = {}
+        self.initialState = {}
         for ch in self.cmd:
+            dev = self.dev.dm.getDevice(self.dev.config[ch]['channel'][0])
             if 'preset' in self.cmd[ch]:
-                dev = self.dev.dm.getDevice(self.dev.config[ch]['channel'][0])
                 dev.setChannelValue(self.dev.config[ch]['channel'][1], self.cmd[ch]['preset'])
             elif 'holding' in self.cmd[ch]:
                 self.dev.setHolding(ch, self.cmd[ch]['holding'])
+            if 'recordInit' in self.cmd[ch] and self.cmd[ch]['recordInit']:
+                self.initialState[ch] = self.dev.getChannelValue(ch)
                 
     def createChannels(self, daqTask):
+        #print "createChannels"
         l = QtCore.QMutexLocker(self.dev.lock)
         ## Is this the correct DAQ device for any of my channels?
         ## create needed channels + info
         ## write waveform to command channel if needed
         
         for ch in self.dev.config:
+            #print "  creating channel %s.." % ch
             if ch not in self.cmd:
+                #print "    ignoring channel", ch, "not in command"
                 continue
             chConf = self.dev.config[ch]
             if chConf['channel'][0] != daqTask.devName():
+                #print "    ignoring channel", ch, "wrong device"
                 continue
             
             ## Input channels are only used if the command has record: True
             if chConf['type'] in ['ai', 'di']:
                 if ('record' not in self.cmd[ch]) or (not self.cmd[ch]['record']):
+                    #print "    ignoring channel", ch, "recording disabled"
                     continue
                 
             ## Output channels are only added if they have a command waveform specified
             elif chConf['type'] in ['ao', 'do']:
-                if 'cmd' not in self.cmd[ch]:
+                if 'command' not in self.cmd[ch]:
+                    #print "    ignoring channel", ch, "no command"
                     continue
             
             self.bufferedChannels.append(ch)
             daqTask.addChannel(chConf['channel'][1], chConf['type'])
+            self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
             self.cmd[ch]['task'] = daqTask
             if chConf['type'] in ['ao', 'do']:
                 scale = self.getChanScale(ch)
                 cmdData = self.cmd[ch]['command'] * scale
+                if chConf['type'] == 'do':
+                    cmdData = cmdData.astype(uint32)
+                    cmdData[cmdData<=0] = 0
+                    cmdData[cmdData>0] = 0xFFFFFFFF
+                #print "channel", chConf['channel'][1], cmdData
                 daqTask.setWaveform(chConf['channel'][1], cmdData)
+            #print "  done"
         
     def getChanScale(self, chan):
         l = QtCore.QMutexLocker(self.dev.lock)
@@ -120,9 +137,13 @@ class DAQGenericTask(DeviceTask):
     def stop(self):
         l = QtCore.QMutexLocker(self.dev.lock)
         ## This is just a bit sketchy, but these tasks have to be stopped before the holding level can be reset.
+        #print "STOP"
         for ch in self.daqTasks:
+            #print "Stop task", ch
             self.daqTasks[ch].stop()
-        self.dev.setHolding()
+        for ch in self.cmd:
+            if 'holding' in self.cmd[ch]:
+                self.dev.setHolding(ch, self.cmd[ch]['holding'])
         
     def getResult(self):
         ## Access data recorded from DAQ task
@@ -131,21 +152,25 @@ class DAQGenericTask(DeviceTask):
         
         ## Collect data and info for each channel in the command
         result = {}
+        #print "buffered channels:", self.bufferedChannels
         for ch in self.bufferedChannels:
-            result[ch] = self.cmd[ch]['task'].getData(self.dev.config[ch][1])
+            result[ch] = self.cmd[ch]['task'].getData(self.dev.config[ch]['channel'][1])
             
             result[ch]['data'] = result[ch]['data'] / self.getChanScale(ch)
             if 'units' in self.dev.config[ch]:
                 result[ch]['units'] = self.dev.config[ch]['units']
             else:
                 result[ch]['units'] = None
-            
+        #print "RESULT:", result    
         ## Todo: Add meta-info about channels that were used but unbuffered
+        
+        
         if len(result) > 0:
-            ## Create an array of time values
-            meta = result[result.keys()[0]]
+            meta = result[result.keys()[0]]['info']
+            #print meta
             rate = meta['rate']
             nPts = meta['numPts']
+            ## Create an array of time values
             timeVals = linspace(0, float(nPts-1) / float(rate), nPts)
             
             ## Concatenate all channels together into a single array, generate MetaArray info
@@ -155,7 +180,7 @@ class DAQGenericTask(DeviceTask):
             arr = concatenate(chanList)
             info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'rate': rate, 'numPts': nPts, 'startTime': meta['startTime']}]
             marr = MetaArray(arr, info=info)
-                
+            #print marr    
             return marr
             
         else:

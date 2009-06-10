@@ -627,6 +627,7 @@ class ProtocolRunner(Module, QtCore.QObject):
     
     def handleFrame(self, frame):
         ## Request each device handles its own data
+        #print "got frame", frame
         for d in frame['result']:
             if d != 'protocol':
                 self.docks[d].widget().handleResult(frame['result'][d])

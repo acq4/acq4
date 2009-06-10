@@ -2,6 +2,7 @@
 from PyQt4 import QtCore, QtGui
 from ProtocolTemplate import *
 from lib.devices.Device import ProtocolGui
+import sys
 
 class NiDAQProto(ProtocolGui):
     def __init__(self, dev, prot):
@@ -23,11 +24,15 @@ class NiDAQProto(ProtocolGui):
         return self.currentState()
         
     def restoreState(self, state):
-        self.ui.rateSpin.setValue(state['rate'] / 1000.)
-        if 'triggerDevice' in state and state['triggerDevice'] in self.devs:
-            self.ui.triggerDevList.setCurrentIndex(self.devs.index(state['triggerDevice'])+1)
-        else:
-            self.ui.triggerDevList.setCurrentIndex(0)
+        try:
+            self.ui.rateSpin.setValue(state['rate'] / 1000.)
+            if 'triggerDevice' in state and state['triggerDevice'] in self.devs:
+                self.ui.triggerDevList.setCurrentIndex(self.devs.index(state['triggerDevice'])+1)
+            else:
+                self.ui.triggerDevList.setCurrentIndex(0)
+        except:
+            sys.excepthook(*sys.exc_info())
+            print "Error while loading DAQ configuration, proceeding with default configuration."
         
     def generateProtocol(self, params=None):
         if params is None:

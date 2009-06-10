@@ -21,6 +21,23 @@ class NiDAQ(Device):
         if 'ao' in chan:
             self.n.writeAnalogSample(chan, value)
         else:
+            if value is True or value == 1:
+                value = 0xFFFFFFFF
+            else:
+                value = 0
+            self.n.writeDigitalSample(chan, value)
+        self.release()
+        
+    def getChannelValue(self, chan):
+        self.reserve(block=True)
+        #print "Setting channel %s to %f" % (chan, value)
+        if 'ao' in chan:
+            self.n.writeAnalogSample(chan, value)
+        else:
+            if value is True or value == 1:
+                value = 0xFFFFFFFF
+            else:
+                value = 0
             self.n.writeDigitalSample(chan, value)
         self.release()
         
@@ -39,11 +56,17 @@ class Task(DeviceTask):
         self.st = SuperTask(self.dev.n)
         
     def configure(self, tasks, startOrder):
-        #print "daq configure"
+        #print "daq configure", tasks
         ## Request to all devices that they create the channels they use on this task
         for dName in tasks:
+            #print "Requesting %s create channels" % dName
             if hasattr(tasks[dName], 'createChannels'):
                 tasks[dName].createChannels(self)
+        
+        ## If no devices requested buffered operations, then do not configure clock.
+        ## This might eventually cause some triggering issues..
+        if not self.st.hasTasks():
+            return
         
         ## Determine the sample clock source, configure tasks
         self.st.configureClocks(rate=self.cmd['rate'], nPts=self.cmd['numPts'])
@@ -64,13 +87,19 @@ class Task(DeviceTask):
         return self.st.setWaveform(*args, **kwargs)
         
     def start(self):
-        self.st.start()
+        if self.st.hasTasks():
+            self.st.start()
         
     def isDone(self):
-        return self.st.isDone()
+        if self.st.hasTasks():
+            return self.st.isDone()
+        else:
+            return True
+        
         
     def stop(self):
-        self.st.stop(wait=True)
+        if self.st.hasTasks():
+            self.st.stop(wait=True)
         
     def getResult(self):
         ## Results should be collected by individual devices using getData

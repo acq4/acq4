@@ -222,6 +222,7 @@ class Task:
         self.nidaq.StartTask(self.handle)
 
     def stop(self):
+        #print "stopTask", self.getTaskDevices()
         self.nidaq.StopTask(self.handle)
 
     def isDone(self):
@@ -430,13 +431,12 @@ class SuperTask:
         ## For now, all ao waveforms must be between -10 and 10
         
         typ = self.channelInfo[chan]['task'][1]
-        if typ == 'ao':
-            if any(data > 10.0) or any(data < -10.0):
-                self.channelInfo[chan]['data'] = clip(data, -10.0, 10.0)
-                self.channelInfo[chan]['clipped'] = True
-            else:
-                self.channelInfo[chan]['data'] = data
-                self.channelInfo[chan]['clipped'] = False
+        if typ in 'ao' and (any(data > 10.0) or any(data < -10.0)):
+            self.channelInfo[chan]['data'] = clip(data, -10.0, 10.0)
+            self.channelInfo[chan]['clipped'] = True
+        else:
+            self.channelInfo[chan]['data'] = data
+            self.channelInfo[chan]['clipped'] = False
             
         key = self.getTaskKey(chan)
         self.taskInfo[key]['dataWritten'] = False
@@ -462,9 +462,14 @@ class SuperTask:
                 self.tasks[k].write(d)
                 self.taskInfo[k]['dataWritten'] = True
         
+    def hasTasks(self):
+        return len(self.tasks) > 0
+        
     def configureClocks(self, rate, nPts):
         """Configure sample clock and triggering for all tasks"""
         clkSource = None
+        if len(self.tasks) == 0:
+            raise Exception("No tasks to configure.")
         keys = self.tasks.keys()
         self.numPts = nPts
         self.rate = rate
