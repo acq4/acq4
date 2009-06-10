@@ -7,7 +7,14 @@ from protoGUI import *
 class DAQGeneric(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
         ## Do some sanity checks here on the configuration
+        
+        self.holding = {}
+        for ch in config:
+            if 'scale' not in config[ch]:
+                config[ch]['scale'] = 1.0
+            self.holding[ch] = None
         
     
     def createTask(self, cmd):
@@ -15,10 +22,17 @@ class DAQGeneric(Device):
     
         
     def setHolding(self, channel, level=None):
-        """Set all channel for this device to its configured holding level. If mode is None, then
-        the level is chosen based on the current mode of the channel."""
+        """Define and set the holding values for this channel"""
+        l = QtCore.QMutexLocker(self.lock)
         ### Set correct holding level here...
-        pass
+        if level is not None:
+            self.holding[channel] = level
+        if self.holding[channel] is None:
+            return
+        daq, chan = self.config[channel]['channel']
+        daqDev = self.dm.getDevice(daq)
+        scale = self.config[channel]['scale']
+        daqDev.setChannelValue(chan, self.holding[channel]*scale, block=False)
         
         
     #def devRackInterface(self):
@@ -43,13 +57,17 @@ class DAQGenericTask(DeviceTask):
         self.bufferedChannels = []
         
     def configure(self, tasks, startOrder):
+        l = QtCore.QMutexLocker(self.dev.lock)
         self.daqTasks = {}
         for ch in self.cmd:
             if 'preset' in self.cmd[ch]:
                 dev = self.dev.dm.getDevice(self.dev.config[ch]['channel'][0])
                 dev.setChannelValue(self.dev.config[ch]['channel'][1], self.cmd[ch]['preset'])
+            elif 'holding' in self.cmd[ch]:
+                self.dev.setHolding(ch, self.cmd[ch]['holding'])
                 
     def createChannels(self, daqTask):
+        l = QtCore.QMutexLocker(self.dev.lock)
         ## Is this the correct DAQ device for any of my channels?
         ## create needed channels + info
         ## write waveform to command channel if needed
@@ -80,6 +98,7 @@ class DAQGenericTask(DeviceTask):
                 daqTask.setWaveform(chConf['channel'][1], cmdData)
         
     def getChanScale(self, chan):
+        l = QtCore.QMutexLocker(self.dev.lock)
         ## Scale defaults to 1.0
         ## - can be overridden in configuration
         ## - can be overridden again in command
@@ -97,6 +116,13 @@ class DAQGenericTask(DeviceTask):
     def isDone(self):
         ## DAQ task handles this for us.
         return True
+        
+    def stop(self):
+        l = QtCore.QMutexLocker(self.dev.lock)
+        ## This is just a bit sketchy, but these tasks have to be stopped before the holding level can be reset.
+        for ch in self.daqTasks:
+            self.daqTasks[ch].stop()
+        self.dev.setHolding()
         
     def getResult(self):
         ## Access data recorded from DAQ task

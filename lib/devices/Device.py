@@ -115,7 +115,11 @@ class DeviceTask:
     
     def storeResult(self, dirHandle):
         result = self.getResult()
-        dirHandle.writeFile(result, self.dev.name)
+        if isinstance(result, dict):
+            for k in result:
+                dirHandle.writeFile(result, self.dev.name+'_'+str(k))
+        else:
+            dirHandle.writeFile(result, self.dev.name)
     
     
 class ProtocolGui(QtGui.QWidget):
