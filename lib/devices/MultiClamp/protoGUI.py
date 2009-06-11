@@ -14,6 +14,10 @@ class MultiClampProtoGui(ProtocolGui):
         ProtocolGui.__init__(self, dev, prot)
         daqDev = self.dev.getDAQName()
         daqUI = self.prot.getDevice(daqDev)
+        
+        self.traces = {}  ## Stores traces from a sequence to allow average plotting
+        self.avgPlots = {}
+        
         self.cmdPlots = []
         self.inpPlots = []
         self.currentCmdPlot = None
@@ -113,6 +117,9 @@ class MultiClampProtoGui(ProtocolGui):
         for i in self.inpPlots:
             i.detach()
         self.inpPlots = []
+        for i in self.avgPlots:
+            i.detach()
+        self.avgPlots = {}
         
     def protoStarted(self, params):
         ## Draw green trace for current command waveform
@@ -235,11 +242,29 @@ class MultiClampProtoGui(ProtocolGui):
             raise Exception('Signal %s does not exist' % sig)
         c.setCurrentIndex(ind)
         
-    def handleResult(self, result):
+    def handleResult(self, result, params):
         plot = Qwt.QwtPlotCurve('cell')
         plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         plot.setData(result.xvals('Time'), result['scaled'])
         plot.attach(self.ui.topPlotWidget)
         self.inpPlots.append(plot)
+        
+        if self.stateGroup.state()['displayAverageCheck']:
+            params = params.copy()
+            if ('protocol', 'repetitions') in params:
+                del params[('protocol', 'repetitions')]
+            paramKey = tuple(params.items())
+            if paramKey not in self.traces:
+                self.traces[paramKey] = []
+            self.traces[paramKey].append(result)
+            
+            for k in self.traces:
+                if k not in self.avgPlots:
+                    plot = Qwt.QwtPlotCurve('cell')
+                    plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 250)))
+                    self.avgPlots[k] = plot
+                avgTrace = vstack([a.view(ndarray) for a in self.traces[k]])
+                self.avgPlots[k].setData(self.traces[k][0].xvals('Time'), avgTrace)
+        
         self.ui.topPlotWidget.replot()
         

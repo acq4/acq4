@@ -31,6 +31,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             (self.ui.protoLoopCheck, 'loop'),
             (self.ui.protoCycleTimeSpin, 'loopCycleTime', 1e3),
             (self.ui.seqCycleTimeSpin, 'cycleTime', 1e3),
+            (self.ui.seqRepetitionSpin, 'repetitions', 1),
         ])
         self.protocolList = DirTreeModel(self.config['globalDir'])
         self.ui.protocolList.setModel(self.protocolList)
@@ -67,6 +68,8 @@ class ProtocolRunner(Module, QtCore.QObject):
         
     def protoGroupChanged(self, param, value):
         self.emit(QtCore.SIGNAL('protocolChanged'), param, value)
+        if param == 'repetitions':
+            self.updateSeqParams()
         if param in ['duration', 'cycleTime', 'leadTime']:
             self.updateSeqReport()
         
@@ -191,11 +194,18 @@ class ProtocolRunner(Module, QtCore.QObject):
             self.ui.currentProtocolLabel.setText(pn)
             return
             
-    def updateSeqParams(self, dev):
+    def updateSeqParams(self, dev='protocol'):
         """Update the list of available sequence parameters."""
-        if dev not in self.currentProtocol.enabledDevices():
+        if dev == 'protocol':
+            rep = self.stateGroup.state()['repetitions']
+            if rep == 0:
+                params = {}
+            else:
+                params = {('protocol', 'repetitions'): rep}
+        elif dev not in self.currentProtocol.enabledDevices():
             return
-        params = self.docks[dev].widget().listSequence()
+        else:
+            params = self.docks[dev].widget().listSequence()
         # Catalog the parameters that already exist for this device:
         items = {}
         for i in self.ui.sequenceParamList.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0):
@@ -630,7 +640,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         #print "got frame", frame
         for d in frame['result']:
             if d != 'protocol':
-                self.docks[d].widget().handleResult(frame['result'][d])
+                self.docks[d].widget().handleResult(frame['result'][d], frame['params'])
                 
         ## If this is a single-mode protocol and looping is turned on, schedule the next run
         if self.loopEnabled:

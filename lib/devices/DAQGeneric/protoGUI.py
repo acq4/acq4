@@ -74,7 +74,7 @@ class DAQGenericProtoGui(ProtocolGui):
         #print p
         return p
         
-    def handleResult(self, result):
+    def handleResult(self, result, params):
         #print "handling result:", result
         if result is None:
             return

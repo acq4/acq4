@@ -144,5 +144,5 @@ class ProtocolGui(QtGui.QWidget):
             params = {}
         return {}
         
-    def handleResult(self, result):
+    def handleResult(self, result, params):
         pass

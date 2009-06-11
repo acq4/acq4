@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Sat Jun 06 17:23:04 2009
-#      by: PyQt4 UI code generator 4.4.3
+# Created: Thu Jun 11 15:11:42 2009
+#      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -118,6 +118,12 @@ class Ui_Form(object):
         self.waveGeneratorWidget.setSizePolicy(sizePolicy)
         self.waveGeneratorWidget.setObjectName("waveGeneratorWidget")
         self.verticalLayout.addWidget(self.waveGeneratorWidget)
+        self.horizontalLayout_3 = QtGui.QHBoxLayout()
+        self.horizontalLayout_3.setObjectName("horizontalLayout_3")
+        self.displayAverageCheck = QtGui.QCheckBox(self.frame)
+        self.displayAverageCheck.setObjectName("displayAverageCheck")
+        self.horizontalLayout_3.addWidget(self.displayAverageCheck)
+        self.verticalLayout.addLayout(self.horizontalLayout_3)
         self.verticalLayout_2.addWidget(self.frame)
         self.splitter = QtGui.QSplitter(self.splitter_2)
         self.splitter.setOrientation(QtCore.Qt.Vertical)
@@ -154,6 +160,10 @@ class Ui_Form(object):
         self.setScaledGainCheck.setText(QtGui.QApplication.translate("Form", "Set Gain", None, QtGui.QApplication.UnicodeUTF8))
         self.setRawGainCheck.setText(QtGui.QApplication.translate("Form", "Set Gain", None, QtGui.QApplication.UnicodeUTF8))
         self.waveGeneratorLabel.setText(QtGui.QApplication.translate("Form", "Function (values in pA)", None, QtGui.QApplication.UnicodeUTF8))
+        self.displayAverageCheck.setToolTip(QtGui.QApplication.translate("Form", "Plots the average of all recorded traces over\n"
+"sequence repetitions (you must use the\n"
+"\"Repetitions\" value in the sequence dock)", None, QtGui.QApplication.UnicodeUTF8))
+        self.displayAverageCheck.setText(QtGui.QApplication.translate("Form", "Display average", None, QtGui.QApplication.UnicodeUTF8))
 
 from lib.util.generator.StimGenerator import StimGenerator
 from PyQt4.Qwt5 import QwtPlot

@@ -31,15 +31,16 @@ class NiDAQ(Device):
     def getChannelValue(self, chan):
         self.reserve(block=True)
         #print "Setting channel %s to %f" % (chan, value)
-        if 'ao' in chan:
-            self.n.writeAnalogSample(chan, value)
+        if 'ai' in chan:
+            val = self.n.readAnalogSample(chan)
         else:
-            if value is True or value == 1:
-                value = 0xFFFFFFFF
+            val = self.n.readDigitalSample(chan)
+            if val <= 0:
+                val = 0
             else:
-                value = 0
-            self.n.writeDigitalSample(chan, value)
+                val = 1
         self.release()
+        return val
         
     def protocolInterface(self, prot):
         return NiDAQProto(self, prot)

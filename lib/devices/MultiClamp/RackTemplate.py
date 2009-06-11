@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'RackTemplate.ui'
 #
-# Created: Mon Apr 13 02:42:53 2009
+# Created: Thu Jun 11 15:11:42 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!

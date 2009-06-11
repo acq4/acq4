@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Sat Jun  6 19:33:57 2009
+# Created: Thu Jun 11 15:11:31 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -178,6 +178,14 @@ QMainWindow::separator {background-color: #666}""")
         self.seqCycleTimeSpin.setProperty("value", QtCore.QVariant(250))
         self.seqCycleTimeSpin.setObjectName("seqCycleTimeSpin")
         self.verticalLayout.addWidget(self.seqCycleTimeSpin)
+        self.label_11 = QtGui.QLabel(self.dockWidgetContents_7)
+        self.label_11.setObjectName("label_11")
+        self.verticalLayout.addWidget(self.label_11)
+        self.seqRepetitionSpin = QtGui.QSpinBox(self.dockWidgetContents_7)
+        self.seqRepetitionSpin.setMinimum(0)
+        self.seqRepetitionSpin.setMaximum(1000000)
+        self.seqRepetitionSpin.setObjectName("seqRepetitionSpin")
+        self.verticalLayout.addWidget(self.seqRepetitionSpin)
         spacerItem5 = QtGui.QSpacerItem(17, 18, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem5)
         self.label_2 = QtGui.QLabel(self.dockWidgetContents_7)
@@ -258,6 +266,7 @@ QMainWindow::separator {background-color: #666}""")
         self.SequenceDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Sequence", None, QtGui.QApplication.UnicodeUTF8))
         self.label_10.setText(QtGui.QApplication.translate("MainWindow", "Sequence Parameters", None, QtGui.QApplication.UnicodeUTF8))
         self.label_9.setText(QtGui.QApplication.translate("MainWindow", "Cycle Time (ms)", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_11.setText(QtGui.QApplication.translate("MainWindow", "Repetitions", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("MainWindow", "Parameter Space: ", None, QtGui.QApplication.UnicodeUTF8))
         self.paramSpaceLabel.setText(QtGui.QApplication.translate("MainWindow", "0", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("MainWindow", "Total time:", None, QtGui.QApplication.UnicodeUTF8))
