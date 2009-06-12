@@ -42,12 +42,16 @@ class Manager(QtCore.QObject):
         if not cfg.has_key('devices'):
             raise Exception('configuration file %s has no "devices" section.' % configFile)
         for k in cfg['devices']:
-            print "\n=== Configuring device %s ===" % k
-            conf = None
-            if cfg['devices'][k].has_key('config'):
-                conf = cfg['devices'][k]['config']
-            modName = cfg['devices'][k]['module']
-            self.loadDevice(modName, conf, k)
+            print "\n=== Configuring device '%s' ===" % k
+            try:
+                conf = None
+                if cfg['devices'][k].has_key('config'):
+                    conf = cfg['devices'][k]['config']
+                modName = cfg['devices'][k]['module']
+                self.loadDevice(modName, conf, k)
+            except:
+                print "Error configuring device %s:" % k
+                sys.excepthook(*sys.exc_info())
         if 'users' in cfg:
             user = 'Luke'
             self.conf = cfg['users'][user]

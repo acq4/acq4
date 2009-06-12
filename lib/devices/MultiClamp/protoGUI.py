@@ -19,7 +19,7 @@ class MultiClampProtoGui(ProtocolGui):
         self.avgPlots = {}
         
         self.cmdPlots = []
-        self.inpPlots = []
+        self.inpPlots = {}
         self.currentCmdPlot = None
         self.ui = Ui_Form()
         self.ui.setupUi(self)
@@ -114,12 +114,14 @@ class MultiClampProtoGui(ProtocolGui):
         self.cmdPlots = []
         
     def clearInpPlots(self):
-        for i in self.inpPlots:
-            i.detach()
-        self.inpPlots = []
+        for k in self.inpPlots:
+            for i in self.inpPlots[k]:
+                i.detach()
+        self.inpPlots = {}
         for i in self.avgPlots:
-            i.detach()
+            self.avgPlots[i].detach()
         self.avgPlots = {}
+        self.traces = {}
         
     def protoStarted(self, params):
         ## Draw green trace for current command waveform
@@ -243,28 +245,60 @@ class MultiClampProtoGui(ProtocolGui):
         c.setCurrentIndex(ind)
         
     def handleResult(self, result, params):
+        ## Is this result one of repeated trials?
+        params = params.copy()
+        repsRunning = ('protocol', 'repetitions') in params
+        
+        ## What is the total number of repeats?
+        reps = self.prot.getParam('repetitions')
+        if reps == 0:
+            reps = 1
+            
+        ## What is the current repetition number?
+        rep = 1
+        if repsRunning:
+            rep += params[('protocol', 'repetitions')]
+            del params[('protocol', 'repetitions')]
+        paramKey = tuple(params.items())
+            
+        #if repsRunning:
+            #plotColor = QtGui.QColor(255, 255, 255, int(255./rep))
+        #else:
+            #plotColor = QtGui.QColor(255, 255, 255, 200)
+        
+        if repsRunning and (reps > 1):
+            ## Add the results into the average plot if requested
+                
+            if self.stateGroup.state()['displayAverageCheck'] and repsRunning:
+                
+                if paramKey not in self.traces:
+                    self.traces[paramKey] = []
+                self.traces[paramKey].append(result)
+                
+                for k in self.traces:
+                    if k not in self.avgPlots:
+                        plot = Qwt.QwtPlotCurve('cell')
+                        plot.setPen(QtGui.QPen(QtGui.QColor(0, 255, 0)))
+                        plot.setZ(100)
+                        self.avgPlots[k] = plot
+                        plot.attach(self.ui.topPlotWidget)
+                    avgTrace = numpy.vstack([a['scaled'].view(ndarray) for a in self.traces[k]]).mean(axis=0)
+                    #print avgTrace.shape
+                    self.avgPlots[k].setData(self.traces[k][0].xvals('Time'), avgTrace)
+                
+        ## Plot the results
         plot = Qwt.QwtPlotCurve('cell')
-        plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         plot.setData(result.xvals('Time'), result['scaled'])
         plot.attach(self.ui.topPlotWidget)
-        self.inpPlots.append(plot)
+        if paramKey not in self.inpPlots:
+            self.inpPlots[paramKey] = []
+        self.inpPlots[paramKey].append(plot)
         
-        if self.stateGroup.state()['displayAverageCheck']:
-            params = params.copy()
-            if ('protocol', 'repetitions') in params:
-                del params[('protocol', 'repetitions')]
-            paramKey = tuple(params.items())
-            if paramKey not in self.traces:
-                self.traces[paramKey] = []
-            self.traces[paramKey].append(result)
-            
-            for k in self.traces:
-                if k not in self.avgPlots:
-                    plot = Qwt.QwtPlotCurve('cell')
-                    plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 250)))
-                    self.avgPlots[k] = plot
-                avgTrace = vstack([a.view(ndarray) for a in self.traces[k]])
-                self.avgPlots[k].setData(self.traces[k][0].xvals('Time'), avgTrace)
+        ## Update the color of all plots sharing this parameter set
+        alpha = 200 / len(self.inpPlots[paramKey])
+        for p in self.inpPlots[paramKey]:
+            p.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha)))
+        
         
         self.ui.topPlotWidget.replot()
         

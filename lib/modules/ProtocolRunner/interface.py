@@ -197,11 +197,11 @@ class ProtocolRunner(Module, QtCore.QObject):
     def updateSeqParams(self, dev='protocol'):
         """Update the list of available sequence parameters."""
         if dev == 'protocol':
-            rep = self.stateGroup.state()['repetitions']
+            rep = self.protoStateGroup.state()['repetitions']
             if rep == 0:
                 params = {}
             else:
-                params = {('protocol', 'repetitions'): rep}
+                params = {'repetitions': rep}
         elif dev not in self.currentProtocol.enabledDevices():
             return
         else:
@@ -213,6 +213,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         ## Add new sequence parameters, update old ones
         for p in params:
             if p not in items:
+                #print dev, p, params[p]
                 item = QtGui.QTreeWidgetItem([dev, p, str(params[p])])
                 item.setFlags(
                     QtCore.Qt.ItemIsSelectable | 
