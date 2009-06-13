@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Thu Jun 11 15:11:42 2009
+# Created: Sat Jun 13 13:27:04 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -14,10 +14,10 @@ class Ui_Form(object):
         Form.setObjectName("Form")
         Form.resize(809, 377)
         Form.setAutoFillBackground(True)
-        self.horizontalLayout = QtGui.QHBoxLayout(Form)
-        self.horizontalLayout.setSpacing(0)
-        self.horizontalLayout.setMargin(0)
-        self.horizontalLayout.setObjectName("horizontalLayout")
+        self.verticalLayout_3 = QtGui.QVBoxLayout(Form)
+        self.verticalLayout_3.setSpacing(0)
+        self.verticalLayout_3.setMargin(0)
+        self.verticalLayout_3.setObjectName("verticalLayout_3")
         self.splitter_2 = QtGui.QSplitter(Form)
         self.splitter_2.setOrientation(QtCore.Qt.Horizontal)
         self.splitter_2.setObjectName("splitter_2")
@@ -128,21 +128,11 @@ class Ui_Form(object):
         self.splitter = QtGui.QSplitter(self.splitter_2)
         self.splitter.setOrientation(QtCore.Qt.Vertical)
         self.splitter.setObjectName("splitter")
-        self.topPlotWidget = QwtPlot(self.splitter)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.topPlotWidget.sizePolicy().hasHeightForWidth())
-        self.topPlotWidget.setSizePolicy(sizePolicy)
+        self.topPlotWidget = PlotWidget(self.splitter)
         self.topPlotWidget.setObjectName("topPlotWidget")
-        self.bottomPlotWidget = QwtPlot(self.splitter)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Preferred)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.bottomPlotWidget.sizePolicy().hasHeightForWidth())
-        self.bottomPlotWidget.setSizePolicy(sizePolicy)
+        self.bottomPlotWidget = PlotWidget(self.splitter)
         self.bottomPlotWidget.setObjectName("bottomPlotWidget")
-        self.horizontalLayout.addWidget(self.splitter_2)
+        self.verticalLayout_3.addWidget(self.splitter_2)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
@@ -166,4 +156,4 @@ class Ui_Form(object):
         self.displayAverageCheck.setText(QtGui.QApplication.translate("Form", "Display average", None, QtGui.QApplication.UnicodeUTF8))
 
 from lib.util.generator.StimGenerator import StimGenerator
-from PyQt4.Qwt5 import QwtPlot
+from lib.util.PlotWidget import PlotWidget

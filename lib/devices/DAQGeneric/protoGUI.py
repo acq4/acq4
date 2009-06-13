@@ -6,7 +6,8 @@ from DaqChannelGui import *
 from lib.devices.Device import ProtocolGui
 from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
-from PyQt4 import Qwt5 as Qwt
+#from PyQt4 import Qwt5 as Qwt
+from lib.util.PlotWidget import PlotWidget
 import numpy
 
 class DAQGenericProtoGui(ProtocolGui):
@@ -22,8 +23,12 @@ class DAQGenericProtoGui(ProtocolGui):
         ## Create plots and control widgets
         for ch in self.dev.config:
             conf = self.dev.config[ch]
-            p = Qwt.QwtPlot(self.ui.plotSplitter)
-            p.setMinimumHeight(100)
+            p = PlotWidget(self.ui.plotSplitter)
+            units = ''
+            if 'units' in conf:
+                units = ' (%s)' % conf['units']
+                
+            p.setAxisTitle(PlotWidget.yLeft, ch+units)
             self.plots[ch] = p
             
             if conf['type'] in ['ao', 'do']:

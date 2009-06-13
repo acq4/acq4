@@ -16,7 +16,7 @@
   <property name="autoFillBackground">
    <bool>true</bool>
   </property>
-  <layout class="QHBoxLayout" name="horizontalLayout">
+  <layout class="QVBoxLayout" name="verticalLayout_3">
    <property name="spacing">
     <number>0</number>
    </property>
@@ -218,22 +218,8 @@ sequence repetitions (you must use the
       <property name="orientation">
        <enum>Qt::Vertical</enum>
       </property>
-      <widget class="QwtPlot" name="topPlotWidget" native="true">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-      </widget>
-      <widget class="QwtPlot" name="bottomPlotWidget" native="true">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-      </widget>
+      <widget class="PlotWidget" name="topPlotWidget" native="true"/>
+      <widget class="PlotWidget" name="bottomPlotWidget" native="true"/>
      </widget>
     </widget>
    </item>
@@ -241,15 +227,15 @@ sequence repetitions (you must use the
  </widget>
  <customwidgets>
   <customwidget>
-   <class>QwtPlot</class>
-   <extends>QWidget</extends>
-   <header>PyQt4.Qwt5</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
    <class>StimGenerator</class>
    <extends>QWidget</extends>
    <header>lib.util.generator.StimGenerator</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>PlotWidget</class>
+   <extends>QWidget</extends>
+   <header>lib.util.PlotWidget</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

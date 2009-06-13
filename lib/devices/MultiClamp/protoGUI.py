@@ -21,10 +21,13 @@ class MultiClampProtoGui(ProtocolGui):
         self.cmdPlots = []
         self.inpPlots = {}
         self.currentCmdPlot = None
+        
+        
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.stateGroup = WidgetGroup(self)
         self.ui.waveGeneratorWidget.setTimeScale(1e-3)
+        self.ui.topPlotWidget.enableAxis(PlotWidget.xBottom, False)
         self.unitLabels = [self.ui.waveGeneratorLabel, self.ui.holdingCheck]
         self.modeSignalList = self.dev.listModeSignals()
         self.mode = None
@@ -44,9 +47,9 @@ class MultiClampProtoGui(ProtocolGui):
         #])
         
         self.daqChanged(daqUI.currentState())
-        for p in [self.ui.topPlotWidget, self.ui.bottomPlotWidget]:
-            p.setCanvasBackground(QtGui.QColor(0,0,0))
-            p.replot()
+        #for p in [self.ui.topPlotWidget, self.ui.bottomPlotWidget]:
+            #p.setCanvasBackground(QtGui.QColor(0,0,0))
+            #p.plot()
         QtCore.QObject.connect(daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
         QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
@@ -139,7 +142,7 @@ class MultiClampProtoGui(ProtocolGui):
         plot.attach(self.ui.bottomPlotWidget)
         self.cmdPlots.append(plot)
         if replot:
-            self.ui.bottomPlotWidget.replot()
+            self.ui.bottomPlotWidget.plot()
         return plot
         
     def generateProtocol(self, params=None):
@@ -217,14 +220,18 @@ class MultiClampProtoGui(ProtocolGui):
                 newUnit = 'mV'
                 oldUnit = 'pA'
                 self.cmdScale = 1e-3
+                self.inpScale = 1e-12
             else:
                 newUnit = 'pA'
                 oldUnit = 'mV'
                 self.cmdScale = 1e-12
+                self.inpScale = 1e-3
             self.stateGroup.setScale(self.ui.holdingSpin, 1./self.cmdScale)
             for l in self.unitLabels:
                 text = str(l.text())
                 l.setText(text.replace(oldUnit, newUnit))
+            self.ui.topPlotWidget.setAxisTitle(PlotWidget.yLeft, oldUnit)
+            self.ui.bottomPlotWidget.setAxisTitle(PlotWidget.yLeft, newUnit)
                 
             ## Hide stim plot for I=0 mode
             if mode == 'I=0':
@@ -245,6 +252,7 @@ class MultiClampProtoGui(ProtocolGui):
         c.setCurrentIndex(ind)
         
     def handleResult(self, result, params):
+
         ## Is this result one of repeated trials?
         params = params.copy()
         repsRunning = ('protocol', 'repetitions') in params
@@ -284,11 +292,11 @@ class MultiClampProtoGui(ProtocolGui):
                         plot.attach(self.ui.topPlotWidget)
                     avgTrace = numpy.vstack([a['scaled'].view(ndarray) for a in self.traces[k]]).mean(axis=0)
                     #print avgTrace.shape
-                    self.avgPlots[k].setData(self.traces[k][0].xvals('Time'), avgTrace)
+                    self.avgPlots[k].setData(self.traces[k][0].xvals('Time'), avgTrace / self.inpScale)
                 
         ## Plot the results
         plot = Qwt.QwtPlotCurve('cell')
-        plot.setData(result.xvals('Time'), result['scaled'])
+        plot.setData(result.xvals('Time'), result['scaled'] / self.inpScale)
         plot.attach(self.ui.topPlotWidget)
         if paramKey not in self.inpPlots:
             self.inpPlots[paramKey] = []
@@ -300,5 +308,5 @@ class MultiClampProtoGui(ProtocolGui):
             p.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha)))
         
         
-        self.ui.topPlotWidget.replot()
+        self.ui.topPlotWidget.plot()
         

@@ -118,16 +118,28 @@ class MetaArray(ndarray):
             meta = eval(meta)
       
             ## read in axis values
+            dynAxis = None
+            frameSize = 1
             for ax in meta['info']:
                 if ax.has_key('values_len'):
-                    ax['values'] = fromstring(fd.read(ax['values_len']), dtype=ax['values_type'])
-                    del ax['values_len']
-                    del ax['values_type']
-      
-            subarr = fromstring(fd.read(), dtype=meta['type'])
-            subarr = subarr.view(subtype)
-            subarr.shape = meta['shape']
-            subarr._info = meta['info']
+                    if ax['values_len'] == 'dynamic':
+                        dynAxis = ax
+                    else:
+                        ax['values'] = fromstring(fd.read(ax['values_len']), dtype=ax['values_type'])
+                        frameSize *= ax['values_len']
+                        del ax['values_len']
+                        del ax['values_type']
+                        
+            ## No axes are dynamic, just read the entire array in at once
+            if dynAxis is None:
+                subarr = fromstring(fd.read(), dtype=meta['type'])
+                subarr = subarr.view(subtype)
+                subarr.shape = meta['shape']
+                subarr._info = meta['info']
+            ## One axis is dynamic, read in a frame at a time
+            else:
+                xVals = []
+                frames = []
 
         return subarr
 
