@@ -58,7 +58,14 @@ class PVCam(Device):
     def protocolInterface(self, prot):
         return PVCamProto(self, prot)
         
-
+    def setParam(self, param, val):
+        r = self.acqThread.isRunning()
+        if r: 
+            self.acqThread.stop(block=True)
+        self.cam.setParam(param, val)
+        if r: 
+            self.acqThread.start()
+        
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):

@@ -28,20 +28,36 @@ class _CameraClass:
         self.pvcam.pl_cam_open(c_char_p(self.name), byref(self.hCam), OPEN_EXCLUSIVE)
         self.isOpen = True
 
-    def initCam(self):
+    def initCam(self, params=None):
+        if params is None:
+            params = {
+                'READOUT_PORT': 0,  ## Only option for Q57, fastest for QuantEM
+                #'SPDTAB_INDEX': 2,  ## Fastest option for Q57
+                'SPDTAB_INDEX': 0,  ## Fastest option for QM512
+                'GAIN_INDEX': 3,
+                'PMODE': PMODE_NORMAL,  ## PMODE_FT ?
+                'SHTR_OPEN_MODE': OPEN_PRE_SEQUENCE,
+                'CLEAR_MODE': CLEAR_PRE_EXPOSURE,
+                #'CLEAR_MODE': CLEAR_PRE_SEQUENCE,  ## Overlapping mode for QuantEM cameras
+                'CLEAR_CYCLES': 2,
+            }
+        
+        self.setParams(params)
+            
         ## This stuff should be moved out to separate functions..
         ##   - PARAM_BIT_DEPTH, PARAM_PIX_TIME, and PARAM_GAIN_INDEX(ATTR_MAX)
         ##     are determined by setting PARAM_READOUT_PORT and PARAM_SPDTAB_INDEX 
         ##   - PARAM_GAIN_INDEX must be set AFTER setting PARAM_SPDTAB_INDEX
-        self.setParam(PARAM_READOUT_PORT, 0)  ## Only option for Q57
-        #self.setParam(PARAM_SPDTAB_INDEX, 2)  ## Fastest option for Q57
-        self.setParam(PARAM_SPDTAB_INDEX, 0)  ## Fastest option for QM512
-        self.setParam(PARAM_GAIN_INDEX, 3)
-        self.setParam(PARAM_PMODE, PMODE_NORMAL)  ## PMODE_FT ?
-        self.setParam(PARAM_SHTR_OPEN_MODE, OPEN_PRE_SEQUENCE)
-        #self.setParam(PARAM_CLEAR_MODE, CLEAR_PRE_EXPOSURE)
-        self.setParam(PARAM_CLEAR_MODE, CLEAR_PRE_SEQUENCE)  ## Overlapping mode for QuantEM cameras
-        self.setParam(PARAM_CLEAR_CYCLES, 2)
+
+        #self.setParam(PARAM_READOUT_PORT, 0)  ## Only option for Q57
+        ##self.setParam(PARAM_SPDTAB_INDEX, 2)  ## Fastest option for Q57
+        #self.setParam(PARAM_SPDTAB_INDEX, 0)  ## Fastest option for QM512
+        #self.setParam(PARAM_GAIN_INDEX, 3)
+        #self.setParam(PARAM_PMODE, PMODE_NORMAL)  ## PMODE_FT ?
+        #self.setParam(PARAM_SHTR_OPEN_MODE, OPEN_PRE_SEQUENCE)
+        ##self.setParam(PARAM_CLEAR_MODE, CLEAR_PRE_EXPOSURE)
+        #self.setParam(PARAM_CLEAR_MODE, CLEAR_PRE_SEQUENCE)  ## Overlapping mode for QuantEM cameras
+        #self.setParam(PARAM_CLEAR_CYCLES, 2)
         
     #def listTransferModes(self):
         #return self.getEnumList(PARAM_PMODE)[0]
@@ -72,6 +88,10 @@ class _CameraClass:
             raise Exception("Invalid value for %s" % paramName(param))
         self.setParam(param, l[1][val])
         
+    self.setParams(self, params):
+        for p in params:
+            self.setParam(p, params[p])
+
 
     def close(self):
         if self.isOpen:
@@ -209,6 +229,12 @@ class _CameraClass:
         
     def setParam(self, param, value, autoClip=False, autoQuantize=False, checkValue=True):
         ## Make sure parameter exists on this hardware and is writable
+        if type(value) is str:
+            if value in self.pvcam.defs:
+                value = self.pvcam.defs[value]
+            else:
+                raise Exception("Unrecognized value '%s'" % value)
+        
         param = self.pvcam.param(param)
         self._assertParamWritable(param)
 
@@ -266,6 +292,11 @@ class _CameraClass:
         self._assertParamAvailable(param)
         return self._getParam(param, ATTR_TYPE)
 
+    def getParamTypeName(self, param):
+        param = self.pvcam.param(param)
+        typ = self.getParamType(param)
+        return self.pvcam.typeName(typ)
+
     def getEnumList(self, param):
         param = self.pvcam.param(param)
         self._assertParamAvailable(param)
@@ -283,7 +314,7 @@ class _CameraClass:
           self.pvcam.pl_get_enum_param(self.hCam, param, ind, byref(val), byref(strn), slen)
           names.append(strn.value)
           vals.append(val.value)
-        return [names, vals]
+        return (names, vals)
 
 
     def _assertCameraOpen(self):

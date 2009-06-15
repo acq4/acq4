@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Sun May  3 17:31:32 2009
+# Created: Mon Jun 15 15:25:58 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!

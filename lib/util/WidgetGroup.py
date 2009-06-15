@@ -43,6 +43,10 @@ class WidgetGroup(QtCore.QObject):
             ('changed',
             StimGenerator.saveState,
             StimGenerator.loadState),
+        QtGui.QComboBox:
+            ('currentIndexChanged(int)',
+            lambda w: int(w.itemData(w.currentIndex())),
+            lambda w,v: w.setCurrentIndex(w.findData(QtCore.QVariant(v)))
     }
     
     
@@ -122,6 +126,8 @@ class WidgetGroup(QtCore.QObject):
         val = getFunc(w)
         if self.scales[w] is not None:
             val /= self.scales[w]
+        if isinstance(val, QtCore.QString):
+            val = str(val)
         n = self.widgetList[w]
         self.cache[n] = val
         return val

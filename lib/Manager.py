@@ -47,8 +47,8 @@ class Manager(QtCore.QObject):
                 conf = None
                 if cfg['devices'][k].has_key('config'):
                     conf = cfg['devices'][k]['config']
-                modName = cfg['devices'][k]['module']
-                self.loadDevice(modName, conf, k)
+                driverName = cfg['devices'][k]['driver']
+                self.loadDevice(driverName, conf, k)
             except:
                 print "Error configuring device %s:" % k
                 sys.excepthook(*sys.exc_info())
@@ -67,9 +67,9 @@ class Manager(QtCore.QObject):
     def __del__(self):
         self.quit()
     
-    def loadDevice(self, modName, conf, name):
-        mod = __import__('lib.devices.%s.interface' % modName, fromlist=['*'])
-        devclass = getattr(mod, modName)
+    def loadDevice(self, driverName, conf, name):
+        mod = __import__('lib.devices.%s.interface' % driverName, fromlist=['*'])
+        devclass = getattr(mod, driverName)
         self.devices[name] = devclass(self, conf, name)
         return self.devices[name]
     
