@@ -43,23 +43,23 @@ class _CameraClass:
         self.setParam(PARAM_CLEAR_MODE, CLEAR_PRE_SEQUENCE)  ## Overlapping mode for QuantEM cameras
         self.setParam(PARAM_CLEAR_CYCLES, 2)
         
-    def listTransferModes(self):
-        return self.getEnumList(PARAM_PMODE)[0]
+    #def listTransferModes(self):
+        #return self.getEnumList(PARAM_PMODE)[0]
         
-    def setTransferMode(self, mode):
-        self.setEnum(PARAM_PMODE, mode)
+    #def setTransferMode(self, mode):
+        #self.setEnum(PARAM_PMODE, mode)
 
-    def getTransferMode(self):
-        return self.getEnum(PARAM_PMODE)
+    #def getTransferMode(self):
+        #return self.getEnum(PARAM_PMODE)
         
-    def listShutterModes(self):
-        return self.getEnumList(PARAM_SHTR_OPEN_MODE)[0]
+    #def listShutterModes(self):
+        #return self.getEnumList(PARAM_SHTR_OPEN_MODE)[0]
         
-    def setShutterMode(self, mode):
-        self.setEnum(PARAM_SHTR_OPEN_MODE, mode)
+    #def setShutterMode(self, mode):
+        #self.setEnum(PARAM_SHTR_OPEN_MODE, mode)
 
-    def getShutterMode(self):
-        return self.getEnum(PARAM_SHTR_OPEN_MODE)
+    #def getShutterMode(self):
+        #return self.getEnum(PARAM_SHTR_OPEN_MODE)
         
     def getEnum(self, param):
         l = self.getEnumList(param)
@@ -196,13 +196,20 @@ class _CameraClass:
             self.pvcam.pl_exp_stop_cont(self.hCam, CCS_CLEAR_CLOSE_SHTR)
         self.mode = 0
 
+    def listParams(self):
+        p = self.pvcam.listParams()
+        p = filter(self.paramAvailable, p)
+        return p
+
     def getParam(self, param):
         ## Make sure parameter exists on this hardware and is writable
+        param = self.pvcam.param(param)
         self._assertParamReadable(param)
         return self._getParam(param, ATTR_CURRENT)
         
     def setParam(self, param, value, autoClip=False, autoQuantize=False, checkValue=True):
         ## Make sure parameter exists on this hardware and is writable
+        param = self.pvcam.param(param)
         self._assertParamWritable(param)
 
         ## Determine the parameter type
@@ -244,6 +251,7 @@ class _CameraClass:
         self.pvcam.pl_set_param(self.hCam, param, byref(val))
 
     def getParamRange(self, param):
+        param = self.pvcam.param(param)
         self._assertParamAvailable(param)
         typ = self.getParamType(param)
 
@@ -254,10 +262,12 @@ class _CameraClass:
         return (minval, maxval, stepval)
 
     def getParamType(self, param):
+        param = self.pvcam.param(param)
         self._assertParamAvailable(param)
         return self._getParam(param, ATTR_TYPE)
 
     def getEnumList(self, param):
+        param = self.pvcam.param(param)
         self._assertParamAvailable(param)
         if self.getParamType(param) != TYPE_ENUM:
           raise Exception('Parameter is not enum type.')
@@ -275,11 +285,13 @@ class _CameraClass:
           vals.append(val.value)
         return [names, vals]
 
+
     def _assertCameraOpen(self):
         if not self.isOpen:
             raise Exception("Camera is not open.")
     
     def paramAvailable(self, param):
+        param = self.pvcam.param(param)
         self._assertCameraOpen()
         return self._getParam(param, ATTR_AVAIL) > 0
     
@@ -288,6 +300,7 @@ class _CameraClass:
             raise Exception("Parameter is not available.")
         
     def _assertParamWritable(self, param):
+        param = self.pvcam.param(param)
         self._assertParamAvailable(param)
         access = self._getParam(param, ATTR_ACCESS)
         if access in [ACC_EXIST_CHECK_ONLY, ACC_READ_ONLY]:
@@ -296,6 +309,7 @@ class _CameraClass:
             raise Exception("Unknown access check value!")
 
     def _assertParamReadable(self, param):
+        param = self.pvcam.param(param)
         self._assertParamAvailable(param)
         access = self._getParam(param, ATTR_ACCESS)
         if access in [ACC_EXIST_CHECK_ONLY, ACC_WRITE_ONLY]:
@@ -322,17 +336,19 @@ class _CameraClass:
 
     
 class _PVCamClass:
+    
+    PVCAM_CREATED = False
+    
     def __init__(self):
         self.cams = {}
         self.pvcam = windll.Pvcam32
-        global PVCAM_CREATED
-        if PVCAM_CREATED:
+        if _PVCamClass.PVCAM_CREATED:
             raise Exception("Will not create another pvcam instance--use the pre-existing PVCam object.")
         if self.pvcam.pl_pvcam_init() < 1:
             raise Exception("Could not initialize pvcam library (pl_pvcam_init): %s" % self.error())
         if self.pvcam.pl_exp_init_seq() < 1:
             raise Exception("Could not initialize pvcam library (pl_exp_init_seq): %s" % self.error())
-        PVCAM_CREATED = True
+        _PVCamClass.PVCAM_CREATED = True
 
     def listCameras(self):
         nCam = c_int()
@@ -384,6 +400,46 @@ class _PVCamClass:
         self.pvcam.pl_pvcam_uninit()
         PVCAM_CREATED = False
 
+    def param(self, pName):
+        if type(pName) is str:
+            pName = 'PARAM_'+pName
+            if pName in self.defs:
+                return self.defs[pName]
+            else:
+                raise Exception('No parameter named %s' % pName)
+        else:
+            return pName
+
+    def attr(self, pName):
+        if type(pName) is str:
+            pName = 'ATTR_'+pName
+            if pName in self.defs:
+                return self.defs[pName]
+            else:
+                raise Exception('No parameter named %s' % pName)
+        else:
+            return pName
+
+    def paramName(self, param):
+        for p in self.listParams():
+            if self.defs[p] == param:
+                return p
+
+    def attrName(self, attr):
+        for p in self.defs:
+            if p[:5] == 'ATTR_' and self.defs[p] == attr:
+                return p
+
+    def typeName(self, typ):
+        for p in self.defs:
+            if p[:5] == 'TYPE_' and self.defs[p] == typ:
+                return p
+
+    def listParams(self):
+        return [x[6:] for x in self.defs if x[:6] == 'PARAM_']
+        
+
+
 class Region(Structure):
     _fields_ = [
         ('s1', c_ushort),
@@ -419,6 +475,9 @@ def init():
     defs = cheader.getDefs(pvcam_header_files)
     global PVCam
     PVCam = _PVCamClass()
+    PVCam.defs = defs
+    
+    ## Export names to global level for easier use
     for k in defs:
         setattr(sys.modules[__name__], k, defs[k])
 
@@ -444,19 +503,5 @@ def mkCObj(typ, value=None):
     else:
         return typs[typ](value)
 
-def paramName(param):
-    for p in dir(__main__):
-        if p[:6] == 'PARAM_' and getattr(__main__, p) == param:
-            return p
-
-def attrName(attr):
-    for p in dir(__main__):
-        if p[:5] == 'ATTR_' and getattr(__main__, p) == attr:
-            return p
-
-def typeName(typ):
-    for p in dir(__main__):
-        if p[:5] == 'TYPE_' and getattr(__main__, p) == typ:
-            return p
 
 init()

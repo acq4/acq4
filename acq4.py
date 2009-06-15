@@ -25,7 +25,7 @@ print "Loading all modules.."
 #p2 = dm.loadModule(module='Patch', name='Patch1', config={'clampDev': 'Clamp2'})
 prm = dm.loadModule(module='ProtocolRunner', name='PR', config={'globalDir': os.path.abspath('config/protocols')})
 qtcam = dm.loadModule(module='Camera', name='Camera', config={'camDev': 'Camera'})
-#dm.loadModule(module='DataManager', name='DM', config={})
+dm.loadModule(module='DataManager', name='DM', config={})
 
 ## If running interactively, just return to the prompt and let python call the qt event loop for us.
 ## Otherwise, we need to run it ourselves:
