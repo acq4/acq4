@@ -39,7 +39,8 @@ class _CameraClass:
         self.setParam(PARAM_GAIN_INDEX, 3)
         self.setParam(PARAM_PMODE, PMODE_NORMAL)  ## PMODE_FT ?
         self.setParam(PARAM_SHTR_OPEN_MODE, OPEN_PRE_SEQUENCE)
-        self.setParam(PARAM_CLEAR_MODE, CLEAR_PRE_EXPOSURE)
+        #self.setParam(PARAM_CLEAR_MODE, CLEAR_PRE_EXPOSURE)
+        self.setParam(PARAM_CLEAR_MODE, CLEAR_PRE_SEQUENCE)  ## Overlapping mode for QuantEM cameras
         self.setParam(PARAM_CLEAR_CYCLES, 2)
         
     def listTransferModes(self):

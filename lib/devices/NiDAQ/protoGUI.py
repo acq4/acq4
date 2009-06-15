@@ -45,7 +45,7 @@ class NiDAQProto(ProtocolGui):
         self.updateNPts()
         state['numPts'] = self.nPts
         if self.ui.triggerDevList.currentIndex() > 0:
-            state['triggerDevice'] = self.ui.triggerDevList.currentText()
+            state['triggerDevice'] = str(self.ui.triggerDevList.currentText())
         return state
         
     def rateChanged(self):

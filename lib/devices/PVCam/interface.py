@@ -130,7 +130,9 @@ class Task(DeviceTask):
             times -= times[0]
             info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), data[0][1]]
             marr = MetaArray(arr, info=info)
+            #print "returning frames:", marr.shape
         else:
+            #print "returning no frames"
             marr = None
         
         return {'frames': marr, 'expose': expose}
@@ -153,7 +155,7 @@ class AcquireThread(QtCore.QThread):
         self.acqBuffer = None
         self.frameId = 0
         self.bufferTime = 5.0
-        self.ringSize = 20
+        self.ringSize = 15
         self.tasks = []
     
     def __del__(self):
@@ -207,6 +209,7 @@ class AcquireThread(QtCore.QThread):
         self.fps = None
         
         try:
+            #print self.ringSize, binning, exposure, region
             self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region)
             lastFrameTime = ptime.time() #time.clock()  # Use time.time() on Linux
             

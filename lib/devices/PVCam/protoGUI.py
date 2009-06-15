@@ -36,4 +36,7 @@ class PVCamProto(ProtocolGui):
     def handleResult(self, result, params):
         #print result
         if self.stateGroup.state()['display']:
-            self.ui.imageView.setImage(result['frames'])
+            if result['frames'] is None:
+                print "No images returned from camera protocol."
+            else:
+                self.ui.imageView.setImage(result['frames'])

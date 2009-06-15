@@ -136,6 +136,8 @@ class MultiClampProtoGui(ProtocolGui):
         self.currentCmdPlot = self.plotCmdWave(cur, color=QtGui.QColor(100, 200, 100))
         
     def plotCmdWave(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
+        if data is None:
+            return
         plot = Qwt.QwtPlotCurve('cell')
         plot.setPen(QtGui.QPen(color))
         plot.setData(self.timeVals, data)
