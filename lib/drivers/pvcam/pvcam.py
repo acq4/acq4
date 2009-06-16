@@ -88,7 +88,7 @@ class _CameraClass:
             raise Exception("Invalid value for %s" % paramName(param))
         self.setParam(param, l[1][val])
         
-    self.setParams(self, params):
+    def setParams(self, params):
         for p in params:
             self.setParam(p, params[p])
 
@@ -219,6 +219,10 @@ class _CameraClass:
     def listParams(self):
         p = self.pvcam.listParams()
         p = filter(self.paramAvailable, p)
+        rem = ['ADC_OFFSET']
+        for r in rem:
+            if r in p:
+                p.remove(r)
         return p
 
     def getParam(self, param):
@@ -329,6 +333,12 @@ class _CameraClass:
     def _assertParamAvailable(self, param):
         if not self.paramAvailable(param):
             raise Exception("Parameter is not available.")
+        
+    def paramWritable(self, param):
+        param = self.pvcam.param(param)
+        self._assertParamAvailable(param)
+        access = self._getParam(param, ATTR_ACCESS)
+        return access in [ACC_WRITE_ONLY, ACC_READ_WRITE]
         
     def _assertParamWritable(self, param):
         param = self.pvcam.param(param)

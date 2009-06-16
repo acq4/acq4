@@ -16,7 +16,7 @@ if len(sys.argv) > 1:
 config = os.path.abspath(config)
 
 dm = Manager(config)
-#dm.showDeviceRack()
+dm.showDeviceRack()
 
 dm.setCurrentDir('junk')
 

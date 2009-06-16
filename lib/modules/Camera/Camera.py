@@ -161,8 +161,8 @@ class PVCamera(QtGui.QMainWindow):
         QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('started()'), self.acqThreadStarted)
         QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('showMessage'), self.showMessage)
         QtCore.QObject.connect(self.gv, QtCore.SIGNAL("sceneMouseMoved(PyQt_PyObject)"), self.setMouse)
-        QtCore.QObject.connect(self.ui.comboTransferMode, QtCore.SIGNAL('currentIndexChanged(int)'), self.setTransferMode)
-        QtCore.QObject.connect(self.ui.comboShutterMode, QtCore.SIGNAL('currentIndexChanged(int)'), self.setShutterMode)
+        #QtCore.QObject.connect(self.ui.comboTransferMode, QtCore.SIGNAL('currentIndexChanged(int)'), self.setTransferMode)
+        #QtCore.QObject.connect(self.ui.comboShutterMode, QtCore.SIGNAL('currentIndexChanged(int)'), self.setShutterMode)
         QtCore.QObject.connect(self.ui.btnDivideBackground, QtCore.SIGNAL('clicked()'), self.divideClicked)
         
         QtCore.QObject.connect(self.ui.btnAddROI, QtCore.SIGNAL('clicked()'), self.addROI)
@@ -270,25 +270,25 @@ class PVCamera(QtGui.QMainWindow):
         #print "Exiting."
 
         
-    def setTransferMode(self, mode):
-        acq = self.acquireThread.isRunning()
-        if acq:
-            self.acquireThread.stop()
-            self.acquireThread.wait()
-        self.cam.setTransferMode(mode)
-        self.ui.comboTransferMode.setCurrentIndex(self.cam.getTransferMode())
-        if acq:
-            self.acquireThread.start()
+    #def setTransferMode(self, mode):
+        #acq = self.acquireThread.isRunning()
+        #if acq:
+            #self.acquireThread.stop()
+            #self.acquireThread.wait()
+        #self.cam.setTransferMode(mode)
+        #self.ui.comboTransferMode.setCurrentIndex(self.cam.getTransferMode())
+        #if acq:
+            #self.acquireThread.start()
         
-    def setShutterMode(self, mode):
-        acq = self.acquireThread.isRunning()
-        if acq:
-            self.acquireThread.stop()
-            self.acquireThread.wait()
-        self.cam.setShutterMode(mode)
-        self.ui.comboShutterMode.setCurrentIndex(self.cam.getShutterMode())
-        if acq:
-            self.acquireThread.start()
+    #def setShutterMode(self, mode):
+        #acq = self.acquireThread.isRunning()
+        #if acq:
+            #self.acquireThread.stop()
+            #self.acquireThread.wait()
+        #self.cam.setShutterMode(mode)
+        #self.ui.comboShutterMode.setCurrentIndex(self.cam.getShutterMode())
+        #if acq:
+            #self.acquireThread.start()
 
     def setMouse(self, qpt=None):
         if qpt is None:
@@ -358,14 +358,14 @@ class PVCamera(QtGui.QMainWindow):
             #self.ui.spinRegionP2.setMinimum(1)
             self.setRegion()
             self.ui.statusbar.showMessage("Opened camera %s" % self.cam, 5000)
-            tmodes = self.cam.listTransferModes()
-            tmode = self.cam.getTransferMode()
-            self.ui.comboTransferMode.addItems(tmodes)
-            self.ui.comboTransferMode.setCurrentIndex(tmode)
-            smodes = self.cam.listShutterModes()
-            smode = self.cam.getShutterMode()
-            self.ui.comboShutterMode.addItems(smodes)
-            self.ui.comboShutterMode.setCurrentIndex(smode)
+            #tmodes = self.cam.listTransferModes()
+            #tmode = self.cam.getTransferMode()
+            #self.ui.comboTransferMode.addItems(tmodes)
+            #self.ui.comboTransferMode.setCurrentIndex(tmode)
+            #smodes = self.cam.listShutterModes()
+            #smode = self.cam.getShutterMode()
+            #self.ui.comboShutterMode.addItems(smodes)
+            #self.ui.comboShutterMode.setCurrentIndex(smode)
         except:
             self.ui.statusbar.showMessage("Error opening camera")
             raise

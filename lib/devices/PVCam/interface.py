@@ -6,6 +6,7 @@ import time, sys, traceback
 from numpy import *
 from lib.util.MetaArray import *
 from protoGUI import *
+from deviceGUI import *
 import lib.util.ptime as ptime
 
 class PVCam(Device):
@@ -15,6 +16,9 @@ class PVCam(Device):
         self.cam = None
         self.acqThread = AcquireThread(self)
         print "Created PVCam device. Cameras are:", self.pvc.listCameras()
+        
+        if 'params' in config:
+            self.getCamera().setParams(config['params'])
     
     def quit(self):
         if hasattr(self, 'acqThread') and self.acqThread.isRunning():
@@ -57,7 +61,10 @@ class PVCam(Device):
 
     def protocolInterface(self, prot):
         return PVCamProto(self, prot)
-        
+
+    def deviceInterface(self):
+        return PVCamDevGui(self)
+
     def setParam(self, param, val):
         r = self.acqThread.isRunning()
         if r: 

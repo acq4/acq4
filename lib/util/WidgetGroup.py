@@ -45,8 +45,8 @@ class WidgetGroup(QtCore.QObject):
             StimGenerator.loadState),
         QtGui.QComboBox:
             ('currentIndexChanged(int)',
-            lambda w: int(w.itemData(w.currentIndex())),
-            lambda w,v: w.setCurrentIndex(w.findData(QtCore.QVariant(v)))
+            lambda w: w.itemData(w.currentIndex()).toInt()[0],
+            lambda w,v: w.setCurrentIndex(w.findData(QtCore.QVariant(v))))
     }
     
     
