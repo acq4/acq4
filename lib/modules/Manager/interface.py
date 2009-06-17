@@ -24,6 +24,8 @@ class Manager(Module):
         
         QtCore.QObject.connect(self.ui.loadConfigBtn, QtCore.SIGNAL('clicked()'), self.loadConfig)
         QtCore.QObject.connect(self.ui.loadModuleBtn, QtCore.SIGNAL('clicked()'), self.loadModule)
+        QtCore.QObject.connect(self.ui.configList, QtCore.SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.loadConfig)
+        QtCore.QObject.connect(self.ui.moduleList, QtCore.SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.loadModule)
         QtCore.QObject.connect(self.ui.quitBtn, QtCore.SIGNAL('clicked()'), self.requestQuit)
         self.win.show()
         

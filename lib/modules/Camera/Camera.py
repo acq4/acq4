@@ -415,6 +415,7 @@ class PVCamera(QtGui.QMainWindow):
         self.ui.labelLevelMax.setText(str(self.levelMax))
         self.ui.labelLevelMid.setText(str((self.levelMax+self.levelMin) * 0.5)[:4])
         self.ui.labelLevelMin.setText(str(self.levelMin))
+        self.ui.sliderAvgLevel.setMaximum(2**self.bitDepth - 1)
         #self.updateFrame = True
         
     def getLevels(self):
