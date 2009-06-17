@@ -168,7 +168,7 @@ class _NIDAQ:
     def listPorts(self):
         ports = {'AI': [], 'AO': [], 'DOP': []}
 
-    def listAIChannels(self, dev):
+    def listAIChannels(self, dev=None):
         return self.GetDevAIPhysicalChans(dev).split(", ")
 
     def listAOChannels(self, dev):

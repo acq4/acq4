@@ -38,6 +38,27 @@ class PlotWidget(Qwt.QwtPlot):
         text.setFont(QtGui.QFont('Arial', 8))
         Qwt.QwtPlot.setAxisTitle(self, axis, text)
         
-        
-        
+    def plotMetaArray(self, arr):
+        self.clear()
+        inf = arr.infoCopy()
+
+        ## Set axis titles
+        titles = ['', '']
+        for i in [0,1]:
+            if 'name' in inf[i]:
+                titles[i] = inf[i]['name']
+            if 'units' in inf[i]:
+                titles[i] = titles[i] + ' (%s)' % inf[i]['units']
+        self.setAxisTitle(self.xBottom, titles[0])
+        self.setAxisTitle(self.yLeft, titles[1])
+
+        ## create curves
+        curves = []
+        for i in range(arr.shape[1]):
+            c = Qwt.QwtPlotCurve()
+            c.setData(arr.xVals(0), arr[:, i])
+            c.attach(self)
+            
+        self.plot()
+
         

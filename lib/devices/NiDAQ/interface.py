@@ -44,6 +44,10 @@ class NiDAQ(Device):
         
     def protocolInterface(self, prot):
         return NiDAQProto(self, prot)
+        
+    #def listTriggerPorts(self):
+        #p = self.n.listDILines()
+        #return [x for x in p if 'PFI' in x]
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
@@ -77,7 +81,7 @@ class Task(DeviceTask):
             self.st.setTrigger(trigger)
         elif 'triggerDevice' in self.cmd:
             tDev = self.dev.dm.getDevice(self.cmd['triggerDevice'])
-            self.st.setTrigger(tDev.getTriggerChannel())
+            self.st.setTrigger(tDev.getTriggerChannel(self.dev.name))
         #print "daq configure complete"
         
     def addChannel(self, *args, **kwargs):

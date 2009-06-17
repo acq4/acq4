@@ -168,7 +168,7 @@ class _CameraClass:
         return int(exp * 1000.)
         
 
-    def start(self, frames=None, exposure=None, region=None, binning=None):
+    def start(self, frames=None, exposure=None, region=None, binning=None, mode='Normal'):
         if self.mode != 0:
             raise Exception("Camera is not ready to start new acquisition")
         assert(frames > 0)
@@ -177,6 +177,9 @@ class _CameraClass:
         if region is None: region = self.region
         if binning is None: binning = self.binning
         if frames is None: frames = self.ringSize
+        tModes = self.listTriggerModes()
+        if mode not in tModes:
+            raise Exception('Trigger mode "%s" is invalid. Must be one of %s' % (mode, str(tModes.keys())))
         exp = self._parseExposure(exposure)
         
         ssize = c_uint()
@@ -184,7 +187,7 @@ class _CameraClass:
         rSize = rgn.size()
         self.frameSize = rSize[0] * rSize[1] * 2
         self.buf = numpy.empty((frames, rgn.size()[1], rgn.size()[0]), dtype=numpy.uint16)
-        self.pvcam.pl_exp_setup_cont(self.hCam, c_ushort(1), byref(rgn), TIMED_MODE, c_uint(exp), byref(ssize), CIRC_OVERWRITE)
+        self.pvcam.pl_exp_setup_cont(self.hCam, c_ushort(1), byref(rgn), tModes[mode], c_uint(exp), byref(ssize), CIRC_OVERWRITE)
         ssize = c_ulong(ssize.value*frames)
         if len(self.buf.data) != ssize.value:
             raise Exception('Created wrong size buffer! %d != %d' %(len(self.buf.data), ssize.value))
@@ -375,6 +378,13 @@ class _CameraClass:
         self.pvcam.pl_get_param(self.hCam, param, attr, byref(val))
         return val.value
 
+    def listTriggerModes(self):
+        return {
+            'Normal': TIMED_MODE,
+            'Trigger First': TRIGGER_FIRST_MODE,
+            'Strobed': STROBED_MODE,
+            'Bulb': BULB_MODE
+        }
     
 class _PVCamClass:
     

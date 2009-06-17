@@ -12,6 +12,20 @@ def splitterState(w):
     #print "%s: %d %s" % (w.objectName(), w.count(), str(s))
     return s
         
+def comboState(w):
+    ind = w.currentIndex()
+    data = w.itemData(ind)
+    if not data.isValid():
+        return w.itemText(ind)
+    else:
+        return data.toInt()[0]    
+    
+def setComboState(w, v):
+    if type(v) is int:
+        w.setCurrentIndex(w.findData(QtCore.QVariant(v)))    
+    elif type(v) is str:
+        w.setCurrentIndex(w.findText(v))
+        
 
 class WidgetGroup(QtCore.QObject):
     """This class takes a list of widgets and keeps an internal record of their state which is always up to date. Allows reading and writing from groups of widgets simultaneously."""
@@ -45,8 +59,8 @@ class WidgetGroup(QtCore.QObject):
             StimGenerator.loadState),
         QtGui.QComboBox:
             ('currentIndexChanged(int)',
-            lambda w: w.itemData(w.currentIndex()).toInt()[0],
-            lambda w,v: w.setCurrentIndex(w.findData(QtCore.QVariant(v))))
+            comboState,
+            setComboState)
     }
     
     

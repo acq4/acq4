@@ -525,7 +525,10 @@ class ProtocolRunner(Module, QtCore.QObject):
         try:
             self.currentDir = self.manager.getCurrentDir()
             if store:
-                dh = self.currentDir.mkdir(self.currentProtocol.name, autoIncrement=True, info=self.protocolInfo())
+                name = self.currentProtocol.name
+                if name is None:
+                    name = 'protocol'
+                dh = self.currentDir.mkdir(name, autoIncrement=True, info=self.protocolInfo())
             else:
                 dh = None
             
@@ -562,7 +565,10 @@ class ProtocolRunner(Module, QtCore.QObject):
             ## Set storage dir
             self.currentDir = self.manager.getCurrentDir()
             if store:
-                dh = self.currentDir.mkdir(self.currentProtocol.name, autoIncrement=True, info=self.protocolInfo(params))
+                name = self.currentProtocol.name
+                if name is None:
+                    name = 'protocol'
+                dh = self.currentDir.mkdir(name, autoIncrement=True, info=self.protocolInfo(params))
             else:
                 dh = None
             

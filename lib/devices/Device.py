@@ -86,6 +86,10 @@ class Device:
             print "WARNING: Failed to release device lock for %s" % self.name
             traceback.print_exception(sys.exc_info())
 
+    def getTriggerChannel(self, daq):
+        """Return the name of the channel on daq that this device raises when it starts.
+        Allows the DAQ to trigger off of this device."""
+        return None
 
 class DeviceTask:
     def __init__(self, dev, cmd):

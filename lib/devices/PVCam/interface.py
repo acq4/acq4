@@ -9,9 +9,11 @@ from protoGUI import *
 from deviceGUI import *
 import lib.util.ptime as ptime
 
+
 class PVCam(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
         self.pvc = PVCDriver
         self.cam = None
         self.acqThread = AcquireThread(self)
@@ -19,6 +21,14 @@ class PVCam(Device):
         
         if 'params' in config:
             self.getCamera().setParams(config['params'])
+            
+        if 'exposeChannel' in config:
+            ## create input channel in DAQGeneric
+            pass
+        if 'triggerInChannel' in config:
+            ## create output channel in DAQGeneric
+            pass
+            
     
     def quit(self):
         if hasattr(self, 'acqThread') and self.acqThread.isRunning():
@@ -27,9 +37,11 @@ class PVCam(Device):
         
         
     def devName(self):
+        l = QtCore.QMutexLocker(self.lock)
         return self.name
     
     def getCamera(self):
+        l = QtCore.QMutexLocker(self.lock)
         if self.cam is None:
             cams = self.pvc.listCameras()
             print "Cameras:", cams
@@ -48,16 +60,31 @@ class PVCam(Device):
         return self.cam
     
     def createTask(self, cmd):
+        l = QtCore.QMutexLocker(self.lock)
         return Task(self, cmd)
     
-    def getTriggerChannel(self):
+    def getTriggerChannel(self, daq):
+        l = QtCore.QMutexLocker(self.lock)
+        if not 'triggerChannel' in self.config:
+            return None
+        if self.config['triggerChannel'][0] != daq:
+            return None
         return self.config['triggerChannel'][1]
         
-    def startAcquire(self):
+    def startAcquire(self, params=None):
+        l = QtCore.QMutexLocker(self.lock)
+        if params is not None:
+            for p in params:
+                self.acqThread.setParam(p, params[p])
         self.acqThread.start()
         
     def stopAcquire(self, block=True):
+        l = QtCore.QMutexLocker(self.lock)
         self.acqThread.stop(block)
+
+    def isRunning(self):
+        l = QtCore.QMutexLocker(self.lock)
+        return self.acqThread.isRunning()
 
     def protocolInterface(self, prot):
         return PVCamProto(self, prot)
@@ -66,6 +93,7 @@ class PVCam(Device):
         return PVCamDevGui(self)
 
     def setParam(self, param, val):
+        l = QtCore.QMutexLocker(self.lock)
         r = self.acqThread.isRunning()
         if r: 
             self.acqThread.stop(block=True)
@@ -73,17 +101,29 @@ class PVCam(Device):
         if r: 
             self.acqThread.start()
         
+    def getParam(self, param):
+        l = QtCore.QMutexLocker(self.lock)
+        return self.cam.getParam(param)
+        
+    def listTriggerModes(self):
+        l = QtCore.QMutexLocker(self.lock)
+        return self.cam.listTriggerModes()
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
         self.recordHandle = None
+        self.stopAfter = False
         
         
     def configure(self, tasks, startOrder):
-        ## If we are triggering, stop acquisition now and request that we start after the DAQ
+        ## if the camera is being triggered by the daq, stop it now
+        if self.cmd['triggerMode'] != 'Normal':
+            self.dev.stopAcquire(block=True)  
+            
+        ## If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
         name = self.dev.devName()
-        if self.cmd['trigger']:
+        if self.cmd['triggerProtocol']:
             #print "Stopping camera before task start.."
             self.dev.stopAcquire(block=True)  
             #print "done"
@@ -93,7 +133,7 @@ class Task(DeviceTask):
             startOrder.insert(startOrder.index(daqName)+1, name)
             
         
-        ## If we are not triggering, request that we start before everyone else
+        ## If we are not triggering the daq, request that we start before everyone else
         ## (no need to stop, we will simply record frames as they are collected)
         else:
             startOrder.remove(name)
@@ -118,7 +158,8 @@ class Task(DeviceTask):
         ## arm recording
         self.recordHandle = self.dev.acqThread.startRecord()
         ## start acquisition if needed
-        self.dev.startAcquire()
+        self.stopAfter = (not self.dev.isRunning())
+        self.dev.startAcquire({'mode': self.cmd['triggerMode']})
         
     def isDone(self):
         ## should return false if recording is required to run for a specific time.
@@ -126,7 +167,10 @@ class Task(DeviceTask):
         
     def stop(self):
         self.recordHandle.stop()
-        
+        self.dev.stopAcquire()
+        if not self.stopAfter:
+            self.dev.startAcquire({'mode': 'Normal'})
+                
     def getResult(self):
         expose = None
         ## generate MetaArray of expose channel if it was recorded
@@ -163,7 +207,7 @@ class AcquireThread(QtCore.QThread):
         QtCore.QThread.__init__(self)
         self.dev = dev
         self.cam = self.dev.getCamera()
-        self.state = {'binning': 1, 'exposure': .001, 'region': None}
+        self.state = {'binning': 1, 'exposure': .001, 'region': None, 'mode': 'Normal'}
         self.stopThread = False
         self.lock = QtCore.QMutex()
         self.acqBuffer = None
@@ -213,6 +257,7 @@ class AcquireThread(QtCore.QThread):
         
         exposure = self.state['exposure']
         region = self.state['region']
+        mode = self.state['mode']
         lastFrame = None
         lastFrameTime = None
         #print "Lock for startup.."
@@ -224,7 +269,7 @@ class AcquireThread(QtCore.QThread):
         
         try:
             #print self.ringSize, binning, exposure, region
-            self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region)
+            self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region, mode=mode)
             lastFrameTime = ptime.time() #time.clock()  # Use time.time() on Linux
             
             loopCount = 0

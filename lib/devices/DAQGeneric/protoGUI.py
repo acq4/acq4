@@ -31,12 +31,14 @@ class DAQGenericProtoGui(ProtocolGui):
             p.setAxisTitle(PlotWidget.yLeft, ch+units)
             self.plots[ch] = p
             
+            
             if conf['type'] in ['ao', 'do']:
                 w = OutputChannelGui(self.ui.controlSplitter, ch, conf, p, dev, prot)
             elif conf['type'] in ['ai', 'di']:
                 w = InputChannelGui(self.ui.controlSplitter, ch, conf, p, dev, prot)
             else:
                 raise Exception("Unrecognized device type '%s'" % conf['type'])
+            w.ui.groupBox.setTitle(ch)
             self.channels[ch] = w
         
         self.stateGroup = WidgetGroup([
@@ -88,6 +90,7 @@ class DAQGenericProtoGui(ProtocolGui):
             #if ch not in result:
                 #print "  no result"
                 #continue
+            #print result.infoCopy()
             self.channels[ch].handleResult(result[ch])
             
             

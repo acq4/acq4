@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'DataManagerTemplate.ui'
 #
-# Created: Thu Jun  4 00:33:25 2009
+# Created: Tue Jun 16 11:31:05 2009
 #      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -120,6 +120,11 @@ class Ui_MainWindow(object):
         self.fileDisplayTabs.addTab(self.tab_4, "")
         self.tab_3 = QtGui.QWidget()
         self.tab_3.setObjectName("tab_3")
+        self.verticalLayout_7 = QtGui.QVBoxLayout(self.tab_3)
+        self.verticalLayout_7.setObjectName("verticalLayout_7")
+        self.dataViewWidget = FileDataView(self.tab_3)
+        self.dataViewWidget.setObjectName("dataViewWidget")
+        self.verticalLayout_7.addWidget(self.dataViewWidget)
         self.fileDisplayTabs.addTab(self.tab_3, "")
         self.tab_2 = QtGui.QWidget()
         self.tab_2.setObjectName("tab_2")
@@ -169,3 +174,4 @@ class Ui_MainWindow(object):
         self.logDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Current Log", None, QtGui.QApplication.UnicodeUTF8))
 
 from FileInfoView import FileInfoView
+from FileDataView import FileDataView

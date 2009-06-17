@@ -69,6 +69,15 @@ class PVCamera(QtGui.QMainWindow):
         QtGui.QMainWindow.__init__(self)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+        
+        ## Create device configuration dock 
+        dw = self.module.cam.deviceInterface()
+        dock = QtGui.QDockWidget(self)
+        dock.setFeatures(dock.DockWidgetMovable|dock.DockWidgetFloatable|dock.DockWidgetVerticalTitleBar)
+        dock.setWidget(dw)
+        self.addDockWidget(QtCore.Qt.TopDockWidgetArea, dock)
+        
+        
         self.recordThread = RecordThread(self, self.module.manager)
         self.recordThread.start()
         
@@ -421,6 +430,7 @@ class PVCamera(QtGui.QMainWindow):
 
     def toggleAcquire(self):
         if self.ui.btnAcquire.isChecked():
+            self.acquireThread.setParam('mode', 'Normal')
             self.acquireThread.start()
         else:
             self.toggleRecord(False)

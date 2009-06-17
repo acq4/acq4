@@ -92,5 +92,10 @@ class NiDAQProto(ProtocolGui):
         self.ui.triggerDevList.clear()
         self.ui.triggerDevList.addItem('No Trigger')
         for d in self.devs:
-            self.ui.triggerDevList.addItem(d)
+            dev = self.dev.dm.getDevice(d)
+            if dev.getTriggerChannel(self.dev.name) is not None:
+                self.ui.triggerDevList.addItem(d)
+        #for p in self.dev.listTriggerPorts():
+            #self.ui.triggerDevList.addItem(p)
+        ## Add list of triggerable port names here?
             

@@ -203,6 +203,11 @@
            <attribute name="title">
             <string>Data</string>
            </attribute>
+           <layout class="QVBoxLayout" name="verticalLayout_7">
+            <item>
+             <widget class="FileDataView" name="dataViewWidget" native="true"/>
+            </item>
+           </layout>
           </widget>
           <widget class="QWidget" name="tab_2">
            <attribute name="title">
@@ -254,6 +259,12 @@
    <class>FileInfoView</class>
    <extends>QWidget</extends>
    <header>FileInfoView</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>FileDataView</class>
+   <extends>QWidget</extends>
+   <header>FileDataView</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

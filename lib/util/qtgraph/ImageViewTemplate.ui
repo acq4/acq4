@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>296</width>
+    <width>757</width>
     <height>439</height>
    </rect>
   </property>
@@ -14,7 +14,7 @@
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="0" column="0">
+   <item row="0" column="0" rowspan="2">
     <widget class="GraphicsView" name="graphicsView" native="true"/>
    </item>
    <item row="0" column="1">
@@ -52,13 +52,6 @@
      </property>
     </widget>
    </item>
-   <item row="1" column="0">
-    <widget class="QSlider" name="timeSlider">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-    </widget>
-   </item>
    <item row="1" column="1">
     <widget class="QLabel" name="label">
      <property name="text">
@@ -70,6 +63,13 @@
     <widget class="QLabel" name="label_2">
      <property name="text">
       <string>W</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0" colspan="3">
+    <widget class="QSlider" name="timeSlider">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
      </property>
     </widget>
    </item>
