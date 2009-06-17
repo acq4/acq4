@@ -373,9 +373,12 @@ class Task:
         
     def getResult(self):
         
+        #print "get result"
         if not self.stopped:
+            #print "stopping tasks.."
             ## Stop all tasks
             for t in self.tasks:
+                #print "  stopping", t
                 self.tasks[t].stop()
             self.stopped = True
             

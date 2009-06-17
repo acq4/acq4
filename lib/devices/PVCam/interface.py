@@ -117,6 +117,9 @@ class Task(DeviceTask):
         
         
     def configure(self, tasks, startOrder):
+        ## Determine whether to restart acquisition after protocol
+        self.stopAfter = (not self.dev.isRunning())
+        
         ## if the camera is being triggered by the daq, stop it now
         if self.cmd['triggerMode'] != 'Normal':
             self.dev.stopAcquire(block=True)  
@@ -158,7 +161,7 @@ class Task(DeviceTask):
         ## arm recording
         self.recordHandle = self.dev.acqThread.startRecord()
         ## start acquisition if needed
-        self.stopAfter = (not self.dev.isRunning())
+        #print "stopAfter:", self.stopAfter
         self.dev.startAcquire({'mode': self.cmd['triggerMode']})
         
     def isDone(self):
@@ -166,10 +169,14 @@ class Task(DeviceTask):
         return True
         
     def stop(self):
+        #print "stop task"
         self.recordHandle.stop()
         self.dev.stopAcquire()
         if not self.stopAfter:
+            #print "restart camera"
             self.dev.startAcquire({'mode': 'Normal'})
+        #else:
+            #print "no restaRT"
                 
     def getResult(self):
         expose = None
