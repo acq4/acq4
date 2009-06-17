@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'PatchTemplate.ui'
 #
-# Created: Fri Jun 05 11:38:50 2009
+# Created: Wed Jun 17 09:55:56 2009
 #      by: PyQt4 UI code generator 4.4.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -122,11 +122,13 @@ class Ui_Form(object):
         self.label_7.setObjectName("label_7")
         self.gridLayout_2.addWidget(self.label_7, 8, 3, 1, 1)
         self.delayTimeSpin = QtGui.QDoubleSpinBox(self.groupBox_2)
+        self.delayTimeSpin.setMinimum(1.0)
         self.delayTimeSpin.setMaximum(10000.0)
         self.delayTimeSpin.setSingleStep(10.0)
         self.delayTimeSpin.setObjectName("delayTimeSpin")
         self.gridLayout_2.addWidget(self.delayTimeSpin, 7, 2, 1, 1)
         self.pulseTimeSpin = QtGui.QDoubleSpinBox(self.groupBox_2)
+        self.pulseTimeSpin.setMinimum(1.0)
         self.pulseTimeSpin.setMaximum(10000.0)
         self.pulseTimeSpin.setSingleStep(10.0)
         self.pulseTimeSpin.setObjectName("pulseTimeSpin")
@@ -237,7 +239,7 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
+        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Patch", None, QtGui.QApplication.UnicodeUTF8))
         self.startBtn.setText(QtGui.QApplication.translate("Form", "Start", None, QtGui.QApplication.UnicodeUTF8))
         self.recordPlot.setText(QtGui.QApplication.translate("Form", "Record", None, QtGui.QApplication.UnicodeUTF8))
         self.vcModeRadio.setText(QtGui.QApplication.translate("Form", "VC", None, QtGui.QApplication.UnicodeUTF8))

@@ -254,7 +254,7 @@ class PVCamera(QtGui.QMainWindow):
         #self.ui.txtStorageDir.setText(newDir)
 
     def showMessage(self, msg):
-        self.ui.statusbar.showMessage(msg)
+        self.ui.statusbar.showMessage(str(msg))
         
     def updateRegion(self, *args):
         self.clearFrameBuffer()

@@ -33,7 +33,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             (self.ui.seqCycleTimeSpin, 'cycleTime', 1e3),
             (self.ui.seqRepetitionSpin, 'repetitions', 1),
         ])
-        self.protocolList = DirTreeModel(self.config['globalDir'])
+        self.protocolList = DirTreeModel(self.manager.config['protocolDir'])
         self.ui.protocolList.setModel(self.protocolList)
         
         self.currentProtocol = None   ## pointer to current protocol object

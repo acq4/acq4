@@ -22,7 +22,7 @@ class DataManager(Module):
         self.baseDirChanged()
         self.currentDirChanged()
         self.selFile = None
-        
+        self.updateNewFolderList()
         
         
         ## Make all connections needed
@@ -33,6 +33,7 @@ class DataManager(Module):
         QtCore.QObject.connect(self.dialog, QtCore.SIGNAL('filesSelected(const QStringList)'), self.setBaseDir)
         QtCore.QObject.connect(self.manager, QtCore.SIGNAL('baseDirChanged'), self.baseDirChanged)
         QtCore.QObject.connect(self.manager, QtCore.SIGNAL('currentDirChanged'), self.currentDirChanged)
+        QtCore.QObject.connect(self.manager, QtCore.SIGNAL('configChanged'), self.updateNewFolderList)
         QtCore.QObject.connect(self.ui.newFolderList, QtCore.SIGNAL('currentIndexChanged(int)'), self.newFolder)
         QtCore.QObject.connect(self.ui.fileTreeView.selectionModel(), QtCore.SIGNAL('selectionChanged(const QItemSelection&, const QItemSelection&)'), self.fileSelectionChanged)
         QtCore.QObject.connect(self.ui.logEntryText, QtCore.SIGNAL('returnPressed()'), self.logEntry)
@@ -40,7 +41,9 @@ class DataManager(Module):
         self.win.show()
         
     def updateNewFolderList(self):
-        conf = self.manager.conf['folderTypes']
+        self.ui.newFolderList.clear()
+        conf = self.manager.config['folderTypes']
+        #print "folderTypes:", self.manager.config['folderTypes'].keys()
         self.ui.newFolderList.clear()
         self.ui.newFolderList.addItems(['New...', 'Folder'] + conf.keys())
         
@@ -49,7 +52,7 @@ class DataManager(Module):
         self.baseDir = dh
         self.ui.baseDirText.setText(QtCore.QString(dh.name()))
         self.model.setBaseDirHandle(dh)
-        self.currentDirChanged()
+        #self.currentDirChanged()
 
     def setCurrentClicked(self):
         handle = self.selectedFile()
@@ -114,7 +117,7 @@ class DataManager(Module):
         return self.model.handle(index)
 
     def newFolder(self):
-        if self.ui.newFolderList.currentIndex() == 0:
+        if self.ui.newFolderList.currentIndex() < 1:
             return
             
         ftype = str(self.ui.newFolderList.currentText())
@@ -126,7 +129,7 @@ class DataManager(Module):
             item = self.model.handleIndex(nd)
             self.ui.fileTreeView.edit(item)
         else:
-            spec = self.manager.conf['folderTypes'][ftype]
+            spec = self.manager.config['folderTypes'][ftype]
             name = time.strftime(spec['name'])
                 
             ## Determine where to put the new directory

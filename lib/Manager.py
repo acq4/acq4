@@ -27,11 +27,14 @@ class Manager(QtCore.QObject):
         atexit.register(self.quit)
         self.devices = {}
         self.modules = {}
-        self.devRack = None
+        self.config = {}
+        self.definedModules = {}
+        #self.devRack = None
         self.dataManager = DataManager()
         self.currentDir = None
         self.baseDir = None
         self.readConfig(configFile)
+        self.interface = None
         Manager.CREATED = True
         Manager.single = self
 
@@ -39,30 +42,82 @@ class Manager(QtCore.QObject):
         """Read configuration file, create device objects, add devices to list"""
         print "============= Starting Manager configuration from %s =================" % configFile
         cfg = configfile.readConfigFile(configFile)
-        if not cfg.has_key('devices'):
-            raise Exception('configuration file %s has no "devices" section.' % configFile)
-        for k in cfg['devices']:
-            print "\n=== Configuring device '%s' ===" % k
-            try:
-                conf = None
-                if cfg['devices'][k].has_key('config'):
-                    conf = cfg['devices'][k]['config']
-                driverName = cfg['devices'][k]['driver']
-                self.loadDevice(driverName, conf, k)
-            except:
-                print "Error configuring device %s:" % k
-                sys.excepthook(*sys.exc_info())
-        if 'users' in cfg:
-            user = 'Luke'
-            self.conf = cfg['users'][user]
-            baseDir = self.conf['storageDir']
-            self.setBaseDir(baseDir)
-            self.setCurrentDir('')
-        else:
-            raise Exception("No configuration found for data management!")
+        #self.config = cfg
+        
+        #if not cfg.has_key('devices'):
+            #raise Exception('configuration file %s has no "devices" section.' % configFile)
+            
+        ## read modules, devices, and stylesheet out of config
+        self.configure(cfg)
+        
+        #if 'configurations' in cfg:
+            #self.setCurrentDir('')
+        #else:
+            #raise Exception("No configuration found for data management!")
         print "\n============= Manager configuration complete =================\n"
+        
+    def configure(self, cfg):
+        """Load the devices, modules, stylesheet, and storageDir defined in cfg"""
+        
+        ## configure new devices
+        for key in cfg:
+            if key == 'devices':
+                for k in cfg['devices']:
+                    print "\n=== Configuring device '%s' ===" % k
+                    try:
+                        conf = None
+                        if cfg['devices'][k].has_key('config'):
+                            conf = cfg['devices'][k]['config']
+                        driverName = cfg['devices'][k]['driver']
+                        self.loadDevice(driverName, conf, k)
+                    except:
+                        print "Error configuring device %s:" % k
+                        sys.excepthook(*sys.exc_info())
+                        
+            ## Copy in new module definitions
+            elif key == 'modules':
+                for m in cfg['modules']:
+                    self.definedModules[m] = cfg['modules'][m]
+                    
+            ## set new storage directory
+            elif key == 'storageDir':
+                self.setBaseDir(cfg['storageDir'])
+            
+            ## Copy in any other configurations.
+            ## dicts are extended, all others are overwritten.
+            else:
+                if isinstance(cfg[key], dict):
+                    if key not in self.config:
+                        self.config[key] = {}
+                    for key2 in cfg[key]:
+                        self.config[key][key2] = cfg[key][key2]
+                else:
+                    self.config[key] = cfg[key]
+            
+            ### set new protocol directory
+            #if 'protocolDir' in cfg:
+                #self.config['protocolDir'] = cfg['protocolDir']
+                
+            ### copy in new folder type definitions
+            #if 'folderTypes' in cfg:
+                #if 'folderTypes' not in self.config:
+                    #self.config['folderTypes'] = {}
+                #for t in cfg['folderTypes']:
+                    #self.config['folderTypes'][t] = cfg['folderTypes'][t]
+            
+        #print self.config
+        self.emit(QtCore.SIGNAL('configChanged'))
 
+    def listConfigurations(self):
+        """Return a list of the named configurations available"""
+        if 'configurations' in self.config:
+            return self.config['configurations'].keys()
+        else:
+            return []
 
+    def loadDefinedConfig(self, name):
+        if name in self.config['configurations']:
+            self.configure(self.config['configurations'][name])
 
     def __del__(self):
         self.quit()
@@ -84,6 +139,7 @@ class Manager(QtCore.QObject):
         return self.devices.keys()
 
     def loadModule(self, module, name, config=None):
+        """Create a new instance of a module"""
         if config is None:
             config = {}
         mod = __import__('lib.modules.%s.interface' % module, fromlist=['*'])
@@ -92,10 +148,23 @@ class Manager(QtCore.QObject):
         return self.modules[name]
         
     def getModule(self, name):
+        """Return an already loaded module"""
         if name not in self.modules:
             raise Exception("No module named %s" % name)
         return self.modules[name]
         
+    def listDefinedModules(self):
+        """List module configurations defined in the config file"""
+        return self.definedModules.keys()
+            
+    def loadDefinedModule(self, name):
+        """Load a module and configure as defined in the config file"""
+        mod = self.definedModules[name]['module']
+        if 'config' in self.definedModules[name]:
+            conf = self.definedModules[name]['config']
+        else:
+            conf = {}
+        return self.loadModule(mod, name, conf)
     
     def runProtocol(self, cmd):
         t = Task(self, cmd)
@@ -105,20 +174,11 @@ class Manager(QtCore.QObject):
     def createTask(self, cmd):
         return Task(self, cmd)
 
+    def showInterface(self):
+        if self.interface is None:
+            self.interface = self.loadModule('Manager', 'Manager', {})
+        self.interface.show()
     
-    def showDeviceRack(self):
-        if self.devRack is None:
-            self.devRackDocks = {}
-            self.devRack = QtGui.QMainWindow()
-            for d in self.devices:
-                dw = self.devices[d].deviceInterface()
-                dock = QtGui.QDockWidget(d)
-                dock.setFeatures(dock.AllDockWidgetFeatures)
-                dock.setWidget(dw)
-                
-                self.devRackDocks[d] = dock
-                self.devRack.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
-        self.devRack.show()
     
     def getCurrentDir(self):
         if self.currentDir is None:
@@ -159,7 +219,9 @@ class Manager(QtCore.QObject):
             raise Exception("Invalid argument type: ", type(d), d)
         if not self.baseDir.isManaged():
             self.baseDir.createIndex()
+
         self.emit(QtCore.SIGNAL('baseDirChanged'))
+        self.setCurrentDir(self.baseDir)
 
     def dirHandle(self, d, create=False):
         """Return a directory handle for d."""
@@ -186,12 +248,20 @@ class Manager(QtCore.QObject):
         cd.logMsg(msg, tags)
 
     def quit(self):
-        """Nicely request that all devices shut down"""
+        """Nicely request that all devices and modules shut down"""
         if not self.alreadyQuit:
+            for m in self.modules:
+                self.modules[m].quit()
+                
             for d in self.devices:
                 print "Requesting %s quit.." % d
                 self.devices[d].quit()
+                
+            QtGui.QApplication.instance().closeAllWindows()
+            
             self.alreadyQuit = True
+        
+        
 
 
 class Task:

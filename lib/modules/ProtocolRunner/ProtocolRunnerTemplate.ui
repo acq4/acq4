@@ -1,8 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<ui version="4.0">
+<ui version="4.0" >
  <class>MainWindow</class>
- <widget class="QMainWindow" name="MainWindow">
-  <property name="geometry">
+ <widget class="QMainWindow" name="MainWindow" >
+  <property name="geometry" >
    <rect>
     <x>0</x>
     <y>0</y>
@@ -10,142 +9,142 @@
     <height>593</height>
    </rect>
   </property>
-  <property name="windowTitle">
-   <string>MainWindow</string>
+  <property name="windowTitle" >
+   <string>Protocol Runner</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true">QDockWidget::title { background-color: #446;}
+  <property name="styleSheet" >
+   <string notr="true" >QDockWidget::title { background-color: #446;}
 QSplitter::handle {background-color: #666}
 QMainWindow::separator {background-color: #666}</string>
   </property>
-  <property name="dockNestingEnabled">
+  <property name="dockNestingEnabled" >
    <bool>true</bool>
   </property>
-  <widget class="QWidget" name="centralwidget"/>
-  <widget class="QDockWidget" name="LoaderDock">
-   <property name="features">
+  <widget class="QWidget" name="centralwidget" />
+  <widget class="QDockWidget" name="LoaderDock" >
+   <property name="features" >
     <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetVerticalTitleBar</set>
    </property>
-   <property name="windowTitle">
+   <property name="windowTitle" >
     <string>Loader</string>
    </property>
-   <attribute name="dockWidgetArea">
+   <attribute name="dockWidgetArea" >
     <number>4</number>
    </attribute>
-   <widget class="QWidget" name="dockWidgetContents">
-    <layout class="QGridLayout">
-     <item row="1" column="1">
-      <widget class="QPushButton" name="newProtocolBtn">
-       <property name="text">
+   <widget class="QWidget" name="dockWidgetContents" >
+    <layout class="QGridLayout" >
+     <item row="1" column="1" >
+      <widget class="QPushButton" name="newProtocolBtn" >
+       <property name="text" >
         <string>New</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="1">
-      <widget class="QPushButton" name="loadProtocolBtn">
-       <property name="text">
+     <item row="2" column="1" >
+      <widget class="QPushButton" name="loadProtocolBtn" >
+       <property name="text" >
         <string>Load</string>
        </property>
       </widget>
      </item>
-     <item row="5" column="1">
-      <widget class="QPushButton" name="saveProtocolBtn">
-       <property name="enabled">
+     <item row="5" column="1" >
+      <widget class="QPushButton" name="saveProtocolBtn" >
+       <property name="enabled" >
         <bool>false</bool>
        </property>
-       <property name="text">
+       <property name="text" >
         <string>Save</string>
        </property>
       </widget>
      </item>
-     <item row="6" column="1">
-      <widget class="QPushButton" name="saveAsProtocolBtn">
-       <property name="enabled">
+     <item row="6" column="1" >
+      <widget class="QPushButton" name="saveAsProtocolBtn" >
+       <property name="enabled" >
         <bool>true</bool>
        </property>
-       <property name="text">
+       <property name="text" >
         <string>Save As..</string>
        </property>
       </widget>
      </item>
-     <item row="8" column="1">
-      <widget class="QPushButton" name="deleteProtocolBtn">
-       <property name="enabled">
+     <item row="8" column="1" >
+      <widget class="QPushButton" name="deleteProtocolBtn" >
+       <property name="enabled" >
         <bool>false</bool>
        </property>
-       <property name="text">
+       <property name="text" >
         <string>Delete</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="0" rowspan="8">
-      <widget class="QTreeView" name="protocolList">
-       <property name="acceptDrops">
+     <item rowspan="8" row="2" column="0" >
+      <widget class="QTreeView" name="protocolList" >
+       <property name="acceptDrops" >
         <bool>true</bool>
        </property>
-       <property name="editTriggers">
+       <property name="editTriggers" >
         <set>QAbstractItemView::SelectedClicked</set>
        </property>
-       <property name="dragEnabled">
+       <property name="dragEnabled" >
         <bool>true</bool>
        </property>
-       <property name="dragDropMode">
+       <property name="dragDropMode" >
         <enum>QAbstractItemView::InternalMove</enum>
        </property>
       </widget>
      </item>
-     <item row="1" column="0">
-      <widget class="QLabel" name="label_3">
-       <property name="text">
+     <item row="1" column="0" >
+      <widget class="QLabel" name="label_3" >
+       <property name="text" >
         <string>Protocols</string>
        </property>
-       <property name="alignment">
+       <property name="alignment" >
         <set>Qt::AlignCenter</set>
        </property>
       </widget>
      </item>
-     <item row="10" column="0" colspan="2">
-      <layout class="QHBoxLayout" name="horizontalLayout">
+     <item row="10" column="0" colspan="2" >
+      <layout class="QHBoxLayout" name="horizontalLayout" >
        <item>
-        <widget class="QLabel" name="label_5">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+        <widget class="QLabel" name="label_5" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Preferred" hsizetype="Preferred" >
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
-         <property name="text">
+         <property name="text" >
           <string>Current Protocol:</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QLabel" name="currentProtocolLabel">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
+        <widget class="QLabel" name="currentProtocolLabel" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Preferred" hsizetype="MinimumExpanding" >
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
-         <property name="font">
+         <property name="font" >
           <font>
            <weight>75</weight>
            <bold>true</bold>
           </font>
          </property>
-         <property name="text">
+         <property name="text" >
           <string/>
          </property>
         </widget>
        </item>
       </layout>
      </item>
-     <item row="3" column="1">
+     <item row="3" column="1" >
       <spacer>
-       <property name="orientation">
+       <property name="orientation" >
         <enum>Qt::Vertical</enum>
        </property>
-       <property name="sizeHint" stdset="0">
+       <property name="sizeHint" stdset="0" >
         <size>
          <width>20</width>
          <height>77</height>
@@ -153,12 +152,12 @@ QMainWindow::separator {background-color: #666}</string>
        </property>
       </spacer>
      </item>
-     <item row="7" column="1">
-      <spacer name="verticalSpacer">
-       <property name="orientation">
+     <item row="7" column="1" >
+      <spacer name="verticalSpacer" >
+       <property name="orientation" >
         <enum>Qt::Vertical</enum>
        </property>
-       <property name="sizeHint" stdset="0">
+       <property name="sizeHint" stdset="0" >
         <size>
          <width>20</width>
          <height>40</height>
@@ -169,88 +168,88 @@ QMainWindow::separator {background-color: #666}</string>
     </layout>
    </widget>
   </widget>
-  <widget class="QDockWidget" name="ProtocolDock">
-   <property name="enabled">
+  <widget class="QDockWidget" name="ProtocolDock" >
+   <property name="enabled" >
     <bool>true</bool>
    </property>
-   <property name="features">
+   <property name="features" >
     <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetVerticalTitleBar</set>
    </property>
-   <property name="windowTitle">
+   <property name="windowTitle" >
     <string>Protocol</string>
    </property>
-   <attribute name="dockWidgetArea">
+   <attribute name="dockWidgetArea" >
     <number>4</number>
    </attribute>
-   <widget class="QWidget" name="dockWidgetContents_5">
-    <layout class="QGridLayout" name="gridLayout">
-     <item row="0" column="0">
-      <widget class="QLabel" name="label">
-       <property name="text">
+   <widget class="QWidget" name="dockWidgetContents_5" >
+    <layout class="QGridLayout" name="gridLayout" >
+     <item row="0" column="0" >
+      <widget class="QLabel" name="label" >
+       <property name="text" >
         <string>Devices</string>
        </property>
-       <property name="alignment">
+       <property name="alignment" >
         <set>Qt::AlignCenter</set>
        </property>
       </widget>
      </item>
-     <item row="0" column="1" colspan="2">
-      <widget class="QCheckBox" name="protoContinuousCheck">
-       <property name="enabled">
+     <item row="0" column="1" colspan="2" >
+      <widget class="QCheckBox" name="protoContinuousCheck" >
+       <property name="enabled" >
         <bool>false</bool>
        </property>
-       <property name="toolTip">
+       <property name="toolTip" >
         <string>Protocol runs continuously without 
 gaps until stopped (not yet implemented).</string>
        </property>
-       <property name="text">
+       <property name="text" >
         <string>Continuous</string>
        </property>
       </widget>
      </item>
-     <item row="1" column="0" rowspan="5">
-      <widget class="QListWidget" name="deviceList"/>
+     <item rowspan="5" row="1" column="0" >
+      <widget class="QListWidget" name="deviceList" />
      </item>
-     <item row="1" column="1" colspan="2">
-      <widget class="QLabel" name="label_8">
-       <property name="text">
+     <item row="1" column="1" colspan="2" >
+      <widget class="QLabel" name="label_8" >
+       <property name="text" >
         <string>Duration (ms)</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="1" colspan="2">
-      <widget class="QLabel" name="label_6">
-       <property name="text">
+     <item row="2" column="1" colspan="2" >
+      <widget class="QLabel" name="label_6" >
+       <property name="text" >
         <string>Lead Time (ms)</string>
        </property>
       </widget>
      </item>
-     <item row="3" column="1">
-      <widget class="QCheckBox" name="protoLoopCheck">
-       <property name="toolTip">
+     <item row="3" column="1" >
+      <widget class="QCheckBox" name="protoLoopCheck" >
+       <property name="toolTip" >
         <string>Protocol will run repeatedly until stopped and 
 waits a minimum of Cycle Time between episodes.
 Not the same as continuous acquisition (there 
 will be a time gap between each recording).</string>
        </property>
-       <property name="text">
+       <property name="text" >
         <string>Loop</string>
        </property>
       </widget>
      </item>
-     <item row="4" column="1" colspan="2">
-      <widget class="QLabel" name="label_7">
-       <property name="text">
+     <item row="4" column="1" colspan="2" >
+      <widget class="QLabel" name="label_7" >
+       <property name="text" >
         <string>Cycle Time (ms)</string>
        </property>
       </widget>
      </item>
-     <item row="5" column="2">
+     <item row="5" column="2" >
       <spacer>
-       <property name="orientation">
+       <property name="orientation" >
         <enum>Qt::Vertical</enum>
        </property>
-       <property name="sizeHint" stdset="0">
+       <property name="sizeHint" stdset="0" >
         <size>
          <width>20</width>
          <height>91</height>
@@ -258,24 +257,24 @@ will be a time gap between each recording).</string>
        </property>
       </spacer>
      </item>
-     <item row="6" column="0" colspan="4">
-      <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <item row="6" column="0" colspan="4" >
+      <layout class="QHBoxLayout" name="horizontalLayout_2" >
        <item>
-        <widget class="QPushButton" name="testSingleBtn">
-         <property name="enabled">
+        <widget class="QPushButton" name="testSingleBtn" >
+         <property name="enabled" >
           <bool>true</bool>
          </property>
-         <property name="text">
+         <property name="text" >
           <string>Test</string>
          </property>
         </widget>
        </item>
        <item>
         <spacer>
-         <property name="orientation">
+         <property name="orientation" >
           <enum>Qt::Horizontal</enum>
          </property>
-         <property name="sizeHint" stdset="0">
+         <property name="sizeHint" stdset="0" >
           <size>
            <width>13</width>
            <height>20</height>
@@ -284,21 +283,21 @@ will be a time gap between each recording).</string>
         </spacer>
        </item>
        <item>
-        <widget class="QPushButton" name="runProtocolBtn">
-         <property name="enabled">
+        <widget class="QPushButton" name="runProtocolBtn" >
+         <property name="enabled" >
           <bool>true</bool>
          </property>
-         <property name="text">
+         <property name="text" >
           <string>Run Single</string>
          </property>
         </widget>
        </item>
        <item>
-        <spacer name="horizontalSpacer">
-         <property name="orientation">
+        <spacer name="horizontalSpacer" >
+         <property name="orientation" >
           <enum>Qt::Horizontal</enum>
          </property>
-         <property name="sizeHint" stdset="0">
+         <property name="sizeHint" stdset="0" >
           <size>
            <width>40</width>
            <height>20</height>
@@ -307,61 +306,61 @@ will be a time gap between each recording).</string>
         </spacer>
        </item>
        <item>
-        <widget class="QPushButton" name="stopSingleBtn">
-         <property name="text">
+        <widget class="QPushButton" name="stopSingleBtn" >
+         <property name="text" >
           <string>Stop Single</string>
          </property>
         </widget>
        </item>
       </layout>
      </item>
-     <item row="1" column="3">
-      <widget class="QSpinBox" name="protoDurationSpin">
-       <property name="toolTip">
+     <item row="1" column="3" >
+      <widget class="QSpinBox" name="protoDurationSpin" >
+       <property name="toolTip" >
         <string>Duration of stimulus/acquisition in the protocol.</string>
        </property>
-       <property name="maximum">
+       <property name="maximum" >
         <number>10000000</number>
        </property>
-       <property name="singleStep">
+       <property name="singleStep" >
         <number>10</number>
        </property>
-       <property name="value">
+       <property name="value" >
         <number>100</number>
        </property>
       </widget>
      </item>
-     <item row="2" column="3">
-      <widget class="QSpinBox" name="protoLeadTimeSpin">
-       <property name="toolTip">
+     <item row="2" column="3" >
+      <widget class="QSpinBox" name="protoLeadTimeSpin" >
+       <property name="toolTip" >
         <string>Duration of time to wait before acquisition starts 
 (the hardware is reserved so nothing else can 
 run during this time).</string>
        </property>
-       <property name="maximum">
+       <property name="maximum" >
         <number>10000000</number>
        </property>
-       <property name="singleStep">
+       <property name="singleStep" >
         <number>10</number>
        </property>
-       <property name="value">
+       <property name="value" >
         <number>10</number>
        </property>
       </widget>
      </item>
-     <item row="4" column="3">
-      <widget class="QSpinBox" name="protoCycleTimeSpin">
-       <property name="toolTip">
+     <item row="4" column="3" >
+      <widget class="QSpinBox" name="protoCycleTimeSpin" >
+       <property name="toolTip" >
         <string>The minimum time to wait between recordings 
 in loop mode.</string>
        </property>
-       <property name="maximum">
+       <property name="maximum" >
         <number>10000000</number>
        </property>
-       <property name="singleStep">
+       <property name="singleStep" >
         <number>10</number>
        </property>
-       <property name="value">
+       <property name="value" >
         <number>250</number>
        </property>
       </widget>
@@ -369,73 +368,73 @@ in loop mode.</string>
     </layout>
    </widget>
   </widget>
-  <widget class="QDockWidget" name="SequenceDock">
-   <property name="enabled">
+  <widget class="QDockWidget" name="SequenceDock" >
+   <property name="enabled" >
     <bool>true</bool>
    </property>
-   <property name="features">
+   <property name="features" >
     <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetVerticalTitleBar</set>
    </property>
-   <property name="windowTitle">
+   <property name="windowTitle" >
     <string>Sequence</string>
    </property>
-   <attribute name="dockWidgetArea">
+   <attribute name="dockWidgetArea" >
     <number>4</number>
    </attribute>
-   <widget class="QWidget" name="dockWidgetContents_7">
-    <layout class="QGridLayout" name="gridLayout_2">
-     <item row="0" column="0">
-      <widget class="QLabel" name="label_10">
-       <property name="text">
+   <widget class="QWidget" name="dockWidgetContents_7" >
+    <layout class="QGridLayout" name="gridLayout_2" >
+     <item row="0" column="0" >
+      <widget class="QLabel" name="label_10" >
+       <property name="text" >
         <string>Sequence Parameters</string>
        </property>
       </widget>
      </item>
-     <item row="0" column="1" rowspan="2">
-      <layout class="QVBoxLayout" name="verticalLayout">
+     <item rowspan="2" row="0" column="1" >
+      <layout class="QVBoxLayout" name="verticalLayout" >
        <item>
-        <widget class="QLabel" name="label_9">
-         <property name="text">
+        <widget class="QLabel" name="label_9" >
+         <property name="text" >
           <string>Cycle Time (ms)</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QSpinBox" name="seqCycleTimeSpin">
-         <property name="maximum">
+        <widget class="QSpinBox" name="seqCycleTimeSpin" >
+         <property name="maximum" >
           <number>10000000</number>
          </property>
-         <property name="singleStep">
+         <property name="singleStep" >
           <number>10</number>
          </property>
-         <property name="value">
+         <property name="value" >
           <number>250</number>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QLabel" name="label_11">
-         <property name="text">
+        <widget class="QLabel" name="label_11" >
+         <property name="text" >
           <string>Repetitions</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QSpinBox" name="seqRepetitionSpin">
-         <property name="minimum">
+        <widget class="QSpinBox" name="seqRepetitionSpin" >
+         <property name="minimum" >
           <number>0</number>
          </property>
-         <property name="maximum">
+         <property name="maximum" >
           <number>1000000</number>
          </property>
         </widget>
        </item>
        <item>
         <spacer>
-         <property name="orientation">
+         <property name="orientation" >
           <enum>Qt::Vertical</enum>
          </property>
-         <property name="sizeHint" stdset="0">
+         <property name="sizeHint" stdset="0" >
           <size>
            <width>17</width>
            <height>18</height>
@@ -444,39 +443,39 @@ in loop mode.</string>
         </spacer>
        </item>
        <item>
-        <widget class="QLabel" name="label_2">
-         <property name="text">
+        <widget class="QLabel" name="label_2" >
+         <property name="text" >
           <string>Parameter Space: </string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QLabel" name="paramSpaceLabel">
-         <property name="text">
+        <widget class="QLabel" name="paramSpaceLabel" >
+         <property name="text" >
           <string>0</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QLabel" name="label_4">
-         <property name="text">
+        <widget class="QLabel" name="label_4" >
+         <property name="text" >
           <string>Total time:</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QLabel" name="seqTimeLabel">
-         <property name="text">
+        <widget class="QLabel" name="seqTimeLabel" >
+         <property name="text" >
           <string>0</string>
          </property>
         </widget>
        </item>
        <item>
-        <spacer name="verticalSpacer_2">
-         <property name="orientation">
+        <spacer name="verticalSpacer_2" >
+         <property name="orientation" >
           <enum>Qt::Vertical</enum>
          </property>
-         <property name="sizeHint" stdset="0">
+         <property name="sizeHint" stdset="0" >
           <size>
            <width>13</width>
            <height>13</height>
@@ -486,49 +485,49 @@ in loop mode.</string>
        </item>
       </layout>
      </item>
-     <item row="1" column="0">
-      <widget class="QTreeWidget" name="sequenceParamList">
-       <property name="dragEnabled">
+     <item row="1" column="0" >
+      <widget class="QTreeWidget" name="sequenceParamList" >
+       <property name="dragEnabled" >
         <bool>true</bool>
        </property>
-       <property name="dragDropMode">
+       <property name="dragDropMode" >
         <enum>QAbstractItemView::InternalMove</enum>
        </property>
-       <property name="rootIsDecorated">
+       <property name="rootIsDecorated" >
         <bool>false</bool>
        </property>
        <column>
-        <property name="text">
+        <property name="text" >
          <string>dev</string>
         </property>
        </column>
        <column>
-        <property name="text">
+        <property name="text" >
          <string>param</string>
         </property>
        </column>
        <column>
-        <property name="text">
+        <property name="text" >
          <string>len</string>
         </property>
        </column>
       </widget>
      </item>
-     <item row="2" column="0" colspan="2">
-      <layout class="QHBoxLayout" name="horizontalLayout_3">
+     <item row="2" column="0" colspan="2" >
+      <layout class="QHBoxLayout" name="horizontalLayout_3" >
        <item>
-        <widget class="QPushButton" name="testSequenceBtn">
-         <property name="text">
+        <widget class="QPushButton" name="testSequenceBtn" >
+         <property name="text" >
           <string>Test</string>
          </property>
         </widget>
        </item>
        <item>
         <spacer>
-         <property name="orientation">
+         <property name="orientation" >
           <enum>Qt::Horizontal</enum>
          </property>
-         <property name="sizeHint" stdset="0">
+         <property name="sizeHint" stdset="0" >
           <size>
            <width>38</width>
            <height>17</height>
@@ -537,18 +536,18 @@ in loop mode.</string>
         </spacer>
        </item>
        <item>
-        <widget class="QPushButton" name="runSequenceBtn">
-         <property name="text">
+        <widget class="QPushButton" name="runSequenceBtn" >
+         <property name="text" >
           <string>Run Sequence</string>
          </property>
         </widget>
        </item>
        <item>
-        <spacer name="horizontalSpacer_2">
-         <property name="orientation">
+        <spacer name="horizontalSpacer_2" >
+         <property name="orientation" >
           <enum>Qt::Horizontal</enum>
          </property>
-         <property name="sizeHint" stdset="0">
+         <property name="sizeHint" stdset="0" >
           <size>
            <width>58</width>
            <height>20</height>
@@ -557,8 +556,8 @@ in loop mode.</string>
         </spacer>
        </item>
        <item>
-        <widget class="QPushButton" name="stopSequenceBtn">
-         <property name="text">
+        <widget class="QPushButton" name="stopSequenceBtn" >
+         <property name="text" >
           <string>Stop Sequence</string>
          </property>
         </widget>

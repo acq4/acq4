@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'DataManagerTemplate.ui'
 #
-# Created: Tue Jun 16 11:31:05 2009
-#      by: PyQt4 UI code generator 4.4.4
+# Created: Wed Jun 17 12:15:45 2009
+#      by: PyQt4 UI code generator 4.4.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -55,12 +55,6 @@ class Ui_MainWindow(object):
         sizePolicy.setHeightForWidth(self.newFolderList.sizePolicy().hasHeightForWidth())
         self.newFolderList.setSizePolicy(sizePolicy)
         self.newFolderList.setObjectName("newFolderList")
-        self.newFolderList.addItem(QtCore.QString())
-        self.newFolderList.addItem(QtCore.QString())
-        self.newFolderList.addItem(QtCore.QString())
-        self.newFolderList.addItem(QtCore.QString())
-        self.newFolderList.addItem(QtCore.QString())
-        self.newFolderList.addItem(QtCore.QString())
         self.verticalLayout_2.addWidget(self.newFolderList)
         self.fileTreeView = QtGui.QTreeView(self.layoutWidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
@@ -156,17 +150,11 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
-        MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "MainWindow", None, QtGui.QApplication.UnicodeUTF8))
+        MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Data Manager", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("MainWindow", "Top-level Directory:", None, QtGui.QApplication.UnicodeUTF8))
         self.selectDirBtn.setText(QtGui.QApplication.translate("MainWindow", "...", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("MainWindow", "Storage Directory:", None, QtGui.QApplication.UnicodeUTF8))
         self.setCurrentDirBtn.setText(QtGui.QApplication.translate("MainWindow", "Set", None, QtGui.QApplication.UnicodeUTF8))
-        self.newFolderList.setItemText(0, QtGui.QApplication.translate("MainWindow", "New...", None, QtGui.QApplication.UnicodeUTF8))
-        self.newFolderList.setItemText(1, QtGui.QApplication.translate("MainWindow", "Folder", None, QtGui.QApplication.UnicodeUTF8))
-        self.newFolderList.setItemText(2, QtGui.QApplication.translate("MainWindow", "Day", None, QtGui.QApplication.UnicodeUTF8))
-        self.newFolderList.setItemText(3, QtGui.QApplication.translate("MainWindow", "Experiment", None, QtGui.QApplication.UnicodeUTF8))
-        self.newFolderList.setItemText(4, QtGui.QApplication.translate("MainWindow", "Slice", None, QtGui.QApplication.UnicodeUTF8))
-        self.newFolderList.setItemText(5, QtGui.QApplication.translate("MainWindow", "Cell", None, QtGui.QApplication.UnicodeUTF8))
         self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab), QtGui.QApplication.translate("MainWindow", "Info", None, QtGui.QApplication.UnicodeUTF8))
         self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab_4), QtGui.QApplication.translate("MainWindow", "Log", None, QtGui.QApplication.UnicodeUTF8))
         self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab_3), QtGui.QApplication.translate("MainWindow", "Data", None, QtGui.QApplication.UnicodeUTF8))

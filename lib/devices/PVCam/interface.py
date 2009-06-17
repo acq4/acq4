@@ -65,11 +65,11 @@ class PVCam(Device):
     
     def getTriggerChannel(self, daq):
         l = QtCore.QMutexLocker(self.lock)
-        if not 'triggerChannel' in self.config:
+        if not 'triggerOutChannel' in self.config:
             return None
-        if self.config['triggerChannel'][0] != daq:
+        if self.config['triggerOutChannel'][0] != daq:
             return None
-        return self.config['triggerChannel'][1]
+        return self.config['triggerOutChannel'][1]
         
     def startAcquire(self, params=None):
         l = QtCore.QMutexLocker(self.lock)
@@ -128,7 +128,7 @@ class Task(DeviceTask):
             self.dev.stopAcquire(block=True)  
             #print "done"
             #print "running:", self.dev.acqThread.isRunning()
-            daqName = self.dev.config['triggerChannel'][0]
+            daqName = self.dev.config['triggerOutChannel'][0]
             startOrder.remove(name)
             startOrder.insert(startOrder.index(daqName)+1, name)
             
@@ -213,7 +213,7 @@ class AcquireThread(QtCore.QThread):
         self.acqBuffer = None
         self.frameId = 0
         self.bufferTime = 5.0
-        self.ringSize = 15
+        self.ringSize = 2
         self.tasks = []
     
     def __del__(self):

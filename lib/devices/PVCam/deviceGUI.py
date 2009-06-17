@@ -61,7 +61,7 @@ class PVCamDevGui(QtGui.QWidget):
         #if 'ENUM' in typ:
             #ind = 
         #if typ[5:8] in ['INT', 'UNS', 'FLT']:
-        print val, type(val)
+        #print val, type(val)
         self.dev.setParam(p, val)    
         
         

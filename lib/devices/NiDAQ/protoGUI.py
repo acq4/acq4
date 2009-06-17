@@ -92,8 +92,10 @@ class NiDAQProto(ProtocolGui):
         self.ui.triggerDevList.clear()
         self.ui.triggerDevList.addItem('No Trigger')
         for d in self.devs:
+            print d, self.dev.name
             dev = self.dev.dm.getDevice(d)
             if dev.getTriggerChannel(self.dev.name) is not None:
+                print "------"
                 self.ui.triggerDevList.addItem(d)
         #for p in self.dev.listTriggerPorts():
             #self.ui.triggerDevList.addItem(p)

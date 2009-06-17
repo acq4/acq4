@@ -53,8 +53,8 @@ class FileInfoView(QtGui.QWidget):
             if 'dirType' in info:
                 infoKeys.remove('dirType')
                 dt = info['dirType']
-                if dt in self.manager.conf['folderTypes']:
-                    fields = self.manager.conf['folderTypes'][dt]['info']
+                if dt in self.manager.config['folderTypes']:
+                    fields = self.manager.config['folderTypes'][dt]['info']
         
         if 'notes' not in fields:
             fields['notes'] = 'text', 5
