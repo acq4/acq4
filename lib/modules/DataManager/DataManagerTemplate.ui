@@ -1,7 +1,8 @@
-<ui version="4.0" >
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
  <class>MainWindow</class>
- <widget class="QMainWindow" name="MainWindow" >
-  <property name="geometry" >
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
@@ -9,49 +10,49 @@
     <height>600</height>
    </rect>
   </property>
-  <property name="windowTitle" >
+  <property name="windowTitle">
    <string>Data Manager</string>
   </property>
-  <widget class="QWidget" name="centralwidget" >
-   <layout class="QVBoxLayout" name="verticalLayout_5" >
-    <property name="spacing" >
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout_5">
+    <property name="spacing">
      <number>0</number>
     </property>
-    <property name="margin" >
+    <property name="margin">
      <number>0</number>
     </property>
     <item>
-     <layout class="QGridLayout" name="gridLayout" >
-      <item row="0" column="0" >
-       <widget class="QLabel" name="label_2" >
-        <property name="text" >
+     <layout class="QGridLayout" name="gridLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_2">
+        <property name="text">
          <string>Top-level Directory:</string>
         </property>
        </widget>
       </item>
-      <item row="0" column="1" >
-       <widget class="QLineEdit" name="baseDirText" />
+      <item row="0" column="1">
+       <widget class="QLineEdit" name="baseDirText"/>
       </item>
-      <item row="0" column="2" >
-       <widget class="QPushButton" name="selectDirBtn" >
-        <property name="text" >
+      <item row="0" column="2">
+       <widget class="QPushButton" name="selectDirBtn">
+        <property name="text">
          <string>...</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="0" >
-       <widget class="QLabel" name="label" >
-        <property name="text" >
+      <item row="1" column="0">
+       <widget class="QLabel" name="label">
+        <property name="text">
          <string>Storage Directory:</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="1" >
-       <widget class="QLineEdit" name="currentDirText" />
+      <item row="1" column="1">
+       <widget class="QLineEdit" name="currentDirText"/>
       </item>
-      <item row="1" column="2" >
-       <widget class="QPushButton" name="setCurrentDirBtn" >
-        <property name="text" >
+      <item row="1" column="2">
+       <widget class="QPushButton" name="setCurrentDirBtn">
+        <property name="text">
          <string>Set</string>
         </property>
        </widget>
@@ -59,19 +60,19 @@
      </layout>
     </item>
     <item>
-     <widget class="QSplitter" name="splitter" >
-      <property name="orientation" >
+     <widget class="QSplitter" name="splitter">
+      <property name="orientation">
        <enum>Qt::Horizontal</enum>
       </property>
-      <widget class="QWidget" name="layoutWidget" >
-       <layout class="QVBoxLayout" name="verticalLayout_2" >
-        <property name="spacing" >
+      <widget class="QWidget" name="layoutWidget">
+       <layout class="QVBoxLayout" name="verticalLayout_2">
+        <property name="spacing">
          <number>3</number>
         </property>
         <item>
-         <widget class="QComboBox" name="newFolderList" >
-          <property name="sizePolicy" >
-           <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+         <widget class="QComboBox" name="newFolderList">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
             <horstretch>2</horstretch>
             <verstretch>0</verstretch>
            </sizepolicy>
@@ -79,107 +80,107 @@
          </widget>
         </item>
         <item>
-         <widget class="QTreeView" name="fileTreeView" >
-          <property name="sizePolicy" >
-           <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+         <widget class="QTreeView" name="fileTreeView">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
             <horstretch>2</horstretch>
             <verstretch>0</verstretch>
            </sizepolicy>
           </property>
-          <property name="dragEnabled" >
+          <property name="dragEnabled">
            <bool>true</bool>
           </property>
-          <property name="dragDropMode" >
+          <property name="dragDropMode">
            <enum>QAbstractItemView::InternalMove</enum>
           </property>
          </widget>
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="layoutWidget" >
-       <layout class="QVBoxLayout" name="verticalLayout_4" >
-        <property name="spacing" >
+      <widget class="QWidget" name="layoutWidget">
+       <layout class="QVBoxLayout" name="verticalLayout_4">
+        <property name="spacing">
          <number>0</number>
         </property>
         <item>
-         <widget class="QLabel" name="fileNameLabel" >
-          <property name="sizePolicy" >
-           <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
+         <widget class="QLabel" name="fileNameLabel">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
             <horstretch>5</horstretch>
             <verstretch>0</verstretch>
            </sizepolicy>
           </property>
-          <property name="font" >
+          <property name="font">
            <font>
             <pointsize>7</pointsize>
             <weight>75</weight>
             <bold>true</bold>
            </font>
           </property>
-          <property name="text" >
+          <property name="text">
            <string/>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QTabWidget" name="fileDisplayTabs" >
-          <property name="sizePolicy" >
-           <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+         <widget class="QTabWidget" name="fileDisplayTabs">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
             <horstretch>5</horstretch>
             <verstretch>0</verstretch>
            </sizepolicy>
           </property>
-          <property name="currentIndex" >
-           <number>0</number>
+          <property name="currentIndex">
+           <number>2</number>
           </property>
-          <widget class="QWidget" name="tab" >
-           <attribute name="title" >
+          <widget class="QWidget" name="tab">
+           <attribute name="title">
             <string>Info</string>
            </attribute>
-           <layout class="QVBoxLayout" name="verticalLayout_3" >
-            <property name="spacing" >
+           <layout class="QVBoxLayout" name="verticalLayout_3">
+            <property name="spacing">
              <number>0</number>
             </property>
-            <property name="margin" >
+            <property name="margin">
              <number>0</number>
             </property>
             <item>
-             <widget class="FileInfoView" native="1" name="fileInfo" />
+             <widget class="FileInfoView" name="fileInfo" native="true"/>
             </item>
            </layout>
           </widget>
-          <widget class="QWidget" name="tab_4" >
-           <attribute name="title" >
+          <widget class="QWidget" name="tab_4">
+           <attribute name="title">
             <string>Log</string>
            </attribute>
-           <layout class="QVBoxLayout" name="verticalLayout_6" >
-            <property name="spacing" >
+           <layout class="QVBoxLayout" name="verticalLayout_6">
+            <property name="spacing">
              <number>0</number>
             </property>
-            <property name="margin" >
+            <property name="margin">
              <number>0</number>
             </property>
             <item>
-             <widget class="QTextEdit" name="selectedLogView" >
-              <property name="readOnly" >
+             <widget class="QTextEdit" name="selectedLogView">
+              <property name="readOnly">
                <bool>true</bool>
               </property>
              </widget>
             </item>
            </layout>
           </widget>
-          <widget class="QWidget" name="tab_3" >
-           <attribute name="title" >
+          <widget class="QWidget" name="tab_3">
+           <attribute name="title">
             <string>Data</string>
            </attribute>
-           <layout class="QVBoxLayout" name="verticalLayout_7" >
+           <layout class="QVBoxLayout" name="verticalLayout_7">
             <item>
-             <widget class="FileDataView" native="1" name="dataViewWidget" />
+             <widget class="FileDataView" name="dataViewWidget" native="true"/>
             </item>
            </layout>
           </widget>
-          <widget class="QWidget" name="tab_2" >
-           <attribute name="title" >
+          <widget class="QWidget" name="tab_2">
+           <attribute name="title">
             <string>Analysis</string>
            </attribute>
           </widget>
@@ -191,33 +192,33 @@
     </item>
    </layout>
   </widget>
-  <widget class="QDockWidget" name="logDock" >
-   <property name="floating" >
+  <widget class="QDockWidget" name="logDock">
+   <property name="floating">
     <bool>false</bool>
    </property>
-   <property name="features" >
+   <property name="features">
     <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable</set>
    </property>
-   <property name="windowTitle" >
+   <property name="windowTitle">
     <string>Current Log</string>
    </property>
-   <attribute name="dockWidgetArea" >
+   <attribute name="dockWidgetArea">
     <number>8</number>
    </attribute>
-   <widget class="QWidget" name="dockWidgetContents" >
-    <layout class="QVBoxLayout" name="verticalLayout" >
-     <property name="margin" >
+   <widget class="QWidget" name="dockWidgetContents">
+    <layout class="QVBoxLayout" name="verticalLayout">
+     <property name="margin">
       <number>0</number>
      </property>
      <item>
-      <widget class="QTextEdit" name="logView" >
-       <property name="readOnly" >
+      <widget class="QTextEdit" name="logView">
+       <property name="readOnly">
         <bool>true</bool>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QLineEdit" name="logEntryText" />
+      <widget class="QLineEdit" name="logEntryText"/>
      </item>
     </layout>
    </widget>

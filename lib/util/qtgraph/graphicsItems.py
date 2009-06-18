@@ -127,7 +127,11 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
             im = ((self.image - black) * scale).clip(0.,255.).astype(ubyte)
                 
 
-        im1 = empty((im.shape[axh['y']], im.shape[axh['x']], 4), dtype=ubyte)
+        try:
+            im1 = empty((im.shape[axh['y']], im.shape[axh['x']], 4), dtype=ubyte)
+        except:
+            print im.shape, axh
+            raise
             
         # Fill image 
         if im.ndim == 2:

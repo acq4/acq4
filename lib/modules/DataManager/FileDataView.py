@@ -4,11 +4,14 @@ from PyQt4 import QtCore, QtGui
 from lib.DataManager import *
 import lib.Manager as Manager
 import sip
+from lib.util.PlotWidget import PlotWidget
+from lib.util.qtgraph.ImageView import ImageView
 
 class FileDataView(QtGui.QWidget):
     def __init__(self, parent):
         QtGui.QWidget.__init__(self, parent)
         self.manager = Manager.getManager()
+        self.layout = QtGui.QVBoxLayout(self)
         self.current = None
         self.widget = None
 
@@ -17,21 +20,39 @@ class FileDataView(QtGui.QWidget):
         if file is self.current:
             return
             
+        self.clear()
+        
         if file is None:
-            self.clear()
             self.current = None
             return
             
         if file.isDir():
             ## Sequence or not?
-            pass
+            return
         else:
-            ## Meta array?
-              ## plot?
-              ## image?
-            ## tiff file?
-            pass
+            typ = file.fileType()
+            if typ is None:
+                return
+            else:
+                image = False
+                data = file.read()
+                if typ == 'ImageFile': 
+                    image = True
+                elif typ == 'MetaArray':
+                    if data.ndim > 2:
+                        image = True
+                else:
+                    return
+                        
         
+        if image:
+            self.widget = ImageView(self)
+            self.layout.addWidget(self.widget)
+            self.widget.setImage(data)
+        else:
+            self.widget = PlotWidget(self)
+            self.layout.addWidget(self.widget)
+            self.widget.plotMetaArray(data)
         
     def clear(self):
         if self.widget is not None:

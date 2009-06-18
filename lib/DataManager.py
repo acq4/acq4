@@ -224,8 +224,28 @@ class FileHandle(QtCore.QObject):
         
     def read(self):
         self.checkDeleted()
-        pass
+        l = QtCore.QMutexLocker(self.lock)
+        typ = self.fileType()
+        if typ is None:
+            fd = open(self.name(), 'r')
+            data = fd.read()
+            fd.close()
+        else:
+            mod = __import__('lib.filetypes.%s' % typ, fromlist=['*'])
+            func = getattr(mod, 'fromFile')
+            data = func(fileName=self.name())
         
+        return data
+        
+    def fileType(self):
+        l = QtCore.QMutexLocker(self.lock)
+        info = self.info()
+        if '__object_type__' not in info:
+            return None
+        else:
+            return info['__object_type__']
+
+
     def emitChanged(self, change, *args):
         self.emit(QtCore.SIGNAL('changed'), self.name(), change, *args)
     
@@ -265,18 +285,6 @@ class FileHandle(QtCore.QObject):
         gname = grandparent.name() + os.path.sep
         return self.name()[:len(gname)] == gname
     
-    #def getFile(self, fileName):
-        #l = QtCore.QMutexLocker(self.lock)
-        
-        #info = self.fileInfo(fileName)
-        #typ = info['__object_type__']
-        #cls = self.getFileClass(typ)
-        #return cls.fromFile(fileName=os.path.join(self.path, fileName))
-        ##return MetaArray(file=os.path.join(self.path, fileName))
-
-    #def getFileClass(self, className):
-        #mod = __import__('lib.filetypes.%s' % modName, fromlist=['*'])
-        #return getattr(mod, modName)
 
 
 

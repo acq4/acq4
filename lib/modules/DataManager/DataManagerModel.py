@@ -238,6 +238,7 @@ class DMModel(QtCore.QAbstractItemModel):
         #fullPath = os.path.join(self.baseDir.name(), path)
         #parent = self.baseDir.getDir(os.path.join(self.baseDir.name(), base))
         
+        ret = QtCore.QVariant()
         if role == QtCore.Qt.DisplayRole or role == QtCore.Qt.EditRole:
             ret = dh.shortName()
         elif role == QtCore.Qt.TextColorRole:
@@ -248,17 +249,20 @@ class DMModel(QtCore.QAbstractItemModel):
         elif role == QtCore.Qt.BackgroundRole:
             if dh == self.currentDir:
                 ret = QtGui.QBrush(QtGui.QColor(150, 220, 150))
-            else:
-                ret = QtCore.QVariant()
+            #else:
+                #ret = QtCore.QVariant()
         elif role == QtCore.Qt.FontRole:
-            info = dh.info()
-            if ('important' in info) and (info['important'] is True):
-                ret = QtGui.QFont()
-                ret.setWeight(QtGui.QFont.Bold)
-            else:
-                ret = QtCore.QVariant()
-        else:
-            ret = QtCore.QVariant()
+            if dh.isManaged():
+                info = dh.info()
+                if ('important' in info) and (info['important'] is True):
+                    ret = QtGui.QFont()
+                    ret.setWeight(QtGui.QFont.Bold)
+                #else:
+                    #ret = QtCore.QVariant()
+            #else:
+                #ret = QtCore.QVariant()
+        #else:
+            #ret = QtCore.QVariant()
         return QtCore.QVariant(ret)
 
     def flags(self, index):

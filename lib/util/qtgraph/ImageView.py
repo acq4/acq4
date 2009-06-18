@@ -31,8 +31,14 @@ class ImageView(QtGui.QWidget):
     def updateImage(self):
         if self.image is None:
             return
-        self.imageItem.updateImage(self.image[self.ui.timeSlider.value()], white=self.whiteLevel(), black=self.blackLevel())
-        
+        if self.image.ndim == 3:
+            self.ui.timeSlider.show()
+            self.imageItem.updateImage(self.image[self.ui.timeSlider.value()], white=self.whiteLevel(), black=self.blackLevel())
+        elif self.image.ndim == 2:
+            self.ui.timeSlider.hide()
+            self.imageItem.updateImage(self.image, white=self.whiteLevel(), black=self.blackLevel())
+            
+            
     def autoRange(self):
         self.levelMax = float(self.image.max())
         self.levelMin = float(self.image.min())

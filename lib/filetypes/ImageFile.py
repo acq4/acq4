@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import Image
+from numpy import array
+
 
 class ImageFile:
     def __init__(self, data):
@@ -13,7 +15,7 @@ class ImageFile:
         img = Image.fromarray(self.data.transpose())
         img.save(fileName)
         
-    def fromFile(fileName, info=None):
-        img = Image.open(fileName)
-        return array(img).transpose()
+def fromFile(fileName, info=None):
+    img = Image.open(fileName)
+    return array(img).transpose()
 

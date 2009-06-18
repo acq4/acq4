@@ -183,9 +183,11 @@ class DataManager(Module):
         self.ui.selectedLogView.clear()
         if fh is None:
             self.ui.fileInfo.setCurrentFile(None)
+            self.ui.dataViewWidget.setCurrentFile(None)
             self.ui.fileNameLabel.setText('')
         else:
             self.ui.fileInfo.setCurrentFile(fh)
+            self.ui.dataViewWidget.setCurrentFile(fh)
             self.ui.fileNameLabel.setText(fh.name(relativeTo=self.baseDir))
             if fh.isDir():
                 self.loadLog(fh, self.ui.selectedLogView, recursive=3)

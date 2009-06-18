@@ -41,6 +41,39 @@ class PlotWidget(Qwt.QwtPlot):
     def plotMetaArray(self, arr):
         self.clear()
         inf = arr.infoCopy()
+        
+        if arr.ndim == 1:
+            xAxis = 0
+            yAxis = 1
+            
+            
+        elif arr.ndim == 2:
+            for i in [0,1]:
+                if 'cols' in inf[i]:
+                    xAxis = 1-i
+                    yAxis = i
+                    
+        titles = ['', '']
+        for i in [1,0]:
+            t = ''
+            if i >= len(inf):
+                continue
+            
+            ## If there are columns, pick title/units from first column
+            if 'cols' in inf[i]:
+                s = inf[i]['cols'][0]
+            else:
+                s = inf[i]
+                
+            if 'name' in s:
+                t = s['name']
+            if 'units' in s:
+                t += ' (%s)' % s['units']
+            
+            
+        else:
+            raise Exception('can only automatically plot 1 or 2 dimensional arrays.')
+        
 
         ## Set axis titles
         titles = ['', '']
@@ -56,7 +89,7 @@ class PlotWidget(Qwt.QwtPlot):
         curves = []
         for i in range(arr.shape[1]):
             c = Qwt.QwtPlotCurve()
-            c.setData(arr.xVals(0), arr[:, i])
+            c.setData(arr.xvals(0), arr[:, i])
             c.attach(self)
             
         self.plot()
