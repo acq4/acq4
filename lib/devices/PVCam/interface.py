@@ -98,6 +98,7 @@ class PVCam(Device):
         if r: 
             self.acqThread.stop(block=True)
         self.cam.setParam(param, val)
+        self.emit(QtCore.SIGNAL('paramChanged'), param, val)
         if r: 
             self.acqThread.start()
         
@@ -114,6 +115,7 @@ class Task(DeviceTask):
         DeviceTask.__init__(self, dev, cmd)
         self.recordHandle = None
         self.stopAfter = False
+        self.returnState = {}
         
         
     def configure(self, tasks, startOrder):
@@ -162,23 +164,36 @@ class Task(DeviceTask):
         self.recordHandle = self.dev.acqThread.startRecord()
         ## start acquisition if needed
         #print "stopAfter:", self.stopAfter
+        
         self.dev.startAcquire({'mode': self.cmd['triggerMode']})
+        
+        ## If we requested a trigger mode, wait 200ms for the camera to get ready for the trigger
+        ##   (Is there a way to ask the camera when it is ready instead?)
+        if self.cmd['triggerMode'] is not None:
+            time.sleep(0.3)
         
     def isDone(self):
         ## should return false if recording is required to run for a specific time.
         return True
         
     def stop(self):
-        #print "stop task"
+        #print "stop camera task"
         self.recordHandle.stop()
         self.dev.stopAcquire()
+        
+        ## If this task made any changes to the camera state, return them now
+        for k in self.returnState:
+            self.dev.setParam(k, self.returnState[k])
+            
         if not self.stopAfter:
             #print "restart camera"
             self.dev.startAcquire({'mode': 'Normal'})
         #else:
             #print "no restaRT"
+        #print "camera task stopped"
                 
     def getResult(self):
+        #print "get result from camera task.."
         expose = None
         ## generate MetaArray of expose channel if it was recorded
         if ('recordExposeChannel' in self.cmd) and self.cmd['recordExposeChannel']:
@@ -276,7 +291,9 @@ class AcquireThread(QtCore.QThread):
         
         try:
             #print self.ringSize, binning, exposure, region
+            #print "  start camera.."
             self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region, mode=mode)
+            #print "  camera started."
             lastFrameTime = ptime.time() #time.clock()  # Use time.time() on Linux
             
             loopCount = 0
@@ -325,15 +342,16 @@ class AcquireThread(QtCore.QThread):
                     self.frameId += 1
                 time.sleep(10e-6)
                 
-                #print "*Locking thread"
                 if loopCount > 1000:
+                    #print "    Locking thread to check for stop request"
                     self.lock.lock()
-                    if self.stopThread and frame is not None:
-                        #print "Unlocking thread for exit"
+                    if self.stopThread:
+                        #print "    Unlocking thread for exit"
                         self.lock.unlock()
-                        #print "Camera acquisition thread stopping."
+                        #print "    Camera acquisition thread stopping."
                         break
                     self.lock.unlock()
+                    #print "    Done with thread stiop check"
                     loopCount = 0
                 
                 loopCount += 1
@@ -357,7 +375,7 @@ class AcquireThread(QtCore.QThread):
         self.stopThread = True
         #print "got lock, requested stop."
         l.unlock()
-        #print "Unlocked, waiting for thread exit"
+        #print "Unlocked, waiting for thread exit (%s)" % block
         if block:
           self.wait()
         #print "thread exited"

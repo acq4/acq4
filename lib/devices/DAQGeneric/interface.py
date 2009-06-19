@@ -53,6 +53,8 @@ class DAQGeneric(Device):
 class DAQGenericTask(DeviceTask):
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
+        self.daqTasks = {}
+        self.initialState = {}
         
         ## Stores the list of channels that will generate or acquire buffered samples
         self.bufferedChannels = []

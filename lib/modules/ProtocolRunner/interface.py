@@ -476,6 +476,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         ## Start editing new file name
         index = self.protocolList.findIndex(newFile)
         #self.ui.protocolList.update(index)
+        self.ui.protocolList.scrollTo(index)
         self.ui.protocolList.edit(index)
         
         pn = newFile.replace(self.protocolList.baseDir, '')

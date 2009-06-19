@@ -5,9 +5,10 @@ from PyQt4 import QtCore, QtGui
 import lib.util.ptime as ptime
 #from lib.util.Mutex import Mutex
 
-class Device:
+class Device(QtCore.QObject):
     """Abstract class defining the standard interface for Device subclasses."""
     def __init__(self, deviceManager, config, name):
+        QtCore.QObject.__init__(self)
         #self._lock_ = threading.Lock()
         self._lock_ = QtCore.QMutex(QtCore.QMutex.Recursive)
         #self._lock_ = Mutex()

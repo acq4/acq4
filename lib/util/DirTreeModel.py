@@ -8,7 +8,7 @@ import traceback, os, sys
 class DirTreeModel(QtCore.QAbstractItemModel):
     def __init__(self, baseDir, parent=None):
         QtCore.QAbstractItemModel.__init__(self, parent)
-        self.baseDir = baseDir
+        self.baseDir = os.path.normpath(baseDir)
         self.paths = {}
         self.dirCache = {}
         
@@ -40,7 +40,8 @@ class DirTreeModel(QtCore.QAbstractItemModel):
         if dirName == '' or dirName is None:
             return QtCore.QModelIndex()
         if not os.path.exists(os.path.join(self.baseDir, dirName)):
-            raise Exception("Dir %s does not exist" % dirName)
+            raise Exception("Dir %s does not exist" % os.path.join(self.baseDir, dirName))
+            
         row = self.pathRow(dirName)
         return self.createIndex(row, 0, self.pathKey(dirName))
         
@@ -49,6 +50,7 @@ class DirTreeModel(QtCore.QAbstractItemModel):
         
     def findIndex(self, fileName):
         fileName = os.path.normpath(fileName)
+        
         if self.baseDir in fileName:
             fileName = fileName.replace(self.baseDir, '')
         while fileName[0] in ['/', '\\']:
