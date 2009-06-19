@@ -4,7 +4,7 @@ from numpy import *
 import scipy.weave as weave
 from scipy.weave import converters
 from lib.util.MetaArray import MetaArray
-import types
+import types, sys
 
 ## Multiple inheritance not allowed in PyQt. Retarded workaround:
 class QObjectWorkaround:
