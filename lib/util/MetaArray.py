@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 ## Class for storing data sets and writing to disk
 
-from numpy import ndarray, array, empty, fromstring, arange
+from numpy import ndarray, array, empty, fromstring, arange, concatenate
 import types, copy, threading, os, re
 #import traceback
 
@@ -75,6 +75,11 @@ class MetaArray(ndarray):
         since the actual values are described (name and units) in the column info for the first axis.
     """
   
+    version = '2'
+    
+    ## Types allowed as axis or column names
+    nameTypes = [str, tuple]
+  
     def __new__(subtype, data=None, file=None, info=None, dtype=None, copy=False):
         if data is not None:
             if type(data) is types.TupleType:
@@ -109,37 +114,17 @@ class MetaArray(ndarray):
 
         elif file is not None:
             fd = open(file, 'rb')
-            meta = ''
-            while True:
-                line = fd.readline().strip()
-                if line == '':
-                    break
-                meta += line
-            meta = eval(meta)
-      
-            ## read in axis values
-            dynAxis = None
-            frameSize = 1
-            for ax in meta['info']:
-                if ax.has_key('values_len'):
-                    if ax['values_len'] == 'dynamic':
-                        dynAxis = ax
-                    else:
-                        ax['values'] = fromstring(fd.read(ax['values_len']), dtype=ax['values_type'])
-                        frameSize *= ax['values_len']
-                        del ax['values_len']
-                        del ax['values_type']
-                        
-            ## No axes are dynamic, just read the entire array in at once
-            if dynAxis is None:
-                subarr = fromstring(fd.read(), dtype=meta['type'])
-                subarr = subarr.view(subtype)
-                subarr.shape = meta['shape']
-                subarr._info = meta['info']
-            ## One axis is dynamic, read in a frame at a time
+            meta = MetaArray._readMeta(fd)
+            if 'version' in meta:
+                ver = meta['version']
             else:
-                xVals = []
-                frames = []
+                ver = 1
+            rFuncName = '_readData%s' % str(ver)
+            if not hasattr(MetaArray, rFuncName):
+                raise Exception("This MetaArray library does not support array version '%s'" % ver)
+            rFunc = getattr(MetaArray, rFuncName)
+            subarr = rFunc(fd, meta, subtype)
+                
 
         return subarr
 
@@ -254,47 +239,47 @@ class MetaArray(ndarray):
         a._info = self.infoCopy()
         return a
   
-    def write(self, fileName):
-        """Write this object to a file. The object can be restored by calling MetaArray(file=fileName)"""
+    #def write(self, fileName):
+        #"""Write this object to a file. The object can be restored by calling MetaArray(file=fileName)"""
     
-        meta = { 'shape': self.shape, 'type': str(self.dtype), 'info': self.infoCopy()}
-        axstrs = []
-        for ax in meta['info']:
-            if ax.has_key('values'):
-                axstrs.append(ax['values'].tostring())
-                ax['values_len'] = len(axstrs[-1])
-                ax['values_type'] = str(ax['values'].dtype)
-                del ax['values']
-        fd = open(fileName, 'wb')
-        fd.write(str(meta) + '\n\n')
-        for ax in axstrs:
-            fd.write(ax)
-        fd.write(self.tostring())
-        fd.close()
+        #meta = { 'shape': self.shape, 'type': str(self.dtype), 'info': self.infoCopy()}
+        #axstrs = []
+        #for ax in meta['info']:
+            #if ax.has_key('values'):
+                #axstrs.append(ax['values'].tostring())
+                #ax['values_len'] = len(axstrs[-1])
+                #ax['values_type'] = str(ax['values'].dtype)
+                #del ax['values']
+        #fd = open(fileName, 'wb')
+        #fd.write(str(meta) + '\n\n')
+        #for ax in axstrs:
+            #fd.write(ax)
+        #fd.write(self.tostring())
+        #fd.close()
   
-    def writeCsv(self, fileName=None):
-        """Write 2D array to CSV file or return the string if no filename is given"""
-        if self.ndim > 2:
-            raise Exception("CSV Export is only for 2D arrays")
-        if fileName is not None:
-            file = open(fileName, 'w')
-        ret = ''
-        if self._info[0].has_key('cols'):
-            s = ','.join([x['name'] for x in self._info[0]['cols']]) + '\n'
-            if fileName is not None:
-                file.write(s)
-            else:
-                ret += s
-        for row in range(0, self.shape[1]):
-            s = ','.join(["%g" % x for x in self[:, row]]) + '\n'
-            if fileName is not None:
-                file.write(s)
-            else:
-                ret += s
-        if fileName is not None:
-            file.close()
-        else:
-            return ret
+    #def writeCsv(self, fileName=None):
+        #"""Write 2D array to CSV file or return the string if no filename is given"""
+        #if self.ndim > 2:
+            #raise Exception("CSV Export is only for 2D arrays")
+        #if fileName is not None:
+            #file = open(fileName, 'w')
+        #ret = ''
+        #if self._info[0].has_key('cols'):
+            #s = ','.join([x['name'] for x in self._info[0]['cols']]) + '\n'
+            #if fileName is not None:
+                #file.write(s)
+            #else:
+                #ret += s
+        #for row in range(0, self.shape[1]):
+            #s = ','.join(["%g" % x for x in self[:, row]]) + '\n'
+            #if fileName is not None:
+                #file.write(s)
+            #else:
+                #ret += s
+        #if fileName is not None:
+            #file.close()
+        #else:
+            #return ret
   
   ## Turn this into a constructor case
   #def readCsv(fileName):
@@ -326,20 +311,29 @@ class MetaArray(ndarray):
             return axis
   
     def _interpretIndex(self, ind, pos, numOk):
-        if type(ind) == types.StringType:
+        #print "Interpreting index", ind, pos, numOk
+        
+        
+        if type(ind) in MetaArray.nameTypes:
             if not numOk:
                 raise Exception("string and integer indexes may not follow named indexes")
+            #print "  String index, column is ", self._getIndex(pos, ind)
             return (pos, self._getIndex(pos, ind), False)
-        elif type(ind) == types.SliceType:
-            if type(ind.start) in [str, tuple] or type(ind.stop) is str:  ## Not an actual slice!
+        elif type(ind) is slice:
+            #print "  Slice index"
+            if type(ind.start) in MetaArray.nameTypes or type(ind.stop) in MetaArray.nameTypes:  ## Not an actual slice!
+                #print "    ..not a real slice"
                 axis = self._interpretAxis(ind.start)
+                #print "    axis is", axis
                 
                 ## x[Axis:Column]
-                if type(ind.stop) is str:
+                if type(ind.stop) in MetaArray.nameTypes:
+                    #print "    column name, column is ", self._getIndex(axis, ind.stop)
                     index = self._getIndex(axis, ind.stop)
                     
                 ## x[Axis:min:max]
                 elif (type(ind.stop) is float or type(ind.step) is float) and ('values' in self._info[axis]):
+                    #print "    axis value range"
                     if ind.stop is None:
                         mask = self.xvals(axis) < ind.step
                     elif ind.step is None:
@@ -350,26 +344,43 @@ class MetaArray(ndarray):
                     
                 ## x[Axis:columnIndex]
                 elif type(ind.stop) is int or type(ind.step) is int:
+                    #print "    normal slice after named axis"
                     if ind.step is None:
                         index = ind.stop
                     else:
                         index = slice(ind.stop, ind.step)
                     
                 ## x[Axis: [list]]
+                elif type(ind.stop) is list:
+                    index = []
+                    for i in ind.stop:
+                        if type(i) is int:
+                            index.append(i)
+                        elif type(i) in MetaArray.nameTypes:
+                            index.append(self._getIndex(axis, i))
+                        else:
+                            ## unrecognized type, try just passing on to array
+                            index = ind.stop
+                            break
+                
                 else:
+                    #print "    other type.. forward on to array for handling"
                     index = ind.stop
                 #print "Axis %s (%s) : %s" % (ind.start, str(axis), str(type(index)))
                 #if type(index) is ndarray:
                     #print "    ", index.shape
                 return (axis, index, True)
             else:
+                #print "  Looks like a real slice, passing on to array"
                 return (pos, ind, False)
-        elif type(ind) == types.ListType:
+        elif type(ind) is list:
+            #print "  List index., interpreting each element individually"
             indList = [self._interpretIndex(i, pos, numOk)[1] for i in ind]
             return (pos, indList, False)
         else:
             if not numOk:
                 raise Exception("string and integer indexes may not follow named indexes")
+            #print "  normal numerical index"
             return (pos, ind, False)
   
     def _getAxis(self, name):
@@ -408,6 +419,188 @@ class MetaArray(ndarray):
         return self.__repr__()
 
 
+    #### File I/O Routines
+
+    @staticmethod
+    def _readMeta(fd):
+        """Read meta array from the top of a file. Read lines until a blank line is reached.
+        This function should ideally work for ALL versions of MetaArray.
+        """
+        meta = ''
+        ## Read meta information until the first blank line
+        while True:
+            line = fd.readline().strip()
+            if line == '':
+                break
+            meta += line
+        return eval(meta)
+
+    @staticmethod
+    def _readData1(fd, meta, subtype):
+        """Read array data from the file descriptor for MetaArray v1 files
+        """
+        ## read in axis values for any axis that specifies a length
+        frameSize = 1
+        for ax in meta['info']:
+            if ax.has_key('values_len'):
+                ax['values'] = fromstring(fd.read(ax['values_len']), dtype=ax['values_type'])
+                frameSize *= ax['values_len']
+                del ax['values_len']
+                del ax['values_type']
+        ## the remaining data is the actual array
+        subarr = fromstring(fd.read(), dtype=meta['type'])
+        subarr = subarr.view(subtype)
+        subarr.shape = meta['shape']
+        subarr._info = meta['info']
+        return subarr
+            
+    @staticmethod
+    def _readData2(fd, meta, subtype):
+        ## read in axis values
+        dynAxis = None
+        frameSize = 1
+        ## read in axis values for any axis that specifies a length
+        for i in range(len(meta['info'])):
+            ax = meta['info'][i]
+            if ax.has_key('values_len'):
+                if ax['values_len'] == 'dynamic':
+                    if dynAxis is not None:
+                        raise Exception("MetaArray has more than one dynamic axis! (this is not allowed)")
+                    dynAxis = i
+                else:
+                    ax['values'] = fromstring(fd.read(ax['values_len']), dtype=ax['values_type'])
+                    frameSize *= ax['values_len']
+                    del ax['values_len']
+                    del ax['values_type']
+                    
+        ## No axes are dynamic, just read the entire array in at once
+        if dynAxis is None:
+            subarr = fromstring(fd.read(), dtype=meta['type'])
+            #subarr = subarr.view(subtype)
+            subarr.shape = meta['shape']
+            #subarr._info = meta['info']
+        ## One axis is dynamic, read in a frame at a time
+        else:
+            ax = meta['info'][dynAxis]
+            xVals = []
+            frames = []
+            frameShape = list(meta['shape'])
+            frameShape[dynAxis] = 1
+            frameSize = reduce(lambda a,b: a*b, frameShape)
+            n = 0
+            while True:
+                ## Extract one non-blank line
+                while True:
+                    line = fd.readline()
+                    if line != '\n':
+                        break
+                if line == '':
+                    break
+                    
+                ## evaluate line
+                inf = eval(line)
+                
+                ## read data block
+                #print "read %d bytes as %s" % (inf['len'], meta['type'])
+                data = fromstring(fd.read(inf['len']), dtype=meta['type'])
+                
+                if data.size != frameSize * inf['numFrames']:
+                    #print data.size, frameSize, inf['numFrames']
+                    raise Exception("Wrong frame size in MetaArray file! (frame %d)" % n)
+                    
+                ## read in data block
+                shape = list(frameShape)
+                shape[dynAxis] = inf['numFrames']
+                data.shape = shape
+                frames.append(data)
+                
+                n += inf['numFrames']
+                if 'xVals' in inf:
+                    xVals.extend(inf['xVals'])
+            subarr = concatenate(frames, axis=dynAxis)
+            if len(xVals)> 0:
+                ax['values'] = array(xVals, dtype=ax['values_type'])
+            del ax['values_len']
+            del ax['values_type']
+        subarr = subarr.view(subtype)
+        subarr._info = meta['info']
+        return subarr
+                    
+    def write(self, fileName, appendAxis=None):
+        """Write this object to a file. The object can be restored by calling MetaArray(file=fileName)"""
+    
+        meta = {'shape':self.shape, 'type':str(self.dtype), 'info':self.infoCopy(), 'version':MetaArray.version}
+        axstrs = []
+        
+        ## copy out axis values for dynamic axis if requested
+        if appendAxis is not None:
+            if type(appendAxis) in MetaArray.nameTypes:
+                appendAxis = self._interpretAxis(appendAxis)
+            
+            
+            ax = meta['info'][appendAxis]
+            ax['values_len'] = 'dynamic'
+            if 'values' in ax:
+                ax['values_type'] = str(ax['values'].dtype)
+                dynXVals = ax['values']
+                del ax['values']
+            else:
+                dynXVals = None
+                
+        ## Generate axis data string, modify axis info so we know how to read it back in later
+        for ax in meta['info']:
+            if 'values' in ax:
+                axstrs.append(ax['values'].tostring())
+                ax['values_len'] = len(axstrs[-1])
+                ax['values_type'] = str(ax['values'].dtype)
+                del ax['values']
+                
+        ## does the file already exist?
+        newFile = not os.path.exists(fileName)
+        
+        ## write data to file
+        if appendAxis is None or newFile:
+            fd = open(fileName, 'wb')
+            fd.write(str(meta) + '\n\n')
+            for ax in axstrs:
+                fd.write(ax)
+        else:
+            fd = open(fileName, 'ab')
+            
+        dataStr = self.view(ndarray).tostring()
+        #print self.size, len(dataStr), self.dtype
+        if appendAxis is not None:
+            frameInfo = {'len':len(dataStr), 'numFrames':self.shape[appendAxis]}
+            if dynXVals is not None:
+                frameInfo['xVals'] = list(dynXVals)
+            fd.write('\n'+str(frameInfo)+'\n')
+        fd.write(dataStr)
+        fd.close()
+  
+    def writeCsv(self, fileName=None):
+        """Write 2D array to CSV file or return the string if no filename is given"""
+        if self.ndim > 2:
+            raise Exception("CSV Export is only for 2D arrays")
+        if fileName is not None:
+            file = open(fileName, 'w')
+        ret = ''
+        if self._info[0].has_key('cols'):
+            s = ','.join([x['name'] for x in self._info[0]['cols']]) + '\n'
+            if fileName is not None:
+                file.write(s)
+            else:
+                ret += s
+        for row in range(0, self.shape[1]):
+            s = ','.join(["%g" % x for x in self[:, row]]) + '\n'
+            if fileName is not None:
+                file.write(s)
+            else:
+                ret += s
+        if fileName is not None:
+            file.close()
+        else:
+            return ret
+        
 
 
 
