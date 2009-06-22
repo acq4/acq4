@@ -13,5 +13,5 @@ from lib.util.MetaArray import MetaArray
         #self.data.write(fileName, *args)
         
 def fromFile(fileName, info=None):
-    return MA(file=fileName)
+    return MetaArray(file=fileName)
     

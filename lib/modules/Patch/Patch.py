@@ -135,10 +135,14 @@ class PatchWindow(QtGui.QMainWindow):
         if self.ui.recordBtn.isChecked():
             if len(self.analysisData['time']) > 0:
                 data = self.makeAnalysisArray()
-                data.write(self.storageFile().name(), appendAxis='Time', newFile=True)
+                sd = self.storageDir()
+                sd.writeFile(data, self.clampName, appendAxis='Time', newFile=True)
+                
+    def storageDir(self):
+        return self.manager.getCurrentDir().getDir('Patch', create=True)
                 
     def storageFile(self):
-        sd = self.manager.getCurrentDir().getDir('Patch', create=True)
+        sd = self.storageDir()
         return sd.getFile(self.clampName, create=True)
             
         
@@ -182,7 +186,7 @@ class PatchWindow(QtGui.QMainWindow):
         if self.ui.recordBtn.isChecked():
             
             arr = self.makeAnalysisArray(lastOnly=True)
-            print "appending array", arr.shape
+            #print "appending array", arr.shape
             arr.write(self.storageFile().name(), appendAxis='Time')
         
     def makeAnalysisArray(self, lastOnly=False):
@@ -331,16 +335,25 @@ class PatchThread(QtCore.QThread):
                 self.emit(QtCore.SIGNAL('newFrame'), frame)
                 
                 ## sleep until it is time for the next run
+                c = 0
+                stop = False
                 while True:
+                    ## check for stop button every 100ms
+                    if c % 1000 == 0:
+                        l.relock()
+                        if self.stopThread:
+                            l.unlock()
+                            stop = True
+                            break
+                        l.unlock()
                     now = time.clock()
                     if now >= (lastTime+params['cycleTime']):
                         break
-                    time.sleep(100e-6)
-                l.relock()
-                if self.stopThread:
-                    l.unlock()
+                    
+                    time.sleep(100e-6) ## Wake up every 100us
+                    c += 1
+                if stop:
                     break
-                l.unlock()
         except:
             print "Error in patch acquisition thread, exiting."
             traceback.print_exception(*sys.exc_info())

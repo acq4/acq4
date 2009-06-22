@@ -516,7 +516,7 @@ class DirHandle(FileHandle):
         return os.path.isfile(fn)
         
     
-    def writeFile(self, obj, fileName, info=None, autoIncrement=False):
+    def writeFile(self, obj, fileName, info=None, autoIncrement=False, **kwargs):
         """Write a file to this directory using obj.write(fileName), store info in the index."""
         if info is None:
             info = {}   ## never put {} in the function default
@@ -541,7 +541,7 @@ class DirHandle(FileHandle):
                     break
                 d += 1
         
-        obj.write(fullFn)
+        obj.write(fullFn, **kwargs)
         self._childChanged()
         
         if not info.has_key('__object_type__'):
