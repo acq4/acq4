@@ -2,7 +2,9 @@
 from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
 from PyQt4 import Qwt5 as Qwt
-from lib.util.WidgetGroup import *
+from lib.util.WidgetGroup import WidgetGroup
+from lib.util.PlotWidget import PlotWidget
+from lib.util.MetaArray import *
 import traceback, sys, time
 from numpy import *
 
@@ -11,7 +13,11 @@ class PatchWindow(QtGui.QMainWindow):
         QtGui.QMainWindow.__init__(self)
         self.setWindowTitle(clampName)
         
-        self.analysisItems = ['inputResistance', 'restingPotential', 'restingCurrent', 'timeConstant']
+        self.analysisItems = {
+            'inputResistance': 'Ohm', 
+            'restingPotential': 'V', 
+            'restingCurrent': 'A', 
+            'timeConstant': 's'}
         
         self.params = {
             'mode': 'vc',
@@ -33,13 +39,20 @@ class PatchWindow(QtGui.QMainWindow):
         
         self.paramLock = QtCore.QMutex(QtCore.QMutex.Recursive)
 
-        self.dm = dm
+        self.manager = dm
         self.clampName = clampName
         self.thread = PatchThread(self)
         self.cw = QtGui.QWidget()
         self.setCentralWidget(self.cw)
         self.ui = Ui_Form()
         self.ui.setupUi(self.cw)
+        
+        self.plots = {}
+        for k in self.analysisItems:
+            p = PlotWidget()
+            self.ui.plotLayout.addWidget(p)
+            self.plots[k] = p
+        
         
         self.stateGroup = WidgetGroup([
             (self.ui.icPulseSpin, 'icPulse', 1e12),
@@ -55,16 +68,6 @@ class PatchWindow(QtGui.QMainWindow):
             (self.ui.delayTimeSpin, 'delayTime', 1e3),
         ])
         self.stateGroup.setState(self.params)
-        #self.ui.icPulseSpin.setValue(self.params['icPulse']*1e12)
-        #self.ui.vcPulseSpin.setValue(self.params['vcPulse']*1e3)
-        #self.ui.icHoldSpin.setValue(self.params['icHolding']*1e12)
-        #self.ui.vcHoldSpin.setValue(self.params['vcHolding']*1e3)
-        #self.ui.icPulseCheck.setChecked(self.params['icPulseEnabled'])
-        #self.ui.vcPulseCheck.setChecked(self.params['vcPulseEnabled'])
-        #self.ui.icHoldCheck.setChecked(self.params['icHoldingEnabled'])
-        #self.ui.vcHoldCheck.setChecked(self.params['vcHoldingEnabled'])
-        #self.ui.cycleTimeSpin.setValue(self.params['cycleTime']*1e3)
-        
         
         for p in [self.ui.patchPlot, self.ui.commandPlot]:
             p.setCanvasBackground(QtGui.QColor(0,0,0))
@@ -75,25 +78,14 @@ class PatchWindow(QtGui.QMainWindow):
         self.commandCurve = Qwt.QwtPlotCurve('command')
         self.commandCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         self.commandCurve.attach(self.ui.commandPlot)
-        #self.analysisCurve = Qwt.QwtPlotCurve('analysis')
-        #self.analysisCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        #self.analysisCurve.attach(self.ui.analysisPlot)
-        #self.analysisData = {'mr': [], 'rmp': [], 'tau': [], 'time': []}
         
         QtCore.QObject.connect(self.ui.startBtn, QtCore.SIGNAL('clicked()'), self.startClicked)
+        QtCore.QObject.connect(self.ui.recordBtn, QtCore.SIGNAL('clicked()'), self.recordClicked)
         QtCore.QObject.connect(self.ui.resetBtn, QtCore.SIGNAL('clicked()'), self.resetClicked)
         QtCore.QObject.connect(self.thread, QtCore.SIGNAL('finished()'), self.threadStopped)
         QtCore.QObject.connect(self.thread, QtCore.SIGNAL('newFrame'), self.handleNewFrame)
         QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.updateParams)
         QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.updateParams)
-        #QtCore.QObject.connect(self.ui.icPulseSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateParams)
-        #QtCore.QObject.connect(self.ui.icHoldSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateParams)
-        #QtCore.QObject.connect(self.ui.icPulseCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
-        #QtCore.QObject.connect(self.ui.icHoldCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
-        #QtCore.QObject.connect(self.ui.vcPulseSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateParams)
-        #QtCore.QObject.connect(self.ui.vcHoldSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateParams)
-        #QtCore.QObject.connect(self.ui.vcPulseCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
-        #QtCore.QObject.connect(self.ui.vcHoldCheck, QtCore.SIGNAL('clicked()'), self.updateParams)
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.updateParams)
                 
         ## Configure analysis plots, curves, and data arrays
@@ -102,7 +94,7 @@ class PatchWindow(QtGui.QMainWindow):
         for n in self.analysisItems:
             w = getattr(self.ui, n+'Check')
             QtCore.QObject.connect(w, QtCore.SIGNAL('clicked()'), self.showPlots)
-            p = getattr(self.ui, n+'Plot')
+            p = self.plots[n]
             p.setCanvasBackground(QtGui.QColor(0,0,0))
             p.replot()
             for suf in ['', 'Std']:
@@ -118,7 +110,7 @@ class PatchWindow(QtGui.QMainWindow):
         """Show/hide analysis plot widgets"""
         for n in self.analysisItems:
             w = getattr(self.ui, n+'Check')
-            p = getattr(self.ui, n+'Plot')
+            p = self.plots[n]
             if w.isChecked():
                 p.show()
             else:
@@ -136,29 +128,23 @@ class PatchWindow(QtGui.QMainWindow):
             if p in state:
                 self.params[p] = state[p]
         self.params['recordTime'] = self.params['delayTime'] *2.0 + self.params['pulseTime']
-        #self.params['icHoldingEnabled'] = self.ui.icHoldCheck.isChecked()
-        #self.params['icPulseEnabled'] = self.ui.icPulseCheck.isChecked()
-        #self.params['icHolding'] = self.ui.icHoldSpin.value() * 1e-12
-        #self.params['icPulse'] = self.ui.icPulseSpin.value() * 1e-12
-        #self.params['vcHoldingEnabled'] = self.ui.vcHoldCheck.isChecked()
-        #self.params['vcPulseEnabled'] = self.ui.vcPulseCheck.isChecked()
-        #self.params['vcHolding'] = self.ui.vcHoldSpin.value() * 1e-3
-        #self.params['vcPulse'] = self.ui.vcPulseSpin.value() * 1e-3
         l.unlock()
         self.thread.updateParams()
+        
+    def recordClicked(self):
+        if self.ui.recordBtn.isChecked():
+            if len(self.analysisData['time']) > 0:
+                data = self.makeAnalysisArray()
+                data.write(self.storageFile().name(), appendAxis='Time', newFile=True)
+                
+    def storageFile(self):
+        sd = self.manager.getCurrentDir().getDir('Patch', create=True)
+        return sd.getFile(self.clampName, create=True)
+            
         
     def resetClicked(self):
         for n in self.analysisData:
             self.analysisData[n] = []
-        
-    #def setParameter(self, param, value):
-        #if param in ['cycleTime', 'recordTime', 'delayTime', 'pulseTime']:
-            ##w = getattr(self.ui, param+'Spin')
-            #l = QtCore.QMutexLocker(self.paramLock)
-            #self.params[param] = value
-            #l.unlock()
-        #self.thread.updateParams()
-        
         
     def handleNewFrame(self, frame):
         l = QtCore.QMutexLocker(self.paramLock)
@@ -192,22 +178,61 @@ class PatchWindow(QtGui.QMainWindow):
         self.analysisData['time'].append(data._info[-1]['startTime'])
         self.updateAnalysisPlots()
         
+        ## Record to disk if requested.
+        if self.ui.recordBtn.isChecked():
+            
+            arr = self.makeAnalysisArray(lastOnly=True)
+            print "appending array", arr.shape
+            arr.write(self.storageFile().name(), appendAxis='Time')
+        
+    def makeAnalysisArray(self, lastOnly=False):
+        ## Determine how much of the data to include in this array
+        if lastOnly:
+            sl = slice(-1, None)
+        else:
+            sl = slice(None)
+            
+        ## Generate the meta-info structure
+        info = [
+            {'name': 'Time', 'values': self.analysisData['time'][sl], 'units': 's'},
+            {'name': 'Value', 'cols': []}
+        ]
+        for k in self.analysisItems:
+            for s in ['', 'Std']:
+                if len(self.analysisData[k+s]) < 1:
+                    continue
+                info[1]['cols'].append({'name': k+s, 'units': self.analysisItems[k]})
+                
+        ## Create the blank MetaArray
+        data = MetaArray(
+            (len(info[0]['values']), len(info[1]['cols'])), 
+            dtype=float,
+            info=info
+        )
+        
+        ## Fill with data
+        for k in self.analysisItems:
+            for s in ['', 'Std']:
+                if len(self.analysisData[k+s]) < 1:
+                    continue
+                try:
+                    data[:, k+s] = self.analysisData[k+s][sl]
+                except:
+                    print data.shape, data[:, k+s].shape, len(self.analysisData[k+s][sl])
+                    raise
+                
+        return data
+            
+            
+        
     def updateAnalysisPlots(self):
         for n in self.analysisItems:
-            p = getattr(self.ui, n+'Plot')
+            p = self.plots[n]
             if p.isVisible():
                 self.analysisCurves[n].setData(self.analysisData['time'], self.analysisData[n])
                 if len(self.analysisData[n+'Std']) > 0:
                     self.analysisCurves[p+'Std'].setData(self.analysisData['time'], self.analysisData[n+'Std'])
                 p.replot()
-        #if self.ui.inputResistanceRadio.isChecked():
-            #p = 'mr'
-        #elif self.ui.restingPotentialRadio.isChecked():
-            #p = 'rmp'
-        #elif self.ui.timeConstantRadio.isChecked():
-            #p = 'tau'
-        #self.analysisCurve.setData(self.analysisData['time'], self.analysisData[p])
-        #self.ui.analysisPlot.replot()
     
     def startClicked(self):
         if self.ui.startBtn.isChecked():
@@ -227,7 +252,7 @@ class PatchWindow(QtGui.QMainWindow):
 class PatchThread(QtCore.QThread):
     def __init__(self, ui):
         self.ui = ui
-        self.dm = ui.dm
+        self.manager = ui.manager
         self.clampName = ui.clampName
         QtCore.QThread.__init__(self)
         self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
@@ -242,7 +267,7 @@ class PatchThread(QtCore.QThread):
         try:
             l = QtCore.QMutexLocker(self.lock)
             self.stopThread = False
-            clamp = self.dm.getDevice(self.clampName)
+            clamp = self.manager.getDevice(self.clampName)
             daqName = clamp.config['commandChannel'][0]
             clampName = self.clampName
             self.paramsUpdated = True
@@ -293,7 +318,7 @@ class PatchThread(QtCore.QThread):
                 
                 ## Create task
                 ## TODO: reuse tasks to improve efficiency
-                task = self.dm.createTask(cmd)
+                task = self.manager.createTask(cmd)
                 
                 ## Execute task
                 task.execute()

@@ -526,7 +526,7 @@ class MetaArray(ndarray):
         subarr._info = meta['info']
         return subarr
                     
-    def write(self, fileName, appendAxis=None):
+    def write(self, fileName, appendAxis=None, newFile=False):
         """Write this object to a file. The object can be restored by calling MetaArray(file=fileName)"""
     
         meta = {'shape':self.shape, 'type':str(self.dtype), 'info':self.infoCopy(), 'version':MetaArray.version}
@@ -555,8 +555,9 @@ class MetaArray(ndarray):
                 ax['values_type'] = str(ax['values'].dtype)
                 del ax['values']
                 
-        ## does the file already exist?
-        newFile = not os.path.exists(fileName)
+        ## Decide whether to output the meta block for a new file
+        if not newFile:
+            newFile = not os.path.exists(fileName)
         
         ## write data to file
         if appendAxis is None or newFile:

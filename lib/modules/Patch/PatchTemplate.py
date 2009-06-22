@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'PatchTemplate.ui'
 #
-# Created: Wed Jun 17 09:55:56 2009
-#      by: PyQt4 UI code generator 4.4.3
+# Created: Sat Jun 20 22:36:29 2009
+#      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(524, 511)
+        Form.resize(524, 533)
         self.verticalLayout_3 = QtGui.QVBoxLayout(Form)
         self.verticalLayout_3.setObjectName("verticalLayout_3")
         self.horizontalLayout = QtGui.QHBoxLayout()
@@ -34,10 +34,10 @@ class Ui_Form(object):
         self.startBtn.setCheckable(True)
         self.startBtn.setObjectName("startBtn")
         self.gridLayout_2.addWidget(self.startBtn, 0, 0, 1, 1)
-        self.recordPlot = QtGui.QPushButton(self.groupBox_2)
-        self.recordPlot.setCheckable(True)
-        self.recordPlot.setObjectName("recordPlot")
-        self.gridLayout_2.addWidget(self.recordPlot, 0, 1, 1, 1)
+        self.recordBtn = QtGui.QPushButton(self.groupBox_2)
+        self.recordBtn.setCheckable(True)
+        self.recordBtn.setObjectName("recordBtn")
+        self.gridLayout_2.addWidget(self.recordBtn, 0, 1, 1, 1)
         self.vcModeRadio = QtGui.QRadioButton(self.groupBox_2)
         self.vcModeRadio.setChecked(True)
         self.vcModeRadio.setObjectName("vcModeRadio")
@@ -196,20 +196,10 @@ class Ui_Form(object):
         self.horizontalLayout.addLayout(self.verticalLayout)
         self.verticalLayout_2 = QtGui.QVBoxLayout()
         self.verticalLayout_2.setObjectName("verticalLayout_2")
-        self.patchPlot = QwtPlot(Form)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Expanding)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(10)
-        sizePolicy.setHeightForWidth(self.patchPlot.sizePolicy().hasHeightForWidth())
-        self.patchPlot.setSizePolicy(sizePolicy)
+        self.patchPlot = PlotWidget(Form)
         self.patchPlot.setObjectName("patchPlot")
         self.verticalLayout_2.addWidget(self.patchPlot)
-        self.commandPlot = QwtPlot(Form)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Expanding)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(5)
-        sizePolicy.setHeightForWidth(self.commandPlot.sizePolicy().hasHeightForWidth())
-        self.commandPlot.setSizePolicy(sizePolicy)
+        self.commandPlot = PlotWidget(Form)
         self.commandPlot.setObjectName("commandPlot")
         self.verticalLayout_2.addWidget(self.commandPlot)
         self.horizontalLayout.addLayout(self.verticalLayout_2)
@@ -217,22 +207,6 @@ class Ui_Form(object):
         self.plotLayout = QtGui.QVBoxLayout()
         self.plotLayout.setSpacing(0)
         self.plotLayout.setObjectName("plotLayout")
-        self.inputResistancePlot = QwtPlot(Form)
-        self.inputResistancePlot.setMinimumSize(QtCore.QSize(0, 30))
-        self.inputResistancePlot.setObjectName("inputResistancePlot")
-        self.plotLayout.addWidget(self.inputResistancePlot)
-        self.restingPotentialPlot = QwtPlot(Form)
-        self.restingPotentialPlot.setMinimumSize(QtCore.QSize(0, 30))
-        self.restingPotentialPlot.setObjectName("restingPotentialPlot")
-        self.plotLayout.addWidget(self.restingPotentialPlot)
-        self.restingCurrentPlot = QwtPlot(Form)
-        self.restingCurrentPlot.setMinimumSize(QtCore.QSize(0, 30))
-        self.restingCurrentPlot.setObjectName("restingCurrentPlot")
-        self.plotLayout.addWidget(self.restingCurrentPlot)
-        self.timeConstantPlot = QwtPlot(Form)
-        self.timeConstantPlot.setMinimumSize(QtCore.QSize(0, 30))
-        self.timeConstantPlot.setObjectName("timeConstantPlot")
-        self.plotLayout.addWidget(self.timeConstantPlot)
         self.verticalLayout_3.addLayout(self.plotLayout)
 
         self.retranslateUi(Form)
@@ -241,7 +215,7 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Patch", None, QtGui.QApplication.UnicodeUTF8))
         self.startBtn.setText(QtGui.QApplication.translate("Form", "Start", None, QtGui.QApplication.UnicodeUTF8))
-        self.recordPlot.setText(QtGui.QApplication.translate("Form", "Record", None, QtGui.QApplication.UnicodeUTF8))
+        self.recordBtn.setText(QtGui.QApplication.translate("Form", "Record", None, QtGui.QApplication.UnicodeUTF8))
         self.vcModeRadio.setText(QtGui.QApplication.translate("Form", "VC", None, QtGui.QApplication.UnicodeUTF8))
         self.vcPulseCheck.setText(QtGui.QApplication.translate("Form", "Pulse", None, QtGui.QApplication.UnicodeUTF8))
         self.pulseLabel.setText(QtGui.QApplication.translate("Form", "mV", None, QtGui.QApplication.UnicodeUTF8))
@@ -269,4 +243,4 @@ class Ui_Form(object):
         self.restingCurrentCheck.setText(QtGui.QApplication.translate("Form", "Resting Current", None, QtGui.QApplication.UnicodeUTF8))
         self.restingCurrentLabel.setText(QtGui.QApplication.translate("Form", "0 +/- 0pA", None, QtGui.QApplication.UnicodeUTF8))
 
-from PyQt4.Qwt5 import QwtPlot
+from lib.util.PlotWidget import PlotWidget

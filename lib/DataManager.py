@@ -435,6 +435,20 @@ class DirHandle(FileHandle):
             else:
                 raise Exception('Directory %s does not exist.' % ndir)
         
+    def getFile(self, fileName, create=False):
+        """return a File handle for the named file. Create an empty file if create-True and the file does not already exist."""
+        fullName = os.path.join(self.name(), fileName)
+        if create and not os.path.exists(fullName):
+            open(fullName, 'w')
+            self.addFile(fileName)
+        if not os.path.isfile(fullName):
+            raise Exception('Error creating file "%s" (name already exists?)' % fullName)
+        fh = self[fileName]
+        if not fh.isManaged():
+            self.addFile(fileName)
+        return fh
+        
+        
     def dirExists(self, dirName):
         return os.path.isdir(os.path.join(self.path, dirName))
             
