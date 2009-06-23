@@ -37,7 +37,7 @@ class Device(QtCore.QObject):
 
     def deviceInterface(self):
         """Return a widget with a UI to put in the device rack"""
-        return QtGui.QLabel(self.name)
+        return QtGui.QWidget()
         
     def protocolInterface(self, prot):
         """Return a widget with a UI to put in the protocol rack"""
