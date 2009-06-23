@@ -89,7 +89,7 @@ class PVCamera(QtGui.QMainWindow):
 
         self.ui.plotWidget.setCanvasBackground(QtGui.QColor(0,0,0))
         self.ui.plotWidget.enableAxis(Qwt.QwtPlot.xBottom, False)
-        self.ui.plotWidget.replot()
+        self.ui.plotWidget.plot()
 
 
         ## Set up plot graphicsView
@@ -476,7 +476,7 @@ class PVCamera(QtGui.QMainWindow):
                 #r['plot'].updateData(array(r['vals']))
                 r['plot'].setData(array(r['times'])-minTime, r['vals'])
             
-        self.ui.plotWidget.replot()
+        self.ui.plotWidget.plot()
     
             
     def newFrame(self, frame):

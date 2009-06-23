@@ -7,6 +7,7 @@ from lib.util.PlotWidget import PlotWidget
 from lib.util.MetaArray import *
 import traceback, sys, time
 from numpy import *
+import scipy.optimize
 
 class PatchWindow(QtGui.QMainWindow):
     def __init__(self, dm, clampName):
@@ -15,9 +16,11 @@ class PatchWindow(QtGui.QMainWindow):
         
         self.analysisItems = {
             'inputResistance': 'Ohm', 
+            'accessResistance': 'Ohm',
+            'capacitance': 'pF',
             'restingPotential': 'V', 
             'restingCurrent': 'A', 
-            'timeConstant': 's'}
+        }
         
         self.params = {
             'mode': 'vc',
@@ -26,8 +29,8 @@ class PatchWindow(QtGui.QMainWindow):
             'recordTime': 0.1,
             'delayTime': 0.03,
             'pulseTime': 0.05,
-            'icPulse': 10e-12,
-            'vcPulse': 10e-3,
+            'icPulse': -10e-12,
+            'vcPulse': -10e-3,
             'icHolding': 0,
             'vcHolding': -50e-3,
             'icHoldingEnabled': False,
@@ -71,7 +74,7 @@ class PatchWindow(QtGui.QMainWindow):
         
         for p in [self.ui.patchPlot, self.ui.commandPlot]:
             p.setCanvasBackground(QtGui.QColor(0,0,0))
-            p.replot()
+            p.plot()
         self.patchCurve = Qwt.QwtPlotCurve('cell')
         self.patchCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         self.patchCurve.attach(self.ui.patchPlot)
@@ -96,7 +99,7 @@ class PatchWindow(QtGui.QMainWindow):
             QtCore.QObject.connect(w, QtCore.SIGNAL('clicked()'), self.showPlots)
             p = self.plots[n]
             p.setCanvasBackground(QtGui.QColor(0,0,0))
-            p.replot()
+            p.plot()
             for suf in ['', 'Std']:
                 self.analysisCurves[n+suf] = Qwt.QwtPlotCurve(n+suf)
                 self.analysisCurves[n+suf].setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
@@ -164,20 +167,23 @@ class PatchWindow(QtGui.QMainWindow):
             scale2 = 1e12
         self.patchCurve.setData(data.xvals('Time'), data['scaled']*scale1)
         self.commandCurve.setData(data.xvals('Time'), data['raw']*scale2)
-        self.ui.patchPlot.replot()
-        self.ui.commandPlot.replot()
+        self.ui.patchPlot.plot()
+        self.ui.commandPlot.plot()
         
         for k in self.analysisItems:
             if k in frame['analysis']:
                 self.analysisData[k].append(frame['analysis'][k])
                 
-        if frame['analysis']['inputResistance'] > 1e9:
-            self.ui.inputResistanceLabel.setText('%0.2f GOhm' % (frame['analysis']['inputResistance']*1e-9))
-        else:
-            self.ui.inputResistanceLabel.setText('%0.2f MOhm' % (frame['analysis']['inputResistance']*1e-6))
+        for r in ['input', 'access']:
+            res = r+'Resistance'
+            label = getattr(self.ui, res+'Label')
+            if frame['analysis'][res] > 1e9:
+                label.setText('%0.2f GOhm' % (frame['analysis'][res]*1e-9))
+            else:
+                label.setText('%0.2f MOhm' % (frame['analysis'][res]*1e-6))
         self.ui.restingPotentialLabel.setText('%0.2f +/- %0.2f mV' % (frame['analysis']['restingPotential']*1e3, frame['analysis']['restingPotentialStd']*1e3))
         self.ui.restingCurrentLabel.setText('%0.2f +/- %0.2f pA' % (frame['analysis']['restingCurrent']*1e9, frame['analysis']['restingCurrentStd']*1e9))
-        self.ui.timeConstantLabel.setText('%0.2f ms' % (frame['analysis']['timeConstant']*1e3))
+        self.ui.capacitanceLabel.setText('%0.2f pF' % (frame['analysis']['capacitance']*1e12))
         
         self.analysisData['time'].append(data._info[-1]['startTime'])
         self.updateAnalysisPlots()
@@ -236,7 +242,7 @@ class PatchWindow(QtGui.QMainWindow):
                 self.analysisCurves[n].setData(self.analysisData['time'], self.analysisData[n])
                 if len(self.analysisData[n+'Std']) > 0:
                     self.analysisCurves[p+'Std'].setData(self.analysisData['time'], self.analysisData[n+'Std'])
-                p.replot()
+                p.plot()
     
     def startClicked(self):
         if self.ui.startBtn.isChecked():
@@ -360,41 +366,98 @@ class PatchThread(QtCore.QThread):
         #self.emit(QtCore.SIGNAL('threadStopped'))
             
     def analyze(self, data, params):
+        #print "\n\nAnalysis parameters:", params
+        ## Extract specific time segments
         base = data['Time': 0.0:params['delayTime']]
         pulse = data['Time': params['delayTime']:params['delayTime']+params['pulseTime']]
         pulseEnd = data['Time': params['delayTime']+(params['pulseTime']*2./3.):params['delayTime']+params['pulseTime']]
+        end = data['Time':params['delayTime']+params['pulseTime']:]
+        #print "time ranges:", pulse.xvals('Time').min(),pulse.xvals('Time').max(),end.xvals('Time').min(),end.xvals('Time').max()
+        ## Exponential fit
+        #  v[0] is offset to start of exp
+        #  v[1] is amplitude of exp
+        #  v[2] is tau
+        def expFn(v, t):
+            return (v[0]-v[1]) + v[1] * exp(-t / v[2])
+        # predictions
+        ar = 10e6
+        ir = 200e6
+        if params['mode'] == 'vc':
+            ari = params['vcPulse'] / ar
+            iri = params['vcPulse'] / ir
+            pred1 = [ari, ari-iri, 1e-3]
+            pred2 = [iri-ari, iri-ari, 1e-3]
+        else:
+            clamp = self.manager.getDevice(self.clampName)
+            bridge = float(clamp.getParam('BridgeBalResist', cache=False))
+            bridgeOn = clamp.getParam('BridgeBalEnable', cache=False)
+            #print "bridge on: '%s'" % bridgeOn, type(bridgeOn)
+            if bridgeOn != 'True':
+                bridge = 0.0
+            #print "Bridge:", bridge, bridgeOn, type(bridgeOn)
+            arv = params['icPulse'] * (ar-bridge)
+            irv = params['icPulse'] * ir
+            pred1 = [arv, -irv, 10e-3]
+            pred2 = [irv, irv, 50e-3]
+            
+        # Fit exponential to pulse and post-pulse traces
+        fit1 = scipy.optimize.leastsq(
+            lambda v, t, y: y - expFn(v, t), pred1, 
+            args=(pulse.xvals('Time')-pulse.xvals('Time').min(), pulse['scaled'] - base['scaled'].mean()))
+        fit2 = scipy.optimize.leastsq(
+            lambda v, t, y: y - expFn(v, t), pred2, 
+            args=(end.xvals('Time')-end.xvals('Time').min(), end['scaled'] - base['scaled'].mean()))
+        # Average fit1 with fit2 (needs massaging since fits have different starting points)
+        fit1 = fit1[0]
+        fit2 = fit2[0]
+        fitAvg = [
+            0.5 * (fit1[0] - (fit2[0] - (fit1[0] - fit1[1]))),
+            0.5 * (fit1[1] - fit2[1]),
+            0.5 * (fit1[2] + fit2[2])            
+        ]
+        fitAvg = fit1
         
+        0.5 * (fit1[0] + (fit2[0] * array([-1, -1, 1])))
+        #print pred1, fit1, pred2, fit2, fitAvg
+        
+        ## Handle anelysis differently depenting on clamp mode
         if params['mode'] == 'vc':
             iBase = base['Channel': 'scaled']
             iPulse = pulseEnd['Channel': 'scaled'] 
             vBase = base['Channel': 'Command']
             vPulse = pulse['Channel': 'Command'] 
+            
+            vStep = vPulse.mean() - vBase.mean()
+            aRes = vStep / fitAvg[0]
+            iRes = vStep / (fitAvg[0] - fitAvg[1])
+            cap = fitAvg[2] / aRes
         if params['mode'] == 'ic':
             iBase = base['Channel': 'Command']
             iPulse = pulse['Channel': 'Command'] 
             vBase = base['Channel': 'scaled']
             vPulse = pulseEnd['Channel': 'scaled'] 
-            # exponential fit starting point: y = est[0] + est[1] * exp(-x*est[2])
-            #estimate = [rmp
-            ## Exponential fit
-            #fit = leastsq(lambda v, x, y: y - (v[0] - v[1]*exp(-x * v[2])), [10, 2, 3], args=(array(x), array(y)))
-        #rmp = vBase.median()
-        #rmps = vBase.std()
-        #rmc = iBase.median()
-        #rmcs = iBase.std()
-        #ir = (vPulse.median()-rmp) / (iPulse.median()-rmc)
+            
+            iStep = iPulse.mean() - iBase.mean()
+            #print "current step:", iStep
+            #print "bridge:", bridge
+            aRes = (fitAvg[0] / iStep) + bridge
+            iRes = (-fitAvg[1] / iStep) + bridge
+            cap = fitAvg[2] / (iRes-aRes)
+            
+            
+            
         rmp = vBase.mean()
         rmps = vBase.std()
         rmc = iBase.mean()
         rmcs = iBase.std()
-        ir = (vPulse.mean()-rmp) / (iPulse.mean()-rmc)
         
             
         return {
-            'inputResistance': ir, 
+            'inputResistance': iRes, 
+            'accessResistance': aRes,
+            'capacitance': cap,
             'restingPotential': rmp, 'restingPotentialStd': rmps,
             'restingCurrent': rmc, 'restingCurrentStd': rmcs,
-            'timeConstant': 0
         }
             
     def stop(self, block=False):

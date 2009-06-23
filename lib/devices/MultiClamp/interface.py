@@ -63,6 +63,13 @@ class MultiClamp(Device):
         ind = self.getChanIndex()
         self.mc.setParams(ind, params)
     
+    def getParam(self, param, cache=None):
+        l = QtCore.QMutexLocker(self.lock)
+        ind = self.getChanIndex()
+        return self.mc.readParams(ind, [param], cache=cache)[param][0]
+        
+        
+    
     def createTask(self, cmd):
         l = QtCore.QMutexLocker(self.lock)
         return Task(self, cmd)
