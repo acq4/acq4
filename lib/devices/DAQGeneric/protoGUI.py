@@ -34,6 +34,7 @@ class DAQGenericProtoGui(ProtocolGui):
             
             if conf['type'] in ['ao', 'do']:
                 w = OutputChannelGui(self.ui.controlSplitter, ch, conf, p, dev, prot)
+                QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
             elif conf['type'] in ['ai', 'di']:
                 w = InputChannelGui(self.ui.controlSplitter, ch, conf, p, dev, prot)
             else:
@@ -46,6 +47,7 @@ class DAQGenericProtoGui(ProtocolGui):
             (self.ui.controlSplitter, 'splitter2'),
             (self.ui.plotSplitter, 'splitter3'),
         ])
+        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('protocolStarted'), self.protoStarted)
         
 
     def saveState(self):
@@ -67,17 +69,44 @@ class DAQGenericProtoGui(ProtocolGui):
         
     def listSequence(self):
         ## returns sequence parameter names and lengths
-        l = []
+        l = {}
         for ch in self.channels:
-            l.extend(self.channels[ch].listSequence())
+            chl = self.channels[ch].listSequence()
+            for k in chl:
+                l[ch+'.'+k] = chl[k]
         return l
         
+    def sequenceChanged(self):
+        self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        
+    def protoStarted(self, params):
+        ## Pull out parameters for this device
+        params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name])
+        
+        for ch in self.channels:
+            ## Extract just the parameters the channel will need
+            chParams = {}
+            search = ch + '.'
+            for k in params:
+                if k[:len(search)] == search:
+                    chParams[k[len(search):]] = params[k]
+            self.channels[ch].protoStarted(chParams)
+        
     def generateProtocol(self, params=None):
+        #print "generating protocol with:", params
         if params is None:
             params = {}
         p = {}
         for ch in self.channels:
-            p[ch] = self.channels[ch].generateProtocol(params)
+            ## Extract just the parameters the channel will need
+            chParams = {}
+            search = ch + '.'
+            for k in params:
+                if k[:len(search)] == search:
+                    chParams[k[len(search):]] = params[k]
+            ## request the protocol from the channel
+            #print "  requesting %s protocol with params:"%ch, chParams
+            p[ch] = self.channels[ch].generateProtocol(chParams)
         #print p
         return p
         

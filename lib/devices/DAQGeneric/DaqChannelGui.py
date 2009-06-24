@@ -68,6 +68,9 @@ class DaqChannelGui(QtGui.QWidget):
             self.plot.show()
         else:
             self.plot.hide()
+            
+    def protoStarted(self, params):
+        pass
         
 class OutputChannelGui(DaqChannelGui):
     def __init__(self, *args):
@@ -90,7 +93,6 @@ class OutputChannelGui(DaqChannelGui):
 
         QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
-        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('protocolStarted'), self.protoStarted)
 
         
     
@@ -147,7 +149,7 @@ class OutputChannelGui(DaqChannelGui):
             return
         if self.currentPlot is not None:
             self.currentPlot.detach()
-        params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name])
+        
         cur = self.getSingleWave(params)
         #cur = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
         if cur is not None:
@@ -165,6 +167,7 @@ class OutputChannelGui(DaqChannelGui):
 
     def getSingleWave(self, params=None):
         ## waveGenerator generates values in mV or pA
+        #print "    get wave:", params
         wave = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
         
         if wave is None:

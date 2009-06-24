@@ -206,6 +206,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             return
         else:
             params = self.docks[dev].widget().listSequence()
+        #print "New parameter lst:", params
         # Catalog the parameters that already exist for this device:
         items = {}
         for i in self.ui.sequenceParamList.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0):
