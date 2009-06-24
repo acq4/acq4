@@ -1,0 +1,50 @@
+winState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%00%00%00%05l%00%00%02%C8%FC%02%00%00%00%02%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%00%D9%00%00%01%B4%00%00%01.%00%07%FF%FF%FB%00%00%00%0A%00S%00t%00i%00m%000%01%00%00%02%91%00%00%01%10%00%00%01%10%00%07%FF%FF%00%00%00%02%00%00%05p%00%00%00%D5%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01x%00%00%01%09%00%07%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%01%7C%00%00%01%C4%00%00%01%15%00%07%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%03D%00%00%01q%00%00%01%1C%00%07%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%04%B9%00%00%00%B7%00%00%00%93%00%07%FF%FF%00%00%00%00%00%00%02%C8%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+devices:
+    Stim0:
+        splitter2: [1]
+        splitter3: [1]
+        splitter1: [334, 1031]
+        channels:
+            Command:
+                holdingCheck: True
+                autoUpdateCheck: False
+                holdingSpin: 0.0
+                functionCheck: True
+                preSetCheck: True
+                displayCheck: True
+                preSetSpin: 0.0
+                waveGeneratorWidget:
+                    function: 'pulse(100, 0.1, Amp)'
+                    params: 'Amp = 0.01; 0.001:0.03/50:l'
+    Clamp1:
+        splitter: [1, 1]
+        setRawGainCheck: False
+        holdingCheck: False
+        rawGainSpin: 0.0
+        autoUpdateCheck: False
+        holdingSpin: 0.0
+        scaledGainSpin: 0.0
+        rawSignal: 'MembranePotential'
+        rawSignalCheck: False
+        scaledSignalCombo: 'MembranePotential'
+        rawSignalCombo: 'MembranePotential'
+        scaledSignalCheck: False
+        splitter_2: [346, 1037]
+        scaledSignal: 'MembranePotential'
+        setScaledGainCheck: False
+        waveGeneratorWidget:
+            function: ''
+            params: ''
+        displayAverageCheck: False
+        mode: 'I=0'
+    DAQ:
+        numPts: 20000
+        rate: 40000.0
+conf:
+    repetitions: 0
+    cycleTime: 0.29999999999999999
+    loopCycleTime: 0.29999999999999999
+    duration: 0.5
+    continuous: False
+    leadTime: 0.01
+    loop: False

@@ -1,0 +1,50 @@
+winState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%00%00%00%05l%00%00%02%C8%FC%02%00%00%00%02%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%00%D9%00%00%01u%00%00%01.%00%07%FF%FF%FB%00%00%00%0C%00P%00u%00f%00f%00e%00r%01%00%00%02R%00%00%01O%00%00%01%10%00%07%FF%FF%00%00%00%02%00%00%05p%00%00%00%D5%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01l%00%00%00%BD%00%07%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%01p%00%00%01i%00%00%01%15%00%07%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02%DD%00%00%01d%00%00%01%1C%00%07%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%04E%00%00%01%2B%00%00%00%93%00%07%FF%FF%00%00%00%00%00%00%02%C8%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+devices:
+    Clamp1:
+        splitter: [1, 1]
+        setRawGainCheck: False
+        holdingCheck: False
+        rawGainSpin: 0.0
+        autoUpdateCheck: False
+        holdingSpin: 0.0
+        scaledGainSpin: 0.0
+        rawSignal: 'MembranePotential'
+        rawSignalCheck: False
+        scaledSignalCombo: 'MembranePotential'
+        rawSignalCombo: 'MembranePotential'
+        scaledSignalCheck: False
+        splitter_2: [346, 1037]
+        scaledSignal: 'MembranePotential'
+        setScaledGainCheck: False
+        waveGeneratorWidget:
+            function: ''
+            params: ''
+        displayAverageCheck: False
+        mode: 'I=0'
+    Puffer:
+        splitter2: [1]
+        splitter3: [1]
+        splitter1: [337, 1028]
+        channels:
+            Command:
+                holdingCheck: False
+                autoUpdateCheck: False
+                holdingSpin: 0
+                functionCheck: True
+                preSetCheck: True
+                displayCheck: True
+                preSetSpin: 0
+                waveGeneratorWidget:
+                    function: 'pulse(1000, 10, 1)'
+                    params: ''
+    DAQ:
+        numPts: 120000
+        rate: 40000.0
+conf:
+    repetitions: 0
+    cycleTime: 0.29999999999999999
+    loopCycleTime: 0.29999999999999999
+    duration: 3.0
+    continuous: False
+    leadTime: 0.01
+    loop: True
