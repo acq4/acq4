@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'PatchTemplate.ui'
 #
-# Created: Mon Jun 22 17:06:33 2009
-#      by: PyQt4 UI code generator 4.4.3
+# Created: Thu Jun 25 11:53:18 2009
+#      by: PyQt4 UI code generator 4.4.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -166,12 +166,12 @@ class Ui_Form(object):
         self.gridLayout_3.addWidget(self.capacitanceLabel, 4, 2, 1, 1)
         self.label_6 = QtGui.QLabel(self.groupBox)
         self.label_6.setObjectName("label_6")
-        self.gridLayout_3.addWidget(self.label_6, 5, 0, 1, 1)
+        self.gridLayout_3.addWidget(self.label_6, 6, 0, 1, 1)
         self.averagingSpin = QtGui.QDoubleSpinBox(self.groupBox)
         self.averagingSpin.setObjectName("averagingSpin")
-        self.gridLayout_3.addWidget(self.averagingSpin, 5, 1, 1, 2)
+        self.gridLayout_3.addWidget(self.averagingSpin, 6, 1, 1, 2)
         spacerItem1 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.gridLayout_3.addItem(spacerItem1, 6, 1, 1, 1)
+        self.gridLayout_3.addItem(spacerItem1, 7, 1, 1, 1)
         self.inputResistanceCheck = QtGui.QCheckBox(self.groupBox)
         self.inputResistanceCheck.setChecked(True)
         self.inputResistanceCheck.setObjectName("inputResistanceCheck")
@@ -202,6 +202,16 @@ class Ui_Form(object):
         self.accessResistanceLabel.setFont(font)
         self.accessResistanceLabel.setObjectName("accessResistanceLabel")
         self.gridLayout_3.addWidget(self.accessResistanceLabel, 1, 2, 1, 1)
+        self.fitErrorCheck = QtGui.QCheckBox(self.groupBox)
+        self.fitErrorCheck.setObjectName("fitErrorCheck")
+        self.gridLayout_3.addWidget(self.fitErrorCheck, 5, 0, 1, 1)
+        self.fitErrorLabel = QtGui.QLabel(self.groupBox)
+        font = QtGui.QFont()
+        font.setWeight(75)
+        font.setBold(True)
+        self.fitErrorLabel.setFont(font)
+        self.fitErrorLabel.setObjectName("fitErrorLabel")
+        self.gridLayout_3.addWidget(self.fitErrorLabel, 5, 2, 1, 1)
         self.verticalLayout.addWidget(self.groupBox)
         self.horizontalLayout.addLayout(self.verticalLayout)
         self.verticalLayout_2 = QtGui.QVBoxLayout()
@@ -254,5 +264,7 @@ class Ui_Form(object):
         self.restingCurrentLabel.setText(QtGui.QApplication.translate("Form", "0 +/- 0pA", None, QtGui.QApplication.UnicodeUTF8))
         self.accessResistanceCheck.setText(QtGui.QApplication.translate("Form", "Access Resistance", None, QtGui.QApplication.UnicodeUTF8))
         self.accessResistanceLabel.setText(QtGui.QApplication.translate("Form", "0 MOhm", None, QtGui.QApplication.UnicodeUTF8))
+        self.fitErrorCheck.setText(QtGui.QApplication.translate("Form", "Fit Error", None, QtGui.QApplication.UnicodeUTF8))
+        self.fitErrorLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
 
 from lib.util.PlotWidget import PlotWidget

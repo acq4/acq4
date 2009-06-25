@@ -1,7 +1,8 @@
-<ui version="4.0" >
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
  <class>Form</class>
- <widget class="QWidget" name="Form" >
-  <property name="geometry" >
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
@@ -9,177 +10,177 @@
     <height>533</height>
    </rect>
   </property>
-  <property name="windowTitle" >
+  <property name="windowTitle">
    <string>Patch</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout_3" >
+  <layout class="QVBoxLayout" name="verticalLayout_3">
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout" >
+    <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
-      <layout class="QVBoxLayout" name="verticalLayout" >
+      <layout class="QVBoxLayout" name="verticalLayout">
        <item>
-        <widget class="QGroupBox" name="groupBox_2" >
-         <property name="sizePolicy" >
-          <sizepolicy vsizetype="Preferred" hsizetype="Preferred" >
+        <widget class="QGroupBox" name="groupBox_2">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
-         <property name="title" >
+         <property name="title">
           <string/>
          </property>
-         <layout class="QGridLayout" name="gridLayout_2" >
-          <property name="margin" >
+         <layout class="QGridLayout" name="gridLayout_2">
+          <property name="margin">
            <number>0</number>
           </property>
-          <property name="spacing" >
+          <property name="spacing">
            <number>0</number>
           </property>
-          <item row="0" column="0" >
-           <widget class="QPushButton" name="startBtn" >
-            <property name="text" >
+          <item row="0" column="0">
+           <widget class="QPushButton" name="startBtn">
+            <property name="text">
              <string>Start</string>
             </property>
-            <property name="checkable" >
+            <property name="checkable">
              <bool>true</bool>
             </property>
            </widget>
           </item>
-          <item row="0" column="1" >
-           <widget class="QPushButton" name="recordBtn" >
-            <property name="text" >
+          <item row="0" column="1">
+           <widget class="QPushButton" name="recordBtn">
+            <property name="text">
              <string>Record</string>
             </property>
-            <property name="checkable" >
+            <property name="checkable">
              <bool>true</bool>
             </property>
            </widget>
           </item>
-          <item row="1" column="0" >
-           <widget class="QRadioButton" name="vcModeRadio" >
-            <property name="text" >
+          <item row="1" column="0">
+           <widget class="QRadioButton" name="vcModeRadio">
+            <property name="text">
              <string>VC</string>
             </property>
-            <property name="checked" >
+            <property name="checked">
              <bool>true</bool>
             </property>
            </widget>
           </item>
-          <item row="1" column="1" >
-           <widget class="QCheckBox" name="vcPulseCheck" >
-            <property name="text" >
+          <item row="1" column="1">
+           <widget class="QCheckBox" name="vcPulseCheck">
+            <property name="text">
              <string>Pulse</string>
             </property>
-            <property name="checked" >
+            <property name="checked">
              <bool>true</bool>
             </property>
            </widget>
           </item>
-          <item row="1" column="2" >
-           <widget class="QDoubleSpinBox" name="vcPulseSpin" >
-            <property name="minimum" >
+          <item row="1" column="2">
+           <widget class="QDoubleSpinBox" name="vcPulseSpin">
+            <property name="minimum">
              <double>-100.000000000000000</double>
             </property>
-            <property name="maximum" >
+            <property name="maximum">
              <double>100.000000000000000</double>
             </property>
            </widget>
           </item>
-          <item row="1" column="3" >
-           <widget class="QLabel" name="pulseLabel" >
-            <property name="text" >
+          <item row="1" column="3">
+           <widget class="QLabel" name="pulseLabel">
+            <property name="text">
              <string>mV</string>
             </property>
            </widget>
           </item>
-          <item row="2" column="1" >
-           <widget class="QCheckBox" name="vcHoldCheck" >
-            <property name="text" >
+          <item row="2" column="1">
+           <widget class="QCheckBox" name="vcHoldCheck">
+            <property name="text">
              <string>Hold</string>
             </property>
            </widget>
           </item>
-          <item row="2" column="2" >
-           <widget class="QDoubleSpinBox" name="vcHoldSpin" >
-            <property name="minimum" >
+          <item row="2" column="2">
+           <widget class="QDoubleSpinBox" name="vcHoldSpin">
+            <property name="minimum">
              <double>-100.000000000000000</double>
             </property>
-            <property name="maximum" >
+            <property name="maximum">
              <double>100.000000000000000</double>
             </property>
            </widget>
           </item>
-          <item row="2" column="3" >
-           <widget class="QLabel" name="holdLabel" >
-            <property name="text" >
+          <item row="2" column="3">
+           <widget class="QLabel" name="holdLabel">
+            <property name="text">
              <string>mV</string>
             </property>
            </widget>
           </item>
-          <item row="3" column="0" >
-           <widget class="QRadioButton" name="icModeRadio" >
-            <property name="text" >
+          <item row="3" column="0">
+           <widget class="QRadioButton" name="icModeRadio">
+            <property name="text">
              <string>IC</string>
             </property>
            </widget>
           </item>
-          <item row="3" column="1" >
-           <widget class="QCheckBox" name="icPulseCheck" >
-            <property name="text" >
+          <item row="3" column="1">
+           <widget class="QCheckBox" name="icPulseCheck">
+            <property name="text">
              <string>Pulse</string>
             </property>
-            <property name="checked" >
+            <property name="checked">
              <bool>true</bool>
             </property>
            </widget>
           </item>
-          <item row="3" column="2" >
-           <widget class="QDoubleSpinBox" name="icPulseSpin" >
-            <property name="minimum" >
+          <item row="3" column="2">
+           <widget class="QDoubleSpinBox" name="icPulseSpin">
+            <property name="minimum">
              <double>-1000.000000000000000</double>
             </property>
-            <property name="maximum" >
+            <property name="maximum">
              <double>1000.000000000000000</double>
             </property>
            </widget>
           </item>
-          <item rowspan="2" row="3" column="3" >
-           <widget class="QLabel" name="pulseLabel_2" >
-            <property name="text" >
+          <item row="3" column="3" rowspan="2">
+           <widget class="QLabel" name="pulseLabel_2">
+            <property name="text">
              <string>pA</string>
             </property>
            </widget>
           </item>
-          <item row="5" column="1" >
-           <widget class="QCheckBox" name="icHoldCheck" >
-            <property name="text" >
+          <item row="5" column="1">
+           <widget class="QCheckBox" name="icHoldCheck">
+            <property name="text">
              <string>Hold</string>
             </property>
            </widget>
           </item>
-          <item rowspan="2" row="4" column="2" >
-           <widget class="QDoubleSpinBox" name="icHoldSpin" >
-            <property name="minimum" >
+          <item row="4" column="2" rowspan="2">
+           <widget class="QDoubleSpinBox" name="icHoldSpin">
+            <property name="minimum">
              <double>-1000.000000000000000</double>
             </property>
-            <property name="maximum" >
+            <property name="maximum">
              <double>1000.000000000000000</double>
             </property>
            </widget>
           </item>
-          <item row="5" column="3" >
-           <widget class="QLabel" name="holdLabel_2" >
-            <property name="text" >
+          <item row="5" column="3">
+           <widget class="QLabel" name="holdLabel_2">
+            <property name="text">
              <string>pA</string>
             </property>
            </widget>
           </item>
-          <item row="6" column="1" >
-           <spacer name="verticalSpacer" >
-            <property name="orientation" >
+          <item row="6" column="1">
+           <spacer name="verticalSpacer">
+            <property name="orientation">
              <enum>Qt::Vertical</enum>
             </property>
-            <property name="sizeHint" stdset="0" >
+            <property name="sizeHint" stdset="0">
              <size>
               <width>20</width>
               <height>40</height>
@@ -187,93 +188,93 @@
             </property>
            </spacer>
           </item>
-          <item row="9" column="2" >
-           <widget class="QDoubleSpinBox" name="cycleTimeSpin" >
-            <property name="minimum" >
+          <item row="9" column="2">
+           <widget class="QDoubleSpinBox" name="cycleTimeSpin">
+            <property name="minimum">
              <double>0.010000000000000</double>
             </property>
-            <property name="maximum" >
+            <property name="maximum">
              <double>1000.000000000000000</double>
             </property>
-            <property name="singleStep" >
+            <property name="singleStep">
              <double>0.100000000000000</double>
             </property>
-            <property name="value" >
+            <property name="value">
              <double>0.200000000000000</double>
             </property>
            </widget>
           </item>
-          <item row="9" column="1" >
-           <widget class="QLabel" name="label" >
-            <property name="text" >
+          <item row="9" column="1">
+           <widget class="QLabel" name="label">
+            <property name="text">
              <string>Cycle Time</string>
             </property>
            </widget>
           </item>
-          <item row="9" column="3" >
-           <widget class="QLabel" name="label_2" >
-            <property name="text" >
+          <item row="9" column="3">
+           <widget class="QLabel" name="label_2">
+            <property name="text">
              <string>s</string>
             </property>
            </widget>
           </item>
-          <item row="0" column="3" >
-           <widget class="QToolButton" name="resetBtn" >
-            <property name="text" >
+          <item row="0" column="3">
+           <widget class="QToolButton" name="resetBtn">
+            <property name="text">
              <string>Reset</string>
             </property>
            </widget>
           </item>
-          <item row="8" column="1" >
-           <widget class="QLabel" name="label_3" >
-            <property name="text" >
+          <item row="8" column="1">
+           <widget class="QLabel" name="label_3">
+            <property name="text">
              <string>Pulse Length</string>
             </property>
            </widget>
           </item>
-          <item row="7" column="1" >
-           <widget class="QLabel" name="label_4" >
-            <property name="text" >
+          <item row="7" column="1">
+           <widget class="QLabel" name="label_4">
+            <property name="text">
              <string>Delay Length</string>
             </property>
            </widget>
           </item>
-          <item row="7" column="3" >
-           <widget class="QLabel" name="label_5" >
-            <property name="text" >
+          <item row="7" column="3">
+           <widget class="QLabel" name="label_5">
+            <property name="text">
              <string>ms</string>
             </property>
            </widget>
           </item>
-          <item row="8" column="3" >
-           <widget class="QLabel" name="label_7" >
-            <property name="text" >
+          <item row="8" column="3">
+           <widget class="QLabel" name="label_7">
+            <property name="text">
              <string>ms</string>
             </property>
            </widget>
           </item>
-          <item row="7" column="2" >
-           <widget class="QDoubleSpinBox" name="delayTimeSpin" >
-            <property name="minimum" >
+          <item row="7" column="2">
+           <widget class="QDoubleSpinBox" name="delayTimeSpin">
+            <property name="minimum">
              <double>1.000000000000000</double>
             </property>
-            <property name="maximum" >
+            <property name="maximum">
              <double>10000.000000000000000</double>
             </property>
-            <property name="singleStep" >
+            <property name="singleStep">
              <double>10.000000000000000</double>
             </property>
            </widget>
           </item>
-          <item row="8" column="2" >
-           <widget class="QDoubleSpinBox" name="pulseTimeSpin" >
-            <property name="minimum" >
+          <item row="8" column="2">
+           <widget class="QDoubleSpinBox" name="pulseTimeSpin">
+            <property name="minimum">
              <double>1.000000000000000</double>
             </property>
-            <property name="maximum" >
+            <property name="maximum">
              <double>10000.000000000000000</double>
             </property>
-            <property name="singleStep" >
+            <property name="singleStep">
              <double>10.000000000000000</double>
             </property>
            </widget>
@@ -282,72 +283,72 @@
         </widget>
        </item>
        <item>
-        <widget class="QGroupBox" name="groupBox" >
-         <property name="sizePolicy" >
-          <sizepolicy vsizetype="Preferred" hsizetype="Preferred" >
+        <widget class="QGroupBox" name="groupBox">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
-         <property name="title" >
+         <property name="title">
           <string/>
          </property>
-         <layout class="QGridLayout" name="gridLayout_3" >
-          <item row="0" column="2" >
-           <widget class="QLabel" name="inputResistanceLabel" >
-            <property name="font" >
+         <layout class="QGridLayout" name="gridLayout_3">
+          <item row="0" column="2">
+           <widget class="QLabel" name="inputResistanceLabel">
+            <property name="font">
              <font>
               <weight>75</weight>
               <bold>true</bold>
              </font>
             </property>
-            <property name="text" >
+            <property name="text">
              <string>0 MOhm</string>
             </property>
            </widget>
           </item>
-          <item row="2" column="2" >
-           <widget class="QLabel" name="restingPotentialLabel" >
-            <property name="font" >
+          <item row="2" column="2">
+           <widget class="QLabel" name="restingPotentialLabel">
+            <property name="font">
              <font>
               <weight>75</weight>
               <bold>true</bold>
              </font>
             </property>
-            <property name="text" >
+            <property name="text">
              <string>0 +/- 0mV</string>
             </property>
            </widget>
           </item>
-          <item row="4" column="2" >
-           <widget class="QLabel" name="capacitanceLabel" >
-            <property name="font" >
+          <item row="4" column="2">
+           <widget class="QLabel" name="capacitanceLabel">
+            <property name="font">
              <font>
               <weight>75</weight>
               <bold>true</bold>
              </font>
             </property>
-            <property name="text" >
+            <property name="text">
              <string>0 pF</string>
             </property>
            </widget>
           </item>
-          <item row="5" column="0" >
-           <widget class="QLabel" name="label_6" >
-            <property name="text" >
+          <item row="6" column="0">
+           <widget class="QLabel" name="label_6">
+            <property name="text">
              <string>Averaging:</string>
             </property>
            </widget>
           </item>
-          <item row="5" column="1" colspan="2" >
-           <widget class="QDoubleSpinBox" name="averagingSpin" />
+          <item row="6" column="1" colspan="2">
+           <widget class="QDoubleSpinBox" name="averagingSpin"/>
           </item>
-          <item row="6" column="1" >
-           <spacer name="verticalSpacer_2" >
-            <property name="orientation" >
+          <item row="7" column="1">
+           <spacer name="verticalSpacer_2">
+            <property name="orientation">
              <enum>Qt::Vertical</enum>
             </property>
-            <property name="sizeHint" stdset="0" >
+            <property name="sizeHint" stdset="0">
              <size>
               <width>20</width>
               <height>40</height>
@@ -355,67 +356,87 @@
             </property>
            </spacer>
           </item>
-          <item row="0" column="0" colspan="2" >
-           <widget class="QCheckBox" name="inputResistanceCheck" >
-            <property name="text" >
+          <item row="0" column="0" colspan="2">
+           <widget class="QCheckBox" name="inputResistanceCheck">
+            <property name="text">
              <string>Input Resistance</string>
             </property>
-            <property name="checked" >
+            <property name="checked">
              <bool>true</bool>
             </property>
            </widget>
           </item>
-          <item row="2" column="0" colspan="2" >
-           <widget class="QCheckBox" name="restingPotentialCheck" >
-            <property name="text" >
+          <item row="2" column="0" colspan="2">
+           <widget class="QCheckBox" name="restingPotentialCheck">
+            <property name="text">
              <string>Resting Potential</string>
             </property>
            </widget>
           </item>
-          <item row="4" column="0" colspan="2" >
-           <widget class="QCheckBox" name="capacitanceCheck" >
-            <property name="text" >
+          <item row="4" column="0" colspan="2">
+           <widget class="QCheckBox" name="capacitanceCheck">
+            <property name="text">
              <string>Capacitance</string>
             </property>
            </widget>
           </item>
-          <item row="3" column="0" >
-           <widget class="QCheckBox" name="restingCurrentCheck" >
-            <property name="text" >
+          <item row="3" column="0">
+           <widget class="QCheckBox" name="restingCurrentCheck">
+            <property name="text">
              <string>Resting Current</string>
             </property>
            </widget>
           </item>
-          <item row="3" column="2" >
-           <widget class="QLabel" name="restingCurrentLabel" >
-            <property name="font" >
+          <item row="3" column="2">
+           <widget class="QLabel" name="restingCurrentLabel">
+            <property name="font">
              <font>
               <weight>75</weight>
               <bold>true</bold>
              </font>
             </property>
-            <property name="text" >
+            <property name="text">
              <string>0 +/- 0pA</string>
             </property>
            </widget>
           </item>
-          <item row="1" column="0" >
-           <widget class="QCheckBox" name="accessResistanceCheck" >
-            <property name="text" >
+          <item row="1" column="0">
+           <widget class="QCheckBox" name="accessResistanceCheck">
+            <property name="text">
              <string>Access Resistance</string>
             </property>
            </widget>
           </item>
-          <item row="1" column="2" >
-           <widget class="QLabel" name="accessResistanceLabel" >
-            <property name="font" >
+          <item row="1" column="2">
+           <widget class="QLabel" name="accessResistanceLabel">
+            <property name="font">
              <font>
               <weight>75</weight>
               <bold>true</bold>
              </font>
             </property>
-            <property name="text" >
+            <property name="text">
              <string>0 MOhm</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0">
+           <widget class="QCheckBox" name="fitErrorCheck">
+            <property name="text">
+             <string>Fit Error</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="2">
+           <widget class="QLabel" name="fitErrorLabel">
+            <property name="font">
+             <font>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="text">
+             <string>0</string>
             </property>
            </widget>
           </item>
@@ -425,20 +446,20 @@
       </layout>
      </item>
      <item>
-      <layout class="QVBoxLayout" name="verticalLayout_2" >
+      <layout class="QVBoxLayout" name="verticalLayout_2">
        <item>
-        <widget class="PlotWidget" native="1" name="patchPlot" />
+        <widget class="PlotWidget" name="patchPlot" native="true"/>
        </item>
        <item>
-        <widget class="PlotWidget" native="1" name="commandPlot" />
+        <widget class="PlotWidget" name="commandPlot" native="true"/>
        </item>
       </layout>
      </item>
     </layout>
    </item>
    <item>
-    <layout class="QVBoxLayout" name="plotLayout" >
-     <property name="spacing" >
+    <layout class="QVBoxLayout" name="plotLayout">
+     <property name="spacing">
       <number>0</number>
      </property>
     </layout>

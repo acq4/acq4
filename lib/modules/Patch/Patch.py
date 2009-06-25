@@ -20,6 +20,7 @@ class PatchWindow(QtGui.QMainWindow):
             'capacitance': 'pF',
             'restingPotential': 'V', 
             'restingCurrent': 'A', 
+            'fitError': ''
         }
         
         self.params = {
@@ -184,7 +185,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.restingPotentialLabel.setText('%0.2f +/- %0.2f mV' % (frame['analysis']['restingPotential']*1e3, frame['analysis']['restingPotentialStd']*1e3))
         self.ui.restingCurrentLabel.setText('%0.2f +/- %0.2f pA' % (frame['analysis']['restingCurrent']*1e9, frame['analysis']['restingCurrentStd']*1e9))
         self.ui.capacitanceLabel.setText('%0.2f pF' % (frame['analysis']['capacitance']*1e12))
-        
+        self.ui.fitErrorLabel.setText('%0.2g' % frame['analysis']['fitError'])
         self.analysisData['time'].append(data._info[-1]['startTime'])
         self.updateAnalysisPlots()
         
@@ -403,11 +404,14 @@ class PatchThread(QtCore.QThread):
         # Fit exponential to pulse and post-pulse traces
         fit1 = scipy.optimize.leastsq(
             lambda v, t, y: y - expFn(v, t), pred1, 
-            args=(pulse.xvals('Time')-pulse.xvals('Time').min(), pulse['scaled'] - base['scaled'].mean()))
+            args=(pulse.xvals('Time')-pulse.xvals('Time').min(), pulse['scaled'] - base['scaled'].mean()),
+            maxfev=50, warning=False)
         fit2 = scipy.optimize.leastsq(
             lambda v, t, y: y - expFn(v, t), pred2, 
-            args=(end.xvals('Time')-end.xvals('Time').min(), end['scaled'] - base['scaled'].mean()))
+            args=(end.xvals('Time')-end.xvals('Time').min(), end['scaled'] - base['scaled'].mean()),
+            maxfev=50, warning=False)
         # Average fit1 with fit2 (needs massaging since fits have different starting points)
+        err = max(fit1[1]['infodict']['fvec'], fit2[1]['infodict']['fvec'])
         fit1 = fit1[0]
         fit2 = fit2[0]
         fitAvg = [
@@ -458,6 +462,7 @@ class PatchThread(QtCore.QThread):
             'capacitance': cap,
             'restingPotential': rmp, 'restingPotentialStd': rmps,
             'restingCurrent': rmc, 'restingCurrentStd': rmcs,
+            'fitError': err
         }
             
     def stop(self, block=False):
