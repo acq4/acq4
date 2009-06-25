@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+print "Loading ACQ4..."
+
 from lib.Manager import *
 import os, sys
 from numpy import *
