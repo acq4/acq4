@@ -379,7 +379,10 @@ class Task:
             ## Stop all tasks
             for t in self.tasks:
                 #print "  stopping", t
+                ## Force all tasks to stop immediately.
+                print "Stopping task", t, "..."
                 self.tasks[t].stop()
+                print "   ..task", t, "stopped"
             self.stopped = True
             
         if not self.tasksDone():

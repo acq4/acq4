@@ -186,12 +186,20 @@ class _CameraClass:
         rgn = Region(region, binning)
         rSize = rgn.size()
         self.frameSize = rSize[0] * rSize[1] * 2
-        self.buf = numpy.empty((frames, rgn.size()[1], rgn.size()[0]), dtype=numpy.uint16)
+        self.buf = numpy.ascontiguousarray(numpy.empty((frames, rgn.size()[1], rgn.size()[0]), dtype=numpy.uint16))
+        #self.buf = numpy.empty((frames, rgn.size()[1], rgn.size()[0]), dtype=numpy.uint16)
+        #print "Created buffer:", self.buf.shape, self.buf.size, self.buf.dtype
+        #print "frameSize:", self.frameSize
+        #print "Setup camera:", region, binning, mode, exp, ssize
+        
         self.pvcam.pl_exp_setup_cont(self.hCam, c_ushort(1), byref(rgn), tModes[mode], c_uint(exp), byref(ssize), CIRC_OVERWRITE)
         ssize = c_ulong(ssize.value*frames)
+        #print "   done"
         if len(self.buf.data) != ssize.value:
             raise Exception('Created wrong size buffer! %d != %d' %(len(self.buf.data), ssize.value))
+        #print "Start continuous:"
         self.pvcam.pl_exp_start_cont(self.hCam, self.buf.ctypes.data, ssize)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
+        #print "  done"
         self.mode = 2
 
         return self.buf.transpose((0, 2, 1))
@@ -505,6 +513,7 @@ class Region(Structure):
         if len(args) == 6:
             Structure.__init__(self, *args)
         else:
+            print "creating region:", args
             rgn = args[0][:]
             if type(args[1]) is types.IntType:
                 bin = [args[1], args[1]]
@@ -512,8 +521,10 @@ class Region(Structure):
                 bin = args[1][:]
             assert( hasattr(rgn, '__len__') and len(rgn) == 4 )
             assert( hasattr(bin, '__len__') and len(bin) == 2 )
-            rgn[2] = rgn[0] + (int((rgn[2]-rgn[0])/bin[0]) * bin[0])
-            rgn[3] = rgn[1] + (int((rgn[3]-rgn[1])/bin[1]) * bin[1])
+            ## Quantize region size based on binning parameter
+            # (is this needed at all?)
+            #rgn[2] = rgn[0] + (int((rgn[2]-rgn[0]+1)/bin[0]) * bin[0]) - 1
+            #rgn[3] = rgn[1] + (int((rgn[3]-rgn[1]+1)/bin[1]) * bin[1]) - 1
             Structure.__init__(self, rgn[0], rgn[2], bin[0], rgn[1], rgn[3], bin[1])
             
     def size(self):

@@ -839,17 +839,21 @@ class TaskThread(QtCore.QThread):
         task = self.dm.createTask(cmd)
         self.lastRunTime = time.clock()
         self.emit(QtCore.SIGNAL('protocolStarted'), params)
+        print "Starting task.."
         task.execute(block=False)
-            
+        print "task started" 
+        
         ## wait for finish, watch for abort requests
         while True:
             if task.isDone():
                 break
+                
             l.relock()
             if self.abortThread:
                 l.unlock()
+                print "Stopping task..."
                 task.stop()
-                #print "Protocol run aborted by user"
+                print "Protocol run aborted by user"
                 return
             l.unlock()
             ## Abort if protocol is taking too long

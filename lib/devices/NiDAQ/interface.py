@@ -102,9 +102,11 @@ class Task(DeviceTask):
             return True
         
         
-    def stop(self):
+    def stop(self, wait=False):
         if self.st.hasTasks():
-            self.st.stop(wait=True)
+            print "stopping ST..."
+            self.st.stop(wait=wait)
+            print "   ST stopped"
         
     def getResult(self):
         ## Results should be collected by individual devices using getData

@@ -405,13 +405,24 @@ class PatchThread(QtCore.QThread):
         fit1 = scipy.optimize.leastsq(
             lambda v, t, y: y - expFn(v, t), pred1, 
             args=(pulse.xvals('Time')-pulse.xvals('Time').min(), pulse['scaled'] - base['scaled'].mean()),
-            maxfev=50, warning=False)
+            maxfev=200, full_output=1, warning=False)
         fit2 = scipy.optimize.leastsq(
             lambda v, t, y: y - expFn(v, t), pred2, 
             args=(end.xvals('Time')-end.xvals('Time').min(), end['scaled'] - base['scaled'].mean()),
-            maxfev=50, warning=False)
+            maxfev=200, full_output=1, warning=False)
+            
+        
+        err = max(abs(fit1[2]['fvec']).sum(), abs(fit2[2]['fvec']).sum())
+        #err = max(fit1[2]['nfev'], fit2[2]['nfev'])
+        
+        #times = pulse.xvals('Time')-pulse.xvals('Time').min()
+        #err = fromfunction(lambda t: pulse['scaled'][t] - expFn(fit1[0], times[t]), pulse['scaled'].shape)
+        #err *= err
+        #err = err.sum()
+        
+        
         # Average fit1 with fit2 (needs massaging since fits have different starting points)
-        err = max(fit1[1]['infodict']['fvec'], fit2[1]['infodict']['fvec'])
+        #print fit1
         fit1 = fit1[0]
         fit2 = fit2[0]
         fitAvg = [

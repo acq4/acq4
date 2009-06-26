@@ -109,7 +109,9 @@ class _NIDAQ:
             raise NIDAQError(errCode)
             #raise NIDAQError(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         elif errCode > 0:
-            raise NIDAQWarning(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
+            print "NIDAQ Warning:"
+            print self.error(errCode)
+            #raise NIDAQWarning(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         
         if ret is None:
             return True
@@ -572,18 +574,24 @@ class SuperTask:
         return data
         
     def stop(self, wait=False):
+        print "ST stopping, wait=",wait
         if wait:
             while not self.isDone():
                 #print "Sleeping..", time.time()
                 time.sleep(10e-6)
-        ## data must be read before stopping the task
-        self.getResult()
+                
+        if self.isDone():
+            # data must be read before stopping the task,
+            # but should only be read if we know the task is complete.
+            self.getResult()
         
         for t in self.tasks:
-            #print "Stopping task", t
+            print "  ST Stopping task", t
             self.tasks[t].stop()
+            print "    ..done"
             # unreserve hardware
             self.tasks[t].TaskControl(Val_Task_Unreserve)
+        print "ST stop complete."
 
     def getResult(self, channel=None):
         #print "getresult"
