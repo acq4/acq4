@@ -189,7 +189,7 @@ class DAQGenericTask(DeviceTask):
             return None
             
     def storeResult(self, dirHandle):
-        Device.storeResult(self, dirHandle)
+        DeviceTask.storeResult(self, dirHandle)
         for ch in self.cmd:
             if 'recordInit' in self.cmd[ch] and self.cmd[ch]['recordInit']:
                 dirHandle.setAttribute((self.dev.name, ch), self.initialState[ch])
