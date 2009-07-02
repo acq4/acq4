@@ -1,5 +1,6 @@
 import serial
-sp = serial.Serial(2, baudrate=1200, bytesize=serial.SEVENBITS)
+sp = serial.Serial(3, baudrate=1200, bytesize=serial.SEVENBITS)
+print "Opened", sp.portstr
 
 #def itoa(x, base=10):
    #isNegative = x < 0
