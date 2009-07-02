@@ -276,7 +276,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         """Create/unhide new docks if they are needed and hide old docks if they are not."""
         if protocol is None:
             protocol = self.currentProtocol
-        #print "update docks", protocol.name
+        #print "update docks", protocol.name()
         #print "  devices:", protocol.enabledDevices()
         
         ## (un)hide docks as needed
@@ -527,7 +527,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         try:
             self.currentDir = self.manager.getCurrentDir()
             if store:
-                name = self.currentProtocol.name
+                name = self.currentProtocol.name()
                 if name is None:
                     name = 'protocol'
                 dh = self.currentDir.mkdir(name, autoIncrement=True, info=self.protocolInfo())
@@ -567,7 +567,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             ## Set storage dir
             self.currentDir = self.manager.getCurrentDir()
             if store:
-                name = self.currentProtocol.name
+                name = self.currentProtocol.name()
                 if name is None:
                     name = 'protocol'
                 dh = self.currentDir.mkdir(name, autoIncrement=True, info=self.protocolInfo(params))
@@ -670,7 +670,6 @@ class Protocol:
         self.ui = ui
         
         if fileName is not None:
-            self.name = os.path.split(fileName)[1]
             self.fileName = fileName
             conf = readConfigFile(fileName)
             self.conf = conf['conf']
@@ -679,7 +678,6 @@ class Protocol:
             self.enabled = self.devices.keys()
         else:
             self.fileName = None
-            self.name = None
             #self.conf = {
                 #'devices': {}, 
                 #'duration': 0.2, 
@@ -722,6 +720,11 @@ class Protocol:
             fileName = self.fileName
         self.fileName = fileName
         writeConfigFile(info, fileName)
+        
+    def name(self):
+        if self.fileName is None:
+            return None
+        return os.path.split(self.fileName)[1]
     
     def describe(self):
         self.updateFromUi()
@@ -828,7 +831,7 @@ class TaskThread(QtCore.QThread):
             l.relock()
             if self.abortThread or self.stopThread:
                 l.unlock()
-                print "Protocol run aborted by user"
+                #print "Protocol run aborted by user"
                 return
             l.unlock()
             time.sleep(1e-3)
@@ -839,31 +842,42 @@ class TaskThread(QtCore.QThread):
         task = self.dm.createTask(cmd)
         self.lastRunTime = time.clock()
         self.emit(QtCore.SIGNAL('protocolStarted'), params)
-        print "Starting task.."
-        task.execute(block=False)
-        print "task started" 
+        #print "Starting task.."
         
-        ## wait for finish, watch for abort requests
-        while True:
-            if task.isDone():
-                break
-                
-            l.relock()
-            if self.abortThread:
+        try:
+            task.execute(block=False)
+            #print "task started" 
+            
+            ## wait for finish, watch for abort requests
+            while True:
+                if task.isDone():
+                    break
+                    
+                l.relock()
+                if self.abortThread:
+                    l.unlock()
+                    #print "Stopping task..."
+                    task.stop()
+                    #print "Protocol run aborted by user"
+                    return
                 l.unlock()
-                print "Stopping task..."
-                task.stop()
-                print "Protocol run aborted by user"
-                return
-            l.unlock()
-            ## Abort if protocol is taking too long
-            #if time.clock() >= (self.lastRunTime+(cmd['protocol']['duration']+0.2)):
-                #print "Protocol run aborted--timeout"
-                #task.abort()
-                #return
-            time.sleep(100e-6)
-        
-        result = task.getResult()
+                ## Abort if protocol is taking too long
+                #if time.clock() >= (self.lastRunTime+(cmd['protocol']['duration']+0.2)):
+                    #print "Protocol run aborted--timeout"
+                    #task.abort()
+                    #return
+                time.sleep(100e-6)
+                
+            result = task.getResult()
+        except:
+            ## Make sure the task is fully stopped if there was a failure at any point.
+            print "\nError during protocol execution:"
+            sys.excepthook(*sys.exc_info())
+            print "\nStopping task.."
+            task.stop()
+            print ""
+            raise
+            
         frame = {'params': params, 'cmd': cmd, 'result': result}
         self.emit(QtCore.SIGNAL('newFrame'), frame)
         if self.stopThread:

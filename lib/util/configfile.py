@@ -14,7 +14,7 @@ def readConfigFile(fname):
     try:
         os.chdir(newDir)
         fd = open(fname)
-        s = fd.read()
+        s = unicode(fd.read(), 'UTF-8')
         fd.close()
         data = parseString(s)[1]
     finally:
@@ -46,7 +46,7 @@ def genString(data, indent=''):
 def parseString(lines, start=0):
     #data = {'__order__': []}
     data = OrderedDict()
-    if type(lines) is str:
+    if isinstance(lines, basestring):
         lines = lines.split('\n')
         
     indent = measureIndent(lines[start])

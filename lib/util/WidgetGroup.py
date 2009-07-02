@@ -23,7 +23,7 @@ def comboState(w):
 def setComboState(w, v):
     if type(v) is int:
         w.setCurrentIndex(w.findData(QtCore.QVariant(v)))    
-    elif type(v) is str:
+    elif isinstance(v, basestring):
         w.setCurrentIndex(w.findText(v))
         
 

@@ -21,6 +21,7 @@ class DaqChannelGui(QtGui.QWidget):
             self.scale = config['scale']
         else:
             self.scale = 1.0
+        #print "device %s scale=%f" % (name, self.scale)
         
         ## The device handle for this channel's DAQGeneric device
         self.dev = dev

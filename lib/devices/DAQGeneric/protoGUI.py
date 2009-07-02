@@ -39,7 +39,7 @@ class DAQGenericProtoGui(ProtocolGui):
                 w = InputChannelGui(self.ui.controlSplitter, ch, conf, p, dev, prot)
             else:
                 raise Exception("Unrecognized device type '%s'" % conf['type'])
-            w.ui.groupBox.setTitle(ch)
+            w.ui.groupBox.setTitle(ch + units)
             self.channels[ch] = w
         
         self.stateGroup = WidgetGroup([

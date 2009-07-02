@@ -120,7 +120,9 @@ class DeviceTask:
     
     def storeResult(self, dirHandle):
         result = self.getResult()
-        if isinstance(result, dict):
+        if result is None:
+            return
+        elif isinstance(result, dict):
             for k in result:
                 dirHandle.writeFile(result, self.dev.name+'_'+str(k))
         else:

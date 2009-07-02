@@ -190,7 +190,7 @@ class Manager(QtCore.QObject):
             QtCore.QObject.disconnect(self.currentDir, QtCore.SIGNAL('changed'), self.currentDirChanged)
             
             
-        if type(d) is str:
+        if isinstance(d, basestring):
             self.currentDir = self.baseDir.getDir(d, create=True)
         elif isinstance(d, DirHandle):
             self.currentDir = d
@@ -211,7 +211,7 @@ class Manager(QtCore.QObject):
         return self.baseDir
 
     def setBaseDir(self, d):
-        if type(d) is str:
+        if isinstance(d, basestring):
             self.baseDir = self.dirHandle(d, create=False)
         elif isinstance(d, DirHandle):
             self.baseDir = d
@@ -254,7 +254,7 @@ class Manager(QtCore.QObject):
                 self.modules[m].quit()
                 
             for d in self.devices:
-                print "Requesting %s quit.." % d
+                #print "Requesting %s quit.." % d
                 self.devices[d].quit()
                 
             QtGui.QApplication.instance().closeAllWindows()
@@ -380,9 +380,9 @@ class Task:
             for t in self.tasks:
                 #print "  stopping", t
                 ## Force all tasks to stop immediately.
-                print "Stopping task", t, "..."
+                #print "Stopping task", t, "..."
                 self.tasks[t].stop()
-                print "   ..task", t, "stopped"
+                #print "   ..task", t, "stopped"
             self.stopped = True
             
         if not self.tasksDone():

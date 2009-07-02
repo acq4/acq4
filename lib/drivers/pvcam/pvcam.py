@@ -244,7 +244,7 @@ class _CameraClass:
         
     def setParam(self, param, value, autoClip=False, autoQuantize=False, checkValue=True):
         ## Make sure parameter exists on this hardware and is writable
-        if type(value) is str:
+        if isinstance(value, basestring):
             if value in self.pvcam.defs:
                 value = self.pvcam.defs[value]
             else:
@@ -460,7 +460,7 @@ class _PVCamClass:
         PVCAM_CREATED = False
 
     def param(self, pName):
-        if type(pName) is str:
+        if isinstance(pName, basestring):
             pName = 'PARAM_'+pName
             if pName in self.defs:
                 return self.defs[pName]
@@ -470,7 +470,7 @@ class _PVCamClass:
             return pName
 
     def attr(self, pName):
-        if type(pName) is str:
+        if isinstance(pName, basestring):
             pName = 'ATTR_'+pName
             if pName in self.defs:
                 return self.defs[pName]
