@@ -574,7 +574,7 @@ class SuperTask:
         return data
         
     def stop(self, wait=False):
-        print "ST stopping, wait=",wait
+        #print "ST stopping, wait=",wait
         if wait:
             while not self.isDone():
                 #print "Sleeping..", time.time()
@@ -586,12 +586,12 @@ class SuperTask:
             self.getResult()
         
         for t in self.tasks:
-            print "  ST Stopping task", t
+            #print "  ST Stopping task", t
             self.tasks[t].stop()
-            print "    ..done"
+            #print "    ..done"
             # unreserve hardware
             self.tasks[t].TaskControl(Val_Task_Unreserve)
-        print "ST stop complete."
+        #print "ST stop complete."
 
     def getResult(self, channel=None):
         #print "getresult"

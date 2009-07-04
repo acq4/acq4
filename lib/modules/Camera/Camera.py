@@ -4,16 +4,9 @@
 ## TODO
 # reliable error messaging for missed frames
 # Add fast/simple histogram 
-# region plots
-# decrease displayed framerate gracefully
-
-## workaround for dev libraries
-#import sys
-#sys.path = ["libs", "../pvcam", "../nidaq", "../cheader"] + sys.path
 
 
 from CameraTemplate import Ui_MainWindow
-#from ROPing import ROPWindow
 from lib.util.qtgraph.GraphicsView import *
 from lib.util.qtgraph.graphicsItems import *
 from lib.util.qtgraph.widgets import ROI
@@ -23,10 +16,6 @@ from PyQt4 import QtGui, QtCore
 from PyQt4 import Qwt5 as Qwt
 import scipy.ndimage
 import time, types, os.path, re, sys
-#if '--mock' in sys.argv:
-    #sys.path = ['mock'] + sys.path
-#import pvcam
-
 
 class CamROI(ROI):
     def __init__(self, size):
@@ -137,6 +126,14 @@ class PVCamera(QtGui.QMainWindow):
         
         self.gv.setRange(QtCore.QRect(0, 0, self.camSize[0], self.camSize[1]), lockAspect=True)
         
+        
+        self.scaleEngine = Qwt.QwtLinearScaleEngine()
+        self.ui.levelThermo.setScalePosition(Qwt.QwtThermo.NoScale)
+        self.ui.levelScale.setAlignment(Qwt.QwtScaleDraw.LeftScale)
+        self.ui.levelScale.setColorBarEnabled(True)
+        self.ui.levelScale.setColorBarWidth(10)
+
+        
         QtCore.QObject.connect(self.ui.btnAcquire, QtCore.SIGNAL('clicked()'), self.toggleAcquire)
         QtCore.QObject.connect(self.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
         QtCore.QObject.connect(self.ui.btnAutoGain, QtCore.SIGNAL('toggled(bool)'), self.toggleAutoGain)
@@ -154,8 +151,8 @@ class PVCamera(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.btnAddROI, QtCore.SIGNAL('clicked()'), self.addROI)
         QtCore.QObject.connect(self.ui.checkEnableROIs, QtCore.SIGNAL('valueChanged(bool)'), self.enableROIsChanged)
         QtCore.QObject.connect(self.ui.spinROITime, QtCore.SIGNAL('valueChanged(double)'), self.setROITime)
-        QtCore.QObject.connect(self.ui.sliderWhiteLevel, QtCore.SIGNAL('valueChanged(int)'), self.requestFrameUpdate)
-        QtCore.QObject.connect(self.ui.sliderBlackLevel, QtCore.SIGNAL('valueChanged(int)'), self.requestFrameUpdate)
+        QtCore.QObject.connect(self.ui.sliderWhiteLevel, QtCore.SIGNAL('valueChanged(int)'), self.levelsChanged)
+        QtCore.QObject.connect(self.ui.sliderBlackLevel, QtCore.SIGNAL('valueChanged(int)'), self.levelsChanged)
         QtCore.QObject.connect(self.ui.spinFlattenSize, QtCore.SIGNAL('valueChanged(int)'), self.requestFrameUpdate)
         
         
@@ -197,6 +194,10 @@ class PVCamera(QtGui.QMainWindow):
             self.ui.btnRecord.setChecked(True)
         else:
             self.ui.btnRecord.setChecked(False)
+
+    def levelsChanged(self):
+        self.updateColorScale()
+        self.requestFrameUpdate()
 
     def requestFrameUpdate(self):
         self.updateFrame = True
@@ -325,10 +326,22 @@ class PVCamera(QtGui.QMainWindow):
                     rmax = 2**self.bitDepth - 1
         self.levelMin = rmin
         self.levelMax = rmax
-        self.ui.labelLevelMax.setText(str(self.levelMax))
-        self.ui.labelLevelMid.setText(str((self.levelMax+self.levelMin) * 0.5)[:4])
-        self.ui.labelLevelMin.setText(str(self.levelMin))
-        self.ui.sliderAvgLevel.setMaximum(2**self.bitDepth - 1)
+        #self.ui.labelLevelMax.setText(str(self.levelMax))
+        #self.ui.labelLevelMid.setText(str((self.levelMax+self.levelMin) * 0.5)[:4])
+        #self.ui.labelLevelMin.setText(str(self.levelMin))
+        #self.ui.sliderAvgLevel.setMaximum(2**self.bitDepth - 1)
+        
+        self.ui.levelScale.setScaleDiv(self.scaleEngine.transformation(), self.scaleEngine.divideScale(self.levelMin, self.levelMax, 8, 5))
+        self.updateColorScale()
+        
+        self.ui.levelThermo.setMaxValue(2**self.bitDepth - 1)
+        self.ui.levelThermo.setAlarmLevel(self.ui.levelThermo.maxValue() * 0.9)
+        
+    def updateColorScale(self):
+        (w, b) = self.getLevels()
+        self.ui.levelScale.setColorMap(Qwt.QwtDoubleInterval(b, w), Qwt.QwtLinearColorMap(QtCore.Qt.black, QtCore.Qt.white))
+                
+        
         #self.updateFrame = True
         
     def getLevels(self):
@@ -422,8 +435,7 @@ class PVCamera(QtGui.QMainWindow):
                 (data, info) = self.currentFrame
                 self.currentClipMask = (data >= (2**self.bitDepth * 0.99)) 
                 
-                ## Removed because of memory leak in QSlider
-                #self.ui.sliderAvgLevel.setValue(int(data.mean()))
+                self.ui.levelThermo.setValue(int(data.mean()))
                 
                 ## If background division is enabled, mix the current frame into the background frame
                 if self.ui.btnDivideBackground.isChecked():
