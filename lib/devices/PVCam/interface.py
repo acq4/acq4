@@ -294,7 +294,7 @@ class AcquireThread(QtCore.QThread):
         self.stopThread = False
         self.lock.unlock()
         #print "..unlocked from startup"
-        self.fps = None
+        #self.fps = None
         
         try:
             #print self.ringSize, binning, exposure, region
@@ -318,17 +318,17 @@ class AcquireThread(QtCore.QThread):
                             self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped %d frame(s) after %d!" % (diff-1, self.frameId))
                     lastFrame = frame
                     
-                    ## compute FPS
-                    dt = now - lastFrameTime
-                    if dt > 0.:
-                        if self.fps is None:
-                            self.fps = 1.0/dt
-                        else:
-                            self.fps = self.fps * 0.9 + 0.1 / dt
+                    ### compute FPS
+                    #dt = now - lastFrameTime
+                    #if dt > 0.:
+                        #if self.fps is None:
+                            #self.fps = 1.0/dt
+                        #else:
+                            #self.fps = self.fps * 0.9 + 0.1 / dt
                     
                     ## Build meta-info for this frame
                     ## Use lastFrameTime because the current frame _began_ exposing when the previous frame arrived.
-                    info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region, 'fps': self.fps}
+                    info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region}
                     
                     lastFrameTime = now
                     

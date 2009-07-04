@@ -55,6 +55,7 @@ class PVCamera(QtGui.QMainWindow):
         self.currentClipMask = None
         self.backgroundFrame = None
         self.lastDrawTime = None
+        self.fps = None
         
         QtGui.QMainWindow.__init__(self)
         self.ui = Ui_MainWindow()
@@ -409,6 +410,14 @@ class PVCamera(QtGui.QMainWindow):
     
             
     def newFrame(self, frame):
+        #if hasattr(self.acquireThread, 'fps') and self.acquireThread.fps is not None:
+        if self.nextFrame is not None:
+            dt = frame[1]['time'] - self.nextFrame[1]['time']
+            if self.fps is None:
+                self.fps = 1.0/dt
+            else:
+                self.fps = self.fps * 0.9 + 0.1 / dt
+            self.fpsLabel.setText('%02.2ffps' % self.fps)
         self.nextFrame = frame
         
     def drawFrame(self):
@@ -500,8 +509,6 @@ class PVCamera(QtGui.QMainWindow):
             
             ## update info for pixel under mouse pointer
             self.setMouse()
-            if hasattr(self.acquireThread, 'fps') and self.acquireThread.fps is not None:
-                self.fpsLabel.setText('%02.2ffps' % self.acquireThread.fps)
             self.updateRgnLabel()
         except:
             #print "Exception in QtCam::newFrame: %s (line %d)" % (str(sys.exc_info()[1]), sys.exc_info()[2].tb_lineno)
@@ -533,15 +540,15 @@ class RecordThread(QtCore.QThread):
         l = QtCore.QMutexLocker(self.lock)
         try:
             newRec = self.recordStart
+            lastRec = self.recordStop
             if self.recordStop:
                 self.recording = False
                 self.recordStop = False
-                self.showMessage('Finished recording %s' % self.currentRecord.name()) 
             if self.recordStart:
                 self.recordStart = False
                 self.recording = True
                 #self.currentRecord = self.m.getCurrentDir().createFile('video', autoIncrement=True)
-            recording = self.recording
+            recording = self.recording or lastRec
             takeSnap = self.takeSnap
             recFile = self.currentRecord
         finally:
@@ -550,7 +557,7 @@ class RecordThread(QtCore.QThread):
             cLock = QtCore.QMutexLocker(self.camLock)
             ## remember the record/snap/storageDir states since they might change 
             ## before the write thread gets to this frame
-            self.newCamFrames.append({'frame': frame, 'record': recording, 'snap': takeSnap, 'newRec': newRec})
+            self.newCamFrames.append({'frame': frame, 'record': recording, 'snap': takeSnap, 'newRec': newRec, 'lastRec': lastRec})
     
     def run(self):
         self.stopThread = False
@@ -597,21 +604,33 @@ class RecordThread(QtCore.QThread):
             #fileName = 'camFrame_%05d_%f.tif' % (fNum, info['time'])
             #self.showMessage("Recording %s - %d" % (frame['recordDir'].name(), fNum))
             #frame['recordDir'].writeFile(ImageFile(data), fileName, info)
+            if frame['newRec']:
+                self.startFrameTime = info['time']
+                
             arrayInfo = [
-                {'name': 'Time', 'values': array([info['time']]), 'units': 's'},
+                {'name': 'Time', 'values': array([info['time'] - self.startFrameTime]), 'units': 's'},
                 {'name': 'X'},
                 {'name': 'Y'}
             ]
             data = MetaArray(data[newaxis], info=arrayInfo)
             if frame['newRec']:
-                self.currentRecord = self.m.getCurrentDir().writeFile(data, 'video', autoIncrement=True, info=info, appendAxis='Time')
+                self.currentRecord = self.m.getCurrentDir().writeFile(data, 'video.ma', autoIncrement=True, info=info, appendAxis='Time')
                 self.currentFrameNum = 0
             else:
                 data.write(self.currentRecord.name(), appendAxis='Time')
+                s = 1.0/self.currentFrameNum
+                
                 #self.currentRecord.write(data, appendAxis='Time')
             self.showMessage("Recording %s - %d" % (self.currentRecord.name(), self.currentFrameNum))
             
             self.currentFrameNum += 1
+            
+            if frame['lastRec']:
+                dur = info['time'] - self.startFrameTime
+                self.currentRecord.setInfo({'frames': self.currentFrameNum, 'duration': dur, 'averageFPS': ((self.currentFrameNum-1)/dur)})
+                self.showMessage('Finished recording %s - %d frames, %02f sec' % (self.currentRecord.name(), self.currentFrameNum, dur)) 
+                
+            
         
         if frame['snap']:
             fileName = 'image.tif'

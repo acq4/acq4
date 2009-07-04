@@ -555,7 +555,7 @@ class DirHandle(FileHandle):
         return os.path.isfile(fn)
         
     
-    def writeFile(self, obj, fileName, info=None, autoIncrement=False, **kwargs):
+    def writeFile(self, obj, fileName, info=None, autoIncrement=False, useExt=True, **kwargs):
         """Write a file to this directory using obj.write(fileName), store info in the index."""
         if info is None:
             info = {}   ## never put {} in the function default
@@ -566,20 +566,21 @@ class DirHandle(FileHandle):
         t = ptime.time()
         l = QtCore.QMutexLocker(self.lock)
         name = fileName
-        fullFn = os.path.join(self.path, name)
         appendInfo = False
 
         if autoIncrement:
-            appendInfo = True
-            d = 0
-            base, ext = os.path.splitext(name)
-            while True:
-                name = "%s_%04d%s" % (base, d, ext)
-                fullFn = os.path.join(self.path, name)
-                if not os.path.exists(fullFn):
-                    break
-                d += 1
-        
+            name = self.incrementFileName(name, useExt=useExt)
+            appendInfo = True  ## Guaranteed to be a new file, so the info can be appended to the index file
+            #d = 0
+            #base, ext = os.path.splitext(name)
+            #while True:
+                #name = "%s_%04d%s" % (base, d, ext)
+                #fullFn = os.path.join(self.path, name)
+                #if not os.path.exists(fullFn):
+                    #break
+                #d += 1
+        fullFn = os.path.join(self.path, name)
+                
         obj.write(fullFn, **kwargs)
         self._childChanged()
         
