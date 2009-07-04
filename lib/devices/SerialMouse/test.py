@@ -32,5 +32,5 @@ def readPacket(sp):
     #print "%s %s %s %s" % (bin(xh), bin(xl), bin(yh), bin(yl))
     return (sint(xl | xh), sint(yl | yh))
 
-for i in range(100):
+while True:
     print readPacket(sp)

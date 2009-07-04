@@ -61,6 +61,7 @@ class PVCamera(QtGui.QMainWindow):
         #self.ropWindow = ROPWindow(self)
         
         self.nextFrame = None
+        self.updateFrame = False
         self.currentFrame = None
         self.currentClipMask = None
         self.backgroundFrame = None
@@ -91,33 +92,14 @@ class PVCamera(QtGui.QMainWindow):
         self.ui.plotWidget.enableAxis(Qwt.QwtPlot.xBottom, False)
         self.ui.plotWidget.plot()
 
-
-        ## Set up plot graphicsView
-        #l2 = QtGui.QVBoxLayout(self.ui.plotWidget)
-        #l2.setMargin(0)
-        #self.pgv = GraphicsView(self.ui.plotWidget)
-        #l2.addWidget(self.pgv)
-
         self.setCentralWidget(self.ui.centralwidget)
         self.scene = QtGui.QGraphicsScene(self)
-        #self.plotScene = QtGui.QGraphicsScene(self)
-        #self.grid = Grid()
-        #self.scene.addItem(self.grid)
-        #self.grid.setZValue(-1)
         self.imageItem = ImageItem()
         self.scene.addItem(self.imageItem)
-        #self.regionBox = self.scene.addRect(0,0,1,1, QtGui.QPen(QtGui.QColor(80,80,50))) 
         self.gv.setScene(self.scene)
         self.gv.setAspectLocked(True)
         self.gv.invertY()
         self.AGCLastMax = None
-        
-        #self.plotScene.addItem(QtGui.QGraphicsRectItem(-1, -1, 2, 2))
-        #self.grid = Grid(self.pgv)
-        #self.plotScene.addItem(self.grid)
-        #self.grid.setZValue(-1)
-        #self.pgv.setScene(self.plotScene)
-        #self.pgv.setRange(QtCore.QRectF(0, 0, 100, 3000))
         
         self.recLabel = QtGui.QLabel()
         self.fpsLabel = QtGui.QLabel()
@@ -157,21 +139,16 @@ class PVCamera(QtGui.QMainWindow):
         
         QtCore.QObject.connect(self.ui.btnAcquire, QtCore.SIGNAL('clicked()'), self.toggleAcquire)
         QtCore.QObject.connect(self.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
-        #QtCore.QObject.connect(self.ui.btnROPing, QtCore.SIGNAL('toggled(bool)'), self.toggleROPing)
         QtCore.QObject.connect(self.ui.btnAutoGain, QtCore.SIGNAL('toggled(bool)'), self.toggleAutoGain)
         QtCore.QObject.connect(self.ui.btnFullFrame, QtCore.SIGNAL('clicked()'), self.setRegion)
         QtCore.QObject.connect(self.ui.spinBinning, QtCore.SIGNAL('valueChanged(int)'), self.setBinning)
         QtCore.QObject.connect(self.ui.spinExposure, QtCore.SIGNAL('valueChanged(double)'), self.setExposure)
-        #QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('storageDirChanged'), self.updateStorageDir)
-        #QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('recordStatusChanged'), self.updateRecordStatus)
         QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
         QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('newFrame'), self.newFrame)
         QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('finished()'), self.acqThreadStopped)
         QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('started()'), self.acqThreadStarted)
         QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('showMessage'), self.showMessage)
         QtCore.QObject.connect(self.gv, QtCore.SIGNAL("sceneMouseMoved(PyQt_PyObject)"), self.setMouse)
-        #QtCore.QObject.connect(self.ui.comboTransferMode, QtCore.SIGNAL('currentIndexChanged(int)'), self.setTransferMode)
-        #QtCore.QObject.connect(self.ui.comboShutterMode, QtCore.SIGNAL('currentIndexChanged(int)'), self.setShutterMode)
         QtCore.QObject.connect(self.ui.btnDivideBackground, QtCore.SIGNAL('clicked()'), self.divideClicked)
         
         QtCore.QObject.connect(self.ui.btnAddROI, QtCore.SIGNAL('clicked()'), self.addROI)
@@ -189,7 +166,7 @@ class PVCamera(QtGui.QMainWindow):
         ## Some checks may be skipped even if there is a new frame waiting to avoid drawing more than 
         ## 60fps.
         self.frameTimer = QtCore.QTimer()
-        QtCore.QObject.connect(self.frameTimer, QtCore.SIGNAL('timeout()'), self.updateFrame)
+        QtCore.QObject.connect(self.frameTimer, QtCore.SIGNAL('timeout()'), self.drawFrame)
         self.frameTimer.start(1)
 
     def addROI(self):
@@ -217,28 +194,10 @@ class PVCamera(QtGui.QMainWindow):
 
     def toggleRecord(self, b):
         if b:
-            #self.ui.txtStorageDir.setEnabled(False)
-            #self.ui.btnSelectDir.setEnabled(False)
             self.ui.btnRecord.setChecked(True)
         else:
-            #self.ui.txtStorageDir.setEnabled(True)
-            #self.ui.btnSelectDir.setEnabled(True)
             self.ui.btnRecord.setChecked(False)
 
-    #def toggleROPing(self, b):
-    #  if b:
-    #    self.ropWindow.show()
-    #  else:
-    #    self.ropWindow.hide()
-
-    #def updateRecordStatus(self, ready):
-        #if ready:
-            #self.ui.btnRecord.setEnabled(True)
-            #self.ui.btnSnap.setEnabled(True)
-        #else:
-            #self.ui.btnRecord.setEnabled(False)
-            #self.ui.btnSnap.setEnabled(False)
-            
     def requestFrameUpdate(self):
         self.updateFrame = True
 
@@ -250,9 +209,6 @@ class PVCamera(QtGui.QMainWindow):
             self.backgroundFrame = None
         self.requestFrameUpdate()
             
-    #def updateStorageDir(self, newDir):
-        #self.ui.txtStorageDir.setText(newDir)
-
     def showMessage(self, msg):
         self.ui.statusbar.showMessage(str(msg))
         
@@ -263,11 +219,9 @@ class PVCamera(QtGui.QMainWindow):
         if self.region != newRegion:
             self.region = newRegion
             self.acquireThread.setParam('region', self.region)
-            #self.acquireThread.reset()
         
         
     def closeEvent(self, ev):
-        #self.ropWindow.stop()
         if self.acquireThread.isRunning():
             print "Stopping acquisition thread.."
             self.acquireThread.stop()
@@ -276,28 +230,6 @@ class PVCamera(QtGui.QMainWindow):
             print "Stopping recording thread.."
             self.recordThread.stop()
             self.recordThread.wait()
-        #print "Exiting."
-
-        
-    #def setTransferMode(self, mode):
-        #acq = self.acquireThread.isRunning()
-        #if acq:
-            #self.acquireThread.stop()
-            #self.acquireThread.wait()
-        #self.cam.setTransferMode(mode)
-        #self.ui.comboTransferMode.setCurrentIndex(self.cam.getTransferMode())
-        #if acq:
-            #self.acquireThread.start()
-        
-    #def setShutterMode(self, mode):
-        #acq = self.acquireThread.isRunning()
-        #if acq:
-            #self.acquireThread.stop()
-            #self.acquireThread.wait()
-        #self.cam.setShutterMode(mode)
-        #self.ui.comboShutterMode.setCurrentIndex(self.cam.getShutterMode())
-        #if acq:
-            #self.acquireThread.start()
 
     def setMouse(self, qpt=None):
         if qpt is None:
@@ -347,12 +279,9 @@ class PVCamera(QtGui.QMainWindow):
     def setExposure(self, e):
         self.exposure = e
         self.acquireThread.setParam('exposure', self.exposure)
-        #self.acquireThread.reset()
         
     def openCamera(self, ind=0):
         try:
-            #cams = pvcam.PVCam.listCameras()
-            #self.cam = pvcam.PVCam.getCamera(cams[ind])
             self.cam = self.module.cam.getCamera()
             
             self.bitDepth = self.cam.getBitDepth()
@@ -361,20 +290,8 @@ class PVCamera(QtGui.QMainWindow):
             self.roi = CamROI(self.camSize)
             self.roi.connect(QtCore.SIGNAL('regionChangeFinished'), self.updateRegion)
             self.scene.addItem(self.roi)
-            #self.ui.spinRegionS2.setMaximum(self.camSize[0]-1)
-            #self.ui.spinRegionP2.setMaximum(self.camSize[1]-1)
-            #self.ui.spinRegionS2.setMinimum(1)
-            #self.ui.spinRegionP2.setMinimum(1)
             self.setRegion()
             self.ui.statusbar.showMessage("Opened camera %s" % self.cam, 5000)
-            #tmodes = self.cam.listTransferModes()
-            #tmode = self.cam.getTransferMode()
-            #self.ui.comboTransferMode.addItems(tmodes)
-            #self.ui.comboTransferMode.setCurrentIndex(tmode)
-            #smodes = self.cam.listShutterModes()
-            #smode = self.cam.getShutterMode()
-            #self.ui.comboShutterMode.addItems(smodes)
-            #self.ui.comboShutterMode.setCurrentIndex(smode)
         except:
             self.ui.statusbar.showMessage("Error opening camera")
             raise
@@ -384,10 +301,6 @@ class PVCamera(QtGui.QMainWindow):
         self.backgroundFrame = None
         if rgn is None:
             rgn = [0, 0, self.camSize[0]-1, self.camSize[1]-1]
-        #self.ui.spinRegionS1.setValue(rgn[0])
-        #self.ui.spinRegionP1.setValue(rgn[1])
-        #self.ui.spinRegionS2.setValue(rgn[2])
-        #self.ui.spinRegionP2.setValue(rgn[3])
         self.roi.setPos([rgn[0], rgn[1]])
         self.roi.setSize([self.camSize[0], self.camSize[1]])
         self.updateRegion()
@@ -482,7 +395,7 @@ class PVCamera(QtGui.QMainWindow):
     def newFrame(self, frame):
         self.nextFrame = frame
         
-    def updateFrame(self):
+    def drawFrame(self):
         try:
             
             ## If we last drew a frame < 1/60s ago, return.
@@ -502,14 +415,15 @@ class PVCamera(QtGui.QMainWindow):
             ## We will now draw a new frame (even if the frame is unchanged)
             self.lastDrawTime = t
             
-            
             ## Handle the next available frame, if there is one.
             if self.nextFrame is not None:
                 self.currentFrame = self.nextFrame
                 self.nextFrame = None
                 (data, info) = self.currentFrame
                 self.currentClipMask = (data >= (2**self.bitDepth * 0.99)) 
-                self.ui.sliderAvgLevel.setValue(int(data.mean()))
+                
+                ## Removed because of memory leak in QSlider
+                #self.ui.sliderAvgLevel.setValue(int(data.mean()))
                 
                 ## If background division is enabled, mix the current frame into the background frame
                 if self.ui.btnDivideBackground.isChecked():
@@ -578,144 +492,42 @@ class PVCamera(QtGui.QMainWindow):
             #print "Exception in QtCam::newFrame: %s (line %d)" % (str(sys.exc_info()[1]), sys.exc_info()[2].tb_lineno)
             sys.excepthook(*sys.exc_info())
 
-#class AcquireThread(QtCore.QThread):
-    #def __init__(self, ui):
-        #QtCore.QThread.__init__(self)
-        #self.ui = ui
-        #self.stopThread = False
-        #self.lock = QtCore.QMutex()
-        #self.acqBuffer = None
-        #self.frameId = 0
-        #self.bufferTime = 5.0
-        #self.ringSize = 20
-        #time.clock()  ## On windows, this is needed to start the clock
-    
-    #def run(self):
-        #binning = self.ui.binning
-        #exposure = self.ui.exposure
-        #region = self.ui.region
-        #lastFrame = None
-        #lastFrameTime = None
-        #self.lock.lock()
-        #self.stopThread = False
-        #self.lock.unlock()
-        #self.fps = None
-        
-        #try:
-            #self.acqBuffer = self.ui.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region)
-            #lastFrameTime = time.clock()  # Use time.time() on Linux
-            
-            #while True:
-                #frame = self.ui.cam.lastFrame()
-                #now = time.clock()
-                
-                ### If a new frame is available, process it and inform other threads
-                #if frame is not None and frame != lastFrame:
-                    
-                    #if lastFrame is not None and frame - lastFrame > 1:
-                        #print "Dropped frames between %d and %d" % (lastFrame, frame)
-                        #self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped frame!")
-                    #lastFrame = frame
-                    
-                    ### compute FPS
-                    #dt = now - lastFrameTime
-                    #if dt > 0.:
-                        #if self.fps is None:
-                            #self.fps = 1.0/dt
-                        #else:
-                            #self.fps = self.fps * 0.9 + 0.1 / dt
-                    
-                    ### Build meta-info for this frame
-                    ### Use lastFrameTime because the current frame _began_ exposing when the previous frame arrived.
-                    #info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region, 'fps': self.fps}
-                    
-                    #lastFrameTime = now
-                    
-                    ### Inform that new frame is ready
-                    #self.emit(QtCore.SIGNAL("newFrame"), (self.acqBuffer[frame].copy(), info))
-                    #self.frameId += 1
-                #time.sleep(10e-6)
-                
-                #self.lock.lock()
-                #if self.stopThread and frame is not None:
-                    #self.lock.unlock()
-                    #break
-                #self.lock.unlock()
-            #self.ui.cam.stop()
-        #except:
-            #try:
-                #self.ui.cam.stop()
-            #except:
-                #pass
-            #self.emit(QtCore.SIGNAL("showMessage"), "ERROR Starting acquisition: %s" % str(sys.exc_info()[1]))
-        
-    #def stop(self):
-        #l = QtCore.QMutexLocker(self.lock)
-        #self.stopThread = True
-
-    #def reset(self):
-        #if self.isRunning():
-            #self.stop()
-            #self.wait()
-            #self.start()
-
 
 class RecordThread(QtCore.QThread):
     def __init__(self, ui, manager):
         QtCore.QThread.__init__(self)
         self.ui = ui
         self.m = manager
-        #self.dialog = QtGui.QFileDialog()
-        #self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
         QtCore.QObject.connect(self.ui.acquireThread, QtCore.SIGNAL('newFrame'), self.newCamFrame)
-        #QtCore.QObject.connect(self.ui.ropWindow.acquireThread, QtCore.SIGNAL('newFrame'), self.newDaqFrame)
         
         QtCore.QObject.connect(ui.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
         QtCore.QObject.connect(ui.ui.btnSnap, QtCore.SIGNAL('clicked()'), self.snapClicked)
-        #QtCore.QObject.connect(ui.ui.btnSelectDir, QtCore.SIGNAL('clicked()'), self.showFileDialog)
-        #QtCore.QObject.connect(ui.ui.txtStorageDir, QtCore.SIGNAL('textEdited(const QString)'), self.selectDir)
-        #QtCore.QObject.connect(self.dialog, QtCore.SIGNAL('filesSelected(const QStringList)'), self.selectDir)
         self.recording = False
         self.takeSnap = False
-        #self.currentRecord = 0
-        #self.nextRecord = 0
-        self.currentDir = None
-        self.currentCamFrame = 0
-        #self.currentDaqFrame = 0
-        #self.storageDir = None
+        #self.currentDir = None
+        self.currentRecord = None
+        #self.currentCamFrame = 0
         
         self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
-        #self.daqLock = QtCore.QMutex()
         self.camLock = QtCore.QMutex()
-        #self.newDaqFrames = []
         self.newCamFrames = []
-        
-    #def newDaqFrame(self, frame):
-    #  l = QtCore.QMutexLocker(self.lock)
-    #  recording = self.recording
-    #  l.unlock()
-    #  if recording:
-    #    dlock = QtCore.QMutexLocker(self.daqLock)
-    #    self.newDaqFrames.append(frame)
         
     def newCamFrame(self, frame):
         l = QtCore.QMutexLocker(self.lock)
         recording = self.recording
         takeSnap = self.takeSnap
+        recFile = self.currentRecord
         l.unlock()
         if recording or takeSnap:
             cLock = QtCore.QMutexLocker(self.camLock)
-            self.newCamFrames.append(frame)
-    
+            ## remember the record/snap/storageDir states since they might change 
+            ## before the write thread gets to this frame
+            self.newCamFrames.append({'frame': frame, 'record': recording, 'snap': takeSnap, 'file': self.currentRecord})
     
     def run(self):
         self.stopThread = False
         
         while True:
-            #dlock = QtCore.QMutexLocker(self.daqLock)
-            #handleDaqFrames = self.newDaqFrames[:]
-            #self.newDaqFrames = []
-            #dlock.unlock()
             try:
                 cLock = QtCore.QMutexLocker(self.camLock)
                 handleCamFrames = self.newCamFrames[:]
@@ -725,9 +537,6 @@ class RecordThread(QtCore.QThread):
                 break
             finally:
                 cLock.unlock()
-            
-            #while len(handleDaqFrames) > 0:
-            #  self.handleDaqFrame(handleDaqFrames.pop(0))
             
             try:
                 while len(handleCamFrames) > 0:
@@ -745,72 +554,38 @@ class RecordThread(QtCore.QThread):
 
 
     def handleCamFrame(self, frame):
-        l = QtCore.QMutexLocker(self.lock)
-        recording = self.recording
-        takeSnap = self.takeSnap
-        #storageDir = self.storageDir
-        l.unlock()
+        #l = QtCore.QMutexLocker(self.lock)
+        #recording = self.recording
+        #takeSnap = self.takeSnap
+        #l.unlock()
         
-        if not (recording or takeSnap):
-            return
+        #if not (recording or takeSnap):
+            #return
         
-        (data, info) = frame
+        (data, info) = frame['frame']
         
-        if recording:
-            fileName = 'camFrame_%05d_%f.tif' % (self.currentCamFrame, info['time'])
-            #fileName = os.path.join(self.currentDir(), fileName)
-            self.showMessage("Recording %s - %d" % (self.currentDir.name(), self.currentCamFrame))
-            self.currentDir.writeFile(ImageFile(data), fileName, info)
-            #infoFile = os.path.join(self.currentDir(), '.info')
-            #if self.currentCamFrame == 0:
-                #fd = open(infoFile, 'a')
-                #fd.write("info['camera'] = " + str(info) + "\n")
-                #fd.close()
-            self.currentCamFrame += 1
+        if frame['record']:
+            #fNum = len(frame['recordDir'].ls())
+            #fileName = 'camFrame_%05d_%f.tif' % (fNum, info['time'])
+            #self.showMessage("Recording %s - %d" % (frame['recordDir'].name(), fNum))
+            #frame['recordDir'].writeFile(ImageFile(data), fileName, info)
+            info = [
+                {'name': 'Time', 'values': array([info['time']]), 'units': 's'},
+                {'name': 'X'},
+                {'name': 'Y'}
+            ]
+            data = MetaArray(data, info=info)
+            frame['file'].write(data, appendAxis='Time')
+            
+            #self.currentCamFrame += 1
         
-        if takeSnap:
+        if frame['snap']:
             fileName = 'image.tif'
-            #fileName = os.path.join(storageDir, fileName)
+            
             fn = self.m.getCurrentDir().writeFile(ImageFile(data), fileName, info, autoIncrement=True)
             self.showMessage("Saved image %s" % fn)
-            #self.nextRecord += 1
-            
-            #infoFile = os.path.join(storageDir, '.info')
-            #fd = open(infoFile, 'a')
-            #fd.write("info['%s'] = " % os.path.split(fileName)[1])
-            #fd.write(str(info) + "\n")
-            #fd.close()
-            
             l = QtCore.QMutexLocker(self.lock)
             self.takeSnap = False
-
-        #img = Image.fromarray(data.transpose())
-        #img.save(fileName)
-
-
-    #def handleDaqFrame(self, frame):
-    #  l = QtCore.QMutexLocker(self.lock)
-    #  recording = self.recording
-    #  storageDir = self.storageDir
-    #  l.unlock()
-    #  
-    #  if storageDir is None or not recording:
-    #    return
-    #  
-    #  (data, info) = frame
-    #  fileName = 'daqFrame_%05d_%f.dat' % (self.currentDaqFrame, info['time'])
-    #  fileName = os.path.join(self.currentDir(), fileName)
-    #  info['dtype'] = data.dtype
-    #  info['shape'] = data.shape
-    #  self.writeDaqFile(data, fileName)
-    #  infoFile = os.path.join(self.currentDir(), '.info')
-    #  if self.currentDaqFrame == 0:
-    #    fd = open(infoFile, 'a')
-    #    fd.write("info['daq'] = " + str(info) + "\n")
-    #    fd.close()
-    #  self.currentDaqFrame += 1
-        
-
     
     def showMessage(self, msg):
         self.emit(QtCore.SIGNAL('showMessage'), msg)
@@ -823,87 +598,19 @@ class RecordThread(QtCore.QThread):
         l = QtCore.QMutexLocker(self.lock)
         try:
             if b:
-                self.currentDir = self.m.getCurrentDir().mkdir('record', autoIncrement=True)
-                self.currentCamFrame = 0
-        #   self.currentDaqFrame = 0
-                #self.currentRecord = self.nextRecord
-                #self.nextRecord += 1
+                #self.currentDir = self.m.getCurrentDir().mkdir('record', autoIncrement=True)
+                #self.currentCamFrame = 0
+                self.currentRecord = self.m.getCurrentDir().createFile('video', autoIncrement=True)
                 self.recording = True
-                #os.mkdir(self.currentDir())
             else:
                 if self.recording:
                     self.recording = False
-                    self.showMessage('Finished recording %s' % self.currentDir.name()) 
+                    self.showMessage('Finished recording %s' % self.currentRecord.name()) 
+                    self.currentRecord = None
         finally:
             l.unlock()
-
-    #def currentDir(self):
-        ##l = QtCore.QMutexLocker(self.lock)
-        ##storageDir = self.storageDir
-        ##l.unlock()
-        #baseDir = self.m.getCurrentDir()
-        #return baseDir.getDir('record_%03d' % self.currentRecord, create=True)
-        ##return os.path.normpath(os.path.join(storageDir, 'record_%03d' % self.currentRecord))
-
-        ## How do we differentiate between record images and snap images?
-    #def writeFile(self, data, fileName):
-        #origName = fileName
-        #ind = 0
-        #while os.path.isfile(fileName):
-            #parts = os.path.splitext(origName)
-            #fileName = parts[0] + '_%d'%ind + parts[1]
-            #ind += 1
-        #img = Image.fromarray(data.transpose())
-        #img.save(fileName)
-
-    #def writeDaqFile(self, data, fileName):
-    #  origName = fileName
-    #  ind = 0
-    #  while os.path.isfile(fileName):
-    #    parts = os.path.splitext(origName)
-    #    fileName = parts[0] + '_%d'%ind + parts[1]
-    #    ind += 1
-    #  data.tofile(fileName)
-
-    #def showFileDialog(self):
-        #self.dialog.show()
-
-    #def selectDir(self, dirName=None):
-        #if dirName is None:
-            #dirName = QtGui.QFileDialog.getExistingDirectory()
-        #elif type(dirName) is QtCore.QStringList:
-            #dirName = str(dirName[0])
-        #elif type(dirName) is QtCore.QString:
-            #dirName = str(dirName)
-        #if dirName is None:
-            #return
-        #if os.path.isdir(dirName):
-            #l = QtCore.QMutexLocker(self.lock)
-            #self.storageDir = dirName
-            #self.nextRecord = 0
-            #self.emit(QtCore.SIGNAL("recordStatusChanged"), True)
-            #self.emit(QtCore.SIGNAL("storageDirChanged"), self.storageDir)
-            #for f in os.listdir(dirName):
-                #m = re.match(r'\D+_(\d+).*', f)
-                #if m is not None:
-                    #num = int(m.groups()[0]) + 1
-                    #self.nextRecord = max(self.nextRecord, num)
-            #self.showMessage("Next record number is %d" % self.nextRecord) 
-        #else:
-            #self.emit(QtCore.SIGNAL("recordStatusChanged"), False)
-            #self.showMessage("Storage directory is invalid")
 
     def stop(self):
         l = QtCore.QMutexLocker(self.lock)
         self.stopThread = True
         l.unlock()
-
-
-#def main():
-    #global app, qc
-    #app = QtGui.QApplication(sys.argv)
-    #qc = QtCam()
-    #app.exec_()
-    
-    
-#main()

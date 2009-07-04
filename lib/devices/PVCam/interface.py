@@ -235,7 +235,7 @@ class AcquireThread(QtCore.QThread):
         self.acqBuffer = None
         self.frameId = 0
         self.bufferTime = 5.0
-        self.ringSize = 2
+        self.ringSize = 10
         self.tasks = []
     
     def __del__(self):

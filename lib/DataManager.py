@@ -184,9 +184,9 @@ class FileHandle(QtCore.QObject):
         self.path = fn2
         self.parentDir = None
         if oldDir.isManaged() and newDir.isManaged():
-            newDir.addFile(name, info=oldDir._fileInfo(name))
+            newDir.indexFile(name, info=oldDir._fileInfo(name))
         elif newDir.isManaged():
-            newDir.addFile(name)
+            newDir.indexFile(name)
         if oldDir.isManaged():
             oldDir.forget(name)
         self.emitChanged('moved', fn1, fn2)
@@ -205,7 +205,7 @@ class FileHandle(QtCore.QObject):
         self.parent()._childChanged()
         self.path = fn2
         if parent.isManaged():
-            parent.addFile(newName, info=parent._fileInfo(oldName))
+            parent.indexFile(newName, info=parent._fileInfo(oldName))
             parent.forget(oldName)
         self.emitChanged('renamed', fn1, fn2)
         
@@ -285,7 +285,9 @@ class FileHandle(QtCore.QObject):
         gname = grandparent.name() + os.path.sep
         return self.name()[:len(gname)] == gname
     
-
+    def write(self, data, **kwargs):
+        self.parent().writeFile(data, self.shortName(), **kwargs)
+        
 
 
 
@@ -385,24 +387,47 @@ class DirHandle(FileHandle):
         subdirs = filter(lambda d: os.path.isdir(os.path.join(self.name(), d)), ls)
         return subdirs
     
-    def mkdir(self, name, autoIncrement=False, info=None):
+    def incrementFileName(self, fileName, useExt=True):
+        """Given fileName.ext, finds the next available fileName_NNN.ext
+        If useExt is False, do not attempt to insert the index number before the extension.
+        """
+        files = self.ls()
+        if useExt:
+            (fileName, ext) = os.path.splitext(fileName)
+            regex = re.compile(fileName + r'_(\d+)' + ext + '$')
+        else:
+            regex = re.compile(fileName + r'_(\d+)$')
+        files = filter(lambda f: regex.match(f), files)
+        if len(files) > 0:
+            files.sort()
+            maxVal = int(regex.match(files[-1]).group(1)) + 1
+        else:
+            maxVal = 0
+        if useExt:
+            return fileName + ('_%03d' % maxVal) + ext
+        else:
+            return fileName + ('_%03d' % maxVal)
+    
+    def mkdir(self, name, autoIncrement=False, info=None, useExt=False):
         """Create a new subdirectory, return a new DirHandle object. If autoIndex is true, add a number to the end of the dir name if it already exists."""
         if info is None:
             info = {}
         l = QtCore.QMutexLocker(self.lock)
         
         if autoIncrement:
-            fullName = name+"_000"
+            fullName = self.incrementFileName(name, useExt=useExt)
+            #fullName = name+"_000"
         else:
             fullName = name
             
-        if autoIncrement:
-            files = os.listdir(self.path)
-            files = filter(lambda f: re.match(name + r'_\d+$', f), files)
-            if len(files) > 0:
-                files.sort()
-                maxVal = int(files[-1][-3:])
-                fullName = name + "_%03d" % (maxVal+1)
+        #if autoIncrement:
+            
+            #files = os.listdir(self.path)
+            #files = filter(lambda f: re.match(name + r'_\d+$', f), files)
+            #if len(files) > 0:
+                #files.sort()
+                #maxVal = int(files[-1][-3:])
+                #fullName = name + "_%03d" % (maxVal+1)
             
         newDir = os.path.join(self.path, fullName)
         if os.path.isdir(newDir):
@@ -423,7 +448,7 @@ class DirHandle(FileHandle):
         self.emitChanged('children', newDir)
         return ndm
         
-    def getDir(self, subdir, create=False, autoIncrement=False):
+    def getDir(self, subdir, create=False, autoIncrement=False, useExt=False):
         """Return a DirHandle for the specified subdirectory. If the subdir does not exist, it will be created only if create==True"""
         l = QtCore.QMutexLocker(self.lock)
         ndir = os.path.join(self.path, subdir)
@@ -431,22 +456,36 @@ class DirHandle(FileHandle):
             return self.manager.getDirHandle(ndir)
         else:
             if create:
-                return self.mkdir(subdir, autoIncrement=autoIncrement)
+                return self.mkdir(subdir, autoIncrement=autoIncrement, useExt=useExt)
             else:
                 raise Exception('Directory %s does not exist.' % ndir)
         
-    def getFile(self, fileName, create=False):
+    def getFile(self, fileName, create=False, autoIncrement=False, useExt=True):
         """return a File handle for the named file. Create an empty file if create-True and the file does not already exist."""
         fullName = os.path.join(self.name(), fileName)
-        if create and not os.path.exists(fullName):
-            open(fullName, 'w')
-            self.addFile(fileName)
+        if create:
+            self.createFile(fileName, autoIncrement=autoIncrement, useExt=useExt)
         if not os.path.isfile(fullName):
-            raise Exception('Error creating file "%s" (name already exists?)' % fullName)
+            raise Exception('File "%s" does not exist.' % fullName)
         fh = self[fileName]
         if not fh.isManaged():
-            self.addFile(fileName)
+            self.indexFile(fileName)
         return fh
+        
+    def createFile(self, fileName, autoIncrement=False, useExt=True):
+        if autoIncrement:
+            fileName = self.incrementFileName(fileName, useExt=useExt)
+        fullName = os.path.join(self.name(), fileName)
+        
+        if os.path.exists(fullName):
+            raise Exception('File %s already exists!' % fullName)
+            
+        fd = open(fullName, 'w')
+        fd.close()
+        
+        self.indexFile(fileName)
+        return self[fileName]
+        
         
         
     def dirExists(self, dirName):
@@ -555,7 +594,7 @@ class DirHandle(FileHandle):
         self.emitChanged('children', fileName)
         return name
     
-    def addFile(self, fileName, info=None, protect=False):
+    def indexFile(self, fileName, info=None, protect=False):
         """Add a pre-existing file into the index. Overwrites any pre-existing info for the file unless protect is True"""
         #print "Adding file %s to index" % fileName
         if info is None:

@@ -513,7 +513,7 @@ class Region(Structure):
         if len(args) == 6:
             Structure.__init__(self, *args)
         else:
-            print "creating region:", args
+            #print "creating region:", args
             rgn = args[0][:]
             if type(args[1]) is types.IntType:
                 bin = [args[1], args[1]]

@@ -557,7 +557,8 @@ class MetaArray(ndarray):
                 
         ## Decide whether to output the meta block for a new file
         if not newFile:
-            newFile = not os.path.exists(fileName)
+            ## If the file does not exist or its size is 0, then we must write the header
+            newFile = (not os.path.exists(fileName))  or  (os.stat(fileName).st_size == 0)
         
         ## write data to file
         if appendAxis is None or newFile:

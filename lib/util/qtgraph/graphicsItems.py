@@ -164,7 +164,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         self.ims = im1.tostring()  ## Must be held in memory here because qImage won't do it for us :(
         qimage = QtGui.QImage(self.ims, im1.shape[1], im1.shape[0], QtGui.QImage.Format_RGB32)
         self.pixmap = QtGui.QPixmap.fromImage(qimage)
-        #del self.ims
+        ##del self.ims
         self.setPixmap(self.pixmap)
         self.update()
 
