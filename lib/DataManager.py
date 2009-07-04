@@ -116,7 +116,7 @@ class FileHandle(QtCore.QObject):
     def __init__(self, path, manager):
         QtCore.QObject.__init__(self)
         self.manager = manager
-        self.path = os.path.abspath(path)
+        self.path = os.path.normcase(os.path.abspath(path))
         self.parentDir = None
         #self.lock = threading.RLock()
         self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
@@ -472,7 +472,7 @@ class DirHandle(FileHandle):
             self.indexFile(fileName)
         return fh
         
-    def createFile(self, fileName, autoIncrement=False, useExt=True):
+    def createFile(self, fileName, autoIncrement=False, useExt=True, info=None):
         if autoIncrement:
             fileName = self.incrementFileName(fileName, useExt=useExt)
         fullName = os.path.join(self.name(), fileName)
@@ -483,7 +483,7 @@ class DirHandle(FileHandle):
         fd = open(fullName, 'w')
         fd.close()
         
-        self.indexFile(fileName)
+        self.indexFile(fileName, info=info)
         return self[fileName]
         
         
@@ -592,7 +592,7 @@ class DirHandle(FileHandle):
             info['__timestamp__'] = t
         self._setFileInfo(name, info, append=appendInfo)
         self.emitChanged('children', fileName)
-        return name
+        return self[name]
     
     def indexFile(self, fileName, info=None, protect=False):
         """Add a pre-existing file into the index. Overwrites any pre-existing info for the file unless protect is True"""

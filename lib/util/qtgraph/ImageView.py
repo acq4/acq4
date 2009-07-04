@@ -47,7 +47,11 @@ class ImageView(QtGui.QWidget):
         self.ui.blackSlider.setValue(0)
         self.imageItem.setLevels(white=self.whiteLevel(), black=self.blackLevel())
         
-        self.ui.graphicsView.setRange(QtCore.QRectF(0, 0, self.image.shape[0], self.image.shape[1]), padding=0., lockAspect=True)        
+        if self.image.ndim == 2:
+            axes = (0, 1)
+        elif self.image.ndim == 3:
+            axes = (1, 2)
+        self.ui.graphicsView.setRange(QtCore.QRectF(0, 0, self.image.shape[axes[0]], self.image.shape[axes[1]]), padding=0., lockAspect=True)        
 
     def whiteLevel(self):
         return self.levelMin + (self.levelMax-self.levelMin) * self.ui.whiteSlider.value() / self.ui.whiteSlider.maximum() 

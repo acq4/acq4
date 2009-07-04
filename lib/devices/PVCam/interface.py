@@ -271,11 +271,18 @@ class AcquireThread(QtCore.QThread):
     def run(self):
         #print "Starting up camera acquisition thread."
         binning = self.state['binning']
-        if 'maxBinning' in self.dev.config and binning > self.dev.config['maxBinning']:
-            msg = "Requested binning %d exceeds maximum, using %d instead" % (binning, self.dev.config['maxBinning'])
+        
+        ## Make sure binning value is acceptable (stupid driver problem)
+        if 'allowedBinning' in self.dev.config and binning not in self.dev.config['allowedBinning']:
+            ab = self.dev.config['allowedBinning'][:]
+            ab.sort()
+            if binning < ab[0]:
+                binning = ab[0]
+            while binning not in ab:
+                binning -= 1
+            msg = "Requested binning %d not allowed, using %d instead" % (self.state['binning'], binning)
             print msg
             self.emit(QtCore.SIGNAL("showMessage"), msg)
-            binning = self.dev.config['maxBinning']
         
         exposure = self.state['exposure']
         region = self.state['region']

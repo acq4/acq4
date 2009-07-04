@@ -60,6 +60,14 @@ class PVCamera(QtGui.QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         
+        ## Set up level thermo and scale widgets
+        self.scaleEngine = Qwt.QwtLinearScaleEngine()
+        self.ui.levelThermo.setScalePosition(Qwt.QwtThermo.NoScale)
+        self.ui.levelScale.setAlignment(Qwt.QwtScaleDraw.LeftScale)
+        self.ui.levelScale.setColorBarEnabled(True)
+        self.ui.levelScale.setColorBarWidth(10)
+        
+        
         ## Create device configuration dock 
         dw = self.module.cam.deviceInterface()
         dock = QtGui.QDockWidget(self)
@@ -127,11 +135,6 @@ class PVCamera(QtGui.QMainWindow):
         self.gv.setRange(QtCore.QRect(0, 0, self.camSize[0], self.camSize[1]), lockAspect=True)
         
         
-        self.scaleEngine = Qwt.QwtLinearScaleEngine()
-        self.ui.levelThermo.setScalePosition(Qwt.QwtThermo.NoScale)
-        self.ui.levelScale.setAlignment(Qwt.QwtScaleDraw.LeftScale)
-        self.ui.levelScale.setColorBarEnabled(True)
-        self.ui.levelScale.setColorBarWidth(10)
 
         
         QtCore.QObject.connect(self.ui.btnAcquire, QtCore.SIGNAL('clicked()'), self.toggleAcquire)
@@ -515,6 +518,8 @@ class RecordThread(QtCore.QThread):
         QtCore.QObject.connect(ui.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
         QtCore.QObject.connect(ui.ui.btnSnap, QtCore.SIGNAL('clicked()'), self.snapClicked)
         self.recording = False
+        self.recordStart = False
+        self.recordStop = False
         self.takeSnap = False
         #self.currentDir = None
         self.currentRecord = None
@@ -526,15 +531,26 @@ class RecordThread(QtCore.QThread):
         
     def newCamFrame(self, frame):
         l = QtCore.QMutexLocker(self.lock)
-        recording = self.recording
-        takeSnap = self.takeSnap
-        recFile = self.currentRecord
-        l.unlock()
+        try:
+            newRec = self.recordStart
+            if self.recordStop:
+                self.recording = False
+                self.recordStop = False
+                self.showMessage('Finished recording %s' % self.currentRecord.name()) 
+            if self.recordStart:
+                self.recordStart = False
+                self.recording = True
+                #self.currentRecord = self.m.getCurrentDir().createFile('video', autoIncrement=True)
+            recording = self.recording
+            takeSnap = self.takeSnap
+            recFile = self.currentRecord
+        finally:
+            l.unlock()
         if recording or takeSnap:
             cLock = QtCore.QMutexLocker(self.camLock)
             ## remember the record/snap/storageDir states since they might change 
             ## before the write thread gets to this frame
-            self.newCamFrames.append({'frame': frame, 'record': recording, 'snap': takeSnap, 'file': self.currentRecord})
+            self.newCamFrames.append({'frame': frame, 'record': recording, 'snap': takeSnap, 'newRec': newRec})
     
     def run(self):
         self.stopThread = False
@@ -581,15 +597,21 @@ class RecordThread(QtCore.QThread):
             #fileName = 'camFrame_%05d_%f.tif' % (fNum, info['time'])
             #self.showMessage("Recording %s - %d" % (frame['recordDir'].name(), fNum))
             #frame['recordDir'].writeFile(ImageFile(data), fileName, info)
-            info = [
+            arrayInfo = [
                 {'name': 'Time', 'values': array([info['time']]), 'units': 's'},
                 {'name': 'X'},
                 {'name': 'Y'}
             ]
-            data = MetaArray(data, info=info)
-            frame['file'].write(data, appendAxis='Time')
+            data = MetaArray(data[newaxis], info=arrayInfo)
+            if frame['newRec']:
+                self.currentRecord = self.m.getCurrentDir().writeFile(data, 'video', autoIncrement=True, info=info, appendAxis='Time')
+                self.currentFrameNum = 0
+            else:
+                data.write(self.currentRecord.name(), appendAxis='Time')
+                #self.currentRecord.write(data, appendAxis='Time')
+            self.showMessage("Recording %s - %d" % (self.currentRecord.name(), self.currentFrameNum))
             
-            #self.currentCamFrame += 1
+            self.currentFrameNum += 1
         
         if frame['snap']:
             fileName = 'image.tif'
@@ -612,13 +634,14 @@ class RecordThread(QtCore.QThread):
             if b:
                 #self.currentDir = self.m.getCurrentDir().mkdir('record', autoIncrement=True)
                 #self.currentCamFrame = 0
-                self.currentRecord = self.m.getCurrentDir().createFile('video', autoIncrement=True)
-                self.recording = True
+                self.recordStart = True
+                #self.recording = True
             else:
                 if self.recording:
-                    self.recording = False
-                    self.showMessage('Finished recording %s' % self.currentRecord.name()) 
-                    self.currentRecord = None
+                    #self.recording = False
+                    self.recordStop = True
+                    #self.showMessage('Finished recording %s' % self.currentRecord.name()) 
+                    #self.currentRecord = None
         finally:
             l.unlock()
 

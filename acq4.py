@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+print "Loading ACQ4..."
+
 from lib.Manager import *
 import os, sys
 from numpy import *
@@ -11,21 +13,19 @@ if app is None:
 
 
 config = 'config/default.cfg'
-if len(sys.argv) > 1:
-    config = sys.argv[1]
-config = os.path.abspath(config)
+#if len(sys.argv) > 1:
+    #config = sys.argv[1]
+#config = os.path.abspath(config)
 
-dm = Manager(config)
-dm.showDeviceRack()
+dm = Manager(config, sys.argv[1:])
+#dm.showDeviceRack()
 
-dm.setCurrentDir('junk')
+#dm.setCurrentDir('junk')
 
-print "Loading all modules.."
-#p1 = dm.loadModule(module='Patch', name='Patch0', config={'clampDev': 'Clamp1'})
-#p2 = dm.loadModule(module='Patch', name='Patch1', config={'clampDev': 'Clamp2'})
-prm = dm.loadModule(module='ProtocolRunner', name='PR', config={'globalDir': os.path.abspath('config/protocols')})
-qtcam = dm.loadModule(module='Camera', name='Camera', config={'camDev': 'Camera'})
-dm.loadModule(module='DataManager', name='DM', config={})
+#print "Loading camera module.."
+#qtcam = dm.loadModule(module='Camera', name='Camera', config={'camDev': 'Camera'})
+#print "Loading dataManager module.."
+dm.loadModule(module='Manager', name='Manager', config={})
 
 ## If running interactively, just return to the prompt and let python call the qt event loop for us.
 ## Otherwise, we need to run it ourselves:

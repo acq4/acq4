@@ -4,6 +4,7 @@ import time, sys, atexit
 from PyQt4 import QtCore, QtGui
 from DataManager import *
 import lib.util.ptime as ptime
+import getopt
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
@@ -17,10 +18,22 @@ class Manager(QtCore.QObject):
     CREATED = False
     single = None
     
-    def __init__(self, configFile=None):
+    def __init__(self, configFile=None, argv=None):
         if Manager.CREATED:
             raise Exception("Manager object already created!")
         
+        if argv is not None:
+            try:
+                opts, args = getopt.getopt(argv, 'c:m:b:s:', ['config=', 'module=', 'baseDir=', 'storageDir='])
+            except getopt.GetoptError, err:
+                print str(err)
+                print """
+Valid options are:
+    -c --config=     configuration file
+    -m --module=     module name to load
+    -b --baseDir=    base directory to use
+    -s --storageDir= storage directory to use
+"""
         QtCore.QObject.__init__(self)
         self.alreadyQuit = False
         self.taskLock = QtCore.QMutex(QtCore.QMutex.Recursive)
@@ -33,10 +46,45 @@ class Manager(QtCore.QObject):
         self.dataManager = DataManager()
         self.currentDir = None
         self.baseDir = None
-        self.readConfig(configFile)
         self.interface = None
+        
+        ## Handle command line options
+        loadModules = []
+        setBaseDir = None
+        setStorageDir = None
+        for o, a in opts:
+            if o in ['-c', '--config']:
+                configFile = a
+            elif o in ['-m', '--module']:
+                loadModules.append(a)
+            elif o in ['-b', '--baseDir']:
+                setBaseDir = a
+            elif o in ['-s', '--storageDir']:
+                setStorageDir = a
+            else:
+                print "Unhandled option", o, a
+        
+        ## Read in configuration file
+        if configFile is None:
+            raise Exception("No configuration file specified!")
+        self.readConfig(configFile)
+        
+        
         Manager.CREATED = True
         Manager.single = self
+        
+        ## Act on options if they were specified..
+        try:
+            if setBaseDir is not None:
+                self.setBaseDir(setBaseDir)
+            if setStorageDir is not None:
+                self.setCurrentDir(setStorageDir)
+            for m in loadModules:
+                self.loadDefinedModule(m)
+        except:
+            sys.excepthook(*sys.exc_info())
+            print "\nError while acting on command line options, continuing on anyway.."
+        
 
     def readConfig(self, configFile):
         """Read configuration file, create device objects, add devices to list"""
@@ -159,6 +207,10 @@ class Manager(QtCore.QObject):
             
     def loadDefinedModule(self, name):
         """Load a module and configure as defined in the config file"""
+        if name not in self.definedModules:
+            print "Module '%s' is not defined. Options are: %s" % (name, str(self.definedModules.keys()))
+            return
+        
         mod = self.definedModules[name]['module']
         if 'config' in self.definedModules[name]:
             conf = self.definedModules[name]['config']
