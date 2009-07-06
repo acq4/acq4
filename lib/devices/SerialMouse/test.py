@@ -1,24 +1,9 @@
+# -*- coding: utf-8 -*-
 import serial
 sp = serial.Serial(3, baudrate=1200, bytesize=serial.SEVENBITS)
 print "Opened", sp.portstr
 
-#def itoa(x, base=10):
-   #isNegative = x < 0
-   #if isNegative:
-      #x = -x
-   #digits = []
-   #while x > 0:
-      #x, lastDigit = divmod(x, base)
-      #digits.append('0123456789abcdefghijklmnopqrstuvwxyz'[lastDigit])
-   #if isNegative:
-      #digits.append('-')
-   #digits.reverse()
-   #return ''.join(digits) 
-
-#def bin(x):
-    #return itoa(x, 2).zfill(8)
-
-## convert int to signed int
+## convert byte to signed byte
 def sint(x):
     return ((x+128)%256)-128
 
