@@ -235,7 +235,7 @@ class AcquireThread(QtCore.QThread):
         self.acqBuffer = None
         self.frameId = 0
         self.bufferTime = 5.0
-        self.ringSize = 10
+        self.ringSize = 100
         self.tasks = []
     
     def __del__(self):
@@ -299,7 +299,24 @@ class AcquireThread(QtCore.QThread):
         try:
             #print self.ringSize, binning, exposure, region
             #print "  start camera.."
-            self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region, mode=mode)
+            
+            ## Attempt camera start. If the driver complains that it can not allocate memory, reduce the ring size until it works. (Ridiculous driver bug)
+            printRingSize = False
+            while True:
+                try:
+                    self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region, mode=mode)
+                    break
+                except Exception, e:
+                    if len(e.args) == 2 and e.args[1] == 15:
+                        printRingSize = True
+                        self.ringSize = int(self.ringSize * 0.9)
+                        if self.ringSize < 2:
+                            raise Exception("Will not reduce camera ring size < 2")
+                    else:
+                        raise
+            if printRingSize:
+                print "Reduced camera ring size to %d" % self.ringSize
+            
             #print "  camera started."
             lastFrameTime = ptime.time() #time.clock()  # Use time.time() on Linux
             

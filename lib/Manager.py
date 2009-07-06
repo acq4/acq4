@@ -301,29 +301,29 @@ Valid options are:
 
     def quit(self):
         """Nicely request that all devices and modules shut down"""
-        app = QtGui.QApplication.instance()
-        def q():
-            print "all windows closed"
-        QtCore.QObject.connect(app, QtCore.SIGNAL('lastWindowClosed()'), q)
+        #app = QtGui.QApplication.instance()
+        #def q():
+            #print "all windows closed"
+        #QtCore.QObject.connect(app, QtCore.SIGNAL('lastWindowClosed()'), q)
         
         if not self.alreadyQuit:
             for m in self.modules:
                 self.modules[m].quit()
                 
             for d in self.devices:
-                print "Requesting %s quit.." % d
+                #print "Requesting %s quit.." % d
                 self.devices[d].quit()
-                print "  done."
+                #print "  done."
                 
-            print "Closing windows.."
+            #print "Closing windows.."
             QtGui.QApplication.instance().closeAllWindows()
-            print "  done."
+            #print "  done."
             
             self.alreadyQuit = True
-        print app.topLevelWidgets()
-        for w in app.topLevelWidgets():
-            print w, w.isVisible()
-        print app.quitOnLastWindowClosed()
+        #print app.topLevelWidgets()
+        #for w in app.topLevelWidgets():
+            #print w, w.isVisible()
+        #print app.quitOnLastWindowClosed()
 
 class Task:
     id = 0

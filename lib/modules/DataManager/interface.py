@@ -3,7 +3,7 @@ from DataManagerTemplate import *
 from DataManagerModel import *
 from lib.modules.Module import *
 from lib.DataManager import *
-import os, re, sys, time
+import os, re, sys, time, sip
 
 class DataManager(Module):
     def __init__(self, manager, name, config):
@@ -241,6 +241,8 @@ class DataManager(Module):
         else:
             return lines[0]
             
-        
+    def quit(self):
+        ## Silly: needed to prevent lockup on some systems.
+        sip.delete(self.dialog)
         
 
