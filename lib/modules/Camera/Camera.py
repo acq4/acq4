@@ -224,13 +224,15 @@ class PVCamera(QtGui.QMainWindow):
         
     def closeEvent(self, ev):
         if self.acquireThread.isRunning():
-            print "Stopping acquisition thread.."
+            #print "Stopping acquisition thread.."
             self.acquireThread.stop()
             self.acquireThread.wait()
         if self.recordThread.isRunning():
-            print "Stopping recording thread.."
+            #print "Stopping recording thread.."
             self.recordThread.stop()
+            #print "  requested stop, waiting for thread -- running=",self.recordThread.isRunning() 
             self.recordThread.wait()
+            #print "  record thread finished."
 
     def setMouse(self, qpt=None):
         if qpt is None:
@@ -569,10 +571,16 @@ class RecordThread(QtCore.QThread):
                 
             time.sleep(10e-3)
             
+            #print "  RecordThread run: stop check"
             l = QtCore.QMutexLocker(self.lock)
+            #print "  RecordThread run:   got lock"
+            
             if self.stopThread:
+                #print "  RecordThread run:   stop requested, exiting loop"
+                l.unlock()
                 break
             l.unlock()
+            #print "  RecordThread run:   unlocked"
 
 
     def handleCamFrame(self, frame):
@@ -634,6 +642,10 @@ class RecordThread(QtCore.QThread):
             l.unlock()
 
     def stop(self):
+        #print "RecordThread stop.."    
         l = QtCore.QMutexLocker(self.lock)
+        #print "  RecordThread stop: locked"
         self.stopThread = True
         l.unlock()
+        #print "  RecordThread stop: done"
+        

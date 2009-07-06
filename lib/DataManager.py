@@ -431,25 +431,15 @@ class DirHandle(FileHandle):
             return fileName + ('_%03d' % maxVal)
     
     def mkdir(self, name, autoIncrement=False, info=None, useExt=False):
-        """Create a new subdirectory, return a new DirHandle object. If autoIndex is true, add a number to the end of the dir name if it already exists."""
+        """Create a new subdirectory, return a new DirHandle object. If autoIncrement is true, add a number to the end of the dir name if it already exists."""
         if info is None:
             info = {}
         l = QtCore.QMutexLocker(self.lock)
         
         if autoIncrement:
             fullName = self.incrementFileName(name, useExt=useExt)
-            #fullName = name+"_000"
         else:
             fullName = name
-            
-        #if autoIncrement:
-            
-            #files = os.listdir(self.path)
-            #files = filter(lambda f: re.match(name + r'_\d+$', f), files)
-            #if len(files) > 0:
-                #files.sort()
-                #maxVal = int(files[-1][-3:])
-                #fullName = name + "_%03d" % (maxVal+1)
             
         newDir = os.path.join(self.path, fullName)
         if os.path.isdir(newDir):
@@ -460,9 +450,10 @@ class DirHandle(FileHandle):
         t = ptime.time()
         self._childChanged()
         
-        ## Mark the creation time in the parent directory so it can sort its full list of files without 
-        ## going into each subdir
-        self._setFileInfo(fullName, {'__timestamp__': t})
+        if self.isManaged():
+            ## Mark the creation time in the parent directory so it can sort its full list of files without 
+            ## going into each subdir
+            self._setFileInfo(fullName, {'__timestamp__': t})
         
         ## create the index file in the new directory
         info['__timestamp__'] = t

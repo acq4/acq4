@@ -38,5 +38,4 @@ else:
 
 ## isatty is broken for cygwin shell. This should not be needed for regular windows shell..
 app.exec_()
-
 #dm.quit()
