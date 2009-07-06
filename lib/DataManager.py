@@ -7,6 +7,7 @@ from lib.util.MetaArray import MetaArray
 #from lib.util.advancedTypes import Locker
 import lib.util.ptime as ptime
 from PyQt4 import QtCore
+from lib.filetypes.FileType import *
 
 class DataManager(QtCore.QObject):
     """Class for creating and caching DirHandle objects to make sure there is only one manager object per file/directory. 
@@ -472,19 +473,20 @@ class DirHandle(FileHandle):
             self.indexFile(fileName)
         return fh
         
-    def createFile(self, fileName, autoIncrement=False, useExt=True, info=None):
-        if autoIncrement:
-            fileName = self.incrementFileName(fileName, useExt=useExt)
-        fullName = os.path.join(self.name(), fileName)
+    def createFile(self, fileName, **kwargs):   ## autoIncrement=False, useExt=True, info=None):
+        self.writeFile(None, fileName=fileName, **kwargs)
+        #if autoIncrement:
+            #fileName = self.incrementFileName(fileName, useExt=useExt)
+        #fullName = os.path.join(self.name(), fileName)
         
-        if os.path.exists(fullName):
-            raise Exception('File %s already exists!' % fullName)
+        #if os.path.exists(fullName):
+            #raise Exception('File %s already exists!' % fullName)
             
-        fd = open(fullName, 'w')
-        fd.close()
+        #fd = open(fullName, 'w')
+        #fd.close()
         
-        self.indexFile(fileName, info=info)
-        return self[fileName]
+        #self.indexFile(fileName, info=info)
+        #return self[fileName]
         
         
         
@@ -555,45 +557,61 @@ class DirHandle(FileHandle):
         return os.path.isfile(fn)
         
     
-    def writeFile(self, obj, fileName, info=None, autoIncrement=False, useExt=True, **kwargs):
+    def writeFile(self, obj=None, fileName=None, info=None, autoIncrement=False, useExt=True, **kwargs):
         """Write a file to this directory using obj.write(fileName), store info in the index."""
+        if fileName is None:
+            raise Exception('fileName must be specified for DirHandle.writeFile()')
         if info is None:
             info = {}   ## never put {} in the function default
             
-        if not hasattr(obj, 'write') or not callable(obj.write):
-            raise Exception("Can not create file from object of type %s" % str(type(obj)))
         
         t = ptime.time()
         l = QtCore.QMutexLocker(self.lock)
         name = fileName
-        appendInfo = False
+        #appendInfo = False
 
         if autoIncrement:
             name = self.incrementFileName(name, useExt=useExt)
-            appendInfo = True  ## Guaranteed to be a new file, so the info can be appended to the index file
-            #d = 0
-            #base, ext = os.path.splitext(name)
-            #while True:
-                #name = "%s_%04d%s" % (base, d, ext)
-                #fullFn = os.path.join(self.path, name)
-                #if not os.path.exists(fullFn):
-                    #break
-                #d += 1
-        fullFn = os.path.join(self.path, name)
-                
-        obj.write(fullFn, **kwargs)
+            #appendInfo = True  ## Guaranteed to be a new file, so the info can be appended to the index file
+        #fullFn = os.path.join(self.path, name)
+        
+        
+        ## When writing obj to file, we will try a few different approaches in order:
+        #   - If obj is None, just create an empty file
+        #   - If obj is a FileType, use obj.write
+        #   - If object can be converted to FileType, try that
+        if obj is None:
+            open(os.path.join(self.path, name), 'w')
+            newName = name
+            #self.addFile(name)
+        else:
+            if not isinstance(obj, FileType):
+                try:
+                    if hasattr(obj, '__class__'):
+                        objType = obj.__class__.__name__
+                    else:
+                        objType = type(obj).__name__
+                    mod = __import__('lib.filetypes.%s' % objType, fromlist=['*'])
+                    cls = getattr(mod, objType)
+                    obj = cls(obj)
+                except:
+                    raise Exception("Can not create file from object of type %s" % str(type(obj)))
+                    
+            newName = obj.write(self, name, **kwargs)
+            
+        if newName is None:
+            newName = name
+            
         self._childChanged()
         
         if not info.has_key('__object_type__'):
-            if hasattr(obj, 'typeName'):
-                info['__object_type__'] = obj.typeName()
-            else:
-                info['__object_type__'] = type(obj).__name__
+            info['__object_type__'] = obj.typeName()
         if not info.has_key('__timestamp__'):
             info['__timestamp__'] = t
-        self._setFileInfo(name, info, append=appendInfo)
-        self.emitChanged('children', fileName)
-        return self[name]
+        
+        self._setFileInfo(newName, info)
+        self.emitChanged('children', newName)
+        return self[newName]
     
     def indexFile(self, fileName, info=None, protect=False):
         """Add a pre-existing file into the index. Overwrites any pre-existing info for the file unless protect is True"""
@@ -606,13 +624,13 @@ class DirHandle(FileHandle):
         if not (os.path.isfile(fn) or os.path.isdir(fn)):
             raise Exception("File %s does not exist." % fn)
             
-        append = True
+        #append = True
         if fileName in index:
-            append = False
+            #append = False
             if protect:
                 raise Exception("File %s is already indexed." % fileName)
 
-        self._setFileInfo(fileName, info, append=append)
+        self._setFileInfo(fileName, info)
         self.emitChanged('children', fileName)
     
     def forget(self, fileName):
@@ -656,18 +674,22 @@ class DirHandle(FileHandle):
             raise
         return os.path.exists(fn)
 
-    def _setFileInfo(self, fileName, info, append=False):
-        """Set or update meta-information array for fileName."""
+    def _setFileInfo(self, fileName, info):
+        """Set or update meta-information array for fileName. If merge is false, the info dict is completely overwritten."""
         l = QtCore.QMutexLocker(self.lock)
-        
+            
+        index = self._readIndex(lock=False)
+        append = False
+        if fileName not in index:
+            index[fileName] = {}
+            append = True
+            
+        for k in info:
+            index[fileName][k] = info[k]
+            
         if append:
             appendConfigFile({fileName: info}, self._indexFile())
         else:
-            index = self._readIndex(lock=False)
-            if fileName not in index:
-                index[fileName] = {}
-            for k in info:
-                index[fileName][k] = info[k]
             self._writeIndex(index, lock=False)
         self.emitChanged('meta', fileName)
         

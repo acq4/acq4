@@ -38,7 +38,6 @@ class PVCamera(QtGui.QMainWindow):
         self.exposure = 0.001
         self.binning = 1
         self.region = None
-        #self.acquireThread = AcquireThread(self)
         self.acquireThread = self.module.cam.acqThread
         self.acquireThread.setParam('binning', self.binning)
         self.acquireThread.setParam('exposure', self.exposure)
@@ -47,7 +46,6 @@ class PVCamera(QtGui.QMainWindow):
         self.lastPlotTime = None
         self.ROIs = []
         self.plotCurves = []
-        #self.ropWindow = ROPWindow(self)
         
         self.nextFrame = None
         self.updateFrame = False
@@ -174,8 +172,6 @@ class PVCamera(QtGui.QMainWindow):
         roi = PlotROI(10)
         roi.setZValue(20)
         self.scene.addItem(roi)
-        #plot = Plot(array([]))
-        #self.plotScene.addItem(plot)
         plot = Qwt.QwtPlotCurve('roi%d'%len(self.ROIs))
         plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         plot.attach(self.ui.plotWidget)
@@ -330,10 +326,6 @@ class PVCamera(QtGui.QMainWindow):
                     rmax = 2**self.bitDepth - 1
         self.levelMin = rmin
         self.levelMax = rmax
-        #self.ui.labelLevelMax.setText(str(self.levelMax))
-        #self.ui.labelLevelMid.setText(str((self.levelMax+self.levelMin) * 0.5)[:4])
-        #self.ui.labelLevelMin.setText(str(self.levelMin))
-        #self.ui.sliderAvgLevel.setMaximum(2**self.bitDepth - 1)
         
         self.ui.levelScale.setScaleDiv(self.scaleEngine.transformation(), self.scaleEngine.divideScale(self.levelMin, self.levelMax, 8, 5))
         self.updateColorScale()
@@ -497,13 +489,10 @@ class PVCamera(QtGui.QMainWindow):
                 
             ## Translate and scale image based on ROI and binning
             m = QtGui.QTransform()
-            #m.translate(self.region[0], self.region[1])
             m.translate(info['region'][0], info['region'][1])
-            #m.scale(self.binning, self.binning)
             m.scale(info['binning'], info['binning'])
             
             ## update image in viewport
-            #self.imageItem.setLevels(white=wl, black=bl)
             self.imageItem.updateImage(data, clipMask=self.currentClipMask, white=wl, black=bl)
             self.imageItem.setTransform(m)
             
@@ -528,9 +517,7 @@ class RecordThread(QtCore.QThread):
         self.recordStart = False
         self.recordStop = False
         self.takeSnap = False
-        #self.currentDir = None
         self.currentRecord = None
-        #self.currentCamFrame = 0
         
         self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
         self.camLock = QtCore.QMutex()
@@ -547,9 +534,9 @@ class RecordThread(QtCore.QThread):
             if self.recordStart:
                 self.recordStart = False
                 self.recording = True
-                #self.currentRecord = self.m.getCurrentDir().createFile('video', autoIncrement=True)
             recording = self.recording or lastRec
             takeSnap = self.takeSnap
+            self.takeSnap = False
             recFile = self.currentRecord
         finally:
             l.unlock()
@@ -589,21 +576,9 @@ class RecordThread(QtCore.QThread):
 
 
     def handleCamFrame(self, frame):
-        #l = QtCore.QMutexLocker(self.lock)
-        #recording = self.recording
-        #takeSnap = self.takeSnap
-        #l.unlock()
-        
-        #if not (recording or takeSnap):
-            #return
-        
         (data, info) = frame['frame']
         
         if frame['record']:
-            #fNum = len(frame['recordDir'].ls())
-            #fileName = 'camFrame_%05d_%f.tif' % (fNum, info['time'])
-            #self.showMessage("Recording %s - %d" % (frame['recordDir'].name(), fNum))
-            #frame['recordDir'].writeFile(ImageFile(data), fileName, info)
             if frame['newRec']:
                 self.startFrameTime = info['time']
                 
@@ -614,13 +589,12 @@ class RecordThread(QtCore.QThread):
             ]
             data = MetaArray(data[newaxis], info=arrayInfo)
             if frame['newRec']:
-                self.currentRecord = self.m.getCurrentDir().writeFile(data, 'video.ma', autoIncrement=True, info=info, appendAxis='Time')
+                self.currentRecord = self.m.getCurrentDir().writeFile(data, 'video', autoIncrement=True, info=info, appendAxis='Time')
                 self.currentFrameNum = 0
             else:
                 data.write(self.currentRecord.name(), appendAxis='Time')
                 s = 1.0/self.currentFrameNum
                 
-                #self.currentRecord.write(data, appendAxis='Time')
             self.showMessage("Recording %s - %d" % (self.currentRecord.name(), self.currentFrameNum))
             
             self.currentFrameNum += 1
@@ -635,7 +609,8 @@ class RecordThread(QtCore.QThread):
         if frame['snap']:
             fileName = 'image.tif'
             
-            fn = self.m.getCurrentDir().writeFile(ImageFile(data), fileName, info, autoIncrement=True)
+            fh = self.m.getCurrentDir().writeFile(ImageFile(data), fileName, info, autoIncrement=True)
+            fn = fh.name()
             self.showMessage("Saved image %s" % fn)
             l = QtCore.QMutexLocker(self.lock)
             self.takeSnap = False
@@ -651,16 +626,10 @@ class RecordThread(QtCore.QThread):
         l = QtCore.QMutexLocker(self.lock)
         try:
             if b:
-                #self.currentDir = self.m.getCurrentDir().mkdir('record', autoIncrement=True)
-                #self.currentCamFrame = 0
                 self.recordStart = True
-                #self.recording = True
             else:
                 if self.recording:
-                    #self.recording = False
                     self.recordStop = True
-                    #self.showMessage('Finished recording %s' % self.currentRecord.name()) 
-                    #self.currentRecord = None
         finally:
             l.unlock()
 

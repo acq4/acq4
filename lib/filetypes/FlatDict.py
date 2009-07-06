@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
+from FileType import *
 
-class FlatDict:
+class FlatDict(FileType):
     def __init__(self, file):
         pass
         
-    def typeName(self):
-        return 'FlatDict'
-        
-    def write(self, fileName):
+    def write(self, dirHandle, fileName):
         pass

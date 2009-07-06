@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
 
-from lib.util.MetaArray import MetaArray
+from lib.util.MetaArray import MetaArray as MA
+from FileType import *
 
-#class MetaArray:
-    #def __init__(self, data):
-        #self.data = data
+class MetaArray(FileType):
+    def __init__(self, data):
+        self.data = data
         
-    #def typeName(self):
-        #return 'MetaArray'
-        
-    #def write(self, fileName, *args):
-        #self.data.write(fileName, *args)
+    def write(self, dirHandle, fileName, **args):
+        if fileName[-3:] != '.ma':
+            fileName = fileName + '.ma'
+        self.data.write(os.path.join(dirHandle.name(), fileName), **args)
+        return fileName
         
 def fromFile(fileName, info=None):
-    return MetaArray(file=fileName)
+    return MA(file=fileName)
     
