@@ -137,17 +137,17 @@ class PatchWindow(QtGui.QMainWindow):
         
     def recordClicked(self):
         if self.ui.recordBtn.isChecked():
-            if len(self.analysisData['time']) > 0:
-                data = self.makeAnalysisArray()
-                sd = self.storageDir()
-                sd.writeFile(data, self.clampName, appendAxis='Time', newFile=True)
-                
+            data = self.makeAnalysisArray()
+            sd = self.storageDir()
+            print "new file", type(data)
+            self.storageFile = sd.writeFile(data, self.clampName, autoIncrement=True, appendAxis='Time', newFile=True)
+            
     def storageDir(self):
         return self.manager.getCurrentDir().getDir('Patch', create=True)
                 
-    def storageFile(self):
-        sd = self.storageDir()
-        return sd.getFile(self.clampName, create=True)
+    #def storageFile(self):
+        #sd = self.storageDir()
+        #return sd.getFile(self.clampName, create=True)
             
         
     def resetClicked(self):
@@ -194,7 +194,7 @@ class PatchWindow(QtGui.QMainWindow):
             
             arr = self.makeAnalysisArray(lastOnly=True)
             #print "appending array", arr.shape
-            arr.write(self.storageFile().name(), appendAxis='Time')
+            arr.write(self.storageFile.name(), appendAxis='Time')
         
     def makeAnalysisArray(self, lastOnly=False):
         ## Determine how much of the data to include in this array

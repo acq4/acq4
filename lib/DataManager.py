@@ -9,6 +9,13 @@ import lib.util.ptime as ptime
 from PyQt4 import QtCore
 from lib.filetypes.FileType import *
 
+def abspath(fileName):
+    """Return an absolute path string which is guaranteed to uniquely identify a file."""
+    return os.path.normcase(os.path.abspath(fileName))
+    
+
+
+
 class DataManager(QtCore.QObject):
     """Class for creating and caching DirHandle objects to make sure there is only one manager object per file/directory. 
     This class is (supposedly) thread-safe.
@@ -33,9 +40,9 @@ class DataManager(QtCore.QObject):
                 raise Exception("Directory %s does not exist" % dirName)
             else:
                 raise Exception("Not a directory: %s" % dirName)
-        if dirName not in self.cache:
+        if not self._cacheHasName(dirName):
             self._addHandle(dirName, DirHandle(dirName, self, create=create))
-        return self.cache[dirName]
+        return self._getCache(dirName)
         
     def getFileHandle(self, fileName):
         l = QtCore.QMutexLocker(self.lock)
@@ -45,9 +52,9 @@ class DataManager(QtCore.QObject):
                 raise Exception("File %s does not exist" % fileName)
             else:
                 raise Exception("Not a regular file: %s" % fileName)
-        if fileName not in self.cache:
+        if not self._cacheHasName(fileName):
             self._addHandle(fileName, FileHandle(fileName, self))
-        return self.cache[fileName]
+        return self._getCache(fileName)
         
     def getHandle(self, fileName):
         try:
@@ -55,9 +62,9 @@ class DataManager(QtCore.QObject):
         except:
             return self.getDirHandle(fileName)
 
-    def _addHandle(self, dirName, handle):
+    def _addHandle(self, fileName, handle):
         """Cache a handle and watch it for changes"""
-        self.cache[dirName] = handle
+        self._setCache(fileName, handle)
         QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self._handleChanged)
         
     def _handleChanged(self, handle, change, *args):
@@ -74,23 +81,23 @@ class DataManager(QtCore.QObject):
                 ## Update key to cached handle
                 newh = os.path.abspath(os.path.join(newName, h[len(oldName+os.path.sep):]))
                 #print "update key %s, (newName=%s, )" % (newh, newName)
-                self.cache[newh] = self.cache[h]
+                self._setCache(newh, self._getCache(h))
                 
                 ## If the change originated from h's parent, inform it that this change has occurred.
                 if h != oldName:
                     #print "  Informing", h, oldName
-                    self.cache[h]._parentMoved(oldName, newName)
-                del self.cache[h]
+                    self._getCache(h)._parentMoved(oldName, newName)
+                self._delCache(h)
             
         if change == 'deleted':
             oldName = args[0]
-            del self.cache[oldName]
+            self._delCache(oldName)
 
             ## Inform all children that they have been deleted and remove from cache
             tree = self._getTree(oldName)
             for path in tree:
-                self.cache[path]._deleted()
-                del self.cache[path]
+                self._getCache(path)._deleted()
+                self._delCache(path)
                 
 
     def _getTree(self, parent):
@@ -98,8 +105,8 @@ class DataManager(QtCore.QObject):
         
         ## If handle has no children, then there is no need to search for its tree.
         tree = [parent]
-        ph = self.cache[parent]
-        prefix = parent + os.path.sep
+        ph = self._getCache(parent)
+        prefix = os.path.normcase(parent + os.path.sep)
         
         if ph.hasChildren():
             for h in self.cache:
@@ -113,11 +120,25 @@ class DataManager(QtCore.QObject):
                     tree.append(h)
         return tree
 
+    def _getCache(self, name):
+        return self.cache[abspath(name)]
+        
+    def _setCache(self, name, value):
+        self.cache[abspath(name)] = value
+        
+    def _delCache(self, name):
+        del self.cache[abspath(name)]
+        
+    def _cacheHasName(self, name):
+        return abspath(name) in self.cache
+        
+
+
 class FileHandle(QtCore.QObject):
     def __init__(self, path, manager):
         QtCore.QObject.__init__(self)
         self.manager = manager
-        self.path = os.path.normcase(os.path.abspath(path))
+        self.path = os.path.abspath(path)
         self.parentDir = None
         #self.lock = threading.RLock()
         self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
@@ -300,12 +321,12 @@ class DirHandle(FileHandle):
         self._index = None
         self.lsCache = None
         
-        if not os.path.isdir(path):
+        if not os.path.isdir(self.path):
             if create:
-                os.mkdir(path)
+                os.mkdir(self.path)
                 self.createIndex()
             else:
-                raise Exception("Directory %s does not exist." % path)
+                raise Exception("Directory %s does not exist." % self.path)
         
         if os.path.isfile(self._indexFile()):
             ## read the index and cache it.
@@ -461,11 +482,11 @@ class DirHandle(FileHandle):
             else:
                 raise Exception('Directory %s does not exist.' % ndir)
         
-    def getFile(self, fileName, create=False, autoIncrement=False, useExt=True):
-        """return a File handle for the named file. Create an empty file if create-True and the file does not already exist."""
+    def getFile(self, fileName, autoIncrement=False, useExt=True):
+        """return a File handle for the named file."""
         fullName = os.path.join(self.name(), fileName)
-        if create:
-            self.createFile(fileName, autoIncrement=autoIncrement, useExt=useExt)
+        #if create:
+            #self.createFile(fileName, autoIncrement=autoIncrement, useExt=useExt)
         if not os.path.isfile(fullName):
             raise Exception('File "%s" does not exist.' % fullName)
         fh = self[fileName]
@@ -473,28 +494,17 @@ class DirHandle(FileHandle):
             self.indexFile(fileName)
         return fh
         
-    def createFile(self, fileName, **kwargs):   ## autoIncrement=False, useExt=True, info=None):
-        self.writeFile(None, fileName=fileName, **kwargs)
-        #if autoIncrement:
-            #fileName = self.incrementFileName(fileName, useExt=useExt)
-        #fullName = os.path.join(self.name(), fileName)
-        
-        #if os.path.exists(fullName):
-            #raise Exception('File %s already exists!' % fullName)
-            
-        #fd = open(fullName, 'w')
-        #fd.close()
-        
-        #self.indexFile(fileName, info=info)
-        #return self[fileName]
-        
+    #def createFile(self, fileName, **kwargs):   ## autoIncrement=False, useExt=True, info=None):
+        #self.writeFile(None, fileName=fileName, **kwargs)
         
         
     def dirExists(self, dirName):
         return os.path.isdir(os.path.join(self.path, dirName))
             
-    def ls(self):
-        """Return a list of all files in the directory"""
+    def ls(self, normcase=False):
+        """Return a list of all files in the directory.
+        If normcase is True, normalize the case of all names in the list."""
+        
         l = QtCore.QMutexLocker(self.lock)
         #self._readIndex()
         #ls = self.index.keys()
@@ -505,7 +515,10 @@ class DirHandle(FileHandle):
                 if i in self.lsCache:
                     self.lsCache.remove(i)
             self.lsCache.sort(self._cmpFileTimes)
-        return self.lsCache[:]
+        if normcase:
+            return map(os.path.normcase, self.lsCache)
+        else:
+            return self.lsCache[:]
     
     def _cmpFileTimes(self, a, b):
         l = QtCore.QMutexLocker(self.lock)
@@ -557,61 +570,52 @@ class DirHandle(FileHandle):
         return os.path.isfile(fn)
         
     
-    def writeFile(self, obj=None, fileName=None, info=None, autoIncrement=False, useExt=True, **kwargs):
-        """Write a file to this directory using obj.write(fileName), store info in the index."""
-        if fileName is None:
-            raise Exception('fileName must be specified for DirHandle.writeFile()')
+    def writeFile(self, obj, fileName, info=None, autoIncrement=False, useExt=True, **kwargs):
+        """Write a file to this directory using obj.write(fileName), store info in the index.
+        Will try to convert obj into a FileType if the correct type exists.
+        """
         if info is None:
             info = {}   ## never put {} in the function default
-            
         
         t = ptime.time()
         l = QtCore.QMutexLocker(self.lock)
-        name = fileName
-        #appendInfo = False
+        
+        ## Convert object to FileType if needed
+        if not isinstance(obj, FileType):
+            try:
+                if hasattr(obj, '__class__'):
+                    objType = obj.__class__.__name__
+                else:
+                    objType = type(obj).__name__
+                mod = __import__('lib.filetypes.%s' % objType, fromlist=['*'])
+                cls = getattr(mod, objType)
+                obj = cls(obj)
+            except:
+                raise Exception("Can not create file from object of type %s" % str(type(obj)))
 
+        ## Add on default extension if there is one
+        ext = obj.extension(**kwargs)
+        if fileName[-len(ext):] != ext:
+            fileName = fileName + ext
+
+        ## Increment file name
         if autoIncrement:
-            name = self.incrementFileName(name, useExt=useExt)
-            #appendInfo = True  ## Guaranteed to be a new file, so the info can be appended to the index file
-        #fullFn = os.path.join(self.path, name)
-        
-        
-        ## When writing obj to file, we will try a few different approaches in order:
-        #   - If obj is None, just create an empty file
-        #   - If obj is a FileType, use obj.write
-        #   - If object can be converted to FileType, try that
-        if obj is None:
-            open(os.path.join(self.path, name), 'w')
-            newName = name
-            #self.addFile(name)
-        else:
-            if not isinstance(obj, FileType):
-                try:
-                    if hasattr(obj, '__class__'):
-                        objType = obj.__class__.__name__
-                    else:
-                        objType = type(obj).__name__
-                    mod = __import__('lib.filetypes.%s' % objType, fromlist=['*'])
-                    cls = getattr(mod, objType)
-                    obj = cls(obj)
-                except:
-                    raise Exception("Can not create file from object of type %s" % str(type(obj)))
-                    
-            newName = obj.write(self, name, **kwargs)
-            
-        if newName is None:
-            newName = name
-            
+            fileName = self.incrementFileName(fileName, useExt=useExt)
+                
+        ## Write file
+        obj.write(self, fileName, **kwargs)
         self._childChanged()
         
+        ## Write meta-info
         if not info.has_key('__object_type__'):
             info['__object_type__'] = obj.typeName()
         if not info.has_key('__timestamp__'):
             info['__timestamp__'] = t
+        self._setFileInfo(fileName, info)
+        print "Wrote file", fileName, info
         
-        self._setFileInfo(newName, info)
-        self.emitChanged('children', newName)
-        return self[newName]
+        self.emitChanged('children', fileName)
+        return self[fileName]
     
     def indexFile(self, fileName, info=None, protect=False):
         """Add a pre-existing file into the index. Overwrites any pre-existing info for the file unless protect is True"""

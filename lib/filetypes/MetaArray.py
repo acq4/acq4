@@ -8,10 +8,10 @@ class MetaArray(FileType):
         self.data = data
         
     def write(self, dirHandle, fileName, **args):
-        if fileName[-3:] != '.ma':
-            fileName = fileName + '.ma'
         self.data.write(os.path.join(dirHandle.name(), fileName), **args)
-        return fileName
+        
+    def extension(self, **args):
+        return ".ma"
         
 def fromFile(fileName, info=None):
     return MA(file=fileName)
