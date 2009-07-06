@@ -23,7 +23,20 @@ class SerialMouse(Device):
     def getPosition(self):
         return self.pos[:]
         
+    def deviceInterface(self):
+        return SMInterface(self)
     
+class SMInterface(QtGui.QLabel):
+    def __init__(self, dev):
+        QtGui.QWidget.__init__(self)
+        self.dev = dev
+        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.update)
+        self.update()
+        
+    def update(self):
+        pos = self.dev.getPosition()
+        self.setText(u"%0.4f, %0.4f (μm)" % (pos[0]*1e6, pos[1]*1e6))
+        
     
     
 class MouseThread(QtCore.QThread):
@@ -37,17 +50,27 @@ class MouseThread(QtCore.QThread):
     def run(self):
         self.stopThread = False
         self.sp = serial.Serial(int(self.port), baudrate=1200, bytesize=serial.SEVENBITS)
+        self.sp.read(12) ## Mouse says hello every time we connect.
+        #time.sleep(3) ## Wait a few seconds for the mouse to say hello
+        #if self.sp.inWaiting() > 0:
+            #print "Discarding %d bytes" % self.sp.inWaiting()
+            #self.sp.read(self.sp.inWaiting())
         while True:
+            tdx = tdy = 0
             if self.sp.inWaiting() >= 3:
-                (dx, dy) = self.readPacket()
-                self.pos = [self.pos[0] + dx, self.pos[1] + dy]
-                self.emit(QtCore.SIGNAL('positionChanged'), {'rel': (dx, dy), 'abs': self.pos})
+                while self.sp.inWaiting() >= 3:
+                    (dx, dy) = self.readPacket()
+                    tdx += dx
+                    tdy += dy
+                self.pos = [self.pos[0] + tdx, self.pos[1] + tdy]
+                self.emit(QtCore.SIGNAL('positionChanged'), {'rel': (tdx, tdy), 'abs': self.pos})
             self.lock.lock()
             if self.stopThread:
                 self.lock.unlock()
                 break
             self.lock.unlock()
-            time.sleep(100)
+            time.sleep(100e-3)
+        self.sp.close()
             
     ## convert byte to signed byte
     @staticmethod

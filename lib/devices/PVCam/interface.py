@@ -28,7 +28,12 @@ class PVCam(Device):
         if 'triggerInChannel' in config:
             ## create output channel in DAQGeneric
             pass
-            
+        
+        if 'positionDevice' in config:
+            self.posDev = self.dm.getDevice(config['positionDevice'])
+        else:
+            self.posDev = None
+        
     
     def quit(self):
         if hasattr(self, 'acqThread') and self.acqThread.isRunning():
@@ -109,6 +114,13 @@ class PVCam(Device):
     def listTriggerModes(self):
         l = QtCore.QMutexLocker(self.lock)
         return self.cam.listTriggerModes()
+        
+    def getPosition(self):
+        l = QtCore.QMutexLocker(self.lock)
+        if self.posDev is None:
+            return None
+        else:
+            return self.posDev.getPosition()
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
@@ -345,7 +357,7 @@ class AcquireThread(QtCore.QThread):
                     
                     ## Build meta-info for this frame
                     ## Use lastFrameTime because the current frame _began_ exposing when the previous frame arrived.
-                    info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region}
+                    info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region, 'position': self.dev.getPosition()}
                     
                     lastFrameTime = now
                     
