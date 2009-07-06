@@ -612,7 +612,6 @@ class DirHandle(FileHandle):
         if not info.has_key('__timestamp__'):
             info['__timestamp__'] = t
         self._setFileInfo(fileName, info)
-        print "Wrote file", fileName, info
         
         self.emitChanged('children', fileName)
         return self[fileName]

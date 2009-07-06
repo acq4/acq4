@@ -139,7 +139,6 @@ class PatchWindow(QtGui.QMainWindow):
         if self.ui.recordBtn.isChecked():
             data = self.makeAnalysisArray()
             sd = self.storageDir()
-            print "new file", type(data)
             self.storageFile = sd.writeFile(data, self.clampName, autoIncrement=True, appendAxis='Time', newFile=True)
             
     def storageDir(self):
