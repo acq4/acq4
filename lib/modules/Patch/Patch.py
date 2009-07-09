@@ -345,7 +345,7 @@ class PatchThread(QtCore.QThread):
                 stop = False
                 while True:
                     ## check for stop button every 100ms
-                    if c % 1000 == 0:
+                    if c % 100 == 0:
                         l.relock()
                         if self.stopThread:
                             l.unlock()
@@ -356,7 +356,7 @@ class PatchThread(QtCore.QThread):
                     if now >= (lastTime+params['cycleTime']):
                         break
                     
-                    time.sleep(100e-6) ## Wake up every 100us
+                    time.sleep(1e-3) ## Wake up every 1ms
                     c += 1
                 if stop:
                     break

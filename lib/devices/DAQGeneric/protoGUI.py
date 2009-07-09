@@ -115,7 +115,10 @@ class DAQGenericProtoGui(ProtocolGui):
         if result is None:
             return
         for ch in self.channels:
-            #print "handle result for", ch
+            #print "\nhandle result for", ch
+            #print 'result:', type(result)
+            #print result
+            #print "--------\n"
             #if ch not in result:
                 #print "  no result"
                 #continue

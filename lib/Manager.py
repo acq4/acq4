@@ -306,20 +306,25 @@ Valid options are:
             #print "all windows closed"
         #QtCore.QObject.connect(app, QtCore.SIGNAL('lastWindowClosed()'), q)
         
-        if not self.alreadyQuit:
+        if not self.alreadyQuit:  ## Need this because multiple triggers can call this function during quit
+            self.alreadyQuit = True
+            
+            print "Requesting all modules shut down.."
             for m in self.modules:
+                print "    %s" % m
                 self.modules[m].quit()
                 
+            print "Requesting all devices shut down.."
             for d in self.devices:
-                #print "Requesting %s quit.." % d
+                print "    %s" % d
                 self.devices[d].quit()
                 #print "  done."
                 
-            #print "Closing windows.."
+            print "Closing windows.."
             QtGui.QApplication.instance().closeAllWindows()
             #print "  done."
+            print "\n    ciao."
             
-            self.alreadyQuit = True
         #print app.topLevelWidgets()
         #for w in app.topLevelWidgets():
             #print w, w.isVisible()

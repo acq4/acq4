@@ -78,7 +78,10 @@ class MetaArray(ndarray):
     version = '2'
     
     ## Types allowed as axis or column names
-    nameTypes = [str, tuple]
+    nameTypes = [basestring, tuple]
+    @staticmethod
+    def isNameType(var):
+        return any([isinstance(var, t) for t in MetaArray.nameTypes])
   
     def __new__(subtype, data=None, file=None, info=None, dtype=None, copy=False):
         if data is not None:
@@ -141,6 +144,7 @@ class MetaArray(ndarray):
   
     def __getitem__(self, ind):
         nInd = self._interpretIndexes(ind)
+        #print "Indexes:", nInd
         a = ndarray.__getitem__(self, nInd)
         if type(a) == type(self):  ## generate new info array
             a._info = []
@@ -314,20 +318,20 @@ class MetaArray(ndarray):
         #print "Interpreting index", ind, pos, numOk
         
         
-        if type(ind) in MetaArray.nameTypes:
+        if MetaArray.isNameType(ind):
             if not numOk:
                 raise Exception("string and integer indexes may not follow named indexes")
             #print "  String index, column is ", self._getIndex(pos, ind)
             return (pos, self._getIndex(pos, ind), False)
         elif type(ind) is slice:
             #print "  Slice index"
-            if type(ind.start) in MetaArray.nameTypes or type(ind.stop) in MetaArray.nameTypes:  ## Not an actual slice!
+            if MetaArray.isNameType(ind.start) or MetaArray.isNameType(ind.stop):  ## Not an actual slice!
                 #print "    ..not a real slice"
                 axis = self._interpretAxis(ind.start)
                 #print "    axis is", axis
                 
                 ## x[Axis:Column]
-                if type(ind.stop) in MetaArray.nameTypes:
+                if MetaArray.isNameType(ind.stop):
                     #print "    column name, column is ", self._getIndex(axis, ind.stop)
                     index = self._getIndex(axis, ind.stop)
                     
@@ -356,7 +360,7 @@ class MetaArray(ndarray):
                     for i in ind.stop:
                         if type(i) is int:
                             index.append(i)
-                        elif type(i) in MetaArray.nameTypes:
+                        elif MetaArray.isNameType(i):
                             index.append(self._getIndex(axis, i))
                         else:
                             ## unrecognized type, try just passing on to array
@@ -534,7 +538,7 @@ class MetaArray(ndarray):
         
         ## copy out axis values for dynamic axis if requested
         if appendAxis is not None:
-            if type(appendAxis) in MetaArray.nameTypes:
+            if MetaArray.isNameType(appendAxis):
                 appendAxis = self._interpretAxis(appendAxis)
             
             

@@ -13,6 +13,7 @@ class SerialMouse(Device):
         self.mThread.start()
         
     def quit(self):
+        #print "serial mouse requesting thread exit.."
         self.mThread.stop(block=True)
         
     def posChanged(self, data):
@@ -50,20 +51,28 @@ class MouseThread(QtCore.QThread):
     def run(self):
         self.stopThread = False
         self.sp = serial.Serial(int(self.port), baudrate=1200, bytesize=serial.SEVENBITS)
-        self.sp.read(12) ## Mouse says hello every time we connect.
-        #time.sleep(3) ## Wait a few seconds for the mouse to say hello
-        #if self.sp.inWaiting() > 0:
+        time.sleep(3) ## Wait a few seconds for the mouse to say hello
+        if self.sp.inWaiting() > 0:
             #print "Discarding %d bytes" % self.sp.inWaiting()
-            #self.sp.read(self.sp.inWaiting())
+            self.sp.read(self.sp.inWaiting())
         while True:
             tdx = tdy = 0
-            if self.sp.inWaiting() >= 3:
-                while self.sp.inWaiting() >= 3:
-                    (dx, dy) = self.readPacket()
-                    tdx += dx
-                    tdy += dy
-                self.pos = [self.pos[0] + tdx, self.pos[1] + tdy]
-                self.emit(QtCore.SIGNAL('positionChanged'), {'rel': (tdx, tdy), 'abs': self.pos})
+            if self.sp.inWaiting() > 0:
+                if self.sp.inWaiting() < 3:  ## could be in the middle of a packet, wait for more bytes to arrive
+                    time.sleep(100e-3)
+                    
+                bytesWaiting = self.sp.inWaiting()
+                if bytesWaiting < 3:  ## More bytes have not arrived, probably there is data corruption!
+                    print "WARNING: possible corrupt data from serial mouse."
+                    self.sp.read(bytesWaiting)
+                    
+                elif self.sp.inWaiting() >= 3: ## at least one packet is available.
+                    while self.sp.inWaiting() >= 3:
+                        (dx, dy) = self.readPacket()
+                        tdx += dx
+                        tdy += dy
+                    self.pos = [self.pos[0] + tdx, self.pos[1] + tdy]
+                    self.emit(QtCore.SIGNAL('positionChanged'), {'rel': (tdx, tdy), 'abs': self.pos})
             self.lock.lock()
             if self.stopThread:
                 self.lock.unlock()
@@ -89,9 +98,14 @@ class MouseThread(QtCore.QThread):
         return (MouseThread.sint(xl | xh), MouseThread.sint(yl | yh))
     
     def stop(self, block=False):
+        #print "  stop: locking"
         l = QtCore.QMutexLocker(self.lock)
+        #print "  stop: requesting stop"
         self.stopThread = True
         l.unlock()
         if block:
-          self.wait()
+            #print "  stop: waiting"
+            self.wait()
+        #print "  stop: done"
+            
         
