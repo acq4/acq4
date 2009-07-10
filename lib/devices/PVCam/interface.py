@@ -77,14 +77,14 @@ class PVCam(Device):
         return self.config['triggerOutChannel'][1]
         
     def startAcquire(self, params=None):
-        l = QtCore.QMutexLocker(self.lock)
+        #l = QtCore.QMutexLocker(self.lock)
         if params is not None:
             for p in params:
                 self.acqThread.setParam(p, params[p])
         self.acqThread.start()
         
     def stopAcquire(self, block=True):
-        l = QtCore.QMutexLocker(self.lock)
+        #l = QtCore.QMutexLocker(self.lock)
         self.acqThread.stop(block)
 
     def isRunning(self):
@@ -98,7 +98,7 @@ class PVCam(Device):
         return PVCamDevGui(self)
 
     def setParam(self, param, val):
-        l = QtCore.QMutexLocker(self.lock)
+        #l = QtCore.QMutexLocker(self.lock)
         r = self.acqThread.isRunning()
         if r: 
             self.acqThread.stop(block=True)
@@ -108,19 +108,23 @@ class PVCam(Device):
             self.acqThread.start()
         
     def getParam(self, param):
-        l = QtCore.QMutexLocker(self.lock)
+        #l = QtCore.QMutexLocker(self.lock)
         return self.cam.getParam(param)
         
     def listTriggerModes(self):
-        l = QtCore.QMutexLocker(self.lock)
+        #l = QtCore.QMutexLocker(self.lock)
         return self.cam.listTriggerModes()
         
     def getPosition(self):
+        #print "PVCam: getPosition"
         l = QtCore.QMutexLocker(self.lock)
         if self.posDev is None:
+            #print "   none"
             return None
         else:
-            return self.posDev.getPosition()
+            p = self.posDev.getPosition()
+            #print "   ", p
+            return p
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
@@ -177,6 +181,7 @@ class Task(DeviceTask):
         ## start acquisition if needed
         #print "stopAfter:", self.stopAfter
         
+        #print "Camera start acquire: ", self.cmd['triggerMode']
         self.dev.startAcquire({'mode': self.cmd['triggerMode']})
         
         ## If we requested a trigger mode, wait 200ms for the camera to get ready for the trigger
@@ -191,7 +196,10 @@ class Task(DeviceTask):
     def stop(self):
         #print "stop camera task"
         self.recordHandle.stop()
+        #print "stop camera task: done"
+        #print "Stop camera acquisition"
         self.dev.stopAcquire()
+        #print "done"
         
         ## If this task made any changes to the camera state, return them now
         for k in self.returnState:
@@ -301,16 +309,16 @@ class AcquireThread(QtCore.QThread):
         mode = self.state['mode']
         lastFrame = None
         lastFrameTime = None
-        #print "Lock for startup.."
+        #print "AcquireThread.run: Lock for startup.."
         self.lock.lock()
         self.stopThread = False
         self.lock.unlock()
-        #print "..unlocked from startup"
+        #print "AcquireThread.run: ..unlocked from startup"
         #self.fps = None
         
         try:
             #print self.ringSize, binning, exposure, region
-            #print "  start camera.."
+            #print "  AcquireThread.run: start camera.."
             
             ## Attempt camera start. If the driver complains that it can not allocate memory, reduce the ring size until it works. (Ridiculous driver bug)
             printRingSize = False
@@ -329,23 +337,24 @@ class AcquireThread(QtCore.QThread):
             if printRingSize:
                 print "Reduced camera ring size to %d" % self.ringSize
             
-            #print "  camera started."
+            #print "  AcquireThread.run: camera started."
             lastFrameTime = ptime.time() #time.clock()  # Use time.time() on Linux
             
             loopCount = 0
             while True:
                 frame = self.cam.lastFrame()
-                
                 ## If a new frame is available, process it and inform other threads
                 if frame is not None and frame != lastFrame:
+                    #print "      AcquireThread.run: frame"
                     now = ptime.time() #time.clock()
-                    
+                    #print "      AcquireThread.run: frame 2"
                     if lastFrame is not None:
                         diff = ((frame + self.ringSize) - lastFrame) % self.ringSize
                         if diff > 1:
                             print "Dropped %d frames after %d" % (diff-1, self.frameId)
                             self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped %d frame(s) after %d!" % (diff-1, self.frameId))
                     lastFrame = frame
+                    #print "      AcquireThread.run: frame 3"
                     
                     ### compute FPS
                     #dt = now - lastFrameTime
@@ -360,36 +369,41 @@ class AcquireThread(QtCore.QThread):
                     info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region, 'position': self.dev.getPosition()}
                     
                     lastFrameTime = now
+                    #print "      AcquireThread.run: frame 4"
                     
                     ## Inform that new frame is ready
                     outFrame = (self.acqBuffer[frame].copy(), info)
                     self.emit(QtCore.SIGNAL("newFrame"), outFrame)
                     
                     ## Lock task array and copy before tinkering with it
-                    #print "*Locking task array"
+                    #print "AcquireThread.run: *Locking task array"
                     self.lock.lock()
                     tasks = self.tasks[:]
                     self.lock.unlock()
-                    #print "*Unlocked task array"
+                    #print "AcquireThread.run: *Unlocked task array"
                     
+                    #print "AcquireThread.run: Adding frame to tasks"
                     for t in tasks:
                         t.addFrame(outFrame)
+                    #print "AcquireThread.run: done"
                         
                     self.frameId += 1
                 time.sleep(10e-6)
                 
                 if frame is not None and loopCount > 1000: ## If no frame has arrived yet, do NOT stop the camera (this can hang the driver)
-                    #print "    Locking thread to check for stop request"
+                    #print "    AcquireThread.run: Locking thread to check for stop request"
                     self.lock.lock()
                     if self.stopThread:
-                        #print "    Unlocking thread for exit"
+                        #print "    AcquireThread.run: Unlocking thread for exit"
                         self.lock.unlock()
-                        #print "    Camera acquisition thread stopping."
+                        #print "    AcquireThread.run: Camera acquisition thread stopping."
                         break
                     self.lock.unlock()
-                    #print "    Done with thread stiop check"
+                    #print "    AcquireThread.run: Done with thread stop check"
                     loopCount = 0
                 
+                #if loopCount % 10000 == 0:
+                    #print "    AcquireThread.run: loop"
                 loopCount += 1
                 #print "*Unlocking thread"
             ## Inform that we have stopped (?)
@@ -406,15 +420,15 @@ class AcquireThread(QtCore.QThread):
             self.emit(QtCore.SIGNAL("showMessage"), msg)
         
     def stop(self, block=False):
-        #print "Requesting thread stop, acquiring lock first.."
+        #print "AcquireThread.stop: Requesting thread stop, acquiring lock first.."
         l = QtCore.QMutexLocker(self.lock)
         self.stopThread = True
-        #print "got lock, requested stop."
+        #print "AcquireThread.stop: got lock, requested stop."
         l.unlock()
-        #print "Unlocked, waiting for thread exit (%s)" % block
+        #print "AcquireThread.stop: Unlocked, waiting for thread exit (%s)" % block
         if block:
           self.wait()
-        #print "thread exited"
+        #print "AcquireThread.stop: thread exited"
 
     def reset(self):
         if self.isRunning():
@@ -432,11 +446,12 @@ class CameraTask:
         self.recording = True
     
     def addFrame(self, frame):
-        #print "Add frame"
+        #print "CameraTask.Add frame"
         l = QtCore.QMutexLocker(self.lock)
         self.frames.append(frame)
         if not self.recording:
             self.cam.removeTask(self)
+        #print "CameraTask.Add frame done"
     
     def data(self):
         l = QtCore.QMutexLocker(self.lock)

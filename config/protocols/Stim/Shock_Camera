@@ -1,0 +1,60 @@
+winState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%00%00%00%04%FC%00%00%03%0D%FC%02%00%00%00%03%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%00%00%00%00%D9%00%00%01%99%00%00%00%00%00%00%00%00%FB%00%00%00%0A%00S%00t%00i%00m%000%01%00%00%00%D9%00%00%01t%00%00%01%10%00%07%FF%FF%FC%00%00%02Q%00%00%01%95%00%00%01%94%00%08%00%15%FA%00%00%00%00%01%00%00%00%02%FB%00%00%00%0C%00C%00a%00m%00e%00r%00a%01%00%00%00%00%FF%FF%FF%FF%00%00%01%DB%00%07%FF%FF%FB%00%00%00%1A%00C%00a%00m%00e%00r%00a%00T%00r%00i%00g%00g%00e%00r%01%00%00%00%00%00%00%04%FC%00%00%01%E2%00%07%FF%FF%00%00%00%02%00%00%05%00%00%00%00%D5%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01Y%00%00%00%FC%00%07%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%01%5D%00%00%01%A0%00%00%01%15%00%07%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%03%01%00%00%01R%00%00%01%1C%00%07%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%04W%00%00%00%A9%00%00%00%93%00%07%FF%FF%00%00%00%00%00%00%03%0D%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+devices:
+    Stim0:
+        splitter2: [1]
+        splitter3: [1]
+        splitter1: [1, 1]
+        channels:
+            Command:
+                holdingCheck: True
+                autoUpdateCheck: True
+                holdingSpin: 0.0
+                functionCheck: True
+                preSetCheck: True
+                displayCheck: True
+                preSetSpin: 0.0
+                waveGeneratorWidget:
+                    function: 'pulse(100, 0.1, Amp) + pulse(100.1, 0.1, -Amp)'
+                    params: 'Amp = 400; 0.001:0.03/50:l'
+    Camera:
+        triggerCheck: False
+        splitter: [1, 1, 1]
+        recordCheck: True
+        autoUpdateCheck: False
+        displayTriggerCheck: False
+        triggerOutputCheck: False
+        splitter_2: [1, 1]
+        displayCheck: True
+        displayExposureCheck: True
+        triggerGenerator:
+            function: ''
+            params: ''
+        recordExposeCheck: True
+        triggerModeCombo: 'Trigger First'
+    DAQ:
+        numPts: 20000
+        rate: 40000.0
+    CameraTrigger:
+        splitter2: [1]
+        splitter3: [1]
+        splitter1: [1, 1]
+        channels:
+            Command:
+                holdingCheck: False
+                autoUpdateCheck: False
+                holdingSpin: 0
+                functionCheck: True
+                preSetCheck: True
+                displayCheck: True
+                preSetSpin: 0
+                waveGeneratorWidget:
+                    function: 'pulse(10, 10, 1)'
+                    params: ''
+conf:
+    repetitions: 0
+    cycleTime: 0.29999999999999999
+    loopCycleTime: 0.29999999999999999
+    duration: 0.5
+    continuous: False
+    leadTime: 0.01
+    loop: False

@@ -379,9 +379,11 @@ class Task:
         ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
         ## This is how we allow multiple devices to communicate and decide how to operate together.
         ## Each task may modify the startOrder array to suit its needs.
+        #print "Configuring subtasks.."
         self.startOrder = self.devs.keys()
         for devName in self.tasks:
             self.tasks[devName].configure(self.tasks, self.startOrder)
+        #print "done"
 
         if 'leadTime' in self.cfg:
             time.sleep(self.cfg['leadTime'])
@@ -389,7 +391,9 @@ class Task:
         self.result = None
         
         ## Start tasks in specific order
+        #print "Starting tasks.."
         for devName in self.startOrder:
+            #print "  ", devName
             self.tasks[devName].start()
         self.startTime = ptime.time()
         #print "  %d Task started" % self.id
@@ -399,8 +403,10 @@ class Task:
             return
         
         ## Wait until all tasks are done
+        #print "Waiting for all tasks to finish.."
         while not self.isDone():
             time.sleep(10e-6)
+        #print "all tasks finshed."
         
         self.stop()
         #print "  %d execute complete" % self.id
