@@ -390,16 +390,18 @@ class AcquireThread(QtCore.QThread):
                     self.frameId += 1
                 time.sleep(10e-6)
                 
-                if frame is not None and loopCount > 1000: ## If no frame has arrived yet, do NOT stop the camera (this can hang the driver)
-                    #print "    AcquireThread.run: Locking thread to check for stop request"
-                    self.lock.lock()
-                    if self.stopThread:
-                        #print "    AcquireThread.run: Unlocking thread for exit"
+                if loopCount > 1000: 
+                    ## If no frame has arrived yet, do NOT stop the camera (this can hang the driver)
+                    if frame is not None or (ptime.time()-lastFrameTime > 1):
+                        #print "    AcquireThread.run: Locking thread to check for stop request"
+                        self.lock.lock()
+                        if self.stopThread:
+                            #print "    AcquireThread.run: Unlocking thread for exit"
+                            self.lock.unlock()
+                            #print "    AcquireThread.run: Camera acquisition thread stopping."
+                            break
                         self.lock.unlock()
-                        #print "    AcquireThread.run: Camera acquisition thread stopping."
-                        break
-                    self.lock.unlock()
-                    #print "    AcquireThread.run: Done with thread stop check"
+                        #print "    AcquireThread.run: Done with thread stop check"
                     loopCount = 0
                 
                 #if loopCount % 10000 == 0:

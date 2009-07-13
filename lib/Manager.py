@@ -453,7 +453,11 @@ class Task:
                 #print "  stopping", t
                 ## Force all tasks to stop immediately.
                 #print "Stopping task", t, "..."
-                self.tasks[t].stop()
+                try:
+                    self.tasks[t].stop()
+                except:
+                    print "Error while stopping task %s:" % t
+                    sys.excepthook(*sys.exc_info())
                 #print "   ..task", t, "stopped"
             self.stopped = True
             
@@ -461,10 +465,16 @@ class Task:
             raise Exception("Cannot get result; task is still running.")
         
         if self.result is None:
+            #print "Get results.."
             ## Let each device generate its own output structure.
             result = {}
             for devName in self.tasks:
-                result[devName] = self.tasks[devName].getResult()
+                try:
+                    result[devName] = self.tasks[devName].getResult()
+                except:
+                    print "Error getting result for task %s:" % t
+                    result[devName] = None
+                    sys.excepthook(*sys.exc_info())
             self.result = result
             #print "RESULT 1:", self.result
             
@@ -475,9 +485,15 @@ class Task:
             
         ## Release all hardware for use elsewhere
         if self.reserved:
+            #print "release hardware.."
             for t in self.tasks:
                 #print "  %d releasing" % self.id, t
-                self.tasks[t].release()
+                try:
+                    self.tasks[t].release()
+                except:
+                    print "Error while releasing hardware for task %s:" % t
+                    sys.excepthook(*sys.exc_info())
+                    
                 #print "  %d released" % self.id, t
         self.reserved = False
             
