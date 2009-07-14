@@ -116,7 +116,8 @@ class OutputChannelGui(DaqChannelGui):
         if state['holdingCheck']:
             prot['holding'] = state['holdingSpin']
         if state['functionCheck']:
-            prot['command'] = self.scale * self.getSingleWave(params)
+            #prot['command'] = self.scale * self.getSingleWave(params)  ## scaling is handled by Device
+            prot['command'] = self.getSingleWave(params)
             
         #print prot
         return prot

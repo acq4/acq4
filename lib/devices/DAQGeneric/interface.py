@@ -14,6 +14,7 @@ class DAQGeneric(Device):
         for ch in config:
             if 'scale' not in config[ch]:
                 config[ch]['scale'] = 1.0
+            print "chan %s scale %f" % (ch, config[ch]['scale'])
             self.holding[ch] = None
         
     
@@ -122,9 +123,9 @@ class DAQGenericTask(DeviceTask):
         ## - can be overridden in configuration
         ## - can be overridden again in command
         scale = 1.0
-        if scale in self.dev.config[chan]:
+        if 'scale' in self.dev.config[chan]:
             scale = self.dev.config[chan]['scale']
-        if scale in self.cmd[chan]:
+        if 'scale' in self.cmd[chan]:
             scale = self.cmd[chan]['scale']
         return scale
         
@@ -157,7 +158,6 @@ class DAQGenericTask(DeviceTask):
         #print "buffered channels:", self.bufferedChannels
         for ch in self.bufferedChannels:
             result[ch] = self.cmd[ch]['task'].getData(self.dev.config[ch]['channel'][1])
-            
             result[ch]['data'] = result[ch]['data'] / self.getChanScale(ch)
             if 'units' in self.dev.config[ch]:
                 result[ch]['units'] = self.dev.config[ch]['units']
