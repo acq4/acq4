@@ -29,10 +29,10 @@ class PVCam(Device):
             ## create output channel in DAQGeneric
             pass
         
-        if 'positionDevice' in config:
-            self.posDev = self.dm.getDevice(config['positionDevice'])
+        if 'scopeDevice' in config:
+            self.scopeDev = self.dm.getDevice(config['scopeDevice'])
         else:
-            self.posDev = None
+            self.scopeDev = None
         
     
     def quit(self):
@@ -133,7 +133,8 @@ class PVCam(Device):
             #print "   none"
             return None
         else:
-            (objName, scale) = self.scopeDev.getObjective()
+            obj = self.scopeDev.getObjective()
+            scale = obj['scale']
             #print "   ", p
             sf = self.config['scaleFactor']
             return (scale * sf[0], scale * sf[1])
@@ -148,8 +149,8 @@ class PVCam(Device):
             #print "   none"
             return None
         else:
-            (objName, scale) = self.scopeDev.getObjective()
-            return objName
+            obj = self.scopeDev.getObjective()
+            return obj['name']
         
         
 

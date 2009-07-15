@@ -20,11 +20,12 @@ class Microscope(Device):
             else:
                 self.positionScale = (1.0,) * nax
             QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
-        if 'objectiveDevice' in config:
-            self.objDev = dm.getDevice(config['positionDevice'][0])
-            self.objSwitchId = config['positionDevice'][1]
+        if 'objectiveSwitch' in config:
+            self.objDev = dm.getDevice(config['objectiveSwitch'][0])
+            self.objSwitchId = config['objectiveSwitch'][1]
             state = self.objDev.getSwitch(self.objSwitchId)
-            self.objective = self.config['objectives'][str(state)]
+            objList = self.config['objectives'][str(state)]
+            self.objective = objList[objList.keys()[0]]
             QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('switchChanged'), self.objectiveChanged)
         
 
@@ -54,7 +55,7 @@ class Microscope(Device):
     def getObjective(self):
         """Return a tuple ("objective name", scale)"""
         l = QtCore.QMutexLocker(self.lock)
-        return self.objective[:]
+        return self.objective.copy()
         
     def getState(self):
         l = QtCore.QMutexLocker(self.lock)

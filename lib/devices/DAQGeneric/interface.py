@@ -14,7 +14,7 @@ class DAQGeneric(Device):
         for ch in config:
             if 'scale' not in config[ch]:
                 config[ch]['scale'] = 1.0
-            print "chan %s scale %f" % (ch, config[ch]['scale'])
+            #print "chan %s scale %f" % (ch, config[ch]['scale'])
             self.holding[ch] = None
         
     
