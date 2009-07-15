@@ -118,13 +118,40 @@ class PVCam(Device):
     def getPosition(self):
         #print "PVCam: getPosition"
         l = QtCore.QMutexLocker(self.lock)
-        if self.posDev is None:
+        if self.scopeDev is None:
             #print "   none"
             return None
         else:
-            p = self.posDev.getPosition()
+            p = self.scopeDev.getPosition()
             #print "   ", p
             return p
+
+    def getScale(self):
+        #print "PVCam: getPosition"
+        l = QtCore.QMutexLocker(self.lock)
+        if self.scopeDev is None:
+            #print "   none"
+            return None
+        else:
+            (objName, scale) = self.scopeDev.getObjective()
+            #print "   ", p
+            sf = self.config['scaleFactor']
+            return (scale * sf[0], scale * sf[1])
+        
+    def getPixelSize(self):
+        s = self.getScale()
+        return (abs(s[0]), abs(s[1]))
+        
+    def getObjective(self):
+        l = QtCore.QMutexLocker(self.lock)
+        if self.scopeDev is None:
+            #print "   none"
+            return None
+        else:
+            (objName, scale) = self.scopeDev.getObjective()
+            return objName
+        
+        
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
@@ -366,7 +393,7 @@ class AcquireThread(QtCore.QThread):
                     
                     ## Build meta-info for this frame
                     ## Use lastFrameTime because the current frame _began_ exposing when the previous frame arrived.
-                    info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region, 'position': self.dev.getPosition()}
+                    info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region, 'position': self.dev.getPosition(), 'pixelSize': self.dev.getPixelSize(), 'objective': self.dev.getObjective()}
                     
                     lastFrameTime = now
                     #print "      AcquireThread.run: frame 4"

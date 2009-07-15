@@ -5,11 +5,14 @@ import serial
 class SerialMouse(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.lock = QtCore.QMutex()
         self.port = config['port']
         self.scale = config['scale']
         self.mThread = MouseThread(self)
         self.pos = [0, 0]
+        self.buttons = [0, 0]
         QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('positionChanged'), self.posChanged)
+        QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('buttonChanged'), self.btnChanged)
         self.mThread.start()
         
     def quit(self):
@@ -17,12 +20,35 @@ class SerialMouse(Device):
         self.mThread.stop(block=True)
         
     def posChanged(self, data):
+        l = QtCore.QMutexLocker(self.lock)
         self.pos = [data['abs'][0] * self.scale, data['abs'][1] * self.scale]
         rel = [data['rel'][0] * self.scale, data['rel'][1] * self.scale]
         self.emit(QtCore.SIGNAL('positionChanged'), {'rel': rel, 'abs': self.pos[:]})
         
+    def btnChanged(self, btns):
+        l = QtCore.QMutexLocker(self.lock)
+        change = {}
+        for i in [0, 1]:
+            if btns[i] != self.buttons[i]:
+                change[i] = btns[i]
+        self.emit(QtCore.SIGNAL('switchChanged'), change)
+        
     def getPosition(self):
+        l = QtCore.QMutexLocker(self.lock)
         return self.pos[:]
+        
+    def getSwitches(self):
+        l = QtCore.QMutexLocker(self.lock)
+        return self.buttons[:]
+
+    def getSwitch(self, swid):
+        l = QtCore.QMutexLocker(self.lock)
+        return self.buttons[swid]
+        
+
+    def getState(self):
+        l = QtCore.QMutexLocker(self.lock)
+        return (self.pos[:], self.buttons[:])
         
     def deviceInterface(self):
         return SMInterface(self)
@@ -32,11 +58,12 @@ class SMInterface(QtGui.QLabel):
         QtGui.QWidget.__init__(self)
         self.dev = dev
         QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.update)
+        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('buttonChanged'), self.update)
         self.update()
         
     def update(self):
-        pos = self.dev.getPosition()
-        self.setText(u"%0.4f, %0.4f (μm)" % (pos[0]*1e6, pos[1]*1e6))
+        (pos, btn) = self.dev.getState()
+        self.setText(u"%0.4f, %0.4f (μm)  Btn0: %d  Btn1: %d" % (pos[0]*1e6, pos[1]*1e6, btn[0], btn[1]))
         
     
     
@@ -47,6 +74,7 @@ class MouseThread(QtCore.QThread):
         self.dev = dev
         self.port = self.dev.port
         self.pos = [0, 0]
+        self.btns = [0, 0]
         
     def run(self):
         self.stopThread = False
@@ -68,11 +96,16 @@ class MouseThread(QtCore.QThread):
                     
                 elif self.sp.inWaiting() >= 3: ## at least one packet is available.
                     while self.sp.inWaiting() >= 3:
-                        (dx, dy) = self.readPacket()
+                        (dx, dy, b0, b1) = self.readPacket()
                         tdx += dx
                         tdy += dy
                     self.pos = [self.pos[0] + tdx, self.pos[1] + tdy]
-                    self.emit(QtCore.SIGNAL('positionChanged'), {'rel': (tdx, tdy), 'abs': self.pos})
+                    if tdx != 0 or tdy != 0:
+                        self.emit(QtCore.SIGNAL('positionChanged'), {'rel': (tdx, tdy), 'abs': self.pos})
+                    if b0 != self.btns[0] or b1 != self.btns[1]:
+                        self.btns = [b0, b1]
+                        self.emit(QtCore.SIGNAL('buttonChanged'), self.btns)
+                        
             self.lock.lock()
             if self.stopThread:
                 self.lock.unlock()
@@ -89,13 +122,15 @@ class MouseThread(QtCore.QThread):
     def readPacket(self):
         d = self.sp.read(3)
         #print "%s %s %s" % (bin(ord(d[0])), bin(ord(d[1])), bin(ord(d[2])))
+        b0 = (ord(d[0]) & 32) >> 5
+        b1 = (ord(d[0]) & 16) >> 4
         xh = (ord(d[0]) & 3) << 6
         yh = (ord(d[0]) & 12) << 4
         xl = (ord(d[1]) & 63)
         yl = (ord(d[2]) & 63)
         
         #print "%s %s %s %s" % (bin(xh), bin(xl), bin(yh), bin(yl))
-        return (MouseThread.sint(xl | xh), MouseThread.sint(yl | yh))
+        return (MouseThread.sint(xl | xh), MouseThread.sint(yl | yh), b0, b1)
     
     def stop(self, block=False):
         #print "  stop: locking"
