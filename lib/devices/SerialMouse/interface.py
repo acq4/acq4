@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 from lib.devices.Device import *
 import serial
+#import pdb
 
 class SerialMouse(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self.lock = QtCore.QMutex()
+        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
         self.port = config['port']
         self.scale = config['scale']
         self.mThread = MouseThread(self)
@@ -20,18 +21,27 @@ class SerialMouse(Device):
         self.mThread.stop(block=True)
         
     def posChanged(self, data):
+        #QtCore.pyqtRemoveInputHook()
+        #pdb.set_trace()
+        #print "Mouse: posChanged"
         l = QtCore.QMutexLocker(self.lock)
+        #print "Mouse: posChanged locked"
         self.pos = [data['abs'][0] * self.scale, data['abs'][1] * self.scale]
         rel = [data['rel'][0] * self.scale, data['rel'][1] * self.scale]
+        #print "Mouse: posChanged emit.."
         self.emit(QtCore.SIGNAL('positionChanged'), {'rel': rel, 'abs': self.pos[:]})
+        #print "Mouse: posChanged done"
         
     def btnChanged(self, btns):
+        #print "Mouse: btnChanged"
         l = QtCore.QMutexLocker(self.lock)
         change = {}
         for i in [0, 1]:
             if btns[i] != self.buttons[i]:
                 change[i] = btns[i]
+                self.buttons[i] = btns[i]
         self.emit(QtCore.SIGNAL('switchChanged'), change)
+        #print "Mouse: btnChanged done"
         
     def getPosition(self):
         l = QtCore.QMutexLocker(self.lock)
@@ -58,12 +68,13 @@ class SMInterface(QtGui.QLabel):
         QtGui.QWidget.__init__(self)
         self.dev = dev
         QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.update)
-        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('buttonChanged'), self.update)
+        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('switchChanged'), self.update)
         self.update()
         
     def update(self):
         (pos, btn) = self.dev.getState()
-        self.setText(u"%0.4f, %0.4f (μm)  Btn0: %d  Btn1: %d" % (pos[0]*1e6, pos[1]*1e6, btn[0], btn[1]))
+        
+        self.setText(u"%0.4f, %0.4f  Btn0: %d  Btn1: %d" % (pos[0], pos[1], btn[0], btn[1]))
         
     
     

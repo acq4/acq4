@@ -5,6 +5,7 @@ from PyQt4 import QtCore, QtGui
 from DataManager import *
 import lib.util.ptime as ptime
 import getopt
+#import pdb
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:

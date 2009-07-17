@@ -9,6 +9,13 @@ from protoGUI import *
 from deviceGUI import *
 import lib.util.ptime as ptime
 
+def ftrace(func):
+    def w(*args, **kargs):
+        print "PVCam:" + func.__name__ + " start"
+        rv = func(*args, **kargs)
+        print "PVCam:" + func.__name__ + " done"
+        return rv
+    return w
 
 class PVCam(Device):
     def __init__(self, dm, config, name):
@@ -31,6 +38,8 @@ class PVCam(Device):
         
         if 'scopeDevice' in config:
             self.scopeDev = self.dm.getDevice(config['scopeDevice'])
+            #QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
+            #QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
         else:
             self.scopeDev = None
         
@@ -41,10 +50,12 @@ class PVCam(Device):
             self.acqThread.wait()
         
         
+    #@ftrace
     def devName(self):
         l = QtCore.QMutexLocker(self.lock)
         return self.name
     
+    #@ftrace
     def getCamera(self):
         l = QtCore.QMutexLocker(self.lock)
         if self.cam is None:
@@ -64,10 +75,12 @@ class PVCam(Device):
             self.cam = self.pvc.getCamera(cams[ind])
         return self.cam
     
+    #@ftrace
     def createTask(self, cmd):
         l = QtCore.QMutexLocker(self.lock)
         return Task(self, cmd)
     
+    #@ftrace
     def getTriggerChannel(self, daq):
         l = QtCore.QMutexLocker(self.lock)
         if not 'triggerOutChannel' in self.config:
@@ -111,47 +124,68 @@ class PVCam(Device):
         #l = QtCore.QMutexLocker(self.lock)
         return self.cam.getParam(param)
         
+    #@ftrace
     def listTriggerModes(self):
         #l = QtCore.QMutexLocker(self.lock)
         return self.cam.listTriggerModes()
         
+    #@ftrace
     def getPosition(self):
         #print "PVCam: getPosition"
         l = QtCore.QMutexLocker(self.lock)
+        #print "PVCam: getPosition: locked"
         if self.scopeDev is None:
             #print "   none"
+            #print "PVCam: getPosition done"
             return None
         else:
+            #print "PVCam:getPosition: scopeDev.getPosition"
             p = self.scopeDev.getPosition()
+            #print "PVCam:getPosition: scopeDev.getPosition done"
             #print "   ", p
+            #print "PVCam: getPosition done"
             return p
 
+    #@ftrace
     def getScale(self):
-        #print "PVCam: getPosition"
+        """Return the dimensions of 1 pixel with signs if the image is flipped"""
         l = QtCore.QMutexLocker(self.lock)
+        #print "PVCam: getScale locked"
+        
         if self.scopeDev is None:
             #print "   none"
             return None
         else:
+            #print "PVCam: getScale getObj"
             obj = self.scopeDev.getObjective()
+            #print "PVCam: getScale getObj done"
             scale = obj['scale']
             #print "   ", p
             sf = self.config['scaleFactor']
-            return (scale * sf[0], scale * sf[1])
+            return (sf[0]/scale, sf[1]/scale)
         
+    #@ftrace
     def getPixelSize(self):
+        """Return the absolute size of 1 pixel"""
         s = self.getScale()
         return (abs(s[0]), abs(s[1]))
         
+    #@ftrace
     def getObjective(self):
         l = QtCore.QMutexLocker(self.lock)
+        #print "PVCam:getObjective: locked"
         if self.scopeDev is None:
             #print "   none"
             return None
         else:
+            #print "PVCam:getObjective: scopeDev.getObjective"
             obj = self.scopeDev.getObjective()
+            #print "PVCam:getObjective: scopeDev.getObjective done"
             return obj['name']
-        
+
+    def getScopeDevice(self):
+        l = QtCore.QMutexLocker(self.lock)
+        return self.scopeDev
         
 
 class Task(DeviceTask):
@@ -283,7 +317,7 @@ class AcquireThread(QtCore.QThread):
         self.acqBuffer = None
         self.frameId = 0
         self.bufferTime = 5.0
-        self.ringSize = 100
+        self.ringSize = 30
         self.tasks = []
     
     def __del__(self):
@@ -394,7 +428,9 @@ class AcquireThread(QtCore.QThread):
                     
                     ## Build meta-info for this frame
                     ## Use lastFrameTime because the current frame _began_ exposing when the previous frame arrived.
-                    info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region, 'position': self.dev.getPosition(), 'pixelSize': self.dev.getPixelSize(), 'objective': self.dev.getObjective()}
+                    ps = self.dev.getPixelSize()
+                    ps = (ps[0] * binning, ps[1] * binning)
+                    info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region, 'position': self.dev.getPosition(), 'pixelSize': ps, 'objective': self.dev.getObjective()}
                     
                     lastFrameTime = now
                     #print "      AcquireThread.run: frame 4"

@@ -47,6 +47,7 @@ class PVCamera(QtGui.QMainWindow):
         self.ROIs = []
         self.plotCurves = []
         
+        
         self.nextFrame = None
         self.updateFrame = False
         self.currentFrame = None
@@ -96,7 +97,12 @@ class PVCamera(QtGui.QMainWindow):
         self.gv.setAspectLocked(True)
         self.gv.invertY()
         self.AGCLastMax = None
-        
+
+        self.persistentFrames = []
+        self.persistentGroup = QtGui.QGraphicsItemGroup()
+        self.persistentGroup.setZValue(-10)
+        self.scene.addItem(self.persistentGroup)
+
         self.recLabel = QtGui.QLabel()
         self.fpsLabel = QtGui.QLabel()
         self.rgnLabel = QtGui.QLabel()
@@ -133,9 +139,6 @@ class PVCamera(QtGui.QMainWindow):
         
         self.gv.setRange(QtCore.QRect(0, 0, self.camSize[0], self.camSize[1]), lockAspect=True)
         
-        
-
-        
         QtCore.QObject.connect(self.ui.btnAcquire, QtCore.SIGNAL('clicked()'), self.toggleAcquire)
         QtCore.QObject.connect(self.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
         QtCore.QObject.connect(self.ui.btnAutoGain, QtCore.SIGNAL('toggled(bool)'), self.toggleAutoGain)
@@ -156,8 +159,9 @@ class PVCamera(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.sliderWhiteLevel, QtCore.SIGNAL('valueChanged(int)'), self.levelsChanged)
         QtCore.QObject.connect(self.ui.sliderBlackLevel, QtCore.SIGNAL('valueChanged(int)'), self.levelsChanged)
         QtCore.QObject.connect(self.ui.spinFlattenSize, QtCore.SIGNAL('valueChanged(int)'), self.requestFrameUpdate)
-        
-        
+
+        QtCore.QObject.connect(self.ui.addFrameBtn, QtCore.SIGNAL('clicked()'), self.addPersistentFrame)
+        QtCore.QObject.connect(self.ui.clearFramesBtn, QtCore.SIGNAL('clicked()'), self.clearPersistentFrames)
         
         self.ui.btnAutoGain.setChecked(True)
         
@@ -167,6 +171,58 @@ class PVCamera(QtGui.QMainWindow):
         self.frameTimer = QtCore.QTimer()
         QtCore.QObject.connect(self.frameTimer, QtCore.SIGNAL('timeout()'), self.drawFrame)
         self.frameTimer.start(1)
+
+    def addPersistentFrame(self):
+        px = self.imageItem.getPixmap()
+        if px is None:
+            return
+        im = QtGui.QGraphicsPixmapItem(px)
+        if len(self.persistentFrames) == 0:
+            z = -1000
+        else:
+            z = self.persistentFrames[-1].zValue() + 1
+        im.setZValue(z)
+        
+        
+        (img, info) = self.currentFrame
+        s = info['pixelSize']
+        p = info['position']
+        r = info['region']
+        b = info['binning']
+        self.persistentFrames.append(im)
+        self.persistentGroup.resetTransform()
+        im.setParentItem(self.persistentGroup)
+        im.resetTransform()
+        pos = [p[0]-(r[2]*s[0]*0.5), p[1]-(r[3]*s[0]*0.5)]
+        im.translate(pos[0], pos[1])
+        im.scale(s[0], s[1])
+        self.updatePersistentGroup()
+    
+    def  clearPersistentFrames(self):
+        for i in self.persistentFrames:
+            self.persistentGroup.removeFromGroup(i)
+        self.persistentFrames = []
+
+    def positionChanged(self, p):
+        self.updatePersistentGroup()
+    
+    
+    def objectiveChanged(self, obj):
+        self.updatePersistentGroup()
+        
+    def updatePersistentGroup(self):
+        p = self.module.cam.getPosition()
+        s = self.module.cam.getScale()
+        self.persistentGroup.resetTransform()
+        
+        ## Set the origin at the center of the Sensor area
+        self.persistentGroup.translate(self.camSize[0]/2., self.camSize[1]/2.)
+        
+        ## Scale and translate based on current scope position and objective
+        self.persistentGroup.scale(1.0/s[0], 1.0/s[1])
+        self.persistentGroup.translate(-p[0], -p[1])
+        
+        
 
     def addROI(self):
         roi = PlotROI(10)
@@ -295,6 +351,13 @@ class PVCamera(QtGui.QMainWindow):
             self.scene.addItem(self.roi)
             self.setRegion()
             self.ui.statusbar.showMessage("Opened camera %s" % self.cam, 5000)
+            self.scope = self.module.cam.getScopeDevice()
+            #self.persistentGroup.setPos(self.camSize[0]/2., self.camSize[1]/2.)
+            if self.scope is not None:
+                QtCore.QObject.connect(self.scope, QtCore.SIGNAL('positionChanged'), self.positionChanged)
+                QtCore.QObject.connect(self.scope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            self.updatePersistentGroup()
+            
         except:
             self.ui.statusbar.showMessage("Error opening camera")
             raise

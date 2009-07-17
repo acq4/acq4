@@ -139,14 +139,14 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
             im1[..., 0] = im2
             im1[..., 1] = im2
             im1[..., 2] = im2
-            im1[..., 3] = 0
+            im1[..., 3] = 255
         elif im.ndim == 3:
             im2 = im.transpose(axh['y'], axh['x'], axh['c'])
             
             for i in range(0, im.shape[axh['c']]):
                 im1[..., i] = im2[..., i]
             for i in range(im.shape[axh['c']], 4):
-                im1[..., i] = 0
+                im1[..., i] = 255
         else:
             raise Exception("Image must be 2 or 3 dimensions")
         #self.im1 = im1
@@ -167,6 +167,9 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         ##del self.ims
         self.setPixmap(self.pixmap)
         self.update()
+        
+    def getPixmap(self):
+        return self.pixmap.copy()
 
 
 class Plot(QtGui.QGraphicsItem, QObjectWorkaround):
