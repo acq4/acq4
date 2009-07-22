@@ -69,11 +69,11 @@ class PVCamera(QtGui.QMainWindow):
         
         
         ## Create device configuration dock 
-        dw = self.module.cam.deviceInterface()
-        dock = QtGui.QDockWidget(self)
-        dock.setFeatures(dock.DockWidgetMovable|dock.DockWidgetFloatable|dock.DockWidgetVerticalTitleBar)
-        dock.setWidget(dw)
-        self.addDockWidget(QtCore.Qt.TopDockWidgetArea, dock)
+        #dw = self.module.cam.deviceInterface()
+        #dock = QtGui.QDockWidget(self)
+        #dock.setFeatures(dock.DockWidgetMovable|dock.DockWidgetFloatable|dock.DockWidgetVerticalTitleBar)
+        #dock.setWidget(dw)
+        #self.addDockWidget(QtCore.Qt.TopDockWidgetArea, dock)
         
         
         self.recordThread = RecordThread(self, self.module.manager)

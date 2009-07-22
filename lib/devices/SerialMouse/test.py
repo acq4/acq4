@@ -9,7 +9,7 @@ def sint(x):
 
 def readPacket(sp):
     d = sp.read(3)
-    #print "%s %s %s" % (bin(ord(d[0])), bin(ord(d[1])), bin(ord(d[2])))
+    print "%x %x %x" % (ord(d[0]), ord(d[1]), ord(d[2]))
     xh = (ord(d[0]) & 3) << 6
     yh = (ord(d[0]) & 12) << 4
     xl = (ord(d[1]) & 63)

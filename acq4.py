@@ -27,15 +27,5 @@ dm = Manager(config, sys.argv[1:])
 #print "Loading dataManager module.."
 dm.loadModule(module='Manager', name='Manager', config={})
 
-## If running interactively, just return to the prompt and let python call the qt event loop for us.
-## Otherwise, we need to run it ourselves:
-print "Checking to see if we should start the Qt event loop"
-if not sys.stdin.isatty():
-    print "  .. starting the Qt event loop."
-    app.exec_()
-else:
-    print "Exiting script, hopefully entering interactive mode.."
-
-## isatty is broken for cygwin shell. This should not be needed for regular windows shell..
+## Start Qt event loop.
 app.exec_()
-#dm.quit()
