@@ -357,7 +357,7 @@ class PVCamera(QtGui.QMainWindow):
             if self.scope is not None:
                 QtCore.QObject.connect(self.scope, QtCore.SIGNAL('positionChanged'), self.positionChanged)
                 QtCore.QObject.connect(self.scope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
-            self.updatePersistentGroup()
+                self.updatePersistentGroup()
             
         except:
             self.ui.statusbar.showMessage("Error opening camera")

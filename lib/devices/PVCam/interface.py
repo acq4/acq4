@@ -169,6 +169,8 @@ class PVCam(Device):
     def getPixelSize(self):
         """Return the absolute size of 1 pixel"""
         s = self.getScale()
+        if s is None:
+            return None
         return (abs(s[0]), abs(s[1]))
         
     #@ftrace
@@ -429,10 +431,19 @@ class AcquireThread(QtCore.QThread):
                     
                     ## Build meta-info for this frame
                     ## Use lastFrameTime because the current frame _began_ exposing when the previous frame arrived.
-                    ps = self.dev.getPixelSize()
-                    ps = (ps[0] * binning, ps[1] * binning)
-                    info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region, 'position': self.dev.getPosition(), 'pixelSize': ps, 'objective': self.dev.getObjective()}
+                    info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region}
                     
+                    ps = self.dev.getPixelSize()
+                    if ps is not None:
+                        ps = (ps[0] * binning, ps[1] * binning)
+                        info['pixelSize'] = ps
+                    obj = self.dev.getObjective()
+                    if obj is not None:
+                        info['objective'] = obj
+                    pos = self.dev.getPosition()
+                    if pos is not None:
+                        info['position'] = pos
+
                     lastFrameTime = now
                     #print "      AcquireThread.run: frame 4"
                     
