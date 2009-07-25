@@ -12,6 +12,7 @@ from lib.util.qtgraph.graphicsItems import *
 from lib.util.qtgraph.widgets import ROI
 import lib.util.ptime as ptime
 from lib.filetypes.ImageFile import *
+from lib.util.Mutex import Mutex
 from PyQt4 import QtGui, QtCore
 from PyQt4 import Qwt5 as Qwt
 import scipy.ndimage
@@ -399,7 +400,7 @@ class PVCamera(QtGui.QMainWindow):
         self.ui.levelThermo.setAlarmLevel(self.ui.levelThermo.maxValue() * 0.9)
         
     def updateColorScale(self):
-        (w, b) = self.getLevels()
+        (b, w) = self.getLevels()
         self.ui.levelScale.setColorMap(Qwt.QwtDoubleInterval(b, w), Qwt.QwtLinearColorMap(QtCore.Qt.black, QtCore.Qt.white))
                 
         
@@ -478,20 +479,24 @@ class PVCamera(QtGui.QMainWindow):
         self.nextFrame = frame
         
     def drawFrame(self):
+        #sys.stdout.write('+')
         try:
             
             ## If we last drew a frame < 1/60s ago, return.
             t = ptime.time()
             if (self.lastDrawTime is not None) and (t - self.lastDrawTime < .016666):
+                #sys.stdout.write('-')
                 return
             
             ## if there is no new frame and no controls have changed, just exit
             if not self.updateFrame and self.nextFrame is None:
+                #sys.stdout.write('-')
                 return
             self.updateFrame = False
             
             ## If there are no new frames and no previous frames, then there is nothing to draw.
             if self.currentFrame is None and self.nextFrame is None:
+                #sys.stdout.write('-')
                 return
             
             ## We will now draw a new frame (even if the frame is unchanged)
@@ -567,6 +572,7 @@ class PVCamera(QtGui.QMainWindow):
         except:
             #print "Exception in QtCam::newFrame: %s (line %d)" % (str(sys.exc_info()[1]), sys.exc_info()[2].tb_lineno)
             sys.excepthook(*sys.exc_info())
+        #sys.stdout.write('!')
 
 
 class RecordThread(QtCore.QThread):
@@ -584,8 +590,8 @@ class RecordThread(QtCore.QThread):
         self.takeSnap = False
         self.currentRecord = None
         
-        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
-        self.camLock = QtCore.QMutex()
+        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.camLock = Mutex()
         self.newCamFrames = []
         
     def newCamFrame(self, frame):

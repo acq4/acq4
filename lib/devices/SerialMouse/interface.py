@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 from lib.devices.Device import *
 import serial
+from lib.util.Mutex import Mutex
 #import pdb
 
 class SerialMouse(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(QtCore.QMutex.Recursive)
         self.port = config['port']
         self.scale = config['scale']
         self.mThread = MouseThread(self)
@@ -81,7 +82,7 @@ class SMInterface(QtGui.QLabel):
 class MouseThread(QtCore.QThread):
     def __init__(self, dev):
         QtCore.QThread.__init__(self)
-        self.lock = QtCore.QMutex()
+        self.lock = Mutex(QtCore.QMutex.Recursive)
         self.dev = dev
         self.port = self.dev.port
         self.pos = [0, 0]

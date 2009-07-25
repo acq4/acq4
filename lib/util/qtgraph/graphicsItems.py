@@ -48,7 +48,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         return self.pixmap.height()
         
     def setClipLevel(self, level=None):
-            self.clipLevel = level
+        self.clipLevel = level
         
     #def paint(self, p, opt, widget):
         #pass
@@ -65,7 +65,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
 
     def updateImage(self, image=None, copy=True, autoRange=False, clipMask=None, white=None, black=None):
         axh = {'x': 0, 'y': 1, 'c': 2}
-        
+        #print "Update image", black, white
         if white is not None:
             self.whiteLevel = white
         if black is not None:
@@ -80,6 +80,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
                 self.image = image.copy()
             else:
                 self.image = image
+        #print "  image max:", self.image.max(), "min:", self.image.min()
         
         # Determine scale factors
         if autoRange or self.blackLevel is None:

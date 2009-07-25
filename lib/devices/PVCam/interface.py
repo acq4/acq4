@@ -8,6 +8,7 @@ from lib.util.MetaArray import *
 from protoGUI import *
 from deviceGUI import *
 import lib.util.ptime as ptime
+from lib.util.Mutex import Mutex
 
 def ftrace(func):
     def w(*args, **kargs):
@@ -20,7 +21,7 @@ def ftrace(func):
 class PVCam(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(QtCore.QMutex.Recursive)
         self.pvc = PVCDriver
         self.cam = None
         self.acqThread = AcquireThread(self)
@@ -313,7 +314,7 @@ class AcquireThread(QtCore.QThread):
         self.cam = self.dev.getCamera()
         self.state = {'binning': 1, 'exposure': .001, 'region': None, 'mode': 'Normal'}
         self.stopThread = False
-        self.lock = QtCore.QMutex()
+        self.lock = Mutex()
         self.acqBuffer = None
         self.frameId = 0
         self.bufferTime = 5.0
@@ -452,11 +453,22 @@ class AcquireThread(QtCore.QThread):
                     #print "AcquireThread.run: done"
                         
                     self.frameId += 1
+                    
+                    ## mandatory sleep until 300us before next expected frame
+                    ## Otherwise the CPU is constantly tied up waiting for new frames.
+                    sleepTime = (lastFrameTime + exposure - 300e-6) - ptime.time()
+                    if sleepTime > 0:
+                        time.sleep(sleepTime)
+                    loopCount = 0
+                        
                 time.sleep(10e-6)
                 
-                if loopCount > 1000: 
+                if loopCount > 1000:
+                    loopCount = 0
+                if loopCount == 0: 
                     ## If no frame has arrived yet, do NOT stop the camera (this can hang the driver)
-                    if frame is not None or (ptime.time()-lastFrameTime > 1):
+                    diff = ptime.time()-lastFrameTime
+                    if frame is not None or diff > 1:
                         #print "    AcquireThread.run: Locking thread to check for stop request"
                         self.lock.lock()
                         if self.stopThread:
@@ -466,7 +478,10 @@ class AcquireThread(QtCore.QThread):
                             break
                         self.lock.unlock()
                         #print "    AcquireThread.run: Done with thread stop check"
-                    loopCount = 0
+                        
+                        if diff > (10 + exposure):
+                            print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
+                            break
                 
                 #if loopCount % 10000 == 0:
                     #print "    AcquireThread.run: loop"
@@ -507,7 +522,7 @@ class CameraTask:
     def __init__(self, cam, maxTime=None):
         self.cam = cam
         self.maxTime = maxTime
-        self.lock = QtCore.QMutex()
+        self.lock = Mutex()
         self.frames = []
         self.recording = True
     
