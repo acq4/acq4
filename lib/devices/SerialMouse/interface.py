@@ -152,7 +152,8 @@ class MouseThread(QtCore.QThread):
         l.unlock()
         if block:
             #print "  stop: waiting"
-            self.wait()
+            if not self.wait(10000):
+                raise Exception("Timed out while waiting for thread exit!")
         #print "  stop: done"
             
         

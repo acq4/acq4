@@ -6,6 +6,7 @@ from lib.util.configfile import *
 from lib.util.MetaArray import MetaArray
 #from lib.util.advancedTypes import Locker
 import lib.util.ptime as ptime
+from lib.util.Mutex import Mutex
 from PyQt4 import QtCore
 from lib.filetypes.FileType import *
 
@@ -30,7 +31,7 @@ class DataManager(QtCore.QObject):
         DataManager.CREATED = True
         self.cache = {}
         #self.lock = threading.RLock()
-        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(QtCore.QMutex.Recursive)
         
     def getDirHandle(self, dirName, create=False):
         l = QtCore.QMutexLocker(self.lock)
@@ -141,7 +142,7 @@ class FileHandle(QtCore.QObject):
         self.path = os.path.abspath(path)
         self.parentDir = None
         #self.lock = threading.RLock()
-        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(QtCore.QMutex.Recursive)
         
     def __repr__(self):
         return "<%s '%s'>" % (self.__class__.__name__, self.name())

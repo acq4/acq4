@@ -5,6 +5,7 @@ from PyQt4 import Qwt5 as Qwt
 from lib.util.WidgetGroup import WidgetGroup
 from lib.util.PlotWidget import PlotWidget
 from lib.util.MetaArray import *
+from lib.util.Mutex import Mutex
 import traceback, sys, time
 from numpy import *
 import scipy.optimize
@@ -41,7 +42,7 @@ class PatchWindow(QtGui.QMainWindow):
         }
         
         
-        self.paramLock = QtCore.QMutex(QtCore.QMutex.Recursive)
+        self.paramLock = Mutex(QtCore.QMutex.Recursive)
 
         self.manager = dm
         self.clampName = clampName
@@ -265,7 +266,7 @@ class PatchThread(QtCore.QThread):
         self.manager = ui.manager
         self.clampName = ui.clampName
         QtCore.QThread.__init__(self)
-        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(QtCore.QMutex.Recursive)
         self.stopThread = True
         self.paramsUpdated = True
                 
@@ -480,4 +481,6 @@ class PatchThread(QtCore.QThread):
         self.stopThread = True
         l.unlock()
         if block:
-            self.wait()
+            if not self.wait(10000):
+                raise Exception("Timed out while waiting for thread exit!")
+                

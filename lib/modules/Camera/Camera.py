@@ -283,12 +283,14 @@ class PVCamera(QtGui.QMainWindow):
         if self.acquireThread.isRunning():
             #print "Stopping acquisition thread.."
             self.acquireThread.stop()
-            self.acquireThread.wait()
+            if not self.acquireThread.wait(10000):
+                raise Exception("Timed out while waiting for thread exit!")
         if self.recordThread.isRunning():
             #print "Stopping recording thread.."
             self.recordThread.stop()
             #print "  requested stop, waiting for thread -- running=",self.recordThread.isRunning() 
-            self.recordThread.wait()
+            if not self.recordThread.wait(10000):
+                raise Exception("Timed out while waiting for thread exit!")
             #print "  record thread finished."
 
     def setMouse(self, qpt=None):
@@ -329,12 +331,15 @@ class PVCamera(QtGui.QMainWindow):
         self.ui.btnAcquire.setEnabled(True)
 
     def setBinning(self, b):
+        #sys.stdout.write("+")
         self.backgroundFrame = None
         self.binning = b
         self.acquireThread.setParam('binning', self.binning)
         #self.acquireThread.reset()
         self.clearFrameBuffer()
         self.updateRgnLabel()
+        #sys.stdout.write("- ")
+        
         
     def setExposure(self, e):
         self.exposure = e
@@ -426,20 +431,30 @@ class PVCamera(QtGui.QMainWindow):
             self.acquireThread.stop()
             
     def addPlotFrame(self, frame):
+        #sys.stdout.write('+')
         ## Get rid of old frames
         minTime = None
         if len(self.frameBuffer) > 0:
             now = ptime.time()
             while self.frameBuffer[0][1]['time'] < (now-self.ui.spinROITime.value()):
                 self.frameBuffer.pop(0)
+                #if ptime.time() - now > 10:
+                    #print "Stuck in loop 1"
+                    #break
             for r in self.ROIs:
                 if len(r['times']) < 1:
                     continue
                 while r['times'][0] < (now-self.ui.spinROITime.value()):
                     r['times'].pop(0)
                     r['vals'].pop(0)
+                    #if ptime.time() - now > 10:
+                        #print "Stuck in loop 2"
+                        #break
                 if minTime is None or r['times'][0] < minTime:
                     minTime = r['times'][0]
+                #if ptime.time() - now > 10:
+                    #print "Stuck in loop 3"
+                    #break
         if minTime is None:
             minTime = frame[1]['time']
                 
@@ -449,6 +464,7 @@ class PVCamera(QtGui.QMainWindow):
             draw = True
         self.frameBuffer.append(frame)
         if len(self.frameBuffer) < 2: 
+            #sys.stdout.write('-')
             return
         for r in self.ROIs:
             d = r['roi'].getArrayRegion(frame[0], self.imageItem, axes=(0,1))
@@ -463,8 +479,12 @@ class PVCamera(QtGui.QMainWindow):
             if draw:
                 #r['plot'].updateData(array(r['vals']))
                 r['plot'].setData(array(r['times'])-minTime, r['vals'])
+            #if ptime.time() - now > 10:
+                #print "Stuck in loop 4"
+                #break
             
         self.ui.plotWidget.plot()
+        #sys.stdout.write('!')
     
             
     def newFrame(self, frame):
@@ -513,7 +533,7 @@ class PVCamera(QtGui.QMainWindow):
                 
                 ## If background division is enabled, mix the current frame into the background frame
                 if self.ui.btnDivideBackground.isChecked():
-                    if self.backgroundFrame is None:
+                    if self.backgroundFrame is None or self.backgroundFrame.shape != data.shape:
                         self.backgroundFrame = data.astype(float)
                     if not self.ui.btnLockBackground.isChecked():
                         s = 1.0 - 1.0 / (self.ui.spinFilterTime.value()+1.0)

@@ -22,6 +22,7 @@ class PVCam(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.camLock = Mutex(QtCore.QMutex.Recursive)
         self.pvc = PVCDriver
         self.cam = None
         self.acqThread = AcquireThread(self)
@@ -48,7 +49,8 @@ class PVCam(Device):
     def quit(self):
         if hasattr(self, 'acqThread') and self.acqThread.isRunning():
             self.stopAcquire()
-            self.acqThread.wait()
+            if not self.acqThread.wait(10000):
+                raise Exception("Timed out while waiting for thread exit!")
         
         
     #@ftrace
@@ -59,6 +61,7 @@ class PVCam(Device):
     #@ftrace
     def getCamera(self):
         l = QtCore.QMutexLocker(self.lock)
+        cl = QtCore.QMutexLocker(self.camLock)
         if self.cam is None:
             cams = self.pvc.listCameras()
             print "Cameras:", cams
@@ -91,15 +94,21 @@ class PVCam(Device):
         return self.config['triggerOutChannel'][1]
         
     def startAcquire(self, params=None):
-        #l = QtCore.QMutexLocker(self.lock)
+        l = QtCore.QMutexLocker(self.lock)
+        at = self.scqThread
+        l.unlock()
+        
         if params is not None:
             for p in params:
-                self.acqThread.setParam(p, params[p])
-        self.acqThread.start()
+                at.setParam(p, params[p])
+        at.start()
         
     def stopAcquire(self, block=True):
-        #l = QtCore.QMutexLocker(self.lock)
-        self.acqThread.stop(block)
+        l = QtCore.QMutexLocker(self.lock)
+        at = self.acqThread
+        l.unlock()
+        
+        at.stop(block)
 
     def isRunning(self):
         l = QtCore.QMutexLocker(self.lock)
@@ -112,22 +121,29 @@ class PVCam(Device):
         return PVCamDevGui(self)
 
     def setParam(self, param, val):
-        #l = QtCore.QMutexLocker(self.lock)
-        r = self.acqThread.isRunning()
+        l = QtCore.QMutexLocker(self.lock)
+        at = self.scqThread
+        l.unlock()
+        
+        r = at.isRunning()
         if r: 
-            self.acqThread.stop(block=True)
-        self.cam.setParam(param, val)
+            at.stop(block=True)
+            
+        cl = QtCore.QMutexLocker(self.camLock)        
+        cam.setParam(param, val)
+        cl.unlock()
+        
         self.emit(QtCore.SIGNAL('paramChanged'), param, val)
         if r: 
-            self.acqThread.start()
+            at.start()
         
     def getParam(self, param):
-        #l = QtCore.QMutexLocker(self.lock)
+        cl = QtCore.QMutexLocker(self.camLock)
         return self.cam.getParam(param)
         
     #@ftrace
     def listTriggerModes(self):
-        #l = QtCore.QMutexLocker(self.lock)
+        cl = QtCore.QMutexLocker(self.camLock)        
         return self.cam.listTriggerModes()
         
     #@ftrace
@@ -328,10 +344,13 @@ class AcquireThread(QtCore.QThread):
             self.cam.stop()
     
     def setParam(self, param, value):
+        #print "PVCam:setParam", param, value
         start = False
         if self.isRunning():
             start = True
+            #print "Camera.setParam: Stopping camera before setting parameter.."
             self.stop(block=True)
+            #print "Camera.setPAram: camera stopped"
         l = QtCore.QMutexLocker(self.lock)
         self.state[param] = value
         l.unlock()
@@ -354,6 +373,9 @@ class AcquireThread(QtCore.QThread):
         #print "..unlock from remove task"
     
     def run(self):
+        #self.lock.lock()
+        #self.stopThread = False
+        #self.lock.unlock()
         #print "Starting up camera acquisition thread."
         binning = self.state['binning']
         
@@ -368,16 +390,13 @@ class AcquireThread(QtCore.QThread):
             msg = "Requested binning %d not allowed, using %d instead" % (self.state['binning'], binning)
             print msg
             self.emit(QtCore.SIGNAL("showMessage"), msg)
-        
+        #print "Will use binning", binning
         exposure = self.state['exposure']
         region = self.state['region']
         mode = self.state['mode']
         lastFrame = None
         lastFrameTime = None
         #print "AcquireThread.run: Lock for startup.."
-        self.lock.lock()
-        self.stopThread = False
-        self.lock.unlock()
         #print "AcquireThread.run: ..unlocked from startup"
         #self.fps = None
         
@@ -484,6 +503,7 @@ class AcquireThread(QtCore.QThread):
                         self.lock.lock()
                         if self.stopThread:
                             #print "    AcquireThread.run: Unlocking thread for exit"
+                            self.stopThread = False
                             self.lock.unlock()
                             #print "    AcquireThread.run: Camera acquisition thread stopping."
                             break
@@ -501,7 +521,7 @@ class AcquireThread(QtCore.QThread):
             ## Inform that we have stopped (?)
             #self.ui.stop()
             self.cam.stop()
-            #print "camera stopped"
+            #print "AcquireThread.run: camera stopped"
         except:
             try:
                 self.cam.stop()
@@ -510,6 +530,7 @@ class AcquireThread(QtCore.QThread):
             msg = "ERROR Starting acquisition:", sys.exc_info()[0], sys.exc_info()[1]
             print traceback.print_exception(*sys.exc_info())
             self.emit(QtCore.SIGNAL("showMessage"), msg)
+            
         
     def stop(self, block=False):
         #print "AcquireThread.stop: Requesting thread stop, acquiring lock first.."
@@ -519,13 +540,15 @@ class AcquireThread(QtCore.QThread):
         l.unlock()
         #print "AcquireThread.stop: Unlocked, waiting for thread exit (%s)" % block
         if block:
-          self.wait()
+          if not self.wait(10000):
+              raise Exception("Timed out waiting for thread exit!")
         #print "AcquireThread.stop: thread exited"
 
     def reset(self):
         if self.isRunning():
             self.stop()
-            self.wait()
+            if not self.wait(10000):
+                raise Exception("Timed out while waiting for thread exit!")
             self.start()
 
 

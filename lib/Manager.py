@@ -4,6 +4,7 @@ import time, sys, atexit
 from PyQt4 import QtCore, QtGui
 from DataManager import *
 import lib.util.ptime as ptime
+from lib.util.Mutex import Mutex
 import getopt
 #import pdb
 
@@ -37,7 +38,7 @@ Valid options are:
 """
         QtCore.QObject.__init__(self)
         self.alreadyQuit = False
-        self.taskLock = QtCore.QMutex(QtCore.QMutex.Recursive)
+        self.taskLock = Mutex(QtCore.QMutex.Recursive)
         atexit.register(self.quit)
         self.devices = {}
         self.modules = {}

@@ -2,6 +2,7 @@
 from lib.drivers.MultiClamp import MultiClamp as MultiClampDriver
 from lib.devices.Device import *
 from lib.util.MetaArray import MetaArray, axis
+from lib.util.Mutex import Mutex
 from PyQt4 import QtCore
 from numpy import *
 import sys, traceback
@@ -11,7 +12,7 @@ from protoGUI import *
 class MultiClamp(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(QtCore.QMutex.Recursive)
         self.index = None
         self.devRackGui = None
         

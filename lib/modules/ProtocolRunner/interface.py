@@ -7,6 +7,7 @@ from lib.util.configfile import *
 from lib.util.advancedTypes import OrderedDict
 from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
+from lib.util.Mutex import Mutex
 import time
 
 class ProtocolRunner(Module, QtCore.QObject):
@@ -775,7 +776,7 @@ class TaskThread(QtCore.QThread):
         QtCore.QThread.__init__(self)
         self.ui = ui
         self.dm = self.ui.manager
-        self.lock = QtCore.QMutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(QtCore.QMutex.Recursive)
         self.stopThread = True
         self.abortThread = False
                 
@@ -895,7 +896,8 @@ class TaskThread(QtCore.QThread):
         self.stopThread = True
         l.unlock()
         if block:
-            self.wait()
+            if not self.wait(10000):
+                raise Exception("Timed out while waiting for thread exit!")
             
     def abort(self):
         l = QtCore.QMutexLocker(self.lock)
