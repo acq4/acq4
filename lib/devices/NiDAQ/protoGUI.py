@@ -15,7 +15,7 @@ class NiDAQProto(ProtocolGui):
         self.rate = 40e3
         self.updateNPts()
         self.updateDevList()
-        self.devs = []
+        #self.devs = []
         QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('valueChanged(double)'), self.rateChanged)
         QtCore.QObject.connect(self.ui.periodSpin, QtCore.SIGNAL('valueChanged(double)'), self.periodChanged)
         QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolChanged'), self.protocolChanged)
@@ -26,10 +26,14 @@ class NiDAQProto(ProtocolGui):
     def restoreState(self, state):
         try:
             self.ui.rateSpin.setValue(state['rate'] / 1000.)
+            #print "trigger dev:", state['triggerDevice']
+            #print self.devs
             if 'triggerDevice' in state and state['triggerDevice'] in self.devs:
                 self.ui.triggerDevList.setCurrentIndex(self.devs.index(state['triggerDevice'])+1)
+                #print "Set index to", self.devs.index(state['triggerDevice'])+1
             else:
                 self.ui.triggerDevList.setCurrentIndex(0)
+                #print "No index"
         except:
             sys.excepthook(*sys.exc_info())
             print "Error while loading DAQ configuration, proceeding with default configuration."
@@ -88,15 +92,23 @@ class NiDAQProto(ProtocolGui):
             self.ui.numPtsLabel.setText(str(self.nPts))
         
     def updateDevList(self):
-        self.devs = self.dev.dm.listDevices()
+        ## list all devices
+        allDevNames = self.dev.dm.listDevices()
+        ## convert device names into device handles
+        allDevs = [self.dev.dm.getDevice(d) for d in allDevNames]
+        ## select out devices which have trigger channel to this DAQ
+        self.devs = [d.name for d in allDevs if d.getTriggerChannel(self.dev.name) is not None]
+            
+            
         self.ui.triggerDevList.clear()
         self.ui.triggerDevList.addItem('No Trigger')
+        
         for d in self.devs:
             #print d, self.dev.name
-            dev = self.dev.dm.getDevice(d)
-            if dev.getTriggerChannel(self.dev.name) is not None:
+            #dev = self.dev.dm.getDevice(d)
+            #if dev.getTriggerChannel(self.dev.name) is not None:
                 #print "------"
-                self.ui.triggerDevList.addItem(d)
+            self.ui.triggerDevList.addItem(d)
         #for p in self.dev.listTriggerPorts():
             #self.ui.triggerDevList.addItem(p)
         ## Add list of triggerable port names here?

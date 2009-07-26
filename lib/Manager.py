@@ -26,7 +26,7 @@ class Manager(QtCore.QObject):
         
         if argv is not None:
             try:
-                opts, args = getopt.getopt(argv, 'c:m:b:s:', ['config=', 'module=', 'baseDir=', 'storageDir='])
+                opts, args = getopt.getopt(argv, 'c:m:b:s:n', ['config=', 'module=', 'baseDir=', 'storageDir=', 'noManager'])
             except getopt.GetoptError, err:
                 print str(err)
                 print """
@@ -35,6 +35,7 @@ Valid options are:
     -m --module=     module name to load
     -b --baseDir=    base directory to use
     -s --storageDir= storage directory to use
+    -n --noManager   Do not load manager module
 """
         QtCore.QObject.__init__(self)
         self.alreadyQuit = False
@@ -54,6 +55,7 @@ Valid options are:
         loadModules = []
         setBaseDir = None
         setStorageDir = None
+        loadManager = True
         for o, a in opts:
             if o in ['-c', '--config']:
                 configFile = a
@@ -63,6 +65,8 @@ Valid options are:
                 setBaseDir = a
             elif o in ['-s', '--storageDir']:
                 setStorageDir = a
+            elif o in ['-n', '--noManager']:
+                loadManager = False
             else:
                 print "Unhandled option", o, a
         
@@ -81,6 +85,8 @@ Valid options are:
                 self.setBaseDir(setBaseDir)
             if setStorageDir is not None:
                 self.setCurrentDir(setStorageDir)
+            if loadManager:
+                self.loadModule(module='Manager', name='Manager', config={})
             for m in loadModules:
                 self.loadDefinedModule(m)
         except:

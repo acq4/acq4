@@ -102,15 +102,16 @@ class StimGenerator(QtGui.QWidget):
             self.setError("Error parsing parameters:\n" + str(sys.exc_info()[1]))
             return False
         try:
-            self.getSingle(1, 1)
+            self.getSingle(1, 1, params={'test': True})
             self.setError()
             return True
         except:
-            self.setError("Error parsing function:\n" + str(sys.exc_info()[1]))
+            self.setError("Error in function:\n" + str(sys.exc_info()[1]))
             return False
     
     def saveState(self):
         """ Return a dict structure with the state of the widget """
+        #print "Saving state:", self.functionString()
         return ({'function': self.functionString(), 'params': self.paramString()})
     
     def loadState(self, state):
@@ -138,7 +139,7 @@ class StimGenerator(QtGui.QWidget):
         return argwhere(ar)
         
     def setError(self, msg=None):
-        if msg is None:
+        if msg is None or msg == '':
             self.ui.errorText.setText('')
             self.ui.errorBtn.setStyleSheet('')
         else:

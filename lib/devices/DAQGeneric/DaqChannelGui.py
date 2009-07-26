@@ -51,7 +51,6 @@ class DaqChannelGui(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('stateChanged(int)'), self.displayCheckChanged)
             
     def saveState(self):
-        #print "Requesting DAQ channel state:", self.stateGroup.state()
         return self.stateGroup.state()
     
     def restoreState(self, state):

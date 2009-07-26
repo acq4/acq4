@@ -25,7 +25,7 @@ dm = Manager(config, sys.argv[1:])
 #print "Loading camera module.."
 #qtcam = dm.loadModule(module='Camera', name='Camera', config={'camDev': 'Camera'})
 #print "Loading dataManager module.."
-dm.loadModule(module='Manager', name='Manager', config={})
+#dm.loadModule(module='Manager', name='Manager', config={})
 
 ## Start Qt event loop.
 app.exec_()
