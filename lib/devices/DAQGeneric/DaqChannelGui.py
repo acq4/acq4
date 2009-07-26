@@ -49,6 +49,21 @@ class DaqChannelGui(QtGui.QWidget):
         
         self.displayCheckChanged()
         QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('stateChanged(int)'), self.displayCheckChanged)
+        QtCore.QObject.connect(self.ui.groupBox, QtCore.SIGNAL('toggled(bool)'), self.groupBoxClicked)
+            
+    def groupBoxClicked(self, b):
+        self.setChildrenVisible(self.ui.groupBox, b)
+        if b:
+            self.ui.groupBox.setTitle(str(self.ui.groupBox.title())[4:])
+        else:
+            self.ui.groupBox.setTitle("[+] " + str(self.ui.groupBox.title()))
+            
+    def setChildrenVisible(self, obj, vis):
+        for c in obj.children():
+            if isinstance(c, QtGui.QWidget):
+                c.setVisible(vis)
+            else:
+                self.setChildrenVisible(c, vis)
             
     def saveState(self):
         return self.stateGroup.state()

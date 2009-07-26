@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'InputChannelTemplate.ui'
 #
-# Created: Tue Jun 16 22:41:24 2009
-#      by: PyQt4 UI code generator 4.4.4
+# Created: Sun Jul 26 17:33:38 2009
+#      by: PyQt4 UI code generator 4.4.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -22,8 +22,11 @@ class Ui_Form(object):
         font.setWeight(75)
         font.setBold(True)
         self.groupBox.setFont(font)
+        self.groupBox.setCheckable(True)
         self.groupBox.setObjectName("groupBox")
         self.gridLayout = QtGui.QGridLayout(self.groupBox)
+        self.gridLayout.setSpacing(0)
+        self.gridLayout.setContentsMargins(5, 0, 0, 0)
         self.gridLayout.setObjectName("gridLayout")
         self.recordCheck = QtGui.QCheckBox(self.groupBox)
         font = QtGui.QFont()

@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'AOChannelTemplate.ui'
 #
-# Created: Tue Jun 16 22:41:24 2009
-#      by: PyQt4 UI code generator 4.4.4
+# Created: Sun Jul 26 17:33:37 2009
+#      by: PyQt4 UI code generator 4.4.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -22,10 +22,14 @@ class Ui_Form(object):
         font.setWeight(75)
         font.setBold(True)
         self.groupBox.setFont(font)
+        self.groupBox.setCheckable(True)
         self.groupBox.setObjectName("groupBox")
         self.verticalLayout_2 = QtGui.QVBoxLayout(self.groupBox)
+        self.verticalLayout_2.setSpacing(0)
+        self.verticalLayout_2.setContentsMargins(5, 0, 0, 0)
         self.verticalLayout_2.setObjectName("verticalLayout_2")
         self.gridLayout = QtGui.QGridLayout()
+        self.gridLayout.setSpacing(0)
         self.gridLayout.setObjectName("gridLayout")
         self.preSetCheck = QtGui.QCheckBox(self.groupBox)
         font = QtGui.QFont()
@@ -61,6 +65,8 @@ class Ui_Form(object):
         self.frame.setFrameShadow(QtGui.QFrame.Raised)
         self.frame.setObjectName("frame")
         self.verticalLayout = QtGui.QVBoxLayout(self.frame)
+        self.verticalLayout.setSpacing(0)
+        self.verticalLayout.setMargin(0)
         self.verticalLayout.setObjectName("verticalLayout")
         self.horizontalLayout = QtGui.QHBoxLayout()
         self.horizontalLayout.setObjectName("horizontalLayout")

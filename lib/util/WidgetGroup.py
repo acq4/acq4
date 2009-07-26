@@ -60,7 +60,11 @@ class WidgetGroup(QtCore.QObject):
         QtGui.QComboBox:
             ('currentIndexChanged(int)',
             comboState,
-            setComboState)
+            setComboState),
+        QtGui.QGroupBox:
+            ('clicked(bool)',
+            QtGui.QGroupBox.isChecked,
+            QtGui.QGroupBox.setChecked),
     }
     
     
