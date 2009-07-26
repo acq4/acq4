@@ -101,7 +101,7 @@ class PVCam(Device):
         if params is not None:
             for p in params:
                 at.setParam(p, params[p])
-        at.start()
+        at.start(QtCore.QThread.HighPriority)
         
     def stopAcquire(self, block=True):
         l = QtCore.QMutexLocker(self.lock)
@@ -135,7 +135,7 @@ class PVCam(Device):
         
         self.emit(QtCore.SIGNAL('paramChanged'), param, val)
         if r: 
-            at.start()
+            at.start(QtCore.QThread.HighPriority)
         
     def getParam(self, param):
         cl = QtCore.QMutexLocker(self.camLock)
@@ -355,7 +355,7 @@ class AcquireThread(QtCore.QThread):
         self.state[param] = value
         l.unlock()
         if start:
-            self.start()
+            self.start(QtCore.QThread.HighPriority)
         
     def startRecord(self, maxTime=None):
         rec = CameraTask(self, maxTime)
@@ -394,6 +394,7 @@ class AcquireThread(QtCore.QThread):
         exposure = self.state['exposure']
         region = self.state['region']
         mode = self.state['mode']
+        size = self.cam.getSize()
         lastFrame = None
         lastFrameTime = None
         #print "AcquireThread.run: Lock for startup.."
@@ -436,7 +437,7 @@ class AcquireThread(QtCore.QThread):
                         diff = ((frame + self.ringSize) - lastFrame) % self.ringSize
                         if diff > 1:
                             print "Dropped %d frames after %d" % (diff-1, self.frameId)
-                            self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped %d frame(s) after %d!" % (diff-1, self.frameId))
+                            self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped %d frame(s) after frame %d. (%02g since last frame arrived)" % (diff-1, self.frameId, now-lastFrameTime))
                     lastFrame = frame
                     #print "      AcquireThread.run: frame 3"
                     
@@ -454,14 +455,17 @@ class AcquireThread(QtCore.QThread):
                     
                     ps = self.dev.getPixelSize()
                     if ps is not None:
-                        ps = (ps[0] * binning, ps[1] * binning)
-                        info['pixelSize'] = ps
+                        ps2 = (ps[0] * binning, ps[1] * binning)
+                        info['pixelSize'] = ps2
                     obj = self.dev.getObjective()
                     if obj is not None:
                         info['objective'] = obj
-                    pos = self.dev.getPosition()
+                    pos = self.dev.getPosition()  ## pos is the position of the center of the sensor
                     if pos is not None:
-                        info['position'] = pos
+                        info['scopePosition'] = pos
+                        if ps is not None:
+                            pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
+                            info['imagePosition'] = pos2
 
                     lastFrameTime = now
                     #print "      AcquireThread.run: frame 4"
@@ -549,7 +553,7 @@ class AcquireThread(QtCore.QThread):
             self.stop()
             if not self.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
-            self.start()
+            self.start(QtCore.QThread.HighPriority)
 
 
 class CameraTask:

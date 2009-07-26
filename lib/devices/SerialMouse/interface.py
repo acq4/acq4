@@ -123,7 +123,7 @@ class MouseThread(QtCore.QThread):
                 self.lock.unlock()
                 break
             self.lock.unlock()
-            time.sleep(100e-3)
+            time.sleep(10e-3)
         self.sp.close()
             
     ## convert byte to signed byte

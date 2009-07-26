@@ -187,14 +187,18 @@ class PVCamera(QtGui.QMainWindow):
         
         (img, info) = self.currentFrame
         s = info['pixelSize']
-        p = info['position']
-        r = info['region']
-        b = info['binning']
+        p = info['imagePosition']
+        #r = info['region']
+        #b = info['binning']
         self.persistentFrames.append(im)
         self.persistentGroup.resetTransform()
         im.setParentItem(self.persistentGroup)
         im.resetTransform()
-        pos = [p[0]-(r[2]*s[0]*0.5), p[1]-(r[3]*s[0]*0.5)]
+        
+        ## r should be divided by b here (or just use image size)
+        ## what if region does not start at 0,0?
+        #pos = [p[0]-(r[2]*s[0]*0.5), p[1]-(r[3]*s[0]*0.5)]
+        pos = p
         im.translate(pos[0], pos[1])
         im.scale(s[0], s[1])
         self.updatePersistentGroup()
