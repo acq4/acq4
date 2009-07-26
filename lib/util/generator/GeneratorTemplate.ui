@@ -118,6 +118,10 @@ p, li { white-space: pre-wrap; }
 &lt;p style="-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:'Sans Serif'; font-size:7pt;">&lt;/p>
 &lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:'Sans Serif'; font-size:7pt;">steps( &lt;span style=" font-style:italic;">times&lt;/span>, &lt;span style=" font-style:italic;">values&lt;/span>, [&lt;span style=" font-style:italic;">base&lt;/span>=0.0] )&lt;/p>
 &lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:'Sans Serif'; font-size:7pt;">pulse( &lt;span style=" font-style:italic;">times&lt;/span>, &lt;span style=" font-style:italic;">widths&lt;/span>, &lt;span style=" font-style:italic;">values&lt;/span>, [&lt;span style=" font-style:italic;">base&lt;/span>=0.0] )&lt;/p>
+&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:'Sans Serif'; font-size:7pt;">sineWave(&lt;span style=" font-style:italic;">period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base=0.0&lt;/span>)&lt;/p>
+&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:'Sans Serif'; font-size:7pt;">squareWave(&lt;span style=" font-style:italic;">period, amplitude=1.0, phase=0.0, duty=0.5, start=0.0, stop=None, base=0.0&lt;/span>)&lt;/p>
+&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:'Sans Serif'; font-size:7pt;">sawWave(&lt;span style=" font-style:italic;">period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base=0.0&lt;/span>)&lt;/p>
+&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:'Sans Serif'; font-size:7pt;">listWave(&lt;span style=" font-style:italic;">period, values, phase=0.0, start=0.0, stop=None, base=0.0&lt;/span>)&lt;/p>
 &lt;p style="-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:'Sans Serif'; font-size:7pt;">&lt;/p>
 &lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:'Sans Serif'; font-size:7pt;">In each of these functions, &lt;span style=" font-style:italic;">times&lt;/span> must be specified as a list of times in seconds. Lists are notated as numbers enclosed in brackets and separated by commas like [0.0, 0.2, ...]. The steps function also requires a list of &lt;span style=" font-style:italic;">values.&lt;/span> The pulses function can accept either lists or single values for &lt;span style=" font-style:italic;">widths&lt;/span> and &lt;span style=" font-style:italic;">values&lt;/span>. The argument &lt;span style=" font-style:italic;">base&lt;/span> is optional for both functions.&lt;/p>&lt;/body>&lt;/html></string>
             </property>
@@ -231,7 +235,6 @@ p, li { white-space: pre-wrap; }
   </layout>
  </widget>
  <layoutdefault spacing="0" margin="0" />
- <includes/>
  <resources/>
  <connections/>
 </ui>

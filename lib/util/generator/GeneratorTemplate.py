@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'GeneratorTemplate.ui'
 #
-# Created: Thu Jun 04 11:13:53 2009
+# Created: Sun Jul 26 01:05:57 2009
 #      by: PyQt4 UI code generator 4.4.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -128,6 +128,10 @@ class Ui_Form(object):
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Sans Serif\'; font-size:7pt;\"></p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Sans Serif\'; font-size:7pt;\">steps( <span style=\" font-style:italic;\">times</span>, <span style=\" font-style:italic;\">values</span>, [<span style=\" font-style:italic;\">base</span>=0.0] )</p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Sans Serif\'; font-size:7pt;\">pulse( <span style=\" font-style:italic;\">times</span>, <span style=\" font-style:italic;\">widths</span>, <span style=\" font-style:italic;\">values</span>, [<span style=\" font-style:italic;\">base</span>=0.0] )</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Sans Serif\'; font-size:7pt;\">sineWave(<span style=\" font-style:italic;\">period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base=0.0</span>)</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Sans Serif\'; font-size:7pt;\">squareWave(<span style=\" font-style:italic;\">period, amplitude=1.0, phase=0.0, duty=0.5, start=0.0, stop=None, base=0.0</span>)</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Sans Serif\'; font-size:7pt;\">sawWave(<span style=\" font-style:italic;\">period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base=0.0</span>)</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Sans Serif\'; font-size:7pt;\">listWave(<span style=\" font-style:italic;\">period, values, phase=0.0, start=0.0, stop=None, base=0.0</span>)</p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Sans Serif\'; font-size:7pt;\"></p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Sans Serif\'; font-size:7pt;\">In each of these functions, <span style=\" font-style:italic;\">times</span> must be specified as a list of times in seconds. Lists are notated as numbers enclosed in brackets and separated by commas like [0.0, 0.2, ...]. The steps function also requires a list of <span style=\" font-style:italic;\">values.</span> The pulses function can accept either lists or single values for <span style=\" font-style:italic;\">widths</span> and <span style=\" font-style:italic;\">values</span>. The argument <span style=\" font-style:italic;\">base</span> is optional for both functions.</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
         self.textBrowser_2.setHtml(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"

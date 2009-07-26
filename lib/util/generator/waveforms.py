@@ -52,7 +52,7 @@ def steps(params, times, values, base=0.0):
     d[last:] = values[-1]
     return d
     
-def sineWave(params, amplitude, frequency=None, period=None, phase=0.0, start=0.0, stop=None, base=0.0):
+def sineWave(params, period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base=0.0):
     rate = params['rate']
     nPts = params['nPts']
     params['message'] = ""
@@ -60,14 +60,8 @@ def sineWave(params, amplitude, frequency=None, period=None, phase=0.0, start=0.
     ## Check all arguments 
     if type(amplitude) not in [float, int]:
         raise Exception("Amplitude argument must be a number")
-    if frequency is None:
-        if period is None:
-            raise Exception("Must specify frequency or period.")
-        if type(period) not in [float, int]:
-            raise Exception("Period argument must be a number")
-        frequency = 1.0 / period
-    if type(frequency) not in [float, int]:
-        raise Exception("Frequency argument must be a number")
+    if type(period) not in [float, int]:
+        raise Exception("Period argument must be a number")
     if type(phase) not in [float, int]:
         raise Exception("Phase argument must be a number")
     if start is not None and type(start) not in [float, int]:
@@ -93,7 +87,7 @@ def sineWave(params, amplitude, frequency=None, period=None, phase=0.0, start=0.
         params['message'] += "WARNING: Function is longer than generated waveform\n"    
         stop = nPts-1
     
-    d[start:stop] = numpy.fromfunction(lambda i: amplitude * numpy.sin(phase * 2.0 * numpy.pi + i * 2.0 * numpy.pi * frequency / rate), (stop-start,))
+    d[start:stop] = numpy.fromfunction(lambda i: amplitude * numpy.sin(phase * 2.0 * numpy.pi + i * 2.0 * numpy.pi / (period * rate)), (stop-start,))
     return d
     
 def squareWave(params, period, amplitude=1.0, phase=0.0, duty=0.5, start=0.0, stop=None, base=0.0):
@@ -194,7 +188,7 @@ def sawWave(params, period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base
     return d
 
     
-def stairWave(params, period, values=None, phase=0.0, start=0.0, stop=None, base=0.0):
+def listWave(params, period, values=None, phase=0.0, start=0.0, stop=None, base=0.0):
     rate = params['rate']
     nPts = params['nPts']
     params['message'] = ""

@@ -88,7 +88,13 @@ Valid options are:
             if loadManager:
                 self.loadModule(module='Manager', name='Manager', config={})
             for m in loadModules:
-                self.loadDefinedModule(m)
+                try:
+                    self.loadDefinedModule(m)
+                except:
+                    if not loadManager:
+                        self.loadModule(module='Manager', name='Manager', config={})
+                    raise
+                    
         except:
             sys.excepthook(*sys.exc_info())
             print "\nError while acting on command line options, continuing on anyway.."
