@@ -410,7 +410,10 @@ class PVCamera(QtGui.QMainWindow):
         
     def updateColorScale(self):
         (b, w) = self.getLevels()
-        self.ui.levelScale.setColorMap(Qwt.QwtDoubleInterval(b, w), Qwt.QwtLinearColorMap(QtCore.Qt.black, QtCore.Qt.white))
+        if w > b:
+            self.ui.levelScale.setColorMap(Qwt.QwtDoubleInterval(b, w), Qwt.QwtLinearColorMap(QtCore.Qt.black, QtCore.Qt.white))
+        else:
+            self.ui.levelScale.setColorMap(Qwt.QwtDoubleInterval(w, b), Qwt.QwtLinearColorMap(QtCore.Qt.white, QtCore.Qt.black))
                 
         
         #self.updateFrame = True

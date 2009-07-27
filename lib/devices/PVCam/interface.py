@@ -95,7 +95,7 @@ class PVCam(Device):
         
     def startAcquire(self, params=None):
         l = QtCore.QMutexLocker(self.lock)
-        at = self.scqThread
+        at = self.acqThread
         l.unlock()
         
         if params is not None:
