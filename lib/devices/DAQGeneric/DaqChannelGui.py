@@ -36,7 +36,7 @@ class DaqChannelGui(QtGui.QWidget):
         ## plot widget
         self.plot = plot
         plot.setCanvasBackground(QtGui.QColor(0,0,0))
-        plot.plot()
+        plot.replot()
         
         ## Curves displayed in self.plot
         self.plots = []
@@ -178,7 +178,7 @@ class OutputChannelGui(DaqChannelGui):
         plot.attach(self.plot)
         self.plots.append(plot)
         if replot:
-            self.plot.plot()
+            self.plot.replot()
         return plot
 
     def getSingleWave(self, params=None):
@@ -217,5 +217,5 @@ class InputChannelGui(DaqChannelGui):
             plot.setData(result.xvals('Time'), result)
             plot.attach(self.plot)
             self.plots.append(plot)
-            self.plot.plot()
+            self.plot.replot()
     

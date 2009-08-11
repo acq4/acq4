@@ -3,7 +3,7 @@ from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
 from PyQt4 import Qwt5 as Qwt
 from lib.util.WidgetGroup import WidgetGroup
-from lib.util.PlotWidget import PlotWidget
+from lib.util.PlotWidget import PlotWidget, PlotCurve
 from lib.util.MetaArray import *
 from lib.util.Mutex import Mutex
 import traceback, sys, time
@@ -76,11 +76,11 @@ class PatchWindow(QtGui.QMainWindow):
         
         for p in [self.ui.patchPlot, self.ui.commandPlot]:
             p.setCanvasBackground(QtGui.QColor(0,0,0))
-            p.plot()
-        self.patchCurve = Qwt.QwtPlotCurve('cell')
+            p.replot()
+        self.patchCurve = PlotCurve('cell')
         self.patchCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         self.patchCurve.attach(self.ui.patchPlot)
-        self.commandCurve = Qwt.QwtPlotCurve('command')
+        self.commandCurve = PlotCurve('command')
         self.commandCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         self.commandCurve.attach(self.ui.commandPlot)
         
@@ -101,9 +101,9 @@ class PatchWindow(QtGui.QMainWindow):
             QtCore.QObject.connect(w, QtCore.SIGNAL('clicked()'), self.showPlots)
             p = self.plots[n]
             p.setCanvasBackground(QtGui.QColor(0,0,0))
-            p.plot()
+            p.replot()
             for suf in ['', 'Std']:
-                self.analysisCurves[n+suf] = Qwt.QwtPlotCurve(n+suf)
+                self.analysisCurves[n+suf] = PlotCurve(n+suf)
                 self.analysisCurves[n+suf].setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
                 self.analysisCurves[n+suf].attach(p)
                 self.analysisData[n+suf] = []
@@ -168,8 +168,8 @@ class PatchWindow(QtGui.QMainWindow):
             scale2 = 1e12
         self.patchCurve.setData(data.xvals('Time'), data['scaled']*scale1)
         self.commandCurve.setData(data.xvals('Time'), data['raw']*scale2)
-        self.ui.patchPlot.plot()
-        self.ui.commandPlot.plot()
+        self.ui.patchPlot.replot()
+        self.ui.commandPlot.replot()
         
         for k in self.analysisItems:
             if k in frame['analysis']:
@@ -178,14 +178,24 @@ class PatchWindow(QtGui.QMainWindow):
         for r in ['input', 'access']:
             res = r+'Resistance'
             label = getattr(self.ui, res+'Label')
-            if frame['analysis'][res] > 1e9:
-                label.setText('%0.2f GOhm' % (frame['analysis'][res]*1e-9))
+            resistance = frame['analysis'][res]
+            if resistance >= 0.0:
+                if resistance >= 1e12:
+                    label.setText('%7.3f TOhm' % (resistance*1e-12))
+                elif resistance >= 1e9:
+                    label.setText('%7.3f GOhm' % (resistance*1e-9))
+                elif resistance >= 1e6:
+                    label.setText('%7.3f MOhm' % (resistance*1e-6))
+                elif resistance >= 1e3:
+                    label.setText('%7.3f KOhm' % (resistance*1e-3))
+                else:
+                    label.setText('%7.3f  Ohm' % (resistance))
             else:
-                label.setText('%0.2f MOhm' % (frame['analysis'][res]*1e-6))
-        self.ui.restingPotentialLabel.setText('%0.2f +/- %0.2f mV' % (frame['analysis']['restingPotential']*1e3, frame['analysis']['restingPotentialStd']*1e3))
-        self.ui.restingCurrentLabel.setText('%0.2f +/- %0.2f pA' % (frame['analysis']['restingCurrent']*1e9, frame['analysis']['restingCurrentStd']*1e9))
-        self.ui.capacitanceLabel.setText('%0.2f pF' % (frame['analysis']['capacitance']*1e12))
-        self.ui.fitErrorLabel.setText('%0.2g' % frame['analysis']['fitError'])
+                label.setText('>   10^15  Ohm')
+        self.ui.restingPotentialLabel.setText('%7.2f +/- %7.2f mV' % (frame['analysis']['restingPotential']*1e3, frame['analysis']['restingPotentialStd']*1e3))
+        self.ui.restingCurrentLabel.setText('%7.2f +/- %7.2f pA' % (frame['analysis']['restingCurrent']*1e9, frame['analysis']['restingCurrentStd']*1e9))
+        self.ui.capacitanceLabel.setText('%7.2f pF' % (frame['analysis']['capacitance']*1e12))
+        self.ui.fitErrorLabel.setText('%7.2g' % frame['analysis']['fitError'])
         self.analysisData['time'].append(data._info[-1]['startTime'])
         self.updateAnalysisPlots()
         
@@ -243,7 +253,7 @@ class PatchWindow(QtGui.QMainWindow):
                 self.analysisCurves[n].setData(self.analysisData['time'], self.analysisData[n])
                 if len(self.analysisData[n+'Std']) > 0:
                     self.analysisCurves[p+'Std'].setData(self.analysisData['time'], self.analysisData[n+'Std'])
-                p.plot()
+                p.replot()
     
     def startClicked(self):
         if self.ui.startBtn.isChecked():

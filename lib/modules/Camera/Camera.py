@@ -88,7 +88,7 @@ class PVCamera(QtGui.QMainWindow):
 
         self.ui.plotWidget.setCanvasBackground(QtGui.QColor(0,0,0))
         self.ui.plotWidget.enableAxis(Qwt.QwtPlot.xBottom, False)
-        self.ui.plotWidget.plot()
+        self.ui.plotWidget.replot()
 
         self.setCentralWidget(self.ui.centralwidget)
         self.scene = QtGui.QGraphicsScene(self)
@@ -490,7 +490,7 @@ class PVCamera(QtGui.QMainWindow):
                 #print "Stuck in loop 4"
                 #break
             
-        self.ui.plotWidget.plot()
+        self.ui.plotWidget.replot()
         #sys.stdout.write('!')
     
             

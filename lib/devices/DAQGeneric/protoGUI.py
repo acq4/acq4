@@ -123,6 +123,7 @@ class DAQGenericProtoGui(ProtocolGui):
                 #print "  no result"
                 #continue
             #print result.infoCopy()
-            self.channels[ch].handleResult(result[ch])
+            if result.hasColumn(0, ch):
+                self.channels[ch].handleResult(result[ch])
             
             

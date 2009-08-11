@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 import PyQt4.Qwt5 as Qwt
 from PyQt4 import QtCore, QtGui, QtSvg
-from MetaArray import MetaArray
+from lib.util.MetaArray import MetaArray
 from numpy import *
 from plotConfigTemplate import Ui_Form
 
 class PlotWidget(Qwt.QwtPlot):
-    def __init__(self, parent, *args):
-        Qwt.QwtPlot.__init__(self, parent, *args)
+    def __init__(self, *args):
+        Qwt.QwtPlot.__init__(self, *args)
         self.setMinimumHeight(50)
-        #self.setCanvasBackground(QtGui.QColor(0,0,0))
+        self.setCanvasBackground(QtGui.QColor(0,0,0))
         self.setAxisFont(self.yLeft, QtGui.QFont("Arial", 7))
         self.setAxisFont(self.xBottom, QtGui.QFont("Arial", 7))
         #self.zoomer = Qwt.QwtPlotZoomer(
@@ -359,8 +359,12 @@ class PlotWidget(Qwt.QwtPlot):
         self.curves = []
         self.paramIndex = {}
 
+    def registerCurve(self, curve):
+        self.curves.append(curve)
 
-
+    def unregisterCurve(self, curve):
+        self.curves.remove(curve)
+        
 
 #class PlotWidgetPanel(QtGui.QWidget):
     #def __init__(self, *args):
@@ -379,11 +383,12 @@ class PlotCurve:
     """Reimplements QwtPlotCurve to include automatic decimation, alpha, and point display.
     Assumes X values are linear/ascending.
     """
-    def __init__(self):
+    def __init__(self, *args):
         self.xData = None
         self.yData = None
         self.currentCurve = None
         self.plot = None
+        self.pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
     
     def setData(self, x, y):
         self.xData = x
@@ -399,25 +404,27 @@ class PlotCurve:
         
         if numPts < width:
             ptAlpha = 255 * clip(0.1 * width/numPts, 0, 1)
-            alpha = 1.0
+            alpha = 255
             showPts = True
         else:
             ptAlpha = 0
             showPts = False
-            alpha = 255 * numPts / width
+            alpha = 255 * width / numPts
             
         cc = 0
         self.setCurve(cc)
         s = Qwt.QwtSymbol(
             Qwt.QwtSymbol.Ellipse, 
             QtGui.QBrush(), 
-            QtGui.QPen(QtGui.QColor(0,0,0,ptAlpha)), 
-            QtCore.QSize(3,3))
+            QtGui.QPen(QtGui.QColor(200,200,255,ptAlpha)), 
+            QtCore.QSize(5,5))
         if showPts:
             self.curves[cc].setSymbol(s)
+            self.curves[cc].setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha)))
         else:
             s.setStyle(Qwt.QwtSymbol.NoSymbol)
             self.curves[cc].setSymbol(s)
+            self.curves[cc].setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha)))
             
             
         
@@ -426,6 +433,8 @@ class PlotCurve:
         self.plot = plot
         if self.currentCurve is not None:
             self.curves[self.currentCurve].attach(plot)
+        if hasattr(plot, 'registerCurve'):
+            plot.registerCurve(self)
             
         
     def generateCurves(self):
@@ -437,12 +446,19 @@ class PlotCurve:
     def detach(self):
         if self.currentCurve is not None:
             self.curves[self.currentCurve].detach()
+            if hasattr(self.plot, 'unregisterCurve'):
+                self.plot.unregisterCurve(self)
             
     def setCurve(self, c):
         plot = self.plot
         self.detach()
         self.currentCurve = c
         self.attach(plot)
+        self.curves[c].setPen(self.pen)
     
+    def setPen(self, pen):
+        self.pen = pen
+        if self.currentCurve is not None:
+            self.curves[self.currentCurve].setPen(pen)
     
     

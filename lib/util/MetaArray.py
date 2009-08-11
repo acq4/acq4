@@ -187,7 +187,16 @@ class MetaArray(ndarray):
         ax = self._info[self._interpretAxis(axis)]
         if ax.has_key('units'):
             return ax['units']
-  
+        
+    def hasColumn(self, axis, col):
+        ax = self._info[self._interpretAxis(axis)]
+        if ax.has_key('cols'):
+            for c in ax['cols']:
+                if c['name'] == col:
+                    return True
+        return False
+        
+        
     def columnUnits(self, axis, column):
         """Return the units for column in axis"""
         ax = self._info[self._interpretAxis(axis)]

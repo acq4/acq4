@@ -8,6 +8,7 @@ from lib.util.WidgetGroup import *
 from PyQt4 import Qwt5 as Qwt
 import numpy
 from ProtocolTemplate import *
+from lib.util.PlotWidget import PlotCurve
 
 class MultiClampProtoGui(ProtocolGui):
     def __init__(self, dev, prot):
@@ -138,13 +139,13 @@ class MultiClampProtoGui(ProtocolGui):
     def plotCmdWave(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
         if data is None:
             return
-        plot = Qwt.QwtPlotCurve('cell')
+        plot = PlotCurve('cell')
         plot.setPen(QtGui.QPen(color))
         plot.setData(self.timeVals, data)
         plot.attach(self.ui.bottomPlotWidget)
         self.cmdPlots.append(plot)
         if replot:
-            self.ui.bottomPlotWidget.plot()
+            self.ui.bottomPlotWidget.replot()
         return plot
         
     def generateProtocol(self, params=None):
@@ -287,7 +288,7 @@ class MultiClampProtoGui(ProtocolGui):
                 
                 for k in self.traces:
                     if k not in self.avgPlots:
-                        plot = Qwt.QwtPlotCurve('cell')
+                        plot = PlotCurve('cell')
                         plot.setPen(QtGui.QPen(QtGui.QColor(0, 255, 0)))
                         plot.setZ(100)
                         self.avgPlots[k] = plot
@@ -297,7 +298,7 @@ class MultiClampProtoGui(ProtocolGui):
                     self.avgPlots[k].setData(self.traces[k][0].xvals('Time'), avgTrace / self.inpScale)
                 
         ## Plot the results
-        plot = Qwt.QwtPlotCurve('cell')
+        plot = PlotCurve('cell')
         plot.setData(result.xvals('Time'), result['scaled'] / self.inpScale)
         plot.attach(self.ui.topPlotWidget)
         if paramKey not in self.inpPlots:
@@ -310,5 +311,5 @@ class MultiClampProtoGui(ProtocolGui):
             p.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha)))
         
         
-        self.ui.topPlotWidget.plot()
+        self.ui.topPlotWidget.replot()
         
