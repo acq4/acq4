@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import PyQt4.Qwt5 as Qwt
+from PyQt4 import Qwt5 as Qwt
 from PyQt4 import QtCore, QtGui, QtSvg
 from lib.util.MetaArray import MetaArray
 from numpy import *
@@ -202,6 +202,7 @@ class PlotWidget(Qwt.QwtPlot):
         if self.ctrl.yAutoRadio.isChecked():
             self.setAxisAutoScale(Qwt.QwtPlot.yLeft)
             
+    
         r = self.plotRange()
         
         if self.ctrl.xAutoRadio.isChecked():
@@ -239,7 +240,7 @@ class PlotWidget(Qwt.QwtPlot):
             c.setData(x[i%x.shape[0]], arr[i])
             c.attach(self)
             ret.append(len(self.curves))
-            self.curves.append(c)
+            #self.curves.append(c)
                 
         self.replot()
         return ret
@@ -289,7 +290,7 @@ class PlotWidget(Qwt.QwtPlot):
         self.setAxisTitle(self.yLeft, titles[1])
 
         ## create curves
-        curves = []
+        #curves = []
         try:
             xv = arr.xvals(xAxis)
         except:
@@ -306,14 +307,14 @@ class PlotWidget(Qwt.QwtPlot):
                 #c.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
                 c.attach(self)
                 ret.append(len(self.curves))
-                self.curves.append(c)
+                #self.curves.append(c)
         else:
             c = PlotCurve()
             c.setData(xv, arr)
             #c.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
             c.attach(self)
             ret.append(len(self.curves))
-            self.curves.append(c)
+            #self.curves.append(c)
             
             
         self.replot()
@@ -396,7 +397,7 @@ class PlotCurve:
         self.generateCurves()
         
     def setDisplayRange(self, min, max, width):
-        if self.xData is None:
+        if self.xData is None or len(self.xData) < 2:
             return
         dif = max-min
         dx = (self.xData[-1] - self.xData[0]) / (len(self.xData) - 1)
@@ -409,8 +410,7 @@ class PlotCurve:
         else:
             ptAlpha = 0
             showPts = False
-            alpha = 255 * width / numPts
-            
+            alpha = clip(255 * width / numPts, 1, 255)
         cc = 0
         self.setCurve(cc)
         s = Qwt.QwtSymbol(
@@ -433,28 +433,39 @@ class PlotCurve:
         self.plot = plot
         if self.currentCurve is not None:
             self.curves[self.currentCurve].attach(plot)
+            #print "attach", self.curves[self.currentCurve]
         if hasattr(plot, 'registerCurve'):
             plot.registerCurve(self)
             
         
     def generateCurves(self):
+        plot = self.plot
+        self.detach()
         self.curves = []
         self.curves.append(Qwt.QwtPlotCurve())
+        self.curves[-1].setPen(self.pen)
+        #print "new plot", self.curves[-1]
         self.curves[-1].setData(self.xData, self.yData)
         self.currentCurve = 0
+        if plot is not None:
+            self.attach(plot)
     
     def detach(self):
         if self.currentCurve is not None:
             self.curves[self.currentCurve].detach()
+            #print "detach", self.curves[self.currentCurve]
             if hasattr(self.plot, 'unregisterCurve'):
                 self.plot.unregisterCurve(self)
+        self.plot = None
             
     def setCurve(self, c):
+        if c == self.currentCurve:
+            return
         plot = self.plot
         self.detach()
         self.currentCurve = c
-        self.attach(plot)
         self.curves[c].setPen(self.pen)
+        self.attach(plot)
     
     def setPen(self, pen):
         self.pen = pen
