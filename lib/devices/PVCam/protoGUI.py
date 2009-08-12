@@ -3,6 +3,7 @@ from PyQt4 import QtCore, QtGui
 from ProtocolTemplate import *
 from lib.devices.Device import ProtocolGui
 from lib.util.WidgetGroup import *
+from lib.util.PlotWidget import PlotCurve
 from numpy import ndarray
 from PyQt4 import Qwt5 as Qwt
 
@@ -73,7 +74,7 @@ class PVCamProto(ProtocolGui):
         if state['displayExposureCheck'] and 'expose' in result and result['expose'] is not None:
             #self.ui.exposePlot.plotMetaArray(result['expose'])
             self.ui.exposePlot.clear()
-            c = Qwt.QwtPlotCurve()
+            c = PlotCurve()
             d = result['expose']
             c.setData(d.xvals('Time'), d.view(ndarray))
             c.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))

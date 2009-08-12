@@ -168,13 +168,6 @@ class PlotWidget(Qwt.QwtPlot):
         self.mousePos = pos
         Qwt.QwtPlot.mouseReleaseEvent(self, ev)
         
-    #def clearZoomStack(self):
-        #"""Auto scale and clear the zoom stack"""
-        #self.setAxisAutoScale(Qwt.QwtPlot.xBottom)
-        #self.setAxisAutoScale(Qwt.QwtPlot.yLeft)
-        #self.replot()
-        #self.zoomer.setZoomBase()
-
     def plot(self, data, x=None, clear=True, params=None):
         if clear:
             self.clear()
@@ -189,10 +182,6 @@ class PlotWidget(Qwt.QwtPlot):
             ids = self.plotArray(array(data), x=x)
         else:
             raise Exception('Not sure how to plot object of type %s' % type(data))
-            
-            
-        
-            
             
         self.replot()
         
@@ -221,9 +210,9 @@ class PlotWidget(Qwt.QwtPlot):
             self.ctrl.yMinText.setText('%g' % r[1][0])
             self.ctrl.yMaxText.setText('%g' % r[1][1])
             
-        w = self.size().width()
-        for c in self.curves:
-            c.setDisplayRange(r[0][0], r[0][1], w)
+        #w = self.size().width()
+        #for c in self.curves:
+            #c.setDisplayRange(r[0][0], r[0][1], w)
 
     def setAxisTitle(self, axis, title):
         text = Qwt.QwtText(title)
@@ -369,36 +358,34 @@ class PlotWidget(Qwt.QwtPlot):
         self.curves = []
         self.paramIndex = {}
 
-    def registerCurve(self, curve):
-        self.curves.append(curve)
+    #def registerCurve(self, curve):
+        #self.curves.append(curve)
 
-    def unregisterCurve(self, curve):
-        self.curves.remove(curve)
+    #def unregisterCurve(self, curve):
+        #self.curves.remove(curve)
         
-                
-    
-class PlotCurve:
-    """Reimplements QwtPlotCurve to include automatic decimation, alpha, and point display.
-    Assumes X values are linear/ascending.
-    """
+class PlotCurve(Qwt.QwtPlotCurve):
     def __init__(self, *args):
+        Qwt.QwtPlotCurve.__init__(self, *args)
         self.xData = None
         self.yData = None
-        self.currentCurve = None
-        self.plot = None
-        self.pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
-    
-    def setData(self, x, y):
-        self.xData = x
-        self.yData = y
-        self.generateCurves()
+        #self.currentCurve = None
+        #self.plot = None
+        pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
+        self.setPen(pen)
         
-    def setDisplayRange(self, min, max, width):
+    #def setPen(self, pen):
+        #self.pen = pen
+        #self.setPen(self.pen)
+        
+    def draw(self, *args):
         if self.xData is None or len(self.xData) < 2:
             return
-        dif = max-min
+        (p, xsm, ysm, r) = args
+        width = xsm.pDist()
+        sd = xsm.sDist()
         dx = (self.xData[-1] - self.xData[0]) / (len(self.xData) - 1)
-        numPts = dif / dx
+        numPts = sd / dx
         
         if numPts < width:
             ptAlpha = 255 * clip(0.1 * width/numPts, 0, 1)
@@ -408,65 +395,30 @@ class PlotCurve:
             ptAlpha = 0
             showPts = False
             alpha = clip(255 * width / numPts, 1, 255)
-        cc = 0
-        self.setCurve(cc)
         s = Qwt.QwtSymbol(
             Qwt.QwtSymbol.Ellipse, 
             QtGui.QBrush(), 
             QtGui.QPen(QtGui.QColor(200,200,255,ptAlpha)), 
             QtCore.QSize(5,5))
         if showPts:
-            self.curves[cc].setSymbol(s)
-            self.curves[cc].setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha)))
+            self.setSymbol(s)
+            self.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha)))
         else:
             s.setStyle(Qwt.QwtSymbol.NoSymbol)
-            self.curves[cc].setSymbol(s)
-            self.curves[cc].setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha)))
+            self.setSymbol(s)
+            self.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha)))
             
-            
+        Qwt.QwtPlotCurve.draw(self, *args)
         
-        
-    def attach(self, plot):
-        self.plot = plot
-        if self.currentCurve is not None:
-            self.curves[self.currentCurve].attach(plot)
-            #print "attach", self.curves[self.currentCurve]
-        if hasattr(plot, 'registerCurve'):
-            plot.registerCurve(self)
-            
-        
+    def setDisplayRange(self, *args, **kargs):
+        pass
+
+    def setData(self, x, y):
+        self.xData = x
+        self.yData = y
+        Qwt.QwtPlotCurve.setData(self, x, y)
+        self.generateCurves()
+
     def generateCurves(self):
-        plot = self.plot
-        self.detach()
-        self.curves = []
-        self.curves.append(Qwt.QwtPlotCurve())
-        self.curves[-1].setPen(self.pen)
-        #print "new plot", self.curves[-1]
-        self.curves[-1].setData(self.xData, self.yData)
-        self.currentCurve = 0
-        if plot is not None:
-            self.attach(plot)
-    
-    def detach(self):
-        if self.currentCurve is not None:
-            self.curves[self.currentCurve].detach()
-            #print "detach", self.curves[self.currentCurve]
-            if hasattr(self.plot, 'unregisterCurve'):
-                self.plot.unregisterCurve(self)
-        self.plot = None
-            
-    def setCurve(self, c):
-        if c == self.currentCurve:
-            return
-        plot = self.plot
-        self.detach()
-        self.currentCurve = c
-        self.curves[c].setPen(self.pen)
-        self.attach(plot)
-    
-    def setPen(self, pen):
-        self.pen = pen
-        if self.currentCurve is not None:
-            self.curves[self.currentCurve].setPen(pen)
-    
-    
+        pass
+                

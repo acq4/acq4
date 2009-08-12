@@ -10,6 +10,7 @@ from CameraTemplate import Ui_MainWindow
 from lib.util.qtgraph.GraphicsView import *
 from lib.util.qtgraph.graphicsItems import *
 from lib.util.qtgraph.widgets import ROI
+from lib.util.PlotWidget import PlotCurve
 import lib.util.ptime as ptime
 from lib.filetypes.ImageFile import *
 from lib.util.Mutex import Mutex
@@ -233,7 +234,7 @@ class PVCamera(QtGui.QMainWindow):
         roi = PlotROI(10)
         roi.setZValue(20)
         self.scene.addItem(roi)
-        plot = Qwt.QwtPlotCurve('roi%d'%len(self.ROIs))
+        plot = PlotCurve('roi%d'%len(self.ROIs))
         plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         plot.attach(self.ui.plotWidget)
         self.ROIs.append({'roi': roi, 'plot': plot, 'vals': [], 'times': []})

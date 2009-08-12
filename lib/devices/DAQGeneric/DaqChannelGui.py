@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 
 from PyQt4 import QtGui, QtCore
-from PyQt4 import Qwt5 as Qwt
+#from PyQt4 import Qwt5 as Qwt
 import AOChannelTemplate, DOChannelTemplate, InputChannelTemplate
 from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
+from lib.util.PlotWidget import PlotCurve
 import numpy
 
 class DaqChannelGui(QtGui.QWidget):
@@ -172,7 +173,7 @@ class OutputChannelGui(DaqChannelGui):
             self.currentPlot = self.plotCurve(cur, color=QtGui.QColor(100, 200, 100))
         
     def plotCurve(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
-        plot = Qwt.QwtPlotCurve('cell')
+        plot = PlotCurve('cell')
         plot.setPen(QtGui.QPen(color))
         plot.setData(self.timeVals, data)
         plot.attach(self.plot)
@@ -212,7 +213,7 @@ class InputChannelGui(DaqChannelGui):
     
     def handleResult(self, result):
         if self.stateGroup.state()['displayCheck']:
-            plot = Qwt.QwtPlotCurve('cell')
+            plot = PlotCurve('cell')
             plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
             plot.setData(result.xvals('Time'), result)
             plot.attach(self.plot)
