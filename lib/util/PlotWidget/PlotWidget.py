@@ -108,10 +108,14 @@ class PlotWidget(Qwt.QwtPlot):
         
     def scaleBy(self, s):
         xr, yr = self.plotRange()
-        xd = (xr[1] - xr[0]) * (s[0] - 1.0) * 0.5
-        yd = (yr[1] - yr[0]) * (s[1] - 1.0) * 0.5
-        self.setXRange(xr[0] + xd, xr[1] - xd)
-        self.setYRange(yr[0] + yd, yr[1] - yd)
+        xd = (xr[1] - xr[0]) * s[0] * 0.5
+        yd = (yr[1] - yr[0]) * s[1] * 0.5
+        xc = (xr[1] + xr[0]) * 0.5
+        yc = (yr[1] + yr[0]) * 0.5
+        #print s, xr, xd, yr, yd
+        
+        self.setXRange(xc - xd, xc + xd)
+        self.setYRange(yc - yd, yc + yd)
         self.replot()
         
     def translateBy(self, t, screen=False):
@@ -140,7 +144,7 @@ class PlotWidget(Qwt.QwtPlot):
         if ev.buttons() & QtCore.Qt.LeftButton:
             self.translateBy(-dif * mask, screen=True)
         elif ev.buttons() & QtCore.Qt.RightButton:
-            dif[1] *= -1
+            dif[0] *= -1
             s = ((mask * 0.02) + 1) ** dif
             self.scaleBy(s)
             
@@ -366,18 +370,6 @@ class PlotWidget(Qwt.QwtPlot):
     def unregisterCurve(self, curve):
         self.curves.remove(curve)
         
-
-#class PlotWidgetPanel(QtGui.QWidget):
-    #def __init__(self, *args):
-        #QtGui.QWidget.__init__(self)
-        #self.ui = Ui_Form()
-        #self.ui.setupUi(self)
-        
-        #self.closeBtn = QtGui.QPushButton('X', self)
-        #QtCore.QObject.connect(self.closeBtn, QtCore.SIGNAL('clicked()'), self.close)
-        
-    #def close(self):
-        #self.hide()
                 
     
 class PlotCurve:
