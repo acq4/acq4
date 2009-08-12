@@ -102,9 +102,14 @@ class PlotWidget(Qwt.QwtPlot):
         return ((xsd.lowerBound(), xsd.upperBound()), (ysd.lowerBound(), ysd.upperBound()))
         
     def screenScale(self):
+        pr = self.plotRange()
+        xd = pr[0][1] - pr[0][0]
+        yd = pr[1][1] - pr[1][0]
         mx = self.axisScaleDraw(self.xBottom).map()
         my = self.axisScaleDraw(self.yLeft).map()
-        return array([mx.transform(1.0) - mx.transform(0.0), my.transform(1.0) - my.transform(0.0)], dtype=float)
+        ss = array([(mx.transform(xd) - mx.transform(0.0))/xd, (my.transform(yd) - my.transform(0.0))/yd], dtype=float)
+        #print ss, mx.transform(1.0), mx.transform(0.0), my.transform(1.0), my.transform(0.0)
+        return ss
         
     def scaleBy(self, s):
         xr, yr = self.plotRange()
