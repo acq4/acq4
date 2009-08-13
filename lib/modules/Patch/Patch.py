@@ -55,6 +55,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.plots = {}
         for k in self.analysisItems:
             p = PlotWidget()
+            p.setAxisTitle(p.yLeft, k)
             self.ui.plotLayout.addWidget(p)
             self.plots[k] = p
         

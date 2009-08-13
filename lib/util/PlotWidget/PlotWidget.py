@@ -21,6 +21,13 @@ class PlotWidget(Qwt.QwtPlot):
         self.plotLayout().setCanvasMargin(0)
         #self.zoomer.setRubberBandPen(QtGui.QPen(QtGui.QColor(250, 250, 200)))
         
+        self.grid = Qwt.QwtPlotGrid()
+        self.grid.attach(self)
+        self.grid.setMinPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 10)))
+        self.grid.setMajPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 30)))
+        #self.grid.enableXMin(True)
+        #self.grid.enableYMin(True)
+        
         self.curves = []
         self.paramIndex = {}
         self.avgCurves = {}
@@ -51,15 +58,32 @@ class PlotWidget(Qwt.QwtPlot):
         
         QtCore.QObject.connect(c.xAutoRadio, QtCore.SIGNAL('clicked()'), self.updateXScale)
         QtCore.QObject.connect(c.yAutoRadio, QtCore.SIGNAL('clicked()'), self.updateYScale)
-        
-        
-        
-        
-        
-        
-        
-        
+
+        QtCore.QObject.connect(c.alphaGroup, QtCore.SIGNAL('toggled(bool)'), self.updateAlpha)
+        QtCore.QObject.connect(c.alphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateAlpha)
+        QtCore.QObject.connect(c.autoAlphaCheck, QtCore.SIGNAL('toggled(bool)'), self.updateAlpha)
+
         self.replot()
+        
+    def updateAlpha(self, *args):
+        (alpha, auto) = self.alphaState()
+        for item in self.itemList():
+            if isinstance(item, PlotCurve):
+                item.setAlpha(alpha, auto)
+                
+        self.replot()
+     
+    def alphaState(self):
+        enabled = self.ctrl.alphaGroup.isChecked()
+        auto = self.ctrl.autoAlphaCheck.isChecked()
+        alpha = float(self.ctrl.alphaSlider.value()) / self.ctrl.alphaSlider.maximum()
+        if auto:
+            alpha = 1.0  ## should be 1/number of overlapping plots
+        if not enabled:
+            auto = False
+            alpha = 1.0
+        return (alpha, auto)
+        
         
     def updateXScale(self, b=False):
         if b:
@@ -358,11 +382,19 @@ class PlotWidget(Qwt.QwtPlot):
         self.curves = []
         self.paramIndex = {}
 
-    #def registerCurve(self, curve):
-        #self.curves.append(curve)
+    def registerItem(self, item):
+        if isinstance(item, PlotCurve):
+            self.curves.append(item)
+            self.configureCurve(item)
 
-    #def unregisterCurve(self, curve):
-        #self.curves.remove(curve)
+    def unregisterItem(self, item):
+        if isinstance(item, PlotCurve):
+            self.curves.remove(item)
+            
+    def configureCurve(self, curve):
+        (alpha, auto) = self.alphaState()
+        curve.setAlpha(alpha, auto)
+        
         
 class PlotCurve(Qwt.QwtPlotCurve):
     def __init__(self, *args):
@@ -370,13 +402,15 @@ class PlotCurve(Qwt.QwtPlotCurve):
         self.xData = None
         self.yData = None
         #self.currentCurve = None
-        #self.plot = None
+        self.plot = None
         pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
         self.setPen(pen)
+        self.alpha = 1.0
+        self.autoAlpha = True
         
-    #def setPen(self, pen):
-        #self.pen = pen
-        #self.setPen(self.pen)
+    def setAlpha(self, alpha, auto=True):
+        self.alpha = alpha
+        self.autoAlpha = auto
         
     def draw(self, *args):
         if self.xData is None or len(self.xData) < 2:
@@ -400,13 +434,17 @@ class PlotCurve(Qwt.QwtPlotCurve):
             QtGui.QBrush(), 
             QtGui.QPen(QtGui.QColor(200,200,255,ptAlpha)), 
             QtCore.QSize(5,5))
-        if showPts:
-            self.setSymbol(s)
-            self.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha)))
-        else:
+        if not showPts:
             s.setStyle(Qwt.QwtSymbol.NoSymbol)
-            self.setSymbol(s)
-            self.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha)))
+        self.setSymbol(s)
+        
+        penColor = self.pen().color()
+            
+        if self.autoAlpha:
+            penColor.setAlpha(alpha * self.alpha)
+        else:
+            penColor.setAlpha(int(self.alpha * 255))
+        self.setPen(QtGui.QPen(penColor))
             
         Qwt.QwtPlotCurve.draw(self, *args)
         
@@ -421,4 +459,16 @@ class PlotCurve(Qwt.QwtPlotCurve):
 
     def generateCurves(self):
         pass
-                
+    
+    def attach(self, plot):
+        self.plot = plot
+        if hasattr(plot, 'registerItem'):
+            plot.registerItem(self)
+        Qwt.QwtPlotCurve.attach(self, plot)
+        
+    def detach(self):
+        if self.plot is not None and hasattr(plot, 'unregisterItem'):
+            plot.unregisterItem(self)
+        self.plot = None
+        Qwt.QwtPlotCurve.detach(self)
+        

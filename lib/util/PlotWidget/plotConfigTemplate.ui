@@ -238,6 +238,19 @@
         <number>0</number>
        </property>
        <item>
+        <widget class="QGroupBox" name="powerSpectrumGroup">
+         <property name="title">
+          <string>Power Spectrum</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="checked">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QGroupBox" name="decimateGroup">
          <property name="title">
           <string>Decimate</string>
@@ -309,6 +322,13 @@
          </layout>
         </widget>
        </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="tab_3">
+      <attribute name="title">
+       <string>Display</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayout_3">
        <item>
         <widget class="QGroupBox" name="alphaGroup">
          <property name="title">
@@ -317,7 +337,7 @@
          <property name="checkable">
           <bool>true</bool>
          </property>
-         <layout class="QVBoxLayout" name="verticalLayout_3">
+         <layout class="QHBoxLayout" name="horizontalLayout">
           <item>
            <widget class="QCheckBox" name="autoAlphaCheck">
             <property name="text">
@@ -331,10 +351,10 @@
           <item>
            <widget class="QSlider" name="alphaSlider">
             <property name="maximum">
-             <number>100</number>
+             <number>1000</number>
             </property>
             <property name="value">
-             <number>100</number>
+             <number>1000</number>
             </property>
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
@@ -344,12 +364,20 @@
          </layout>
         </widget>
        </item>
+       <item>
+        <spacer name="verticalSpacer_2">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
       </layout>
-     </widget>
-     <widget class="QWidget" name="tab_3">
-      <attribute name="title">
-       <string>Display</string>
-      </attribute>
      </widget>
      <widget class="QWidget" name="tab_4">
       <attribute name="title">

@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'AOChannelTemplate.ui'
 #
-# Created: Sun Jul 26 17:33:37 2009
-#      by: PyQt4 UI code generator 4.4.3
+# Created: Thu Aug 13 00:15:16 2009
+#      by: PyQt4 UI code generator 4.5.2
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -43,6 +43,8 @@ class Ui_Form(object):
         font.setWeight(50)
         font.setBold(False)
         self.preSetSpin.setFont(font)
+        self.preSetSpin.setMinimum(-999999999.0)
+        self.preSetSpin.setMaximum(999999999.0)
         self.preSetSpin.setObjectName("preSetSpin")
         self.gridLayout.addWidget(self.preSetSpin, 0, 1, 1, 1)
         self.holdingCheck = QtGui.QCheckBox(self.groupBox)
@@ -57,6 +59,8 @@ class Ui_Form(object):
         font.setWeight(50)
         font.setBold(False)
         self.holdingSpin.setFont(font)
+        self.holdingSpin.setMinimum(-999999999.0)
+        self.holdingSpin.setMaximum(999999999.0)
         self.holdingSpin.setObjectName("holdingSpin")
         self.gridLayout.addWidget(self.holdingSpin, 1, 1, 1, 1)
         self.verticalLayout_2.addLayout(self.gridLayout)
