@@ -28,7 +28,7 @@ class MultiClampProtoGui(ProtocolGui):
         self.ui.setupUi(self)
         self.stateGroup = WidgetGroup(self)
         self.ui.waveGeneratorWidget.setTimeScale(1e-3)
-        self.ui.topPlotWidget.enableAxis(PlotWidget.xBottom, False)
+        #self.ui.topPlotWidget.enableAxis(PlotWidget.xBottom, False)
         self.unitLabels = [self.ui.waveGeneratorLabel, self.ui.holdingCheck]
         self.modeSignalList = self.dev.listModeSignals()
         self.mode = None
@@ -162,7 +162,9 @@ class MultiClampProtoGui(ProtocolGui):
             prot['raw'] = self.ui.rawSignalCombo.currentText()
         if mode != 'I=0':
             ## Must scale command to V or A before sending to protocol system.
-            prot['command'] = self.cmdScale * self.getSingleWave(params)
+            wave = self.getSingleWave(params)
+            if wave is not None:
+                prot['command'] = self.cmdScale * wave
             if state['holdingCheck']:
                 prot['holding'] = state['holdingSpin']
         return prot

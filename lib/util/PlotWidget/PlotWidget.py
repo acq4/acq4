@@ -3,6 +3,7 @@ from PyQt4 import Qwt5 as Qwt
 from PyQt4 import QtCore, QtGui, QtSvg
 from lib.util.MetaArray import MetaArray
 from numpy import *
+from scipy.fftpack import fft
 from plotConfigTemplate import Ui_Form
 
 class PlotWidget(Qwt.QwtPlot):
@@ -63,8 +64,32 @@ class PlotWidget(Qwt.QwtPlot):
         QtCore.QObject.connect(c.alphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateAlpha)
         QtCore.QObject.connect(c.autoAlphaCheck, QtCore.SIGNAL('toggled(bool)'), self.updateAlpha)
 
+        QtCore.QObject.connect(c.powerSpectrumGroup, QtCore.SIGNAL('toggled(bool)'), self.updateSpectrumMode)
+    
         self.replot()
+      
+    def updateSpectrumMode(self, b=None):
+        if b is None:
+            b = self.ctrl.powerSpectrumGroup.isChecked()
+        curves = filter(lambda i: isinstance(i, Qwt.QwtPlotCurve), self.itemList())
+        for c in curves:
+            c.setSpectrumMode(b)
+            
+      
+    def updateDecimation(self):
+        if self.ctrl.maxTracesCheck.isChecked():
+            numCurves = self.ctrl.maxTracesSpin.value()
+        else:
+            numCurves = -1
+            
+        curves = filter(lambda i: isinstance(i, Qwt.QwtPlotCurve), self.itemList())
+        for i in range(len(curves)):
+            if numCurves == -1 or i > (len(curves) - numCurves):
+                curves[i].show()
+            else:
+                curves[i].hide()
         
+      
     def updateAlpha(self, *args):
         (alpha, auto) = self.alphaState()
         for item in self.itemList():
@@ -386,14 +411,18 @@ class PlotWidget(Qwt.QwtPlot):
         if isinstance(item, PlotCurve):
             self.curves.append(item)
             self.configureCurve(item)
+        self.updateDecimation()
+        
 
     def unregisterItem(self, item):
         if isinstance(item, PlotCurve):
             self.curves.remove(item)
+        self.updateDecimation()
             
     def configureCurve(self, curve):
         (alpha, auto) = self.alphaState()
         curve.setAlpha(alpha, auto)
+        curve.setSpectrumMode(self.ctrl.powerSpectrumGroup.isChecked())
         
         
 class PlotCurve(Qwt.QwtPlotCurve):
@@ -401,12 +430,19 @@ class PlotCurve(Qwt.QwtPlotCurve):
         Qwt.QwtPlotCurve.__init__(self, *args)
         self.xData = None
         self.yData = None
+        self.xSpecData = None
+        self.ySpecData = None
+        self.specCurve = None
         #self.currentCurve = None
         self.plot = None
         pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
         self.setPen(pen)
         self.alpha = 1.0
         self.autoAlpha = True
+        self.spectrumMode = False
+        
+    def setSpectrumMode(self, b):
+        self.spectrumMode = b
         
     def setAlpha(self, alpha, auto=True):
         self.alpha = alpha
@@ -415,10 +451,21 @@ class PlotCurve(Qwt.QwtPlotCurve):
     def draw(self, *args):
         if self.xData is None or len(self.xData) < 2:
             return
+            
+        if self.spectrumMode:
+            self.generateSpecData()
+            xData = self.xSpecData
+            yData = self.ySpecData
+            drawCurve = self.specCurve
+        else:
+            xData = self.xData
+            yData = self.yData
+            drawCurve = self
+            
         (p, xsm, ysm, r) = args
         width = xsm.pDist()
         sd = xsm.sDist()
-        dx = (self.xData[-1] - self.xData[0]) / (len(self.xData) - 1)
+        dx = (xData[-1] - xData[0]) / (len(xData) - 1)
         numPts = sd / dx
         
         if numPts < width:
@@ -436,7 +483,7 @@ class PlotCurve(Qwt.QwtPlotCurve):
             QtCore.QSize(5,5))
         if not showPts:
             s.setStyle(Qwt.QwtSymbol.NoSymbol)
-        self.setSymbol(s)
+        drawCurve.setSymbol(s)
         
         penColor = self.pen().color()
             
@@ -444,18 +491,35 @@ class PlotCurve(Qwt.QwtPlotCurve):
             penColor.setAlpha(alpha * self.alpha)
         else:
             penColor.setAlpha(int(self.alpha * 255))
-        self.setPen(QtGui.QPen(penColor))
+        drawCurve.setPen(QtGui.QPen(penColor))
             
-        Qwt.QwtPlotCurve.draw(self, *args)
+        Qwt.QwtPlotCurve.draw(drawCurve, *args)
         
     def setDisplayRange(self, *args, **kargs):
         pass
+
+    def generateSpecData(self):
+        if self.ySpecData is None:
+            f = fft(self.yData)
+            
+            self.ySpecData = abs(f[1:len(f)/2])
+            
+            dt = self.xData[-1] - self.xData[0]
+            self.xSpecData = linspace(0, 0.5*len(self.xData)/dt, len(self.ySpecData))
+            self.specCurve = Qwt.QwtPlotCurve()
+            self.specCurve.setData(self.xSpecData, self.ySpecData)
+        
+        
+        
 
     def setData(self, x, y):
         self.xData = x
         self.yData = y
         Qwt.QwtPlotCurve.setData(self, x, y)
         self.generateCurves()
+        self.xSpecData = None
+        self.ySpecData = None
+        self.specCurve = None
 
     def generateCurves(self):
         pass
@@ -467,8 +531,16 @@ class PlotCurve(Qwt.QwtPlotCurve):
         Qwt.QwtPlotCurve.attach(self, plot)
         
     def detach(self):
-        if self.plot is not None and hasattr(plot, 'unregisterItem'):
-            plot.unregisterItem(self)
+        if self.plot is not None and hasattr(self.plot, 'unregisterItem'):
+            self.plot.unregisterItem(self)
         self.plot = None
         Qwt.QwtPlotCurve.detach(self)
+        
+    def boundingRect(self):
+        if self.spectrumMode:
+            self.generateSpecData()
+            return Qwt.QwtPlotCurve.boundingRect(self.specCurve)
+        else:
+            return Qwt.QwtPlotCurve.boundingRect(self)
+        
         
