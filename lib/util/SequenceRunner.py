@@ -90,7 +90,7 @@ class SequenceRunner:
                 else:
                     ret = func(**params)
             except Exception, e:
-                if e.args[0] == 'stop':
+                if len(e.args) > 0 and e.args[0] == 'stop':
                     stop = True
                     if len(e.args) > 1:
                         ret = e.args[1]
