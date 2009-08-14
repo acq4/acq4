@@ -3,6 +3,7 @@
 
 from numpy import ndarray, array, empty, fromstring, arange, concatenate
 import types, copy, threading, os, re
+import pickle
 #import traceback
 
 
@@ -252,58 +253,6 @@ class MetaArray(ndarray):
         a._info = self.infoCopy()
         return a
   
-    #def write(self, fileName):
-        #"""Write this object to a file. The object can be restored by calling MetaArray(file=fileName)"""
-    
-        #meta = { 'shape': self.shape, 'type': str(self.dtype), 'info': self.infoCopy()}
-        #axstrs = []
-        #for ax in meta['info']:
-            #if ax.has_key('values'):
-                #axstrs.append(ax['values'].tostring())
-                #ax['values_len'] = len(axstrs[-1])
-                #ax['values_type'] = str(ax['values'].dtype)
-                #del ax['values']
-        #fd = open(fileName, 'wb')
-        #fd.write(str(meta) + '\n\n')
-        #for ax in axstrs:
-            #fd.write(ax)
-        #fd.write(self.tostring())
-        #fd.close()
-  
-    #def writeCsv(self, fileName=None):
-        #"""Write 2D array to CSV file or return the string if no filename is given"""
-        #if self.ndim > 2:
-            #raise Exception("CSV Export is only for 2D arrays")
-        #if fileName is not None:
-            #file = open(fileName, 'w')
-        #ret = ''
-        #if self._info[0].has_key('cols'):
-            #s = ','.join([x['name'] for x in self._info[0]['cols']]) + '\n'
-            #if fileName is not None:
-                #file.write(s)
-            #else:
-                #ret += s
-        #for row in range(0, self.shape[1]):
-            #s = ','.join(["%g" % x for x in self[:, row]]) + '\n'
-            #if fileName is not None:
-                #file.write(s)
-            #else:
-                #ret += s
-        #if fileName is not None:
-            #file.close()
-        #else:
-            #return ret
-  
-  ## Turn this into a constructor case
-  #def readCsv(fileName):
-    #file = open(fileName)
-    #data = file.readlines()
-    #shape = (len(data), len(data[0].split(',')))
-    #arr = empty(shape, dtype=float)
-    #for row in range(0, shape[0]):
-      #arr[row] = array([float(x) for x in data[row].split(',')])
-    #return arr
-  
   
     def _interpretIndexes(self, ind):
         if type(ind) != types.TupleType:
@@ -488,7 +437,10 @@ class MetaArray(ndarray):
                     
         ## No axes are dynamic, just read the entire array in at once
         if dynAxis is None:
-            subarr = fromstring(fd.read(), dtype=meta['type'])
+            if meta['type'] == 'object':
+                subarr = pickle.loads(fd.read())
+            else:
+                subarr = fromstring(fd.read(), dtype=meta['type'])
             #subarr = subarr.view(subtype)
             subarr.shape = meta['shape']
             #subarr._info = meta['info']
@@ -515,7 +467,10 @@ class MetaArray(ndarray):
                 
                 ## read data block
                 #print "read %d bytes as %s" % (inf['len'], meta['type'])
-                data = fromstring(fd.read(inf['len']), dtype=meta['type'])
+                if meta['type'] == 'object':
+                    data = pickle.loads(fd.read(inf['len']))
+                else:
+                    data = fromstring(fd.read(inf['len']), dtype=meta['type'])
                 
                 if data.size != frameSize * inf['numFrames']:
                     #print data.size, frameSize, inf['numFrames']
@@ -581,8 +536,11 @@ class MetaArray(ndarray):
                 fd.write(ax)
         else:
             fd = open(fileName, 'ab')
-            
-        dataStr = self.view(ndarray).tostring()
+        
+        if self.dtype != object:
+            dataStr = self.view(ndarray).tostring()
+        else:
+            dataStr = pickle.dumps(self.view(ndarray))
         #print self.size, len(dataStr), self.dtype
         if appendAxis is not None:
             frameInfo = {'len':len(dataStr), 'numFrames':self.shape[appendAxis]}

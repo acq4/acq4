@@ -9,6 +9,7 @@ from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
 from lib.util.Mutex import Mutex
 import time
+import pdb
 
 class ProtocolRunner(Module, QtCore.QObject):
     def __init__(self, manager, name, config):
@@ -293,6 +294,7 @@ class ProtocolRunner(Module, QtCore.QObject):
                 self.showDock(d)
             
         ## Create docks that don't exist
+        #pdb.set_trace()
         for d in protocol.enabledDevices():
             if d not in self.docks:
                 if d not in self.manager.listDevices():
@@ -400,6 +402,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         return self.protocolList.getFileName(index)
     
     def loadProtocol(self, index=None):
+        
         ## Determine selected item
         if index is None:
             sel = list(self.ui.protocolList.selectedIndexes())
@@ -430,6 +433,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         ## Update sequence parameters, dis/enable sequence dock
         
         ## Create new docks
+        
         self.updateDocks()
         
         

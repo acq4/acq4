@@ -4,7 +4,7 @@ print "Loading ACQ4..."
 from lib.Manager import *
 import os, sys
 from numpy import *
-from PyQt4 import QtGui
+from PyQt4 import QtGui, QtCore
 
 ## Make sure QApplication is created
 app = QtGui.QApplication.instance()
@@ -26,6 +26,10 @@ dm = Manager(config, sys.argv[1:])
 #qtcam = dm.loadModule(module='Camera', name='Camera', config={'camDev': 'Camera'})
 #print "Loading dataManager module.."
 #dm.loadModule(module='Manager', name='Manager', config={})
+
+## for debugging with pdb
+QtCore.pyqtRemoveInputHook()
+
 
 ## Start Qt event loop.
 app.exec_()

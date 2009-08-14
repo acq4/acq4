@@ -74,6 +74,7 @@ class PlotWidget(Qwt.QwtPlot):
         curves = filter(lambda i: isinstance(i, Qwt.QwtPlotCurve), self.itemList())
         for c in curves:
             c.setSpectrumMode(b)
+        self.replot()
             
       
     def updateDecimation(self):

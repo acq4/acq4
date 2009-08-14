@@ -330,7 +330,8 @@ class AcquireThread(QtCore.QThread):
         QtCore.QThread.__init__(self)
         self.dev = dev
         self.cam = self.dev.getCamera()
-        self.state = {'binning': 1, 'exposure': .001, 'region': None, 'mode': 'Normal'}
+        size = self.cam.getSize()
+        self.state = {'binning': 1, 'exposure': .001, 'region': [0, 0, size[0]-1, size[1]-1], 'mode': 'Normal'}
         self.stopThread = False
         self.lock = Mutex()
         self.acqBuffer = None
@@ -463,7 +464,8 @@ class AcquireThread(QtCore.QThread):
                     pos = self.dev.getPosition()  ## pos is the position of the center of the sensor
                     if pos is not None:
                         info['scopePosition'] = pos
-                        if ps is not None:
+                        if ps is not None and size is not None:
+                            #print pos, size, ps, region
                             pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
                             info['imagePosition'] = pos2
 

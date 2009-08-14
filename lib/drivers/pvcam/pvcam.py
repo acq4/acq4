@@ -25,7 +25,11 @@ class _CameraClass:
 
     def open(self):
         self.hCam = c_ushort()
-        self.pvcam.pl_cam_open(c_char_p(self.name), byref(self.hCam), OPEN_EXCLUSIVE)
+        ## Driver bug, try opening twice.
+        try:
+            self.pvcam.pl_cam_open(c_char_p(self.name), byref(self.hCam), OPEN_EXCLUSIVE)
+        except:
+            self.pvcam.pl_cam_open(c_char_p(self.name), byref(self.hCam), OPEN_EXCLUSIVE)
         self.isOpen = True
 
     def initCam(self, params=None):

@@ -7,6 +7,7 @@ from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
 from lib.util.PlotWidget import PlotCurve
 import numpy
+import pdb 
 
 class DaqChannelGui(QtGui.QWidget):
     def __init__(self, parent, name, config, plot, dev, prot):
@@ -99,6 +100,7 @@ class OutputChannelGui(DaqChannelGui):
             self.ui = DOChannelTemplate.Ui_Form()
         else:
             raise Exception("Unrecognized channel type '%s'" % self.config['type'])
+        #pdb.set_trace()
         self.ui.setupUi(self)
         self.postUiInit()
         self.ui.waveGeneratorWidget.setTimeScale(1e-3)

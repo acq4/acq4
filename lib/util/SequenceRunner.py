@@ -115,7 +115,7 @@ class SequenceRunner:
                 try:
                     self.nloop(ind2, func=func)
                 except Exception, e:
-                    if e.args[0] == 'break':
+                    if len(e.args) > 0 and e.args[0] == 'break':
                         if e.args[1] <= 1:
                             break
                         else:

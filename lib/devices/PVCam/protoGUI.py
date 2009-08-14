@@ -79,7 +79,7 @@ class PVCamProto(ProtocolGui):
             c.setData(d.xvals('Time'), d.view(ndarray))
             c.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
             c.attach(self.ui.exposePlot)
-            self.ui.exposePlot.plot()
+            self.ui.exposePlot.replot()
 
 
     def recordExposeClicked(self):
