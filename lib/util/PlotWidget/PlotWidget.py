@@ -416,8 +416,11 @@ class PlotWidget(Qwt.QwtPlot):
         
 
     def unregisterItem(self, item):
+        
         if isinstance(item, PlotCurve):
+            #print 'remove', item
             self.curves.remove(item)
+            #print self.curves
         self.updateDecimation()
             
     def configureCurve(self, curve):
@@ -526,13 +529,17 @@ class PlotCurve(Qwt.QwtPlotCurve):
         pass
     
     def attach(self, plot):
+        if self.plot is not None:
+            self.detach()
         self.plot = plot
         if hasattr(plot, 'registerItem'):
             plot.registerItem(self)
         Qwt.QwtPlotCurve.attach(self, plot)
         
     def detach(self):
+        #print 'detach', self
         if self.plot is not None and hasattr(self.plot, 'unregisterItem'):
+            #print 'unregister', self
             self.plot.unregisterItem(self)
         self.plot = None
         Qwt.QwtPlotCurve.detach(self)
@@ -543,5 +550,4 @@ class PlotCurve(Qwt.QwtPlotCurve):
             return Qwt.QwtPlotCurve.boundingRect(self.specCurve)
         else:
             return Qwt.QwtPlotCurve.boundingRect(self)
-        
         

@@ -359,6 +359,7 @@ class SuperTask:
         self.dataWrtten = False
         self.devs = daq.listDevices()
         self.triggerChannel = None
+        self.result = None
         
     def absChanName(self, chan):
         parts = chan.lstrip('/').split('/')

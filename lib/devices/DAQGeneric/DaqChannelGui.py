@@ -41,7 +41,7 @@ class DaqChannelGui(QtGui.QWidget):
         plot.replot()
         
         ## Curves displayed in self.plot
-        self.plots = []
+        #self.plots = []
         
             
     def postUiInit(self):
@@ -76,9 +76,10 @@ class DaqChannelGui(QtGui.QWidget):
             self.ui.waveGeneratorWidget.update()
 
     def clearPlots(self):
-        for i in self.plots:
-            i.detach()
-        self.plots = []
+        #for i in self.plots:
+            #i.detach()
+        #self.plots = []
+        self.plot.clear()
 
     def displayCheckChanged(self):
         if self.stateGroup.state()['displayCheck']:
@@ -167,7 +168,16 @@ class OutputChannelGui(DaqChannelGui):
         if not self.stateGroup.state()['displayCheck']:
             return
         if self.currentPlot is not None:
+            #print "======================== DATCH %s ===========================" % self.currentPlot
+            #import gc
+            #print "REF BEFORE:\n", '\n'.join(["%s:\n%s\n" % (type(x), str(x)) for x in gc.get_referrers(self.currentPlot)[:10]])
             self.currentPlot.detach()
+        
+            #refs = gc.get_referrers(self.currentPlot)[:10]
+            #print "REF AFTER:\n", '\n'.join(["%s:\n%s\n" % (type(x), str(x)) for x in refs])
+            #refs = gc.get_referrers(refs[1])[:10]
+            #print "REF2 AFTER:\n", '\n'.join(["%s:\n%s\n" % (type(x), str(x)) for x in refs])
+        #a = empty((107)); a = empty((7)); a = empty((10007))
         
         cur = self.getSingleWave(params)
         #cur = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
@@ -179,7 +189,7 @@ class OutputChannelGui(DaqChannelGui):
         plot.setPen(QtGui.QPen(color))
         plot.setData(self.timeVals, data)
         plot.attach(self.plot)
-        self.plots.append(plot)
+        #self.plots.append(plot)
         if replot:
             self.plot.replot()
         return plot
@@ -219,6 +229,6 @@ class InputChannelGui(DaqChannelGui):
             plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
             plot.setData(result.xvals('Time'), result)
             plot.attach(self.plot)
-            self.plots.append(plot)
+            #self.plots.append(plot)
             self.plot.replot()
     

@@ -19,7 +19,7 @@ class MultiClampProtoGui(ProtocolGui):
         self.traces = {}  ## Stores traces from a sequence to allow average plotting
         self.avgPlots = {}
         
-        self.cmdPlots = []
+        #self.cmdPlots = []
         self.inpPlots = {}
         self.currentCmdPlot = None
         
@@ -113,19 +113,21 @@ class MultiClampProtoGui(ProtocolGui):
         self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
         
     def clearCmdPlots(self):
-        for i in self.cmdPlots:
-            i.detach()
-        self.cmdPlots = []
+        #for i in self.cmdPlots:
+            #i.detach()
+        #self.cmdPlots = []
+        self.ui.bottomPlotWidget.clear()
         
     def clearInpPlots(self):
-        for k in self.inpPlots:
-            for i in self.inpPlots[k]:
-                i.detach()
+        #for k in self.inpPlots:
+            #for i in self.inpPlots[k]:
+                #i.detach()
         self.inpPlots = {}
-        for i in self.avgPlots:
-            self.avgPlots[i].detach()
+        #for i in self.avgPlots:
+            #self.avgPlots[i].detach()
         self.avgPlots = {}
         self.traces = {}
+        self.ui.topPlotWidget.clear()
         
     def protoStarted(self, params):
         ## Draw green trace for current command waveform
@@ -143,7 +145,7 @@ class MultiClampProtoGui(ProtocolGui):
         plot.setPen(QtGui.QPen(color))
         plot.setData(self.timeVals, data)
         plot.attach(self.ui.bottomPlotWidget)
-        self.cmdPlots.append(plot)
+        #self.cmdPlots.append(plot)
         if replot:
             self.ui.bottomPlotWidget.replot()
         return plot

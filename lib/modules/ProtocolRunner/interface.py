@@ -844,13 +844,15 @@ class TaskThread(QtCore.QThread):
         ## Run
         #print "Create task:"
         #print cmd
+        
+        
         task = self.dm.createTask(cmd)
         self.lastRunTime = time.clock()
         self.emit(QtCore.SIGNAL('protocolStarted'), params)
         #print "Starting task.."
-        
         try:
             task.execute(block=False)
+            
             #print "task started" 
             
             ## wait for finish, watch for abort requests
