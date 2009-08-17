@@ -87,11 +87,14 @@ class PatchWindow(QtGui.QMainWindow):
         
         QtCore.QObject.connect(self.ui.startBtn, QtCore.SIGNAL('clicked()'), self.startClicked)
         QtCore.QObject.connect(self.ui.recordBtn, QtCore.SIGNAL('clicked()'), self.recordClicked)
+        QtCore.QObject.connect(self.ui.bathModeBtn, QtCore.SIGNAL('clicked()'), self.bathMode)
+        QtCore.QObject.connect(self.ui.patchModeBtn, QtCore.SIGNAL('clicked()'), self.patchMode)
+        QtCore.QObject.connect(self.ui.cellModeBtn, QtCore.SIGNAL('clicked()'), self.cellMode)
         QtCore.QObject.connect(self.ui.resetBtn, QtCore.SIGNAL('clicked()'), self.resetClicked)
         QtCore.QObject.connect(self.thread, QtCore.SIGNAL('finished()'), self.threadStopped)
         QtCore.QObject.connect(self.thread, QtCore.SIGNAL('newFrame'), self.handleNewFrame)
-        QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.updateParams)
-        QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.updateParams)
+        #QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('toggled(bool)'), self.updateParams)
+        QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('toggled(bool)'), self.updateParams)
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.updateParams)
                 
         ## Configure analysis plots, curves, and data arrays
@@ -111,6 +114,23 @@ class PatchWindow(QtGui.QMainWindow):
         self.showPlots()
         self.updateParams()
         self.show()
+    
+    def bathMode(self):
+        self.ui.vcPulseCheck.setChecked(True)
+        self.ui.vcHoldCheck.setChecked(False)
+        self.ui.vcModeRadio.setChecked(True)
+        self.ui.cycleTimeSpin.setValue(0.2)
+    
+    def patchMode(self):
+        self.ui.vcPulseCheck.setChecked(True)
+        self.ui.vcHoldCheck.setChecked(True)
+        self.ui.vcModeRadio.setChecked(True)
+        self.ui.cycleTimeSpin.setValue(0.2)
+    
+    def cellMode(self):
+        self.ui.icPulseCheck.setChecked(True)
+        self.ui.icModeRadio.setChecked(True)
+        self.ui.cycleTimeSpin.setValue(0.2)
     
     def showPlots(self):
         """Show/hide analysis plot widgets"""
