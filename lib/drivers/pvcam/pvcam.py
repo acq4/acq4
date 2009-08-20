@@ -341,10 +341,14 @@ class _CameraClass:
             raise Exception("Camera is not open.")
     
     def paramAvailable(self, param):
-        param = self.pvcam.param(param)
-        self._assertCameraOpen()
-        return self._getParam(param, ATTR_AVAIL) > 0
-    
+        try:
+            param = self.pvcam.param(param)
+            self._assertCameraOpen()
+            return self._getParam(param, ATTR_AVAIL) > 0
+        except:
+            print "Error checking availability of parameter %s" % param
+            sys.excepthook(*sys.exc_info())
+            return False
     def _assertParamAvailable(self, param):
         if not self.paramAvailable(param):
             raise Exception("Parameter is not available.")
@@ -499,7 +503,31 @@ class _PVCamClass:
                 return p
 
     def listParams(self):
-        return [x[6:] for x in self.defs if x[:6] == 'PARAM_']
+        #return [x[6:] for x in self.defs if x[:6] == 'PARAM_']
+        return [
+            'SPDTAB_INDEX',
+            'BIT_DEPTH',
+            'GAIN_INDEX',
+            'GAIN_MULT_ENABLE',
+            'GAIN_MULT_FACTOR',
+            'INTENSIFIER_GAIN',
+            'EXPOSURE_MODE',
+            'PREFLASH',
+            
+            'PIX_TIME',
+            'CLEAR_MODE',
+            'CLEAR_CYCLES',
+            'SHTR_OPEN_MODE',
+            'SHTR_OPEN_DELAY',
+            'PIX_SER_SIZE',
+            'PIX_PAR_SIZE',
+            'ANTI_BLOOMING',
+            'TEMP',
+            'TEMP_SETPOINT',
+            'COOLING_MODE',
+            
+            
+        ]
         
 
 

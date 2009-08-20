@@ -506,7 +506,7 @@ class AcquireThread(QtCore.QThread):
                 if loopCount == 0: 
                     ## If no frame has arrived yet, do NOT stop the camera (this can hang the driver)
                     diff = ptime.time()-lastFrameTime
-                    if frame is not None or diff > 1:
+                    if True: #frame is not None or diff > 1:
                         #print "    AcquireThread.run: Locking thread to check for stop request"
                         self.lock.lock()
                         if self.stopThread:

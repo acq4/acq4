@@ -2,9 +2,11 @@
 from DevTemplate import Ui_Form
 from PyQt4 import QtCore, QtGui
 from lib.util.WidgetGroup import WidgetGroup
+#import pdb
 
 class PVCamDevGui(QtGui.QWidget):
     def __init__(self, dev):
+        #pdb.set_trace()
         QtGui.QWidget.__init__(self)
         self.dev = dev
         self.cam = self.dev.cam
@@ -15,6 +17,7 @@ class PVCamDevGui(QtGui.QWidget):
         
         
         for p in self.params:
+            #print p
             if not self.cam.paramWritable(p):
                 continue
             try:
@@ -53,8 +56,8 @@ class PVCamDevGui(QtGui.QWidget):
             
             self.ui.formLayout_2.addRow(p, w)
             self.stateGroup.addWidget(w, p)
-            
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
+        #print "Done with UI"
             
     def stateChanged(self, p, val):
         #typ = self.cam.paramTypeName(p)
