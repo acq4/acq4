@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
+from __future__ import with_statement
 from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
 from PyQt4 import Qwt5 as Qwt
 from lib.util.WidgetGroup import WidgetGroup
 from lib.util.PlotWidget import PlotWidget, PlotCurve
 from lib.util.MetaArray import *
-from lib.util.Mutex import Mutex
+from lib.util.Mutex import Mutex, MutexLocker
 import traceback, sys, time
 from numpy import *
 import scipy.optimize
@@ -143,18 +144,17 @@ class PatchWindow(QtGui.QMainWindow):
                 p.hide()
     
     def updateParams(self, *args):
-        l = QtCore.QMutexLocker(self.paramLock)
-        if self.ui.icModeRadio.isChecked():
-            mode = 'ic'
-        else:
-            mode = 'vc'
-        self.params['mode'] = mode
-        state = self.stateGroup.state()
-        for p in self.params:
-            if p in state:
-                self.params[p] = state[p]
-        self.params['recordTime'] = self.params['delayTime'] *2.0 + self.params['pulseTime']
-        l.unlock()
+        with MutexLocker(self.paramLock):
+            if self.ui.icModeRadio.isChecked():
+                mode = 'ic'
+            else:
+                mode = 'vc'
+            self.params['mode'] = mode
+            state = self.stateGroup.state()
+            for p in self.params:
+                if p in state:
+                    self.params[p] = state[p]
+            self.params['recordTime'] = self.params['delayTime'] *2.0 + self.params['pulseTime']
         self.thread.updateParams()
         
     def recordClicked(self):
@@ -176,9 +176,8 @@ class PatchWindow(QtGui.QMainWindow):
             self.analysisData[n] = []
         
     def handleNewFrame(self, frame):
-        l = QtCore.QMutexLocker(self.paramLock)
-        mode = self.params['mode']
-        l.unlock()
+        with MutexLocker(self.paramLock):
+            mode = self.params['mode']
         
         data = frame['data'][self.clampName]
         if mode == 'vc':
@@ -302,96 +301,95 @@ class PatchThread(QtCore.QThread):
         self.paramsUpdated = True
                 
     def updateParams(self):
-        l = QtCore.QMutexLocker(self.lock)
-        self.paramsUpdated = True
+        with MutexLocker(self.lock):
+            self.paramsUpdated = True
         
     def run(self):
         try:
-            l = QtCore.QMutexLocker(self.lock)
-            self.stopThread = False
-            clamp = self.manager.getDevice(self.clampName)
-            daqName = clamp.config['commandChannel'][0]
-            clampName = self.clampName
-            self.paramsUpdated = True
-            l.unlock()
-            
-            lastTime = None
-            while True:
-                lastTime = time.clock()
-                
-                updateCommand = False
-                l.relock()
-                if self.paramsUpdated:
-                    pl = QtCore.QMutexLocker(self.ui.paramLock)
-                    params = self.ui.params.copy()
-                    self.paramsUpdated = False
-                    pl.unlock()
-                    updateCommand = True
+            with MutexLocker(self.lock) as l:
+                self.stopThread = False
+                clamp = self.manager.getDevice(self.clampName)
+                daqName = clamp.config['commandChannel'][0]
+                clampName = self.clampName
+                self.paramsUpdated = True
                 l.unlock()
                 
-                ## Regenerate command signal if parameters have changed
-                numPts = int(float(params['recordTime']) * params['rate'])
-                mode = params['mode']
-                if params[mode+'HoldingEnabled']:
-                    holding = params[mode+'Holding']
-                else:
-                    holding = 0.
-                if params[mode+'PulseEnabled']:
-                    amplitude = params[mode+'Pulse']
-                else:
-                    amplitude = 0.
-                cmdData = empty(numPts)
-                cmdData[:] = holding
-                start = int(params['delayTime'] * params['rate'])
-                stop = start + int(params['pulseTime'] * params['rate'])
-                cmdData[start:stop] = holding + amplitude
-                #cmdData[-1] = holding
-                
-                cmd = {
-                    'protocol': {'duration': params['recordTime'], 'leadTime': 0.02},
-                    daqName: {'rate': params['rate'], 'numPts': numPts},
-                    clampName: {
-                        'mode': params['mode'],
-                        'command': cmdData,
-                        'holding': holding
+                lastTime = None
+                while True:
+                    lastTime = time.clock()
+                    
+                    updateCommand = False
+                    l.relock()
+                    if self.paramsUpdated:
+                        with MutexLocker(self.ui.paramLock):
+                            params = self.ui.params.copy()
+                            self.paramsUpdated = False
+                        updateCommand = True
+                    l.unlock()
+                    
+                    ## Regenerate command signal if parameters have changed
+                    numPts = int(float(params['recordTime']) * params['rate'])
+                    mode = params['mode']
+                    if params[mode+'HoldingEnabled']:
+                        holding = params[mode+'Holding']
+                    else:
+                        holding = 0.
+                    if params[mode+'PulseEnabled']:
+                        amplitude = params[mode+'Pulse']
+                    else:
+                        amplitude = 0.
+                    cmdData = empty(numPts)
+                    cmdData[:] = holding
+                    start = int(params['delayTime'] * params['rate'])
+                    stop = start + int(params['pulseTime'] * params['rate'])
+                    cmdData[start:stop] = holding + amplitude
+                    #cmdData[-1] = holding
+                    
+                    cmd = {
+                        'protocol': {'duration': params['recordTime'], 'leadTime': 0.02},
+                        daqName: {'rate': params['rate'], 'numPts': numPts},
+                        clampName: {
+                            'mode': params['mode'],
+                            'command': cmdData,
+                            'holding': holding
+                        }
+                        
                     }
                     
-                }
-                
-                ## Create task
-                ## TODO: reuse tasks to improve efficiency
-                task = self.manager.createTask(cmd)
-                
-                ## Execute task
-                task.execute()
-                
-                ## analyze trace 
-                result = task.getResult()
-                analysis = self.analyze(result[clampName], params)
-                frame = {'data': result, 'analysis': analysis}
-                
-                self.emit(QtCore.SIGNAL('newFrame'), frame)
-                
-                ## sleep until it is time for the next run
-                c = 0
-                stop = False
-                while True:
-                    ## check for stop button every 100ms
-                    if c % 100 == 0:
-                        l.relock()
-                        if self.stopThread:
-                            l.unlock()
-                            stop = True
-                            break
-                        l.unlock()
-                    now = time.clock()
-                    if now >= (lastTime+params['cycleTime']):
-                        break
+                    ## Create task
+                    ## TODO: reuse tasks to improve efficiency
+                    task = self.manager.createTask(cmd)
                     
-                    time.sleep(1e-3) ## Wake up every 1ms
-                    c += 1
-                if stop:
-                    break
+                    ## Execute task
+                    task.execute()
+                    
+                    ## analyze trace 
+                    result = task.getResult()
+                    analysis = self.analyze(result[clampName], params)
+                    frame = {'data': result, 'analysis': analysis}
+                    
+                    self.emit(QtCore.SIGNAL('newFrame'), frame)
+                    
+                    ## sleep until it is time for the next run
+                    c = 0
+                    stop = False
+                    while True:
+                        ## check for stop button every 100ms
+                        if c % 100 == 0:
+                            l.relock()
+                            if self.stopThread:
+                                l.unlock()
+                                stop = True
+                                break
+                            l.unlock()
+                        now = time.clock()
+                        if now >= (lastTime+params['cycleTime']):
+                            break
+                        
+                        time.sleep(1e-3) ## Wake up every 1ms
+                        c += 1
+                    if stop:
+                        break
         except:
             print "Error in patch acquisition thread, exiting."
             traceback.print_exception(*sys.exc_info())
@@ -508,9 +506,8 @@ class PatchThread(QtCore.QThread):
         }
             
     def stop(self, block=False):
-        l = QtCore.QMutexLocker(self.lock)
-        self.stopThread = True
-        l.unlock()
+        with MutexLocker(self.lock):
+            self.stopThread = True
         if block:
             if not self.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")

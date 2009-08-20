@@ -86,7 +86,7 @@ class Device(QtCore.QObject):
             #print "Released device", self.name, "%0.9f"%ptime.time()
         except:
             print "WARNING: Failed to release device lock for %s" % self.name
-            traceback.print_exception(sys.exc_info())
+            traceback.print_exception(*sys.exc_info())
 
     def getTriggerChannel(self, daq):
         """Return the name of the channel on daq that this device raises when it starts.

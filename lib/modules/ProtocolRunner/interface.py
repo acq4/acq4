@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import with_statement
 from lib.modules.Module import *
 from ProtocolRunnerTemplate import *
 from PyQt4 import QtGui, QtCore
@@ -7,9 +8,9 @@ from lib.util.configfile import *
 from lib.util.advancedTypes import OrderedDict
 from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
-from lib.util.Mutex import Mutex
+from lib.util.Mutex import Mutex, MutexLocker
 import time
-import pdb
+#import pdb
 
 class ProtocolRunner(Module, QtCore.QObject):
     def __init__(self, manager, name, config):
@@ -523,8 +524,13 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.runSingle(store=False)
     
     def runSingle(self, store=True):
+        #print "RunSingle"
+        #if self.taskThread.isRunning():
+            #import traceback
+            #traceback.print_stack()
+            #print "Task already running."
+
         self.lastProtoTime = time.clock()
-        
         ## Disable all start buttons
         self.enableStartBtns(False)
         
@@ -543,9 +549,13 @@ class ProtocolRunner(Module, QtCore.QObject):
             prot = self.generateProtocol(dh)
             
             self.emit(QtCore.SIGNAL('protocolStarted'), {})
+            #print "runSingle: Starting taskThread.."
             self.taskThread.startProtocol(prot)
+            #print "runSingle: taskThreadStarted"
         except:
             self.enableStartBtns(True)
+            self.stopSingle()
+            print "Error starting protocol. ", self.taskThread.isRunning()
             raise
         
    
@@ -587,6 +597,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             self.taskThread.startProtocol(prot, params)
         except:
             self.enableStartBtns(True)
+
             raise
         
     def generateProtocol(self, dh, params=None):
@@ -667,7 +678,11 @@ class ProtocolRunner(Module, QtCore.QObject):
         if not self.loopEnabled:
             self.enableStartBtns(True)
             return
-        self.testSingle()
+
+        if self.taskThread.isRunning():  ## If a protocol is still running, delay 10ms and try again
+            QtCore.QTimer.singleShot(10, self.loop)
+        else:
+            self.testSingle()
             
     
 class Protocol:
@@ -785,21 +800,31 @@ class TaskThread(QtCore.QThread):
         self.abortThread = False
                 
     def startProtocol(self, protocol, paramSpace=None):
-        l = QtCore.QMutexLocker(self.lock)
-        if self.isRunning():
-            raise Exception("Already running another protocol")
-        self.protocol = protocol
-        self.paramSpace = paramSpace
-        self.lastRunTime = None
-        self.start()
+        #print "TaskThread:startProtocol", self.lock.depth(), self.lock
+        with MutexLocker(self.lock):
+            #print "TaskThread:startProtocol got lock", self.lock.depth(), "    tracebacks follow:\n==========="
+            #print "\n\n".join(self.lock.traceback())
+            #print "======================"
+            while self.isRunning():
+                #l.unlock()
+                raise Exception("Already running another protocol")
+            self.protocol = protocol
+            self.paramSpace = paramSpace
+            self.lastRunTime = None
+            #l.unlock()
+            #print "TaskThread:startProtocol starting..", self.lock.depth()
+            self.start()
+            #print "TaskThread:startProtocol started", self.lock.depth()
     
                 
     def run(self):
+        #print "TaskThread:run()"
         try:
-            l = QtCore.QMutexLocker(self.lock)
-            self.stopThread = False
-            self.abortThread = False
-            l.unlock()
+            #print "TaskThread:run   waiting for lock..", self.lock.depth()
+            with MutexLocker(self.lock):
+                #print "TaskThread:run   got lock."
+                self.stopThread = False
+                self.abortThread = False
             
             if self.paramSpace is None:
                 try:
@@ -818,95 +843,96 @@ class TaskThread(QtCore.QThread):
             sys.excepthook(*sys.exc_info())
         #finally:
             #self.emit(QtCore.SIGNAL("protocolFinished()"))
+        #print "TaskThread:run() finished"
                     
     def runOnce(self, params=None):
+        #print "TaskThread:runOnce"
         if params is None:
             params = {}
-        l = QtCore.QMutexLocker(self.lock)
-        l.unlock()
-        
-        ## Select correct command to execute
-        cmd = self.protocol
-        if params is not None:
-            for p in params:
-                cmd = cmd[p: params[p]]
-                
-        ## Wait before starting if we've already run too recently
-        while (self.lastRunTime is not None) and (time.clock() < self.lastRunTime + cmd['protocol']['cycleTime']):
-            l.relock()
-            if self.abortThread or self.stopThread:
-                l.unlock()
-                #print "Protocol run aborted by user"
-                return
+        with MutexLocker(self.lock) as l:
             l.unlock()
-            time.sleep(1e-3)
         
-        ## Run
-        #print "Create task:"
-        #print cmd
-        
-        
-        task = self.dm.createTask(cmd)
-        self.lastRunTime = time.clock()
-        self.emit(QtCore.SIGNAL('protocolStarted'), params)
-        #print "Starting task.."
-        try:
-            task.execute(block=False)
-            
-            #print "task started" 
-            
-            ## wait for finish, watch for abort requests
-            while True:
-                if task.isDone():
-                    break
+            ## Select correct command to execute
+            cmd = self.protocol
+            if params is not None:
+                for p in params:
+                    cmd = cmd[p: params[p]]
                     
+            ## Wait before starting if we've already run too recently
+            while (self.lastRunTime is not None) and (time.clock() < self.lastRunTime + cmd['protocol']['cycleTime']):
                 l.relock()
-                if self.abortThread:
+                if self.abortThread or self.stopThread:
                     l.unlock()
-                    #print "Stopping task..."
-                    task.stop()
                     #print "Protocol run aborted by user"
                     return
                 l.unlock()
-                ## Abort if protocol is taking too long
-                #if time.clock() >= (self.lastRunTime+(cmd['protocol']['duration']+0.2)):
-                    #print "Protocol run aborted--timeout"
-                    #task.abort()
-                    #return
-                time.sleep(100e-6)
+                time.sleep(1e-3)
+            
+            ## Run
+            #print "Create task:"
+            #print cmd
+            
+            
+            task = self.dm.createTask(cmd)
+            self.lastRunTime = time.clock()
+            self.emit(QtCore.SIGNAL('protocolStarted'), params)
+            #print "Starting task.."
+            try:
+                task.execute(block=False)
                 
-            result = task.getResult()
-        except:
-            ## Make sure the task is fully stopped if there was a failure at any point.
-            print "\nError during protocol execution:"
-            sys.excepthook(*sys.exc_info())
-            print "\nStopping task.."
-            task.stop()
-            print ""
-            raise
+                #print "task started" 
+                
+                ## wait for finish, watch for abort requests
+                while True:
+                    if task.isDone():
+                        break
+                    #print "TaskThread:runOnce waiting for finish, locking for exit.."    
+                    l.relock()
+                    if self.abortThread:
+                        l.unlock()
+                        #print "Stopping task..."
+                        task.stop()
+                        #print "Protocol run aborted by user"
+                        return
+                    l.unlock()
+                    ## Abort if protocol is taking too long
+                    #if time.clock() >= (self.lastRunTime+(cmd['protocol']['duration']+0.2)):
+                        #print "Protocol run aborted--timeout"
+                        #task.abort()
+                        #return
+                    time.sleep(1e-3)
+                    
+                result = task.getResult()
+            except:
+                ## Make sure the task is fully stopped if there was a failure at any point.
+                print "\nError during protocol execution:"
+                sys.excepthook(*sys.exc_info())
+                print "\nStopping task.."
+                task.stop()
+                print ""
+                raise
             
         frame = {'params': params, 'cmd': cmd, 'result': result}
         self.emit(QtCore.SIGNAL('newFrame'), frame)
         if self.stopThread:
             raise Exception('stop', result)
+        #print "TaskThread:runOnce return"
         return result
         
     def checkStop(self):
-        l = QtCore.QMutexLocker(self.lock)
-        if self.stopThread:
-            raise Exception('stop')
+        with MutexLocker(self.lock):
+            if self.stopThread:
+                raise Exception('stop')
         
         
     def stop(self, block=False):
-        l = QtCore.QMutexLocker(self.lock)
-        self.stopThread = True
-        l.unlock()
+        with MutexLocker(self.lock):
+            self.stopThread = True
         if block:
             if not self.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
             
     def abort(self):
-        l = QtCore.QMutexLocker(self.lock)
-        self.abortThread = True
-        l.unlock()
+        with MutexLocker(self.lock):
+            self.abortThread = True
         

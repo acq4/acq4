@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import with_statement
 from lib.drivers.pvcam import PVCam as PVCDriver
 from lib.devices.Device import *
 from PyQt4 import QtCore
@@ -8,7 +9,7 @@ from lib.util.MetaArray import *
 from protoGUI import *
 from deviceGUI import *
 import lib.util.ptime as ptime
-from lib.util.Mutex import Mutex
+from lib.util.Mutex import Mutex, MutexLocker
 
 def ftrace(func):
     def w(*args, **kargs):
@@ -55,48 +56,47 @@ class PVCam(Device):
         
     #@ftrace
     def devName(self):
-        l = QtCore.QMutexLocker(self.lock)
-        return self.name
+        with MutexLocker(self.lock):
+            return self.name
     
     #@ftrace
     def getCamera(self):
-        l = QtCore.QMutexLocker(self.lock)
-        cl = QtCore.QMutexLocker(self.camLock)
-        if self.cam is None:
-            cams = self.pvc.listCameras()
-            print "Cameras:", cams
-            if len(cams) < 1:
-                raise Exception('No cameras found by pvcam driver')
-            
-            if self.config['serial'] is None:  ## Just pick first camera
-                ind = 0
-            else:
-                if self.config['serial'] in cams:
-                    ind = cams.index(self.config['serial'])
-                else:
-                    raise Exception('Can not find pvcam camera "%s"' % str(self.config['serial']))
-            print "Selected camera:", cams[ind]
-            self.cam = self.pvc.getCamera(cams[ind])
-        return self.cam
+        with MutexLocker(self.lock):
+            with MutexLocker(self.camLock):
+                if self.cam is None:
+                    cams = self.pvc.listCameras()
+                    print "Cameras:", cams
+                    if len(cams) < 1:
+                        raise Exception('No cameras found by pvcam driver')
+                    
+                    if self.config['serial'] is None:  ## Just pick first camera
+                        ind = 0
+                    else:
+                        if self.config['serial'] in cams:
+                            ind = cams.index(self.config['serial'])
+                        else:
+                            raise Exception('Can not find pvcam camera "%s"' % str(self.config['serial']))
+                    print "Selected camera:", cams[ind]
+                    self.cam = self.pvc.getCamera(cams[ind])
+                return self.cam
     
     #@ftrace
     def createTask(self, cmd):
-        l = QtCore.QMutexLocker(self.lock)
-        return Task(self, cmd)
+        with MutexLocker(self.lock):
+            return Task(self, cmd)
     
     #@ftrace
     def getTriggerChannel(self, daq):
-        l = QtCore.QMutexLocker(self.lock)
-        if not 'triggerOutChannel' in self.config:
-            return None
-        if self.config['triggerOutChannel'][0] != daq:
-            return None
-        return self.config['triggerOutChannel'][1]
+        with MutexLocker(self.lock):
+            if not 'triggerOutChannel' in self.config:
+                return None
+            if self.config['triggerOutChannel'][0] != daq:
+                return None
+            return self.config['triggerOutChannel'][1]
         
     def startAcquire(self, params=None):
-        l = QtCore.QMutexLocker(self.lock)
-        at = self.acqThread
-        l.unlock()
+        with MutexLocker(self.lock):
+            at = self.acqThread
         
         if params is not None:
             for p in params:
@@ -104,15 +104,14 @@ class PVCam(Device):
         at.start(QtCore.QThread.HighPriority)
         
     def stopAcquire(self, block=True):
-        l = QtCore.QMutexLocker(self.lock)
-        at = self.acqThread
-        l.unlock()
+        with MutexLocker(self.lock):
+            at = self.acqThread
         
         at.stop(block)
 
     def isRunning(self):
-        l = QtCore.QMutexLocker(self.lock)
-        return self.acqThread.isRunning()
+        with MutexLocker(self.lock):
+            return self.acqThread.isRunning()
 
     def protocolInterface(self, prot):
         return PVCamProto(self, prot)
@@ -121,65 +120,63 @@ class PVCam(Device):
         return PVCamDevGui(self)
 
     def setParam(self, param, val):
-        l = QtCore.QMutexLocker(self.lock)
-        at = self.scqThread
-        l.unlock()
+        with MutexLocker(self.lock):
+            at = self.scqThread
         
         r = at.isRunning()
         if r: 
             at.stop(block=True)
             
-        cl = QtCore.QMutexLocker(self.camLock)        
-        cam.setParam(param, val)
-        cl.unlock()
+        with MutexLocker(self.camLock):
+            cam.setParam(param, val)
         
         self.emit(QtCore.SIGNAL('paramChanged'), param, val)
         if r: 
             at.start(QtCore.QThread.HighPriority)
         
     def getParam(self, param):
-        cl = QtCore.QMutexLocker(self.camLock)
-        return self.cam.getParam(param)
+        with MutexLocker(self.camLock):
+            return self.cam.getParam(param)
         
     #@ftrace
     def listTriggerModes(self):
-        cl = QtCore.QMutexLocker(self.camLock)        
-        return self.cam.listTriggerModes()
+        with MutexLocker(self.camLock):
+            return self.cam.listTriggerModes()
         
     #@ftrace
     def getPosition(self):
         #print "PVCam: getPosition"
-        l = QtCore.QMutexLocker(self.lock)
-        #print "PVCam: getPosition: locked"
-        if self.scopeDev is None:
-            #print "   none"
-            #print "PVCam: getPosition done"
-            return None
-        else:
-            #print "PVCam:getPosition: scopeDev.getPosition"
-            p = self.scopeDev.getPosition()
-            #print "PVCam:getPosition: scopeDev.getPosition done"
-            #print "   ", p
-            #print "PVCam: getPosition done"
-            return p
+        with MutexLocker(self.lock):
+            #print "PVCam: getPosition: locked"
+            if self.scopeDev is None:
+                #print "   none"
+                #print "PVCam: getPosition done"
+                return None
+            else:
+                #print "PVCam:getPosition: scopeDev.getPosition"
+                p = self.scopeDev.getPosition()
+                #print "PVCam:getPosition: scopeDev.getPosition done"
+                #print "   ", p
+                #print "PVCam: getPosition done"
+                return p
 
     #@ftrace
     def getScale(self):
         """Return the dimensions of 1 pixel with signs if the image is flipped"""
-        l = QtCore.QMutexLocker(self.lock)
-        #print "PVCam: getScale locked"
-        
-        if self.scopeDev is None:
-            #print "   none"
-            return None
-        else:
-            #print "PVCam: getScale getObj"
-            obj = self.scopeDev.getObjective()
-            #print "PVCam: getScale getObj done"
-            scale = obj['scale']
-            #print "   ", p
-            sf = self.config['scaleFactor']
-            return (sf[0]/scale, sf[1]/scale)
+        with MutexLocker(self.lock):
+            #print "PVCam: getScale locked"
+            
+            if self.scopeDev is None:
+                #print "   none"
+                return None
+            else:
+                #print "PVCam: getScale getObj"
+                obj = self.scopeDev.getObjective()
+                #print "PVCam: getScale getObj done"
+                scale = obj['scale']
+                #print "   ", p
+                sf = self.config['scaleFactor']
+                return (sf[0]/scale, sf[1]/scale)
         
     #@ftrace
     def getPixelSize(self):
@@ -191,28 +188,31 @@ class PVCam(Device):
         
     #@ftrace
     def getObjective(self):
-        l = QtCore.QMutexLocker(self.lock)
-        #print "PVCam:getObjective: locked"
-        if self.scopeDev is None:
-            #print "   none"
-            return None
-        else:
-            #print "PVCam:getObjective: scopeDev.getObjective"
-            obj = self.scopeDev.getObjective()
-            #print "PVCam:getObjective: scopeDev.getObjective done"
-            return obj['name']
+        with MutexLocker(self.lock):
+            #print "PVCam:getObjective: locked"
+            if self.scopeDev is None:
+                #print "   none"
+                return None
+            else:
+                #print "PVCam:getObjective: scopeDev.getObjective"
+                obj = self.scopeDev.getObjective()
+                #print "PVCam:getObjective: scopeDev.getObjective done"
+                return obj['name']
 
     def getScopeDevice(self):
-        l = QtCore.QMutexLocker(self.lock)
-        return self.scopeDev
+        with MutexLocker(self.lock):
+            return self.scopeDev
         
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
+        self.lock = Mutex()
         self.recordHandle = None
         self.stopAfter = False
         self.returnState = {}
+        self.frames = []
+        self.recording = False
         
         
     def configure(self, tasks, startOrder):
@@ -241,7 +241,12 @@ class Task(DeviceTask):
             startOrder.remove(name)
             startOrder.insert(0, name)
             
-        
+    def newFrame(self, frame):
+        with MutexLocker(self.lock):
+            self.frames.append(frame)
+            if not self.recording:
+                QtCore.QObject.disconnect(self.dev.acqThread, QtCore.SIGNAL('newFrame'), self.newFrame)
+
     def createChannels(self, daqTask):
         ## Are we interested in recording the expose signal?
         if ('recordExposeChannel' not in self.cmd) or (not self.cmd['recordExposeChannel']):
@@ -258,7 +263,11 @@ class Task(DeviceTask):
         
     def start(self):
         ## arm recording
-        self.recordHandle = self.dev.acqThread.startRecord()
+        self.frames = []
+        self.recording = True
+        ## Connect must be direct because there is probably no event loop in this thread.
+        QtCore.QObject.connect(self.dev.acqThread, QtCore.SIGNAL('newFrame'), self.newFrame, QtCore.Qt.DirectConnection)
+        #self.recordHandle = CameraTask(self.dev.acqThread)  #self.dev.acqThread.startRecord()
         ## start acquisition if needed
         #print "stopAfter:", self.stopAfter
         
@@ -276,7 +285,9 @@ class Task(DeviceTask):
         
     def stop(self):
         #print "stop camera task"
-        self.recordHandle.stop()
+        #self.recordHandle.stop()
+        with MutexLocker(self.lock):
+            self.recording = False
         #print "stop camera task: done"
         #print "Stop camera acquisition"
         self.dev.stopAcquire()
@@ -304,19 +315,21 @@ class Task(DeviceTask):
             expose = MetaArray(expose['data'], info=info)
             
         ## generate MetaArray of images collected during recording
-        data = self.recordHandle.data()
-        if len(data) > 0:
-            arr = concatenate([f[0][newaxis,...] for f in data])
-            times = array([f[1]['time'] for f in data])
-            times -= times[0]
-            info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), data[0][1]]
-            marr = MetaArray(arr, info=info)
-            #print "returning frames:", marr.shape
-        else:
-            #print "returning no frames"
-            marr = None
-        
-        return {'frames': marr, 'expose': expose}
+        #data = self.recordHandle.data()
+        with MutexLocker(self.lock):
+            data = self.frames
+            if len(data) > 0:
+                arr = concatenate([f[0][newaxis,...] for f in data])
+                times = array([f[1]['time'] for f in data])
+                times -= times[0]
+                info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), data[0][1]]
+                marr = MetaArray(arr, info=info)
+                #print "returning frames:", marr.shape
+            else:
+                #print "returning no frames"
+                marr = None
+            
+            return {'frames': marr, 'expose': expose}
         
     def storeResult(self, dirHandle):
         result = self.getResult()
@@ -352,26 +365,26 @@ class AcquireThread(QtCore.QThread):
             #print "Camera.setParam: Stopping camera before setting parameter.."
             self.stop(block=True)
             #print "Camera.setPAram: camera stopped"
-        l = QtCore.QMutexLocker(self.lock)
-        self.state[param] = value
-        l.unlock()
+        with MutexLocker(self.lock):
+            self.state[param] = value
         if start:
-            self.start(QtCore.QThread.HighPriority)
+            #self.start(QtCore.QThread.HighPriority)
+            self.start()
         
-    def startRecord(self, maxTime=None):
-        rec = CameraTask(self, maxTime)
-        #print "lock to create task"
-        l = QtCore.QMutexLocker(self.lock)
-        self.tasks.append(rec)
-        #print "..unlock from create task"
-        return rec
+    #def startRecord(self, maxTime=None):
+        #rec = CameraTask(self, maxTime)
+        ##print "lock to create task"
+        #with MutexLocker(self.lock):
+            #self.tasks.append(rec)
+            ##print "..unlock from create task"
+        #return rec
         
-    def removeTask(self, task):
-        #print "Lock to remove task"
-        l = QtCore.QMutexLocker(self.lock)
-        if task in self.tasks:
-            self.tasks.remove(task)
-        #print "..unlock from remove task"
+    #def removeTask(self, task):
+        ##print "Lock to remove task"
+        #with MutexLocker(self.lock):
+            #if task in self.tasks:
+                #self.tasks.remove(task)
+        ##print "..unlock from remove task"
     
     def run(self):
         #self.lock.lock()
@@ -431,24 +444,13 @@ class AcquireThread(QtCore.QThread):
                 frame = self.cam.lastFrame()
                 ## If a new frame is available, process it and inform other threads
                 if frame is not None and frame != lastFrame:
-                    #print "      AcquireThread.run: frame"
                     now = ptime.time() #time.clock()
-                    #print "      AcquireThread.run: frame 2"
                     if lastFrame is not None:
                         diff = ((frame + self.ringSize) - lastFrame) % self.ringSize
                         if diff > 1:
                             print "Dropped %d frames after %d" % (diff-1, self.frameId)
                             self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped %d frame(s) after frame %d. (%02g since last frame arrived)" % (diff-1, self.frameId, now-lastFrameTime))
                     lastFrame = frame
-                    #print "      AcquireThread.run: frame 3"
-                    
-                    ### compute FPS
-                    #dt = now - lastFrameTime
-                    #if dt > 0.:
-                        #if self.fps is None:
-                            #self.fps = 1.0/dt
-                        #else:
-                            #self.fps = self.fps * 0.9 + 0.1 / dt
                     
                     ## Build meta-info for this frame
                     ## Use lastFrameTime because the current frame _began_ exposing when the previous frame arrived.
@@ -470,34 +472,34 @@ class AcquireThread(QtCore.QThread):
                             info['imagePosition'] = pos2
 
                     lastFrameTime = now
-                    #print "      AcquireThread.run: frame 4"
                     
                     ## Inform that new frame is ready
                     outFrame = (self.acqBuffer[frame].copy(), info)
                     self.emit(QtCore.SIGNAL("newFrame"), outFrame)
                     
                     ## Lock task array and copy before tinkering with it
-                    #print "AcquireThread.run: *Locking task array"
-                    self.lock.lock()
-                    tasks = self.tasks[:]
-                    self.lock.unlock()
-                    #print "AcquireThread.run: *Unlocked task array"
-                    
-                    #print "AcquireThread.run: Adding frame to tasks"
-                    for t in tasks:
-                        t.addFrame(outFrame)
-                    #print "AcquireThread.run: done"
-                        
+                    #print "lock", self.lock.depth()
+                    #self.lock.lock(id="PVCam/interface.py AcquireThread.run near 465")
+                    #print "locked", self.lock.depth()
+                    #try:
+                        ##tasks = self.tasks[:]
+                        #for t in self.tasks:
+                            #t.addFrame(outFrame)
+                    #finally:
+                        #self.lock.unlock()
+                    #print "unlock", self.lock.depth()
+
                     self.frameId += 1
                     
                     ## mandatory sleep until 300us before next expected frame
                     ## Otherwise the CPU is constantly tied up waiting for new frames.
                     sleepTime = (lastFrameTime + exposure - 300e-6) - ptime.time()
                     if sleepTime > 0:
+                        #print "Sleep %f sec"% sleepTime
                         time.sleep(sleepTime)
                     loopCount = 0
                         
-                time.sleep(10e-6)
+                time.sleep(1e-3)
                 
                 if loopCount > 1000:
                     loopCount = 0
@@ -519,15 +521,8 @@ class AcquireThread(QtCore.QThread):
                         if diff > (10 + exposure):
                             print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
                             break
-                
-                #if loopCount % 10000 == 0:
-                    #print "    AcquireThread.run: loop"
                 loopCount += 1
-                #print "*Unlocking thread"
-            ## Inform that we have stopped (?)
-            #self.ui.stop()
             self.cam.stop()
-            #print "AcquireThread.run: camera stopped"
         except:
             try:
                 self.cam.stop()
@@ -540,10 +535,9 @@ class AcquireThread(QtCore.QThread):
         
     def stop(self, block=False):
         #print "AcquireThread.stop: Requesting thread stop, acquiring lock first.."
-        l = QtCore.QMutexLocker(self.lock)
-        self.stopThread = True
+        with MutexLocker(self.lock):
+            self.stopThread = True
         #print "AcquireThread.stop: got lock, requested stop."
-        l.unlock()
         #print "AcquireThread.stop: Unlocked, waiting for thread exit (%s)" % block
         if block:
           if not self.wait(10000):
@@ -558,28 +552,36 @@ class AcquireThread(QtCore.QThread):
             self.start(QtCore.QThread.HighPriority)
 
 
-class CameraTask:
-    def __init__(self, cam, maxTime=None):
-        self.cam = cam
-        self.maxTime = maxTime
-        self.lock = Mutex()
-        self.frames = []
-        self.recording = True
+#class CameraTask(QObject):
+    #def __init__(self, cam, maxTime=None):
+        #self.cam = cam
+        #self.maxTime = maxTime
+        #self.lock = Mutex()
+        #self.frames = []
+        #self.recording = True
+        #QtCore.QObject.connect(self.cam, QtCore.SIGNAL('newFrame'), self.newFrame)
     
-    def addFrame(self, frame):
-        #print "CameraTask.Add frame"
-        l = QtCore.QMutexLocker(self.lock)
-        self.frames.append(frame)
-        if not self.recording:
-            self.cam.removeTask(self)
-        #print "CameraTask.Add frame done"
+    ##def addFrame(self, frame):
+        ###print "CameraTask.Add frame"
+        ##with MutexLocker(self.lock):
+            ##self.frames.append(frame)
+            ##rec = self.recording
+        ##if not rec:
+            ##self.cam.removeTask(self)
+            ###print "CameraTask.Add frame done"
+        
+    #def newFrame(self, frame):
+        #self.frames.append(frame)
+        #if not self.recording:
+            #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('newFrame'), self.newFrame)
+
+
+    #def data(self):
+        ##with MutexLocker(self.lock):
+        #return self.frames
     
-    def data(self):
-        l = QtCore.QMutexLocker(self.lock)
-        return self.frames
-    
-    def stop(self):
-        #print "Stop cam record"
-        l = QtCore.QMutexLocker(self.lock)
-        self.recording = False
+    #def stop(self):
+        ##print "Stop cam record"
+        ##with MutexLocker(self.lock):
+        #self.recording = False
     

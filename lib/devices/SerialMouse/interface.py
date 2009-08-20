@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
+from __future__ import with_statement
 from lib.devices.Device import *
 import serial
-from lib.util.Mutex import Mutex
+from lib.util.Mutex import Mutex, MutexLocker
 #import pdb
 
 class SerialMouse(Device):
@@ -25,41 +26,42 @@ class SerialMouse(Device):
         #QtCore.pyqtRemoveInputHook()
         #pdb.set_trace()
         #print "Mouse: posChanged"
-        l = QtCore.QMutexLocker(self.lock)
-        #print "Mouse: posChanged locked"
-        self.pos = [data['abs'][0] * self.scale, data['abs'][1] * self.scale]
-        rel = [data['rel'][0] * self.scale, data['rel'][1] * self.scale]
+        with MutexLocker(self.lock):
+            #print "Mouse: posChanged locked"
+            self.pos = [data['abs'][0] * self.scale, data['abs'][1] * self.scale]
+            rel = [data['rel'][0] * self.scale, data['rel'][1] * self.scale]
+            ab = self.pos[:]
         #print "Mouse: posChanged emit.."
-        self.emit(QtCore.SIGNAL('positionChanged'), {'rel': rel, 'abs': self.pos[:]})
+        self.emit(QtCore.SIGNAL('positionChanged'), {'rel': rel, 'abs': ab})
         #print "Mouse: posChanged done"
         
     def btnChanged(self, btns):
         #print "Mouse: btnChanged"
-        l = QtCore.QMutexLocker(self.lock)
-        change = {}
-        for i in [0, 1]:
-            if btns[i] != self.buttons[i]:
-                change[i] = btns[i]
-                self.buttons[i] = btns[i]
+        with MutexLocker(self.lock):
+            change = {}
+            for i in [0, 1]:
+                if btns[i] != self.buttons[i]:
+                    change[i] = btns[i]
+                    self.buttons[i] = btns[i]
         self.emit(QtCore.SIGNAL('switchChanged'), change)
         #print "Mouse: btnChanged done"
         
     def getPosition(self):
-        l = QtCore.QMutexLocker(self.lock)
-        return self.pos[:]
+        with MutexLocker(self.lock):
+            return self.pos[:]
         
     def getSwitches(self):
-        l = QtCore.QMutexLocker(self.lock)
-        return self.buttons[:]
+        with MutexLocker(self.lock):
+            return self.buttons[:]
 
     def getSwitch(self, swid):
-        l = QtCore.QMutexLocker(self.lock)
-        return self.buttons[swid]
+        with MutexLocker(self.lock):
+            return self.buttons[swid]
         
 
     def getState(self):
-        l = QtCore.QMutexLocker(self.lock)
-        return (self.pos[:], self.buttons[:])
+        with MutexLocker(self.lock):
+            return (self.pos[:], self.buttons[:])
         
     def deviceInterface(self):
         return SMInterface(self)
@@ -146,10 +148,9 @@ class MouseThread(QtCore.QThread):
     
     def stop(self, block=False):
         #print "  stop: locking"
-        l = QtCore.QMutexLocker(self.lock)
-        #print "  stop: requesting stop"
-        self.stopThread = True
-        l.unlock()
+        with MutexLocker(self.lock):
+            #print "  stop: requesting stop"
+            self.stopThread = True
         if block:
             #print "  stop: waiting"
             if not self.wait(10000):

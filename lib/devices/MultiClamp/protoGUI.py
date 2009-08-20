@@ -21,6 +21,7 @@ class MultiClampProtoGui(ProtocolGui):
         
         #self.cmdPlots = []
         self.inpPlots = {}
+        self.resetInpPlots = False  ## Signals result handler to clear plots before adding a new one
         self.currentCmdPlot = None
         
         
@@ -56,7 +57,7 @@ class MultiClampProtoGui(ProtocolGui):
         QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.ui.i0ModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
-        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.clearInpPlots)
+        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.sequenceStarted)
         QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('protocolStarted'), self.protoStarted)
         
     def saveState(self):
@@ -117,7 +118,11 @@ class MultiClampProtoGui(ProtocolGui):
             #i.detach()
         #self.cmdPlots = []
         self.ui.bottomPlotWidget.clear()
-        
+        self.currentCmdPlot = None
+
+    def sequenceStarted(self):
+        self.resetInpPlots = True
+
     def clearInpPlots(self):
         #for k in self.inpPlots:
             #for i in self.inpPlots[k]:
@@ -259,6 +264,9 @@ class MultiClampProtoGui(ProtocolGui):
         c.setCurrentIndex(ind)
         
     def handleResult(self, result, params):
+        if self.resetInpPlots:
+            self.resetInpPlots = False
+            self.clearInpPlots()
 
         ## Is this result one of repeated trials?
         params = params.copy()

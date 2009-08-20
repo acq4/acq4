@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
+from __future__ import with_statement
 from lib.devices.Device import *
 from deviceTemplate import Ui_Form
-from lib.util.Mutex import Mutex
+from lib.util.Mutex import Mutex, MutexLocker
 
 def ftrace(func):
     def w(*args, **kargs):
@@ -52,51 +53,51 @@ class Microscope(Device):
     
     #@ftrace
     def positionChanged(self, p):
-        l = QtCore.QMutexLocker(self.lock)
-        #rel = []
-        #for i in range(len(self.position)):
-            #rel.append(p['rel'][i] * self.positionScale[i])
-            #self.position[i] += rel[i]
-        self.position = [p['abs'][self.axisOrder[i]] * self.positionScale[i] for i in range(len(self.position))]
-        rel = [p['rel'][self.axisOrder[i]] * self.positionScale[i] for i in range(len(self.position))]
-        p = self.position[:]
-        
-        l.unlock() ## always release mutex before emitting!
+        with MutexLocker(self.lock):
+            #rel = []
+            #for i in range(len(self.position)):
+                #rel.append(p['rel'][i] * self.positionScale[i])
+                #self.position[i] += rel[i]
+            self.position = [p['abs'][self.axisOrder[i]] * self.positionScale[i] for i in range(len(self.position))]
+            rel = [p['rel'][self.axisOrder[i]] * self.positionScale[i] for i in range(len(self.position))]
+            p = self.position[:]
+
+        ## Mutex must be released before emitting!
         self.emit(QtCore.SIGNAL('positionChanged'), {'abs': p, 'rel': rel})
         
     #@ftrace
     def objectiveChanged(self, o):
-        l = QtCore.QMutexLocker(self.lock)
-        if self.objSwitchId in o:
-            state = str(o[self.objSwitchId])
-            lastObj = self.objective
-            self.objective = self.objList[str(state)][self.objSelList[str(state)]]
-            #self.objective = self.config['objectives'][state]
-            obj = self.objective.copy()
-            l.unlock()  ## always release mutex before emitting!
-            self.emit(QtCore.SIGNAL('objectiveChanged'), (obj, state, lastObj))
+        with MutexLocker(self.lock) as l:
+            if self.objSwitchId in o:
+                state = str(o[self.objSwitchId])
+                lastObj = self.objective
+                self.objective = self.objList[str(state)][self.objSelList[str(state)]]
+                #self.objective = self.config['objectives'][state]
+                obj = self.objective.copy()
+                l.unlock()  ## always release mutex before emitting!
+                self.emit(QtCore.SIGNAL('objectiveChanged'), (obj, state, lastObj))
 
     #@ftrace
     def getPosition(self):
         """Return x,y,z position of microscope stage"""
-        l = QtCore.QMutexLocker(self.lock)
-        #print "Microscope:getPosition locked"
-        return self.position[:]
+        with MutexLocker(self.lock):
+            #print "Microscope:getPosition locked"
+            return self.position[:]
         
     #@ftrace
     def getObjective(self):
         """Return a tuple ("objective name", scale)"""
-        l = QtCore.QMutexLocker(self.lock)
-        #print "Microscope:getObjective locked"
-        return self.objective.copy()
+        with MutexLocker(self.lock):
+            #print "Microscope:getObjective locked"
+            return self.objective.copy()
         
     def listObjectives(self):
         return self.objList
         
     #@ftrace
     def getState(self):
-        l = QtCore.QMutexLocker(self.lock)
-        return {'position': self.position[:], 'objective': self.objective[:]}
+        with MutexLocker(self.lock):
+            return {'position': self.position[:], 'objective': self.objective[:]}
     
     def deviceInterface(self):
         return ScopeGUI(self)

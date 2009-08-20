@@ -5,6 +5,7 @@
 # reliable error messaging for missed frames
 # Add fast/simple histogram 
 
+from __future__ import with_statement
 
 from CameraTemplate import Ui_MainWindow
 from lib.util.qtgraph.GraphicsView import *
@@ -13,7 +14,7 @@ from lib.util.qtgraph.widgets import ROI
 from lib.util.PlotWidget import PlotCurve
 import lib.util.ptime as ptime
 from lib.filetypes.ImageFile import *
-from lib.util.Mutex import Mutex
+from lib.util.Mutex import Mutex, MutexLocker
 from PyQt4 import QtGui, QtCore
 from PyQt4 import Qwt5 as Qwt
 import scipy.ndimage
@@ -623,8 +624,7 @@ class RecordThread(QtCore.QThread):
         self.newCamFrames = []
         
     def newCamFrame(self, frame):
-        l = QtCore.QMutexLocker(self.lock)
-        try:
+        with MutexLocker(self.lock):
             newRec = self.recordStart
             lastRec = self.recordStop
             if self.recordStop:
@@ -637,27 +637,23 @@ class RecordThread(QtCore.QThread):
             takeSnap = self.takeSnap
             self.takeSnap = False
             recFile = self.currentRecord
-        finally:
-            l.unlock()
         if recording or takeSnap:
-            cLock = QtCore.QMutexLocker(self.camLock)
-            ## remember the record/snap/storageDir states since they might change 
-            ## before the write thread gets to this frame
-            self.newCamFrames.append({'frame': frame, 'record': recording, 'snap': takeSnap, 'newRec': newRec, 'lastRec': lastRec})
+            with MutexLocker(self.camLock):
+                ## remember the record/snap/storageDir states since they might change 
+                ## before the write thread gets to this frame
+                self.newCamFrames.append({'frame': frame, 'record': recording, 'snap': takeSnap, 'newRec': newRec, 'lastRec': lastRec})
     
     def run(self):
         self.stopThread = False
         
         while True:
             try:
-                cLock = QtCore.QMutexLocker(self.camLock)
-                handleCamFrames = self.newCamFrames[:]
-                self.newCamFrames = []
+                with MutexLocker(self.camLock):
+                    handleCamFrames = self.newCamFrames[:]
+                    self.newCamFrames = []
             except:
                 sys.excepthook(*sys.exc_info())
                 break
-            finally:
-                cLock.unlock()
             
             try:
                 while len(handleCamFrames) > 0:
@@ -669,14 +665,11 @@ class RecordThread(QtCore.QThread):
             time.sleep(10e-3)
             
             #print "  RecordThread run: stop check"
-            l = QtCore.QMutexLocker(self.lock)
-            #print "  RecordThread run:   got lock"
-            
-            if self.stopThread:
-                #print "  RecordThread run:   stop requested, exiting loop"
-                l.unlock()
-                break
-            l.unlock()
+            with MutexLocker(self.lock) as l:
+                #print "  RecordThread run:   got lock"
+                if self.stopThread:
+                    #print "  RecordThread run:   stop requested, exiting loop"
+                    break
             #print "  RecordThread run:   unlocked"
 
 
@@ -717,32 +710,28 @@ class RecordThread(QtCore.QThread):
             fh = self.m.getCurrentDir().writeFile(ImageFile(data), fileName, info, autoIncrement=True)
             fn = fh.name()
             self.showMessage("Saved image %s" % fn)
-            l = QtCore.QMutexLocker(self.lock)
-            self.takeSnap = False
+            with MutexLocker(self.lock):
+                self.takeSnap = False
     
     def showMessage(self, msg):
         self.emit(QtCore.SIGNAL('showMessage'), msg)
     
     def snapClicked(self):
-        l = QtCore.QMutexLocker(self.lock)
-        self.takeSnap = True
+        with MutexLocker(self.lock):
+            self.takeSnap = True
 
     def toggleRecord(self, b):
-        l = QtCore.QMutexLocker(self.lock)
-        try:
+        with MutexLocker(self.lock):
             if b:
                 self.recordStart = True
             else:
                 if self.recording:
                     self.recordStop = True
-        finally:
-            l.unlock()
 
     def stop(self):
         #print "RecordThread stop.."    
-        l = QtCore.QMutexLocker(self.lock)
+        with MutexLocker(self.lock):
         #print "  RecordThread stop: locked"
-        self.stopThread = True
-        l.unlock()
+            self.stopThread = True
         #print "  RecordThread stop: done"
         

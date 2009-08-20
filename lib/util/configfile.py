@@ -17,6 +17,9 @@ def readConfigFile(fname):
         s = unicode(fd.read(), 'UTF-8')
         fd.close()
         data = parseString(s)[1]
+    except:
+	print "Error while reading config file %s:"% fname
+	raise
     finally:
         os.chdir(cwd)
     return data

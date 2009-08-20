@@ -459,57 +459,57 @@ class Task:
         
     def getResult(self):
         
-        #print "get result"
-        if not self.stopped:
-            #print "stopping tasks.."
-            ## Stop all tasks
-            for t in self.tasks:
-                #print "  stopping", t
-                ## Force all tasks to stop immediately.
-                #print "Stopping task", t, "..."
-                try:
-                    self.tasks[t].stop()
-                except:
-                    print "Error while stopping task %s:" % t
-                    sys.excepthook(*sys.exc_info())
-                #print "   ..task", t, "stopped"
-            self.stopped = True
-            
-        if not self.tasksDone():
-            raise Exception("Cannot get result; task is still running.")
-        
-        if self.result is None:
-            #print "Get results.."
-            ## Let each device generate its own output structure.
-            result = {}
-            for devName in self.tasks:
-                try:
-                    result[devName] = self.tasks[devName].getResult()
-                except:
-                    print "Error getting result for task %s:" % t
-                    result[devName] = None
-                    sys.excepthook(*sys.exc_info())
-            self.result = result
-            #print "RESULT 1:", self.result
-            
-            ## Store data if requested
-            if 'storeData' in self.cfg and self.cfg['storeData'] is True:
+        try:
+            if not self.stopped:
+                #print "stopping tasks.."
+                ## Stop all tasks
                 for t in self.tasks:
-                    self.tasks[t].storeResult(self.cfg['storageDir'])
+                    #print "  stopping", t
+                    ## Force all tasks to stop immediately.
+                    #print "Stopping task", t, "..."
+                    try:
+                        self.tasks[t].stop()
+                    except:
+                        print "Error while stopping task %s:" % t
+                        sys.excepthook(*sys.exc_info())
+                    #print "   ..task", t, "stopped"
+                self.stopped = True
             
-        ## Release all hardware for use elsewhere
-        if self.reserved:
-            #print "release hardware.."
-            for t in self.tasks:
-                #print "  %d releasing" % self.id, t
-                try:
-                    self.tasks[t].release()
-                except:
-                    print "Error while releasing hardware for task %s:" % t
-                    sys.excepthook(*sys.exc_info())
-                    
-                #print "  %d released" % self.id, t
-        self.reserved = False
+            if not self.tasksDone():
+                raise Exception("Cannot get result; task is still running.")
+            
+            if self.result is None:
+                #print "Get results.."
+                ## Let each device generate its own output structure.
+                result = {}
+                for devName in self.tasks:
+                    try:
+                        result[devName] = self.tasks[devName].getResult()
+                    except:
+                        print "Error getting result for task %s:" % t
+                        result[devName] = None
+                        sys.excepthook(*sys.exc_info())
+                self.result = result
+                #print "RESULT 1:", self.result
+                
+                ## Store data if requested
+                if 'storeData' in self.cfg and self.cfg['storeData'] is True:
+                    for t in self.tasks:
+                        self.tasks[t].storeResult(self.cfg['storageDir'])
+        finally:   ## Regardless of any other problems, at least make sure we release hardware for future use
+            ## Release all hardware for use elsewhere
+            if self.reserved:
+                #print "release hardware.."
+                for t in self.tasks:
+                    #print "  %d releasing" % self.id, t
+                    try:
+                        self.tasks[t].release()
+                    except:
+                        print "Error while releasing hardware for task %s:" % t
+                        sys.excepthook(*sys.exc_info())
+                        
+                    #print "  %d released" % self.id, t
+            self.reserved = False
             
         #print "tasks:", self.tasks
         #print "RESULT:", self.result        
