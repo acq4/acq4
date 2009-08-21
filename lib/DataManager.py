@@ -108,7 +108,7 @@ class DataManager(QtCore.QObject):
         ## If handle has no children, then there is no need to search for its tree.
         tree = [parent]
         ph = self._getCache(parent)
-        prefix = os.path.normcase(parent + os.path.sep)
+        prefix = os.path.normcase(os.path.join(parent, ''))
         
         if ph.hasChildren():
             for h in self.cache:
@@ -158,7 +158,7 @@ class FileHandle(QtCore.QObject):
                 rpath = relativeTo.name()
                 if not self.isGrandchildOf(relativeTo):
                     raise Exception("Path %s is not child of %s" % (path, rpath))
-                return path[len(rpath + os.path.sep):]
+                return path[len(os.path.join(rpath, '')):]
             return path
         
     def shortName(self):
@@ -279,7 +279,7 @@ class FileHandle(QtCore.QObject):
     
     def _parentMoved(self, oldDir, newDir):
         """Inform this object that it has been moved as a result of its (grand)parent having moved."""
-        prefix = oldDir + os.path.sep
+        prefix = os.path.join(oldDir, '')
         if self.path[:len(prefix)] != prefix:
             raise Exception("File %s is not in moved tree %s, should not update!" % (self.path, oldDir))
         subName = self.path[len(prefix):]
@@ -306,7 +306,7 @@ class FileHandle(QtCore.QObject):
     
     def isGrandchildOf(self, grandparent):
         """Return true if this files is anywhere in the tree beneath grandparent."""
-        gname = grandparent.name() + os.path.sep
+        gname = os.path.join(grandparent.name(), '')
         return self.name()[:len(gname)] == gname
     
     def write(self, data, **kwargs):

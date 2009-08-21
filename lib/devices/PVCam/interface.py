@@ -213,6 +213,7 @@ class Task(DeviceTask):
         self.returnState = {}
         self.frames = []
         self.recording = False
+        self.stopRecording = False
         
         
     def configure(self, tasks, startOrder):
@@ -241,11 +242,20 @@ class Task(DeviceTask):
             startOrder.remove(name)
             startOrder.insert(0, name)
             
+        ## connect using acqThread's connect method because there may be no event loop
+        ## to deliver signals here.
+        self.dev.acqThread.connect(self.newFrame)
+            
     def newFrame(self, frame):
+        dis = False
         with MutexLocker(self.lock):
-            self.frames.append(frame)
-            if not self.recording:
-                QtCore.QObject.disconnect(self.dev.acqThread, QtCore.SIGNAL('newFrame'), self.newFrame)
+            if self.recording:
+                self.frames.append(frame)
+            if self.stopRecording:
+                self.recording = False
+                dis = True
+        if dis:   ## Must be done only after unlocking mutex
+            self.dev.acqThread.disconnect(self.newFrame)
 
     def createChannels(self, daqTask):
         ## Are we interested in recording the expose signal?
@@ -264,9 +274,8 @@ class Task(DeviceTask):
     def start(self):
         ## arm recording
         self.frames = []
+        self.stopRecording = False
         self.recording = True
-        ## Connect must be direct because there is probably no event loop in this thread.
-        QtCore.QObject.connect(self.dev.acqThread, QtCore.SIGNAL('newFrame'), self.newFrame, QtCore.Qt.DirectConnection)
         #self.recordHandle = CameraTask(self.dev.acqThread)  #self.dev.acqThread.startRecord()
         ## start acquisition if needed
         #print "stopAfter:", self.stopAfter
@@ -287,7 +296,7 @@ class Task(DeviceTask):
         #print "stop camera task"
         #self.recordHandle.stop()
         with MutexLocker(self.lock):
-            self.recording = False
+            self.stopRecording = True
         #print "stop camera task: done"
         #print "Stop camera acquisition"
         self.dev.stopAcquire()
@@ -352,10 +361,23 @@ class AcquireThread(QtCore.QThread):
         self.bufferTime = 5.0
         self.ringSize = 30
         self.tasks = []
+        
+        ## This thread does not run an event loop,
+        ## so we may need to deliver frames manually to some places
+        self.connections = []
+        self.connectMutex = Mutex()
     
     def __del__(self):
         if hasattr(self, 'cam'):
             self.cam.stop()
+    
+    def connect(self, method):
+        with MutexLocker(self.connectMutex):
+            self.connections.append(method)
+    
+    def disconnect(self, method):
+        with MutexLocker(self.connectMutex):
+            self.connections.remove(method)
     
     def setParam(self, param, value):
         #print "PVCam:setParam", param, value
@@ -475,6 +497,11 @@ class AcquireThread(QtCore.QThread):
                     
                     ## Inform that new frame is ready
                     outFrame = (self.acqBuffer[frame].copy(), info)
+                    
+                    with MutexLocker(self.connectMutex):
+                        conn = self.connections[:]
+                    for c in conn:
+                        c(outFrame)
                     self.emit(QtCore.SIGNAL("newFrame"), outFrame)
                     
                     ## Lock task array and copy before tinkering with it

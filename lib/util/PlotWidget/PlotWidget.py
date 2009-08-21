@@ -33,6 +33,8 @@ class PlotWidget(Qwt.QwtPlot):
         self.paramIndex = {}
         self.avgCurves = {}
         
+        self.range = [[0, 1000], [0, 1000]]
+        
         ### Set up context menu
         
         w = QtGui.QWidget()
@@ -97,7 +99,7 @@ class PlotWidget(Qwt.QwtPlot):
             if isinstance(item, PlotCurve):
                 item.setAlpha(alpha, auto)
                 
-        self.replot()
+        self.replot(autoRange=False)
      
     def alphaState(self):
         enabled = self.ctrl.alphaGroup.isChecked()
@@ -115,14 +117,14 @@ class PlotWidget(Qwt.QwtPlot):
         if b:
             self.updateManualXScale()
         else:
-            self.setAxisAutoScale(Qwt.QwtPlot.xBottom)
+            #self.setAxisAutoScale(Qwt.QwtPlot.xBottom)
             self.replot()
         
     def updateYScale(self, b=False):
         if b:
             self.updateManualYScale()
         else:
-            self.setAxisAutoScale(Qwt.QwtPlot.yLeft)
+            #self.setAxisAutoScale(Qwt.QwtPlot.yLeft)
             self.replot()
         
         
@@ -141,51 +143,79 @@ class PlotWidget(Qwt.QwtPlot):
         self.replot()
         
     def plotRange(self):
-        xsd = self.axisScaleDiv(self.xBottom)
-        ysd = self.axisScaleDiv(self.yLeft)
-        ## Silly API change
-        if not hasattr(xsd, 'lowerBound'):
-            xsd.lowerBound = xsd.lBound
-            xsd.upperBound = xsd.hBound
-            ysd.lowerBound = ysd.lBound
-            ysd.upperBound = ysd.hBound
-        return ((xsd.lowerBound(), xsd.upperBound()), (ysd.lowerBound(), ysd.upperBound()))
+        return self.range
+        #xsd = self.axisScaleDiv(self.xBottom)
+        #ysd = self.axisScaleDiv(self.yLeft)
+        ### Silly API change
+        #if not hasattr(xsd, 'lowerBound'):
+            #xsd.lowerBound = xsd.lBound
+            #xsd.upperBound = xsd.hBound
+            #ysd.lowerBound = ysd.lBound
+            #ysd.upperBound = ysd.hBound
+        #return ((xsd.lowerBound(), xsd.upperBound()), (ysd.lowerBound(), ysd.upperBound()))
+        
+        #ul = self.map([0,0])
+        #cs = self.canvas().size()
+        #br = self.map([cs.width(), cs.height()])
+        #print ul, br, cs
+        #return ((ul[0], br[0]), (br[1], ul[1]))
         
     def screenScale(self):
         pr = self.plotRange()
         xd = pr[0][1] - pr[0][0]
         yd = pr[1][1] - pr[1][0]
-        mx = self.axisScaleDraw(self.xBottom).map()
-        my = self.axisScaleDraw(self.yLeft).map()
-        ss = array([(mx.transform(xd) - mx.transform(0.0))/xd, (my.transform(yd) - my.transform(0.0))/yd], dtype=float)
+        #ss = array([
+            #(self.transform(self.xBottom, xd) - self.transform(self.xBottom, 0.0))/xd, 
+            #(self.transform(self.yLeft, yd) - self.transform(self.yLeft, 0.0))/yd], dtype=float)
         #print ss, mx.transform(1.0), mx.transform(0.0), my.transform(1.0), my.transform(0.0)
-        return ss
         
-    def scaleBy(self, s):
+        cs = self.canvas().size()
+        return array([cs.width() / xd, cs.height() / yd])
+
+    def map(self, pt):
+        return array([self.invTransform(self.xBottom, pt[0]), self.invTransform(self.yLeft, pt[1])], dtype=float)
+        
+
+    def scaleBy(self, s, center=None):
+        #print center, self.pressPos
         xr, yr = self.plotRange()
-        xd = (xr[1] - xr[0]) * s[0] * 0.5
-        yd = (yr[1] - yr[0]) * s[1] * 0.5
-        xc = (xr[1] + xr[0]) * 0.5
-        yc = (yr[1] + yr[0]) * 0.5
+        if center is None:
+            xc = (xr[1] + xr[0]) * 0.5
+            yc = (yr[1] + yr[0]) * 0.5
+        else:
+            (xc, yc) = center
+            
+        #xd = (xr[1] - xr[0]) * s[0] * 0.5
+        #yd = (yr[1] - yr[0]) * s[1] * 0.5
+        #xc = (xr[1] + xr[0]) * 0.5
+        #yc = (yr[1] + yr[0]) * 0.5
         #print s, xr, xd, yr, yd
         
-        self.setXRange(xc - xd, xc + xd)
-        self.setYRange(yc - yd, yc + yd)
-        self.replot()
+        x1 = xc + (xr[0]-xc) * s[0]
+        x2 = xc + (xr[1]-xc) * s[0]
+        y1 = yc + (yr[0]-yc) * s[1]
+        y2 = yc + (yr[1]-yc) * s[1]
+        
+        self.setXRange(x1, x2)
+        self.setYRange(y1, y2)
+        self.replot(autoRange=False)
         
     def translateBy(self, t, screen=False):
         t = t.astype(float)
         if screen:  ## scale from pixels
             t /= self.screenScale()
         xr, yr = self.plotRange()
-        self.setAxisScale(self.xBottom, xr[0] + t[0], xr[1] + t[0])
-        self.setAxisScale(self.yLeft, yr[0] + t[1], yr[1] + t[1])
-        self.replot()
+        #self.setAxisScale(self.xBottom, xr[0] + t[0], xr[1] + t[0])
+        #self.setAxisScale(self.yLeft, yr[0] + t[1], yr[1] + t[1])
+        self.setXRange(xr[0] + t[0], xr[1] + t[0])
+        self.setYRange(yr[0] + t[1], yr[1] + t[1])
+        self.replot(autoRange=False)
         
         
     def mouseMoveEvent(self, ev):
         pos = array([ev.pos().x(), ev.pos().y()])
         dif = pos - self.mousePos
+        dif[0] *= -1
         self.mousePos = pos
         
         ## Ignore axes if mouse is disabled
@@ -197,11 +227,12 @@ class PlotWidget(Qwt.QwtPlot):
         
         ## Scale or translate based on mouse button
         if ev.buttons() & QtCore.Qt.LeftButton:
-            self.translateBy(-dif * mask, screen=True)
+            self.translateBy(dif * mask, screen=True)
         elif ev.buttons() & QtCore.Qt.RightButton:
-            dif[0] *= -1
             s = ((mask * 0.02) + 1) ** dif
-            self.scaleBy(s)
+            cPos = self.canvas().pos()
+            cPos = array([cPos.x(), cPos.y()])
+            self.scaleBy(s, self.map(self.pressPos - cPos))
             
         Qwt.QwtPlot.mouseMoveEvent(self, ev)
         
@@ -217,6 +248,72 @@ class PlotWidget(Qwt.QwtPlot):
                 self.ctrlMenu.popup(self.mapToGlobal(ev.pos()))
         self.mousePos = pos
         Qwt.QwtPlot.mouseReleaseEvent(self, ev)
+        
+    def setYRange(self, min, max):
+        self.setAxisScale(self.yLeft, min, max)
+        self.range[1] = [min, max]
+        self.ctrl.yMinText.setText('%g' % min)
+        self.ctrl.yMaxText.setText('%g' % max)
+        
+    def setXRange(self, min, max):
+        self.setAxisScale(self.xBottom, min, max)
+        self.range[0] = [min, max]
+        self.ctrl.xMinText.setText('%g' % min)
+        self.ctrl.xMaxText.setText('%g' % max)
+
+    def replot(self, autoRange=True):
+        if autoRange:
+            self.autoRange()
+        Qwt.QwtPlot.replot(self)
+
+    def autoRange(self):
+        if self.ctrl.xAutoRadio.isChecked():
+            #self.setAxisAutoScale(Qwt.QwtPlot.xBottom)
+            #print "first:", self.plotRange()
+            xMin = []
+            xMax = []
+            for i in self.itemList():
+                if isinstance(i, Qwt.QwtPlotCurve):
+                    xMin.append(i.minXValue())
+                    xMax.append(i.maxXValue())
+            if len(xMin) > 0:
+                xMin = min(xMin)
+                xMax = max(xMax)
+                d = (xMax-xMin) * 0.05
+                self.setXRange(xMin-d, xMax+d)
+            #print "second:", self.plotRange()
+        if self.ctrl.yAutoRadio.isChecked():
+            #self.setAxisAutoScale(Qwt.QwtPlot.yLeft)
+            yMin = []
+            yMax = []
+            for i in self.itemList():
+                if isinstance(i, Qwt.QwtPlotCurve):
+                    yMin.append(i.minYValue())
+                    yMax.append(i.maxYValue())
+            if len(yMin) > 0:
+                yMin = min(yMin)
+                yMax = max(yMax)
+                d = (yMax-yMin) * 0.05
+                self.setYRange(yMin-d, yMax+d)
+            
+    
+        #r = self.plotRange()
+        
+        #if self.ctrl.xAutoRadio.isChecked():
+            #self.ctrl.xMinText.setText('%g' % r[0][0])
+            #self.ctrl.xMaxText.setText('%g' % r[0][1])
+        #if self.ctrl.yAutoRadio.isChecked():
+            #self.ctrl.yMinText.setText('%g' % r[1][0])
+            #self.ctrl.yMaxText.setText('%g' % r[1][1])
+            
+        #w = self.size().width()
+        #for c in self.curves:
+            #c.setDisplayRange(r[0][0], r[0][1], w)
+
+    def setAxisTitle(self, axis, title):
+        text = Qwt.QwtText(title)
+        text.setFont(QtGui.QFont('Arial', 8))
+        Qwt.QwtPlot.setAxisTitle(self, axis, text)
         
     def plot(self, data, x=None, clear=True, params=None):
         if clear:
@@ -242,33 +339,7 @@ class PlotWidget(Qwt.QwtPlot):
     def indexParams(self, params, ids):
         """Add IDs into the parameter index for params"""
         pass
-        
-
-    def autoRange(self):
-        if self.ctrl.xAutoRadio.isChecked():
-            self.setAxisAutoScale(Qwt.QwtPlot.xBottom)
-        if self.ctrl.yAutoRadio.isChecked():
-            self.setAxisAutoScale(Qwt.QwtPlot.yLeft)
-            
     
-        r = self.plotRange()
-        
-        if self.ctrl.xAutoRadio.isChecked():
-            self.ctrl.xMinText.setText('%g' % r[0][0])
-            self.ctrl.xMaxText.setText('%g' % r[0][1])
-        if self.ctrl.yAutoRadio.isChecked():
-            self.ctrl.yMinText.setText('%g' % r[1][0])
-            self.ctrl.yMaxText.setText('%g' % r[1][1])
-            
-        #w = self.size().width()
-        #for c in self.curves:
-            #c.setDisplayRange(r[0][0], r[0][1], w)
-
-    def setAxisTitle(self, axis, title):
-        text = Qwt.QwtText(title)
-        text.setFont(QtGui.QFont('Arial', 8))
-        Qwt.QwtPlot.setAxisTitle(self, axis, text)
-        
     def plotArray(self, arr, x=None):
         arr = atleast_2d(arr)
         if arr.ndim != 2:
@@ -389,19 +460,6 @@ class PlotWidget(Qwt.QwtPlot):
         #self.setRenderHints(rh)
         self.png.save(fileName)
         
-    def setYRange(self, min, max):
-        self.setAxisScale(self.yLeft, min, max)
-        self.ctrl.yMinText.setText('%g' % min)
-        self.ctrl.yMaxText.setText('%g' % max)
-        
-    def setXRange(self, min, max):
-        self.setAxisScale(self.xBottom, min, max)
-        self.ctrl.xMinText.setText('%g' % min)
-        self.ctrl.xMaxText.setText('%g' % max)
-
-    def replot(self):
-        Qwt.QwtPlot.replot(self)
-        self.autoRange()
         
     def clear(self):
         Qwt.QwtPlot.clear(self)
@@ -417,11 +475,11 @@ class PlotWidget(Qwt.QwtPlot):
 
     def unregisterItem(self, item):
         
-        if isinstance(item, PlotCurve):
+        if isinstance(item, PlotCurve) and item in self.curves:
             #print 'remove', item
             self.curves.remove(item)
             #print self.curves
-        self.updateDecimation()
+            self.updateDecimation()
             
     def configureCurve(self, curve):
         (alpha, auto) = self.alphaState()
@@ -455,7 +513,6 @@ class PlotCurve(Qwt.QwtPlotCurve):
     def draw(self, *args):
         if self.xData is None or len(self.xData) < 2:
             return
-            
         if self.spectrumMode:
             self.generateSpecData()
             xData = self.xSpecData

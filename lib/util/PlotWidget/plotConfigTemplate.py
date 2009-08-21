@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'plotConfigTemplate.ui'
 #
-# Created: Thu Aug 13 00:09:27 2009
-#      by: PyQt4 UI code generator 4.5.2
+# Created: Fri Aug 21 09:34:13 2009
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -162,7 +162,7 @@ class Ui_Form(object):
         self.horizontalLayout = QtGui.QHBoxLayout(self.alphaGroup)
         self.horizontalLayout.setObjectName("horizontalLayout")
         self.autoAlphaCheck = QtGui.QCheckBox(self.alphaGroup)
-        self.autoAlphaCheck.setChecked(True)
+        self.autoAlphaCheck.setChecked(False)
         self.autoAlphaCheck.setObjectName("autoAlphaCheck")
         self.horizontalLayout.addWidget(self.autoAlphaCheck)
         self.alphaSlider = QtGui.QSlider(self.alphaGroup)
@@ -201,7 +201,7 @@ class Ui_Form(object):
         self.gridLayout_3.addWidget(self.tabWidget, 0, 0, 1, 1)
 
         self.retranslateUi(Form)
-        self.tabWidget.setCurrentIndex(0)
+        self.tabWidget.setCurrentIndex(2)
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):

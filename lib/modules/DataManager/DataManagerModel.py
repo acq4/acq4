@@ -35,6 +35,9 @@ class DMModel(QtCore.QAbstractItemModel):
         if not isinstance(handle, FileHandle):
             raise Exception("Function requires FileHandle or DirHandle as argument")
         #print handle, handle.parent()
+        if handle.parent() is handle:
+            return self.createIndex(0, 0, handle)
+            
         if handle not in self.handles:
             self.handles[handle] = None
             self.watch(handle)
