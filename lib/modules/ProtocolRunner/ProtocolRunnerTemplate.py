@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Wed Jun 17 09:56:24 2009
-#      by: PyQt4 UI code generator 4.4.3
+# Created: Sun Aug 23 22:07:25 2009
+#      by: PyQt4 UI code generator 4.5.2
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -255,7 +255,7 @@ QMainWindow::separator {background-color: #666}""")
         self.protoLoopCheck.setText(QtGui.QApplication.translate("MainWindow", "Loop", None, QtGui.QApplication.UnicodeUTF8))
         self.label_7.setText(QtGui.QApplication.translate("MainWindow", "Cycle Time (ms)", None, QtGui.QApplication.UnicodeUTF8))
         self.testSingleBtn.setText(QtGui.QApplication.translate("MainWindow", "Test", None, QtGui.QApplication.UnicodeUTF8))
-        self.runProtocolBtn.setText(QtGui.QApplication.translate("MainWindow", "Run Single", None, QtGui.QApplication.UnicodeUTF8))
+        self.runProtocolBtn.setText(QtGui.QApplication.translate("MainWindow", "Record Single", None, QtGui.QApplication.UnicodeUTF8))
         self.stopSingleBtn.setText(QtGui.QApplication.translate("MainWindow", "Stop Single", None, QtGui.QApplication.UnicodeUTF8))
         self.protoDurationSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Duration of stimulus/acquisition in the protocol.", None, QtGui.QApplication.UnicodeUTF8))
         self.protoLeadTimeSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Duration of time to wait before acquisition starts \n"
@@ -275,6 +275,6 @@ QMainWindow::separator {background-color: #666}""")
         self.sequenceParamList.headerItem().setText(1, QtGui.QApplication.translate("MainWindow", "param", None, QtGui.QApplication.UnicodeUTF8))
         self.sequenceParamList.headerItem().setText(2, QtGui.QApplication.translate("MainWindow", "len", None, QtGui.QApplication.UnicodeUTF8))
         self.testSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Test", None, QtGui.QApplication.UnicodeUTF8))
-        self.runSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Run Sequence", None, QtGui.QApplication.UnicodeUTF8))
+        self.runSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Record Sequence", None, QtGui.QApplication.UnicodeUTF8))
         self.stopSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Stop Sequence", None, QtGui.QApplication.UnicodeUTF8))
 

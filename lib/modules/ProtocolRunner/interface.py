@@ -683,7 +683,20 @@ class ProtocolRunner(Module, QtCore.QObject):
             QtCore.QTimer.singleShot(10, self.loop)
         else:
             self.testSingle()
-            
+
+    def saveState(self):
+        conf = self.protoStateGroup.state()
+        
+        ## store window state
+        ws = str(self.ui.win.saveState().toPercentEncoding())
+        self.winState = ws
+        
+        ## store parameter order/state
+        params = []
+        
+        return {'conf': conf, 'params': params, 'windowState': ws}
+        
+
     
 class Protocol:
     def __init__(self, ui, fileName=None):
@@ -718,17 +731,7 @@ class Protocol:
         return dev in self.enabled
         
         
-    def updateFromUi(self):
-        self.conf = self.ui.protoStateGroup.state()
-        
-        ## store window state
-        ws = str(self.ui.win.saveState().toPercentEncoding())
-        self.winState = ws
-        
-        ## store individual dock states
-        for d in self.ui.docks:
-            if self.deviceEnabled(d):
-                self.devices[d] = self.ui.docks[d].widget().saveState()
+    #def updateFromUi(self):
         
         
     def write(self, fileName=None):
@@ -747,7 +750,17 @@ class Protocol:
         return os.path.split(self.fileName)[1]
     
     def describe(self):
-        self.updateFromUi()
+        self.conf = self.ui.saveState()
+        
+        ## store window state
+        #ws = str(self.ui.win.saveState().toPercentEncoding())
+        #self.winState = ws
+        
+        ## store individual dock states
+        for d in self.ui.docks:
+            if self.deviceEnabled(d):
+                self.devices[d] = self.ui.docks[d].widget().saveState()
+        #self.updateFromUi()
         
         conf = self.conf.copy()
         devs = self.devices.copy()
@@ -756,7 +769,7 @@ class Protocol:
         rem = [d for d in devs if not self.deviceEnabled(d)]
         for d in rem:
             del devs[d]
-        return {'conf': conf, 'devices': devs, 'winState': self.winState}
+        return {'conf': conf, 'devices': devs}  #, 'winState': self.winState}
         
     
     def enabledDevices(self):
