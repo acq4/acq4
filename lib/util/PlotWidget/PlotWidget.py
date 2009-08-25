@@ -334,7 +334,11 @@ class PlotWidget(Qwt.QwtPlot):
         self.updateDecimation()
         
     def detachCurve(self, c):
-        Qwt.QwtPlotCurve.detach(c)
+        try:
+            Qwt.QwtPlotCurve.detach(c)
+        except:
+            pass
+        
         self.curves.remove(c)
         self.updateDecimation()
         

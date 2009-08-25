@@ -133,6 +133,21 @@ class Task(DeviceTask):
         """
         
         res = self.st.getResult(channel)
+        if 'downsample' in self.cmd:
+            ds = self.cmd['downsample']
+            if ds > 1:
+                data = res['data']
+                newLen = int(data.shape[0] / ds) * ds
+                data = data[:newLen]
+                data.shape = (data.shape[0]/ds, ds)
+                data = data.mean(axis=1)
+                res['data'] = data
+                res['info']['nPts'] = data.shape[0]
+                res['info']['downsampling'] = ds
+                res['info']['rate'] = res['info']['rate'] / ds
+                
+                
+                
         # if type(res['info']) is not dict:
           # res['info'] = {'info': res['info']}
         # res['info'] = {}

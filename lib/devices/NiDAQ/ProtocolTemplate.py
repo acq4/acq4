@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Tue Jun 16 22:41:30 2009
-#      by: PyQt4 UI code generator 4.4.4
+# Created: Tue Aug 25 02:31:17 2009
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(202, 125)
+        Form.resize(202, 191)
         self.gridLayout = QtGui.QGridLayout(Form)
         self.gridLayout.setObjectName("gridLayout")
         self.label = QtGui.QLabel(Form)
@@ -53,7 +53,16 @@ class Ui_Form(object):
         self.triggerDevList.addItem(QtCore.QString())
         self.gridLayout.addWidget(self.triggerDevList, 3, 1, 1, 2)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.gridLayout.addItem(spacerItem, 4, 1, 1, 1)
+        self.gridLayout.addItem(spacerItem, 5, 1, 1, 1)
+        self.downsampleSpin = QtGui.QSpinBox(Form)
+        self.downsampleSpin.setMinimum(1)
+        self.downsampleSpin.setMaximum(10000000)
+        self.downsampleSpin.setProperty("value", QtCore.QVariant(1))
+        self.downsampleSpin.setObjectName("downsampleSpin")
+        self.gridLayout.addWidget(self.downsampleSpin, 4, 1, 1, 1)
+        self.label_7 = QtGui.QLabel(Form)
+        self.label_7.setObjectName("label_7")
+        self.gridLayout.addWidget(self.label_7, 4, 0, 1, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
@@ -68,4 +77,5 @@ class Ui_Form(object):
         self.numPtsLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("Form", "Trigger", None, QtGui.QApplication.UnicodeUTF8))
         self.triggerDevList.setItemText(0, QtGui.QApplication.translate("Form", "No Trigger", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_7.setText(QtGui.QApplication.translate("Form", "Downsample", None, QtGui.QApplication.UnicodeUTF8))
 

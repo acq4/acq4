@@ -836,14 +836,14 @@ class TaskThread(QtCore.QThread):
                     
     def runOnce(self, params=None):
         #print "TaskThread:runOnce"
-        import gc
-        from lib.util.PlotWidget import PlotCurve
-        from PyQt4 import Qwt5
-        print "PlotCurve:", len(filter(lambda x: isinstance(x, PlotCurve), gc.get_objects()))
-        print "QwtPlotCurve:", len(filter(lambda x: isinstance(x, Qwt5.QwtPlotCurve), gc.get_objects()))
-        print "MetaArray:", len(filter(lambda x: isinstance(x, MetaArray), gc.get_objects()))
-        print "ndarray:", len(filter(lambda x: isinstance(x, ndarray), gc.get_objects()))
-        print ""
+        #import gc
+        #from lib.util.PlotWidget import PlotCurve
+        #from PyQt4 import Qwt5
+        #print "PlotCurve:", len(filter(lambda x: isinstance(x, PlotCurve), gc.get_objects()))
+        #print "QwtPlotCurve:", len(filter(lambda x: isinstance(x, Qwt5.QwtPlotCurve), gc.get_objects()))
+        #print "MetaArray:", len(filter(lambda x: isinstance(x, MetaArray), gc.get_objects()))
+        #print "ndarray:", len(filter(lambda x: isinstance(x, ndarray), gc.get_objects()))
+        #print ""
         
         if params is None:
             params = {}

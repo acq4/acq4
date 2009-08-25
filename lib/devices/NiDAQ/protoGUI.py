@@ -25,6 +25,8 @@ class NiDAQProto(ProtocolGui):
         
     def restoreState(self, state):
         try:
+            if 'downsample' in state:
+                self.ui.downsampleSpin.setValue(state['downsample'])
             self.ui.rateSpin.setValue(state['rate'] / 1000.)
             #print "trigger dev:", state['triggerDevice']
             #print self.devs
@@ -50,6 +52,7 @@ class NiDAQProto(ProtocolGui):
         state['numPts'] = self.nPts
         if self.ui.triggerDevList.currentIndex() > 0:
             state['triggerDevice'] = str(self.ui.triggerDevList.currentText())
+        state['downsample'] = self.ui.downsampleSpin.value()
         return state
         
     def rateChanged(self):
