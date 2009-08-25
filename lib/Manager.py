@@ -353,7 +353,11 @@ class Task:
         self.command = command
         self.result = None
         self.reserved = False
-        self.cfg = command['protocol']
+        try:
+            self.cfg = command['protocol']
+        except:
+            print self.cfg
+            raise
         self.id = Task.id
         Task.id += 1
         

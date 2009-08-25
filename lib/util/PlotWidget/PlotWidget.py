@@ -5,6 +5,7 @@ from lib.util.MetaArray import MetaArray
 from numpy import *
 from scipy.fftpack import fft
 from plotConfigTemplate import Ui_Form
+from lib.util.WidgetGroup import WidgetGroup
 
 class PlotWidget(Qwt.QwtPlot):
     def __init__(self, *args):
@@ -46,6 +47,8 @@ class PlotWidget(Qwt.QwtPlot):
         ac.setDefaultWidget(w)
         self.ctrlMenu.addAction(ac)
         
+        self.stateGroup = WidgetGroup(self.ctrlMenu)
+        
         c.xMinText.setValidator(dv)
         c.yMinText.setValidator(dv)
         c.xMaxText.setValidator(dv)
@@ -67,8 +70,11 @@ class PlotWidget(Qwt.QwtPlot):
         QtCore.QObject.connect(c.autoAlphaCheck, QtCore.SIGNAL('toggled(bool)'), self.updateAlpha)
 
         QtCore.QObject.connect(c.powerSpectrumGroup, QtCore.SIGNAL('toggled(bool)'), self.updateSpectrumMode)
-    
+        
         self.replot()
+      
+    def widgetGroupInterface(self):
+        return (None, PlotWidget.saveState, PlotWidget.restoreState)
       
     def updateSpectrumMode(self, b=None):
         if b is None:
@@ -85,12 +91,18 @@ class PlotWidget(Qwt.QwtPlot):
         else:
             numCurves = -1
             
-        curves = filter(lambda i: isinstance(i, Qwt.QwtPlotCurve), self.itemList())
+        #curves = filter(lambda i: isinstance(i, Qwt.QwtPlotCurve), self.itemList())
+        curves = self.curves[:]
+        split = len(curves) - numCurves
         for i in range(len(curves)):
-            if numCurves == -1 or i > (len(curves) - numCurves):
+            if numCurves == -1 or i >= split:
                 curves[i].show()
             else:
-                curves[i].hide()
+                if self.ctrl.forgetTracesCheck.isChecked():
+                    curves[i].free()
+                    self.detachCurve(curves[i])
+                else:
+                    curves[i].hide()
         
       
     def updateAlpha(self, *args):
@@ -144,30 +156,11 @@ class PlotWidget(Qwt.QwtPlot):
         
     def plotRange(self):
         return self.range
-        #xsd = self.axisScaleDiv(self.xBottom)
-        #ysd = self.axisScaleDiv(self.yLeft)
-        ### Silly API change
-        #if not hasattr(xsd, 'lowerBound'):
-            #xsd.lowerBound = xsd.lBound
-            #xsd.upperBound = xsd.hBound
-            #ysd.lowerBound = ysd.lBound
-            #ysd.upperBound = ysd.hBound
-        #return ((xsd.lowerBound(), xsd.upperBound()), (ysd.lowerBound(), ysd.upperBound()))
-        
-        #ul = self.map([0,0])
-        #cs = self.canvas().size()
-        #br = self.map([cs.width(), cs.height()])
-        #print ul, br, cs
-        #return ((ul[0], br[0]), (br[1], ul[1]))
         
     def screenScale(self):
         pr = self.plotRange()
         xd = pr[0][1] - pr[0][0]
         yd = pr[1][1] - pr[1][0]
-        #ss = array([
-            #(self.transform(self.xBottom, xd) - self.transform(self.xBottom, 0.0))/xd, 
-            #(self.transform(self.yLeft, yd) - self.transform(self.yLeft, 0.0))/yd], dtype=float)
-        #print ss, mx.transform(1.0), mx.transform(0.0), my.transform(1.0), my.transform(0.0)
         
         cs = self.canvas().size()
         return array([cs.width() / xd, cs.height() / yd])
@@ -177,19 +170,12 @@ class PlotWidget(Qwt.QwtPlot):
         
 
     def scaleBy(self, s, center=None):
-        #print center, self.pressPos
         xr, yr = self.plotRange()
         if center is None:
             xc = (xr[1] + xr[0]) * 0.5
             yc = (yr[1] + yr[0]) * 0.5
         else:
             (xc, yc) = center
-            
-        #xd = (xr[1] - xr[0]) * s[0] * 0.5
-        #yd = (yr[1] - yr[0]) * s[1] * 0.5
-        #xc = (xr[1] + xr[0]) * 0.5
-        #yc = (yr[1] + yr[0]) * 0.5
-        #print s, xr, xd, yr, yd
         
         x1 = xc + (xr[0]-xc) * s[0]
         x2 = xc + (xr[1]-xc) * s[0]
@@ -295,52 +281,69 @@ class PlotWidget(Qwt.QwtPlot):
                 yMax = max(yMax)
                 d = (yMax-yMin) * 0.05
                 self.setYRange(yMin-d, yMax+d)
-            
-    
-        #r = self.plotRange()
-        
-        #if self.ctrl.xAutoRadio.isChecked():
-            #self.ctrl.xMinText.setText('%g' % r[0][0])
-            #self.ctrl.xMaxText.setText('%g' % r[0][1])
-        #if self.ctrl.yAutoRadio.isChecked():
-            #self.ctrl.yMinText.setText('%g' % r[1][0])
-            #self.ctrl.yMaxText.setText('%g' % r[1][1])
-            
-        #w = self.size().width()
-        #for c in self.curves:
-            #c.setDisplayRange(r[0][0], r[0][1], w)
 
     def setAxisTitle(self, axis, title):
         text = Qwt.QwtText(title)
         text.setFont(QtGui.QFont('Arial', 8))
         Qwt.QwtPlot.setAxisTitle(self, axis, text)
         
-    def plot(self, data, x=None, clear=True, params=None):
+    def plot(self, data=None, x=None, clear=False, params=None, pen=None, replot=True):
         if clear:
             self.clear()
         
         if isinstance(data, MetaArray):
-            ids = self.plotMetaArray(data)
+            curves = self._plotMetaArray(data)
         elif isinstance(data, ndarray):
-            ids = self.plotArray(data, x=x)
+            curves = self._plotArray(data, x=x)
         elif isinstance(data, list):
             if x is not None:
                 x = array(x)
-            ids = self.plotArray(array(data), x=x)
+            curves = self._plotArray(array(data), x=x)
+        elif data is None:
+            curves = [PlotCurve()]
         else:
             raise Exception('Not sure how to plot object of type %s' % type(data))
             
-        self.replot()
+        for c in curves:
+            self.attachCurve(c)
+            c.setParams(params)
+            if pen is not None:
+                c.setPen(pen)
+            
+            
+        if replot:
+            self.replot()
         
-        self.indexParams(params, ids)
+        #self.indexParams(params, ids)
         
-        return ids
+        if data is not None and data.ndim == 2:
+            return curves
+        else:
+            return curves[0]
+        
+    def attachCurve(self, c, params=None):
+        self.curves.append(c)
+        Qwt.QwtPlotCurve.attach(c, self)
+        
+        ## configure curve for this plot
+        (alpha, auto) = self.alphaState()
+        c.setAlpha(alpha, auto)
+        c.setSpectrumMode(self.ctrl.powerSpectrumGroup.isChecked())
+        
+        ## Hide older plots if needed
+        self.updateDecimation()
+        
+    def detachCurve(self, c):
+        Qwt.QwtPlotCurve.detach(c)
+        self.curves.remove(c)
+        self.updateDecimation()
+        
         
     def indexParams(self, params, ids):
         """Add IDs into the parameter index for params"""
         pass
     
-    def plotArray(self, arr, x=None):
+    def _plotArray(self, arr, x=None):
         arr = atleast_2d(arr)
         if arr.ndim != 2:
             raise Exception("Array must be 1 or 2D to plot (shape is %s)" % arr.shape)
@@ -357,16 +360,15 @@ class PlotWidget(Qwt.QwtPlot):
         for i in range(arr.shape[0]):
             c = PlotCurve()
             c.setData(x[i%x.shape[0]], arr[i])
-            c.attach(self)
-            ret.append(len(self.curves))
+            #c.attach(self)
+            ret.append(c)
             #self.curves.append(c)
                 
-        self.replot()
         return ret
             
         
         
-    def plotMetaArray(self, arr):
+    def _plotMetaArray(self, arr):
         inf = arr.infoCopy()
         
         if arr.ndim == 1:
@@ -431,12 +433,11 @@ class PlotWidget(Qwt.QwtPlot):
             c = PlotCurve()
             c.setData(xv, arr)
             #c.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-            c.attach(self)
-            ret.append(len(self.curves))
+            #c.attach(self)
+            ret.append(c)
             #self.curves.append(c)
             
             
-        self.replot()
         return ret
 
     def writeSvg(self, fileName=None):
@@ -466,25 +467,12 @@ class PlotWidget(Qwt.QwtPlot):
         self.curves = []
         self.paramIndex = {}
 
-    def registerItem(self, item):
-        if isinstance(item, PlotCurve):
-            self.curves.append(item)
-            self.configureCurve(item)
-        self.updateDecimation()
+    def saveState(self):
+        return self.stateGroup.state()
         
-
-    def unregisterItem(self, item):
+    def restoreState(self, state):
+        self.stateGroup.setState(state)
         
-        if isinstance(item, PlotCurve) and item in self.curves:
-            #print 'remove', item
-            self.curves.remove(item)
-            #print self.curves
-            self.updateDecimation()
-            
-    def configureCurve(self, curve):
-        (alpha, auto) = self.alphaState()
-        curve.setAlpha(alpha, auto)
-        curve.setSpectrumMode(self.ctrl.powerSpectrumGroup.isChecked())
         
         
 class PlotCurve(Qwt.QwtPlotCurve):
@@ -496,13 +484,20 @@ class PlotCurve(Qwt.QwtPlotCurve):
         self.ySpecData = None
         self.specCurve = None
         #self.currentCurve = None
-        self.plot = None
+        #self.plot = None
         pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
         self.setPen(pen)
         self.alpha = 1.0
         self.autoAlpha = True
         self.spectrumMode = False
-        
+
+    def free(self):
+        self.xData = None
+        self.yData = None
+        self.xSpecData = None
+        self.xSpecData = None
+        self.specCurve = None
+
     def setSpectrumMode(self, b):
         self.spectrumMode = b
         
@@ -571,7 +566,8 @@ class PlotCurve(Qwt.QwtPlotCurve):
             self.specCurve.setData(self.xSpecData, self.ySpecData)
         
         
-        
+    def setParams(self, params):
+        self.params = params
 
     def setData(self, x, y):
         self.xData = x
@@ -586,20 +582,22 @@ class PlotCurve(Qwt.QwtPlotCurve):
         pass
     
     def attach(self, plot):
-        if self.plot is not None:
-            self.detach()
-        self.plot = plot
-        if hasattr(plot, 'registerItem'):
-            plot.registerItem(self)
-        Qwt.QwtPlotCurve.attach(self, plot)
+        raise Exception("Use PlotWidget.attachCurve instead.")
+        #if self.plot is not None:
+            #self.detach()
+        #self.plot = plot
+        #if hasattr(plot, 'registerItem'):
+            #plot.registerItem(self)
+        #Qwt.QwtPlotCurve.attach(self, plot)
         
     def detach(self):
-        #print 'detach', self
-        if self.plot is not None and hasattr(self.plot, 'unregisterItem'):
-            #print 'unregister', self
-            self.plot.unregisterItem(self)
-        self.plot = None
-        Qwt.QwtPlotCurve.detach(self)
+        raise Exception("Use PlotWidget.detachCurve instead.")
+        ##print 'detach', self
+        #if self.plot is not None and hasattr(self.plot, 'unregisterItem'):
+            ##print 'unregister', self
+            #self.plot.unregisterItem(self)
+        #self.plot = None
+        #Qwt.QwtPlotCurve.detach(self)
         
     def boundingRect(self):
         if self.spectrumMode:

@@ -73,13 +73,14 @@ class PVCamProto(ProtocolGui):
                 
         if state['displayExposureCheck'] and 'expose' in result and result['expose'] is not None:
             #self.ui.exposePlot.plotMetaArray(result['expose'])
-            self.ui.exposePlot.clear()
-            c = PlotCurve()
+            #self.ui.exposePlot.clear()
             d = result['expose']
-            c.setData(d.xvals('Time'), d.view(ndarray))
-            c.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-            c.attach(self.ui.exposePlot)
-            self.ui.exposePlot.replot()
+            self.ui.exposePlot.plot(d.view(ndarray), x=d.xvals('Time'), pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), clear=True)
+            #c = PlotCurve()
+            #c.setData(d.xvals('Time'), d.view(ndarray))
+            #c.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
+            #c.attach(self.ui.exposePlot)
+            #self.ui.exposePlot.replot()
 
 
     def recordExposeClicked(self):

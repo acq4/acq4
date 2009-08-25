@@ -235,9 +235,10 @@ class PVCamera(QtGui.QMainWindow):
         roi = PlotROI(10)
         roi.setZValue(20)
         self.scene.addItem(roi)
-        plot = PlotCurve('roi%d'%len(self.ROIs))
-        plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        plot.attach(self.ui.plotWidget)
+        plot = self.ui.plotWidget.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=False)
+        #plot = PlotCurve('roi%d'%len(self.ROIs))
+        #plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
+        #plot.attach(self.ui.plotWidget)
         self.ROIs.append({'roi': roi, 'plot': plot, 'vals': [], 'times': []})
         
     def clearFrameBuffer(self):

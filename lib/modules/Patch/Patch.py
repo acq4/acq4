@@ -79,12 +79,15 @@ class PatchWindow(QtGui.QMainWindow):
         for p in [self.ui.patchPlot, self.ui.commandPlot]:
             p.setCanvasBackground(QtGui.QColor(0,0,0))
             p.replot()
-        self.patchCurve = PlotCurve('cell')
-        self.patchCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        self.patchCurve.attach(self.ui.patchPlot)
-        self.commandCurve = PlotCurve('command')
-        self.commandCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        self.commandCurve.attach(self.ui.commandPlot)
+            
+        self.patchCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=False)
+        #self.patchCurve = PlotCurve('cell')
+        #self.patchCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
+        #self.patchCurve.attach(self.ui.patchPlot)
+        self.commandCurve = self.ui.commandPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=False)
+        #self.commandCurve = PlotCurve('command')
+        #self.commandCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
+        #self.commandCurve.attach(self.ui.commandPlot)
         
         QtCore.QObject.connect(self.ui.startBtn, QtCore.SIGNAL('clicked()'), self.startClicked)
         QtCore.QObject.connect(self.ui.recordBtn, QtCore.SIGNAL('clicked()'), self.recordClicked)
@@ -108,9 +111,10 @@ class PatchWindow(QtGui.QMainWindow):
             p.setCanvasBackground(QtGui.QColor(0,0,0))
             p.replot()
             for suf in ['', 'Std']:
-                self.analysisCurves[n+suf] = PlotCurve(n+suf)
-                self.analysisCurves[n+suf].setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-                self.analysisCurves[n+suf].attach(p)
+                self.analysisCurves[n+suf] = p.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=False)
+                #self.analysisCurves[n+suf] = PlotCurve(n+suf)
+                #self.analysisCurves[n+suf].setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
+                #self.analysisCurves[n+suf].attach(p)
                 self.analysisData[n+suf] = []
         self.showPlots()
         self.updateParams()

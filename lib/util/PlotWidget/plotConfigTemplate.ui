@@ -35,7 +35,7 @@
       </size>
      </property>
      <property name="currentIndex">
-      <number>2</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="tab">
       <attribute name="title">
@@ -294,6 +294,13 @@
           </item>
           <item row="2" column="1">
            <widget class="QSpinBox" name="maxTracesSpin"/>
+          </item>
+          <item row="3" column="0" colspan="2">
+           <widget class="QCheckBox" name="forgetTracesCheck">
+            <property name="text">
+             <string>Forget hidden traces</string>
+            </property>
+           </widget>
           </item>
          </layout>
         </widget>

@@ -494,10 +494,16 @@ in loop mode.</string>
        <property name="dragDropMode">
         <enum>QAbstractItemView::InternalMove</enum>
        </property>
+       <property name="indentation">
+        <number>10</number>
+       </property>
        <property name="rootIsDecorated">
         <bool>true</bool>
        </property>
        <property name="animated">
+        <bool>true</bool>
+       </property>
+       <property name="allColumnsShowFocus">
         <bool>true</bool>
        </property>
        <column>

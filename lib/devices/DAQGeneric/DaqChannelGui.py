@@ -80,6 +80,7 @@ class DaqChannelGui(QtGui.QWidget):
             #i.detach()
         #self.plots = []
         self.plot.clear()
+        self.currentPlot = None
 
     def displayCheckChanged(self):
         if self.stateGroup.state()['displayCheck']:
@@ -171,7 +172,8 @@ class OutputChannelGui(DaqChannelGui):
             #print "======================== DATCH %s ===========================" % self.currentPlot
             #import gc
             #print "REF BEFORE:\n", '\n'.join(["%s:\n%s\n" % (type(x), str(x)) for x in gc.get_referrers(self.currentPlot)[:10]])
-            self.currentPlot.detach()
+            self.plot.detachCurve(self.currentPlot)
+            #self.currentPlot.detach()
         
             #refs = gc.get_referrers(self.currentPlot)[:10]
             #print "REF AFTER:\n", '\n'.join(["%s:\n%s\n" % (type(x), str(x)) for x in refs])
@@ -185,13 +187,14 @@ class OutputChannelGui(DaqChannelGui):
             self.currentPlot = self.plotCurve(cur, color=QtGui.QColor(100, 200, 100))
         
     def plotCurve(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
-        plot = PlotCurve('cell')
-        plot.setPen(QtGui.QPen(color))
-        plot.setData(self.timeVals, data)
-        plot.attach(self.plot)
+        plot = self.plot.plot(data, self.timeVals, pen=QtGui.QPen(color), replot=replot)
+        #plot = PlotCurve('cell')
+        #plot.setPen(QtGui.QPen(color))
+        #plot.setData(self.timeVals, data)
+        #plot.attach(self.plot)
         #self.plots.append(plot)
-        if replot:
-            self.plot.replot()
+        #if replot:
+            #self.plot.replot()
         return plot
 
     def getSingleWave(self, params=None):
@@ -225,10 +228,11 @@ class InputChannelGui(DaqChannelGui):
     
     def handleResult(self, result):
         if self.stateGroup.state()['displayCheck']:
-            plot = PlotCurve('cell')
-            plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-            plot.setData(result.xvals('Time'), result)
-            plot.attach(self.plot)
+            plot = self.plot.plot(result.view(numpy.ndarray), result.xvals('Time'), pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=True)
+            #plot = PlotCurve('cell')
+            #plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
+            #plot.setData(result.xvals('Time'), result)
+            #plot.attach(self.plot)
             #self.plots.append(plot)
             self.plot.replot()
     

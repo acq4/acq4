@@ -235,6 +235,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         
     def showDock(self, dev):
         self.docks[dev].show()
+        self.updateSeqParams(dev)
         #items = self.ui.sequenceParamList.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0)
         #for i in items:
             #i.setHidden(False)
@@ -604,7 +605,9 @@ class ProtocolRunner(Module, QtCore.QObject):
     
     def protocolInfo(self, params=None):
         info = self.currentProtocol.describe()
-        del info['winState']
+        del info['protocol']['windowState']
+        del info['protocol']['params']
+        info['protocol']['params'] = self.ui.sequenceParamList.listParams()
         if params is not None:
             info['sequenceParams'] = params
         return info
@@ -814,7 +817,7 @@ class TaskThread(QtCore.QThread):
             
             if self.paramSpace is None:
                 try:
-                    result = self.runOnce()
+                    self.runOnce()
                 except Exception, e:
                     if e.args[0] != 'stop':
                         raise
@@ -822,7 +825,7 @@ class TaskThread(QtCore.QThread):
                 #runner = SequenceRunner(self.paramSpace, self.paramSpace.keys(), passHash=True)
                 #runner.setEndFuncs([]*len(self.paramSpace) + [self.checkStop])
                 #result = runner.start(self.runOnce)
-                result = runSequence(self.runOnce, self.paramSpace, self.paramSpace.keys(), passHash=True)
+                runSequence(self.runOnce, self.paramSpace, self.paramSpace.keys(), passHash=True)
             
         except:
             print "Error in protocol thread, exiting."
@@ -833,6 +836,15 @@ class TaskThread(QtCore.QThread):
                     
     def runOnce(self, params=None):
         #print "TaskThread:runOnce"
+        import gc
+        from lib.util.PlotWidget import PlotCurve
+        from PyQt4 import Qwt5
+        print "PlotCurve:", len(filter(lambda x: isinstance(x, PlotCurve), gc.get_objects()))
+        print "QwtPlotCurve:", len(filter(lambda x: isinstance(x, Qwt5.QwtPlotCurve), gc.get_objects()))
+        print "MetaArray:", len(filter(lambda x: isinstance(x, MetaArray), gc.get_objects()))
+        print "ndarray:", len(filter(lambda x: isinstance(x, ndarray), gc.get_objects()))
+        print ""
+        
         if params is None:
             params = {}
         with MutexLocker(self.lock) as l:
@@ -903,7 +915,9 @@ class TaskThread(QtCore.QThread):
         if self.stopThread:
             raise Exception('stop', result)
         #print "TaskThread:runOnce return"
-        return result
+        
+        ## Don't return result--this just causes it to be stored until the entire sequence is finished.
+        #return result  
         
     def checkStop(self):
         with MutexLocker(self.lock):

@@ -17,10 +17,10 @@ class MultiClampProtoGui(ProtocolGui):
         daqUI = self.prot.getDevice(daqDev)
         
         self.traces = {}  ## Stores traces from a sequence to allow average plotting
-        self.avgPlots = {}
+        #self.avgPlots = {}
         
         #self.cmdPlots = []
-        self.inpPlots = {}
+        #self.inpPlots = {}
         self.resetInpPlots = False  ## Signals result handler to clear plots before adding a new one
         self.currentCmdPlot = None
         
@@ -65,6 +65,8 @@ class MultiClampProtoGui(ProtocolGui):
         state['mode'] = self.getMode()
         state['scaledSignal'] = str(self.ui.scaledSignalCombo.currentText())
         state['rawSignal'] = str(self.ui.rawSignalCombo.currentText())
+        #state['topPlot'] = self.ui.topPlotWidget.saveState()
+        #state['bottomPlot'] = self.ui.bottomPlotWidget.saveState()
         #state['stim'] = self.ui.waveGeneratorWidget.saveState()
         #print state['splitter'], state['splitter_2']
         return state
@@ -127,17 +129,18 @@ class MultiClampProtoGui(ProtocolGui):
         #for k in self.inpPlots:
             #for i in self.inpPlots[k]:
                 #i.detach()
-        self.inpPlots = {}
+        #self.inpPlots = {}
         #for i in self.avgPlots:
             #self.avgPlots[i].detach()
-        self.avgPlots = {}
+        #self.avgPlots = {}
         self.traces = {}
         self.ui.topPlotWidget.clear()
         
     def protoStarted(self, params):
         ## Draw green trace for current command waveform
         if self.currentCmdPlot is not None:
-            self.currentCmdPlot.detach()
+            self.ui.bottomPlotWidget.detachCurve(self.currentCmdPlot)
+            #self.currentCmdPlot.detach()
         params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name])
         #cur = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
         cur = self.getSingleWave(params)
@@ -146,13 +149,15 @@ class MultiClampProtoGui(ProtocolGui):
     def plotCmdWave(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
         if data is None:
             return
-        plot = PlotCurve('cell')
+        plot = self.ui.bottomPlotWidget.plot(data, x=self.timeVals, replot=False)
+        #plot = PlotCurve('cell')
         plot.setPen(QtGui.QPen(color))
-        plot.setData(self.timeVals, data)
-        plot.attach(self.ui.bottomPlotWidget)
+        #plot.setData(self.timeVals, data)
+        #plot.attach(self.ui.bottomPlotWidget)
         #self.cmdPlots.append(plot)
         if replot:
             self.ui.bottomPlotWidget.replot()
+        
         return plot
         
     def generateProtocol(self, params=None):
@@ -269,59 +274,61 @@ class MultiClampProtoGui(ProtocolGui):
             self.clearInpPlots()
 
         ## Is this result one of repeated trials?
-        params = params.copy()
-        repsRunning = ('protocol', 'repetitions') in params
+        #params = params.copy()
+        #repsRunning = ('protocol', 'repetitions') in params
         
         ## What is the total number of repeats?
-        reps = self.prot.getParam('repetitions')
-        if reps == 0:
-            reps = 1
+        #reps = self.prot.getParam('repetitions')
+        #if reps == 0:
+            #reps = 1
             
         ## What is the current repetition number?
-        rep = 1
-        if repsRunning:
-            rep += params[('protocol', 'repetitions')]
-            del params[('protocol', 'repetitions')]
-        paramKey = tuple(params.items())
+        #rep = 1
+        #if repsRunning:
+            #rep += params[('protocol', 'repetitions')]
+            #del params[('protocol', 'repetitions')]
+        #paramKey = tuple(params.items())
             
         #if repsRunning:
             #plotColor = QtGui.QColor(255, 255, 255, int(255./rep))
         #else:
             #plotColor = QtGui.QColor(255, 255, 255, 200)
         
-        if repsRunning and (reps > 1):
+        #if repsRunning and (reps > 1):
             ## Add the results into the average plot if requested
                 
-            if self.stateGroup.state()['displayAverageCheck'] and repsRunning:
+            #if self.stateGroup.state()['displayAverageCheck'] and repsRunning:
                 
-                if paramKey not in self.traces:
-                    self.traces[paramKey] = []
-                self.traces[paramKey].append(result)
+                #if paramKey not in self.traces:
+                    #self.traces[paramKey] = []
+                #self.traces[paramKey].append(result)
                 
-                for k in self.traces:
-                    if k not in self.avgPlots:
-                        plot = PlotCurve('cell')
-                        plot.setPen(QtGui.QPen(QtGui.QColor(0, 255, 0)))
-                        plot.setZ(100)
-                        self.avgPlots[k] = plot
-                        plot.attach(self.ui.topPlotWidget)
-                    avgTrace = numpy.vstack([a['scaled'].view(ndarray) for a in self.traces[k]]).mean(axis=0)
-                    #print avgTrace.shape
-                    self.avgPlots[k].setData(self.traces[k][0].xvals('Time'), avgTrace / self.inpScale)
+                #for k in self.traces:
+                    #if k not in self.avgPlots:
+                        #plot = self.ui.topPlotWidget.plot(replot=False)
+                        ##plot = PlotCurve('cell')
+                        #plot.setPen(QtGui.QPen(QtGui.QColor(0, 255, 0)))
+                        #plot.setZ(100)
+                        #self.avgPlots[k] = plot
+                        ##plot.attach(self.ui.topPlotWidget)
+                    #avgTrace = numpy.vstack([a['scaled'].view(ndarray) for a in self.traces[k]]).mean(axis=0)
+                    ##print avgTrace.shape
+                    #self.avgPlots[k].setData(self.traces[k][0].xvals('Time'), avgTrace / self.inpScale)
                 
         ## Plot the results
-        plot = PlotCurve('cell')
-        plot.setData(result.xvals('Time'), result['scaled'] / self.inpScale)
-        plot.attach(self.ui.topPlotWidget)
-        if paramKey not in self.inpPlots:
-            self.inpPlots[paramKey] = []
-        self.inpPlots[paramKey].append(plot)
+        plot = self.ui.topPlotWidget.plot(result['scaled'].view(numpy.ndarray) / self.inpScale, x=result.xvals('Time'))
+        #plot = PlotCurve('cell')
+        #plot.setData(result.xvals('Time'), result['scaled'] / self.inpScale)
+        #plot.attach(self.ui.topPlotWidget)
+        #if paramKey not in self.inpPlots:
+            #self.inpPlots[paramKey] = []
+        #self.inpPlots[paramKey].append(plot)
         
         ## Update the color of all plots sharing this parameter set
-        alpha = 200 / len(self.inpPlots[paramKey])
-        for p in self.inpPlots[paramKey]:
-            p.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha)))
+        #alpha = 200 / len(self.inpPlots[paramKey])
+        #for p in self.inpPlots[paramKey]:
+            #p.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha)))
         
         
-        self.ui.topPlotWidget.replot()
+        #self.ui.topPlotWidget.replot()
         

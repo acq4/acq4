@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 from lib.util.generator.StimGenerator import StimGenerator
+#from lib.util.PlotWidget import PlotWidget
 
 ## Bug workaround; splitters do not report their own state correctly.
 def splitterState(w):
@@ -31,7 +32,7 @@ class WidgetGroup(QtCore.QObject):
     """This class takes a list of widgets and keeps an internal record of their state which is always up to date. Allows reading and writing from groups of widgets simultaneously."""
     
     ## List of widget types which can be handled by WidgetGroup.
-    ## the value for each type is a tuple (change signal, get function, set function)
+    ## the value for each type is a tuple (change signal, get function, set function, [auto-add children])
     classes = {
         QtGui.QSpinBox: 
             ('valueChanged(int)', 
@@ -44,7 +45,8 @@ class WidgetGroup(QtCore.QObject):
         QtGui.QSplitter: 
             ('splitterMoved(int,int)', 
             splitterState,
-            QtGui.QSplitter.setSizes),
+            QtGui.QSplitter.setSizes,
+            True),
         QtGui.QCheckBox: 
             ('stateChanged(int)',
             QtGui.QCheckBox.isChecked,
@@ -56,11 +58,24 @@ class WidgetGroup(QtCore.QObject):
         QtGui.QGroupBox:
             ('clicked(bool)',
             QtGui.QGroupBox.isChecked,
-            QtGui.QGroupBox.setChecked),
+            QtGui.QGroupBox.setChecked,
+            True),
         StimGenerator:
             ('changed',
             StimGenerator.saveState,
             StimGenerator.loadState),
+        #PlotWidget:
+            #(None,
+            #PlotWidget.saveState,
+            #PlotWidget.restoreState),
+        QtGui.QLineEdit:
+            ('editingFinished()',
+            lambda w: str(w.text()),
+            QtGui.QLineEdit.setText),
+        QtGui.QRadioButton:
+            ('toggled(bool)',
+            QtGui.QRadioButton.isChecked,
+            QtGui.QRadioButton.setChecked),
     }
     
     
@@ -69,6 +84,7 @@ class WidgetGroup(QtCore.QObject):
         self.widgetList = {}
         self.scales = {}
         self.cache = {}
+        self.uncachedWidgets = []
         if isinstance(widgetList, QtCore.QObject):
             self.autoAdd(widgetList)
         elif isinstance(widgetList, list):
@@ -86,21 +102,45 @@ class WidgetGroup(QtCore.QObject):
         if not self.acceptsType(w):
             raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
             
-        signal = WidgetGroup.classes[type(w)][0]
-        QtCore.QObject.connect(w, QtCore.SIGNAL(signal), self.mkChangeCallback(w))
+        if type(w) in WidgetGroup.classes:
+            signal = WidgetGroup.classes[type(w)][0]
+        else:
+            signal = w.widgetGroupInterface()[0]
             
+        if signal is not None:
+            QtCore.QObject.connect(w, QtCore.SIGNAL(signal), self.mkChangeCallback(w))
+        else:
+            self.uncachedWidgets.append(w)
+       
+    def interface(self, obj):
+        t = type(obj)
+        if t in WidgetGroup.classes:
+            return WidgetGroup.classes[t]
+        else:
+            return obj.widgetGroupInterface()
+
+    def checkForChildren(self, obj):
+        """Return true if we should automatically search the children of this object for more."""
+        iface = self.interface(obj)
+        return (len(iface) > 3 and iface[3])
+       
     def autoAdd(self, obj):
         ## Find all children of this object and add them if possible.
-        if self.acceptsType(obj):
+        accepted = self.acceptsType(obj)
+        if accepted:
             #print "%s  auto add %s" % (self.objectName(), obj.objectName())
             self.addWidget(obj)
-        for c in obj.children():
-            self.autoAdd(c)
+            
+        if not accepted or self.checkForChildren(obj):
+            for c in obj.children():
+                self.autoAdd(c)
 
     def acceptsType(self, obj):
         for c in WidgetGroup.classes:
             if isinstance(obj, c):
                 return True
+        if hasattr(obj, 'widgetGroupInterface'):
+            return True
         return False
         #return (type(obj) in WidgetGroup.classes)
 
@@ -123,6 +163,8 @@ class WidgetGroup(QtCore.QObject):
             self.emit(QtCore.SIGNAL('changed'), self.widgetList[w], v2)
         
     def state(self):
+        for w in self.uncachedWidgets:
+            self.readWidget(w)
         return self.cache.copy()
 
     def setState(self, s):
@@ -136,7 +178,10 @@ class WidgetGroup(QtCore.QObject):
             self.setWidget(w, s[n])
 
     def readWidget(self, w):
-        getFunc = WidgetGroup.classes[type(w)][1]
+        if type(w) in WidgetGroup.classes:
+            getFunc = WidgetGroup.classes[type(w)][1]
+        else:
+            getFunc = w.widgetGroupInterface()[1]
         val = getFunc(w)
         if self.scales[w] is not None:
             val /= self.scales[w]
@@ -149,7 +194,11 @@ class WidgetGroup(QtCore.QObject):
     def setWidget(self, w, v):
         if self.scales[w] is not None:
             v *= self.scales[w]
-        setFunc = WidgetGroup.classes[type(w)][2]
+        
+        if type(w) in WidgetGroup.classes:
+            setFunc = WidgetGroup.classes[type(w)][2]
+        else:
+            setFunc = w.widgetGroupInterface()[2]
         setFunc(w, v)
 
         

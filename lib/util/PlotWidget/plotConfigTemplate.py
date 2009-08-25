@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'plotConfigTemplate.ui'
 #
-# Created: Fri Aug 21 09:34:13 2009
+# Created: Mon Aug 24 23:26:36 2009
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -138,6 +138,9 @@ class Ui_Form(object):
         self.maxTracesSpin = QtGui.QSpinBox(self.decimateGroup)
         self.maxTracesSpin.setObjectName("maxTracesSpin")
         self.gridLayout_4.addWidget(self.maxTracesSpin, 2, 1, 1, 1)
+        self.forgetTracesCheck = QtGui.QCheckBox(self.decimateGroup)
+        self.forgetTracesCheck.setObjectName("forgetTracesCheck")
+        self.gridLayout_4.addWidget(self.forgetTracesCheck, 3, 0, 1, 2)
         self.verticalLayout_2.addWidget(self.decimateGroup)
         self.averageGroup = QtGui.QGroupBox(self.tab_2)
         self.averageGroup.setCheckable(True)
@@ -201,7 +204,7 @@ class Ui_Form(object):
         self.gridLayout_3.addWidget(self.tabWidget, 0, 0, 1, 1)
 
         self.retranslateUi(Form)
-        self.tabWidget.setCurrentIndex(2)
+        self.tabWidget.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
@@ -228,6 +231,7 @@ class Ui_Form(object):
         self.manualDecimateRadio.setText(QtGui.QApplication.translate("Form", "Manual", None, QtGui.QApplication.UnicodeUTF8))
         self.autoDecimateRadio.setText(QtGui.QApplication.translate("Form", "Auto", None, QtGui.QApplication.UnicodeUTF8))
         self.maxTracesCheck.setText(QtGui.QApplication.translate("Form", "Max Traces:", None, QtGui.QApplication.UnicodeUTF8))
+        self.forgetTracesCheck.setText(QtGui.QApplication.translate("Form", "Forget hidden traces", None, QtGui.QApplication.UnicodeUTF8))
         self.averageGroup.setTitle(QtGui.QApplication.translate("Form", "Average", None, QtGui.QApplication.UnicodeUTF8))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), QtGui.QApplication.translate("Form", "Data", None, QtGui.QApplication.UnicodeUTF8))
         self.alphaGroup.setTitle(QtGui.QApplication.translate("Form", "Alpha", None, QtGui.QApplication.UnicodeUTF8))
