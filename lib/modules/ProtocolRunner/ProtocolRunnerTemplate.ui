@@ -487,7 +487,7 @@ in loop mode.</string>
       </layout>
      </item>
      <item row="1" column="0">
-      <widget class="QTreeWidget" name="sequenceParamList">
+      <widget class="ParamList" name="sequenceParamList">
        <property name="dragEnabled">
         <bool>true</bool>
        </property>
@@ -495,7 +495,10 @@ in loop mode.</string>
         <enum>QAbstractItemView::InternalMove</enum>
        </property>
        <property name="rootIsDecorated">
-        <bool>false</bool>
+        <bool>true</bool>
+       </property>
+       <property name="animated">
+        <bool>true</bool>
        </property>
        <column>
         <property name="text">
@@ -569,6 +572,13 @@ in loop mode.</string>
    </widget>
   </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ParamList</class>
+   <extends>QTreeWidget</extends>
+   <header>ParamList</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

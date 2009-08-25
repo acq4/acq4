@@ -295,6 +295,8 @@ class Task(DeviceTask):
                 else:
                     scale = 1.0 / self.state[ch + 'Signal'][1]
                     result[ch]['data'] = result[ch]['data'] * scale
+                    #if ch == 'raw':
+                        #print scale, result[ch]['data'].max(), result[ch]['data'].min()
                     result[ch]['units'] = self.state[ch + 'Signal'][2]
                     #result[ch]['name'] = self.state[ch + 'Signal'][0]
                     result[ch]['name'] = ch

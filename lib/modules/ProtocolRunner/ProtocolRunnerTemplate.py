@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Sun Aug 23 22:07:25 2009
-#      by: PyQt4 UI code generator 4.5.2
+# Created: Mon Aug 24 19:45:56 2009
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -203,10 +203,11 @@ QMainWindow::separator {background-color: #666}""")
         spacerItem6 = QtGui.QSpacerItem(13, 13, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem6)
         self.gridLayout_2.addLayout(self.verticalLayout, 0, 1, 2, 1)
-        self.sequenceParamList = QtGui.QTreeWidget(self.dockWidgetContents_7)
+        self.sequenceParamList = ParamList(self.dockWidgetContents_7)
         self.sequenceParamList.setDragEnabled(True)
         self.sequenceParamList.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
-        self.sequenceParamList.setRootIsDecorated(False)
+        self.sequenceParamList.setRootIsDecorated(True)
+        self.sequenceParamList.setAnimated(True)
         self.sequenceParamList.setObjectName("sequenceParamList")
         self.gridLayout_2.addWidget(self.sequenceParamList, 1, 0, 1, 1)
         self.horizontalLayout_3 = QtGui.QHBoxLayout()
@@ -278,3 +279,4 @@ QMainWindow::separator {background-color: #666}""")
         self.runSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Record Sequence", None, QtGui.QApplication.UnicodeUTF8))
         self.stopSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Stop Sequence", None, QtGui.QApplication.UnicodeUTF8))
 
+from ParamList import ParamList

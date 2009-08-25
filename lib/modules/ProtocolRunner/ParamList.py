@@ -1,0 +1,150 @@
+from PyQt4 import QtGui, QtCore
+from lib.util.advancedTypes import OrderedDict
+
+class ParamList(QtGui.QTreeWidget):
+    def __init__(self, *args):
+        QtGui.QTreeWidget.__init__(self, *args)
+        self.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
+
+
+    checkStateMap = {
+        True: QtCore.Qt.Checked,
+        False: QtCore.Qt.Unchecked
+    }
+    
+    def updateList(self, dev, params):
+        """Update the list of sequence parameters for dev."""
+        # Catalog the parameters that already exist for this device:
+        items = {}
+        for i in self.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0):
+            items[str(i.text(1))] = i
+        ## Add new sequence parameters, update old ones
+        for p in params:
+            if p not in items:
+                #print dev, p, params[p]
+                item = QtGui.QTreeWidgetItem([dev, p, str(params[p])])
+                item.setFlags(
+                    QtCore.Qt.ItemIsSelectable | 
+                    QtCore.Qt.ItemIsDragEnabled |
+                    QtCore.Qt.ItemIsDropEnabled |
+                    QtCore.Qt.ItemIsUserCheckable |
+                    QtCore.Qt.ItemIsEnabled)
+                item.setCheckState(0, QtCore.Qt.Checked)
+                items[p] = item
+                self.addTopLevelItem(item)
+                item.setExpanded(True)  ## Must happen AFTER adding to tree.
+            items[p].setData(2, QtCore.Qt.DisplayRole, QtCore.QVariant(str(params[p])))
+            
+        ## remove non-existent sequence parameters (but not their children)
+        for key in items:
+            if key not in params:
+                item = items[key]
+                childs = item.takeChildren()
+                p = item.parent()
+                if p is None:
+                    ind = self.indexOfTopLevelItem(item)
+                    self.takeTopLevelItem(ind)
+                    for c in childs:
+                        self.addTopLevelItem(c)
+                else:
+                    p.removeChild(item)
+                    for c in childs:
+                        p.addChild(c)
+    
+    def saveState(self):
+        state = []
+        for i in self.topLevelItems():
+            d = self.itemData(i)
+            childs = []
+            for j in range(i.childCount()):
+                dd = self.itemData(i.child(j))
+                childs.append(dd)
+            state.append(d + (childs,))
+        return state
+        
+    
+    def loadState(self, state):
+        """Order all parameters to match order in list. Does not create or destroy any parameters."""
+        items = self.topLevelItems()
+        
+        ordered = []
+        
+        ## Go through parameter list, remove items from treewidget and store in temporary list
+        for p in state:
+            (dev, param, enabled, childs) = p
+            item = self.findItem(dev, param)
+            if item is None:
+                continue
+            item.setCheckState(0, ParamList.checkStateMap[enabled])
+            o2 = []
+            ordered.append((self.takeItem(item), o2))
+            for c in childs:
+                (dev2, param2, enabled2) = c
+                item = self.findItem(dev2, param2)
+                if item is None:
+                    continue
+                item.setCheckState(0, ParamList.checkStateMap[enabled])
+                o2.append([self.takeItem(item), []])
+        
+        ## Re-add items from param list in correct order
+        for i in ordered:
+            self.addTopLevelItem(i[0])
+            for i2 in i[1]:
+                i[0].addChild(i2)
+        
+        
+        
+    
+    def dropEvent(self, ev):
+        QtGui.QTreeWidget.dropEvent(self, ev)
+        
+        ## Enable drop for top-level items, disable for all others.
+        for i in self.topLevelItems():
+            i.setFlags(i.flags() | QtCore.Qt.ItemIsDropEnabled)
+            for j in range(i.childCount()):
+                i.child(j).setFlags(i.flags() & (~QtCore.Qt.ItemIsDropEnabled))
+            i.setExpanded(True)
+                
+    def itemData(self, item):
+        dev = str(item.text(0))
+        param = str(item.text(1))
+        enab = (item.checkState(0)==QtCore.Qt.Checked)
+        return(dev, param, enab)
+        
+    def topLevelItems(self):
+        items = []
+        for i in range(self.topLevelItemCount()):
+            items.append(self.topLevelItem(i))
+        return items
+        
+    def findItem(self, dev, param):
+        items = self.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0)
+        for i in items:
+            p = str(i.data(1, QtCore.Qt.DisplayRole).toString())
+            if p == param:
+                return i
+        return None
+        
+    def takeItem(self, item):
+        p = item.parent()
+        if p is None:
+            return self.takeTopLevelItem(self.indexOfTopLevelItem(item))
+        else:
+            return p.takeChild(p.indexOfChild(item))
+
+    def listParams(self):
+        params = []
+        for i in self.topLevelItems():
+            (dev, param, enabled) = self.itemData(i)
+            if enabled:
+                num = i.text(2).toInt()[0]
+                params.append((dev, param, num))
+        return params
+        
+    def removeDevice(self, dev):
+        """Remove all parameters for a specific device"""
+        items = self.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0)
+        for i in items:
+            self.takeItem(i)
+        
+        

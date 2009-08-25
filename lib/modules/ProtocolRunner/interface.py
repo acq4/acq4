@@ -26,7 +26,6 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.ui = Ui_MainWindow()
         self.win = QtGui.QMainWindow()
         self.ui.setupUi(self.win)
-        self.ui.sequenceParamList.header().setResizeMode(QtGui.QHeaderView.Stretch)
         self.protoStateGroup = WidgetGroup([
             (self.ui.protoContinuousCheck, 'continuous'),
             (self.ui.protoDurationSpin, 'duration', 1e3),
@@ -68,6 +67,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         #QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.deviceItemChanged)
         QtCore.QObject.connect(self.protoStateGroup, QtCore.SIGNAL('changed'), self.protoGroupChanged)
         self.win.show()
+        QtCore.QObject.connect(self.ui.sequenceParamList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.updateSeqReport)
         
     def protoGroupChanged(self, param, value):
         self.emit(QtCore.SIGNAL('protocolChanged'), param, value)
@@ -210,70 +210,34 @@ class ProtocolRunner(Module, QtCore.QObject):
         else:
             params = self.docks[dev].widget().listSequence()
         #print "New parameter lst:", params
-        # Catalog the parameters that already exist for this device:
-        items = {}
-        for i in self.ui.sequenceParamList.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0):
-            items[str(i.text(1))] = i
-        ## Add new sequence parameters, update old ones
-        for p in params:
-            if p not in items:
-                #print dev, p, params[p]
-                item = QtGui.QTreeWidgetItem([dev, p, str(params[p])])
-                item.setFlags(
-                    QtCore.Qt.ItemIsSelectable | 
-                    QtCore.Qt.ItemIsDragEnabled |
-                    QtCore.Qt.ItemIsDropEnabled |
-                    QtCore.Qt.ItemIsUserCheckable |
-                    QtCore.Qt.ItemIsEnabled)
-                items[p] = item
-                self.ui.sequenceParamList.addTopLevelItem(item)
-            items[p].setData(2, QtCore.Qt.DisplayRole, QtCore.QVariant(str(params[p])))
-            
-        ## remove non-existent sequence parameters (but not their children)
-        for key in items:
-            if key not in params:
-                item = items[key]
-                childs = item.takeChildren()
-                p = item.parent()
-                if p is None:
-                    ind = self.ui.sequenceParamList.indexOfTopLevelItem(item)
-                    self.ui.sequenceParamList.takeTopLevelItem(ind)
-                    for c in childs:
-                        self.ui.sequenceParamList.addTopLevelItem(c)
-                else:
-                    p.removeChild(item)
-                    for c in childs:
-                        p.addChild(c)
+        self.ui.sequenceParamList.updateList(dev, params)
         
         self.updateSeqReport()
         
     def updateSeqReport(self):
         s = self.protoStateGroup.state()
         period = max(s['duration']+s['leadTime'], s['cycleTime'])
-        items = []
-        for i in range(self.ui.sequenceParamList.topLevelItemCount()):
-            items.append(self.ui.sequenceParamList.topLevelItem(i))
+        items = self.ui.sequenceParamList.listParams()[:]
         if len(items) == 0:
             self.ui.paramSpaceLabel.setText('0')
             self.ui.seqTimeLabel.setText('0')
         else:
-            ps = [str(i.text(2)) for i in items]
-            psi = [int(i) for i in ps]
+            #ps = [str(i.text(2)) for i in items]
+            psi = [i[2] for i in items]
+            ps = map(str, psi)
             tot = reduce(lambda x,y: x*y, psi)
             self.ui.paramSpaceLabel.setText(' x '.join(ps) + ' = %d' % tot)
             self.ui.seqTimeLabel.setText('%0.3f sec' % (period*tot))
         
     def hideDock(self, dev):
         self.docks[dev].hide()
-        items = self.ui.sequenceParamList.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0)
-        for i in items:
-            i.setHidden(True)
+        self.ui.sequenceParamList.removeDevice(dev)
         
     def showDock(self, dev):
         self.docks[dev].show()
-        items = self.ui.sequenceParamList.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0)
-        for i in items:
-            i.setHidden(False)
+        #items = self.ui.sequenceParamList.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0)
+        #for i in items:
+            #i.setHidden(False)
         
     def updateDocks(self, protocol = None):
         """Create/unhide new docks if they are needed and hide old docks if they are not."""
@@ -425,7 +389,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         #print "Docks cleared."
         
         ## Update protocol parameters
-        self.protoStateGroup.setState(prot.conf)
+        self.protoStateGroup.setState(prot.conf['conf'])
         #self.updateProtParams(prot)
         
         ## update dev list
@@ -443,9 +407,11 @@ class ProtocolRunner(Module, QtCore.QObject):
             if d in self.docks:
                 self.docks[d].widget().restoreState(prot.devices[d])
             
+        ## Load sequence parameter state (must be done after docks have loaded)
+        self.ui.sequenceParamList.loadState(prot.conf['params'])
         
         ## Configure dock positions
-        winState = prot.windowState()
+        winState = prot.conf['windowState']
         if winState is not None:
             self.win.restoreState(winState)
             
@@ -570,14 +536,14 @@ class ProtocolRunner(Module, QtCore.QObject):
         
         ## Find all top-level items in the sequence parameter list
         try:
-            items = []
-            for i in range(self.ui.sequenceParamList.topLevelItemCount()):
-                items.append(self.ui.sequenceParamList.topLevelItem(i))
+            items = self.ui.sequenceParamList.listParams()
+            #for i in self.ui.sequenceParamList.topLevelItems:
+                #items.append(i)
             ## Generate parameter space
             params = OrderedDict()
             for i in items:
-                key = (str(i.text(0)), str(i.text(1)))
-                params[key] = range(int(i.text(2)))
+                key = i[:2]
+                params[key] = range(i[2])
             
             ## Set storage dir
             self.currentDir = self.manager.getCurrentDir()
@@ -688,11 +654,11 @@ class ProtocolRunner(Module, QtCore.QObject):
         conf = self.protoStateGroup.state()
         
         ## store window state
-        ws = str(self.ui.win.saveState().toPercentEncoding())
-        self.winState = ws
+        ws = str(self.win.saveState().toPercentEncoding())
+        #self.winState = ws
         
         ## store parameter order/state
-        params = []
+        params = self.ui.sequenceParamList.saveState()
         
         return {'conf': conf, 'params': params, 'windowState': ws}
         
@@ -705,9 +671,20 @@ class Protocol:
         if fileName is not None:
             self.fileName = fileName
             conf = readConfigFile(fileName)
-            self.conf = conf['conf']
+            if 'protocol' not in conf:
+                self.conf = conf
+            else:
+                self.conf = conf['protocol']
+            if 'params' not in self.conf:
+                self.conf['params'] = []
+                
+            if 'winState' in conf:
+                self.conf['windowState'] = conf['winState']
+            self.conf['windowState'] = QtCore.QByteArray.fromPercentEncoding(self.conf['windowState'])
+                
+            #self.params = conf['params']
             self.devices = conf['devices']
-            self.winState = conf['winState']
+            #self.winState = conf['winState']
             self.enabled = self.devices.keys()
         else:
             self.fileName = None
@@ -769,7 +746,7 @@ class Protocol:
         rem = [d for d in devs if not self.deviceEnabled(d)]
         for d in rem:
             del devs[d]
-        return {'conf': conf, 'devices': devs}  #, 'winState': self.winState}
+        return {'protocol': conf, 'devices': devs}  #, 'winState': self.winState}
         
     
     def enabledDevices(self):
@@ -797,10 +774,6 @@ class Protocol:
             if newName in self.enabled:
                 self.enabled.remove(newName)
             
-    def windowState(self):
-        if self.winState is None:
-            return None
-        return QtCore.QByteArray.fromPercentEncoding(self.winState)        
         
         
 class TaskThread(QtCore.QThread):
@@ -948,4 +921,6 @@ class TaskThread(QtCore.QThread):
     def abort(self):
         with MutexLocker(self.lock):
             self.abortThread = True
-        
+
+
+

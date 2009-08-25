@@ -365,6 +365,7 @@ class PatchThread(QtCore.QThread):
                     
                     ## analyze trace 
                     result = task.getResult()
+                    #print result[clampName]['raw'].max(), result[clampName]['raw'].min()
                     analysis = self.analyze(result[clampName], params)
                     frame = {'data': result, 'analysis': analysis}
                     

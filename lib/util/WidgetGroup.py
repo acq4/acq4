@@ -44,19 +44,11 @@ class WidgetGroup(QtCore.QObject):
         QtGui.QSplitter: 
             ('splitterMoved(int,int)', 
             splitterState,
-            #QtGui.QSplitter.sizes,
             QtGui.QSplitter.setSizes),
-            #lambda w: str(w.saveState().toPercentEncoding()),
-            #splitterState,
-            #lambda w,v: w.restoreState(QtCore.QByteArray.fromPercentEncoding(v))),
         QtGui.QCheckBox: 
             ('stateChanged(int)',
             QtGui.QCheckBox.isChecked,
             QtGui.QCheckBox.setChecked),
-        StimGenerator:
-            ('changed',
-            StimGenerator.saveState,
-            StimGenerator.loadState),
         QtGui.QComboBox:
             ('currentIndexChanged(int)',
             comboState,
@@ -65,6 +57,10 @@ class WidgetGroup(QtCore.QObject):
             ('clicked(bool)',
             QtGui.QGroupBox.isChecked,
             QtGui.QGroupBox.setChecked),
+        StimGenerator:
+            ('changed',
+            StimGenerator.saveState,
+            StimGenerator.loadState),
     }
     
     
