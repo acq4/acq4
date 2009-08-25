@@ -198,15 +198,16 @@ class OutputChannelGui(DaqChannelGui):
         return plot
 
     def getSingleWave(self, params=None):
-        ## waveGenerator generates values in mV or pA
-        #print "    get wave:", params
-        wave = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
-        
-        if wave is None:
-            return None
         state = self.stateGroup.state()
         if state['holdingCheck']:
-            wave += (state['holdingSpin'] / self.scale)
+            h = state['holdingSpin']
+        else:
+            h = 0.0
+            
+        self.ui.waveGeneratorWidget.setOffset(h)
+        
+        wave = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
+        
         return wave
         
 class InputChannelGui(DaqChannelGui):

@@ -64,7 +64,7 @@ class DAQGenericTask(DeviceTask):
         
     def configure(self, tasks, startOrder):
         with MutexLocker(self.dev.lock):
-            self.daqTasks = {}
+            #self.daqTasks = {}
             self.initialState = {}
             for ch in self.cmd:
                 dev = self.dev.dm.getDevice(self.dev.config[ch]['channel'][0])
@@ -76,6 +76,7 @@ class DAQGenericTask(DeviceTask):
                     self.initialState[ch] = self.dev.getChannelValue(ch)
                 
     def createChannels(self, daqTask):
+        self.daqTasks = {}
         #print "createChannels"
         with MutexLocker(self.dev.lock):
             ## Is this the correct DAQ device for any of my channels?
@@ -107,12 +108,12 @@ class DAQGenericTask(DeviceTask):
                 self.bufferedChannels.append(ch)
                 daqTask.addChannel(chConf['channel'][1], chConf['type'])
                 self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
-                self.cmd[ch]['task'] = daqTask
+                #self.cmd[ch]['task'] = daqTask  ## ALSO DON't FORGET TO DELETE IT, ASS.
                 if chConf['type'] in ['ao', 'do']:
                     scale = self.getChanScale(ch)
                     cmdData = self.cmd[ch]['command']
                     if cmdData is None:
-                        print "No command for channel %s, skipping." % ch
+                        #print "No command for channel %s, skipping." % ch
                         continue
                     cmdData *= scale
                     if chConf['type'] == 'do':
@@ -121,7 +122,7 @@ class DAQGenericTask(DeviceTask):
                         cmdData[cmdData>0] = 0xFFFFFFFF
                     #print "channel", chConf['channel'][1], cmdData
                     daqTask.setWaveform(chConf['channel'][1], cmdData)
-                #print "  done"
+                #print "  done: ", self.daqTasks.keys()
         
     def getChanScale(self, chan):
         with MutexLocker(self.dev.lock):
@@ -163,12 +164,14 @@ class DAQGenericTask(DeviceTask):
         result = {}
         #print "buffered channels:", self.bufferedChannels
         for ch in self.bufferedChannels:
-            result[ch] = self.cmd[ch]['task'].getData(self.dev.config[ch]['channel'][1])
+            #result[ch] = self.cmd[ch]['task'].getData(self.dev.config[ch]['channel'][1])
+            result[ch] = self.daqTasks[ch].getData(self.dev.config[ch]['channel'][1])
             result[ch]['data'] = result[ch]['data'] / self.getChanScale(ch)
             if 'units' in self.dev.config[ch]:
                 result[ch]['units'] = self.dev.config[ch]['units']
             else:
                 result[ch]['units'] = None
+            #del self.cmd[ch]['task']
         #print "RESULT:", result    
         ## Todo: Add meta-info about channels that were used but unbuffered
         

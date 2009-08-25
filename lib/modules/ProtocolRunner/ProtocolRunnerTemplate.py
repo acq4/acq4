@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Mon Aug 24 22:45:08 2009
+# Created: Tue Aug 25 14:37:38 2009
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -13,7 +13,7 @@ class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(1118, 593)
-        MainWindow.setStyleSheet("""QDockWidget::title { background-color: #446;}
+        MainWindow.setStyleSheet("""/*QDockWidget::title { background-color: #446;}*/
 QSplitter::handle {background-color: #666}
 QMainWindow::separator {background-color: #666}""")
         MainWindow.setDockNestingEnabled(True)
@@ -230,6 +230,20 @@ QMainWindow::separator {background-color: #666}""")
         self.gridLayout_2.addLayout(self.horizontalLayout_3, 2, 0, 1, 2)
         self.SequenceDock.setWidget(self.dockWidgetContents_7)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.SequenceDock)
+        self.dockWidget = QtGui.QDockWidget(MainWindow)
+        self.dockWidget.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable|QtGui.QDockWidget.DockWidgetVerticalTitleBar)
+        self.dockWidget.setObjectName("dockWidget")
+        self.dockWidgetContents_2 = QtGui.QWidget()
+        self.dockWidgetContents_2.setObjectName("dockWidgetContents_2")
+        self.horizontalLayout_4 = QtGui.QHBoxLayout(self.dockWidgetContents_2)
+        self.horizontalLayout_4.setSpacing(0)
+        self.horizontalLayout_4.setMargin(0)
+        self.horizontalLayout_4.setObjectName("horizontalLayout_4")
+        self.analysisModuleList = QtGui.QListWidget(self.dockWidgetContents_2)
+        self.analysisModuleList.setObjectName("analysisModuleList")
+        self.horizontalLayout_4.addWidget(self.analysisModuleList)
+        self.dockWidget.setWidget(self.dockWidgetContents_2)
+        MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.dockWidget)
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
@@ -280,5 +294,6 @@ QMainWindow::separator {background-color: #666}""")
         self.testSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Test", None, QtGui.QApplication.UnicodeUTF8))
         self.runSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Record Sequence", None, QtGui.QApplication.UnicodeUTF8))
         self.stopSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Stop Sequence", None, QtGui.QApplication.UnicodeUTF8))
+        self.dockWidget.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Analysis", None, QtGui.QApplication.UnicodeUTF8))
 
 from ParamList import ParamList

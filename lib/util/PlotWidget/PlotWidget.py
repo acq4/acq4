@@ -339,7 +339,8 @@ class PlotWidget(Qwt.QwtPlot):
         except:
             pass
         
-        self.curves.remove(c)
+        if c in self.curves:
+            self.curves.remove(c)
         self.updateDecimation()
         
         

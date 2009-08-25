@@ -701,11 +701,7 @@ class Protocol:
             self.conf = {}
             self.devices = {}
             self.winState = None
-        
-    def generateProtocol(self, **args):
-        """Generate the configuration data that will execute this protocol"""
-        
-        pass
+
     
     def deviceEnabled(self, dev):
         return dev in self.enabled
@@ -807,6 +803,7 @@ class TaskThread(QtCore.QThread):
     
                 
     def run(self):
+        self.objs = None
         #print "TaskThread:run()"
         try:
             #print "TaskThread:run   waiting for lock..", self.lock.depth()
@@ -825,6 +822,7 @@ class TaskThread(QtCore.QThread):
                 #runner = SequenceRunner(self.paramSpace, self.paramSpace.keys(), passHash=True)
                 #runner.setEndFuncs([]*len(self.paramSpace) + [self.checkStop])
                 #result = runner.start(self.runOnce)
+                    
                 runSequence(self.runOnce, self.paramSpace, self.paramSpace.keys(), passHash=True)
             
         except:
@@ -836,15 +834,7 @@ class TaskThread(QtCore.QThread):
                     
     def runOnce(self, params=None):
         #print "TaskThread:runOnce"
-        #import gc
-        #from lib.util.PlotWidget import PlotCurve
-        #from PyQt4 import Qwt5
-        #print "PlotCurve:", len(filter(lambda x: isinstance(x, PlotCurve), gc.get_objects()))
-        #print "QwtPlotCurve:", len(filter(lambda x: isinstance(x, Qwt5.QwtPlotCurve), gc.get_objects()))
-        #print "MetaArray:", len(filter(lambda x: isinstance(x, MetaArray), gc.get_objects()))
-        #print "ndarray:", len(filter(lambda x: isinstance(x, ndarray), gc.get_objects()))
-        #print ""
-        
+       
         if params is None:
             params = {}
         with MutexLocker(self.lock) as l:
@@ -866,38 +856,23 @@ class TaskThread(QtCore.QThread):
                 l.unlock()
                 time.sleep(1e-3)
             
-            ## Run
-            #print "Create task:"
-            #print cmd
-            
-            
+            #print "BEFORE:\n", cmd
             task = self.dm.createTask(cmd)
             self.lastRunTime = time.clock()
             self.emit(QtCore.SIGNAL('protocolStarted'), params)
-            #print "Starting task.."
             try:
                 task.execute(block=False)
-                
-                #print "task started" 
                 
                 ## wait for finish, watch for abort requests
                 while True:
                     if task.isDone():
                         break
-                    #print "TaskThread:runOnce waiting for finish, locking for exit.."    
                     l.relock()
                     if self.abortThread:
                         l.unlock()
-                        #print "Stopping task..."
                         task.stop()
-                        #print "Protocol run aborted by user"
                         return
                     l.unlock()
-                    ## Abort if protocol is taking too long
-                    #if time.clock() >= (self.lastRunTime+(cmd['protocol']['duration']+0.2)):
-                        #print "Protocol run aborted--timeout"
-                        #task.abort()
-                        #return
                     time.sleep(1e-3)
                     
                 result = task.getResult()
@@ -909,15 +884,41 @@ class TaskThread(QtCore.QThread):
                 task.stop()
                 print ""
                 raise
+            #print "\nAFTER:\n", cmd
             
         frame = {'params': params, 'cmd': cmd, 'result': result}
         self.emit(QtCore.SIGNAL('newFrame'), frame)
         if self.stopThread:
             raise Exception('stop', result)
-        #print "TaskThread:runOnce return"
         
-        ## Don't return result--this just causes it to be stored until the entire sequence is finished.
-        #return result  
+        #import gc
+        #from lib.util.PlotWidget import PlotCurve
+        #from PyQt4 import Qwt5
+        #import lib.Manager
+        #from lib.devices.MultiClamp import Task as MCTask
+        #from lib.devices.DAQGeneric import DAQGenericTask
+        ##print "PlotCurve:", len(filter(lambda x: isinstance(x, PlotCurve), gc.get_objects()))
+        ##print "QwtPlotCurve:", len(filter(lambda x: isinstance(x, Qwt5.QwtPlotCurve), gc.get_objects()))
+        ##print "MetaArray:", len(filter(lambda x: isinstance(x, MetaArray), gc.get_objects()))
+        ##print "ndarray:", len(filter(lambda x: isinstance(x, ndarray), gc.get_objects()))
+        #print "list:", len(filter(lambda x: isinstance(x, list), gc.get_objects()))
+        #print "dict:", len(filter(lambda x: isinstance(x, dict), gc.get_objects()))
+        #print "Task:", len(filter(lambda x: isinstance(x, lib.Manager.Task), gc.get_objects()))
+        #print "MCTask:", len(filter(lambda x: isinstance(x, MCTask), gc.get_objects()))
+        #print "DaqTask:", len(filter(lambda x: isinstance(x, DAQGenericTask), gc.get_objects()))
+        #print ""
+        
+        #def fn(x, arr):
+            #try:
+                #return x not in arr
+            #except:
+                #return False
+        #if self.objs is None:
+            #self.objs = gc.get_objects()
+        #objs = filter(lambda x: fn(x, self.objs), gc.get_objects())
+        #print "Currently tracking %d" % len(objs)
+        
+        
         
     def checkStop(self):
         with MutexLocker(self.lock):

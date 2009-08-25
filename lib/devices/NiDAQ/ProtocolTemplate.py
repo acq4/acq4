@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Tue Aug 25 02:31:17 2009
+# Created: Tue Aug 25 03:30:40 2009
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -39,12 +39,6 @@ class Ui_Form(object):
         self.label_6 = QtGui.QLabel(Form)
         self.label_6.setObjectName("label_6")
         self.gridLayout.addWidget(self.label_6, 1, 2, 1, 1)
-        self.label_3 = QtGui.QLabel(Form)
-        self.label_3.setObjectName("label_3")
-        self.gridLayout.addWidget(self.label_3, 2, 0, 1, 1)
-        self.numPtsLabel = QtGui.QLabel(Form)
-        self.numPtsLabel.setObjectName("numPtsLabel")
-        self.gridLayout.addWidget(self.numPtsLabel, 2, 1, 1, 2)
         self.label_2 = QtGui.QLabel(Form)
         self.label_2.setObjectName("label_2")
         self.gridLayout.addWidget(self.label_2, 3, 0, 1, 1)
@@ -53,7 +47,7 @@ class Ui_Form(object):
         self.triggerDevList.addItem(QtCore.QString())
         self.gridLayout.addWidget(self.triggerDevList, 3, 1, 1, 2)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.gridLayout.addItem(spacerItem, 5, 1, 1, 1)
+        self.gridLayout.addItem(spacerItem, 6, 1, 1, 1)
         self.downsampleSpin = QtGui.QSpinBox(Form)
         self.downsampleSpin.setMinimum(1)
         self.downsampleSpin.setMaximum(10000000)
@@ -63,6 +57,12 @@ class Ui_Form(object):
         self.label_7 = QtGui.QLabel(Form)
         self.label_7.setObjectName("label_7")
         self.gridLayout.addWidget(self.label_7, 4, 0, 1, 1)
+        self.label_3 = QtGui.QLabel(Form)
+        self.label_3.setObjectName("label_3")
+        self.gridLayout.addWidget(self.label_3, 2, 0, 1, 1)
+        self.numPtsLabel = QtGui.QLabel(Form)
+        self.numPtsLabel.setObjectName("numPtsLabel")
+        self.gridLayout.addWidget(self.numPtsLabel, 2, 1, 1, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
@@ -73,9 +73,9 @@ class Ui_Form(object):
         self.label_5.setText(QtGui.QApplication.translate("Form", "kHz", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("Form", "Period", None, QtGui.QApplication.UnicodeUTF8))
         self.label_6.setText(QtGui.QApplication.translate("Form", "μs", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("Form", "Points", None, QtGui.QApplication.UnicodeUTF8))
-        self.numPtsLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("Form", "Trigger", None, QtGui.QApplication.UnicodeUTF8))
         self.triggerDevList.setItemText(0, QtGui.QApplication.translate("Form", "No Trigger", None, QtGui.QApplication.UnicodeUTF8))
         self.label_7.setText(QtGui.QApplication.translate("Form", "Downsample", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_3.setText(QtGui.QApplication.translate("Form", "Points", None, QtGui.QApplication.UnicodeUTF8))
+        self.numPtsLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
 

@@ -502,23 +502,25 @@ class Task:
                         self.tasks[t].storeResult(self.cfg['storageDir'])
         finally:   ## Regardless of any other problems, at least make sure we release hardware for future use
             ## Release all hardware for use elsewhere
-            if self.reserved:
-                #print "release hardware.."
-                for t in self.tasks:
-                    #print "  %d releasing" % self.id, t
-                    try:
-                        self.tasks[t].release()
-                    except:
-                        print "Error while releasing hardware for task %s:" % t
-                        sys.excepthook(*sys.exc_info())
-                        
-                    #print "  %d released" % self.id, t
-            self.reserved = False
+            self.releaseAll()
             
         #print "tasks:", self.tasks
         #print "RESULT:", self.result        
         return self.result
 
+    def releaseAll(self):
+        if self.reserved:
+            #print "release hardware.."
+            for t in self.tasks:
+                #print "  %d releasing" % self.id, t
+                try:
+                    self.tasks[t].release()
+                except:
+                    print "Error while releasing hardware for task %s:" % t
+                    sys.excepthook(*sys.exc_info())
+                    
+                #print "  %d released" % self.id, t
+        self.reserved = False
 
 def getManager():
     if Manager.single is None:

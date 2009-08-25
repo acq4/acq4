@@ -39,12 +39,17 @@ class StimGenerator(QtGui.QWidget):
         """
         QtGui.QWidget.__init__(self, parent)
         self.timeScale = 1.0
+        self.scale = 1.0
+        self.offset = 0.0
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.ui.functionText.setFontFamily('Courier')
         self.ui.paramText.setFontFamily('Courier')
         self.ui.errorText.setVisible(False)
         self.cacheOk = False
+        self.cache = {}
+        self.cacheRate = None
+        self.cacheNPts = None
         QtCore.QObject.connect(self.ui.functionText, QtCore.SIGNAL('textChanged()'), self.funcChanged)
         QtCore.QObject.connect(self.ui.paramText, QtCore.SIGNAL('textChanged()'), self.paramChanged)
         QtCore.QObject.connect(self.ui.updateBtn, QtCore.SIGNAL('clicked()'), self.update)
@@ -53,7 +58,22 @@ class StimGenerator(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.helpBtn, QtCore.SIGNAL('clicked()'), self.helpBtnClicked)
 
     def setTimeScale(self, s):
-        self.timeScale = s
+        if self.timeScale != s:
+            self.timeScale = s
+            self.clearCache()
+
+    def setScale(self, s):
+        if self.scale != s:
+            self.scale = s
+            self.clearCache()
+
+    def setOffset(self, o):
+        if self.offset != o:
+            self.offset = o
+            self.clearCache()
+
+    def clearCache(self):
+        self.cache = {}
 
     def update(self):
         if self.test():
@@ -74,6 +94,7 @@ class StimGenerator(QtGui.QWidget):
 
     def funcChanged(self):
         # test function. If ok, auto-update
+        self.clearCache()
         if self.test():
             self.autoUpdate()
             #self.emit(QtCore.SIGNAL('functionChanged'))
@@ -81,6 +102,7 @@ class StimGenerator(QtGui.QWidget):
         
     def paramChanged(self):
         # test params. If ok, auto-update
+        self.clearCache()
         self.cacheOk = False
         if self.test():
             self.autoUpdate()
@@ -153,6 +175,16 @@ class StimGenerator(QtGui.QWidget):
         if not re.search(r'\w', self.functionString()):
             return None
             
+        if self.cacheRate != rate or self.cacheNPts != nPts:
+            self.clearCache()
+            
+        paramKey = tuple(params.items())
+        if paramKey in self.cache:
+            return self.cache[paramKey]
+            
+        self.cacheRate = rate
+        self.cacheNPts = nPts
+            
         ## create namespace with generator functions
         ns = {}
         arg = {'rate': rate * self.timeScale, 'nPts': nPts}
@@ -172,11 +204,16 @@ class StimGenerator(QtGui.QWidget):
         ## evaluate and return
         fn = self.functionString().replace('\n', '')
         ret = eval(fn, globals(), ns)
+        if isinstance(ret, ndarray):
+            ret *= self.scale
+            ret += self.offset
         
         if 'message' in arg:
             self.setError(arg['message'])
         else:
             self.setError()
+            
+        self.cache[paramKey] = ret
         return ret
         
     def makeWaveFunction(self, name, arg):
