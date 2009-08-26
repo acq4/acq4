@@ -152,7 +152,7 @@ class Prot:
             alpha = gaussian_filter((f['cam'] - f['cam'].min()).astype(float32), (5, 5))
             alpha /= alpha.max()
             tol = self.state['spotToleranceSpin']
-            alpha = clip(alpha-tol, 0, 1) / (1.0-tol)
+            alpha = clip(alpha-tol, 0, 1) / (1.0-tol) * 256
             
             (r, g, b) = self.evaluateTrace(f['clamp'])
             #print "New frame analysis:", r, g, b, alpha.max(), alpha.min()
@@ -161,7 +161,7 @@ class Prot:
             newImg[..., 1] = g * alpha
             newImg[..., 2] = r * alpha
             newImg[..., 3] = alpha
-            self.img = clip(newImg.astype(uint16) + alpha, 0, 255)
+            self.img = clip(self.img + (newImg.astype(uint16)), 0, 255)
             #self.img = (newImg.copy() * 256).astype(uint8) 
             #self.img[..., 3] = 255
             

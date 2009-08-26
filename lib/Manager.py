@@ -359,7 +359,7 @@ class Task:
         try:
             self.cfg = command['protocol']
         except:
-            print self.cfg
+            print command
             raise
         self.id = Task.id
         Task.id += 1

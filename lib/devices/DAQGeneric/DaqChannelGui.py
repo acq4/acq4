@@ -137,6 +137,9 @@ class OutputChannelGui(DaqChannelGui):
         if state['functionCheck']:
             #prot['command'] = self.scale * self.getSingleWave(params)  ## scaling is handled by Device
             prot['command'] = self.getSingleWave(params)
+            #if prot['command'] is not None:
+                #print "===command==", prot['command'].min(), prot['command'].max()
+                #print params
             
         #print prot
         return prot
@@ -162,6 +165,7 @@ class OutputChannelGui(DaqChannelGui):
         single = self.getSingleWave()
         if single is not None:
             self.plotCurve(single, color=QtGui.QColor(200, 100, 100))
+            #print "===single==", single.min(), single.max()
         self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
         
     def protoStarted(self, params):
@@ -185,6 +189,8 @@ class OutputChannelGui(DaqChannelGui):
         #cur = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
         if cur is not None:
             self.currentPlot = self.plotCurve(cur, color=QtGui.QColor(100, 200, 100))
+            #print "==cur===", cur.min(), cur.max()
+            #print params
         
     def plotCurve(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
         plot = self.plot.plot(data, self.timeVals, pen=QtGui.QPen(color), replot=replot)

@@ -115,7 +115,7 @@ class DAQGenericTask(DeviceTask):
                     if cmdData is None:
                         #print "No command for channel %s, skipping." % ch
                         continue
-                    cmdData *= scale
+                    cmdData = cmdData * scale
                     if chConf['type'] == 'do':
                         cmdData = cmdData.astype(uint32)
                         cmdData[cmdData<=0] = 0

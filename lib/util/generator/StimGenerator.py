@@ -207,7 +207,7 @@ class StimGenerator(QtGui.QWidget):
         if isinstance(ret, ndarray):
             ret *= self.scale
             ret += self.offset
-        
+            #print "===eval===", ret.min(), ret.max(), self.scale
         if 'message' in arg:
             self.setError(arg['message'])
         else:
