@@ -176,7 +176,7 @@ class PVCam(Device):
                 scale = obj['scale']
                 #print "   ", p
                 sf = self.config['scaleFactor']
-                return (sf[0]/scale, sf[1]/scale)
+                return (sf[0]*scale, sf[1]*scale)
         
     #@ftrace
     def getPixelSize(self):
