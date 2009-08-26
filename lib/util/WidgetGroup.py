@@ -76,6 +76,10 @@ class WidgetGroup(QtCore.QObject):
             ('toggled(bool)',
             QtGui.QRadioButton.isChecked,
             QtGui.QRadioButton.setChecked),
+        QtGui.QSlider:
+            ('valueChanged(int)',
+            QtGui.QSlider.value,
+            QtGui.QSlider.setValue),
     }
     
     

@@ -596,7 +596,7 @@ in loop mode.</string>
       <number>0</number>
      </property>
      <item>
-      <widget class="QListWidget" name="analysisModuleList"/>
+      <widget class="QListWidget" name="analysisList"/>
      </item>
     </layout>
    </widget>

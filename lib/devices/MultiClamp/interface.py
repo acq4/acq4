@@ -285,6 +285,8 @@ class Task(DeviceTask):
                 chConf = self.dev.config[ch+'Channel']
                 result[ch] = self.daqTasks[ch].getData(chConf[1])
                 # print result[ch]
+                nPts = result[ch]['info']['nPts']
+                rate = result[ch]['info']['rate']
                 if ch == 'command':
                     result[ch]['data'] = result[ch]['data'] / self.dev.config['cmdScale'][self.cmd['mode']]
                     result[ch]['name'] = 'Command'
@@ -307,7 +309,8 @@ class Task(DeviceTask):
             for k in firstChInfo:
                 self.state[k] = firstChInfo[k]
                 
-            timeVals = linspace(0, float(self.state['numPts']-1) / float(self.state['rate']), self.state['numPts'])
+            #timeVals = linspace(0, float(self.state['numPts']-1) / float(self.state['rate']), self.state['numPts'])
+            timeVals = linspace(0, float(nPts-1) / float(rate), nPts)
             chanList = [atleast_2d(result[x]['data']) for x in result]
             # for l in chanList:
             # print l.shape

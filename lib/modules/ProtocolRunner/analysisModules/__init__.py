@@ -11,6 +11,6 @@ del mdir
 def createAnalysisModule(name, runner):
     if name not in MODULES:
         raise Exception('No analysis module named %s' % name)
-    mod = __import__('lib.modules.ProtocolRunner.analysisModules.' + name + 'Module', fromlist=['*'])
-    cls = getattr(mod, name)
+    mod = __import__('lib.modules.ProtocolRunner.analysisModules.' + name, fromlist=['*'])
+    cls = getattr(mod, name + 'Module')
     return cls(runner)

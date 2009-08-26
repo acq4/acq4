@@ -47,7 +47,7 @@ class DAQGenericProtoGui(ProtocolGui):
             (self.ui.controlSplitter, 'splitter2'),
             (self.ui.plotSplitter, 'splitter3'),
         ])
-        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('protocolStarted'), self.protoStarted)
+        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('taskStarted'), self.protoStarted)
         
 
     def saveState(self):

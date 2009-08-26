@@ -9,6 +9,7 @@ from lib.util.advancedTypes import OrderedDict
 from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
 from lib.util.Mutex import Mutex, MutexLocker
+import analysisModules
 import time
 #import pdb
 
@@ -22,6 +23,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         
         #self.seqListItems = OrderedDict()  ## Looks like {(device, param): listItem, ...}
         self.docks = {}
+        self.analysisDocks = {}
         self.deleteState = 0
         self.ui = Ui_MainWindow()
         self.win = QtGui.QMainWindow()
@@ -39,6 +41,11 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.ui.protocolList.setModel(self.protocolList)
         
         self.currentProtocol = None   ## pointer to current protocol object
+        
+        for m in analysisModules.MODULES:
+            item = QtGui.QListWidgetItem(m, self.ui.analysisList)
+            item.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsUserCheckable )
+            item.setCheckState(QtCore.Qt.Unchecked)
         
         #self.updateDeviceList()
         
@@ -68,6 +75,8 @@ class ProtocolRunner(Module, QtCore.QObject):
         QtCore.QObject.connect(self.protoStateGroup, QtCore.SIGNAL('changed'), self.protoGroupChanged)
         self.win.show()
         QtCore.QObject.connect(self.ui.sequenceParamList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.updateSeqReport)
+        QtCore.QObject.connect(self.ui.analysisList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.analysisItemClicked)
+        
         
     def protoGroupChanged(self, param, value):
         self.emit(QtCore.SIGNAL('protocolChanged'), param, value)
@@ -136,6 +145,14 @@ class ProtocolRunner(Module, QtCore.QObject):
                 self.devListItems[d].setCheckState(QtCore.Qt.Checked)
             else:
                 self.devListItems[d].setCheckState(QtCore.Qt.Unchecked)
+        
+    def deviceItemClicked(self, item):
+        """Respond to clicks in the device list. Add/remove devices from the current protocol and update docks."""
+        if item.checkState() == QtCore.Qt.Unchecked:
+            self.currentProtocol.removeDevice(str(item.text()))
+        else:
+            self.currentProtocol.addDevice(str(item.text()))
+        self.updateDeviceDocks()
             
     #def deviceItemChanged(self, item):
         #newName = str(item.text())
@@ -152,7 +169,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             ### Destroy old dock if needed
             #if newName in self.currentProtocol.enabledDevices():
                 #self.devListItems[newName].setCheckState(QtCore.Qt.Unchecked)
-                #self.updateDocks()
+                #self.updateDeviceDocks()
             ### remove from list
             #self.ui.deviceList.takeItem(self.devListItems[newName])
           
@@ -166,7 +183,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         
         ### If the new name is an existing device, load and configure its dock
         #if newName in self.manager.listDevices():
-            #self.updateDocks()
+            #self.updateDeviceDocks()
         
         ### Configure docks
         #if newName in self.docks:
@@ -176,6 +193,45 @@ class ProtocolRunner(Module, QtCore.QObject):
             #if 'winState' in self.currentProtocol.conf:
                 #self.win.restoreState(QtCore.QByteArray.fromPercentEncoding(self.currentProtocol.conf['winState']))
             
+        
+    def analysisItemClicked(self, item):
+        name = str(item.text())
+        if item.checkState() == QtCore.Qt.Checked:
+            if not self.createAnalysisDock(name):
+                item.setCheckState(QtCore.Qt.Unchecked)
+        else:
+            self.removeAnalysisDock(name)
+        
+    def createAnalysisDock(self, mod):
+        try:
+            m = analysisModules.createAnalysisModule(mod, self)
+            dock = QtGui.QDockWidget(mod)
+            dock.setFeatures(dock.AllDockWidgetFeatures)
+            dock.setObjectName(mod)
+            dock.setWidget(m)
+            dock.setAutoFillBackground(True)
+            
+            self.analysisDocks[mod] = dock
+            self.win.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+            
+            items = self.ui.analysisList.findItems(mod, QtCore.Qt.MatchExactly)
+            items[0].setCheckState(QtCore.Qt.Checked)
+            
+            return True
+        except:
+            print "Analysis module creation failed:"
+            sys.excepthook(*sys.exc_info())
+            return False
+        
+    def removeAnalysisDock(self, mod):
+        if mod not in self.analysisDocks:
+            return
+        self.win.removeDockWidget(self.analysisDocks[mod])
+        del self.analysisDocks[mod]
+        items = self.ui.analysisList.findItems(mod, QtCore.Qt.MatchExactly)
+        items[0].setCheckState(QtCore.Qt.Unchecked)
+        
+        
     def protoListClicked(self, ind):
         sel = list(self.ui.protocolList.selectedIndexes())
         if len(sel) == 1:
@@ -240,7 +296,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         #for i in items:
             #i.setHidden(False)
         
-    def updateDocks(self, protocol = None):
+    def updateDeviceDocks(self, protocol = None):
         """Create/unhide new docks if they are needed and hide old docks if they are not."""
         if protocol is None:
             protocol = self.currentProtocol
@@ -280,18 +336,14 @@ class ProtocolRunner(Module, QtCore.QObject):
                 QtCore.QObject.connect(dock.widget(), QtCore.SIGNAL('sequenceChanged'), self.updateSeqParams)
                 self.updateSeqParams(d)
         
-    def deviceItemClicked(self, item):
-        """Respond to clicks in the device list. Add/remove devices from the current protocol and update docks."""
-        if item.checkState() == QtCore.Qt.Unchecked:
-            self.currentProtocol.removeDevice(str(item.text()))
-        else:
-            self.currentProtocol.addDevice(str(item.text()))
-        self.updateDocks()
-        
     def clearDocks(self):
         for d in self.docks:
             self.win.removeDockWidget(self.docks[d])
         self.docks = {}
+
+        for d in self.analysisDocks.keys()[:]:
+            self.removeAnalysisDock(d)
+
         self.ui.sequenceParamList.clear()
                 
         
@@ -344,6 +396,8 @@ class ProtocolRunner(Module, QtCore.QObject):
         
         self.ui.saveProtocolBtn.setEnabled(False)
         #self.currentIsModified(False)
+        
+        
     
     #def updateProtParams(self, prot=None):
         #if prot is None:
@@ -400,14 +454,26 @@ class ProtocolRunner(Module, QtCore.QObject):
         
         ## Create new docks
         
-        self.updateDocks()
+        self.updateDeviceDocks()
         
         
         ## Configure docks
         for d in prot.devices:
             if d in self.docks:
                 self.docks[d].widget().restoreState(prot.devices[d])
-            
+
+        ## create and configure analysis docks
+        if 'analysis' in prot.conf:
+            for k in prot.conf['analysis']:
+                try:
+                    self.createAnalysisDock(k)
+                    conf = prot.conf['analysis'][k]
+                    self.analysisDocks[k].widget().restoreState(conf)
+                except:
+                    print "Error while loading analysis dock:"
+                    sys.excepthook(*sys.exc_info())
+                    
+
         ## Load sequence parameter state (must be done after docks have loaded)
         self.ui.sequenceParamList.loadState(prot.conf['params'])
         
@@ -415,6 +481,9 @@ class ProtocolRunner(Module, QtCore.QObject):
         winState = prot.conf['windowState']
         if winState is not None:
             self.win.restoreState(winState)
+            
+        
+            
             
         pn = fn.replace(self.protocolList.baseDir, '')
         self.ui.currentProtocolLabel.setText(pn)
@@ -663,7 +732,11 @@ class ProtocolRunner(Module, QtCore.QObject):
         ## store parameter order/state
         params = self.ui.sequenceParamList.saveState()
         
-        return {'conf': conf, 'params': params, 'windowState': ws}
+        adocks = {}
+        for d in self.analysisDocks:
+            adocks[d] = self.analysisDocks[d].widget().saveState()
+        
+        return {'conf': conf, 'params': params, 'windowState': ws, 'analysis': adocks}
         
 
     
@@ -859,7 +932,7 @@ class TaskThread(QtCore.QThread):
             #print "BEFORE:\n", cmd
             task = self.dm.createTask(cmd)
             self.lastRunTime = time.clock()
-            self.emit(QtCore.SIGNAL('protocolStarted'), params)
+            self.emit(QtCore.SIGNAL('taskStarted'), params)
             try:
                 task.execute(block=False)
                 

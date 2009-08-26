@@ -58,7 +58,7 @@ class MultiClampProtoGui(ProtocolGui):
         QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.ui.i0ModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.sequenceStarted)
-        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('protocolStarted'), self.protoStarted)
+        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('taskStarted'), self.protoStarted)
         
     def saveState(self):
         state = self.stateGroup.state().copy()

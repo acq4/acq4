@@ -102,9 +102,14 @@ class PVCamera(QtGui.QMainWindow):
         self.AGCLastMax = None
 
         self.persistentFrames = []
-        self.persistentGroup = QtGui.QGraphicsItemGroup()
-        self.persistentGroup.setZValue(-10)
-        self.scene.addItem(self.persistentGroup)
+        
+        ## group 1 is below, group 2 is above
+        self.persistentGroup1 = QtGui.QGraphicsItemGroup()
+        self.persistentGroup1.setZValue(-10)
+        self.scene.addItem(self.persistentGroup1)
+        self.persistentGroup2 = QtGui.QGraphicsItemGroup()
+        self.persistentGroup2.setZValue(10)
+        self.scene.addItem(self.persistentGroup2)
 
         self.recLabel = QtGui.QLabel()
         self.fpsLabel = QtGui.QLabel()
@@ -176,16 +181,15 @@ class PVCamera(QtGui.QMainWindow):
         self.frameTimer.start(1)
 
     def addPersistentFrame(self):
+        """Make a copy of the current camera frame and store it in the background"""
         px = self.imageItem.getPixmap()
         if px is None:
             return
         im = QtGui.QGraphicsPixmapItem(px)
         if len(self.persistentFrames) == 0:
-            z = -1000
+            z = -10000
         else:
             z = self.persistentFrames[-1].zValue() + 1
-        im.setZValue(z)
-        
         
         (img, info) = self.currentFrame
         s = info['pixelSize']
@@ -193,21 +197,33 @@ class PVCamera(QtGui.QMainWindow):
         #r = info['region']
         #b = info['binning']
         self.persistentFrames.append(im)
-        self.persistentGroup.resetTransform()
-        im.setParentItem(self.persistentGroup)
-        im.resetTransform()
+        self.addImage(im, p, s, z)
+        
+    def addImage(self, imgItem, pos, scale, z):
+        """Adds an image into the persistent frame group. The image will be scaled and 
+        translated with the group when the scope moves."""
+        #print "add image at", pos, scale, z
+        ## reset group coords before adding image.
+        if z < 0: 
+            group = self.persistentGroup1
+        else:
+            group = self.persistentGroup2
+        group.resetTransform()
+        imgItem.setParentItem(group)
+        imgItem.resetTransform()
         
         ## r should be divided by b here (or just use image size)
         ## what if region does not start at 0,0?
         #pos = [p[0]-(r[2]*s[0]*0.5), p[1]-(r[3]*s[0]*0.5)]
-        pos = p
-        im.translate(pos[0], pos[1])
-        im.scale(s[0], s[1])
+        #pos = p
+        imgItem.translate(pos[0], pos[1])
+        imgItem.scale(scale[0], scale[1])
+        imgItem.setZValue(z)
         self.updatePersistentGroup()
     
     def  clearPersistentFrames(self):
         for i in self.persistentFrames:
-            self.persistentGroup.removeFromGroup(i)
+            self.persistentGroup1.removeFromGroup(i)
         self.persistentFrames = []
 
     def positionChanged(self, p):
@@ -220,14 +236,15 @@ class PVCamera(QtGui.QMainWindow):
     def updatePersistentGroup(self):
         p = self.module.cam.getPosition()
         s = self.module.cam.getScale()
-        self.persistentGroup.resetTransform()
-        
-        ## Set the origin at the center of the Sensor area
-        self.persistentGroup.translate(self.camSize[0]/2., self.camSize[1]/2.)
-        
-        ## Scale and translate based on current scope position and objective
-        self.persistentGroup.scale(1.0/s[0], 1.0/s[1])
-        self.persistentGroup.translate(-p[0], -p[1])
+        for group in [self.persistentGroup1, self.persistentGroup2]:
+            group.resetTransform()
+            
+            ## Set the origin at the center of the Sensor area
+            group.translate(self.camSize[0]/2., self.camSize[1]/2.)
+            
+            ## Scale and translate based on current scope position and objective
+            group.scale(1.0/s[0], 1.0/s[1])
+            group.translate(-p[0], -p[1])
         
         
 

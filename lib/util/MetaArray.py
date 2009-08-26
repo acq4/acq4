@@ -146,7 +146,11 @@ class MetaArray(ndarray):
     def __getitem__(self, ind):
         nInd = self._interpretIndexes(ind)
         #print "Indexes:", nInd
-        a = ndarray.__getitem__(self, nInd)
+        try:
+            a = ndarray.__getitem__(self, nInd)
+        except:
+            print nInd, nInd[0].shape, self.shape
+            raise
         if type(a) == type(self):  ## generate new info array
             a._info = []
             for i in range(0, len(nInd)):   ## iterate over all axes

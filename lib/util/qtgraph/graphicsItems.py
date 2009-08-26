@@ -24,6 +24,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         self.useWeave = True
         self.blackLevel = None
         self.whiteLevel = None
+        self.alpha = 1.0
         self.image = None
         self.clipLevel = None
         QtGui.QGraphicsPixmapItem.__init__(self, *args)
@@ -32,6 +33,9 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
             self.updateImage(image, copy, autoRange=True)
         #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
+    def setAlpha(self, alpha):
+        self.alpha = alpha
+        self.updateImage()
         
     #def boundingRect(self):
         #return self.pixmapItem.boundingRect()
@@ -133,21 +137,21 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         except:
             print im.shape, axh
             raise
-            
+        alpha = clip(int(255 * self.alpha), 0, 255)
         # Fill image 
         if im.ndim == 2:
             im2 = im.transpose(axh['y'], axh['x'])
             im1[..., 0] = im2
             im1[..., 1] = im2
             im1[..., 2] = im2
-            im1[..., 3] = 255
+            im1[..., 3] = alpha
         elif im.ndim == 3:
             im2 = im.transpose(axh['y'], axh['x'], axh['c'])
             
             for i in range(0, im.shape[axh['c']]):
                 im1[..., i] = im2[..., i]
             for i in range(im.shape[axh['c']], 4):
-                im1[..., i] = 255
+                im1[..., i] = alpha
         else:
             raise Exception("Image must be 2 or 3 dimensions")
         #self.im1 = im1
@@ -163,7 +167,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
                 im1[..., 2][mask] = 255
         
         self.ims = im1.tostring()  ## Must be held in memory here because qImage won't do it for us :(
-        qimage = QtGui.QImage(self.ims, im1.shape[1], im1.shape[0], QtGui.QImage.Format_RGB32)
+        qimage = QtGui.QImage(self.ims, im1.shape[1], im1.shape[0], QtGui.QImage.Format_ARGB32)
         self.pixmap = QtGui.QPixmap.fromImage(qimage)
         ##del self.ims
         self.setPixmap(self.pixmap)

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Tue Aug 25 14:37:38 2009
+# Created: Tue Aug 25 18:08:58 2009
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -239,9 +239,9 @@ QMainWindow::separator {background-color: #666}""")
         self.horizontalLayout_4.setSpacing(0)
         self.horizontalLayout_4.setMargin(0)
         self.horizontalLayout_4.setObjectName("horizontalLayout_4")
-        self.analysisModuleList = QtGui.QListWidget(self.dockWidgetContents_2)
-        self.analysisModuleList.setObjectName("analysisModuleList")
-        self.horizontalLayout_4.addWidget(self.analysisModuleList)
+        self.analysisList = QtGui.QListWidget(self.dockWidgetContents_2)
+        self.analysisList.setObjectName("analysisList")
+        self.horizontalLayout_4.addWidget(self.analysisList)
         self.dockWidget.setWidget(self.dockWidgetContents_2)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.dockWidget)
 

@@ -209,6 +209,9 @@ Valid options are:
         self.modules[name] = modclass(self, name, config)
         return self.modules[name]
         
+    def listModules(self):
+        return self.modules.keys()[:]
+        
     def getModule(self, name):
         """Return an already loaded module"""
         if name not in self.modules:
