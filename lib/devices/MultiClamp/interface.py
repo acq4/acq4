@@ -285,7 +285,7 @@ class Task(DeviceTask):
                 chConf = self.dev.config[ch+'Channel']
                 result[ch] = self.daqTasks[ch].getData(chConf[1])
                 # print result[ch]
-                nPts = result[ch]['info']['nPts']
+                nPts = result[ch]['info']['numPts']
                 rate = result[ch]['info']['rate']
                 if ch == 'command':
                     result[ch]['data'] = result[ch]['data'] / self.dev.config['cmdScale'][self.cmd['mode']]

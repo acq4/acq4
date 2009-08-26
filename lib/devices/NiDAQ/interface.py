@@ -128,7 +128,7 @@ class Task(DeviceTask):
         """Return the data collected for a specific channel. Return looks like:
         {
           'data': ndarray,
-          'info': {'rate': xx, 'nPts': xx, ...}
+          'info': {'rate': xx, 'numPts': xx, ...}
         }
         """
         
@@ -142,10 +142,9 @@ class Task(DeviceTask):
                 data.shape = (data.shape[0]/ds, ds)
                 data = data.mean(axis=1)
                 res['data'] = data
-                res['info']['nPts'] = data.shape[0]
+                res['info']['numPts'] = data.shape[0]
                 res['info']['downsampling'] = ds
                 res['info']['rate'] = res['info']['rate'] / ds
-                
                 
                 
         # if type(res['info']) is not dict:
