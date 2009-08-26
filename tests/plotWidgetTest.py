@@ -44,24 +44,24 @@ p2 = PlotWidget(cw)
 vl.addWidget(p2)
 
 
-data = array([1,4,2,5,3,6,4,7,5,6,3,4,5,32,2,21,34,65,4,3,2,5,4,6,6,3,2,434])
 #c1 = Qwt.QwtPlotCurve()
 #c1.setData(range(len(data)), data)
 #c1.attach(p1)
-c2 = PlotCurve()
-c2.setData([1,2,3,4,5,6,7,8], [1,2,10,4,3,2,4,1])
-c2.attach(p2)
+#c2 = PlotCurve()
+#c2.setData([1,2,3,4,5,6,7,8], [1,2,10,4,3,2,4,1])
+#c2.attach(p2)
+
 
 def updateData():
     global data
-    data = random.random(len(data))
-    data[10:13] += .5
-    data[18] += 2
-    data[10:13] *= 5
-    data[18] *= 20
+    data = random.random(10000)
+    data[1000:1300] += .5
+    data[1800] += 2
+    data[1000:1300] *= 5
+    data[1800] *= 20
     #c1.setData(range(len(data)), data)
     
-    p1.plot(data)
+    p1.plot(data, clear=True)
     
 t = QtCore.QTimer()
 QtCore.QObject.connect(t, QtCore.SIGNAL('timeout()'), updateData)
