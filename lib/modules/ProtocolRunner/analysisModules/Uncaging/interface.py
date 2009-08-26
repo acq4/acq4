@@ -25,6 +25,7 @@ class UncagingModule(AnalysisModule):
         QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteSelected)
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
         QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*, QListWidgetItem*)'), self.itemSelected)
+        QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemClicked)
         
         
     def protocolStarted(self, *args):
@@ -53,7 +54,10 @@ class UncagingModule(AnalysisModule):
         p = Prot(name, self)
         self.currentProt = p
         self.prots[name] = p
-        self.ui.protList.addItem(name)
+        item = QtGui.QListWidgetItem(name)
+        item.setCheckState(QtCore.Qt.Checked)
+        self.ui.protList.addItem(item)
+        self.ui.protList.setCurrentItem(item)
 
     def deleteSelected(self):
         row = self.ui.protList.currentRow()
@@ -83,6 +87,14 @@ class UncagingModule(AnalysisModule):
         sp = self.selectedProt()
         if sp is not None:
             self.stateGroup.setState(sp.getState())
+            
+    def itemClicked(self, item):
+        prot = self.prots[str(item.text())]
+        if item.checkState() == QtCore.Qt.Checked:
+            prot.show()
+        else:
+            prot.hide()
+            
         
 class Prot:
     z = 1000
@@ -103,9 +115,10 @@ class Prot:
         clampDev = str(self.ui.ui.clampDevCombo.currentText())
         camFrame = self.state['frameSpin']
         data = {
-            'cam': frame['result'][camDev]['frames'][camFrame],
-            'clamp': frame['result'][clampDev]['scaled']
+            'cam': frame['result'][camDev]['frames'][camFrame].copy(),
+            'clamp': frame['result'][clampDev]['scaled'].copy()
         }
+        #print "============\n", data
         #print "New frame:", data['clamp'].shape, data['clamp'].xvals('Time').shape
         self.frames.append(data)
         self.recalculate()
@@ -133,22 +146,22 @@ class Prot:
             frames = self.frames[-1:]
         
         if self.img is None:
-            self.img = zeros(frames[0]['cam'].shape + (4,), dtype=uint8)
+            self.img = zeros(frames[0]['cam'].shape + (4,), dtype=float32)
         
         for f in frames:
             alpha = gaussian_filter((f['cam'] - f['cam'].min()).astype(float32), (5, 5))
             alpha /= alpha.max()
             tol = self.state['spotToleranceSpin']
-            alpha = ((clip(alpha-tol, 0, 1) / (1.0-tol)) * 256).astype(uint8)
+            alpha = clip(alpha-tol, 0, 1) / (1.0-tol)
             
             (r, g, b) = self.evaluateTrace(f['clamp'])
             #print "New frame analysis:", r, g, b, alpha.max(), alpha.min()
-            newImg = empty(frames[0]['cam'].shape + (4,), dtype=uint8)
+            newImg = empty(frames[0]['cam'].shape + (4,), dtype=uint16)
             newImg[..., 0] = b * alpha
             newImg[..., 1] = g * alpha
             newImg[..., 2] = r * alpha
             newImg[..., 3] = alpha
-            self.img += newImg
+            self.img = clip(newImg.astype(uint16) + alpha, 0, 255)
             #self.img = (newImg.copy() * 256).astype(uint8) 
             #self.img[..., 3] = 255
             
@@ -163,11 +176,12 @@ class Prot:
             info = self.frames[-1]['cam'].infoCopy()[-1]
             s = info['pixelSize']
             p = info['imagePosition']
+            #camMod.scene.removeItem(self.imgItem)
             camMod.ui.addImage(self.imgItem, p, s, self.z)
             #scene.addItem(self.imgItem)
 
     def updateImage(self):
-        aImg = self.img.copy()
+        aImg = self.img.astype(uint8)
         aImg[..., 3] *= float(self.state['alphaSlider']) / self.ui.ui.alphaSlider.maximum()
         self.imgItem.updateImage(aImg)
 
@@ -181,9 +195,9 @@ class Prot:
         med = median(base)
         std = base.std()
         test = test - med
-        r = 0.0
+        g = 0.4
         tol = self.state['pspToleranceSpin']
-        g = clip(test.max() / (tol*std), 0.0, 1.0)
+        r = clip(test.max() / (tol*std), 0.0, 1.0)
         b = clip(-test.min() / (tol*std), 0.0, 1.0)
         return (r, g, b)
         
@@ -195,3 +209,12 @@ class Prot:
     
     def getState(self):
         return self.state
+        
+    def show(self):
+        #self.visible = True
+        self.imgItem.show()
+        
+    def hide(self):
+        #self.visible = False
+        self.imgItem.hide()
+        

@@ -82,8 +82,12 @@ class PlotWidget(Qwt.QwtPlot):
         curves = filter(lambda i: isinstance(i, Qwt.QwtPlotCurve), self.itemList())
         for c in curves:
             c.setSpectrumMode(b)
+        self.enableAutoScale()
         self.replot()
             
+    def enableAutoScale(self):
+        self.ctrl.xAutoRadio.setChecked(True)
+        self.ctrl.yAutoRadio.setChecked(True)
       
     def updateDecimation(self):
         if self.ctrl.maxTracesCheck.isChecked():
@@ -153,7 +157,7 @@ class PlotWidget(Qwt.QwtPlot):
         self.ctrl.yManualRadio.setChecked(True)
         self.setYRange(y1, y2)
         self.replot()
-        
+
     def plotRange(self):
         return self.range
         
@@ -219,6 +223,10 @@ class PlotWidget(Qwt.QwtPlot):
             cPos = self.canvas().pos()
             cPos = array([cPos.x(), cPos.y()])
             self.scaleBy(s, self.map(self.pressPos - cPos))
+            if mask[0] == 1:
+                self.updateManualXScale()
+            if mask[1] == 1:
+                self.updateManualYScale()
             
         Qwt.QwtPlot.mouseMoveEvent(self, ev)
         
