@@ -99,8 +99,9 @@ class UncagingModule(AnalysisModule):
             prot.hide()
 
     def recompute(self):
-        if self.currentProt is not None:
-            self.currentProt.recalculate(allFrames=True)
+        sp = self.selectedProt()
+        if sp is not None:
+            sp.recalculate(allFrames=True)
 
         
 class Prot:
@@ -122,7 +123,7 @@ class Prot:
         clampDev = str(self.ui.ui.clampDevCombo.currentText())
         camFrame1 = frame['result'][camDev]['frames'][self.state['frame1Spin']]
         camFrame2 = frame['result'][camDev]['frames'][self.state['frame2Spin']]
-        camFrame = MetaArray(camFrame2 - camFrame1, info=camFrame1.infoCopy())
+        camFrame = MetaArray(camFrame2.astype(float32) - camFrame1.astype(float32), info=camFrame1.infoCopy())
         data = {
             'cam': camFrame,
             'clamp': frame['result'][clampDev]['scaled'].copy()
@@ -146,8 +147,8 @@ class Prot:
     def recalculate(self, allFrames=False):
         if len(self.frames) < 1:
             return
-        print "recalc", allFrames
-        print self.state
+        #print "recalc", allFrames
+        #print self.state
         ## calculate image
         if allFrames:
             self.img = None
@@ -159,11 +160,13 @@ class Prot:
             self.img = zeros(frames[0]['cam'].shape + (4,), dtype=float32)
         
         for f in frames:
-            alpha = gaussian_filter((f['cam'] - f['cam'].min()).astype(float32), (5, 5))
-            alpha /= alpha.max()
-            print alpha.max(), alpha.min()
+            alpha = gaussian_filter((f['cam'] - f['cam'].min()), (5, 5))
+            #alpha /= alpha.max()
+            #print alpha.max(), alpha.min()
             tol = self.state['spotToleranceSpin']
-            alpha = clip(alpha-tol, 0, 1) / (1.0-tol) * 256
+            alpha = clip(alpha-tol, 0, 2**32)
+            alpha *= 256. / alpha.max()
+            #alpha = clip(alpha-tol, 0, 1) / (1.0-tol) * 256
             
             (r, g, b) = self.evaluateTrace(f['clamp'])
             #print "New frame analysis:", r, g, b, alpha.max(), alpha.min()
