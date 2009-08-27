@@ -414,7 +414,7 @@
           </widget>
          </item>
          <item row="1" column="0">
-          <widget class="QPushButton" name="savePngBtn">
+          <widget class="QPushButton" name="saveImgBtn">
            <property name="text">
             <string>Image</string>
            </property>

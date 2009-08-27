@@ -52,7 +52,7 @@ class FileDataView(QtGui.QWidget):
         else:
             self.widget = PlotWidget(self)
             self.layout.addWidget(self.widget)
-            self.widget.plotMetaArray(data)
+            self.widget.plot(data)
         
     def clear(self):
         if self.widget is not None:

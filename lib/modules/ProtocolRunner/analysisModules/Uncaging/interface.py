@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from lib.modules.ProtocolRunner.analysisModules import AnalysisModule
 import lib.Manager as Manager
 from PyQt4 import QtCore, QtGui
@@ -5,6 +6,7 @@ from UncagingTemplate import Ui_Form
 from lib.util.qtgraph.graphicsItems import ImageItem
 from numpy import *
 from scipy.ndimage.filters import gaussian_filter
+from lib.util.MetaArray import MetaArray
 
 class UncagingModule(AnalysisModule):
     def __init__(self, *args):
@@ -26,6 +28,7 @@ class UncagingModule(AnalysisModule):
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
         QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*, QListWidgetItem*)'), self.itemSelected)
         QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemClicked)
+        QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.recompute)
         
         
     def protocolStarted(self, *args):
@@ -94,11 +97,15 @@ class UncagingModule(AnalysisModule):
             prot.show()
         else:
             prot.hide()
-            
+
+    def recompute(self):
+        if self.currentProt is not None:
+            self.currentProt.recalculate(allFrames=True)
+
         
 class Prot:
     z = 1000
-    params = ['alphaSlider', 'frameSpin', 'clampBaseStartSpin', 'clampBaseStopSpin', 'clampTestStartSpin', 'clampTestStopSpin', 'pspToleranceSpin', 'spotToleranceSpin']
+    params = ['alphaSlider', 'frame1Spin', 'frame2Spin', 'clampBaseStartSpin', 'clampBaseStopSpin', 'clampTestStartSpin', 'clampTestStopSpin', 'pspToleranceSpin', 'spotToleranceSpin']
     
     def __init__(self, name, ui):
         self.name = name
@@ -113,9 +120,11 @@ class Prot:
     def addFrame(self, frame):
         camDev = str(self.ui.ui.cameraDevCombo.currentText())
         clampDev = str(self.ui.ui.clampDevCombo.currentText())
-        camFrame = self.state['frameSpin']
+        camFrame1 = frame['result'][camDev]['frames'][self.state['frame1Spin']]
+        camFrame2 = frame['result'][camDev]['frames'][self.state['frame2Spin']]
+        camFrame = MetaArray(camFrame2 - camFrame1, info=camFrame1.infoCopy())
         data = {
-            'cam': frame['result'][camDev]['frames'][camFrame].copy(),
+            'cam': camFrame,
             'clamp': frame['result'][clampDev]['scaled'].copy()
         }
         #print "============\n", data
@@ -131,13 +140,14 @@ class Prot:
         if param == 'alphaSlider':
             self.updateImage()
             #self.imgItem.setAlpha(state['alphaSlider'])
-        else:
-            self.recalculate(allFrames=True)
+        #else:
+            #self.recalculate(allFrames=True)
         
     def recalculate(self, allFrames=False):
         if len(self.frames) < 1:
             return
-            
+        print "recalc", allFrames
+        print self.state
         ## calculate image
         if allFrames:
             self.img = None
@@ -151,6 +161,7 @@ class Prot:
         for f in frames:
             alpha = gaussian_filter((f['cam'] - f['cam'].min()).astype(float32), (5, 5))
             alpha /= alpha.max()
+            print alpha.max(), alpha.min()
             tol = self.state['spotToleranceSpin']
             alpha = clip(alpha-tol, 0, 1) / (1.0-tol) * 256
             

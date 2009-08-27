@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'plotConfigTemplate.ui'
 #
-# Created: Mon Aug 24 23:26:36 2009
+# Created: Thu Aug 27 15:38:16 2009
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -189,9 +189,9 @@ class Ui_Form(object):
         self.saveSvgBtn = QtGui.QPushButton(self.tab_4)
         self.saveSvgBtn.setObjectName("saveSvgBtn")
         self.gridLayout_6.addWidget(self.saveSvgBtn, 0, 0, 1, 1)
-        self.savePngBtn = QtGui.QPushButton(self.tab_4)
-        self.savePngBtn.setObjectName("savePngBtn")
-        self.gridLayout_6.addWidget(self.savePngBtn, 1, 0, 1, 1)
+        self.saveImgBtn = QtGui.QPushButton(self.tab_4)
+        self.saveImgBtn.setObjectName("saveImgBtn")
+        self.gridLayout_6.addWidget(self.saveImgBtn, 1, 0, 1, 1)
         self.saveMaBtn = QtGui.QPushButton(self.tab_4)
         self.saveMaBtn.setObjectName("saveMaBtn")
         self.gridLayout_6.addWidget(self.saveMaBtn, 2, 0, 1, 1)
@@ -238,7 +238,7 @@ class Ui_Form(object):
         self.autoAlphaCheck.setText(QtGui.QApplication.translate("Form", "Auto", None, QtGui.QApplication.UnicodeUTF8))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_3), QtGui.QApplication.translate("Form", "Display", None, QtGui.QApplication.UnicodeUTF8))
         self.saveSvgBtn.setText(QtGui.QApplication.translate("Form", "SVG", None, QtGui.QApplication.UnicodeUTF8))
-        self.savePngBtn.setText(QtGui.QApplication.translate("Form", "Image", None, QtGui.QApplication.UnicodeUTF8))
+        self.saveImgBtn.setText(QtGui.QApplication.translate("Form", "Image", None, QtGui.QApplication.UnicodeUTF8))
         self.saveMaBtn.setText(QtGui.QApplication.translate("Form", "MetaArray", None, QtGui.QApplication.UnicodeUTF8))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_4), QtGui.QApplication.translate("Form", "Save", None, QtGui.QApplication.UnicodeUTF8))
 

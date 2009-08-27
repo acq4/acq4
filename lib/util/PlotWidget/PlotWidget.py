@@ -8,6 +8,9 @@ from plotConfigTemplate import Ui_Form
 from lib.util.WidgetGroup import WidgetGroup
 
 class PlotWidget(Qwt.QwtPlot):
+    
+    lastFileDir = None
+    
     def __init__(self, *args):
         Qwt.QwtPlot.__init__(self, *args)
         self.setMinimumHeight(50)
@@ -49,6 +52,9 @@ class PlotWidget(Qwt.QwtPlot):
         
         self.stateGroup = WidgetGroup(self.ctrlMenu)
         
+        self.fileDialog = None
+        
+        
         c.xMinText.setValidator(dv)
         c.yMinText.setValidator(dv)
         c.xMaxText.setValidator(dv)
@@ -70,6 +76,9 @@ class PlotWidget(Qwt.QwtPlot):
         QtCore.QObject.connect(c.autoAlphaCheck, QtCore.SIGNAL('toggled(bool)'), self.updateAlpha)
 
         QtCore.QObject.connect(c.powerSpectrumGroup, QtCore.SIGNAL('toggled(bool)'), self.updateSpectrumMode)
+        QtCore.QObject.connect(c.saveSvgBtn, QtCore.SIGNAL('clicked()'), self.saveSvgClicked)
+        QtCore.QObject.connect(c.saveImgBtn, QtCore.SIGNAL('clicked()'), self.saveImgClicked)
+        
         
         self.replot()
       
@@ -384,84 +393,126 @@ class PlotWidget(Qwt.QwtPlot):
     def _plotMetaArray(self, arr):
         inf = arr.infoCopy()
         
-        if arr.ndim == 1:
-            xAxis = 0
-            yAxis = 1
+        #print "_plotMetaArray()"
+        #print inf
+        #print arr.shape
+        axes = [0, 1]
             
-        elif arr.ndim == 2:
+        if arr.ndim == 2:
             for i in [0,1]:
                 if 'cols' in inf[i]:
-                    xAxis = 1-i
-                    yAxis = i
-        else:
+                    #print "axis %d has cols" % i
+                    axes = [1-i, i]
+        elif arr.ndim != 1:
             raise Exception('can only automatically plot 1 or 2 dimensional arrays.')
                     
+        #print "AXES:", axes
         titles = ['', '']
         for i in [1,0]:
+            ax = axes[i]
             t = ''
             if i >= len(inf):
                 continue
             
             ## If there are columns, pick title/units from first column
-            if 'cols' in inf[i]:
-                s = inf[i]['cols'][0]
+            if 'cols' in inf[ax]:
+                s = inf[ax]['cols'][0]
             else:
-                s = inf[i]
+                s = inf[ax]
                 
             if 'name' in s:
                 t = s['name']
             if 'units' in s:
                 t += ' (%s)' % s['units']
-            
-        ## Set axis titles
-        titles = ['', '']
-        for i in [0,1]:
-            if 'name' in inf[i]:
-                titles[i] = inf[i]['name']
-            if 'units' in inf[i]:
-                titles[i] = titles[i] + ' (%s)' % inf[i]['units']
+            titles[i] = t
+        ### Set axis titles
+        #titles = ['', '']
+        #for i in [0,1]:
+            #if 'title' in inf[axes[i]]:
+                #titles[i] = inf[axes[i]]['title']
+            #else:
+                #titles[i] = inf[axes[i]]['name']
+            #if 'units' in inf[axes[i]]:
+                #titles[i] = titles[i] + ' (%s)' % inf[axes[i]]['units']
+                
         self.setAxisTitle(self.xBottom, titles[0])
         self.setAxisTitle(self.yLeft, titles[1])
 
         ## create curves
         #curves = []
         try:
-            xv = arr.xvals(xAxis)
+            xv = arr.xvals(axes[0])
         except:
             print "Making up xvals"
-            print arr
-            raise
-            xv = range(arr.shape[xAxis])
-            
+            #print arr
+            #raise
+            xv = range(arr.shape[axes[0]])
+        
         ret = []
         if arr.ndim == 2:
-            for i in range(arr.shape[yAxis]):
+            for i in range(arr.shape[axes[1]]):
                 c = PlotCurve()
-                c.setData(xv, arr[yAxis:i])
-                #c.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-                c.attach(self)
-                ret.append(len(self.curves))
-                #self.curves.append(c)
+                
+                axName = inf[axes[1]]['name']
+                #print "ARRAY:"
+                yArr = arr[axName:i].view(ndarray)
+                #print xv.shape, xv.min(), xv.max()
+                #print yArr.shape, yArr.min(), yArr.max()
+                #c.setData(array([1,2,3,4,5]), array([1,4,2,3,5]))
+                c.setData(xv, yArr)
+                
+                ret.append(c)
         else:
             c = PlotCurve()
-            c.setData(xv, arr)
-            #c.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-            #c.attach(self)
+            #c.setData(array([1,2,3,4,5]), array([1,4,2,3,5]))
+            print xv.shape, arr.view(ndarray).shape
+            c.setData(xv, arr.view(ndarray))
             ret.append(c)
-            #self.curves.append(c)
-            
             
         return ret
+        #return []
+
+    def saveSvgClicked(self):
+        self.fileDialog = QtGui.QFileDialog(self)
+        if PlotWidget.lastFileDir is not None:
+            self.fileDialog.setDirectory(PlotWidget.lastFileDir)
+        self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+        self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+        self.fileDialog.show()
+        QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.svgFileSelected)
+            
+    def svgFileSelected(self, fileName):
+        #PlotWidget.lastFileDir = os.path.split(fileName)[0]
+        self.writeSvg(str(fileName))
+        self.fileDialog = None
+
+    def saveImgClicked(self):
+        self.fileDialog = QtGui.QFileDialog(self)
+        if PlotWidget.lastFileDir is not None:
+            self.fileDialog.setDirectory(PlotWidget.lastFileDir)
+        self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+        self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+        self.fileDialog.show()
+        QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.imgFileSelected)
+            
+    def imgFileSelected(self, fileName):
+        #PlotWidget.lastFileDir = os.path.split(fileName)[0]
+        self.writeImage(str(fileName))
+        self.fileDialog = None
+      
 
     def writeSvg(self, fileName=None):
         if fileName is None:
             fileName = str(QtGui.QFileDialog.getSaveFileName())
+        #s = self.size()
+        #self.setSize(self.size() * 4)
         self.svg = QtSvg.QSvgGenerator()
         self.svg.setFileName(fileName)
         self.svg.setSize(self.size())
-        self.svg.setResolution(600)
+        #self.svg.setResolution(600)
         painter = QtGui.QPainter(self.svg)
         self.print_(painter, self.rect())
+        #self.setSize(s)
         
     def writeImage(self, fileName=None):
         if fileName is None:
@@ -503,6 +554,9 @@ class PlotCurve(Qwt.QwtPlotCurve):
         self.alpha = 1.0
         self.autoAlpha = True
         self.spectrumMode = False
+        self.setPaintAttribute(self.PaintFiltered, False)
+        self.setPaintAttribute(self.ClipPolygons, False)
+        
 
     def free(self):
         self.xData = None

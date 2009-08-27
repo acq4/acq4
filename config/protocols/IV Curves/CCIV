@@ -1,34 +1,101 @@
-winState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%00%00%00%04%FC%00%00%03%0D%FC%02%00%00%00%01%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%00%D9%00%00%03%0D%00%00%01.%00%07%FF%FF%00%00%00%02%00%00%05%00%00%00%00%D5%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01e%00%00%00%DD%00%07%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%01i%00%00%01%9B%00%00%01%15%00%07%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%03%08%00%00%01K%00%00%01%1C%00%07%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%04W%00%00%00%A9%00%00%00%93%00%07%FF%FF%00%00%00%00%00%00%03%0D%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+protocol:
+    windowState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%00%00%00%04%FC%00%00%03%0D%FC%02%00%00%00%01%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%00%D9%00%00%03%0D%00%00%01%14%00%FF%FF%FF%00%00%00%02%00%00%05%00%00%00%00%D5%FC%01%00%00%00%05%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01%0D%00%00%00%DD%00%FF%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%01%11%00%00%016%00%00%01%15%00%FF%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02K%00%00%01%2B%00%00%01%2B%00%FF%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%03z%00%00%00%B0%00%00%00%B0%00%FF%FF%FF%FB%00%00%00%14%00d%00o%00c%00k%00W%00i%00d%00g%00e%00t%01%00%00%04.%00%00%00%D2%00%00%00S%00%FF%FF%FF%00%00%00%00%00%00%03%0D%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+    params: [('Clamp1', 'Amplitude', True, [])]
+    conf:
+        continuous: False
+        cycleTime: 0.5
+        loop: False
+        duration: 0.20000000000000001
+        repetitions: 0
+        leadTime: 0.050000000000000003
+        loopCycleTime: 1.0
+    analysis:
 devices:
     Clamp1:
-        splitter: [522, 232]
-        setRawGainCheck: False
+        bottomPlotWidget:
+            averageGroup: False
+            xAutoRadio: True
+            maxTracesCheck: False
+            yAutoRadio: True
+            yMouseCheck: True
+            xSyncCombo: ''
+            decimateGroup: True
+            decimateSpin: 0
+            xMinText: '0'
+            groupBox_2: False
+            yMinText: '0'
+            ySyncCombo: ''
+            yAutoPercentSpin: 100
+            manualDecimateRadio: False
+            xManualRadio: False
+            maxTracesSpin: 0
+            ySyncCheck: False
+            autoAlphaCheck: False
+            xMouseCheck: True
+            alphaGroup: True
+            xAutoPercentSpin: 100
+            xMaxText: '0'
+            alphaSlider: 1000
+            yMaxText: '0'
+            powerSpectrumGroup: False
+            autoDecimateRadio: True
+            yManualRadio: False
+            groupBox: False
+            xSyncCheck: False
+            forgetTracesCheck: False
+        topPlotWidget:
+            averageGroup: False
+            xAutoRadio: True
+            maxTracesCheck: False
+            yAutoRadio: True
+            yMouseCheck: True
+            xSyncCombo: ''
+            decimateGroup: True
+            decimateSpin: 0
+            xMinText: '0'
+            groupBox_2: False
+            yMinText: '0'
+            ySyncCombo: ''
+            yAutoPercentSpin: 100
+            manualDecimateRadio: False
+            xManualRadio: False
+            maxTracesSpin: 0
+            ySyncCheck: False
+            autoAlphaCheck: False
+            xMouseCheck: True
+            alphaGroup: True
+            xAutoPercentSpin: 100
+            xMaxText: '0'
+            alphaSlider: 1000
+            yMaxText: '0'
+            powerSpectrumGroup: False
+            autoDecimateRadio: True
+            yManualRadio: False
+            groupBox: False
+            xSyncCheck: False
+            forgetTracesCheck: False
+        vcModeRadio: False
+        splitter: [1, 1]
         holdingCheck: False
-        rawGainSpin: 0.0
-        autoUpdateCheck: True
-        holdingSpin: 0.0
         scaledGainSpin: 0.0
-        rawSignal: 'MembranePotential'
-        rawSignalCheck: False
-        scaledSignalCombo: 'MembranePotential'
-        rawSignalCombo: 'MembranePotential'
-        scaledSignalCheck: False
-        splitter_2: [349, 922]
-        scaledSignal: 'MembranePotential'
+        holdingSpin: 0.0
         setScaledGainCheck: False
+        splitter_2: [1, 1]
+        scaledSignalCombo: 'MembranePotential'
+        setRawGainCheck: False
+        i0ModeRadio: False
         waveGeneratorWidget:
             function: 'pulse(10, 100, Amplitude)'
-            params: 'Amplitude = 300; -300:300/11'
-        displayAverageCheck: False
+            params: 'Amplitude = 200; -200:200/11'
+        icModeRadio: True
+        rawGainSpin: 0.0
+        rawSignal: 'MembranePotential'
+        rawSignalCheck: False
         mode: 'IC'
+        rawSignalCombo: 'MembranePotential'
+        scaledSignalCheck: False
+        scaledSignal: 'MembranePotential'
     DAQ:
+        downsample: 1
         numPts: 8000
         rate: 40000.0
-conf:
-    repetitions: 0
-    cycleTime: 0.5
-    loopCycleTime: 1.0
-    duration: 0.20000000000000001
-    continuous: False
-    leadTime: 0.050000000000000003
-    loop: False
