@@ -159,11 +159,13 @@ class OutputChannelGui(DaqChannelGui):
         runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys(), passHash=True)
         for w in waves:
             if w is not None:
+                self.ui.functionCheck.setChecked(True)
                 self.plotCurve(w, color=QtGui.QColor(100, 100, 100), replot=False)
         
         ## display single-mode wave in red
         single = self.getSingleWave()
         if single is not None:
+            self.ui.functionCheck.setChecked(True)
             self.plotCurve(single, color=QtGui.QColor(200, 100, 100))
             #print "===single==", single.min(), single.max()
         self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
