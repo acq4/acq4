@@ -26,12 +26,16 @@ class PlotWidget(Qwt.QwtPlot):
         self.plotLayout().setCanvasMargin(0)
         #self.zoomer.setRubberBandPen(QtGui.QPen(QtGui.QColor(250, 250, 200)))
         
+        self.autoBtn = QtGui.QPushButton("A", self)
+        self.autoBtn.setGeometry(0, 0, 20, 20)
+        
+        
         self.grid = Qwt.QwtPlotGrid()
         self.grid.attach(self)
-        self.grid.setMinPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 10)))
-        self.grid.setMajPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 30)))
-        #self.grid.enableXMin(True)
-        #self.grid.enableYMin(True)
+        #self.grid.setMinPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 10)))
+        #self.grid.setMajPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 30)))
+        ##self.grid.enableXMin(True)
+        ##self.grid.enableYMin(True)
         
         self.curves = []
         self.paramIndex = {}
@@ -60,16 +64,19 @@ class PlotWidget(Qwt.QwtPlot):
         c.xMaxText.setValidator(dv)
         c.yMaxText.setValidator(dv)
         
-        QtCore.QObject.connect(c.xMinText, QtCore.SIGNAL('editingFinished()'), self.updateManualXScale)
-        QtCore.QObject.connect(c.xMaxText, QtCore.SIGNAL('editingFinished()'), self.updateManualXScale)
-        QtCore.QObject.connect(c.yMinText, QtCore.SIGNAL('editingFinished()'), self.updateManualYScale)
-        QtCore.QObject.connect(c.yMaxText, QtCore.SIGNAL('editingFinished()'), self.updateManualYScale)
+        QtCore.QObject.connect(c.xMinText, QtCore.SIGNAL('editingFinished()'), self.setManualXScale)
+        QtCore.QObject.connect(c.xMaxText, QtCore.SIGNAL('editingFinished()'), self.setManualXScale)
+        QtCore.QObject.connect(c.yMinText, QtCore.SIGNAL('editingFinished()'), self.setManualYScale)
+        QtCore.QObject.connect(c.yMaxText, QtCore.SIGNAL('editingFinished()'), self.setManualYScale)
         
         QtCore.QObject.connect(c.xManualRadio, QtCore.SIGNAL('toggled(bool)'), self.updateXScale)
         QtCore.QObject.connect(c.yManualRadio, QtCore.SIGNAL('toggled(bool)'), self.updateYScale)
         
         QtCore.QObject.connect(c.xAutoRadio, QtCore.SIGNAL('clicked()'), self.updateXScale)
         QtCore.QObject.connect(c.yAutoRadio, QtCore.SIGNAL('clicked()'), self.updateYScale)
+
+        QtCore.QObject.connect(c.xLogCheck, QtCore.SIGNAL('toggled(bool)'), self.setXLog)
+        QtCore.QObject.connect(c.yLogCheck, QtCore.SIGNAL('toggled(bool)'), self.setYLog)
 
         QtCore.QObject.connect(c.alphaGroup, QtCore.SIGNAL('toggled(bool)'), self.updateAlpha)
         QtCore.QObject.connect(c.alphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateAlpha)
@@ -79,8 +86,36 @@ class PlotWidget(Qwt.QwtPlot):
         QtCore.QObject.connect(c.saveSvgBtn, QtCore.SIGNAL('clicked()'), self.saveSvgClicked)
         QtCore.QObject.connect(c.saveImgBtn, QtCore.SIGNAL('clicked()'), self.saveImgClicked)
         
+        QtCore.QObject.connect(self.autoBtn, QtCore.SIGNAL('clicked()'), self.enableAutoScale)
         
+        QtCore.QObject.connect(c.gridGroup, QtCore.SIGNAL('toggled(bool)'), self.updateGrid)
+        QtCore.QObject.connect(c.gridAlphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateGrid)
+        
+        self.updateGrid()
         self.replot()
+        
+    def setXLog(self, b, base=10):
+        if b:
+            self.setAxisScaleEngine(self.xBottom, Qwt.QwtLog10ScaleEngine())
+        else:
+            self.setAxisScaleEngine(self.xBottom, Qwt.QwtLinearScaleEngine())
+        
+        
+    def setYLog(self, b, base=10):
+        if b:
+            self.setAxisScaleEngine(self.yLeft, Qwt.QwtLog10ScaleEngine())
+        else:
+            self.setAxisScaleEngine(self.yLeft, Qwt.QwtLinearScaleEngine())
+        
+    def updateGrid(self):
+        if self.ctrl.gridGroup.isChecked():
+            self.grid.setMinPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 10)))
+            self.grid.setMajPen(QtGui.QPen(QtGui.QColor(255, 255, 255, self.ctrl.gridAlphaSlider.value())))
+            self.grid.enableXMin(True)
+            self.grid.enableYMin(True)
+        else:
+            self.grid.enableXMin(False)
+            self.grid.enableYMin(False)
       
     def widgetGroupInterface(self):
         return (None, PlotWidget.saveState, PlotWidget.restoreState)
@@ -97,6 +132,7 @@ class PlotWidget(Qwt.QwtPlot):
     def enableAutoScale(self):
         self.ctrl.xAutoRadio.setChecked(True)
         self.ctrl.yAutoRadio.setChecked(True)
+        self.autoBtn.hide()
       
     def updateDecimation(self):
         if self.ctrl.maxTracesCheck.isChecked():
@@ -140,31 +176,33 @@ class PlotWidget(Qwt.QwtPlot):
         
     def updateXScale(self, b=False):
         if b:
-            self.updateManualXScale()
+            self.setManualXScale()
         else:
             #self.setAxisAutoScale(Qwt.QwtPlot.xBottom)
             self.replot()
         
     def updateYScale(self, b=False):
         if b:
-            self.updateManualYScale()
+            self.setManualYScale()
         else:
             #self.setAxisAutoScale(Qwt.QwtPlot.yLeft)
             self.replot()
         
         
-    def updateManualXScale(self):
+    def setManualXScale(self):
         x1 = float(self.ctrl.xMinText.text())
         x2 = float(self.ctrl.xMaxText.text())
         self.ctrl.xManualRadio.setChecked(True)
         self.setXRange(x1, x2)
+        self.autoBtn.show()
         self.replot()
         
-    def updateManualYScale(self):
+    def setManualYScale(self):
         y1 = float(self.ctrl.yMinText.text())
         y2 = float(self.ctrl.yMaxText.text())
         self.ctrl.yManualRadio.setChecked(True)
         self.setYRange(y1, y2)
+        self.autoBtn.show()
         self.replot()
 
     def plotRange(self):
@@ -218,11 +256,13 @@ class PlotWidget(Qwt.QwtPlot):
         self.mousePos = pos
         
         ## Ignore axes if mouse is disabled
-        mask = array([1, 1])
-        if not self.ctrl.xMouseCheck.isChecked():
-            mask[0] = 0
-        if not self.ctrl.yMouseCheck.isChecked():
-            mask[1] = 0
+        mask = array([0, 0])
+        if self.ctrl.xMouseCheck.isChecked():
+            mask[0] = 1
+            self.setManualXScale()
+        if self.ctrl.yMouseCheck.isChecked():
+            mask[1] = 1
+            self.setManualYScale()
         
         ## Scale or translate based on mouse button
         if ev.buttons() & QtCore.Qt.LeftButton:
@@ -232,10 +272,6 @@ class PlotWidget(Qwt.QwtPlot):
             cPos = self.canvas().pos()
             cPos = array([cPos.x(), cPos.y()])
             self.scaleBy(s, self.map(self.pressPos - cPos))
-            if mask[0] == 1:
-                self.updateManualXScale()
-            if mask[1] == 1:
-                self.updateManualYScale()
             
         Qwt.QwtPlot.mouseMoveEvent(self, ev)
         
@@ -280,9 +316,12 @@ class PlotWidget(Qwt.QwtPlot):
                     xMin.append(i.minXValue())
                     xMax.append(i.maxXValue())
             if len(xMin) > 0:
+                #print xMin, xMax
                 xMin = min(xMin)
                 xMax = max(xMax)
                 d = (xMax-xMin) * 0.05
+                if d == 0:
+                    d = 1.0
                 self.setXRange(xMin-d, xMax+d)
             #print "second:", self.plotRange()
         if self.ctrl.yAutoRadio.isChecked():
@@ -297,6 +336,8 @@ class PlotWidget(Qwt.QwtPlot):
                 yMin = min(yMin)
                 yMax = max(yMax)
                 d = (yMax-yMin) * 0.05
+                if d == 0:
+                    d = 1.0
                 self.setYRange(yMin-d, yMax+d)
 
     def setAxisTitle(self, axis, title):
@@ -623,7 +664,7 @@ class PlotCurve(Qwt.QwtPlotCurve):
 
     def generateSpecData(self):
         if self.ySpecData is None:
-            f = fft(self.yData)
+            f = fft(self.yData) /len(self.yData)
             
             self.ySpecData = abs(f[1:len(f)/2])
             

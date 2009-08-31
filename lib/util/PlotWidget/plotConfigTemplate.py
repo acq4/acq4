@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'plotConfigTemplate.ui'
 #
-# Created: Thu Aug 27 15:38:16 2009
+# Created: Mon Aug 31 15:53:06 2009
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(250, 350)
+        Form.resize(210, 216)
         Form.setMaximumSize(QtCore.QSize(250, 350))
         self.gridLayout_3 = QtGui.QGridLayout(Form)
         self.gridLayout_3.setMargin(0)
@@ -63,7 +63,10 @@ class Ui_Form(object):
         self.xMouseCheck = QtGui.QCheckBox(self.groupBox)
         self.xMouseCheck.setChecked(True)
         self.xMouseCheck.setObjectName("xMouseCheck")
-        self.gridLayout.addWidget(self.xMouseCheck, 3, 0, 1, 1)
+        self.gridLayout.addWidget(self.xMouseCheck, 3, 1, 1, 1)
+        self.xLogCheck = QtGui.QCheckBox(self.groupBox)
+        self.xLogCheck.setObjectName("xLogCheck")
+        self.gridLayout.addWidget(self.xLogCheck, 3, 0, 1, 1)
         self.verticalLayout.addWidget(self.groupBox)
         self.groupBox_2 = QtGui.QGroupBox(self.tab)
         self.groupBox_2.setObjectName("groupBox_2")
@@ -101,7 +104,10 @@ class Ui_Form(object):
         self.yMouseCheck = QtGui.QCheckBox(self.groupBox_2)
         self.yMouseCheck.setChecked(True)
         self.yMouseCheck.setObjectName("yMouseCheck")
-        self.gridLayout_2.addWidget(self.yMouseCheck, 3, 0, 1, 1)
+        self.gridLayout_2.addWidget(self.yMouseCheck, 3, 1, 1, 1)
+        self.yLogCheck = QtGui.QCheckBox(self.groupBox_2)
+        self.yLogCheck.setObjectName("yLogCheck")
+        self.gridLayout_2.addWidget(self.yLogCheck, 3, 0, 1, 1)
         self.verticalLayout.addWidget(self.groupBox_2)
         self.tabWidget.addTab(self.tab, "")
         self.tab_2 = QtGui.QWidget()
@@ -175,6 +181,18 @@ class Ui_Form(object):
         self.alphaSlider.setObjectName("alphaSlider")
         self.horizontalLayout.addWidget(self.alphaSlider)
         self.verticalLayout_3.addWidget(self.alphaGroup)
+        self.gridGroup = QtGui.QGroupBox(self.tab_3)
+        self.gridGroup.setCheckable(True)
+        self.gridGroup.setObjectName("gridGroup")
+        self.verticalLayout_4 = QtGui.QVBoxLayout(self.gridGroup)
+        self.verticalLayout_4.setObjectName("verticalLayout_4")
+        self.gridAlphaSlider = QtGui.QSlider(self.gridGroup)
+        self.gridAlphaSlider.setMaximum(255)
+        self.gridAlphaSlider.setProperty("value", QtCore.QVariant(70))
+        self.gridAlphaSlider.setOrientation(QtCore.Qt.Horizontal)
+        self.gridAlphaSlider.setObjectName("gridAlphaSlider")
+        self.verticalLayout_4.addWidget(self.gridAlphaSlider)
+        self.verticalLayout_3.addWidget(self.gridGroup)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout_3.addItem(spacerItem)
         self.tabWidget.addTab(self.tab_3, "")
@@ -217,6 +235,7 @@ class Ui_Form(object):
         self.xAutoPercentSpin.setSuffix(QtGui.QApplication.translate("Form", "%", None, QtGui.QApplication.UnicodeUTF8))
         self.xSyncCheck.setText(QtGui.QApplication.translate("Form", "Sync", None, QtGui.QApplication.UnicodeUTF8))
         self.xMouseCheck.setText(QtGui.QApplication.translate("Form", "Mouse", None, QtGui.QApplication.UnicodeUTF8))
+        self.xLogCheck.setText(QtGui.QApplication.translate("Form", "Log", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Y Axis", None, QtGui.QApplication.UnicodeUTF8))
         self.yManualRadio.setText(QtGui.QApplication.translate("Form", "Manual", None, QtGui.QApplication.UnicodeUTF8))
         self.yMinText.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
@@ -225,6 +244,7 @@ class Ui_Form(object):
         self.yAutoPercentSpin.setSuffix(QtGui.QApplication.translate("Form", "%", None, QtGui.QApplication.UnicodeUTF8))
         self.ySyncCheck.setText(QtGui.QApplication.translate("Form", "Sync", None, QtGui.QApplication.UnicodeUTF8))
         self.yMouseCheck.setText(QtGui.QApplication.translate("Form", "Mouse", None, QtGui.QApplication.UnicodeUTF8))
+        self.yLogCheck.setText(QtGui.QApplication.translate("Form", "Log", None, QtGui.QApplication.UnicodeUTF8))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), QtGui.QApplication.translate("Form", "Scale", None, QtGui.QApplication.UnicodeUTF8))
         self.powerSpectrumGroup.setTitle(QtGui.QApplication.translate("Form", "Power Spectrum", None, QtGui.QApplication.UnicodeUTF8))
         self.decimateGroup.setTitle(QtGui.QApplication.translate("Form", "Decimate", None, QtGui.QApplication.UnicodeUTF8))
@@ -236,6 +256,7 @@ class Ui_Form(object):
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), QtGui.QApplication.translate("Form", "Data", None, QtGui.QApplication.UnicodeUTF8))
         self.alphaGroup.setTitle(QtGui.QApplication.translate("Form", "Alpha", None, QtGui.QApplication.UnicodeUTF8))
         self.autoAlphaCheck.setText(QtGui.QApplication.translate("Form", "Auto", None, QtGui.QApplication.UnicodeUTF8))
+        self.gridGroup.setTitle(QtGui.QApplication.translate("Form", "Grid", None, QtGui.QApplication.UnicodeUTF8))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_3), QtGui.QApplication.translate("Form", "Display", None, QtGui.QApplication.UnicodeUTF8))
         self.saveSvgBtn.setText(QtGui.QApplication.translate("Form", "SVG", None, QtGui.QApplication.UnicodeUTF8))
         self.saveImgBtn.setText(QtGui.QApplication.translate("Form", "Image", None, QtGui.QApplication.UnicodeUTF8))

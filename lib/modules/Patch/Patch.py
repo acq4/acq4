@@ -59,6 +59,12 @@ class PatchWindow(QtGui.QMainWindow):
             p.setAxisTitle(p.yLeft, k)
             self.ui.plotLayout.addWidget(p)
             self.plots[k] = p
+        irp = self.plots['inputResistance']
+        irp.setManualYScale()
+        irp.setYLog(True)
+        irp.setYRange(1e6, 1e11)
+            
+        
         
         
         self.stateGroup = WidgetGroup([
@@ -110,8 +116,9 @@ class PatchWindow(QtGui.QMainWindow):
             p = self.plots[n]
             p.setCanvasBackground(QtGui.QColor(0,0,0))
             p.replot()
+            self.analysisCurves[n] = p.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=False)
             for suf in ['', 'Std']:
-                self.analysisCurves[n+suf] = p.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=False)
+                #self.analysisCurves[n+suf] = p.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=False)
                 #self.analysisCurves[n+suf] = PlotCurve(n+suf)
                 #self.analysisCurves[n+suf].setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
                 #self.analysisCurves[n+suf].attach(p)
@@ -275,8 +282,8 @@ class PatchWindow(QtGui.QMainWindow):
             p = self.plots[n]
             if p.isVisible():
                 self.analysisCurves[n].setData(self.analysisData['time'], self.analysisData[n])
-                if len(self.analysisData[n+'Std']) > 0:
-                    self.analysisCurves[p+'Std'].setData(self.analysisData['time'], self.analysisData[n+'Std'])
+                #if len(self.analysisData[n+'Std']) > 0:
+                    #self.analysisCurves[p+'Std'].setData(self.analysisData['time'], self.analysisData[n+'Std'])
                 p.replot()
     
     def startClicked(self):

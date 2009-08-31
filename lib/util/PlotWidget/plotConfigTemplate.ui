@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>250</width>
-    <height>350</height>
+    <width>210</width>
+    <height>216</height>
    </rect>
   </property>
   <property name="maximumSize">
@@ -123,13 +123,20 @@
             </property>
            </widget>
           </item>
-          <item row="3" column="0">
+          <item row="3" column="1">
            <widget class="QCheckBox" name="xMouseCheck">
             <property name="text">
              <string>Mouse</string>
             </property>
             <property name="checked">
              <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QCheckBox" name="xLogCheck">
+            <property name="text">
+             <string>Log</string>
             </property>
            </widget>
           </item>
@@ -211,13 +218,20 @@
             </property>
            </widget>
           </item>
-          <item row="3" column="0">
+          <item row="3" column="1">
            <widget class="QCheckBox" name="yMouseCheck">
             <property name="text">
              <string>Mouse</string>
             </property>
             <property name="checked">
              <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QCheckBox" name="yLogCheck">
+            <property name="text">
+             <string>Log</string>
             </property>
            </widget>
           </item>
@@ -362,6 +376,31 @@
             </property>
             <property name="value">
              <number>1000</number>
+            </property>
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="gridGroup">
+         <property name="title">
+          <string>Grid</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_4">
+          <item>
+           <widget class="QSlider" name="gridAlphaSlider">
+            <property name="maximum">
+             <number>255</number>
+            </property>
+            <property name="value">
+             <number>70</number>
             </property>
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
