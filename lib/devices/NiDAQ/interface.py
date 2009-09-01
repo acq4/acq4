@@ -3,6 +3,7 @@ from lib.drivers.nidaq import NIDAQ, SuperTask
 from lib.devices.Device import *
 import threading, time, traceback, sys
 from protoGUI import *
+from numpy import byte
 
 class NiDAQ(Device):
     def __init__(self, dm, config, name):
@@ -112,15 +113,6 @@ class Task(DeviceTask):
         ## Results should be collected by individual devices using getData
         return None
         
-        ### Make sure all tasks are finished
-        #while not self.st.isDone():
-            #time.sleep(10e-6)
-        
-        ### Read data from input tasks
-        #data = self.st.getAllData()
-        
-        #self.st.stop()
-        
     def storeResult(self, dirHandle):
         pass
         
@@ -135,24 +127,26 @@ class Task(DeviceTask):
         res = self.st.getResult(channel)
         if 'downsample' in self.cmd:
             ds = self.cmd['downsample']
-            if ds > 1:
-                data = res['data']
-                newLen = int(data.shape[0] / ds) * ds
-                data = data[:newLen]
-                data.shape = (data.shape[0]/ds, ds)
+        else:
+            ds = 1
+            
+        if res['info']['type'] in ['di', 'do']:
+            res['data'] = (res['data'] > 0).astype(byte)
+            
+        if ds > 1:
+            data = res['data']
+            newLen = int(data.shape[0] / ds) * ds
+            data = data[:newLen]
+            data.shape = (data.shape[0]/ds, ds)
+            if res['info']['type'] in ['di', 'do']:
+                data = data.mean(axis=1).round().astype(byte)
+            else:
                 data = data.mean(axis=1)
-                res['data'] = data
-                res['info']['numPts'] = data.shape[0]
-                res['info']['downsampling'] = ds
-                res['info']['rate'] = res['info']['rate'] / ds
+            res['data'] = data
+            res['info']['numPts'] = data.shape[0]
+            res['info']['downsampling'] = ds
+            res['info']['rate'] = res['info']['rate'] / ds
                 
-                
-        # if type(res['info']) is not dict:
-          # res['info'] = {'info': res['info']}
-        # res['info'] = {}
-        # res['info']['rate'] = self.cmd['rate']
-        # res['info']['nPts'] = self.cmd['numPts']
-        # res['info']['time'] = self.st.startTime
         return res
         
     def devName(self):

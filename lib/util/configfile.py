@@ -16,6 +16,7 @@ def readConfigFile(fname):
         fd = open(fname)
         s = unicode(fd.read(), 'UTF-8')
         fd.close()
+        s = s.replace("\r", "")
         data = parseString(s)[1]
     except:
 	print "Error while reading config file %s:"% fname

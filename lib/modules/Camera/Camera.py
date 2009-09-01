@@ -465,23 +465,14 @@ class PVCamera(QtGui.QMainWindow):
             now = ptime.time()
             while self.frameBuffer[0][1]['time'] < (now-self.ui.spinROITime.value()):
                 self.frameBuffer.pop(0)
-                #if ptime.time() - now > 10:
-                    #print "Stuck in loop 1"
-                    #break
             for r in self.ROIs:
                 if len(r['times']) < 1:
                     continue
                 while r['times'][0] < (now-self.ui.spinROITime.value()):
                     r['times'].pop(0)
                     r['vals'].pop(0)
-                    #if ptime.time() - now > 10:
-                        #print "Stuck in loop 2"
-                        #break
                 if minTime is None or r['times'][0] < minTime:
                     minTime = r['times'][0]
-                #if ptime.time() - now > 10:
-                    #print "Stuck in loop 3"
-                    #break
         if minTime is None:
             minTime = frame[1]['time']
                 
@@ -510,21 +501,36 @@ class PVCamera(QtGui.QMainWindow):
                 #print "Stuck in loop 4"
                 #break
             
-        self.ui.plotWidget.replot()
+        #self.ui.plotWidget.replot()
         #sys.stdout.write('!')
     
             
     def newFrame(self, frame):
         #if hasattr(self.acquireThread, 'fps') and self.acquireThread.fps is not None:
-        if self.nextFrame is not None:
-            dt = frame[1]['time'] - self.nextFrame[1]['time']
-            if self.fps is None:
-                self.fps = 1.0/dt
-            else:
-                self.fps = self.fps * 0.9 + 0.1 / dt
-            self.fpsLabel.setText('%02.2ffps' % self.fps)
-        self.nextFrame = frame
         
+        lf = None
+        if self.nextFrame is not None:
+            lf = self.nextFrame
+        elif self.currentFrame is not None:
+            lf = self.currentFrame
+            
+        if lf is not None:
+            dt = frame[1]['time'] - lf[1]['time']
+            #print self.fps, 1.0/dt
+            if dt > 0:
+                if self.fps is None:
+                    self.fps = 1.0/dt
+                else:
+                    self.fps = self.fps * 0.9 + 0.1 / dt
+                self.fpsLabel.setText('%02.2ffps' % self.fps)
+        
+        ## Update ROI plots, if any
+        if self.ui.checkEnableROIs.isChecked():
+            self.addPlotFrame(frame)
+
+        self.nextFrame = frame
+
+
     def drawFrame(self):
         #sys.stdout.write('+')
         try:
@@ -569,9 +575,9 @@ class PVCamera(QtGui.QMainWindow):
 
             (data, info) = self.currentFrame
             
-            ## Update ROI plots, if any
-            if self.ui.checkEnableROIs.isChecked():
-                self.addPlotFrame(self.currentFrame)
+            ### Update ROI plots, if any
+            #if self.ui.checkEnableROIs.isChecked():
+                #self.addPlotFrame(self.currentFrame)
             
             ## divide the background out of the current frame if needed
             if self.ui.btnDivideBackground.isChecked() and self.backgroundFrame is not None:
@@ -616,6 +622,12 @@ class PVCamera(QtGui.QMainWindow):
             ## update info for pixel under mouse pointer
             self.setMouse()
             self.updateRgnLabel()
+
+            
+            if self.ui.checkEnableROIs.isChecked():
+                self.ui.plotWidget.replot()
+
+
         except:
             #print "Exception in QtCam::newFrame: %s (line %d)" % (str(sys.exc_info()[1]), sys.exc_info()[2].tb_lineno)
             sys.excepthook(*sys.exc_info())

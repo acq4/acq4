@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ImageViewTemplate.ui'
 #
-# Created: Tue Jun 16 18:46:05 2009
-#      by: PyQt4 UI code generator 4.4.4
+# Created: Tue Sep 01 19:00:24 2009
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -40,6 +40,7 @@ class Ui_Form(object):
         self.label_2.setObjectName("label_2")
         self.gridLayout.addWidget(self.label_2, 1, 2, 1, 1)
         self.timeSlider = QtGui.QSlider(Form)
+        self.timeSlider.setMaximum(65535)
         self.timeSlider.setOrientation(QtCore.Qt.Horizontal)
         self.timeSlider.setObjectName("timeSlider")
         self.gridLayout.addWidget(self.timeSlider, 2, 0, 1, 3)

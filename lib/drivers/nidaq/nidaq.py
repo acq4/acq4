@@ -624,7 +624,7 @@ class SuperTask:
             res = self.result[self.channelInfo[channel]['task']]
             ret = {
                 'data': res['data'][self.channelInfo[channel]['index']],
-                'info': {'startTime': res['start'], 'numPts': self.numPts, 'rate': self.rate}
+                'info': {'startTime': res['start'], 'numPts': self.numPts, 'rate': self.rate, 'type': self.channelInfo[channel]['task'][1]}
             }
             if 'clipped' in res:
                 ret['info']['clipped'] = res['clipped']

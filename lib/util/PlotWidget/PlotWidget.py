@@ -92,6 +92,7 @@ class PlotWidget(Qwt.QwtPlot):
         QtCore.QObject.connect(c.gridAlphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateGrid)
         
         self.updateGrid()
+        self.enableAutoScale()
         self.replot()
         
     def setXLog(self, b, base=10):

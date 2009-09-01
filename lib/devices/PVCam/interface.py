@@ -338,7 +338,39 @@ class Task(DeviceTask):
                 #print "returning no frames"
                 marr = None
             
-            return {'frames': marr, 'expose': expose}
+        ## If exposure channel was recorded, update frame times to match.
+        if expose is not None and marr is not None:
+            ## Extract times from trace
+            ex = expose.view(ndarray)
+            exd = ex[1:] - ex[:-1]
+            
+            inds = argwhere(exd > 0)[:, 0] + 1
+            onTimes = timeVals[inds]
+            #print "onTimes:", onTimes
+            inds = argwhere(exd < 0)[:, 0] + 1
+            offTimes = timeVals[inds]
+            
+            ## Cut all arrays back to the same length
+            #onTimes = onTimes[:len(times)]
+            #offTimes = offTimes[:len(times)]
+            #times = times[:len(onTimes)]
+            
+            ## Determine average frame transfer time
+            txLen = (offTimes[:len(times)] - times[:len(offTimes)]).mean()
+            
+            ## Determine average exposure time (excluding first frame)
+            expLen = (offTimes[1:len(onTimes)] - onTimes[1:len(offTimes)]).mean()
+            
+            ## New times list is onTimes, any extra frames use their original time offset by txLen and expLen
+            vals = marr.xvals('Time')
+            #print "Original times:", vals
+            vals[:len(onTimes)] = onTimes[:len(vals)]
+            vals[len(onTimes):] -= txLen + expLen
+            #print "New times:", vals
+            
+            
+            
+        return {'frames': marr, 'expose': expose}
         
     def storeResult(self, dirHandle):
         result = self.getResult()
@@ -370,6 +402,13 @@ class AcquireThread(QtCore.QThread):
     def __del__(self):
         if hasattr(self, 'cam'):
             self.cam.stop()
+    
+    def start(self, *args):
+        self.lock.lock()
+        self.stopThread = False
+        self.lock.unlock()
+        QtCore.QThread.start(self, *args)
+        
     
     def connect(self, method):
         with MutexLocker(self.connectMutex):
@@ -476,7 +515,7 @@ class AcquireThread(QtCore.QThread):
                     
                     ## Build meta-info for this frame
                     ## Use lastFrameTime because the current frame _began_ exposing when the previous frame arrived.
-                    info = {'id': self.frameId, 'time': lastFrameTime, 'binning': binning, 'exposure': exposure, 'region': region}
+                    info = {'id': self.frameId, 'time': now, 'binning': binning, 'exposure': exposure, 'region': region}
                     
                     ps = self.dev.getPixelSize()
                     if ps is not None:
@@ -576,7 +615,8 @@ class AcquireThread(QtCore.QThread):
             self.stop()
             if not self.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
-            self.start(QtCore.QThread.HighPriority)
+            #self.start(QtCore.QThread.HighPriority)
+            self.start()
 
 
 #class CameraTask(QObject):
