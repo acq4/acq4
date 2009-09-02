@@ -1,7 +1,14 @@
 # -*- coding: utf-8 -*-
 from ImageViewTemplate import *
 from graphicsItems import *
+from widgets import ROI
 from PyQt4 import QtCore, QtGui
+
+class PlotROI(ROI):
+    def __init__(self, size):
+        ROI.__init__(self, pos=[0,0], size=size, scaleSnap=True, translateSnap=True)
+        self.addScaleHandle([1, 1], [0, 0])
+
 
 class ImageView(QtGui.QWidget):
     def __init__(self, *args):
@@ -18,22 +25,54 @@ class ImageView(QtGui.QWidget):
         self.imageItem = ImageItem()
         self.scene.addItem(self.imageItem)
         self.currentIndex = 0
+
+        self.roi = PlotROI(10)
+        self.roi.setZValue(20)
+        self.scene.addItem(self.roi)
+        self.roi.hide()
+        self.ui.roiPlot.hide()
+        self.roiCurve = self.ui.roiPlot.plot()
+
         QtCore.QObject.connect(self.ui.timeSlider, QtCore.SIGNAL('valueChanged(int)'), self.timeChanged)
         QtCore.QObject.connect(self.ui.whiteSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
         QtCore.QObject.connect(self.ui.blackSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
-        
+        QtCore.QObject.connect(self.ui.roiBtn, QtCore.SIGNAL('clicked()'), self.roiClicked)
+        #QtCore.QObject.connect(self.roi, QtCore.SIGNAL('regionChanged'), self.roiChanged)
+        self.roi.connect(QtCore.SIGNAL('regionChanged'), self.roiChanged)
+
+
+    def roiClicked(self):
+        if self.ui.roiBtn.isChecked():
+            self.roi.show()
+            self.ui.roiPlot.show()
+            self.roiChanged()
+        else:
+            self.roi.hide()
+            self.ui.roiPlot.hide()
+
+    def roiChanged(self):
+        if self.image is not None:
+            data = self.roi.getArrayRegion(self.image.view(ndarray), self.imageItem, (1, 2))
+            if data is not None:
+                data = data.mean(axis=1).mean(axis=1)
+                self.roiCurve.setData(y=data, x=self.image.xvals(0))
+                self.ui.roiPlot.replot()
+
     def setImage(self, img):
         self.image = img
         self.ui.timeSlider.setValue(0)
         #self.ui.timeSlider.setMaximum(img.shape[0]-1)
         self.updateImage()
         self.autoRange()
+        if self.ui.roiBtn.isChecked():
+            self.roiChanged()
         
     def timeChanged(self):
-        ind = self.timeIndex()
+        (ind, time) = self.timeIndex()
         if ind != self.currentIndex:
             self.currentIndex = ind
             self.updateImage()
+        self.emit(QtCore.SIGNAL('timeChanged'), ind, time)
 
     def updateImage(self):
         if self.image is None:
@@ -49,20 +88,21 @@ class ImageView(QtGui.QWidget):
         v = self.ui.timeSlider.value()
         vmax = self.ui.timeSlider.maximum()
         f = float(v) / vmax
+        t = 0.0
         xv = self.image.xvals('Time') 
         if xv is None:
             ind = int(f * self.image.shape[0])
         else:
             if len(xv) < 2:
-                return 0
+                return (0,0)
             totTime = xv[-1] + (xv[-1]-xv[-2])
             t = f * totTime
             inds = argwhere(xv < t)
             if len(inds) < 1:
-                return 0
+                return (0,0)
             ind = inds[-1,0]
         #print ind
-        return ind
+        return ind, t
             
     def autoRange(self):
         self.levelMax = float(self.image.max())
