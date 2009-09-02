@@ -3,6 +3,7 @@ from ImageViewTemplate import *
 from graphicsItems import *
 from widgets import ROI
 from PyQt4 import QtCore, QtGui
+from PyQt4 import Qwt5 as Qwt
 
 class PlotROI(ROI):
     def __init__(self, size):
@@ -32,6 +33,12 @@ class ImageView(QtGui.QWidget):
         self.roi.hide()
         self.ui.roiPlot.hide()
         self.roiCurve = self.ui.roiPlot.plot()
+        self.roiTimeLine = Qwt.QwtPlotMarker()
+        self.roiTimeLine.setLinePen(QtGui.QPen(QtGui.QColor(255, 255, 0)))
+        self.roiTimeLine.setLineStyle(Qwt.QwtPlotMarker.VLine)
+        self.roiTimeLine.setXValue(0)
+        self.roiTimeLine.attach(self.ui.roiPlot)
+
 
         QtCore.QObject.connect(self.ui.timeSlider, QtCore.SIGNAL('valueChanged(int)'), self.timeChanged)
         QtCore.QObject.connect(self.ui.whiteSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
@@ -72,6 +79,8 @@ class ImageView(QtGui.QWidget):
         if ind != self.currentIndex:
             self.currentIndex = ind
             self.updateImage()
+        self.roiTimeLine.setXValue(time)
+        self.ui.roiPlot.replot()
         self.emit(QtCore.SIGNAL('timeChanged'), ind, time)
 
     def updateImage(self):
@@ -85,6 +94,8 @@ class ImageView(QtGui.QWidget):
             self.imageItem.updateImage(self.image, white=self.whiteLevel(), black=self.blackLevel())
             
     def timeIndex(self):
+        if self.image is None:
+            return (0,0)
         v = self.ui.timeSlider.value()
         vmax = self.ui.timeSlider.maximum()
         f = float(v) / vmax
@@ -99,7 +110,7 @@ class ImageView(QtGui.QWidget):
             t = f * totTime
             inds = argwhere(xv < t)
             if len(inds) < 1:
-                return (0,0)
+                return (0,t)
             ind = inds[-1,0]
         #print ind
         return ind, t

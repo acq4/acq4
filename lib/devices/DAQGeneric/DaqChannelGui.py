@@ -56,9 +56,9 @@ class DaqChannelGui(QtGui.QWidget):
     def groupBoxClicked(self, b):
         self.setChildrenVisible(self.ui.groupBox, b)
         if b:
-            self.ui.groupBox.setTitle(str(self.ui.groupBox.title())[4:])
+            self.ui.groupBox.setTitle(unicode(self.ui.groupBox.title())[4:])
         else:
-            self.ui.groupBox.setTitle("[+] " + str(self.ui.groupBox.title()))
+            self.ui.groupBox.setTitle("[+] " + unicode(self.ui.groupBox.title()))
             
     def setChildrenVisible(self, obj, vis):
         for c in obj.children():
