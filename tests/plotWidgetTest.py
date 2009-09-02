@@ -50,7 +50,8 @@ vl.addWidget(p2)
 #c2 = PlotCurve()
 #c2.setData([1,2,3,4,5,6,7,8], [1,2,10,4,3,2,4,1])
 #c2.attach(p2)
-
+ma = MetaArray(file='tests/Clamp1.ma')
+c2 = p2.plot(ma)
 
 def updateData():
     global data
