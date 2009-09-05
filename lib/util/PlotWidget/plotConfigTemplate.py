@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'plotConfigTemplate.ui'
 #
-# Created: Mon Aug 31 15:53:06 2009
-#      by: PyQt4 UI code generator 4.5.4
+# Created: Sat Sep  5 13:54:00 2009
+#      by: PyQt4 UI code generator 4.5.2
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(210, 216)
+        Form.resize(210, 320)
         Form.setMaximumSize(QtCore.QSize(250, 350))
         self.gridLayout_3 = QtGui.QGridLayout(Form)
         self.gridLayout_3.setMargin(0)
@@ -54,12 +54,9 @@ class Ui_Form(object):
         self.xAutoPercentSpin.setProperty("value", QtCore.QVariant(100))
         self.xAutoPercentSpin.setObjectName("xAutoPercentSpin")
         self.gridLayout.addWidget(self.xAutoPercentSpin, 1, 1, 1, 2)
-        self.xSyncCombo = QtGui.QComboBox(self.groupBox)
-        self.xSyncCombo.setObjectName("xSyncCombo")
-        self.gridLayout.addWidget(self.xSyncCombo, 2, 1, 1, 2)
-        self.xSyncCheck = QtGui.QCheckBox(self.groupBox)
-        self.xSyncCheck.setObjectName("xSyncCheck")
-        self.gridLayout.addWidget(self.xSyncCheck, 2, 0, 1, 1)
+        self.xLinkCombo = QtGui.QComboBox(self.groupBox)
+        self.xLinkCombo.setObjectName("xLinkCombo")
+        self.gridLayout.addWidget(self.xLinkCombo, 2, 1, 1, 2)
         self.xMouseCheck = QtGui.QCheckBox(self.groupBox)
         self.xMouseCheck.setChecked(True)
         self.xMouseCheck.setObjectName("xMouseCheck")
@@ -67,6 +64,9 @@ class Ui_Form(object):
         self.xLogCheck = QtGui.QCheckBox(self.groupBox)
         self.xLogCheck.setObjectName("xLogCheck")
         self.gridLayout.addWidget(self.xLogCheck, 3, 0, 1, 1)
+        self.label = QtGui.QLabel(self.groupBox)
+        self.label.setObjectName("label")
+        self.gridLayout.addWidget(self.label, 2, 0, 1, 1)
         self.verticalLayout.addWidget(self.groupBox)
         self.groupBox_2 = QtGui.QGroupBox(self.tab)
         self.groupBox_2.setObjectName("groupBox_2")
@@ -95,12 +95,9 @@ class Ui_Form(object):
         self.yAutoPercentSpin.setProperty("value", QtCore.QVariant(100))
         self.yAutoPercentSpin.setObjectName("yAutoPercentSpin")
         self.gridLayout_2.addWidget(self.yAutoPercentSpin, 1, 1, 1, 2)
-        self.ySyncCombo = QtGui.QComboBox(self.groupBox_2)
-        self.ySyncCombo.setObjectName("ySyncCombo")
-        self.gridLayout_2.addWidget(self.ySyncCombo, 2, 1, 1, 2)
-        self.ySyncCheck = QtGui.QCheckBox(self.groupBox_2)
-        self.ySyncCheck.setObjectName("ySyncCheck")
-        self.gridLayout_2.addWidget(self.ySyncCheck, 2, 0, 1, 1)
+        self.yLinkCombo = QtGui.QComboBox(self.groupBox_2)
+        self.yLinkCombo.setObjectName("yLinkCombo")
+        self.gridLayout_2.addWidget(self.yLinkCombo, 2, 1, 1, 2)
         self.yMouseCheck = QtGui.QCheckBox(self.groupBox_2)
         self.yMouseCheck.setChecked(True)
         self.yMouseCheck.setObjectName("yMouseCheck")
@@ -108,6 +105,9 @@ class Ui_Form(object):
         self.yLogCheck = QtGui.QCheckBox(self.groupBox_2)
         self.yLogCheck.setObjectName("yLogCheck")
         self.gridLayout_2.addWidget(self.yLogCheck, 3, 0, 1, 1)
+        self.label_2 = QtGui.QLabel(self.groupBox_2)
+        self.label_2.setObjectName("label_2")
+        self.gridLayout_2.addWidget(self.label_2, 2, 0, 1, 1)
         self.verticalLayout.addWidget(self.groupBox_2)
         self.tabWidget.addTab(self.tab, "")
         self.tab_2 = QtGui.QWidget()
@@ -233,18 +233,18 @@ class Ui_Form(object):
         self.xMaxText.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
         self.xAutoRadio.setText(QtGui.QApplication.translate("Form", "Auto", None, QtGui.QApplication.UnicodeUTF8))
         self.xAutoPercentSpin.setSuffix(QtGui.QApplication.translate("Form", "%", None, QtGui.QApplication.UnicodeUTF8))
-        self.xSyncCheck.setText(QtGui.QApplication.translate("Form", "Sync", None, QtGui.QApplication.UnicodeUTF8))
         self.xMouseCheck.setText(QtGui.QApplication.translate("Form", "Mouse", None, QtGui.QApplication.UnicodeUTF8))
         self.xLogCheck.setText(QtGui.QApplication.translate("Form", "Log", None, QtGui.QApplication.UnicodeUTF8))
+        self.label.setText(QtGui.QApplication.translate("Form", "Link with:", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Y Axis", None, QtGui.QApplication.UnicodeUTF8))
         self.yManualRadio.setText(QtGui.QApplication.translate("Form", "Manual", None, QtGui.QApplication.UnicodeUTF8))
         self.yMinText.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
         self.yMaxText.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
         self.yAutoRadio.setText(QtGui.QApplication.translate("Form", "Auto", None, QtGui.QApplication.UnicodeUTF8))
         self.yAutoPercentSpin.setSuffix(QtGui.QApplication.translate("Form", "%", None, QtGui.QApplication.UnicodeUTF8))
-        self.ySyncCheck.setText(QtGui.QApplication.translate("Form", "Sync", None, QtGui.QApplication.UnicodeUTF8))
         self.yMouseCheck.setText(QtGui.QApplication.translate("Form", "Mouse", None, QtGui.QApplication.UnicodeUTF8))
         self.yLogCheck.setText(QtGui.QApplication.translate("Form", "Log", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtGui.QApplication.translate("Form", "Link with:", None, QtGui.QApplication.UnicodeUTF8))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), QtGui.QApplication.translate("Form", "Scale", None, QtGui.QApplication.UnicodeUTF8))
         self.powerSpectrumGroup.setTitle(QtGui.QApplication.translate("Form", "Power Spectrum", None, QtGui.QApplication.UnicodeUTF8))
         self.decimateGroup.setTitle(QtGui.QApplication.translate("Form", "Decimate", None, QtGui.QApplication.UnicodeUTF8))

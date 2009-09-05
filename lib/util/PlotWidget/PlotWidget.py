@@ -7,12 +7,55 @@ from scipy.fftpack import fft
 from plotConfigTemplate import Ui_Form
 from lib.util.WidgetGroup import WidgetGroup
 
+class PlotWidgetManager(QtCore.QObject):
+    """Used for managing communication between PlotWidgets"""
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+        self.widgets = {}
+    
+    def addWidget(self, w, name):
+        self.widgets[name] = w
+        self.emit(QtCore.SIGNAL('widgetListChanged'), self.widgets.keys())
+        
+    def listWidgets(self):
+        return self.widgets.keys()
+        
+    def getWidget(self, name):
+        if name not in self.widgets:
+            return None
+        else:
+            return self.widgets[name]
+            
+    def linkX(self, p1, p2):
+        QtCore.QObject.connect(p1, QtCore.SIGNAL('xRangeChanged'), p2.linkXChanged)
+        QtCore.QObject.connect(p2, QtCore.SIGNAL('xRangeChanged'), p1.linkXChanged)
+        p2.setManualXScale()
+
+    def unlinkX(self, p1, p2):
+        QtCore.QObject.disconnect(p1, QtCore.SIGNAL('xRangeChanged'), p2.linkXChanged)
+        QtCore.QObject.disconnect(p2, QtCore.SIGNAL('xRangeChanged'), p1.linkXChanged)
+        
+    def linkY(self, p1, p2):
+        QtCore.QObject.connect(p1, QtCore.SIGNAL('yRangeChanged'), p2.linkYChanged)
+        QtCore.QObject.connect(p2, QtCore.SIGNAL('yRangeChanged'), p1.linkYChanged)
+        p2.setManualYScale()
+
+    def unlinkY(self, p1, p2):
+        QtCore.QObject.disconnect(p1, QtCore.SIGNAL('yRangeChanged'), p2.linkYChanged)
+        QtCore.QObject.disconnect(p2, QtCore.SIGNAL('yRangeChanged'), p1.linkYChanged)
+
+
 class PlotWidget(Qwt.QwtPlot):
     
     lastFileDir = None
+    manager = None
     
-    def __init__(self, *args):
+    def __init__(self, name, *args):
         Qwt.QwtPlot.__init__(self, *args)
+        if PlotWidget.manager is None:
+            PlotWidget.manager = PlotWidgetManager()
+        self.name = name
+        PlotWidget.manager.addWidget(self, name)
         self.setMinimumHeight(50)
         self.setCanvasBackground(QtGui.QColor(0,0,0))
         self.setAxisFont(self.yLeft, QtGui.QFont("Arial", 7))
@@ -58,6 +101,9 @@ class PlotWidget(Qwt.QwtPlot):
         
         self.fileDialog = None
         
+        self.xLinkPlot = None
+        self.yLinkPlot = None
+        self.linksBlocked = False
         
         c.xMinText.setValidator(dv)
         c.yMinText.setValidator(dv)
@@ -90,19 +136,89 @@ class PlotWidget(Qwt.QwtPlot):
         
         QtCore.QObject.connect(c.gridGroup, QtCore.SIGNAL('toggled(bool)'), self.updateGrid)
         QtCore.QObject.connect(c.gridAlphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateGrid)
+        QtCore.QObject.connect(PlotWidget.manager, QtCore.SIGNAL('widgetListChanged'), self.updatePlotList)
         
+        QtCore.QObject.connect(self.ctrl.xLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.xLinkComboChanged)
+        QtCore.QObject.connect(self.ctrl.yLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.yLinkComboChanged)
+        
+        self.updatePlotList()
         self.updateGrid()
         self.enableAutoScale()
         self.replot()
+
+    def updatePlotList(self):
+        """Update the list of all plotWidgets in the "link" combos"""
+        for sc in [self.ctrl.xLinkCombo, self.ctrl.yLinkCombo]:
+            current = str(sc.currentText())
+            sc.clear()
+            sc.addItem("")
+            for w in PlotWidget.manager.listWidgets():
+                #print w
+                if w == self.name:
+                    continue
+                sc.addItem(w)
+
+    def blockLink(self, b):
+        self.linksBlocked = b
+
+    def xLinkComboChanged(self):
+        self.setXLink(str(self.ctrl.xLinkCombo.currentText()))
+
+    def yLinkComboChanged(self):
+        self.setYLink(str(self.ctrl.yLinkCombo.currentText()))
+
+    def setXLink(self, plotName=None):
+        if self.xLinkPlot is not None:
+            PlotWidget.manager.unlinkX(self, self.xLinkPlot)
+        plot = PlotWidget.manager.getWidget(plotName)
+        self.xLinkPlot = plot
+        if plot is not None:
+            PlotWidget.manager.linkX(self, plot)
+            
+    def setYLink(self, plotName=None):
+        if self.yLinkPlot is not None:
+            PlotWidget.manager.unlinkY(self, self.yLinkPlot)
+        plot = PlotWidget.manager.getWidget(plotName)
+        self.yLinkPlot = plot
+        if plot is not None:
+            PlotWidget.manager.linkY(self, plot)
         
-    def setXLog(self, b, base=10):
+    def linkXChanged(self, plot):
+        if self.linksBlocked:
+            return
+        pr = plot.plotRange()[0]
+        pg = plot.canvas().geometry()
+        sg = self.canvas().geometry()
+        upp = float(pr[1] - pr[0]) / pg.width()
+        x1 = pr[0] + (sg.x()-pg.x()) * upp
+        x2 = x1 + sg.width() * upp
+        plot.blockLink(True)
+        self.setXRange(x1, x2)
+        plot.blockLink(False)
+        self.replot()
+        
+    def linkYChanged(self, plot):
+        if self.linksBlocked:
+            return
+        pr = plot.plotRange()[1]
+        pg = plot.canvas().geometry()
+        sg = self.canvas().geometry()
+        upp = float(pr[1] - pr[0]) / pg.height()
+        y1 = pr[0] + (sg.y()-pg.y()) * upp
+        y2 = y1 + sg.height() * upp
+        plot.blockLink(True)
+        self.setYRange(y1, y2)
+        plot.blockLink(False)
+        self.replot()
+
+    def setXLog(self, b):
         if b:
             self.setAxisScaleEngine(self.xBottom, Qwt.QwtLog10ScaleEngine())
         else:
             self.setAxisScaleEngine(self.xBottom, Qwt.QwtLinearScaleEngine())
         
         
-    def setYLog(self, b, base=10):
+    def setYLog(self, b):
         if b:
             self.setAxisScaleEngine(self.yLeft, Qwt.QwtLog10ScaleEngine())
         else:
@@ -290,16 +406,20 @@ class PlotWidget(Qwt.QwtPlot):
         Qwt.QwtPlot.mouseReleaseEvent(self, ev)
         
     def setYRange(self, min, max):
-        self.setAxisScale(self.yLeft, min, max)
-        self.range[1] = [min, max]
-        self.ctrl.yMinText.setText('%g' % min)
-        self.ctrl.yMaxText.setText('%g' % max)
+        if self.range[1] != [min, max]:
+            self.setAxisScale(self.yLeft, min, max)
+            self.range[1] = [min, max]
+            self.ctrl.yMinText.setText('%g' % min)
+            self.ctrl.yMaxText.setText('%g' % max)
+            self.emit(QtCore.SIGNAL('yRangeChanged'), self, (min, max))
         
     def setXRange(self, min, max):
-        self.setAxisScale(self.xBottom, min, max)
-        self.range[0] = [min, max]
-        self.ctrl.xMinText.setText('%g' % min)
-        self.ctrl.xMaxText.setText('%g' % max)
+        if self.range[0] != [min, max]:
+            self.setAxisScale(self.xBottom, min, max)
+            self.range[0] = [min, max]
+            self.ctrl.xMinText.setText('%g' % min)
+            self.ctrl.xMaxText.setText('%g' % max)
+            self.emit(QtCore.SIGNAL('xRangeChanged'), self, (min, max))
 
     def replot(self, autoRange=True):
         if autoRange:
@@ -308,8 +428,6 @@ class PlotWidget(Qwt.QwtPlot):
 
     def autoRange(self):
         if self.ctrl.xAutoRadio.isChecked():
-            #self.setAxisAutoScale(Qwt.QwtPlot.xBottom)
-            #print "first:", self.plotRange()
             xMin = []
             xMax = []
             for i in self.itemList():
@@ -317,16 +435,13 @@ class PlotWidget(Qwt.QwtPlot):
                     xMin.append(i.minXValue())
                     xMax.append(i.maxXValue())
             if len(xMin) > 0:
-                #print xMin, xMax
                 xMin = min(xMin)
                 xMax = max(xMax)
                 d = (xMax-xMin) * 0.05
                 if d == 0:
                     d = 1.0
                 self.setXRange(xMin-d, xMax+d)
-            #print "second:", self.plotRange()
         if self.ctrl.yAutoRadio.isChecked():
-            #self.setAxisAutoScale(Qwt.QwtPlot.yLeft)
             yMin = []
             yMax = []
             for i in self.itemList():

@@ -37,11 +37,15 @@ vl = QtGui.QVBoxLayout()
 cw.setLayout(vl)
 mw.setCentralWidget(cw)
 mw.show()
+mw.resize(800, 600)
 
-p1 = PlotWidget(cw)
+
+p1 = PlotWidget("Plot1", cw)
 vl.addWidget(p1)
-p2 = PlotWidget(cw)
+p2 = PlotWidget("Plot2", cw)
 vl.addWidget(p2)
+p3 = PlotWidget("Plot3", cw)
+vl.addWidget(p3)
 
 
 #c1 = Qwt.QwtPlotCurve()
@@ -50,22 +54,28 @@ vl.addWidget(p2)
 #c2 = PlotCurve()
 #c2.setData([1,2,3,4,5,6,7,8], [1,2,10,4,3,2,4,1])
 #c2.attach(p2)
-ma = MetaArray(file='tests/Clamp1.ma')
-c2 = p2.plot(ma)
 
-def updateData():
-    global data
+def rand():
     data = random.random(10000)
     data[1000:1300] += .5
     data[1800] += 2
     data[1000:1300] *= 5
     data[1800] *= 20
     #c1.setData(range(len(data)), data)
+    return data, arange(10000, 10000+len(data))
     
-    p1.plot(data, clear=True)
-    
+
+def updateData():
+    yd, xd = rand()
+    p1.plot(yd, x=xd, clear=True)
+
+yd, xd = rand()
+p2.plot(yd * 1000, x=xd)
+yd, xd = rand()
+p3.plot(yd * 100000, x=xd)
+
 t = QtCore.QTimer()
 QtCore.QObject.connect(t, QtCore.SIGNAL('timeout()'), updateData)
-t.start(200)
-
+#t.start(200)
+updateData()
 
