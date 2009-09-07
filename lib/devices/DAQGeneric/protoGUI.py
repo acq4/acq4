@@ -124,6 +124,6 @@ class DAQGenericProtoGui(ProtocolGui):
                 #continue
             #print result.infoCopy()
             if result.hasColumn(0, ch):
-                self.channels[ch].handleResult(result[ch])
+                self.channels[ch].handleResult(result[ch], params)
             
             

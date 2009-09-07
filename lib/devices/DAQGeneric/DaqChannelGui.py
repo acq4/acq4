@@ -235,9 +235,9 @@ class InputChannelGui(DaqChannelGui):
         state = self.stateGroup.state()
         return {'record': state['recordCheck'], 'recordInit': state['recordInitCheck']}
     
-    def handleResult(self, result):
+    def handleResult(self, result, params):
         if self.stateGroup.state()['displayCheck']:
-            plot = self.plot.plot(result.view(numpy.ndarray), result.xvals('Time'), pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=True)
+            plot = self.plot.plot(result.view(numpy.ndarray), result.xvals('Time'), pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=True, params=params)
             #plot = PlotCurve('cell')
             #plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
             #plot.setData(result.xvals('Time'), result)

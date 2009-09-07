@@ -166,8 +166,13 @@ class PlotWidget(Qwt.QwtPlot):
             return
                 
         p = curve.params().copy()
+        for k in p:
+            if type(k) is tuple:
+                p['.'.join(k)] = p[k]
+                del p[k]
         for rk in remKeys:
-            del p[rk]
+            if rk in p:
+                del p[rk]
         for ak in addKeys:
             if ak not in p:
                 p[ak] = None
@@ -195,8 +200,14 @@ class PlotWidget(Qwt.QwtPlot):
         for c in self.curves:
             for p in c.params().keys():
                 if p not in self.paramList:
+                    if type(p) is tuple:
+                        p = '.'.join(p)
                     self.paramList.append(p)
-                    i = QtGui.QListWidgetItem(p)
+                    try:
+                        i = QtGui.QListWidgetItem(p)
+                    except: 
+                        print "param:", p
+                        raise
                     i.setCheckState(QtCore.Qt.Unchecked)
                     self.ctrl.avgParamList.addItem(i)
                     
@@ -519,7 +530,8 @@ class PlotWidget(Qwt.QwtPlot):
     def plot(self, data=None, x=None, clear=False, params=None, pen=None, replot=True):
         if clear:
             self.clear()
-        
+        if params is None:
+            params = {}
         if isinstance(data, MetaArray):
             curves = self._plotMetaArray(data)
         elif isinstance(data, ndarray):
