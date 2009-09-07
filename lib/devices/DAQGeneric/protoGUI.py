@@ -24,6 +24,7 @@ class DAQGenericProtoGui(ProtocolGui):
         for ch in self.dev.config:
             conf = self.dev.config[ch]
             p = PlotWidget(self.ui.plotSplitter)
+            
             units = ''
             if 'units' in conf:
                 units = ' (%s)' % conf['units']
@@ -31,6 +32,7 @@ class DAQGenericProtoGui(ProtocolGui):
             p.setAxisTitle(PlotWidget.yLeft, ch+units)
             self.plots[ch] = p
             
+            p.registerPlot(self.dev.name + '.' + ch)
             
             if conf['type'] in ['ao', 'do']:
                 w = OutputChannelGui(self.ui.controlSplitter, ch, conf, p, dev, prot)

@@ -11,6 +11,7 @@ from lib.util.WidgetGroup import *
 from lib.util.Mutex import Mutex, MutexLocker
 import analysisModules
 import time
+import sip
 #import pdb
 
 class ProtocolRunner(Module, QtCore.QObject):
@@ -227,6 +228,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         if mod not in self.analysisDocks:
             return
         self.win.removeDockWidget(self.analysisDocks[mod])
+        sip.delete(self.analysisDocks[mod])
         del self.analysisDocks[mod]
         items = self.ui.analysisList.findItems(mod, QtCore.Qt.MatchExactly)
         items[0].setCheckState(QtCore.Qt.Unchecked)
@@ -339,6 +341,7 @@ class ProtocolRunner(Module, QtCore.QObject):
     def clearDocks(self):
         for d in self.docks:
             self.win.removeDockWidget(self.docks[d])
+            sip.delete(self.docks[d])
         self.docks = {}
 
         for d in self.analysisDocks.keys()[:]:

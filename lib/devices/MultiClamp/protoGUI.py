@@ -34,7 +34,11 @@ class MultiClampProtoGui(ProtocolGui):
         self.modeSignalList = self.dev.listModeSignals()
         self.mode = None
         self.setMode('I=0')
-        
+
+        self.ui.topPlotWidget.registerPlot(self.dev.name + '.Input')
+        self.ui.bottomPlotWidget.registerPlot(self.dev.name + '.Command')
+
+
         #self.stateGroup = WidgetGroup([
             #(self.ui.scaledSignalCheck, 'setScaledSignal'),
             #(self.ui.rawSignalCheck, 'setRawSignal'),
@@ -324,7 +328,7 @@ class MultiClampProtoGui(ProtocolGui):
                     #self.avgPlots[k].setData(self.traces[k][0].xvals('Time'), avgTrace / self.inpScale)
                 
         ## Plot the results
-        plot = self.ui.topPlotWidget.plot(result['scaled'].view(numpy.ndarray) / self.inpScale, x=result.xvals('Time'))
+        plot = self.ui.topPlotWidget.plot(result['scaled'].view(numpy.ndarray) / self.inpScale, x=result.xvals('Time'), params=params)
         #plot = PlotCurve('cell')
         #plot.setData(result.xvals('Time'), result['scaled'] / self.inpScale)
         #plot.attach(self.ui.topPlotWidget)

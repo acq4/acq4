@@ -47,6 +47,10 @@ class PVCamProto(ProtocolGui):
         self.vLines[0].attach(self.ui.exposePlot)
         self.vLines[1].attach(self.ui.triggerPlot)
         
+        self.ui.exposePlot.registerPlot(self.dev.name + '.Expose')
+        self.ui.triggerPlot.registerPlot(self.dev.name + '.Trigger')
+        self.ui.imageView.ui.roiPlot.registerPlot(self.dev.name + '.ROI')
+        
         QtCore.QObject.connect(self.ui.recordExposeCheck, QtCore.SIGNAL('clicked()'), self.recordExposeClicked)
         QtCore.QObject.connect(self.ui.imageView, QtCore.SIGNAL('timeChanged'), self.timeChanged)
             

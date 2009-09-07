@@ -12,15 +12,14 @@ from lib.util.WidgetGroup import WidgetGroup
 class PlotWidget(Qwt.QwtPlot):
     
     lastFileDir = None
-    manager = None
+    managers = {}
     
-    def __init__(self, parent=None, name=None):
+    def __init__(self, parent=None):
         Qwt.QwtPlot.__init__(self, parent)
-        if PlotWidget.manager is None:
-            PlotWidget.manager = PlotWidgetManager()
-        self.name = name
-        if name is not None:
-            PlotWidget.manager.addWidget(self, name)
+        
+        self.name = None
+        self.manager = None
+        
         self.setMinimumHeight(50)
         self.setCanvasBackground(QtGui.QColor(0,0,0))
         self.setAxisFont(self.yLeft, QtGui.QFont("Arial", 7))
@@ -46,7 +45,7 @@ class PlotWidget(Qwt.QwtPlot):
         ##self.grid.enableYMin(True)
         
         self.curves = []
-        self.paramIndex = {}
+        self.paramList = {}
         self.avgCurves = {}
         
         self.range = [[0, 1000], [0, 1000]]
@@ -101,12 +100,11 @@ class PlotWidget(Qwt.QwtPlot):
         
         QtCore.QObject.connect(c.gridGroup, QtCore.SIGNAL('toggled(bool)'), self.updateGrid)
         QtCore.QObject.connect(c.gridAlphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateGrid)
-        QtCore.QObject.connect(PlotWidget.manager, QtCore.SIGNAL('widgetListChanged'), self.updatePlotList)
         
         QtCore.QObject.connect(self.ctrl.xLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.xLinkComboChanged)
         QtCore.QObject.connect(self.ctrl.yLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.yLinkComboChanged)
         
-        QtCore.QObject.connect(self.ctrl.avgParamList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.recomputeAverages)
+        QtCore.QObject.connect(self.ctrl.avgParamList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.avgParamListClicked)
         QtCore.QObject.connect(self.ctrl.averageGroup, QtCore.SIGNAL('toggled(bool)'), self.avgToggled)
         
         QtCore.QObject.connect(self.ctrl.pointsGroup, QtCore.SIGNAL('toggled(bool)'), self.updatePointMode)
@@ -117,6 +115,23 @@ class PlotWidget(Qwt.QwtPlot):
         self.updateGrid()
         self.enableAutoScale()
         self.replot()
+
+    def __del__(self):
+        if self.manager is not None:
+            self.manager.removeWidget(name)
+
+
+    def registerPlot(self, name):
+        self.name = name
+        win = self.window()
+        #print "register", name, win
+        if win not in PlotWidget.managers:
+            PlotWidget.managers[win] = PlotWidgetManager()
+        self.manager = PlotWidget.managers[win]
+        self.manager.addWidget(self, name)
+        QtCore.QObject.connect(self.manager, QtCore.SIGNAL('widgetListChanged'), self.updatePlotList)
+        self.updatePlotList()
+        
 
     def pointMode(self):
         if self.ctrl.pointsGroup.isChecked():
@@ -181,7 +196,9 @@ class PlotWidget(Qwt.QwtPlot):
         ### Create a new curve if needed
         if key not in self.avgCurves:
             plot = PlotCurve()
-            plot.setPen(QtGui.QPen(QtGui.QColor(0, 255, 0)))
+            plot.setPen(QtGui.QPen(QtGui.QColor(0, 155, 0)))
+            plot.setAlpha(1.0, False)
+            plot.setZ(100)
             Qwt.QwtPlotCurve.attach(plot, self)
             self.avgCurves[key] = [0, plot]
         self.avgCurves[key][0] += 1
@@ -195,21 +212,40 @@ class PlotWidget(Qwt.QwtPlot):
             plot.setData(curve.xData, curve.yData)
 
     def updateParamList(self):
-        self.paramList = []
         self.ctrl.avgParamList.clear()
+        ## Check to see that each parameter for each curve is present in the list
+        #print "\nUpdate param list", self
+        #print "paramList:", self.paramList
         for c in self.curves:
+            #print "  curve:", c
             for p in c.params().keys():
-                if p not in self.paramList:
-                    if type(p) is tuple:
-                        p = '.'.join(p)
-                    self.paramList.append(p)
-                    try:
-                        i = QtGui.QListWidgetItem(p)
-                    except: 
-                        print "param:", p
-                        raise
-                    i.setCheckState(QtCore.Qt.Unchecked)
+                #print "    param:", p
+                if type(p) is tuple:
+                    p = '.'.join(p)
+                    
+                ## If the parameter is not in the list, add it.
+                matches = self.ctrl.avgParamList.findItems(p, QtCore.Qt.MatchExactly)
+                #print "      matches:", matches
+                if len(matches) == 0:
+                    i = QtGui.QListWidgetItem(p)
+                    if p in self.paramList and self.paramList[p] is True:
+                        #print "      set checked"
+                        i.setCheckState(QtCore.Qt.Checked)
+                    else:
+                        #print "      set unchecked"
+                        i.setCheckState(QtCore.Qt.Unchecked)
                     self.ctrl.avgParamList.addItem(i)
+                else:
+                    i = matches[0]
+                    
+                self.paramList[p] = (i.checkState() == QtCore.Qt.Checked)
+        #print "paramList:", self.paramList
+                    
+    def avgParamListClicked(self, item):
+        name = str(item.text())
+        self.paramList[name] = (item.checkState() == QtCore.Qt.Checked)
+        self.recomputeAverages()
+                    
                     
     def updatePlotList(self):
         """Update the list of all plotWidgets in the "link" combos"""
@@ -217,11 +253,12 @@ class PlotWidget(Qwt.QwtPlot):
             current = str(sc.currentText())
             sc.clear()
             sc.addItem("")
-            for w in PlotWidget.manager.listWidgets():
-                #print w
-                if w == self.name:
-                    continue
-                sc.addItem(w)
+            if self.manager is not None:
+                for w in self.manager.listWidgets():
+                    #print w
+                    if w == self.name:
+                        continue
+                    sc.addItem(w)
 
     def blockLink(self, b):
         self.linksBlocked = b
@@ -233,21 +270,25 @@ class PlotWidget(Qwt.QwtPlot):
         self.setYLink(str(self.ctrl.yLinkCombo.currentText()))
 
     def setXLink(self, plotName=None):
+        if self.manager is None:
+            return
         if self.xLinkPlot is not None:
-            PlotWidget.manager.unlinkX(self, self.xLinkPlot)
-        plot = PlotWidget.manager.getWidget(plotName)
+            self.manager.unlinkX(self, self.xLinkPlot)
+        plot = self.manager.getWidget(plotName)
         self.xLinkPlot = plot
         if plot is not None:
-            PlotWidget.manager.linkX(self, plot)
+            self.manager.linkX(self, plot)
             self.setManualXScale()
             
     def setYLink(self, plotName=None):
+        if self.manager is None:
+            return
         if self.yLinkPlot is not None:
-            PlotWidget.manager.unlinkY(self, self.yLinkPlot)
-        plot = PlotWidget.manager.getWidget(plotName)
+            self.manager.unlinkY(self, self.yLinkPlot)
+        plot = self.manager.getWidget(plotName)
         self.yLinkPlot = plot
         if plot is not None:
-            PlotWidget.manager.linkY(self, plot)
+            self.manager.linkY(self, plot)
             self.setManualXScale()
         
     def linkXChanged(self, plot):
@@ -546,8 +587,7 @@ class PlotWidget(Qwt.QwtPlot):
             raise Exception('Not sure how to plot object of type %s' % type(data))
             
         for c in curves:
-            self.attachCurve(c)
-            c.setParams(params)
+            self.attachCurve(c, params)
             if pen is not None:
                 c.setPen(pen)
             
@@ -563,6 +603,7 @@ class PlotWidget(Qwt.QwtPlot):
             return curves[0]
         
     def attachCurve(self, c, params=None):
+        c.setParams(params)
         self.curves.append(c)
         Qwt.QwtPlotCurve.attach(c, self)
         
@@ -761,7 +802,8 @@ class PlotWidget(Qwt.QwtPlot):
     def clear(self):
         Qwt.QwtPlot.clear(self)
         self.curves = []
-        self.paramIndex = {}
+        #self.paramList = {}
+        self.avgCurves = {}
 
     def saveState(self):
         return self.stateGroup.state()
@@ -928,6 +970,11 @@ class PlotWidgetManager(QtCore.QObject):
     def addWidget(self, w, name):
         self.widgets[name] = w
         self.emit(QtCore.SIGNAL('widgetListChanged'), self.widgets.keys())
+        
+    def removeWidget(self, name):
+        if name in self.widgets:
+            del self.widgets[name]
+            self.emit(QtCore.SIGNAL('widgetListChanged'), self.widgets.keys())
         
     def listWidgets(self):
         return self.widgets.keys()
