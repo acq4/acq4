@@ -7,42 +7,6 @@ from scipy.fftpack import fft
 from plotConfigTemplate import Ui_Form
 from lib.util.WidgetGroup import WidgetGroup
 
-class PlotWidgetManager(QtCore.QObject):
-    """Used for managing communication between PlotWidgets"""
-    def __init__(self):
-        QtCore.QObject.__init__(self)
-        self.widgets = {}
-    
-    def addWidget(self, w, name):
-        self.widgets[name] = w
-        self.emit(QtCore.SIGNAL('widgetListChanged'), self.widgets.keys())
-        
-    def listWidgets(self):
-        return self.widgets.keys()
-        
-    def getWidget(self, name):
-        if name not in self.widgets:
-            return None
-        else:
-            return self.widgets[name]
-            
-    def linkX(self, p1, p2):
-        QtCore.QObject.connect(p1, QtCore.SIGNAL('xRangeChanged'), p2.linkXChanged)
-        QtCore.QObject.connect(p2, QtCore.SIGNAL('xRangeChanged'), p1.linkXChanged)
-        p2.setManualXScale()
-
-    def unlinkX(self, p1, p2):
-        QtCore.QObject.disconnect(p1, QtCore.SIGNAL('xRangeChanged'), p2.linkXChanged)
-        QtCore.QObject.disconnect(p2, QtCore.SIGNAL('xRangeChanged'), p1.linkXChanged)
-        
-    def linkY(self, p1, p2):
-        QtCore.QObject.connect(p1, QtCore.SIGNAL('yRangeChanged'), p2.linkYChanged)
-        QtCore.QObject.connect(p2, QtCore.SIGNAL('yRangeChanged'), p1.linkYChanged)
-        p2.setManualYScale()
-
-    def unlinkY(self, p1, p2):
-        QtCore.QObject.disconnect(p1, QtCore.SIGNAL('yRangeChanged'), p2.linkYChanged)
-        QtCore.QObject.disconnect(p2, QtCore.SIGNAL('yRangeChanged'), p1.linkYChanged)
 
 
 class PlotWidget(Qwt.QwtPlot):
@@ -50,12 +14,13 @@ class PlotWidget(Qwt.QwtPlot):
     lastFileDir = None
     manager = None
     
-    def __init__(self, name, *args):
-        Qwt.QwtPlot.__init__(self, *args)
+    def __init__(self, parent=None, name=None):
+        Qwt.QwtPlot.__init__(self, parent)
         if PlotWidget.manager is None:
             PlotWidget.manager = PlotWidgetManager()
         self.name = name
-        PlotWidget.manager.addWidget(self, name)
+        if name is not None:
+            PlotWidget.manager.addWidget(self, name)
         self.setMinimumHeight(50)
         self.setCanvasBackground(QtGui.QColor(0,0,0))
         self.setAxisFont(self.yLeft, QtGui.QFont("Arial", 7))
@@ -141,11 +106,100 @@ class PlotWidget(Qwt.QwtPlot):
         QtCore.QObject.connect(self.ctrl.xLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.xLinkComboChanged)
         QtCore.QObject.connect(self.ctrl.yLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.yLinkComboChanged)
         
+        QtCore.QObject.connect(self.ctrl.avgParamList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.recomputeAverages)
+        QtCore.QObject.connect(self.ctrl.averageGroup, QtCore.SIGNAL('toggled(bool)'), self.avgToggled)
+        
+        QtCore.QObject.connect(self.ctrl.pointsGroup, QtCore.SIGNAL('toggled(bool)'), self.updatePointMode)
+        QtCore.QObject.connect(self.ctrl.autoPointsCheck, QtCore.SIGNAL('toggled(bool)'), self.updatePointMode)
+        
+        
         self.updatePlotList()
         self.updateGrid()
         self.enableAutoScale()
         self.replot()
 
+    def pointMode(self):
+        if self.ctrl.pointsGroup.isChecked():
+            if self.ctrl.autoPointsCheck.isChecked():
+                mode = None
+            else:
+                mode = True
+        else:
+            mode = False
+        return mode
+
+    def updatePointMode(self):
+        mode = self.pointMode()
+        for c in self.curves:
+            c.setPointMode(mode)
+        self.replot()
+        
+
+    def avgToggled(self, b):
+        if b:
+            self.recomputeAverages()
+        for k in self.avgCurves:
+            self.avgCurves[k][1].setVisible(b)
+        self.replot()
+
+    def recomputeAverages(self):
+        for k in self.avgCurves:
+            Qwt.QwtPlotCurve.detach(self.avgCurves[k][1])
+        self.avgCurves = {}
+        for c in self.curves:
+            self.addAvgCurve(c)
+        self.replot()
+        
+    def addAvgCurve(self, curve):
+        
+        ### First determine the key of the curve to which this new data should be averaged
+        remKeys = []
+        addKeys = []
+        for i in range(self.ctrl.avgParamList.count()):
+            item = self.ctrl.avgParamList.item(i)
+            if item.checkState() == QtCore.Qt.Checked:
+                remKeys.append(str(item.text()))
+            else:
+                addKeys.append(str(item.text()))
+                
+        if len(remKeys) < 1:  ## In this case, there would be 1 average plot for each data plot; not useful.
+            return
+                
+        p = curve.params().copy()
+        for rk in remKeys:
+            del p[rk]
+        for ak in addKeys:
+            if ak not in p:
+                p[ak] = None
+        key = tuple(p.items())
+        
+        ### Create a new curve if needed
+        if key not in self.avgCurves:
+            plot = PlotCurve()
+            plot.setPen(QtGui.QPen(QtGui.QColor(0, 255, 0)))
+            Qwt.QwtPlotCurve.attach(plot, self)
+            self.avgCurves[key] = [0, plot]
+        self.avgCurves[key][0] += 1
+        (n, plot) = self.avgCurves[key]
+        
+        ### Average data together
+        if plot.yData is not None:
+            newData = plot.yData * (n-1) / float(n) + curve.yData * 1.0 / float(n)
+            plot.setData(plot.xData, newData)
+        else:
+            plot.setData(curve.xData, curve.yData)
+
+    def updateParamList(self):
+        self.paramList = []
+        self.ctrl.avgParamList.clear()
+        for c in self.curves:
+            for p in c.params().keys():
+                if p not in self.paramList:
+                    self.paramList.append(p)
+                    i = QtGui.QListWidgetItem(p)
+                    i.setCheckState(QtCore.Qt.Unchecked)
+                    self.ctrl.avgParamList.addItem(i)
+                    
     def updatePlotList(self):
         """Update the list of all plotWidgets in the "link" combos"""
         for sc in [self.ctrl.xLinkCombo, self.ctrl.yLinkCombo]:
@@ -174,6 +228,7 @@ class PlotWidget(Qwt.QwtPlot):
         self.xLinkPlot = plot
         if plot is not None:
             PlotWidget.manager.linkX(self, plot)
+            self.setManualXScale()
             
     def setYLink(self, plotName=None):
         if self.yLinkPlot is not None:
@@ -182,6 +237,7 @@ class PlotWidget(Qwt.QwtPlot):
         self.yLinkPlot = plot
         if plot is not None:
             PlotWidget.manager.linkY(self, plot)
+            self.setManualXScale()
         
     def linkXChanged(self, plot):
         if self.linksBlocked:
@@ -273,9 +329,8 @@ class PlotWidget(Qwt.QwtPlot):
       
     def updateAlpha(self, *args):
         (alpha, auto) = self.alphaState()
-        for item in self.itemList():
-            if isinstance(item, PlotCurve):
-                item.setAlpha(alpha, auto)
+        for c in self.curves:
+            c.setAlpha(alpha, auto)
                 
         self.replot(autoRange=False)
      
@@ -503,9 +558,16 @@ class PlotWidget(Qwt.QwtPlot):
         (alpha, auto) = self.alphaState()
         c.setAlpha(alpha, auto)
         c.setSpectrumMode(self.ctrl.powerSpectrumGroup.isChecked())
+        c.setPointMode(self.pointMode())
         
         ## Hide older plots if needed
         self.updateDecimation()
+        
+        ## Add to average if needed
+        self.updateParamList()
+        if self.ctrl.averageGroup.isChecked():
+            self.addAvgCurve(c)
+        
         
     def detachCurve(self, c):
         try:
@@ -516,6 +578,7 @@ class PlotWidget(Qwt.QwtPlot):
         if c in self.curves:
             self.curves.remove(c)
         self.updateDecimation()
+        self.updateParamList()
         
         
     def indexParams(self, params, ids):
@@ -711,8 +774,10 @@ class PlotCurve(Qwt.QwtPlotCurve):
         self.alpha = 1.0
         self.autoAlpha = True
         self.spectrumMode = False
+        self.pointMode = None
         self.setPaintAttribute(self.PaintFiltered, False)
         self.setPaintAttribute(self.ClipPolygons, False)
+        self.paramList = {}
         
 
     def free(self):
@@ -724,6 +789,9 @@ class PlotCurve(Qwt.QwtPlotCurve):
 
     def setSpectrumMode(self, b):
         self.spectrumMode = b
+        
+    def setPointMode(self, m):
+        self.pointMode = m
         
     def setAlpha(self, alpha, auto=True):
         self.alpha = alpha
@@ -756,11 +824,17 @@ class PlotCurve(Qwt.QwtPlotCurve):
             ptAlpha = 0
             showPts = False
             alpha = clip(255 * width / numPts, 1, 255)
+            
+        if self.pointMode is True:
+            ptAlpha = 255
+        elif self.pointMode is False:
+            showPts = False
         s = Qwt.QwtSymbol(
             Qwt.QwtSymbol.Ellipse, 
             QtGui.QBrush(), 
             QtGui.QPen(QtGui.QColor(200,200,255,ptAlpha)), 
             QtCore.QSize(5,5))
+        
         if not showPts:
             s.setStyle(Qwt.QwtSymbol.NoSymbol)
         drawCurve.setSymbol(s)
@@ -791,7 +865,10 @@ class PlotCurve(Qwt.QwtPlotCurve):
         
         
     def setParams(self, params):
-        self.params = params
+        self.paramList = params
+        
+    def params(self):
+        return self.paramList
 
     def setData(self, x, y):
         self.xData = x
@@ -830,3 +907,39 @@ class PlotCurve(Qwt.QwtPlotCurve):
         else:
             return Qwt.QwtPlotCurve.boundingRect(self)
         
+class PlotWidgetManager(QtCore.QObject):
+    """Used for managing communication between PlotWidgets"""
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+        self.widgets = {}
+    
+    def addWidget(self, w, name):
+        self.widgets[name] = w
+        self.emit(QtCore.SIGNAL('widgetListChanged'), self.widgets.keys())
+        
+    def listWidgets(self):
+        return self.widgets.keys()
+        
+    def getWidget(self, name):
+        if name not in self.widgets:
+            return None
+        else:
+            return self.widgets[name]
+            
+    def linkX(self, p1, p2):
+        QtCore.QObject.connect(p1, QtCore.SIGNAL('xRangeChanged'), p2.linkXChanged)
+        QtCore.QObject.connect(p2, QtCore.SIGNAL('xRangeChanged'), p1.linkXChanged)
+        #p2.setManualXScale()
+
+    def unlinkX(self, p1, p2):
+        QtCore.QObject.disconnect(p1, QtCore.SIGNAL('xRangeChanged'), p2.linkXChanged)
+        QtCore.QObject.disconnect(p2, QtCore.SIGNAL('xRangeChanged'), p1.linkXChanged)
+        
+    def linkY(self, p1, p2):
+        QtCore.QObject.connect(p1, QtCore.SIGNAL('yRangeChanged'), p2.linkYChanged)
+        QtCore.QObject.connect(p2, QtCore.SIGNAL('yRangeChanged'), p1.linkYChanged)
+        #p2.setManualYScale()
+
+    def unlinkY(self, p1, p2):
+        QtCore.QObject.disconnect(p1, QtCore.SIGNAL('yRangeChanged'), p2.linkYChanged)
+        QtCore.QObject.disconnect(p2, QtCore.SIGNAL('yRangeChanged'), p1.linkYChanged)

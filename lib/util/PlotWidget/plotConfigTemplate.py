@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'plotConfigTemplate.ui'
 #
-# Created: Sat Sep  5 13:54:00 2009
+# Created: Sun Sep  6 22:05:05 2009
 #      by: PyQt4 UI code generator 4.5.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -193,6 +193,16 @@ class Ui_Form(object):
         self.gridAlphaSlider.setObjectName("gridAlphaSlider")
         self.verticalLayout_4.addWidget(self.gridAlphaSlider)
         self.verticalLayout_3.addWidget(self.gridGroup)
+        self.pointsGroup = QtGui.QGroupBox(self.tab_3)
+        self.pointsGroup.setCheckable(True)
+        self.pointsGroup.setObjectName("pointsGroup")
+        self.verticalLayout_5 = QtGui.QVBoxLayout(self.pointsGroup)
+        self.verticalLayout_5.setObjectName("verticalLayout_5")
+        self.autoPointsCheck = QtGui.QCheckBox(self.pointsGroup)
+        self.autoPointsCheck.setChecked(True)
+        self.autoPointsCheck.setObjectName("autoPointsCheck")
+        self.verticalLayout_5.addWidget(self.autoPointsCheck)
+        self.verticalLayout_3.addWidget(self.pointsGroup)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout_3.addItem(spacerItem)
         self.tabWidget.addTab(self.tab_3, "")
@@ -222,7 +232,7 @@ class Ui_Form(object):
         self.gridLayout_3.addWidget(self.tabWidget, 0, 0, 1, 1)
 
         self.retranslateUi(Form)
-        self.tabWidget.setCurrentIndex(0)
+        self.tabWidget.setCurrentIndex(1)
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
@@ -257,6 +267,8 @@ class Ui_Form(object):
         self.alphaGroup.setTitle(QtGui.QApplication.translate("Form", "Alpha", None, QtGui.QApplication.UnicodeUTF8))
         self.autoAlphaCheck.setText(QtGui.QApplication.translate("Form", "Auto", None, QtGui.QApplication.UnicodeUTF8))
         self.gridGroup.setTitle(QtGui.QApplication.translate("Form", "Grid", None, QtGui.QApplication.UnicodeUTF8))
+        self.pointsGroup.setTitle(QtGui.QApplication.translate("Form", "Points", None, QtGui.QApplication.UnicodeUTF8))
+        self.autoPointsCheck.setText(QtGui.QApplication.translate("Form", "Auto", None, QtGui.QApplication.UnicodeUTF8))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_3), QtGui.QApplication.translate("Form", "Display", None, QtGui.QApplication.UnicodeUTF8))
         self.saveSvgBtn.setText(QtGui.QApplication.translate("Form", "SVG", None, QtGui.QApplication.UnicodeUTF8))
         self.saveImgBtn.setText(QtGui.QApplication.translate("Form", "Image", None, QtGui.QApplication.UnicodeUTF8))
