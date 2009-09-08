@@ -110,6 +110,9 @@ class PlotWidget(Qwt.QwtPlot):
         QtCore.QObject.connect(self.ctrl.pointsGroup, QtCore.SIGNAL('toggled(bool)'), self.updatePointMode)
         QtCore.QObject.connect(self.ctrl.autoPointsCheck, QtCore.SIGNAL('toggled(bool)'), self.updatePointMode)
         
+        QtCore.QObject.connect(self.ctrl.maxTracesCheck, QtCore.SIGNAL('toggled(bool)'), self.decimationChanged)
+        QtCore.QObject.connect(self.ctrl.maxTracesSpin, QtCore.SIGNAL('valueChanged(int)'), self.decimationChanged)
+        
         
         self.updatePlotList()
         self.updateGrid()
@@ -120,10 +123,13 @@ class PlotWidget(Qwt.QwtPlot):
         if self.manager is not None:
             self.manager.removeWidget(name)
 
-
+    def decimationChanged(self):
+        self.updateDecimation()
+        self.replot()
+        
     def registerPlot(self, name):
         self.name = name
-        win = self.window()
+        win = str(self.window())
         #print "register", name, win
         if win not in PlotWidget.managers:
             PlotWidget.managers[win] = PlotWidgetManager()
@@ -975,6 +981,7 @@ class PlotWidgetManager(QtCore.QObject):
         if name in self.widgets:
             del self.widgets[name]
             self.emit(QtCore.SIGNAL('widgetListChanged'), self.widgets.keys())
+        
         
     def listWidgets(self):
         return self.widgets.keys()

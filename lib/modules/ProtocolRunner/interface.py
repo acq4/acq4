@@ -479,6 +479,7 @@ class ProtocolRunner(Module, QtCore.QObject):
 
         ## Load sequence parameter state (must be done after docks have loaded)
         self.ui.sequenceParamList.loadState(prot.conf['params'])
+        self.updateSeqParams('protocol')
         
         ## Configure dock positions
         winState = prot.conf['windowState']
