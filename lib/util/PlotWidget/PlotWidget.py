@@ -283,8 +283,8 @@ class PlotWidget(Qwt.QwtPlot):
         plot = self.manager.getWidget(plotName)
         self.xLinkPlot = plot
         if plot is not None:
-            self.manager.linkX(self, plot)
             self.setManualXScale()
+            self.manager.linkX(self, plot)
             
     def setYLink(self, plotName=None):
         if self.manager is None:
@@ -294,8 +294,8 @@ class PlotWidget(Qwt.QwtPlot):
         plot = self.manager.getWidget(plotName)
         self.yLinkPlot = plot
         if plot is not None:
+            self.setManualYScale()
             self.manager.linkY(self, plot)
-            self.setManualXScale()
         
     def linkXChanged(self, plot):
         if self.linksBlocked:
@@ -812,10 +812,22 @@ class PlotWidget(Qwt.QwtPlot):
         self.avgCurves = {}
 
     def saveState(self):
-        return self.stateGroup.state()
+        state = self.stateGroup.state()
+        state['paramList'] = self.paramList.copy()
+        #print "\nSAVE %s:\n" % str(self.name), state
+        #print "Saving state. averageGroup.isChecked(): %s  state: %s" % (str(self.ctrl.averageGroup.isChecked()), str(state['averageGroup']))
+        return state
         
     def restoreState(self, state):
-        self.stateGroup.setState(state)
+        if 'paramList' in state:
+            self.paramList = state['paramList'].copy()
+            self.stateGroup.setState(state)
+        self.updateParamList()
+        #print "\nRESTORE %s:\n" % str(self.name), state
+        #print "Restoring state. averageGroup.isChecked(): %s  state: %s" % (str(self.ctrl.averageGroup.isChecked()), str(state['averageGroup']))
+        #avg = self.ctrl.averageGroup.isChecked()
+        #if avg != state['averageGroup']:
+            #print "  WARNING: avgGroup is %s, should be %s" % (str(avg), str(state['averageGroup']))
         
         
         
@@ -995,6 +1007,7 @@ class PlotWidgetManager(QtCore.QObject):
     def linkX(self, p1, p2):
         QtCore.QObject.connect(p1, QtCore.SIGNAL('xRangeChanged'), p2.linkXChanged)
         QtCore.QObject.connect(p2, QtCore.SIGNAL('xRangeChanged'), p1.linkXChanged)
+        p1.linkXChanged(p2)
         #p2.setManualXScale()
 
     def unlinkX(self, p1, p2):
@@ -1004,6 +1017,7 @@ class PlotWidgetManager(QtCore.QObject):
     def linkY(self, p1, p2):
         QtCore.QObject.connect(p1, QtCore.SIGNAL('yRangeChanged'), p2.linkYChanged)
         QtCore.QObject.connect(p2, QtCore.SIGNAL('yRangeChanged'), p1.linkYChanged)
+        p1.linkYChanged(p2)
         #p2.setManualYScale()
 
     def unlinkY(self, p1, p2):

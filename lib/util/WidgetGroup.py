@@ -56,7 +56,7 @@ class WidgetGroup(QtCore.QObject):
             comboState,
             setComboState),
         QtGui.QGroupBox:
-            ('clicked(bool)',
+            ('toggled(bool)',
             QtGui.QGroupBox.isChecked,
             QtGui.QGroupBox.setChecked,
             True),
@@ -98,13 +98,13 @@ class WidgetGroup(QtCore.QObject):
             raise Exception("Wrong argument type %s" % type(widgetList))
         
     def addWidget(self, w, name=None, scale=None):
+        if not self.acceptsType(w):
+            raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
         if name is None:
             name = str(w.objectName())
         self.widgetList[w] = name
         self.scales[w] = scale
         self.readWidget(w)
-        if not self.acceptsType(w):
-            raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
             
         if type(w) in WidgetGroup.classes:
             signal = WidgetGroup.classes[type(w)][0]
@@ -115,6 +115,12 @@ class WidgetGroup(QtCore.QObject):
             QtCore.QObject.connect(w, QtCore.SIGNAL(signal), self.mkChangeCallback(w))
         else:
             self.uncachedWidgets.append(w)
+       
+    def findWidget(self, name):
+        for w in self.widgetList:
+            if self.widgetList[w] == name:
+                return w
+        return None
        
     def interface(self, obj):
         t = type(obj)
@@ -169,6 +175,16 @@ class WidgetGroup(QtCore.QObject):
     def state(self):
         for w in self.uncachedWidgets:
             self.readWidget(w)
+        
+        #cc = self.cache.copy()
+        #if 'averageGroup' in cc:
+            #val = cc['averageGroup']
+            #w = self.findWidget('averageGroup')
+            #self.readWidget(w)
+            #if val != self.cache['averageGroup']:
+                #print "  AverageGroup did not match cached value!"
+            #else:
+                #print "  AverageGroup OK"
         return self.cache.copy()
 
     def setState(self, s):
@@ -196,6 +212,7 @@ class WidgetGroup(QtCore.QObject):
         return val
 
     def setWidget(self, w, v):
+        v1 = v
         if self.scales[w] is not None:
             v *= self.scales[w]
         
@@ -204,6 +221,9 @@ class WidgetGroup(QtCore.QObject):
         else:
             setFunc = w.widgetGroupInterface()[2]
         setFunc(w, v)
+        #name = self.widgetList[w]
+        #if name in self.cache and (self.cache[name] != v1):
+            #print "%s: Cached value %s != set value %s" % (name, str(self.cache[name]), str(v1))
 
         
         
