@@ -9,6 +9,7 @@ from lib.util.WidgetGroup import *
 #from PyQt4 import Qwt5 as Qwt
 from lib.util.PlotWidget import PlotWidget
 import numpy
+import weakref
 
 class DAQGenericProtoGui(ProtocolGui):
     def __init__(self, dev, prot):
@@ -17,7 +18,7 @@ class DAQGenericProtoGui(ProtocolGui):
         self.ui.setupUi(self)
 
         
-        self.plots = {}
+        self.plots = weakref.WeakValueDictionary()
         self.channels = {}
         
         ## Create plots and control widgets

@@ -341,6 +341,7 @@ class ProtocolRunner(Module, QtCore.QObject):
     def clearDocks(self):
         for d in self.docks:
             self.win.removeDockWidget(self.docks[d])
+            self.docks[d].close()
             sip.delete(self.docks[d])
         self.docks = {}
 

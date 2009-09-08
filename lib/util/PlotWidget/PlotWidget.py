@@ -6,7 +6,7 @@ from numpy import *
 from scipy.fftpack import fft
 from plotConfigTemplate import Ui_Form
 from lib.util.WidgetGroup import WidgetGroup
-
+import weakref
 
 
 class PlotWidget(Qwt.QwtPlot):
@@ -120,8 +120,10 @@ class PlotWidget(Qwt.QwtPlot):
         self.replot()
 
     def __del__(self):
+        #print "delete plot", self
         if self.manager is not None:
-            self.manager.removeWidget(name)
+            self.manager.removeWidget(self.name)
+        #QtCore.QObject.disconnect(self)
 
     def decimationChanged(self):
         self.updateDecimation()
@@ -255,16 +257,23 @@ class PlotWidget(Qwt.QwtPlot):
                     
     def updatePlotList(self):
         """Update the list of all plotWidgets in the "link" combos"""
-        for sc in [self.ctrl.xLinkCombo, self.ctrl.yLinkCombo]:
-            current = str(sc.currentText())
-            sc.clear()
-            sc.addItem("")
-            if self.manager is not None:
-                for w in self.manager.listWidgets():
-                    #print w
-                    if w == self.name:
-                        continue
-                    sc.addItem(w)
+        #print "update plot list", self
+        try:
+            for sc in [self.ctrl.xLinkCombo, self.ctrl.yLinkCombo]:
+                current = str(sc.currentText())
+                sc.clear()
+                sc.addItem("")
+                if self.manager is not None:
+                    for w in self.manager.listWidgets():
+                        #print w
+                        if w == self.name:
+                            continue
+                        sc.addItem(w)
+        except:
+            import gc
+            refs= gc.get_referrers(self)
+            print "  error during update. Referrers are:", refs
+            raise
 
     def blockLink(self, b):
         self.linksBlocked = b
@@ -983,7 +992,7 @@ class PlotWidgetManager(QtCore.QObject):
     """Used for managing communication between PlotWidgets"""
     def __init__(self):
         QtCore.QObject.__init__(self)
-        self.widgets = {}
+        self.widgets = weakref.WeakValueDictionary() # Don't keep PlotWidgets around just because they are listed here
     
     def addWidget(self, w, name):
         self.widgets[name] = w

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
-from lib.util.generator.StimGenerator import StimGenerator
+import weakref
+#from lib.util.generator.StimGenerator import StimGenerator
 #from lib.util.PlotWidget import PlotWidget
 
 ## Bug workaround; splitters do not report their own state correctly.
@@ -32,7 +33,12 @@ class WidgetGroup(QtCore.QObject):
     """This class takes a list of widgets and keeps an internal record of their state which is always up to date. Allows reading and writing from groups of widgets simultaneously."""
     
     ## List of widget types which can be handled by WidgetGroup.
-    ## the value for each type is a tuple (change signal, get function, set function, [auto-add children])
+    ## The value for each type is a tuple (change signal, get function, set function, [auto-add children])
+    ## The change signal should be a signal that is emitted any time the state of the widget changes, not just 
+    ##   when it is changed by user interaction. (for example, 'clicked' is not a valid signal here)
+    ## If the change signal is None, the value of the widget is not cached.
+    ## Custom widgets not in this list can be made to work with WidgetGroup by giving them a 'widgetGroupInterface' method
+    ##   which returns the tuple.
     classes = {
         QtGui.QSpinBox: 
             ('valueChanged(int)', 
@@ -60,10 +66,10 @@ class WidgetGroup(QtCore.QObject):
             QtGui.QGroupBox.isChecked,
             QtGui.QGroupBox.setChecked,
             True),
-        StimGenerator:
-            ('changed',
-            StimGenerator.saveState,
-            StimGenerator.loadState),
+        #StimGenerator:
+            #('changed',
+            #StimGenerator.saveState,
+            #StimGenerator.loadState),
         #PlotWidget:
             #(None,
             #PlotWidget.saveState,
@@ -85,7 +91,7 @@ class WidgetGroup(QtCore.QObject):
     
     def __init__(self, widgetList):
         QtCore.QObject.__init__(self)
-        self.widgetList = {}
+        self.widgetList = weakref.WeakKeyDictionary() # Make sure widgets don't stick around just because they are listed here
         self.scales = {}
         self.cache = {}
         self.uncachedWidgets = []

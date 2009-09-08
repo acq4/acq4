@@ -57,6 +57,9 @@ class StimGenerator(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.errorBtn, QtCore.SIGNAL('clicked()'), self.errorBtnClicked)
         QtCore.QObject.connect(self.ui.helpBtn, QtCore.SIGNAL('clicked()'), self.helpBtnClicked)
 
+    def widgetGroupInterface(self):
+        return ('changed', StimGenerator.saveState, StimGenerator.loadState)
+
     def setTimeScale(self, s):
         if self.timeScale != s:
             self.timeScale = s
@@ -134,7 +137,7 @@ class StimGenerator(QtGui.QWidget):
     def saveState(self):
         """ Return a dict structure with the state of the widget """
         #print "Saving state:", self.functionString()
-        return ({'function': self.functionString(), 'params': self.paramString()})
+        return ({'function': self.functionString(), 'params': self.paramString(), 'autoUpdate': self.ui.autoUpdateCheck.isChecked()})
     
     def loadState(self, state):
         """set the parameters with the new state"""
@@ -142,6 +145,8 @@ class StimGenerator(QtGui.QWidget):
             self.ui.functionText.setPlainText(state['function'])
         if 'params' in state:
             self.ui.paramText.setPlainText(state['params'])            
+        if 'autoUpdate' in state:
+            self.ui.autoUpdateCheck.setChecked(state['autoUpdate'])
     
     def listSequences(self):
         """ return an ordered dict of the sequence parameter names and lengths in the same order as that
