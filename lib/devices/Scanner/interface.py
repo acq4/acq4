@@ -2,12 +2,15 @@
 from lib.devices.Device import *
 from lib.util.Mutex import Mutex, MutexLocker
 import lib.util.configfile as configfile
-
+from DeviceGui import ScannerDeviceGui
+from ProtocolGui import ScannerProtoGui
+import os 
 
 class Scanner(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.devGui = None
         
     def setPosition(self, x, y, camera, laser):
         """Set the position of the xy mirrors to a point in the image"""
@@ -42,13 +45,16 @@ class Scanner(Device):
     def getCalibrationIndex(self):
         calDir = self.config['calibrationDir']
         fileName = os.path.join(calDir, 'index')
-        index = configfile.read(fileName)
+        try:
+            index = configfile.readConfigFile(fileName)
+        except:
+            index = {}
         return index
         
     def writeCalibrationIndex(self, index):
         calDir = self.config['calibrationDir']
         fileName = os.path.join(calDir, 'index')
-        configfile.write(index, fileName)
+        configfile.writeConfigFile(index, fileName)
         
     def getCalibration(self, camera, laser, objective):
         index = self.getCalibrationIndex()

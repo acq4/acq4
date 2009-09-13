@@ -98,7 +98,9 @@ Valid options are:
         except:
             sys.excepthook(*sys.exc_info())
             print "\nError while acting on command line options, continuing on anyway.."
-        
+            
+        if QtGui.QApplication.instance().activeWindow() is None:
+            raise Exception("No GUI windows created during startup, exiting now.")
 
     def readConfig(self, configFile):
         """Read configuration file, create device objects, add devices to list"""

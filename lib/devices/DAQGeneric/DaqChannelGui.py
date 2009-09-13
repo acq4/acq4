@@ -144,7 +144,7 @@ class OutputChannelGui(DaqChannelGui):
         #print prot
         return prot
     
-    def handleResult(self, result):
+    def handleResult(self, result, params):
         pass
     
     def updateWaves(self):

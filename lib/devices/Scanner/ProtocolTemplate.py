@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Thu Sep 10 17:18:53 2009
-#      by: PyQt4 UI code generator 4.5.2
+# Created: Sun Sep 13 10:22:21 2009
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(517, 247)
+        Form.resize(504, 227)
         self.gridLayout_2 = QtGui.QGridLayout(Form)
         self.gridLayout_2.setObjectName("gridLayout_2")
         self.moduleCombo = QtGui.QComboBox(Form)

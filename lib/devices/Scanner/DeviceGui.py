@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from DeviceTemplate import Ui_Form
 import time
+from PyQt4 import QtCore, QtGui
+from lib.util.MetaArray import MetaArray
 
 class ScannerDeviceGui(QtGui.QWidget):
     def __init__(self, dev):
@@ -33,12 +35,13 @@ class ScannerDeviceGui(QtGui.QWidget):
                     cal = index[cam][laser][obj]
                     spot = cal['spot']
                     date = cal['date']
-                    self.ui.calibrationList.addItem([cam, obj, laser, str(spot), date])
+                    item = QtGui.QTableWidgetItem([cam, obj, laser, str(spot), date])
+                    self.ui.calibrationList.setItem(self.ui.calibrationList.rowCount(), item)
         
         
     def calibrateClicked(self):
-        cam = self.ui.cameraCombo.currentText()
-        laser = self.ui.laserCombo.currentText()
+        cam = str(self.ui.cameraCombo.currentText())
+        laser = str(self.ui.laserCombo.currentText())
         obj = self.dev.getObjective(cam)
         
         ## Run calibration
@@ -57,7 +60,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         index[cam][laser][obj] = {'fileName': fileName, 'spot': spot, 'date': date}
            
         self.dev.writeCalibrationIndex(index)
-        cal.writeFile(fileName)
+        cal.write(fileName)
         
         self.updateCalibrationList()
 

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from ProtocolTemplate import Ui_Form
 from lib.devices.Device import ProtocolGui
+from PyQt4 import QtCore, QtGui
 
 class ScannerProtoGui(ProtocolGui):
     def __init__(self, dev, prot):
