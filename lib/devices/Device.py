@@ -12,12 +12,15 @@ class Device(QtCore.QObject):
         QtCore.QObject.__init__(self)
         #self._lock_ = threading.Lock()
         self._lock_ = Mutex(QtCore.QMutex.Recursive)
+        self._lock_tb_ = None
         #self._lock_ = Mutex()
         self.dm = deviceManager
         self.config = config
         self.name = name
     
-    def createTask(self):
+    def createTask(self, cmd):
+        ### Read configuration, configure tasks
+        ### Return a handle unique to this task
         pass
     
     def __del__(self):
@@ -26,16 +29,6 @@ class Device(QtCore.QObject):
     def quit(self):
         pass
     
-    def prepareProtocol(cmd):
-        ## Read configuration, configure tasks
-        ## Return a handle unique to this task
-        raise Exception("Function prepareProtocol() not defined in this subclass!")
-        
-    ## This should not be needed.
-    #def setHolding(self):
-        #"""set all channels for this device to their configured holding level"""
-        #raise Exception("Function setHolding() not defined in this subclass!")
-
     def deviceInterface(self):
         """Return a widget with a UI to put in the device rack"""
         return QtGui.QWidget()
@@ -46,48 +39,28 @@ class Device(QtCore.QObject):
         
 
     def reserve(self, block=True, timeout=20):
-        #lock = False
-        #count = 0
-        #interval = 1e-3
-        #lock = self._lock_.acquire(False)  ## We'll do our own blocking
-        #if not lock and not block:
-            #raise Exception("Could not acquire lock")
-        #while not lock:
-            #if timeout is not None and (count*interval > timeout):
-                #raise Exception("Timed out waiting for device lock for %s" % self.name)
-            #time.sleep(interval)
-            #lock = self._lock_.acquire(False)  ## We'll do our own blocking
-            #count += 1
-        #return True
-        
         if block:
-            #if self._lock_.tryLock():
-                #self._lock_.unlock()
-                #print "    mutex is unlocked", self.name, "%0.9f"%ptime.time()
-            #else:
-                #print "    mutex is locked", self.name, "%0.9f"%ptime.time()
             l = self._lock_.tryLock(int(timeout*1000))
-            #print "    Reserved device", self.name, l, "%0.9f"%ptime.time()
-            #print "    mutex is locked:", not self._lock_.tryLock()
             if not l:
-                #print "**************************"
+                print "Timeout waiting for device lock for %s" % self.name
+                print "  Device is currently locked from:"
+                print self._lock_tb_
                 raise Exception("Timed out waiting for device lock for %s" % self.name)
         else:
             l = self._lock_.tryLock()
             if not l:
                 raise Exception("Could not acquire lock")
+        self._lock_tb_ = ''.join(traceback.format_stack()[:-1])
         return True
         
     def release(self):
         try:
-            #self.lock.release()
-            #print "Unlocking device", self.name, "%0.9f"%ptime.time()
             self._lock_.unlock()
-            #print "Released device", self.name, "%0.9f"%ptime.time()
+            self._lock_tb_ = None
         except:
             print "WARNING: Failed to release device lock for %s" % self.name
             traceback.print_exception(*sys.exc_info())
-
+            
     def getTriggerChannel(self, daq):
         """Return the name of the channel on daq that this device raises when it starts.
         Allows the DAQ to trigger off of this device."""
@@ -98,7 +71,7 @@ class DeviceTask:
         self.dev = dev
         self.cmd = cmd
     
-    def configure(self, tasks):
+    def configure(self, tasks, startOrder):
         pass
     
     def reserve(self, block=True, timeout=20):
@@ -117,7 +90,7 @@ class DeviceTask:
         self.dev.release()
     
     def getResult(self):
-        pass
+        return None
     
     def storeResult(self, dirHandle):
         result = self.getResult()

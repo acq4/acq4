@@ -30,8 +30,12 @@ class MultiClamp(Device):
         
         try:
             mcs = self.mc.listDevices()
-            print "Connected to host %s, devices are %s" % (self.host, repr(mcs))
             self.channelID = self.config['channelID']
+            if self.channelID in mcs:
+                print "Connected to host %s, channel %s" % (self.host, self.channelID)
+            else:
+                print "WARNING: Connected to host %s, but channel is not available." % self.host
+                print "  available channels:", mcs
         except:
             traceback.print_exception(*(sys.exc_info()))
             print "Error connecting to MultiClamp commander, will try again when needed. (default settings not loaded)"
@@ -56,9 +60,10 @@ class MultiClamp(Device):
         self.setMode('I=0')
 
     def deviceInterface(self):
-        if self.devRackGui is None:
-            self.devRackGui = MCRackGui(self)
-        return self.devRackGui
+        with MutexLocker(self.lock):
+            if self.devRackGui is None:
+                self.devRackGui = MCRackGui(self)
+            return self.devRackGui
 
     def setParams(self, params):
         with MutexLocker(self.lock):

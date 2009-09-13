@@ -1,5 +1,0 @@
-QDockWidget::title { background-color: #446; color: #DDD }
-QDockWidget > QWidget { background-color: #BBB }
-QMainWindow { background-color: #000 }
-QSplitter::handle {background-color: #666}
-QMainWindow::separator {background-color: #666}
