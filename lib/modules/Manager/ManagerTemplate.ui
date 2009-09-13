@@ -1,7 +1,8 @@
-<ui version="4.0" >
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
  <class>MainWindow</class>
- <widget class="QMainWindow" name="MainWindow" >
-  <property name="geometry" >
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
@@ -9,56 +10,56 @@
     <height>600</height>
    </rect>
   </property>
-  <property name="windowTitle" >
+  <property name="windowTitle">
    <string>ACQ4 Manager</string>
   </property>
-  <widget class="QWidget" name="centralwidget" >
-   <layout class="QVBoxLayout" name="verticalLayout_2" >
-    <property name="margin" >
+  <property name="styleSheet">
+   <string notr="true">QDockWidget::title { background: #77F; border-radius: 3px; border-color: #77F; border-style: outset; border-width: 1px; font-weight: bold}</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout_2">
+    <property name="margin">
      <number>1</number>
     </property>
     <item>
-     <layout class="QVBoxLayout" name="verticalLayout" >
+     <layout class="QVBoxLayout" name="verticalLayout">
       <item>
-       <widget class="QGroupBox" name="groupBox" >
-        <property name="title" >
+       <widget class="QGroupBox" name="groupBox">
+        <property name="title">
          <string>Configuration</string>
         </property>
-        <layout class="QVBoxLayout" name="verticalLayout_3" >
-         <property name="margin" >
+        <layout class="QVBoxLayout" name="verticalLayout_3">
+         <property name="margin">
           <number>1</number>
          </property>
          <item>
-          <widget class="QListWidget" name="configList" />
+          <widget class="QListWidget" name="configList"/>
          </item>
          <item>
-          <widget class="QPushButton" name="loadConfigBtn" >
-           <property name="text" >
+          <widget class="QPushButton" name="loadConfigBtn">
+           <property name="text">
             <string>Load Configuration</string>
            </property>
           </widget>
          </item>
         </layout>
-        <zorder>configList</zorder>
-        <zorder>configList</zorder>
-        <zorder>loadConfigBtn</zorder>
        </widget>
       </item>
       <item>
-       <widget class="QGroupBox" name="groupBox_2" >
-        <property name="title" >
+       <widget class="QGroupBox" name="groupBox_2">
+        <property name="title">
          <string>Modules</string>
         </property>
-        <layout class="QVBoxLayout" name="verticalLayout_4" >
-         <property name="margin" >
+        <layout class="QVBoxLayout" name="verticalLayout_4">
+         <property name="margin">
           <number>1</number>
          </property>
          <item>
-          <widget class="QListWidget" name="moduleList" />
+          <widget class="QListWidget" name="moduleList"/>
          </item>
          <item>
-          <widget class="QPushButton" name="loadModuleBtn" >
-           <property name="text" >
+          <widget class="QPushButton" name="loadModuleBtn">
+           <property name="text">
             <string>Load Module</string>
            </property>
           </widget>
@@ -67,11 +68,11 @@
        </widget>
       </item>
       <item>
-       <spacer name="verticalSpacer" >
-        <property name="orientation" >
+       <spacer name="verticalSpacer">
+        <property name="orientation">
          <enum>Qt::Vertical</enum>
         </property>
-        <property name="sizeHint" stdset="0" >
+        <property name="sizeHint" stdset="0">
          <size>
           <width>20</width>
           <height>40</height>
@@ -80,8 +81,8 @@
        </spacer>
       </item>
       <item>
-       <widget class="QPushButton" name="quitBtn" >
-        <property name="text" >
+       <widget class="QPushButton" name="quitBtn">
+        <property name="text">
          <string>Quit ACQ4</string>
         </property>
        </widget>
