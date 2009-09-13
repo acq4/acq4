@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'DeviceTemplate.ui'
 #
-# Created: Sun Sep 13 13:36:07 2009
+# Created: Sun Sep 13 14:52:02 2009
 #      by: PyQt4 UI code generator 4.5.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -54,9 +54,6 @@ class Ui_Form(object):
         self.deleteBtn.setObjectName("deleteBtn")
         self.horizontalLayout_2.addWidget(self.deleteBtn)
         self.gridLayout.addLayout(self.horizontalLayout_2, 3, 0, 2, 2)
-        self.resultLabel = QtGui.QLabel(Form)
-        self.resultLabel.setObjectName("resultLabel")
-        self.gridLayout.addWidget(self.resultLabel, 4, 1, 1, 1)
         self.accuracyLabel = QtGui.QLabel(Form)
         self.accuracyLabel.setObjectName("accuracyLabel")
         self.gridLayout.addWidget(self.accuracyLabel, 5, 0, 1, 2)
