@@ -11,6 +11,9 @@ class Scanner(Device):
         Device.__init__(self, dm, config, name)
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.devGui = None
+        if not os.path.isdir(config['calibrationDir']):
+            print "Calibration directory '%s' does not exist, creating.." % config['calibrationDir']
+            os.mkdir(config['calibrationDir'])
         
     def setPosition(self, x, y, camera, laser):
         """Set the position of the xy mirrors to a point in the image"""

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from DeviceTemplate import Ui_Form
-import time
+import time, os, sys
 from PyQt4 import QtCore, QtGui
 from lib.util.MetaArray import MetaArray
 
@@ -35,8 +35,8 @@ class ScannerDeviceGui(QtGui.QWidget):
                     cal = index[cam][laser][obj]
                     spot = cal['spot']
                     date = cal['date']
-                    item = QtGui.QTableWidgetItem([cam, obj, laser, str(spot), date])
-                    self.ui.calibrationList.setItem(self.ui.calibrationList.rowCount(), item)
+                    item = QtGui.QTreeWidgetItem([cam, obj, laser, str(spot), date])
+                    self.ui.calibrationList.addTopLevelItem(item)
         
         
     def calibrateClicked(self):
@@ -60,7 +60,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         index[cam][laser][obj] = {'fileName': fileName, 'spot': spot, 'date': date}
            
         self.dev.writeCalibrationIndex(index)
-        cal.write(fileName)
+        cal.write(os.path.join(self.dev.config['calibrationDir'], fileName))
         
         self.updateCalibrationList()
 
@@ -69,9 +69,9 @@ class ScannerDeviceGui(QtGui.QWidget):
 
     def deleteClicked(self):
         cur = self.ui.calibrationList.currentItem()
-        cam = cur.text(0)
-        obj = cur.text(1)
-        laser = cur.text(2)
+        cam = str(cur.text(0))
+        obj = str(cur.text(1))
+        laser = str(cur.text(2))
         
         index = self.dev.getCalibrationIndex()
         
@@ -80,8 +80,11 @@ class ScannerDeviceGui(QtGui.QWidget):
         calDir = self.dev.config['calibrationDir']
         fileName = os.path.join(calDir, fileName)
         del index[cam][laser][obj]
-        os.remove(fileName)
-            
+        try:
+            os.remove(fileName)
+        except:
+            print "Error while removing file %s:" % fileName
+            sys.excepthook(*sys.exc_info())
         self.dev.writeCalibrationIndex(index)
         
         self.updateCalibrationList()

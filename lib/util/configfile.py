@@ -19,8 +19,8 @@ def readConfigFile(fname):
         s = s.replace("\r", "")
         data = parseString(s)[1]
     except:
-	print "Error while reading config file %s:"% fname
-	raise
+        print "Error while reading config file %s:"% fname
+        raise
     finally:
         os.chdir(cwd)
     return data

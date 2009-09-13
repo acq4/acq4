@@ -20,6 +20,10 @@ class OrderedDict(dict):
             self.order.append(k)
         dict.__setitem__(self, k, v)
     
+    def __delitem__(self, k):
+        self.order.remove(k)
+        dict.__delitem__(self, k)
+
     def keys(self):
         return self.order[:]
     
