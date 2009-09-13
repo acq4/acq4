@@ -14,50 +14,23 @@
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="0" column="0">
-    <widget class="QLabel" name="label">
-     <property name="text">
-      <string>Calibrations:</string>
-     </property>
-    </widget>
-   </item>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <property name="spacing">
+    <number>0</number>
+   </property>
    <item row="0" column="2" rowspan="6">
-    <widget class="QGraphicsView" name="view">
+    <widget class="GraphicsView" name="view">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
-    </widget>
-   </item>
-   <item row="1" column="0" colspan="2">
-    <widget class="QTableWidget" name="calibrationList">
-     <column>
-      <property name="text">
-       <string>Camera</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Objective</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Laser</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Spot</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Date</string>
-      </property>
-     </column>
     </widget>
    </item>
    <item row="2" column="0" colspan="2">
@@ -129,8 +102,56 @@
      </property>
     </widget>
    </item>
+   <item row="1" column="0" colspan="2">
+    <widget class="QTreeWidget" name="calibrationList">
+     <property name="rootIsDecorated">
+      <bool>false</bool>
+     </property>
+     <property name="itemsExpandable">
+      <bool>false</bool>
+     </property>
+     <attribute name="headerStretchLastSection">
+      <bool>true</bool>
+     </attribute>
+     <attribute name="headerStretchLastSection">
+      <bool>true</bool>
+     </attribute>
+     <column>
+      <property name="text">
+       <string>Camera</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Objective</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Laser</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Spot</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Date</string>
+      </property>
+     </column>
+    </widget>
+   </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>GraphicsView</class>
+   <extends>QGraphicsView</extends>
+   <header>lib.util.qtgraph.GraphicsView</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>
