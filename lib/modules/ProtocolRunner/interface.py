@@ -924,6 +924,8 @@ class TaskThread(QtCore.QThread):
                 for p in params:
                     cmd = cmd[p: params[p]]
                     
+            print "Protocol:", cmd
+                    
             ## Wait before starting if we've already run too recently
             while (self.lastRunTime is not None) and (time.clock() < self.lastRunTime + cmd['protocol']['cycleTime']):
                 l.relock()

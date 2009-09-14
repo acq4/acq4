@@ -1,6 +1,7 @@
 from lib.modules.Module import *
 from ManagerTemplate import Ui_MainWindow
 from PyQt4 import QtCore, QtGui
+import sys
 
 class Manager(Module):
     def __init__(self, manager, name, config):
@@ -11,13 +12,17 @@ class Manager(Module):
 
         self.devRackDocks = {}
         for d in self.manager.listDevices():
-            dw = self.manager.getDevice(d).deviceInterface()
-            dock = QtGui.QDockWidget(d)
-            dock.setFeatures(dock.AllDockWidgetFeatures)
-            dock.setWidget(dw)
-            
-            self.devRackDocks[d] = dock
-            self.win.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
+            try:
+                dw = self.manager.getDevice(d).deviceInterface()
+                dock = QtGui.QDockWidget(d)
+                dock.setFeatures(dock.AllDockWidgetFeatures)
+                dock.setWidget(dw)
+                
+                self.devRackDocks[d] = dock
+                self.win.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
+            except:
+                print "Error while creating dock for device '%s':" % d
+                sys.excepthook(*sys.exc_info())
 
         self.updateModList()
         self.updateConfList()

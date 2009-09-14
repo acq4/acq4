@@ -81,7 +81,7 @@ class DeviceTask:
         pass
     
     def isDone(self):
-        pass
+        return True
     
     def stop(self):
         pass

@@ -27,7 +27,7 @@ class PVCam(Device):
         self.pvc = PVCDriver
         self.cam = None
         self.acqThread = AcquireThread(self)
-        print "Created PVCam device. Cameras are:", self.pvc.listCameras()
+        #print "Created PVCam device. Cameras are:", self.pvc.listCameras()
         
         if 'params' in config:
             self.getCamera().setParams(config['params'])
@@ -101,7 +101,7 @@ class PVCam(Device):
         if params is not None:
             for p in params:
                 at.setParam(p, params[p])
-        at.start(QtCore.QThread.HighPriority)
+        at.start()
         
     def stopAcquire(self, block=True):
         with MutexLocker(self.lock):
@@ -121,18 +121,18 @@ class PVCam(Device):
 
     def setParam(self, param, val):
         with MutexLocker(self.lock):
-            at = self.scqThread
+            at = self.acqThread
         
         r = at.isRunning()
         if r: 
             at.stop(block=True)
             
         with MutexLocker(self.camLock):
-            cam.setParam(param, val)
+            self.cam.setParam(param, val)
         
         self.emit(QtCore.SIGNAL('paramChanged'), param, val)
         if r: 
-            at.start(QtCore.QThread.HighPriority)
+            at.start()
         
     def getParam(self, param):
         with MutexLocker(self.camLock):
@@ -217,6 +217,17 @@ class Task(DeviceTask):
         
         
     def configure(self, tasks, startOrder):
+        ## Merge command into default values:
+        defaults = {
+            'record': True,
+            'triggerProtocol': False,
+            'triggerMode': 'Normal',
+            'recordExposeChannel': False
+        }
+        for k in defaults:
+            if k not in self.cmd:
+                self.cmd[k] = defaults[k]
+        
         ## Determine whether to restart acquisition after protocol
         self.stopAfter = (not self.dev.isRunning())
         
@@ -234,6 +245,9 @@ class Task(DeviceTask):
             daqName = self.dev.config['triggerOutChannel'][0]
             startOrder.remove(name)
             startOrder.insert(startOrder.index(daqName)+1, name)
+        elif 'forceStop' in self.cmd and self.cmd['forceStop'] is True:
+            self.dev.stopAcquire(block=True)  
+            
             
         
         ## If we are not triggering the daq, request that we start before everyone else
@@ -290,6 +304,10 @@ class Task(DeviceTask):
         
     def isDone(self):
         ## should return false if recording is required to run for a specific time.
+        if 'minFrames' in self.cmd:
+            with MutexLocker(self.lock):
+                if len(self.frames) < self.cmd['minFrames']:
+                    return False
         return True
         
     def stop(self):

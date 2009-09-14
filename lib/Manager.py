@@ -8,6 +8,14 @@ from lib.util.Mutex import Mutex
 import getopt
 #import pdb
 
+### All other modules can use this function to get the manager instance
+def getManager():
+    if Manager.single is None:
+        raise Exception("No manager created yet")
+    return Manager.single
+
+
+
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
       - Loading/configuring device modules and storing their handles
@@ -428,7 +436,7 @@ class Task:
         ## Wait until all tasks are done
         #print "Waiting for all tasks to finish.."
         while not self.isDone():
-            time.sleep(10e-6)
+            time.sleep(1e-3)
         #print "all tasks finshed."
         
         self.stop()
@@ -526,8 +534,3 @@ class Task:
                     
                 #print "  %d released" % self.id, t
         self.reserved = False
-
-def getManager():
-    if Manager.single is None:
-        raise Exception("No manager created yet")
-    return Manager.single
