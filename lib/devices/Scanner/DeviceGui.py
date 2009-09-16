@@ -136,10 +136,14 @@ class ScannerDeviceGui(QtGui.QWidget):
         amp = mfBlur.max() - median(mfBlur)  # guess intensity of spot
         (x, y) = argwhere(mfBlur == mfBlur.max())[0]   # guess location of spot
         fit = fitGaussian2D(maxFrame, [amp, x, y, maxFrame.shape[0] / 10, 0.])[0]  ## gaussian fit to locate spot exactly
-        pixelSize = origFrames.infoCopy()[-1]['pixelSize'][0]
+        info = origFrames.infoCopy()[-1]
+        pixelSize = info['pixelSize'][0]
+        region = info['region']
+        binning = info['binning']
         spotHeight = fit[0]
         spotWidth = fit[3] * pixelSize
         size = self.spotSize(mfBlur)
+        center = info['centerPosition']
         
         ## Determine location of spot within each frame, 
         ## ignoring frames where the spot is too dim or too close to the frame edge
@@ -160,12 +164,19 @@ class ScannerDeviceGui(QtGui.QWidget):
             if y < margin or y > frame.shape[1] - margin:
                 continue
             
+            ## x,y are currently in sensor coords, now convert to absolute scale relative to center
+            print "======="
+            print x, y, region
+            x = (x - (region[2]*0.5 / binning)) * info['pixelSize'][0]
+            y = (y - (region[3]*0.5 / binning)) * info['pixelSize'][1]
+            print x, y
+            
             spotLocations.append([x, y])
             spotCommands.append(positions[i])
             spotFrames.append(frame[newaxis])
         
-        #for i in range(len(spotLocations)):
-            #print spotLocations[i], spotCommands[i]
+        for i in range(len(spotLocations)):
+            print spotLocations[i], spotCommands[i]
         spotFrameMax = concatenate(spotFrames).max(axis=0)
         self.image.updateImage(spotFrameMax, autoRange=True)
         self.ui.view.setRange(self.image.boundingRect())
@@ -173,7 +184,8 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         ## Fit all data to a map function
         mapParams = self.generateMap(array(spotLocations), array(spotCommands))
-        #print "Map parameters:", mapParams
+        print 
+        print "Map parameters:", mapParams
         return (mapParams, (spotHeight, spotWidth))
 
     def generateMap(self, loc, cmd):

@@ -49,6 +49,11 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.rotateSnap = rotateSnap
         self.scaleSnap = scaleSnap
         
+    def setZValue(self, z):
+        QtGui.QGraphicsItem.setZValue(self, z)
+        for h in self.handles:
+            h['item'].setZValue(z+1)
+        
     def sceneBounds(self):
         return self.sceneTransform().mapRect(self.boundingRect())
     
@@ -111,6 +116,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         #h.mousePressEvent = lambda ev: self.pointPressEvent(iid, ev)
         #h.mouseReleaseEvent = lambda ev: self.pointReleaseEvent(iid, ev)
         self.handles.append(info)
+        h.setZValue(self.zValue()+1)
         return h
         
     def mapSceneToParent(self, pt):
@@ -119,7 +125,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
     def mousePressEvent(self, ev):
         if self.translatable:
             self.cursorOffset = self.scenePos() - ev.scenePos()
-            self.emit(QtCore.SIGNAL('regionChangeStarted'))
+            self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
         
     def mouseMoveEvent(self, ev):
         if self.translatable:
@@ -132,17 +138,17 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
     
     def mouseReleaseEvent(self, ev):
         if self.translatable:
-            self.emit(QtCore.SIGNAL('regionChangeFinished'))
+            self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
     
     
     
     def pointPressEvent(self, pt, ev):
-        self.emit(QtCore.SIGNAL('regionChangeStarted'))
+        self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
         #self.pressPos = self.mapFromScene(ev.scenePos())
         #self.pressHandlePos = self.handles[pt]['item'].pos()
     
     def pointReleaseEvent(self, pt, ev):
-        self.emit(QtCore.SIGNAL('regionChangeFinished'))
+        self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
     
     def stateCopy(self):
         sc = {}
@@ -693,13 +699,13 @@ class MultiLineROI(QtGui.QGraphicsItemGroup, QObjectWorkaround):
         for l in self.lines[1:]:
             w0 = l.state['size'][1]
             l.scale([1.0, w/w0], center=[0.5,0.5])
-        self.emit(QtCore.SIGNAL('regionChanged'))
+        self.emit(QtCore.SIGNAL('regionChanged'), self)
             
     def roiChangeStartedEvent(self):
-        self.emit(QtCore.SIGNAL('regionChangeStarted'))
+        self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
         
     def roiChangeFinishedEvent(self):
-        self.emit(QtCore.SIGNAL('regionChangeFinished'))
+        self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
         
             
     def getArrayRegion(self, arr, img=None):

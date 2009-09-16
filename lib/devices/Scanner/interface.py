@@ -24,9 +24,14 @@ class Scanner(Device):
             v = max(mn, min(mx, vals[i]))
             dev.setChannelValue(chan, v, block=True)
     
-    def setPosition(self, x, y, camera, laser):
+    def setPosition(self, pos, camera, laser):
         """Set the position of the xy mirrors to a point in the image"""
-        vals = self.mapToScanner(x, y)
+        (x, y) = pos
+        cam = self.dm.getDevice(camera)
+        camPos = cam.getPosition()
+        vals = self.mapToScanner(x - camPos[0], y - camPos[1], camera, laser)
+        print "Setting position", pos, " values are", vals
+        
         self.setCommand(vals)
     
     def getObjective(self, camera):
@@ -37,11 +42,11 @@ class Scanner(Device):
     def mapToScanner(self, x, y, camera, laser):
         """Convert coordinate in camera space to voltages required to set scan mirrors"""
         obj = self.getObjective(camera)
-        cal = self.getCalibration(camera, laser, obj)
+        cal = self.getCalibration(camera, laser, obj)['params']
         
         if cal is None:
             raise Exception("No calibration found for this combination of laser, camera, and objective:\n  %s\n  %s\n  %s" % (laser, camera, obj))
-        
+        print "Map:", camera, laser, obj, cal
         #if x < 0 or x >= cal.shape[0]:
             #raise Exception("Requested point out of camera range 0 <= %f < %d" % (x, cal.shape[0]))
         #if y < 0 or y >= cal.shape[1]:
@@ -65,7 +70,9 @@ class Scanner(Device):
         fileName = os.path.join(calDir, 'index')
         configfile.writeConfigFile(index, fileName)
         
-    def getCalibration(self, camera, laser, objective):
+    def getCalibration(self, camera, laser, objective=None):
+        if objective is None:
+            objective = self.getObjective(camera)
         index = self.getCalibrationIndex()
         
         try:
@@ -83,8 +90,6 @@ class Scanner(Device):
         except:
             return None
         
-        cal = index3['params']
-
         #calFile = os.path.join(calDir, index3['fileName'])
         
         #try:
@@ -93,7 +98,7 @@ class Scanner(Device):
             #print "Error loading calibration file for:\n  %s\n  %s\n  %s" % (laser, camera, obj)
             #raise
         
-        return cal
+        return index3
         
     
     def createTask(self, cmd):
@@ -122,7 +127,7 @@ class ScannerTask(DeviceTask):
             if 'command' in self.cmd:
                 self.dev.setCommand(self.cmd['command'])
             elif 'position' in self.cmd:
-                self.dev.setPosition(*self.cmd['command'])
+                self.dev.setPosition(self.cmd['position'], self.cmd['camera'], self.cmd['laser'])
         
     def createChannels(self, daqTask):
         self.daqTasks = []

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Tue Aug 25 18:08:58 2009
+# Created: Wed Sep 16 02:21:41 2009
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -13,7 +13,7 @@ class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(1118, 593)
-        MainWindow.setStyleSheet("""/*QDockWidget::title { background-color: #446;}*/
+        MainWindow.setStyleSheet("""QDockWidget::title { background: #77F; border-radius: 3px; border-color: #77F; border-style: outset; border-width: 1px; font-weight: bold}
 QSplitter::handle {background-color: #666}
 QMainWindow::separator {background-color: #666}""")
         MainWindow.setDockNestingEnabled(True)
