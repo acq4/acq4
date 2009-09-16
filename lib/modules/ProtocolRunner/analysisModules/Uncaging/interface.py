@@ -186,7 +186,7 @@ class Prot:
         cModName = str(self.ui.ui.cameraModCombo.currentText())
         camMod = self.ui.man.getModule(cModName)
         scene = camMod.ui.scene
-        if self.imgItem.scene is not scene:
+        if self.imgItem.scene() is not scene:
             info = self.frames[-1]['cam'].infoCopy()[-1]
             s = info['pixelSize']
             p = info['imagePosition']
@@ -209,10 +209,21 @@ class Prot:
         med = median(base)
         std = base.std()
         test = test - med
-        g = 0.4
+        g = 0.0
         tol = self.state['pspToleranceSpin']
         r = clip(test.max() / (tol*std), 0.0, 1.0)
         b = clip(-test.min() / (tol*std), 0.0, 1.0)
+        
+        ## measure latency 
+        
+        for i in range(5):
+            t = i * 1e-3
+            sec = data['Time': tstart+t:tstart+t+1e-3].view(ndarray)
+            if (abs(sec.max()-med) > tol*std) or (abs(sec.min()-med) > tol*std):
+                g = (5-i) * 0.2
+                break
+
+        g = clip(g, 0.0, 1.0)
         return (r, g, b)
         
         

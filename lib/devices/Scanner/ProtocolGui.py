@@ -5,6 +5,8 @@ from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager
 from lib.util.WidgetGroup import WidgetGroup
 from lib.util.qtgraph.widgets import *
+import random
+import numpy
 
 class ScannerProtoGui(ProtocolGui):
     def __init__(self, dev, prot):
@@ -42,23 +44,71 @@ class ScannerProtoGui(ProtocolGui):
             (self.ui.cameraCombo,),
             (self.ui.laserCombo,),
             (self.ui.minTimeSpin, 'minTime'),
-            (self.ui.minDistSpin, 'minDist', 1e6)
+            (self.ui.minDistSpin, 'minDist', 1e6),
+            (self.ui.packingSpin, 'packingDensity')
         ])
-        self.stateGroup.setState({'minTime': 10, 'minDist': 300e-6})
+        self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6})
 
         QtCore.QObject.connect(self.ui.addPointBtn, QtCore.SIGNAL('clicked()'), self.addPoint)
         QtCore.QObject.connect(self.ui.addGridBtn, QtCore.SIGNAL('clicked()'), self.addGrid)
         QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.delete)
         QtCore.QObject.connect(self.ui.deleteAllBtn, QtCore.SIGNAL('clicked()'), self.deleteAll)
-        QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemClicked)
+        QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemToggled)
         QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*,QListWidgetItem*)'), self.itemSelected)
         QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('toggled(bool)'), self.showInterface)
-
+        QtCore.QObject.connect(self.ui.cameraCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.watchScope)
+        QtCore.QObject.connect(self.ui.packingSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateSpotSizes)
+        QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.generateTargets)
+        
+        
 
         self.testTarget = TargetPoint([0,0], self.pointSize())
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
         camMod = self.cameraModule()
         camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
+        
+        self.currentObjective = None
+        self.currentScope = None
+        self.watchScope()
+        
+        
+    def watchScope(self):
+        camDev = self.cameraDevice()
+        if camDev is None:
+            return
+        scope = camDev.getScopeDevice()
+        
+        if self.currentScope is scope:
+            return
+        elif self.currentScope is not None:
+            QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+        
+        self.currentScope = scope
+        QtCore.QObject.connect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+        self.objectiveChanged()
+        
+    def objectiveChanged(self):
+        camDev = self.cameraDevice()
+        if camDev is None:
+            return
+        obj = camDev.getObjective()
+        if self.currentObjective != obj:
+            self.currentObjective = obj
+            self.updateSpotSizes()
+            for i in self.items.values():
+                li = self.listItem(i.name)
+                if i.objective == obj:
+                    li.setCheckState(QtCore.Qt.Checked)
+                else:
+                    li.setCheckState(QtCore.Qt.Unchecked)
+                self.itemToggled(li)
+            self.testTarget.setPointSize(self.pointSize())
+
+    def updateSpotSizes(self):
+        size = self.pointSize()
+        for i in self.items.values():
+            i.setPointSize(size)
+        self.testTarget.setPointSize(size)
 
     def showInterface(self, b):
         for k in self.items:
@@ -73,11 +123,18 @@ class ScannerProtoGui(ProtocolGui):
         cam = self.cameraModule().config['camDev']
         laser = str(self.ui.laserCombo.currentText())
         cal = self.dev.getCalibration(cam, laser)
-        return cal['spot'][1]
+        return cal['spot'][1] * self.ui.packingSpin.value()
         
     def cameraModule(self):
         modName = str(self.ui.cameraCombo.currentText())
         return getManager().getModule(modName)
+        
+    def cameraDevice(self):
+        mod = self.cameraModule()
+        if 'camDev' not in mod.config:
+            return None
+        cam = mod.config['camDev']
+        return getManager().getDevice(cam)
         
     def calibrationChanged(self):
         pass
@@ -100,14 +157,23 @@ class ScannerProtoGui(ProtocolGui):
             return {}
         
     def generateProtocol(self, params=None):
-        if params is None or 'target' not in params:
+        if params is None or 'targets' not in params:
             target = self.testTarget.listPoints()[0]
+            delay = 0
         else:
             if self.targets is None:
                 self.generateTargets()
-            target = self.targets[params['target']]
+            (target, delay) = self.targets[params['targets']]
             
-        return {'position': target, 'camera': self.cameraModule().config['camDev'], 'laser': str(self.ui.laserCombo.currentText())}
+        prot = {
+            'position': target, 
+            'minWaitTime': delay,
+            'camera': self.cameraModule().config['camDev'], 
+            'laser': str(self.ui.laserCombo.currentText())
+        }
+        return prot
+        
+        
         
     def handleResult(self, result, params):
         pass
@@ -124,6 +190,7 @@ class ScannerProtoGui(ProtocolGui):
     def addItem(self, item, name):
         name = name + str(self.nextId)
         item.name = name
+        item.objective = self.currentObjective
         self.items[name] = item
         listitem = QtGui.QListWidgetItem(name)
         listitem.setCheckState(QtCore.Qt.Checked)
@@ -147,7 +214,7 @@ class ScannerProtoGui(ProtocolGui):
         item = self.ui.itemList.takeItem(row)
         name = str(item.text())
         i = self.items[name]
-        self.removeItemPoints(i)
+        #self.removeItemPoints(i)
         i.scene().removeItem(i)
         del self.items[name]
         self.sequenceChanged()
@@ -157,11 +224,11 @@ class ScannerProtoGui(ProtocolGui):
         for k in self.items:
             i = self.items[k]
             i.scene().removeItem(i)
-            self.removeItemPoints(i)
+            #self.removeItemPoints(i)
         self.items = {}
         self.sequenceChanged()
         
-    def itemClicked(self, item):
+    def itemToggled(self, item):
         name = str(item.text())
         i = self.items[name]
         if item.checkState() == QtCore.Qt.Checked and self.ui.displayCheck.isChecked():
@@ -182,7 +249,7 @@ class ScannerProtoGui(ProtocolGui):
         if item is self.ui.itemList.currentItem():
             color = QtGui.QColor(255, 255, 200)
         else:
-            color = QtGui.QColor(100, 100, 100)
+            color = QtGui.QColor(200, 255, 100)
         name = str(item.text())
         self.items[name].setPen(QtGui.QPen(color))
 
@@ -199,22 +266,148 @@ class ScannerProtoGui(ProtocolGui):
     def generateTargets(self):
         items = self.activeItems()
         self.targets = []
+        locations = []
         for i in items:
             pts = i.listPoints()
             for p in pts:
-                self.targets.append(p)
-        ## Order targets here
+                locations.append(p)
+        
+        minTime = None
+        bestSolution = None
+        for i in range(10):
+            solution = self.findSolution(locations)
+            time = sum([l[1] for l in solution])
+            if minTime is None or time < minTime:
+                #print "  new best time:", time
+                minTime = time
+                bestSolution = solution[:]
+        
+        
+        #for i in range(10):
+            #solution = self.swapWorst(bestSolution)
+            #if solution is None:
+                #continue
+            #bestSolution = solution
+        
+        
+        self.targets = bestSolution
+        #print "Solution:"
+        #for t in self.targets:
+            #print "  ", t
+        self.ui.timeLabel.setText('Total time: %0.1f sec'% minTime)
+        
+    def findSolution(self, locations):
+        locations = locations[:]
+        random.shuffle(locations)
+        solution = [(locations.pop(), 0.0)]
+        
+        while len(locations) > 0:
+            minTime = None
+            minIndex = None
+            for i in range(len(locations)):
+                time = self.computeTime(solution, locations[i])
+                if minTime is None or time < minTime:
+                    minTime = time
+                    minIndex = i
+                if time == 0.0:  ## can't get any better; stop searching
+                    break
+            solution.append((locations.pop(minIndex), minTime))
+        return solution
+        
+    def swapWorst(self, solution):
+        """Find points very close together, swap elsewhere to improve time"""
+        maxTime = None
+        maxInd = None
+        ## find worst pair
+        for i in range(len(solution)):
+            if maxTime is None or maxTime < solution[i][1]:
+                maxTime = solution[i][1]
+                maxInd = i
+        
+        ## Try moving
+        
+        minTime = sum([l[1] for l in solution])
+        #print "Trying swap, time is currently", minTime
+        bestSolution = None
+        for i in range(len(solution)):
+            newSoln = solution[:]
+            loc = newSoln.pop(maxInd)
+            newSoln.insert(i, loc)
+            (soln, time) = self.computeTimes([l[0] for l in newSoln])
+            if time < minTime:
+                minTime = time
+                bestSolution = soln
+        #print "  new time is ", minTime
+        return bestSolution
+            
+    def costFunction(self):
+        state = self.stateGroup.state()
+        minTime = state['minTime']
+        minDist = state['minDist']
+        b = numpy.log(0.1) / minDist**2
+        return lambda dist: minTime * numpy.exp(b * dist**2)
+
+    #def computeTimes(self, locations):
+        #result = []
+        #total = 0.0
+        #func = self.costFunction()
+        #for i in range(len(locations)):
+            #t = self.computeTime(locations, i, func)
+            #total += t
+            #result.append((locations[i], t))
+        #return (result, total)
+        
+    def computeTime(self, solution, loc, func=None):
+        """Return the minimum time that must be waited before stimulating the location, given that solution has already run"""
+        #print "============= computeTime:"
+        #print "Current stack:"
+        #for l in solution:
+            #print l
+        #print "Next point:", loc
+        if func is None:
+            func = self.costFunction()
+        state = self.stateGroup.state()
+        minDist = state['minDist']
+        minTime = state['minTime']
+        minWaitTime = 0.0
+        cumWaitTime = 0
+        for i in range(len(solution)-1, -1, -1):
+            l = solution[i][0]
+            dx = loc[0] - l[0]
+            dy = loc[1] - l[1]
+            dist = (dx **2 + dy **2) ** 0.5
+            if dist > minDist:
+                time = 0.0
+            else:
+                time = func(dist) - cumWaitTime
+            #print i, "cumulative time:", cumWaitTime, "distance: %0.1fum" % (dist * 1e6), "time:", time
+            minWaitTime = max(minWaitTime, time)
+            cumWaitTime += solution[i][1]
+            if cumWaitTime > minTime:
+                break
+        #print "--> minimum:", minWaitTime
+        return minWaitTime
+            
+            
+            
+            
+        
 
     def activeItems(self):
         return [self.items[i] for i in self.items if self.listItem(i).checkState() == QtCore.Qt.Checked]
 
     def quit(self):
         self.deleteAll()
+        self.testTarget.scene().removeItem(self.testTarget)
     
 class TargetPoint(EllipseROI):
     def __init__(self, pos, radius, **args):
         ROI.__init__(self, pos, [radius] * 2, **args)
         self.aspectLocked = True
+        
+    def setPointSize(self, size):
+        s = size / self.state['size'][0]
+        self.scale(s, [0.5, 0.5])
         
     def listPoints(self):
         p = self.mapToScene(self.boundingRect().center())

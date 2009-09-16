@@ -146,39 +146,26 @@ class PVCam(Device):
     #@ftrace
     def getPosition(self):
         """Return the coordinate of the center of the sensor area"""
-        #print "PVCam: getPosition"
         with MutexLocker(self.lock):
-            #print "PVCam: getPosition: locked"
             if self.scopeDev is None:
-                #print "   none"
-                #print "PVCam: getPosition done"
                 return [0, 0]
             else:
-                #print "PVCam:getPosition: scopeDev.getPosition"
                 p = self.scopeDev.getPosition()
-                #print "PVCam:getPosition: scopeDev.getPosition done"
-                #print "   ", p
-                #print "PVCam: getPosition done"
                 return p
 
     #@ftrace
     def getScale(self):
         """Return the dimensions of 1 pixel with signs if the image is flipped"""
         with MutexLocker(self.lock):
-            #print "PVCam: getScale locked"
             if 'scaleFactor' in self.config:
                 sf = self.config['scaleFactor']
             else:
                 sf = [1, 1]
             if self.scopeDev is None:
-                #print "   none"
                 return sf
             else:
-                #print "PVCam: getScale getObj"
                 obj = self.scopeDev.getObjective()
-                #print "PVCam: getScale getObj done"
                 scale = obj['scale']
-                #print "   ", p
                 return (sf[0]*scale, sf[1]*scale)
         
     #@ftrace
@@ -192,14 +179,10 @@ class PVCam(Device):
     #@ftrace
     def getObjective(self):
         with MutexLocker(self.lock):
-            #print "PVCam:getObjective: locked"
             if self.scopeDev is None:
-                #print "   none"
                 return None
             else:
-                #print "PVCam:getObjective: scopeDev.getObjective"
                 obj = self.scopeDev.getObjective()
-                #print "PVCam:getObjective: scopeDev.getObjective done"
                 return obj['name']
 
     def getScopeDevice(self):
@@ -453,25 +436,8 @@ class AcquireThread(QtCore.QThread):
             #self.start(QtCore.QThread.HighPriority)
             self.start()
         
-    #def startRecord(self, maxTime=None):
-        #rec = CameraTask(self, maxTime)
-        ##print "lock to create task"
-        #with MutexLocker(self.lock):
-            #self.tasks.append(rec)
-            ##print "..unlock from create task"
-        #return rec
-        
-    #def removeTask(self, task):
-        ##print "Lock to remove task"
-        #with MutexLocker(self.lock):
-            #if task in self.tasks:
-                #self.tasks.remove(task)
-        ##print "..unlock from remove task"
     
     def run(self):
-        #self.lock.lock()
-        #self.stopThread = False
-        #self.lock.unlock()
         #print "Starting up camera acquisition thread."
         binning = self.state['binning']
         

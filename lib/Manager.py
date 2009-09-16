@@ -452,6 +452,7 @@ class Task:
     def tasksDone(self):
         for t in self.tasks:
             if not self.tasks[t].isDone():
+                print "Task %s not finished" % t
                 return False
         return True
         

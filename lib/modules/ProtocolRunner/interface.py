@@ -341,7 +341,7 @@ class ProtocolRunner(Module, QtCore.QObject):
     def clearDocks(self):
         for d in self.docks:
             self.win.removeDockWidget(self.docks[d])
-            print "quit", d
+            #print "quit", d
             self.docks[d].widget().quit()
             self.docks[d].close()
             sip.delete(self.docks[d])
@@ -926,7 +926,7 @@ class TaskThread(QtCore.QThread):
                 for p in params:
                     cmd = cmd[p: params[p]]
                     
-            print "Protocol:", cmd
+            #print "Protocol:", cmd
                     
             ## Wait before starting if we've already run too recently
             while (self.lastRunTime is not None) and (time.clock() < self.lastRunTime + cmd['protocol']['cycleTime']):

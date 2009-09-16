@@ -5,12 +5,14 @@ import lib.util.configfile as configfile
 from DeviceGui import ScannerDeviceGui
 from ProtocolGui import ScannerProtoGui
 import os 
+from lib.util import ptime
 
 class Scanner(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.devGui = None
+        self.lastRunTime = None
         if not os.path.isdir(config['calibrationDir']):
             print "Calibration directory '%s' does not exist, creating.." % config['calibrationDir']
             os.mkdir(config['calibrationDir'])
@@ -30,7 +32,7 @@ class Scanner(Device):
         cam = self.dm.getDevice(camera)
         camPos = cam.getPosition()
         vals = self.mapToScanner(x - camPos[0], y - camPos[1], camera, laser)
-        print "Setting position", pos, " values are", vals
+        #print "Setting position", pos, " values are", vals
         
         self.setCommand(vals)
     
@@ -46,7 +48,7 @@ class Scanner(Device):
         
         if cal is None:
             raise Exception("No calibration found for this combination of laser, camera, and objective:\n  %s\n  %s\n  %s" % (laser, camera, obj))
-        print "Map:", camera, laser, obj, cal
+        #print "Map:", camera, laser, obj, cal
         #if x < 0 or x >= cal.shape[0]:
             #raise Exception("Requested point out of camera range 0 <= %f < %d" % (x, cal.shape[0]))
         #if y < 0 or y >= cal.shape[1]:
@@ -150,10 +152,24 @@ class ScannerTask(DeviceTask):
         with MutexLocker(self.dev.lock):
             for t in self.daqTasks:
                 t.stop()
+            self.dev.lastRunTime = ptime.time()
             #for ch in self.cmd:
                 #if 'holding' in self.cmd[ch]:
                     #self.dev.setHolding(ch, self.cmd[ch]['holding'])
 
-
-
-
+    def start(self):
+        #print "start"
+        with MutexLocker(self.dev.lock):
+            lastRunTime = self.dev.lastRunTime
+        if lastRunTime is None:
+            #print "  no wait"
+            return
+        now = ptime.time()
+        if 'minWaitTime' in self.cmd:
+            
+            wait = self.cmd['minWaitTime'] - (now - lastRunTime)
+            #print "  min wait is ", self.cmd['minWaitTime'], "; sleep", wait
+            if wait > 0:
+                time.sleep(wait)
+            
+        

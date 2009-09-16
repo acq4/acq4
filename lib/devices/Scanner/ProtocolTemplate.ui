@@ -116,6 +116,29 @@
        </property>
       </widget>
      </item>
+     <item row="2" column="0">
+      <widget class="QDoubleSpinBox" name="packingSpin">
+       <property name="minimum">
+        <double>0.100000000000000</double>
+       </property>
+       <property name="maximum">
+        <double>3.000000000000000</double>
+       </property>
+       <property name="singleStep">
+        <double>0.100000000000000</double>
+       </property>
+       <property name="value">
+        <double>1.000000000000000</double>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="QLabel" name="label_7">
+       <property name="text">
+        <string>Packing Density</string>
+       </property>
+      </widget>
+     </item>
     </layout>
    </item>
    <item row="4" column="0">
@@ -195,6 +218,13 @@
    </item>
    <item row="1" column="2" rowspan="9">
     <widget class="QListWidget" name="itemList"/>
+   </item>
+   <item row="8" column="1">
+    <widget class="QCheckBox" name="checkBox">
+     <property name="text">
+      <string>Auto recompute</string>
+     </property>
+    </widget>
    </item>
   </layout>
  </widget>

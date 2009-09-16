@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Wed Sep 16 02:20:33 2009
+# Created: Wed Sep 16 13:30:08 2009
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -62,6 +62,16 @@ class Ui_Form(object):
         self.label_3 = QtGui.QLabel(Form)
         self.label_3.setObjectName("label_3")
         self.gridLayout.addWidget(self.label_3, 0, 1, 1, 1)
+        self.packingSpin = QtGui.QDoubleSpinBox(Form)
+        self.packingSpin.setMinimum(0.1)
+        self.packingSpin.setMaximum(3.0)
+        self.packingSpin.setSingleStep(0.1)
+        self.packingSpin.setProperty("value", QtCore.QVariant(1.0))
+        self.packingSpin.setObjectName("packingSpin")
+        self.gridLayout.addWidget(self.packingSpin, 2, 0, 1, 1)
+        self.label_7 = QtGui.QLabel(Form)
+        self.label_7.setObjectName("label_7")
+        self.gridLayout.addWidget(self.label_7, 2, 1, 1, 1)
         self.gridLayout_2.addLayout(self.gridLayout, 3, 0, 1, 2)
         self.addPointBtn = QtGui.QPushButton(Form)
         self.addPointBtn.setObjectName("addPointBtn")
@@ -91,6 +101,9 @@ class Ui_Form(object):
         self.itemList = QtGui.QListWidget(Form)
         self.itemList.setObjectName("itemList")
         self.gridLayout_2.addWidget(self.itemList, 1, 2, 9, 1)
+        self.checkBox = QtGui.QCheckBox(Form)
+        self.checkBox.setObjectName("checkBox")
+        self.gridLayout_2.addWidget(self.checkBox, 8, 1, 1, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
@@ -106,6 +119,7 @@ class Ui_Form(object):
         self.minDistSpin.setSuffix(QtGui.QApplication.translate("Form", "µm", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("Form", "Minimum distance", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("Form", "Minimum time", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_7.setText(QtGui.QApplication.translate("Form", "Packing Density", None, QtGui.QApplication.UnicodeUTF8))
         self.addPointBtn.setText(QtGui.QApplication.translate("Form", "Add Point", None, QtGui.QApplication.UnicodeUTF8))
         self.addOcclusionBtn.setText(QtGui.QApplication.translate("Form", "Add Occlusion", None, QtGui.QApplication.UnicodeUTF8))
         self.addGridBtn.setText(QtGui.QApplication.translate("Form", "Add Grid", None, QtGui.QApplication.UnicodeUTF8))
@@ -113,4 +127,5 @@ class Ui_Form(object):
         self.deleteAllBtn.setText(QtGui.QApplication.translate("Form", "Delete All", None, QtGui.QApplication.UnicodeUTF8))
         self.recomputeBtn.setText(QtGui.QApplication.translate("Form", "Recompute", None, QtGui.QApplication.UnicodeUTF8))
         self.timeLabel.setText(QtGui.QApplication.translate("Form", "Total Time:", None, QtGui.QApplication.UnicodeUTF8))
+        self.checkBox.setText(QtGui.QApplication.translate("Form", "Auto recompute", None, QtGui.QApplication.UnicodeUTF8))
 

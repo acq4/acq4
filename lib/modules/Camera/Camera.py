@@ -645,7 +645,7 @@ class PVCamera(QtGui.QMainWindow):
                 self.cameraCenter = newPos
                 self.updateCameraDecorations()
             
-            newScale = info['pixelSize']
+            newScale = [info['pixelSize'][0] / info['binning'], info['pixelSize'][1] / info['binning']]
             if newScale != self.cameraScale:
                 diff = [self.cameraScale[0] / newScale[0], self.cameraScale[1] /newScale[1]]
                 #print diff

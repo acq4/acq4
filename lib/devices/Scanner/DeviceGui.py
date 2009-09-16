@@ -165,11 +165,11 @@ class ScannerDeviceGui(QtGui.QWidget):
                 continue
             
             ## x,y are currently in sensor coords, now convert to absolute scale relative to center
-            print "======="
-            print x, y, region
+            #print "======="
+            #print x, y, region
             x = (x - (region[2]*0.5 / binning)) * info['pixelSize'][0]
             y = (y - (region[3]*0.5 / binning)) * info['pixelSize'][1]
-            print x, y
+            #print x, y
             
             spotLocations.append([x, y])
             spotCommands.append(positions[i])
