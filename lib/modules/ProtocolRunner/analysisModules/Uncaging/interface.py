@@ -191,7 +191,7 @@ class Prot:
             s = info['pixelSize']
             p = info['imagePosition']
             #camMod.scene.removeItem(self.imgItem)
-            camMod.ui.addImage(self.imgItem, p, s, self.z)
+            camMod.ui.addItem(self.imgItem, p, s, self.z)
             #scene.addItem(self.imgItem)
 
     def updateImage(self):

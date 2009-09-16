@@ -94,8 +94,15 @@ class PVCamera(QtGui.QMainWindow):
 
         self.setCentralWidget(self.ui.centralwidget)
         self.scene = QtGui.QGraphicsScene(self)
+        self.cameraItemGroup = QtGui.QGraphicsItemGroup()
+        self.scene.addItem(self.cameraItemGroup)
         self.imageItem = ImageItem()
-        self.scene.addItem(self.imageItem)
+        self.cameraItemGroup.addToGroup(self.imageItem)
+        #self.scene.addItem(self.imageItem)
+        
+        #grid = Grid(self.gv)
+        #self.scene.addItem(grid)
+        
         self.gv.setScene(self.scene)
         self.gv.setAspectLocked(True)
         self.gv.invertY()
@@ -138,14 +145,30 @@ class PVCamera(QtGui.QMainWindow):
         
         self.ui.spinBinning.setValue(self.binning)
         self.ui.spinExposure.setValue(self.exposure)
-        self.border = self.scene.addRect(0, 0,self.camSize[0], self.camSize[1], QtGui.QPen(QtGui.QColor(50,80,80))) 
+        #self.border = self.scene.addRect(0, 0, self.camSize[0], self.camSize[1], QtGui.QPen(QtGui.QColor(50,80,80))) 
+        self.border = QtGui.QGraphicsRectItem(0, 0, self.camSize[0], self.camSize[1])
+        self.border.setPen(QtGui.QPen(QtGui.QColor(50,80,80))) 
+        self.cameraItemGroup.addToGroup(self.border)
         
         bw = self.camSize[0]*0.125
         bh = self.camSize[1]*0.125
-        self.centerBox = self.scene.addRect(self.camSize[0]*0.5-bw*0.5, self.camSize[1]*0.5-bh*0.5, bw, bh, QtGui.QPen(QtGui.QColor(80,80,50)))
+        self.centerBox = QtGui.QGraphicsRectItem(self.camSize[0]*0.5-bw*0.5, self.camSize[1]*0.5-bh*0.5, bw, bh)
+        self.centerBox.setPen(QtGui.QPen(QtGui.QColor(80,80,50)))
+        #self.centerBox = QtGui.QGraphicsRectItem(0, 0, 1, 1, QtGui.QPen(QtGui.QColor(80,80,50)))
         self.centerBox.setZValue(50)
+        self.cameraItemGroup.addToGroup(self.centerBox)
         
+        ## Initialize values
+        self.cameraCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
+        self.cameraScale = [1, 1]
         self.gv.setRange(QtCore.QRect(0, 0, self.camSize[0], self.camSize[1]), lockAspect=True)
+        #self.updateCameraDecorations()
+        
+        self.roi = CamROI(self.camSize)
+        self.roi.connect(QtCore.SIGNAL('regionChangeFinished'), self.updateRegion)
+        self.cameraItemGroup.addToGroup(self.roi)
+        self.setRegion()
+        
         
         QtCore.QObject.connect(self.ui.btnAcquire, QtCore.SIGNAL('clicked()'), self.toggleAcquire)
         QtCore.QObject.connect(self.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
@@ -180,6 +203,7 @@ class PVCamera(QtGui.QMainWindow):
         QtCore.QObject.connect(self.frameTimer, QtCore.SIGNAL('timeout()'), self.drawFrame)
         self.frameTimer.start(1)
 
+
     def addPersistentFrame(self):
         """Make a copy of the current camera frame and store it in the background"""
         px = self.imageItem.getPixmap()
@@ -197,9 +221,9 @@ class PVCamera(QtGui.QMainWindow):
         #r = info['region']
         #b = info['binning']
         self.persistentFrames.append(im)
-        self.addImage(im, p, s, z)
+        self.addItem(im, p, s, z)
         
-    def addImage(self, imgItem, pos, scale, z):
+    def addItem(self, imgItem, pos, scale, z):
         """Adds an image into the persistent frame group. The image will be scaled and 
         translated with the group when the scope moves."""
         #print "add image at", pos, scale, z
@@ -226,12 +250,12 @@ class PVCamera(QtGui.QMainWindow):
             self.persistentGroup1.removeFromGroup(i)
         self.persistentFrames = []
 
-    def positionChanged(self, p):
-        self.updatePersistentGroup()
+    #def positionChanged(self, p):
+        #self.updatePersistentGroup()
     
     
-    def objectiveChanged(self, obj):
-        self.updatePersistentGroup()
+    #def objectiveChanged(self, obj):
+        #self.updatePersistentGroup()
         
     def updatePersistentGroup(self):
         p = self.module.cam.getPosition()
@@ -296,7 +320,7 @@ class PVCamera(QtGui.QMainWindow):
         
     def updateRegion(self, *args):
         self.clearFrameBuffer()
-        r = self.roi.sceneBounds()
+        r = self.roi.parentBounds()
         newRegion = [int(r.left()), int(r.top()), int(r.right())-1, int(r.bottom())-1]
         if self.region != newRegion:
             self.region = newRegion
@@ -304,18 +328,22 @@ class PVCamera(QtGui.QMainWindow):
         
         
     def closeEvent(self, ev):
+        self.quit()
+
+    def quit(self):
+        self.frameTimer.stop()
         if self.acquireThread.isRunning():
             #print "Stopping acquisition thread.."
             self.acquireThread.stop()
             if not self.acquireThread.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
         if self.recordThread.isRunning():
-            #print "Stopping recording thread.."
+            print "Stopping recording thread.."
             self.recordThread.stop()
             #print "  requested stop, waiting for thread -- running=",self.recordThread.isRunning() 
             if not self.recordThread.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
-            #print "  record thread finished."
+            print "  record thread finished."
 
     def setMouse(self, qpt=None):
         if qpt is None:
@@ -372,26 +400,44 @@ class PVCamera(QtGui.QMainWindow):
     def openCamera(self, ind=0):
         try:
             self.cam = self.module.cam.getCamera()
-            
             self.bitDepth = self.cam.getBitDepth()
             self.setLevelRange()
             self.camSize = self.cam.getSize()
-            self.roi = CamROI(self.camSize)
-            self.roi.connect(QtCore.SIGNAL('regionChangeFinished'), self.updateRegion)
-            self.scene.addItem(self.roi)
-            self.setRegion()
             self.ui.statusbar.showMessage("Opened camera %s" % self.cam, 5000)
             self.scope = self.module.cam.getScopeDevice()
             #self.persistentGroup.setPos(self.camSize[0]/2., self.camSize[1]/2.)
-            if self.scope is not None:
-                QtCore.QObject.connect(self.scope, QtCore.SIGNAL('positionChanged'), self.positionChanged)
-                QtCore.QObject.connect(self.scope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
-                self.updatePersistentGroup()
+            #if self.scope is not None:
+                #QtCore.QObject.connect(self.scope, QtCore.SIGNAL('positionChanged'), self.udpateViewPosition)
+                #QtCore.QObject.connect(self.scope, QtCore.SIGNAL('objectiveChanged'), self.updateViewScale)
+                #self.updatePersistentGroup()
             
         except:
             self.ui.statusbar.showMessage("Error opening camera")
             raise
     
+
+    def updateCameraDecorations(self):
+        ps = self.cameraScale
+        pos = self.cameraCenter
+        cs = self.camSize
+        #w = cs[0] * ps[0]
+        #h = cs[1] * ps[1]
+        #self.border.setRect(pos[0] - (w*0.5), pos[1] - (h*0.5), w, h)
+        #m = QtGui.QTransform()
+        #m.translate(-cs[0] * 0.5, -cs[1] * 0.5)
+        #m.scale(ps[0], ps[1])
+        #self.
+        
+        
+        #w *= .125
+        #h *= .125
+        #self.centerBox.setRect(pos[0] - (w*0.5), pos[1] - (h*0.5), w, h)
+        m = QtGui.QTransform()
+        m.translate(pos[0], pos[1])
+        m.scale(ps[0], ps[1])
+        m.translate(-cs[0]*0.5, -cs[1]*0.5)
+        self.cameraItemGroup.setTransform(m)
+        
 
     def setRegion(self, rgn=None):
         self.backgroundFrame = None
@@ -614,11 +660,30 @@ class PVCamera(QtGui.QMainWindow):
             m = QtGui.QTransform()
             m.translate(info['region'][0], info['region'][1])
             m.scale(info['binning'], info['binning'])
+            #m.translate(info['imagePosition'][0], info['imagePosition'][1])
+            #m.scale(info['pixelSize'][0], info['pixelSize'][1])
             
             ## update image in viewport
             self.imageItem.updateImage(data, clipMask=self.currentClipMask, white=wl, black=bl)
             self.imageItem.setTransform(m)
+
+            ## Update viewport to correct for scope movement/scaling
+            newPos = info['centerPosition']
+            if newPos != self.cameraCenter:
+                diff = [newPos[0] - self.cameraCenter[0], newPos[1] - self.cameraCenter[1]]
+                self.gv.translate(diff[0], diff[1])
+                self.cameraCenter = newPos
+                self.updateCameraDecorations()
             
+            newScale = info['pixelSize']
+            if newScale != self.cameraScale:
+                diff = [self.cameraScale[0] / newScale[0], self.cameraScale[1] /newScale[1]]
+                #print diff
+                self.gv.scale(diff[0], diff[1])
+                self.cameraScale = newScale
+                self.updateCameraDecorations()
+
+
             ## update info for pixel under mouse pointer
             self.setMouse()
             self.updateRgnLabel()
@@ -759,6 +824,7 @@ class RecordThread(QtCore.QThread):
                     self.recordStop = True
 
     def stop(self):
+        QtCore.QObject.disconnect(self.ui.acquireThread, QtCore.SIGNAL('newFrame'), self.newCamFrame)
         #print "RecordThread stop.."    
         with MutexLocker(self.lock):
         #print "  RecordThread stop: locked"

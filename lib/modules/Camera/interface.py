@@ -9,5 +9,8 @@ class Camera(Module):
         self.cam = self.manager.getDevice(camDev)
         self.ui = PVCamera(self)
         
+    def quit(self):
+        self.ui.quit()
+        
     def insertROI(self, roi):
         return handle

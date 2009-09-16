@@ -15,10 +15,10 @@ class Point(QtCore.QPointF):
   def __init__(self, *args):
     if len(args) == 1:
       if hasattr(args[0], '__getitem__'):
-        QtCore.QPointF.__init__(self, args[0][0], args[0][1])
+        QtCore.QPointF.__init__(self, float(args[0][0]), float(args[0][1]))
         return
       elif type(args[0]) in [types.FloatType, types.IntType]:
-        QtCore.QPointF.__init__(self, args[0], args[0])
+        QtCore.QPointF.__init__(self, float(args[0]), float(args[0]))
         return
     elif len(args) == 2:
       QtCore.QPointF.__init__(self, args[0], args[1])

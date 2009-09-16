@@ -145,13 +145,14 @@ class PVCam(Device):
         
     #@ftrace
     def getPosition(self):
+        """Return the coordinate of the center of the sensor area"""
         #print "PVCam: getPosition"
         with MutexLocker(self.lock):
             #print "PVCam: getPosition: locked"
             if self.scopeDev is None:
                 #print "   none"
                 #print "PVCam: getPosition done"
-                return None
+                return [0, 0]
             else:
                 #print "PVCam:getPosition: scopeDev.getPosition"
                 p = self.scopeDev.getPosition()
@@ -165,17 +166,19 @@ class PVCam(Device):
         """Return the dimensions of 1 pixel with signs if the image is flipped"""
         with MutexLocker(self.lock):
             #print "PVCam: getScale locked"
-            
+            if 'scaleFactor' in self.config:
+                sf = self.config['scaleFactor']
+            else:
+                sf = [1, 1]
             if self.scopeDev is None:
                 #print "   none"
-                return None
+                return sf
             else:
                 #print "PVCam: getScale getObj"
                 obj = self.scopeDev.getObjective()
                 #print "PVCam: getScale getObj done"
                 scale = obj['scale']
                 #print "   ", p
-                sf = self.config['scaleFactor']
                 return (sf[0]*scale, sf[1]*scale)
         
     #@ftrace
@@ -544,7 +547,7 @@ class AcquireThread(QtCore.QThread):
                         info['objective'] = obj
                     pos = self.dev.getPosition()  ## pos is the position of the center of the sensor
                     if pos is not None:
-                        info['scopePosition'] = pos
+                        info['centerPosition'] = pos
                         if ps is not None and size is not None:
                             #print pos, size, ps, region
                             pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]

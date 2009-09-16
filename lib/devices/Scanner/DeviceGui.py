@@ -101,10 +101,10 @@ class ScannerDeviceGui(QtGui.QWidget):
         index = self.dev.getCalibrationIndex()
         
         cal = index[cam][laser][obj]
-        fileName = cal['fileName']
-        calDir = self.dev.config['calibrationDir']
-        fileName = os.path.join(calDir, fileName)
         del index[cam][laser][obj]
+        #fileName = cal['fileName']
+        #calDir = self.dev.config['calibrationDir']
+        #fileName = os.path.join(calDir, fileName)
         #try:
             #os.remove(fileName)
         #except:

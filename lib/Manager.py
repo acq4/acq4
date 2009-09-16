@@ -332,7 +332,6 @@ Valid options are:
         #def q():
             #print "all windows closed"
         #QtCore.QObject.connect(app, QtCore.SIGNAL('lastWindowClosed()'), q)
-        
         if not self.alreadyQuit:  ## Need this because multiple triggers can call this function during quit
             self.alreadyQuit = True
             
@@ -340,6 +339,7 @@ Valid options are:
             for m in self.modules:
                 print "    %s" % m
                 self.modules[m].quit()
+            #pdb.set_trace()
                 
             print "Requesting all devices shut down.."
             for d in self.devices:

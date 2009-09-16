@@ -1,6 +1,6 @@
 from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
 #from GraphicsView import qPtArr
-from numpy import array, arccos, dot, pi, zeros, vstack, ubyte, fromfunction
+from numpy import array, arccos, dot, pi, zeros, vstack, ubyte, fromfunction, ceil, floor
 from numpy.linalg import norm
 import scipy.ndimage as ndimage
 #from vector import *
@@ -51,6 +51,9 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         
     def sceneBounds(self):
         return self.sceneTransform().mapRect(self.boundingRect())
+    
+    def parentBounds(self):
+        return self.mapToParent(self.boundingRect()).boundingRect()
 
     def setPen(self, pen):
         self.pen = pen
@@ -110,6 +113,9 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.handles.append(info)
         return h
         
+    def mapSceneToParent(self, pt):
+        return self.mapToParent(self.mapFromScene(pt))
+
     def mousePressEvent(self, ev):
         if self.translatable:
             self.cursorOffset = self.scenePos() - ev.scenePos()
@@ -118,10 +124,11 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
     def mouseMoveEvent(self, ev):
         if self.translatable:
             snap = None
-            if self.translateSnap or (ev.modifiers & QtCore.Qt.ControlModifier):
+            if self.translateSnap or (ev.modifiers() & QtCore.Qt.ControlModifier):
                 snap = Point(self.snapSize, self.snapSize)
             newPos = ev.scenePos() + self.cursorOffset
-            self.translate(newPos - self.scenePos(), snap)
+            newPos = self.mapSceneToParent(newPos)
+            self.translate(newPos - self.pos(), snap=snap)
     
     def mouseReleaseEvent(self, ev):
         if self.translatable:
@@ -164,21 +171,25 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         #p0 = self.mapToScene(h['item'].pos())
         p0 = self.mapToScene(h['pos'] * self.state['size'])
         p1 = Point(pos)
+        p0 = self.mapSceneToParent(p0)
+        p1 = self.mapSceneToParent(p1)
+
         if h.has_key('center'):
             c = h['center']
             cs = c * self.state['size']
             #lpOrig = h['pos'] - 
-            lp0 = self.mapFromScene(p0) - cs
-            lp1 = self.mapFromScene(p1) - cs
+            #lp0 = self.mapFromScene(p0) - cs
+            #lp1 = self.mapFromScene(p1) - cs
+            lp0 = self.mapFromParent(p0) - cs
+            lp1 = self.mapFromParent(p1) - cs
         
         if h['type'] == 't':
             #p0 = Point(self.mapToScene(h['item'].pos()))
             #p1 = Point(pos + self.mapToScene(self.pressHandlePos) - self.mapToScene(self.pressPos))
-            
             snap = None
             if self.translateSnap or (modifiers & QtCore.Qt.ControlModifier):
                 snap = Point(self.snapSize, self.snapSize)
-            self.translate(p1-p0, snap)
+            self.translate(p1-p0, snap=snap)
         
         elif h['type'] == 's':
             #c = h['center']
@@ -215,7 +226,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
             
             s0 = c * self.state['size']
             s1 = c * newSize
-            cc = self.mapToScene(s0 - s1) - self.mapToScene(Point(0, 0))
+            cc = self.mapToParent(s0 - s1) - self.mapToParent(Point(0, 0))
             
             newState['size'] = newSize
             newState['pos'] = newState['pos'] + cc
@@ -249,7 +260,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
             tr = QtGui.QTransform()
             tr.rotate(-ang * 180. / pi)
             
-            cc = self.mapToScene(cs) - (tr.map(cs) + self.state['pos'])
+            cc = self.mapToParent(cs) - (tr.map(cs) + self.state['pos'])
             newState['angle'] = ang
             newState['pos'] = newState['pos'] + cc
             if self.maxBounds is not None:
@@ -291,7 +302,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
             tr = QtGui.QTransform()
             tr.rotate(-ang * 180. / pi)
             
-            cc = self.mapToScene(cs) - (tr.map(c1) + self.state['pos'])
+            cc = self.mapToParent(cs) - (tr.map(c1) + self.state['pos'])
             newState['angle'] = ang
             newState['pos'] = newState['pos'] + cc
             if self.maxBounds is not None:
@@ -330,7 +341,18 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.setPos(self.state['pos'])
         self.updateHandles()
     
-    def translate(self, pt, snap=None):
+    def translate(self, *args, **kargs):
+        """accepts either (x, y, snap) or ([x,y], snap) as arguments"""
+        if 'snap' not in kargs:
+            snap = None
+        else:
+            snap = kargs['snap']
+
+        if len(args) == 1:
+            pt = args[0]
+        else:
+            pt = args
+            
         newState = self.stateCopy()
         newState['pos'] = newState['pos'] + pt
         if snap != None:
@@ -373,66 +395,133 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         p.setPen(self.pen)
         p.drawRect(r)
         
-    def getArrayRegion(self, data, img=None, axes=(0,1)):
-        #print "----------------------"
-        ## determine boundaries of image in scene coordinates
-        ##   assumes image is not rotated!
+
+    def getArraySlice(self, data, img, axes=(0,1), returnSlice=True):
+        """Return a tuple of slice objects that can be used to slice the region from data covered by this ROI.
+        Also returns the transform which maps the ROI into data coordinates.
+        
+        If returnSlice is set to False, the function returns a pair of tuples with the values that would have 
+        been used to generate the slice objects. ((ax0Start, ax0Stop), (ax1Start, ax1Stop))"""
+        
+        ## Determine shape of array along ROI axes
         dShape = (data.shape[axes[0]], data.shape[axes[1]])
-        if img is None:
-            bounds = QtCore.QRectF(0, 0, dShape[0], dShape[1])
+        
+        ## Determine transform that maps ROI bounding box to image coordinates
+        tr = self.sceneTransform() * img.sceneTransform().inverted()[0] 
+        
+        ## Modify transform to scale from image coords to data coords
+        #m = QtGui.QTransform()
+        tr.scale(float(dShape[0]) / img.width(), float(dShape[1]) / img.height())
+        #tr = tr * m
+        
+        ## Transform ROI bounds into data bounds
+        dataBounds = tr.mapRect(self.boundingRect())
+        
+        ## Intersect transformed ROI bounds with data bounds
+        intBounds = dataBounds.intersect(QtCore.QRectF(0, 0, dShape[0], dShape[1]))
+        
+        ## Determine index values to use when referencing the array. 
+        bounds = (
+            (int(min(intBounds.left(), intBounds.right())), int(1+max(intBounds.left(), intBounds.right()))),
+            (int(min(intBounds.bottom(), intBounds.top())), int(1+max(intBounds.bottom(), intBounds.top())))
+        )
+        
+        
+        if returnSlice:
+            ## Create slice objects
+            sl = [slice(None)] * data.ndim
+            sl[axes[0]] = slice(*bounds[0])
+            sl[axes[1]] = slice(*bounds[1])
+            return tuple(sl), tr
         else:
-            imr = QtCore.QRect(0, 0, img.width(), img.height())
-            bounds = img.sceneTransform().mapRect(imr)
-            #print "imr, bounds", imr, bounds
-        
-        ## Determine shape of ROI in data coordinates
-        scaleFactor = Point(dShape) / Point(bounds.width(), bounds.height())
-        if abs(self.state['angle']) < 1e-5:
-            paddedRgn = self.boundingRect()
-        else:
-            paddedRgn = self.boundingRect().adjusted(-scaleFactor[0], -scaleFactor[1], scaleFactor[0], scaleFactor[1])  ## pad by 1 pixel
-        #print "paddedRgn", paddedRgn
-            
-        ## Determine region ROI covers in data
-        ##   paddedRgn (ROI local coords) -> scene coords -> img local coords
-        #rgn = self.sceneTransform().mapRect(paddedRgn).adjusted(-bounds.x(), -bounds.y(), -bounds.x(), -bounds.y())
-        rgn = img.sceneTransform().inverted()[0].mapRect(self.sceneTransform().mapRect(paddedRgn))
-        
-        rgnPos = Point(rgn.x(), rgn.y())
-        rgnSize = Point(rgn.width(), rgn.height())
-        #print "rgn", rgn
-        
-        
-        dataRect = QtCore.QRectF(0, 0, dShape[0], dShape[1])
-        #print "dataRect", dataRect
-        
-        ## Find intersection between image and ROI
-        readRgn = rgn.intersected(dataRect)
-        #print "readRgn", readRgn
-        
-            
-        ## convert readRegion to integer rect
-        readRgni = QtCore.QRect(int(readRgn.x()), int(readRgn.y()), round(readRgn.width()), round(readRgn.height()))
-        dpix = Point(readRgni.x() - readRgn.x(), readRgni.y() - readRgn.y())
-        
-        ## if there is no intersection, bail out
-        if readRgni.width() == 0 or readRgn.height() == 0:
-            #print "No intersection"
-            return None
-        
-        
-        ### From here on, we extract data from the source array
-        ### and massage it into the return array
-        
-        writeRgn = readRgni.adjusted(int(-rgnPos[0]-dpix[0]), int(-rgnPos[1]-dpix[1]), round(-rgnPos[0]-dpix[0]), round(-rgnPos[1]-dpix[1]))
-        
+            return bounds, tr
+
+
+    def getArrayRegion(self, data, img, axes=(0,1)):
         ## transpose data so x and y are the first 2 axes
         trAx = range(0, data.ndim)
         trAx.remove(axes[0])
         trAx.remove(axes[1])
         tr1 = tuple(axes) + tuple(trAx)
-        dataTr = data.transpose(tr1)
-        #print "First transpose:", tr1, data.shape, dataTr.shape
+        arr = data.transpose(tr1)
+        
+        ## Determine the minimal area of the data we will need
+        (dataBounds, roiDataTransform) = self.getArraySlice(data, img, returnSlice=False)
+        
+        ## Pad data boundaries by 1px is possible
+        dataBounds = (
+            (max(dataBounds[0][0]-1, 0), min(dataBounds[0][1]+1, arr.shape[0])),
+            (max(dataBounds[1][0]-1, 0), min(dataBounds[1][1]+1, arr.shape[1]))
+        )
+
+        ## Extract minimal data from array
+        arr1 = arr[dataBounds[0][0]:dataBounds[0][1], dataBounds[1][0]:dataBounds[1][1]]
+        
+        ## Update roiDataTransform to reflect this extraction
+        roiDataTransform *= QtGui.QTransform().translate(-dataBounds[0][0], -dataBounds[1][0]) 
+        ### (roiDataTransform now maps from ROI coords to extracted data coords)
+        
+        
+        ## Rotate array
+        if abs(self.state['angle']) > 1e-5:
+            arr2 = ndimage.rotate(arr1, self.state['angle'] * 180 / pi, order=1)
+            
+            ## update data transforms to reflect this rotation
+            rot = QtGui.QTransform().rotate(self.state['angle'] * 180 / pi)
+            roiDataTransform *= rot
+            
+            ## The rotation also causes a shift which must be accounted for:
+            dataBound = QtCore.QRectF(0, 0, arr1.shape[0], arr1.shape[1])
+            rotBound = rot.mapRect(dataBound)
+            roiDataTransform *= QtGui.QTransform().translate(-rotBound.left(), -rotBound.top())
+            
+        else:
+            arr2 = arr1
+        
+        
+        
+        ### Shift off partial pixels
+        # 1. map ROI into current data space
+        roiBounds = roiDataTransform.mapRect(self.boundingRect())
+        
+        # 2. Determine amount to shift data
+        shift = (int(roiBounds.left()) - roiBounds.left(), int(roiBounds.bottom()) - roiBounds.bottom())
+        if abs(shift[0]) > 1e-6 or abs(shift[1]) > 1e-6:
+            # 3. pad array with 0s before shifting
+            arr2a = zeros((arr2.shape[0]+2, arr2.shape[1]+2) + arr2.shape[2:], dtype=arr2.dtype)
+            arr2a[1:-1, 1:-1] = arr2
+            
+            # 4. shift array and udpate transforms
+            arr3 = ndimage.shift(arr2a, shift + (0,)*(arr2.ndim-2), order=1)
+            roiDataTransform *= QtGui.QTransform().translate(1+shift[0], 1+shift[1]) 
+        else:
+            arr3 = arr2
+        
+        
+        ### Extract needed region from rotated/shifted array
+        # 1. map ROI into current data space (round these values off--they should be exact integer values at this point)
+        roiBounds = roiDataTransform.mapRect(self.boundingRect())
+        roiBounds = QtCore.QRect(round(roiBounds.left()), round(roiBounds.top()), round(roiBounds.width()), round(roiBounds.height()))
+        
+        #2. intersect ROI with data bounds
+        dataBounds = roiBounds.intersect(QtCore.QRect(0, 0, arr3.shape[0], arr3.shape[1]))
+        
+        #3. Extract data from array
+        db = dataBounds
+        bounds = (
+            (db.left(), db.right()+1),
+            (db.top(), db.bottom()+1)
+        )
+        arr4 = arr3[bounds[0][0]:bounds[0][1], bounds[1][0]:bounds[1][1]]
+
+        ### Create zero array in size of ROI
+        arr5 = zeros((roiBounds.width(), roiBounds.height()) + arr4.shape[2:], dtype=arr4.dtype)
+        
+        ## Fill array with ROI data
+        orig = Point(dataBounds.topLeft() - roiBounds.topLeft())
+        subArr = arr5[orig[0]:orig[0]+arr4.shape[0], orig[1]:orig[1]+arr4.shape[1]]
+        subArr[:] = arr4[:subArr.shape[0], :subArr.shape[1]]
+        
         
         ## figure out the reverse transpose order
         tr2 = array(tr1)
@@ -440,46 +529,11 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
             tr2[tr1[i]] = i
         tr2 = tuple(tr2)
         
-        ## slice data out of transposed source array
-        arr = dataTr[readRgni.x():readRgni.x()+readRgni.width(), readRgni.y():readRgni.y()+readRgni.height()]
-        
-        ## shift off partial pixels if needed
-        if dpix[0] != 0 or dpix[1] != 0:
-            sArr = ndimage.shift(arr, tuple(dpix) + (0,)*(arr.ndim-2), order=1)
-        else:
-            sArr = arr
-        
-        ## prepare write array and copy data
-        arr1 = zeros((round(rgnSize[0]), round(rgnSize[1])) + dataTr.shape[2:], dtype=data.dtype)
-        arr1[writeRgn.x():writeRgn.x()+arr.shape[0], writeRgn.y():writeRgn.y()+arr.shape[1]] = sArr
-        
-        
-        ## rotate if needed
-        #print self.state['angle']
-        if abs(self.state['angle']) > 1e-5:
-            arr2 = ndimage.rotate(arr1, self.state['angle'] * 180 / pi, order=1)
-            
-            ## crop down to original region
-            rgn2 = QtCore.QRectF(0, 0, rgn.width(), rgn.height())
-            tr = QtGui.QTransform()
-            tr.rotate(self.state['angle'] * 180 / pi)
-            tr2 = tr.inverted()[0]
-            
-            rgn3 = tr.mapRect(rgn2)
-            p3 = Point(rgn3.x(), rgn3.y())
-            p3r = tr2.map(p3) + Point(rgn.x(), rgn.y())
-            
-            p1r = self.state['pos'] - Point(bounds.x(), bounds.y()) - p3r
-            p1 = Point(tr.map(p1r))
-            p1 = Point(int(p1[0]), int(p1[1])) #- Point(1, 1)
-            arr3 = arr2[p1[0]:p1[0]+round(self.state['size'][0]), p1[1]:p1[1]+round(self.state['size'][1])]
-        else:
-            arr3 = arr1
-            
-        ## Retranspose sliced data into original coordinates
-        arr4 = arr3.transpose(tr2)
-        #print "Reverse transpose:", tr2, arr3.shape, arr4.shape
-        return arr4
+        ## Untranspose array before returning
+        return arr5.transpose(tr2)
+
+
+
 
 
         
@@ -564,9 +618,10 @@ class TestROI(ROI):
     def __init__(self, pos, size, **args):
         #QtGui.QGraphicsRectItem.__init__(self, pos[0], pos[1], size[0], size[1])
         ROI.__init__(self, pos, size, **args)
-        self.addTranslateHandle([0, 0])
+        #self.addTranslateHandle([0, 0])
         self.addTranslateHandle([0.5, 0.5])
         self.addScaleHandle([1, 1], [0, 0])
+        self.addScaleHandle([0, 0], [1, 1])
         self.addScaleRotateHandle([1, 0.5], [0.5, 0.5])
         self.addScaleHandle([0.5, 1], [0.5, 0.5])
         self.addRotateHandle([1, 0], [0, 0])

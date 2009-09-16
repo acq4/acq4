@@ -90,6 +90,13 @@ class WidgetGroup(QtCore.QObject):
     
     
     def __init__(self, widgetList):
+        """Initialize WidgetGroup, adding specified widgets into this group.
+        widgetList can be either a list of widget specifications (widget, [name], [scale])
+        or it can be any QObject, and all compatible child widgets will be added recursively.
+        
+        The 'scale' parameter for each widget allows QSpinBox to display a different value than the value recorded
+        in the group state (for example, the program may set a spin box value to 100e-6 and have it displayed as 100 to the user)
+        """
         QtCore.QObject.__init__(self)
         self.widgetList = weakref.WeakKeyDictionary() # Make sure widgets don't stick around just because they are listed here
         self.scales = {}

@@ -36,62 +36,51 @@ class GraphicsView(QtGui.QGraphicsView):
         self.lastMousePos = None
         self.setMouseTracking(False)
         self.aspectLocked = False
-        #self.scale = Point(1.0, -1.0)
         self.yInverted = False
-        #self.translate = Point(0.0, 0.0)
         self.range = QtCore.QRectF(0, 0, 1, 1)
         self.currentItem = None
         self.clearMouse()
         self.updateMatrix()
-        
         
     def clearMouse(self):
         self.mouseTrail = []
         self.lastButtonReleased = None
     
     def resizeEvent(self, ev):
-        #if ev.oldSize().width() == -1 or ev.oldSize().height() == -1:
-            #return
-        #print "Resize:"
-        #s = Point(float(self.size().width())/ev.oldSize().width(), float(self.size().height())/ev.oldSize().height())
-        #print ev.oldSize()
-        #print self.size()
-        #print s
-        #self.scale = self.scale * s
         self.setRange(self.range, padding=0)
         self.updateMatrix()
     
     def updateMatrix(self, propagate=True):
-        #print "======"
-        self.translate = Point(self.range.center())
-        #self.scale = Point(self.range.width() / self.size().width(), self.range.height() / self.size().height())
-        self.scale = Point(self.size().width()/self.range.width(), self.size().height()/self.range.height())
-        if not self.yInverted:
-            self.scale = self.scale * Point(1, -1)
+        #print "udpateMatrix:"
+        translate = Point(self.range.center())
+        scale = Point(self.size().width()/self.range.width(), self.size().height()/self.range.height())
         
         m = QtGui.QMatrix()
         
         ## First center the viewport at 0
         self.resetMatrix()
         center = self.viewportTransform().inverted()[0].map(Point(self.width()/2., self.height()/2.))
-        #print center, self.yInverted
         if self.yInverted:
             m.translate(center.x(), center.y())
+            #print "  inverted; translate", center.x(), center.y()
         else:
             m.translate(center.x(), -center.y())
+            #print "  not inverted; translate", center.x(), -center.y()
             
         ## Now scale and translate properly
-        #print self.scale
         if self.aspectLocked:
-            self.scale = Point(self.scale.min())
-        m.scale(self.scale[0], self.scale[1])
-        #print self.translate
-        st = self.translate
+            scale = Point(scale.min())
+        if not self.yInverted:
+            scale = scale * Point(1, -1)
+        m.scale(scale[0], scale[1])
+        #print "  scale:", scale
+        st = translate
         m.translate(-st[0], -st[1])
+        #print "  translate:", st
         self.setMatrix(m)
+        self.currentScale = scale
         
         if propagate:
-            #r = self.range()
             for v in self.lockedViewports:
                 v.setXRange(self.range, padding=0)
         
@@ -99,48 +88,31 @@ class GraphicsView(QtGui.QGraphicsView):
         r = QtCore.QRectF(self.rect())
         return self.viewportTransform().inverted()[0].mapRect(r)
 
+    def translate(self, dx, dy):
+        self.range.adjust(dx, dy, dx, dy)
+        self.updateMatrix()
+    
+    def scale(self, sx, sy):
+        scale = [sx, sy]
+        if self.aspectLocked:
+            scale[0] = scale[1]
+        adj = (self.range.width()*0.5*(1.0-(1.0/scale[0])), self.range.height()*0.5*(1.0-(1.0/scale[1])))
+        #print "======\n", scale, adj
+        #print self.range
+        self.range.adjust(adj[0], adj[1], -adj[0], -adj[1])
+        #print self.range
+        
+        self.updateMatrix()
+
     def setRange(self, newRect, padding=0.05, lockAspect=None, propagate=True):
-        #print "-----------> setRange"
-        #print "  requested range:", newRect
-        #print "  current translate/scale:", self.translate, self.scale
         padding = Point(padding)
-        
-        #rect = QtCore.QRectF(self.rect())
-        #newRect = QtCore.QRectF(newRect)
-        #size = Point(rect.width(), rect.height())
-        #newSize = Point(newRect.width(), newRect.height())
-        #if newSize[0] == 0 or newSize[1] == 0:
-            #return
-        #self.scale = (1.0 / (1.0+padding)) * size / newSize
-        #if lockAspect:
-            #self.scale = Point(self.scale.min())
-        #if not self.yInverted:
-            #self.scale *= Point(1.0, -1.0)
-        #self.translate = Point(-newRect.center().x(), newRect.center().y())
-        
         newRect = QtCore.QRectF(newRect)
         pw = newRect.width() * padding[0]
         ph = newRect.height() * padding[1]
         self.range = newRect.adjusted(-pw, -ph, pw, ph)
-        
-        #if self.aspectLocked:
-            #print 'correct aspect'
-            #a1 = float(self.width()) / self.height()
-            #a2 = float(self.range.width()) / self.range.height()
-            #if a1 > a2:
-                #print 'adjust w'
-                #adj = 0.5 * (self.range.height()*a1 - self.range.width())
-                #self.range.adjust(-adj, 0, adj, 0)
-            #elif a2 > a1:
-                #print 'adjust h'
-                #adj = 0.5 * (self.range.width()/a1 - self.range.height())
-                #self.range.adjust(0, -adj, 0, adj)
-        
+        #print "New Range:", self.range
         self.updateMatrix(propagate)
-        #print "  new range:", self.range()
-        #print "  new translate/scale", self.translate, self.scale
         self.emit(QtCore.SIGNAL('viewChanged(QRectF)'), self.range)
-        #print "<----------- setRange"
         
         
     def lockXRange(self, v1):
@@ -148,24 +120,20 @@ class GraphicsView(QtGui.QGraphicsView):
             self.lockedViewports.append(v1)
         
     def setXRange(self, r, padding=0.05):
-        #print "-----------> setXRange"
         r1 = QtCore.QRectF(self.range)
         r1.setLeft(r.left())
         r1.setRight(r.right())
         self.setRange(r1, padding=[padding, 0], propagate=False)
-        #print "<---------- setYRange"
         
     def setYRange(self, r, padding=0.05):
-        #print "----------> setYRange"
         r1 = QtCore.QRectF(self.range)
         r1.setTop(r.top())
         r1.setBottom(r.bottom())
         self.setRange(r1, padding=[0, padding], propagate=False)
-        #print "<---------- setYRange"
         
     def invertY(self, invert=True):
-        if self.yInverted != invert:
-            self.scale[1] *= -1.
+        #if self.yInverted != invert:
+            #self.scale[1] *= -1.
         self.yInverted = invert
         self.updateMatrix()
     
@@ -173,8 +141,9 @@ class GraphicsView(QtGui.QGraphicsView):
     def wheelEvent(self, ev):
         QtGui.QGraphicsView.wheelEvent(self, ev)
         sc = 1.001 ** ev.delta()
-        self.scale *= sc
-        self.updateMatrix()
+        #self.scale *= sc
+        #self.updateMatrix()
+        self.scale(sc, sc)
         
         
     def setAspectLocked(self, s):
@@ -249,27 +218,18 @@ class GraphicsView(QtGui.QGraphicsView):
         self.lastMousePos = Point(ev.pos())
         
         if ev.buttons() == QtCore.Qt.RightButton:
-            delta = Point(clip(delta[0], -10, 10), clip(delta[1], -10, 10))
+            delta = Point(clip(delta[0], -10, 10), clip(-delta[1], -10, 10))
             scale = 1.01 ** delta
-            if self.aspectLocked:
-                scale[0] = scale[1]
-                if self.yInverted:
-                    scale[0] = 1. / scale[0]
-            adj = (self.range.width()*(scale[0]-1), self.range.height()*(scale[1]-1))
-            
-            #print delta, adj
-            #print self.range
-            self.range.adjust(adj[0], -adj[1], -adj[0], adj[1])
-            #print self.range
-            #self.scale *= scale
-            self.updateMatrix()
+            #if self.yInverted:
+                #scale[0] = 1. / scale[0]
+            self.scale(scale[0], scale[1])
             self.emit(QtCore.SIGNAL('regionChanged(QRectF)'), self.range)
         elif ev.buttons() == QtCore.Qt.MidButton:
-            tr = -delta / self.scale
-            self.range.adjust(tr[0], tr[1], tr[0], tr[1])
-            self.updateMatrix()
+            tr = -delta / self.currentScale
+            
+            self.translate(tr[0], tr[1])
             self.emit(QtCore.SIGNAL('regionChanged(QRectF)'), self.range)
-
+    
         
     def writeSvg(self, fileName=None):
         if fileName is None:

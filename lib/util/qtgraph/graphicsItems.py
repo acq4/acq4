@@ -6,6 +6,17 @@ from scipy.weave import converters
 from lib.util.MetaArray import MetaArray
 import types, sys
 
+
+class ItemGroup(QtGui.QGraphicsItem):
+    def boundingRect(self):
+        return QtCore.QRectF()
+        
+    def paint(self, *args):
+        pass
+    
+    def addItem(self, item):
+        item.setParentItem(self)
+
 ## Multiple inheritance not allowed in PyQt. Retarded workaround:
 class QObjectWorkaround:
     def __init__(self):
