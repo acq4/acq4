@@ -9,12 +9,13 @@ from PyQt4 import Qwt5 as Qwt
 import numpy
 from ProtocolTemplate import *
 from lib.util.PlotWidget import PlotCurve
+import sip
 
 class MultiClampProtoGui(ProtocolGui):
     def __init__(self, dev, prot):
         ProtocolGui.__init__(self, dev, prot)
         daqDev = self.dev.getDAQName()
-        daqUI = self.prot.getDevice(daqDev)
+        self.daqUI = self.prot.getDevice(daqDev)
         
         self.traces = {}  ## Stores traces from a sequence to allow average plotting
         #self.avgPlots = {}
@@ -52,17 +53,15 @@ class MultiClampProtoGui(ProtocolGui):
             #(self.ui.splitter_2, 'splitter2')
         #])
         
-        self.daqChanged(daqUI.currentState())
+        self.daqChanged(self.daqUI.currentState())
         #for p in [self.ui.topPlotWidget, self.ui.bottomPlotWidget]:
             #p.setCanvasBackground(QtGui.QColor(0,0,0))
             #p.plot()
-        QtCore.QObject.connect(daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
+        QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
         QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.ui.i0ModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
-        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.sequenceStarted)
-        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('taskStarted'), self.protoStarted)
         
     def saveState(self):
         state = self.stateGroup.state().copy()
@@ -126,7 +125,7 @@ class MultiClampProtoGui(ProtocolGui):
         self.ui.bottomPlotWidget.clear()
         self.currentCmdPlot = None
 
-    def sequenceStarted(self):
+    def protocolStarted(self):
         self.resetInpPlots = True
 
     def clearInpPlots(self):
@@ -140,7 +139,7 @@ class MultiClampProtoGui(ProtocolGui):
         self.traces = {}
         self.ui.topPlotWidget.clear()
         
-    def protoStarted(self, params):
+    def taskStarted(self, params):
         ## Draw green trace for current command waveform
         if self.currentCmdPlot is not None:
             self.ui.bottomPlotWidget.detachCurve(self.currentCmdPlot)
@@ -344,3 +343,7 @@ class MultiClampProtoGui(ProtocolGui):
         
         #self.ui.topPlotWidget.replot()
         
+    def quit(self):
+        ProtocolGui.quit(self)
+        if not sip.isdeleted(self.daqUI):
+            QtCore.QObject.disconnect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)

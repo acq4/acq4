@@ -172,4 +172,15 @@ class ScannerTask(DeviceTask):
             if wait > 0:
                 time.sleep(wait)
             
+    def getResult(self):
+        result = {}
+        for k in ['position', 'command']:
+            if k in self.cmd:
+                result[k] = self.cmd[k]
+        return result
+    
+    def storeResult(self, dirHandle):
+        result = self.getResult()
+        dirHandle.setInfo({self.dev.name: result})
+        
         

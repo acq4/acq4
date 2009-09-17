@@ -50,7 +50,7 @@ class DAQGenericProtoGui(ProtocolGui):
             (self.ui.controlSplitter, 'splitter2'),
             (self.ui.plotSplitter, 'splitter3'),
         ])
-        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('taskStarted'), self.protoStarted)
+        #QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('taskStarted'), self.protoStarted)
         
 
     def saveState(self):
@@ -82,7 +82,7 @@ class DAQGenericProtoGui(ProtocolGui):
     def sequenceChanged(self):
         self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
         
-    def protoStarted(self, params):
+    def taskStarted(self, params):  ## automatically invoked from ProtocolGui
         ## Pull out parameters for this device
         params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name])
         
@@ -93,7 +93,12 @@ class DAQGenericProtoGui(ProtocolGui):
             for k in params:
                 if k[:len(search)] == search:
                     chParams[k[len(search):]] = params[k]
-            self.channels[ch].protoStarted(chParams)
+            self.channels[ch].taskStarted(chParams)
+            
+    def protocolStarted(self):  ## automatically invoked from ProtocolGui
+        for ch in self.channels:
+            self.channels[ch].protocolStarted()
+        
         
     def generateProtocol(self, params=None):
         #print "generating protocol with:", params
@@ -130,3 +135,8 @@ class DAQGenericProtoGui(ProtocolGui):
                 self.channels[ch].handleResult(result[ch], params)
             
             
+    def quit(self):
+        ProtocolGui.quit(self)
+        for ch in self.channels:
+            self.channels[ch].quit()
+        

@@ -1,7 +1,8 @@
 from lib.modules.Module import *
 from ManagerTemplate import Ui_MainWindow
 from PyQt4 import QtCore, QtGui
-import sys
+import sys, os
+from lib.util import configfile
 
 class Manager(Module):
     def __init__(self, manager, name, config):
@@ -9,6 +10,7 @@ class Manager(Module):
         self.win = QtGui.QMainWindow()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
+        self.stateFile = os.path.join('config', 'managerState.cfg')
 
         self.devRackDocks = {}
         for d in self.manager.listDevices():
@@ -16,6 +18,7 @@ class Manager(Module):
                 dw = self.manager.getDevice(d).deviceInterface()
                 dock = QtGui.QDockWidget(d)
                 dock.setFeatures(dock.AllDockWidgetFeatures)
+                dock.setObjectName(d)
                 dock.setWidget(dw)
                 
                 self.devRackDocks[d] = dock
@@ -33,6 +36,11 @@ class Manager(Module):
         QtCore.QObject.connect(self.ui.moduleList, QtCore.SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.loadModule)
         QtCore.QObject.connect(self.ui.quitBtn, QtCore.SIGNAL('clicked()'), self.requestQuit)
         self.win.show()
+
+        if os.path.exists(self.stateFile):
+            state = configfile.readConfigFile(self.stateFile)
+            ws = QtCore.QByteArray.fromPercentEncoding(state['window'])
+            self.win.restoreState(ws)
         
     def updateModList(self):
         self.ui.moduleList.clear()
@@ -59,3 +67,7 @@ class Manager(Module):
         self.manager.loadDefinedConfig(cfg)
         self.updateModList()
 
+    def quit(self):
+        ## save ui configuration
+        state = {'window': str(self.win.saveState().toPercentEncoding())}
+        configfile.writeConfigFile(state, self.stateFile)

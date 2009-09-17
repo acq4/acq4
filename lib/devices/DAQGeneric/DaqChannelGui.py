@@ -7,7 +7,7 @@ from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
 from lib.util.PlotWidget import PlotCurve
 import numpy
-import pdb 
+import sip
 
 class DaqChannelGui(QtGui.QWidget):
     def __init__(self, parent, name, config, plot, dev, prot):
@@ -88,7 +88,13 @@ class DaqChannelGui(QtGui.QWidget):
         else:
             self.plot.hide()
             
-    def protoStarted(self, params):
+    def taskStarted(self, params):
+        pass
+    
+    def protocolStarted(self):
+        pass
+    
+    def quit(self):
         pass
         
 class OutputChannelGui(DaqChannelGui):
@@ -114,7 +120,10 @@ class OutputChannelGui(DaqChannelGui):
         QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
 
-        
+    def quit(self):
+        DaqChannelGui.quit(self)
+        if not sip.isdeleted(self.daqUI):
+            QtCore.QObject.disconnect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
     
     def daqChanged(self, state):
         self.rate = state['rate']
@@ -170,7 +179,7 @@ class OutputChannelGui(DaqChannelGui):
             #print "===single==", single.min(), single.max()
         self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
         
-    def protoStarted(self, params):
+    def taskStarted(self, params):
         ## Draw green trace for current command waveform
         if not self.stateGroup.state()['displayCheck']:
             return
@@ -223,9 +232,12 @@ class InputChannelGui(DaqChannelGui):
         DaqChannelGui.__init__(self, *args)
         self.ui = InputChannelTemplate.Ui_Form()
         self.ui.setupUi(self)
-        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.clearPlots)
+        #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.clearPlots)
         self.postUiInit()
-                
+         
+    def protocolStarted(self):
+        self.clearPlots()
+         
     def listSequence(self):
         return []
     

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>238</width>
-    <height>264</height>
+    <width>240</width>
+    <height>287</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -76,24 +76,14 @@
       </widget>
      </item>
      <item row="3" column="1" colspan="2">
-      <widget class="QComboBox" name="cameraDevCombo"/>
+      <widget class="QComboBox" name="scannerDevCombo"/>
      </item>
      <item row="3" column="0">
       <widget class="QLabel" name="label_4">
        <property name="text">
-        <string>Camera Device</string>
+        <string>Scanner Device:</string>
        </property>
       </widget>
-     </item>
-     <item row="7" column="0">
-      <widget class="QLabel" name="label_2">
-       <property name="text">
-        <string>Frame:</string>
-       </property>
-      </widget>
-     </item>
-     <item row="7" column="1">
-      <widget class="QSpinBox" name="frame1Spin"/>
      </item>
      <item row="8" column="0">
       <widget class="QLabel" name="label_5">
@@ -160,13 +150,6 @@
        </property>
       </widget>
      </item>
-     <item row="11" column="0">
-      <widget class="QLabel" name="label_7">
-       <property name="text">
-        <string>Spot Cutoff</string>
-       </property>
-      </widget>
-     </item>
      <item row="10" column="1" colspan="2">
       <widget class="QDoubleSpinBox" name="pspToleranceSpin">
        <property name="value">
@@ -174,7 +157,24 @@
        </property>
       </widget>
      </item>
-     <item row="11" column="1" colspan="2">
+     <item row="17" column="1">
+      <widget class="QPushButton" name="recomputeBtn">
+       <property name="text">
+        <string>Recompute</string>
+       </property>
+      </widget>
+     </item>
+     <item row="13" column="1" colspan="2">
+      <widget class="QCheckBox" name="displayImageCheck">
+       <property name="text">
+        <string>Display images</string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item row="15" column="1">
       <widget class="QDoubleSpinBox" name="spotToleranceSpin">
        <property name="minimum">
         <double>0.010000000000000</double>
@@ -186,18 +186,28 @@
         <double>0.100000000000000</double>
        </property>
        <property name="value">
-        <double>0.500000000000000</double>
+        <double>1000.000000000000000</double>
        </property>
       </widget>
      </item>
-     <item row="12" column="1">
-      <widget class="QPushButton" name="recomputeBtn">
+     <item row="15" column="0">
+      <widget class="QLabel" name="label_7">
        <property name="text">
-        <string>Recompute</string>
+        <string>Spot Cutoff</string>
        </property>
       </widget>
      </item>
-     <item row="7" column="2">
+     <item row="14" column="0">
+      <widget class="QLabel" name="label_2">
+       <property name="text">
+        <string>Frame:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="14" column="1">
+      <widget class="QSpinBox" name="frame1Spin"/>
+     </item>
+     <item row="14" column="2">
       <widget class="QSpinBox" name="frame2Spin"/>
      </item>
     </layout>

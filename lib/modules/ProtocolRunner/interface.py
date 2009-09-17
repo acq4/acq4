@@ -227,6 +227,11 @@ class ProtocolRunner(Module, QtCore.QObject):
     def removeAnalysisDock(self, mod):
         if mod not in self.analysisDocks:
             return
+        try:
+            self.analysisDocks[mod].widget().quit()
+        except:
+            print "Error closing analysis dock"
+            sys.excepthook(*sys.exc_info())
         self.win.removeDockWidget(self.analysisDocks[mod])
         sip.delete(self.analysisDocks[mod])
         del self.analysisDocks[mod]
@@ -340,9 +345,12 @@ class ProtocolRunner(Module, QtCore.QObject):
         
     def clearDocks(self):
         for d in self.docks:
+            try:
+                self.docks[d].widget().quit()
+            except:
+                print "Error closing dock", d
+                sys.excepthook(*sys.exc_info())
             self.win.removeDockWidget(self.docks[d])
-            #print "quit", d
-            self.docks[d].widget().quit()
             self.docks[d].close()
             sip.delete(self.docks[d])
         self.docks = {}

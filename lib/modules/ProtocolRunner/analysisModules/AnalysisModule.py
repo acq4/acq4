@@ -35,3 +35,9 @@ class AnalysisModule(QtGui.QWidget):
     def restoreState(self, state):
         self.stateGroup.setState(state)
         
+    def quit(self):
+        QtCore.QObject.disconnect(self.pr.taskThread, QtCore.SIGNAL('newFrame'), self.newFrame)
+        QtCore.QObject.disconnect(self.pr, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)
+        QtCore.QObject.disconnect(self.pr.taskThread, QtCore.SIGNAL('taskStarted'), self.taskStarted)
+        QtCore.QObject.disconnect(self.pr.taskThread, QtCore.SIGNAL('finished()'), self.protocolFinished)
+        

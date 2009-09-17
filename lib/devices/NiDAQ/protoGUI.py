@@ -20,6 +20,10 @@ class NiDAQProto(ProtocolGui):
         QtCore.QObject.connect(self.ui.periodSpin, QtCore.SIGNAL('valueChanged(double)'), self.periodChanged)
         QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolChanged'), self.protocolChanged)
         
+    def quit(self):
+        ProtocolGui.quit(self)
+        QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolChanged'), self.protocolChanged)
+        
     def saveState(self):
         return self.currentState()
         

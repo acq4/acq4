@@ -108,6 +108,9 @@ class ProtocolGui(QtGui.QWidget):
         QtGui.QWidget.__init__(self)
         self.dev = dev
         self.prot = prot
+        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)
+        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('taskStarted'), self.taskStarted)
+        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('finished()'), self.protocolFinished)
         
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
@@ -132,5 +135,24 @@ class ProtocolGui(QtGui.QWidget):
         Does NOT handle file storage; this is handled by the device itself."""
         pass
 
-    def quit(self):
+    def protocolStarted(self):
+        """Automatically invoked before a protocol or sequence is started"""
         pass
+
+    def taskStarted(self, params):
+        """Automatically invoked before a single protocol task is started"""
+        pass
+        
+    def protocolFinished(self):
+        """Automatically invoked after a protocol or sequence has finished"""
+        pass
+
+    def quit(self):
+        QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)
+        QtCore.QObject.disconnect(self.prot.taskThread, QtCore.SIGNAL('taskStarted'), self.taskStarted)
+        QtCore.QObject.disconnect(self.prot.taskThread, QtCore.SIGNAL('finished()'), self.protocolFinished)
+
+
+
+
+
