@@ -58,6 +58,7 @@ Valid options are:
         self.currentDir = None
         self.baseDir = None
         self.interface = None
+        self.shortcuts = []
         
         ## Handle command line options
         loadModules = []
@@ -94,7 +95,8 @@ Valid options are:
             if setStorageDir is not None:
                 self.setCurrentDir(setStorageDir)
             if loadManager:
-                self.loadModule(module='Manager', name='Manager', config={})
+                mm = self.loadModule(module='Manager', name='Manager', config={})
+                self.createWindowShortcut('F1', mm.win)
             for m in loadModules:
                 try:
                     self.loadDefinedModule(m)
@@ -109,6 +111,8 @@ Valid options are:
             
         if QtGui.QApplication.instance().activeWindow() is None:
             raise Exception("No GUI windows created during startup, exiting now.")
+            
+            
 
     def readConfig(self, configFile):
         """Read configuration file, create device objects, add devices to list"""
@@ -237,13 +241,27 @@ Valid options are:
         if name not in self.definedModules:
             print "Module '%s' is not defined. Options are: %s" % (name, str(self.definedModules.keys()))
             return
+        conf = self.definedModules[name]
         
-        mod = self.definedModules[name]['module']
-        if 'config' in self.definedModules[name]:
-            conf = self.definedModules[name]['config']
+        mod = conf['module']
+        if 'config' in conf:
+            config = conf['config']
         else:
-            conf = {}
-        return self.loadModule(mod, name, conf)
+            config = {}
+            
+        mod = self.loadModule(mod, name, config)
+        if 'shortcut' in conf and hasattr(mod, 'win'):
+            self.createWindowShortcut(conf['shortcut'], mod.win)
+    
+    def createWindowShortcut(self, keys, win):
+        try:
+            sh = QtGui.QShortcut(QtGui.QKeySequence(keys), win)
+            sh.setContext(QtCore.Qt.ApplicationShortcut)
+            QtCore.QObject.connect(sh, QtCore.SIGNAL('activated()'), win.raise_)
+        except:
+            print "Error creating shortcut '%s':" % keys
+            sys.excepthook(*sys.exc_info())
+        self.shortcuts.append((sh, keys, win))
     
     def runProtocol(self, cmd):
         t = Task(self, cmd)
