@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'CameraTemplate.ui'
 #
-# Created: Wed Jul 15 10:59:36 2009
-#      by: PyQt4 UI code generator 4.4.3
+# Created: Fri Sep 18 13:41:38 2009
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -113,14 +113,14 @@ class Ui_MainWindow(object):
         self.vboxlayout1.setObjectName("vboxlayout1")
         self.hboxlayout2 = QtGui.QHBoxLayout()
         self.hboxlayout2.setObjectName("hboxlayout2")
-        self.levelThermo = QwtThermo(self.dockWidgetContents_2)
+        self.levelThermo = Qwt5.QwtThermo(self.dockWidgetContents_2)
         font = QtGui.QFont()
         font.setPointSize(5)
         self.levelThermo.setFont(font)
-        self.levelThermo.setProperty("alarmColor", QtCore.QVariant(QtGui.QColor(255, 0, 0)))
-        self.levelThermo.setProperty("alarmEnabled", QtCore.QVariant(True))
-        self.levelThermo.setProperty("borderWidth", QtCore.QVariant(1))
-        self.levelThermo.setProperty("maxValue", QtCore.QVariant(4096.0))
+        self.levelThermo.setAlarmColor(QtGui.QColor(255, 0, 0))
+        self.levelThermo.setAlarmEnabled(True)
+        self.levelThermo.setBorderWidth(1)
+        self.levelThermo.setMaxValue(4096.0)
         self.levelThermo.setObjectName("levelThermo")
         self.hboxlayout2.addWidget(self.levelThermo)
         self.verticalSlider = QtGui.QSlider(self.dockWidgetContents_2)
@@ -129,7 +129,7 @@ class Ui_MainWindow(object):
         self.hboxlayout2.addWidget(self.verticalSlider)
         spacerItem2 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.hboxlayout2.addItem(spacerItem2)
-        self.levelScale = QwtScaleWidget(self.dockWidgetContents_2)
+        self.levelScale = Qwt5.QwtScaleWidget(self.dockWidgetContents_2)
         self.levelScale.setObjectName("levelScale")
         self.hboxlayout2.addWidget(self.levelScale)
         self.sliderWhiteLevel = QtGui.QSlider(self.dockWidgetContents_2)
@@ -235,7 +235,7 @@ class Ui_MainWindow(object):
         self.label_5.setObjectName("label_5")
         self.hboxlayout4.addWidget(self.label_5)
         self.spinFlattenSize = QtGui.QDoubleSpinBox(self.frame_3)
-        self.spinFlattenSize.setProperty("value", QtCore.QVariant(4.0))
+        self.spinFlattenSize.setProperty("value", QtCore.QVariant(0.0))
         self.spinFlattenSize.setObjectName("spinFlattenSize")
         self.hboxlayout4.addWidget(self.spinFlattenSize)
         self.vboxlayout2.addWidget(self.frame_3)
@@ -382,5 +382,5 @@ class Ui_MainWindow(object):
         self.addFrameBtn.setText(QtGui.QApplication.translate("MainWindow", "Add", None, QtGui.QApplication.UnicodeUTF8))
         self.clearFramesBtn.setText(QtGui.QApplication.translate("MainWindow", "Clear", None, QtGui.QApplication.UnicodeUTF8))
 
+from PyQt4 import Qwt5
 from lib.util.PlotWidget import PlotWidget
-from PyQt4.Qwt5 import QwtScaleWidget, QwtThermo

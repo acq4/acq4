@@ -9,6 +9,9 @@ class Camera(Module):
         self.cam = self.manager.getDevice(camDev)
         self.ui = PVCamera(self)
         
+    def window(self):
+        return self.ui
+        
     def quit(self):
         self.ui.quit()
         

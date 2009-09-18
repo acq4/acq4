@@ -250,8 +250,9 @@ Valid options are:
             config = {}
             
         mod = self.loadModule(mod, name, config)
-        if 'shortcut' in conf and hasattr(mod, 'win'):
-            self.createWindowShortcut(conf['shortcut'], mod.win)
+        win = mod.window()
+        if 'shortcut' in conf and win is not None:
+            self.createWindowShortcut(conf['shortcut'], win)
     
     def createWindowShortcut(self, keys, win):
         try:

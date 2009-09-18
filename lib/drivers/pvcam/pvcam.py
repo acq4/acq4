@@ -32,6 +32,10 @@ class _CameraClass:
             self.pvcam.pl_cam_open(c_char_p(self.name), byref(self.hCam), OPEN_EXCLUSIVE)
         self.isOpen = True
 
+    def close(self):
+        self.pvcam.pl_cam_close(self.hCam)
+        self.isOpen = False
+
     def initCam(self, params=None):
         if params is None:
             params = {

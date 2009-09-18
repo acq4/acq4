@@ -266,24 +266,39 @@ class Prot:
         tstop = self.state['clampTestStopSpin'] * 1e-3
         base = data['Time': bstart:bstop].view(ndarray)
         test = data['Time': tstart:tstop].view(ndarray)
+        time = data.xvals('Time')
+        dt = time[1] - time[0]
         med = median(base)
         std = base.std()
         test = test - med
+        testBlur = gaussian_filter(test, (1e-3 / dt))
         g = 0.0
         tol = self.state['pspToleranceSpin']
-        r = clip(test.max() / (tol*std), 0.0, 1.0)
-        b = clip(-test.min() / (tol*std), 0.0, 1.0)
+        r = clip(testBlur.max() / (tol*std), 0.0, 1.0)
+        b = clip(-testBlur.min() / (tol*std), 0.0, 1.0)
         
         ## measure latency 
         
-        for i in range(5):
-            t = i * 1e-3
-            sec = data['Time': tstart+t:tstart+t+1e-3].view(ndarray)
-            if (abs(sec.max()-med) > tol*std) or (abs(sec.min()-med) > tol*std):
-                g = (5-i) * 0.2
-                break
-
-        g = clip(g, 0.0, 1.0)
+        #for i in range(5):
+            #t = i * 1e-3
+            ##sec = data['Time': tstart+t:tstart+t+1e-3].view(ndarray)
+            #sec = testBlur[int(t / dt):int((t+1e-3) / dt)]
+            #if (abs(sec.max()-med) > tol*std) or (abs(sec.min()-med) > tol*std):
+                #g = (5-i) * 0.2
+                #break
+                
+        ## Only check first 10ms after stim
+        testLen = 10e-3
+        sec = abs(testBlur[:int(testLen/dt)])
+        secMax = max(abs(testBlur.max()), abs(testBlur.min()))
+        if sec.max() < secMax:
+            g = 0
+        else:
+            sec = sec * (sec < (secMax * 0.5))
+            halfTime = argwhere(sec==sec.max())[0,0] * dt
+            g = (testLen-halfTime) / testLen
+            g = clip(g, 0.0, 1.0)
+        g = g * max(r, b)
         return (r, g, b)
         
         

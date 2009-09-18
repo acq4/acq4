@@ -18,6 +18,7 @@ class Microscope(Device):
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.posDev = None
         self.objDev = None
+        self.currentObjective = None
         if 'positionDevice' in config:
             if 'axisOrder' not in config:
                 self.axisOrder = [0,1]
@@ -36,17 +37,28 @@ class Microscope(Device):
             else:
                 self.positionScale = (1.0,) * nax
             QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
-        if 'objectiveSwitch' in config:
-            self.objDev = dm.getDevice(config['objectiveSwitch'][0])
-            self.objSwitchId = config['objectiveSwitch'][1]
-            state = self.objDev.getSwitch(self.objSwitchId)
-            self.objList = self.config['objectives']  ## all available objectives
-            self.objSelList = {}                      ## objective to use for each switch state
-            for i in self.objList:
-                self.objSelList[i] = self.objList[i].keys()[0]  ## Default to first obj in each list
-            self.objective = self.objList[str(state)][self.objSelList[str(state)]]
-            QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('switchChanged'), self.objectiveChanged)
         
+        self.allObjectives = self.config['objectives']  ## all available objectives
+        for l in self.allObjectives.values():  ## Set default values for each objective
+            for o in l:
+                if 'offset' not in l[o]:
+                    l[o]['offset'] = [0,0]
+
+        ### Keep track of the objective currently in use for each position
+        self.objectives = {}                      ## objective to use for each switch state
+        for i in self.allObjectives:
+            self.objectives[i] = self.allObjectives[i].keys()[0]  ## Default to first obj in each list
+            
+        currentObj = self.objectives.keys()[0]  ## Just guess that the first position is correct
+        
+        ## If there is a switch device, configure it here
+        if 'objectiveSwitch' in config:
+            self.objDev = dm.getDevice(config['objectiveSwitch'][0])  ## Switch device
+            self.objSwitchId = config['objectiveSwitch'][1]           ## Switch ID
+            currentObj = str(self.objDev.getSwitch(self.objSwitchId))           ## Get current switch state
+            QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('switchChanged'), self.objectiveSwitched)
+        
+        self.setObjective(currentObj)
 
     def quit(self):
         pass
@@ -65,18 +77,24 @@ class Microscope(Device):
         ## Mutex must be released before emitting!
         self.emit(QtCore.SIGNAL('positionChanged'), {'abs': p, 'rel': rel})
         
-    #@ftrace
-    def objectiveChanged(self, o):
-        with MutexLocker(self.lock) as l:
-            if self.objSwitchId in o:
-                state = str(o[self.objSwitchId])
-                lastObj = self.objective
-                self.objective = self.objList[str(state)][self.objSelList[str(state)]]
-                #self.objective = self.config['objectives'][state]
-                obj = self.objective.copy()
-                l.unlock()  ## always release mutex before emitting!
-                self.emit(QtCore.SIGNAL('objectiveChanged'), (obj, state, lastObj))
-
+    def objectiveSwitched(self, change):
+        """Called when the switch device has changed, NOT when the user has selected a different objective."""
+        if self.objSwitchId not in change:
+            return
+        state = str(change[self.objSwitchId])
+        self.setObjective(state)
+        
+    def setObjective(self, index):
+        """Selects the objective currently in position 'index'"""
+        if index != self.currentObjective:
+            if index not in self.objectives:
+                print "WARNING: objective position index '%s' invalid, not selecting" % index
+                return
+            lastObj = self.getObjective()
+            self.currentObjective = index
+            obj = self.getObjective()
+            self.emit(QtCore.SIGNAL('objectiveChanged'), (obj, index, lastObj))
+        
     #@ftrace
     def getPosition(self):
         """Return x,y,z position of microscope stage"""
@@ -89,10 +107,19 @@ class Microscope(Device):
         """Return a tuple ("objective name", scale)"""
         with MutexLocker(self.lock):
             #print "Microscope:getObjective locked"
-            return self.objective.copy()
+            if self.currentObjective not in self.objectives:
+                return None
+            obj = self.objectives[self.currentObjective]
+            return self.allObjectives[self.currentObjective][obj].copy()
         
-    def listObjectives(self):
-        return self.objList
+    def listObjectives(self, allObjs=True):
+        if allObjs:
+            return self.allObjectives
+        else:
+            l = {}
+            for i in self.objectives:
+                l[i] = self.allObjectives[i][self.objectives[i]]
+            return l
         
     #@ftrace
     def getState(self):
@@ -104,9 +131,10 @@ class Microscope(Device):
 
     def selectObjectives(self, sel):
         """Set the objective to be picked from each list when the switch changes"""
-        for i in self.objList:
+        for i in self.allObjectives:
             if i in sel:
-                self.objSelList[i] = sel[i]
+                self.objectives[i] = sel[i]
+        self.emit(QtCore.SIGNAL('objectiveListChanged'))
                 
 
     
@@ -131,7 +159,7 @@ class ScopeGUI(QtGui.QWidget):
             self.objRadios[i] = r
             for o in self.objList[i]:
                 c.addItem(self.objList[i][o]['name'], QtCore.QVariant(QtCore.QString(o)))
-            QtCore.QObject.connect(c, QtCore.SIGNAL('clicked()'), self.objRadioClicked)
+            QtCore.QObject.connect(r, QtCore.SIGNAL('clicked()'), self.objRadioClicked)
             QtCore.QObject.connect(c, QtCore.SIGNAL('currentIndexChanged(int)'), self.objComboChanged)
         
     def objectiveChanged(self,obj):
@@ -142,15 +170,18 @@ class ScopeGUI(QtGui.QWidget):
         self.ui.positionLabel.setText('%0.2f, %0.2f' % (p['abs'][0] * 1e6, p['abs'][1] * 1e6))
                 
     def objRadioClicked(self):
-        pass
-        
+        checked = None
+        for r in self.objRadios:
+            if self.objRadios[r].isChecked():
+                checked = r
+                break
+        self.dev.setObjective(r)
         
     def objComboChanged(self):
         sel = {}
-        for i in self.objList:
+        for i in self.objCombos:
             c = self.objCombos[i]
-            o = str(c.itemData(c.currentIndex()).toString())
-            sel[i] = o
+            sel[i] = str(c.itemData(c.currentIndex()).toString())
         self.dev.selectObjectives(sel)
         
             

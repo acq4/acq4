@@ -7,3 +7,5 @@ class Patch(Module):
         Module.__init__(self, manager, name, config)
         self.ui = PatchWindow(manager, config['clampDev'])
     
+    def window(self):
+        return self.ui

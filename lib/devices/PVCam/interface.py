@@ -52,6 +52,8 @@ class PVCam(Device):
             self.stopAcquire()
             if not self.acqThread.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
+        self.cam.close()
+        #print "Camera device quit."
         
         
     #@ftrace
@@ -144,13 +146,18 @@ class PVCam(Device):
             return self.cam.listTriggerModes()
         
     #@ftrace
-    def getPosition(self):
-        """Return the coordinate of the center of the sensor area"""
+    def getPosition(self, justScope=False):
+        """Return the coordinate of the center of the sensor area
+        If justScope is True, return the scope position, uncorrected for the objective offset"""
         with MutexLocker(self.lock):
             if self.scopeDev is None:
                 return [0, 0]
             else:
                 p = self.scopeDev.getPosition()
+                if not justScope:
+                    o = self.scopeDev.getObjective()
+                    off = o['offset']
+                    p = [p[0] + off[0], p[1] + off[1]]
                 return p
 
     #@ftrace
@@ -188,6 +195,38 @@ class PVCam(Device):
     def getScopeDevice(self):
         with MutexLocker(self.lock):
             return self.scopeDev
+            
+    def getBoundary(self, obj=None):
+        """Return the boundaries of the camera in coordinates relative to the scope center.
+        If obj is specified, then the boundary is computed for that objective."""
+        if obj is None:
+            obj = self.getObjective()
+        if obj is None:
+            return None
+        
+        if 'scaleFactor' in self.config:
+            sf = self.config['scaleFactor']
+        else:
+            sf = [1, 1]
+        size = self.cam.getSize()
+        sx = size[0] * obj['scale'] * sf[0]
+        sy = size[1] * obj['scale'] * sf[1]
+        bounds = QtCore.QRectF(-sx * 0.5 + obj['offset'][0], -sy * 0.5 + obj['offset'][1], sx, sy)
+        return bounds
+        
+    def getBoundaries(self):
+        """Return a list of camera boundaries for all objectives"""
+        objs = self.scopeDev.listObjectives(allObjs=False)
+        return [self.getBoundary(objs[o]) for o in objs]
+        
+        
+        
+        
+        
+        
+       
+        
+        
         
 
 class Task(DeviceTask):
@@ -518,6 +557,9 @@ class AcquireThread(QtCore.QThread):
                             #print pos, size, ps, region
                             pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
                             info['imagePosition'] = pos2
+                    sPos = self.dev.getPosition(justScope=True)
+                    if sPos is not None:
+                        info['scopePosition'] = sPos
 
                     lastFrameTime = now
                     
