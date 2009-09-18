@@ -48,15 +48,9 @@ class Scanner(Device):
         
         if cal is None:
             raise Exception("No calibration found for this combination of laser, camera, and objective:\n  %s\n  %s\n  %s" % (laser, camera, obj))
-        #print "Map:", camera, laser, obj, cal
-        #if x < 0 or x >= cal.shape[0]:
-            #raise Exception("Requested point out of camera range 0 <= %f < %d" % (x, cal.shape[0]))
-        #if y < 0 or y >= cal.shape[1]:
-            #raise Exception("Requested point out of camera range 0 <= %f < %d" % (y, cal.shape[1]))
-        x1 = cal[0][0] + cal[0][1] * x + cal[0][2] * y
-        y1 = cal[1][0] + cal[1][1] * x + cal[1][2] * y
+        x1 = cal[0][0] + cal[0][1] * x + cal[0][2] * y + cal[0][3] * x**2 + cal[0][4] * y**2
+        y1 = cal[1][0] + cal[1][1] * x + cal[1][2] * y + cal[1][3] * x**2 + cal[1][4] * y**2
         return [x1, y1]
-        #return cal[x, y]
         
     def getCalibrationIndex(self):
         calDir = self.config['calibrationDir']

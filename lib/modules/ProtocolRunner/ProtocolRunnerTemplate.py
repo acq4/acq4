@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Wed Sep 16 02:21:41 2009
+# Created: Fri Sep 18 15:35:01 2009
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(1118, 593)
+        MainWindow.resize(955, 428)
         MainWindow.setStyleSheet("""QDockWidget::title { background: #77F; border-radius: 3px; border-color: #77F; border-style: outset; border-width: 1px; font-weight: bold}
 QSplitter::handle {background-color: #666}
 QMainWindow::separator {background-color: #666}""")
@@ -227,6 +227,11 @@ QMainWindow::separator {background-color: #666}""")
         self.stopSequenceBtn = QtGui.QPushButton(self.dockWidgetContents_7)
         self.stopSequenceBtn.setObjectName("stopSequenceBtn")
         self.horizontalLayout_3.addWidget(self.stopSequenceBtn)
+        self.pauseSequenceBtn = QtGui.QPushButton(self.dockWidgetContents_7)
+        self.pauseSequenceBtn.setMinimumSize(QtCore.QSize(40, 0))
+        self.pauseSequenceBtn.setCheckable(True)
+        self.pauseSequenceBtn.setObjectName("pauseSequenceBtn")
+        self.horizontalLayout_3.addWidget(self.pauseSequenceBtn)
         self.gridLayout_2.addLayout(self.horizontalLayout_3, 2, 0, 1, 2)
         self.SequenceDock.setWidget(self.dockWidgetContents_7)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.SequenceDock)
@@ -294,6 +299,7 @@ QMainWindow::separator {background-color: #666}""")
         self.testSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Test", None, QtGui.QApplication.UnicodeUTF8))
         self.runSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Record Sequence", None, QtGui.QApplication.UnicodeUTF8))
         self.stopSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Stop Sequence", None, QtGui.QApplication.UnicodeUTF8))
+        self.pauseSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Pause", None, QtGui.QApplication.UnicodeUTF8))
         self.dockWidget.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Analysis", None, QtGui.QApplication.UnicodeUTF8))
 
 from ParamList import ParamList

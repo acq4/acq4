@@ -65,6 +65,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         QtCore.QObject.connect(self.ui.runSequenceBtn, QtCore.SIGNAL('clicked()'), self.runSequence)
         QtCore.QObject.connect(self.ui.stopSingleBtn, QtCore.SIGNAL('clicked()'), self.stopSingle)
         QtCore.QObject.connect(self.ui.stopSequenceBtn, QtCore.SIGNAL('clicked()'), self.stopSequence)
+        QtCore.QObject.connect(self.ui.pauseSequenceBtn, QtCore.SIGNAL('toggled(bool)'), self.pauseSequence)
         QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.deviceItemClicked)
         #QtCore.QObject.connect(self.ui.protoDurationSpin, QtCore.SIGNAL('editingFinished()'), self.protParamsChanged)
         QtCore.QObject.connect(self.ui.protocolList, QtCore.SIGNAL('doubleClicked(const QModelIndex &)'), self.loadProtocol)
@@ -713,6 +714,9 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.loopEnabled = False
         self.taskThread.stop()
     
+    def pauseSequence(self, pause):
+        self.taskThread.pause(pause)
+    
     def handleFrame(self, frame):
         ## Request each device handles its own data
         #print "got frame", frame
@@ -871,6 +875,7 @@ class TaskThread(QtCore.QThread):
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.stopThread = True
         self.abortThread = False
+        self.paused = False
                 
     def startProtocol(self, protocol, paramSpace=None):
         #print "TaskThread:startProtocol", self.lock.depth(), self.lock
@@ -889,6 +894,9 @@ class TaskThread(QtCore.QThread):
             self.start()
             #print "TaskThread:startProtocol started", self.lock.depth()
     
+    def pause(self, pause):
+        with MutexLocker(self.lock):
+            self.paused = pause
                 
     def run(self):
         self.objs = None
@@ -945,6 +953,14 @@ class TaskThread(QtCore.QThread):
                     return
                 l.unlock()
                 time.sleep(1e-3)
+            
+            while True:
+                l.relock()
+                pause = self.paused
+                l.unlock()
+                if not pause:
+                    break
+                time.sleep(10e-3)
             
             #print "BEFORE:\n", cmd
             task = self.dm.createTask(cmd)

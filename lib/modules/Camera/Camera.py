@@ -137,12 +137,11 @@ class PVCamera(QtGui.QMainWindow):
         self.scene = QtGui.QGraphicsScene(self)
         self.cameraItemGroup = QtGui.QGraphicsItemGroup()   ## Objects which follow and scale with camera view
         self.scopeItemGroup = QtGui.QGraphicsItemGroup()    ## Objects which follow scope position
-        self.scopeItemGroup.setZValue(10)
         self.scene.addItem(self.cameraItemGroup)
         self.scene.addItem(self.scopeItemGroup)
+        self.scopeItemGroup.setZValue(10)
         self.imageItem = ImageItem()
         self.cameraItemGroup.addToGroup(self.imageItem)
-        #self.scene.addItem(self.imageItem)
         
         #grid = Grid(self.gv)
         #self.scene.addItem(grid)
@@ -157,14 +156,6 @@ class PVCamera(QtGui.QMainWindow):
 
         self.persistentFrames = []
         
-        ## group 1 is below, group 2 is above
-        #self.persistentGroup1 = QtGui.QGraphicsItemGroup()
-        #self.persistentGroup1.setZValue(-10)
-        #self.scene.addItem(self.persistentGroup1)
-        #self.persistentGroup2 = QtGui.QGraphicsItemGroup()
-        #self.persistentGroup2.setZValue(10)
-        #self.scene.addItem(self.persistentGroup2)
-
         self.recLabel = QtGui.QLabel()
         self.fpsLabel = QtGui.QLabel()
         self.rgnLabel = QtGui.QLabel()
@@ -192,31 +183,17 @@ class PVCamera(QtGui.QMainWindow):
         
         self.ui.spinBinning.setValue(self.binning)
         self.ui.spinExposure.setValue(self.exposure)
-        #self.border = self.scene.addRect(0, 0, self.camSize[0], self.camSize[1], QtGui.QPen(QtGui.QColor(50,80,80))) 
-        #self.border = QtGui.QGraphicsRectItem(0, 0, self.camSize[0], self.camSize[1])
-        #self.border.setPen(QtGui.QPen(QtGui.QColor(50,80,80))) 
-        #self.cameraItemGroup.addToGroup(self.border)
+
+        ## Initialize values
+        self.cameraCenter = self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
+        self.cameraScale = [1, 1]
+        self.gv.setRange(QtCore.QRect(0, 0, self.camSize[0], self.camSize[1]), lockAspect=True)
         
-        #bw = self.camSize[0]*0.125
-        #bh = self.camSize[1]*0.125
-        #self.centerBox = QtGui.QGraphicsRectItem(self.camSize[0]*0.5-bw*0.5, self.camSize[1]*0.5-bh*0.5, bw, bh)
-        #self.centerBox.setPen(QtGui.QPen(QtGui.QColor(80,80,50)))
-        #self.centerBox = QtGui.QGraphicsRectItem(0, 0, 1, 1, QtGui.QPen(QtGui.QColor(80,80,50)))
-        #self.centerBox.setZValue(1)
-        #self.cameraItemGroup.addToGroup(self.centerBox)
         self.borders = []
         self.updateBorders()
         scope = self.module.cam.getScopeDevice()
         if scope is not None:
             QtCore.QObject.connect(scope, QtCore.SIGNAL('objectiveListChanged'), self.updateBorders)
-        
-        
-        
-        ## Initialize values
-        self.cameraCenter = self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
-        self.cameraScale = [1, 1]
-        self.gv.setRange(QtCore.QRect(0, 0, self.camSize[0], self.camSize[1]), lockAspect=True)
-        #self.updateCameraDecorations()
         
         self.roi = CamROI(self.camSize)
         self.roi.connect(QtCore.SIGNAL('regionChangeFinished'), self.updateRegion)
@@ -271,8 +248,10 @@ class PVCamera(QtGui.QMainWindow):
         for b in bounds:
             border = QtGui.QGraphicsRectItem(b)
             border.setPen(QtGui.QPen(QtGui.QColor(50,80,80))) 
+            border.setZValue(10)
             self.scopeItemGroup.addToGroup(border)
             self.borders.append(border)
+        self.updateCameraDecorations()
 
 
     def addPersistentFrame(self):
@@ -455,6 +434,8 @@ class PVCamera(QtGui.QMainWindow):
         ps = self.cameraScale
         pos = self.cameraCenter
         cs = self.camSize
+        if ps is None:
+            return
         
         ## move scope group
         m = QtGui.QTransform()

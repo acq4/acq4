@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1118</width>
-    <height>593</height>
+    <width>955</width>
+    <height>428</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -569,6 +569,22 @@ in loop mode.</string>
         <widget class="QPushButton" name="stopSequenceBtn">
          <property name="text">
           <string>Stop Sequence</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="pauseSequenceBtn">
+         <property name="minimumSize">
+          <size>
+           <width>40</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>Pause</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
          </property>
         </widget>
        </item>

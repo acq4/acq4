@@ -191,18 +191,18 @@ class ScannerDeviceGui(QtGui.QWidget):
     def generateMap(self, loc, cmd):
         """Generates parameters for functions that map image locations to command values.
         We assume that command values can be approximated by planar functions:
-          Cmd.X  =  A  +  B * Loc.X  +  C * Loc.Y
-          Cmd.Y  =  D  +  E * Loc.X  +  F * Loc.Y
-        Returns [[A, B, C], [D, E, F]]
+          Cmd.X  =  A  +  B * Loc.X  +  C * Loc.Y  +  D * Loc.X^2  +  E * Loc.Y^2
+          Cmd.Y  =  F  +  G * Loc.X  +  H * Loc.Y  +  I * Loc.X^2  +  J * Loc.Y^2
+        Returns [[A, B, C, D, E], [F, G, H, I, J]]
         """
         def fn(v, loc):
-            return v[0] + v[1] * loc[:, 0] + v[2] * loc[:, 1]
+            return v[0] + v[1] * loc[:, 0] + v[2] * loc[:, 1] + v[3] * loc[:, 0]**2 + v[4] * loc[:, 1]**2
             
         def erf(v, loc, cmd):
             return fn(v, loc) - cmd
             
-        xFit = leastsq(erf, [0, 1, 1], (loc, cmd[:,0]))[0]
-        yFit = leastsq(erf, [0, 1, 1], (loc, cmd[:,1]))[0]
+        xFit = leastsq(erf, [0, 1, 1, 0, 0], (loc, cmd[:,0]))[0]
+        yFit = leastsq(erf, [0, 1, 1, 0, 0], (loc, cmd[:,1]))[0]
         return (list(xFit), list(yFit))
 
     def spotSize(self, frame):
