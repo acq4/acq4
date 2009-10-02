@@ -103,7 +103,7 @@ class MultiClamp(Device):
                 #print "    mode %s not in %s" % (mode, str(self.holding))
                 return
             holding = self.holding[mode]
-            daq, chan = self.config['commandChannel']
+            daq, chan = self.config['commandChannel'][:2]
             daqDev = self.dm.getDevice(daq)
             scale = self.config['cmdScale'][mode]
             #print "     setChannelValue", chan, holding
@@ -175,7 +175,7 @@ class MultiClamp(Device):
     def getDAQName(self):
         """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
         with MutexLocker(self.lock):
-            daq, chan = self.config['commandChannel']
+            daq, chan = self.config['commandChannel'][:2]
             return daq
 
     def quit(self):
@@ -260,6 +260,7 @@ class Task(DeviceTask):
             
             for ch in self.getUsedChannels():
                 chConf = self.dev.config[ch+'Channel']
+                    
                 if chConf[0] == daqTask.devName():
                     if ch == 'command':
                         daqTask.addChannel(chConf[1], 'ao')
@@ -267,7 +268,11 @@ class Task(DeviceTask):
                         cmdData = self.cmd['command'] * scale
                         daqTask.setWaveform(chConf[1], cmdData)
                     else:
-                        daqTask.addChannel(chConf[1], 'ai')
+                        if len(chConf) < 3:
+                            mode = 'RSE'
+                        else:
+                            mode = chConf[2]
+                        daqTask.addChannel(chConf[1], 'ai', mode)
                     self.daqTasks[ch] = daqTask
         
     def start(self):

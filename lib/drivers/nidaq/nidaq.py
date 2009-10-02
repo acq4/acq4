@@ -397,12 +397,26 @@ class SuperTask:
         chan = self.absChanName(chan)
         (dev, typ) = self.getTaskKey(chan, typ)
         t = self.getTask(chan, typ)
+        
+        ## Determine mode to use for this channel
         if mode is None:
             if typ == 'ai':
                 mode = Val_RSE
             elif typ in ['di', 'do']:
                 mode = Val_ChanPerLine
-        
+        elif isinstance(mode, basestring):
+            modes = {
+                'rse': Val_RSE,
+                'nrse': Val_NRSE,
+                'diff': Val_Diff,
+                'chanperline': Val_ChanPerLine,
+                'chanforalllines': Val_ChanForAllLines
+            }
+            try:
+                mode = modes[mode.lower()]
+            except:
+                raise Exception("Unrecognized channel mode '%s'" % mode)
+            
         if typ == 'ai':
             #print 'CreateAIVoltageChan(%s, "", %s, vRange[0], vRange[1], Val_Volts, None)' % (chan, str(mode))
             t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], Val_Volts, None)

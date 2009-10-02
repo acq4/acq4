@@ -57,6 +57,7 @@ class PVCamDevGui(QtGui.QWidget):
             self.ui.formLayout_2.addRow(p, w)
             self.stateGroup.addWidget(w, p)
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
+        QtCore.QObject.connect(self.ui.reconnectBtn, QtCore.SIGNAL('clicked()'), self.reconnect)
         #print "Done with UI"
             
     def stateChanged(self, p, val):
@@ -67,5 +68,6 @@ class PVCamDevGui(QtGui.QWidget):
         #print val, type(val)
         self.dev.setParam(p, val)    
         
-        
+    def reconnect(self):
+        self.dev.reconnect()
         

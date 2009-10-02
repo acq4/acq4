@@ -29,6 +29,12 @@ class PVCam(Device):
         self.acqThread = AcquireThread(self)
         #print "Created PVCam device. Cameras are:", self.pvc.listCameras()
         
+        if 'scaleFactor' not in self.config:
+            self.config['scaleFactor'] = [1, 1]
+        
+        ## Default values for scope state. These will be used if there is no scope defined.
+        self.scopeState = {'id': 0, 'scale': self.config['scaleFactor'], 'scopePosition': [0, 0], 'centerPosition': [0, 0], 'offset': [0, 0], 'objScale': 1, 'pixelSize': filter(abs, self.config['scaleFactor'])}
+        
         if 'params' in config:
             self.getCamera().setParams(config['params'])
             
@@ -41,11 +47,59 @@ class PVCam(Device):
         
         if 'scopeDevice' in config:
             self.scopeDev = self.dm.getDevice(config['scopeDevice'])
-            #QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
-            #QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
+            QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            ## Cache microscope state for fast access later
+            self.objectiveChanged()
+            self.positionChanged()
         else:
             self.scopeDev = None
+            
+    def reconnect(self):
+        print "Stopping acquisition.."
+        try:
+            self.stopAcquire(block=True)
+        except:
+            pass
+        print "Closing camera.."
+        try:
+            self.cam.cose()
+        except:
+            pass
+        self.cam.open()
+        print "Re-opened camera."
         
+
+    def positionChanged(self, pos=None):
+        if pos is None:
+            pos = self.scopeDev.getPosition()
+        else:
+            pos = pos['abs']
+        with MutexLocker(self.lock):
+            self.scopeState['scopePosition'] = pos
+            offset = self.scopeState['offset']
+            self.scopeState['centerPosition'] = [pos[0] + offset[0], pos[1] + offset[1]]
+            self.scopeState['id'] += 1
+        #print self.scopeState
+        
+    def objectiveChanged(self, obj=None):
+        if obj is None:
+            obj = self.scopeDev.getObjective()
+        else:
+            obj = obj[0]
+        with MutexLocker(self.lock):
+            scale = obj['scale']
+            offset = obj['offset']
+            pos = self.scopeState['scopePosition']
+            self.scopeState['objective'] = obj['name']
+            self.scopeState['objScale'] = scale
+            self.scopeState['offset'] = offset
+            self.scopeState['centerPosition'] = [pos[0] + offset[0], pos[1] + offset[1]]
+            sf = self.config['scaleFactor']
+            self.scopeState['scale'] = [sf[0] * scale, sf[1] * scale]
+            self.scopeState['pixelSize'] = filter(abs, self.scopeState['scale'])
+            self.scopeState['id'] += 1
+        #print self.scopeState
     
     def quit(self):
         if hasattr(self, 'acqThread') and self.acqThread.isRunning():
@@ -150,47 +204,55 @@ class PVCam(Device):
         """Return the coordinate of the center of the sensor area
         If justScope is True, return the scope position, uncorrected for the objective offset"""
         with MutexLocker(self.lock):
-            if self.scopeDev is None:
-                return [0, 0]
+            if justScope:
+                return self.scopeState['scopePosition']
             else:
-                p = self.scopeDev.getPosition()
-                if not justScope:
-                    o = self.scopeDev.getObjective()
-                    off = o['offset']
-                    p = [p[0] + off[0], p[1] + off[1]]
-                return p
+                return self.scopeState['centerPosition']
+            #if self.scopeDev is None:
+                #return [0, 0]
+            #else:
+                #p = self.scopeDev.getPosition()
+                #if not justScope:
+                    #o = self.scopeDev.getObjective()
+                    #off = o['offset']
+                    #p = [p[0] + off[0], p[1] + off[1]]
+                #return p
 
     #@ftrace
     def getScale(self):
         """Return the dimensions of 1 pixel with signs if the image is flipped"""
         with MutexLocker(self.lock):
-            if 'scaleFactor' in self.config:
-                sf = self.config['scaleFactor']
-            else:
-                sf = [1, 1]
-            if self.scopeDev is None:
-                return sf
-            else:
-                obj = self.scopeDev.getObjective()
-                scale = obj['scale']
-                return (sf[0]*scale, sf[1]*scale)
+            return self.scopeState['scale']
+            #if 'scaleFactor' in self.config:
+                #sf = self.config['scaleFactor']
+            #else:
+                #sf = [1, 1]
+            #if self.scopeDev is None:
+                #return sf
+            #else:
+                #obj = self.scopeDev.getObjective()
+                #scale = obj['scale']
+                #return (sf[0]*scale, sf[1]*scale)
         
     #@ftrace
     def getPixelSize(self):
         """Return the absolute size of 1 pixel"""
-        s = self.getScale()
-        if s is None:
-            return None
-        return (abs(s[0]), abs(s[1]))
+        with MutexLocker(self.lock):
+            return self.scopeState['pixelSize']
+        #s = self.getScale()
+        #if s is None:
+            #return None
+        #return (abs(s[0]), abs(s[1]))
         
     #@ftrace
     def getObjective(self):
         with MutexLocker(self.lock):
-            if self.scopeDev is None:
-                return None
-            else:
-                obj = self.scopeDev.getObjective()
-                return obj['name']
+            return self.scopeState['objective']
+            #if self.scopeDev is None:
+                #return None
+            #else:
+                #obj = self.scopeDev.getObjective()
+                #return obj['name']
 
     def getScopeDevice(self):
         with MutexLocker(self.lock):
@@ -200,25 +262,27 @@ class PVCam(Device):
         """Return the boundaries of the camera in coordinates relative to the scope center.
         If obj is specified, then the boundary is computed for that objective."""
         if obj is None:
-            obj = self.getObjective()
+            obj = self.scopeDev.getObjective()
         if obj is None:
             return None
         
-        if 'scaleFactor' in self.config:
+        with MutexLocker(self.lock):
             sf = self.config['scaleFactor']
-        else:
-            sf = [1, 1]
-        size = self.cam.getSize()
-        sx = size[0] * obj['scale'] * sf[0]
-        sy = size[1] * obj['scale'] * sf[1]
-        bounds = QtCore.QRectF(-sx * 0.5 + obj['offset'][0], -sy * 0.5 + obj['offset'][1], sx, sy)
-        return bounds
+            size = self.cam.getSize()
+            sx = size[0] * obj['scale'] * sf[0]
+            sy = size[1] * obj['scale'] * sf[1]
+            bounds = QtCore.QRectF(-sx * 0.5 + obj['offset'][0], -sy * 0.5 + obj['offset'][1], sx, sy)
+            return bounds
         
     def getBoundaries(self):
         """Return a list of camera boundaries for all objectives"""
         objs = self.scopeDev.listObjectives(allObjs=False)
         return [self.getBoundary(objs[o]) for o in objs]
         
+    def getScopeState(self):
+        """Return meta information to be included with each frame. This function must be FAST."""
+        with MutexLocker(self.lock):
+            return self.scopeState
         
         
         
@@ -524,13 +588,18 @@ class AcquireThread(QtCore.QThread):
                 print "Reduced camera ring size to %d" % self.ringSize
             
             #print "  AcquireThread.run: camera started."
-            lastFrameTime = ptime.time() #time.clock()  # Use time.time() on Linux
-            
-            loopCount = 0
+            lastFrameTime = lastStopCheck = ptime.time() #time.clock()  # Use time.time() on Linux
+            #times = [0] * 15
+            frameInfo = {}
+            scopeState = None
             while True:
+                ti = 0
+                #times[ti] = ptime.time(); ti += 1
                 frame = self.cam.lastFrame()
+                #times[ti] = ptime.time(); ti += 1  ## +40us
                 ## If a new frame is available, process it and inform other threads
                 if frame is not None and frame != lastFrame:
+                    #print 'frame'
                     now = ptime.time() #time.clock()
                     if lastFrame is not None:
                         diff = ((frame + self.ringSize) - lastFrame) % self.ringSize
@@ -538,39 +607,66 @@ class AcquireThread(QtCore.QThread):
                             print "Dropped %d frames after %d" % (diff-1, self.frameId)
                             self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped %d frame(s) after frame %d. (%02g since last frame arrived)" % (diff-1, self.frameId, now-lastFrameTime))
                     lastFrame = frame
+                    #times[ti] = ptime.time(); ti += 1  # +130us
                     
                     ## Build meta-info for this frame
                     ## Use lastFrameTime because the current frame _began_ exposing when the previous frame arrived.
                     info = {'id': self.frameId, 'time': now, 'binning': binning, 'exposure': exposure, 'region': region}
                     
-                    ps = self.dev.getPixelSize()
-                    if ps is not None:
-                        ps2 = (ps[0] * binning, ps[1] * binning)
-                        info['pixelSize'] = ps2
-                    obj = self.dev.getObjective()
-                    if obj is not None:
-                        info['objective'] = obj
-                    pos = self.dev.getPosition()  ## pos is the position of the center of the sensor
-                    if pos is not None:
-                        info['centerPosition'] = pos
-                        if ps is not None and size is not None:
-                            #print pos, size, ps, region
-                            pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
-                            info['imagePosition'] = pos2
-                    sPos = self.dev.getPosition(justScope=True)
-                    if sPos is not None:
-                        info['scopePosition'] = sPos
+                    #ps = self.dev.getPixelSize()
+                    #if ps is not None:
+                        #ps2 = (ps[0] * binning, ps[1] * binning)
+                        #info['pixelSize'] = ps2
+                    #obj = self.dev.getObjective()
+                    #if obj is not None:
+                        #info['objective'] = obj
+                    #pos = self.dev.getPosition()  ## pos is the position of the center of the sensor
+                    #if pos is not None:
+                        #info['centerPosition'] = pos
+                        #if ps is not None and size is not None:
+                            ##print pos, size, ps, region
+                            #pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
+                            #info['imagePosition'] = pos2
+                    #sPos = self.dev.getPosition(justScope=True)
+                    #if sPos is not None:
+                        #info['scopePosition'] = sPos
+                        
+                    ## frameInfo includes pixelSize, objective, centerPosition, scopePosition, imagePosition
+                    ss = self.dev.getScopeState()
+                    #print ss
+                    if ss['id'] != scopeState:
+                        #print "scope state changed"
+                        scopeState = ss['id']
+                        ## regenerate frameInfo here
+                        ps = ss['pixelSize']
+                        pos = ss['centerPosition']
+                        pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
+                        
+                        frameInfo = {
+                            'pixelSize': [ps[0] * binning, ps[1] * binning],
+                            'scopePosition': ss['scopePosition'],
+                            'centerPosition': pos,
+                            'objective': ss['objective'],
+                            'imagePosition': pos2
+                        }
+                    ## Copy frame info to info array
+                    for k in frameInfo:
+                        info[k] = frameInfo[k]
+                    #times[ti] = ptime.time(); ti += 1   ## + 3600us
 
                     lastFrameTime = now
                     
                     ## Inform that new frame is ready
                     outFrame = (self.acqBuffer[frame].copy(), info)
+                    #times[ti] = ptime.time(); ti += 1  ## +1130us
                     
                     with MutexLocker(self.connectMutex):
                         conn = self.connections[:]
                     for c in conn:
                         c(outFrame)
+                    #times[ti] = ptime.time(); ti += 1  ## + 169us
                     self.emit(QtCore.SIGNAL("newFrame"), outFrame)
+                    #times[ti] = ptime.time(); ti += 1  ## + 26us
                     
                     ## Lock task array and copy before tinkering with it
                     #print "lock", self.lock.depth()
@@ -586,19 +682,24 @@ class AcquireThread(QtCore.QThread):
 
                     self.frameId += 1
                     
-                    ## mandatory sleep until 300us before next expected frame
+                    ## mandatory sleep until 1ms before next expected frame
                     ## Otherwise the CPU is constantly tied up waiting for new frames.
-                    sleepTime = (lastFrameTime + exposure - 300e-6) - ptime.time()
+                    sleepTime = (lastFrameTime + exposure - 1e-3) - ptime.time()
                     if sleepTime > 0:
                         #print "Sleep %f sec"% sleepTime
                         time.sleep(sleepTime)
                     loopCount = 0
+                    #times[ti] = ptime.time(); ti += 1
+                #times[ti] = ptime.time(); ti += 1
                         
-                time.sleep(1e-3)
+                time.sleep(100e-6)
                 
-                if loopCount > 1000:
-                    loopCount = 0
-                if loopCount == 0: 
+                
+                now = ptime.time()
+                ## check for stop request every 10ms
+                if now - lastStopCheck > 10e-3: 
+                    lastStopCheck = now
+                    #print "stop check"
                     ## If no frame has arrived yet, do NOT stop the camera (this can hang the driver)
                     diff = ptime.time()-lastFrameTime
                     if frame is not None or diff > 1:
@@ -616,7 +717,9 @@ class AcquireThread(QtCore.QThread):
                         if diff > (10 + exposure):
                             print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
                             break
-                loopCount += 1
+                #times[ti] = ptime.time(); ti += 1 ## + 285us
+                #print ",   ".join(['%03.2f' % ((times[i]-times[i-1]) * 1e6) for i in range(len(times)-1)])
+                #times[-1] = ptime.time()
             self.cam.stop()
         except:
             try:

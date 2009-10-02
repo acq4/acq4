@@ -119,6 +119,7 @@ class PVCamera(QtGui.QMainWindow):
         #dock.setWidget(dw)
         #self.addDockWidget(QtCore.Qt.TopDockWidgetArea, dock)
         
+        self.hasQuit = False
         
         self.recordThread = RecordThread(self, self.module.manager)
         self.recordThread.start()
@@ -140,6 +141,7 @@ class PVCamera(QtGui.QMainWindow):
         self.scene.addItem(self.cameraItemGroup)
         self.scene.addItem(self.scopeItemGroup)
         self.scopeItemGroup.setZValue(10)
+        self.cameraItemGroup.setZValue(0)
         self.imageItem = ImageItem()
         self.cameraItemGroup.addToGroup(self.imageItem)
         
@@ -198,6 +200,7 @@ class PVCamera(QtGui.QMainWindow):
         self.roi = CamROI(self.camSize)
         self.roi.connect(QtCore.SIGNAL('regionChangeFinished'), self.updateRegion)
         self.cameraItemGroup.addToGroup(self.roi)
+        self.roi.setZValue(1000)
         self.setRegion()
         
         
@@ -230,9 +233,10 @@ class PVCamera(QtGui.QMainWindow):
         ## Check for new frame updates every 1ms
         ## Some checks may be skipped even if there is a new frame waiting to avoid drawing more than 
         ## 60fps.
-        self.frameTimer = QtCore.QTimer()
-        QtCore.QObject.connect(self.frameTimer, QtCore.SIGNAL('timeout()'), self.drawFrame)
-        self.frameTimer.start(1)
+        #self.frameTimer = QtCore.QTimer()
+        #QtCore.QObject.connect(self.frameTimer, QtCore.SIGNAL('timeout()'), self.drawFrame)
+        #self.frameTimer.start(1)
+        QtCore.QTimer.singleShot(1, self.drawFrame)
 
     def updateBorders(self):
         """Draw the camera boundaries for each objective"""
@@ -293,7 +297,7 @@ class PVCamera(QtGui.QMainWindow):
     def addROI(self):
         
         roi = PlotROI(self.cameraCenter, self.cameraScale[0] * 10)
-        roi.setZValue(20)
+        roi.setZValue(4000)
         self.scene.addItem(roi)
         plot = self.ui.plotWidget.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=False)
         #plot = PlotCurve('roi%d'%len(self.ROIs))
@@ -350,7 +354,8 @@ class PVCamera(QtGui.QMainWindow):
         self.quit()
 
     def quit(self):
-        self.frameTimer.stop()
+        #self.frameTimer.stop()
+        self.hasQuit = True
         if self.acquireThread.isRunning():
             #print "Stopping acquisition thread.."
             self.acquireThread.stop()
@@ -592,6 +597,8 @@ class PVCamera(QtGui.QMainWindow):
 
 
     def drawFrame(self):
+        if self.hasQuit:
+            return
         #sys.stdout.write('+')
         try:
             
@@ -682,10 +689,12 @@ class PVCamera(QtGui.QMainWindow):
             self.imageItem.setTransform(m)
 
             ## Update viewport to correct for scope movement/scaling
+            #print info
             newPos = info['centerPosition']
             if newPos != self.cameraCenter:
                 diff = [newPos[0] - self.cameraCenter[0], newPos[1] - self.cameraCenter[1]]
                 self.gv.translate(diff[0], diff[1])
+                #print "translate view:", diff
                 self.cameraCenter = newPos
                 self.scopeCenter = info['scopePosition']
                 self.updateCameraDecorations()
@@ -693,6 +702,7 @@ class PVCamera(QtGui.QMainWindow):
             newScale = [info['pixelSize'][0] / info['binning'], info['pixelSize'][1] / info['binning']]
             if newScale != self.cameraScale:
                 diff = [self.cameraScale[0] / newScale[0], self.cameraScale[1] /newScale[1]]
+                #print "scale view:", diff
                 #print diff
                 self.gv.scale(diff[0], diff[1])
                 self.cameraScale = newScale
@@ -711,6 +721,9 @@ class PVCamera(QtGui.QMainWindow):
         except:
             #print "Exception in QtCam::newFrame: %s (line %d)" % (str(sys.exc_info()[1]), sys.exc_info()[2].tb_lineno)
             sys.excepthook(*sys.exc_info())
+        finally:
+            QtCore.QTimer.singleShot(1, self.drawFrame)
+
         #sys.stdout.write('!')
 
 

@@ -35,12 +35,12 @@ class Manager(Module):
         QtCore.QObject.connect(self.ui.configList, QtCore.SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.loadConfig)
         QtCore.QObject.connect(self.ui.moduleList, QtCore.SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.loadModule)
         QtCore.QObject.connect(self.ui.quitBtn, QtCore.SIGNAL('clicked()'), self.requestQuit)
-        self.win.show()
 
         if os.path.exists(self.stateFile):
             state = configfile.readConfigFile(self.stateFile)
             ws = QtCore.QByteArray.fromPercentEncoding(state['window'])
             self.win.restoreState(ws)
+        self.win.show()
         
     def updateModList(self):
         self.ui.moduleList.clear()

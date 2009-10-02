@@ -127,7 +127,10 @@ class Microscope(Device):
             return {'position': self.position[:], 'objective': self.objective[:]}
     
     def deviceInterface(self):
-        return ScopeGUI(self)
+        iface = ScopeGUI(self)
+        iface.objectiveChanged((None, self.currentObjective, None))
+        iface.positionChanged({'abs': self.getPosition()})
+        return iface
 
     def selectObjectives(self, sel):
         """Set the objective to be picked from each list when the switch changes"""

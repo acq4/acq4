@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>400</width>
-    <height>60</height>
+    <width>628</width>
+    <height>234</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,6 +20,13 @@
    <property name="margin">
     <number>0</number>
    </property>
+   <item>
+    <widget class="QPushButton" name="reconnectBtn">
+     <property name="text">
+      <string>Reconnect Camera</string>
+     </property>
+    </widget>
+   </item>
    <item>
     <widget class="QScrollArea" name="scrollArea">
      <property name="sizePolicy">
@@ -39,8 +46,8 @@
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>394</width>
-        <height>54</height>
+        <width>626</width>
+        <height>209</height>
        </rect>
       </property>
       <layout class="QFormLayout" name="formLayout_2">

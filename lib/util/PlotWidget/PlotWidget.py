@@ -955,31 +955,15 @@ class PlotCurve(Qwt.QwtPlotCurve):
         self.xData = x
         self.yData = y
         Qwt.QwtPlotCurve.setData(self, x, y)
-        self.generateCurves()
         self.xSpecData = None
         self.ySpecData = None
         self.specCurve = None
 
-    def generateCurves(self):
-        pass
-    
     def attach(self, plot):
         raise Exception("Use PlotWidget.attachCurve instead.")
-        #if self.plot is not None:
-            #self.detach()
-        #self.plot = plot
-        #if hasattr(plot, 'registerItem'):
-            #plot.registerItem(self)
-        #Qwt.QwtPlotCurve.attach(self, plot)
         
     def detach(self):
         raise Exception("Use PlotWidget.detachCurve instead.")
-        ##print 'detach', self
-        #if self.plot is not None and hasattr(self.plot, 'unregisterItem'):
-            ##print 'unregister', self
-            #self.plot.unregisterItem(self)
-        #self.plot = None
-        #Qwt.QwtPlotCurve.detach(self)
         
     def boundingRect(self):
         if self.spectrumMode:

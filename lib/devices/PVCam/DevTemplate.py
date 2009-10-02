@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'DevTemplate.ui'
 #
-# Created: Wed Jun 17 00:21:03 2009
-#      by: PyQt4 UI code generator 4.4.4
+# Created: Thu Oct 01 23:55:38 2009
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,11 +12,14 @@ from PyQt4 import QtCore, QtGui
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(400, 60)
+        Form.resize(628, 234)
         self.verticalLayout = QtGui.QVBoxLayout(Form)
         self.verticalLayout.setSpacing(0)
         self.verticalLayout.setMargin(0)
         self.verticalLayout.setObjectName("verticalLayout")
+        self.reconnectBtn = QtGui.QPushButton(Form)
+        self.reconnectBtn.setObjectName("reconnectBtn")
+        self.verticalLayout.addWidget(self.reconnectBtn)
         self.scrollArea = QtGui.QScrollArea(Form)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
@@ -27,7 +30,7 @@ class Ui_Form(object):
         self.scrollArea.setWidgetResizable(True)
         self.scrollArea.setObjectName("scrollArea")
         self.scrollAreaWidgetContents = QtGui.QWidget(self.scrollArea)
-        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 394, 54))
+        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 626, 209))
         self.scrollAreaWidgetContents.setObjectName("scrollAreaWidgetContents")
         self.formLayout_2 = QtGui.QFormLayout(self.scrollAreaWidgetContents)
         self.formLayout_2.setFieldGrowthPolicy(QtGui.QFormLayout.ExpandingFieldsGrow)
@@ -40,4 +43,5 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
+        self.reconnectBtn.setText(QtGui.QApplication.translate("Form", "Reconnect Camera", None, QtGui.QApplication.UnicodeUTF8))
 
