@@ -19,6 +19,7 @@ from PyQt4 import QtGui, QtCore
 from PyQt4 import Qwt5 as Qwt
 import scipy.ndimage
 import time, types, os.path, re, sys
+from lib.util.color import intColor
 
 class CamROI(ROI):
     def __init__(self, size):
@@ -86,7 +87,7 @@ class PVCamera(QtGui.QMainWindow):
         self.acquireThread.setParam('binning', self.binning)
         self.acquireThread.setParam('exposure', self.exposure)
         
-        self.frameBuffer = []
+        #self.frameBuffer = []
         self.lastPlotTime = None
         self.ROIs = []
         self.plotCurves = []
@@ -131,7 +132,7 @@ class PVCamera(QtGui.QMainWindow):
         l.addWidget(self.gv)
 
         self.ui.plotWidget.setCanvasBackground(QtGui.QColor(0,0,0))
-        self.ui.plotWidget.enableAxis(Qwt.QwtPlot.xBottom, False)
+        #self.ui.plotWidget.enableAxis(Qwt.QwtPlot.xBottom, False)
         self.ui.plotWidget.replot()
 
         self.setCentralWidget(self.ui.centralwidget)
@@ -295,18 +296,19 @@ class PVCamera(QtGui.QMainWindow):
         self.persistentFrames = []
 
     def addROI(self):
-        
+        pen = QtGui.QPen(intColor(len(self.ROIs)))
         roi = PlotROI(self.cameraCenter, self.cameraScale[0] * 10)
         roi.setZValue(4000)
+        roi.setPen(pen)
         self.scene.addItem(roi)
-        plot = self.ui.plotWidget.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=False)
+        plot = self.ui.plotWidget.plot(pen=pen, replot=False)
         #plot = PlotCurve('roi%d'%len(self.ROIs))
         #plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         #plot.attach(self.ui.plotWidget)
         self.ROIs.append({'roi': roi, 'plot': plot, 'vals': [], 'times': []})
         
     def clearFrameBuffer(self):
-        self.frameBuffer = []
+        #self.frameBuffer = []
         for r in self.ROIs:
             r['vals'] = []
             r['times'] = []
@@ -526,29 +528,28 @@ class PVCamera(QtGui.QMainWindow):
         #sys.stdout.write('+')
         ## Get rid of old frames
         minTime = None
-        if len(self.frameBuffer) > 0:
-            now = ptime.time()
-            while self.frameBuffer[0][1]['time'] < (now-self.ui.spinROITime.value()):
-                self.frameBuffer.pop(0)
-            for r in self.ROIs:
-                if len(r['times']) < 1:
-                    continue
-                while r['times'][0] < (now-self.ui.spinROITime.value()):
-                    r['times'].pop(0)
-                    r['vals'].pop(0)
-                if minTime is None or r['times'][0] < minTime:
-                    minTime = r['times'][0]
+        now = ptime.time()
+        #if len(self.frameBuffer) > 0:
+            #while len(self.frameBuffer) > 0 and self.frameBuffer[0][1]['time'] < (now-self.ui.spinROITime.value()):
+                #self.frameBuffer.pop(0)
+        for r in self.ROIs:
+            while len(r['times']) > 0 and r['times'][0] < (now-self.ui.spinROITime.value()):
+                r['times'].pop(0)
+                r['vals'].pop(0)
+            if len(r['times']) > 0 and (minTime is None or r['times'][0] < minTime):
+                minTime = r['times'][0]
         if minTime is None:
             minTime = frame[1]['time']
                 
         ## add new frame
         draw = False
-        if self.lastPlotTime is None or now - lastPlotTime > 0.05:
+        if self.lastPlotTime is None or now - self.lastPlotTime > 0.05:
             draw = True
-        self.frameBuffer.append(frame)
-        if len(self.frameBuffer) < 2: 
+            self.lastPlotTime = now
+        #self.frameBuffer.append(frame)
+        #if len(self.frameBuffer) < 2: 
             #sys.stdout.write('-')
-            return
+            #return
         for r in self.ROIs:
             d = r['roi'].getArrayRegion(frame[0], self.imageItem, axes=(0,1))
             if d is None:

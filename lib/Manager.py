@@ -109,8 +109,16 @@ Valid options are:
             sys.excepthook(*sys.exc_info())
             print "\nError while acting on command line options, continuing on anyway.."
             
-        if QtGui.QApplication.instance().activeWindow() is None:
+            
+        win = QtGui.QApplication.instance().activeWindow()
+        if win is None:
             raise Exception("No GUI windows created during startup, exiting now.")
+        
+        self.quitShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+q'), win)
+        self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
+        QtCore.QObject.connect(self.quitShortcut, QtCore.SIGNAL('activated()'), self.quit)
+            
+            
             
             
 
