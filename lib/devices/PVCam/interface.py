@@ -33,7 +33,16 @@ class PVCam(Device):
             self.config['scaleFactor'] = [1, 1]
         
         ## Default values for scope state. These will be used if there is no scope defined.
-        self.scopeState = {'id': 0, 'scale': self.config['scaleFactor'], 'scopePosition': [0, 0], 'centerPosition': [0, 0], 'offset': [0, 0], 'objScale': 1, 'pixelSize': filter(abs, self.config['scaleFactor'])}
+        self.scopeState = {
+            'id': 0,
+            'scale': self.config['scaleFactor'],
+            'scopePosition': [0, 0],
+            'centerPosition': [0, 0],
+            'offset': [0, 0],
+            'objScale': 1,
+            'pixelSize': filter(abs, self.config['scaleFactor']),
+            'objective': ''
+        }
         
         if 'params' in config:
             self.getCamera().setParams(config['params'])
