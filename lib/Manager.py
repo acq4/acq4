@@ -5,6 +5,7 @@ from PyQt4 import QtCore, QtGui
 from DataManager import *
 import lib.util.ptime as ptime
 from lib.util.Mutex import Mutex
+from lib.util.debug import *
 import getopt
 #import pdb
 
@@ -106,8 +107,7 @@ Valid options are:
                     raise
                     
         except:
-            sys.excepthook(*sys.exc_info())
-            print "\nError while acting on command line options, continuing on anyway.."
+            printExc("\nError while acting on command line options: (but continuing on anyway..)")
             
             
         win = QtGui.QApplication.instance().activeWindow()
@@ -155,8 +155,7 @@ Valid options are:
                         driverName = cfg['devices'][k]['driver']
                         self.loadDevice(driverName, conf, k)
                     except:
-                        print "Error configuring device %s:" % k
-                        sys.excepthook(*sys.exc_info())
+                        printExc("Error configuring device %s:" % k)
                         
             ## Copy in new module definitions
             elif key == 'modules':
@@ -268,8 +267,7 @@ Valid options are:
             sh.setContext(QtCore.Qt.ApplicationShortcut)
             QtCore.QObject.connect(sh, QtCore.SIGNAL('activated()'), win.raise_)
         except:
-            print "Error creating shortcut '%s':" % keys
-            sys.excepthook(*sys.exc_info())
+            printExc("Error creating shortcut '%s':" % keys)
         self.shortcuts.append((sh, keys, win))
     
     def runProtocol(self, cmd):
@@ -515,8 +513,7 @@ class Task:
                     try:
                         self.tasks[t].stop()
                     except:
-                        print "Error while stopping task %s:" % t
-                        sys.excepthook(*sys.exc_info())
+                        printExc("Error while stopping task %s:" % t)
                     #print "   ..task", t, "stopped"
                 self.stopped = True
             
@@ -531,9 +528,8 @@ class Task:
                     try:
                         result[devName] = self.tasks[devName].getResult()
                     except:
-                        print "Error getting result for task %s:" % t
+                        printExc( "Error getting result for task %s (will set result=None for this task):" % t)
                         result[devName] = None
-                        sys.excepthook(*sys.exc_info())
                 self.result = result
                 #print "RESULT 1:", self.result
                 
@@ -557,8 +553,7 @@ class Task:
                 try:
                     self.tasks[t].release()
                 except:
-                    print "Error while releasing hardware for task %s:" % t
-                    sys.excepthook(*sys.exc_info())
+                    printExc("Error while releasing hardware for task %s:" % t)
                     
                 #print "  %d released" % self.id, t
         self.reserved = False

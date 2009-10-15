@@ -10,6 +10,7 @@ from lib.util.Mutex import Mutex, MutexLocker
 import traceback, sys, time
 from numpy import *
 import scipy.optimize
+from lib.util.debug import *
 
 class PatchWindow(QtGui.QMainWindow):
     def __init__(self, dm, clampName):
@@ -126,6 +127,13 @@ class PatchWindow(QtGui.QMainWindow):
         self.showPlots()
         self.updateParams()
         self.show()
+    
+    def quit(self):
+        print "Stopping patch thread.."
+        self.thread.stop(block=True)
+        
+    def closeEvent(self, ev):
+        self.quit()
     
     def bathMode(self):
         self.ui.vcPulseCheck.setChecked(True)
@@ -403,8 +411,7 @@ class PatchThread(QtCore.QThread):
                     if stop:
                         break
         except:
-            print "Error in patch acquisition thread, exiting."
-            traceback.print_exception(*sys.exc_info())
+            printExc("Error in patch acquisition thread, exiting.")
         #self.emit(QtCore.SIGNAL('threadStopped'))
             
     def analyze(self, data, params):

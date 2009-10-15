@@ -12,7 +12,7 @@ def readConfigFile(fname):
     cwd = os.getcwd()
     (newDir, fname) = os.path.split(os.path.abspath(fname))
     try:
-        os.chdir(newDir)
+        os.chdir(newDir)  ## bad.
         fd = open(fname)
         s = unicode(fd.read(), 'UTF-8')
         fd.close()

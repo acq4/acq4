@@ -10,6 +10,7 @@ from lib.util.WidgetGroup import *
 from lib.util.PlotWidget import PlotWidget
 import numpy
 import weakref
+from lib.util.debug import *
 
 class DAQGenericProtoGui(ProtocolGui):
     def __init__(self, dev, prot):
@@ -66,7 +67,8 @@ class DAQGenericProtoGui(ProtocolGui):
             for ch in state['channels']:
                 self.channels[ch].restoreState(state['channels'][ch])
         except:
-            sys.excepthook(*sys.exc_info())
+            printExc('Error while restoring GUI state:')
+            #sys.excepthook(*sys.exc_info())
         #self.ui.waveGeneratorWidget.update()
             
         

@@ -6,6 +6,7 @@ from lib.util.MetaArray import MetaArray
 from lib.util.qtgraph.graphicsItems import ImageItem
 import lib.Manager
 from lib.util.imageAnalysis import *
+from lib.util.debug import *
 
 class ScannerDeviceGui(QtGui.QWidget):
     def __init__(self, dev):

@@ -10,14 +10,7 @@ from protoGUI import *
 from deviceGUI import *
 import lib.util.ptime as ptime
 from lib.util.Mutex import Mutex, MutexLocker
-
-def ftrace(func):
-    def w(*args, **kargs):
-        print "PVCam:" + func.__name__ + " start"
-        rv = func(*args, **kargs)
-        print "PVCam:" + func.__name__ + " done"
-        return rv
-    return w
+from lib.util.debug import *
 
 class PVCam(Device):
     def __init__(self, dm, config, name):
@@ -69,12 +62,18 @@ class PVCam(Device):
         try:
             self.stopAcquire(block=True)
         except:
-            pass
+            printExc("Error while stopping camera:")
         print "Closing camera.."
         try:
-            self.cam.cose()
+            self.cam.close()
         except:
-            pass
+            printExc("Error while closing camera:")
+            
+        print "Re-initializing pvcam driver"
+        self.pvc.reloadDriver()
+            
+        print "Cameras are:", self.pvc.listCameras()
+            
         self.cam.open()
         print "Re-opened camera."
         
@@ -115,7 +114,8 @@ class PVCam(Device):
             self.stopAcquire()
             if not self.acqThread.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
-        self.cam.close()
+        #self.cam.close()
+        self.pvc.quit()
         #print "Camera device quit."
         
         
@@ -724,8 +724,12 @@ class AcquireThread(QtCore.QThread):
                         #print "    AcquireThread.run: Done with thread stop check"
                         
                         if diff > (10 + exposure):
-                            print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
-                            break
+                            if mode == 'Normal':
+                                print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
+                                break
+                            else:
+                                pass  ## do not exit loop if there is a possibility we are waiting for a trigger
+                                
                 #times[ti] = ptime.time(); ti += 1 ## + 285us
                 #print ",   ".join(['%03.2f' % ((times[i]-times[i-1]) * 1e6) for i in range(len(times)-1)])
                 #times[-1] = ptime.time()
@@ -735,9 +739,8 @@ class AcquireThread(QtCore.QThread):
                 self.cam.stop()
             except:
                 pass
-            msg = "ERROR Starting acquisition:", sys.exc_info()[0], sys.exc_info()[1]
-            print traceback.print_exception(*sys.exc_info())
-            self.emit(QtCore.SIGNAL("showMessage"), msg)
+            printExc("Error starting camera acquisition:")
+            self.emit(QtCore.SIGNAL("showMessage"), "ERROR starting acquisition (see console output)")
             
         
     def stop(self, block=False):

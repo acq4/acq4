@@ -9,3 +9,6 @@ class Patch(Module):
     
     def window(self):
         return self.ui
+
+    def quit(self):
+        self.ui.quit()

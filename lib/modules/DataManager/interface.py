@@ -4,6 +4,7 @@ from DataManagerModel import *
 from lib.modules.Module import *
 from lib.DataManager import *
 import os, re, sys, time, sip
+from lib.util.debug import *
 
 class DataManager(Module):
     def __init__(self, manager, name, config):
@@ -147,8 +148,7 @@ class DataManager(Module):
                         #print "dir no match:", spec, inf
                     checkDir = checkDir.parent()
             except:
-                sys.excepthook(*sys.exc_info())
-                print "Error while deciding where to put new folder (using currentDir by default)"
+                printExc("Error while deciding where to put new folder (using currentDir by default)")
             
             ## make
             nd = parent.mkdir(name, autoIncrement=True)

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import traceback, os, sys
+from lib.util.debug import *
 
     
 
@@ -181,8 +182,7 @@ class DirTreeModel(QtCore.QAbstractItemModel):
                 #print "Data changed, editable:", int(self.flags(index))
                 return True
             except:
-                print fn, fn2
-                sys.excepthook(*sys.exc_info())
+                printExc('Error while renaming file (%s => %s):' % (fn, fn2))
                 return False
         else:
             print "setData ignoring role", int(role)
@@ -231,7 +231,7 @@ class DirTreeModel(QtCore.QAbstractItemModel):
                 self.emit(QtCore.SIGNAL('layoutChanged()'))
             return True
         except:
-            sys.excepthook(*sys.exc_info())
+            printExc('Error while moving file:')
             return False
         
     def emitTreeChanged(self, dirName):

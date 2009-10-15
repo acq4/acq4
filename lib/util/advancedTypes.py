@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import threading, sys
+from lib.util.debug import *
 
 class OrderedDict(dict):
     """extends dict so that elements are iterated in the order that they were added.
@@ -203,7 +204,4 @@ class Locker:
             self.lock.release()
         except:
             pass
-        #except:
-            #sys.excepthook(*sys.exc_info())
-            #print "WARNING: Tried to release unacquired mutex"
 

@@ -9,6 +9,7 @@ from PyQt4 import Qwt5 as Qwt
 import numpy
 from ProtocolTemplate import *
 from lib.util.PlotWidget import PlotCurve
+from lib.util.debug import *
 import sip
 
 class MultiClampProtoGui(ProtocolGui):
@@ -82,7 +83,7 @@ class MultiClampProtoGui(ProtocolGui):
             #self.ui.waveGeneratorWidget.loadState(state['stim'])
             self.stateGroup.setState(state)
         except:
-            sys.excepthook(*sys.exc_info())
+            printExc('Error while restoring MultiClamp protocol GUI state:')
         self.ui.waveGeneratorWidget.update()
         
         

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import socket, traceback, sys
+from lib.util.debug import *
 
 class MultiClamp:
   """Class used to interface with remote multiclamp server"""
@@ -95,8 +96,7 @@ class MultiClamp:
       try:
         v = self.runFunction('set'+p, [chan, params[p]], cache=cache)
       except:
-        traceback.print_exception(*sys.exc_info())
-        print "Error while setting parameter %s=%s" % (p, str(params[p]))
+        printExc("Error while setting parameter %s=%s" % (p, str(params[p])))
       finally:
         res[p] = v
     return res

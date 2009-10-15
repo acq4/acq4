@@ -6,6 +6,7 @@ from DeviceGui import ScannerDeviceGui
 from ProtocolGui import ScannerProtoGui
 import os 
 from lib.util import ptime
+from lib.util.debug import *
 
 class Scanner(Device):
     def __init__(self, dm, config, name):
@@ -13,31 +14,35 @@ class Scanner(Device):
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.devGui = None
         self.lastRunTime = None
+        self.calibrationIndex = None
         if not os.path.isdir(config['calibrationDir']):
             print "Calibration directory '%s' does not exist, creating.." % config['calibrationDir']
             os.mkdir(config['calibrationDir'])
     
     def setCommand(self, vals):
-        (mn, mx) = self.config['commandLimits']
-        for i in [0,1]:
-            x = ['XAxis', 'YAxis'][i]
-            (daq, chan) = self.config[x]
-            dev = self.dm.getDevice(daq)
-            v = max(mn, min(mx, vals[i]))
-            dev.setChannelValue(chan, v, block=True)
+        with MutexLocker(self.lock):
+            (mn, mx) = self.config['commandLimits']
+            for i in [0,1]:
+                x = ['XAxis', 'YAxis'][i]
+                (daq, chan) = self.config[x]
+                dev = self.dm.getDevice(daq)
+                v = max(mn, min(mx, vals[i]))
+                dev.setChannelValue(chan, v, block=True)
     
     def setPosition(self, pos, camera, laser):
         """Set the position of the xy mirrors to a point in the image"""
-        (x, y) = pos
-        cam = self.dm.getDevice(camera)
-        camPos = cam.getPosition()
-        vals = self.mapToScanner(x - camPos[0], y - camPos[1], camera, laser)
-        #print "Setting position", pos, " values are", vals
-        
-        self.setCommand(vals)
+        with MutexLocker(self.lock):
+            (x, y) = pos
+            cam = self.dm.getDevice(camera)
+            camPos = cam.getPosition()
+            vals = self.mapToScanner(x - camPos[0], y - camPos[1], camera, laser)
+            #print "Setting position", pos, " values are", vals
+            
+            self.setCommand(vals)
     
     def getObjective(self, camera):
-        camDev = self.dm.getDevice(camera)
+        with MutexLocker(self.lock):
+            camDev = self.dm.getDevice(camera)
         scope = camDev.scopeDev
         return scope.getObjective()['name']
     
@@ -53,37 +58,50 @@ class Scanner(Device):
         return [x1, y1]
         
     def getCalibrationIndex(self):
-        calDir = self.config['calibrationDir']
-        fileName = os.path.join(calDir, 'index')
-        try:
-            index = configfile.readConfigFile(fileName)
-        except:
-            index = {}
-        return index
+        with MutexLocker(self.lock):
+            if self.calibrationIndex is None:
+                calDir = self.config['calibrationDir']
+                fileName = os.path.join(calDir, 'index')
+                try:
+                    index = configfile.readConfigFile(fileName)
+                except:
+                    index = {}
+                    printExc("===== Warning: Error while reading scanner calibration index:")
+                    print "    calDir: %s  fileName: %s" % (calDir, fileName)
+                    print "    self.config:", self.config
+                self.calibrationIndex = index
+            return self.calibrationIndex
         
     def writeCalibrationIndex(self, index):
-        calDir = self.config['calibrationDir']
-        fileName = os.path.join(calDir, 'index')
-        configfile.writeConfigFile(index, fileName)
+        with MutexLocker(self.lock):
+            calDir = self.config['calibrationDir']
+            fileName = os.path.join(calDir, 'index')
+            configfile.writeConfigFile(index, fileName)
+            self.calibrationIndex = index
         
     def getCalibration(self, camera, laser, objective=None):
+        with MutexLocker(self.lock):
+            index = self.getCalibrationIndex()
+            
         if objective is None:
             objective = self.getObjective(camera)
-        index = self.getCalibrationIndex()
         
-        try:
+        if camera in index:
             index1 = index[camera]
-        except:
+        else:
+            print "Warning: No calibration found for camera %s" % camera
             return None
             
-        try:
+        if laser in index1:
             index2 = index1[laser]
-        except:
+        else:
+            print "Warning: No calibration found for laser %s" % laser
             return None
             
-        try:
+        if objective in index2:
             index3 = index2[objective]
-        except:
+        else:
+            print "Warning: No calibration found for objective %s" % objective
             return None
         
         #calFile = os.path.join(calDir, index3['fileName'])
@@ -94,7 +112,7 @@ class Scanner(Device):
             #print "Error loading calibration file for:\n  %s\n  %s\n  %s" % (laser, camera, obj)
             #raise
         
-        return index3
+        return index3.copy()
         
     
     def createTask(self, cmd):

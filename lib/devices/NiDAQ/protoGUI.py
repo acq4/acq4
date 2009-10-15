@@ -2,6 +2,7 @@
 from PyQt4 import QtCore, QtGui
 from ProtocolTemplate import *
 from lib.devices.Device import ProtocolGui
+from lib.util.debug import *
 import sys
 
 class NiDAQProto(ProtocolGui):
@@ -41,8 +42,8 @@ class NiDAQProto(ProtocolGui):
                 self.ui.triggerDevList.setCurrentIndex(0)
                 #print "No index"
         except:
-            sys.excepthook(*sys.exc_info())
-            print "Error while loading DAQ configuration, proceeding with default configuration."
+            #sys.excepthook(*sys.exc_info())
+            printExc("Error while loading DAQ protocol GUI configuration (proceeding with default configuration) :")
         
     def generateProtocol(self, params=None):
         if params is None:

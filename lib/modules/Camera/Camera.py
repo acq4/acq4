@@ -20,6 +20,7 @@ from PyQt4 import Qwt5 as Qwt
 import scipy.ndimage
 import time, types, os.path, re, sys
 from lib.util.color import intColor
+from lib.util.debug import *
 
 class CamROI(ROI):
     def __init__(self, size):
@@ -720,8 +721,7 @@ class PVCamera(QtGui.QMainWindow):
 
 
         except:
-            #print "Exception in QtCam::newFrame: %s (line %d)" % (str(sys.exc_info()[1]), sys.exc_info()[2].tb_lineno)
-            sys.excepthook(*sys.exc_info())
+            printExc('Error while drawing new frames:')
         finally:
             QtCore.QTimer.singleShot(1, self.drawFrame)
 
@@ -778,14 +778,14 @@ class RecordThread(QtCore.QThread):
                     handleCamFrames = self.newCamFrames[:]
                     self.newCamFrames = []
             except:
-                sys.excepthook(*sys.exc_info())
+                printExc('Error in camera recording thread:')
                 break
             
             try:
                 while len(handleCamFrames) > 0:
                     self.handleCamFrame(handleCamFrames.pop(0))
             except:
-                sys.excepthook(*sys.exc_info())
+                printExc('Error in camera recording thread:')
                 break
                 
             time.sleep(10e-3)

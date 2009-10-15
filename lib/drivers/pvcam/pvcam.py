@@ -2,6 +2,7 @@
 from ctypes import *
 import sys, numpy, time, types
 import lib.util.cheader as cheader
+from lib.util.debug import *
 
 PVCAM_CREATED = False
 
@@ -350,9 +351,9 @@ class _CameraClass:
             self._assertCameraOpen()
             return self._getParam(param, ATTR_AVAIL) > 0
         except:
-            print "Error checking availability of parameter %s" % param
-            sys.excepthook(*sys.exc_info())
+            printExc("Error checking availability of parameter %s" % param)
             return False
+            
     def _assertParamAvailable(self, param):
         if not self.paramAvailable(param):
             raise Exception("Parameter is not available.")
@@ -421,6 +422,16 @@ class _PVCamClass:
             raise Exception("Could not initialize pvcam library (pl_exp_init_seq): %s" % self.error())
         _PVCamClass.PVCAM_CREATED = True
 
+    def reloadDriver(self):
+        #if self.pvcam.pl_pvcam_uninit() < 1:
+            #raise Exception("Could not un-initialize pvcam library (pl_pvcam_init): %s" % self.error())
+        #self.pvcam = windll.Pvcam32
+        #if self.pvcam.pl_pvcam_init() < 1:
+            #raise Exception("Could not initialize pvcam library (pl_pvcam_init): %s" % self.error())
+        self.quit()
+        self.__init__()
+        
+
     def listCameras(self):
         nCam = c_int()
         cams = []
@@ -460,6 +471,9 @@ class _PVCamClass:
         return "%d: %s" % (erc, err.value)
 
     def __del__(self):
+        self.quit()
+
+    def quit(self):
         for c in self.cams:
             try:
                 self.cams[c].close()
@@ -469,7 +483,7 @@ class _PVCamClass:
             return
         self.pvcam.pl_exp_uninit_seq()
         self.pvcam.pl_pvcam_uninit()
-        PVCAM_CREATED = False
+        _PVCamClass.PVCAM_CREATED = False
 
     def param(self, pName):
         if isinstance(pName, basestring):

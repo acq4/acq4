@@ -9,6 +9,7 @@ from numpy import *
 import sys, traceback
 from DeviceGui import *
 from protoGUI import *
+from lib.util.debug import *
 
 class MultiClamp(Device):
     def __init__(self, dm, config, name):
@@ -37,8 +38,7 @@ class MultiClamp(Device):
                 print "WARNING: Connected to host %s, but channel is not available." % self.host
                 print "  available channels:", mcs
         except:
-            traceback.print_exception(*(sys.exc_info()))
-            print "Error connecting to MultiClamp commander, will try again when needed. (default settings not loaded)"
+            printExc("Error connecting to MultiClamp commander, will try again when needed. (default settings not loaded)")
         
         print "Created MultiClamp device"
     

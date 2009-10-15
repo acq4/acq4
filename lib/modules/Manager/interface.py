@@ -3,6 +3,7 @@ from ManagerTemplate import Ui_MainWindow
 from PyQt4 import QtCore, QtGui
 import sys, os
 from lib.util import configfile
+from lib.util.debug import *
 
 class Manager(Module):
     def __init__(self, manager, name, config):
@@ -24,8 +25,7 @@ class Manager(Module):
                 self.devRackDocks[d] = dock
                 self.win.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
             except:
-                print "Error while creating dock for device '%s':" % d
-                sys.excepthook(*sys.exc_info())
+                printExc("Error while creating dock for device '%s':" % d)
 
         self.updateModList()
         self.updateConfList()

@@ -4,6 +4,7 @@ from numpy import *
 import scipy.weave as weave
 from scipy.weave import converters
 from lib.util.MetaArray import MetaArray
+from lib.util.debug import *
 import types, sys
 
 
@@ -137,8 +138,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         except:
             if self.useWeave:
                 self.useWeave = False
-                print "Weave compile failed, falling back to slower version."
-                sys.excepthook(*sys.exc_info())
+                printExc("Weave compile failed, falling back to slower version. Error was:")
             self.image.shape = shape
             im = ((self.image - black) * scale).clip(0.,255.).astype(ubyte)
                 

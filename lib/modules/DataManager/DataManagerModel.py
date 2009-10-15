@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 from lib.DataManager import *
+from lib.util.debug import *
 import os
 
 class DMModel(QtCore.QAbstractItemModel):
@@ -146,8 +147,7 @@ class DMModel(QtCore.QAbstractItemModel):
                 self.emit(QtCore.SIGNAL('dataChanged(const QModelIndex &, const QModelIndex &)'), index, index)
                 return True
             except:
-                sys.excepthook(*sys.exc_info())
-                print fn1, fn2
+                printExc('Error while renaming file (%s => %s):' % (fn1, fn2))
                 return False
         else:
             print "setData ignoring role", int(role)
@@ -171,7 +171,7 @@ class DMModel(QtCore.QAbstractItemModel):
                     print "Can not move %s (Same parent dir)"  % handle.name()
                     return False
         except:
-            sys.excepthook(*sys.exc_info())
+            printExc("Error while trying to move files (don't worry, nothing moved yet)")
             return False
                     
                     
@@ -187,7 +187,7 @@ class DMModel(QtCore.QAbstractItemModel):
                 self.layoutChanged()
             return True
         except:
-            sys.excepthook(*sys.exc_info())
+            printExc("<<WARNING>> Error while moving files:")
             return False
 
     def layoutChanged(self):

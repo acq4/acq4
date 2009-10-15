@@ -9,6 +9,7 @@ from lib.util.advancedTypes import OrderedDict
 from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
 from lib.util.Mutex import Mutex, MutexLocker
+from lib.util.debug import *
 import analysisModules
 import time
 import sip
@@ -221,8 +222,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             
             return True
         except:
-            print "Analysis module creation failed:"
-            sys.excepthook(*sys.exc_info())
+            printExc("Analysis module creation failed:")
             return False
         
     def removeAnalysisDock(self, mod):
@@ -231,8 +231,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         try:
             self.analysisDocks[mod].widget().quit()
         except:
-            print "Error closing analysis dock"
-            sys.excepthook(*sys.exc_info())
+            printExc("Error closing analysis dock:")
         self.win.removeDockWidget(self.analysisDocks[mod])
         sip.delete(self.analysisDocks[mod])
         del self.analysisDocks[mod]
@@ -349,8 +348,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             try:
                 self.docks[d].widget().quit()
             except:
-                print "Error closing dock", d
-                sys.excepthook(*sys.exc_info())
+                printExc("Error closing dock %s:", d)
             self.win.removeDockWidget(self.docks[d])
             self.docks[d].close()
             sip.delete(self.docks[d])
@@ -485,8 +483,7 @@ class ProtocolRunner(Module, QtCore.QObject):
                     conf = prot.conf['analysis'][k]
                     self.analysisDocks[k].widget().restoreState(conf)
                 except:
-                    print "Error while loading analysis dock:"
-                    sys.excepthook(*sys.exc_info())
+                    printExc("Error while loading analysis dock:")
                     
 
         ## Load sequence parameter state (must be done after docks have loaded)
@@ -554,7 +551,7 @@ class ProtocolRunner(Module, QtCore.QObject):
                 os.remove(fn)
                 self.protocolList.clearCache()
             except:
-                sys.excepthook(*sys.exc_info())
+                printExc('Error while deleting protocol file:')
                 return
             finally:
                 self.resetDeleteState()
@@ -922,8 +919,7 @@ class TaskThread(QtCore.QThread):
                 runSequence(self.runOnce, self.paramSpace, self.paramSpace.keys(), passHash=True)
             
         except:
-            print "Error in protocol thread, exiting."
-            sys.excepthook(*sys.exc_info())
+            printExc("Error in protocol thread, exiting.")
         #finally:
             #self.emit(QtCore.SIGNAL("protocolFinished()"))
         #print "TaskThread:run() finished"
@@ -984,8 +980,7 @@ class TaskThread(QtCore.QThread):
                 result = task.getResult()
             except:
                 ## Make sure the task is fully stopped if there was a failure at any point.
-                print "\nError during protocol execution:"
-                sys.excepthook(*sys.exc_info())
+                printExc("\nError during protocol execution:")
                 print "\nStopping task.."
                 task.stop()
                 print ""

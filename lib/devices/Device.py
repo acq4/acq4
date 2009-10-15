@@ -5,6 +5,7 @@ from PyQt4 import QtCore, QtGui
 import lib.util.ptime as ptime
 from lib.util.Mutex import Mutex
 #from lib.util.Mutex import Mutex
+from lib.util.debug import *
 
 class Device(QtCore.QObject):
     """Abstract class defining the standard interface for Device subclasses."""
@@ -58,8 +59,7 @@ class Device(QtCore.QObject):
             self._lock_.unlock()
             self._lock_tb_ = None
         except:
-            print "WARNING: Failed to release device lock for %s" % self.name
-            traceback.print_exception(*sys.exc_info())
+            printExc("WARNING: Failed to release device lock for %s" % self.name)
             
     def getTriggerChannel(self, daq):
         """Return the name of the channel on daq that this device raises when it starts.
