@@ -4,6 +4,7 @@ from lib.devices.Device import *
 import threading, time, traceback, sys
 from protoGUI import *
 from numpy import byte
+from lib.util.debug import *
 
 class NiDAQ(Device):
     def __init__(self, dm, config, name):
@@ -19,28 +20,37 @@ class NiDAQ(Device):
     def setChannelValue(self, chan, value, block=False):
         self.reserve(block=block)
         #print "Setting channel %s to %f" % (chan, value)
-        if 'ao' in chan:
-            self.n.writeAnalogSample(chan, value)
-        else:
-            if value is True or value == 1:
-                value = 0xFFFFFFFF
+        try:
+            if 'ao' in chan:
+                self.n.writeAnalogSample(chan, value)
             else:
-                value = 0
-            self.n.writeDigitalSample(chan, value)
-        self.release()
+                if value is True or value == 1:
+                    value = 0xFFFFFFFF
+                else:
+                    value = 0
+                self.n.writeDigitalSample(chan, value)
+        except:
+            printExc("Error while setting channel %s to %s:" % (chan, str(value)))
+        finally:
+            self.release()
         
     def getChannelValue(self, chan):
         self.reserve(block=True)
         #print "Setting channel %s to %f" % (chan, value)
-        if 'ai' in chan:
-            val = self.n.readAnalogSample(chan)
-        else:
-            val = self.n.readDigitalSample(chan)
-            if val <= 0:
-                val = 0
+        try:
+            if 'ai' in chan:
+                val = self.n.readAnalogSample(chan)
             else:
-                val = 1
-        self.release()
+                val = self.n.readDigitalSample(chan)
+                if val <= 0:
+                    val = 0
+                else:
+                    val = 1
+        except:
+            printExc("Error while setting channel %s to %s:" % (chan, str(value)))
+            raise
+        finally:
+            self.release()
         return val
         
     def protocolInterface(self, prot):

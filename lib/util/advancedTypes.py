@@ -35,7 +35,7 @@ class OrderedDict(dict):
     
     def remove(self, key):
         del self[key]
-        self.order.remove(key)
+        #self.order.remove(key)
     
     def __iter__(self):
         for k in self.keys():

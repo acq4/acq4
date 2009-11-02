@@ -330,28 +330,38 @@ class ProtocolRunner(Module, QtCore.QObject):
                     continue
                 self.docks[d] = None  ## Instantiate to prevent endless loops!
                 #print "  Create", d
-                dev = self.manager.getDevice(d)
-                dw = dev.protocolInterface(self)
-                dock = QtGui.QDockWidget(d)
-                dock.setFeatures(dock.AllDockWidgetFeatures)
-                dock.setObjectName(d)
-                dock.setWidget(dw)
-                dock.setAutoFillBackground(True)
+                try:
+                    dev = self.manager.getDevice(d)
+                    dw = dev.protocolInterface(self)
+                except:
+                    printExc("Error while creating dock '%s':" % d)
+                    del self.docks[d]
+                    
+                if d in self.docks:
+                    dock = QtGui.QDockWidget(d)
+                    dock.setFeatures(dock.AllDockWidgetFeatures)
+                    dock.setObjectName(d)
+                    dock.setWidget(dw)
+                    dock.setAutoFillBackground(True)
+                    
+                    self.docks[d] = dock
+                    self.win.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+                    QtCore.QObject.connect(dock.widget(), QtCore.SIGNAL('sequenceChanged'), self.updateSeqParams)
+                    self.updateSeqParams(d)
                 
-                self.docks[d] = dock
-                self.win.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
-                QtCore.QObject.connect(dock.widget(), QtCore.SIGNAL('sequenceChanged'), self.updateSeqParams)
-                self.updateSeqParams(d)
         
     def clearDocks(self):
         for d in self.docks:
             try:
                 self.docks[d].widget().quit()
             except:
-                printExc("Error closing dock %s:", d)
-            self.win.removeDockWidget(self.docks[d])
-            self.docks[d].close()
-            sip.delete(self.docks[d])
+                printExc("Error while requesting dock '%s' quit:"% d)
+            try:
+                self.win.removeDockWidget(self.docks[d])
+                self.docks[d].close()
+                sip.delete(self.docks[d])
+            except:
+                printExc("Error while closing dock '%s':" % d)
         self.docks = {}
 
         for d in self.analysisDocks.keys()[:]:

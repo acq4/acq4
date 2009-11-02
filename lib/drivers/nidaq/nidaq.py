@@ -95,9 +95,12 @@ class _NIDAQ:
             raise Exception("Argument list is too long (%d) for function signature: %s" % (len(args), str(argSig)))
         for i in range(0, len(args)):
             arg = args[i]
-            if type(args[i]) in [types.FloatType, types.IntType, types.LongType, types.BooleanType] and argSig[i][2] == 0:
+            #if type(args[i]) in [types.FloatType, types.IntType, types.LongType, types.BooleanType] and argSig[i][2] == 0:
+            if hasattr(args[i], '__int__') and argSig[i][2] == 0:  ## all numbers and booleans probably have an __int__ method.
                 #print func, i, argSig[i][0], argSig[i][1], type(arg)
                 arg = getattr(ctypes, argSig[i][1])(arg)
+            #else:
+                #print "Warning: passing unknown argument type", type(args[i])
             cArgs.append(arg)
         
         #print "  FINAL CALL: ", cArgs

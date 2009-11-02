@@ -634,9 +634,10 @@ class DirHandle(FileHandle):
             if not self.isManaged(fileName):
                 raise Exception("Can not forget %s, not managed" % fileName)
             index = self._readIndex(lock=False)
-            index.remove(fileName)
-            self._writeIndex(index, lock=False)
-            self.emitChanged('children', fileName)
+            if fileName in index:
+                index.remove(fileName)
+                self._writeIndex(index, lock=False)
+                self.emitChanged('children', fileName)
         
     def isManaged(self, fileName=None):
         with MutexLocker(self.lock):
@@ -698,6 +699,7 @@ class DirHandle(FileHandle):
                 try:
                     self._index = readConfigFile(indexFile)
                     self._indexMTime = os.path.getmtime(indexFile)
+                    self.checkIndex()
                 except:
                     print "***************Error while reading index file %s!*******************" % indexFile
                     raise
@@ -709,6 +711,17 @@ class DirHandle(FileHandle):
             writeConfigFile(newIndex, self._indexFile())
             self._index = newIndex
             self._indexMTime = os.path.getmtime(self._indexFile())
+        
+    def checkIndex(self):
+        ind = self._readIndex()
+        changed = False
+        for f in ind:
+            if not self.exists(f):
+                print "File %s is no more, removing from index." % (os.path.join(self.name(), f))
+                ind.remove(f)
+                changed = True
+        self._writeIndex(ind)
+            
         
     def _childChanged(self):
         self.lsCache = None

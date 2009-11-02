@@ -234,9 +234,11 @@ class InputChannelGui(DaqChannelGui):
         self.ui.setupUi(self)
         #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.clearPlots)
         self.postUiInit()
+        self.clearBeforeNextPlot = False
          
     def protocolStarted(self):
-        self.clearPlots()
+        self.clearBeforeNextPlot = True
+        #self.clearPlots()
          
     def listSequence(self):
         return []
@@ -249,6 +251,10 @@ class InputChannelGui(DaqChannelGui):
     
     def handleResult(self, result, params):
         if self.stateGroup.state()['displayCheck']:
+            if self.clearBeforeNextPlot:
+                self.clearPlots()
+                self.clearBeforeNextPlot = False
+
             plot = self.plot.plot(result.view(numpy.ndarray), result.xvals('Time'), pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=True, params=params)
             #plot = PlotCurve('cell')
             #plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))

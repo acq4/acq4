@@ -218,7 +218,7 @@ class GraphicsView(QtGui.QGraphicsView):
         self.lastMousePos = Point(ev.pos())
         
         if ev.buttons() == QtCore.Qt.RightButton:
-            delta = Point(clip(delta[0], -10, 10), clip(-delta[1], -10, 10))
+            delta = Point(clip(delta[0], -50, 50), clip(-delta[1], -50, 50))
             scale = 1.01 ** delta
             #if self.yInverted:
                 #scale[0] = 1. / scale[0]
