@@ -228,6 +228,7 @@ Valid options are:
         mod = __import__('lib.modules.%s.interface' % module, fromlist=['*'])
         modclass = getattr(mod, module)
         self.modules[name] = modclass(self, name, config)
+        self.emit(QtCore.SIGNAL('modulesChanged'))
         return self.modules[name]
         
     def listModules(self):
@@ -260,6 +261,10 @@ Valid options are:
         win = mod.window()
         if 'shortcut' in conf and win is not None:
             self.createWindowShortcut(conf['shortcut'], win)
+    
+    def moduleHasQuit(self, mod):
+        del self.modules[mod.name]
+        self.emit(QtCore.SIGNAL('modulesChanged'))
     
     def createWindowShortcut(self, keys, win):
         try:

@@ -244,5 +244,6 @@ class DataManager(Module):
     def quit(self):
         ## Silly: needed to prevent lockup on some systems.
         sip.delete(self.dialog)
+        Module.quit(self)
         
 

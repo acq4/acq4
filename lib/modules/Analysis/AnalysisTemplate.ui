@@ -19,7 +19,7 @@ QSplitter::handle {background-color: #666}
 QMainWindow::separator {background-color: #666}</string>
   </property>
   <widget class="QWidget" name="centralwidget"/>
-  <widget class="QDockWidget" name="dockWidget_2">
+  <widget class="QDockWidget" name="dataDock">
    <property name="features">
     <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetVerticalTitleBar</set>
    </property>
@@ -41,15 +41,12 @@ QMainWindow::separator {background-color: #666}</string>
         </widget>
        </item>
        <item>
-        <widget class="QComboBox" name="comboBox"/>
+        <widget class="QComboBox" name="dataSourceCombo"/>
        </item>
       </layout>
      </item>
      <item>
-      <widget class="QTreeWidget" name="treeWidget_2">
-       <attribute name="headerVisible">
-        <bool>false</bool>
-       </attribute>
+      <widget class="QTreeWidget" name="dataFrameList">
        <attribute name="headerVisible">
         <bool>false</bool>
        </attribute>
@@ -61,7 +58,7 @@ QMainWindow::separator {background-color: #666}</string>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="pushButton_3">
+      <widget class="QPushButton" name="removeDataBtn">
        <property name="text">
         <string>Remove</string>
        </property>
@@ -70,7 +67,7 @@ QMainWindow::separator {background-color: #666}</string>
     </layout>
    </widget>
   </widget>
-  <widget class="QDockWidget" name="dockWidget_3">
+  <widget class="QDockWidget" name="moduleDock">
    <property name="features">
     <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable|QDockWidget::DockWidgetVerticalTitleBar</set>
    </property>
@@ -92,10 +89,10 @@ QMainWindow::separator {background-color: #666}</string>
         </widget>
        </item>
        <item>
-        <widget class="QListWidget" name="listWidget"/>
+        <widget class="QListWidget" name="modsAvailableList"/>
        </item>
        <item>
-        <widget class="QPushButton" name="pushButton">
+        <widget class="QPushButton" name="useModBtn">
          <property name="text">
           <string>Use -&gt;</string>
          </property>
@@ -113,10 +110,10 @@ QMainWindow::separator {background-color: #666}</string>
         </widget>
        </item>
        <item>
-        <widget class="QListWidget" name="listWidget_2"/>
+        <widget class="QListWidget" name="modsUsedList"/>
        </item>
        <item>
-        <widget class="QPushButton" name="pushButton_2">
+        <widget class="QPushButton" name="removeModBtn">
          <property name="text">
           <string>Remove</string>
          </property>
@@ -134,7 +131,7 @@ QMainWindow::separator {background-color: #666}</string>
         </widget>
        </item>
        <item>
-        <widget class="QLineEdit" name="lineEdit">
+        <widget class="QLineEdit" name="modNameText">
          <property name="minimumSize">
           <size>
            <width>100</width>
@@ -290,7 +287,7 @@ QMainWindow::separator {background-color: #666}</string>
       </spacer>
      </item>
      <item row="2" column="0" rowspan="8">
-      <widget class="QTreeWidget" name="protocolList">
+      <widget class="QTreeView" name="protocolList">
        <property name="acceptDrops">
         <bool>true</bool>
        </property>
@@ -303,17 +300,6 @@ QMainWindow::separator {background-color: #666}</string>
        <property name="dragDropMode">
         <enum>QAbstractItemView::InternalMove</enum>
        </property>
-       <attribute name="headerVisible">
-        <bool>false</bool>
-       </attribute>
-       <attribute name="headerVisible">
-        <bool>false</bool>
-       </attribute>
-       <column>
-        <property name="text">
-         <string notr="true">1</string>
-        </property>
-       </column>
       </widget>
      </item>
     </layout>

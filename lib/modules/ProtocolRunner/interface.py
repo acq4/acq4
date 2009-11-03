@@ -74,6 +74,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         QtCore.QObject.connect(self.protocolList, QtCore.SIGNAL('fileRenamed(PyQt_PyObject, PyQt_PyObject)'), self.fileRenamed)
         QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('finished()'), self.taskThreadStopped)
         QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('newFrame'), self.handleFrame)
+        QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('taskStarted'), self.taskStarted)
         #QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.deviceItemChanged)
         QtCore.QObject.connect(self.protoStateGroup, QtCore.SIGNAL('changed'), self.protoGroupChanged)
         self.win.show()
@@ -710,6 +711,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             b.setEnabled(v)
             
     def taskThreadStopped(self):
+        self.emit(QtCore.SIGNAL('protocolFinished'))
         if not self.loopEnabled:
             self.enableStartBtns(True)
     
@@ -723,13 +725,20 @@ class ProtocolRunner(Module, QtCore.QObject):
     
     def pauseSequence(self, pause):
         self.taskThread.pause(pause)
+        
+    def taskStarted(self):
+        self.emit(QtCore.SIGNAL('taskStarted'))
+        
     
     def handleFrame(self, frame):
+        
         ## Request each device handles its own data
         #print "got frame", frame
         for d in frame['result']:
             if d != 'protocol':
                 self.docks[d].widget().handleResult(frame['result'][d], frame['params'])
+                
+        self.emit(QtCore.SIGNAL('newFrame'), frame)
                 
         ## If this is a single-mode protocol and looping is turned on, schedule the next run
         if self.loopEnabled:

@@ -13,7 +13,7 @@ class Module:
         return None
     
     def quit(self):
-        pass
+        self.manager.moduleHasQuit(self)
         
     
     

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from lib.modules.Module import *
 from ManagerTemplate import Ui_MainWindow
 from PyQt4 import QtCore, QtGui
@@ -71,3 +72,4 @@ class Manager(Module):
         ## save ui configuration
         state = {'window': str(self.win.saveState().toPercentEncoding())}
         configfile.writeConfigFile(state, self.stateFile)
+        Module.quit(self)

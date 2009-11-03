@@ -14,6 +14,8 @@ class Camera(Module):
         
     def quit(self):
         self.ui.quit()
+        Module.quit(self)
+
         
     def insertROI(self, roi):
         return handle
