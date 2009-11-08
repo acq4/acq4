@@ -111,8 +111,8 @@ Valid options are:
             
             
         win = QtGui.QApplication.instance().activeWindow()
-        if win is None:
-            raise Exception("No GUI windows created during startup, exiting now.")
+        #if win is None:   ## Breaks on some systems..
+            #raise Exception("No GUI windows created during startup, exiting now.")
         
         self.quitShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+q'), win)
         self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
@@ -223,6 +223,7 @@ Valid options are:
 
     def loadModule(self, module, name, config=None):
         """Create a new instance of a module"""
+        print 'Loading module "%s" as "%s"...' % (module, name)
         if config is None:
             config = {}
         mod = __import__('lib.modules.%s.interface' % module, fromlist=['*'])
@@ -366,7 +367,8 @@ Valid options are:
             self.alreadyQuit = True
             
             print "Requesting all modules shut down.."
-            for m in self.modules:
+            while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
+                m = self.modules.keys()[0]
                 print "    %s" % m
                 self.modules[m].quit()
             #pdb.set_trace()

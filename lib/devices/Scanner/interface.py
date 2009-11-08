@@ -62,13 +62,16 @@ class Scanner(Device):
             if self.calibrationIndex is None:
                 calDir = self.config['calibrationDir']
                 fileName = os.path.join(calDir, 'index')
-                try:
-                    index = configfile.readConfigFile(fileName)
-                except:
+                if os.path.isfile(fileName):
+                    try:
+                        index = configfile.readConfigFile(fileName)
+                    except:
+                        index = {}
+                        printExc("===== Warning: Error while reading scanner calibration index:")
+                        print "    calDir: %s  fileName: %s" % (calDir, fileName)
+                        print "    self.config:", self.config
+                else:
                     index = {}
-                    printExc("===== Warning: Error while reading scanner calibration index:")
-                    print "    calDir: %s  fileName: %s" % (calDir, fileName)
-                    print "    self.config:", self.config
                 self.calibrationIndex = index
             return self.calibrationIndex
         

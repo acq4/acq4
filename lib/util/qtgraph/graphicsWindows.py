@@ -4,7 +4,7 @@ from graphicsWindow import *
 from graphicsItems import *
 from scipy import *
 import time, types
-from MetaArray import *
+from lib.util.MetaArray import *
 from PlotWidgetTemplate import Ui_Form as PlotWidgetTemplate
 
 

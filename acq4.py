@@ -33,3 +33,5 @@ QtCore.pyqtRemoveInputHook()
 
 ## Start Qt event loop.
 app.exec_()
+
+print "Qt event loop exited."
