@@ -38,7 +38,7 @@ class DataManager(Module):
         QtCore.QObject.connect(self.ui.newFolderList, QtCore.SIGNAL('currentIndexChanged(int)'), self.newFolder)
         QtCore.QObject.connect(self.ui.fileTreeView.selectionModel(), QtCore.SIGNAL('selectionChanged(const QItemSelection&, const QItemSelection&)'), self.fileSelectionChanged)
         QtCore.QObject.connect(self.ui.logEntryText, QtCore.SIGNAL('returnPressed()'), self.logEntry)
-        
+        QtCore.QObject.connect(self.ui.fileDisplayTabs, QtCore.SIGNAL('currentChanged(int)'), self.tabChanged)
         self.win.show()
         
     def updateNewFolderList(self):
@@ -186,12 +186,26 @@ class DataManager(Module):
             self.ui.dataViewWidget.setCurrentFile(None)
             self.ui.fileNameLabel.setText('')
         else:
-            self.ui.fileInfo.setCurrentFile(fh)
-            self.ui.dataViewWidget.setCurrentFile(fh)
+            #self.ui.fileInfo.setCurrentFile(fh)
+            #self.ui.dataViewWidget.setCurrentFile(fh)
             self.ui.fileNameLabel.setText(fh.name(relativeTo=self.baseDir))
+            #if fh.isDir():
+                #self.loadLog(fh, self.ui.selectedLogView, recursive=3)
+            self.tabChanged()
+
+    def tabChanged(self, n=None):
+        if n is None:
+            n = self.ui.fileDisplayTabs.currentIndex()
+        fh = self.selectedFile()
+        if n == 0:
+            self.ui.fileInfo.setCurrentFile(fh)
+        elif n == 1:
             if fh.isDir():
                 self.loadLog(fh, self.ui.selectedLogView, recursive=3)
-        
+        elif n == 2:
+            self.ui.dataViewWidget.setCurrentFile(fh)
+            
+
     def selectedFileAltered(self, name, change, *args):
         if change in ['parent', 'renamed', 'moved'] and self.selFile is not None:
             index = self.model.handleIndex(self.selFile)
