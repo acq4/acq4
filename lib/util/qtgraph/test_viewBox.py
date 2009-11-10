@@ -26,7 +26,7 @@ l = QtGui.QGraphicsGridLayout()
 
 
 vb = ViewBox(QtCore.QRectF(0.1, 0.1, 0.8, 0.8), showGrid=False)
-p1 = PlotItem()
+p1 = PlotCurveItem()
 #gv.scene().addItem(vb)
 vb.addItem(p1)
 vl.addWidget(gv)
@@ -58,8 +58,8 @@ def rand(n):
     
 
 def updateData():
-    yd, xd = rand(10000)
-    p1.updateData(yd, xVals=xd)
+    yd, xd = rand(100000)
+    p1.updateData(yd, x=xd)
     
     #vb.setRange(p1.boundingRect())
     #p1.plot(yd, x=xd, clear=True)
@@ -73,6 +73,6 @@ yd, xd = rand(10000)
 
 t = QtCore.QTimer()
 QtCore.QObject.connect(t, QtCore.SIGNAL('timeout()'), updateData)
-t.start(20)
+t.start(100)
 updateData()
 

@@ -6,7 +6,7 @@ from scipy.weave import converters
 from lib.util.MetaArray import MetaArray
 from lib.util.debug import *
 from Point import *
-import types, sys
+import types, sys, struct
 
 
 class ItemGroup(QtGui.QGraphicsItem):
@@ -192,50 +192,79 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         return self.pixmap.copy()
 
 
-class PlotItem(QtGui.QGraphicsWidget):
-    def __init__(self, data=None, xVals = None, copy=False, color=0, parent=None):
+class PlotCurveItem(QtGui.QGraphicsWidget):
+    """Class representing a single plot curve."""
+    def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None):
         QtGui.QGraphicsItem.__init__(self, parent)
-        #QObjectWorkaround.__init__(self)
-        if type(color) is types.TupleType:
-            self.color = color
-            self.autoColor = False
-        else:
-            self.color = color
-            self.autoColor = True
-        if data is not None:
-            self.updateData(data, xVals, copy)
-            self.makeBrushes()
-        else:
-            self.xVals = None
-            self.data = None
-        self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
+        if pen is None:
+            pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
+        self.pen = pen
+        
+        self.shadow = shadow
+        #QObjectWorkaround.__init__(self)
+        #if type(color) is types.TupleType:
+            #self.color = color
+            #self.autoColor = False
+        #else:
+            #self.color = color
+            #self.autoColor = True
+        if y is not None:
+            self.updateData(y, x, copy)
+        else:
+            self.x = None
+            self.y = None
+        #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
+        
+    def setPen(self, pen):
+        self.pen = pen
+        self.update()
+        
+    def setShadowPen(self, pen):
+        self.shadow = pen
+        self.update()
 
-    def updateData(self, data, xVals=None, copy=False):
+    def updateData(self, data, x=None, copy=False):
+        if not isinstance(data, ndarray) or data.ndim > 2:
+            raise Exception("Plot data must be 1 or 2D ndarray or MetaArray")
+        if data.ndim == 2:  ### If data is 2D array, then assume x and y values are in first two columns or rows.
+            if x is not None:
+                raise Exception("Plot data may be 2D only if no x argument is supplied.")
+            ax = 0
+            if data.shape[0] > 2 and data.shape[1] == 2:
+                ax = 1
+            ind = [slice(None), slice(None)]
+            ind[ax] = 0
+            y = data[tuple(ind)]
+            ind[ax] = 1
+            x = data[tuple(ind)]
+        elif data.ndim == 1:
+            y = data
+            
         self.prepareGeometryChange()
         if copy:
-            self.data = data.copy()
+            self.y = y.copy()
         else:
-            self.data = data
+            self.y = y
             
-            
-        if copy and xVals is not None:
-            self.xVals = xVals.copy()
+        if copy and x is not None:
+            self.x = x.copy()
         else:
-            self.xVals = xVals
+            self.x = x
         
-        if type(data) not in [MetaArray, ndarray] or data.ndim > 2:
-            raise Exception("Plot data must be 1 or 2D ndarray or MetaArray")
+        if x is None:
+            self.x = range(0, self.y.shape[0])
+
         
-        self.meta = (type(data) is MetaArray)
+        #self.meta = (type(data) is MetaArray)
         
-        if self.data.ndim == 1:
-            self.data.shape = (1,) + self.data.shape
-            if self.meta:
-                if len(self.data._info) == 2:
-                    self.data._info.insert(0, self.data._info[1])
-                else:
-                    self.data._info.insert(0, {})
+        #if self.data.ndim == 1:
+            #self.data.shape = (1,) + self.data.shape
+            #if self.meta:
+                #if len(self.data._info) == 2:
+                    #self.data._info.insert(0, self.data._info[1])
+                #else:
+                    #self.data._info.insert(0, {})
             
             
         #if xColumn is not None:
@@ -243,105 +272,127 @@ class PlotItem(QtGui.QGraphicsWidget):
             #yCols = range(0, self.data.shape[0])
             #yCols.remove(xColumn)
         
-        if self.meta:
-            if not self.data._info[1].has_key('values'):
-                if self.xVals is None:
-                    self.data._info[1]['values'] = arange(0, self.data.shape[1])
-                else:
-                    self.data._info[1]['values'] = self.xVals
+        #if self.meta:
+            #if not self.data._info[1].has_key('values'):
+                #if self.xVals is None:
+                    #self.data._info[1]['values'] = arange(0, self.data.shape[1])
+                #else:
+                    #self.data._info[1]['values'] = self.xVals
             
         #self.xscale = 1.0
         #self.yscales = [1.0] * data.shape[0]
-        self.makePaths()
-        self.makeBrushes()
+        
+        ## Make path
+        self.path = QtGui.QPainterPath()
+        #self.path.moveTo(x[0], y[0])
+        #for i in range(1, y.shape[0]):
+            #self.path.lineTo(x[i], y[i])
+            
+        ## Speed this up using >> operator
+        ## Format is:
+        ##    numVerts(i4)   0(i4)
+        ##    x(f8)   y(f8)   0(i4)    <-- 0 means this vert. does not connect
+        ##    x(f8)   y(f8)   1(i4)    <-- 1 means this vert. connects to the previous vert.
+        ##    ...
+        ##    0(i4)
+        ##
+        ## All values are big endian--pack using struct.pack('>d') or struct.pack('>i')
+        #
+        n = self.x.shape[0]
+        arr = empty(n, dtype=[('x', '>f8'), ('y', '>f8'), ('c', '>i4')])
+        arr['x'] = self.x
+        arr['y'] = self.y
+        arr['c'] = 1
+        buf = QtCore.QByteArray(struct.pack('>ii', n, 0) + arr.tostring() + struct.pack('>i', 0))
+        ds = QtCore.QDataStream(buf)
+        ds >> self.path
+           
+           
+        #self.makeBrushes()
         self.update()
         self.emit(QtCore.SIGNAL('plotChanged'), self)
         
 
-    def makePaths(self):
-        self.paths = []
-        if self.xVals is not None:
-            xVals = self.xVals
-        elif self.meta:
-            xVals = self.data.xvals(1)
-        else:
-            xVals = range(0, self.data.shape[1])
+    #def makePath(self):
+        #self.path = []
+        #if self.x is not None:
+            #xVals = self.xVals
+        #elif self.meta:
+            #xVals = self.data.xvals(1)
+        #else:
+            #xVals = range(0, self.data.shape[1])
             
-        for i in range(0, self.data.shape[0]):
-            path = QtGui.QPainterPath()
-            path.moveTo(xVals[0], self.data[i,0])
-            for j in range(1, self.data.shape[1]):
-                path.lineTo(xVals[j], self.data[i,j])
-            self.paths.append(path)
+        #for i in range(0, self.data.shape[0]):
+            #path = QtGui.QPainterPath()
+            #path.moveTo(xVals[0], self.data[i,0])
+            #for j in range(1, self.data.shape[1]):
+                #path.lineTo(xVals[j], self.data[i,j])
+            #self.paths.append(path)
 
-    def numColumns(self):
-        return self.data.shape[0]
+    #def numColumns(self):
+        #return self.data.shape[0]
 
     def boundingRect(self):
-        if self.data is None:
+        if self.y is None:
             return QtCore.QRectF()
             
-        if hasattr(self.data, 'xVals'):
-            xmin = self.data.xVals(1).min()
-            xmax = self.data.xVals(1).max()
-        elif self.xVals is not None:
-            xmin = self.xVals.min()
-            xmax = self.xVals.max()
-        else: 
-            xmin = 0
-            xmax = self.data.shape[1]
-        ymin = self.data.min()
-        return QtCore.QRectF(xmin, ymin, xmax-xmin, self.data.max() - ymin)
+        xmin = self.x.min()
+        xmax = self.x.max()
+        ymin = self.y.min()
+        ymax = self.y.max()
+        return QtCore.QRectF(xmin, ymin, xmax-xmin, ymax-ymin)
 
     def paint(self, p, opt, widget):
-        for i in range(0, self.data.shape[0]):
-            p.setPen(self.brushes[i])
-            p.drawPath(self.paths[i])
+        if self.shadow is not None:
+            p.setPen(self.shadow)
+            p.drawPath(self.path)
+        p.setPen(self.pen)
+        p.drawPath(self.path)
+        
+            ##for j in range(1, self.data.shape[1]):
+                ##if self.meta:
+                    ##p.drawLine(QtCore.QPointF(self.data.xVals(1)[j-1], self.data[i][j-1]), QtCore.QPointF(self.data.xVals(1)[j], self.data[i][j]))
+                ##else:
+                    ##p.drawLine(QtCore.QPointF(j-1, self.data[i][j-1]), QtCore.QPointF(j, self.data[i][j]))
             
-            #for j in range(1, self.data.shape[1]):
-                #if self.meta:
-                    #p.drawLine(QtCore.QPointF(self.data.xVals(1)[j-1], self.data[i][j-1]), QtCore.QPointF(self.data.xVals(1)[j], self.data[i][j]))
-                #else:
-                    #p.drawLine(QtCore.QPointF(j-1, self.data[i][j-1]), QtCore.QPointF(j, self.data[i][j]))
-            
-            if self.meta and widget is not None:
-                m = QtGui.QMatrix(p.worldMatrix())
-                p.resetMatrix()
-                legend = "%s (%s)" % (self.data._info[0]['cols'][i]['name'], self.data._info[0]['cols'][i]['units'])
-                p.drawText(QtCore.QRectF(0, 20*i, widget.width()-10, 20), QtCore.Qt.AlignRight, legend)
-                p.setWorldMatrix(m)
-        if self.meta:
-            p.resetMatrix()
-            p.setPen(QtGui.QPen(QtGui.QColor(150, 150, 150)))
-            p.drawText(QtCore.QRectF(0, widget.height()-50, widget.width()-10, 20), QtCore.Qt.AlignRight, "%s (%s)" % (self.data._info[1]['name'], self.data._info[1]['units']))
+            #if self.meta and widget is not None:
+                #m = QtGui.QMatrix(p.worldMatrix())
+                #p.resetMatrix()
+                #legend = "%s (%s)" % (self.data._info[0]['cols'][i]['name'], self.data._info[0]['cols'][i]['units'])
+                #p.drawText(QtCore.QRectF(0, 20*i, widget.width()-10, 20), QtCore.Qt.AlignRight, legend)
+                #p.setWorldMatrix(m)
+        #if self.meta:
+            #p.resetMatrix()
+            #p.setPen(QtGui.QPen(QtGui.QColor(150, 150, 150)))
+            #p.drawText(QtCore.QRectF(0, widget.height()-50, widget.width()-10, 20), QtCore.Qt.AlignRight, "%s (%s)" % (self.data._info[1]['name'], self.data._info[1]['units']))
         
             
     
-    def makeBrushes(self):
-        self.brushes = []
-        for i in range(0, self.data.shape[0]):
-            if self.autoColor:
-                c = self.intcolor(i+self.color)
-                self.brushes.append(QtGui.QPen(QtGui.QColor(*c)))
-            else:
-                self.brushes.append(QtGui.QPen(QtGui.QColor(*self.color)))
+    #def makeBrushes(self):
+        #self.brushes = []
+        #for i in range(0, self.data.shape[0]):
+            #if self.autoColor:
+                #c = self.intcolor(i+self.color)
+                #self.brushes.append(QtGui.QPen(QtGui.QColor(*c)))
+            #else:
+                #self.brushes.append(QtGui.QPen(QtGui.QColor(*self.color)))
         
-    def intcolor(self, ind):
-        x = (ind * 280) % (256*3)
-        r = clip(255-abs(x), 0, 255) + clip(255-abs(x-768), 0, 255)
-        g = clip(255-abs(x-256), 0, 255)
-        b = clip(255-abs(x-512), 0, 255)
-        return (r, g, b)
+    #def intcolor(self, ind):
+        #x = (ind * 280) % (256*3)
+        #r = clip(255-abs(x), 0, 255) + clip(255-abs(x-768), 0, 255)
+        #g = clip(255-abs(x-256), 0, 255)
+        #b = clip(255-abs(x-512), 0, 255)
+        #return (r, g, b)
     
 
-class ROIPlot(PlotItem):
+class ROIPlotItem(PlotCurveItem):
     def __init__(self, roi, data, img, axes=(0,1), xVals=None, color=None):
         self.roi = roi
         self.roiData = data
         self.roiImg = img
         self.axes = axes
         self.xVals = xVals
-        PlotItem.__init__(self, self.getRoiData(), xVals=self.xVals, color=color)
+        PlotCurveItem.__init__(self, self.getRoiData(), x=self.xVals, color=color)
         roi.connect(QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
         #self.roiChangedEvent()
         
@@ -881,18 +932,18 @@ class ViewBox(QtGui.QGraphicsWidget):
     def paint(self, p, opt, widget):
         bounds = self.boundingRect()
         p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))
-        p.fillRect(bounds, QtGui.QColor(0, 0, 0))
+        #p.fillRect(bounds, QtGui.QColor(0, 0, 0))
         p.drawRect(bounds)
         #print "draw rect", bounds
         
-        if self.picture is None:
-            self.picture = QtGui.QPicture()
-            pp = QtGui.QPainter()
-            pp.begin(self.picture)
-            if self.showGrid:
-                self.drawGrid(pp, opt, widget)
-            pp.end()
-        p.drawPicture(0, 0, self.picture)
+        #if self.picture is None:
+            #self.picture = QtGui.QPicture()
+            #pp = QtGui.QPainter()
+            #pp.begin(self.picture)
+            #if self.showGrid:
+                #self.drawGrid(pp, opt, widget)
+            #pp.end()
+        #p.drawPicture(0, 0, self.picture)
             
             
     def drawGrid(self, p, opt, widget):
