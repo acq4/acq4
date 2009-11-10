@@ -5,6 +5,7 @@ import scipy.weave as weave
 from scipy.weave import converters
 from lib.util.MetaArray import MetaArray
 from lib.util.debug import *
+from Point import *
 import types, sys
 
 
@@ -22,12 +23,15 @@ class ItemGroup(QtGui.QGraphicsItem):
 class QObjectWorkaround:
     def __init__(self):
         self._qObj_ = QtCore.QObject()
-    def __getattr__(self, attr):
-        if attr == '_qObj_':
-            raise Exception("QObjectWorkaround not initialized!")
-        return getattr(self._qObj_, attr)
+    #def __getattr__(self, attr):
+        #if attr == '_qObj_':
+            #raise Exception("QObjectWorkaround not initialized!")
+        #return getattr(self._qObj_, attr)
     def connect(self, *args):
         return QtCore.QObject.connect(self._qObj_, *args)
+    def emit(self, *args):
+        return QtCore.QObject.emit(self._qObj_, *args)
+
 
 class ImageItem(QtGui.QGraphicsPixmapItem):
     def __init__(self, image=None, copy=True, *args):
@@ -188,18 +192,22 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         return self.pixmap.copy()
 
 
-class Plot(QtGui.QGraphicsItem, QObjectWorkaround):
-    def __init__(self, data, xVals = None, copy=False, color=0, parent=None):
+class PlotItem(QtGui.QGraphicsWidget):
+    def __init__(self, data=None, xVals = None, copy=False, color=0, parent=None):
         QtGui.QGraphicsItem.__init__(self, parent)
-        QObjectWorkaround.__init__(self)
+        #QObjectWorkaround.__init__(self)
         if type(color) is types.TupleType:
             self.color = color
             self.autoColor = False
         else:
             self.color = color
             self.autoColor = True
-        self.updateData(data, xVals, copy)
-        self.makeBrushes()
+        if data is not None:
+            self.updateData(data, xVals, copy)
+            self.makeBrushes()
+        else:
+            self.xVals = None
+            self.data = None
         self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
 
@@ -245,6 +253,7 @@ class Plot(QtGui.QGraphicsItem, QObjectWorkaround):
         #self.xscale = 1.0
         #self.yscales = [1.0] * data.shape[0]
         self.makePaths()
+        self.makeBrushes()
         self.update()
         self.emit(QtCore.SIGNAL('plotChanged'), self)
         
@@ -254,7 +263,7 @@ class Plot(QtGui.QGraphicsItem, QObjectWorkaround):
         if self.xVals is not None:
             xVals = self.xVals
         elif self.meta:
-            xVals = self.data.xVals(1)
+            xVals = self.data.xvals(1)
         else:
             xVals = range(0, self.data.shape[1])
             
@@ -269,6 +278,9 @@ class Plot(QtGui.QGraphicsItem, QObjectWorkaround):
         return self.data.shape[0]
 
     def boundingRect(self):
+        if self.data is None:
+            return QtCore.QRectF()
+            
         if hasattr(self.data, 'xVals'):
             xmin = self.data.xVals(1).min()
             xmax = self.data.xVals(1).max()
@@ -292,7 +304,7 @@ class Plot(QtGui.QGraphicsItem, QObjectWorkaround):
                 #else:
                     #p.drawLine(QtCore.QPointF(j-1, self.data[i][j-1]), QtCore.QPointF(j, self.data[i][j]))
             
-            if self.meta:
+            if self.meta and widget is not None:
                 m = QtGui.QMatrix(p.worldMatrix())
                 p.resetMatrix()
                 legend = "%s (%s)" % (self.data._info[0]['cols'][i]['name'], self.data._info[0]['cols'][i]['units'])
@@ -322,14 +334,14 @@ class Plot(QtGui.QGraphicsItem, QObjectWorkaround):
         return (r, g, b)
     
 
-class ROIPlot(Plot):
+class ROIPlot(PlotItem):
     def __init__(self, roi, data, img, axes=(0,1), xVals=None, color=None):
         self.roi = roi
         self.roiData = data
         self.roiImg = img
         self.axes = axes
         self.xVals = xVals
-        Plot.__init__(self, self.getRoiData(), xVals=self.xVals, color=color)
+        PlotItem.__init__(self, self.getRoiData(), xVals=self.xVals, color=color)
         roi.connect(QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
         #self.roiChangedEvent()
         
@@ -573,41 +585,126 @@ class Grid(UIGraphicsItem):
 
 
 
-class ViewBox(QtGui.QGraphicsItem):
+#class ViewBox(QtGui.QGraphicsItem, QObjectWorkaround):
+class ViewBox(QtGui.QGraphicsWidget):
     """Box that allows internal scaling/panning of children by mouse drag. Not compatible with GraphicsView having the same functionality."""
-    def __init__(self, bounds, view=None, showGrid=False, parent=None):
+    def __init__(self, view=None, showGrid=False, parent=None):
+        #QObjectWorkaround.__init__(self)
+        QtGui.QGraphicsWidget.__init__(self, parent)
         self.gView = view
         self.showGrid = showGrid
-        self._bounds = bounds
-        self._viewRect = None
+        self.range = [[0,1], [0,1]]   ## child coord. range visible [[xmin, xmax], [ymin, ymax]]
+        
         self.aspectLocked = False
         QtGui.QGraphicsItem.__init__(self, parent)
-        #self.setFlag(QtGui.QGraphicsItem.ItemClipsChildrenToShape)
-        self.setFlag(QtGui.QGraphicsItem.ItemClipsToShape)
+        self.setFlag(QtGui.QGraphicsItem.ItemClipsChildrenToShape)
+        #self.setFlag(QtGui.QGraphicsItem.ItemClipsToShape)
         
-        self.childScale = [1.0, 1.0]
-        self.childTranslate = [0.0, 0.0]
+        #self.childScale = [1.0, 1.0]
+        #self.childTranslate = [0.0, 0.0]
         self.childGroup = QtGui.QGraphicsItemGroup(self)
+        self.currentScale = Point(1, 1)
         
+        self.yInverted = False
         self.invertY()
         self.setZValue(-100)
+        self.picture = None
         
+    
     def addItem(self, item):
         if item.zValue() < self.zValue():
             item.setZValue(self.zValue()+1)
         item.setParentItem(self.childGroup)
         
-    def updateChildTransform(self):
-        m = QtGui.QTransform()
-        m.scale(*self.childScale)
-        m.translate(*self.childTranslate)
-        self.childGroup.setTransform(m)
-        self.picture = None
-        self.update()
+    def resizeEvent(self, ev):
+        #self.setRange(self.range, padding=0)
+        self.updateMatrix()
         
-    def invertY(self):
-        self.childScale[1] *= -1.0
-        self.updateChildTransform()
+    #def visibleRange(self):
+        #r = QtCore.QRectF(self.rect())
+        #return self.viewportTransform().inverted()[0].mapRect(r)
+
+    #def translate(self, dx, dy):
+        #self.range.adjust(dx, dy, dx, dy)
+        #self.updateMatrix()
+    
+    #def scale(self, sx, sy):
+        #scale = [sx, sy]
+        #if self.aspectLocked:
+            #scale[0] = scale[1]
+        #adj = (self.range.width()*0.5*(1.0-(1.0/scale[0])), self.range.height()*0.5*(1.0-(1.0/scale[1])))
+        ##print "======\n", scale, adj
+        ##print self.range
+        #self.range.adjust(adj[0], adj[1], -adj[0], -adj[1])
+        ##print self.range
+        
+        #self.updateMatrix()
+
+    #def setRange(self, newRect, padding=0.05, lockAspect=None, propagate=True):
+        #padding = Point(padding)
+        #newRect = QtCore.QRectF(newRect)
+        #pw = newRect.width() * padding[0]
+        #ph = newRect.height() * padding[1]
+        #self.range = newRect.adjusted(-pw, -ph, pw, ph)
+        ##print "New Range:", self.range
+        #self.updateMatrix()
+        #self.emit(QtCore.SIGNAL('viewChanged(QRectF)'), self.range)
+        
+    def viewRect(self):
+        try:
+            return QtCore.QRectF(self.range[0][0], self.range[1][0], self.range[0][1]-self.range[0][0], self.range[1][1] - self.range[1][0])
+        except:
+            print "make qrectf failed:", self.range
+            raise
+    
+    def updateMatrix(self):
+        #print "udpateMatrix:"
+        vr = self.viewRect()
+        translate = Point(vr.center())
+        bounds = self.boundingRect()
+        scale = Point(bounds.width()/vr.width(), bounds.height()/vr.height())
+        #print "  range:", self.range
+        m = QtGui.QMatrix()
+        
+        ## First center the viewport at 0
+        self.childGroup.resetMatrix()
+        center = self.transform().inverted()[0].map(bounds.center())
+        #print "  transform to center:", center
+        if self.yInverted:
+            m.translate(center.x(), center.y())
+            #print "  inverted; translate", center.x(), center.y()
+        else:
+            m.translate(center.x(), -center.y())
+            #print "  not inverted; translate", center.x(), -center.y()
+            
+        ## Now scale and translate properly
+        if self.aspectLocked:
+            scale = Point(scale.min())
+        if not self.yInverted:
+            scale = scale * Point(1, -1)
+        m.scale(scale[0], scale[1])
+        #print "  scale:", scale
+        st = translate
+        m.translate(-st[0], -st[1])
+        #print "  translate:", st
+        self.childGroup.setMatrix(m)
+        self.currentScale = scale
+        
+        #if propagate:
+            #for v in self.lockedViewports:
+                #v.setXRange(self.range, padding=0)
+                
+    #def updateChildTransform(self):
+        #m = QtGui.QTransform()
+        #m.scale(*self.childScale)
+        #m.translate(*self.childTranslate)
+        #self.childGroup.setTransform(m)
+        #self.picture = None
+        #self.update()
+        
+    def invertY(self, b=True):
+        self.yInverted = b
+        self.updateMatrix()
         
     def childTransform(self):
         m = self.childGroup.transform()
@@ -617,51 +714,168 @@ class ViewBox(QtGui.QGraphicsItem):
     
     def setAspectLocked(self, s):
         self.aspectLocked = s
+
+    def viewScale(self):
+        pr = self.range
+        #print "viewScale:", self.range
+        xd = pr[0][1] - pr[0][0]
+        yd = pr[1][1] - pr[1][0]
         
-    def mousePressEvent(self, ev):
-        if ev.buttons() == QtCore.Qt.RightButton or ev.buttons() == QtCore.Qt.MidButton:
-            pass
+        #cs = self.canvas().size()
+        cs = self.boundingRect()
+        return array([cs.width() / xd, cs.height() / yd])
+
+    def scaleBy(self, s, center=None):
+        #print "scaleBy", s, center
+        xr, yr = self.range
+        if center is None:
+            xc = (xr[1] + xr[0]) * 0.5
+            yc = (yr[1] + yr[0]) * 0.5
         else:
-            print "passing on press"
-            ev.ignore()
+            (xc, yc) = center
+        
+        x1 = xc + (xr[0]-xc) * s[0]
+        x2 = xc + (xr[1]-xc) * s[0]
+        y1 = yc + (yr[0]-yc) * s[1]
+        y2 = yc + (yr[1]-yc) * s[1]
+        
+        self.setXRange(x1, x2, update=False)
+        self.setYRange(y1, y2)
+        
+    def translateBy(self, t, viewCoords=False):
+        t = t.astype(float)
+        #print "translate:", t, self.viewScale()
+        if viewCoords:  ## scale from pixels
+            t /= self.viewScale()
+        xr, yr = self.range
+        #self.setAxisScale(self.xBottom, xr[0] + t[0], xr[1] + t[0])
+        #self.setAxisScale(self.yLeft, yr[0] + t[1], yr[1] + t[1])
+        self.setXRange(xr[0] + t[0], xr[1] + t[0])
+        self.setYRange(yr[0] + t[1], yr[1] + t[1])
+        #self.replot(autoRange=False)
+        self.updateMatrix()
+        
         
     def mouseMoveEvent(self, ev):
-        d = ev.scenePos() - ev.lastScenePos()
-        if ev.buttons() == QtCore.Qt.RightButton:
-            if self.aspectLocked:
-                self.childScale[0] *= 1.02 ** -d.y()
-            else:
-                self.childScale[0] *= 1.02 ** d.x()
-            self.childScale[1] *= 1.02 ** -d.y()
-            self.updateChildTransform()
-        elif ev.buttons() == QtCore.Qt.MidButton:
-            self.childTranslate[0] += d.x() / self.childScale[0]
-            self.childTranslate[1] += d.y() / self.childScale[1]
-            self.updateChildTransform()
+        pos = array([ev.pos().x(), ev.pos().y()])
+        dif = pos - self.mousePos
+        dif *= -1
+        self.mousePos = pos
+        
+        ## Ignore axes if mouse is disabled
+        if self.yInverted:
+            mask = array([1, 1])
+        else:
+            mask = array([1, -1])
+        #if self.ctrl.xMouseCheck.isChecked():
+            #mask[0] = 1
+            #self.setManualXScale()
+        #if self.ctrl.yMouseCheck.isChecked():
+            #mask[1] = 1
+            #self.setManualYScale()
+        
+        ## Scale or translate based on mouse button
+        if ev.buttons() & QtCore.Qt.LeftButton:
+            self.translateBy(dif * mask, viewCoords=True)
+        elif ev.buttons() & QtCore.Qt.RightButton:
+            dif = ev.screenPos() - ev.lastScreenPos()
+            dif = array([dif.x(), dif.y()])
+            dif[0] *= -1
+            s = ((mask * 0.02) + 1) ** dif
+            #print "scale:", dif, s
+            #cPos = self.canvas().pos()
+            #cPos = array([cPos.x(), cPos.y()])
+            self.scaleBy(s, Point(self.childGroup.transform().inverted()[0].map(ev.buttonDownPos(QtCore.Qt.RightButton))))
+            
+        #Qwt.QwtPlot.mouseMoveEvent(self, ev)
+        
+    def mousePressEvent(self, ev):
+        self.mousePos = array([ev.pos().x(), ev.pos().y()])
+        self.pressPos = self.mousePos.copy()
+        #Qwt.QwtPlot.mousePressEvent(self, ev)
         
     def mouseReleaseEvent(self, ev):
-        pass
+        pos = array([ev.pos().x(), ev.pos().y()])
+        #if sum(abs(self.pressPos - pos)) < 3:  ## Detect click
+            #if ev.button() == QtCore.Qt.RightButton:
+                #self.ctrlMenu.popup(self.mapToGlobal(ev.pos()))
+        self.mousePos = pos
+        #Qwt.QwtPlot.mouseReleaseEvent(self, ev)
+        
+    def setYRange(self, min, max, update=True):
+        #print "setYRange:", min, max
+        if self.range[1] != [min, max]:
+            #self.setAxisScale(self.yLeft, min, max)
+            self.range[1] = [min, max]
+            #self.ctrl.yMinText.setText('%g' % min)
+            #self.ctrl.yMaxText.setText('%g' % max)
+            self.emit(QtCore.SIGNAL('yRangeChanged'), self, (min, max))
+        if update:
+            self.updateMatrix()
+        
+    def setXRange(self, min, max, update=True):
+        #print "setXRange:", min, max
+        if self.range[0] != [min, max]:
+            #self.setAxisScale(self.xBottom, min, max)
+            self.range[0] = [min, max]
+            #self.ctrl.xMinText.setText('%g' % min)
+            #self.ctrl.xMaxText.setText('%g' % max)
+            self.emit(QtCore.SIGNAL('xRangeChanged'), self, (min, max))
+        if update:
+            self.updateMatrix()
+
+
+    #def mousePressEvent(self, ev):
+        #if ev.buttons() == QtCore.Qt.RightButton or ev.buttons() == QtCore.Qt.LeftButton:
+            #pass
+        #else:
+            #print "passing on press"
+            #ev.ignore()
+        
+    #def mouseMoveEvent(self, ev):
+        #print "Mouse move"
+        #d = ev.scenePos() - ev.lastScenePos()
+        #if ev.buttons() == QtCore.Qt.RightButton:
+            ##if self.aspectLocked:
+                ##self.childScale[0] *= 1.02 ** -d.y()
+            ##else:
+                ##self.childScale[0] *= 1.02 ** d.x()
+            ##self.childScale[1] *= 1.02 ** -d.y()
+            ##self.updateChildTransform()
+            #self.scale(1.02 ** d.x(), 1.02 ** -d.y())
+            
+        #elif ev.buttons() == QtCore.Qt.LeftButton:
+            #self.translate(-d.x(), -d.y())
+            ##self.childTranslate[0] += d.x() / self.childScale[0]
+            ##self.childTranslate[1] += d.y() / self.childScale[1]
+            ##self.updateMatrix()
+        
+    #def mouseReleaseEvent(self, ev):
+        #pass
         
     def boundingRect(self):
-        if self.gView is None:
-            self.bounds = self._bounds
-        else:
-            vr = self.gView.rect()
+        return QtCore.QRectF(0, 0, self.size().width(), self.size().height())
+        
+        #print 'boundingRect'
+        #if self.gView is None:
+            #self.bounds = self._bounds
+        #else:
+            #vr = self.gView.rect()
             
-            if self._viewRect is None or vr != self._viewRect:
-                if self._viewRect is not None:
-                    ## Rescale children to fit new widget size
-                    self.childScale[0] *= float(vr.width()) / self._viewRect.width()
-                    self.childScale[1] *= float(vr.height()) / self._viewRect.height()
-                self._viewRect = vr
-                self.bounds = QtCore.QRectF(
-                    QtCore.QPointF(self._bounds.left()*vr.width(), self._bounds.top()*vr.height()),
-                    QtCore.QPointF(self._bounds.right()*vr.width(), self._bounds.bottom()*vr.height())
-                )
-                self.prepareGeometryChange()
-                self.picture = None
-        self.childGroup.setPos(self.bounds.center())
-        return self.bounds
+            #if self._viewRect is None or vr != self._viewRect:
+                #if self._viewRect is not None:
+                    ### Rescale children to fit new widget size
+                    #self.childScale[0] *= float(vr.width()) / self._viewRect.width()
+                    #self.childScale[1] *= float(vr.height()) / self._viewRect.height()
+                #self._viewRect = vr
+                #self.bounds = QtCore.QRectF(
+                    #QtCore.QPointF(self._bounds.left()*vr.width(), self._bounds.top()*vr.height()),
+                    #QtCore.QPointF(self._bounds.right()*vr.width(), self._bounds.bottom()*vr.height())
+                #)
+                #self.prepareGeometryChange()
+                #self.picture = None
+        #self.childGroup.setPos(self.bounds.center())
+        #return self.bounds
         
         
     def paint(self, p, opt, widget):
@@ -669,6 +883,7 @@ class ViewBox(QtGui.QGraphicsItem):
         p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))
         p.fillRect(bounds, QtGui.QColor(0, 0, 0))
         p.drawRect(bounds)
+        #print "draw rect", bounds
         
         if self.picture is None:
             self.picture = QtGui.QPicture()

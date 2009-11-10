@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
 from numpy import vstack
 import time
@@ -5,8 +6,8 @@ from Point import *
 #from vector import *
 
         
-    
-
+        
+        
 class GraphicsView(QtGui.QGraphicsView):
     def __init__(self, *args):
         QtGui.QGraphicsView.__init__(self, *args)
@@ -31,22 +32,33 @@ class GraphicsView(QtGui.QGraphicsView):
         #self.setResizeAnchor(QtGui.QGraphicsView.NoAnchor)
         self.setViewportUpdateMode(QtGui.QGraphicsView.SmartViewportUpdate)
         self.setSceneRect(QtCore.QRectF(-1e100, -1e100, 1e100, 1e100))
-        self.setInteractive(False)
+        #self.setInteractive(False)
         self.lockedViewports = []
         self.lastMousePos = None
-        self.setMouseTracking(False)
+        #self.setMouseTracking(False)
         self.aspectLocked = False
         self.yInverted = False
         self.range = QtCore.QRectF(0, 0, 1, 1)
+        self.autoPixelRange = True
         self.currentItem = None
         self.clearMouse()
         self.updateMatrix()
+        self.sceneObj = QtGui.QGraphicsScene()
+        self.setScene(self.sceneObj)
+        self.centralWidget = QtGui.QGraphicsWidget()
+        self.sceneObj.addItem(self.centralWidget)
+        self.mouseEnabled = True
+        
+    def enableMouse(self, b):
+        self.mouseEnabled = b
         
     def clearMouse(self):
         self.mouseTrail = []
         self.lastButtonReleased = None
     
     def resizeEvent(self, ev):
+        if self.autoPixelRange:
+            self.range = QtCore.QRectF(0, 0, self.size().width(), self.size().height())
         self.setRange(self.range, padding=0)
         self.updateMatrix()
     
@@ -111,8 +123,9 @@ class GraphicsView(QtGui.QGraphicsView):
         ph = newRect.height() * padding[1]
         self.range = newRect.adjusted(-pw, -ph, pw, ph)
         #print "New Range:", self.range
+        self.centralWidget.setGeometry(self.range)
         self.updateMatrix(propagate)
-        self.emit(QtCore.SIGNAL('viewChanged(QRectF)'), self.range)
+        self.emit(QtCore.SIGNAL('viewChanged'), self.range)
         
         
     def lockXRange(self, v1):
@@ -139,6 +152,8 @@ class GraphicsView(QtGui.QGraphicsView):
     
     
     def wheelEvent(self, ev):
+        if not self.mouseEnabled:
+            return
         QtGui.QGraphicsView.wheelEvent(self, ev)
         sc = 1.001 ** ev.delta()
         #self.scale *= sc
@@ -173,6 +188,8 @@ class GraphicsView(QtGui.QGraphicsView):
         
     def mousePressEvent(self, ev):
         QtGui.QGraphicsView.mousePressEvent(self, ev)
+        if not self.mouseEnabled:
+            return
         self.lastMousePos = Point(ev.pos())
         if ev.buttons() == QtCore.Qt.LeftButton:
             self.currentItem = None
@@ -191,6 +208,8 @@ class GraphicsView(QtGui.QGraphicsView):
                 
     def mouseReleaseEvent(self, ev):
         QtGui.QGraphicsView.mouseReleaseEvent(self, ev)
+        if not self.mouseEnabled:
+            return
         if ev.button() == QtCore.Qt.LeftButton:
             self.mouseTrail.append(Point(self.mapToScene(ev.pos())))
             self.emit(QtCore.SIGNAL("mouseReleased(PyQt_PyObject)"), self.mouseTrail)
@@ -202,6 +221,8 @@ class GraphicsView(QtGui.QGraphicsView):
 
     def mouseMoveEvent(self, ev):
         QtGui.QGraphicsView.mouseMoveEvent(self, ev)
+        if not self.mouseEnabled:
+            return
         self.emit(QtCore.SIGNAL("sceneMouseMoved(PyQt_PyObject)"), self.mapToScene(ev.pos()))
         
         if ev.buttons() == QtCore.Qt.LeftButton:
@@ -319,4 +340,3 @@ class GraphicsSceneMouseEvent(QtGui.QGraphicsSceneMouseEvent):
     def buttonDownScreenPos(self):
         return self.vbuttonDownScreenPos
     
-  

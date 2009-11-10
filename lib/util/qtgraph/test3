@@ -1,6 +1,7 @@
 #!/usr/bin/python -i
+# -*- coding: utf-8 -*-
 from scipy import zeros
-from graphicsWindows import *
+#from graphicsWindows import *
 from graphicsItems import *
 from widgets import *
 from PyQt4 import QtCore, QtGui
