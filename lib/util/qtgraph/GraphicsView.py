@@ -11,6 +11,7 @@ from Point import *
 class GraphicsView(QtGui.QGraphicsView):
     def __init__(self, *args):
         QtGui.QGraphicsView.__init__(self, *args)
+        self.setViewport(QtOpenGL.QGLWidget())
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(0,0,0))
         brush.setStyle(QtCore.Qt.SolidPattern)
@@ -37,7 +38,7 @@ class GraphicsView(QtGui.QGraphicsView):
         self.lastMousePos = None
         #self.setMouseTracking(False)
         self.aspectLocked = False
-        self.yInverted = False
+        self.yInverted = True
         self.range = QtCore.QRectF(0, 0, 1, 1)
         self.autoPixelRange = True
         self.currentItem = None

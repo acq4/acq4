@@ -191,11 +191,42 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
     def getPixmap(self):
         return self.pixmap.copy()
 
+class LabelItem(QtGui.QGraphicsWidget):
+    def __init__(self, text, html=False, color=None, parent=None):
+        QtGui.QGraphicsWidget.__init__(self, parent)
+        self.item = QtGui.QGraphicsTextItem(self)
+        if color is not None:
+            self.setColor(color)
+        self.setText(text, html)
+            
+    def setColor(self, color):
+        self.color = color
+        self.item.setDefaultTextColor(color)
+        
+    def setText(self, text, html=False):
+        self.text = text
+        if html:
+            self.item.setHtml(text)
+        else:
+            self.item.setPlainText(text)
+        
+    def resizeEvent(self, ev):
+        c1 = self.boundingRect().center()
+        c2 = self.item.mapToParent(self.item.boundingRect().center()) # + self.item.pos()
+        dif = c1 - c2
+        self.item.moveBy(dif.x(), dif.y())
+        #print c1, c2, dif, self.item.pos()
+        
+    def setAngle(self, angle):
+        self.angle = angle
+        self.item.resetMatrix()
+        self.item.rotate(angle)
+
 
 class PlotCurveItem(QtGui.QGraphicsWidget):
     """Class representing a single plot curve."""
     def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None):
-        QtGui.QGraphicsItem.__init__(self, parent)
+        QtGui.QGraphicsWidget.__init__(self, parent)
         
         if pen is None:
             pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
@@ -282,8 +313,11 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         #self.xscale = 1.0
         #self.yscales = [1.0] * data.shape[0]
         
-        ## Make path
         self.path = QtGui.QPainterPath()
+        
+        ## Create all vertices in path. The method used below creates a binary format so that all 
+        ## vertices can be read in at once. This binary format may change in future versions, 
+        ## so the original (slower) method is left here for emergencies:
         #self.path.moveTo(x[0], y[0])
         #for i in range(1, y.shape[0]):
             #self.path.lineTo(x[i], y[i])
@@ -540,7 +574,7 @@ class UIGraphicsItem(QtGui.QGraphicsItem):
         pass
 
 
-class Grid(UIGraphicsItem):
+class GridItem(UIGraphicsItem):
     def __init__(self, view, bounds=None, *args):
         UIGraphicsItem.__init__(self, view, bounds)
         #QtGui.QGraphicsItem.__init__(self, *args)
@@ -632,18 +666,169 @@ class Grid(UIGraphicsItem):
 
 
 
-
-
+class ScaleItem(QtGui.QGraphicsWidget):
+    def __init__(self, orientation, pen=None, linkView=None, parent=None):
+        QtGui.QGraphicsWidget.__init__(self, parent)
+        self.orientation = orientation
+        if orientation not in ['left', 'right', 'top', 'bottom']:
+            raise Exception("Orientation argument must be one of 'left', 'right', 'top', or 'bottom'.")
+            
+        self.setRange(0, 1)
+        
+        if pen is None:
+            pen = QtGui.QPen(QtGui.QColor(100, 100, 100))
+        self.setPen(pen)
+        
+        self.linkedView = None
+        if linkView is not None:
+            self.linkToView(linkView)
+        
+    def setPen(self, pen):
+        self.pen = pen
+        self.update()
+        
+    def setRange(self, mn, mx):
+        self.range = [mn, mx]
+        self.update()
+        
+    def linkToView(self, view):
+        if self.orientation in ['right', 'left']:
+            signal = QtCore.SIGNAL('yRangeChanged')
+        else:
+            signal = QtCore.SIGNAL('xRangeChanged')
+            
+        if self.linkedView is not None:
+            QtCore.QObject.disconnect(view, signal, self.linkedViewChanged)
+        self.linkedView = view
+        QtCore.QObject.connect(view, signal, self.linkedViewChanged)
+        
+    def linkedViewChanged(self, _, newRange):
+        self.setRange(*newRange)
+        
+    def boundingRect(self):
+        return self.mapRectFromParent(self.geometry())
+        
+    def paint(self, p, opt, widget):
+        p.setPen(self.pen)
+        bounds = self.boundingRect()
+        if self.orientation == 'left':
+            p.drawLine(bounds.topRight(), bounds.bottomRight())
+            tickStart = bounds.right()
+            tickDir = -1
+            axis = 0
+        elif self.orientation == 'right':
+            p.drawLine(bounds.topLeft(), bounds.bottomLeft())
+            tickStart = bounds.left()
+            tickDir = 1
+            axis = 0
+        elif self.orientation == 'top':
+            p.drawLine(bounds.bottomLeft(), bounds.bottomRight())
+            tickStart = bounds.bottom()
+            tickDir = -1
+            axis = 1
+        elif self.orientation == 'bottom':
+            p.drawLine(bounds.topLeft(), bounds.topRight())
+            tickStart = bounds.top()
+            tickDir = 1
+            axis = 1
+        
+        ## Determine optimal tick spacing
+        intervals = [1., 2., 5., 10., 20., 50.]
+        dif = abs(self.range[1] - self.range[0])
+        pw = 10 ** (floor(log10(dif))-1)
+        for i in range(len(intervals)):
+            i1 = i
+            if dif / (pw*intervals[i]) < 10:
+                break
+        
+        
+        #print "range: %s   dif: %f   power: %f  interval: %f   spacing: %f" % (str(self.range), dif, pw, intervals[i1], sp)
+        
+        #print "  start at %f,  %d ticks" % (start, num)
+        
+        ## Number of decimal places to print
+        places = max(2, int(3 - log10(dif)))
+        #print dif, places
+        
+        if axis == 0:
+            xs = -bounds.height() / dif
+        else:
+            xs = bounds.width() / dif
+            
+        ## draw ticks and text
+        for i in [i1, i1+1, i1+2]:  ## draw three different intervals
+            ## spacing for this interval
+            sp = pw*intervals[i]
+            
+            ## determine starting tick
+            start = ceil(self.range[0] / sp) * sp
+        
+            ## determine number of ticks
+            num = int(dif / sp) + 1
+            
+            ## length of tick
+            h = min(15, (45. / num) - 1.)
+            
+            ## alpha
+            a = min(255, (765. / num) - 1.)
+            
+            p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100, a)))
+            if axis == 0:
+                offset = self.range[0] * xs - bounds.height()
+            else:
+                offset = self.range[0] * xs
+            
+            for j in range(num):
+                v = start + sp * j
+                x = (v * xs) - offset
+                #vals.append(x)
+                p1 = [0, 0]
+                p2 = [0, 0]
+                p1[axis] = tickStart
+                p2[axis] = tickStart + h*tickDir
+                p1[1-axis] = p2[1-axis] = x
+                p.drawLine(Point(p1), Point(p2))
+                if i > i1:
+                    if self.orientation == 'left':
+                        textFlags = QtCore.Qt.AlignRight|QtCore.Qt.AlignVCenter
+                        rect = QtCore.QRectF(tickStart-100, x-15, 85, 30)
+                    elif self.orientation == 'right':
+                        textFlags = QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter
+                        rect = QtCore.QRectF(tickStart+15, x-15, 85, 30)
+                    elif self.orientation == 'top':
+                        textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignBottom
+                        rect = QtCore.QRectF(x-100, tickStart-45, 200, 30)
+                    elif self.orientation == 'bottom':
+                        textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignTop
+                        rect = QtCore.QRectF(x-100, tickStart+15, 200, 30)
+                    
+                    #coords = [0, 0, 0, 0]
+                    #coords[axis] = tickStart# + 20*tickDir
+                    #coords[1-axis] = x# - 100*tickDir
+                    ##coords[axis+2] = 15
+                    ##coords[3-axis] = 200
+                    #coords[0] -= 100 + 30*(1-axis)
+                    #coords[1] += 15*tickDir
+                    #coords[2] = 200
+                    #coords[3] = 30
+                    #rect = QtCore.QRectF(*coords)
+                    p.drawText(rect, textFlags, ("%%0.%dg" % places) % v)
+        #print "  vals:", vals
+        
+        
+        
+        
+        
 
 
 #class ViewBox(QtGui.QGraphicsItem, QObjectWorkaround):
 class ViewBox(QtGui.QGraphicsWidget):
     """Box that allows internal scaling/panning of children by mouse drag. Not compatible with GraphicsView having the same functionality."""
-    def __init__(self, view=None, showGrid=False, parent=None):
+    def __init__(self, parent=None):
         #QObjectWorkaround.__init__(self)
         QtGui.QGraphicsWidget.__init__(self, parent)
-        self.gView = view
-        self.showGrid = showGrid
+        #self.gView = view
+        #self.showGrid = showGrid
         self.range = [[0,1], [0,1]]   ## child coord. range visible [[xmin, xmax], [ymin, ymax]]
         
         self.aspectLocked = False
@@ -657,10 +842,12 @@ class ViewBox(QtGui.QGraphicsWidget):
         self.currentScale = Point(1, 1)
         
         self.yInverted = False
-        self.invertY()
+        #self.invertY()
         self.setZValue(-100)
-        self.picture = None
+        #self.picture = None
+        self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding))
         
+        self.drawFrame = True
     
     def addItem(self, item):
         if item.zValue() < self.zValue():
@@ -671,36 +858,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         #self.setRange(self.range, padding=0)
         self.updateMatrix()
         
-    #def visibleRange(self):
-        #r = QtCore.QRectF(self.rect())
-        #return self.viewportTransform().inverted()[0].mapRect(r)
 
-    #def translate(self, dx, dy):
-        #self.range.adjust(dx, dy, dx, dy)
-        #self.updateMatrix()
-    
-    #def scale(self, sx, sy):
-        #scale = [sx, sy]
-        #if self.aspectLocked:
-            #scale[0] = scale[1]
-        #adj = (self.range.width()*0.5*(1.0-(1.0/scale[0])), self.range.height()*0.5*(1.0-(1.0/scale[1])))
-        ##print "======\n", scale, adj
-        ##print self.range
-        #self.range.adjust(adj[0], adj[1], -adj[0], -adj[1])
-        ##print self.range
-        
-        #self.updateMatrix()
-
-    #def setRange(self, newRect, padding=0.05, lockAspect=None, propagate=True):
-        #padding = Point(padding)
-        #newRect = QtCore.QRectF(newRect)
-        #pw = newRect.width() * padding[0]
-        #ph = newRect.height() * padding[1]
-        #self.range = newRect.adjusted(-pw, -ph, pw, ph)
-        ##print "New Range:", self.range
-        #self.updateMatrix()
-        #self.emit(QtCore.SIGNAL('viewChanged(QRectF)'), self.range)
-        
     def viewRect(self):
         try:
             return QtCore.QRectF(self.range[0][0], self.range[1][0], self.range[0][1]-self.range[0][0], self.range[1][1] - self.range[1][0])
@@ -710,11 +868,13 @@ class ViewBox(QtGui.QGraphicsWidget):
     
     def updateMatrix(self):
         #print "udpateMatrix:"
+        #print "  range:", self.range
         vr = self.viewRect()
         translate = Point(vr.center())
         bounds = self.boundingRect()
+        #print "  bounds:", bounds
         scale = Point(bounds.width()/vr.width(), bounds.height()/vr.height())
-        #print "  range:", self.range
+        #print "  scale:", scale
         m = QtGui.QMatrix()
         
         ## First center the viewport at 0
@@ -722,10 +882,10 @@ class ViewBox(QtGui.QGraphicsWidget):
         center = self.transform().inverted()[0].map(bounds.center())
         #print "  transform to center:", center
         if self.yInverted:
-            m.translate(center.x(), center.y())
+            m.translate(center.x(), -center.y())
             #print "  inverted; translate", center.x(), center.y()
         else:
-            m.translate(center.x(), -center.y())
+            m.translate(center.x(), center.y())
             #print "  not inverted; translate", center.x(), -center.y()
             
         ## Now scale and translate properly
@@ -740,18 +900,6 @@ class ViewBox(QtGui.QGraphicsWidget):
         #print "  translate:", st
         self.childGroup.setMatrix(m)
         self.currentScale = scale
-        
-        #if propagate:
-            #for v in self.lockedViewports:
-                #v.setXRange(self.range, padding=0)
-                
-    #def updateChildTransform(self):
-        #m = QtGui.QTransform()
-        #m.scale(*self.childScale)
-        #m.translate(*self.childTranslate)
-        #self.childGroup.setTransform(m)
-        #self.picture = None
-        #self.update()
         
     def invertY(self, b=True):
         self.yInverted = b
@@ -801,10 +949,10 @@ class ViewBox(QtGui.QGraphicsWidget):
         xr, yr = self.range
         #self.setAxisScale(self.xBottom, xr[0] + t[0], xr[1] + t[0])
         #self.setAxisScale(self.yLeft, yr[0] + t[1], yr[1] + t[1])
-        self.setXRange(xr[0] + t[0], xr[1] + t[0])
+        self.setXRange(xr[0] + t[0], xr[1] + t[0], update=False)
         self.setYRange(yr[0] + t[1], yr[1] + t[1])
         #self.replot(autoRange=False)
-        self.updateMatrix()
+        #self.updateMatrix()
         
         
     def mouseMoveEvent(self, ev):
@@ -814,10 +962,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         self.mousePos = pos
         
         ## Ignore axes if mouse is disabled
-        if self.yInverted:
-            mask = array([1, 1])
-        else:
-            mask = array([1, -1])
+        mask = array([1, 1])
         #if self.ctrl.xMouseCheck.isChecked():
             #mask[0] = 1
             #self.setManualXScale()
@@ -827,6 +972,8 @@ class ViewBox(QtGui.QGraphicsWidget):
         
         ## Scale or translate based on mouse button
         if ev.buttons() & QtCore.Qt.LeftButton:
+            if not self.yInverted:
+                mask *= array([1, -1])
             self.translateBy(dif * mask, viewCoords=True)
         elif ev.buttons() & QtCore.Qt.RightButton:
             dif = ev.screenPos() - ev.lastScreenPos()
@@ -875,6 +1022,12 @@ class ViewBox(QtGui.QGraphicsWidget):
         if update:
             self.updateMatrix()
 
+    def autoRange(self, padding=0.05):
+        br = self.childGroup.childrenBoundingRect()
+        px = br.width() * padding
+        py = br.height() * padding
+        self.setXRange(br.left()-px, br.right()+px, update=False)
+        self.setYRange(br.top()-py, br.bottom()+py)
 
     #def mousePressEvent(self, ev):
         #if ev.buttons() == QtCore.Qt.RightButton or ev.buttons() == QtCore.Qt.LeftButton:
@@ -930,11 +1083,12 @@ class ViewBox(QtGui.QGraphicsWidget):
         
         
     def paint(self, p, opt, widget):
-        bounds = self.boundingRect()
-        p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))
-        #p.fillRect(bounds, QtGui.QColor(0, 0, 0))
-        p.drawRect(bounds)
-        #print "draw rect", bounds
+        if self.drawFrame:
+            bounds = self.boundingRect()
+            p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))
+            #p.fillRect(bounds, QtGui.QColor(0, 0, 0))
+            p.drawRect(bounds)
+            #print "draw rect", bounds
         
         #if self.picture is None:
             #self.picture = QtGui.QPicture()
@@ -946,58 +1100,58 @@ class ViewBox(QtGui.QGraphicsWidget):
         #p.drawPicture(0, 0, self.picture)
             
             
-    def drawGrid(self, p, opt, widget):
-        bounds = self.boundingRect()
-        m = self.childTransform()
-        mi = m.inverted()[0]
-        lBounds = mi.mapRect(bounds)
-        ul = array([lBounds.left(), lBounds.top()])
-        br = array([lBounds.right(), lBounds.bottom()])
-        diag = br-ul
-        dim = array([bounds.width(), bounds.height()])
+    #def drawGrid(self, p, opt, widget):
+        #bounds = self.boundingRect()
+        #m = self.childTransform()
+        #mi = m.inverted()[0]
+        #lBounds = mi.mapRect(bounds)
+        #ul = array([lBounds.left(), lBounds.top()])
+        #br = array([lBounds.right(), lBounds.bottom()])
+        #diag = br-ul
+        #dim = array([bounds.width(), bounds.height()])
         
-        for i in [2, 1, 0]:  ## Iterate over scales (roughly 10**i lines per iteration)
-            nlTarget = 10.**i
+        #for i in [2, 1, 0]:  ## Iterate over scales (roughly 10**i lines per iteration)
+            #nlTarget = 10.**i
             
-            ## determine line spacing
-            d = 10. ** floor(log10(abs(diag/nlTarget))+0.5)
+            ### determine line spacing
+            #d = 10. ** floor(log10(abs(diag/nlTarget))+0.5)
             
-            ## determine start and stop values
-            ul1 = floor(ul / d) * d
-            br1 = ceil(br / d) * d
+            ### determine start and stop values
+            #ul1 = floor(ul / d) * d
+            #br1 = ceil(br / d) * d
             
-            ## determine number of lines
-            dist = br1-ul1
-            nl = (dist / d) + 0.5
+            ### determine number of lines
+            #dist = br1-ul1
+            #nl = (dist / d) + 0.5
             
-            for ax in [0,1]:  ## Draw grid for both axes
-                bx = (ax+1) % 2
+            #for ax in [0,1]:  ## Draw grid for both axes
+                #bx = (ax+1) % 2
                 
-                ## determine pixel spacing of lines to set colors
-                ppl = dim[ax] / nl[ax]
-                c = clip(3.*(ppl-3), 0., 30.)
-                linePen = QtGui.QPen(QtGui.QColor(255, 255, 255, c)) 
-                textPen = QtGui.QPen(QtGui.QColor(255, 255, 255, c*2)) 
+                ### determine pixel spacing of lines to set colors
+                #ppl = dim[ax] / nl[ax]
+                #c = clip(3.*(ppl-3), 0., 30.)
+                #linePen = QtGui.QPen(QtGui.QColor(255, 255, 255, c)) 
+                #textPen = QtGui.QPen(QtGui.QColor(255, 255, 255, c*2)) 
         
-                ## draw lines
-                for x in range(0, int(nl[ax])):
-                    p.setPen(linePen)
-                    p1 = array([0.,0.])
-                    p2 = array([0.,0.])
-                    p1[ax] = ul1[ax] + x * d[ax]
-                    p2[ax] = p1[ax]
-                    p1[bx] = ul1[bx]
-                    p2[bx] = br1[bx]
-                    p.drawLine(m.map(QtCore.QPointF(p1[0], p1[1])), m.map(QtCore.QPointF(p2[0], p2[1])))
-                    if i < 2:
-                        p.setPen(textPen)
-                        if ax == 0:
-                            x = m.map(p1[0], 0.)[0] + 2
-                            y = dim[1] - 10
-                        else:
-                            x = 10
-                            y = m.map(0., p1[1])[1] - 2
-                        p.drawText(QtCore.QPointF(x, y), "%g"%p1[ax])
+                ### draw lines
+                #for x in range(0, int(nl[ax])):
+                    #p.setPen(linePen)
+                    #p1 = array([0.,0.])
+                    #p2 = array([0.,0.])
+                    #p1[ax] = ul1[ax] + x * d[ax]
+                    #p2[ax] = p1[ax]
+                    #p1[bx] = ul1[bx]
+                    #p2[bx] = br1[bx]
+                    #p.drawLine(m.map(QtCore.QPointF(p1[0], p1[1])), m.map(QtCore.QPointF(p2[0], p2[1])))
+                    #if i < 2:
+                        #p.setPen(textPen)
+                        #if ax == 0:
+                            #x = m.map(p1[0], 0.)[0] + 2
+                            #y = dim[1] - 10
+                        #else:
+                            #x = 10
+                            #y = m.map(0., p1[1])[1] - 2
+                        #p.drawText(QtCore.QPointF(x, y), "%g"%p1[ax])
 
 
 

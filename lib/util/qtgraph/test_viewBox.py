@@ -25,7 +25,7 @@ gv.enableMouse(False)
 l = QtGui.QGraphicsGridLayout()
 
 
-vb = ViewBox(QtCore.QRectF(0.1, 0.1, 0.8, 0.8), showGrid=False)
+vb = ViewBox()
 p1 = PlotCurveItem()
 #gv.scene().addItem(vb)
 vb.addItem(p1)
@@ -34,8 +34,26 @@ rect = QtGui.QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 1))
 rect.setPen(QtGui.QPen(QtGui.QColor(100, 200, 100)))
 vb.addItem(rect)
 
-l.addItem(vb, 0, 0)
+l.addItem(vb, 0, 2)
 gv.centralWidget.setLayout(l)
+
+xScale = ScaleItem(orientation='bottom', linkView=vb)
+l.addItem(xScale, 1, 2)
+yScale = ScaleItem(orientation='left', linkView=vb)
+l.addItem(yScale, 0, 1)
+
+xLabel = LabelItem(u"<span style='color: #ff0000; font-weight: bold'>X</span> <i>Axis</i> <span style='font-size: 6pt'>(μV)</span>", html=True, color=QtGui.QColor(200, 200, 200))
+l.setRowFixedHeight(2, 20)
+l.addItem(xLabel, 2, 2)
+yLabel = LabelItem("Y Axis", color=QtGui.QColor(200, 200, 200))
+yLabel.setAngle(90)
+l.setColumnFixedWidth(0, 20)
+l.addItem(yLabel, 0, 0)
+
+
+#grid = GridItem(gv)
+#vb.addItem(grid)
+
 #gv.scene().addItem(w1)
 #w1.setGeometry(0, 0, 1, 1)
 
@@ -58,7 +76,7 @@ def rand(n):
     
 
 def updateData():
-    yd, xd = rand(100000)
+    yd, xd = rand(10000)
     p1.updateData(yd, x=xd)
     
     #vb.setRange(p1.boundingRect())
@@ -70,9 +88,10 @@ yd, xd = rand(10000)
     #for j in range(3):
         #yd, xd = rand(1000)
         #p3.plot(yd * 100000 * i, x=xd, params={'repetitions': j, 'scale': i})
+updateData()
+vb.autoRange()
 
 t = QtCore.QTimer()
 QtCore.QObject.connect(t, QtCore.SIGNAL('timeout()'), updateData)
-t.start(100)
-updateData()
+t.start(50)
 
