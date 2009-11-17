@@ -23,6 +23,8 @@ gv = GraphicsView(cw)
 gv.enableMouse(False)
 #w1 = QtGui.QGraphicsWidget()
 l = QtGui.QGraphicsGridLayout()
+l.setHorizontalSpacing(0)
+l.setVerticalSpacing(0)
 
 
 vb = ViewBox()
@@ -37,6 +39,7 @@ vb.addItem(rect)
 l.addItem(vb, 0, 2)
 gv.centralWidget.setLayout(l)
 
+
 xScale = ScaleItem(orientation='bottom', linkView=vb)
 l.addItem(xScale, 1, 2)
 yScale = ScaleItem(orientation='left', linkView=vb)
@@ -44,10 +47,12 @@ l.addItem(yScale, 0, 1)
 
 xLabel = LabelItem(u"<span style='color: #ff0000; font-weight: bold'>X</span> <i>Axis</i> <span style='font-size: 6pt'>(μV)</span>", html=True, color=QtGui.QColor(200, 200, 200))
 l.setRowFixedHeight(2, 20)
+l.setRowFixedHeight(1, 40)
 l.addItem(xLabel, 2, 2)
 yLabel = LabelItem("Y Axis", color=QtGui.QColor(200, 200, 200))
 yLabel.setAngle(90)
 l.setColumnFixedWidth(0, 20)
+l.setColumnFixedWidth(1, 60)
 l.addItem(yLabel, 0, 0)
 
 

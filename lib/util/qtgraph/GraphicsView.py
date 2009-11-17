@@ -10,6 +10,17 @@ from Point import *
         
 class GraphicsView(QtGui.QGraphicsView):
     def __init__(self, *args):
+        """Re-implementation of QGraphicsView that removes scrollbars and allows unambiguous control of the 
+        viewed coordinate range. Also automatically creates a QGraphicsScene and a central QGraphicsWidget
+        that is automatically scaled to the full view geometry.
+        
+        By default, the view coordinate system matches the widget's pixel coordinates and 
+        automatically updates when the view is resized. This can be overridden by setting 
+        autoPixelRange=False. The exact visible range can be set with setRange().
+        
+        The view can be panned using the left mouse button and scaled using the right mouse button unless
+        disabled via enableMouse(False)."""
+        
         QtGui.QGraphicsView.__init__(self, *args)
         self.setViewport(QtOpenGL.QGLWidget())
         palette = QtGui.QPalette()
@@ -46,9 +57,18 @@ class GraphicsView(QtGui.QGraphicsView):
         self.updateMatrix()
         self.sceneObj = QtGui.QGraphicsScene()
         self.setScene(self.sceneObj)
-        self.centralWidget = QtGui.QGraphicsWidget()
-        self.sceneObj.addItem(self.centralWidget)
+        self.centralWidget = None
+        self.setCentralItem(QtGui.QGraphicsWidget())
         self.mouseEnabled = True
+        
+    def setCentralItem(self, item):
+        if self.centralWidget is not None:
+            self.scene().removeItem(self.centralWidget)
+        self.centralWidget = item
+        self.sceneObj.addItem(item)
+        
+    def addItem(self, *args):
+        return self.scene.addItem(*args)
         
     def enableMouse(self, b):
         self.mouseEnabled = b
@@ -117,7 +137,10 @@ class GraphicsView(QtGui.QGraphicsView):
         
         self.updateMatrix()
 
-    def setRange(self, newRect, padding=0.05, lockAspect=None, propagate=True):
+    def setRange(self, newRect=None, padding=0.05, lockAspect=None, propagate=True):
+        if newRect is None:
+            newRect = self.visibleRange()
+            padding = 0
         padding = Point(padding)
         newRect = QtCore.QRectF(newRect)
         pw = newRect.width() * padding[0]
