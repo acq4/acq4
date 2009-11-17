@@ -10,7 +10,7 @@ class PlotWidget(GraphicsView):
         self.plotItem = PlotItem()
         self.setCentralItem(self.plotItem)
         ## Wrap a few methods from plotItem
-        for m in ['setXRange', 'setYRange', 'autoRange', 'getLabel', 'getScale', 'showLabel', 'showScale']:
+        for m in ['setXRange', 'setYRange', 'autoRange', 'getLabel', 'getScale', 'showLabel', 'showScale', 'plot']:
             setattr(self, m, getattr(self.plotItem, m))
         
     def addItem(self, *args):

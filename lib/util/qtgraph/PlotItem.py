@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from graphicsItems import *
+from plotConfigTemplate import *
+from lib.util.WidgetGroup import *
 
 class PlotItem(QtGui.QGraphicsWidget):
     """Plot graphics item that can be added to any graphics scene. Implements axis titles, scales, interactive viewbox."""
@@ -11,7 +13,10 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.layout.setVerticalSpacing(0)
         self.vb = ViewBox()
         self.layout.addItem(self.vb, 3, 2)
-        
+        self.alpha = 1.0
+        self.autoAlpha = True
+        self.spectrumMode = False
+         
         ## Create and place scale items
         self.scales = {
             'top':    {'item': ScaleItem(orientation='top',    linkView=self.vb), 'pos': (2, 2)}, 
@@ -56,26 +61,35 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.showLabel('bottom', False)
         self.showScale('right', False)
         self.showScale('top', False)
+        self.showScale('left', True)
+        self.showScale('bottom', True)
 
-        #self.xScale = ScaleItem(orientation='bottom', linkView=self.vb)
-        #self.layout.addItem(self.xScale, 1, 2)
-        #self.yScale = ScaleItem(orientation='left', linkView=self.vb)
-        #self.layout.addItem(self.yScale, 0, 1)
-
-        #self.xLabel = LabelItem(u"<span style='color: #ff0000; font-weight: bold'>X</span> <i>Axis</i> <span style='font-size: 6pt'>(μV)</span>", html=True, color=QtGui.QColor(200, 200, 200))
-        #self.layout.setRowFixedHeight(2, 20)
-        #self.layout.setRowFixedHeight(1, 30)
-        #self.layout.addItem(self.xLabel, 2, 2)
-        #self.yLabel = LabelItem("Y Axis", color=QtGui.QColor(200, 200, 200))
-        #self.yLabel.setAngle(90)
-        #self.layout.setColumnFixedWidth(0, 20)
-        #self.layout.setColumnFixedWidth(1, 60)
-        #self.layout.addItem(self.yLabel, 0, 0)
-        
         ## Wrap a few methods from viewBox
         for m in ['setXRange', 'setYRange', 'autoRange']:
             setattr(self, m, getattr(self.vb, m))
+            
+            
+        self.curves = []
         
+        ### Set up context menu
+        
+        w = QtGui.QWidget()
+        self.ctrl = c = Ui_Form()
+        c.setupUi(w)
+        dv = QtGui.QDoubleValidator(self)
+        self.ctrlMenu = QtGui.QMenu()
+        ac = QtGui.QWidgetAction(self)
+        ac.setDefaultWidget(w)
+        self.ctrlMenu.addAction(ac)
+        
+        self.stateGroup = WidgetGroup(self.ctrlMenu)
+        
+        self.fileDialog = None
+        
+        self.xLinkPlot = None
+        self.yLinkPlot = None
+        self.linksBlocked = False
+
 
     def addItem(self, *args):
         self.vb.addItem(*args)
@@ -122,11 +136,11 @@ class PlotItem(QtGui.QGraphicsWidget):
         if show:
             s.show()
             if key in ['left', 'right']:
-                self.layout.setColumnFixedWidth(p[1], l.size().width())
-                s.setMaximumWidth(30)
+                self.layout.setColumnFixedWidth(p[1], s.size().width())
+                s.setMaximumWidth(40)
             else:
-                self.layout.setRowFixedHeight(p[0], l.size().height())
-                s.setMaximumHeight(30)
+                self.layout.setRowFixedHeight(p[0], s.size().height())
+                s.setMaximumHeight(20)
         else:
             s.hide()
             if key in ['left', 'right']:
@@ -136,44 +150,36 @@ class PlotItem(QtGui.QGraphicsWidget):
                 self.layout.setRowFixedHeight(p[0], 0)
                 s.setMaximumHeight(0)
         
-    def plot(self, data=None, x=None, clear=False, params=None, pen=None, replot=True):
+    def plot(self, data=None, x=None, clear=False, params=None, pen=None):
         if clear:
             self.clear()
         if params is None:
             params = {}
         if isinstance(data, MetaArray):
-            curves = self._plotMetaArray(data)
+            curve = self._plotMetaArray(data, x=x)
         elif isinstance(data, ndarray):
-            curves = self._plotArray(data, x=x)
+            curve = self._plotArray(data, x=x)
         elif isinstance(data, list):
             if x is not None:
                 x = array(x)
-            curves = self._plotArray(array(data), x=x)
+            curve = self._plotArray(array(data), x=x)
         elif data is None:
-            curves = [PlotCurve()]
+            curve = [PlotCurveItem()]
         else:
             raise Exception('Not sure how to plot object of type %s' % type(data))
             
-        for c in curves:
-            self.attachCurve(c, params)
-            if pen is not None:
-                c.setPen(pen)
-            
-            
-        if replot:
-            self.replot()
+        print data, curve
+        self.addCurve(curve, params)
+        if pen is not None:
+            curve.setPen(pen)
         
-        #self.indexParams(params, ids)
-        
-        if data is not None and data.ndim == 2:
-            return curves
-        else:
-            return curves[0]
+        return curve
 
-    def attachCurve(self, c, params=None):
-        c.setParams(params)
+    def addCurve(self, c, params=None):
+        c.setMeta(params)
         self.curves.append(c)
-        Qwt.QwtPlotCurve.attach(c, self)
+        #Qwt.QwtPlotCurve.attach(c, self)
+        self.addItem(c)
         
         ## configure curve for this plot
         (alpha, auto) = self.alphaState()
@@ -190,124 +196,67 @@ class PlotItem(QtGui.QGraphicsWidget):
             self.addAvgCurve(c)
         
         
-    def detachCurve(self, c):
-        try:
-            Qwt.QwtPlotCurve.detach(c)
-        except:
-            pass
-        
+    def removeCurve(self, c):
         if c in self.curves:
             self.curves.remove(c)
         self.updateDecimation()
         self.updateParamList()
 
+    def updateParamList(self):
+        self.ctrl.avgParamList.clear()
+        ## Check to see that each parameter for each curve is present in the list
+        #print "\nUpdate param list", self
+        #print "paramList:", self.paramList
+        for c in self.curves:
+            #print "  curve:", c
+            for p in c.meta().keys():
+                #print "    param:", p
+                if type(p) is tuple:
+                    p = '.'.join(p)
+                    
+                ## If the parameter is not in the list, add it.
+                matches = self.ctrl.avgParamList.findItems(p, QtCore.Qt.MatchExactly)
+                #print "      matches:", matches
+                if len(matches) == 0:
+                    i = QtGui.QListWidgetItem(p)
+                    if p in self.paramList and self.paramList[p] is True:
+                        #print "      set checked"
+                        i.setCheckState(QtCore.Qt.Checked)
+                    else:
+                        #print "      set unchecked"
+                        i.setCheckState(QtCore.Qt.Unchecked)
+                    self.ctrl.avgParamList.addItem(i)
+                else:
+                    i = matches[0]
+                    
+                self.paramList[p] = (i.checkState() == QtCore.Qt.Checked)
+        #print "paramList:", self.paramList
 
     def _plotArray(self, arr, x=None):
-        arr = atleast_2d(arr)
-        if arr.ndim != 2:
-            raise Exception("Array must be 1 or 2D to plot (shape is %s)" % arr.shape)
-            
+        if arr.ndim != 1:
+            raise Exception("Array must be 1D to plot (shape is %s)" % arr.shape)
         if x is None:
-            x = arange(arr.shape[1])
-            
-        x = atleast_2d(x)
-        if x.ndim != 2:
-            raise Exception("X array must be 1 or 2D to plot (shape is %s)" % x.shape)
-            
-        
-        ret = []
-        for i in range(arr.shape[0]):
-            c = PlotCurve()
-            c.setData(x[i%x.shape[0]], arr[i])
-            #c.attach(self)
-            ret.append(c)
-            #self.curves.append(c)
-                
-        return ret
+            x = arange(arr.shape[0])
+        if x.ndim != 1:
+            raise Exception("X array must be 1D to plot (shape is %s)" % x.shape)
+        c = PlotCurveItem(arr, x=x)
+        return c
             
         
         
     def _plotMetaArray(self, arr):
         inf = arr.infoCopy()
-        
-        #print "_plotMetaArray()"
-        #print inf
-        #print arr.shape
-        axes = [0, 1]
-            
-        if arr.ndim == 2:
-            for i in [0,1]:
-                if 'cols' in inf[i]:
-                    #print "axis %d has cols" % i
-                    axes = [1-i, i]
-        elif arr.ndim != 1:
-            raise Exception('can only automatically plot 1 or 2 dimensional arrays.')
-                    
-        #print "AXES:", axes
-        titles = ['', '']
-        for i in [1,0]:
-            ax = axes[i]
-            t = ''
-            if i >= len(inf):
-                continue
-            
-            ## If there are columns, pick title/units from first column
-            if 'cols' in inf[ax]:
-                s = inf[ax]['cols'][0]
-            else:
-                s = inf[ax]
-                
-            if 'name' in s:
-                t = s['name']
-            if 'units' in s:
-                t += ' (%s)' % s['units']
-            titles[i] = t
-        ### Set axis titles
-        #titles = ['', '']
-        #for i in [0,1]:
-            #if 'title' in inf[axes[i]]:
-                #titles[i] = inf[axes[i]]['title']
-            #else:
-                #titles[i] = inf[axes[i]]['name']
-            #if 'units' in inf[axes[i]]:
-                #titles[i] = titles[i] + ' (%s)' % inf[axes[i]]['units']
-                
-        self.setAxisTitle(self.xBottom, titles[0])
-        self.setAxisTitle(self.yLeft, titles[1])
-
-        ## create curves
-        #curves = []
+        if arr.ndim != 1:
+            raise Exception('can only automatically plot 1 dimensional arrays.')
+        ## create curve
         try:
-            xv = arr.xvals(axes[0])
+            xv = arr.xvals(0)
         except:
-            print "Making up xvals"
-            #print arr
-            #raise
-            xv = range(arr.shape[axes[0]])
-        
-        ret = []
-        if arr.ndim == 2:
-            for i in range(arr.shape[axes[1]]):
-                c = PlotCurve()
-                
-                axName = inf[axes[1]]['name']
-                #print "ARRAY:"
-                yArr = arr[axName:i].view(ndarray)
-                #print xv.shape, xv.min(), xv.max()
-                #print yArr.shape, yArr.min(), yArr.max()
-                #c.setData(array([1,2,3,4,5]), array([1,4,2,3,5]))
-                c.setData(xv, yArr)
-                
-                ret.append(c)
-        else:
-            c = PlotCurve()
-            #c.setData(array([1,2,3,4,5]), array([1,4,2,3,5]))
-            print xv.shape, arr.view(ndarray).shape
-            c.setData(xv, arr.view(ndarray))
-            ret.append(c)
+            xv = range(arr.shape[0])
+        c = PlotCurveItem()
+        c.setData(x=xv, y=arr.view(ndarray))
             
-        return ret
-        #return []
+        return c
 
     def saveSvgClicked(self):
         self.fileDialog = QtGui.QFileDialog(self)
@@ -386,3 +335,71 @@ class PlotItem(QtGui.QGraphicsWidget):
         #avg = self.ctrl.averageGroup.isChecked()
         #if avg != state['averageGroup']:
             #print "  WARNING: avgGroup is %s, should be %s" % (str(avg), str(state['averageGroup']))
+
+
+    def widgetGroupInterface(self):
+        return (None, PlotWidget.saveState, PlotWidget.restoreState)
+      
+    def updateSpectrumMode(self, b=None):
+        if b is None:
+            b = self.ctrl.powerSpectrumGroup.isChecked()
+        curves = filter(lambda i: isinstance(i, Qwt.QwtPlotCurve), self.itemList())
+        for c in curves:
+            c.setSpectrumMode(b)
+        self.enableAutoScale()
+        self.replot()
+            
+    def enableAutoScale(self):
+        self.ctrl.xAutoRadio.setChecked(True)
+        self.ctrl.yAutoRadio.setChecked(True)
+        self.autoBtn.hide()
+      
+    def updateDecimation(self):
+        if self.ctrl.maxTracesCheck.isChecked():
+            numCurves = self.ctrl.maxTracesSpin.value()
+        else:
+            numCurves = -1
+            
+        #curves = filter(lambda i: isinstance(i, Qwt.QwtPlotCurve), self.itemList())
+        curves = self.curves[:]
+        split = len(curves) - numCurves
+        for i in range(len(curves)):
+            if numCurves == -1 or i >= split:
+                curves[i].show()
+            else:
+                if self.ctrl.forgetTracesCheck.isChecked():
+                    curves[i].free()
+                    self.detachCurve(curves[i])
+                else:
+                    curves[i].hide()
+        
+      
+    def updateAlpha(self, *args):
+        (alpha, auto) = self.alphaState()
+        for c in self.curves:
+            c.setAlpha(alpha, auto)
+                
+        self.replot(autoRange=False)
+     
+    def alphaState(self):
+        enabled = self.ctrl.alphaGroup.isChecked()
+        auto = self.ctrl.autoAlphaCheck.isChecked()
+        alpha = float(self.ctrl.alphaSlider.value()) / self.ctrl.alphaSlider.maximum()
+        if auto:
+            alpha = 1.0  ## should be 1/number of overlapping plots
+        if not enabled:
+            auto = False
+            alpha = 1.0
+        return (alpha, auto)
+
+    def pointMode(self):
+        if self.ctrl.pointsGroup.isChecked():
+            if self.ctrl.autoPointsCheck.isChecked():
+                mode = None
+            else:
+                mode = True
+        else:
+            mode = False
+        return mode
+
+

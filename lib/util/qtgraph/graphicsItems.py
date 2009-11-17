@@ -270,6 +270,8 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
     def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None):
         QtGui.QGraphicsWidget.__init__(self, parent)
         
+        self.path = None
+        
         if pen is None:
             pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
         self.pen = pen
@@ -289,14 +291,35 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
             self.y = None
         #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
+        self.metaDict = {}
+        
+    def setMeta(self, data):
+        self.metaData = data
+        
+    def meta(self):
+        return self.metaData
+        
     def setPen(self, pen):
         self.pen = pen
         self.update()
+        
+    def setAlpha(self, alpha, auto):
+        pass
+        
+    def setSpectrumMode(self, mode):
+        pass
+    
+    def setPointMode(self, mode):
+        pass
         
     def setShadowPen(self, pen):
         self.shadow = pen
         self.update()
 
+    def setData(self, x, y, copy=False):
+        """For Qwt compatibility"""
+        self.updateData(y, x, copy)
+        
     def updateData(self, data, x=None, copy=False):
         if not isinstance(data, ndarray) or data.ndim > 2:
             raise Exception("Plot data must be 1 or 2D ndarray or MetaArray")
@@ -371,6 +394,8 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         return QtCore.QRectF(xmin, ymin, xmax-xmin, ymax-ymin)
 
     def paint(self, p, opt, widget):
+        if self.path is None:
+            return
         if self.shadow is not None:
             p.setPen(self.shadow)
             p.drawPath(self.path)

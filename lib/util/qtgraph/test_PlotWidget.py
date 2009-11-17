@@ -46,5 +46,5 @@ pw.autoRange()
 
 t = QtCore.QTimer()
 QtCore.QObject.connect(t, QtCore.SIGNAL('timeout()'), updateData)
-t.start(50)
+#t.start(50)
 
