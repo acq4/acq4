@@ -19,8 +19,11 @@ class ImageView(QtGui.QWidget):
         self.image = None
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        self.scene = QtGui.QGraphicsScene()
-        self.ui.graphicsView.setScene(self.scene)
+        #self.scene = QtGui.QGraphicsScene()
+        #self.ui.graphicsView.setScene(self.scene)
+        self.scene = self.ui.graphicsView.sceneObj
+        self.ui.graphicsView.enableMouse(True)
+        self.ui.graphicsView.autoPixelRange = False
         self.ui.graphicsView.setAspectLocked(True)
         self.ui.graphicsView.invertY()
         self.imageItem = ImageItem()
@@ -62,11 +65,15 @@ class ImageView(QtGui.QWidget):
             data = self.roi.getArrayRegion(self.image.view(ndarray), self.imageItem, (1, 2))
             if data is not None:
                 data = data.mean(axis=1).mean(axis=1)
-                self.roiCurve.setData(y=data, x=self.image.xvals(0))
+                self.roiCurve.setData(y=data, x=self.tVals)
                 self.ui.roiPlot.replot()
 
     def setImage(self, img):
         self.image = img
+        if hasattr(img, 'xvals'):
+            self.tVals = img.xvals(0)
+        else:
+            self.tVals = arange(img.shape[0])
         self.ui.timeSlider.setValue(0)
         #self.ui.timeSlider.setMaximum(img.shape[0]-1)
         self.updateImage()
@@ -100,7 +107,8 @@ class ImageView(QtGui.QWidget):
         vmax = self.ui.timeSlider.maximum()
         f = float(v) / vmax
         t = 0.0
-        xv = self.image.xvals('Time') 
+        #xv = self.image.xvals('Time') 
+        xv = self.tVals
         if xv is None:
             ind = int(f * self.image.shape[0])
         else:

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
 #from GraphicsView import qPtArr
 from numpy import array, arccos, dot, pi, zeros, vstack, ubyte, fromfunction, ceil, floor
@@ -408,9 +409,11 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         
         If returnSlice is set to False, the function returns a pair of tuples with the values that would have 
         been used to generate the slice objects. ((ax0Start, ax0Stop), (ax1Start, ax1Stop))"""
+        #print "getArraySlice"
         
         ## Determine shape of array along ROI axes
         dShape = (data.shape[axes[0]], data.shape[axes[1]])
+        #print "  dshape", dShape
         
         ## Determine transform that maps ROI bounding box to image coordinates
         tr = self.sceneTransform() * img.sceneTransform().inverted()[0] 
@@ -422,16 +425,19 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         
         ## Transform ROI bounds into data bounds
         dataBounds = tr.mapRect(self.boundingRect())
+        #print "  boundingRect:", self.boundingRect()
+        #print "  dataBounds:", dataBounds
         
         ## Intersect transformed ROI bounds with data bounds
         intBounds = dataBounds.intersect(QtCore.QRectF(0, 0, dShape[0], dShape[1]))
+        #print "  intBounds:", intBounds
         
         ## Determine index values to use when referencing the array. 
         bounds = (
             (int(min(intBounds.left(), intBounds.right())), int(1+max(intBounds.left(), intBounds.right()))),
             (int(min(intBounds.bottom(), intBounds.top())), int(1+max(intBounds.bottom(), intBounds.top())))
         )
-        
+        #print "  bounds:", bounds
         
         if returnSlice:
             ## Create slice objects
@@ -452,8 +458,8 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         arr = data.transpose(tr1)
         
         ## Determine the minimal area of the data we will need
-        (dataBounds, roiDataTransform) = self.getArraySlice(data, img, returnSlice=False)
-        
+        (dataBounds, roiDataTransform) = self.getArraySlice(data, img, returnSlice=False, axes=axes)
+
         ## Pad data boundaries by 1px is possible
         dataBounds = (
             (max(dataBounds[0][0]-1, 0), min(dataBounds[0][1]+1, arr.shape[0])),
