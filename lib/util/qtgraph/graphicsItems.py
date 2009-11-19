@@ -7,6 +7,7 @@ from scipy.fftpack import fft
 from lib.util.MetaArray import MetaArray
 from lib.util.debug import *
 from Point import *
+from functions import *
 import types, sys, struct
 
 
@@ -336,10 +337,12 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         
     def setColor(self, color):
         self.pen.setColor(color)
+        self.update()
         
     def setAlpha(self, alpha, auto):
         self.opts['alphaHint'] = alpha
         self.opts['alphaMode'] = auto
+        self.update()
         
     def setSpectrumMode(self, mode):
         self.opts['spectrumMode'] = mode
@@ -347,6 +350,7 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
     
     def setPointMode(self, mode):
         self.opts['pointMode'] = mode
+        self.update()
         
     def setShadowPen(self, pen):
         self.shadow = pen
@@ -457,11 +461,25 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
                 self.path = self.generatePath(*self.getData())
             path = self.path
             
+        ## Copy pens and apply alpha adjustment
+        sp = QtGui.QPen(self.shadow)
+        cp = QtGui.QPen(self.pen)
+        for pen in [sp, cp]:
+            if pen is None:
+                continue
+            c = pen.color()
+            c.setAlpha(c.alpha() * self.opts['alphaHint'])
+            pen.setColor(c)
+            #pen.setCosmetic(True)
+            
         if self.shadow is not None:
-            p.setPen(self.shadow)
+            p.setPen(sp)
             p.drawPath(path)
-        p.setPen(self.pen)
+        p.setPen(cp)
         p.drawPath(path)
+        
+    def free(self):
+        del self.xData, self.yData, self.xSpec, self.ySpec, self.path, self.specPath
         
         
 class ROIPlotItem(PlotCurveItem):

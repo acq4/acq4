@@ -2,9 +2,13 @@
 from graphicsItems import *
 from plotConfigTemplate import *
 from lib.util.WidgetGroup import *
+from PyQt4 import QtGui, QtCore, QtSvg
 
 class PlotItem(QtGui.QGraphicsWidget):
     """Plot graphics item that can be added to any graphics scene. Implements axis titles, scales, interactive viewbox."""
+    lastFileDir = None
+    managers = {}
+    
     def __init__(self, parent=None):
         QtGui.QGraphicsWidget.__init__(self, parent)
         self.layout = QtGui.QGraphicsGridLayout()
@@ -132,9 +136,9 @@ class PlotItem(QtGui.QGraphicsWidget):
         #QtCore.QObject.connect(c.xLogCheck, QtCore.SIGNAL('toggled(bool)'), self.setXLog)
         #QtCore.QObject.connect(c.yLogCheck, QtCore.SIGNAL('toggled(bool)'), self.setYLog)
 
-        #QtCore.QObject.connect(c.alphaGroup, QtCore.SIGNAL('toggled(bool)'), self.updateAlpha)
-        #QtCore.QObject.connect(c.alphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateAlpha)
-        #QtCore.QObject.connect(c.autoAlphaCheck, QtCore.SIGNAL('toggled(bool)'), self.updateAlpha)
+        QtCore.QObject.connect(c.alphaGroup, QtCore.SIGNAL('toggled(bool)'), self.updateAlpha)
+        QtCore.QObject.connect(c.alphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateAlpha)
+        QtCore.QObject.connect(c.autoAlphaCheck, QtCore.SIGNAL('toggled(bool)'), self.updateAlpha)
 
         QtCore.QObject.connect(c.powerSpectrumGroup, QtCore.SIGNAL('toggled(bool)'), self.updateSpectrumMode)
         QtCore.QObject.connect(c.saveSvgBtn, QtCore.SIGNAL('clicked()'), self.saveSvgClicked)
@@ -143,8 +147,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         #QtCore.QObject.connect(c.gridGroup, QtCore.SIGNAL('toggled(bool)'), self.updateGrid)
         #QtCore.QObject.connect(c.gridAlphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateGrid)
         
-        #QtCore.QObject.connect(self.ctrl.xLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.xLinkComboChanged)
-        #QtCore.QObject.connect(self.ctrl.yLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.yLinkComboChanged)
+        QtCore.QObject.connect(self.ctrl.xLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.xLinkComboChanged)
+        QtCore.QObject.connect(self.ctrl.yLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.yLinkComboChanged)
         
         QtCore.QObject.connect(self.ctrl.avgParamList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.avgParamListClicked)
         QtCore.QObject.connect(self.ctrl.averageGroup, QtCore.SIGNAL('toggled(bool)'), self.avgToggled)
@@ -152,11 +156,109 @@ class PlotItem(QtGui.QGraphicsWidget):
         #QtCore.QObject.connect(self.ctrl.pointsGroup, QtCore.SIGNAL('toggled(bool)'), self.updatePointMode)
         #QtCore.QObject.connect(self.ctrl.autoPointsCheck, QtCore.SIGNAL('toggled(bool)'), self.updatePointMode)
         
-        #QtCore.QObject.connect(self.ctrl.maxTracesCheck, QtCore.SIGNAL('toggled(bool)'), self.decimationChanged)
-        #QtCore.QObject.connect(self.ctrl.maxTracesSpin, QtCore.SIGNAL('valueChanged(int)'), self.decimationChanged)
+        QtCore.QObject.connect(self.ctrl.maxTracesCheck, QtCore.SIGNAL('toggled(bool)'), self.updateDecimation)
+        QtCore.QObject.connect(self.ctrl.maxTracesSpin, QtCore.SIGNAL('valueChanged(int)'), self.updateDecimation)
         QtCore.QObject.connect(c.xMouseCheck, QtCore.SIGNAL('toggled(bool)'), self.mouseCheckChanged)
         QtCore.QObject.connect(c.yMouseCheck, QtCore.SIGNAL('toggled(bool)'), self.mouseCheckChanged)
+
+        self.xLinkPlot = None
+        self.yLinkPlot = None
+        self.linksBlocked = False
+
+    def __del__(self):
+        if self.manager is not None:
+            self.manager.removeWidget(self.name)
+
+    def registerPlot(self, name):
+        self.name = name
+        win = str(self.window())
+        #print "register", name, win
+        if win not in PlotItem.managers:
+            PlotItem.managers[win] = PlotWidgetManager()
+        self.manager = PlotItem.managers[win]
+        self.manager.addWidget(self, name)
+        QtCore.QObject.connect(self.manager, QtCore.SIGNAL('widgetListChanged'), self.updatePlotList)
+        self.updatePlotList()
+
+    def updatePlotList(self):
+        """Update the list of all plotWidgets in the "link" combos"""
+        #print "update plot list", self
+        try:
+            for sc in [self.ctrl.xLinkCombo, self.ctrl.yLinkCombo]:
+                current = str(sc.currentText())
+                sc.clear()
+                sc.addItem("")
+                if self.manager is not None:
+                    for w in self.manager.listWidgets():
+                        #print w
+                        if w == self.name:
+                            continue
+                        sc.addItem(w)
+        except:
+            import gc
+            refs= gc.get_referrers(self)
+            print "  error during update. Referrers are:", refs
+            raise
+
+    def blockLink(self, b):
+        self.linksBlocked = b
+
+    def xLinkComboChanged(self):
+        self.setXLink(str(self.ctrl.xLinkCombo.currentText()))
+
+    def yLinkComboChanged(self):
+        self.setYLink(str(self.ctrl.yLinkCombo.currentText()))
+
+    def setXLink(self, plotName=None):
+        if self.manager is None:
+            return
+        if self.xLinkPlot is not None:
+            self.manager.unlinkX(self, self.xLinkPlot)
+        plot = self.manager.getWidget(plotName)
+        self.xLinkPlot = plot
+        if plot is not None:
+            self.setManualXScale()
+            self.manager.linkX(self, plot)
+            
+    def setYLink(self, plotName=None):
+        if self.manager is None:
+            return
+        if self.yLinkPlot is not None:
+            self.manager.unlinkY(self, self.yLinkPlot)
+        plot = self.manager.getWidget(plotName)
+        self.yLinkPlot = plot
+        if plot is not None:
+            self.setManualYScale()
+            self.manager.linkY(self, plot)
         
+    def linkXChanged(self, plot):
+        if self.linksBlocked:
+            return
+        pr = plot.vb.viewRect()
+        pg = plot.vb.boundingRect()
+        sg = self.vb.boundingRect()
+        upp = float(pr.width()) / pg.width()
+        x1 = pr.left() + (sg.x()-pg.x()) * upp
+        x2 = x1 + sg.width() * upp
+        plot.blockLink(True)
+        self.setXRange(x1, x2)
+        plot.blockLink(False)
+        self.replot()
+        
+    def linkYChanged(self, plot):
+        if self.linksBlocked:
+            return
+        pr = plot.vb.viewRect()
+        pg = plot.vb.boundingRect()
+        sg = self.vb.boundingRect()
+        upp = float(pr.width()) / pg.height()
+        y1 = pr.bottom() + (sg.y()-pg.y()) * upp
+        y2 = y1 + sg.height() * upp
+        plot.blockLink(True)
+        self.setYRange(y1, y2)
+        plot.blockLink(False)
+        self.replot()
+
     def avgToggled(self, b):
         if b:
             self.recomputeAverages()
@@ -175,7 +277,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.avgCurves = {}
         for c in self.curves:
             self.addAvgCurve(c)
-        #self.replot()
+        self.replot()
         
     def addAvgCurve(self, curve):
         """Add a single curve into the pool of curves averaged together"""
@@ -209,7 +311,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         ### Create a new curve if needed
         if key not in self.avgCurves:
             plot = PlotCurveItem()
-            plot.setPen(QtGui.QPen(QtGui.QColor(0, 155, 0)))
+            plot.setPen(mkPen([0, 200, 0]))
+            plot.setShadowPen(mkPen([0, 0, 0, 100], 3))
             plot.setAlpha(1.0, False)
             plot.setZValue(100)
             self.addItem(plot)
@@ -219,11 +322,12 @@ class PlotItem(QtGui.QGraphicsWidget):
         (n, plot) = self.avgCurves[key]
         
         ### Average data together
+        (x, y) = curve.getData()
         if plot.yData is not None:
-            newData = plot.yData * (n-1) / float(n) + curve.yData * 1.0 / float(n)
+            newData = plot.yData * (n-1) / float(n) + y * 1.0 / float(n)
             plot.setData(plot.xData, newData)
         else:
-            plot.setData(curve.xData, curve.yData)
+            plot.setData(x, y)
         
         
     def mouseCheckChanged(self):
@@ -233,16 +337,19 @@ class PlotItem(QtGui.QGraphicsWidget):
     def xRangeChanged(self, _, range):
         self.ctrl.xMinText.setText('%0.5g' % range[0])
         self.ctrl.xMaxText.setText('%0.5g' % range[1])
+        self.emit(QtCore.SIGNAL('xRangeChanged'), self, range)
 
     def yRangeChanged(self, _, range):
         self.ctrl.yMinText.setText('%0.5g' % range[0])
         self.ctrl.yMaxText.setText('%0.5g' % range[1])
+        self.emit(QtCore.SIGNAL('yRangeChanged'), self, range)
 
 
     def enableAutoScale(self):
         self.ctrl.xAutoRadio.setChecked(True)
         self.ctrl.yAutoRadio.setChecked(True)
         self.autoBtn.hide()
+        self.replot()
       
     def updateXScale(self):
         """Set plot to autoscale or not depending on state of radio buttons"""
@@ -250,6 +357,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             self.setManualXScale()
         else:
             self.setAutoXScale()
+        #self.replot()
         
     def updateYScale(self, b=False):
         """Set plot to autoscale or not depending on state of radio buttons"""
@@ -257,6 +365,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             self.setManualYScale()
         else:
             self.setAutoYScale()
+        #self.replot()
 
     def enableManualScale(self, v=[True, True]):
         if v[0]:
@@ -268,6 +377,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             self.ctrl.yManualRadio.setChecked(True)
             #self.setManualYScale()
         self.autoBtn.show()
+        #self.replot()
         
     def setManualXScale(self):
         self.autoScale[0] = False
@@ -290,10 +400,12 @@ class PlotItem(QtGui.QGraphicsWidget):
     def setAutoXScale(self):
         self.autoScale[0] = True
         self.ctrl.xAutoRadio.setChecked(True)
+        #self.replot()
         
     def setAutoYScale(self):
         self.autoScale[1] = True
         self.ctrl.yAutoRadio.setChecked(True)
+        #self.replot()
 
     def addItem(self, item, *args):
         self.items.append(item)
@@ -369,13 +481,21 @@ class PlotItem(QtGui.QGraphicsWidget):
             if self.autoScale[ax]:
                 mn = None
                 mx = None
-                for c in self.curves:
+                for c in self.curves + [c[1] for c in self.avgCurves.values()]:
+                    if not c.isVisible():
+                        continue
                     cmn, cmx = c.getRange(ax)
                     if mn is None or cmn < mn:
                         mn = cmn
                     if mx is None or cmx > mx:
                         mx = cmx
+                if mn is None or mx is None:
+                    continue
                 self.setRange(ax, mn, mx)
+                
+    def replot(self):
+        self.plotChanged()
+        self.update()
 
     def updateParamList(self):
         self.ctrl.avgParamList.clear()
@@ -414,10 +534,15 @@ class PlotItem(QtGui.QGraphicsWidget):
         #self.setSize(self.size() * 4)
         self.svg = QtSvg.QSvgGenerator()
         self.svg.setFileName(fileName)
-        self.svg.setSize(self.size())
-        #self.svg.setResolution(600)
+        self.svg.setSize(QtCore.QSize(self.size().width(), self.size().height()))
+        self.svg.setResolution(600)
         painter = QtGui.QPainter(self.svg)
-        self.print_(painter, self.rect())
+        op = QtGui.QStyleOptionGraphicsItem()
+        op.exposedRect = self.boundingRect()
+        op.levelOfDetail = 1
+        op.matrix = self.sceneTransform().toAffine()
+        self.paint(painter, op)
+        #painter.end()
         #self.setSize(s)
         
     def writeImage(self, fileName=None):
@@ -427,8 +552,14 @@ class PlotItem(QtGui.QGraphicsWidget):
         painter = QtGui.QPainter(self.png)
         #rh = self.renderHints()
         #self.setRenderHints(QtGui.QPainter.Antialiasing)
-        self.print_(painter, self.rect())
+        #self.print_(painter, self.rect())
         #self.setRenderHints(rh)
+        op = QtGui.QStyleOptionGraphicsItem()
+        op.exposedRect = self.boundingRect()
+        op.levelOfDetail = 1
+        op.matrix = self.sceneTransform().toAffine()
+        self.paint(painter, op)
+        painter.end()
         self.png.save(fileName)
         
 
@@ -457,11 +588,10 @@ class PlotItem(QtGui.QGraphicsWidget):
     def updateSpectrumMode(self, b=None):
         if b is None:
             b = self.ctrl.powerSpectrumGroup.isChecked()
-        #curves = filter(lambda i: isinstance(i, Qwt.QwtPlotCurve), self.itemList())
         for c in self.curves:
             c.setSpectrumMode(b)
         self.enableAutoScale()
-        #self.replot()
+        self.recomputeAverages()
             
         
     def updateDecimation(self):
@@ -470,7 +600,6 @@ class PlotItem(QtGui.QGraphicsWidget):
         else:
             numCurves = -1
             
-        #curves = filter(lambda i: isinstance(i, Qwt.QwtPlotCurve), self.itemList())
         curves = self.curves[:]
         split = len(curves) - numCurves
         for i in range(len(curves)):
@@ -479,7 +608,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             else:
                 if self.ctrl.forgetTracesCheck.isChecked():
                     curves[i].free()
-                    self.detachCurve(curves[i])
+                    self.removeItem(curves[i])
                 else:
                     curves[i].hide()
         
@@ -487,9 +616,9 @@ class PlotItem(QtGui.QGraphicsWidget):
     def updateAlpha(self, *args):
         (alpha, auto) = self.alphaState()
         for c in self.curves:
-            c.setAlpha(alpha, auto)
+            c.setAlpha(alpha**2, auto)
                 
-        self.replot(autoRange=False)
+        #self.replot(autoRange=False)
      
     def alphaState(self):
         enabled = self.ctrl.alphaGroup.isChecked()
@@ -630,9 +759,9 @@ class PlotItem(QtGui.QGraphicsWidget):
         return c
 
     def saveSvgClicked(self):
-        self.fileDialog = QtGui.QFileDialog(self)
-        if PlotWidget.lastFileDir is not None:
-            self.fileDialog.setDirectory(PlotWidget.lastFileDir)
+        self.fileDialog = QtGui.QFileDialog()
+        if PlotItem.lastFileDir is not None:
+            self.fileDialog.setDirectory(PlotItem.lastFileDir)
         self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
         self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
         self.fileDialog.show()
@@ -644,9 +773,9 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.fileDialog = None
 
     def saveImgClicked(self):
-        self.fileDialog = QtGui.QFileDialog(self)
-        if PlotWidget.lastFileDir is not None:
-            self.fileDialog.setDirectory(PlotWidget.lastFileDir)
+        self.fileDialog = QtGui.QFileDialog()
+        if PlotItem.lastFileDir is not None:
+            self.fileDialog.setDirectory(PlotItem.lastFileDir)
         self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
         self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
         self.fileDialog.show()
@@ -658,3 +787,47 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.fileDialog = None
       
 
+class PlotWidgetManager(QtCore.QObject):
+    """Used for managing communication between PlotWidgets"""
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+        self.widgets = weakref.WeakValueDictionary() # Don't keep PlotWidgets around just because they are listed here
+    
+    def addWidget(self, w, name):
+        self.widgets[name] = w
+        self.emit(QtCore.SIGNAL('widgetListChanged'), self.widgets.keys())
+        
+    def removeWidget(self, name):
+        if name in self.widgets:
+            del self.widgets[name]
+            self.emit(QtCore.SIGNAL('widgetListChanged'), self.widgets.keys())
+        
+        
+    def listWidgets(self):
+        return self.widgets.keys()
+        
+    def getWidget(self, name):
+        if name not in self.widgets:
+            return None
+        else:
+            return self.widgets[name]
+            
+    def linkX(self, p1, p2):
+        QtCore.QObject.connect(p1, QtCore.SIGNAL('xRangeChanged'), p2.linkXChanged)
+        QtCore.QObject.connect(p2, QtCore.SIGNAL('xRangeChanged'), p1.linkXChanged)
+        p1.linkXChanged(p2)
+        #p2.setManualXScale()
+
+    def unlinkX(self, p1, p2):
+        QtCore.QObject.disconnect(p1, QtCore.SIGNAL('xRangeChanged'), p2.linkXChanged)
+        QtCore.QObject.disconnect(p2, QtCore.SIGNAL('xRangeChanged'), p1.linkXChanged)
+        
+    def linkY(self, p1, p2):
+        QtCore.QObject.connect(p1, QtCore.SIGNAL('yRangeChanged'), p2.linkYChanged)
+        QtCore.QObject.connect(p2, QtCore.SIGNAL('yRangeChanged'), p1.linkYChanged)
+        p1.linkYChanged(p2)
+        #p2.setManualYScale()
+
+    def unlinkY(self, p1, p2):
+        QtCore.QObject.disconnect(p1, QtCore.SIGNAL('yRangeChanged'), p2.linkYChanged)
+        QtCore.QObject.disconnect(p2, QtCore.SIGNAL('yRangeChanged'), p1.linkYChanged)

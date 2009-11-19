@@ -18,6 +18,9 @@ cw.setLayout(l)
 l.addWidget(pw)
 l.addWidget(pw2)
 
+pw.registerPlot('Plot1')
+pw2.registerPlot('Plot2')
+
 #p1 = PlotCurveItem()
 #pw.addItem(p1)
 p1 = pw.plot()
@@ -30,6 +33,8 @@ pen.setCosmetic(True)
 #pen.setJoinStyle(QtCore.Qt.MiterJoin)
 p1.setShadowPen(pen)
 p1.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 50)))
+
+
 
 mw.show()
 
