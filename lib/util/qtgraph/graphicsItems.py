@@ -39,7 +39,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
     def __init__(self, image=None, copy=True, *args):
         self.qimage = QtGui.QImage()
         self.pixmap = None
-        self.useWeave = False
+        self.useWeave = True
         self.blackLevel = None
         self.whiteLevel = None
         self.alpha = 1.0
@@ -750,7 +750,7 @@ class ScaleItem(QtGui.QGraphicsWidget):
                     
                     p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))
                     if abs(v) < .001 or abs(v) >= 10000:
-                        vstr = ("%%0.%dg" % places) % v
+                        vstr = "%g" % v
                     else:
                         vstr = ("%%0.%df" % places) % v
                     p.drawText(rect, textFlags, vstr)

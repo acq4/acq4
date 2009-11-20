@@ -39,6 +39,7 @@ class ScaleBar(UIGraphicsItem):
     def __init__(self, view, size, width=5, color=(100, 100, 255)):
         self.size = size
         UIGraphicsItem.__init__(self, view)
+        self.setAcceptedMouseButtons(QtCore.Qt.NoButton)
         #self.pen = QtGui.QPen(QtGui.QColor(*color))
         #self.pen.setWidth(width)
         #self.pen.setCosmetic(True)
@@ -131,13 +132,15 @@ class PVCamera(QtGui.QMainWindow):
         l.setMargin(0)
         self.gv = GraphicsView(self.ui.graphicsWidget)
         l.addWidget(self.gv)
+        self.gv.enableMouse()
 
         self.ui.plotWidget.setCanvasBackground(QtGui.QColor(0,0,0))
         #self.ui.plotWidget.enableAxis(Qwt.QwtPlot.xBottom, False)
         self.ui.plotWidget.replot()
 
         self.setCentralWidget(self.ui.centralwidget)
-        self.scene = QtGui.QGraphicsScene(self)
+        #self.scene = QtGui.QGraphicsScene(self)
+        self.scene = self.gv.scene()
         self.cameraItemGroup = QtGui.QGraphicsItemGroup()   ## Objects which follow and scale with camera view
         self.scopeItemGroup = QtGui.QGraphicsItemGroup()    ## Objects which follow scope position
         self.scene.addItem(self.cameraItemGroup)
@@ -151,9 +154,9 @@ class PVCamera(QtGui.QMainWindow):
         #self.scene.addItem(grid)
         
         self.scaleBar = ScaleBar(self.gv, 100e-6)
-        self.scene.addItem(self.scaleBar)
+        #self.scene.addItem(self.scaleBar)
         
-        self.gv.setScene(self.scene)
+        #self.gv.setScene(self.scene)
         self.gv.setAspectLocked(True)
         self.gv.invertY()
         self.AGCLastMax = None
@@ -253,6 +256,7 @@ class PVCamera(QtGui.QMainWindow):
         bounds = self.module.cam.getBoundaries()
         for b in bounds:
             border = QtGui.QGraphicsRectItem(b)
+            border.setAcceptedMouseButtons(QtCore.Qt.NoButton)
             border.setPen(QtGui.QPen(QtGui.QColor(50,80,80))) 
             border.setZValue(10)
             self.scopeItemGroup.addToGroup(border)

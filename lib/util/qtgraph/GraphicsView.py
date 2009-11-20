@@ -6,7 +6,38 @@ from Point import *
 #from vector import *
 
         
-        
+#class GraphicsScene(QtGui.QGraphicsScene):
+    #"""Used to work around bugs with event propagation."""
+    #def mousePressEvent(self, ev):
+        #print "scene press"
+        #maxZ = None
+        #topItem = None
+        #items = []
+        #for i in self.items(ev.scenePos()):
+            #if ev.button() & i.acceptedMouseButtons() > 0:
+                #items.append(i)
+        #if len(items) == 0:
+            #print "no items under press", ev.scenePos()
+            #return
+        ##items = items.sort(lambda a, b: cmp(a.zValue(), b.zValue()))  ## Items are already sorted.
+        #for i in items:
+            #i.mousePressEvent(ev)
+            #if ev.accepted():
+                #i.grabMouse()
+                #break
+
+    #def mouseMoveEvent(self, ev):
+        #print "scene move"
+        #i = self.mouseGrabberItem()
+        #if i is not None:
+            #i.mouseMoveEvent(ev)
+            
+    #def mouseReleaseEvent(self, ev):
+        #print "scene release"
+        #i = self.mouseGrabberItem()
+        #if i is not None:
+            #i.mouseReleaseEvent(ev)
+            
         
 class GraphicsView(QtGui.QGraphicsView):
     def __init__(self, *args):
@@ -72,7 +103,7 @@ class GraphicsView(QtGui.QGraphicsView):
         
     def enableMouse(self, b=True):
         self.mouseEnabled = b
-        self.autoPixelScale = (not b)
+        self.autoPixelRange = (not b)
         
     def clearMouse(self):
         self.mouseTrail = []
@@ -213,35 +244,40 @@ class GraphicsView(QtGui.QGraphicsView):
         
     def mousePressEvent(self, ev):
         QtGui.QGraphicsView.mousePressEvent(self, ev)
+        #print "Press over:"
+        #for i in self.items(ev.pos()):
+            #print i.zValue(), int(i.acceptedMouseButtons()), i, i.scenePos()
+        #print "Grabber:", self.scene().mouseGrabberItem()
         if not self.mouseEnabled:
             return
         self.lastMousePos = Point(ev.pos())
-        #if ev.buttons() == QtCore.Qt.LeftButton:
-            #self.currentItem = None
-            #maxZ = None
-            #for i in self.items(ev.pos()):
-                #if maxZ is None or maxZ < i.zValue():
-                    #self.currentItem = i
-                    #maxZ = i.zValue()
-            #self.pev = self.graphicsSceneEvent(ev)
-            #self.fev = self.pev
-            #if self.currentItem is not None:
-                #self.currentItem.mousePressEvent(self.pev)
-            #self.clearMouse()
-            #self.mouseTrail.append(Point(self.mapToScene(ev.pos())))
-            #self.emit(QtCore.SIGNAL("mousePressed(PyQt_PyObject)"), self.mouseTrail)
+        
+        self.currentItem = None
+        maxZ = None
+        for i in self.items(ev.pos()):
+            if maxZ is None or maxZ < i.zValue():
+                self.currentItem = i
+                maxZ = i.zValue()
+        self.pev = self.graphicsSceneEvent(ev)
+        self.fev = self.pev
+        if self.currentItem is not None:
+            self.currentItem.mousePressEvent(self.pev)
+        #self.clearMouse()
+        #self.mouseTrail.append(Point(self.mapToScene(ev.pos())))
+        self.emit(QtCore.SIGNAL("mousePressed(PyQt_PyObject)"), self.mouseTrail)
                 
     def mouseReleaseEvent(self, ev):
         QtGui.QGraphicsView.mouseReleaseEvent(self, ev)
         if not self.mouseEnabled:
             return
-        #if ev.button() == QtCore.Qt.LeftButton:
-            #self.mouseTrail.append(Point(self.mapToScene(ev.pos())))
-            #self.emit(QtCore.SIGNAL("mouseReleased(PyQt_PyObject)"), self.mouseTrail)
-            #if self.currentItem is not None:
-                #pev = self.graphicsSceneEvent(ev, self.pev, self.fev)
-                #self.pev = pev
-                #self.currentItem.mouseReleaseEvent(pev)
+            
+        #self.mouseTrail.append(Point(self.mapToScene(ev.pos())))
+        self.emit(QtCore.SIGNAL("mouseReleased(PyQt_PyObject)"), self.mouseTrail)
+        if self.currentItem is not None:
+            pev = self.graphicsSceneEvent(ev, self.pev, self.fev)
+            self.pev = pev
+            self.currentItem.mouseReleaseEvent(pev)
+            self.currentItem = None
         self.lastButtonReleased = ev.button()
 
     def mouseMoveEvent(self, ev):
@@ -249,13 +285,13 @@ class GraphicsView(QtGui.QGraphicsView):
         if not self.mouseEnabled:
             return
         self.emit(QtCore.SIGNAL("sceneMouseMoved(PyQt_PyObject)"), self.mapToScene(ev.pos()))
+        #print "moved. Grabber:", self.scene().mouseGrabberItem()
         
-        #if ev.buttons() == QtCore.Qt.LeftButton:
-            #self.mouseTrail.append(Point(self.mapToScene(ev.pos())))
-            #if self.currentItem is not None:
-                #pev = self.graphicsSceneEvent(ev, self.pev, self.fev)
-                #self.pev = pev
-                #self.currentItem.mouseMoveEvent(pev)
+        #self.mouseTrail.append(Point(self.mapToScene(ev.pos())))
+        if self.currentItem is not None:
+            pev = self.graphicsSceneEvent(ev, self.pev, self.fev)
+            self.pev = pev
+            self.currentItem.mouseMoveEvent(pev)
         
         if self.lastMousePos is None:
             self.lastMousePos = Point(ev.pos())
@@ -314,54 +350,54 @@ class GraphicsView(QtGui.QGraphicsView):
         return fl[-1]
     
 
-#class GraphicsSceneMouseEvent(QtGui.QGraphicsSceneMouseEvent):
-    #"""Stand-in class for QGraphicsSceneMouseEvent"""
-    #def __init__(self):
-        #QtGui.QGraphicsSceneMouseEvent.__init__(self)
+class GraphicsSceneMouseEvent(QtGui.QGraphicsSceneMouseEvent):
+    """Stand-in class for QGraphicsSceneMouseEvent"""
+    def __init__(self):
+        QtGui.QGraphicsSceneMouseEvent.__init__(self)
             
-    #def setPos(self, p):
-        #self.vpos = p
-    #def setButtons(self, p):
-        #self.vbuttons = p
-    #def setButton(self, p):
-        #self.vbutton = p
-    #def setModifiers(self, p):
-        #self.vmodifiers = p
-    #def setScenePos(self, p):
-        #self.vscenePos = p
-    #def setLastPos(self, p):
-        #self.vlastPos = p
-    #def setLastScenePos(self, p):
-        #self.vlastScenePos = p
-    #def setLastScreenPos(self, p):
-        #self.vlastScreenPos = p
-    #def setButtonDownPos(self, p):
-        #self.vbuttonDownPos = p
-    #def setButtonDownScenePos(self, p):
-        #self.vbuttonDownScenePos = p
-    #def setButtonDownScreenPos(self, p):
-        #self.vbuttonDownScreenPos = p
+    def setPos(self, p):
+        self.vpos = p
+    def setButtons(self, p):
+        self.vbuttons = p
+    def setButton(self, p):
+        self.vbutton = p
+    def setModifiers(self, p):
+        self.vmodifiers = p
+    def setScenePos(self, p):
+        self.vscenePos = p
+    def setLastPos(self, p):
+        self.vlastPos = p
+    def setLastScenePos(self, p):
+        self.vlastScenePos = p
+    def setLastScreenPos(self, p):
+        self.vlastScreenPos = p
+    def setButtonDownPos(self, p):
+        self.vbuttonDownPos = p
+    def setButtonDownScenePos(self, p):
+        self.vbuttonDownScenePos = p
+    def setButtonDownScreenPos(self, p):
+        self.vbuttonDownScreenPos = p
     
-    #def pos(self):
-        #return self.vpos
-    #def buttons(self):
-        #return self.vbuttons
-    #def button(self):
-        #return self.vbutton
-    #def modifiers(self):
-        #return self.vmodifiers
-    #def scenePos(self):
-        #return self.vscenePos
-    #def lastPos(self):
-        #return self.vlastPos
-    #def lastScenePos(self):
-        #return self.vlastScenePos
-    #def lastScreenPos(self):
-        #return self.vlastScreenPos
-    #def buttonDownPos(self):
-        #return self.vbuttonDownPos
-    #def buttonDownScenePos(self):
-        #return self.vbuttonDownScenePos
-    #def buttonDownScreenPos(self):
-        #return self.vbuttonDownScreenPos
+    def pos(self):
+        return self.vpos
+    def buttons(self):
+        return self.vbuttons
+    def button(self):
+        return self.vbutton
+    def modifiers(self):
+        return self.vmodifiers
+    def scenePos(self):
+        return self.vscenePos
+    def lastPos(self):
+        return self.vlastPos
+    def lastScenePos(self):
+        return self.vlastScenePos
+    def lastScreenPos(self):
+        return self.vlastScreenPos
+    def buttonDownPos(self):
+        return self.vbuttonDownPos
+    def buttonDownScenePos(self):
+        return self.vbuttonDownScenePos
+    def buttonDownScreenPos(self):
+        return self.vbuttonDownScreenPos
     

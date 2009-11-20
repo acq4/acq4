@@ -18,6 +18,7 @@ UNC Chapel Hill.
 """
 import sys, types, re
 from numpy import *
+import numpy
 from PyQt4 import Qt, QtCore, QtGui
 from lib.util.advancedTypes import OrderedDict
 from lib.util.functions import logSpace
@@ -206,7 +207,7 @@ class StimGenerator(QtGui.QWidget):
                 ns[k] = float(seq[k][1][params[k]])
             else:  ## just use single value
                 ns[k] = float(seq[k][0])
-                
+        
         ## evaluate and return
         fn = self.functionString().replace('\n', '')
         ret = eval(fn, globals(), ns)

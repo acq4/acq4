@@ -582,11 +582,14 @@ class Handle(QtGui.QGraphicsItem):
         return self.bounds
         
     def mousePressEvent(self, ev):
+        #print "widget press"
         self.cursorOffset = self.scenePos() - ev.scenePos()
         for r in self.roi:
             r[0].pointPressEvent(r[1], ev)
+        #ev.accept()
         
     def mouseReleaseEvent(self, ev):
+        print "release"
         for r in self.roi:
             r[0].pointReleaseEvent(r[1], ev)
                 

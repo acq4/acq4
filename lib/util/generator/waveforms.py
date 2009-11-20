@@ -1,6 +1,19 @@
 # -*- coding: utf-8 -*-
 import numpy
 
+## Checking functions
+def isNum(x):
+    return hasattr(x, '__int__')
+    
+def isNumOrNone(x):
+    return (x is None) or isNum(x)
+    
+def isList(x):
+    return hasattr(x, '__len__')
+    
+def isNumList(x):
+    return isList(x) and (len(x) > 0) and isNum(x[0])
+
 ## Functions to allow in eval for the waveform generator. 
 ## The first parameter is always a dict which will at least contain 'rate' and 'nPts'.
 ##   this parameter is automatically supplied, and will not be entered by the end user.
@@ -10,14 +23,13 @@ import numpy
 def pulse(params, times, widths, values, base=0.0):
     nPts = params['nPts']
     rate = params['rate']
-    if type(times) in [float, int]:
+    if not isList(times):
         times = [times]
-    if type(times) not in [list, tuple]:
-        raise Exception('times argument must be a list')
-    if type(widths) not in [list, tuple]:
+    if not isList(widths):
         widths = [widths] * len(times)
-    if type(values) not in [list, tuple]:
+    if not isList(values):
         values = [values] * len(times)
+        
     d = numpy.empty(nPts)
     d[:] = base
     for i in range(len(times)):
@@ -33,10 +45,11 @@ def pulse(params, times, widths, values, base=0.0):
 def steps(params, times, values, base=0.0):
     rate = params['rate']
     nPts = params['nPts']
-    if type(times) not in [list, tuple]:
+    if not isList(times):
         raise Exception('times argument must be a list')
-    if type(values) not in [list, tuple]:
+    if not isList(values):
         raise Exception('values argument must be a list')
+    
     d = numpy.empty(nPts)
     d[:] = base
     for i in range(1, len(times)):
@@ -58,15 +71,15 @@ def sineWave(params, period, amplitude=1.0, phase=0.0, start=0.0, stop=None, bas
     params['message'] = ""
 
     ## Check all arguments 
-    if type(amplitude) not in [float, int]:
+    if not isNum(amplitude):
         raise Exception("Amplitude argument must be a number")
-    if type(period) not in [float, int]:
+    if not isNum(period):
         raise Exception("Period argument must be a number")
-    if type(phase) not in [float, int]:
+    if not isNum(phase):
         raise Exception("Phase argument must be a number")
-    if start is not None and type(start) not in [float, int]:
+    if not isNumOrNone(start):
         raise Exception("Start argument must be a number")
-    if stop is not None and type(stop) not in [float, int]:
+    if not isNumOrNone(stop):
         raise Exception("Stop argument must be a number")
     
     ## initialize array
@@ -86,6 +99,10 @@ def sineWave(params, period, amplitude=1.0, phase=0.0, start=0.0, stop=None, bas
     if stop > nPts-1:
         params['message'] += "WARNING: Function is longer than generated waveform\n"    
         stop = nPts-1
+        
+    cycleTime = int(period * rate)
+    if cycleTime < 10:
+        params['message'] += 'Warning: Period is less than 10 samples\n'
     
     d[start:stop] = numpy.fromfunction(lambda i: amplitude * numpy.sin(phase * 2.0 * numpy.pi + i * 2.0 * numpy.pi / (period * rate)), (stop-start,))
     return d
@@ -96,17 +113,17 @@ def squareWave(params, period, amplitude=1.0, phase=0.0, duty=0.5, start=0.0, st
     params['message'] = ""
 
     ## Check all arguments 
-    if type(amplitude) not in [float, int]:
+    if not isNum(amplitude):
         raise Exception("Amplitude argument must be a number")
-    if type(period) not in [float, int] or period <= 0:
+    if not isNum(period) or period <= 0:
         raise Exception("Period argument must be a number > 0")
-    if type(phase) not in [float, int]:
+    if not isNum(phase):
         raise Exception("Phase argument must be a number")
-    if type(duty) not in [float, int] or duty < 0.0 or duty > 1.0:
+    if not isNum(duty) or duty < 0.0 or duty > 1.0:
         raise Exception("Duty argument must be a number between 0.0 and 1.0")
-    if start is not None and type(start) not in [float, int]:
+    if not isNumOrNone(start):
         raise Exception("Start argument must be a number")
-    if stop is not None and type(stop) not in [float, int]:
+    if not isNumOrNone(stop):
         raise Exception("Stop argument must be a number")
     
     ## initialize array
@@ -130,8 +147,13 @@ def squareWave(params, period, amplitude=1.0, phase=0.0, duty=0.5, start=0.0, st
     pulseWidth = int(duty * period * rate)
     phase = (phase % 1.0) - 1.0
     pulseShift = int(phase * period * rate)
-    if int(period * rate) < 10:
-        params['message'] += 'Warning: Cycle is less than 10 samples\n'
+    
+    cycleTime = int(period * rate)
+    if cycleTime < 10:
+        params['message'] += 'Warning: Period is less than 10 samples\n'
+    if cycleTime < 1:
+        return numpy.zeros(nPts)
+        
     nCycles = 2 + int((stop-start) / float(period*rate))
     for i in range(nCycles):
         ptr = start + int(i*period*rate)
@@ -153,16 +175,17 @@ def sawWave(params, period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base
     params['message'] = ""
 
     ## Check all arguments 
-    if type(amplitude) not in [float, int]:
+    if not isNum(amplitude):
         raise Exception("Amplitude argument must be a number")
-    if type(period) not in [float, int] or period <= 0:
+    if not isNum(period) or period <= 0:
         raise Exception("Period argument must be a number > 0")
-    if type(phase) not in [float, int]:
+    if not isNum(phase):
         raise Exception("Phase argument must be a number")
-    if start is not None and type(start) not in [float, int]:
+    if not isNumOrNone(start):
         raise Exception("Start argument must be a number")
-    if stop is not None and type(stop) not in [float, int]:
+    if not isNumOrNone(stop):
         raise Exception("Stop argument must be a number")
+    
     
     ## initialize array
     d = numpy.empty(nPts)
@@ -181,8 +204,14 @@ def sawWave(params, period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base
     if stop > nPts-1:
         params['message'] += "WARNING: Function is longer than generated waveform\n"    
         stop = nPts-1
-    if period * rate < 10:
-        params['message'] += "Warning: period is less than 10 samples\n"
+    #if period * rate < 10:
+        #params['message'] += "Warning: period is less than 10 samples\n"
+        
+    cycleTime = int(period * rate)
+    if cycleTime < 10:
+        params['message'] += 'Warning: Period is less than 10 samples\n'
+    if cycleTime < 1:
+        return numpy.zeros(nPts)
     
     d[start:stop] = amplitude * numpy.fromfunction(lambda t: (phase + t/float(rate*period)) % 1.0, (stop-start,))
     return d
@@ -200,14 +229,15 @@ def listWave(params, period, values=None, phase=0.0, start=0.0, stop=None, base=
     if values.ndim != 1:
         raise Exception("Values argument must be 1-dimensional array")
         
-    if type(period) not in [float, int] or period <= 0:
+    if not isNum(period) or period <= 0:
         raise Exception("Period argument must be a number > 0")
-    if type(phase) not in [float, int]:
+    if not isNum(phase):
         raise Exception("Phase argument must be a number")
-    if start is not None and type(start) not in [float, int]:
+    if not isNumOrNone(start):
         raise Exception("Start argument must be a number")
-    if stop is not None and type(stop) not in [float, int]:
+    if not isNumOrNone(stop):
         raise Exception("Stop argument must be a number")
+    
     
     ## initialize array
     d = numpy.empty(nPts)
@@ -226,9 +256,13 @@ def listWave(params, period, values=None, phase=0.0, start=0.0, stop=None, base=
     if stop > nPts-1:
         params['message'] += "WARNING: Function is longer than generated waveform\n"    
         stop = nPts-1
-    if period * rate < 10:
-        params['message'] += "Warning: period is less than 10 samples\n"
-    
+
+    cycleTime = int(period * rate)
+    if cycleTime < 10:
+        params['message'] += 'Warning: Period is less than 10 samples\n'
+    if cycleTime < 1:
+        return numpy.zeros(nPts)
+
     saw = numpy.fromfunction(lambda t: len(values) * ((phase + t/float(rate*period)) % 1.0), (stop-start,))
     d[start:stop] = values[saw.astype(int).clip(0, len(values)-1)]
     #d[start:stop] = saw
