@@ -70,8 +70,9 @@ class GraphicsView(QtGui.QGraphicsView):
     def addItem(self, *args):
         return self.scene.addItem(*args)
         
-    def enableMouse(self, b):
+    def enableMouse(self, b=True):
         self.mouseEnabled = b
+        self.autoPixelScale = (not b)
         
     def clearMouse(self):
         self.mouseTrail = []

@@ -1,8 +1,10 @@
 #!/usr/bin/python -i
+# -*- coding: utf-8 -*-
 from scipy import zeros
 from graphicsWindows import *
 from graphicsItems import *
 from widgets import *
+from PlotWidget import *
 from PyQt4 import QtCore, QtGui
 
 qapp = QtGui.QApplication([])
@@ -16,9 +18,13 @@ w = Win()
 v = GraphicsView()
 v.invertY(True)
 v.setAspectLocked(True)
+v.enableMouse(True)
+v.autoPixelScale = False
+
 w.setCentralWidget(v)
-s = QtGui.QGraphicsScene()
-v.setScene(s)
+#s = QtGui.QGraphicsScene()
+#v.setScene(s)
+s = v.scene()
 
 #p = Plot(array([0,2,1,3,4]), copy=False)
 #s.addItem(p)
@@ -48,8 +54,8 @@ im4.setZValue(10)
 
 
 #g = Grid(view=v, bounds=QtCore.QRectF(0.1, 0.1, 0.8, 0.8))
-g = Grid(view=v)
-s.addItem(g)
+#g = Grid(view=v)
+#s.addItem(g)
 
 #wid = RectROI([0,  0], [2, 2], maxBounds=QtCore.QRectF(-1, -1, 5, 5))
 roi = TestROI([0,  0], [20, 20], maxBounds=QtCore.QRectF(-10, -10, 230, 140))

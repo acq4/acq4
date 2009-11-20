@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'graphicsWindow.ui'
 #
-# Created: Tue Jun 16 18:46:03 2009
-#      by: PyQt4 UI code generator 4.4.4
+# Created: Fri Nov 20 08:22:10 2009
+#      by: PyQt4 UI code generator 4.6
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -29,7 +29,7 @@ class Ui_MainWindow(object):
         brush.setStyle(QtCore.Qt.SolidPattern)
         palette.setBrush(QtGui.QPalette.Disabled, QtGui.QPalette.Base, brush)
         self.graphicsView.setPalette(palette)
-        self.graphicsView.setProperty("cursor", QtCore.QVariant(QtCore.Qt.ArrowCursor))
+        self.graphicsView.setProperty("cursor", QtCore.Qt.ArrowCursor)
         self.graphicsView.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.graphicsView.setFrameShape(QtGui.QFrame.NoFrame)
         self.graphicsView.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
@@ -55,7 +55,7 @@ class Ui_MainWindow(object):
         self.spinBox = QtGui.QSpinBox(self.dockWidgetContents_2)
         self.spinBox.setMinimum(1)
         self.spinBox.setMaximum(1000)
-        self.spinBox.setProperty("value", QtCore.QVariant(10))
+        self.spinBox.setProperty("value", 10)
         self.spinBox.setObjectName("spinBox")
         self.hboxlayout.addWidget(self.spinBox)
         self.timeSlider = QtGui.QSlider(self.dockWidgetContents_2)

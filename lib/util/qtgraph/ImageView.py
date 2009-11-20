@@ -17,6 +17,7 @@ class ImageView(QtGui.QWidget):
         self.levelMax = 4096
         self.levelMin = 0
         self.image = None
+        self.imageDisp = None
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         #self.scene = QtGui.QGraphicsScene()
@@ -26,9 +27,13 @@ class ImageView(QtGui.QWidget):
         self.ui.graphicsView.autoPixelRange = False
         self.ui.graphicsView.setAspectLocked(True)
         self.ui.graphicsView.invertY()
+        self.ui.graphicsView.enableMouse()
+        
         self.imageItem = ImageItem()
         self.scene.addItem(self.imageItem)
         self.currentIndex = 0
+        
+        self.ui.normGroup.hide()
 
         self.roi = PlotROI(10)
         self.roi.setZValue(20)
@@ -36,20 +41,39 @@ class ImageView(QtGui.QWidget):
         self.roi.hide()
         self.ui.roiPlot.hide()
         self.roiCurve = self.ui.roiPlot.plot()
-        self.roiTimeLine = Qwt.QwtPlotMarker()
-        self.roiTimeLine.setLinePen(QtGui.QPen(QtGui.QColor(255, 255, 0)))
-        self.roiTimeLine.setLineStyle(Qwt.QwtPlotMarker.VLine)
-        self.roiTimeLine.setXValue(0)
-        self.roiTimeLine.attach(self.ui.roiPlot)
+        #self.roiTimeLine = Qwt.QwtPlotMarker()
+        #self.roiTimeLine.setLinePen(QtGui.QPen(QtGui.QColor(255, 255, 0)))
+        #self.roiTimeLine.setLineStyle(Qwt.QwtPlotMarker.VLine)
+        #self.roiTimeLine.setXValue(0)
+        #self.roiTimeLine.attach(self.ui.roiPlot)
+        self.roiTimeLine = QtGui.QGraphicsLineItem()
+        self.roiTimeLine.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 200)))
+        self.ui.roiPlot.addItem(self.roiTimeLine)
+        
 
 
         QtCore.QObject.connect(self.ui.timeSlider, QtCore.SIGNAL('valueChanged(int)'), self.timeChanged)
         QtCore.QObject.connect(self.ui.whiteSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
         QtCore.QObject.connect(self.ui.blackSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
         QtCore.QObject.connect(self.ui.roiBtn, QtCore.SIGNAL('clicked()'), self.roiClicked)
-        #QtCore.QObject.connect(self.roi, QtCore.SIGNAL('regionChanged'), self.roiChanged)
         self.roi.connect(QtCore.SIGNAL('regionChanged'), self.roiChanged)
+        QtCore.QObject.connect(self.ui.normBtn, QtCore.SIGNAL('toggled(bool)'), self.normToggled)
+        QtCore.QObject.connect(self.ui.normDivideRadio, QtCore.SIGNAL('clicked()'), self.updateNorm)
+        QtCore.QObject.connect(self.ui.normSubtractRadio, QtCore.SIGNAL('clicked()'), self.updateNorm)
+        QtCore.QObject.connect(self.ui.normOffRadio, QtCore.SIGNAL('clicked()'), self.updateNorm)
+        QtCore.QObject.connect(self.ui.normROICheck, QtCore.SIGNAL('clicked()'), self.updateNorm)
+        QtCore.QObject.connect(self.ui.normFrameCheck, QtCore.SIGNAL('clicked()'), self.updateNorm)
+        QtCore.QObject.connect(self.ui.normTimeRangeCheck, QtCore.SIGNAL('clicked()'), self.updateNorm)
+        QtCore.QObject.connect(self.ui.normStartSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
+        QtCore.QObject.connect(self.ui.normStopSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
 
+    def updateNorm(self):
+        self.imageDisp = None
+        self.updateImage()
+        self.roiChanged()
+
+    def normToggled(self, b):
+        self.ui.normGroup.setVisible(b)
 
     def roiClicked(self):
         if self.ui.roiBtn.isChecked():
@@ -61,12 +85,22 @@ class ImageView(QtGui.QWidget):
             self.ui.roiPlot.hide()
 
     def roiChanged(self):
-        if self.image is not None:
-            data = self.roi.getArrayRegion(self.image.view(ndarray), self.imageItem, (1, 2))
-            if data is not None:
-                data = data.mean(axis=1).mean(axis=1)
-                self.roiCurve.setData(y=data, x=self.tVals)
-                self.ui.roiPlot.replot()
+        if self.image is None:
+            return
+            
+        image = self.getProcessedImage()
+        if image.ndim == 2:
+            axes = (0, 1)
+        elif image.ndim == 3:
+            axes = (1, 2)
+        else:
+            return
+        data = self.roi.getArrayRegion(image.view(ndarray), self.imageItem, axes)
+        if data is not None:
+            while data.ndim > 1:
+                data = data.mean(axis=1)
+            self.roiCurve.setData(y=data, x=self.tVals)
+            #self.ui.roiPlot.replot()
 
     def setImage(self, img):
         self.image = img
@@ -75,36 +109,86 @@ class ImageView(QtGui.QWidget):
         else:
             self.tVals = arange(img.shape[0])
         self.ui.timeSlider.setValue(0)
+        self.ui.normStartSlider.setValue(0)
         #self.ui.timeSlider.setMaximum(img.shape[0]-1)
+            
+        self.imageDisp = None
         self.updateImage()
         self.autoRange()
         if self.ui.roiBtn.isChecked():
             self.roiChanged()
         
+    def getProcessedImage(self):
+        if self.imageDisp is None:
+            image = self.normalize(self.image)
+            self.imageDisp = image
+            self.levelMax = float(image.max())
+            self.levelMin = float(image.min())
+        return self.imageDisp
+        
+    def normalize(self, image):
+        
+        if self.ui.normOffRadio.isChecked():
+            return image
+            
+        div = self.ui.normDivideRadio.isChecked()
+        norm = image.copy()
+        #if div:
+            #norm = ones(image.shape)
+        #else:
+            #norm = zeros(image.shape)
+            
+        if self.ui.normTimeRangeCheck.isChecked() and image.ndim == 3:
+            (start, sind) = self.timeIndex(self.ui.normStartSlider)
+            (end, eind) = self.timeIndex(self.ui.normStopSlider)
+            n = image[sind:eind+1].mean(axis=0)
+            n.shape = (1,) + n.shape
+            if div:
+                norm /= n
+            else:
+                norm -= n
+                
+        if self.ui.normFrameCheck.isChecked() and image.ndim == 3:
+            n = image.mean(axis=1).mean(axis=1)
+            n.shape = n.shape + (1, 1)
+            if div:
+                norm /= n
+            else:
+                norm -= n
+            
+        return norm
+        
+        
+        
     def timeChanged(self):
-        (ind, time) = self.timeIndex()
+        (ind, time) = self.timeIndex(self.ui.timeSlider)
         if ind != self.currentIndex:
             self.currentIndex = ind
             self.updateImage()
-        self.roiTimeLine.setXValue(time)
-        self.ui.roiPlot.replot()
+        self.roiTimeLine.setLine(time, -1e6, time, 1e6)
+        #self.ui.roiPlot.replot()
         self.emit(QtCore.SIGNAL('timeChanged'), ind, time)
 
     def updateImage(self):
+        ## Redraw image on screen
         if self.image is None:
             return
-        if self.image.ndim == 3:
-            self.ui.timeSlider.show()
-            self.imageItem.updateImage(self.image[self.currentIndex], white=self.whiteLevel(), black=self.blackLevel())
-        elif self.image.ndim == 2:
-            self.ui.timeSlider.hide()
-            self.imageItem.updateImage(self.image, white=self.whiteLevel(), black=self.blackLevel())
             
-    def timeIndex(self):
+        image = self.getProcessedImage()
+        #print "update:", image.ndim, image.max(), image.min(), self.blackLevel(), self.whiteLevel()
+        if image.ndim == 3:
+            self.ui.timeSlider.show()
+            self.imageItem.updateImage(image[self.currentIndex], white=self.whiteLevel(), black=self.blackLevel())
+        elif image.ndim == 2:
+            self.ui.timeSlider.hide()
+            self.imageItem.updateImage(image, white=self.whiteLevel(), black=self.blackLevel())
+            
+    def timeIndex(self, slider):
+        """Return the time and frame index indicated by a slider"""
         if self.image is None:
             return (0,0)
-        v = self.ui.timeSlider.value()
-        vmax = self.ui.timeSlider.maximum()
+        v = slider.value()
+        vmax = slider.maximum()
         f = float(v) / vmax
         t = 0.0
         #xv = self.image.xvals('Time') 
@@ -124,18 +208,17 @@ class ImageView(QtGui.QWidget):
         return ind, t
             
     def autoRange(self):
-        self.levelMax = float(self.image.max())
-        self.levelMin = float(self.image.min())
+        image = self.getProcessedImage()
         
         self.ui.whiteSlider.setValue(self.ui.whiteSlider.maximum())
         self.ui.blackSlider.setValue(0)
         self.imageItem.setLevels(white=self.whiteLevel(), black=self.blackLevel())
         
-        if self.image.ndim == 2:
+        if image.ndim == 2:
             axes = (0, 1)
-        elif self.image.ndim == 3:
+        elif image.ndim == 3:
             axes = (1, 2)
-        self.ui.graphicsView.setRange(QtCore.QRectF(0, 0, self.image.shape[axes[0]], self.image.shape[axes[1]]), padding=0., lockAspect=True)        
+        self.ui.graphicsView.setRange(QtCore.QRectF(0, 0, image.shape[axes[0]], image.shape[axes[1]]), padding=0., lockAspect=True)        
 
     def whiteLevel(self):
         return self.levelMin + (self.levelMax-self.levelMin) * self.ui.whiteSlider.value() / self.ui.whiteSlider.maximum() 

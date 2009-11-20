@@ -271,13 +271,14 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
     """Class representing a single plot curve."""
     def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None):
         QtGui.QGraphicsWidget.__init__(self, parent)
-        self.xData = None  ## plot values
+        self.xData = None  ## raw values
         self.yData = None
-        self.xSpec = None  ## spectrum values
-        self.ySpec = None
+        self.xDisp = None  ## display values (after log / fft)
+        self.yDisp = None
+        
         
         self.path = None
-        self.specPath = None
+        #self.dispPath = None
         
         if pen is None:
             pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
@@ -291,6 +292,7 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         self.metaDict = {}
         self.opts = {
             'spectrumMode': False,
+            'logMode': [False, False],
             'pointMode': False,
             'pointStyle': None,
             'decimation': False,
@@ -298,23 +300,32 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
             'alphaMode': False
         }
             
-        self.fps = None
+        #self.fps = None
         
     def getData(self):
-        if self.x is None:
+        if self.xData is None:
             return (None, None)
-        if self.opts['spectrumMode']:
-            if self.xSpec is None:
-                self.generateSpecData()
-            return (self.xSpec, self.ySpec)
-        else:
-            return (self.xData, self.yData)
+        if self.xDisp is None:
+            x = self.xData
+            y = self.yData
+            if self.opts['spectrumMode']:
+                f = fft(y) / len(y)
+                y = abs(f[1:len(f)/2])
+                dt = x[-1] - x[0]
+                x = linspace(0, 0.5*len(x)/dt, len(y))
+            if self.opts['logMode'][0]:
+                x = log10(x)
+            if self.opts['logMode'][1]:
+                y = log10(y)
+            self.xDisp = x
+            self.yDisp = y
+        return self.xDisp, self.yDisp
             
-    def generateSpecData(self):
-        f = fft(self.yData) / len(self.yData)
-        self.ySpec = abs(f[1:len(f)/2])
-        dt = self.xData[-1] - self.xData[0]
-        self.xSpec = linspace(0, 0.5*len(self.xData)/dt, len(self.ySpec))
+    #def generateSpecData(self):
+        #f = fft(self.yData) / len(self.yData)
+        #self.ySpec = abs(f[1:len(f)/2])
+        #dt = self.xData[-1] - self.xData[0]
+        #self.xSpec = linspace(0, 0.5*len(self.xData)/dt, len(self.ySpec))
         
     def getRange(self, ax, frac=1.0):
         (x, y) = self.getData()
@@ -346,6 +357,12 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         
     def setSpectrumMode(self, mode):
         self.opts['spectrumMode'] = mode
+        self.xDisp = self.yDisp = None
+        self.update()
+    
+    def setLogMode(self, mode):
+        self.opts['logMode'] = mode
+        self.xDisp = self.yDisp = None
         self.update()
     
     def setPointMode(self, mode):
@@ -392,8 +409,8 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
             self.xData = arange(0, self.y.shape[0])
 
         self.path = None
-        self.specPath = None
-        self.xSpec = self.ySpec = None
+        #self.specPath = None
+        self.xDisp = self.yDisp = None
         self.update()
         self.emit(QtCore.SIGNAL('plotChanged'), self)
         
@@ -479,7 +496,7 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         p.drawPath(path)
         
     def free(self):
-        del self.xData, self.yData, self.xSpec, self.ySpec, self.path, self.specPath
+        del self.xData, self.yData, self.xDisp, self.yDisp, self.path
         
         
 class ROIPlotItem(PlotCurveItem):
