@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os, re, math, time, threading
 from MetaArray import *
 from scipy import *
@@ -207,3 +208,18 @@ def strncmp(a, b):
       if c != 0:
         return c
   return cmp(a, b)
+
+def downsample(data, n, axis):
+    nPts = int(data.shape[axis] / n)
+    s = list(data.shape)
+    s[axis] = nPts
+    s.insert(axis+1, n)
+    sl = [slice(None)] * data.ndim
+    sl[axis] = slice(0, nPts*n)
+    d1 = data[tuple(sl)]
+    #print d1.shape, s
+    d1.shape = tuple(s)
+    return d1.mean(axis+1)
+    
+
+
