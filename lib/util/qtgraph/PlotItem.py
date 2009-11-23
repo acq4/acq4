@@ -164,6 +164,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.xLinkPlot = None
         self.yLinkPlot = None
         self.linksBlocked = False
+        self.manager = None
 
     def __del__(self):
         if self.manager is not None:
@@ -528,37 +529,25 @@ class PlotItem(QtGui.QGraphicsWidget):
         #print "paramList:", self.paramList
 
     def writeSvg(self, fileName=None):
+        print "writeSvg"
         if fileName is None:
-            fileName = str(QtGui.QFileDialog.getSaveFileName())
-        #s = self.size()
-        #self.setSize(self.size() * 4)
+            fileName = QtGui.QFileDialog.getSaveFileName()
+        fileName = str(fileName)
         self.svg = QtSvg.QSvgGenerator()
         self.svg.setFileName(fileName)
         self.svg.setSize(QtCore.QSize(self.size().width(), self.size().height()))
         self.svg.setResolution(600)
         painter = QtGui.QPainter(self.svg)
-        op = QtGui.QStyleOptionGraphicsItem()
-        op.exposedRect = self.boundingRect()
-        op.levelOfDetail = 1
-        op.matrix = self.sceneTransform().toAffine()
-        self.paint(painter, op)
-        #painter.end()
-        #self.setSize(s)
+        self.scene().render(painter, QtCore.QRectF(), self.mapRectToScene(self.boundingRect()))
         
     def writeImage(self, fileName=None):
         if fileName is None:
-            fileName = str(QtGui.QFileDialog.getSaveFileName())
-        self.png = QtGui.QImage(self.size(), QtGui.QImage.Format_ARGB32)
+            fileName = QtGui.QFileDialog.getSaveFileName()
+        fileName = str(fileName)
+        self.png = QtGui.QImage(int(self.size().width()), int(self.size().height()), QtGui.QImage.Format_ARGB32)
         painter = QtGui.QPainter(self.png)
-        #rh = self.renderHints()
-        #self.setRenderHints(QtGui.QPainter.Antialiasing)
-        #self.print_(painter, self.rect())
-        #self.setRenderHints(rh)
-        op = QtGui.QStyleOptionGraphicsItem()
-        op.exposedRect = self.boundingRect()
-        op.levelOfDetail = 1
-        op.matrix = self.sceneTransform().toAffine()
-        self.paint(painter, op)
+        painter.setRenderHints(painter.Antialiasing | painter.TextAntialiasing)
+        self.scene().render(painter, QtCore.QRectF(), self.mapRectToScene(self.boundingRect()))
         painter.end()
         self.png.save(fileName)
         
@@ -760,31 +749,29 @@ class PlotItem(QtGui.QGraphicsWidget):
 
     def saveSvgClicked(self):
         self.fileDialog = QtGui.QFileDialog()
-        if PlotItem.lastFileDir is not None:
-            self.fileDialog.setDirectory(PlotItem.lastFileDir)
+        #if PlotItem.lastFileDir is not None:
+            #self.fileDialog.setDirectory(PlotItem.lastFileDir)
         self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
         self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
         self.fileDialog.show()
-        QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.svgFileSelected)
+        QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.writeSvg)
             
-    def svgFileSelected(self, fileName):
-        #PlotWidget.lastFileDir = os.path.split(fileName)[0]
-        self.writeSvg(str(fileName))
-        self.fileDialog = None
+    #def svgFileSelected(self, fileName):
+        ##PlotWidget.lastFileDir = os.path.split(fileName)[0]
+        #self.writeSvg(str(fileName))
 
     def saveImgClicked(self):
         self.fileDialog = QtGui.QFileDialog()
-        if PlotItem.lastFileDir is not None:
-            self.fileDialog.setDirectory(PlotItem.lastFileDir)
+        #if PlotItem.lastFileDir is not None:
+            #self.fileDialog.setDirectory(PlotItem.lastFileDir)
         self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
         self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
         self.fileDialog.show()
-        QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.imgFileSelected)
+        QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.writeImage)
             
-    def imgFileSelected(self, fileName):
-        #PlotWidget.lastFileDir = os.path.split(fileName)[0]
-        self.writeImage(str(fileName))
-        self.fileDialog = None
+    #def imgFileSelected(self, fileName):
+        ##PlotWidget.lastFileDir = os.path.split(fileName)[0]
+        #self.writeImage(str(fileName))
       
 
 class PlotWidgetManager(QtCore.QObject):
