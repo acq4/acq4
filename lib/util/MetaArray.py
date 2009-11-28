@@ -149,7 +149,7 @@ class MetaArray(ndarray):
         try:
             a = ndarray.__getitem__(self, nInd)
         except:
-            print nInd, nInd[0].shape, self.shape
+            #print nInd, self.shape
             raise
         if type(a) == type(self):  ## generate new info array
             a._info = []

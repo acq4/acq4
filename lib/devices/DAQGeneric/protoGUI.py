@@ -15,9 +15,13 @@ from lib.util.debug import *
 class DAQGenericProtoGui(ProtocolGui):
     def __init__(self, dev, prot):
         ProtocolGui.__init__(self, dev, prot)
-        self.ui = Ui_Form()
-        self.ui.setupUi(self)
-
+        
+        ## Make sure potential subclasses have not already configured their own GUI
+        if not hasattr(self, 'ui'):
+            self.ui = Ui_Form()
+            self.ui.setupUi(self)
+            self.plotParent = self.ui.plotSplitter
+            self.ctrlParent = self.ui.controlSplitter
         
         self.plots = weakref.WeakValueDictionary()
         self.channels = {}
@@ -25,7 +29,7 @@ class DAQGenericProtoGui(ProtocolGui):
         ## Create plots and control widgets
         for ch in self.dev.config:
             conf = self.dev.config[ch]
-            p = PlotWidget(self.ui.plotSplitter)
+            p = PlotWidget(self.plotParent)
             
             units = ''
             if 'units' in conf:
@@ -37,10 +41,10 @@ class DAQGenericProtoGui(ProtocolGui):
             p.registerPlot(self.dev.name + '.' + ch)
             
             if conf['type'] in ['ao', 'do']:
-                w = OutputChannelGui(self.ui.controlSplitter, ch, conf, p, dev, prot)
+                w = OutputChannelGui(self.controlParent, ch, conf, p, dev, prot)
                 QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
             elif conf['type'] in ['ai', 'di']:
-                w = InputChannelGui(self.ui.controlSplitter, ch, conf, p, dev, prot)
+                w = InputChannelGui(self.controlParent, ch, conf, p, dev, prot)
             else:
                 raise Exception("Unrecognized device type '%s'" % conf['type'])
             w.ui.groupBox.setTitle(ch + units)

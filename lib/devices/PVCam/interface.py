@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
+from lib.devices.DAQGeneric.interface import DAQGeneric
 from lib.drivers.pvcam import PVCam as PVCDriver
 from lib.devices.Device import *
 from PyQt4 import QtCore
@@ -12,40 +13,42 @@ import lib.util.ptime as ptime
 from lib.util.Mutex import Mutex, MutexLocker
 from lib.util.debug import *
 
-class PVCam(Device):
+class PVCam(DAQGeneric):
     def __init__(self, dm, config, name):
-        Device.__init__(self, dm, config, name)
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        # Generate config to use for DAQ 
+        daqConfig = {}
+        if 'exposeChannel' in config:
+            daqConfig['exposure'] = {'type': 'di', 'channel': config['exposeChannel']}
+        if 'triggerInChannel' in config:
+            daqConfig['trigger'] = {'type': 'do', 'channel': config['triggerInChannel']}
+        DAQGeneric.__init__(self, dm, daqConfig, name)
+        
+        #self.lock = Mutex(QtCore.QMutex.Recursive)  ## created by DAQGeneric
+        self.camConfig = config
         self.camLock = Mutex(QtCore.QMutex.Recursive)
         self.pvc = PVCDriver
         self.cam = None
         self.acqThread = AcquireThread(self)
         #print "Created PVCam device. Cameras are:", self.pvc.listCameras()
         
-        if 'scaleFactor' not in self.config:
-            self.config['scaleFactor'] = [1, 1]
+        if 'scaleFactor' not in self.camConfig:
+            self.camConfig['scaleFactor'] = [1, 1]
         
         ## Default values for scope state. These will be used if there is no scope defined.
         self.scopeState = {
             'id': 0,
-            'scale': self.config['scaleFactor'],
+            'scale': self.camConfig['scaleFactor'],
             'scopePosition': [0, 0],
             'centerPosition': [0, 0],
             'offset': [0, 0],
             'objScale': 1,
-            'pixelSize': filter(abs, self.config['scaleFactor']),
+            'pixelSize': filter(abs, self.camConfig['scaleFactor']),
             'objective': ''
         }
         
         if 'params' in config:
             self.getCamera().setParams(config['params'])
             
-        if 'exposeChannel' in config:
-            ## create input channel in DAQGeneric
-            pass
-        if 'triggerInChannel' in config:
-            ## create output channel in DAQGeneric
-            pass
         
         if 'scopeDevice' in config:
             self.scopeDev = self.dm.getDevice(config['scopeDevice'])
@@ -103,7 +106,7 @@ class PVCam(Device):
             self.scopeState['objScale'] = scale
             self.scopeState['offset'] = offset
             self.scopeState['centerPosition'] = [pos[0] + offset[0], pos[1] + offset[1]]
-            sf = self.config['scaleFactor']
+            sf = self.camConfig['scaleFactor']
             self.scopeState['scale'] = [sf[0] * scale, sf[1] * scale]
             self.scopeState['pixelSize'] = filter(abs, self.scopeState['scale'])
             self.scopeState['id'] += 1
@@ -116,6 +119,7 @@ class PVCam(Device):
                 raise Exception("Timed out while waiting for thread exit!")
         #self.cam.close()
         self.pvc.quit()
+        DAQGeneric.quit(self)
         #print "Camera device quit."
         
         
@@ -134,13 +138,13 @@ class PVCam(Device):
                     if len(cams) < 1:
                         raise Exception('No cameras found by pvcam driver')
                     
-                    if self.config['serial'] is None:  ## Just pick first camera
+                    if self.camConfig['serial'] is None:  ## Just pick first camera
                         ind = 0
                     else:
-                        if self.config['serial'] in cams:
-                            ind = cams.index(self.config['serial'])
+                        if self.camConfig['serial'] in cams:
+                            ind = cams.index(self.camConfig['serial'])
                         else:
-                            raise Exception('Can not find pvcam camera "%s"' % str(self.config['serial']))
+                            raise Exception('Can not find pvcam camera "%s"' % str(self.camConfig['serial']))
                     print "Selected camera:", cams[ind]
                     self.cam = self.pvc.getCamera(cams[ind])
                 return self.cam
@@ -153,11 +157,11 @@ class PVCam(Device):
     #@ftrace
     def getTriggerChannel(self, daq):
         with MutexLocker(self.lock):
-            if not 'triggerOutChannel' in self.config:
+            if not 'triggerOutChannel' in self.camConfig:
                 return None
-            if self.config['triggerOutChannel'][0] != daq:
+            if self.camConfig['triggerOutChannel'][0] != daq:
                 return None
-            return self.config['triggerOutChannel'][1]
+            return self.camConfig['triggerOutChannel'][1]
         
     def startAcquire(self, params=None):
         with MutexLocker(self.lock):
@@ -232,8 +236,8 @@ class PVCam(Device):
         """Return the dimensions of 1 pixel with signs if the image is flipped"""
         with MutexLocker(self.lock):
             return self.scopeState['scale']
-            #if 'scaleFactor' in self.config:
-                #sf = self.config['scaleFactor']
+            #if 'scaleFactor' in self.camConfig:
+                #sf = self.camConfig['scaleFactor']
             #else:
                 #sf = [1, 1]
             #if self.scopeDev is None:
@@ -276,7 +280,7 @@ class PVCam(Device):
             return None
         
         with MutexLocker(self.lock):
-            sf = self.config['scaleFactor']
+            sf = self.camConfig['scaleFactor']
             size = self.cam.getSize()
             sx = size[0] * obj['scale'] * sf[0]
             sy = size[1] * obj['scale'] * sf[1]
@@ -302,9 +306,10 @@ class PVCam(Device):
         
         
 
-class Task(DeviceTask):
+class Task(DAQGenericTask):
     def __init__(self, dev, cmd):
-        DeviceTask.__init__(self, dev, cmd)
+        DAQGenericTask.__init__(self, dev, cmd['channels'])
+        self.camCmd = cmd
         self.lock = Mutex()
         self.recordHandle = None
         self.stopAfter = False
@@ -320,30 +325,30 @@ class Task(DeviceTask):
             'record': True,
             'triggerProtocol': False,
             'triggerMode': 'Normal',
-            'recordExposeChannel': False
+            #'recordExposeChannel': False
         }
         for k in defaults:
-            if k not in self.cmd:
-                self.cmd[k] = defaults[k]
+            if k not in self.camCmd:
+                self.camCmd[k] = defaults[k]
         
         ## Determine whether to restart acquisition after protocol
         self.stopAfter = (not self.dev.isRunning())
         
         ## if the camera is being triggered by the daq, stop it now
-        if self.cmd['triggerMode'] != 'Normal':
+        if self.camCmd['triggerMode'] != 'Normal':
             self.dev.stopAcquire(block=True)  
             
         ## If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
         name = self.dev.devName()
-        if self.cmd['triggerProtocol']:
+        if self.camCmd['triggerProtocol']:
             #print "Stopping camera before task start.."
             self.dev.stopAcquire(block=True)  
             #print "done"
             #print "running:", self.dev.acqThread.isRunning()
-            daqName = self.dev.config['triggerOutChannel'][0]
+            daqName = self.dev.camConfig['triggerOutChannel'][0]
             startOrder.remove(name)
             startOrder.insert(startOrder.index(daqName)+1, name)
-        elif 'forceStop' in self.cmd and self.cmd['forceStop'] is True:
+        elif 'forceStop' in self.camCmd and self.camCmd['forceStop'] is True:
             self.dev.stopAcquire(block=True)  
             
             
@@ -357,6 +362,10 @@ class Task(DeviceTask):
         ## connect using acqThread's connect method because there may be no event loop
         ## to deliver signals here.
         self.dev.acqThread.connect(self.newFrame)
+        
+        
+        ## Call the DAQ configure
+        DAQGenericTask.configure(self, tasks, startOrder)
             
     def newFrame(self, frame):
         dis = False
@@ -369,19 +378,20 @@ class Task(DeviceTask):
         if dis:   ## Must be done only after unlocking mutex
             self.dev.acqThread.disconnect(self.newFrame)
 
-    def createChannels(self, daqTask):
-        ## Are we interested in recording the expose signal?
-        if ('recordExposeChannel' not in self.cmd) or (not self.cmd['recordExposeChannel']):
-            return
+    ### Now handled by DAQGenericTask.createChannels
+    #def createChannels(self, daqTask):
+        ### Are we interested in recording the expose signal?
+        #if ('recordExposeChannel' not in self.camCmd) or (not self.camCmd['recordExposeChannel']):
+            #return
             
-        ## Is this the correct DAQ device to record the expose signal? 
-        if daqTask.devName() != self.dev.config['exposeChannel'][0]:
-            return
+        ### Is this the correct DAQ device to record the expose signal? 
+        #if daqTask.devName() != self.dev.camConfig['exposeChannel'][0]:
+            #return
         
-        ## Then: create DI channel
-        daqTask.addChannel(self.dev.config['exposeChannel'][1], 'di')
+        ### Then: create DI channel
+        #daqTask.addChannel(self.dev.camConfig['exposeChannel'][1], 'di')
         
-        self.daqTask = daqTask
+        #self.daqTask = daqTask
         
     def start(self):
         ## arm recording
@@ -392,23 +402,30 @@ class Task(DeviceTask):
         ## start acquisition if needed
         #print "stopAfter:", self.stopAfter
         
-        #print "Camera start acquire: ", self.cmd['triggerMode']
-        self.dev.startAcquire({'mode': self.cmd['triggerMode']})
+        #print "Camera start acquire: ", self.camCmd['triggerMode']
+        self.dev.startAcquire({'mode': self.camCmd['triggerMode']})
         
-        ## If we requested a trigger mode, wait 200ms for the camera to get ready for the trigger
+        ## If we requested a trigger mode, wait 300ms for the camera to get ready for the trigger
         ##   (Is there a way to ask the camera when it is ready instead?)
-        if self.cmd['triggerMode'] is not None:
+        if self.camCmd['triggerMode'] is not None:
             time.sleep(0.3)
+            
+        ## Last I checked, this does nothing. It should be here anyway, though..
+        DAQGenericTask.start(self)
+        
         
     def isDone(self):
         ## should return false if recording is required to run for a specific time.
-        if 'minFrames' in self.cmd:
+        if 'minFrames' in self.camCmd:
             with MutexLocker(self.lock):
-                if len(self.frames) < self.cmd['minFrames']:
+                if len(self.frames) < self.camCmd['minFrames']:
                     return False
-        return True
+        return DAQGenericTask.isDone(self)  ## Should return True.
         
     def stop(self):
+        ## Stop DAQ first
+        DAQGenericTask.stop(self)
+        
         #print "stop camera task"
         #self.recordHandle.stop()
         with MutexLocker(self.lock):
@@ -431,13 +448,14 @@ class Task(DeviceTask):
                 
     def getResult(self):
         #print "get result from camera task.."
-        expose = None
+        #expose = None
         ## generate MetaArray of expose channel if it was recorded
-        if ('recordExposeChannel' in self.cmd) and self.cmd['recordExposeChannel']:
-            expose = self.daqTask.getData(self.dev.config['exposeChannel'][1])
-            timeVals = linspace(0, float(expose['info']['numPts']-1) / float(expose['info']['rate']), expose['info']['numPts'])
-            info = [axis(name='Time', values=timeVals), expose['info']]
-            expose = MetaArray(expose['data'], info=info)
+        #if ('recordExposeChannel' in self.camCmd) and self.camCmd['recordExposeChannel']:
+            #expose = self.daqTask.getData(self.dev.camConfig['exposeChannel'][1])
+            #timeVals = linspace(0, float(expose['info']['numPts']-1) / float(expose['info']['rate']), expose['info']['numPts'])
+            #info = [axis(name='Time', values=timeVals), expose['info']]
+            #expose = MetaArray(expose['data'], info=info)
+        daqResult = DAQGenericTask.getResult(self)
             
         ## generate MetaArray of images collected during recording
         #data = self.recordHandle.data()
@@ -455,6 +473,9 @@ class Task(DeviceTask):
                 marr = None
             
         ## If exposure channel was recorded, update frame times to match.
+        expose = None
+        if daqResult is not None and daqResult.hasColumn('Channel', 'exposure'):
+            expose = daqResult['Channel':'exposure']
         if expose is not None and marr is not None:
             ## Extract times from trace
             ex = expose.view(ndarray)
@@ -484,9 +505,8 @@ class Task(DeviceTask):
             vals[len(onTimes):] -= txLen + expLen
             #print "New times:", vals
             
-            
-            
-        return {'frames': marr, 'expose': expose}
+        ## Generate final result, incorporating data from DAQ
+        return {'frames': marr, 'channels': daqResult}
         
     def storeResult(self, dirHandle):
         result = self.getResult()
@@ -554,8 +574,8 @@ class AcquireThread(QtCore.QThread):
         binning = self.state['binning']
         
         ## Make sure binning value is acceptable (stupid driver problem)
-        if 'allowedBinning' in self.dev.config and binning not in self.dev.config['allowedBinning']:
-            ab = self.dev.config['allowedBinning'][:]
+        if 'allowedBinning' in self.dev.camConfig and binning not in self.dev.camConfig['allowedBinning']:
+            ab = self.dev.camConfig['allowedBinning'][:]
             ab.sort()
             if binning < ab[0]:
                 binning = ab[0]
@@ -762,37 +782,3 @@ class AcquireThread(QtCore.QThread):
             #self.start(QtCore.QThread.HighPriority)
             self.start()
 
-
-#class CameraTask(QObject):
-    #def __init__(self, cam, maxTime=None):
-        #self.cam = cam
-        #self.maxTime = maxTime
-        #self.lock = Mutex()
-        #self.frames = []
-        #self.recording = True
-        #QtCore.QObject.connect(self.cam, QtCore.SIGNAL('newFrame'), self.newFrame)
-    
-    ##def addFrame(self, frame):
-        ###print "CameraTask.Add frame"
-        ##with MutexLocker(self.lock):
-            ##self.frames.append(frame)
-            ##rec = self.recording
-        ##if not rec:
-            ##self.cam.removeTask(self)
-            ###print "CameraTask.Add frame done"
-        
-    #def newFrame(self, frame):
-        #self.frames.append(frame)
-        #if not self.recording:
-            #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('newFrame'), self.newFrame)
-
-
-    #def data(self):
-        ##with MutexLocker(self.lock):
-        #return self.frames
-    
-    #def stop(self):
-        ##print "Stop cam record"
-        ##with MutexLocker(self.lock):
-        #self.recording = False
-    

@@ -12,6 +12,7 @@ from lib.util.qtgraph.GraphicsView import *
 from lib.util.qtgraph.graphicsItems import *
 from lib.util.qtgraph.PlotWidget import *
 from PyQt4 import QtCore, QtGui
+from lib.util.functions import *
 
 plots = []
 images = []

@@ -63,6 +63,7 @@ class DAQGenericTask(DeviceTask):
         self.bufferedChannels = []
         
     def configure(self, tasks, startOrder):
+        ## Record initial state or set initial value
         with MutexLocker(self.dev.lock):
             #self.daqTasks = {}
             self.initialState = {}
