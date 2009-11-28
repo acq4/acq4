@@ -624,42 +624,22 @@ class AcquireThread(QtCore.QThread):
             while True:
                 ti = 0
                 #times[ti] = ptime.time(); ti += 1
+                now = ptime.time()
                 frame = self.cam.lastFrame()
                 #times[ti] = ptime.time(); ti += 1  ## +40us
                 ## If a new frame is available, process it and inform other threads
                 if frame is not None and frame != lastFrame:
                     #print 'frame'
-                    now = ptime.time() #time.clock()
                     if lastFrame is not None:
-                        diff = ((frame + self.ringSize) - lastFrame) % self.ringSize
-                        if diff > 1:
-                            print "Dropped %d frames after %d" % (diff-1, self.frameId)
-                            self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped %d frame(s) after frame %d. (%02g since last frame arrived)" % (diff-1, self.frameId, now-lastFrameTime))
-                    lastFrame = frame
-                    #times[ti] = ptime.time(); ti += 1  # +130us
+                        diff = (frame - lastFrame) % self.ringSize
+                        if diff > (self.ringSize / 2):
+                            print "Image acquisition buffer is at least half full (possible dropped frames)"
+                            #self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped %d frame(s) after frame %d. (%02g since last frame arrived)" % (diff-1, self.frameId, now-lastFrameTime))
+                            
+                            
+                    ## Build meta-info for this frame(s)
+                    info = {'binning': binning, 'exposure': exposure, 'region': region}
                     
-                    ## Build meta-info for this frame
-                    ## Use lastFrameTime because the current frame _began_ exposing when the previous frame arrived.
-                    info = {'id': self.frameId, 'time': now, 'binning': binning, 'exposure': exposure, 'region': region}
-                    
-                    #ps = self.dev.getPixelSize()
-                    #if ps is not None:
-                        #ps2 = (ps[0] * binning, ps[1] * binning)
-                        #info['pixelSize'] = ps2
-                    #obj = self.dev.getObjective()
-                    #if obj is not None:
-                        #info['objective'] = obj
-                    #pos = self.dev.getPosition()  ## pos is the position of the center of the sensor
-                    #if pos is not None:
-                        #info['centerPosition'] = pos
-                        #if ps is not None and size is not None:
-                            ##print pos, size, ps, region
-                            #pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
-                            #info['imagePosition'] = pos2
-                    #sPos = self.dev.getPosition(justScope=True)
-                    #if sPos is not None:
-                        #info['scopePosition'] = sPos
-                        
                     ## frameInfo includes pixelSize, objective, centerPosition, scopePosition, imagePosition
                     ss = self.dev.getScopeState()
                     #print ss
@@ -681,39 +661,36 @@ class AcquireThread(QtCore.QThread):
                     ## Copy frame info to info array
                     for k in frameInfo:
                         info[k] = frameInfo[k]
-                    #times[ti] = ptime.time(); ti += 1   ## + 3600us
-
+                    
+                    
+                    
+                    ## Process all waiting frames. If there is more than one frame waiting, guess the frame times.
+                    dt = (now - lastFrameTime) / diff
+                    for i in range(diff):
+                        fInd = (i+lastFrame+1) % self.ringSize
+                        
+                        frameInfo = info.copy()
+                        frameInfo['time'] = lastFrameTime + (dt * (i+1))
+                        frameInfo['id'] = self.frameId
+                        
+                        ## Inform that new frame is ready
+                        outFrame = (self.acqBuffer[fInd].copy(), frameInfo)
+                        
+                        with MutexLocker(self.connectMutex):
+                            conn = self.connections[:]
+                        for c in conn:
+                            c(outFrame)
+                        self.emit(QtCore.SIGNAL("newFrame"), outFrame)
+                        
+                        self.frameId += 1
+                            
+                    lastFrame = frame
                     lastFrameTime = now
                     
-                    ## Inform that new frame is ready
-                    outFrame = (self.acqBuffer[frame].copy(), info)
-                    #times[ti] = ptime.time(); ti += 1  ## +1130us
-                    
-                    with MutexLocker(self.connectMutex):
-                        conn = self.connections[:]
-                    for c in conn:
-                        c(outFrame)
-                    #times[ti] = ptime.time(); ti += 1  ## + 169us
-                    self.emit(QtCore.SIGNAL("newFrame"), outFrame)
-                    #times[ti] = ptime.time(); ti += 1  ## + 26us
-                    
-                    ## Lock task array and copy before tinkering with it
-                    #print "lock", self.lock.depth()
-                    #self.lock.lock(id="PVCam/interface.py AcquireThread.run near 465")
-                    #print "locked", self.lock.depth()
-                    #try:
-                        ##tasks = self.tasks[:]
-                        #for t in self.tasks:
-                            #t.addFrame(outFrame)
-                    #finally:
-                        #self.lock.unlock()
-                    #print "unlock", self.lock.depth()
-
-                    self.frameId += 1
                     
                     ## mandatory sleep until 1ms before next expected frame
                     ## Otherwise the CPU is constantly tied up waiting for new frames.
-                    sleepTime = (lastFrameTime + exposure - 1e-3) - ptime.time()
+                    sleepTime = (now + exposure - 1e-3) - ptime.time()
                     if sleepTime > 0:
                         #print "Sleep %f sec"% sleepTime
                         time.sleep(sleepTime)
@@ -724,7 +701,7 @@ class AcquireThread(QtCore.QThread):
                 time.sleep(100e-6)
                 
                 
-                now = ptime.time()
+                #now = ptime.time()
                 ## check for stop request every 10ms
                 if now - lastStopCheck > 10e-3: 
                     lastStopCheck = now
