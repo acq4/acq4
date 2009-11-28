@@ -329,11 +329,13 @@ class Task(DAQGenericTask):
         
         ## if the camera is being triggered by the daq, stop it now
         if self.camCmd['triggerMode'] != 'Normal':
+            #print "Stop camera--restarting in trigger mode."
             self.dev.stopAcquire(block=True)  
             
         ## If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
         name = self.dev.devName()
         if self.camCmd['triggerProtocol']:
+            #print "Stop camera--will trigger DAQ on start"
             #print "Stopping camera before task start.."
             self.dev.stopAcquire(block=True)  
             #print "done"
@@ -342,6 +344,7 @@ class Task(DAQGenericTask):
             startOrder.remove(name)
             startOrder.insert(startOrder.index(daqName)+1, name)
         elif 'forceStop' in self.camCmd and self.camCmd['forceStop'] is True:
+            #print "Stop camera--requested by protocol"
             self.dev.stopAcquire(block=True)  
             
             
@@ -399,7 +402,8 @@ class Task(DAQGenericTask):
         #print "stopAfter:", self.stopAfter
         
         #print "Camera start acquire: ", self.camCmd['triggerMode']
-        self.dev.startAcquire({'mode': self.camCmd['triggerMode']})
+        if not self.dev.isRunning():
+            self.dev.startAcquire({'mode': self.camCmd['triggerMode']})
         
         ## If we requested a trigger mode, wait 300ms for the camera to get ready for the trigger
         ##   (Is there a way to ask the camera when it is ready instead?)
@@ -428,14 +432,15 @@ class Task(DAQGenericTask):
             self.stopRecording = True
         #print "stop camera task: done"
         #print "Stop camera acquisition"
-        self.dev.stopAcquire()
+        if self.stopAfter:
+            self.dev.stopAcquire()
         #print "done"
         
         ## If this task made any changes to the camera state, return them now
         for k in self.returnState:
             self.dev.setParam(k, self.returnState[k])
             
-        if not self.stopAfter:
+        if not self.stopAfter and (not self.dev.isRunning() or self.camCmd['triggerMode'] != 'Normal'):
             #print "restart camera"
             self.dev.startAcquire({'mode': 'Normal'})
         #else:
@@ -468,11 +473,11 @@ class Task(DAQGenericTask):
                 #print "returning no frames"
                 marr = None
             
-        ## If exposure channel was recorded, update frame times to match.
+        ## If exposure channel was recorded and the camera was triggered, update frame times to match.
         expose = None
         if daqResult is not None and daqResult.hasColumn('Channel', 'exposure'):
             expose = daqResult['Channel':'exposure']
-        if expose is not None and marr is not None:
+        if expose is not None and marr is not None and self.camCmd['triggerMode'] != 'Normal':
             timeVals = expose.xvals('Time')
             
             ## Extract times from trace
