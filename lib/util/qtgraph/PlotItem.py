@@ -12,6 +12,7 @@ class PlotItem(QtGui.QGraphicsWidget):
     def __init__(self, parent=None):
         QtGui.QGraphicsWidget.__init__(self, parent)
         self.layout = QtGui.QGraphicsGridLayout()
+        self.layout.setContentsMargins(0,0,0,0)
         self.setLayout(self.layout)
         self.layout.setHorizontalSpacing(0)
         self.layout.setVerticalSpacing(0)

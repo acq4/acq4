@@ -287,7 +287,7 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         self.shadow = shadow
         if y is not None:
             self.updateData(y, x, copy)
-        #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
+        self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
         self.metaDict = {}
         self.opts = {
@@ -468,15 +468,15 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
     def paint(self, p, opt, widget):
         if self.xData is None:
             return
-        if self.opts['spectrumMode']:
-            if self.specPath is None:
+        #if self.opts['spectrumMode']:
+            #if self.specPath is None:
                 
-                self.specPath = self.generatePath(*self.getData())
-            path = self.specPath
-        else:
-            if self.path is None:
-                self.path = self.generatePath(*self.getData())
-            path = self.path
+                #self.specPath = self.generatePath(*self.getData())
+            #path = self.specPath
+        #else:
+        if self.path is None:
+            self.path = self.generatePath(*self.getData())
+        path = self.path
             
         ## Copy pens and apply alpha adjustment
         sp = QtGui.QPen(self.shadow)

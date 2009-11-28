@@ -143,7 +143,7 @@ class ImageView(QtGui.QWidget):
         if self.ui.normTimeRangeCheck.isChecked() and image.ndim == 3:
             (sind, start) = self.timeIndex(self.ui.normStartSlider)
             (eind, end) = self.timeIndex(self.ui.normStopSlider)
-            print start, end, sind, eind
+            #print start, end, sind, eind
             n = image[sind:eind+1].mean(axis=0)
             n.shape = (1,) + n.shape
             if div:
