@@ -129,7 +129,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.show()
     
     def quit(self):
-        print "Stopping patch thread.."
+        #print "Stopping patch thread.."
         self.thread.stop(block=True)
         
     def closeEvent(self, ev):
@@ -529,5 +529,5 @@ class PatchThread(QtCore.QThread):
             self.stopThread = True
         if block:
             if not self.wait(10000):
-                raise Exception("Timed out while waiting for thread exit!")
+                raise Exception("Timed out while waiting for patch thread exit!")
                 

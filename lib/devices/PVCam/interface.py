@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.DAQGeneric.interface import DAQGeneric
+from lib.devices.DAQGeneric.interface import DAQGeneric, DAQGenericTask
 from lib.drivers.pvcam import PVCam as PVCDriver
 from lib.devices.Device import *
 from PyQt4 import QtCore
@@ -298,13 +298,6 @@ class PVCam(DAQGeneric):
             return self.scopeState
         
         
-        
-        
-        
-       
-        
-        
-        
 
 class Task(DAQGenericTask):
     def __init__(self, dev, cmd):
@@ -371,6 +364,9 @@ class Task(DAQGenericTask):
         dis = False
         with MutexLocker(self.lock):
             if self.recording:
+                #print "New frame"
+                #if self.stopRecording:
+                    #print "Adding in last frame %d" % len(self.frames)
                 self.frames.append(frame)
             if self.stopRecording:
                 self.recording = False
@@ -477,6 +473,8 @@ class Task(DAQGenericTask):
         if daqResult is not None and daqResult.hasColumn('Channel', 'exposure'):
             expose = daqResult['Channel':'exposure']
         if expose is not None and marr is not None:
+            timeVals = expose.xvals('Time')
+            
             ## Extract times from trace
             ex = expose.view(ndarray)
             exd = ex[1:] - ex[:-1]
@@ -498,11 +496,16 @@ class Task(DAQGenericTask):
             ## Determine average exposure time (excluding first frame)
             expLen = (offTimes[1:len(onTimes)] - onTimes[1:len(offTimes)]).mean()
             
-            ## New times list is onTimes, any extra frames use their original time offset by txLen and expLen
+            ## New times list is onTimes, any extra frames just increment by tx+exp time
             vals = marr.xvals('Time')
             #print "Original times:", vals
             vals[:len(onTimes)] = onTimes[:len(vals)]
-            vals[len(onTimes):] -= txLen + expLen
+            lastTime = onTimes[-1]
+            for i in range(len(onTimes), len(vals)):
+                lastTime += txLen+expLen
+                #print "Guessing time for frame %d: %f" % (i, lastTime)
+                vals[i] = lastTime 
+            #vals[len(onTimes):] -= txLen + expLen
             #print "New times:", vals
             
         ## Generate final result, incorporating data from DAQ
@@ -635,8 +638,11 @@ class AcquireThread(QtCore.QThread):
                         if diff > (self.ringSize / 2):
                             print "Image acquisition buffer is at least half full (possible dropped frames)"
                             #self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped %d frame(s) after frame %d. (%02g since last frame arrived)" % (diff-1, self.frameId, now-lastFrameTime))
-                            
-                            
+                    else:
+                        lastFrame = frame-1
+                        diff = 1
+                        
+                    #print type(diff), type(frame), type(lastFrame), type(self.ringSize)
                     ## Build meta-info for this frame(s)
                     info = {'binning': binning, 'exposure': exposure, 'region': region}
                     

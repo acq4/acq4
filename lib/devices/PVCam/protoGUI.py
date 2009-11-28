@@ -2,6 +2,7 @@
 from PyQt4 import QtCore, QtGui
 from ProtocolTemplate import *
 from lib.devices.DAQGeneric.protoGUI import DAQGenericProtoGui
+from lib.devices.Device import ProtocolGui
 from lib.util.WidgetGroup import *
 from lib.util.PlotWidget import PlotCurve
 from numpy import ndarray
@@ -9,15 +10,14 @@ from PyQt4 import Qwt5 as Qwt
 
 class PVCamProto(DAQGenericProtoGui):
     def __init__(self, dev, prot):
-        ## Set up ui first so DAQGeneric won't try to.
+        DAQGenericProtoGui.__init__(self, dev, prot, ownUi=False)  ## When initializing superclass, make sure it knows this class is creating the ui.
+        
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        self.stateGroup = WidgetGroup(self) ## create state group before DAQ creates its own interface
         
-        ## Make sure DAQ knows where to add plots and channel controls
-        self.plotParent = self.ui.plotSplitter
-        self.ctrlParent = self.ui.ctrlSplitter
-        DAQGenericProtoGui.__init__(self, dev, prot)
-        self.stateGroup = WidgetGroup(self)
+        DAQGenericProtoGui.createChannelWidgets(self, self.ui.ctrlSplitter, self.ui.plotSplitter)
+        
         #self.stateGroup = WidgetGroup([
             #(self.ui.recordCheck, 'record'),
             #(self.ui.triggerCheck, 'trigger'),
@@ -69,14 +69,16 @@ class PVCamProto(DAQGenericProtoGui):
 
     def saveState(self):
         s = self.currentState()
+        s['daqState'] = DAQGenericProtoGui.saveState(self)
         return s
         
     def restoreState(self, state):
         self.stateGroup.setState(state)
+        DAQGenericProtoGui.restoreState(self, state['daqState'])
         
         
     def generateProtocol(self, params=None):
-        daqProt = DAQGenericProtGUI.generateProtocol(self, params)
+        daqProt = DAQGenericProtoGui.generateProtocol(self, params)
         
         if params is None:
             params = {}
@@ -103,7 +105,7 @@ class PVCamProto(DAQGenericProtoGui):
             else:
                 self.ui.imageView.setImage(result['frames'])
                 
-        DAQGenericProtoGUI.handleResult(result['channels'], params)
+        DAQGenericProtoGui.handleResult(self, result['channels'], params)
         #if state['displayExposureCheck'] and 'expose' in result and result['expose'] is not None:
             #d = result['expose']
             #if self.exposeCurve is None:

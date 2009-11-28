@@ -13,23 +13,30 @@ import weakref
 from lib.util.debug import *
 
 class DAQGenericProtoGui(ProtocolGui):
-    def __init__(self, dev, prot):
+    def __init__(self, dev, prot, ownUi=True):
         ProtocolGui.__init__(self, dev, prot)
         
-        ## Make sure potential subclasses have not already configured their own GUI
-        if not hasattr(self, 'ui'):
+        if ownUi:
             self.ui = Ui_Form()
             self.ui.setupUi(self)
-            self.plotParent = self.ui.plotSplitter
-            self.ctrlParent = self.ui.controlSplitter
+            self.stateGroup = WidgetGroup([
+                (self.ui.topSplitter, 'splitter1'),
+                (self.ui.controlSplitter, 'splitter2'),
+                (self.ui.plotSplitter, 'splitter3'),
+            ])
+            self.createChannelWidgets(self.ui.controlSplitter, self.ui.plotSplitter)
+        else:
+            ## If ownUi is False, then the UI is created elsewhere and createChannelWidgets must be called from there too.
+            self.stateGroup = None
         
+    def createChannelWidgets(self, ctrlParent, plotParent):
         self.plots = weakref.WeakValueDictionary()
         self.channels = {}
         
         ## Create plots and control widgets
         for ch in self.dev.config:
             conf = self.dev.config[ch]
-            p = PlotWidget(self.plotParent)
+            p = PlotWidget(plotParent)
             
             units = ''
             if 'units' in conf:
@@ -41,25 +48,21 @@ class DAQGenericProtoGui(ProtocolGui):
             p.registerPlot(self.dev.name + '.' + ch)
             
             if conf['type'] in ['ao', 'do']:
-                w = OutputChannelGui(self.controlParent, ch, conf, p, dev, prot)
+                w = OutputChannelGui(ctrlParent, ch, conf, p, self.dev, self.prot)
                 QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
             elif conf['type'] in ['ai', 'di']:
-                w = InputChannelGui(self.controlParent, ch, conf, p, dev, prot)
+                w = InputChannelGui(ctrlParent, ch, conf, p, self.dev, self.prot)
             else:
                 raise Exception("Unrecognized device type '%s'" % conf['type'])
             w.ui.groupBox.setTitle(ch + units)
             self.channels[ch] = w
         
-        self.stateGroup = WidgetGroup([
-            (self.ui.topSplitter, 'splitter1'),
-            (self.ui.controlSplitter, 'splitter2'),
-            (self.ui.plotSplitter, 'splitter3'),
-        ])
-        #QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('taskStarted'), self.protoStarted)
-        
 
     def saveState(self):
-        state = self.stateGroup.state().copy()
+        if self.stateGroup is not None:
+            state = self.stateGroup.state().copy()
+        else:
+            state = {}
         state['channels'] = {}
         for ch in self.channels:
             state['channels'][ch] = self.channels[ch].saveState()
@@ -67,7 +70,8 @@ class DAQGenericProtoGui(ProtocolGui):
 
     def restoreState(self, state):
         try:
-            self.stateGroup.setState(state)
+            if self.stateGroup is not None:
+                self.stateGroup.setState(state)
             for ch in state['channels']:
                 self.channels[ch].restoreState(state['channels'][ch])
         except:

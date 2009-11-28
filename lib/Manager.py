@@ -371,6 +371,8 @@ Valid options are:
                 m = self.modules.keys()[0]
                 print "    %s" % m
                 self.modules[m].quit()
+                if m in self.modules:
+                    del self.modules[m]
             #pdb.set_trace()
                 
             print "Requesting all devices shut down.."

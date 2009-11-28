@@ -154,7 +154,7 @@ class PVCamera(QtGui.QMainWindow):
         #self.scene.addItem(grid)
         
         self.scaleBar = ScaleBar(self.gv, 100e-6)
-        #self.scene.addItem(self.scaleBar)
+        self.scene.addItem(self.scaleBar)
         
         #self.gv.setScene(self.scene)
         self.gv.setAspectLocked(True)
@@ -259,6 +259,7 @@ class PVCamera(QtGui.QMainWindow):
             border.setAcceptedMouseButtons(QtCore.Qt.NoButton)
             border.setPen(QtGui.QPen(QtGui.QColor(50,80,80))) 
             border.setZValue(10)
+            self.scopeItemGroup.resetTransform()
             self.scopeItemGroup.addToGroup(border)
             self.borders.append(border)
         self.updateCameraDecorations()
