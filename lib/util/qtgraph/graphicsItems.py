@@ -319,6 +319,8 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
                 y = log10(y)
             self.xDisp = x
             self.yDisp = y
+        #print self.yDisp.shape, self.yDisp.min(), self.yDisp.max()
+        #print self.xDisp.shape, self.xDisp.min(), self.xDisp.max()
         return self.xDisp, self.yDisp
             
     #def generateSpecData(self):
@@ -358,11 +360,13 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
     def setSpectrumMode(self, mode):
         self.opts['spectrumMode'] = mode
         self.xDisp = self.yDisp = None
+        self.path = None
         self.update()
     
     def setLogMode(self, mode):
         self.opts['logMode'] = mode
         self.xDisp = self.yDisp = None
+        self.path = None
         self.update()
     
     def setPointMode(self, mode):
