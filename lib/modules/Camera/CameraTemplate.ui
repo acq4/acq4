@@ -663,7 +663,7 @@ background division.</string>
       </layout>
      </item>
      <item>
-      <widget class="QWidget" name="plotWidget" native="true">
+      <widget class="PlotWidget" name="plotWidget" native="true">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
          <horstretch>0</horstretch>
@@ -725,6 +725,14 @@ background division.</string>
   </widget>
  </widget>
  <layoutdefault spacing="2" margin="0"/>
+ <customwidgets>
+  <customwidget>
+   <class>PlotWidget</class>
+   <extends>QWidget</extends>
+   <header>lib.util.qtgraph.PlotWidget</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>
