@@ -223,7 +223,7 @@ Valid options are:
 
     def loadModule(self, module, name, config=None):
         """Create a new instance of a module"""
-        print 'Loading module "%s" as "%s"...' % (module, name)
+        #print 'Loading module "%s" as "%s"...' % (module, name)
         if config is None:
             config = {}
         mod = __import__('lib.modules.%s.interface' % module, fromlist=['*'])

@@ -219,7 +219,7 @@
   <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
-   <header>lib.util.PlotWidget</header>
+   <header>lib.util.qtgraph.PlotWidget</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

@@ -29,7 +29,7 @@
       <property name="orientation">
        <enum>Qt::Horizontal</enum>
       </property>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <layout class="QVBoxLayout" name="verticalLayout">
         <property name="spacing">
          <number>0</number>
@@ -572,7 +572,7 @@
        </widget>
       </widget>
      </widget>
-     <widget class="QWidget" name="">
+     <widget class="QWidget" name="layoutWidget">
       <layout class="QVBoxLayout" name="plotLayout">
        <property name="spacing">
         <number>0</number>
@@ -587,7 +587,7 @@
   <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
-   <header>lib.util.PlotWidget</header>
+   <header>lib.util.qtgraph.PlotWidget</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

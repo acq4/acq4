@@ -5,7 +5,7 @@ from PyQt4 import QtGui, QtCore
 import AOChannelTemplate, DOChannelTemplate, InputChannelTemplate
 from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
-from lib.util.PlotWidget import PlotCurve
+#from lib.util.qtgraph.PlotWidget import PlotCurveItem
 import numpy
 import sip
 
@@ -37,8 +37,8 @@ class DaqChannelGui(QtGui.QWidget):
         
         ## plot widget
         self.plot = plot
-        plot.setCanvasBackground(QtGui.QColor(0,0,0))
-        plot.replot()
+        #plot.setCanvasBackground(QtGui.QColor(0,0,0))
+        #plot.replot()
         
         ## Curves displayed in self.plot
         #self.plots = []
@@ -169,7 +169,7 @@ class OutputChannelGui(DaqChannelGui):
         for w in waves:
             if w is not None:
                 self.ui.functionCheck.setChecked(True)
-                self.plotCurve(w, color=QtGui.QColor(100, 100, 100), replot=False)
+                self.plotCurve(w, color=QtGui.QColor(100, 100, 100))
         
         ## display single-mode wave in red
         single = self.getSingleWave()
@@ -187,7 +187,7 @@ class OutputChannelGui(DaqChannelGui):
             #print "======================== DATCH %s ===========================" % self.currentPlot
             #import gc
             #print "REF BEFORE:\n", '\n'.join(["%s:\n%s\n" % (type(x), str(x)) for x in gc.get_referrers(self.currentPlot)[:10]])
-            self.plot.detachCurve(self.currentPlot)
+            self.plot.removeItem(self.currentPlot)
             #self.currentPlot.detach()
         
             #refs = gc.get_referrers(self.currentPlot)[:10]
@@ -200,11 +200,12 @@ class OutputChannelGui(DaqChannelGui):
         #cur = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
         if cur is not None:
             self.currentPlot = self.plotCurve(cur, color=QtGui.QColor(100, 200, 100))
+            self.currentPlot.setZValue(100)
             #print "==cur===", cur.min(), cur.max()
             #print params
         
     def plotCurve(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
-        plot = self.plot.plot(data, self.timeVals, pen=QtGui.QPen(color), replot=replot)
+        plot = self.plot.plot(data, self.timeVals, pen=QtGui.QPen(color))
         #plot = PlotCurve('cell')
         #plot.setPen(QtGui.QPen(color))
         #plot.setData(self.timeVals, data)
@@ -255,11 +256,11 @@ class InputChannelGui(DaqChannelGui):
                 self.clearPlots()
                 self.clearBeforeNextPlot = False
 
-            plot = self.plot.plot(result.view(numpy.ndarray), result.xvals('Time'), pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=True, params=params)
+            plot = self.plot.plot(result.view(numpy.ndarray), result.xvals('Time'), pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), params=params)
             #plot = PlotCurve('cell')
             #plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
             #plot.setData(result.xvals('Time'), result)
             #plot.attach(self.plot)
             #self.plots.append(plot)
-            self.plot.replot()
+            #self.plot.replot()
     

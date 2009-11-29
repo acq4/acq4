@@ -2,9 +2,9 @@
 from __future__ import with_statement
 from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
-from PyQt4 import Qwt5 as Qwt
+#from PyQt4 import Qwt5 as Qwt
 from lib.util.WidgetGroup import WidgetGroup
-from lib.util.PlotWidget import PlotWidget, PlotCurve
+from lib.util.qtgraph.PlotWidget import PlotWidget
 from lib.util.MetaArray import *
 from lib.util.Mutex import Mutex, MutexLocker
 import traceback, sys, time
@@ -57,13 +57,13 @@ class PatchWindow(QtGui.QMainWindow):
         self.plots = {}
         for k in self.analysisItems:
             p = PlotWidget()
-            p.setAxisTitle(p.yLeft, k)
+            p.setLabel('left', k)
             self.ui.plotLayout.addWidget(p)
             self.plots[k] = p
-        irp = self.plots['inputResistance']
-        irp.setManualYScale()
-        irp.setYLog(True)
-        irp.setYRange(1e6, 1e11)
+        #irp = self.plots['inputResistance']
+        #irp.setManualYScale()
+        #irp.setYLog(True)
+        #irp.setYRange(1e6, 1e11)
             
         
         
@@ -83,15 +83,15 @@ class PatchWindow(QtGui.QMainWindow):
         ])
         self.stateGroup.setState(self.params)
         
-        for p in [self.ui.patchPlot, self.ui.commandPlot]:
-            p.setCanvasBackground(QtGui.QColor(0,0,0))
-            p.replot()
+        #for p in [self.ui.patchPlot, self.ui.commandPlot]:
+            #p.setCanvasBackground(QtGui.QColor(0,0,0))
+            #p.replot()
             
-        self.patchCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=False)
+        self.patchCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
         #self.patchCurve = PlotCurve('cell')
         #self.patchCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         #self.patchCurve.attach(self.ui.patchPlot)
-        self.commandCurve = self.ui.commandPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=False)
+        self.commandCurve = self.ui.commandPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
         #self.commandCurve = PlotCurve('command')
         #self.commandCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         #self.commandCurve.attach(self.ui.commandPlot)
@@ -115,9 +115,9 @@ class PatchWindow(QtGui.QMainWindow):
             w = getattr(self.ui, n+'Check')
             QtCore.QObject.connect(w, QtCore.SIGNAL('clicked()'), self.showPlots)
             p = self.plots[n]
-            p.setCanvasBackground(QtGui.QColor(0,0,0))
-            p.replot()
-            self.analysisCurves[n] = p.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=False)
+            #p.setCanvasBackground(QtGui.QColor(0,0,0))
+            #p.replot()
+            self.analysisCurves[n] = p.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
             for suf in ['', 'Std']:
                 #self.analysisCurves[n+suf] = p.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), replot=False)
                 #self.analysisCurves[n+suf] = PlotCurve(n+suf)
@@ -207,8 +207,8 @@ class PatchWindow(QtGui.QMainWindow):
             scale2 = 1e12
         self.patchCurve.setData(data.xvals('Time'), data['scaled']*scale1)
         self.commandCurve.setData(data.xvals('Time'), data['raw']*scale2)
-        self.ui.patchPlot.replot()
-        self.ui.commandPlot.replot()
+        #self.ui.patchPlot.replot()
+        #self.ui.commandPlot.replot()
         
         for k in self.analysisItems:
             if k in frame['analysis']:
@@ -292,7 +292,7 @@ class PatchWindow(QtGui.QMainWindow):
                 self.analysisCurves[n].setData(self.analysisData['time'], self.analysisData[n])
                 #if len(self.analysisData[n+'Std']) > 0:
                     #self.analysisCurves[p+'Std'].setData(self.analysisData['time'], self.analysisData[n+'Std'])
-                p.replot()
+                #p.replot()
     
     def startClicked(self):
         if self.ui.startBtn.isChecked():

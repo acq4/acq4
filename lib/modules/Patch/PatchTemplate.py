@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'PatchTemplate.ui'
 #
-# Created: Thu Sep 03 18:19:25 2009
-#      by: PyQt4 UI code generator 4.5.4
+# Created: Sat Nov 28 18:34:06 2009
+#      by: PyQt4 UI code generator 4.6.2
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -23,12 +23,12 @@ class Ui_Form(object):
         self.splitter_2 = QtGui.QSplitter(self.splitter_3)
         self.splitter_2.setOrientation(QtCore.Qt.Horizontal)
         self.splitter_2.setObjectName("splitter_2")
-        self.widget = QtGui.QWidget(self.splitter_2)
-        self.widget.setObjectName("widget")
-        self.verticalLayout = QtGui.QVBoxLayout(self.widget)
+        self.layoutWidget = QtGui.QWidget(self.splitter_2)
+        self.layoutWidget.setObjectName("layoutWidget")
+        self.verticalLayout = QtGui.QVBoxLayout(self.layoutWidget)
         self.verticalLayout.setSpacing(0)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.groupBox_2 = QtGui.QGroupBox(self.widget)
+        self.groupBox_2 = QtGui.QGroupBox(self.layoutWidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -99,7 +99,7 @@ class Ui_Form(object):
         self.cycleTimeSpin.setMinimum(0.01)
         self.cycleTimeSpin.setMaximum(1000.0)
         self.cycleTimeSpin.setSingleStep(0.1)
-        self.cycleTimeSpin.setProperty("value", QtCore.QVariant(0.2))
+        self.cycleTimeSpin.setProperty("value", 0.2)
         self.cycleTimeSpin.setObjectName("cycleTimeSpin")
         self.gridLayout_2.addWidget(self.cycleTimeSpin, 10, 2, 1, 1)
         self.label = QtGui.QLabel(self.groupBox_2)
@@ -142,7 +142,7 @@ class Ui_Form(object):
         self.horizontalLayout_2.addWidget(self.cellModeBtn)
         self.gridLayout_2.addLayout(self.horizontalLayout_2, 1, 0, 1, 3)
         self.verticalLayout.addWidget(self.groupBox_2)
-        self.groupBox = QtGui.QGroupBox(self.widget)
+        self.groupBox = QtGui.QGroupBox(self.layoutWidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -256,9 +256,9 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.commandPlot.sizePolicy().hasHeightForWidth())
         self.commandPlot.setSizePolicy(sizePolicy)
         self.commandPlot.setObjectName("commandPlot")
-        self.widget1 = QtGui.QWidget(self.splitter_3)
-        self.widget1.setObjectName("widget1")
-        self.plotLayout = QtGui.QVBoxLayout(self.widget1)
+        self.layoutWidget1 = QtGui.QWidget(self.splitter_3)
+        self.layoutWidget1.setObjectName("layoutWidget1")
+        self.plotLayout = QtGui.QVBoxLayout(self.layoutWidget1)
         self.plotLayout.setSpacing(0)
         self.plotLayout.setObjectName("plotLayout")
         self.verticalLayout_2.addWidget(self.splitter_3)
@@ -304,4 +304,4 @@ class Ui_Form(object):
         self.resetBtn.setText(QtGui.QApplication.translate("Form", "Reset History", None, QtGui.QApplication.UnicodeUTF8))
         self.label_6.setText(QtGui.QApplication.translate("Form", "Averaging:", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.PlotWidget import PlotWidget
+from lib.util.qtgraph.PlotWidget import PlotWidget

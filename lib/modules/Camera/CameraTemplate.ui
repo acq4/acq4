@@ -248,26 +248,26 @@ p, li { white-space: pre-wrap; }
      <item>
       <layout class="QHBoxLayout">
        <item>
-        <widget class="QwtThermo" name="levelThermo">
+        <widget class="QWidget" name="levelThermo" native="true">
          <property name="font">
           <font>
            <pointsize>5</pointsize>
           </font>
          </property>
-         <property name="alarmColor">
+         <property name="alarmColor" stdset="0">
           <color>
            <red>255</red>
            <green>0</green>
            <blue>0</blue>
           </color>
          </property>
-         <property name="alarmEnabled">
+         <property name="alarmEnabled" stdset="0">
           <bool>true</bool>
          </property>
-         <property name="borderWidth">
+         <property name="borderWidth" stdset="0">
           <number>1</number>
          </property>
-         <property name="maxValue">
+         <property name="maxValue" stdset="0">
           <double>4096.000000000000000</double>
          </property>
         </widget>
@@ -296,7 +296,7 @@ p, li { white-space: pre-wrap; }
         </spacer>
        </item>
        <item>
-        <widget class="QwtScaleWidget" name="levelScale"/>
+        <widget class="QWidget" name="levelScale" native="true"/>
        </item>
        <item>
         <widget class="QSlider" name="sliderWhiteLevel">
@@ -663,7 +663,7 @@ background division.</string>
       </layout>
      </item>
      <item>
-      <widget class="PlotWidget" name="plotWidget" native="true">
+      <widget class="QWidget" name="plotWidget" native="true">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
          <horstretch>0</horstretch>
@@ -725,24 +725,6 @@ background division.</string>
   </widget>
  </widget>
  <layoutdefault spacing="2" margin="0"/>
- <customwidgets>
-  <customwidget>
-   <class>QwtScaleWidget</class>
-   <extends>QWidget</extends>
-   <header>qwt_scale_widget.h</header>
-  </customwidget>
-  <customwidget>
-   <class>QwtThermo</class>
-   <extends>QWidget</extends>
-   <header>qwt_thermo.h</header>
-  </customwidget>
-  <customwidget>
-   <class>PlotWidget</class>
-   <extends>QWidget</extends>
-   <header>lib.util.PlotWidget</header>
-   <container>1</container>
-  </customwidget>
- </customwidgets>
  <resources/>
  <connections/>
 </ui>

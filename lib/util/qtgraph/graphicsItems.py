@@ -287,7 +287,7 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         self.shadow = shadow
         if y is not None:
             self.updateData(y, x, copy)
-        self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
+        #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
         self.metaDict = {}
         self.opts = {
@@ -378,8 +378,12 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         self.updateData(y, x, copy)
         
     def updateData(self, data, x=None, copy=False):
+        if isinstance(data, list):
+            data = array(data)
+        if isinstance(x, list):
+            x = array(x)
         if not isinstance(data, ndarray) or data.ndim > 2:
-            raise Exception("Plot data must be 1 or 2D ndarray or MetaArray")
+            raise Exception("Plot data must be 1 or 2D ndarray or MetaArray (data shape is %s)" % str(data.shape))
         if data.ndim == 2:  ### If data is 2D array, then assume x and y values are in first two columns or rows.
             if x is not None:
                 raise Exception("Plot data may be 2D only if no x argument is supplied.")

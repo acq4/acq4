@@ -4,9 +4,8 @@ from ProtocolTemplate import *
 from lib.devices.DAQGeneric.protoGUI import DAQGenericProtoGui
 from lib.devices.Device import ProtocolGui
 from lib.util.WidgetGroup import *
-from lib.util.PlotWidget import PlotCurve
 from numpy import ndarray
-from PyQt4 import Qwt5 as Qwt
+#from PyQt4 import Qwt5 as Qwt
 
 class PVCamProto(DAQGenericProtoGui):
     def __init__(self, dev, prot):

@@ -5,10 +5,10 @@ from lib.devices.Device import ProtocolGui
 from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
 #from lib.util.generator.StimGenerator import *
-from PyQt4 import Qwt5 as Qwt
+#from PyQt4 import Qwt5 as Qwt
 import numpy
 from ProtocolTemplate import *
-from lib.util.PlotWidget import PlotCurve
+#from lib.util.PlotWidget import PlotCurve
 from lib.util.debug import *
 import sip
 
@@ -143,7 +143,7 @@ class MultiClampProtoGui(ProtocolGui):
     def taskStarted(self, params):
         ## Draw green trace for current command waveform
         if self.currentCmdPlot is not None:
-            self.ui.bottomPlotWidget.detachCurve(self.currentCmdPlot)
+            self.ui.bottomPlotWidget.removeItem(self.currentCmdPlot)
             #self.currentCmdPlot.detach()
         params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name])
         #cur = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
@@ -154,14 +154,14 @@ class MultiClampProtoGui(ProtocolGui):
     def plotCmdWave(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
         if data is None:
             return
-        plot = self.ui.bottomPlotWidget.plot(data, x=self.timeVals, replot=False)
+        plot = self.ui.bottomPlotWidget.plot(data, x=self.timeVals)
         #plot = PlotCurve('cell')
         plot.setPen(QtGui.QPen(color))
         #plot.setData(self.timeVals, data)
         #plot.attach(self.ui.bottomPlotWidget)
         #self.cmdPlots.append(plot)
-        if replot:
-            self.ui.bottomPlotWidget.replot()
+        #if replot:
+            #self.ui.bottomPlotWidget.replot()
         
         return plot
         
@@ -259,8 +259,8 @@ class MultiClampProtoGui(ProtocolGui):
             for l in self.unitLabels:
                 text = str(l.text())
                 l.setText(text.replace(oldUnit, newUnit))
-            self.ui.topPlotWidget.setAxisTitle(PlotWidget.yLeft, oldUnit)
-            self.ui.bottomPlotWidget.setAxisTitle(PlotWidget.yLeft, newUnit)
+            self.ui.topPlotWidget.setLabel('left', oldUnit)
+            self.ui.bottomPlotWidget.setLabel('left', newUnit)
                 
             ## Hide stim plot for I=0 mode
             if mode == 'I=0':

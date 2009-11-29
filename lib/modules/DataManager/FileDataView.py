@@ -4,7 +4,7 @@ from PyQt4 import QtCore, QtGui
 from lib.DataManager import *
 import lib.Manager as Manager
 import sip
-from lib.util.PlotWidget import PlotWidget
+from lib.util.qtgraph.PlotWidget import PlotWidget
 from lib.util.qtgraph.ImageView import ImageView
 
 class FileDataView(QtGui.QWidget):

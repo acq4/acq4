@@ -3,7 +3,7 @@ from ImageViewTemplate import *
 from graphicsItems import *
 from widgets import ROI
 from PyQt4 import QtCore, QtGui
-from PyQt4 import Qwt5 as Qwt
+#from PyQt4 import Qwt5 as Qwt
 
 class PlotROI(ROI):
     def __init__(self, size):

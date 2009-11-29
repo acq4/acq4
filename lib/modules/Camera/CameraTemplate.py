@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'CameraTemplate.ui'
 #
-# Created: Fri Sep 18 13:41:38 2009
-#      by: PyQt4 UI code generator 4.5.4
+# Created: Sat Nov 28 18:43:00 2009
+#      by: PyQt4 UI code generator 4.6.2
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -113,14 +113,14 @@ class Ui_MainWindow(object):
         self.vboxlayout1.setObjectName("vboxlayout1")
         self.hboxlayout2 = QtGui.QHBoxLayout()
         self.hboxlayout2.setObjectName("hboxlayout2")
-        self.levelThermo = Qwt5.QwtThermo(self.dockWidgetContents_2)
+        self.levelThermo = QtGui.QWidget(self.dockWidgetContents_2)
         font = QtGui.QFont()
         font.setPointSize(5)
         self.levelThermo.setFont(font)
-        self.levelThermo.setAlarmColor(QtGui.QColor(255, 0, 0))
-        self.levelThermo.setAlarmEnabled(True)
-        self.levelThermo.setBorderWidth(1)
-        self.levelThermo.setMaxValue(4096.0)
+        self.levelThermo.setProperty("alarmColor", QtGui.QColor(255, 0, 0))
+        self.levelThermo.setProperty("alarmEnabled", True)
+        self.levelThermo.setProperty("borderWidth", 1)
+        self.levelThermo.setProperty("maxValue", 4096.0)
         self.levelThermo.setObjectName("levelThermo")
         self.hboxlayout2.addWidget(self.levelThermo)
         self.verticalSlider = QtGui.QSlider(self.dockWidgetContents_2)
@@ -129,25 +129,25 @@ class Ui_MainWindow(object):
         self.hboxlayout2.addWidget(self.verticalSlider)
         spacerItem2 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.hboxlayout2.addItem(spacerItem2)
-        self.levelScale = Qwt5.QwtScaleWidget(self.dockWidgetContents_2)
+        self.levelScale = QtGui.QWidget(self.dockWidgetContents_2)
         self.levelScale.setObjectName("levelScale")
         self.hboxlayout2.addWidget(self.levelScale)
         self.sliderWhiteLevel = QtGui.QSlider(self.dockWidgetContents_2)
-        self.sliderWhiteLevel.setStyleSheet("""QSlider::handle:vertical {
-    border: 2px solid white;
-}""")
+        self.sliderWhiteLevel.setStyleSheet("QSlider::handle:vertical {\n"
+"    border: 2px solid white;\n"
+"}")
         self.sliderWhiteLevel.setMaximum(10000)
         self.sliderWhiteLevel.setSingleStep(10)
         self.sliderWhiteLevel.setPageStep(200)
-        self.sliderWhiteLevel.setProperty("value", QtCore.QVariant(10000))
+        self.sliderWhiteLevel.setProperty("value", 10000)
         self.sliderWhiteLevel.setSliderPosition(10000)
         self.sliderWhiteLevel.setOrientation(QtCore.Qt.Vertical)
         self.sliderWhiteLevel.setObjectName("sliderWhiteLevel")
         self.hboxlayout2.addWidget(self.sliderWhiteLevel)
         self.sliderBlackLevel = QtGui.QSlider(self.dockWidgetContents_2)
-        self.sliderBlackLevel.setStyleSheet("""QSlider::handle:vertical {
-    border: 2px solid black;
-}""")
+        self.sliderBlackLevel.setStyleSheet("QSlider::handle:vertical {\n"
+"    border: 2px solid black;\n"
+"}")
         self.sliderBlackLevel.setMaximum(10000)
         self.sliderBlackLevel.setSingleStep(10)
         self.sliderBlackLevel.setPageStep(200)
@@ -173,7 +173,7 @@ class Ui_MainWindow(object):
         self.label_6.setObjectName("label_6")
         self.gridlayout.addWidget(self.label_6, 0, 0, 1, 1)
         self.spinAutoGainSpeed = QtGui.QDoubleSpinBox(self.dockWidgetContents_2)
-        self.spinAutoGainSpeed.setProperty("value", QtCore.QVariant(2.0))
+        self.spinAutoGainSpeed.setProperty("value", 2.0)
         self.spinAutoGainSpeed.setObjectName("spinAutoGainSpeed")
         self.gridlayout.addWidget(self.spinAutoGainSpeed, 0, 1, 1, 1)
         self.label_8 = QtGui.QLabel(self.dockWidgetContents_2)
@@ -218,7 +218,7 @@ class Ui_MainWindow(object):
         self.hboxlayout3.addWidget(self.label_4)
         self.spinFilterTime = QtGui.QDoubleSpinBox(self.frame_2)
         self.spinFilterTime.setSingleStep(1.0)
-        self.spinFilterTime.setProperty("value", QtCore.QVariant(5.0))
+        self.spinFilterTime.setProperty("value", 5.0)
         self.spinFilterTime.setObjectName("spinFilterTime")
         self.hboxlayout3.addWidget(self.spinFilterTime)
         self.vboxlayout2.addWidget(self.frame_2)
@@ -235,7 +235,7 @@ class Ui_MainWindow(object):
         self.label_5.setObjectName("label_5")
         self.hboxlayout4.addWidget(self.label_5)
         self.spinFlattenSize = QtGui.QDoubleSpinBox(self.frame_3)
-        self.spinFlattenSize.setProperty("value", QtCore.QVariant(0.0))
+        self.spinFlattenSize.setProperty("value", 0.0)
         self.spinFlattenSize.setObjectName("spinFlattenSize")
         self.hboxlayout4.addWidget(self.spinFlattenSize)
         self.vboxlayout2.addWidget(self.frame_3)
@@ -270,13 +270,13 @@ class Ui_MainWindow(object):
         self.gridLayout.addWidget(self.label_7, 2, 0, 1, 1)
         self.spinROITime = QtGui.QDoubleSpinBox(self.dockWidgetContents_4)
         self.spinROITime.setSingleStep(0.1)
-        self.spinROITime.setProperty("value", QtCore.QVariant(5.0))
+        self.spinROITime.setProperty("value", 5.0)
         self.spinROITime.setObjectName("spinROITime")
         self.gridLayout.addWidget(self.spinROITime, 2, 1, 1, 1)
         spacerItem4 = QtGui.QSpacerItem(88, 17, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.gridLayout.addItem(spacerItem4, 3, 0, 1, 2)
         self.horizontalLayout.addLayout(self.gridLayout)
-        self.plotWidget = PlotWidget(self.dockWidgetContents_4)
+        self.plotWidget = QtGui.QWidget(self.dockWidgetContents_4)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -382,5 +382,3 @@ class Ui_MainWindow(object):
         self.addFrameBtn.setText(QtGui.QApplication.translate("MainWindow", "Add", None, QtGui.QApplication.UnicodeUTF8))
         self.clearFramesBtn.setText(QtGui.QApplication.translate("MainWindow", "Clear", None, QtGui.QApplication.UnicodeUTF8))
 
-from PyQt4 import Qwt5
-from lib.util.PlotWidget import PlotWidget

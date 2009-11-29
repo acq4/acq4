@@ -11,12 +11,10 @@ from CameraTemplate import Ui_MainWindow
 from lib.util.qtgraph.GraphicsView import *
 from lib.util.qtgraph.graphicsItems import *
 from lib.util.qtgraph.widgets import ROI
-from lib.util.PlotWidget import PlotCurve
 import lib.util.ptime as ptime
 from lib.filetypes.ImageFile import *
 from lib.util.Mutex import Mutex, MutexLocker
 from PyQt4 import QtGui, QtCore
-from PyQt4 import Qwt5 as Qwt
 import scipy.ndimage
 import time, types, os.path, re, sys
 from lib.util.color import intColor
@@ -108,11 +106,11 @@ class PVCamera(QtGui.QMainWindow):
         self.ui.setupUi(self)
         
         ## Set up level thermo and scale widgets
-        self.scaleEngine = Qwt.QwtLinearScaleEngine()
-        self.ui.levelThermo.setScalePosition(Qwt.QwtThermo.NoScale)
-        self.ui.levelScale.setAlignment(Qwt.QwtScaleDraw.LeftScale)
-        self.ui.levelScale.setColorBarEnabled(True)
-        self.ui.levelScale.setColorBarWidth(10)
+        #self.scaleEngine = Qwt.QwtLinearScaleEngine()
+        #self.ui.levelThermo.setScalePosition(Qwt.QwtThermo.NoScale)
+        #self.ui.levelScale.setAlignment(Qwt.QwtScaleDraw.LeftScale)
+        #self.ui.levelScale.setColorBarEnabled(True)
+        #self.ui.levelScale.setColorBarWidth(10)
         
         
         ## Create device configuration dock 
@@ -134,9 +132,9 @@ class PVCamera(QtGui.QMainWindow):
         l.addWidget(self.gv)
         self.gv.enableMouse()
 
-        self.ui.plotWidget.setCanvasBackground(QtGui.QColor(0,0,0))
+        #self.ui.plotWidget.setCanvasBackground(QtGui.QColor(0,0,0))
         #self.ui.plotWidget.enableAxis(Qwt.QwtPlot.xBottom, False)
-        self.ui.plotWidget.replot()
+        #self.ui.plotWidget.replot()
 
         self.setCentralWidget(self.ui.centralwidget)
         #self.scene = QtGui.QGraphicsScene(self)
@@ -307,7 +305,7 @@ class PVCamera(QtGui.QMainWindow):
         roi.setZValue(4000)
         roi.setPen(pen)
         self.scene.addItem(roi)
-        plot = self.ui.plotWidget.plot(pen=pen, replot=False)
+        plot = self.ui.plotWidget.plot(pen=pen)
         #plot = PlotCurve('roi%d'%len(self.ROIs))
         #plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
         #plot.attach(self.ui.plotWidget)
@@ -495,18 +493,19 @@ class PVCamera(QtGui.QMainWindow):
         self.levelMin = rmin
         self.levelMax = rmax
         
-        self.ui.levelScale.setScaleDiv(self.scaleEngine.transformation(), self.scaleEngine.divideScale(self.levelMin, self.levelMax, 8, 5))
-        self.updateColorScale()
+        #self.ui.levelScale.setScaleDiv(self.scaleEngine.transformation(), self.scaleEngine.divideScale(self.levelMin, self.levelMax, 8, 5))
+        #self.updateColorScale()
         
-        self.ui.levelThermo.setMaxValue(2**self.bitDepth - 1)
-        self.ui.levelThermo.setAlarmLevel(self.ui.levelThermo.maxValue() * 0.9)
+        #self.ui.levelThermo.setMaxValue(2**self.bitDepth - 1)
+        #self.ui.levelThermo.setAlarmLevel(self.ui.levelThermo.maxValue() * 0.9)
         
     def updateColorScale(self):
-        (b, w) = self.getLevels()
-        if w > b:
-            self.ui.levelScale.setColorMap(Qwt.QwtDoubleInterval(b, w), Qwt.QwtLinearColorMap(QtCore.Qt.black, QtCore.Qt.white))
-        else:
-            self.ui.levelScale.setColorMap(Qwt.QwtDoubleInterval(w, b), Qwt.QwtLinearColorMap(QtCore.Qt.white, QtCore.Qt.black))
+        pass
+        #(b, w) = self.getLevels()
+        #if w > b:
+            #self.ui.levelScale.setColorMap(Qwt.QwtDoubleInterval(b, w), Qwt.QwtLinearColorMap(QtCore.Qt.black, QtCore.Qt.white))
+        #else:
+            #self.ui.levelScale.setColorMap(Qwt.QwtDoubleInterval(w, b), Qwt.QwtLinearColorMap(QtCore.Qt.white, QtCore.Qt.black))
                 
         
         #self.updateFrame = True
@@ -636,7 +635,7 @@ class PVCamera(QtGui.QMainWindow):
                 (data, info) = self.currentFrame
                 self.currentClipMask = (data >= (2**self.bitDepth * 0.99)) 
                 
-                self.ui.levelThermo.setValue(int(data.mean()))
+                #self.ui.levelThermo.setValue(int(data.mean()))
                 
                 ## If background division is enabled, mix the current frame into the background frame
                 if self.ui.btnDivideBackground.isChecked():
@@ -721,8 +720,8 @@ class PVCamera(QtGui.QMainWindow):
             self.updateRgnLabel()
 
             
-            if self.ui.checkEnableROIs.isChecked():
-                self.ui.plotWidget.replot()
+            #if self.ui.checkEnableROIs.isChecked():
+                #self.ui.plotWidget.replot()
 
 
         except:

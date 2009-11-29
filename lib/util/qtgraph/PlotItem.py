@@ -573,7 +573,7 @@ class PlotItem(QtGui.QGraphicsWidget):
 
 
     def widgetGroupInterface(self):
-        return (None, PlotWidget.saveState, PlotWidget.restoreState)
+        return (None, PlotItem.saveState, PlotItem.restoreState)
       
     def updateSpectrumMode(self, b=None):
         if b is None:
@@ -677,6 +677,12 @@ class PlotItem(QtGui.QGraphicsWidget):
     def getScale(self, key):
         self._checkScaleKey(key)
         return self.scales[key]['item']
+        
+    def setLabel(self, key, text, **args):
+        l = self.getLabel(key)
+        l.setText(text, **args)
+        self.showLabel(key)
+        
         
     def showLabel(self, key, show=True):
         l = self.getLabel(key)
