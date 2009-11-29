@@ -28,7 +28,8 @@ class PatchWindow(QtGui.QMainWindow):
         
         self.params = {
             'mode': 'vc',
-            'rate': 40000,
+            'rate': 200000,
+            'downsample': 40,
             'cycleTime': .2,
             'recordTime': 0.1,
             'delayTime': 0.03,
@@ -366,7 +367,7 @@ class PatchThread(QtCore.QThread):
                     
                     cmd = {
                         'protocol': {'duration': params['recordTime'], 'leadTime': 0.02},
-                        daqName: {'rate': params['rate'], 'numPts': numPts},
+                        daqName: {'rate': params['rate'], 'numPts': numPts, 'downsample': params['downsample']},
                         clampName: {
                             'mode': params['mode'],
                             'command': cmdData,

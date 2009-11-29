@@ -12,7 +12,7 @@ class PlotItem(QtGui.QGraphicsWidget):
     def __init__(self, parent=None):
         QtGui.QGraphicsWidget.__init__(self, parent)
         self.layout = QtGui.QGraphicsGridLayout()
-        self.layout.setContentsMargins(0,0,0,0)
+        self.layout.setContentsMargins(1,1,1,1)
         self.setLayout(self.layout)
         self.layout.setHorizontalSpacing(0)
         self.layout.setVerticalSpacing(0)
@@ -47,8 +47,8 @@ class PlotItem(QtGui.QGraphicsWidget):
             'left':   {'item': LabelItem('left'),   'pos': (3, 0)},
             'right':  {'item': LabelItem('right'),  'pos': (3, 4)}
         }
-        self.labels['left']['item'].setAngle(90)
-        self.labels['right']['item'].setAngle(90)
+        self.labels['left']['item'].setAngle(-90)
+        self.labels['right']['item'].setAngle(-90)
         for k in self.labels:
             self.layout.addItem(self.labels[k]['item'], *self.labels[k]['pos'])
 
@@ -66,15 +66,6 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.layout.setRowStretchFactor(3, 100)
         self.layout.setColumnStretchFactor(2, 100)
         
-        self.showLabel('right', False)
-        self.showLabel('top', False)
-        self.showLabel('title', False)
-        self.showLabel('left', False)
-        self.showLabel('bottom', False)
-        self.showScale('right', False)
-        self.showScale('top', False)
-        self.showScale('left', True)
-        self.showScale('bottom', True)
 
         ## Wrap a few methods from viewBox
         for m in ['setXRange', 'setYRange', 'setRange', 'autoRange']:
@@ -166,6 +157,16 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.yLinkPlot = None
         self.linksBlocked = False
         self.manager = None
+        
+        self.showLabel('right', False)
+        self.showLabel('top', False)
+        self.showLabel('title', False)
+        self.showLabel('left', False)
+        self.showLabel('bottom', False)
+        self.showScale('right', False)
+        self.showScale('top', False)
+        self.showScale('left', True)
+        self.showScale('bottom', True)
 
     def __del__(self):
         if self.manager is not None:
@@ -706,23 +707,23 @@ class PlotItem(QtGui.QGraphicsWidget):
         
     def showScale(self, key, show=True):
         s = self.getScale(key)
-        p = self.labels[key]['pos']
+        p = self.scales[key]['pos']
         if show:
             s.show()
-            if key in ['left', 'right']:
-                self.layout.setColumnFixedWidth(p[1], s.size().width())
-                s.setMaximumWidth(40)
-            else:
-                self.layout.setRowFixedHeight(p[0], s.size().height())
-                s.setMaximumHeight(20)
+            #if key in ['left', 'right']:
+                #self.layout.setColumnFixedWidth(p[1], s.maximumWidth())
+                ##s.setMaximumWidth(40)
+            #else:
+                #self.layout.setRowFixedHeight(p[0], s.maximumHeight())
+                #s.setMaximumHeight(20)
         else:
             s.hide()
-            if key in ['left', 'right']:
-                self.layout.setColumnFixedWidth(p[1], 0)
-                s.setMaximumWidth(0)
-            else:
-                self.layout.setRowFixedHeight(p[0], 0)
-                s.setMaximumHeight(0)
+            #if key in ['left', 'right']:
+                #self.layout.setColumnFixedWidth(p[1], 0)
+                ##s.setMaximumWidth(0)
+            #else:
+                #self.layout.setRowFixedHeight(p[0], 0)
+                #s.setMaximumHeight(0)
 
     def _plotArray(self, arr, x=None):
         if arr.ndim != 1:

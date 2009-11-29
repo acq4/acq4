@@ -614,7 +614,7 @@ class ScaleItem(QtGui.QGraphicsWidget):
                 QtGui.QSizePolicy.Minimum
             ))
             
-            
+        self.textHeight = 10
             
         self.setRange(0, 1)
         
@@ -739,27 +739,46 @@ class ScaleItem(QtGui.QGraphicsWidget):
                 p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100, a)))
                 p.drawLine(Point(p1), Point(p2))
                 if i == i1+1:
-                    if self.orientation == 'left':
-                        textFlags = QtCore.Qt.AlignRight|QtCore.Qt.AlignVCenter
-                        rect = QtCore.QRectF(tickStart-100, x-self.tickLength, 100-self.tickLength, self.tickLength*2)
-                    elif self.orientation == 'right':
-                        textFlags = QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter
-                        rect = QtCore.QRectF(tickStart+self.tickLength, x-self.tickLength, 100-self.tickLength, self.tickLength*2)
-                    elif self.orientation == 'top':
-                        textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignBottom
-                        rect = QtCore.QRectF(x-100, tickStart-self.tickLength*3, 200, self.tickLength*2)
-                    elif self.orientation == 'bottom':
-                        textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignTop
-                        rect = QtCore.QRectF(x-100, tickStart+self.tickLength, 200, self.tickLength*2)
-                    
-                    p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))
                     if abs(v) < .001 or abs(v) >= 10000:
                         vstr = "%g" % v
                     else:
                         vstr = ("%%0.%df" % places) % v
+                        
+                    textRect = p.boundingRect(QtCore.QRectF(0, 0, 100, 100), QtCore.Qt.AlignCenter, vstr)
+                    height = textRect.height()
+                    self.textHeight = height
+                    if self.orientation == 'left':
+                        textFlags = QtCore.Qt.AlignRight|QtCore.Qt.AlignVCenter
+                        rect = QtCore.QRectF(tickStart-100, x-(height/2), 100-self.tickLength, height)
+                    elif self.orientation == 'right':
+                        textFlags = QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter
+                        rect = QtCore.QRectF(tickStart+self.tickLength, x-(height/2), 100-self.tickLength, height)
+                    elif self.orientation == 'top':
+                        textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignBottom
+                        rect = QtCore.QRectF(x-100, tickStart-self.tickLength-height, 200, height)
+                    elif self.orientation == 'bottom':
+                        textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignTop
+                        rect = QtCore.QRectF(x-100, tickStart+self.tickLength, 200, height)
+                    
+                    p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))
                     p.drawText(rect, textFlags, vstr)
+                    #p.drawRect(rect)
         
+    def show(self):
+        if self.orientation in ['left', 'right']:
+            self.setMaximumWidth(self.tickLength + 40)
+        else:
+            self.setMaximumHeight(self.textHeight + self.tickLength)
+        QtGui.QGraphicsWidget.show(self)
         
+    def hide(self):
+        if self.orientation in ['left', 'right']:
+            self.setMaximumWidth(0)
+        else:
+            self.setMaximumHeight(0)
+        QtGui.QGraphicsWidget.hide(self)
+        
+    
         
         
         
