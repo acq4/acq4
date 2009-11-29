@@ -99,7 +99,7 @@ class GraphicsView(QtGui.QGraphicsView):
         self.sceneObj.addItem(item)
         
     def addItem(self, *args):
-        return self.scene.addItem(*args)
+        return self.scene().addItem(*args)
         
     def enableMouse(self, b=True):
         self.mouseEnabled = b
