@@ -6,10 +6,10 @@ import cheader
 def init():
     ## System-specific code
     headerFile = [os.path.join(os.path.dirname(__file__), "AxMultiClampMsg.h")]
-    replace = [
-        ('AXMCCMSG', ''),
-        ('WINAPI', '')
-    ]
+    replace = {
+        'AXMCCMSG': '',
+        'WINAPI': ''
+    }
     global FUNCTIONS
     defs, FUNCTIONS = cheader.getDefs(headerFile, replace=replace)
     
