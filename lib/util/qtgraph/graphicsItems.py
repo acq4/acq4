@@ -331,7 +331,7 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         
     def getRange(self, ax, frac=1.0):
         (x, y) = self.getData()
-        if x is None:
+        if x is None or len(x) == 0:
             return (0, 1)
         if ax == 0:
             return (x.min(), x.max())
@@ -463,10 +463,10 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         return path
         
     def boundingRect(self):
-        if self.yData is None:
+        (x, y) = self.getData()
+        if x is None or y is None or len(x) == 0 or len(y) == 0:
             return QtCore.QRectF()
             
-        (x, y) = self.getData()
         xmin = x.min()
         xmax = x.max()
         ymin = y.min()
