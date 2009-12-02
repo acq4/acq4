@@ -11,9 +11,11 @@ class PlotWidget(GraphicsView):
         self.enableMouse(False)
         self.plotItem = PlotItem()
         self.setCentralItem(self.plotItem)
-        ## Wrap methods from plotItem
-        
-    def __getattr__(self, attr):
+        ## Explicitly wrap methods from plotItem
+        for m in ['addItem', 'autoRange', 'clear']:
+            setattr(self, m, getattr(self.plotItem, m))
+                
+    def __getattr__(self, attr):  ## implicitly wrap methods from plotItem
         if hasattr(self.plotItem, attr):
             m = getattr(self.plotItem, attr)
             if hasattr(m, '__call__'):
@@ -21,9 +23,7 @@ class PlotWidget(GraphicsView):
         raise exceptions.NameError(attr)
             
             
-        #for m in ['setXRange', 'setYRange', 'autoRange', 'getLabel', 'getScale', 'showLabel', 'setLabel', 'showScale', 'plot', 'addItem', 'autoRange', 'clear', 'registerPlot']:
-            #setattr(self, m, getattr(self.plotItem, m))
-        
+
     def widgetGroupInterface(self):
         return (None, PlotWidget.saveState, PlotWidget.restoreState)
 

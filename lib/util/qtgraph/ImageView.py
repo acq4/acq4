@@ -12,10 +12,11 @@ class PlotROI(ROI):
 
 
 class ImageView(QtGui.QWidget):
-    def __init__(self, *args):
-        QtGui.QWidget.__init__(self, *args)
+    def __init__(self, parent=None, name="ImageView", *args):
+        QtGui.QWidget.__init__(self, parent, *args)
         self.levelMax = 4096
         self.levelMin = 0
+        self.name = name
         self.image = None
         self.imageDisp = None
         self.ui = Ui_Form()
@@ -49,8 +50,6 @@ class ImageView(QtGui.QWidget):
         self.roiTimeLine = QtGui.QGraphicsLineItem()
         self.roiTimeLine.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 200)))
         self.ui.roiPlot.addItem(self.roiTimeLine)
-        
-
 
         QtCore.QObject.connect(self.ui.timeSlider, QtCore.SIGNAL('valueChanged(int)'), self.timeChanged)
         QtCore.QObject.connect(self.ui.whiteSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
@@ -66,6 +65,8 @@ class ImageView(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.normTimeRangeCheck, QtCore.SIGNAL('clicked()'), self.updateNorm)
         QtCore.QObject.connect(self.ui.normStartSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
         QtCore.QObject.connect(self.ui.normStopSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
+        
+        self.ui.roiPlot.registerPlot(self.name + '_ROI')
 
     def updateNorm(self):
         self.imageDisp = None

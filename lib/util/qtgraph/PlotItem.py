@@ -203,6 +203,12 @@ class PlotItem(QtGui.QGraphicsWidget):
             print "  error during update. Referrers are:", refs
             raise
 
+    def viewGeometry(self):
+        """return the screen geometry of the viewbox"""
+        v = self.scene().views()[0]
+        b = self.vb.mapRectToScene(self.vb.boundingRect())
+        return v.mapFromScene(b).boundingRect()
+
     def blockLink(self, b):
         self.linksBlocked = b
 
@@ -238,13 +244,13 @@ class PlotItem(QtGui.QGraphicsWidget):
         if self.linksBlocked:
             return
         pr = plot.vb.viewRect()
-        pg = plot.vb.boundingRect()
-        sg = self.vb.boundingRect()
+        pg = plot.viewGeometry()
+        sg = self.viewGeometry()
         upp = float(pr.width()) / pg.width()
         x1 = pr.left() + (sg.x()-pg.x()) * upp
         x2 = x1 + sg.width() * upp
         plot.blockLink(True)
-        self.setXRange(x1, x2)
+        self.setXRange(x1, x2, padding=0)
         plot.blockLink(False)
         self.replot()
         
@@ -254,11 +260,11 @@ class PlotItem(QtGui.QGraphicsWidget):
         pr = plot.vb.viewRect()
         pg = plot.vb.boundingRect()
         sg = self.vb.boundingRect()
-        upp = float(pr.width()) / pg.height()
+        upp = float(pr.height()) / pg.height()
         y1 = pr.bottom() + (sg.y()-pg.y()) * upp
         y2 = y1 + sg.height() * upp
         plot.blockLink(True)
-        self.setYRange(y1, y2)
+        self.setYRange(y1, y2, padding=0)
         plot.blockLink(False)
         self.replot()
 
