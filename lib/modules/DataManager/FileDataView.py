@@ -4,7 +4,7 @@ from PyQt4 import QtCore, QtGui
 from lib.DataManager import *
 import lib.Manager as Manager
 import sip
-from lib.util.qtgraph.PlotWidget import PlotWidget
+from lib.util.qtgraph.MultiPlotWidget import MultiPlotWidget
 from lib.util.qtgraph.ImageView import ImageView
 
 class FileDataView(QtGui.QWidget):
@@ -50,7 +50,7 @@ class FileDataView(QtGui.QWidget):
             self.layout.addWidget(self.widget)
             self.widget.setImage(data)
         else:
-            self.widget = PlotWidget(self)
+            self.widget = MultiPlotWidget(self)
             self.layout.addWidget(self.widget)
             self.widget.plot(data)
         

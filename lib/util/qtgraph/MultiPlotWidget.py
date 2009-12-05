@@ -1,35 +1,34 @@
 # -*- coding: utf-8 -*-
 from GraphicsView import *
-from PlotItem import *
+from MultiPlotItem import *
 import exceptions
 #from lib.util.WidgetGroup import *
 
-class PlotWidget(GraphicsView):
+class MultiPlotWidget(GraphicsView):
     """Widget implementing a graphicsView with a single PlotItem inside."""
     def __init__(self, parent=None):
         GraphicsView.__init__(self, parent)
         self.enableMouse(False)
-        self.plotItem = PlotItem()
-        self.setCentralItem(self.plotItem)
-        ## Explicitly wrap methods from plotItem
-        for m in ['addItem', 'autoRange', 'clear']:
-            setattr(self, m, getattr(self.plotItem, m))
+        self.mPlotItem = MultiPlotItem()
+        self.setCentralItem(self.mPlotItem)
+        ## Explicitly wrap methods from mPlotItem
+        #for m in ['setData']:
+            #setattr(self, m, getattr(self.mPlotItem, m))
                 
     def __getattr__(self, attr):  ## implicitly wrap methods from plotItem
-        if hasattr(self.plotItem, attr):
-            m = getattr(self.plotItem, attr)
+        if hasattr(self.mPlotItem, attr):
+            m = getattr(self.mPlotItem, attr)
             if hasattr(m, '__call__'):
                 return m
         raise exceptions.NameError(attr)
-            
-            
 
     def widgetGroupInterface(self):
-        return (None, PlotWidget.saveState, PlotWidget.restoreState)
+        return (None, MultiPlotWidget.saveState, MultiPlotWidget.restoreState)
 
     def saveState(self):
-        return self.plotItem.saveState()
+        return {}
+        #return self.plotItem.saveState()
         
     def restoreState(self, state):
-        return self.plotItem.restoreState(state)
-        
+        pass
+        #return self.plotItem.restoreState(state)
