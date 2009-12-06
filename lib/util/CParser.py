@@ -3,6 +3,33 @@ from pyparsing import *
 import sys, re, os
 import ctypes
 
+
+#typedef TYPE *ident[], ...;
+#TYPE ident = expr;
+#struct ident {};
+#enum ident {};
+#TYPE ident();
+#TYPE ident() {}
+
+
+
+
+
+
+#__all__ = ['parseFiles', 'CParser']
+
+def parseFiles(files, cache=None, **args):
+    """Convenience function allowing one-line parsing of C files. 
+    Returns a dictionary of all data processed.
+    The 'cache' argument is passed to CParser.processAll.
+    All extra arguments are passed to CParser.__init__"""
+    p = CParser(files, **args)
+    p.processAll(cache)
+    data = {}
+    for k in p.dataList:
+        data[k] = getattr(p, k)
+    return data
+
 class CParser():
     """Class for parsing C code to extract variable, struct, enum, and function declarations as well as preprocessor macros. This is not a complete C parser; instead, it is meant to simplify the process
     of extracting definitions from header files in the absence of a complete build system. Many files 
@@ -49,15 +76,20 @@ class CParser():
         self.enums = {}
         self.values = {}  ## holds all variables, macros, and enum values
         
-        self.initOpts = (files, types, replace)
+        self.initOpts = args.copy()
+        self.initOpts['files'] = files
+        self.initOpts['replace'] = replace
+        
         self.dataList = ['types', 'variables', 'macros', 'structs', 'enums', 'functions', 'values']
         
         # define a placeholder for macros and typedefs
         self.macroExpr = Forward()
         self.definedType = Forward()
+        self.definedStruct = Forward()
         
-        if types is not None:
-            self.types = types
+        # Import extra arguments if specified
+        for k in args:
+            setattr(self, k, args[k])
         
         self.files = {}
         if type(files) is str:
@@ -158,11 +190,11 @@ class CParser():
     def preprocess(self, file):
         """Scan named file for preprocessor directives, removing them while expanding macros. (operates in memory; does not alter the original files)"""
         text = self.files[file]
-        ident = Word(alphas+"_",alphanums+"_$")
+        #ident = Word(alphas+"_",alphanums+"_$")
         
         # define the structure of a macro definition (the empty term is used 
         # to advance to the next non-whitespace character)
-        ppDefine = Keyword("#define") + ident.setResultsName("macro") + empty + restOfLine.setResultsName("value")
+        ppDefine = Keyword("#define") + ident.setWhitespaceChars(' \t').setResultsName("macro") + restOfLine.setResultsName("value")
         ppDirective = Combine("#" + Word(alphas)) + restOfLine
         
         self.macroExpr << MatchFirst( map(Keyword,self.macros.keys()) )
@@ -181,74 +213,59 @@ class CParser():
         Returns the entire tree of successfully parsed tokens.
         If returnUnparsed is True, return a string of all lines that failed to match (for debugging)."""
         
-        ## Some basic definitions
-        ident = Word(alphas+"_",alphanums+"_$")
-        integer = Combine(Optional("-") + (Word( nums ) | Combine("0x" + Word(hexnums)))) 
-        semi = Literal(";").ignore(quotedString).suppress()
-        lbrace = Literal("{").ignore(quotedString).suppress()
-        rbrace = Literal("}").ignore(quotedString).suppress()
-        lbrack = Literal("[").ignore(quotedString).suppress()
-        rbrack = Literal("]").ignore(quotedString).suppress()
-        lparen = Literal("(").ignore(quotedString).suppress()
-        rparen = Literal(")").ignore(quotedString).suppress()
-        number = Word(hexnums + ".-+x")
-        stars = Optional(Word('*'), default='').setResultsName('ptrs')
 
-        ## language elements
-        functionCall = Forward()
 
         #typeSpec = OneOrMore(oneOf("const static unsigned signed int long short float double char void *")) 
-        self.definedType << MatchFirst( map(Keyword,self.types.keys()) )
+        self.definedType << kwl(self.types.keys())
 
-        fundType = Optional(Keyword('unsigned') | Keyword('signed')) + (Keyword('void') | (ZeroOrMore('long') + MatchFirst(map(Keyword,["int", 'float', 'double', 'char', 'bool'])) ) | OneOrMore(oneOf("long short")))
-        typeQualifier = ZeroOrMore(MatchFirst(map(Keyword,['const', 'static', 'volatile', 'inline']))).suppress()
-        typeSpec = typeQualifier + (fundType|self.definedType).setResultsName('type') + typeQualifier + stars + typeQualifier
-
-        arraySizeSpecifier = integer | ident  
-        bitfieldspec = ":" + arraySizeSpecifier
-        arrayOp = bitfieldspec | ( lbrack + arraySizeSpecifier + rbrack )
-        varNameSpec = Group( ident + Optional(arrayOp))
-        operator = oneOf("+ - / * | & || && ^ % ++ -- == != > < >= <=")
-        expression = OneOrMore(operator | functionCall | ident | quotedString | number)
-        functionCall << ident + '(' + ZeroOrMore(expression) + ')'
+    
+        structType = Forward()
+        
+        typeSpec = typeQualifier + Group(fundType|Optional(kwl(sizeModifiers + signModifiers)) + self.definedType|structType).setResultsName('type') + typeQualifier
 
         ## typedef
-        typeDecl = Keyword('typedef') + (fundType | self.definedType).setResultsName('type') + delimitedList(Group(Combine(ZeroOrMore('*')).setResultsName('ptrs') + ident.setResultsName('newType') + ZeroOrMore(arrayOp).setResultsName('arr'))) + semi
-        typeDecl.setParseAction(self.processType)
+        typeDecl = Keyword('typedef') + Group(typeSpec) + Group(delimitedList(Group(stars.setResultsName('ptrs') + ident.setResultsName('newType') + ZeroOrMore(arrayOp).setResultsName('arr')))) + semi
+        typeDecl.setParseAction(self.processTypedef)
 
-        ## variable definition
-        variableSingleDecl = Group(typeSpec + ident.setResultsName('name')) + Optional(Literal('=').suppress() + expression.setResultsName('value'))
+        ## variable declaration
+        variableSingleDecl = Group(typeSpec + stars + ident.setResultsName('name')) + Optional(Literal('=').suppress() + expression.setResultsName('value'))
 
-        variableDecl = Group(typeSpec.setResultsName('type') + ident.setResultsName('name') + ZeroOrMore(arrayOp).setResultsName('arr')) + Optional(Literal('=').suppress() + (expression.setResultsName('value') | (lbrace + Group(delimitedList(expression)).setResultsName('arrayValue') + rbrace))) + semi
-
+        variableDecl = Group(typeSpec.setResultsName('type') + stars + ident.setResultsName('name') + ZeroOrMore(arrayOp).setResultsName('arr')) + Optional(Literal('=').suppress() + (expression.setResultsName('value') | (lbrace + Group(delimitedList(expression)).setResultsName('arrayValue') + rbrace))) + semi
+        
         ## Struct definition
         structDecl = Forward()
-        memberDecl = (Group(variableDecl) | structDecl)
-        structDecl << (Keyword('struct') | Keyword('union')) + Optional(ident).setResultsName('name') + lbrace + Group(ZeroOrMore( memberDecl )).setResultsName('members') + rbrace + Optional(Word("*"), default="") + Optional(varNameSpec) + semi
+        #memberDecl = (variableDecl | structDecl)
+        structKW = (Keyword('struct') | Keyword('union'))
+        self.definedStruct << kwl(self.structs.keys())
+        
+        structType << structKW + (self.definedStruct.setResultsName('name') | Optional(ident).setResultsName('name') + lbrace + Group(ZeroOrMore( Group(variableDecl) )).setResultsName('members') + rbrace)
+        structType.setParseAction(self.processStruct)
+        
+        structDecl = structType + semi
 
         ## enum definition
         enumVarDecl = Group(ident.setResultsName('name')  + Optional(Literal('=').suppress() + integer.setResultsName('value')))
         enumDecl = Keyword('enum') + Optional(ident).setResultsName('name') + lbrace + Group(delimitedList(enumVarDecl)).setResultsName('names') + rbrace + Optional(ident) + semi
 
         ## function definition
-        functionDecl = typeSpec.setResultsName('type') + ident.setResultsName('name') + lparen + Group(Optional(delimitedList(variableSingleDecl))).setResultsName('args') + rparen + (nestedExpr('{', '}').suppress() | semi)
+        functionDecl = typeSpec.setResultsName('type') + stars + ident.setResultsName('name') + lparen + Group(Optional(delimitedList(variableSingleDecl))).setResultsName('args') + rparen + (nestedExpr('{', '}').suppress() | semi)
 
         
         if returnUnparsed:
             text = (
-                typeDecl.suppress() | 
-                enumDecl.setParseAction(self.processEnum).suppress() | 
-                structDecl.setParseAction(self.processStruct).suppress() | 
-                variableDecl.setParseAction(self.processVariable).suppress() | 
+                typeDecl.suppress() ^
+                structDecl.suppress() ^
+                enumDecl.setParseAction(self.processEnum).suppress() ^
+                variableDecl.setParseAction(self.processVariable).suppress() ^
                 functionDecl.setParseAction(self.processFunction).suppress()
             ).transformString(self.files[file])
             return re.sub(r'\n\s*\n', '\n', text)
         else:
             return [x[0] for x in (
-                typeDecl | 
-                enumDecl.setParseAction(self.processEnum) | 
-                structDecl.setParseAction(self.processStruct) | 
-                variableDecl.setParseAction(self.processVariable) | 
+                typeDecl ^
+                structDecl ^
+                enumDecl.setParseAction(self.processEnum) ^
+                variableDecl.setParseAction(self.processVariable) ^
                 functionDecl.setParseAction(self.processFunction)
             ).scanString(self.files[file])]
 
@@ -258,7 +275,7 @@ class CParser():
     # parse action for macro definitions
     def processMacroDefn(self, s,l,t):
         macroVal = self.macroExpander.transformString(t.value)
-        self.macros[t.macro] = macroVal
+        self.macros[t.macro] = macroVal.strip()
         self.values[t.macro] = self.evalExpr(macroVal)
         self.macroExpr << MatchFirst( map(Keyword,self.macros.keys()) )
         return "#define " + t.macro + " " + macroVal
@@ -278,7 +295,7 @@ class CParser():
                     enum[v.name] = i
                     self.values[v.name] = i
                     i += 1
-                self.enums[t.name] = enum
+                self.enums[t.name[0]] = enum
         except:
             print t
             sys.excepthook(*sys.exc_info())
@@ -316,16 +333,30 @@ class CParser():
 
     def processStruct(self, s, l, t):
         try:
-            if t.name != '':
+            if t.name == '':
+                n = 0
+                while True:
+                    name = 'anonStruct%d' % n
+                    if name not in self.structs:
+                        break
+                    n += 1
+            else:
+                name = t.name[0]
+            if name not in self.structs:
+                #print "STRUCT", name, t
                 struct = {}
                 for m in t.members:
-                    struct[m[0].name] = (m[0].type.type, len(m[0].type.ptrs), [int(x) for x in m[0].arr], self.evalExpr(m))
-                self.structs[t.name] = struct
+                    #print m
+                    struct[m[0].name] = (m[0].type.type[0], len(m[0].type.ptrs), [int(x) for x in m[0].arr], self.evalExpr(m))
+                self.structs[name] = struct
+                self.definedStruct << kwl(self.structs.keys())
+            return ('struct:'+name)
         except:
             print t
             sys.excepthook(*sys.exc_info())
 
     def processVariable(self, s, l, t):
+        #print "VARIABLE:", l, t
         try:
             name = t[0].name
             #print t, name, t.value
@@ -335,12 +366,15 @@ class CParser():
             #print t, t[0].name, t.value
             sys.excepthook(*sys.exc_info())
 
-    def processType(self, s, l, t):
-        typ = t.type
-        for d in t[2:]:
+    def processTypedef(self, s, l, t):
+        #print "TYPE:", l, t, t[1].type
+        typ = t[1].type[0]
+        #print t, t.type
+        for d in t[2]:
+            #print "  ",d, d.newType, d.ptrs, d.arr
             self.types[d.newType] = (typ, len(d.ptrs), [int(x) for x in d.arr])
             self.definedType << MatchFirst( map(Keyword,self.types.keys()) )
-
+        
     def printAll(self):
         """Print everything parsed from files. Useful for debugging."""
         from pprint import pprint
@@ -359,6 +393,43 @@ class CParser():
         print "==============ALL VALUES==================="
         print self.values
         
+## Some basic definitions
+numTypes = ['int', 'float', 'double']
+baseTypes = ['char', 'bool', 'void'] + numTypes
+sizeModifiers = ['short', 'long']
+signModifiers = ['signed', 'unsigned']
+qualifiers = ['const', 'static', 'volatile', 'inline', 'near', 'far']
+keywords = ['struct', 'enum', 'union'] + qualifiers + baseTypes + sizeModifiers + signModifiers
+
+def kwl(strs):
+    """Generate a match-first list of keywords given a list of strings."""
+    return MatchFirst(map(Keyword,strs))
+
+keyword = kwl(keywords)
+ident = (~keyword + Word(alphas+"_",alphanums+"_$")).setParseAction(lambda t: t[0])
+integer = Combine(Optional("-") + (Word( nums ) | Combine("0x" + Word(hexnums)))) 
+semi = Literal(";").ignore(quotedString).suppress()
+lbrace = Literal("{").ignore(quotedString).suppress()
+rbrace = Literal("}").ignore(quotedString).suppress()
+lbrack = Literal("[").ignore(quotedString).suppress()
+rbrack = Literal("]").ignore(quotedString).suppress()
+lparen = Literal("(").ignore(quotedString).suppress()
+rparen = Literal(")").ignore(quotedString).suppress()
+number = Word(hexnums + ".-+x")
+stars = Optional(Word('*'), default='').setResultsName('ptrs')
+
+## language elements
+fundType = OneOrMore(kwl(signModifiers + sizeModifiers + baseTypes)).setParseAction(lambda t: ' '.join(t))
+    
+typeQualifier = ZeroOrMore(kwl(qualifiers)).suppress()
+
+bitfieldspec = ":" + integer
+arrayOp = bitfieldspec | ( lbrack + integer + rbrack )
+varNameSpec = Group(stars + ident + ZeroOrMore(arrayOp))
+operator = oneOf("+ - / * | & || && ^ % ++ -- == != > < >= <=")
+functionCall = Forward()
+expression = OneOrMore(operator | functionCall | ident | quotedString | number)
+functionCall << ident + '(' + Optional(delimitedList(expression)) + ')'
 
 if __name__ == '__main__':
     files = sys.argv[1:]

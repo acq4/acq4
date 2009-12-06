@@ -20,15 +20,27 @@ char* str7 = "string with \"escaped quotes\" ";
 
 /* comment */ int betweenComments /* comment */ ;
 
+#define MACRO5
 typedef char **typeChar;
 typedef int typeInt, *typeIntPtr, typeIntArr[10], typeIntDArr[5][5];
 typedef typeInt typeTypeInt;
+typedef unsigned long ULONG;
 
 struct structName 
 {
   int x; typeTypeInt y;
   char str[10] = "brace }  \0"; /* commented brace } */
 } structInst; 
+
+typedef struct structName *structNamePtr;
+
+typedef struct structName2 {
+    int x;
+    int y;
+} *structName2Ptr;
+
+typedef struct { int x; } *anonStructPtr;
+
 
 static const int constVar = 5;
 
