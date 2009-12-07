@@ -4,18 +4,6 @@ import sys, re, os
 import ctypes
 
 
-#typedef TYPE *ident[], ...;
-#TYPE ident = expr;
-#struct ident {};
-#enum ident {};
-#TYPE ident();
-#TYPE ident() {}
-
-
-
-
-
-
 #__all__ = ['parseFiles', 'CParser']
 
 def parseFiles(files, cache=None, **args):
@@ -68,24 +56,23 @@ class CParser():
             Similarly, preprocessor macros can be specified:
                 macros={'WINAPI': ''}
         """
-        self.macros = {}
-        self.types = {}
-        self.variables = {}
-        self.functions = {}
-        self.structs = {}
-        self.enums = {}
-        self.values = {}  ## holds all variables, macros, and enum values
+        
+        self.defs = {}  ## holds all definitions
+        self.fileDefs = {}  ## holds definitions grouped by the file they came from
         
         self.initOpts = args.copy()
         self.initOpts['files'] = files
         self.initOpts['replace'] = replace
         
-        self.dataList = ['types', 'variables', 'macros', 'structs', 'enums', 'functions', 'values']
-        
-        # define a placeholder for macros and typedefs
+        self.dataList = ['types', 'variables', 'fnmacros', 'macros', 'structs', 'enums', 'functions', 'values']
+            
+            
+        # placeholders for definitions that change during parsing
         self.macroExpr = Forward()
+        self.fnMacroExpr = Forward()
         self.definedType = Forward()
         self.definedStruct = Forward()
+        self.definedEnum = Forward()
         
         # Import extra arguments if specified
         for k in args:
@@ -99,12 +86,21 @@ class CParser():
             fd = open(f)
             self.files[f] = fd.read()
             fd.close()
+            self.fileDefs[f] = {}
             
             if replace is not None:
                 for s in replace:
                     self.files[f] = re.sub(s, replace[s], self.files[f])
+                    
+        ## initialize empty definition lists for each file
+        for k in self.dataList:
+            self.defs[k] = {}
+            for f in files:
+                self.fileDefs[f][k] = {}
+                
+        self.currentFile = None
     
-    def processAll(self, file=None, cache=None, returnUnparsed=False):
+    def processAll(self, file=None, cache=None, returnUnparsed=False, printAfterPreprocess=False):
         """Remove comments, preprocess, and parse for declarations. Operates on the file named
         or all files in series if not specified. (operates in memory; does not alter the original files)
         Returns a list of the results from parseDefs.
@@ -126,6 +122,9 @@ class CParser():
         for f in files:
             self.removeComments(f)
             self.preprocess(f)
+            if printAfterPreprocess:
+                print "===== PREPROCSSED %s =======" % f
+                print self.files[f]
             results.append(self.parseDefs(f, returnUnparsed))
         
         if cache is not None:
@@ -189,39 +188,47 @@ class CParser():
     
     def preprocess(self, file):
         """Scan named file for preprocessor directives, removing them while expanding macros. (operates in memory; does not alter the original files)"""
+        self.currentFile = file
         text = self.files[file]
-        #ident = Word(alphas+"_",alphanums+"_$")
+        ppDirective = Combine("#" + Word(alphas)) + restOfLine
         
         # define the structure of a macro definition (the empty term is used 
         # to advance to the next non-whitespace character)
-        ppDefine = Keyword("#define") + ident.setWhitespaceChars(' \t').setResultsName("macro") + restOfLine.setResultsName("value")
-        ppDirective = Combine("#" + Word(alphas)) + restOfLine
-        
-        self.macroExpr << MatchFirst( map(Keyword,self.macros.keys()) )
-
+        ppDefine = Keyword("#define") + ident.setWhitespaceChars(' \t').setResultsName("macro") + Optional(lparen + delimitedList(ident) + rparen).setWhitespaceChars(' \t').setResultsName('args') + restOfLine.setResultsName("value")
         # attach parse actions to expressions
-        self.macroExpr.setParseAction(self.processMacroRef)
         ppDefine.setParseAction(self.processMacroDefn)
+        
+        self.updateMacroDefns()
 
         # define pattern for scanning through the input string
-        self.macroExpander = (self.macroExpr | ppDefine.suppress() | ppDirective.suppress()).ignore(quotedString)
+        self.macroExpander = (self.macroExpr | self.fnMacroExpr | ppDefine.suppress() | ppDirective.suppress()).ignore(quotedString)
         self.files[file] =  self.macroExpander.transformString(text)
 
+    def updateMacroDefns(self):
+        self.macroExpr << MatchFirst( [Keyword(m).setResultsName('macro') for m in self.defs['macros']] )
+        self.macroExpr.setParseAction(self.processMacroRef)
+
+        self.fnMacroExpr << MatchFirst( [(Keyword(m).setResultsName('macro') + lparen + Group(delimitedList(expression)).setResultsName('args') + rparen) for m in self.defs['fnmacros']] )
+        self.fnMacroExpr.setParseAction(self.processFnMacroRef)        
         
     def parseDefs(self, file, returnUnparsed=False):
         """Scan through the named file for variable, struct, enum, and function declarations.
         Returns the entire tree of successfully parsed tokens.
         If returnUnparsed is True, return a string of all lines that failed to match (for debugging)."""
-        
-
-
-        #typeSpec = OneOrMore(oneOf("const static unsigned signed int long short float double char void *")) 
-        self.definedType << kwl(self.types.keys())
-
+        self.currentFile = file
+        self.definedType << kwl(self.defs['types'].keys())
     
+        parser = self.buildParser()
+        if returnUnparsed:
+            text = parser.suppress().transformString(self.files[file])
+            return re.sub(r'\n\s*\n', '\n', text)
+        else:
+            return [x[0] for x in parser.scanString(self.files[file])]
+
+    def buildParser(self):
         structType = Forward()
-        
-        typeSpec = typeQualifier + Group(fundType|Optional(kwl(sizeModifiers + signModifiers)) + self.definedType|structType).setResultsName('type') + typeQualifier
+        enumType = Forward()
+        typeSpec = typeQualifier + Group(fundType | Optional(kwl(sizeModifiers + signModifiers)) + self.definedType | structType | enumType).setResultsName('type') + typeQualifier
 
         ## typedef
         typeDecl = Keyword('typedef') + Group(typeSpec) + Group(delimitedList(Group(stars.setResultsName('ptrs') + ident.setResultsName('newType') + ZeroOrMore(arrayOp).setResultsName('arr')))) + semi
@@ -231,82 +238,109 @@ class CParser():
         variableSingleDecl = Group(typeSpec + stars + ident.setResultsName('name')) + Optional(Literal('=').suppress() + expression.setResultsName('value'))
 
         variableDecl = Group(typeSpec.setResultsName('type') + stars + ident.setResultsName('name') + ZeroOrMore(arrayOp).setResultsName('arr')) + Optional(Literal('=').suppress() + (expression.setResultsName('value') | (lbrace + Group(delimitedList(expression)).setResultsName('arrayValue') + rbrace))) + semi
+        variableDecl.setParseAction(self.processVariable)
         
         ## Struct definition
         structDecl = Forward()
-        #memberDecl = (variableDecl | structDecl)
         structKW = (Keyword('struct') | Keyword('union'))
-        self.definedStruct << kwl(self.structs.keys())
+        self.definedStruct << kwl(self.defs['structs'].keys())
         
-        structType << structKW + (self.definedStruct.setResultsName('name') | Optional(ident).setResultsName('name') + lbrace + Group(ZeroOrMore( Group(variableDecl) )).setResultsName('members') + rbrace)
+        structType << structKW + (self.definedStruct.setResultsName('name') | Optional(ident).setResultsName('name') + lbrace + Group(ZeroOrMore( Group(variableDecl.setParseAction(lambda: None)) )).setResultsName('members') + rbrace)
         structType.setParseAction(self.processStruct)
         
         structDecl = structType + semi
 
         ## enum definition
         enumVarDecl = Group(ident.setResultsName('name')  + Optional(Literal('=').suppress() + integer.setResultsName('value')))
-        enumDecl = Keyword('enum') + Optional(ident).setResultsName('name') + lbrace + Group(delimitedList(enumVarDecl)).setResultsName('names') + rbrace + Optional(ident) + semi
+        
+        enumType << Keyword('enum') + (self.definedEnum.setResultsName('name') | Optional(ident).setResultsName('name') + lbrace + Group(delimitedList(enumVarDecl)).setResultsName('members') + rbrace)
+        enumType.setParseAction(self.processEnum)
+        
+        enumDecl = enumType + semi
 
         ## function definition
         functionDecl = typeSpec.setResultsName('type') + stars + ident.setResultsName('name') + lparen + Group(Optional(delimitedList(variableSingleDecl))).setResultsName('args') + rparen + (nestedExpr('{', '}').suppress() | semi)
-
+        functionDecl.setParseAction(self.processFunction)
         
-        if returnUnparsed:
-            text = (
-                typeDecl.suppress() ^
-                structDecl.suppress() ^
-                enumDecl.setParseAction(self.processEnum).suppress() ^
-                variableDecl.setParseAction(self.processVariable).suppress() ^
-                functionDecl.setParseAction(self.processFunction).suppress()
-            ).transformString(self.files[file])
-            return re.sub(r'\n\s*\n', '\n', text)
-        else:
-            return [x[0] for x in (
-                typeDecl ^
-                structDecl ^
-                enumDecl.setParseAction(self.processEnum) ^
-                variableDecl.setParseAction(self.processVariable) ^
-                functionDecl.setParseAction(self.processFunction)
-            ).scanString(self.files[file])]
-
-    
+        return (typeDecl ^ structDecl ^ enumDecl ^ variableDecl ^ functionDecl)
     
         
     # parse action for macro definitions
     def processMacroDefn(self, s,l,t):
-        macroVal = self.macroExpander.transformString(t.value)
-        self.macros[t.macro] = macroVal.strip()
-        self.values[t.macro] = self.evalExpr(macroVal)
-        self.macroExpr << MatchFirst( map(Keyword,self.macros.keys()) )
+        macroVal = self.macroExpander.transformString(t.value).strip()
+        if t.args == '':
+            self.addDef('macros', t.macro, macroVal)
+            #print "Add macro:", t.macro, self.defs['macros'][t.macro]
+        else:
+            self.addDef('fnmacros', t.macro,  (macroVal, [x for x in t.args]))
+            #print "Add fn macro:", t.macro, t.args, self.defs['fnmacros'][t.macro]
+        self.addDef('values', t.macro, self.evalExpr(macroVal))
+        self.updateMacroDefns()
+        #self.macroExpr << MatchFirst( map(Keyword,self.defs['macros'].keys()) )
         return "#define " + t.macro + " " + macroVal
         
     # parse action to replace macro references with their respective definition
     def processMacroRef(self, s,l,t):
-        return self.macros[t[0]]
+        return self.defs['macros'][t.macro]
+            
+    def processFnMacroRef(self, s,l,t):
+        m = self.defs['fnmacros'][t.macro]
+        #print "=====>>"
+        #print "Process FN MACRO:", t
+        #print "  macro defn:", t.macro, m
+        #print "  macro call:", t.args
+        ## m looks like ('a + b', ('a', 'b'))
+        newStr = m[0][:]
+        #print "  starting str:", newStr
+        try:
+            for i in range(len(m[1])):
+                #print "  step", i
+                arg = m[1][i]
+                #print "    arg:", arg, '=>', t.args[i]
+                
+                newStr = Keyword(arg).setParseAction(lambda: t.args[i]).transformString(newStr)
+                #print "    new str:", newStr
+        except:
+            #sys.excepthook(*sys.exc_info())
+            raise
+        #print "<<====="
+        return newStr
+            
 
     def processEnum(self, s, l, t):
         try:
-            if t.name != '':
+            if t.name == '':
+                n = 0
+                while True:
+                    name = 'anonEnum%d' % n
+                    if name not in self.defs['enums']:
+                        break
+                    n += 1
+            else:
+                name = t.name[0]
+                
+            if name not in self.defs['enums']:
                 i = 0
                 enum = {}
-                for v in t.names:
+                for v in t.members:
                     if v.value != '':
                         i = int(v.value)
                     enum[v.name] = i
-                    self.values[v.name] = i
+                    self.addDef('values', v.name, i)
                     i += 1
-                self.enums[t.name[0]] = enum
+                self.addDef('enums', name, enum)
+            return ('enum:'+name)
         except:
             print t
             sys.excepthook(*sys.exc_info())
 
     def processFunction(self, s, l, t):
         try:
-            rType = (t.type.type, len(t.type.ptrs))
+            rType = (t.type.type[0], len(t.type.ptrs))
             args = []
             for a in t.args:
-                args.append((a.name, a.type, len(a.ptrs)))
-            self.functions[t.name] = (rType, args)
+                args.append((a.name, a.type[0], len(a.ptrs)))
+            self.addDef('functions', t.name, (rType, args))
         except:
             print t
             sys.excepthook(*sys.exc_info())
@@ -316,14 +350,14 @@ class CParser():
         ## happen to be valid python expressions.
         ## This function does not currently include previous variable
         ## declarations, but that should not be too difficult to implement..
-        
+        #print "Eval:", toks
         try:
             if type(toks) is str:
                 val = eval(toks)
             elif toks.arrayValue != '':
                 val = [eval(x) for x in toks.arrayValue]
             elif toks.value != '':
-                val = eval(toks.value[0])
+                val = eval(' '.join(toks.value))
             else:
                 val = None
             return val
@@ -337,19 +371,22 @@ class CParser():
                 n = 0
                 while True:
                     name = 'anonStruct%d' % n
-                    if name not in self.structs:
+                    if name not in self.defs['structs']:
                         break
                     n += 1
             else:
-                name = t.name[0]
-            if name not in self.structs:
+                if type(t.name) is str:
+                    name = t.name
+                else:
+                    name = t.name[0]
+            if name not in self.defs['structs']:
                 #print "STRUCT", name, t
                 struct = {}
                 for m in t.members:
                     #print m
                     struct[m[0].name] = (m[0].type.type[0], len(m[0].type.ptrs), [int(x) for x in m[0].arr], self.evalExpr(m))
-                self.structs[name] = struct
-                self.definedStruct << kwl(self.structs.keys())
+                self.addDef('structs', name, struct)
+                self.definedStruct << kwl(self.defs['structs'].keys())
             return ('struct:'+name)
         except:
             print t
@@ -360,8 +397,8 @@ class CParser():
         try:
             name = t[0].name
             #print t, name, t.value
-            self.variables[name] = self.evalExpr(t)
-            self.values[name] = self.variables[name]
+            self.addDef('variables', name, self.evalExpr(t))
+            self.addDef('values', name, self.defs['variables'][name])
         except:
             #print t, t[0].name, t.value
             sys.excepthook(*sys.exc_info())
@@ -372,26 +409,23 @@ class CParser():
         #print t, t.type
         for d in t[2]:
             #print "  ",d, d.newType, d.ptrs, d.arr
-            self.types[d.newType] = (typ, len(d.ptrs), [int(x) for x in d.arr])
-            self.definedType << MatchFirst( map(Keyword,self.types.keys()) )
+            self.addDef('types', d.newType, (typ, len(d.ptrs), [int(x) for x in d.arr]))
+            self.definedType << MatchFirst( map(Keyword,self.defs['types'].keys()) )
         
-    def printAll(self):
+    def printAll(self, file=None):
         """Print everything parsed from files. Useful for debugging."""
         from pprint import pprint
-        print "==============MACROS=================="
-        pprint(self.macros)
-        print "==============TYPES==================="
-        pprint(self.types)
-        print "==============VARIABLES==================="
-        pprint(self.variables)
-        print "==============FUNCTIONS==================="
-        pprint(self.functions)
-        print "==============ENUMS==================="
-        pprint(self.enums)
-        print "==============STRUCTS==================="
-        pprint(self.structs)
-        print "==============ALL VALUES==================="
-        print self.values
+        for k in self.dataList:
+            print "============== %s ==================" % k
+            if file is None:
+                pprint(self.defs[k])
+            else:
+                pprint(self.fileDefs[file][k])
+                
+    def addDef(self, typ, name, val):
+        self.defs[typ][name] = val
+        if self.currentFile in self.fileDefs:
+            self.fileDefs[self.currentFile][typ][name] = val
         
 ## Some basic definitions
 numTypes = ['int', 'float', 'double']
