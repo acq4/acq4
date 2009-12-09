@@ -2,7 +2,7 @@
 from pyparsing import *
 import sys, re, os
 import ctypes
-
+ParserElement.enablePackrat()
 
 #__all__ = ['parseFiles', 'CParser']
 
@@ -35,8 +35,8 @@ class CParser():
         p.printAll() 
         
         ## access parsed declarations 
-        allValues = p.values
-        functionSignatures = p.functions
+        allValues = p.defs['values']
+        functionSignatures = p.defs['functions']
         ...
         
         ## To see what was not successfully parsed:
@@ -45,7 +45,7 @@ class CParser():
             print s
     """
     
-    def __init__(self, files, replace=None, **args):
+    def __init__(self, files=None, replace=None, copyFrom=None, **args):
         """Create a C parser object fiven a file or list of files. Files are read to memory and operated
         on from there.
             'replace' may be specified to perform string replacements before parsing.
@@ -74,33 +74,46 @@ class CParser():
         self.definedStruct = Forward()
         self.definedEnum = Forward()
         
-        # Import extra arguments if specified
-        for k in args:
-            setattr(self, k, args[k])
         
         self.files = {}
-        if type(files) is str:
-            files = [files]
-        self.fileOrder = files
-        for f in files:
-            fd = open(f)
-            self.files[f] = fd.read()
-            fd.close()
-            self.fileDefs[f] = {}
-            
-            if replace is not None:
-                for s in replace:
-                    self.files[f] = re.sub(s, replace[s], self.files[f])
+        if files is not None:
+            if type(files) is str:
+                files = [files]
+            self.fileOrder = files
+            for f in files:
+                self.loadFile(f)
                     
-        ## initialize empty definition lists for each file
+        ## initialize empty definition lists
         for k in self.dataList:
             self.defs[k] = {}
-            for f in files:
-                self.fileDefs[f][k] = {}
+            #for f in files:
+                #self.fileDefs[f][k] = {}
                 
         self.currentFile = None
+        
+        # Import extra arguments if specified
+        for t in args:
+            for k in args[t].keys():
+                self.addDef(t, k, args[t][k])
+        
+        # Import from other CParsers if specified
+        if copyFrom is not None:
+            if type(copyFrom) not in [list, tuple]:
+                copyFrom = [copyFrom]
+            for p in copyFrom:
+                self.importDict(p.fileDefs)
     
-    def processAll(self, file=None, cache=None, returnUnparsed=False, printAfterPreprocess=False):
+    def loadFile(self, file):
+        fd = open(file)
+        self.files[file] = fd.read()
+        fd.close()
+        #self.fileDefs[f] = {}
+        
+        if replace is not None:
+            for s in replace:
+                self.files[file] = re.sub(s, replace[s], self.files[file])
+    
+    def processAll(self, file=None, cache=None, returnUnparsed=False, printAfterPreprocess=False, noCacheWarning=False):
         """Remove comments, preprocess, and parse for declarations. Operates on the file named
         or all files in series if not specified. (operates in memory; does not alter the original files)
         Returns a list of the results from parseDefs.
@@ -109,7 +122,7 @@ class CParser():
                C files are newer than the cache. Only valid if 'file' is None.
            'returnUnparsed' is passed directly to parseDefs."""
         if file is None:
-            if self.loadCache(cache):
+            if self.loadCache(cache, checkValidity=True):
                 #print "used cache"
                 return  ## cached values loaded successfully, nothing left to do here
             else:
@@ -119,6 +132,8 @@ class CParser():
             files = [file]
         
         results = []
+        if noCacheWarning:
+            print "Parsing C header files (no valid cache found). This could take several minutes..."
         for f in files:
             self.removeComments(f)
             self.preprocess(f)
@@ -134,16 +149,24 @@ class CParser():
         return results
         
             
-    def loadCache(self, cacheFile, force=False):
-        """Load a cache file, but only if it appears to be a valid cache for this CParser.
-        if 'force' is True, then skip the validity tests."""
+    def loadCache(self, cacheFile, checkValidity=False):
+        """Load a cache file
+        if checkValidity=True, then run several checks before loading the cache:
+           - cache file must not be older than any source files
+           - cache file must not be older than this library file
+           - options recorded in cache must match options used to initialize CParser"""
         
-        ## make sure cache file exists and 
-        if (type(cacheFile) is not str) or (not os.path.isfile(cacheFile)):
-            return False
+        ## make sure cache file exists 
+        if type(cacheFile) is not str:
+            raise Exception("cache file option myst be a string.")
+        if not os.path.isFile(cacheFile):
+            d = os.path.dirname(__file__)  ## If file doesn't exist, search for it in this module's path
+            cacheFile = os.path.join(d, cacheFile)
+            if not os.path.isFile(cacheFile):
+                return False
         
         ## make sure cache is newer than all input files and this code
-        if not force:
+        if checkValidity:
             mtime = os.stat(cacheFile).st_mtime
             if os.stat(__file__).st_mtime > mtime:
                 return False
@@ -157,24 +180,32 @@ class CParser():
             cache = pickle.load(open(cacheFile))
             
             ## make sure __init__ options match
-            if (not force) and (cache['opts'] != self.initOpts):
+            if checkValidity and (cache['opts'] != self.initOpts):
                 return False
                 
             ## import all parse results
-            for k in self.dataList:
-                setattr(self, k, cache[k])
+            self.importDict(cache['fileDefs'])
+            #for k in self.dataList:
+                #setattr(self, k, cache[k])
             return True
         except:
             print "Warning--cache is invalid, ignoring."
             return False
 
+    def importDict(self, data):
+        for f in data.keys():
+            self.currentFile = f
+            for k in self.dataList:
+                for n in data[f][k]:
+                    self.addDef(k, n, data[f][k][n])
 
     def writeCache(self, cacheFile):
         """Store all parsed declarations to cache."""
         cache = {}
         cache['opts'] = self.initOpts
-        for k in self.dataList:
-            cache[k] = getattr(self, k)
+        cache['fileDefs'] = self.fileDefs
+        #for k in self.dataList:
+            #cache[k] = getattr(self, k)
         import pickle
         pickle.dump(cache, open(cacheFile, 'w'))
 
@@ -226,29 +257,25 @@ class CParser():
             return [x[0] for x in parser.scanString(self.files[file])]
 
     def buildParser(self):
-        structType = Forward()
+        self.structType = Forward()
         enumType = Forward()
-        typeSpec = typeQualifier + Group(fundType | Optional(kwl(sizeModifiers + signModifiers)) + self.definedType | structType | enumType).setResultsName('type') + typeQualifier
+        self.typeSpec = typeQualifier + Group(fundType | Optional(kwl(sizeModifiers + signModifiers)) + self.definedType | self.structType | enumType).setResultsName('type') + typeQualifier
 
         ## typedef
-        typeDecl = Keyword('typedef') + Group(typeSpec) + Group(delimitedList(Group(stars.setResultsName('ptrs') + ident.setResultsName('newType') + ZeroOrMore(arrayOp).setResultsName('arr')))) + semi
-        typeDecl.setParseAction(self.processTypedef)
+        self.typeDecl = Keyword('typedef') + Group(self.typeSpec) + Group(delimitedList(Group(typeQualifier + stars.setResultsName('ptrs') + typeQualifier + ident.setResultsName('newType') + ZeroOrMore(arrayOp).setResultsName('arr')))) + semi
+        self.typeDecl.setParseAction(self.processTypedef)
 
         ## variable declaration
-        variableSingleDecl = Group(typeSpec + stars + ident.setResultsName('name')) + Optional(Literal('=').suppress() + expression.setResultsName('value'))
+        variableSingleDecl = Group(self.typeSpec + stars + typeQualifier + ident.setResultsName('name')) + Optional(Literal('=').suppress() + expression.setResultsName('value'))
 
-        variableDecl = Group(typeSpec.setResultsName('type') + stars + ident.setResultsName('name') + ZeroOrMore(arrayOp).setResultsName('arr')) + Optional(Literal('=').suppress() + (expression.setResultsName('value') | (lbrace + Group(delimitedList(expression)).setResultsName('arrayValue') + rbrace))) + semi
-        variableDecl.setParseAction(self.processVariable)
+        self.variableDecl = Group(self.typeSpec.setResultsName('type') + stars + typeQualifier + ident.setResultsName('name') + ZeroOrMore(arrayOp).setResultsName('arr')) + Optional(Literal('=').suppress() + (expression.setResultsName('value') | (lbrace + Group(delimitedList(expression)).setResultsName('arrayValue') + rbrace))) + semi
+        self.variableDecl.setParseAction(self.processVariable)
         
         ## Struct definition
-        structDecl = Forward()
-        structKW = (Keyword('struct') | Keyword('union'))
-        self.definedStruct << kwl(self.defs['structs'].keys())
+        self.structDecl = Forward()
+        self.updateStructDefn()
         
-        structType << structKW + (self.definedStruct.setResultsName('name') | Optional(ident).setResultsName('name') + lbrace + Group(ZeroOrMore( Group(variableDecl.setParseAction(lambda: None)) )).setResultsName('members') + rbrace)
-        structType.setParseAction(self.processStruct)
-        
-        structDecl = structType + semi
+        self.structDecl = self.structType + semi
 
         ## enum definition
         enumVarDecl = Group(ident.setResultsName('name')  + Optional(Literal('=').suppress() + integer.setResultsName('value')))
@@ -259,12 +286,18 @@ class CParser():
         enumDecl = enumType + semi
 
         ## function definition
-        functionDecl = typeSpec.setResultsName('type') + stars + ident.setResultsName('name') + lparen + Group(Optional(delimitedList(variableSingleDecl))).setResultsName('args') + rparen + (nestedExpr('{', '}').suppress() | semi)
+        functionDecl = self.typeSpec.setResultsName('type') + stars + ident.setResultsName('name') + lparen + Group(Optional(delimitedList(variableSingleDecl))).setResultsName('args') + rparen + (nestedExpr('{', '}').suppress() | semi)
         functionDecl.setParseAction(self.processFunction)
         
-        return (typeDecl ^ structDecl ^ enumDecl ^ variableDecl ^ functionDecl)
+        return (self.typeDecl ^ self.structDecl ^ enumDecl ^ self.variableDecl ^ functionDecl)
     
-        
+    def updateStructDefn(self):
+        structKW = (Keyword('struct') | Keyword('union'))
+        self.definedStruct << kwl(self.defs['structs'].keys())
+        self.structType << structKW + (self.definedStruct.setResultsName('name') | Optional(ident).setResultsName('name') + lbrace + Group(ZeroOrMore( Group(self.variableDecl.copy().setParseAction(lambda: None)) )).setResultsName('members') + rbrace)
+        self.structType.setParseAction(self.processStruct)
+    
+    
     # parse action for macro definitions
     def processMacroDefn(self, s,l,t):
         macroVal = self.macroExpander.transformString(t.value).strip()
@@ -386,7 +419,10 @@ class CParser():
                     #print m
                     struct[m[0].name] = (m[0].type.type[0], len(m[0].type.ptrs), [int(x) for x in m[0].arr], self.evalExpr(m))
                 self.addDef('structs', name, struct)
-                self.definedStruct << kwl(self.defs['structs'].keys())
+                #self.definedStruct << kwl(self.defs['structs'].keys())
+                self.updateStructDefn()
+                #print "Added struct %s:", name
+                #print "   definedStruct:", self.definedStruct
             return ('struct:'+name)
         except:
             print t
@@ -396,7 +432,7 @@ class CParser():
         #print "VARIABLE:", l, t
         try:
             name = t[0].name
-            #print t, name, t.value
+            #print "Add variable:", name, t.value
             self.addDef('variables', name, self.evalExpr(t))
             self.addDef('values', name, self.defs['variables'][name])
         except:
@@ -424,15 +460,19 @@ class CParser():
                 
     def addDef(self, typ, name, val):
         self.defs[typ][name] = val
-        if self.currentFile in self.fileDefs:
-            self.fileDefs[self.currentFile][typ][name] = val
-        
+        if self.currentFile not in self.fileDefs:
+            self.fileDefs[self.currentFile] = {}
+            for k in self.dataList:
+                self.fileDefs[self.currentFile][k] = {}
+        self.fileDefs[self.currentFile][typ][name] = val
+            
+            
 ## Some basic definitions
 numTypes = ['int', 'float', 'double']
 baseTypes = ['char', 'bool', 'void'] + numTypes
 sizeModifiers = ['short', 'long']
 signModifiers = ['signed', 'unsigned']
-qualifiers = ['const', 'static', 'volatile', 'inline', 'near', 'far']
+qualifiers = ['const', 'static', 'volatile', 'inline', 'restrict', 'near', 'far']
 keywords = ['struct', 'enum', 'union'] + qualifiers + baseTypes + sizeModifiers + signModifiers
 
 def kwl(strs):
