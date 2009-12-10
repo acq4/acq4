@@ -207,7 +207,9 @@ class PlotItem(QtGui.QGraphicsWidget):
         """return the screen geometry of the viewbox"""
         v = self.scene().views()[0]
         b = self.vb.mapRectToScene(self.vb.boundingRect())
-        return v.mapFromScene(b).boundingRect()
+        wr = v.mapFromScene(b).boundingRect()
+        pos = v.pos()
+        wr.adjust(v.x(), v.y(), v.x(), v.y())
 
     def blockLink(self, b):
         self.linksBlocked = b

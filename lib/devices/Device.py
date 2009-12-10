@@ -50,6 +50,8 @@ class Device(QtCore.QObject):
         else:
             l = self._lock_.tryLock()
             if not l:
+                print "  Device is currently locked from:"
+                print self._lock_tb_
                 raise Exception("Could not acquire lock")
         self._lock_tb_ = ''.join(traceback.format_stack()[:-1])
         return True

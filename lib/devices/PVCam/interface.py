@@ -301,7 +301,11 @@ class PVCam(DAQGeneric):
 
 class Task(DAQGenericTask):
     def __init__(self, dev, cmd):
-        DAQGenericTask.__init__(self, dev, cmd['channels'])
+        daqCmd = {}
+        if 'channels' in cmd:
+            daqCmd = cmd['channels']
+        DAQGenericTask.__init__(self, dev, daqCmd)
+        
         self.camCmd = cmd
         self.lock = Mutex()
         self.recordHandle = None
@@ -692,6 +696,7 @@ class AcquireThread(QtCore.QThread):
                         for c in conn:
                             c(outFrame)
                         self.emit(QtCore.SIGNAL("newFrame"), outFrame)
+                        #print "emit frame", self.frameId
                         
                         self.frameId += 1
                             

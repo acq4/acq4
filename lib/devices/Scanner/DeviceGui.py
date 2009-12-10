@@ -252,9 +252,11 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## Record full scan.
         cmd = {
             'protocol': {'duration': duration},
-            camera: {'record': True, 'triggerMode': 'Trigger First', 'recordExposeChannel': True},
+            camera: {'record': True, 'triggerMode': 'Trigger First', 'recordExposeChannel': True, 'channels': {
+                'exposure': {'record': True}, 
+                'trigger': {'preset': 0, 'command': cameraTrigger}}},
             laser: {'Shutter': {'preset': 1, 'holding': 0}},
-            'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
+            #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
             self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},
             daqName: {'numPts': nPts, 'rate': rate}
         }
