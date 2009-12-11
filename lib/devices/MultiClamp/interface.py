@@ -288,10 +288,10 @@ class Task(DeviceTask):
         ## create MetaArray and fill with MC state info
         #self.state['startTime'] = self.daqTasks[self.daqTasks.keys()[0]].getStartTime()
         with MutexLocker(self.dev.lock):
-            
+            channels = self.getUsedChannels()
             result = {}
             #result['info'] = self.state
-            for ch in self.usedChannels:
+            for ch in channels:
                 chConf = self.dev.config[ch+'Channel']
                 result[ch] = self.daqTasks[ch].getData(chConf[1])
                 # print result[ch]
@@ -314,8 +314,11 @@ class Task(DeviceTask):
                     result[ch]['name'] = ch
             # print result
                 
+            if len(result) == 0:
+                return None
+                
             ## Copy state from first channel (assume this is the same for all channels)
-            firstChInfo = result[self.usedChannels[0]]['info']
+            firstChInfo = result[channels[0]]['info']
             for k in firstChInfo:
                 self.state[k] = firstChInfo[k]
                 

@@ -25,6 +25,9 @@ class DAQGenericProtoGui(ProtocolGui):
                 (self.ui.plotSplitter, 'splitter3'),
             ])
             self.createChannelWidgets(self.ui.controlSplitter, self.ui.plotSplitter)
+            self.ui.topSplitter.setStretchFactor(0, 0)
+            self.ui.topSplitter.setStretchFactor(1, 1)
+            
         else:
             ## If ownUi is False, then the UI is created elsewhere and createChannelWidgets must be called from there too.
             self.stateGroup = None

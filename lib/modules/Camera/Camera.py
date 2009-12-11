@@ -308,9 +308,14 @@ class PVCamera(QtGui.QMainWindow):
         
         if pos is None:
             pos = self.cameraCenter
-        item.translate(pos[0], pos[1])
+        item.resetTransform()
+        item.setPos(QtCore.QPointF(pos[0], pos[1]))
         item.scale(scale[0], scale[1])
         item.setZValue(z)
+        #print pos, item.mapRectToScene(item.boundingRect())
+    
+    def removeItem(self, item):
+        self.scene.removeItem(item)
     
     @trace
     def  clearPersistentFrames(self):
@@ -747,6 +752,7 @@ class PVCamera(QtGui.QMainWindow):
             #print info
             newPos = info['centerPosition']
             if newPos != self.cameraCenter:
+                self.emit(QtCore.SIGNAL('cameraPosChanged'))
                 diff = [newPos[0] - self.cameraCenter[0], newPos[1] - self.cameraCenter[1]]
                 self.gv.translate(diff[0], diff[1])
                 #print "translate view:", diff
@@ -756,6 +762,7 @@ class PVCamera(QtGui.QMainWindow):
             
             newScale = [info['pixelSize'][0] / info['binning'], info['pixelSize'][1] / info['binning']]
             if newScale != self.cameraScale:
+                self.emit(QtCore.SIGNAL('cameraScaleChanged'))
                 diff = [self.cameraScale[0] / newScale[0], self.cameraScale[1] /newScale[1]]
                 #print "scale view:", diff
                 #print diff

@@ -29,6 +29,10 @@ class MultiClampProtoGui(ProtocolGui):
         
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        
+        self.ui.splitter_2.setStretchFactor(0, 0)
+        self.ui.splitter_2.setStretchFactor(1, 1)
+        
         self.stateGroup = WidgetGroup(self)
         self.ui.waveGeneratorWidget.setTimeScale(1e-3)
         #self.ui.topPlotWidget.enableAxis(PlotWidget.xBottom, False)

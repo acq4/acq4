@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Sat Nov 28 14:14:33 2009
-#      by: PyQt4 UI code generator 4.6
+# Created: Fri Dec 11 09:08:52 2009
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -14,6 +14,8 @@ class Ui_Form(object):
         Form.setObjectName("Form")
         Form.resize(252, 141)
         self.horizontalLayout = QtGui.QHBoxLayout(Form)
+        self.horizontalLayout.setSpacing(0)
+        self.horizontalLayout.setMargin(0)
         self.horizontalLayout.setObjectName("horizontalLayout")
         self.horizSplitter = QtGui.QSplitter(Form)
         self.horizSplitter.setOrientation(QtCore.Qt.Horizontal)
@@ -28,6 +30,8 @@ class Ui_Form(object):
         self.cameraGroupBox.setFont(font)
         self.cameraGroupBox.setObjectName("cameraGroupBox")
         self.gridLayout = QtGui.QGridLayout(self.cameraGroupBox)
+        self.gridLayout.setMargin(0)
+        self.gridLayout.setSpacing(0)
         self.gridLayout.setObjectName("gridLayout")
         self.recordCheck = QtGui.QCheckBox(self.cameraGroupBox)
         font = QtGui.QFont()

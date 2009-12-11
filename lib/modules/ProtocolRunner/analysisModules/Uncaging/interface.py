@@ -148,6 +148,8 @@ class Prot:
         scannerDev = self.ui.scannerDevice()
         
         scanUi = self.ui.pr.getDevice(scannerDev)
+        if not hasattr(scanUi, 'pointSize'):
+            printExc('The device "%s" does not appear to be a scanner; skipping analysis.' % scannerDev)
         pointSize = scanUi.pointSize()
         
         camFrame1 = frame['result'][camDev]['frames'][self.state['frame1Spin']]

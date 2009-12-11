@@ -15,6 +15,7 @@ import time
 import sip
 #import pdb
 
+
 class ProtocolRunner(Module, QtCore.QObject):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
@@ -30,6 +31,8 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.ui = Ui_MainWindow()
         self.win = QtGui.QMainWindow()
         self.ui.setupUi(self.win)
+        self.win.setCentralWidget(None)
+        #self.win.centralWidget().setParent(None)  ## get rid of central widget so docks fill the whole screen
         self.protoStateGroup = WidgetGroup([
             (self.ui.protoContinuousCheck, 'continuous'),
             (self.ui.protoDurationSpin, 'duration', 1e3),
@@ -211,12 +214,13 @@ class ProtocolRunner(Module, QtCore.QObject):
             m = analysisModules.createAnalysisModule(mod, self)
             dock = QtGui.QDockWidget(mod)
             dock.setFeatures(dock.AllDockWidgetFeatures)
+            dock.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea|QtCore.Qt.BottomDockWidgetArea)
             dock.setObjectName(mod)
             dock.setWidget(m)
             dock.setAutoFillBackground(True)
             
             self.analysisDocks[mod] = dock
-            self.win.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+            self.win.addDockWidget(QtCore.Qt.BottomDockWidgetArea, dock)
             
             items = self.ui.analysisList.findItems(mod, QtCore.Qt.MatchExactly)
             items[0].setCheckState(QtCore.Qt.Checked)
@@ -341,14 +345,17 @@ class ProtocolRunner(Module, QtCore.QObject):
                 if d in self.docks:
                     dock = QtGui.QDockWidget(d)
                     dock.setFeatures(dock.AllDockWidgetFeatures)
+                    dock.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea|QtCore.Qt.BottomDockWidgetArea)
                     dock.setObjectName(d)
                     dock.setWidget(dw)
                     dock.setAutoFillBackground(True)
-                    
+                    dw.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
                     self.docks[d] = dock
-                    self.win.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+                    self.win.addDockWidget(QtCore.Qt.BottomDockWidgetArea, dock)
                     QtCore.QObject.connect(dock.widget(), QtCore.SIGNAL('sequenceChanged'), self.updateSeqParams)
                     self.updateSeqParams(d)
+                    #dock.setMinimumWidth(3000)
+                    #dock.setMinimumWidth(0)
                 
         
     def clearDocks(self):
@@ -484,7 +491,10 @@ class ProtocolRunner(Module, QtCore.QObject):
         ## Configure docks
         for d in prot.devices:
             if d in self.docks:
-                self.docks[d].widget().restoreState(prot.devices[d])
+                try:
+                    self.docks[d].widget().restoreState(prot.devices[d])
+                except:
+                    printExc("Error while loading protocol dock:")
 
         ## create and configure analysis docks
         if 'analysis' in prot.conf:
@@ -969,6 +979,8 @@ class TaskThread(QtCore.QThread):
                 l.unlock()
                 time.sleep(1e-3)
             
+            
+            # If paused, hang here for a bit.
             while True:
                 l.relock()
                 pause = self.paused

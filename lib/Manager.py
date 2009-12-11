@@ -342,13 +342,15 @@ Valid options are:
         return self.dataManager.getHandle(d)
         
     def lockReserv(self):
-        """Lock the reservation system so that only one task may reserve its set of devices at a time"""
+        """Lock the reservation system so that only one task may reserve its set of devices at a time.
+        This prevents deadlocks where two protocols use the same two devices but reserve them in opposite order."""
         if self.taskLock.tryLock(10e3):
             return True
         else:
             raise Exception("Times out waiting for task reservation system")
         
     def unlockReserv(self):
+        """Unlock reservation system"""
         self.taskLock.unlock()
         
     def logMsg(self, msg, tags=None):
@@ -399,7 +401,12 @@ class Task:
         self.dm = dm
         self.command = command
         self.result = None
-        self.reserved = False
+        
+        self.lockedDevs = []
+        self.startedDevs = []
+        
+        
+        #self.reserved = False
         try:
             self.cfg = command['protocol']
         except:
@@ -417,64 +424,90 @@ class Task:
         ## Create task objects. Each task object is a handle to the device which is unique for this protocol run.
         self.tasks = {}
         for devName in self.devNames:
-            self.devs[devName] = self.dm.getDevice(devName)
-            self.tasks[devName] = self.devs[devName].createTask(self.command[devName])
+            dev = self.dm.getDevice(devName)
+            task = dev.createTask(self.command[devName])
+            if task is None:
+                printExc("Device '%s' does not have a protocol interface; ignoring." % devName)
+                continue
+            self.devs[devName] = dev
+            self.tasks[devName] = task
         
         
     def execute(self, block=True):
+        self.lockedDevs = []
+        self.startedDevs = []
         self.stopped = False
         #print "======  Executing task %d:" % self.id
         #print self.cfg
         #print "======================="
         
-        
-        #print "execute:", self.tasks
-        ## Reserve all hardware before starting any
-        self.dm.lockReserv()
+        ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
         try:
+        
+            #print "execute:", self.tasks
+            ## Reserve all hardware
+            self.dm.lockReserv()
+            try:
+                for devName in self.tasks:
+                    #print "  %d Reserving hardware" % self.id, devName
+                    self.tasks[devName].reserve()
+                    self.lockedDevs.append(devName)
+                    #print "  %d reserved" % self.id, devName
+                #self.reserved = True
+            finally:
+                self.dm.unlockReserv()
+                
+
+
+            ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
+            ## This is how we allow multiple devices to communicate and decide how to operate together.
+            ## Each task may modify the startOrder list to suit its needs.
+            #print "Configuring subtasks.."
+            self.startOrder = self.devs.keys()
             for devName in self.tasks:
-                #print "  %d Reserving hardware" % self.id, devName
-                self.tasks[devName].reserve()
-                #print "  %d reserved" % self.id, devName
-            self.reserved = True
-        finally:
-            self.dm.unlockReserv()
+                self.tasks[devName].configure(self.tasks, self.startOrder)
+            #print "done"
 
+            if 'leadTime' in self.cfg:
+                time.sleep(self.cfg['leadTime'])
 
-        ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
-        ## This is how we allow multiple devices to communicate and decide how to operate together.
-        ## Each task may modify the startOrder array to suit its needs.
-        #print "Configuring subtasks.."
-        self.startOrder = self.devs.keys()
-        for devName in self.tasks:
-            self.tasks[devName].configure(self.tasks, self.startOrder)
-        #print "done"
-
-        if 'leadTime' in self.cfg:
-            time.sleep(self.cfg['leadTime'])
-
-        self.result = None
-        
-        ## Start tasks in specific order
-        #print "Starting tasks.."
-        for devName in self.startOrder:
-            #print "  ", devName
-            self.tasks[devName].start()
-        self.startTime = ptime.time()
-        #print "  %d Task started" % self.id
+            self.result = None
             
-        if not block:
-            #print "  %d Not blocking; execute complete" % self.id
-            return
-        
-        ## Wait until all tasks are done
-        #print "Waiting for all tasks to finish.."
-        while not self.isDone():
-            time.sleep(1e-3)
-        #print "all tasks finshed."
-        
-        self.stop()
-        #print "  %d execute complete" % self.id
+            
+            
+            ## Start tasks in specific order
+            #print "Starting tasks.."
+            for devName in self.startOrder:
+                #print "  ", devName
+                self.tasks[devName].start()
+                self.startedDevs.append(devName)
+            self.startTime = ptime.time()
+            #print "  %d Task started" % self.id
+                
+            if not block:
+                #print "  %d Not blocking; execute complete" % self.id
+                return
+            
+            ## Wait until all tasks are done
+            #print "Waiting for all tasks to finish.."
+            while not self.isDone():
+                time.sleep(1e-3)
+            #print "all tasks finshed."
+            
+            self.stop()
+            #print "  %d execute complete" % self.id
+        except: 
+            for n in self.startedDevs:
+                try:
+                    self.tasks[n].stop()
+                except:
+                    printExc('While bailing out from task execution: Error stopping device "%s"' % n)
+            for n in self.lockedDevs:
+                try:
+                    self.tasks[n].release()
+                except:
+                    printExc('While bailing out from task execution: Error unlocking device "%s"' % n)
+            raise
         
         
     def isDone(self):
@@ -537,7 +570,7 @@ class Task:
                     try:
                         result[devName] = self.tasks[devName].getResult()
                     except:
-                        printExc( "Error getting result for task %s (will set result=None for this task):" % t)
+                        printExc( "Error getting result for task %s (will set result=None for this task):" % devName)
                         result[devName] = None
                 self.result = result
                 #print "RESULT 1:", self.result
@@ -555,14 +588,14 @@ class Task:
         return self.result
 
     def releaseAll(self):
-        if self.reserved:
-            #print "release hardware.."
-            for t in self.tasks:
-                #print "  %d releasing" % self.id, t
-                try:
-                    self.tasks[t].release()
-                except:
-                    printExc("Error while releasing hardware for task %s:" % t)
-                    
+        #if self.reserved:
+        #print "release hardware.."
+        for t in self.lockedDevs:
+            #print "  %d releasing" % self.id, t
+            try:
+                self.tasks[t].release()
+            except:
+                printExc("Error while releasing hardware for task %s:" % t)
+                
                 #print "  %d released" % self.id, t
-        self.reserved = False
+        #self.reserved = False

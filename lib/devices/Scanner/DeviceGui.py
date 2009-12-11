@@ -176,8 +176,8 @@ class ScannerDeviceGui(QtGui.QWidget):
             spotCommands.append(positions[i])
             spotFrames.append(frame[newaxis])
         
-        for i in range(len(spotLocations)):
-            print spotLocations[i], spotCommands[i]
+        #for i in range(len(spotLocations)):
+            #print spotLocations[i], spotCommands[i]
         spotFrameMax = concatenate(spotFrames).max(axis=0)
         self.image.updateImage(spotFrameMax, autoRange=True)
         self.ui.view.setRange(self.image.boundingRect())
@@ -185,8 +185,8 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         ## Fit all data to a map function
         mapParams = self.generateMap(array(spotLocations), array(spotCommands))
-        print 
-        print "Map parameters:", mapParams
+        #print 
+        #print "Map parameters:", mapParams
         return (mapParams, (spotHeight, spotWidth))
 
     def generateMap(self, loc, cmd):

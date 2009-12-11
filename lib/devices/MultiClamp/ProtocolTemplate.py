@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Sat Nov 28 18:22:52 2009
-#      by: PyQt4 UI code generator 4.6.2
+# Created: Fri Dec 11 09:09:06 2009
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -67,14 +67,14 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.scaledSignalCombo.sizePolicy().hasHeightForWidth())
         self.scaledSignalCombo.setSizePolicy(sizePolicy)
         self.scaledSignalCombo.setObjectName("scaledSignalCombo")
-        self.scaledSignalCombo.addItem("")
+        self.scaledSignalCombo.addItem(QtCore.QString())
         self.gridLayout.addWidget(self.scaledSignalCombo, 0, 1, 1, 1)
         self.rawSignalCheck = QtGui.QCheckBox(self.layoutWidget)
         self.rawSignalCheck.setObjectName("rawSignalCheck")
         self.gridLayout.addWidget(self.rawSignalCheck, 1, 0, 1, 1)
         self.rawSignalCombo = QtGui.QComboBox(self.layoutWidget)
         self.rawSignalCombo.setObjectName("rawSignalCombo")
-        self.rawSignalCombo.addItem("")
+        self.rawSignalCombo.addItem(QtCore.QString())
         self.gridLayout.addWidget(self.rawSignalCombo, 1, 1, 1, 1)
         self.gridLayout_2.addLayout(self.gridLayout, 1, 0, 2, 1)
         self.horizontalLayout_5 = QtGui.QHBoxLayout()

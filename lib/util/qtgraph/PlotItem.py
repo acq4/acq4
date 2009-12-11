@@ -502,6 +502,9 @@ class PlotItem(QtGui.QGraphicsWidget):
                         mx = cmx
                 if mn is None or mx is None:
                     continue
+                if mn == mx:
+                    mn -= 1
+                    mx += 1
                 self.setRange(ax, mn, mx)
                 
     def replot(self):
