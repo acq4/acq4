@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ManagerTemplate.ui'
 #
-# Created: Sun Sep 13 13:48:48 2009
-#      by: PyQt4 UI code generator 4.5.2
+# Created: Fri Dec 11 18:18:21 2009
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -13,7 +13,6 @@ class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(800, 600)
-        MainWindow.setStyleSheet("QDockWidget::title { background: #77F; border-radius: 3px; border-color: #77F; border-style: outset; border-width: 1px; font-weight: bold}")
         self.centralwidget = QtGui.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.verticalLayout_2 = QtGui.QVBoxLayout(self.centralwidget)

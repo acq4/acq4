@@ -8,6 +8,7 @@ class PlotWidget(GraphicsView):
     """Widget implementing a graphicsView with a single PlotItem inside."""
     def __init__(self, parent=None):
         GraphicsView.__init__(self, parent)
+        self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         self.enableMouse(False)
         self.plotItem = PlotItem()
         self.setCentralItem(self.plotItem)

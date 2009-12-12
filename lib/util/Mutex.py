@@ -30,7 +30,7 @@ class Mutex(QtCore.QMutex):
             finally:
                 self.l.unlock()
         return l
-
+        
     def lock(self, id=None):
         c = 0
         waitTime = 5000  # in ms

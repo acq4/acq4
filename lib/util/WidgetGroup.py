@@ -6,13 +6,31 @@ import weakref
 
 ## Bug workaround; splitters do not report their own state correctly.
 def splitterState(w):
-    s = w.sizes()
-    if len(s) < w.count():
-        s.extend([1]*(w.count()-len(s)))
-    if sum(s) == 0:
-        s = [1]*len(s)
-    #print "%s: %d %s" % (w.objectName(), w.count(), str(s))
+    #s = w.sizes()
+    #if len(s) < w.count():
+        #s.extend([1]*(w.count()-len(s)))
+    #if sum(s) == 0:
+        #s = [1]*len(s)
+    #print "store splitter state%s: %d %s" % (w.objectName(), w.count(), str(w.sizes()))
+    #return s
+    s = str(w.saveState().toPercentEncoding())
+    #print s
     return s
+    
+def restoreSplitter(w, s):
+    if type(s) is list:
+        w.setSizes(s)
+    elif type(s) is str:
+        #print "Restore string:", s
+        w.restoreState(QtCore.QByteArray.fromPercentEncoding(s))
+    else:
+        print "Can't configure QSplitter using object of type", type(s)
+    #print "restored splitter state%s: %d %s" % (w.objectName(), w.count(), str(w.sizes()))
+    if w.count() > 0:
+        for i in w.sizes():
+            if i > 0:
+                return
+        w.setSizes([50] * w.count())
         
 def comboState(w):
     ind = w.currentIndex()
@@ -49,9 +67,9 @@ class WidgetGroup(QtCore.QObject):
             QtGui.QDoubleSpinBox.value, 
             QtGui.QDoubleSpinBox.setValue),
         QtGui.QSplitter: 
-            ('splitterMoved(int,int)', 
+            (None, 
             splitterState,
-            QtGui.QSplitter.setSizes,
+            restoreSplitter,
             True),
         QtGui.QCheckBox: 
             ('stateChanged(int)',

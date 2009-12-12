@@ -50,6 +50,8 @@ class Device(QtCore.QObject):
         else:
             l = self._lock_.tryLock()
             if not l:
+                print "  Device is currently locked from:"
+                print self._lock_tb_
                 raise Exception("Could not acquire lock")
         self._lock_tb_ = ''.join(traceback.format_stack()[:-1])
         return True
@@ -83,7 +85,7 @@ class DeviceTask:
     def isDone(self):
         return True
     
-    def stop(self):
+    def stop(self, abort=False):
         pass
     
     def release(self):
@@ -102,6 +104,8 @@ class DeviceTask:
         else:
             dirHandle.writeFile(result, self.dev.name)
     
+    def abort(self):
+        self.stop(abort=True)
     
 class ProtocolGui(QtGui.QWidget):
     def __init__(self, dev, prot):

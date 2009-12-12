@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Fri Sep 18 15:35:01 2009
+# Created: Fri Dec 11 18:18:39 2009
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,16 +12,19 @@ from PyQt4 import QtCore, QtGui
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(955, 428)
-        MainWindow.setStyleSheet("""QDockWidget::title { background: #77F; border-radius: 3px; border-color: #77F; border-style: outset; border-width: 1px; font-weight: bold}
-QSplitter::handle {background-color: #666}
-QMainWindow::separator {background-color: #666}""")
+        MainWindow.resize(1089, 309)
         MainWindow.setDockNestingEnabled(True)
         self.centralwidget = QtGui.QWidget(MainWindow)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.centralwidget.sizePolicy().hasHeightForWidth())
+        self.centralwidget.setSizePolicy(sizePolicy)
         self.centralwidget.setObjectName("centralwidget")
         MainWindow.setCentralWidget(self.centralwidget)
         self.LoaderDock = QtGui.QDockWidget(MainWindow)
         self.LoaderDock.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable|QtGui.QDockWidget.DockWidgetVerticalTitleBar)
+        self.LoaderDock.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea|QtCore.Qt.TopDockWidgetArea)
         self.LoaderDock.setObjectName("LoaderDock")
         self.dockWidgetContents = QtGui.QWidget()
         self.dockWidgetContents.setObjectName("dockWidgetContents")
@@ -88,6 +91,7 @@ QMainWindow::separator {background-color: #666}""")
         self.ProtocolDock = QtGui.QDockWidget(MainWindow)
         self.ProtocolDock.setEnabled(True)
         self.ProtocolDock.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable|QtGui.QDockWidget.DockWidgetVerticalTitleBar)
+        self.ProtocolDock.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea|QtCore.Qt.TopDockWidgetArea)
         self.ProtocolDock.setObjectName("ProtocolDock")
         self.dockWidgetContents_5 = QtGui.QWidget()
         self.dockWidgetContents_5.setObjectName("dockWidgetContents_5")
@@ -159,6 +163,7 @@ QMainWindow::separator {background-color: #666}""")
         self.SequenceDock = QtGui.QDockWidget(MainWindow)
         self.SequenceDock.setEnabled(True)
         self.SequenceDock.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable|QtGui.QDockWidget.DockWidgetVerticalTitleBar)
+        self.SequenceDock.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea|QtCore.Qt.TopDockWidgetArea)
         self.SequenceDock.setObjectName("SequenceDock")
         self.dockWidgetContents_7 = QtGui.QWidget()
         self.dockWidgetContents_7.setObjectName("dockWidgetContents_7")
@@ -237,6 +242,7 @@ QMainWindow::separator {background-color: #666}""")
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.SequenceDock)
         self.dockWidget = QtGui.QDockWidget(MainWindow)
         self.dockWidget.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable|QtGui.QDockWidget.DockWidgetVerticalTitleBar)
+        self.dockWidget.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea|QtCore.Qt.TopDockWidgetArea)
         self.dockWidget.setObjectName("dockWidget")
         self.dockWidgetContents_2 = QtGui.QWidget()
         self.dockWidgetContents_2.setObjectName("dockWidgetContents_2")

@@ -20,6 +20,20 @@ import time, types, os.path, re, sys
 from lib.util.color import intColor
 from lib.util.debug import *
 
+traceDepth = 0
+def trace(func):
+    #def newFunc(*args, **kargs):
+        #global traceDepth
+        #print "  "*traceDepth + func.__name__
+        #traceDepth += 2
+        #ret = func(*args, **kargs)
+        #traceDepth -= 2
+        #print "  "*traceDepth + func.__name__, "done"
+        #return ret
+    #return newFunc
+    return func
+
+
 class CamROI(ROI):
     def __init__(self, size):
         ROI.__init__(self, pos=[0,0], size=size, maxBounds=QtCore.QRectF(0, 0, size[0], size[1]), scaleSnap=True, translateSnap=True)
@@ -105,6 +119,7 @@ class PVCamera(QtGui.QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         
+        
         ## Set up level thermo and scale widgets
         #self.scaleEngine = Qwt.QwtLinearScaleEngine()
         #self.ui.levelThermo.setScalePosition(Qwt.QwtThermo.NoScale)
@@ -185,6 +200,7 @@ class PVCamera(QtGui.QMainWindow):
         self.statusBar().addPermanentWidget(self.fpsLabel)
         self.show()
         self.openCamera()
+        self.ui.plotWidget.resize(self.ui.plotWidget.size().width(), 40)
         
         self.ui.spinBinning.setValue(self.binning)
         self.ui.spinExposure.setValue(self.exposure)
@@ -241,6 +257,7 @@ class PVCamera(QtGui.QMainWindow):
         #self.frameTimer.start(1)
         QtCore.QTimer.singleShot(1, self.drawFrame)
 
+    @trace
     def updateBorders(self):
         """Draw the camera boundaries for each objective"""
         for b in self.borders:
@@ -263,6 +280,7 @@ class PVCamera(QtGui.QMainWindow):
         self.updateCameraDecorations()
 
 
+    @trace
     def addPersistentFrame(self):
         """Make a copy of the current camera frame and store it in the background"""
         px = self.imageItem.getPixmap()
@@ -282,6 +300,7 @@ class PVCamera(QtGui.QMainWindow):
         self.persistentFrames.append(im)
         self.addItem(im, p, s, z)
         
+    @trace
     def addItem(self, item, pos, scale, z):
         """Adds an item into the scene. The image will be automatically scaled and translated when the scope moves."""
         
@@ -289,16 +308,23 @@ class PVCamera(QtGui.QMainWindow):
         
         if pos is None:
             pos = self.cameraCenter
-        item.translate(pos[0], pos[1])
+        item.resetTransform()
+        item.setPos(QtCore.QPointF(pos[0], pos[1]))
         item.scale(scale[0], scale[1])
         item.setZValue(z)
+        #print pos, item.mapRectToScene(item.boundingRect())
     
+    def removeItem(self, item):
+        self.scene.removeItem(item)
+    
+    @trace
     def  clearPersistentFrames(self):
         for i in self.persistentFrames:
             #self.persistentGroup1.removeFromGroup(i)
             self.scene.removeItem(i)
         self.persistentFrames = []
 
+    @trace
     def addROI(self):
         pen = QtGui.QPen(intColor(len(self.ROIs)))
         roi = PlotROI(self.cameraCenter, self.cameraScale[0] * 10)
@@ -311,31 +337,38 @@ class PVCamera(QtGui.QMainWindow):
         #plot.attach(self.ui.plotWidget)
         self.ROIs.append({'roi': roi, 'plot': plot, 'vals': [], 'times': []})
         
+    @trace
     def clearFrameBuffer(self):
         #self.frameBuffer = []
         for r in self.ROIs:
             r['vals'] = []
             r['times'] = []
 
+    @trace
     def enableROIsChanged(self, b):
         pass
     
+    @trace
     def setROITime(self, val):
         pass
 
+    @trace
     def toggleRecord(self, b):
         if b:
             self.ui.btnRecord.setChecked(True)
         else:
             self.ui.btnRecord.setChecked(False)
 
+    @trace
     def levelsChanged(self):
         self.updateColorScale()
         self.requestFrameUpdate()
 
+    @trace
     def requestFrameUpdate(self):
         self.updateFrame = True
 
+    @trace
     def divideClicked(self):
         self.AGCLastMax = None
         self.AGCLastMin = None
@@ -344,9 +377,11 @@ class PVCamera(QtGui.QMainWindow):
             self.backgroundFrame = None
         self.requestFrameUpdate()
             
+    @trace
     def showMessage(self, msg):
         self.ui.statusbar.showMessage(str(msg))
         
+    @trace
     def updateRegion(self, *args):
         self.clearFrameBuffer()
         r = self.roi.parentBounds()
@@ -356,9 +391,11 @@ class PVCamera(QtGui.QMainWindow):
             self.acquireThread.setParam('region', self.region)
         
         
+    @trace
     def closeEvent(self, ev):
         self.quit()
 
+    @trace
     def quit(self):
         #self.frameTimer.stop()
         self.hasQuit = True
@@ -375,6 +412,7 @@ class PVCamera(QtGui.QMainWindow):
                 raise Exception("Timed out while waiting for thread exit!")
             #print "  record thread finished."
 
+    @trace
     def setMouse(self, qpt=None):
         if qpt is None:
             if not hasattr(self, 'mouse'):
@@ -399,6 +437,7 @@ class PVCamera(QtGui.QMainWindow):
         #self.vLabel.setText(z)
             
 
+    @trace
     def acqThreadStopped(self):
         self.toggleRecord(False)
         if not self.ui.btnLockBackground.isChecked():
@@ -406,12 +445,14 @@ class PVCamera(QtGui.QMainWindow):
         self.ui.btnAcquire.setChecked(False)
         self.ui.btnAcquire.setEnabled(True)
         
+    @trace
     def acqThreadStarted(self):
         self.AGCLastMax = None
         self.AGCLastMin = None
         self.ui.btnAcquire.setChecked(True)
         self.ui.btnAcquire.setEnabled(True)
 
+    @trace
     def setBinning(self, b):
         #sys.stdout.write("+")
         self.backgroundFrame = None
@@ -423,10 +464,12 @@ class PVCamera(QtGui.QMainWindow):
         #sys.stdout.write("- ")
         
         
+    @trace
     def setExposure(self, e):
         self.exposure = e
         self.acquireThread.setParam('exposure', self.exposure)
         
+    @trace
     def openCamera(self, ind=0):
         try:
             self.cam = self.module.cam.getCamera()
@@ -441,6 +484,7 @@ class PVCamera(QtGui.QMainWindow):
             raise
     
 
+    @trace
     def updateCameraDecorations(self):
         ps = self.cameraScale
         pos = self.cameraCenter
@@ -464,6 +508,7 @@ class PVCamera(QtGui.QMainWindow):
         
         
 
+    @trace
     def setRegion(self, rgn=None):
         self.backgroundFrame = None
         if rgn is None:
@@ -472,12 +517,14 @@ class PVCamera(QtGui.QMainWindow):
         self.roi.setSize([self.camSize[0], self.camSize[1]])
         self.updateRegion()
             
+    @trace
     def updateRgnLabel(self):
         img = self.imageItem.image
         if img is None:
             return
         self.rgnLabel.setText('[%d, %d, %d, %d] %dx%d' % (self.region[0], self.region[1], (img.shape[0]-1)*self.binning, (img.shape[1]-1)*self.binning, self.binning, self.binning))
     
+    @trace
     def setLevelRange(self, rmin=None, rmax=None):
         if rmin is None:
             if self.ui.btnAutoGain.isChecked():
@@ -499,6 +546,7 @@ class PVCamera(QtGui.QMainWindow):
         #self.ui.levelThermo.setMaxValue(2**self.bitDepth - 1)
         #self.ui.levelThermo.setAlarmLevel(self.ui.levelThermo.maxValue() * 0.9)
         
+    @trace
     def updateColorScale(self):
         pass
         #(b, w) = self.getLevels()
@@ -510,6 +558,7 @@ class PVCamera(QtGui.QMainWindow):
         
         #self.updateFrame = True
         
+    @trace
     def getLevels(self):
         w = self.ui.sliderWhiteLevel
         b = self.ui.sliderBlackLevel
@@ -518,9 +567,11 @@ class PVCamera(QtGui.QMainWindow):
         return (bl, wl)
         
 
+    @trace
     def toggleAutoGain(self, b):
         self.setLevelRange()
 
+    @trace
     def toggleAcquire(self):
         if self.ui.btnAcquire.isChecked():
             self.acquireThread.setParam('mode', 'Normal')
@@ -529,6 +580,7 @@ class PVCamera(QtGui.QMainWindow):
             self.toggleRecord(False)
             self.acquireThread.stop()
             
+    @trace
     def addPlotFrame(self, frame):
         #sys.stdout.write('+')
         ## Get rid of old frames
@@ -576,9 +628,10 @@ class PVCamera(QtGui.QMainWindow):
         #sys.stdout.write('!')
     
             
+    @trace
     def newFrame(self, frame):
         #if hasattr(self.acquireThread, 'fps') and self.acquireThread.fps is not None:
-        
+        #print "    New frame", frame[1]['id']
         lf = None
         if self.nextFrame is not None:
             lf = self.nextFrame
@@ -602,6 +655,7 @@ class PVCamera(QtGui.QMainWindow):
         self.nextFrame = frame
 
 
+    @trace
     def drawFrame(self):
         if self.hasQuit:
             return
@@ -698,6 +752,7 @@ class PVCamera(QtGui.QMainWindow):
             #print info
             newPos = info['centerPosition']
             if newPos != self.cameraCenter:
+                self.emit(QtCore.SIGNAL('cameraPosChanged'))
                 diff = [newPos[0] - self.cameraCenter[0], newPos[1] - self.cameraCenter[1]]
                 self.gv.translate(diff[0], diff[1])
                 #print "translate view:", diff
@@ -707,6 +762,7 @@ class PVCamera(QtGui.QMainWindow):
             
             newScale = [info['pixelSize'][0] / info['binning'], info['pixelSize'][1] / info['binning']]
             if newScale != self.cameraScale:
+                self.emit(QtCore.SIGNAL('cameraScaleChanged'))
                 diff = [self.cameraScale[0] / newScale[0], self.cameraScale[1] /newScale[1]]
                 #print "scale view:", diff
                 #print diff

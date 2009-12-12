@@ -14,8 +14,13 @@ class PVCamProto(DAQGenericProtoGui):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.stateGroup = WidgetGroup(self) ## create state group before DAQ creates its own interface
+        self.ui.horizSplitter.setStretchFactor(0, 0)
+        self.ui.horizSplitter.setStretchFactor(1, 1)
         
         DAQGenericProtoGui.createChannelWidgets(self, self.ui.ctrlSplitter, self.ui.plotSplitter)
+        self.ui.plotSplitter.setStretchFactor(0, 10)
+        self.ui.plotSplitter.setStretchFactor(1, 1)
+        self.ui.plotSplitter.setStretchFactor(2, 1)
         
         #self.stateGroup = WidgetGroup([
             #(self.ui.recordCheck, 'record'),

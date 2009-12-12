@@ -118,6 +118,8 @@ class GraphicsView(QtGui.QGraphicsView):
     def updateMatrix(self, propagate=True):
         #print "udpateMatrix:"
         translate = Point(self.range.center())
+        if self.range.width() == 0 or self.range.height() == 0:
+            return
         scale = Point(self.size().width()/self.range.width(), self.size().height()/self.range.height())
         
         m = QtGui.QMatrix()

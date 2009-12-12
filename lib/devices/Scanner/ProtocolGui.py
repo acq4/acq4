@@ -19,9 +19,9 @@ class ScannerProtoGui(ProtocolGui):
         self.nextId = 0
 
         ## Populate module/device lists, auto-select based on device defaults 
-        defCam = None
+        self.defCam = None
         if 'defaultCamera' in self.dev.config:
-            defCam = self.dev.config['defaultCamera']
+            self.defCam = self.dev.config['defaultCamera']
         defLaser = None
         if 'defaultLaser' in self.dev.config:
             defLaser = self.dev.config['defaultLaser']
@@ -32,12 +32,7 @@ class ScannerProtoGui(ProtocolGui):
             if d == defLaser:
                 self.ui.laserCombo.setCurrentIndex(self.ui.laserCombo.count()-1)
 
-        mods = dm.listModules()
-        for m in mods:
-            self.ui.cameraCombo.addItem(m)
-            mod = dm.getModule(m)
-            if 'camDev' in mod.config and mod.config['camDev'] == defCam:
-                self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
+        self.fillModuleList()
               
         ## Create state group for saving/restoring state
         self.stateGroup = WidgetGroup([
@@ -56,36 +51,54 @@ class ScannerProtoGui(ProtocolGui):
         QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemToggled)
         QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*,QListWidgetItem*)'), self.itemSelected)
         QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('toggled(bool)'), self.showInterface)
-        QtCore.QObject.connect(self.ui.cameraCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.watchScope)
+        QtCore.QObject.connect(self.ui.cameraCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.camModChanged)
         QtCore.QObject.connect(self.ui.packingSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateSpotSizes)
         QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.generateTargets)
-        
+        QtCore.QObject.connect(dm, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
         
 
         self.testTarget = TargetPoint([0,0], self.pointSize())
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
-        camMod = self.cameraModule()
-        camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
+        #camMod = self.cameraModule()
         
         self.currentObjective = None
         self.currentScope = None
-        self.watchScope()
+        self.currentCamMod = None
+        self.camModChanged()
+        
+    def fillModuleList(self):
+        man = getManager()
+        self.ui.cameraCombo.clear()
+        mods = man.listModules()
+        for m in mods:
+            self.ui.cameraCombo.addItem(m)
+            mod = man.getModule(m)
+            if 'camDev' in mod.config and mod.config['camDev'] == self.defCam:
+                self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
         
         
-    def watchScope(self):
+    def camModChanged(self):
         camDev = self.cameraDevice()
-        if camDev is None:
-            return
-        scope = camDev.getScopeDevice()
-        
-        if self.currentScope is scope:
-            return
-        elif self.currentScope is not None:
+        camMod = self.cameraModule()
+        if self.currentCamMod is not None:
+            self.currentCamMod.ui.removeItem(self.testTarget)
+            QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+        if self.currentScope is not None:
             QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            
+        self.currentCamMod = camMod
+        if camDev is None or camMod is None:
+            self.currentScope = None
+            return
+        self.currentScope = camDev.getScopeDevice()
+        self.currentCamMod = camMod
+        QtCore.QObject.connect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
         
-        self.currentScope = scope
-        QtCore.QObject.connect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+        if self.currentScope is not None:
+            QtCore.QObject.connect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+        camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
         self.objectiveChanged()
+        
         
     def objectiveChanged(self):
         camDev = self.cameraDevice()
@@ -103,6 +116,10 @@ class ScannerProtoGui(ProtocolGui):
                     li.setCheckState(QtCore.Qt.Unchecked)
                 self.itemToggled(li)
             self.testTarget.setPointSize(self.pointSize())
+            #self.cameraModule().ui.centerItem(self.testTarget)
+        camMod = self.cameraModule()
+        camMod.ui.removeItem(self.testTarget)
+        camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
 
     def updateSpotSizes(self):
         size = self.pointSize()
@@ -120,17 +137,28 @@ class ScannerProtoGui(ProtocolGui):
         return self.ui.itemList.findItems(name, QtCore.Qt.MatchExactly)[0]
 
     def pointSize(self):
-        cam = self.cameraModule().config['camDev']
-        laser = str(self.ui.laserCombo.currentText())
-        cal = self.dev.getCalibration(cam, laser)
-        return cal['spot'][1] * self.ui.packingSpin.value()
+        try:
+            cam = self.cameraModule().config['camDev']
+            laser = str(self.ui.laserCombo.currentText())
+            cal = self.dev.getCalibration(cam, laser)
+            ss = cal['spot'][1] * self.ui.packingSpin.value()
+        except:
+            ss = 1
+        return ss
         
     def cameraModule(self):
         modName = str(self.ui.cameraCombo.currentText())
-        return getManager().getModule(modName)
+        if modName == '':
+            return None
+        mod = getManager().getModule(modName)
+        if not hasattr(mod.ui, 'addItem'): ## silly. should check to see if this is a camera 
+            return None
+        return mod
         
     def cameraDevice(self):
         mod = self.cameraModule()
+        if mod is None:
+            return None
         if 'camDev' not in mod.config:
             return None
         cam = mod.config['camDev']
@@ -157,6 +185,9 @@ class ScannerProtoGui(ProtocolGui):
             return {}
         
     def generateProtocol(self, params=None):
+        if self.cameraModule() is None:
+            raise Exception('No camera module selected, can not build protocol.')
+            
         if params is None or 'targets' not in params:
             target = self.testTarget.listPoints()[0]
             delay = 0
@@ -188,6 +219,9 @@ class ScannerProtoGui(ProtocolGui):
         self.addItem(pt, 'Grid')
 
     def addItem(self, item, name):
+        camMod = self.cameraModule()
+        if camMod is None:
+            return False
         name = name + str(self.nextId)
         item.name = name
         item.objective = self.currentObjective
@@ -197,7 +231,7 @@ class ScannerProtoGui(ProtocolGui):
         self.ui.itemList.addItem(listitem)
         self.nextId += 1
         self.updateItemColor(listitem)
-        camMod = self.cameraModule()
+        
         camMod.ui.addItem(item, None, [1,1], 1000)
         item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
         item.connect(QtCore.SIGNAL('pointsChanged'), self.itemChanged)
@@ -398,7 +432,15 @@ class ScannerProtoGui(ProtocolGui):
 
     def quit(self):
         self.deleteAll()
-        self.testTarget.scene().removeItem(self.testTarget)
+        s = self.testTarget.scene()
+        if s is not None:
+            self.testTarget.scene().removeItem(self.testTarget)
+        QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+            
+        if self.currentCamMod is not None:
+            QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+        if self.currentScope is not None:
+            QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
     
 class TargetPoint(EllipseROI):
     def __init__(self, pos, radius, **args):

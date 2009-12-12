@@ -176,8 +176,8 @@ class ScannerDeviceGui(QtGui.QWidget):
             spotCommands.append(positions[i])
             spotFrames.append(frame[newaxis])
         
-        for i in range(len(spotLocations)):
-            print spotLocations[i], spotCommands[i]
+        #for i in range(len(spotLocations)):
+            #print spotLocations[i], spotCommands[i]
         spotFrameMax = concatenate(spotFrames).max(axis=0)
         self.image.updateImage(spotFrameMax, autoRange=True)
         self.ui.view.setRange(self.image.boundingRect())
@@ -185,8 +185,8 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         ## Fit all data to a map function
         mapParams = self.generateMap(array(spotLocations), array(spotCommands))
-        print 
-        print "Map parameters:", mapParams
+        #print 
+        #print "Map parameters:", mapParams
         return (mapParams, (spotHeight, spotWidth))
 
     def generateMap(self, loc, cmd):
@@ -252,9 +252,11 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## Record full scan.
         cmd = {
             'protocol': {'duration': duration},
-            camera: {'record': True, 'triggerMode': 'Trigger First', 'recordExposeChannel': True},
+            camera: {'record': True, 'triggerMode': 'Trigger First', 'recordExposeChannel': True, 'channels': {
+                'exposure': {'record': True}, 
+                'trigger': {'preset': 0, 'command': cameraTrigger}}},
             laser: {'Shutter': {'preset': 1, 'holding': 0}},
-            'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
+            #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
             self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},
             daqName: {'numPts': nPts, 'rate': rate}
         }

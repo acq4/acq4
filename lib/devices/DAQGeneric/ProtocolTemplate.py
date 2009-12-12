@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Thu Aug 13 00:15:15 2009
-#      by: PyQt4 UI code generator 4.5.2
+# Created: Fri Dec 11 09:09:22 2009
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -14,6 +14,8 @@ class Ui_Form(object):
         Form.setObjectName("Form")
         Form.resize(770, 365)
         self.verticalLayout = QtGui.QVBoxLayout(Form)
+        self.verticalLayout.setSpacing(0)
+        self.verticalLayout.setMargin(0)
         self.verticalLayout.setObjectName("verticalLayout")
         self.topSplitter = QtGui.QSplitter(Form)
         self.topSplitter.setOrientation(QtCore.Qt.Horizontal)
