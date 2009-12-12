@@ -14,7 +14,7 @@
    <string>ACQ4 Manager</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QDockWidget::title { background: #77F; border-radius: 3px; border-color: #77F; border-style: outset; border-width: 1px; font-weight: bold}</string>
+   <string notr="true"/>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_2">

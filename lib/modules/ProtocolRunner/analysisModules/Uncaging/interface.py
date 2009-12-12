@@ -15,13 +15,12 @@ class UncagingModule(AnalysisModule):
         self.ui.setupUi(self)
         self.postGuiInit()
         self.man = getManager()
-        mods = self.man.listModules()
         devs = self.man.listDevices()
-        for m in mods:
-            self.ui.cameraModCombo.addItem(m)
         for d in devs:
             self.ui.scannerDevCombo.addItem(d)
             self.ui.clampDevCombo.addItem(d)
+            
+        self.fillModuleList()
         self.prots = {}
         self.currentProt = None
         QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteSelected)
@@ -29,7 +28,13 @@ class UncagingModule(AnalysisModule):
         QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*, QListWidgetItem*)'), self.itemSelected)
         QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemClicked)
         QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.recompute)
+        QtCore.QObject.connect(self.man, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
         
+    def fillModuleList(self):
+        mods = self.man.listModules()
+        self.ui.cameraModCombo.clear()
+        for m in mods:
+            self.ui.cameraModCombo.addItem(m)
         
     def protocolStarted(self, *args):
         #print "start:",args
@@ -105,6 +110,7 @@ class UncagingModule(AnalysisModule):
             sp.recalculate(allFrames=True)
 
     def quit(self):
+        QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
         AnalysisModule.quit(self)
         for p in self.prots.values():
             p.close()

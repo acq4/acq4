@@ -32,6 +32,8 @@ class MultiClampProtoGui(ProtocolGui):
         
         self.ui.splitter_2.setStretchFactor(0, 0)
         self.ui.splitter_2.setStretchFactor(1, 1)
+        self.ui.splitter.setStretchFactor(0, 3)
+        self.ui.splitter.setStretchFactor(1, 1)
         
         self.stateGroup = WidgetGroup(self)
         self.ui.waveGeneratorWidget.setTimeScale(1e-3)

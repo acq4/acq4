@@ -1,34 +1,112 @@
-winState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%00%00%00%05l%00%00%02%C8%FC%02%00%00%00%01%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%00%D9%00%00%02%C8%00%00%01.%00%07%FF%FF%00%00%00%02%00%00%05p%00%00%00%D5%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01%1B%00%00%00%C0%00%07%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%01%1F%00%00%01%AD%00%00%01%15%00%07%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02%D0%00%00%01%B8%00%00%01%1C%00%07%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%04%8C%00%00%00%E4%00%00%00%93%00%07%FF%FF%00%00%00%00%00%00%02%C8%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+protocol:
+    windowState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%02%00%00%05p%00%00%00%D5%FC%01%00%00%00%05%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%00%EB%00%00%00%C0%00%FF%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%00%EF%00%00%01d%00%00%01%15%00%FF%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02W%00%00%01m%00%00%01Y%00%FF%FF%FF%FB%00%00%00%06%00D%00A%00Q%01%00%00%03%C8%00%00%00%BD%00%00%00%B0%00%FF%FF%FF%FB%00%00%00%14%00d%00o%00c%00k%00W%00i%00d%00g%00e%00t%01%00%00%04%89%00%00%00%E7%00%00%00S%00%FF%FF%FF%00%00%00%03%00%00%05p%00%00%02%C0%FC%01%00%00%00%01%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%00%00%00%00%05p%00%00%01n%00%FF%FF%FF%00%00%05p%00%00%00%00%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+    params: [('protocol', 'repetitions', True, [])]
+    conf:
+        continuous: False
+        cycleTime: 0.29999999999999999
+        loop: True
+        duration: 0.029999999999999999
+        repetitions: 7
+        leadTime: 0.01
+        loopCycleTime: 0.050000000000000003
+    analysis:
 devices:
     Clamp1:
-        splitter: [561, 124]
-        setRawGainCheck: True
+        bottomPlotWidget:
+            xAutoRadio: True
+            maxTracesCheck: False
+            xLinkCombo: ''
+            xMinText: '0'
+            groupBox_2: False
+            xMouseCheck: True
+            yAutoPercentSpin: 100
+            manualDecimateRadio: False
+            xManualRadio: False
+            maxTracesSpin: 0
+            autoDecimateRadio: True
+            xAutoPercentSpin: 100
+            alphaSlider: 1000
+            yMaxText: '0'
+            paramList:
+            yLinkCombo: ''
+            yManualRadio: False
+            autoPointsCheck: True
+            decimateGroup: True
+            yAutoRadio: True
+            yLogCheck: False
+            yMouseCheck: True
+            groupBox: False
+            decimateSpin: 0
+            gridGroup: True
+            pointsGroup: True
+            yMinText: '0'
+            gridAlphaSlider: 70
+            averageGroup: False
+            autoAlphaCheck: False
+            alphaGroup: True
+            xMaxText: '0'
+            powerSpectrumGroup: False
+            forgetTracesCheck: False
+            xLogCheck: False
+        topPlotWidget:
+            xAutoRadio: True
+            maxTracesCheck: False
+            xLinkCombo: ''
+            xMinText: '0'
+            groupBox_2: False
+            xMouseCheck: True
+            yAutoPercentSpin: 100
+            manualDecimateRadio: False
+            xManualRadio: False
+            maxTracesSpin: 0
+            autoDecimateRadio: True
+            xAutoPercentSpin: 100
+            alphaSlider: 1000
+            yMaxText: '0'
+            paramList:
+            yLinkCombo: ''
+            yManualRadio: False
+            autoPointsCheck: True
+            decimateGroup: True
+            yAutoRadio: True
+            yLogCheck: False
+            yMouseCheck: True
+            groupBox: False
+            decimateSpin: 0
+            gridGroup: True
+            pointsGroup: True
+            yMinText: '0'
+            gridAlphaSlider: 70
+            averageGroup: False
+            autoAlphaCheck: False
+            alphaGroup: True
+            xMaxText: '0'
+            powerSpectrumGroup: False
+            forgetTracesCheck: False
+            xLogCheck: False
+        vcModeRadio: False
+        splitter: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%01%F6%00%00%00%AF%01%00%00%00%05%01%00%00%00%02'
         holdingCheck: False
-        rawGainSpin: 10.0
-        autoUpdateCheck: False
-        holdingSpin: 0.0
         scaledGainSpin: 0.0
-        rawSignal: 'MembranePotential'
-        rawSignalCheck: False
-        scaledSignalCombo: 'MembranePotential'
-        rawSignalCombo: 'MembranePotential'
-        scaledSignalCheck: False
-        splitter_2: [346, 1037]
-        scaledSignal: 'MembranePotential'
+        holdingSpin: 0.0
         setScaledGainCheck: False
+        splitter_2: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%00%CF%00%00%009%01%00%00%00%05%01%00%00%00%01'
+        scaledSignalCombo: 'MembranePotential'
+        setRawGainCheck: True
+        i0ModeRadio: False
         waveGeneratorWidget:
             function: 'pulse(10, 10, -10)'
+            autoUpdate: False
             params: ''
-        displayAverageCheck: False
+        icModeRadio: True
+        rawGainSpin: 10.0
+        rawSignal: 'MembranePotential'
+        rawSignalCheck: False
         mode: 'IC'
+        rawSignalCombo: 'MembranePotential'
+        scaledSignalCheck: False
+        scaledSignal: 'MembranePotential'
     DAQ:
+        downsample: 1
         numPts: 1200
         rate: 40000.0
-conf:
-    repetitions: 7
-    cycleTime: 0.29999999999999999
-    loopCycleTime: 0.050000000000000003
-    duration: 0.029999999999999999
-    continuous: False
-    leadTime: 0.01
-    loop: True

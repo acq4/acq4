@@ -186,7 +186,7 @@ class ScannerProtoGui(ProtocolGui):
         
     def generateProtocol(self, params=None):
         if self.cameraModule() is None:
-            return {}
+            raise Exception('No camera module selected, can not build protocol.')
             
         if params is None or 'targets' not in params:
             target = self.testTarget.listPoints()[0]
@@ -432,7 +432,15 @@ class ScannerProtoGui(ProtocolGui):
 
     def quit(self):
         self.deleteAll()
-        self.testTarget.scene().removeItem(self.testTarget)
+        s = self.testTarget.scene()
+        if s is not None:
+            self.testTarget.scene().removeItem(self.testTarget)
+        QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+            
+        if self.currentCamMod is not None:
+            QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+        if self.currentScope is not None:
+            QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
     
 class TargetPoint(EllipseROI):
     def __init__(self, pos, radius, **args):

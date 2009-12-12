@@ -31,8 +31,8 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.ui = Ui_MainWindow()
         self.win = QtGui.QMainWindow()
         self.ui.setupUi(self.win)
-        self.win.setCentralWidget(None)
-        #self.win.centralWidget().setParent(None)  ## get rid of central widget so docks fill the whole screen
+        #self.win.setCentralWidget(None)  ## get rid of central widget so docks fill the whole screen
+        #self.win.centralWidget().setFixedSize(QtCore.QSize(2, 2))
         self.protoStateGroup = WidgetGroup([
             (self.ui.protoContinuousCheck, 'continuous'),
             (self.ui.protoDurationSpin, 'duration', 1e3),
@@ -214,7 +214,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             m = analysisModules.createAnalysisModule(mod, self)
             dock = QtGui.QDockWidget(mod)
             dock.setFeatures(dock.AllDockWidgetFeatures)
-            dock.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea|QtCore.Qt.BottomDockWidgetArea)
+            dock.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea|QtCore.Qt.TopDockWidgetArea)
             dock.setObjectName(mod)
             dock.setWidget(m)
             dock.setAutoFillBackground(True)
@@ -345,7 +345,7 @@ class ProtocolRunner(Module, QtCore.QObject):
                 if d in self.docks:
                     dock = QtGui.QDockWidget(d)
                     dock.setFeatures(dock.AllDockWidgetFeatures)
-                    dock.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea|QtCore.Qt.BottomDockWidgetArea)
+                    dock.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea|QtCore.Qt.TopDockWidgetArea)
                     dock.setObjectName(d)
                     dock.setWidget(dw)
                     dock.setAutoFillBackground(True)
@@ -624,8 +624,8 @@ class ProtocolRunner(Module, QtCore.QObject):
             #print "runSingle: taskThreadStarted"
         except:
             self.enableStartBtns(True)
-            self.stopSingle()
-            print "Error starting protocol. ", self.taskThread.isRunning()
+            self.loopEnabled = False
+            print "Error starting protocol. "
             raise
         
    
@@ -745,8 +745,11 @@ class ProtocolRunner(Module, QtCore.QObject):
         ## Request each device handles its own data
         #print "got frame", frame
         for d in frame['result']:
-            if d != 'protocol':
-                self.docks[d].widget().handleResult(frame['result'][d], frame['params'])
+            try:
+                if d != 'protocol':
+                    self.docks[d].widget().handleResult(frame['result'][d], frame['params'])
+            except:
+                printExc("Error while handling result from device '%s'" % d)
                 
         self.emit(QtCore.SIGNAL('newFrame'), frame)
                 
@@ -995,7 +998,11 @@ class TaskThread(QtCore.QThread):
             self.emit(QtCore.SIGNAL('taskStarted'), params)
             try:
                 task.execute(block=False)
-                
+            except:
+                printExc("\nError starting protocol:")
+                raise
+
+            try:
                 ## wait for finish, watch for abort requests
                 while True:
                     if task.isDone():

@@ -107,8 +107,6 @@ class DAQGenericTask(DeviceTask):
                         continue
                 
                 self.bufferedChannels.append(ch)
-                daqTask.addChannel(chConf['channel'][1], chConf['type'])
-                self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                 #self.cmd[ch]['task'] = daqTask  ## ALSO DON't FORGET TO DELETE IT, ASS.
                 if chConf['type'] in ['ao', 'do']:
                     scale = self.getChanScale(ch)
@@ -122,7 +120,12 @@ class DAQGenericTask(DeviceTask):
                         cmdData[cmdData<=0] = 0
                         cmdData[cmdData>0] = 0xFFFFFFFF
                     #print "channel", chConf['channel'][1], cmdData
+                    daqTask.addChannel(chConf['channel'][1], chConf['type'])
+                    self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                     daqTask.setWaveform(chConf['channel'][1], cmdData)
+                else:
+                    daqTask.addChannel(chConf['channel'][1], chConf['type'])
+                    self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                 #print "  done: ", self.daqTasks.keys()
         
     def getChanScale(self, chan):
@@ -145,13 +148,13 @@ class DAQGenericTask(DeviceTask):
         ## DAQ task handles this for us.
         return True
         
-    def stop(self):
+    def stop(self, abort=False):
         with MutexLocker(self.dev.lock):
             ## This is just a bit sketchy, but these tasks have to be stopped before the holding level can be reset.
             #print "STOP"
             for ch in self.daqTasks:
                 #print "Stop task", ch
-                self.daqTasks[ch].stop()
+                self.daqTasks[ch].stop(abort=abort)
             for ch in self.cmd:
                 if 'holding' in self.cmd[ch]:
                     self.dev.setHolding(ch, self.cmd[ch]['holding'])

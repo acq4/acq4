@@ -85,7 +85,7 @@ class DeviceTask:
     def isDone(self):
         return True
     
-    def stop(self):
+    def stop(self, abort=False):
         pass
     
     def release(self):
@@ -104,6 +104,8 @@ class DeviceTask:
         else:
             dirHandle.writeFile(result, self.dev.name)
     
+    def abort(self):
+        self.stop(abort=True)
     
 class ProtocolGui(QtGui.QWidget):
     def __init__(self, dev, prot):

@@ -83,6 +83,7 @@ Valid options are:
         ## Read in configuration file
         if configFile is None:
             raise Exception("No configuration file specified!")
+        self.configDir = os.path.dirname(configFile)
         self.readConfig(configFile)
         
         
@@ -166,6 +167,14 @@ Valid options are:
             elif key == 'storageDir':
                 self.setBaseDir(cfg['storageDir'])
             
+            ## load stylesheet
+            elif key == 'stylesheet':
+                try:
+                    css = open(os.path.join(self.configDir, cfg['stylesheet'])).read()
+                    QtGui.QApplication.instance().setStyleSheet(css)
+                except:
+                    raise
+                
             ## Copy in any other configurations.
             ## dicts are extended, all others are overwritten.
             else:
@@ -214,7 +223,7 @@ Valid options are:
     def getDevice(self, name):
         name = str(name)
         if name not in self.devices:
-            print self.devices
+            #print self.devices
             raise Exception("No device named %s. Options are %s" % (name, str(self.devices.keys())))
         return self.devices[name]
 
@@ -497,16 +506,9 @@ class Task:
             self.stop()
             #print "  %d execute complete" % self.id
         except: 
-            for n in self.startedDevs:
-                try:
-                    self.tasks[n].stop()
-                except:
-                    printExc('While bailing out from task execution: Error stopping device "%s"' % n)
-            for n in self.lockedDevs:
-                try:
-                    self.tasks[n].release()
-                except:
-                    printExc('While bailing out from task execution: Error unlocking device "%s"' % n)
+            printExc("==========  Error in protocol execution:  ==============")
+            self.abort()
+            self.releaseAll()
             raise
         
         
@@ -514,7 +516,9 @@ class Task:
         t = ptime.time()
         if t - self.startTime < self.cfg['duration']:
             return False
-        return self.tasksDone()
+        d = self.tasksDone()
+        #print "Is done:", d
+        return d
         
     def tasksDone(self):
         for t in self.tasks:
@@ -523,37 +527,19 @@ class Task:
                 return False
         return True
         
-    def stop(self):
-        self.getResult()
-        return
-        
-    #def stop(self):
-        #if self.stopped:
-            #return
-        ### Stop all tasks
-        #for t in self.tasks:
-            #self.tasks[t].stop()
-        #self.stopped = True
-            
-        #self.getResult()
-            
-        ### Release all hardware for use elsewhere
-        #for t in self.tasks:
-            #self.tasks[t].release()
-            #print "  %d released" % self.id, t
-        
-    def getResult(self):
-        
+    def stop(self, abort=False):
+        """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run."""
         try:
             if not self.stopped:
                 #print "stopping tasks.."
                 ## Stop all tasks
-                for t in self.tasks:
+                for t in self.startedDevs[:]:
                     #print "  stopping", t
                     ## Force all tasks to stop immediately.
                     #print "Stopping task", t, "..."
                     try:
                         self.tasks[t].stop()
+                        self.startedDevs.remove(t)
                     except:
                         printExc("Error while stopping task %s:" % t)
                     #print "   ..task", t, "stopped"
@@ -562,7 +548,7 @@ class Task:
             if not self.tasksDone():
                 raise Exception("Cannot get result; task is still running.")
             
-            if self.result is None:
+            if not abort and self.result is None:
                 #print "Get results.."
                 ## Let each device generate its own output structure.
                 result = {}
@@ -585,17 +571,26 @@ class Task:
             
         #print "tasks:", self.tasks
         #print "RESULT:", self.result        
+        
+    def getResult(self):
+        self.stop()
         return self.result
 
     def releaseAll(self):
         #if self.reserved:
         #print "release hardware.."
-        for t in self.lockedDevs:
+        for t in self.lockedDevs[:]:
             #print "  %d releasing" % self.id, t
             try:
                 self.tasks[t].release()
+                self.lockedDevs.remove(t)
             except:
                 printExc("Error while releasing hardware for task %s:" % t)
                 
                 #print "  %d released" % self.id, t
         #self.reserved = False
+
+    def abort(self):
+        """Stop all tasks, to not attempt to get data."""
+        self.stop(abort=True)
+        

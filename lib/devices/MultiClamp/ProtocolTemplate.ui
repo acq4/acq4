@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>809</width>
+    <width>302</width>
     <height>377</height>
    </rect>
   </property>
@@ -30,9 +30,15 @@
      </property>
      <widget class="QWidget" name="layoutWidget">
       <layout class="QVBoxLayout" name="verticalLayout_2">
+       <property name="spacing">
+        <number>0</number>
+       </property>
        <item>
         <layout class="QGridLayout" name="gridLayout_2">
-         <item row="0" column="0">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <item row="0" column="0" colspan="2">
           <widget class="QFrame" name="frame_2">
            <property name="frameShape">
             <enum>QFrame::StyledPanel</enum>
@@ -41,6 +47,12 @@
             <enum>QFrame::Raised</enum>
            </property>
            <layout class="QHBoxLayout" name="horizontalLayout_2">
+            <property name="spacing">
+             <number>0</number>
+            </property>
+            <property name="margin">
+             <number>0</number>
+            </property>
             <item>
              <widget class="QRadioButton" name="icModeRadio">
               <property name="text">
@@ -65,36 +77,49 @@
               </property>
              </widget>
             </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_6">
+              <property name="spacing">
+               <number>0</number>
+              </property>
+              <item>
+               <widget class="QCheckBox" name="holdingCheck">
+                <property name="text">
+                 <string>Holding (pA)</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QDoubleSpinBox" name="holdingSpin">
+                <property name="minimum">
+                 <double>-1000000.000000000000000</double>
+                </property>
+                <property name="maximum">
+                 <double>1000000.000000000000000</double>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
            </layout>
           </widget>
          </item>
-         <item row="0" column="1">
-          <layout class="QHBoxLayout" name="horizontalLayout_6">
-           <item>
-            <widget class="QCheckBox" name="holdingCheck">
-             <property name="text">
-              <string>Holding (pA)</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QDoubleSpinBox" name="holdingSpin">
-             <property name="minimum">
-              <double>-1000000.000000000000000</double>
-             </property>
-             <property name="maximum">
-              <double>1000000.000000000000000</double>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </item>
          <item row="1" column="0" rowspan="2">
           <layout class="QGridLayout" name="gridLayout">
+           <property name="spacing">
+            <number>0</number>
+           </property>
            <item row="0" column="0">
             <widget class="QCheckBox" name="scaledSignalCheck">
              <property name="text">
-              <string>Scaled Signal:</string>
+              <string>Scaled:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QCheckBox" name="rawSignalCheck">
+             <property name="text">
+              <string>Raw:</string>
              </property>
             </widget>
            </item>
@@ -102,9 +127,15 @@
             <widget class="QComboBox" name="scaledSignalCombo">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-               <horstretch>3</horstretch>
+               <horstretch>2</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>40</width>
+               <height>0</height>
+              </size>
              </property>
              <item>
               <property name="text">
@@ -113,15 +144,14 @@
              </item>
             </widget>
            </item>
-           <item row="1" column="0">
-            <widget class="QCheckBox" name="rawSignalCheck">
-             <property name="text">
-              <string>Raw Signal:</string>
-             </property>
-            </widget>
-           </item>
            <item row="1" column="1">
             <widget class="QComboBox" name="rawSignalCombo">
+             <property name="minimumSize">
+              <size>
+               <width>40</width>
+               <height>0</height>
+              </size>
+             </property>
              <item>
               <property name="text">
                <string>MembraneCurrent</string>
@@ -131,22 +161,11 @@
            </item>
           </layout>
          </item>
-         <item row="1" column="1">
-          <layout class="QHBoxLayout" name="horizontalLayout_5">
-           <item>
-            <widget class="QCheckBox" name="setScaledGainCheck">
-             <property name="text">
-              <string>Set Gain</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QDoubleSpinBox" name="scaledGainSpin"/>
-           </item>
-          </layout>
-         </item>
          <item row="2" column="1">
           <layout class="QHBoxLayout" name="horizontalLayout_7">
+           <property name="spacing">
+            <number>0</number>
+           </property>
            <item>
             <widget class="QCheckBox" name="setRawGainCheck">
              <property name="text">
@@ -156,6 +175,23 @@
            </item>
            <item>
             <widget class="QDoubleSpinBox" name="rawGainSpin"/>
+           </item>
+          </layout>
+         </item>
+         <item row="1" column="1">
+          <layout class="QHBoxLayout" name="horizontalLayout_5">
+           <property name="spacing">
+            <number>0</number>
+           </property>
+           <item>
+            <widget class="QCheckBox" name="setScaledGainCheck">
+             <property name="text">
+              <string>Set Gain</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QDoubleSpinBox" name="scaledGainSpin"/>
            </item>
           </layout>
          </item>
@@ -170,6 +206,12 @@
           <enum>QFrame::Raised</enum>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout">
+          <property name="spacing">
+           <number>0</number>
+          </property>
+          <property name="margin">
+           <number>0</number>
+          </property>
           <item>
            <widget class="QLabel" name="waveGeneratorLabel">
             <property name="sizePolicy">

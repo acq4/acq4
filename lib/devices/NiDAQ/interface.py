@@ -113,10 +113,10 @@ class Task(DeviceTask):
             return True
         
         
-    def stop(self, wait=False):
+    def stop(self, wait=False, abort=False):
         if self.st.hasTasks():
             #print "stopping ST..."
-            self.st.stop(wait=wait)
+            self.st.stop(wait=wait, abort=abort)
             #print "   ST stopped"
         
     def getResult(self):

@@ -470,6 +470,8 @@ class SuperTask:
             ## Assemble waveforms in correct order
             waves = []
             for c in self.taskInfo[key]['chans']:
+                if 'data' not in self.channelInfo[c]:
+                    raise Exception("No data specified for DAQ channel %s" % c)
                 waves.append(atleast_2d(self.channelInfo[c]['data']))
             self.taskInfo[key]['cache'] = concatenate(waves)
         return self.taskInfo[key]['cache']
@@ -591,14 +593,14 @@ class SuperTask:
                 data[t] = self.tasks[t].read()
         return data
         
-    def stop(self, wait=False):
+    def stop(self, wait=False, abort=False):
         #print "ST stopping, wait=",wait
         if wait:
             while not self.isDone():
                 #print "Sleeping..", time.time()
                 time.sleep(10e-6)
                 
-        if self.isDone():
+        if not abort and self.isDone():
             # data must be read before stopping the task,
             # but should only be read if we know the task is complete.
             self.getResult()
