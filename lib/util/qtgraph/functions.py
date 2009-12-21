@@ -38,3 +38,17 @@ def mkColor(*args):
 def colorStr(c):
     """Generate a hex string code from a QColor"""
     return ('%02x'*4) % (c.red(), c.blue(), c.green(), c.alpha())
+
+def intColor(ind, colors=9, values=3, maxValue=255, minValue=150, sat=255):
+    """Creates a QColor from a single index. Useful for stepping through a predefined list of colors."""
+    colors = int(colors)
+    values = int(values)
+    ind = int(ind) % (colors * values)
+    indh = ind % colors
+    indv = ind / colors
+    v = minValue + indv * ((maxValue-minValue) / (values-1))
+    h = (indh * 360) / colors
+    
+    c = QtGui.QColor()
+    c.setHsv(h, sat, v)
+    return c
