@@ -71,7 +71,7 @@ class CParser():
         self.macroExpr = Forward()
         self.fnMacroExpr = Forward()
         self.definedType = Forward()
-        self.definedStruct = Forward()
+        #self.definedStruct = Forward()
         self.definedEnum = Forward()
         
         
@@ -286,11 +286,11 @@ class CParser():
         #     *( )(int, int)[10]
         #     ...etc...
         self.abstractDeclarator << Group(
-            Group(ZeroOrMore('*'))('ptrs') + 
+            Group(ZeroOrMore('*' + typeQualifier))('ptrs') + 
             ((Optional('&')('ref')) | (lparen + self.abstractDeclarator + rparen)('center')) + 
-            Optional(lparen + Optional(delimitedList(Group(self.typeSpec('type') + self.abstractDeclarator)), default=None) + rparen)('args') + 
+            Optional(lparen + Optional(delimitedList(Group(self.typeSpec('type') + self.abstractDeclarator('decl'))), default=None) + rparen)('args') + 
             Group(ZeroOrMore(lbrack + Optional(number, default='-1') + rbrack))('arrays')
-        )('decl')
+        )
         
         ## Argument list may consist of declarators or abstract declarators
         self.argList << delimitedList(Group(
@@ -307,11 +307,11 @@ class CParser():
         #     * fnName(int arg1=0)[10]
         #     ...etc...
         self.declarator << Group(
-            Group(ZeroOrMore('*'))('ptrs') + 
+            Group(ZeroOrMore('*' + typeQualifier))('ptrs') + 
             ((Optional('&')('ref') + ident('name')) | (lparen + self.declarator + rparen)('center')) + 
-            Optional(lparen + Optional(delimitedList(Group(self.typeSpec('type') + (self.declarator | self.abstractDeclarator))), default=None) + rparen)('args') + 
+            Optional(lparen + Optional(delimitedList(Group(self.typeSpec('type') + (self.declarator | self.abstractDeclarator)('decl'))), default=None) + rparen)('args') + 
             Group(ZeroOrMore(lbrack + Optional(number, default='-1') + rbrack))('arrays')
-        )('decl')
+        )
         self.declaratorList = Group(delimitedList(self.declarator))
         
         
@@ -348,8 +348,13 @@ class CParser():
     
     def updateStructDefn(self):
         structKW = (Keyword('struct') | Keyword('union'))
-        self.definedStruct << kwl(self.defs['structs'].keys())
-        self.structType << structKW + (self.definedStruct('name') | Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace)
+        
+        ## We could search only for previously defined struct names, 
+        ## but then we would miss incomplete type declarations.
+        #self.definedStruct << kwl(self.defs['structs'].keys())
+        #self.structType << structKW + (self.definedStruct('name') | Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace)
+        
+        self.structType << structKW('structType') + (Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace | ident('name'))
         self.structType.setParseAction(self.processStruct)
     
     def processDeclarator(self, decl):
@@ -358,8 +363,6 @@ class CParser():
         fn(int x)         =>  ('fn', [[('x', ['int'])]])
         (*)(int, int*)   =>  (None, [[(None, ['int']), (None, ['int', '*'])]], '*')
         """
-        if 'decl' in decl:
-            decl = decl['decl']
         toks = []
         name = None
         #print "DECL:", decl
@@ -368,6 +371,7 @@ class CParser():
         if 'arrays' in decl and len(decl['arrays']) > 0:
             toks.append([self.evalExpr(x) for x in decl['arrays']])
         if 'args' in decl and len(decl['args']) > 0:
+            #print "  process args"
             if decl['args'][0] is None:
                 toks.append([])
             else:
@@ -375,7 +379,7 @@ class CParser():
         if 'ref' in decl:
             toks.append('&')
         if 'center' in decl:
-            (n, t) = self.processDeclarator(decl['center'])
+            (n, t) = self.processDeclarator(decl['center'][0])
             if n is not None:
                 name = n
             toks.extend(t)
@@ -389,6 +393,7 @@ class CParser():
         int fn(int x)         =>  ('fn', ['int', [('x', ['int'])]])
         void (*)(int, int*)   =>  (None, ['void', [(None, ['int']), (None, ['int', '*'])]], '*')
         """
+        #print "PROCESS TYPE/DECL:", typ, decl
         (name, decl) = self.processDeclarator(decl)
         return (name, [typ] + decl)
         
@@ -519,7 +524,7 @@ class CParser():
                 else:
                     sname = t.name[0]
             print "  NAME:", sname
-            if sname not in self.defs['structs']:
+            if sname not in self.defs['structs'] or self.defs['structs'][sname] == {}:
                 print "  NEW STRUCT"
                 struct = {}
                 for m in t.members:
@@ -530,13 +535,9 @@ class CParser():
                         (name, decl) = self.processType(typ, d)
                         struct[name] = (decl, val)
                         print "      ", name, decl, val
-                    #struct[m[0].name] = (m[0].type.type[0], len(m[0].type.ptrs), [int(x) for x in m[0].arr], self.evalExpr(m))
                 self.addDef('structs', sname, struct)
-                #self.definedStruct << kwl(self.defs['structs'].keys())
                 self.updateStructDefn()
-                #print "Added struct %s:", name
-                #print "   definedStruct:", self.definedStruct
-            return ('struct:'+sname)
+            return ('struct '+sname)
         except:
             #print t
             sys.excepthook(*sys.exc_info())
@@ -555,7 +556,7 @@ class CParser():
             sys.excepthook(*sys.exc_info())
 
     def processTypedef(self, s, l, t):
-        print "TYPE:", l, t
+        print "TYPE:", t
         typ = t.type
         #print t, t.type
         for d in t.declList:

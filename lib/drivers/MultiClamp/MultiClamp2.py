@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 from ctypes import *
 import struct, os
-from lib.util.CParser import *
-from lib.util.CLibrary import *
+from lib.util.clibrary import *
+#from lib.util.CLibrary import *
 #from PyQt4 import QtCore, QtGui
 
-from lib.util.CParser import *; 
 wd = os.path.dirname(__file__)
 headerFiles = ['WinNtTypes.h', 'BaseTsd.h', 'WinDef.h', 'WTypes.h', 'WinUserAbridged.h']
 p = CParser([os.path.join(wd, h) for h in headerFiles], 

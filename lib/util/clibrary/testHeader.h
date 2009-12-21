@@ -17,8 +17,8 @@ int str5[2] = {0x1, 3.1415e6};
 /*char* str5 = "commented string with \"escaped quotes\" "*/
 char* str6 = "string with define #define MACRO5 macro5 ";
 char* str7 = "string with \"escaped quotes\" ";
-static const int * const (**int[4]) intJunk;
-(int*)(char, float) fnPtr;
+static const int * const (**intJunk[4]);
+int(*fnPtr)(char, float);
 
 /* comment */ int betweenComments /* comment */ ;
 
@@ -43,6 +43,9 @@ typedef struct structName2 {
 
 typedef struct { int x; } *anonStructPtr;
 
+struct recursiveStruct {
+    struct recursiveStruct *next;
+};
 
 static const int constVar = 5;
 
