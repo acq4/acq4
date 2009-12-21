@@ -71,7 +71,7 @@ class CParser():
         self.macroExpr = Forward()
         self.fnMacroExpr = Forward()
         self.definedType = Forward()
-        self.definedStruct = Forward()
+        #self.definedStruct = Forward()
         self.definedEnum = Forward()
         
         
@@ -109,6 +109,7 @@ class CParser():
         fd.close()
         #self.fileDefs[f] = {}
         
+        replace = self.initOpts['replace']
         if replace is not None:
             for s in replace:
                 self.files[file] = re.sub(s, replace[s], self.files[file])
@@ -122,7 +123,7 @@ class CParser():
                C files are newer than the cache. Only valid if 'file' is None.
            'returnUnparsed' is passed directly to parseDefs."""
         if file is None:
-            if self.loadCache(cache, checkValidity=True):
+            if cache is not None and self.loadCache(cache, checkValidity=True):
                 #print "used cache"
                 return  ## cached values loaded successfully, nothing left to do here
             else:
@@ -159,10 +160,10 @@ class CParser():
         ## make sure cache file exists 
         if type(cacheFile) is not str:
             raise Exception("cache file option myst be a string.")
-        if not os.path.isFile(cacheFile):
+        if not os.path.isfile(cacheFile):
             d = os.path.dirname(__file__)  ## If file doesn't exist, search for it in this module's path
             cacheFile = os.path.join(d, cacheFile)
-            if not os.path.isFile(cacheFile):
+            if not os.path.isfile(cacheFile):
                 return False
         
         ## make sure cache is newer than all input files and this code
@@ -225,7 +226,7 @@ class CParser():
         
         # define the structure of a macro definition (the empty term is used 
         # to advance to the next non-whitespace character)
-        ppDefine = Keyword("#define") + ident.setWhitespaceChars(' \t').setResultsName("macro") + Optional(lparen + delimitedList(ident) + rparen).setWhitespaceChars(' \t').setResultsName('args') + restOfLine.setResultsName("value")
+        ppDefine = Keyword("#define") + ident.setWhitespaceChars(' \t')("macro") + Optional(lparen + delimitedList(ident) + rparen).setWhitespaceChars(' \t')('args') + restOfLine("value")
         # attach parse actions to expressions
         ppDefine.setParseAction(self.processMacroDefn)
         
@@ -236,10 +237,10 @@ class CParser():
         self.files[file] =  self.macroExpander.transformString(text)
 
     def updateMacroDefns(self):
-        self.macroExpr << MatchFirst( [Keyword(m).setResultsName('macro') for m in self.defs['macros']] )
+        self.macroExpr << MatchFirst( [Keyword(m)('macro') for m in self.defs['macros']] )
         self.macroExpr.setParseAction(self.processMacroRef)
 
-        self.fnMacroExpr << MatchFirst( [(Keyword(m).setResultsName('macro') + lparen + Group(delimitedList(expression)).setResultsName('args') + rparen) for m in self.defs['fnmacros']] )
+        self.fnMacroExpr << MatchFirst( [(Keyword(m)('macro') + lparen + Group(delimitedList(expression))('args') + rparen) for m in self.defs['fnmacros']] )
         self.fnMacroExpr.setParseAction(self.processFnMacroRef)        
         
     def parseDefs(self, file, returnUnparsed=False):
@@ -259,16 +260,69 @@ class CParser():
     def buildParser(self):
         self.structType = Forward()
         enumType = Forward()
-        self.typeSpec = typeQualifier + Group(fundType | Optional(kwl(sizeModifiers + signModifiers)) + self.definedType | self.structType | enumType).setResultsName('type') + typeQualifier
+        self.typeSpec = (typeQualifier + (
+            fundType | 
+            Optional(kwl(sizeModifiers + signModifiers)) + self.definedType | 
+            self.structType | 
+            enumType
+        ) + typeQualifier).setParseAction(recombine)
+        self.argList = Forward()
+        
+        ### Abstract declarators for use in function pointer arguments
+        #   Thus begins the extremely hairy business of parsing C declarators. 
+        #   Whomever decided this was a reasonable syntax should probably never breed.
+        #   The following parsers combined with the processDeclarator function
+        #   allow us to turn a nest of type modifiers into a correctly
+        #   ordered list of modifiers.
+        
+        self.declarator = Forward()
+        self.abstractDeclarator = Forward()
+        
+        ## abstract declarators look like:
+        #     <empty string>
+        #     *
+        #     **[num]
+        #     (*)(int, int)
+        #     *( )(int, int)[10]
+        #     ...etc...
+        self.abstractDeclarator << Group(
+            Group(ZeroOrMore('*' + typeQualifier))('ptrs') + 
+            ((Optional('&')('ref')) | (lparen + self.abstractDeclarator + rparen)('center')) + 
+            Optional(lparen + Optional(delimitedList(Group(self.typeSpec('type') + self.abstractDeclarator('decl'))), default=None) + rparen)('args') + 
+            Group(ZeroOrMore(lbrack + Optional(number, default='-1') + rbrack))('arrays')
+        )
+        
+        ## Argument list may consist of declarators or abstract declarators
+        self.argList << delimitedList(Group(
+            self.typeSpec('type') + 
+            (self.declarator('decl') | self.abstractDeclarator('decl')) + 
+            Optional(Keyword('=')) + expression
+        ))
+
+        ## declarators look like:
+        #     varName
+        #     *varName
+        #     **varName[num]
+        #     (*fnName)(int, int)
+        #     * fnName(int arg1=0)[10]
+        #     ...etc...
+        self.declarator << Group(
+            Group(ZeroOrMore('*' + typeQualifier))('ptrs') + 
+            ((Optional('&')('ref') + ident('name')) | (lparen + self.declarator + rparen)('center')) + 
+            Optional(lparen + Optional(delimitedList(Group(self.typeSpec('type') + (self.declarator | self.abstractDeclarator)('decl'))), default=None) + rparen)('args') + 
+            Group(ZeroOrMore(lbrack + Optional(number, default='-1') + rbrack))('arrays')
+        )
+        self.declaratorList = Group(delimitedList(self.declarator))
+        
+        
 
         ## typedef
-        self.typeDecl = Keyword('typedef') + Group(self.typeSpec) + Group(delimitedList(Group(typeQualifier + stars.setResultsName('ptrs') + typeQualifier + ident.setResultsName('newType') + ZeroOrMore(arrayOp).setResultsName('arr')))) + semi
+        self.typeDecl = Keyword('typedef') + self.typeSpec('type') + self.declaratorList('declList') + semi
         self.typeDecl.setParseAction(self.processTypedef)
 
         ## variable declaration
-        variableSingleDecl = Group(self.typeSpec + stars + typeQualifier + ident.setResultsName('name')) + Optional(Literal('=').suppress() + expression.setResultsName('value'))
-
-        self.variableDecl = Group(self.typeSpec.setResultsName('type') + stars + typeQualifier + ident.setResultsName('name') + ZeroOrMore(arrayOp).setResultsName('arr')) + Optional(Literal('=').suppress() + (expression.setResultsName('value') | (lbrace + Group(delimitedList(expression)).setResultsName('arrayValue') + rbrace))) + semi
+        self.variableDecl = Group(self.typeSpec('type') + self.declaratorList('declList')) + Optional(Literal('=').suppress() + (expression('value') | (lbrace + Group(delimitedList(expression))('arrayValues') + rbrace))) + semi
+        
         self.variableDecl.setParseAction(self.processVariable)
         
         ## Struct definition
@@ -278,35 +332,87 @@ class CParser():
         self.structDecl = self.structType + semi
 
         ## enum definition
-        enumVarDecl = Group(ident.setResultsName('name')  + Optional(Literal('=').suppress() + integer.setResultsName('value')))
+        enumVarDecl = Group(ident('name')  + Optional(Literal('=').suppress() + integer('value')))
         
-        enumType << Keyword('enum') + (self.definedEnum.setResultsName('name') | Optional(ident).setResultsName('name') + lbrace + Group(delimitedList(enumVarDecl)).setResultsName('members') + rbrace)
+        enumType << Keyword('enum') + (self.definedEnum('name') | Optional(ident)('name') + lbrace + Group(delimitedList(enumVarDecl))('members') + rbrace)
         enumType.setParseAction(self.processEnum)
         
         enumDecl = enumType + semi
 
         ## function definition
-        functionDecl = self.typeSpec.setResultsName('type') + stars + ident.setResultsName('name') + lparen + Group(Optional(delimitedList(variableSingleDecl))).setResultsName('args') + rparen + (nestedExpr('{', '}').suppress() | semi)
+        #self.paramDecl = Group(self.typeSpec + (self.declarator | self.abstractDeclarator)) + Optional(Literal('=').suppress() + expression('value'))
+        functionDecl = self.typeSpec('type') + self.declarator('decl') + nestedExpr('{', '}').suppress()
         functionDecl.setParseAction(self.processFunction)
         
         return (self.typeDecl ^ self.structDecl ^ enumDecl ^ self.variableDecl ^ functionDecl)
     
     def updateStructDefn(self):
         structKW = (Keyword('struct') | Keyword('union'))
-        self.definedStruct << kwl(self.defs['structs'].keys())
-        self.structType << structKW + (self.definedStruct.setResultsName('name') | Optional(ident).setResultsName('name') + lbrace + Group(ZeroOrMore( Group(self.variableDecl.copy().setParseAction(lambda: None)) )).setResultsName('members') + rbrace)
+        
+        ## We could search only for previously defined struct names, 
+        ## but then we would miss incomplete type declarations.
+        #self.definedStruct << kwl(self.defs['structs'].keys())
+        #self.structType << structKW + (self.definedStruct('name') | Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace)
+        
+        self.structType << structKW('structType') + (Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace | ident('name'))
         self.structType.setParseAction(self.processStruct)
     
+    def processDeclarator(self, decl):
+        """Process a declarator (without base type) and return a tuple (name, [modifiers])
+        See processType(...) for more information."""
+        toks = []
+        name = None
+        #print "DECL:", decl
+        if 'ptrs' in decl and len(decl['ptrs']) > 0:
+            toks.append('*' * len(decl['ptrs']))
+        if 'arrays' in decl and len(decl['arrays']) > 0:
+            toks.append([self.evalExpr(x) for x in decl['arrays']])
+        if 'args' in decl and len(decl['args']) > 0:
+            #print "  process args"
+            if decl['args'][0] is None:
+                toks.append(())
+            else:
+                toks.append(tuple([self.processType(a['type'], a['decl']) for a in decl['args']]))
+        if 'ref' in decl:
+            toks.append('&')
+        if 'center' in decl:
+            (n, t) = self.processDeclarator(decl['center'][0])
+            if n is not None:
+                name = n
+            toks.extend(t)
+        if 'name' in decl:
+            name = decl['name']
+        return (name, toks)
+    
+    def processType(self, typ, decl):
+        """Take a declarator + base type and return a serialized name/type description.
+        The description will be a list of elements (name, [basetype, modifier, modifier, ...])
+          - name is the string name of the declarator or None for an abstract declarator
+          - basetype is the string representing the base type
+          - modifiers can be:
+             '*'    - pointer (multiple pointers "***" allowed)
+             '&'    - reference
+             list   - array. Value(s) indicate the length of each array, -1 for incomplete type.
+             tuple  - function, items are the output of processType for each function argument.
+        int *x[10]            =>  ('x', ['int', [10], '*'])
+        char fn(int x)         =>  ('fn', ['char', [('x', ['int'])]])
+        struct s (*)(int, int*)   =>  (None, ["struct s", ((None, ['int']), (None, ['int', '*'])), '*'])
+        """
+        #print "PROCESS TYPE/DECL:", typ, decl
+        (name, decl) = self.processDeclarator(decl)
+        return (name, [typ] + decl)
+        
     
     # parse action for macro definitions
     def processMacroDefn(self, s,l,t):
+        print "MACRO:", t
         macroVal = self.macroExpander.transformString(t.value).strip()
         if t.args == '':
             self.addDef('macros', t.macro, macroVal)
-            #print "Add macro:", t.macro, self.defs['macros'][t.macro]
+            print "  Add macro:", t.macro, self.defs['macros'][t.macro]
         else:
             self.addDef('fnmacros', t.macro,  (macroVal, [x for x in t.args]))
-            #print "Add fn macro:", t.macro, t.args, self.defs['fnmacros'][t.macro]
+            print "  Add fn macro:", t.macro, t.args, self.defs['fnmacros'][t.macro]
         self.addDef('values', t.macro, self.evalExpr(macroVal))
         self.updateMacroDefns()
         #self.macroExpr << MatchFirst( map(Keyword,self.defs['macros'].keys()) )
@@ -368,12 +474,18 @@ class CParser():
             sys.excepthook(*sys.exc_info())
 
     def processFunction(self, s, l, t):
+        print "FUNCTION", t, t.keys()
+        
         try:
-            rType = (t.type.type[0], len(t.type.ptrs))
-            args = []
-            for a in t.args:
-                args.append((a.name, a.type[0], len(a.ptrs)))
-            self.addDef('functions', t.name, (rType, args))
+            #print "  ", t.type, t.decl
+            (name, decl) = self.processType(t.type, t.decl[0])
+            #print "  ", name, decl
+            #rType = (t.type.type[0], len(t.type.ptrs))
+            #args = []
+            #for a in t.args:
+                #args.append((a.name, a.type[0], len(a.ptrs)))
+            self.addDef('functions', name, (decl[:-1], decl[-1]))
+            
         except:
             print t
             sys.excepthook(*sys.exc_info())
@@ -385,67 +497,82 @@ class CParser():
         ## declarations, but that should not be too difficult to implement..
         #print "Eval:", toks
         try:
-            if type(toks) is str:
+            if isinstance(toks, basestring):
+                #print "  as string"
                 val = eval(toks)
-            elif toks.arrayValue != '':
-                val = [eval(x) for x in toks.arrayValue]
+            elif toks.arrayValues != '':
+                #print "  as list:", toks.arrayValues
+                val = [eval(x) for x in toks.arrayValues]
             elif toks.value != '':
-                val = eval(' '.join(toks.value))
+                #print "  as value"
+                val = eval(toks.value)
             else:
+                #print "  as None"
                 val = None
             return val
         except:
-            #print "failed eval:", toks
+            print "failed eval:", toks
             return None
 
     def processStruct(self, s, l, t):
+        print "STRUCT", t.name, t
         try:
             if t.name == '':
                 n = 0
                 while True:
-                    name = 'anonStruct%d' % n
-                    if name not in self.defs['structs']:
+                    sname = 'anonStruct%d' % n
+                    if sname not in self.defs['structs']:
                         break
                     n += 1
             else:
                 if type(t.name) is str:
-                    name = t.name
+                    sname = t.name
                 else:
-                    name = t.name[0]
-            if name not in self.defs['structs']:
-                #print "STRUCT", name, t
+                    sname = t.name[0]
+            print "  NAME:", sname
+            if sname not in self.defs['structs'] or self.defs['structs'][sname] == {}:
+                print "  NEW STRUCT"
                 struct = {}
                 for m in t.members:
-                    #print m
-                    struct[m[0].name] = (m[0].type.type[0], len(m[0].type.ptrs), [int(x) for x in m[0].arr], self.evalExpr(m))
-                self.addDef('structs', name, struct)
-                #self.definedStruct << kwl(self.defs['structs'].keys())
+                    typ = m[0].type
+                    val = self.evalExpr(m)
+                    print "    member:", m, m[0].keys(), m[0].declList
+                    for d in m[0].declList:
+                        (name, decl) = self.processType(typ, d)
+                        struct[name] = (decl, val)
+                        print "      ", name, decl, val
+                self.addDef('structs', sname, struct)
                 self.updateStructDefn()
-                #print "Added struct %s:", name
-                #print "   definedStruct:", self.definedStruct
-            return ('struct:'+name)
+            return ('struct '+sname)
         except:
-            print t
+            #print t
             sys.excepthook(*sys.exc_info())
 
     def processVariable(self, s, l, t):
-        #print "VARIABLE:", l, t
+        print "VARIABLE:", t
         try:
-            name = t[0].name
-            #print "Add variable:", name, t.value
-            self.addDef('variables', name, self.evalExpr(t))
-            self.addDef('values', name, self.defs['variables'][name])
+            val = self.evalExpr(t)
+            for d in t[0].declList:
+                (name, typ) = self.processType(t[0].type, d)
+                if type(typ[-1]) is tuple:  ## this is a function prototype
+                    print "  Add function prototype:", name, typ, val
+                    self.addDef('functions', name, (typ[:-1], typ[-1]))
+                else:
+                    print "  Add variable:", name, typ, val
+                    self.addDef('variables', name, val)
+                    self.addDef('values', name, val)
         except:
             #print t, t[0].name, t.value
             sys.excepthook(*sys.exc_info())
 
     def processTypedef(self, s, l, t):
-        #print "TYPE:", l, t, t[1].type
-        typ = t[1].type[0]
+        print "TYPE:", t
+        typ = t.type
         #print t, t.type
-        for d in t[2]:
-            #print "  ",d, d.newType, d.ptrs, d.arr
-            self.addDef('types', d.newType, (typ, len(d.ptrs), [int(x) for x in d.arr]))
+        for d in t.declList:
+            (name, decl) = self.processType(typ, d)
+            print "  ", name, decl
+            self.addDef('types', name, decl)
             self.definedType << MatchFirst( map(Keyword,self.defs['types'].keys()) )
         
     def printAll(self, file=None):
@@ -459,13 +586,63 @@ class CParser():
                 pprint(self.fileDefs[file][k])
                 
     def addDef(self, typ, name, val):
+        """Add a definition of a specific type to both the definition set for the current file and the global definition set."""
         self.defs[typ][name] = val
         if self.currentFile not in self.fileDefs:
             self.fileDefs[self.currentFile] = {}
             for k in self.dataList:
                 self.fileDefs[self.currentFile][k] = {}
         self.fileDefs[self.currentFile][typ][name] = val
+
+    def isFundType(self, typ):
+        """Return True if this type is a fundamental C type, struct, or union"""
+        if type(typ) in [dict, tuple]:
+            return True  ## function, struct, or union
+        elif type(typ) is list:
+            names = baseTypes + sizeModifiers + signModifiers
+            for w in typ[0].split():
+                if w not in names:
+                    return False
+            return True
+        else:
+            raise Exception("Not sure what to make of type '%s'" % str(t))
+
+    def evalType(self, typ):
+        """evaluate a named type into its fundamental types"""
+        used = [typ]
+        while True:
+            if isFundType(typ):
+                return typ
+            parent = typ[0]
+            if parent in used:
+                raise Exception('Recursive loop while tracing types.')
+            used.append(parent)
+            pt = self.types[parent]
+            typ = pt + typ[1:]
+
+    def ctype(self, typ, val=None):
+        """return a ctype object representing the named type"""
+        # Create the initial type
+        fn = CParser.cTypeDict[typ[0]]
+        if val is None:
+            obj = fn()
+        else:
+            obj = fn(val)
             
+        # apply pointers and arrays
+        for p in typ[1:]:
+            if p in ['*', '&']:
+                obj = POINTER(obj)
+            elif type(p) is int:
+                obj = obj * p
+        return obj
+
+
+
+
+    def makeCInst(self, typ, data):
+        """Make a ctypes instance """
+
             
 ## Some basic definitions
 numTypes = ['int', 'float', 'double']
@@ -490,20 +667,69 @@ rbrack = Literal("]").ignore(quotedString).suppress()
 lparen = Literal("(").ignore(quotedString).suppress()
 rparen = Literal(")").ignore(quotedString).suppress()
 number = Word(hexnums + ".-+x")
-stars = Optional(Word('*'), default='').setResultsName('ptrs')
+#stars = Optional(Word('*&'), default='')('ptrs')  ## may need to separate & from * later?
+typeQualifier = ZeroOrMore(kwl(qualifiers)).suppress()
+pointerOperator = (
+    '*' + typeQualifier |
+    '&' + typeQualifier |
+    '::' + ident + typeQualifier
+)
+
 
 ## language elements
 fundType = OneOrMore(kwl(signModifiers + sizeModifiers + baseTypes)).setParseAction(lambda t: ' '.join(t))
-    
-typeQualifier = ZeroOrMore(kwl(qualifiers)).suppress()
 
 bitfieldspec = ":" + integer
-arrayOp = bitfieldspec | ( lbrack + integer + rbrack )
-varNameSpec = Group(stars + ident + ZeroOrMore(arrayOp))
-operator = oneOf("+ - / * | & || && ^ % ++ -- == != > < >= <=")
-functionCall = Forward()
-expression = OneOrMore(operator | functionCall | ident | quotedString | number)
-functionCall << ident + '(' + Optional(delimitedList(expression)) + ')'
+biOperator = oneOf("+ - / * | & || && ! ~ ^ % == != > < >= <= -> . :: << >> = ? :")
+uniRightOperator = oneOf("++ --")
+uniLeftOperator = oneOf("++ -- - + * sizeof new")
+name = Word(alphas,alphanums + '_')
+
+expression = Forward()
+atom = (
+    ZeroOrMore(uniLeftOperator) + 
+    ((
+        name + '(' + Optional(delimitedList(expression)) + ')' | 
+        name + OneOrMore('[' + expression + ']') | 
+        name | number | quotedString
+    )  |
+    ('(' + expression + ')')) + 
+    ZeroOrMore(uniRightOperator)
+)
+
+expression << Group(
+    atom + ZeroOrMore(biOperator + atom)
+)
+arrayOp = lbrack + expression + rbrack
+
+#def parseExpr(s, l, t):
+    #print "EXPRESSION:", l, s[l:l+10], "..."
+#expression.setParseAction(parseExpr)
+
+def recombine(tok):
+    s = []
+    for t in tok:
+        if isinstance(t, basestring):
+            s.append(t)
+        else:
+            s.append(recombine(t))
+    return " ".join(s)
+expression.setParseAction(recombine)
+        
+
+def printParseResults(pr, depth=0, name=''):
+    start = name + " "*(20-len(name)) + ':'+ '..'*depth    
+    if isinstance(pr, ParseResults):
+        print start
+        for i in pr:
+            name = ''
+            for k in pr.keys():
+                if pr[k] is i:
+                    name = k
+                    break
+            printParseResults(i, depth+1, name)
+    else:
+        print start  + str(pr)
 
 if __name__ == '__main__':
     files = sys.argv[1:]

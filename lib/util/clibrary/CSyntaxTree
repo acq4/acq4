@@ -1,0 +1,90 @@
+decl:  
+    [decl-spec] [decl-list]
+    function-def
+decl-spec:
+    storage-class-spec 
+    type-spec 
+    function-spec
+    friend
+    typedef
+decl-list:
+
+function-def:
+    
+    
+    
+    
+    
+    
+    
+function pointer:
+    
+    int * (*fnp)(int, int);
+    
+function typedef
+
+    typedef int (*PIFN)( char * );
+    
+
+function declared with variable:
+    int i, intf(..);
+    
+declared array of 7 function pointers; functions return int
+    int ( *pifnDispatchArray[7] )( char * );
+    
+    
+POINTER DECLARATOR SYNTAX:
+    
+declarator:
+    identifier
+    qualified-name
+    declarator ( argument-list ) [cv-qualfiers] [exception-spec]
+    declarator [ [ constant-expression ] ]
+    pointer-operator declarator
+    ( declarator )
+pointer-operator:
+    * [cv-qualifiers]
+    & [cv-qualifiers]
+    :: nested-name-specifier * [cv-qualfiers]
+cv-qualifiers:
+    const
+    static
+    ...
+    
+abstract declarators are the same, with no identifier.
+
+
+
+TYPEDEF SYNTAX:
+
+declaration:
+    declaration-specifiers init-declarator-list opt ;
+
+declaration-specifiers:
+    storage-class-specifier declaration-specifiers opt
+    type-specifier declaration-specifiers opt
+    type-qualifier declaration-specifiers opt
+
+storage-class-specifier:
+    typedef
+
+type-specifier:
+    void
+    char
+    short
+    int
+    long
+    float
+    double
+    signed
+    unsigned
+    struct-or-union-specifier
+    enum-specifier
+    typedef-name
+
+typedef-name:
+    identifier
+
+
+
+
