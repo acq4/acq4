@@ -20,17 +20,17 @@ wmlib = CLibrary(windll.User32, p)
 ## Get window handle. Should be a long integer; may change in future windows versions.
 #hWnd = struct.unpack('l', QtGui.QApplication.activeWindow().winId().asstring(4))
 
-## Load windows API header
-winuserHeader = os.path.join(os.path.dirname(__file__), "WinUser.h")  ## file is copied from visual studio
-#defs, funcs = cheader.getDefs(winuserHeader)
-winuserDefs = parseFiles(winuserHeader, cache=winuserHeader+'.cache')
+### Load windows API header
+#winuserHeader = os.path.join(os.path.dirname(__file__), "WinUser.h")  ## file is copied from visual studio
+##defs, funcs = cheader.getDefs(winuserHeader)
+#winuserDefs = parseFiles(winuserHeader, cache=winuserHeader+'.cache')
 
 
 ## Load Axon telegraph header
-telegraphHeader = os.path.join(os.path.dirname(__file__), "mcTelegraphs.hpp")  ## file is copied from SDK
+#telegraphHeader = os.path.join(os.path.dirname(__file__), "mcTelegraphs.hpp")  ## file is copied from SDK
 
 ## Load Multiclamp header
-axonMCHeader = os.path.join(os.path.dirname(__file__), "AxMultiClampMsg.h")  ## file is copied from SDK
+#axonMCHeader = os.path.join(os.path.dirname(__file__), "AxMultiClampMsg.h")  ## file is copied from SDK
 
 
 ## register messages

@@ -160,10 +160,10 @@ class CParser():
         ## make sure cache file exists 
         if type(cacheFile) is not str:
             raise Exception("cache file option myst be a string.")
-        if not os.path.isFile(cacheFile):
+        if not os.path.isfile(cacheFile):
             d = os.path.dirname(__file__)  ## If file doesn't exist, search for it in this module's path
             cacheFile = os.path.join(d, cacheFile)
-            if not os.path.isFile(cacheFile):
+            if not os.path.isfile(cacheFile):
                 return False
         
         ## make sure cache is newer than all input files and this code
@@ -358,11 +358,8 @@ class CParser():
         self.structType.setParseAction(self.processStruct)
     
     def processDeclarator(self, decl):
-        """Take a declarator (without type) and return a serialized modifier description
-        *x[10]            =>  ('x', [10, '*'])
-        fn(int x)         =>  ('fn', [[('x', ['int'])]])
-        (*)(int, int*)   =>  (None, [[(None, ['int']), (None, ['int', '*'])]], '*')
-        """
+        """Process a declarator (without base type) and return a tuple (name, [modifiers])
+        See processType(...) for more information."""
         toks = []
         name = None
         #print "DECL:", decl
@@ -373,9 +370,9 @@ class CParser():
         if 'args' in decl and len(decl['args']) > 0:
             #print "  process args"
             if decl['args'][0] is None:
-                toks.append([])
+                toks.append(())
             else:
-                toks.append([self.processType(a['type'], a['decl']) for a in decl['args']])
+                toks.append(tuple([self.processType(a['type'], a['decl']) for a in decl['args']]))
         if 'ref' in decl:
             toks.append('&')
         if 'center' in decl:
@@ -388,10 +385,18 @@ class CParser():
         return (name, toks)
     
     def processType(self, typ, decl):
-        """Take a name/type declaration, return the name and serialized type description
-        int *x[10]            =>  ('x', ['int', 10, '*'])
-        int fn(int x)         =>  ('fn', ['int', [('x', ['int'])]])
-        void (*)(int, int*)   =>  (None, ['void', [(None, ['int']), (None, ['int', '*'])]], '*')
+        """Take a declarator + base type and return a serialized name/type description.
+        The description will be a list of elements (name, [basetype, modifier, modifier, ...])
+          - name is the string name of the declarator or None for an abstract declarator
+          - basetype is the string representing the base type
+          - modifiers can be:
+             '*'    - pointer (multiple pointers "***" allowed)
+             '&'    - reference
+             list   - array. Value(s) indicate the length of each array, -1 for incomplete type.
+             tuple  - function, items are the output of processType for each function argument.
+        int *x[10]            =>  ('x', ['int', [10], '*'])
+        char fn(int x)         =>  ('fn', ['char', [('x', ['int'])]])
+        struct s (*)(int, int*)   =>  (None, ["struct s", ((None, ['int']), (None, ['int', '*'])), '*'])
         """
         #print "PROCESS TYPE/DECL:", typ, decl
         (name, decl) = self.processDeclarator(decl)
@@ -472,8 +477,9 @@ class CParser():
         print "FUNCTION", t, t.keys()
         
         try:
-            (name, decl) = self.processType(t.type, t.decl)
-            print "  ", name, decl
+            #print "  ", t.type, t.decl
+            (name, decl) = self.processType(t.type, t.decl[0])
+            #print "  ", name, decl
             #rType = (t.type.type[0], len(t.type.ptrs))
             #args = []
             #for a in t.args:
@@ -548,9 +554,13 @@ class CParser():
             val = self.evalExpr(t)
             for d in t[0].declList:
                 (name, typ) = self.processType(t[0].type, d)
-                print "  Add variable:", name, typ, val
-                self.addDef('variables', name, val)
-                self.addDef('values', name, val)
+                if type(typ[-1]) is tuple:  ## this is a function prototype
+                    print "  Add function prototype:", name, typ, val
+                    self.addDef('functions', name, (typ[:-1], typ[-1]))
+                else:
+                    print "  Add variable:", name, typ, val
+                    self.addDef('variables', name, val)
+                    self.addDef('values', name, val)
         except:
             #print t, t[0].name, t.value
             sys.excepthook(*sys.exc_info())
