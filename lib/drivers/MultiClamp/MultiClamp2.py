@@ -5,11 +5,17 @@ from lib.util.clibrary import *
 #from lib.util.CLibrary import *
 #from PyQt4 import QtCore, QtGui
 
-wd = os.path.dirname(__file__)
-headerFiles = ['WinNtTypes.h', 'BaseTsd.h', 'WinDef.h', 'WTypes.h', 'WinUserAbridged.h']
-p = CParser([os.path.join(wd, h) for h in headerFiles], 
-            types={'__int64': ('long long')})
-p.processAll(cache='WinUser.cache', noCacheWarning=True)
+
+## Load windows definitions
+wd = winDefs()
+
+## Load axon headers
+p = CParser(['AxMultiClampMsg.h', 'MCTelegraphs.hpp'], copyFrom=wd)
+
+## Parse definitions from headers. Takes a long time the first time,
+## uses cached values after that.
+p.processAll(cache='AxonHeaders.cache', verbose=True)
+
 
 ##  Windows Messaging API 
 #   provides dll.RegisterWindowMessageA, dll.PostMessageA, dll.PeekMessageA, dll.GetMessageA

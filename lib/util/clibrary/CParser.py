@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-from pyparsing import *
 import sys, re, os
 import ctypes
-ParserElement.enablePackrat()
+#ParserElement.enablePackrat()  ## Don't do this--actually makes the parse take longer!
 
-#__all__ = ['parseFiles', 'CParser']
+__all__ = ['parseFiles', 'winDefs', 'CParser']
 
 def parseFiles(files, cache=None, **args):
     """Convenience function allowing one-line parsing of C files. 
@@ -13,10 +12,27 @@ def parseFiles(files, cache=None, **args):
     All extra arguments are passed to CParser.__init__"""
     p = CParser(files, **args)
     p.processAll(cache)
-    data = {}
-    for k in p.dataList:
-        data[k] = getattr(p, k)
-    return data
+    return p
+
+def winDefs():
+    """Convenience function. Returns a parser which loads a selection of windows headers included with 
+    CParser. These definitions can either be accessed directly or included before parsing
+    another file like this:
+        windefs = CParser.winDefs()
+        p = CParser.CParser("headerFile.h", copyFrom=windefs)
+    Definitions are pulled from a selection of header files included in Visual Studio
+    (possibly not legal to distribute? Who knows.), some of which have been abridged
+    because they take so long to parse. 
+    """
+    headerFiles = ['WinNtTypes.h', 'BaseTsd.h', 'WinDef.h', 'WTypes.h', 'WinUserAbridged.h']
+    d = os.path.dirname(__file__)
+    p = CParser(
+        [os.path.join(d, 'headers', h) for h in headerFiles],
+        types={'__int64': ('long long')}
+    )
+    p.processAll(cache=os.path.join(d, 'headers', 'WinDefs.cache'), noCacheWarning=True)
+    return p
+
 
 class CParser():
     """Class for parsing C code to extract variable, struct, enum, and function declarations as well as preprocessor macros. This is not a complete C parser; instead, it is meant to simplify the process
@@ -45,9 +61,12 @@ class CParser():
             print s
     """
     
+    cacheVersion = 2    ## increment every time cache structure or parsing changes to invalidate old cache files.
+    
     def __init__(self, files=None, replace=None, copyFrom=None, **args):
         """Create a C parser object fiven a file or list of files. Files are read to memory and operated
         on from there.
+            'copyFrom' may be another CParser object from which definitions should be copied.
             'replace' may be specified to perform string replacements before parsing.
                format is {'searchStr': 'replaceStr', ...}
             Extra parameters may be used to specify the starting state of the parser. For example,
@@ -57,6 +76,7 @@ class CParser():
                 macros={'WINAPI': ''}
         """
         
+        
         self.defs = {}  ## holds all definitions
         self.fileDefs = {}  ## holds definitions grouped by the file they came from
         
@@ -64,8 +84,9 @@ class CParser():
         self.initOpts['files'] = files
         self.initOpts['replace'] = replace
         
-        self.dataList = ['types', 'variables', 'fnmacros', 'macros', 'structs', 'enums', 'functions', 'values']
+        self.dataList = ['types', 'variables', 'fnmacros', 'macros', 'structs', 'unions', 'enums', 'functions', 'values']
             
+        self.verbose = False
             
         # placeholders for definitions that change during parsing
         self.macroExpr = Forward()
@@ -89,6 +110,8 @@ class CParser():
             #for f in files:
                 #self.fileDefs[f][k] = {}
                 
+        self.compiledTypes = {}  ## holds translations from typedefs/structs/unions to fundamental types
+                
         self.currentFile = None
         
         # Import extra arguments if specified
@@ -103,55 +126,51 @@ class CParser():
             for p in copyFrom:
                 self.importDict(p.fileDefs)
     
-    def loadFile(self, file):
-        fd = open(file)
-        self.files[file] = fd.read()
-        fd.close()
-        #self.fileDefs[f] = {}
-        
-        replace = self.initOpts['replace']
-        if replace is not None:
-            for s in replace:
-                self.files[file] = re.sub(s, replace[s], self.files[file])
-    
-    def processAll(self, file=None, cache=None, returnUnparsed=False, printAfterPreprocess=False, noCacheWarning=False):
-        """Remove comments, preprocess, and parse for declarations. Operates on the file named
-        or all files in series if not specified. (operates in memory; does not alter the original files)
+    def processAll(self, cache=None, returnUnparsed=False, printAfterPreprocess=False, noCacheWarning=False, verbose=False):
+        """Remove comments, preprocess, and parse declarations from all files. (operates in memory; does not alter the original files)
         Returns a list of the results from parseDefs.
-           'cache' may specify a file where cached results are be stored or retreved. The cache
+           'cache' may specify a file where cached results are be stored or retrieved. The cache
                is automatically invalidated if any of the arguments to __init__ are changed, or if the 
-               C files are newer than the cache. Only valid if 'file' is None.
-           'returnUnparsed' is passed directly to parseDefs."""
-        if file is None:
-            if cache is not None and self.loadCache(cache, checkValidity=True):
-                #print "used cache"
-                return  ## cached values loaded successfully, nothing left to do here
-            else:
-                #print "ignored cache"
-                files = self.fileOrder
-        else:
-            files = [file]
+               C files are newer than the cache.
+           'returnUnparsed' is passed directly to parseDefs.
+           'printAfterPreprocess' is for debugging; prints the result of preprocessing each file."""
+        self.verbose = verbose
+        if cache is not None and self.loadCache(cache, checkValidity=True):
+            if verbose:
+                print "Loaded cached definitions; will skip parsing."
+            return  ## cached values loaded successfully, nothing left to do here
+            
         
         results = []
-        if noCacheWarning:
+        if noCacheWarning or verbose:
             print "Parsing C header files (no valid cache found). This could take several minutes..."
-        for f in files:
+        for f in self.fileOrder:
+            if self.files[f] is None:
+                ## This means the file could not be loaded and there was no cache.
+                raise Exception('Could not find header file "%s" or a suitable cache file.' % f)
+            if verbose:
+                print "Removing comments from file '%s'..." % f
             self.removeComments(f)
+            if verbose:
+                print "Preprocessing file '%s'..." % f
             self.preprocess(f)
             if printAfterPreprocess:
                 print "===== PREPROCSSED %s =======" % f
                 print self.files[f]
+            if verbose:
+                print "Parsing definitions in file '%s'..." % f
             results.append(self.parseDefs(f, returnUnparsed))
         
         if cache is not None:
+            if verbose:
+                print "Writing cache file '%s'" % cache
             self.writeCache(cache)
-            #print "wrote cache"
             
         return results
         
             
     def loadCache(self, cacheFile, checkValidity=False):
-        """Load a cache file
+        """Load a cache file. Used internally if cache is specified in processAll().
         if checkValidity=True, then run several checks before loading the cache:
            - cache file must not be older than any source files
            - cache file must not be older than this library file
@@ -162,17 +181,16 @@ class CParser():
             raise Exception("cache file option myst be a string.")
         if not os.path.isfile(cacheFile):
             d = os.path.dirname(__file__)  ## If file doesn't exist, search for it in this module's path
-            cacheFile = os.path.join(d, cacheFile)
+            cacheFile = os.path.join(d, "headers", cacheFile)
             if not os.path.isfile(cacheFile):
                 return False
         
-        ## make sure cache is newer than all input files and this code
+        ## make sure cache is newer than all input files
         if checkValidity:
             mtime = os.stat(cacheFile).st_mtime
-            if os.stat(__file__).st_mtime > mtime:
-                return False
             for f in self.fileOrder:
-                if os.stat(f).st_mtime > mtime:
+                ## if file does not exist, then it does not count against the validity of the cache.
+                if os.path.isfile(f) and os.stat(f).st_mtime > mtime:
                     return False
         
         try:
@@ -181,19 +199,23 @@ class CParser():
             cache = pickle.load(open(cacheFile))
             
             ## make sure __init__ options match
-            if checkValidity and (cache['opts'] != self.initOpts):
-                return False
+            if checkValidity:
+                if cache['opts'] != self.initOpts:
+                    return False
+                if cache['version'] < self.cacheVersion:
+                    return False
                 
             ## import all parse results
             self.importDict(cache['fileDefs'])
-            #for k in self.dataList:
-                #setattr(self, k, cache[k])
             return True
         except:
             print "Warning--cache is invalid, ignoring."
             return False
 
     def importDict(self, data):
+        """Import definitions from a dictionary. The dict format should be the
+        same as CParser.fileDefs. Used internally; does not need to be called
+        manually."""
         for f in data.keys():
             self.currentFile = f
             for k in self.dataList:
@@ -201,40 +223,79 @@ class CParser():
                     self.addDef(k, n, data[f][k][n])
 
     def writeCache(self, cacheFile):
-        """Store all parsed declarations to cache."""
+        """Store all parsed declarations to cache. Used internally."""
         cache = {}
         cache['opts'] = self.initOpts
         cache['fileDefs'] = self.fileDefs
+        cache['version'] = self.cacheVersion
         #for k in self.dataList:
             #cache[k] = getattr(self, k)
         import pickle
         pickle.dump(cache, open(cacheFile, 'w'))
 
+    def loadFile(self, file):
+        """Read a file, make replacements if requested. Called by __init__, should
+        not be called manually."""
+        if not os.path.isfile(file):
+            ## Not a fatal error since we might be able to function properly if there is a cache file..
+            #raise Exception("File %s not found" % file)
+            print "Warning: C header '%s' is missing; this may cause trouble." % file
+            self.files[file] = None
+            return False
+            
+        fd = open(file, 'rU')  ## U causes all newline types to be converted to \n
+        self.files[file] = fd.read()
+        fd.close()
+        
+        replace = self.initOpts['replace']
+        if replace is not None:
+            for s in replace:
+                self.files[file] = re.sub(s, replace[s], self.files[file])
+        return True
+    
+
+
+
+
+    #### Beginning of processing functions
+    
+    def assertPyparsing(self):
+        """Make sure pyparsing module is available."""
+        global hasPyParsing
+        if not hasPyParsing:
+            raise Exception("CParser class requires 'pyparsing' library for actual parsing work. Without this library, CParser can only be used with previously cached parse results.")
+    
 
     def removeComments(self, file):
         """Remove all comments from file. (operates in memory; does not alter the original files)"""
+        self.assertPyparsing()
         text = self.files[file]
         cplusplusLineComment = Literal("//") + restOfLine
-        self.files[file] = (cStyleComment | cplusplusLineComment).ignore(quotedString).suppress().transformString(text)
+        # match quoted strings first to prevent matching comments inside quotes
+        self.files[file] = (quotedString | cStyleComment.suppress() | cplusplusLineComment.suppress()).transformString(text)
         
     
     def preprocess(self, file):
         """Scan named file for preprocessor directives, removing them while expanding macros. (operates in memory; does not alter the original files)"""
+        self.assertPyparsing()
         self.currentFile = file
-        text = self.files[file]
-        ppDirective = Combine("#" + Word(alphas)) + restOfLine
+        self.ppDirective = Combine("#" + Word(alphas).leaveWhitespace()) + restOfLine
         
         # define the structure of a macro definition (the empty term is used 
         # to advance to the next non-whitespace character)
-        ppDefine = Keyword("#define") + ident.setWhitespaceChars(' \t')("macro") + Optional(lparen + delimitedList(ident) + rparen).setWhitespaceChars(' \t')('args') + restOfLine("value")
+        self.ppDefine = Keyword("#define") + ident.setWhitespaceChars(' \t')("macro") + Optional(lparen + delimitedList(ident) + rparen).setWhitespaceChars(' \t')('args') + SkipTo(LineEnd(), ignore=(Literal('\\').leaveWhitespace()+LineEnd()))('value')
         # attach parse actions to expressions
-        ppDefine.setParseAction(self.processMacroDefn)
-        
+        self.ppDefine.setParseAction(self.processMacroDefn)
+        #ppDefine.setDebug(True)
         self.updateMacroDefns()
 
         # define pattern for scanning through the input string
-        self.macroExpander = (self.macroExpr | self.fnMacroExpr | ppDefine.suppress() | ppDirective.suppress()).ignore(quotedString)
-        self.files[file] =  self.macroExpander.transformString(text)
+        self.macroExpander = (self.macroExpr | self.fnMacroExpr | self.ppDefine.suppress() | self.ppDirective.suppress())
+        
+        text = self.files[file]
+        ## Match quoted strings first to prevent matching macros inside strings.
+        ## do NOT use .ignore(quotedString) -- this has drastic side effects!
+        self.files[file] =  (quotedString | self.macroExpander).transformString(text)
 
     def updateMacroDefns(self):
         self.macroExpr << MatchFirst( [Keyword(m)('macro') for m in self.defs['macros']] )
@@ -247,6 +308,7 @@ class CParser():
         """Scan through the named file for variable, struct, enum, and function declarations.
         Returns the entire tree of successfully parsed tokens.
         If returnUnparsed is True, return a string of all lines that failed to match (for debugging)."""
+        self.assertPyparsing()
         self.currentFile = file
         self.definedType << kwl(self.defs['types'].keys())
     
@@ -258,6 +320,9 @@ class CParser():
             return [x[0] for x in parser.scanString(self.files[file])]
 
     def buildParser(self):
+        self.assertPyparsing()
+        
+        
         self.structType = Forward()
         enumType = Forward()
         self.typeSpec = (typeQualifier + (
@@ -265,7 +330,7 @@ class CParser():
             Optional(kwl(sizeModifiers + signModifiers)) + self.definedType | 
             self.structType | 
             enumType
-        ) + typeQualifier).setParseAction(recombine)
+        ) + typeQualifier + msModifier).setParseAction(recombine)
         self.argList = Forward()
         
         ### Abstract declarators for use in function pointer arguments
@@ -344,7 +409,7 @@ class CParser():
         functionDecl = self.typeSpec('type') + self.declarator('decl') + nestedExpr('{', '}').suppress()
         functionDecl.setParseAction(self.processFunction)
         
-        return (self.typeDecl ^ self.structDecl ^ enumDecl ^ self.variableDecl ^ functionDecl)
+        return (self.typeDecl | self.variableDecl | self.structDecl | enumDecl | functionDecl)
     
     def updateStructDefn(self):
         structKW = (Keyword('struct') | Keyword('union'))
@@ -404,25 +469,30 @@ class CParser():
         
     
     # parse action for macro definitions
-    def processMacroDefn(self, s,l,t):
-        print "MACRO:", t
+    def processMacroDefn(self, t):
+        if self.verbose:
+            print "MACRO:", t
         macroVal = self.macroExpander.transformString(t.value).strip()
+        macroVal = Literal('\\\n').suppress().transformString(macroVal) ## remove escaped newlines
         if t.args == '':
+            val = self.evalExpr(macroVal)
             self.addDef('macros', t.macro, macroVal)
-            print "  Add macro:", t.macro, self.defs['macros'][t.macro]
+            self.addDef('values', t.macro, val)
+            if self.verbose:
+                print "  Add macro:", t.macro, "("+str(val)+")", self.defs['macros'][t.macro]
         else:
             self.addDef('fnmacros', t.macro,  (macroVal, [x for x in t.args]))
-            print "  Add fn macro:", t.macro, t.args, self.defs['fnmacros'][t.macro]
-        self.addDef('values', t.macro, self.evalExpr(macroVal))
+            if self.verbose:
+                print "  Add fn macro:", t.macro, t.args, self.defs['fnmacros'][t.macro]
         self.updateMacroDefns()
         #self.macroExpr << MatchFirst( map(Keyword,self.defs['macros'].keys()) )
         return "#define " + t.macro + " " + macroVal
         
     # parse action to replace macro references with their respective definition
-    def processMacroRef(self, s,l,t):
+    def processMacroRef(self, t):
         return self.defs['macros'][t.macro]
             
-    def processFnMacroRef(self, s,l,t):
+    def processFnMacroRef(self, t):
         m = self.defs['fnmacros'][t.macro]
         #print "=====>>"
         #print "Process FN MACRO:", t
@@ -437,7 +507,7 @@ class CParser():
                 arg = m[1][i]
                 #print "    arg:", arg, '=>', t.args[i]
                 
-                newStr = Keyword(arg).setParseAction(lambda: t.args[i]).transformString(newStr)
+                newStr = Keyword(arg).copy().setParseAction(lambda: t.args[i]).transformString(newStr)
                 #print "    new str:", newStr
         except:
             #sys.excepthook(*sys.exc_info())
@@ -448,6 +518,8 @@ class CParser():
 
     def processEnum(self, s, l, t):
         try:
+            if self.verbose:
+                print "ENUM:", t
             if t.name == '':
                 n = 0
                 while True:
@@ -458,6 +530,9 @@ class CParser():
             else:
                 name = t.name[0]
                 
+            if self.verbose:
+                print "  name:", name
+                
             if name not in self.defs['enums']:
                 i = 0
                 enum = {}
@@ -467,29 +542,107 @@ class CParser():
                     enum[v.name] = i
                     self.addDef('values', v.name, i)
                     i += 1
+                if self.verbose:
+                        print "  members:", enum
                 self.addDef('enums', name, enum)
+                self.addDef('types', 'enum '+name, ('enum', name))
             return ('enum:'+name)
         except:
-            print t
+            if self.verbose:
+                print "Error processing enum:", t
             sys.excepthook(*sys.exc_info())
 
+
     def processFunction(self, s, l, t):
-        print "FUNCTION", t, t.keys()
+        if self.verbose:
+            print "FUNCTION", t, t.keys()
         
         try:
-            #print "  ", t.type, t.decl
             (name, decl) = self.processType(t.type, t.decl[0])
-            #print "  ", name, decl
-            #rType = (t.type.type[0], len(t.type.ptrs))
-            #args = []
-            #for a in t.args:
-                #args.append((a.name, a.type[0], len(a.ptrs)))
+            if self.verbose:
+                print "  name:", name
+                print "  sig:", decl
             self.addDef('functions', name, (decl[:-1], decl[-1]))
             
         except:
-            print t
+            if self.verbose:
+                print "Error processing function:", t
             sys.excepthook(*sys.exc_info())
 
+
+    def processStruct(self, s, l, t):
+        try:
+            strTyp = t.structType  # struct or union
+            if self.verbose:
+                print strTyp.upper(), t.name, t
+            if t.name == '':
+                n = 0
+                while True:
+                    sname = 'anonStruct%d' % n
+                    if sname not in self.defs[strTyp+'s']:
+                        break
+                    n += 1
+            else:
+                if type(t.name) is str:
+                    sname = t.name
+                else:
+                    sname = t.name[0]
+            if self.verbose:
+                print "  NAME:", sname
+            if sname not in self.defs[strTyp+'s'] or self.defs[strTyp+'s'][sname] == {}:
+                if self.verbose:
+                    print "  NEW " + strTyp.upper()
+                struct = {}
+                for m in t.members:
+                    typ = m[0].type
+                    val = self.evalExpr(m)
+                    if self.verbose:
+                        print "    member:", m, m[0].keys(), m[0].declList
+                    for d in m[0].declList:
+                        (name, decl) = self.processType(typ, d)
+                        struct[name] = (decl, val)
+                        if self.verbose:
+                            print "      ", name, decl, val
+                self.addDef(strTyp+'s', sname, struct)
+                self.addDef('types', strTyp+' '+sname, (strTyp, sname))
+                self.updateStructDefn()
+            return (strTyp+' '+sname)
+        except:
+            #print t
+            sys.excepthook(*sys.exc_info())
+
+    def processVariable(self, s, l, t):
+        if self.verbose:
+            print "VARIABLE:", t
+        try:
+            val = self.evalExpr(t)
+            for d in t[0].declList:
+                (name, typ) = self.processType(t[0].type, d)
+                if type(typ[-1]) is tuple:  ## this is a function prototype
+                    if self.verbose:
+                        print "  Add function prototype:", name, typ, val
+                    self.addDef('functions', name, (typ[:-1], typ[-1]))
+                else:
+                    if self.verbose:
+                        print "  Add variable:", name, typ, val
+                    self.addDef('variables', name, (val, typ))
+                    self.addDef('values', name, val)
+        except:
+            #print t, t[0].name, t.value
+            sys.excepthook(*sys.exc_info())
+
+    def processTypedef(self, s, l, t):
+        if self.verbose:
+            print "TYPE:", t
+        typ = t.type
+        #print t, t.type
+        for d in t.declList:
+            (name, decl) = self.processType(typ, d)
+            if self.verbose:
+                print "  ", name, decl
+            self.addDef('types', name, decl)
+            self.definedType << MatchFirst( map(Keyword,self.defs['types'].keys()) )
+        
     def evalExpr(self, toks):
         ## Evaluates expressions. Currently only works for expressions that also 
         ## happen to be valid python expressions.
@@ -499,81 +652,29 @@ class CParser():
         try:
             if isinstance(toks, basestring):
                 #print "  as string"
-                val = eval(toks)
+                val = self.eval(toks, None, self.defs['values'])
             elif toks.arrayValues != '':
                 #print "  as list:", toks.arrayValues
-                val = [eval(x) for x in toks.arrayValues]
+                val = [self.eval(x, None, self.defs['values']) for x in toks.arrayValues]
             elif toks.value != '':
                 #print "  as value"
-                val = eval(toks.value)
+                val = self.eval(toks.value, None, self.defs['values'])
             else:
                 #print "  as None"
                 val = None
             return val
         except:
-            print "failed eval:", toks
+            if self.verbose:
+                print "    failed eval:", toks
+                print "                ", sys.exc_info()[1]
             return None
-
-    def processStruct(self, s, l, t):
-        print "STRUCT", t.name, t
-        try:
-            if t.name == '':
-                n = 0
-                while True:
-                    sname = 'anonStruct%d' % n
-                    if sname not in self.defs['structs']:
-                        break
-                    n += 1
-            else:
-                if type(t.name) is str:
-                    sname = t.name
-                else:
-                    sname = t.name[0]
-            print "  NAME:", sname
-            if sname not in self.defs['structs'] or self.defs['structs'][sname] == {}:
-                print "  NEW STRUCT"
-                struct = {}
-                for m in t.members:
-                    typ = m[0].type
-                    val = self.evalExpr(m)
-                    print "    member:", m, m[0].keys(), m[0].declList
-                    for d in m[0].declList:
-                        (name, decl) = self.processType(typ, d)
-                        struct[name] = (decl, val)
-                        print "      ", name, decl, val
-                self.addDef('structs', sname, struct)
-                self.updateStructDefn()
-            return ('struct '+sname)
-        except:
-            #print t
-            sys.excepthook(*sys.exc_info())
-
-    def processVariable(self, s, l, t):
-        print "VARIABLE:", t
-        try:
-            val = self.evalExpr(t)
-            for d in t[0].declList:
-                (name, typ) = self.processType(t[0].type, d)
-                if type(typ[-1]) is tuple:  ## this is a function prototype
-                    print "  Add function prototype:", name, typ, val
-                    self.addDef('functions', name, (typ[:-1], typ[-1]))
-                else:
-                    print "  Add variable:", name, typ, val
-                    self.addDef('variables', name, val)
-                    self.addDef('values', name, val)
-        except:
-            #print t, t[0].name, t.value
-            sys.excepthook(*sys.exc_info())
-
-    def processTypedef(self, s, l, t):
-        print "TYPE:", t
-        typ = t.type
-        #print t, t.type
-        for d in t.declList:
-            (name, decl) = self.processType(typ, d)
-            print "  ", name, decl
-            self.addDef('types', name, decl)
-            self.definedType << MatchFirst( map(Keyword,self.defs['types'].keys()) )
+            
+    def eval(self, expr, *args):
+        """Just eval with a little extra robustness."""
+        expr = expr.strip()
+        if expr == '':
+            return None
+        return eval(expr, *args)
         
     def printAll(self, file=None):
         """Print everything parsed from files. Useful for debugging."""
@@ -608,16 +709,16 @@ class CParser():
             raise Exception("Not sure what to make of type '%s'" % str(t))
 
     def evalType(self, typ):
-        """evaluate a named type into its fundamental types"""
+        """evaluate a named type into its fundamental type"""
         used = [typ]
         while True:
-            if isFundType(typ):
+            if self.isFundType(typ):
                 return typ
             parent = typ[0]
             if parent in used:
                 raise Exception('Recursive loop while tracing types.')
             used.append(parent)
-            pt = self.types[parent]
+            pt = self.defs['types'][parent]
             typ = pt + typ[1:]
 
     def ctype(self, typ, val=None):
@@ -643,101 +744,109 @@ class CParser():
     def makeCInst(self, typ, data):
         """Make a ctypes instance """
 
+hasPyParsing = False
+try: 
+    from pyparsing import *
+    hasPyParsing = True
+except:
+    pass  ## no need to do anything yet as we might not be using any parsing functions..
+
+
+## Define some common language elements if pyparsing is available.
+if hasPyParsing:
+    ## Some basic definitions
+    expression = Forward()
+    pexpr = '(' + expression + ')'
+    numTypes = ['int', 'float', 'double']
+    baseTypes = ['char', 'bool', 'void'] + numTypes
+    sizeModifiers = ['short', 'long']
+    signModifiers = ['signed', 'unsigned']
+    qualifiers = ['const', 'static', 'volatile', 'inline', 'restrict', 'near', 'far']
+    msModifiers = ['__based', '__declspec', '__stdcall', '__cdecl', '__fastcall', '__restrict', '__sptr', '__uptr', '__w64', '__unaligned']
+    keywords = ['struct', 'enum', 'union'] + qualifiers + baseTypes + sizeModifiers + signModifiers
+
+    def kwl(strs):
+        """Generate a match-first list of keywords given a list of strings."""
+        return MatchFirst(map(Keyword,strs))
+
+    keyword = kwl(keywords)
+    ident = (~keyword + Word(alphas+"_",alphanums+"_$")).setParseAction(lambda t: t[0])
+    integer = Combine(Optional("-") + (Word( nums ) | Combine("0x" + Word(hexnums)))) 
+    semi   = Literal(";").ignore(quotedString).suppress()
+    lbrace = Literal("{").ignore(quotedString).suppress()
+    rbrace = Literal("}").ignore(quotedString).suppress()
+    lbrack = Literal("[").ignore(quotedString).suppress()
+    rbrack = Literal("]").ignore(quotedString).suppress()
+    lparen = Literal("(").ignore(quotedString).suppress()
+    rparen = Literal(")").ignore(quotedString).suppress()
+    number = Word(hexnums + ".-+x")
+    #stars = Optional(Word('*&'), default='')('ptrs')  ## may need to separate & from * later?
+    typeQualifier = ZeroOrMore(kwl(qualifiers)).suppress()
+    msModifier = ZeroOrMore(kwl(msModifiers) + Optional(pexpr)).suppress()
+    pointerOperator = (
+        '*' + typeQualifier |
+        '&' + typeQualifier |
+        '::' + ident + typeQualifier
+    )
+
+
+    ## language elements
+    fundType = OneOrMore(kwl(signModifiers + sizeModifiers + baseTypes)).setParseAction(lambda t: ' '.join(t))
+
+    bitfieldspec = ":" + integer
+    biOperator = oneOf("+ - / * | & || && ! ~ ^ % == != > < >= <= -> . :: << >> = ? :")
+    uniRightOperator = oneOf("++ --")
+    uniLeftOperator = oneOf("++ -- - + * sizeof new")
+    name = Word(alphas,alphanums + '_')
+
+    atom = (
+        ZeroOrMore(uniLeftOperator) + 
+        ((
+            name + '(' + Optional(delimitedList(expression)) + ')' | 
+            name + OneOrMore('[' + expression + ']') | 
+            name | number | quotedString
+        )  |
+        ('(' + expression + ')')) + 
+        ZeroOrMore(uniRightOperator)
+    )
+
+    expression << Group(
+        atom + ZeroOrMore(biOperator + atom)
+    )
+    arrayOp = lbrack + expression + rbrack
+
+    def recombine(tok):
+        """Flattens a tree of tokens and joins into one big string."""
+        s = []
+        for t in tok:
+            if isinstance(t, basestring):
+                s.append(t)
+            else:
+                s.append(recombine(t))
+        return " ".join(s)
+    expression.setParseAction(recombine)
             
-## Some basic definitions
-numTypes = ['int', 'float', 'double']
-baseTypes = ['char', 'bool', 'void'] + numTypes
-sizeModifiers = ['short', 'long']
-signModifiers = ['signed', 'unsigned']
-qualifiers = ['const', 'static', 'volatile', 'inline', 'restrict', 'near', 'far']
-keywords = ['struct', 'enum', 'union'] + qualifiers + baseTypes + sizeModifiers + signModifiers
 
-def kwl(strs):
-    """Generate a match-first list of keywords given a list of strings."""
-    return MatchFirst(map(Keyword,strs))
-
-keyword = kwl(keywords)
-ident = (~keyword + Word(alphas+"_",alphanums+"_$")).setParseAction(lambda t: t[0])
-integer = Combine(Optional("-") + (Word( nums ) | Combine("0x" + Word(hexnums)))) 
-semi = Literal(";").ignore(quotedString).suppress()
-lbrace = Literal("{").ignore(quotedString).suppress()
-rbrace = Literal("}").ignore(quotedString).suppress()
-lbrack = Literal("[").ignore(quotedString).suppress()
-rbrack = Literal("]").ignore(quotedString).suppress()
-lparen = Literal("(").ignore(quotedString).suppress()
-rparen = Literal(")").ignore(quotedString).suppress()
-number = Word(hexnums + ".-+x")
-#stars = Optional(Word('*&'), default='')('ptrs')  ## may need to separate & from * later?
-typeQualifier = ZeroOrMore(kwl(qualifiers)).suppress()
-pointerOperator = (
-    '*' + typeQualifier |
-    '&' + typeQualifier |
-    '::' + ident + typeQualifier
-)
-
-
-## language elements
-fundType = OneOrMore(kwl(signModifiers + sizeModifiers + baseTypes)).setParseAction(lambda t: ' '.join(t))
-
-bitfieldspec = ":" + integer
-biOperator = oneOf("+ - / * | & || && ! ~ ^ % == != > < >= <= -> . :: << >> = ? :")
-uniRightOperator = oneOf("++ --")
-uniLeftOperator = oneOf("++ -- - + * sizeof new")
-name = Word(alphas,alphanums + '_')
-
-expression = Forward()
-atom = (
-    ZeroOrMore(uniLeftOperator) + 
-    ((
-        name + '(' + Optional(delimitedList(expression)) + ')' | 
-        name + OneOrMore('[' + expression + ']') | 
-        name | number | quotedString
-    )  |
-    ('(' + expression + ')')) + 
-    ZeroOrMore(uniRightOperator)
-)
-
-expression << Group(
-    atom + ZeroOrMore(biOperator + atom)
-)
-arrayOp = lbrack + expression + rbrack
-
-#def parseExpr(s, l, t):
-    #print "EXPRESSION:", l, s[l:l+10], "..."
-#expression.setParseAction(parseExpr)
-
-def recombine(tok):
-    s = []
-    for t in tok:
-        if isinstance(t, basestring):
-            s.append(t)
+    def printParseResults(pr, depth=0, name=''):
+        """For debugging; pretty-prints parse result objects."""
+        start = name + " "*(20-len(name)) + ':'+ '..'*depth    
+        if isinstance(pr, ParseResults):
+            print start
+            for i in pr:
+                name = ''
+                for k in pr.keys():
+                    if pr[k] is i:
+                        name = k
+                        break
+                printParseResults(i, depth+1, name)
         else:
-            s.append(recombine(t))
-    return " ".join(s)
-expression.setParseAction(recombine)
-        
+            print start  + str(pr)
 
-def printParseResults(pr, depth=0, name=''):
-    start = name + " "*(20-len(name)) + ':'+ '..'*depth    
-    if isinstance(pr, ParseResults):
-        print start
-        for i in pr:
-            name = ''
-            for k in pr.keys():
-                if pr[k] is i:
-                    name = k
-                    break
-            printParseResults(i, depth+1, name)
-    else:
-        print start  + str(pr)
 
+
+## Just for fun..
 if __name__ == '__main__':
     files = sys.argv[1:]
-    #text = ''
-    #for f in files:
-        #fd = open(f)
-        #text += fd.read()
-        #fd.close()
     p = CParser(files)
     p.processAll()
     p.printAll()
