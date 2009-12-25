@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys, re, os
-import ctypes
+#import ctypes
 #ParserElement.enablePackrat()  ## Don't do this--actually makes the parse take longer!
 
 __all__ = ['parseFiles', 'winDefs', 'CParser']
@@ -592,7 +592,7 @@ class CParser():
             if sname not in self.defs[strTyp+'s'] or self.defs[strTyp+'s'][sname] == {}:
                 if self.verbose:
                     print "  NEW " + strTyp.upper()
-                struct = {}
+                struct = []
                 for m in t.members:
                     typ = m[0].type
                     val = self.evalExpr(m)
@@ -600,7 +600,7 @@ class CParser():
                         print "    member:", m, m[0].keys(), m[0].declList
                     for d in m[0].declList:
                         (name, decl) = self.processType(typ, d)
-                        struct[name] = (decl, val)
+                        struct.append((name, decl, val))
                         if self.verbose:
                             print "      ", name, decl, val
                 self.addDef(strTyp+'s', sname, struct)
@@ -697,16 +697,14 @@ class CParser():
 
     def isFundType(self, typ):
         """Return True if this type is a fundamental C type, struct, or union"""
-        if type(typ) in [dict, tuple]:
-            return True  ## function, struct, or union
-        elif type(typ) is list:
-            names = baseTypes + sizeModifiers + signModifiers
-            for w in typ[0].split():
-                if w not in names:
-                    return False
+        if typ[0][:7] == 'struct ' or typ[0][:6] == 'union ' or typ[0][:5] == 'enum ':
             return True
-        else:
-            raise Exception("Not sure what to make of type '%s'" % str(t))
+            
+        names = baseTypes + sizeModifiers + signModifiers
+        for w in typ[0].split():
+            if w not in names:
+                return False
+        return True
 
     def evalType(self, typ):
         """evaluate a named type into its fundamental type"""
@@ -721,28 +719,6 @@ class CParser():
             pt = self.defs['types'][parent]
             typ = pt + typ[1:]
 
-    def ctype(self, typ, val=None):
-        """return a ctype object representing the named type"""
-        # Create the initial type
-        fn = CParser.cTypeDict[typ[0]]
-        if val is None:
-            obj = fn()
-        else:
-            obj = fn(val)
-            
-        # apply pointers and arrays
-        for p in typ[1:]:
-            if p in ['*', '&']:
-                obj = POINTER(obj)
-            elif type(p) is int:
-                obj = obj * p
-        return obj
-
-
-
-
-    def makeCInst(self, typ, data):
-        """Make a ctypes instance """
 
 hasPyParsing = False
 try: 
