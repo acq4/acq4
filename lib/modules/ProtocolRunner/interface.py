@@ -966,8 +966,10 @@ class TaskThread(QtCore.QThread):
         
             ## Select correct command to execute
             cmd = self.protocol
+            #print "Sequence array:", cmd.shape, cmd.infoCopy()
             if params is not None:
                 for p in params:
+                    #print "Selecting %s: %s from sequence array" % (str(p), str(params[p]))
                     cmd = cmd[p: params[p]]
                     
             #print "Protocol:", cmd

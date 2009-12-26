@@ -11,11 +11,12 @@ __all__ = ['MultiClamp']
 windowsDefs = winDefs()
 
 ## Load axon headers + windows definitions 
-axonDefs = CParser(['AxMultiClampMsg.h', 'MCTelegraphs.hpp'], copyFrom=windowsDefs)
+d = os.path.dirname(__file__)
+axonDefs = CParser([os.path.join(d, 'AxMultiClampMsg.h'), os.path.join(d, 'MCTelegraphs.hpp')], copyFrom=windowsDefs)
 
 ## Parse definitions from headers. Takes a long time the first time,
 ## uses cached values after that.
-P.processAll(cache='AxonHeaders.cache')
+axonDefs.processAll(cache=os.path.join(d, 'AxonHeaders.cache'), verbose=True)
 
 
 ##  Windows Messaging API 
@@ -24,7 +25,7 @@ P.processAll(cache='AxonHeaders.cache')
 wmlib = CLibrary(windll.User32, windowsDefs)
 
 ## Axon API (That's right, we have to use two different APIs to access one device.)
-axlib = CLibrary(windll.AxMultiClampMsg, axonDefs)
+axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axonDefs)
 
 ## Get window handle. Should be a long integer; may change in future windows versions.
 #hWnd = struct.unpack('l', QtGui.QApplication.activeWindow().winId().asstring(4))
@@ -460,7 +461,7 @@ class _MULTICLAMP:
         return self.setSignalByName(devID, signal, 1)
 
 
-init()
+#init()
 
 ## Crapton of stuff to remember that is not provided by header files
 

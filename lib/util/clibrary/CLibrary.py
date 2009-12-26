@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+from ctypes import *
+
 class CLibrary:
     """The CLibrary class is intended to automate much of the work in using ctypes by integrating
     header file definitions from CParser. Ths class serves as a proxy to a ctypes, adding
@@ -30,9 +33,9 @@ class CLibrary:
         'long double': c_longdouble
     }
     cPtrTypes = {
-        'char', c_char_p,
-        'wchar', c_wchar_p,
-        'void', c_void_p
+        'char': c_char_p,
+        'wchar': c_wchar_p,
+        'void': c_void_p
     }
         
         
@@ -99,7 +102,7 @@ class CLibrary:
         for p in mods:
             if isinstance(p, basestring):  ## pointer or reference
                 if p[0] in ['*', '&']:
-                    for i p:
+                    for i in p:
                         cls = POINTER(cls)
             elif type(p) is list:          ## array
                 for i in p:

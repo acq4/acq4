@@ -81,7 +81,7 @@ class CParser():
         self.fileDefs = {}  ## holds definitions grouped by the file they came from
         
         self.initOpts = args.copy()
-        self.initOpts['files'] = files
+        self.initOpts['files'] = map(os.path.basename, files) # only interested in the file names; the directory may change between systems.
         self.initOpts['replace'] = replace
         
         self.dataList = ['types', 'variables', 'fnmacros', 'macros', 'structs', 'unions', 'enums', 'functions', 'values']
@@ -89,11 +89,12 @@ class CParser():
         self.verbose = False
             
         # placeholders for definitions that change during parsing
-        self.macroExpr = Forward()
-        self.fnMacroExpr = Forward()
-        self.definedType = Forward()
-        #self.definedStruct = Forward()
-        self.definedEnum = Forward()
+        if hasPyParsing:
+            self.macroExpr = Forward()
+            self.fnMacroExpr = Forward()
+            self.definedType = Forward()
+            #self.definedStruct = Forward()
+            self.definedEnum = Forward()
         
         
         self.files = {}
@@ -145,6 +146,7 @@ class CParser():
         if noCacheWarning or verbose:
             print "Parsing C header files (no valid cache found). This could take several minutes..."
         for f in self.fileOrder:
+            #fn = os.path.basename(f)
             if self.files[f] is None:
                 ## This means the file could not be loaded and there was no cache.
                 raise Exception('Could not find header file "%s" or a suitable cache file.' % f)
@@ -178,11 +180,13 @@ class CParser():
         
         ## make sure cache file exists 
         if type(cacheFile) is not str:
-            raise Exception("cache file option myst be a string.")
+            raise Exception("cache file option must be a string.")
         if not os.path.isfile(cacheFile):
             d = os.path.dirname(__file__)  ## If file doesn't exist, search for it in this module's path
             cacheFile = os.path.join(d, "headers", cacheFile)
             if not os.path.isfile(cacheFile):
+                if self.verbose:
+                    print "Can't find requested cache file."
                 return False
         
         ## make sure cache is newer than all input files
@@ -191,6 +195,8 @@ class CParser():
             for f in self.fileOrder:
                 ## if file does not exist, then it does not count against the validity of the cache.
                 if os.path.isfile(f) and os.stat(f).st_mtime > mtime:
+                    if self.verbose:
+                        print "Cache file is out of date."
                     return False
         
         try:
@@ -201,15 +207,22 @@ class CParser():
             ## make sure __init__ options match
             if checkValidity:
                 if cache['opts'] != self.initOpts:
+                    if self.verbose:
+                        print "Cache file is not valid--created using different initialization options."
+                        print cache['opts']
+                        print self.initOpts
                     return False
                 if cache['version'] < self.cacheVersion:
+                    if self.verbose:
+                        print "Cache file is not valid--cache format has changed."
                     return False
                 
             ## import all parse results
             self.importDict(cache['fileDefs'])
             return True
         except:
-            print "Warning--cache is invalid, ignoring."
+            print "Warning--cache read failed:"
+            sys.excepthook(*sys.exc_info())
             return False
 
     def importDict(self, data):
@@ -689,11 +702,15 @@ class CParser():
     def addDef(self, typ, name, val):
         """Add a definition of a specific type to both the definition set for the current file and the global definition set."""
         self.defs[typ][name] = val
-        if self.currentFile not in self.fileDefs:
-            self.fileDefs[self.currentFile] = {}
+        if self.currentFile is None:
+            baseName = None
+        else:
+            baseName = os.path.basename(self.currentFile)
+        if baseName not in self.fileDefs:
+            self.fileDefs[baseName] = {}
             for k in self.dataList:
-                self.fileDefs[self.currentFile][k] = {}
-        self.fileDefs[self.currentFile][typ][name] = val
+                self.fileDefs[baseName][k] = {}
+        self.fileDefs[baseName][typ][name] = val
 
     def isFundType(self, typ):
         """Return True if this type is a fundamental C type, struct, or union"""

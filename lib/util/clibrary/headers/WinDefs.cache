@@ -5,7 +5,7 @@ I2
 sS'fileDefs'
 p2
 (dp3
-S'/home/luke/work/manis_lab/code/acq4/lib/util/clibrary/headers/WTypes.h'
+S'WTypes.h'
 p4
 (dp5
 S'functions'
@@ -3177,7 +3177,7 @@ p1592
 (lp1593
 g1498
 ag315
-asssS'/home/luke/work/manis_lab/code/acq4/lib/util/clibrary/headers/WinUserAbridged.h'
+asssS'WinUserAbridged.h'
 p1594
 (dp1595
 g6
@@ -3455,7 +3455,7 @@ sg364
 (dp1743
 sg985
 (dp1744
-ssS'/home/luke/work/manis_lab/code/acq4/lib/util/clibrary/headers/WinDef.h'
+ssS'WinDef.h'
 p1745
 (dp1746
 g6
@@ -4409,7 +4409,7 @@ p2156
 (lp2157
 g1266
 ag315
-asssS'/home/luke/work/manis_lab/code/acq4/lib/util/clibrary/headers/BaseTsd.h'
+asssS'BaseTsd.h'
 p2158
 (dp2159
 g6
@@ -5237,7 +5237,7 @@ g2553
 asg1258
 (lp2583
 g79
-asssS'/home/luke/work/manis_lab/code/acq4/lib/util/clibrary/headers/WinNtTypes.h'
+asssS'WinNtTypes.h'
 p2584
 (dp2585
 g6
