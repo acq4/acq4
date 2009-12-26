@@ -75,3 +75,14 @@ typeTypeInt ** function3(int x, int y)
      { }
      int localVariable = 1;
 }
+
+// undefined types
+typedef someType SomeOtherType;
+undefined x;
+
+// recursive type definitions
+typedef recType1 recType2;
+typedef recType2 recType3;
+typedef recType3 recType1;
+
+

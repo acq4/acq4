@@ -3,18 +3,10 @@ import sys, re, os
 #import ctypes
 #ParserElement.enablePackrat()  ## Don't do this--actually makes the parse take longer!
 
-__all__ = ['parseFiles', 'winDefs', 'CParser']
+__all__ = ['winDefs', 'CParser']
 
-def parseFiles(files, cache=None, **args):
-    """Convenience function allowing one-line parsing of C files. 
-    Returns a dictionary of all data processed.
-    The 'cache' argument is passed to CParser.processAll.
-    All extra arguments are passed to CParser.__init__"""
-    p = CParser(files, **args)
-    p.processAll(cache)
-    return p
 
-def winDefs():
+def winDefs(verbose=False):
     """Convenience function. Returns a parser which loads a selection of windows headers included with 
     CParser. These definitions can either be accessed directly or included before parsing
     another file like this:
@@ -28,9 +20,10 @@ def winDefs():
     d = os.path.dirname(__file__)
     p = CParser(
         [os.path.join(d, 'headers', h) for h in headerFiles],
-        types={'__int64': ('long long')}
+        types={'__int64': ('long long')},
+        processAll=False
     )
-    p.processAll(cache=os.path.join(d, 'headers', 'WinDefs.cache'), noCacheWarning=True)
+    p.processAll(cache=os.path.join(d, 'headers', 'WinDefs.cache'), noCacheWarning=True, verbose=verbose)
     return p
 
 
@@ -61,9 +54,9 @@ class CParser():
             print s
     """
     
-    cacheVersion = 2    ## increment every time cache structure or parsing changes to invalidate old cache files.
+    cacheVersion = 3    ## increment every time cache structure or parsing changes to invalidate old cache files.
     
-    def __init__(self, files=None, replace=None, copyFrom=None, **args):
+    def __init__(self, files=None, replace=None, copyFrom=None, processAll=True, cache=None, verbose=False, **args):
         """Create a C parser object fiven a file or list of files. Files are read to memory and operated
         on from there.
             'copyFrom' may be another CParser object from which definitions should be copied.
@@ -92,9 +85,9 @@ class CParser():
         if hasPyParsing:
             self.macroExpr = Forward()
             self.fnMacroExpr = Forward()
-            self.definedType = Forward()
+            #self.definedType = Forward()
             #self.definedStruct = Forward()
-            self.definedEnum = Forward()
+            #self.definedEnum = Forward()
         
         
         self.files = {}
@@ -126,6 +119,9 @@ class CParser():
                 copyFrom = [copyFrom]
             for p in copyFrom:
                 self.importDict(p.fileDefs)
+                
+        if processAll:
+            self.processAll(cache=cache, verbose=verbose)
     
     def processAll(self, cache=None, returnUnparsed=False, printAfterPreprocess=False, noCacheWarning=False, verbose=False):
         """Remove comments, preprocess, and parse declarations from all files. (operates in memory; does not alter the original files)
@@ -323,7 +319,7 @@ class CParser():
         If returnUnparsed is True, return a string of all lines that failed to match (for debugging)."""
         self.assertPyparsing()
         self.currentFile = file
-        self.definedType << kwl(self.defs['types'].keys())
+        #self.definedType << kwl(self.defs['types'].keys())
     
         parser = self.buildParser()
         if returnUnparsed:
@@ -333,18 +329,22 @@ class CParser():
             return [x[0] for x in parser.scanString(self.files[file])]
 
     def buildParser(self):
+        """Builds the entire tree of parser elements for the C language (the bits we support, anyway).
+        """
+        
+        
         self.assertPyparsing()
         
         
         self.structType = Forward()
-        enumType = Forward()
+        self.enumType = Forward()
         self.typeSpec = (typeQualifier + (
             fundType | 
-            Optional(kwl(sizeModifiers + signModifiers)) + self.definedType | 
+            Optional(kwl(sizeModifiers + signModifiers)) + ident | 
             self.structType | 
-            enumType
+            self.enumType
         ) + typeQualifier + msModifier).setParseAction(recombine)
-        self.argList = Forward()
+        #self.argList = Forward()
         
         ### Abstract declarators for use in function pointer arguments
         #   Thus begins the extremely hairy business of parsing C declarators. 
@@ -371,11 +371,11 @@ class CParser():
         )
         
         ## Argument list may consist of declarators or abstract declarators
-        self.argList << delimitedList(Group(
-            self.typeSpec('type') + 
-            (self.declarator('decl') | self.abstractDeclarator('decl')) + 
-            Optional(Keyword('=')) + expression
-        ))
+        #self.argList << delimitedList(Group(
+            #self.typeSpec('type') + 
+            #(self.declarator('decl') | self.abstractDeclarator('decl')) + 
+            #Optional(Keyword('=')) + expression
+        #))
 
         ## declarators look like:
         #     varName
@@ -391,8 +391,6 @@ class CParser():
             Group(ZeroOrMore(lbrack + Optional(number, default='-1') + rbrack))('arrays')
         )
         self.declaratorList = Group(delimitedList(self.declarator))
-        
-        
 
         ## typedef
         self.typeDecl = Keyword('typedef') + self.typeSpec('type') + self.declaratorList('declList') + semi
@@ -405,35 +403,38 @@ class CParser():
         
         ## Struct definition
         self.structDecl = Forward()
-        self.updateStructDefn()
+        structKW = (Keyword('struct') | Keyword('union'))
+        self.structType << structKW('structType') + (Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace | ident('name'))
+        self.structType.setParseAction(self.processStruct)
+        #self.updateStructDefn()
         
         self.structDecl = self.structType + semi
 
         ## enum definition
         enumVarDecl = Group(ident('name')  + Optional(Literal('=').suppress() + integer('value')))
         
-        enumType << Keyword('enum') + (self.definedEnum('name') | Optional(ident)('name') + lbrace + Group(delimitedList(enumVarDecl))('members') + rbrace)
-        enumType.setParseAction(self.processEnum)
+        self.enumType << Keyword('enum') + (Optional(ident)('name') + lbrace + Group(delimitedList(enumVarDecl))('members') + rbrace | ident('name'))
+        self.enumType.setParseAction(self.processEnum)
         
-        enumDecl = enumType + semi
+        self.enumDecl = self.enumType + semi
 
         ## function definition
         #self.paramDecl = Group(self.typeSpec + (self.declarator | self.abstractDeclarator)) + Optional(Literal('=').suppress() + expression('value'))
-        functionDecl = self.typeSpec('type') + self.declarator('decl') + nestedExpr('{', '}').suppress()
-        functionDecl.setParseAction(self.processFunction)
+        self.functionDecl = self.typeSpec('type') + self.declarator('decl') + nestedExpr('{', '}').suppress()
+        self.functionDecl.setParseAction(self.processFunction)
         
-        return (self.typeDecl | self.variableDecl | self.structDecl | enumDecl | functionDecl)
+        return (self.typeDecl | self.variableDecl | self.structDecl | self.enumDecl | self.functionDecl)
     
-    def updateStructDefn(self):
-        structKW = (Keyword('struct') | Keyword('union'))
+    #def updateStructDefn(self):
+        #structKW = (Keyword('struct') | Keyword('union'))
         
-        ## We could search only for previously defined struct names, 
-        ## but then we would miss incomplete type declarations.
-        #self.definedStruct << kwl(self.defs['structs'].keys())
-        #self.structType << structKW + (self.definedStruct('name') | Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace)
+        ### We could search only for previously defined struct names, 
+        ### but then we would miss incomplete type declarations.
+        ##self.definedStruct << kwl(self.defs['structs'].keys())
+        ##self.structType << structKW + (self.definedStruct('name') | Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace)
         
-        self.structType << structKW('structType') + (Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace | ident('name'))
-        self.structType.setParseAction(self.processStruct)
+        #self.structType << structKW('structType') + (Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace | ident('name'))
+        #self.structType.setParseAction(self.processStruct)
     
     def processDeclarator(self, decl):
         """Process a declarator (without base type) and return a tuple (name, [modifiers])
@@ -618,7 +619,7 @@ class CParser():
                             print "      ", name, decl, val
                 self.addDef(strTyp+'s', sname, struct)
                 self.addDef('types', strTyp+' '+sname, (strTyp, sname))
-                self.updateStructDefn()
+                #self.updateStructDefn()
             return (strTyp+' '+sname)
         except:
             #print t
@@ -654,7 +655,7 @@ class CParser():
             if self.verbose:
                 print "  ", name, decl
             self.addDef('types', name, decl)
-            self.definedType << MatchFirst( map(Keyword,self.defs['types'].keys()) )
+            #self.definedType << MatchFirst( map(Keyword,self.defs['types'].keys()) )
         
     def evalExpr(self, toks):
         ## Evaluates expressions. Currently only works for expressions that also 
@@ -725,14 +726,16 @@ class CParser():
 
     def evalType(self, typ):
         """evaluate a named type into its fundamental type"""
-        used = [typ]
+        used = []
         while True:
             if self.isFundType(typ):
                 return typ
             parent = typ[0]
             if parent in used:
-                raise Exception('Recursive loop while tracing types.')
+                raise Exception('Recursive loop while evaluating types. (typedefs are %s)' % (' -> '.join(used+[parent])))
             used.append(parent)
+            if not parent in self.defs['types']:
+                raise Exception('Unknown type "%s" (typedefs are %s)' % (parent, ' -> '.join(used)))
             pt = self.defs['types'][parent]
             typ = pt + typ[1:]
 

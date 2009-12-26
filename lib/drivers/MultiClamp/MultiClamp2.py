@@ -12,12 +12,12 @@ windowsDefs = winDefs()
 
 ## Load axon headers + windows definitions 
 d = os.path.dirname(__file__)
-axonDefs = CParser([os.path.join(d, 'AxMultiClampMsg.h'), os.path.join(d, 'MCTelegraphs.hpp')], copyFrom=windowsDefs)
-
-## Parse definitions from headers. Takes a long time the first time,
-## uses cached values after that.
-axonDefs.processAll(cache=os.path.join(d, 'AxonHeaders.cache'), verbose=True)
-
+axonDefs = CParser(
+    [os.path.join(d, 'AxMultiClampMsg.h'), os.path.join(d, 'MCTelegraphs.hpp')], 
+    copyFrom=windowsDefs,
+    cache=os.path.join(d, 'AxonHeaders.cache'),
+    verbose=True
+)
 
 ##  Windows Messaging API 
 #   provides dll.RegisterWindowMessageA, dll.PostMessageA, dll.PeekMessageA, dll.GetMessageA
