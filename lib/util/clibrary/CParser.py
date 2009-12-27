@@ -54,7 +54,7 @@ class CParser():
             print s
     """
     
-    cacheVersion = 3    ## increment every time cache structure or parsing changes to invalidate old cache files.
+    cacheVersion = 4    ## increment every time cache structure or parsing changes to invalidate old cache files.
     
     def __init__(self, files=None, replace=None, copyFrom=None, processAll=True, cache=None, verbose=False, **args):
         """Create a C parser object fiven a file or list of files. Files are read to memory and operated
@@ -74,8 +74,8 @@ class CParser():
         self.fileDefs = {}  ## holds definitions grouped by the file they came from
         
         self.initOpts = args.copy()
-        self.initOpts['files'] = map(os.path.basename, files) # only interested in the file names; the directory may change between systems.
-        self.initOpts['replace'] = replace
+        self.initOpts['files'] = []
+        self.initOpts['replace'] = {}
         
         self.dataList = ['types', 'variables', 'fnmacros', 'macros', 'structs', 'unions', 'enums', 'functions', 'values']
             
@@ -90,13 +90,13 @@ class CParser():
             #self.definedEnum = Forward()
         
         
+        self.fileOrder = []
         self.files = {}
         if files is not None:
             if type(files) is str:
                 files = [files]
-            self.fileOrder = files
             for f in files:
-                self.loadFile(f)
+                self.loadFile(f, replace)
                     
         ## initialize empty definition lists
         for k in self.dataList:
@@ -242,7 +242,7 @@ class CParser():
         import pickle
         pickle.dump(cache, open(cacheFile, 'w'))
 
-    def loadFile(self, file):
+    def loadFile(self, file, replace=None):
         """Read a file, make replacements if requested. Called by __init__, should
         not be called manually."""
         if not os.path.isfile(file):
@@ -256,10 +256,12 @@ class CParser():
         self.files[file] = fd.read()
         fd.close()
         
-        replace = self.initOpts['replace']
         if replace is not None:
             for s in replace:
                 self.files[file] = re.sub(s, replace[s], self.files[file])
+        self.fileOrder.append(file)
+        self.initOpts['replace'][file] = replace
+        self.initOpts['files'].append(os.path.basename(file)) # only interested in the file names; the directory may change between systems.
         return True
     
 

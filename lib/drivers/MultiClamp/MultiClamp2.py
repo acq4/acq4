@@ -10,21 +10,29 @@ __all__ = ['MultiClamp']
 ## Load windows definitions
 windowsDefs = winDefs()
 
-## Load axon headers + windows definitions 
+# Load AxMultiClampMsg header, remove MCCMSG_ prefix while loading 
 d = os.path.dirname(__file__)
 axonDefs = CParser(
-    [os.path.join(d, 'AxMultiClampMsg.h'), os.path.join(d, 'MCTelegraphs.hpp')], 
+    os.path.join(d, 'AxMultiClampMsg.h'), 
+    replace={'MCCMSG_': ''},
     copyFrom=windowsDefs,
-    cache=os.path.join(d, 'AxonHeaders.cache'),
-    verbose=True
+    cache=os.path.join(d, 'AxMultiClampMsg.h.cache')
 )
 
-##  Windows Messaging API 
-#   provides dll.RegisterWindowMessageA, dll.PostMessageA, dll.PeekMessageA, dll.GetMessageA
-#   See: http://msdn.microsoft.com/en-us/library/dd458658(VS.85).aspx
-wmlib = CLibrary(windll.User32, windowsDefs)
+# Load telegraph definitions, remove MCTG_ prefix
+teleDefs = CParser(
+    os.path.join(d, 'MCTelegraphs.hpp'),
+    copyFrom=windowsDefs,
+    replace={'MCTG_': ''},
+    cache=os.path.join(d, 'MCTelegraphs.hpp.cache')
+) 
 
-## Axon API (That's right, we have to use two different APIs to access one device.)
+##  Windows Messaging API 
+#   provides RegisterWindowMessageA, PostMessageA, PeekMessageA, GetMessageA
+#   See: http://msdn.microsoft.com/en-us/library/dd458658(VS.85).aspx
+wmlib = CLibrary(windll.User32, teleDefs)
+
+## Axon API (That's right, we have to use two different APIs to access one device. Cool, huh?)
 axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axonDefs)
 
 ## Get window handle. Should be a long integer; may change in future windows versions.
