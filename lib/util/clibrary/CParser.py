@@ -54,7 +54,7 @@ class CParser():
             print s
     """
     
-    cacheVersion = 4    ## increment every time cache structure or parsing changes to invalidate old cache files.
+    cacheVersion = 6    ## increment every time cache structure or parsing changes to invalidate old cache files.
     
     def __init__(self, files=None, replace=None, copyFrom=None, processAll=True, cache=None, verbose=False, **args):
         """Create a C parser object fiven a file or list of files. Files are read to memory and operated
@@ -368,7 +368,11 @@ class CParser():
         self.abstractDeclarator << Group(
             Group(ZeroOrMore('*' + typeQualifier))('ptrs') + 
             ((Optional('&')('ref')) | (lparen + self.abstractDeclarator + rparen)('center')) + 
-            Optional(lparen + Optional(delimitedList(Group(self.typeSpec('type') + self.abstractDeclarator('decl'))), default=None) + rparen)('args') + 
+            Optional(lparen + Optional(delimitedList(Group(
+                self.typeSpec('type') + 
+                self.abstractDeclarator('decl') + 
+                Optional(Literal('=').suppress() + expression, default=None)('val')
+            )), default=None) + rparen)('args') + 
             Group(ZeroOrMore(lbrack + Optional(number, default='-1') + rbrack))('arrays')
         )
         
@@ -389,7 +393,11 @@ class CParser():
         self.declarator << Group(
             Group(ZeroOrMore('*' + typeQualifier))('ptrs') + 
             ((Optional('&')('ref') + ident('name')) | (lparen + self.declarator + rparen)('center')) + 
-            Optional(lparen + Optional(delimitedList(Group(self.typeSpec('type') + (self.declarator | self.abstractDeclarator)('decl'))), default=None) + rparen)('args') + 
+            Optional(lparen + Optional(delimitedList(Group(
+                self.typeSpec('type') + 
+                (self.declarator | self.abstractDeclarator)('decl') + 
+                Optional(Literal('=').suppress() + expression, default=None)('val')
+            )), default=None) + rparen)('args') + 
             Group(ZeroOrMore(lbrack + Optional(number, default='-1') + rbrack))('arrays')
         )
         self.declaratorList = Group(delimitedList(self.declarator))
@@ -453,7 +461,7 @@ class CParser():
             if decl['args'][0] is None:
                 toks.append(())
             else:
-                toks.append(tuple([self.processType(a['type'], a['decl']) for a in decl['args']]))
+                toks.append(tuple([self.processType(a['type'], a['decl']) + (a['val'][0],) for a in decl['args']]))
         if 'ref' in decl:
             toks.append('&')
         if 'center' in decl:
@@ -760,7 +768,7 @@ if hasPyParsing:
     sizeModifiers = ['short', 'long']
     signModifiers = ['signed', 'unsigned']
     qualifiers = ['const', 'static', 'volatile', 'inline', 'restrict', 'near', 'far']
-    msModifiers = ['__based', '__declspec', '__stdcall', '__cdecl', '__fastcall', '__restrict', '__sptr', '__uptr', '__w64', '__unaligned']
+    msModifiers = ['__based', '__declspec', '__stdcall', '__cdecl', '__fastcall', '__restrict', '__sptr', '__uptr', '__w64', '__unaligned', '_far', '_pascal']
     keywords = ['struct', 'enum', 'union'] + qualifiers + baseTypes + sizeModifiers + signModifiers
 
     def kwl(strs):
