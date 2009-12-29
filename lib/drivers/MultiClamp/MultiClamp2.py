@@ -2,6 +2,7 @@
 from ctypes import *
 import struct, os
 from lib.util.clibrary import *
+import weakref
 #from lib.util.CLibrary import *
 #from PyQt4 import QtCore, QtGui
 
@@ -14,7 +15,6 @@ windowsDefs = winDefs()
 d = os.path.dirname(__file__)
 axonDefs = CParser(
     os.path.join(d, 'AxMultiClampMsg.h'), 
-    #replace={'MCCMSG_': ''},
     copyFrom=windowsDefs,
     cache=os.path.join(d, 'AxMultiClampMsg.h.cache'),
     #verbose=True
@@ -24,7 +24,6 @@ axonDefs = CParser(
 teleDefs = CParser(
     os.path.join(d, 'MCTelegraphs.hpp'),
     copyFrom=windowsDefs,
-    #replace={'MCTG_': ''},
     cache=os.path.join(d, 'MCTelegraphs.hpp.cache')
 ) 
 
@@ -39,7 +38,7 @@ axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axo
 ## Get window handle. Should be a long integer; may change in future windows versions.
 #hWnd = struct.unpack('l', QtGui.QApplication.activeWindow().winId().asstring(4))
 
-## register messages
+## regiter messages
 
 #messages = [
     #'MCTG_OPEN_MESSAGE_STR',
@@ -88,18 +87,39 @@ axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axo
 
 
 
-
-
 class MultiClampChannel:
     """Class used to run MultiClamp commander functions for a specific channel.
-    Uses most of the same functions as MultiClamp, but does not require the channel argument."""
-    pass
+    Uses most of the same functions as MultiClamp, but does not require the channel argument.
+    Instances of this class are created via MultiClamp.getChannel"""
+    def __init__(self, mc, chan):
+        self.mc = mc
+        self.chan = chan
+        
+        ## Proxy functions back to MC object with channel argument automatically supplied
+        for fn in ['getParam', 'setParam', 'getParams', 'setParams', 'getMode', 'setMode', 'setPrimarySignalByName', 'setSecondarySignalByName', 'setSignalByName', 'getPrimarySignalInfo', 'getSecondarySignalInfo', 'getSignalInfo', 'listSignals']:
+            setattr(self, fn, lambda *a, **k: self.proxy(fn, *a, **k))
 
-
+    def proxy(self, fn, *args, **kwargs):
+        if self.chan is None:
+            raise Exception("MultiClamp channel does not exist in system!")
+        return getattr(self.mc, fn)(self.chan, *args, **kwargs)
+        
+    def setChan(self, ch):
+        self.chan = ch
+        
+        
 
 class MultiClamp:
     """Class used to interface with remote multiclamp server.
-    Only one instance of this class should be created."""
+    Only one instance of this class should be created.
+    
+    Example usage:
+        mc = MultiClamp.INSTANCE
+        devs = mc.listDevices()
+        chan0 = mc.getChannel(devs[0])
+        chan0.setMode('ic')
+        signal, gain, units = chan0.getSignalInfo()
+    """
     INSTANCE = None
     
     def __init__(self):
@@ -107,8 +127,8 @@ class MultiClamp:
             raise Exception("Already created MultiClamp driver object; use MultiClamp.INSTANCE")
         self.handle = None
         
+        self.chanHandles = weakref.WeakValueDictionary()  
         self.connect()
-        #self.findDevices()
         MultiClamp.INSTANCE = self
     
     def __del__(self):
@@ -121,6 +141,19 @@ class MultiClamp:
 
     ### High-level driver calls
     
+    def getChannel(self, channel):
+        """Return a MultiClampChannel object for the specified device/channel. The
+        argument should be the same as a single item from listDevices()"""
+        try:
+            chInd = self.devices.index(channel)
+        except ValueError:
+            raise Exception("Device not found with description '%s'. Options are: '%s'" % (str(channel), str(self.devices)))
+            
+        h = MultiClampChannel(self, chInd)
+        self.chanHandles[channel] = h
+        return h
+        
+        
     
     def getParam(self, chan, param):
         self.selectDev(chan)
@@ -274,22 +307,35 @@ class MultiClamp:
         #print "%s gain = %f * %f = %f" % (outputChan, float(gain), float(xGain[0]), gain2)
         return (name, gain2, units)
 
-
-    def stateDiff(self, state):
-        """Compare the state of the multiclamp to the expected state (s1), return the keys that differ."""
-        m = []
-        for k in state.keys():
-            v = state[k]
-            if type(v) == bool:
-                if (v and s2[k][0] != 'true') or (not v and s2[k][0] != 'false'):
-                    m.append(k)
-            elif type(v) == int:
-                if v != int(s2[k][0]):
-                    m.append(k)
-            elif type(v) == float:
-                if v - float(s2[k][0]) > 1e-30:
-                    m.append(k)
-        return m
+    
+    def listSignals(self, chan, primary, mode=None):
+        """Return the list of signal names that may be used for this channel. 'primary' must
+        be 0 for the primary channel and 1 for secondary (scaled and raw for 700A).
+        If mode is omitted, then the current mode of the channel is used."""
+        
+        if mode is None:
+            mode = self.getMode(chan)
+        pri = ['PRI', 'SEC'][primary]
+        model = self.devices[chan]['model']
+        sigmap = SIGNAL_MAP[model][mode][pri]
+        return [sigmap[k][0] for k in sigmap]
+        
+    
+    #def stateDiff(self, state):
+        #"""Compare the state of the multiclamp to the expected state (s1), return the keys that differ."""
+        #m = []
+        #for k in state.keys():
+            #v = state[k]
+            #if type(v) == bool:
+                #if (v and s2[k][0] != 'true') or (not v and s2[k][0] != 'false'):
+                    #m.append(k)
+            #elif type(v) == int:
+                #if v != int(s2[k][0]):
+                    #m.append(k)
+            #elif type(v) == float:
+                #if v - float(s2[k][0]) > 1e-30:
+                    #m.append(k)
+        #return m
     
 
 
@@ -335,6 +381,12 @@ class MultiClamp:
                 break
             else:
                 self.devices.append(dev)
+        for h in self.chanHandles:
+            try:
+                ind = self.devices.index(h)
+            except ValueError:
+                ind = None
+            self.chanHandles[h].setChan(ind)
 
     def selectDev(self, devID):
         if devID >= len(self.devices):
