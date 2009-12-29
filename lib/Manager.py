@@ -381,7 +381,10 @@ Valid options are:
             while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
                 m = self.modules.keys()[0]
                 print "    %s" % m
-                self.modules[m].quit()
+                try:
+                    self.modules[m].quit()
+                except:
+                    printExc("Error while requesting module '%s' quit." % m)
                 if m in self.modules:
                     del self.modules[m]
             #pdb.set_trace()
@@ -389,7 +392,10 @@ Valid options are:
             print "Requesting all devices shut down.."
             for d in self.devices:
                 print "    %s" % d
-                self.devices[d].quit()
+                try:
+                    self.devices[d].quit()
+                except:
+                    printExc("Error while requesting device '%s' quit." % d)
                 #print "  done."
                 
             print "Closing windows.."

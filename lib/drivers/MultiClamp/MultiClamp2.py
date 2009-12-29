@@ -21,16 +21,16 @@ axonDefs = CParser(
 )
 
 # Load telegraph definitions
-teleDefs = CParser(
-    os.path.join(d, 'MCTelegraphs.hpp'),
-    copyFrom=windowsDefs,
-    cache=os.path.join(d, 'MCTelegraphs.hpp.cache')
-) 
+#teleDefs = CParser(
+    #os.path.join(d, 'MCTelegraphs.hpp'),
+    #copyFrom=windowsDefs,
+    #cache=os.path.join(d, 'MCTelegraphs.hpp.cache')
+#) 
 
 ##  Windows Messaging API 
 #   provides RegisterWindowMessageA, PostMessageA, PeekMessageA, GetMessageA
 #   See: http://msdn.microsoft.com/en-us/library/dd458658(VS.85).aspx
-wmlib = CLibrary(windll.User32, teleDefs, prefix='MCTG_')
+#wmlib = CLibrary(windll.User32, teleDefs, prefix='MCTG_')
 
 ## Axon API (That's right, we have to use two different APIs to access one device. Cool, huh?)
 axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axonDefs, prefix='MCCMSG_')
@@ -97,7 +97,10 @@ class MultiClampChannel:
         
         ## Proxy functions back to MC object with channel argument automatically supplied
         for fn in ['getParam', 'setParam', 'getParams', 'setParams', 'getMode', 'setMode', 'setPrimarySignalByName', 'setSecondarySignalByName', 'setSignalByName', 'getPrimarySignalInfo', 'getSecondarySignalInfo', 'getSignalInfo', 'listSignals']:
-            setattr(self, fn, lambda *a, **k: self.proxy(fn, *a, **k))
+            self.mkProxy(fn)
+
+    def mkProxy(self, fn):
+        setattr(self, fn, lambda *a, **k: self.proxy(fn, *a, **k))
 
     def proxy(self, fn, *args, **kwargs):
         if self.chan is None:
@@ -114,10 +117,10 @@ class MultiClamp:
     Only one instance of this class should be created.
     
     Example usage:
-        mc = MultiClamp.INSTANCE
+        mc = MultiClamp.instance()
         devs = mc.listDevices()
         chan0 = mc.getChannel(devs[0])
-        chan0.setMode('ic')
+        chan0.setMode('IC')
         signal, gain, units = chan0.getSignalInfo()
     """
     INSTANCE = None
@@ -136,6 +139,9 @@ class MultiClamp:
         self.disconnect()
         MultiClamp.INSTANCE = None
     
+    @staticmethod
+    def instance():
+        return MultiClamp.INSTANCE
     
         
 
@@ -144,16 +150,13 @@ class MultiClamp:
     def getChannel(self, channel):
         """Return a MultiClampChannel object for the specified device/channel. The
         argument should be the same as a single item from listDevices()"""
-        try:
-            chInd = self.devices.index(channel)
-        except ValueError:
-            raise Exception("Device not found with description '%s'. Options are: '%s'" % (str(channel), str(self.devices)))
+        chInd = self.channelIndex(channel)
             
         h = MultiClampChannel(self, chInd)
         self.chanHandles[channel] = h
         return h
         
-        
+    
     
     def getParam(self, chan, param):
         self.selectDev(chan)
@@ -308,18 +311,27 @@ class MultiClamp:
         return (name, gain2, units)
 
     
-    def listSignals(self, chan, primary, mode=None):
-        """Return the list of signal names that may be used for this channel. 'primary' must
-        be 0 for the primary channel and 1 for secondary (scaled and raw for 700A).
+    def listSignals(self, chan, mode=None):
+        """Return two lists of signal names that may be used for this channel:
+           ( [primary signals], [secondary signals] )
         If mode is omitted, then the current mode of the channel is used."""
         
         if mode is None:
             mode = self.getMode(chan)
-        pri = ['PRI', 'SEC'][primary]
+        if mode == 'I=0':
+            mode = 'IC'
         model = self.devices[chan]['model']
-        sigmap = SIGNAL_MAP[model][mode][pri]
-        return [sigmap[k][0] for k in sigmap]
+        sigmap = SIGNAL_MAP[model][mode]
+        pri = [v[0] for v in sigmap['PRI'].values()]
+        sec = [v[0] for v in sigmap['SEC'].values()]
+        return (pri, sec)
         
+    def channelIndex(self, channel):
+        devs = self.listDevices()
+        try:
+            return devs.index(channel)
+        except ValueError:
+            raise Exception("Device not found with description '%s'. Options are: '%s'" % (str(channel), str(devs)))
     
     #def stateDiff(self, state):
         #"""Compare the state of the multiclamp to the expected state (s1), return the keys that differ."""
@@ -342,6 +354,7 @@ class MultiClamp:
 
     ################   Begin Low-level driver calls    ###########################
     
+    
     def connect(self):
         """(re)create connection to commander."""
         if self.handle is not None:
@@ -357,7 +370,8 @@ class MultiClamp:
         if self.handle is not None:
             axlib.DestroyObject(self.handle)
             self.handle = None
-    
+
+
     def findMultiClamp(self):
         if len(self.devices) == 0:
             fn = 'FindFirstMultiClamp'
@@ -383,8 +397,8 @@ class MultiClamp:
                 self.devices.append(dev)
         for h in self.chanHandles:
             try:
-                ind = self.devices.index(h)
-            except ValueError:
+                ind = self.channelIndex(h)
+            except:
                 ind = None
             self.chanHandles[h].setChan(ind)
 
@@ -416,180 +430,9 @@ class MultiClamp:
             sys.excepthook(*sys.exc_info())
             return "<could not generate error message>"
 
-class _MULTICLAMP:
-    MC_CREATED = False
-    
-    #def __init__(self):
-        #if _MULTICLAMP.MC_CREATED:
-            #raise Exception("Will not create another object instance--use the pre-existing MULTICLAMP object.")
-        #self.mc = windll.AxMultiClampMsg
-        ##_MULTICLAMP.MC_CREATED = True
-        
-        #errCode = c_int(0)
-        #self.handle = self._call('MCCMSG_CreateObject', byref(errCode))
-        #if self.handle == 0:
-            #raise Exception("Error %d creating MC object", errCode.value)
-        #self.findDevices()
-    
-    #def __del__(self):
-        #self.__class__.MC_CREATED = False
-
-    def __getattr__(self, attr):
-        """Easy function-calling convention."""
-        attr = attr[0].upper() + attr[1:]
-        if attr[0] != "_" and hasattr(self.mc, 'MCCMSG_' + attr):
-            return lambda *args: self.call(attr, *args)
-        else:
-            raise Exception("No name '%s' found" % attr)
-
-    def call(self, fn, devID, arg=None):
-        """Run a function from the DLL. """
-        func = "MCCMSG_" + fn
-        fsig = FUNCTIONS[func]
-        #print fn, devID, arg
-        self.selectDev(devID)
-        unmap = False
-        unref = False
-        unbool = False
-        
-        if len(fsig[2]) < 3:
-            arg = []
-        else:
-            if f[:3].lower() == 'get':
-                if arg is not None:
-                    raise Exception("Too many arguments to function %s" % f)
-                unref = True
-                if fsig[2][1][0] == 'double':
-                    ref = c_double(0)
-                    arg = byref(ref)
-                elif fsig[2][1][0] == 'BOOL':
-                    ref = c_int(0)
-                    arg = byref(ref)
-                    unbool = True
-                elif fsig[2][1][0] == 'UINT':
-                    ref = c_uint(0)
-                    arg = byref(ref)
-                    unmap = True
-            else:
-                if arg is None:
-                    raise Exception("Missing argument %s for function %s" % (fsig[2][1][2], f))
-                if fsig[2][1][0] == 'double':
-                    arg = c_double(arg)
-                elif fsig[2][1][0] == 'BOOL':
-                    if arg:
-                        print "Interpreting parameter as c_int(1)"
-                        arg = c_int(1)
-                    else:
-                        print "Interpreting parameter as c_int(0)"
-                        arg = c_int(0)
-                elif fsig[2][1][0] == 'UINT':
-                    arg = c_uint(self.nameToInt(arg, f))
-        
-        errCode = c_int(0)
-        args = (self.handle, arg, byref(errCode))
-        
-        #if len(args) != len(fsig[2]):
-            #raise Exception("Function %s takes %d args, %d given" % (f, len(fsig[2])-2, len(args)-2))
-        
-        ret = self._call(func, *args)
-        #print "Call %s%s returned %s" % (func, str(args), str(ret))
-        if ret == 0:
-            raise Exception(errCode.value, self.error(errCode))
-            
-        ## Rediculous workaround--700A likes to claim it's secondary signal gain is 0
-        if func == 'MCCMSG_GetSecondarySignalGain' and self.devices[devID]['model'] == HW_TYPE_MC700A:
-            return 1
-            
-        if unref:
-            if unmap:
-                return self.intToName(ref.value, f)
-            elif unbool:
-                return ref.value == 1
-            else:
-                return ref.value
-        else:
-            return None
-        
-    #def _call(self, func, *args):
-        #try:
-            #return getattr(self.mc, func)(*args)
-        #except:
-            #print func, args
-            #raise
-        
-    #def error(self, errCode):
-        #buf = create_string_buffer('\0' * 256)
-        #try:
-            #self._call('MCCMSG_BuildErrorText', self.handle, errCode, buf, c_int(256))
-            #return str(buf.value)
-        #except:
-            #raise
-            ##raise Exception("Error getting error message :(")
-
-
-        
-    #def selectDev(self, devID):
-        #if devID >= len(self.devices):
-            #raise Exception("Device %d does not exist" % devID)
-        #d = self.devices[devID]
-        #erNum = c_uint(0)
-        #ret = self._call('MCCMSG_SelectMultiClamp', self.handle, c_uint(d['model']), c_char_p(d['serial']), c_uint(d['port']), c_uint(d['device']), c_uint(d['channel']), byref(erNum))
-        #if ret == 0:
-            #raise Exception(erNum.value, self.error(erNum))
-        
-    def nameToInt(self, name, fn):
-        return NAME_MAPS[fn][name]
-        
-    def intToName(self, num, fn):
-        return INV_NAME_MAPS[fn][num]
-        
-    #def getNumDevices(self, *args):
-        #if len(args) > 0:
-            #raise Exception("getNumDevices takes no arguments")
-        #return len(self.devices)
-    
-    #def getDeviceInfo(self, devID):
-        #if devID >= len(self.devices):
-            #raise Exception("Device %d does not exist" % devID)
-        #models = {
-            #HW_TYPE_MC700A: 'MC700A',
-            #HW_TYPE_MC700B: 'MC700B'
-        #}
-        #d = self.devices[devID]
-        #if models.has_key(d['model']):
-            #model = models[d['model']]
-        #else:
-            #model = 'UNKNOWN'
-            
-        #return [model, d['serial'], d['port'], d['device'], d['channel']]
-        
-    #def getSignalInfo(self, devID, primary):
-        #self.selectDev(devID)
-        #model = self.devices[devID]['model']
-        
-        #priMap = ['PRI', 'SEC']
-        
-        #if primary == 0:
-            #sig = self.getPrimarySignal(devID)
-        #elif primary == 1:
-            #sig = self.getSecondarySignal(devID)
-        
-        #mode = self.getMode(devID)
-        #if mode == 'I=0':
-            #mode = 'IC'
-            
-        ##print devID, model, mode, primary, sig
-        #info = SIGNAL_MAP[model][mode][priMap[primary]][sig]
-        #return list(info)
-        
-    
-    
-
-
 
 ### Create instance of driver class
 MultiClamp()
-#init()
 
 ## Crapton of stuff to remember that is not provided by header files
 
@@ -602,9 +445,9 @@ MODELS = {
 }
 
 MODE_LIST = {
-    "vc": axlib.MODE_VCLAMP,
-    "ic": axlib.MODE_ICLAMP,
-    "i=0": axlib.MODE_ICLAMPZERO,
+    "VC": axlib.MODE_VCLAMP,
+    "IC": axlib.MODE_ICLAMP,
+    "I=0": axlib.MODE_ICLAMPZERO,
 }
 MODE_LIST_INV = invertDict(MODE_LIST) 
 
@@ -641,7 +484,7 @@ INV_NAME_MAPS = {
 
 SIGNAL_MAP = {
     axlib.HW_TYPE_MC700A: {
-        'vc': {
+        'VC': {
             'PRI': {
                 "VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
                 "VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
@@ -657,7 +500,7 @@ SIGNAL_MAP = {
                 "VC_AUXILIARY1": ("BathPotential", 1., 'V')
             }
         },
-        'ic': {
+        'IC': {
             'PRI': {   ## Driver bug? Primary IC signals use VC values. Bah.
                 "VC_PIPPOTENTIAL": ("MembranePotential", 1.0, 'V'),
                 "VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
@@ -676,7 +519,7 @@ SIGNAL_MAP = {
     },
         
     axlib.HW_TYPE_MC700B: {
-        'vc': {
+        'VC': {
             'PRI': {
                 "VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
                 "VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
@@ -696,7 +539,7 @@ SIGNAL_MAP = {
                 "VC_AUXILIARY2": ("Auxiliary2", 1., 'V')
             }
         },
-        'ic': {
+        'IC': {
             'PRI': {
                 "IC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
                 "IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
