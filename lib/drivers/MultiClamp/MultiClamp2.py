@@ -121,7 +121,38 @@ class MultiClamp:
 
     ### High-level driver calls
     
-    def readParams(self, chan, params):
+    
+    def getParam(self, chan, param):
+        self.selectDev(chan)
+        fn = 'Get' + param
+        v = self.call(fn)[1]
+        
+        ## perform return value mapping for a few specific functions
+        if fn in INV_NAME_MAPS:
+            if v not in INV_NAME_MAPS[fn]:
+                raise Exception("Return from %s was %s; expected one of %s." % (fn, v, INV_NAME_MAPS[fn].keys()))
+            v = INV_NAME_MAPS[fn][v]
+            
+        ## Silly workaround--MC700A likes to tell us that secondary signal gain is 0
+        if fn == 'GetSecondarySignalGain' and self.devices[chan]['model'] == axlib.HW_TYPE_MC700A:
+            return 1.0
+            
+        return v
+        
+    def setParam(self, chan, param, value):
+        self.selectDev(chan)
+        fn = "Set" + param
+        
+        ## Perform value mapping for a few functions (SetMode, SetPrimarySignal, SetSecondarySignal)
+        if fn in NAME_MAPS:
+            if value not in NAME_MAPS[fn]:
+                raise Exception("Argument to %s must be one of %s" % (fn, NAME_MAPS[fn].keys()))
+            value = NAME_MAPS[fn][value]
+        
+        self.call(fn, value)
+
+
+    def getParams(self, chan, params):
         """Reads multiple parameters from multiclamp.
         
         Arguments:
@@ -132,8 +163,7 @@ class MultiClamp:
         """
         res = {}
         for p in params:
-            v = self.runFunction('get'+p, [chan])
-            res[p] = v
+            res[p] = self.getParam(chan, p)
         return res
 
     def setParams(self, chan, params):
@@ -147,14 +177,19 @@ class MultiClamp:
         for p in params:
             #print "Setting", p, params[p]
             try:
-                v = self.runFunction('set'+p, [chan, params[p]])
+                self.setParam(chan, p, params[p])
+                res[p] = True
             except:
                 printExc("Error while setting parameter %s=%s" % (p, str(params[p])))
-            finally:
-                res[p] = v
+                res[p] = False
         return res
         
+    def getMode(self, chan):
+        return self.getParam(chan, 'Mode')
         
+    def setMode(self, chan, mode):
+        return self.setParam(chan, 'Mode', mode)
+
     def listDevices(self):
         """Return a list of strings used to identify devices on a multiclamp.
         These strings should be used to identify the same device across invocations."""
@@ -171,73 +206,70 @@ class MultiClamp:
             devList.append(strDesc) 
         return devList
     
-    
-    def setMode(self, chan, mode):
-        """Set the mode of the multiclamp channel. Modes are 'ic', 'vc', and 'i=0'."""
-        self.selectDev(chan)
-        self.SetMode(mode)
-    
-    #def runFunction(self, func, args=(), maxResponse=1024):
-        #"""Run a function on a remote multiclamp server. 
+    def setSignalByName(self, chan, signal, primary):
+        """Set the signal of a MC primary/secondary channel by name. 
         
-        #Function names are defined by the server and args must be a [list] of arguments. 
-        #For most functions, the first argument will be a device ID number.
-        #Example:
-            #rtxi.runFunction('getPrimarySignalGain', [rtxi.getDeviceId(0)])
+        Use this function instead of setParam('PrimarySignal', ...). Bugs in the axon driver
+        prevent that call from working correctly."""
+        model = self.devices[chan]['model']
+        priMap = ['PRI', 'SEC']
+        
+        mode = self.getMode(chan)
+        if mode == 'I=0':
+            mode = 'IC'
             
-        #Always returns a list or raises exception if the server returned an error message.
-        
-        #Arguments:
-        #maxResponse -- Maximum response length allowed
-        #cache -- If true, skip 'set' commands and use cached values for 'get' commands (use with caution!)
-        #"""
-        
-        #strArgs = map(lambda x: str(x), args)
-        ##print "runFunction %s%s cache=%s" % (func, str(strArgs), str(cache))
-        
-        #cmd = "%s(%s)\n" % (func, ','.join(strArgs))
-        #s.send(cmd)
-        
-        #resp = s.recv(maxResponse)
-        #data = resp.rstrip('\0\n').split(',')
-        #if func[:3] == 'get' and len(data) == 1:
-            #raise Exception("get returned no data: %s = %s <%s>" % (cmd, resp, str(data)))
-        #if data[0] == '0':
-            #raise Exception('MultiClamp communication error: %s' % ', '.join(data[1:]))
-        #else:
-            ##print "runFunction", data[1:]
-            #return data[1:]
-                
-    def getSignalInfo(self, chan, outputChan='Primary'):
+        sig = None
+        sigMap = SIGNAL_MAP[model][mode][priMap[primary]]
+        for k in sigMap:
+            if sigMap[k][0] == signal:
+                sig = "SIGNAL_" + k
+        if sig is None:
+            raise Exception("Signal name '%s' not found" % signal)
+        if primary == 0:
+            self.setParam(chan, 'PrimarySignal', sig)
+        elif primary == 1:
+            self.setParam(chan, 'SecondarySignal', sig)
+
+    def getPrimarySignalInfo(self, chan):
+        return self.getSignalInfo(chan, 0)
+
+    def getSecondarySignalInfo(self, chan):
+        return self.getSignalInfo(chan, 1)
+
+    def setPrimarySignalByName(self, chan, signal):
+        return self.setSignalByName(chan, signal, 0)
+
+    def setSecondarySignalByName(self, chan, signal):
+        return self.setSignalByName(chan, signal, 1)
+    
+    def getSignalInfo(self, chan, primary=0):
         """Return a tuple (signalName, gain, units) for the current signal
         
         the outputChan argument defaults to 'Primary' and can be set to 'Secondary' instead.
         """
-    #def getSignalInfo(self, devID, primary):
         #self.selectDev(devID)
-        #model = self.devices[devID]['model']
+        model = self.devices[chan]['model']
         
-        #priMap = ['PRI', 'SEC']
+        priMap = ['PRI', 'SEC']
         
-        #if primary == 0:
-            #sig = self.getPrimarySignal(devID)
-        #elif primary == 1:
-            #sig = self.getSecondarySignal(devID)
+        if primary == 0:
+            outputChan = 'Primary'
+        elif primary == 1:
+            outputChan = 'Secondary'
+            
+        sig = self.getParam(chan, outputChan+'Signal')[7:]
         
-        #mode = self.getMode(devID)
-        #if mode == 'I=0':
-            #mode = 'IC'
+        mode = self.getMode(chan)
+        if mode == 'I=0':
+            mode = 'IC'
             
         ##print devID, model, mode, primary, sig
-        #info = SIGNAL_MAP[model][mode][priMap[primary]][sig]
-        #return list(info)
+        (name, gain, units) = SIGNAL_MAP[model][mode][priMap[primary]][sig]
         
-        
-        (name, gain, units) = self.runFunction('get%sSignalInfo' % outputChan, [chan])
-        xGain = float(self.runFunction('get%sSignalGain' % outputChan, [chan])[0])
-        ## Silly workaround-- MC700A likes to tell us that secondary signal gain is 0
-        if xGain < 1e-10:
-                xGain = 1.0
+        xGain = self.getParam(chan, outputChan + 'SignalGain')
+        ### Silly workaround-- MC700A likes to tell us that secondary signal gain is 0
+        #if xGain < 1e-10:
+                #xGain = 1.0
         gain2 = float(gain) * xGain
         #print "%s gain = %f * %f = %f" % (outputChan, float(gain), float(xGain[0]), gain2)
         return (name, gain2, units)
@@ -259,20 +291,6 @@ class MultiClamp:
                     m.append(k)
         return m
     
-    #def getNumDevices(self):
-        #return len(self.devices)
-    
-    #def getDeviceInfo(self, devID):
-        #if devID >= len(self.devices):
-            #raise Exception("Device %d does not exist" % devID)
-        #d = self.devices[devID]
-        #if MODELS.has_key(d['model']):
-            #model = MODELS[d['model']]
-        #else:
-            #model = 'UNKNOWN'
-            
-        #return [model, d['serial'], d['port'], d['device'], d['channel']]
-
 
 
 
@@ -322,32 +340,16 @@ class MultiClamp:
         if devID >= len(self.devices):
             raise Exception("Device %d does not exist" % devID)
         d = self.devices[devID]
-        self.SelectMultiClamp(pszSerialNum=d['sn'], uModel=d['model'], uCOMPortID=d['com'], uDeviceID=d['dev'], uChannelID=d['chan'])
+        self.call('SelectMultiClamp', pszSerialNum=d['sn'], uModel=d['model'], uCOMPortID=d['com'], uDeviceID=d['dev'], uChannelID=d['chan'])
 
 
     def call(self, fName, *args, **kargs):   ## call is only used for functions that return a bool error status and have a pnError argument passed by reference.
-        
-        ## Perform value mapping for a few functions (SetMode, SetPrimarySignal, SetSecondarySignal)
-        if fName in NAME_MAPS:
-            if args[0] not in NAME_MAPS[fName]:
-                raise Exception("Argument to %s must be one of %s" % (fName, NAME_MAPS[fName].keys()))
-            args[0] = NAME_MAPS[fName][args[0]]
-    
         ret = axlib('functions', fName)(self.handle, *args, **kargs)
         if ret() == 0:
             funcStr = "%s(%s)" % (fName, ', '.join(map(str, args) + ["%s=%s" % (k, str(kargs[k])) for k in kargs]))
             self.raiseError("Error while running function  %s\n      Error:" % funcStr, ret['pnError'])
             
-        ## perform return value mapping for a few specific functions
-        if fName in INV_NAME_MAPS:
-            if ret[1] not in INV_NAME_MAPS[fName]:
-                raise Exception("Return from %s was %s; expected one of %s." % (fName, ret[1], NAME_MAPS[fName].keys()))
-            ret[1] = INV_NAME_MAPS[fName][ret[1]]
-            
         return ret
-
-    def __getattr__(self, attr):  ## shorthand for making function calls
-            return lambda *args, **kargs: self.call(attr, *args, **kargs)
     
     def raiseError(self, msg, err):
         raise Exception(err, msg + " " + self.errString(err))
@@ -530,41 +532,11 @@ class _MULTICLAMP:
         
     
     
-    def setSignalByName(self, devID, signal, primary):
-        self.selectDev(devID)
-        model = self.devices[devID]['model']
-        
-        priMap = ['PRI', 'SEC']
-        
-        mode = self.getMode(devID)
-        if mode == 'I=0':
-            mode = 'IC'
-            
-        sig = None
-        sigMap = SIGNAL_MAP[model][mode][priMap[primary]]
-        for k in sigMap:
-            if sigMap[k][0] == signal:
-                sig = k
-        if sig is None:
-            raise Exception("Signal name '%s' not found" % signal)
-        if primary == 0:
-            self.setPrimarySignal(devID, sig)
-        elif primary == 1:
-            self.setSecondarySignal(devID, sig)
-
-    def getPrimarySignalInfo(self, devID):
-        return self.getSignalInfo(devID, 0)
-
-    def getSecondarySignalInfo(self, devID):
-        return self.getSignalInfo(devID, 1)
-
-    def setPrimarySignalByName(self, devID, signal):
-        return self.setSignalByName(devID, signal, 0)
-
-    def setSecondarySignalByName(self, devID, signal):
-        return self.setSignalByName(devID, signal, 1)
 
 
+
+### Create instance of driver class
+MultiClamp()
 #init()
 
 ## Crapton of stuff to remember that is not provided by header files
@@ -588,9 +560,9 @@ MODE_LIST_INV = invertDict(MODE_LIST)
 PRI_OUT_MODE_LIST = {}
 SEC_OUT_MODE_LIST = {}
 for k in axlib['values']:
-    if k[:11] == 'PRI_SIGNAL_':
+    if k[:18] == 'MCCMSG_PRI_SIGNAL_':
         PRI_OUT_MODE_LIST[k[11:]] = axlib('values', k)
-    elif k[:11] == 'SEC_SIGNAL_':
+    elif k[:18] == 'MCCMSG_SEC_SIGNAL_':
         SEC_OUT_MODE_LIST[k[11:]] = axlib('values', k)
 PRI_OUT_MODE_LIST_INV = invertDict(PRI_OUT_MODE_LIST)
 SEC_OUT_MODE_LIST_INV = invertDict(SEC_OUT_MODE_LIST)
@@ -617,7 +589,7 @@ INV_NAME_MAPS = {
 
 SIGNAL_MAP = {
     axlib.HW_TYPE_MC700A: {
-        'VC': {
+        'vc': {
             'PRI': {
                 "VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
                 "VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
@@ -633,7 +605,7 @@ SIGNAL_MAP = {
                 "VC_AUXILIARY1": ("BathPotential", 1., 'V')
             }
         },
-        'IC': {
+        'ic': {
             'PRI': {   ## Driver bug? Primary IC signals use VC values. Bah.
                 "VC_PIPPOTENTIAL": ("MembranePotential", 1.0, 'V'),
                 "VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
@@ -652,7 +624,7 @@ SIGNAL_MAP = {
     },
         
     axlib.HW_TYPE_MC700B: {
-        'VC': {
+        'vc': {
             'PRI': {
                 "VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
                 "VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
@@ -672,7 +644,7 @@ SIGNAL_MAP = {
                 "VC_AUXILIARY2": ("Auxiliary2", 1., 'V')
             }
         },
-        'IC': {
+        'ic': {
             'PRI': {
                 "IC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
                 "IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
