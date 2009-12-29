@@ -136,6 +136,8 @@ class CParser():
             if verbose:
                 print "Loaded cached definitions; will skip parsing."
             return  ## cached values loaded successfully, nothing left to do here
+        #else:
+            #print "No cache.", cache
             
         
         results = []
@@ -260,8 +262,9 @@ class CParser():
             for s in replace:
                 self.files[file] = re.sub(s, replace[s], self.files[file])
         self.fileOrder.append(file)
-        self.initOpts['replace'][file] = replace
-        self.initOpts['files'].append(os.path.basename(file)) # only interested in the file names; the directory may change between systems.
+        bn = os.path.basename(file)
+        self.initOpts['replace'][bn] = replace
+        self.initOpts['files'].append(bn) # only interested in the file names; the directory may change between systems.
         return True
     
 

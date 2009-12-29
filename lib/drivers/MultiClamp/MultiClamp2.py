@@ -21,16 +21,17 @@ axonDefs = CParser(
 )
 
 # Load telegraph definitions
-#teleDefs = CParser(
-    #os.path.join(d, 'MCTelegraphs.hpp'),
-    #copyFrom=windowsDefs,
-    #cache=os.path.join(d, 'MCTelegraphs.hpp.cache')
-#) 
+teleDefs = CParser(
+    os.path.join(d, 'MCTelegraphs.hpp'),
+    copyFrom=windowsDefs,
+    cache=os.path.join(d, 'MCTelegraphs.hpp.cache'),
+    #verbose=True
+) 
 
 ##  Windows Messaging API 
 #   provides RegisterWindowMessageA, PostMessageA, PeekMessageA, GetMessageA
 #   See: http://msdn.microsoft.com/en-us/library/dd458658(VS.85).aspx
-#wmlib = CLibrary(windll.User32, teleDefs, prefix='MCTG_')
+wmlib = CLibrary(windll.User32, teleDefs, prefix='MCTG_')
 
 ## Axon API (That's right, we have to use two different APIs to access one device. Cool, huh?)
 axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axonDefs, prefix='MCCMSG_')
@@ -38,28 +39,28 @@ axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axo
 ## Get window handle. Should be a long integer; may change in future windows versions.
 #hWnd = struct.unpack('l', QtGui.QApplication.activeWindow().winId().asstring(4))
 
-## regiter messages
+## register messages
 
-#messages = [
-    #'MCTG_OPEN_MESSAGE_STR',
-    #'MCTG_CLOSE_MESSAGE_STR',
-    #'MCTG_REQUEST_MESSAGE_STR',
-    #'MCTG_BROADCAST_MESSAGE_STR',
-    #'MCTG_RECONNECT_MESSAGE_STR',
-    #'MCTG_ID_MESSAGE_STR',
-#]
+messages = [
+    'MCTG_OPEN_MESSAGE_STR',
+    'MCTG_CLOSE_MESSAGE_STR',
+    'MCTG_REQUEST_MESSAGE_STR',
+    'MCTG_BROADCAST_MESSAGE_STR',
+    'MCTG_RECONNECT_MESSAGE_STR',
+    'MCTG_ID_MESSAGE_STR',
+]
      
-#msgIds = {}
-#for m in messages:
-    #msgIds[m] = wmlib.RegisterWindowMessageA(wmlib[m])
+msgIds = {}
+for m in messages:
+    msgIds[m] = wmlib.RegisterWindowMessageA(wmlib('values', m))()
 
 
-#def packSignalIDs(comPort, axoBus, channel):
-    #return comPort | (axoBus << 8) | (channel << 16)
+def packSignalIDs(comPort, axoBus, channel):
+    return comPort | (axoBus << 8) | (channel << 16)
 
 
 ## open connection to specific clamp channel
-#wmlib.PostMessageA(wmlib.HWND_BROADCAST, msgIds['MCTG_OPEN_MESSAGE_STR'], hWnd, packSignalIDs(3, 0, 1))
+wmlib.PostMessageA(wmlib.HWND_BROADCAST, msgIds['MCTG_OPEN_MESSAGE_STR'], None, packSignalIDs(3, 0, 1))
 
 ## poll for commander windows
 
