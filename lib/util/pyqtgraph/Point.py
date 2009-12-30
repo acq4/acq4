@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore
 from math import acos
-import types
 
 def clip(x, mn, mx):
     if x > mx:
@@ -18,7 +17,7 @@ class Point(QtCore.QPointF):
             if hasattr(args[0], '__getitem__'):
                 QtCore.QPointF.__init__(self, float(args[0][0]), float(args[0][1]))
                 return
-            elif type(args[0]) in [types.FloatType, types.IntType]:
+            elif type(args[0]) in [float, int]:
                 QtCore.QPointF.__init__(self, float(args[0]), float(args[0]))
                 return
         elif len(args) == 2:

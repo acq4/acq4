@@ -23,6 +23,10 @@ char* str7 = "string with \"escaped quotes\" ";
 static const int * const (**intJunk[4]);
 int(*fnPtr)(char, float);
 
+int x1 = (5 + 3 * 0x1) / 8.0;
+int x2 = (typeCast)0x544 <<16;
+
+
 /* comment */ int betweenComments /* comment */ ;
 
 #define MACRO5

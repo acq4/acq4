@@ -158,4 +158,4 @@ class Ui_Form(object):
         self.waveGeneratorLabel.setText(QtGui.QApplication.translate("Form", "Function (values in pA)", None, QtGui.QApplication.UnicodeUTF8))
 
 from lib.util.generator.StimGenerator import StimGenerator
-from lib.util.qtgraph.PlotWidget import PlotWidget
+from lib.util.pyqtgraph.PlotWidget import PlotWidget

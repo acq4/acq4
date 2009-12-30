@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
-#from GraphicsView import qPtArr
 from numpy import array, arccos, dot, pi, zeros, vstack, ubyte, fromfunction, ceil, floor
 from numpy.linalg import norm
 import scipy.ndimage as ndimage
-#from vector import *
 from Point import *
 from math import cos, sin
 

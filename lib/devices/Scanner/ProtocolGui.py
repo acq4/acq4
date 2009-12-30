@@ -4,7 +4,7 @@ from lib.devices.Device import ProtocolGui
 from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager
 from lib.util.WidgetGroup import WidgetGroup
-from lib.util.qtgraph.widgets import *
+from lib.util.pyqtgraph.widgets import *
 import random
 import numpy
 

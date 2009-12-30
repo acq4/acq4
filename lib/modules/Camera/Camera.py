@@ -8,16 +8,16 @@
 from __future__ import with_statement
 
 from CameraTemplate import Ui_MainWindow
-from lib.util.qtgraph.GraphicsView import *
-from lib.util.qtgraph.graphicsItems import *
-from lib.util.qtgraph.widgets import ROI
+from lib.util.pyqtgraph.GraphicsView import *
+from lib.util.pyqtgraph.graphicsItems import *
+from lib.util.pyqtgraph.widgets import ROI
 import lib.util.ptime as ptime
 from lib.filetypes.ImageFile import *
 from lib.util.Mutex import Mutex, MutexLocker
 from PyQt4 import QtGui, QtCore
 import scipy.ndimage
 import time, types, os.path, re, sys
-from lib.util.color import intColor
+from lib.util.pyqtgraph.functions import intColor
 from lib.util.debug import *
 
 traceDepth = 0

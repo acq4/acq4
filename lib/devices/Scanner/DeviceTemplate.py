@@ -89,4 +89,4 @@ class Ui_Form(object):
         self.deleteBtn.setText(QtGui.QApplication.translate("Form", "Delete", None, QtGui.QApplication.UnicodeUTF8))
         self.accuracyLabel.setText(QtGui.QApplication.translate("Form", "Accuracy:", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.qtgraph.GraphicsView import GraphicsView
+from lib.util.pyqtgraph.GraphicsView import GraphicsView

@@ -6,7 +6,7 @@ from lib.devices.Device import *
 from PyQt4 import QtCore
 import time, sys, traceback
 from numpy import *
-from lib.util.MetaArray import *
+from lib.util.metaarray import *
 from protoGUI import *
 from deviceGUI import *
 import lib.util.ptime as ptime

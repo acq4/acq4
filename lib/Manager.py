@@ -1,9 +1,22 @@
 # -*- coding: utf-8 -*-
-from util import configfile
-import time, sys, atexit
+
+
+## Path adjustments:
+##   - make sure 'lib' path is available for module search
+##   - add util to front of search path. This allows us to override some libs 
+##     that may be installed globally with local versions.
+import sys
+import os.path as osp
+d = osp.dirname(osp.dirname(osp.abspath(__file__)))
+sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
+
+
+
+import time, atexit
 from PyQt4 import QtCore, QtGui
 from DataManager import *
 import lib.util.ptime as ptime
+from lib.util import configfile
 from lib.util.Mutex import Mutex
 from lib.util.debug import *
 import getopt

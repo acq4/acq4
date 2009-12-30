@@ -2,7 +2,7 @@
 from __future__ import with_statement
 from lib.drivers.MultiClamp import MultiClamp as MultiClampDriver
 from lib.devices.Device import *
-from lib.util.MetaArray import MetaArray, axis
+from lib.util.metaarray import MetaArray, axis
 from lib.util.Mutex import Mutex, MutexLocker
 from PyQt4 import QtCore
 from numpy import *

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from MetaArray import *
+from metaarray import *
 from numpy import zeros
 
 def runSequence(func, params, order, dtype=None, passHash=False):

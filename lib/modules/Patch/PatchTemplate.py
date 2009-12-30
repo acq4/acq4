@@ -304,4 +304,4 @@ class Ui_Form(object):
         self.resetBtn.setText(QtGui.QApplication.translate("Form", "Reset History", None, QtGui.QApplication.UnicodeUTF8))
         self.label_6.setText(QtGui.QApplication.translate("Form", "Averaging:", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.qtgraph.PlotWidget import PlotWidget
+from lib.util.pyqtgraph.PlotWidget import PlotWidget

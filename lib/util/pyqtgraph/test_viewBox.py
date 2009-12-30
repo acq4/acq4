@@ -3,8 +3,6 @@
 
 from scipy import random
 from PyQt4 import QtGui, QtCore
-#from lib.util.PlotWidget import *
-#from PyQt4 import Qwt5 as Qwt
 from GraphicsView import *
 from graphicsItems import *
 
@@ -45,7 +43,7 @@ l.addItem(xScale, 1, 2)
 yScale = ScaleItem(orientation='left', linkView=vb)
 l.addItem(yScale, 0, 1)
 
-xLabel = LabelItem(u"<span style='color: #ff0000; font-weight: bold'>X</span> <i>Axis</i> <span style='font-size: 6pt'>(μV)</span>", html=True, color=QtGui.QColor(200, 200, 200))
+xLabel = LabelItem(u"<span style='color: #ff0000; font-weight: bold'>X</span> <i>Axis</i> <span style='font-size: 6pt'>(μV)</span>", html=True, color='CCC')
 l.setRowFixedHeight(2, 20)
 l.setRowFixedHeight(1, 40)
 l.addItem(xLabel, 2, 2)

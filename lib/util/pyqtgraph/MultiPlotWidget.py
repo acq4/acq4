@@ -2,7 +2,6 @@
 from GraphicsView import *
 from MultiPlotItem import *
 import exceptions
-#from lib.util.WidgetGroup import *
 
 class MultiPlotWidget(GraphicsView):
     """Widget implementing a graphicsView with a single PlotItem inside."""

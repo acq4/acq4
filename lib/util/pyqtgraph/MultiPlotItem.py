@@ -1,9 +1,15 @@
 # -*- coding: utf-8 -*-
 from numpy import ndarray
-from lib.util.MetaArray import *
 from graphicsItems import *
 from PlotItem import *
 
+try:
+    from metaarray import *
+    HAVE_METAARRAY = True
+except:
+    HAVE_METAARRAY = False
+    
+    
 class MultiPlotItem(QtGui.QGraphicsWidget):
     def __init__(self, parent=None):
         QtGui.QGraphicsWidget.__init__(self, parent)
@@ -18,7 +24,7 @@ class MultiPlotItem(QtGui.QGraphicsWidget):
         #self.layout.clear()
         self.plots = []
             
-        if isinstance(data, MetaArray):
+        if HAVE_METAARRAY and isinstance(data, MetaArray):
             if data.ndim != 2:
                 raise Exception("MultiPlot currently only accepts 2D MetaArray.")
             ic = data.infoCopy()
@@ -38,4 +44,5 @@ class MultiPlotItem(QtGui.QGraphicsWidget):
                 
         else:
             raise Exception("Data type %s not supported for MultiPlot." % type(data))
+            
         

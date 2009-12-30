@@ -382,4 +382,4 @@ class Ui_MainWindow(object):
         self.addFrameBtn.setText(QtGui.QApplication.translate("MainWindow", "Add", None, QtGui.QApplication.UnicodeUTF8))
         self.clearFramesBtn.setText(QtGui.QApplication.translate("MainWindow", "Clear", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.qtgraph.PlotWidget import PlotWidget
+from lib.util.pyqtgraph.PlotWidget import PlotWidget

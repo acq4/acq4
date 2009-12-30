@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import sys, re, os
-#import ctypes
 #ParserElement.enablePackrat()  ## Don't do this--actually makes the parse take longer!
 
 __all__ = ['winDefs', 'CParser']
@@ -16,7 +15,7 @@ def winDefs(verbose=False):
     (possibly not legal to distribute? Who knows.), some of which have been abridged
     because they take so long to parse. 
     """
-    headerFiles = ['WinNtTypes.h', 'BaseTsd.h', 'WinDef.h', 'WTypes.h', 'WinUserAbridged.h']
+    headerFiles = ['WinNtTypes.h', 'BaseTsd.h', 'WinDef.h', 'WTypes.h', 'WinUser.h']
     d = os.path.dirname(__file__)
     p = CParser(
         [os.path.join(d, 'headers', h) for h in headerFiles],
@@ -54,7 +53,7 @@ class CParser():
             print s
     """
     
-    cacheVersion = 6    ## increment every time cache structure or parsing changes to invalidate old cache files.
+    cacheVersion = 7    ## increment every time cache structure or parsing changes to invalidate old cache files.
     
     def __init__(self, files=None, replace=None, copyFrom=None, processAll=True, cache=None, verbose=False, **args):
         """Create a C parser object fiven a file or list of files. Files are read to memory and operated
@@ -699,6 +698,8 @@ class CParser():
     def eval(self, expr, *args):
         """Just eval with a little extra robustness."""
         expr = expr.strip()
+        cast = (lparen + self.typeSpec + self.abstractDeclarator + rparen).suppress()
+        expr = cast.transformString(expr)
         if expr == '':
             return None
         return eval(expr, *args)

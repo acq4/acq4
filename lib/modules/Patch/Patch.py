@@ -4,8 +4,8 @@ from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
 #from PyQt4 import Qwt5 as Qwt
 from lib.util.WidgetGroup import WidgetGroup
-from lib.util.qtgraph.PlotWidget import PlotWidget
-from lib.util.MetaArray import *
+from lib.util.pyqtgraph.PlotWidget import PlotWidget
+from lib.util.metaarray import *
 from lib.util.Mutex import Mutex, MutexLocker
 import traceback, sys, time
 from numpy import *

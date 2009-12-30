@@ -4,22 +4,6 @@ import sys, re, types, ctypes, os, time
 from numpy import *
 from lib.util import cheader
 
-#Int8 = c_byte
-#uInt8 = c_ubyte
-#Int16 = c_short
-#uInt16 = c_ushort
-#Int32 = c_long
-#uInt32 = c_ulong
-#Float32 = c_float
-#Float64 = c_double
-#Int64 = c_longlong
-#uInt64 = c_ulonglong
-#Bool32 = uInt32
-#TaskHandle = uInt32
-#DAQmxEveryNSamplesEventCallbackPtr = CFUNCTYPE(Int32, c_ulong, c_long, c_ulong, c_void_p)
-#DAQmxDoneEventCallbackPtr = CFUNCTYPE(Int32, c_ulong, c_long, c_void_p)
-#DAQmxSignalEventCallbackPtr = CFUNCTYPE(Int32, c_ulong, c_long, c_void_p)
-
 dtypes = {
     float64: 'F64',
     int16: 'I16',

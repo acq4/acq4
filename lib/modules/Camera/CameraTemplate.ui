@@ -729,7 +729,7 @@ background division.</string>
   <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
-   <header>lib.util.qtgraph.PlotWidget</header>
+   <header>lib.util.pyqtgraph.PlotWidget</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

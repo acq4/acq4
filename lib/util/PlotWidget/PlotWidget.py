@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import Qwt5 as Qwt
 from PyQt4 import QtCore, QtGui, QtSvg
-from lib.util.MetaArray import MetaArray
+from metaarray import MetaArray
 from numpy import *
 from scipy.fftpack import fft
 from plotConfigTemplate import Ui_Form

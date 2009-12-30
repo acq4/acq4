@@ -92,4 +92,4 @@ class Ui_Form(object):
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">can correctly act as a starting trigger.</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
         self.triggerCheck.setText(QtGui.QApplication.translate("Form", "Camera triggers protocol", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.qtgraph.ImageView import ImageView
+from lib.util.pyqtgraph.ImageView import ImageView

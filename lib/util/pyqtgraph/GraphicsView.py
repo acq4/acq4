@@ -1,42 +1,10 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
-from numpy import vstack
-import time
+#from numpy import vstack
+#import time
 from Point import *
 #from vector import *
 
-        
-#class GraphicsScene(QtGui.QGraphicsScene):
-    #"""Used to work around bugs with event propagation."""
-    #def mousePressEvent(self, ev):
-        #print "scene press"
-        #maxZ = None
-        #topItem = None
-        #items = []
-        #for i in self.items(ev.scenePos()):
-            #if ev.button() & i.acceptedMouseButtons() > 0:
-                #items.append(i)
-        #if len(items) == 0:
-            #print "no items under press", ev.scenePos()
-            #return
-        ##items = items.sort(lambda a, b: cmp(a.zValue(), b.zValue()))  ## Items are already sorted.
-        #for i in items:
-            #i.mousePressEvent(ev)
-            #if ev.accepted():
-                #i.grabMouse()
-                #break
-
-    #def mouseMoveEvent(self, ev):
-        #print "scene move"
-        #i = self.mouseGrabberItem()
-        #if i is not None:
-            #i.mouseMoveEvent(ev)
-            
-    #def mouseReleaseEvent(self, ev):
-        #print "scene release"
-        #i = self.mouseGrabberItem()
-        #if i is not None:
-            #i.mouseReleaseEvent(ev)
             
         
 class GraphicsView(QtGui.QGraphicsView):
@@ -49,8 +17,8 @@ class GraphicsView(QtGui.QGraphicsView):
         automatically updates when the view is resized. This can be overridden by setting 
         autoPixelRange=False. The exact visible range can be set with setRange().
         
-        The view can be panned using the left mouse button and scaled using the right mouse button unless
-        disabled via enableMouse(False)."""
+        The view can be panned using the middle mouse button and scaled using the right mouse button if
+        enabled via enableMouse()."""
         
         QtGui.QGraphicsView.__init__(self, *args)
         self.setViewport(QtOpenGL.QGLWidget())
@@ -336,20 +304,20 @@ class GraphicsView(QtGui.QGraphicsView):
         self.setRenderHints(rh)
         self.png.save(fileName)
         
-    def getFreehandLine(self):
+    #def getFreehandLine(self):
         
-        # Wait for click
-        self.clearMouse()
-        while self.lastButtonReleased != QtCore.Qt.LeftButton:
-            QtGui.qApp.sendPostedEvents()
-            QtGui.qApp.processEvents()
-            time.sleep(0.01)
-        fl = vstack(self.mouseTrail)
-        return fl
+        ## Wait for click
+        #self.clearMouse()
+        #while self.lastButtonReleased != QtCore.Qt.LeftButton:
+            #QtGui.qApp.sendPostedEvents()
+            #QtGui.qApp.processEvents()
+            #time.sleep(0.01)
+        #fl = vstack(self.mouseTrail)
+        #return fl
     
-    def getClick(self):
-        fl = self.getFreehandLine()
-        return fl[-1]
+    #def getClick(self):
+        #fl = self.getFreehandLine()
+        #return fl[-1]
     
 
 class GraphicsSceneMouseEvent(QtGui.QGraphicsSceneMouseEvent):

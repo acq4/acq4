@@ -2,7 +2,6 @@
 from ctypes import *
 import sys, numpy, time, types
 import lib.util.cheader as cheader
-from lib.util.debug import *
 
 PVCAM_CREATED = False
 
@@ -351,7 +350,9 @@ class _CameraClass:
             self._assertCameraOpen()
             return self._getParam(param, ATTR_AVAIL) > 0
         except:
-            printExc("Error checking availability of parameter %s" % param)
+            sys.excepthook(*sys.exc_info())
+            print "=============================================="
+            print "Error checking availability of parameter %s" % param
             return False
             
     def _assertParamAvailable(self, param):

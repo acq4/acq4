@@ -2,7 +2,6 @@
 from GraphicsView import *
 from PlotItem import *
 import exceptions
-#from lib.util.WidgetGroup import *
 
 class PlotWidget(GraphicsView):
     """Widget implementing a graphicsView with a single PlotItem inside."""

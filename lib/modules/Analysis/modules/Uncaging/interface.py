@@ -3,10 +3,10 @@ from lib.modules.ProtocolRunner.analysisModules import AnalysisModule
 import lib.Manager as Manager
 from PyQt4 import QtCore, QtGui
 from UncagingTemplate import Ui_Form
-from lib.util.qtgraph.graphicsItems import ImageItem
+from lib.util.pyqtgraph.graphicsItems import ImageItem
 from numpy import *
 from scipy.ndimage.filters import gaussian_filter
-from lib.util.MetaArray import MetaArray
+from lib.util.metaarray import MetaArray
 
 class UncagingModule(AnalysisModule):
     def __init__(self, *args):

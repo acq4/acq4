@@ -148,7 +148,7 @@
   <customwidget>
    <class>GraphicsView</class>
    <extends>QGraphicsView</extends>
-   <header>lib.util.qtgraph.GraphicsView</header>
+   <header>lib.util.pyqtgraph.GraphicsView</header>
   </customwidget>
  </customwidgets>
  <resources/>

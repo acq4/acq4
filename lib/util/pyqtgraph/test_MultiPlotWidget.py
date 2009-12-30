@@ -5,8 +5,7 @@ from scipy import random
 from numpy import linspace
 from PyQt4 import QtGui, QtCore
 from MultiPlotWidget import *
-#from graphicsItems import *
-from lib.util.MetaArray import *
+from metaarray import *
 
 app = QtGui.QApplication([])
 mw = QtGui.QMainWindow()

@@ -4,8 +4,7 @@ from numpy import *
 import scipy.weave as weave
 from scipy.weave import converters
 from scipy.fftpack import fft
-from lib.util.MetaArray import MetaArray
-from lib.util.debug import *
+#from metaarray import MetaArray
 from Point import *
 from functions import *
 import types, sys, struct
@@ -144,7 +143,9 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         except:
             if self.useWeave:
                 self.useWeave = False
-                printExc("Weave compile failed, falling back to slower version. Error was:")
+                sys.excepthook(*sys.exc_info())
+                print "=============================================================================="
+                print "Weave compile failed, falling back to slower version. Original error is above."
             self.image.shape = shape
             im = ((self.image - black) * scale).clip(0.,255.).astype(ubyte)
                 
@@ -200,6 +201,9 @@ class LabelItem(QtGui.QGraphicsWidget):
         self.opts = args
         if 'color' not in args:
             self.opts['color'] = 'CCC'
+        else:
+            if isinstance(args['color'], QtGui.QColor):
+                self.opts['color'] = colorStr(args['color'])[:6]
         self.sizeHint = {}
         self.setText(text)
         
@@ -387,7 +391,7 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         if isinstance(x, list):
             x = array(x)
         if not isinstance(data, ndarray) or data.ndim > 2:
-            raise Exception("Plot data must be 1 or 2D ndarray or MetaArray (data shape is %s)" % str(data.shape))
+            raise Exception("Plot data must be 1 or 2D ndarray (data shape is %s)" % str(data.shape))
         if data.ndim == 2:  ### If data is 2D array, then assume x and y values are in first two columns or rows.
             if x is not None:
                 raise Exception("Plot data may be 2D only if no x argument is supplied.")

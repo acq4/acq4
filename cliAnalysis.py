@@ -5,12 +5,11 @@ pyfile = __file__
 if pyfile[0] != '/':
    pyfile =  os.path.join(os.getcwd(), pyfile)
 sys.path.append(os.path.split(pyfile)[0])
-from lib.util.MetaArray import *
-#from lib.util.PlotWidget import *
-from lib.util.qtgraph.ImageView import *
-from lib.util.qtgraph.GraphicsView import *
-from lib.util.qtgraph.graphicsItems import *
-from lib.util.qtgraph.PlotWidget import *
+from lib.util.metaarray import *
+from lib.util.pyqtgraph.ImageView import *
+from lib.util.pyqtgraph.GraphicsView import *
+from lib.util.pyqtgraph.graphicsItems import *
+from lib.util.pyqtgraph.PlotWidget import *
 from PyQt4 import QtCore, QtGui
 from lib.util.functions import *
 

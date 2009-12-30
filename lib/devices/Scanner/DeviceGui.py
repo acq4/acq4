@@ -2,8 +2,8 @@
 from DeviceTemplate import Ui_Form
 import time, os, sys
 from PyQt4 import QtCore, QtGui
-from lib.util.MetaArray import MetaArray
-from lib.util.qtgraph.graphicsItems import ImageItem
+#from lib.util.metaarray import MetaArray
+from lib.util.pyqtgraph.graphicsItems import ImageItem
 import lib.Manager
 from lib.util.imageAnalysis import *
 from lib.util.debug import *

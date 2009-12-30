@@ -1,8 +1,15 @@
 # -*- coding: utf-8 -*-
 from graphicsItems import *
 from plotConfigTemplate import *
-from lib.util.WidgetGroup import *
 from PyQt4 import QtGui, QtCore, QtSvg
+import weakref
+
+try:
+    from WidgetGroup import *
+    HAVE_WIDGETGROUP = True
+except:
+    HAVE_WIDGETGROUP = False
+    
 
 class PlotItem(QtGui.QGraphicsWidget):
     """Plot graphics item that can be added to any graphics scene. Implements axis titles, scales, interactive viewbox."""
@@ -87,7 +94,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         ac.setDefaultWidget(w)
         self.ctrlMenu.addAction(ac)
         
-        self.stateGroup = WidgetGroup(self.ctrlMenu)
+        if HAVE_WIDGETGROUP:
+            self.stateGroup = WidgetGroup(self.ctrlMenu)
         
         self.fileDialog = None
         
@@ -566,6 +574,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         
 
     def saveState(self):
+        if not HAVE_WIDGETGROUP:
+            raise Exception("State save/restore requires WidgetGroup class.")
         state = self.stateGroup.state()
         state['paramList'] = self.paramList.copy()
         #print "\nSAVE %s:\n" % str(self.name), state
@@ -573,6 +583,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         return state
         
     def restoreState(self, state):
+        if not HAVE_WIDGETGROUP:
+            raise Exception("State save/restore requires WidgetGroup class.")
         if 'paramList' in state:
             self.paramList = state['paramList'].copy()
             self.stateGroup.setState(state)

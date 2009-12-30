@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from lib.util.MetaArray import MetaArray as MA
+from lib.util.metaarray import MetaArray as MA
 from FileType import *
 
 class MetaArray(FileType):
