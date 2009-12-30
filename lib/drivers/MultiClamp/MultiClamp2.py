@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from ctypes import *
+import ctypes
 import struct, os
 from lib.util.clibrary import *
 import weakref
@@ -9,7 +10,7 @@ import weakref
 __all__ = ['MultiClamp']
 
 ## Load windows definitions
-windowsDefs = winDefs()
+windowsDefs = winDefs(verbose=True)
 
 # Load AxMultiClampMsg header
 d = os.path.dirname(__file__)
@@ -17,74 +18,8 @@ axonDefs = CParser(
     os.path.join(d, 'AxMultiClampMsg.h'), 
     copyFrom=windowsDefs,
     cache=os.path.join(d, 'AxMultiClampMsg.h.cache'),
-    #verbose=True
+    verbose=True
 )
-
-# Load telegraph definitions
-teleDefs = CParser(
-    os.path.join(d, 'MCTelegraphs.hpp'),
-    copyFrom=windowsDefs,
-    cache=os.path.join(d, 'MCTelegraphs.hpp.cache'),
-    #verbose=True
-) 
-
-##  Windows Messaging API 
-#   provides RegisterWindowMessageA, PostMessageA, PeekMessageA, GetMessageA
-#   See: http://msdn.microsoft.com/en-us/library/dd458658(VS.85).aspx
-wmlib = CLibrary(windll.User32, teleDefs, prefix='MCTG_')
-
-## Axon API (That's right, we have to use two different APIs to access one device. Cool, huh?)
-axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axonDefs, prefix='MCCMSG_')
-
-## Get window handle. Should be a long integer; may change in future windows versions.
-#hWnd = struct.unpack('l', QtGui.QApplication.activeWindow().winId().asstring(4))
-
-## register messages
-
-messages = [
-    'MCTG_OPEN_MESSAGE_STR',
-    'MCTG_CLOSE_MESSAGE_STR',
-    'MCTG_REQUEST_MESSAGE_STR',
-    'MCTG_BROADCAST_MESSAGE_STR',
-    'MCTG_RECONNECT_MESSAGE_STR',
-    'MCTG_ID_MESSAGE_STR',
-]
-     
-msgIds = {}
-for m in messages:
-    msgIds[m] = wmlib.RegisterWindowMessageA(wmlib('values', m))()
-
-
-def packSignalIDs(comPort, axoBus, channel):
-    return comPort | (axoBus << 8) | (channel << 16)
-
-
-## open connection to specific clamp channel
-wmlib.PostMessageA(wmlib.HWND_BROADCAST, msgIds['MCTG_OPEN_MESSAGE_STR'], None, packSignalIDs(3, 0, 1))
-
-## poll for commander windows
-
-## start thread for receiving messages
-
-## for each message:
-#if msg.cbData == wmlib.MC_TELEGRAPH_DATA.size() and msg.dwData == msgIds['MCTG_REQUEST_MESSAGE_STR']:
-    #data = wmlib.MC_TELEGRAPH_DATA(msg.lpData)
-    #if data.uComPortID == 3 and data.uAxoBusID == 0 and data.uChannelID == 1:
-        ### message is the correct type, and for the correct channel
-        #pass
-
-
-## watch for reconnect messages
-
-## close connection
-#wmlib.PostMessageA(wmlib.HWND_BROADCAST, msgIds['MCTG_CLOSE_MESSAGE_STR'], hWnd, packSignalIDs(3, 0, 1))
-
-
-
-## request an update
-## careful -- does this disable automatic notification of changes?
-#wmlib.PostMessageA(wmlib.HWND_BROADCAST, msgIds['MCTG_REQUEST_MESSAGE_STR'], hWnd, packSignalIDs(3, 0, 1))
-
 
 
 

@@ -24,7 +24,7 @@ def winDefs(verbose=False):
     (possibly not legal to distribute? Who knows.), some of which have been abridged
     because they take so long to parse. 
     """
-    headerFiles = ['WinNtTypes.h', 'BaseTsd.h', 'WinDef.h', 'WTypes.h', 'WinUser.h']
+    headerFiles = ['WinNtTypes.h', 'BaseTsd.h', 'WinDef.h', 'WTypes.h', 'WinUserAbridged.h']
     d = os.path.dirname(__file__)
     p = CParser(
         [os.path.join(d, 'headers', h) for h in headerFiles],
@@ -131,7 +131,7 @@ class CParser():
         if processAll:
             self.processAll(cache=cache, verbose=verbose)
     
-    def processAll(self, cache=None, returnUnparsed=False, printAfterPreprocess=False, noCacheWarning=False, verbose=False):
+    def processAll(self, cache=None, returnUnparsed=False, printAfterPreprocess=False, noCacheWarning=True, verbose=False):
         """Remove comments, preprocess, and parse declarations from all files. (operates in memory; does not alter the original files)
         Returns a list of the results from parseDefs.
            'cache' may specify a file where cached results are be stored or retrieved. The cache
@@ -300,6 +300,7 @@ class CParser():
     def preprocess(self, file):
         """Scan named file for preprocessor directives, removing them while expanding macros. (operates in memory; does not alter the original files)"""
         self.assertPyparsing()
+        self.buildParser()  ## we need this so that evalExpr works properly
         self.currentFile = file
         self.ppDirective = Combine("#" + Word(alphas).leaveWhitespace()) + restOfLine
         
@@ -345,7 +346,10 @@ class CParser():
         """Builds the entire tree of parser elements for the C language (the bits we support, anyway).
         """
         
-        
+        if hasattr(self, 'parser'):
+            return self.parser
+            
+            
         self.assertPyparsing()
         
         
@@ -444,7 +448,8 @@ class CParser():
         self.functionDecl = self.typeSpec('type') + self.declarator('decl') + nestedExpr('{', '}').suppress()
         self.functionDecl.setParseAction(self.processFunction)
         
-        return (self.typeDecl | self.variableDecl | self.structDecl | self.enumDecl | self.functionDecl)
+        self.parser = (self.typeDecl | self.variableDecl | self.structDecl | self.enumDecl | self.functionDecl)
+        return self.parser
     
     #def updateStructDefn(self):
         #structKW = (Keyword('struct') | Keyword('union'))

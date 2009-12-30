@@ -203,7 +203,7 @@ class CLibrary:
         
     def _cstruct(self, strName):
         if strName not in self._structs_:
-            defs = self._defs_['structs'][strName]
+            defs = self._defs_['structs'][strName[1]]
             class s(Structure):
                 pass
             ## must register struct here to allow recursive definitions.
@@ -215,7 +215,7 @@ class CLibrary:
         
     def _cunion(self, unionName):
         if unionName not in self._unions_:
-            defs = self._defs_['unions'][unionName]
+            defs = self._defs_['unions'][unionName[1]]
             class s(Union):
                 pass
             ## must register struct here to allow recursive definitions.
@@ -270,7 +270,8 @@ class CFunction:
         for k in kwargs:
             #print "    kw:", k
             if k not in self.argInds:
-                raise Exception("Function signature has no argument named '%s'. Arguments are: %s" % (k, str(self.argInds.keys())))
+                print "Function signature:", self.prettySignature()
+                raise Exception("Function signature has no argument named '%s'" % k)
             ind = self.argInds[k]
             if ind >= len(argList):  ## stretch argument list if needed
                 argList += [None] * (ind - len(argList) + 1)
@@ -283,12 +284,15 @@ class CFunction:
             if argList[i] is None:
                 try:
                     sig = self.sig[1][i][1]
-                    assert len(sig) == 2 and sig[1] == '*' ## Must be 2-part type, second part must be '*'
+                    argType = self.lib._headers_.evalType(sig)
+                    assert len(argType) == 2 and argType[1] == '*' ## Must be 2-part type, second part must be '*'
                     cls = self.lib._ctype(sig, pointers=False)
                     argList[i] = pointer(cls(0))
                 except:
-                    sys.excepthook(*sys.exc_info())
-                    raise Exception('Missing required argument %d "%s"' % (i, sig[0]))
+                    if sys.exc_info()[0] is not AssertionError:
+                        sys.excepthook(*sys.exc_info())
+                    print "Function signature:", self.prettySignature()
+                    raise Exception('Missing required argument %d "%s"' % (i, self.sig[1][i][0]))
         #print "  args:", argList
         res = self.func(*argList)
         #print "  result:", res
@@ -296,7 +300,8 @@ class CFunction:
         cr = CallResult(res, argList, self.sig)
         return cr
     
-    
+    def prettySignature(self):
+        return "%s %s(%s)" % (''.join(self.sig[0]), self.name, ', '.join(["%s %s" % ("".join(map(str, s[1])), s[0]) for s in self.sig[1]]))
     
 class CallResult:
     """Class for bundling results from C function calls. Allows access to the function

@@ -28,6 +28,12 @@ try:
 except:
     HAVE_WIDGETGROUP = False
     
+try:
+    from metaarray import *
+    HAVE_METAARRAY = True
+except:
+    HAVE_METAARRAY = False
+
 
 class PlotItem(QtGui.QGraphicsWidget):
     """Plot graphics item that can be added to any graphics scene. Implements axis titles, scales, interactive viewbox."""
@@ -469,7 +475,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             self.clear()
         if params is None:
             params = {}
-        if isinstance(data, MetaArray):
+        if HAVE_METAARRAY and isinstance(data, MetaArray):
             curve = self._plotMetaArray(data, x=x)
         elif isinstance(data, ndarray):
             curve = self._plotArray(data, x=x)
