@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+"""
+graphicsItems.py -  Defines several graphics item classes for use in Qt graphics/view framework
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+
+Provides ImageItem, PlotCurveItem, and ViewBox, amongst others.
+"""
+
+
 from PyQt4 import QtGui, QtCore
 from numpy import *
 import scipy.weave as weave

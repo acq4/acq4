@@ -1,5 +1,14 @@
 #!/usr/bin/python -i
 # -*- coding: utf-8 -*-
+"""
+cliAnalysis.py - Command line analysis interface 
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+
+Run in interactive python. Useful for accessing data for manual analysis.
+"""
+
+
 import sys, os
 pyfile = __file__
 if pyfile[0] != '/':

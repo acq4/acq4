@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+"""
+CParser.py - C parsing library 
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+
+Used for extracting data such as macro definitions, variables, typedefs, and function
+signatures from C files (preferrably header files).
+"""
+
 import sys, re, os
 #ParserElement.enablePackrat()  ## Don't do this--actually makes the parse take longer!
 

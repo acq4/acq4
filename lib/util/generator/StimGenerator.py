@@ -1,21 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Stim_Generator is the module for computing a single set of stimulus waveforms
+StimGenerator.py -  Stimulus waveform generator + Qt widget
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
 
-The classes include:
-PyWave, which makes a single waveform
-Stimulator, which manages a list of PyStim objects to generate the
-   appropriate DAC commands, and interfaces with the gui.
-PyStim, which provides an interface and calls the Stimulator.
-This module generates the waveforms and combines them for the different
-output channels, but it does not interface to the hardware.
-
-March 2, 2009
-Paul B. Manis, Ph.D.
-UNC Chapel Hill.
-
+The StimGenerator class is a Qt widget that provides a text box for 
+entering python code used to generate waveforms. Functions available
+for evaluation are provided in waveforms.py.
 """
+
 import sys, types, re
 from numpy import *
 import numpy

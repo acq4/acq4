@@ -1,4 +1,22 @@
 # -*- coding: utf-8 -*-
+"""
+PlotItem.py -  Graphics item implementing a scalable ViewBox with plotting powers.
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+
+This class is one of the workhorses of pyqtgraph. It implements a graphics item with 
+plots, labels, and scales which can be viewed inside a QGraphicsScene. If you want
+a widget that can be added to your GUI, see PlotWidget instead.
+
+This class is very heavily featured:
+  - Automatically creates and manages PlotCurveItems
+  - Fast display and update of plots
+  - Manages zoom/pan ViewBox, scale, and label elements
+  - Automatic scaling when data changes
+  - Control panel with a huge feature set including averaging, decimation,
+    display, power spectrum, svg/png export, plot linking, and more.
+"""
+
 from graphicsItems import *
 from plotConfigTemplate import *
 from PyQt4 import QtGui, QtCore, QtSvg

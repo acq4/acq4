@@ -1,4 +1,15 @@
 # -*- coding: utf-8 -*-
+"""
+Manager.py -  Defines main Manager class for ACQ4
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+
+This class must be invoked once to initialize the ACQ4 core system.
+The class is responsible for:
+    - Configuring devices
+    - Invoking/managing modules
+    - Creating and executing protocol tasks. 
+"""
 
 
 ## Path adjustments:

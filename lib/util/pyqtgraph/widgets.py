@@ -1,4 +1,14 @@
 # -*- coding: utf-8 -*-
+"""
+widgets.py -  Interactive graphics items for GraphicsView (ROI widgets)
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+
+Implements a series of graphics items which display movable/scalable/rotatable shapes
+for use as region-of-interest markers. ROI class automatically handles extraction 
+of array data from ImageItems.
+"""
+
 from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
 from numpy import array, arccos, dot, pi, zeros, vstack, ubyte, fromfunction, ceil, floor
 from numpy.linalg import norm

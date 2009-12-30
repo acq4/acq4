@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+"""
+waveforms.py -  Waveform functions used by StimGenerator
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+
+This file defines several waveform-generating functions meant to be
+called from within a StimGenerator widget.
+"""
+
 import numpy
 
 ## Checking functions

@@ -1,32 +1,28 @@
 # -*- coding: utf-8 -*-
+"""
+WidgetGroup.py -  WidgetGroup class for easily managing lots of Qt widgets
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+
+This class addresses the problem of having to save and restore the state
+of a large group of widgets. 
+"""
+
 from PyQt4 import QtCore, QtGui
 import weakref
-#from lib.util.generator.StimGenerator import StimGenerator
-#from lib.util.PlotWidget import PlotWidget
 
-## Bug workaround; splitters do not report their own state correctly.
 def splitterState(w):
-    #s = w.sizes()
-    #if len(s) < w.count():
-        #s.extend([1]*(w.count()-len(s)))
-    #if sum(s) == 0:
-        #s = [1]*len(s)
-    #print "store splitter state%s: %d %s" % (w.objectName(), w.count(), str(w.sizes()))
-    #return s
     s = str(w.saveState().toPercentEncoding())
-    #print s
     return s
     
 def restoreSplitter(w, s):
     if type(s) is list:
         w.setSizes(s)
     elif type(s) is str:
-        #print "Restore string:", s
         w.restoreState(QtCore.QByteArray.fromPercentEncoding(s))
     else:
         print "Can't configure QSplitter using object of type", type(s)
-    #print "restored splitter state%s: %d %s" % (w.objectName(), w.count(), str(w.sizes()))
-    if w.count() > 0:
+    if w.count() > 0:   ## make sure at least one item is not collapsed
         for i in w.sizes():
             if i > 0:
                 return

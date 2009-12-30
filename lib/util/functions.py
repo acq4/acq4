@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""
+functions.py - Miscellaneous homeless functions 
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+"""
+
 import os, re, math, time, threading
 from metaarray import *
 from scipy import *

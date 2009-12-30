@@ -1,4 +1,18 @@
 # -*- coding: utf-8 -*-
+"""
+ImageView.py -  Widget for basic image dispay and analysis
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+
+Widget used for displaying 2D or 3D data. Features:
+  - float or int (including 16-bit int) image display via ImageItem
+  - zoom/pan via GraphicsView
+  - black/white level controls
+  - time slider for 3D data sets
+  - ROI plotting
+  - Image normalization through a variety of methods
+"""
+
 from ImageViewTemplate import *
 from graphicsItems import *
 from widgets import ROI

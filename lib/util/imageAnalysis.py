@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+ImageAnalysis.py -  Generic image analysis functions
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+"""
+
 from scipy.optimize import leastsq
 from scipy import *
 from scipy.ndimage import *

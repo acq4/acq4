@@ -1,4 +1,11 @@
 # -*- coding: utf-8 -*-
+"""
+DirTreeModel.py -  Uses the Qt model/view architecture to represent a file tree
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+
+"""
+
 from PyQt4 import QtCore, QtGui
 import traceback, os, sys
 from lib.util.debug import *

@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""
+SequenceRunner.py -  Used for running multi-dimensional for-loops
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+"""
+
 from metaarray import *
 from numpy import zeros
 

@@ -1,5 +1,15 @@
 # -*- coding: utf-8 -*-
-## Class for storing data sets and writing to disk
+"""
+MetaArray.py -  Class encapsulating ndarray with meta data
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+
+MetaArray is an extension of ndarray which allows storage of per-axis meta data
+such as axis values, names, units, column names, etc. It also enables several
+new methods for slicing and indexing the array based on this meta data. 
+More info at http://www.scipy.org/Cookbook/MetaArray
+"""
+
 
 from numpy import ndarray, array, empty, fromstring, arange, concatenate
 import types, copy, threading, os, re

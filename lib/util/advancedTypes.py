@@ -1,4 +1,15 @@
 # -*- coding: utf-8 -*-
+"""
+advancedTypes.py - Basic data structures not included with python 
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+
+Includes:
+  - OrderedDict - Dictionary which preserves the order of its elements
+  - BiDict, ReverseDict - Bi-directional dictionaries
+  - ThreadsafeDict, ThreadsafeList - Self-mutexed data structures
+"""
+
 import threading, sys
 from lib.util.debug import *
 

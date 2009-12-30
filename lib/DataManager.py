@@ -1,4 +1,14 @@
 # -*- coding: utf-8 -*-
+"""
+DataManager.py - DataManager, FileHandle, and DirHandle classes 
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+
+These classes implement a data management system that allows modules
+to easily store and retrieve data files along with meta data. The objects
+probably only need to be created via functions in the Manager class.
+"""
+
 from __future__ import with_statement
 import threading, os, re, sys
 ##  import fcntl  ## linux only?

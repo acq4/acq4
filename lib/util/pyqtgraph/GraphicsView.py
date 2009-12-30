@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""
+GraphicsView.py -   Extension of QGraphicsView
+Copyright 2010  Luke Campagnola
+Distributed under MIT/X11 license. See license.txt for more infomation.
+"""
+
 from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
 #from numpy import vstack
 #import time
