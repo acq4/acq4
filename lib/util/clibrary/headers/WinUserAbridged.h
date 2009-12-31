@@ -13,13 +13,15 @@
 // typedef HANDLE HWND;
 // typedef UINT_PTR WPARAM;
 // 
-#define WINUSERAPI
-#define WINAPI
+//#define WINUSERAPI
+//#define WINAPI __stdcall
 #define __in
 #define __in_opt
 #define __out
-#define CONST const
-#define FAR far
+//#define CONST const
+//#define FAR far
+//#define NEAR near
+
 /*
  * Message structure
  */
@@ -150,6 +152,7 @@ CreateWindowExW(
     __in_opt LPVOID lpParam);
 
 
+typedef LRESULT (CALLBACK* WNDPROC)(HWND, UINT, WPARAM, LPARAM);
 
 typedef struct tagWNDCLASSEXA {
     UINT        cbSize;

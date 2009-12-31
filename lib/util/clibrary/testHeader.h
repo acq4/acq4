@@ -2,14 +2,53 @@
 // C++ style comment
 
 #define MACRO1 macro1
-  #define MACRO2 "string macro"
+#define MACRO2 "string macro"
+  
 #ifdef MACRO1
-//#define MACRO3 commentedMacro3
-#define MACRO4 macro4 /*with comment*/
+  //#define MACRO3 commentedMacro3
+  #define MACRO4 macro4 /*with comment*/
 #endif
+
+#ifdef UNDEFINED
+  #define NO_DEFINE
+  int NO_DECLARE;
+#endif
+
+#ifndef DEFINE3
+  #define DEFINE3 10
+  #ifndef DEFINE3
+    #define NO_DEFINE2
+    int NO_DECLARE2;
+  #endif
+#endif
+
+#define MARKER1
+#if !defined DEFINE3
+  #define NO_DEFINE3
+  int NO_DECLARE3;
+  #ifdef DEFINE3
+    #define NO_DEFINE6
+  #endif
+#else
+  #define DEFINE4
+#endif
+
 
 #define mlm Multi Line\
             Macro
+
+#if defined DEFINE4 && DEFINE3 < 5
+  #define NO_DEFINE4
+  int NO_DECLARE4;
+#elif defined DEFINE4 && DEFINE3 > 5
+  #define DEFINE5
+  int DECLARE5;
+#else
+  #define NO_DEFINE6
+  int NO_DECLARE6;
+#endif
+
+
 
 int MACRO1;
 char* str1 = "normal string";
@@ -89,4 +128,8 @@ typedef recType1 recType2;
 typedef recType2 recType3;
 typedef recType3 recType1;
 
-
+#define NEAR near
+typedef struct tagWNDCLASSEXA {
+    int         cbClsExtra;
+    int         cbWndExtra;
+} WNDCLASSEXA, *PWNDCLASSEXA, NEAR *NPWNDCLASSEXA;//, FAR *LPWNDCLASSEXA;

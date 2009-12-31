@@ -29,6 +29,7 @@ def winDefs(verbose=False):
     p = CParser(
         [os.path.join(d, 'headers', h) for h in headerFiles],
         types={'__int64': ('long long')},
+        macros={'_WIN32': '', '_MSC_VER': '800'},
         processAll=False
     )
     p.processAll(cache=os.path.join(d, 'headers', 'WinDefs.cache'), noCacheWarning=True, verbose=verbose)
@@ -302,28 +303,143 @@ class CParser():
         self.assertPyparsing()
         self.buildParser()  ## we need this so that evalExpr works properly
         self.currentFile = file
-        self.ppDirective = Combine("#" + Word(alphas).leaveWhitespace()) + restOfLine
-        
-        # define the structure of a macro definition (the empty term is used 
-        # to advance to the next non-whitespace character)
-        self.ppDefine = Keyword("#define") + ident.setWhitespaceChars(' \t')("macro") + Optional(lparen + delimitedList(ident) + rparen).setWhitespaceChars(' \t')('args') + SkipTo(LineEnd(), ignore=(Literal('\\').leaveWhitespace()+LineEnd()))('value')
-        # attach parse actions to expressions
-        self.ppDefine.setParseAction(self.processMacroDefn)
-        #ppDefine.setDebug(True)
-        self.updateMacroDefns()
-
-        # define pattern for scanning through the input string
-        self.macroExpander = (self.macroExpr | self.fnMacroExpr | self.ppDefine.suppress() | self.ppDirective.suppress())
         
         text = self.files[file]
-        ## Match quoted strings first to prevent matching macros inside strings.
-        ## do NOT use .ignore(quotedString) -- this has drastic side effects!
-        self.files[file] =  (quotedString | self.macroExpander).transformString(text)
+        
+        ## First join together lines split by \\n
+        text = Literal('\\\n').suppress().transformString(text)
+        
+        #self.ppDirective = Combine("#" + Word(alphas).leaveWhitespace()) + restOfLine
+        
+        # define the structure of a macro definition
+        name = Word(alphas+'_', alphanums+'_')('name')
+        self.ppDefine = name.setWhitespaceChars(' \t')("macro") + Optional(lparen + delimitedList(name) + rparen).setWhitespaceChars(' \t')('args') + SkipTo(LineEnd())('value')
+        self.ppDefine.setParseAction(self.processMacroDefn)
+        
+        self.updateMacroDefns()
+        self.updateFnMacroDefns()
 
+        # define pattern for scanning through the input string
+        self.macroExpander = (self.macroExpr | self.fnMacroExpr)
+        
+        ## Comb through lines, process all directives
+        lines = text.split('\n')
+        
+        result = []
+        macroExpander = (quotedString | self.macroExpander)
+        directive = re.compile(r'\s*#([a-zA-Z]+)(.*)$')
+        ifTrue = [True]
+        ifHit = []
+        for i in range(len(lines)):
+            line = lines[i]
+            m = directive.match(line)
+            if m is None:  # regular code line
+                if ifTrue[-1]:  # only include if we are inside the correct section of an IF block
+                    line = macroExpander.transformString(line)  # expand all known macros
+                    result.append(line)
+            else:  # macro line
+                d = m.groups()[0]
+                rest = m.groups()[1]
+                
+                #print "PREPROCESS:", d, rest
+                if d == 'ifdef':
+                    d = 'if'
+                    rest = 'defined '+rest
+                elif d == 'ifndef':
+                    d = 'if'
+                    rest = '!defined '+rest
+                    
+                ## Evaluate 'defined' operator before expanding macros
+                if d in ['if', 'elif']:
+                    def pa(t):
+                        return ['0', '1'][t['name'] in self.defs['macros'] or t['name'] in self.defs['fnmacros']]
+                    rest = (
+                        Keyword('defined') + 
+                        (name | lparen + name + rparen)
+                    ).setParseAction(pa).transformString(rest)
+                elif d in ['define', 'undef']:    
+                    macroName, rest = re.match(r'\s*([a-zA-Z_][a-zA-Z0-9_]*)(.*)$', rest).groups()
+                
+                ## Expand macros
+                if rest is not None:
+                    rest = macroExpander.transformString(rest)
+                    
+                if d == 'elif':
+                    if ifHit[-1] or not all(ifTrue[:-1]):
+                        ev = False
+                    else:
+                        ev = self.evalPreprocessorExpr(rest)
+                    if self.verbose:
+                        print "  "*(len(ifTrue)-2) + line, rest, ev
+                    ifTrue[-1] = ev
+                    ifHit[-1] = ifHit[-1] or ev
+                elif d == 'else':
+                    if self.verbose:
+                        print "  "*(len(ifTrue)-2) + line, not ifHit[-1]
+                    ifTrue[-1] = (not ifHit[-1]) and all(ifTrue[:-1])
+                    ifHit[-1] = True
+                elif d == 'endif':
+                    ifTrue.pop()
+                    ifHit.pop()
+                    if self.verbose:
+                        print "  "*(len(ifTrue)-1) + line
+                elif d == 'if':
+                    if all(ifTrue):
+                        ev = self.evalPreprocessorExpr(rest)
+                    else:
+                        ev = False
+                    if self.verbose:
+                        print "  "*(len(ifTrue)-1) + line, rest, ev
+                    ifTrue.append(ev)
+                    ifHit.append(ev)
+                elif d == 'define':
+                    if not ifTrue[-1]:
+                        continue
+                    try:
+                        self.ppDefine.parseString(macroName+ ' ' + rest) ## macro is registered here
+                    except:
+                        print "Error processing macro definition:", macroName, rest
+                        print "      ", sys.exc_info()[1]
+                elif d == 'undef':
+                    if not ifTrue[-1]:
+                        continue
+                    try:
+                        self.remDef('macros', macroName.strip())
+                    except:
+                        if sys.exc_info()[0] is not KeyError:
+                            sys.excepthook(*sys.exc_info())
+                            print "Error removing macro definition '%s'" % macroName.strip()
+                        
+                else:
+                    pass  ## Ignore any other directives
+                    
+                
+        self.files[file] = '\n'.join(result)
+        
+    def evalPreprocessorExpr(self, expr):
+        ## make a few alterations so the expression can be eval'd
+        macroDiffs = (
+            Literal('!').setParseAction(lambda: ' not ') | 
+            Literal('&&').setParseAction(lambda: ' and ') | 
+            Literal('||').setParseAction(lambda: ' or ') | 
+            Word(alphas+'_',alphanums+'_').setParseAction(lambda: '0'))
+        expr2 = macroDiffs.transformString(expr)
+            
+        try:
+            ev = bool(eval(expr2))
+        except:
+            print "Error evaluating preprocessor expression: %s [%s]" % (expr, expr2)
+            print "      ", sys.exc_info()[1]
+            ev = False
+        return ev
+            
+        
+        
     def updateMacroDefns(self):
         self.macroExpr << MatchFirst( [Keyword(m)('macro') for m in self.defs['macros']] )
         self.macroExpr.setParseAction(self.processMacroRef)
 
+    def updateFnMacroDefns(self):
         self.fnMacroExpr << MatchFirst( [(Keyword(m)('macro') + lparen + Group(delimitedList(expression))('args') + rparen) for m in self.defs['fnmacros']] )
         self.fnMacroExpr.setParseAction(self.processFnMacroRef)        
         
@@ -381,7 +497,7 @@ class CParser():
         #     *( )(int, int)[10]
         #     ...etc...
         self.abstractDeclarator << Group(
-            Group(ZeroOrMore('*' + typeQualifier))('ptrs') + 
+            typeQualifier + Group(ZeroOrMore('*'))('ptrs') + typeQualifier +
             ((Optional('&')('ref')) | (lparen + self.abstractDeclarator + rparen)('center')) + 
             Optional(lparen + Optional(delimitedList(Group(
                 self.typeSpec('type') + 
@@ -406,7 +522,7 @@ class CParser():
         #     * fnName(int arg1=0)[10]
         #     ...etc...
         self.declarator << Group(
-            Group(ZeroOrMore('*' + typeQualifier))('ptrs') + 
+            typeQualifier + callConv + Group(ZeroOrMore('*'))('ptrs') + typeQualifier +
             ((Optional('&')('ref') + ident('name')) | (lparen + self.declarator + rparen)('center')) + 
             Optional(lparen + Optional(delimitedList(Group(
                 self.typeSpec('type') + 
@@ -451,23 +567,14 @@ class CParser():
         self.parser = (self.typeDecl | self.variableDecl | self.structDecl | self.enumDecl | self.functionDecl)
         return self.parser
     
-    #def updateStructDefn(self):
-        #structKW = (Keyword('struct') | Keyword('union'))
-        
-        ### We could search only for previously defined struct names, 
-        ### but then we would miss incomplete type declarations.
-        ##self.definedStruct << kwl(self.defs['structs'].keys())
-        ##self.structType << structKW + (self.definedStruct('name') | Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace)
-        
-        #self.structType << structKW('structType') + (Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace | ident('name'))
-        #self.structType.setParseAction(self.processStruct)
-    
     def processDeclarator(self, decl):
         """Process a declarator (without base type) and return a tuple (name, [modifiers])
         See processType(...) for more information."""
         toks = []
         name = None
         #print "DECL:", decl
+        if 'callConv' in decl and len(decl['callConv']) > 0:
+            toks.append(decl['callConv'])
         if 'ptrs' in decl and len(decl['ptrs']) > 0:
             toks.append('*' * len(decl['ptrs']))
         if 'arrays' in decl and len(decl['arrays']) > 0:
@@ -497,6 +604,7 @@ class CParser():
           - modifiers can be:
              '*'    - pointer (multiple pointers "***" allowed)
              '&'    - reference
+             '__X'  - calling convention (windows only). X can be 'cdecl' or 'stdcall' 
              list   - array. Value(s) indicate the length of each array, -1 for incomplete type.
              tuple  - function, items are the output of processType for each function argument.
         int *x[10]            =>  ('x', ['int', [10], '*'])
@@ -520,11 +628,12 @@ class CParser():
             self.addDef('values', t.macro, val)
             if self.verbose:
                 print "  Add macro:", t.macro, "("+str(val)+")", self.defs['macros'][t.macro]
+            self.updateMacroDefns()
         else:
             self.addDef('fnmacros', t.macro,  (macroVal, [x for x in t.args]))
             if self.verbose:
                 print "  Add fn macro:", t.macro, t.args, self.defs['fnmacros'][t.macro]
-        self.updateMacroDefns()
+            self.updateFnMacroDefns()
         #self.macroExpr << MatchFirst( map(Keyword,self.defs['macros'].keys()) )
         return "#define " + t.macro + " " + macroVal
         
@@ -713,7 +822,7 @@ class CParser():
         """Just eval with a little extra robustness."""
         expr = expr.strip()
         cast = (lparen + self.typeSpec + self.abstractDeclarator + rparen).suppress()
-        expr = cast.transformString(expr)
+        expr = (quotedString | number | cast).transformString(expr)
         if expr == '':
             return None
         return eval(expr, *args)
@@ -741,6 +850,15 @@ class CParser():
                 self.fileDefs[baseName][k] = {}
         self.fileDefs[baseName][typ][name] = val
 
+    def remDef(self, typ, name):
+        if self.currentFile is None:
+            baseName = None
+        else:
+            baseName = os.path.basename(self.currentFile)
+        del self.defs[typ][name]
+        del self.fileDefs[baseName][typ][name]
+        
+
     def isFundType(self, typ):
         """Return True if this type is a fundamental C type, struct, or union"""
         if typ[0][:7] == 'struct ' or typ[0][:6] == 'union ' or typ[0][:5] == 'enum ':
@@ -767,6 +885,17 @@ class CParser():
             pt = self.defs['types'][parent]
             typ = pt + typ[1:]
 
+    def find(self, name):
+        """Search all definitions for the given name"""
+        res = []
+        for f in self.fileDefs:
+            fd = self.fileDefs[f]
+            for t in fd:
+                typ = fd[t]
+                for k in typ:
+                    if k == name:
+                        res.append((f, t))
+        return res
 
 hasPyParsing = False
 try: 
@@ -786,7 +915,7 @@ if hasPyParsing:
     sizeModifiers = ['short', 'long']
     signModifiers = ['signed', 'unsigned']
     qualifiers = ['const', 'static', 'volatile', 'inline', 'restrict', 'near', 'far']
-    msModifiers = ['__based', '__declspec', '__stdcall', '__cdecl', '__fastcall', '__restrict', '__sptr', '__uptr', '__w64', '__unaligned', '_far', '_pascal']
+    msModifiers = ['__based', '__declspec', '__fastcall', '__restrict', '__sptr', '__uptr', '__w64', '__unaligned', '_far']
     keywords = ['struct', 'enum', 'union'] + qualifiers + baseTypes + sizeModifiers + signModifiers
 
     def kwl(strs):
@@ -803,9 +932,13 @@ if hasPyParsing:
     rbrack = Literal("]").ignore(quotedString).suppress()
     lparen = Literal("(").ignore(quotedString).suppress()
     rparen = Literal(")").ignore(quotedString).suppress()
-    number = Word(hexnums + ".-+x")
+    hexint = Regex('-?0x[%s]+[UL]*'%hexnums)
+    decint = Regex('-?[%s]+[UL]*'%nums)
+    floating = Regex('-?[%s]*\\.?[%s]*([eE]-?[%s]+)?'%(nums, nums, nums))
+    number = Word(hexnums + ".-+xUL").setParseAction(lambda t: t[0].rstrip('UL'))
     #stars = Optional(Word('*&'), default='')('ptrs')  ## may need to separate & from * later?
-    typeQualifier = ZeroOrMore(kwl(qualifiers)).suppress()
+    callConv = Optional(Keyword('__cdecl')|Keyword('__stdcall'))('callConv')
+    typeQualifier = ZeroOrMore(kwl(qualifiers + msModifiers)).suppress()
     msModifier = ZeroOrMore(kwl(msModifiers) + Optional(pexpr)).suppress()
     pointerOperator = (
         '*' + typeQualifier |
