@@ -56,6 +56,26 @@ wmlib = CLibrary(windll.User32, teleDefs, prefix='MCTG_')
 #hWnd = ctypes.pythonapi.PyCObject_AsVoidPtr(py_object(win.winId().ascobject()))
 #print hWnd
 
+
+
+
+
+## Create hidden window so we can catch messages
+def wndProc(*args):
+    print "Window event:", args
+    return 0
+
+wndClass = wmlib.WNDCLASSA(0, wmlib.WNDPROC(wndProc), 0, 0, windll.kernel32.GetModuleHandleA(c_int(0)), 0, 0, 0, "", "AxTelegraphWin")
+ret = wmlib.RegisterClassA(wndClass)
+if ret() == 0:
+    raise Exception("Error registering window class.")
+cwret = wmlib.CreateWindowExA(0, wndClass.lpszClassName, "title", 0, 0, 0, 0, 0, 0, 0, wndClass.hInstance, 0)
+if cwret() is None:
+    erv = windll.kernel32.GetLastError()
+    raise Exception("Error creating window.", erv)
+hWnd = cwret()
+
+
 ## register messages
 messages = [
     'MCTG_OPEN_MESSAGE_STR',

@@ -45,6 +45,8 @@ class CLibrary:
         'unsigned char': c_ubyte,
         'short': c_short,
         'short int': c_short,
+        'unsigned short': c_ushort,
+        'unsigned short int': c_ushort,
         'int': c_int,
         'unsigned int': c_uint,
         'long': c_long,
@@ -167,7 +169,7 @@ class CLibrary:
         typ = self._headers_.evalType(typ)
         
         # Create the initial type
-        mods = typ[1:]
+        mods = typ[1:][:]
         if len(typ) > 1 and typ[1] == '*' and typ[0] in CLibrary.cPtrTypes:
             cls = CLibrary.cPtrTypes[typ[0]]
             mods = typ[2:]
@@ -187,16 +189,38 @@ class CLibrary:
             return cls
             
         # apply pointers and arrays
-        for p in mods:
-            if isinstance(p, basestring):  ## pointer or reference
-                if p[0] == '*':
-                    for i in p:
+        while len(mods) > 0:
+            m = mods.pop(0)
+            if isinstance(m, basestring):  ## pointer or reference
+                if m[0] == '*':
+                    for i in m:
                         cls = POINTER(cls)
-            elif type(p) is list:          ## array
-                for i in p:
+            elif type(m) is list:          ## array
+                for i in m:
                     cls = cls * i
-            elif type(p) is tuple:
-                raise Exception("Haven't implemented function types yet..")
+            elif type(m) is tuple:   ## Probably a function pointer
+                # Find pointer and calling convention
+                isPtr = False
+                conv = '__cdecl'
+                for i in [0,1]:
+                    if mods[0] == '*':
+                        mods.pop(0)
+                        isPtr = True
+                    elif mods[0] in ['__stdcall', '__cdecl']:
+                        conv = mods.pop(0)
+                    else:
+                        break
+                if not isPtr:
+                    raise Exception("Not sure how to handle type (function without single pointer): %s" % str(typ))
+                        
+                if conv == '__stdcall':
+                    mkfn = WINFUNCTYPE
+                else:
+                    mkfn = CFUNCTYPE
+                
+                args = [self._ctype(arg[1]) for arg in m]
+                cls = mkfn(cls, *args)
+                        
             else:
                 raise Exception("Not sure what to do with this type modifier: '%s'" % str(p))
         return cls
@@ -230,28 +254,18 @@ class CFunction:
     def __init__(self, lib, func, sig, name):
         self.lib = lib
         self.func = func
-        self.sig = sig   # looks like [return_type, [(argName, type, default), (argName, type, default), ...]]
+        self.sig = sig[:]   # looks like [return_type, [(argName, type, default), (argName, type, default), ...]]
+        for conv in ['__stdcall', '__cdecl']:
+            if conv in self.sig[0]:
+                self.sig[0].remove(conv)
         self.name = name
         self.restype = lib._ctype(sig[0])
-        func.restype = self.restype
+        #func.restype = self.restype
         self.argTypes = [lib._ctype(s[1]) for s in sig[1]]
         func.argtypes = self.argTypes
         self.reqArgs = [x[0] for x in sig[1] if x[2] is None]
         self.argInds = dict([(sig[1][i][0], i) for i in range(len(sig[1]))])  ## mapping from argument names to indices
         #print "created func", self, sig, self.argTypes
-
-    #def coerce(self, obj, typ):   ### gonna need a lot of work here.
-        #baseCls = typ[0]
-        #try:
-            #obj2 = typ(obj)  ## Attempt the coersion..
-        #except:
-            #if type(obj).__module__ == 'ctypes':   ## If this is already a ctypes object, we can try returning it as-is 
-                #return obj
-            #print "==========================================>>>"
-            #sys.excepthook(*sys.exc_info())
-            #print "<<<=========================================="
-            #raise Exception("Error coercing object type '%s' to class '%s'" % (type(obj), typ))
-        #return obj2
 
     def __call__(self, *args, **kwargs):
         """Invoke the SO or dll function referenced, converting all arguments to the correct type.
@@ -294,7 +308,11 @@ class CFunction:
                     print "Function signature:", self.prettySignature()
                     raise Exception('Missing required argument %d "%s"' % (i, self.sig[1][i][0]))
         #print "  args:", argList
-        res = self.func(*argList)
+        try:
+            res = self.func(*argList)
+        except:
+            print "Function call failed. Signature is:", self.prettySignature()
+            raise
         #print "  result:", res
         
         cr = CallResult(res, argList, self.sig)
