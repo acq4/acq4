@@ -359,9 +359,8 @@ class CParser():
                 elif d in ['define', 'undef']:    
                     macroName, rest = re.match(r'\s*([a-zA-Z_][a-zA-Z0-9_]*)(.*)$', rest).groups()
                 
-                ## Expand macros
-                if rest is not None and all(ifTrue):
-                    #rest = macroExpander.transformString(rest)
+                ## Expand macros if needed
+                if rest is not None and (all(ifTrue) or d in ['if', 'elif']):
                     rest = self.expandMacros(rest)
                     
                 if d == 'elif':
