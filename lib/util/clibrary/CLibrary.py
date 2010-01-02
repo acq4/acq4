@@ -176,9 +176,9 @@ class CLibrary:
         elif typ[0] in CLibrary.cTypes:
             cls = CLibrary.cTypes[typ[0]]
         elif typ[0][:7] == 'struct ':
-            cls = self._cstruct(self._defs_['types'][typ[0]])
+            cls = self._cstruct('structs', self._defs_['types'][typ[0]])
         elif typ[0][:6] == 'union ':
-            cls = self._cunion(self._defs_['types'][typ[0]])
+            cls = self._cstruct('unions', self._defs_['types'][typ[0]])
         elif typ[0][:5] == 'enum ':
             cls = c_int
         else:
@@ -225,29 +225,49 @@ class CLibrary:
                 raise Exception("Not sure what to do with this type modifier: '%s'" % str(p))
         return cls
         
-    def _cstruct(self, strName):
+    def _cstruct(self, strType, strName):
         if strName not in self._structs_:
-            defs = self._defs_['structs'][strName[1]]
-            class s(Structure):
-                pass
+            defs = self._defs_[strType][strName[1]][:]
+            if strType == 'structs':
+                class s(Structure):
+                    pass
+            elif strType == 'unions':
+                class s(Union):
+                    pass
+                
             ## must register struct here to allow recursive definitions.
             self._structs_[strName] = s
-            #s._anonymous_ =
+            
+            ## assign names to anonymous members
+            members = []
+            anon = []
+            for i in range(len(defs)):
+                if defs[i][0] is None:
+                    c = 0
+                    while True:
+                        name = 'anon_member%d' % c
+                        if name not in members:
+                            defs[i][0] = name
+                            anon.append(name)
+                            break
+                members.append(defs[i][0])
+            
+            s._anonymous_ = anon
             s._fields_ = [(m[0], self._ctype(m[1])) for m in defs]
             s._defaults_ = [m[2] for m in defs]
         return self._structs_[strName]
         
-    def _cunion(self, unionName):
-        if unionName not in self._unions_:
-            defs = self._defs_['unions'][unionName[1]]
-            class s(Union):
-                pass
-            ## must register struct here to allow recursive definitions.
-            self._unions_[unionName] = s
-            #s._anonymous_ =
-            s._fields_ = [(m[0], self._ctype(m[1])) for m in defs]
-            s._defaults_ = [m[2] for m in defs]
-        return self._unions_[unionName]
+    #def _cunion(self, unionName):
+        #if unionName not in self._unions_:
+            #defs = self._defs_['unions'][unionName[1]]
+            #class s(Union):
+                #pass
+            ### must register struct here to allow recursive definitions.
+            #self._unions_[unionName] = s
+            ##s._anonymous_ =
+            #s._fields_ = [(m[0], self._ctype(m[1])) for m in defs]
+            #s._defaults_ = [m[2] for m in defs]
+        #return self._unions_[unionName]
 
 
 class CFunction:

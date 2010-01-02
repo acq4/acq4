@@ -1,9 +1,31 @@
 /* C-style comment */
 // C++ style comment
 
+#define IS_INTRESOURCE(_r) ((((ULONG_PTR)(_r)) >> 16) == 0)
+#define MAKEINTRESOURCEA(i) ((LPSTR)((ULONG_PTR)((WORD)(i))))
+#define MAKEINTRESOURCEW(i) ((LPWSTR)((ULONG_PTR)((WORD)(i))))
+#ifdef UNICODE
+#define MAKEINTRESOURCE  MAKEINTRESOURCEW
+#else
+#define MAKEINTRESOURCE  MAKEINTRESOURCEA
+#endif // !UNICODE
+int x = MAKEINTRESOURCE(4);
+
+#define MAKELONG(a, b)      ((LONG)(((WORD)((DWORD_PTR)(a) & 0xffff)) | ((DWORD)((WORD)((DWORD_PTR)(b) & 0xffff))) << 16))
+#define POINTTOPOINTS(pt)      (MAKELONG((short)((pt).x), (short)((pt).y)))
+
+
 #define MACRO1 macro1
 #define MACRO2 "string macro"
-  
+#define TEST_MACRO MACRO1 MACRO2
+
+
+#define NESTMACRO1 1
+#define NESTMACRO2 NESTMACRO1
+#define NESTMACRO3 NESTMACRO2
+
+
+
 #ifdef MACRO1
   //#define MACRO3 commentedMacro3
   #define MACRO4 macro4 /*with comment*/
@@ -48,6 +70,9 @@
   int NO_DECLARE6;
 #endif
 
+
+#define FN(x, y)  x + "x" + y
+#define FNMACRO  FN(1, "y")aaa
 
 
 int MACRO1;
@@ -133,3 +158,16 @@ typedef struct tagWNDCLASSEXA {
     int         cbClsExtra;
     int         cbWndExtra;
 } WNDCLASSEXA, *PWNDCLASSEXA, NEAR *NPWNDCLASSEXA;//, FAR *LPWNDCLASSEXA;
+
+
+typedef struct tagRID_DEVICE_INFO {
+    DWORD cbSize;
+    DWORD dwType;
+    union {
+        RID_DEVICE_INFO_MOUSE mouse;
+        RID_DEVICE_INFO_KEYBOARD keyboard;
+        RID_DEVICE_INFO_HID hid;
+    };
+} RID_DEVICE_INFO, *PRID_DEVICE_INFO, *LPRID_DEVICE_INFO;
+
+
