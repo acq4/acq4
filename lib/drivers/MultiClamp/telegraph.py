@@ -5,6 +5,7 @@ from ctypes import *
 import ctypes
 import struct, os
 from clibrary import *
+import time
 import weakref
 #from lib.util.CLibrary import *
 #from PyQt4 import QtCore, QtGui
@@ -61,48 +62,115 @@ wmlib = CLibrary(windll.User32, teleDefs, prefix='MCTG_')
 
 
 ## Create hidden window so we can catch messages
-def wndProc(*args):
-    print "Window event:", args
-    return 0
+def wndProc(hWnd, msg, wParam, lParam):
+    print "Window event:", msg
+    if msg == wmlib.WM_COPYDATA:
+        print "  copydatastruct", lParam
+        data = cast(lParam, POINTER(wmlib.COPYDATASTRUCT)).contents
+        if data.dwData == msgIds['REQUEST']:
+            print "  got update from MCC"
+            data  = cast(data.lpData, POINTER(wmlib.MC_TELEGRAPH_DATA)).contents
+            for f in data._fields_:
+                print "    ", f[0], getattr(data, f[0])
+        else:
+            print "  unknown message type", data.dwData
+    return True
 
-wndClass = wmlib.WNDCLASSA(0, wmlib.WNDPROC(wndProc), 0, 0, windll.kernel32.GetModuleHandleA(c_int(0)), 0, 0, 0, "", "AxTelegraphWin")
+
+def getError():
+    return windll.kernel32.GetLastError()
+
+#wndClass = wmlib.WNDCLASSA(0, wmlib.WNDPROC(wndProc), 0, 0, windll.kernel32.GetModuleHandleA(c_int(0)), 0, 0, 0, "", "AxTelegraphWin")
+wndClass = wmlib.WNDCLASSA(0, wmlib.WNDPROC(wndProc), 0, 0, wmlib.HWND_MESSAGE, 0, 0, 0, "", "AxTelegraphWin")
 ret = wmlib.RegisterClassA(wndClass)
+print "Register class:", ret()
 if ret() == 0:
     raise Exception("Error registering window class.")
-cwret = wmlib.CreateWindowExA(0, wndClass.lpszClassName, "title", 0, 0, 0, 0, 0, 0, 0, wndClass.hInstance, 0)
-if cwret() is None:
-    erv = windll.kernel32.GetLastError()
-    raise Exception("Error creating window.", erv)
-hWnd = cwret()
+cwret = wmlib.CreateWindowExA(
+    0, wndClass.lpszClassName, "title", 
+    wmlib.WS_OVERLAPPEDWINDOW,
+    wmlib.CW_USEDEFAULT,
+    wmlib.CW_USEDEFAULT,
+    wmlib.CW_USEDEFAULT,
+    wmlib.CW_USEDEFAULT,
+    0, 0, wmlib.HWND_MESSAGE, 0)
+if cwret() == 0:
+    raise Exception("Error creating window.", getError())
 
+hWnd = cwret.rval
+print "Create window:", hWnd
 
 ## register messages
-messages = [
-    'MCTG_OPEN_MESSAGE_STR',
-    'MCTG_CLOSE_MESSAGE_STR',
-    'MCTG_REQUEST_MESSAGE_STR',
-    'MCTG_BROADCAST_MESSAGE_STR',
-    'MCTG_RECONNECT_MESSAGE_STR',
-    'MCTG_ID_MESSAGE_STR',
-]
+messages = ['OPEN', 'CLOSE', 'REQUEST', 'BROADCAST', 'RECONNECT', 'ID']
      
 msgIds = {}
 for m in messages:
-    msgIds[m] = wmlib.RegisterWindowMessageA(wmlib('values', m))()
+    msgIds[m] = wmlib.RegisterWindowMessageA(wmlib('values', 'MCTG_' + m + '_MESSAGE_STR'))()
 
 
 def packSignalIDs(comPort, axoBus, channel):
     return comPort | (axoBus << 8) | (channel << 16)
 
 
+
 ## open connection to specific clamp channel
-ret = wmlib.PostMessageA(wmlib.HWND_BROADCAST, msgIds['MCTG_OPEN_MESSAGE_STR'], hWnd, packSignalIDs(3, 0, 1))
-print "Broadcast:", ret()
+def post(msg, val):
+    ret = wmlib.PostMessageA(wmlib.HWND_BROADCAST, msg, hWnd, val)
+    if ret() == 0:
+        raise Exception("Error during post.", getError())
+    
+    
+
+
 
 ## poll for commander windows
-def getMsg():
-    return wmlib.PeekMessageA(None, hWnd, 0, 0, wmlib.PM_NOREMOVE)
+def peekMsg():
+    ret = wmlib.PeekMessageA(None, hWnd, 0, 0, wmlib.PM_REMOVE)
+    if ret() == 0:
+        return None
+    elif ret() == -1:
+        raise Exception("Error during peek", getError())
+    else:
+        msg = ret[0]
+        if msg.message in msgIds.values():
+            print "Peeked Message:", msgIds.keys()[msgIds.values().index(msg.message)]
+        else:
+            print "Peeked Message:", msg.message
+        return msg
 
+def getMsgs():
+    msgs = []
+    while True:
+        msg = peekMsg()
+        if msg is None:
+            return msgs
+        else:
+            msgs.append(msg)
+
+
+#post(msgIds['OPEN'], packSignalIDs(3, 0, 1))
+
+post(msgIds['BROADCAST'], 0)
+time.sleep(1)
+
+def unpackID(i):
+    return (i & 0xFF, (i>>8) & 0xFF, (i>>16))
+
+msgs = getMsgs()
+ids = [m.lParam for m in msgs if m.message==msgIds['ID']]
+print "Devices available:", map(unpackID, ids)
+
+for i in ids:
+    post(msgIds['OPEN'], i)
+
+def msgLoop():
+    while True:
+        m = peekMsg()
+        #if m is not None:
+            #print "got message"
+        time.sleep(0.1)
+    
+msgLoop()
 
 
 #app._exec()

@@ -121,9 +121,9 @@ class CLibrary:
             elif typ == 'types':
                 return self._ctype(obj)
             elif typ == 'structs':
-                return self._cstruct(n)
+                return self._cstruct('structs', n)
             elif typ == 'unions':
-                return self._cunion(n)
+                return self._cstruct('unions', n)
             elif typ == 'enums':
                 return obj
             else:
@@ -166,68 +166,76 @@ class CLibrary:
         """return a ctype object representing the named type. 
         If pointers is True, the class returned includes all pointer/array specs provided. 
         Otherwise, the class returned is just the base type with no pointers."""
-        typ = self._headers_.evalType(typ)
-        
-        # Create the initial type
-        mods = typ[1:][:]
-        if len(typ) > 1 and typ[1] == '*' and typ[0] in CLibrary.cPtrTypes:
-            cls = CLibrary.cPtrTypes[typ[0]]
-            mods = typ[2:]
-        elif typ[0] in CLibrary.cTypes:
-            cls = CLibrary.cTypes[typ[0]]
-        elif typ[0][:7] == 'struct ':
-            cls = self._cstruct('structs', self._defs_['types'][typ[0]])
-        elif typ[0][:6] == 'union ':
-            cls = self._cstruct('unions', self._defs_['types'][typ[0]])
-        elif typ[0][:5] == 'enum ':
-            cls = c_int
-        else:
-            #print typ
-            raise Exception("Can't find base type for %s" % str(typ))
-        
-        if not pointers:
-            return cls
+        try:
+            typ = self._headers_.evalType(typ)
             
-        # apply pointers and arrays
-        while len(mods) > 0:
-            m = mods.pop(0)
-            if isinstance(m, basestring):  ## pointer or reference
-                if m[0] == '*':
-                    for i in m:
-                        cls = POINTER(cls)
-            elif type(m) is list:          ## array
-                for i in m:
-                    cls = cls * i
-            elif type(m) is tuple:   ## Probably a function pointer
-                # Find pointer and calling convention
-                isPtr = False
-                conv = '__cdecl'
-                for i in [0,1]:
-                    if mods[0] == '*':
-                        mods.pop(0)
-                        isPtr = True
-                    elif mods[0] in ['__stdcall', '__cdecl']:
-                        conv = mods.pop(0)
-                    else:
-                        break
-                if not isPtr:
-                    raise Exception("Not sure how to handle type (function without single pointer): %s" % str(typ))
-                        
-                if conv == '__stdcall':
-                    mkfn = WINFUNCTYPE
-                else:
-                    mkfn = CFUNCTYPE
-                
-                args = [self._ctype(arg[1]) for arg in m]
-                cls = mkfn(cls, *args)
-                        
+            # Create the initial type
+            mods = typ[1:][:]
+            if len(typ) > 1 and typ[1] == '*' and typ[0] in CLibrary.cPtrTypes:
+                cls = CLibrary.cPtrTypes[typ[0]]
+                mods = typ[2:]
+            elif typ[0] in CLibrary.cTypes:
+                cls = CLibrary.cTypes[typ[0]]
+            elif typ[0][:7] == 'struct ':
+                cls = self._cstruct('structs', self._defs_['types'][typ[0]][1])
+            elif typ[0][:6] == 'union ':
+                cls = self._cstruct('unions', self._defs_['types'][typ[0]][1])
+            elif typ[0][:5] == 'enum ':
+                cls = c_int
             else:
-                raise Exception("Not sure what to do with this type modifier: '%s'" % str(p))
-        return cls
+                #print typ
+                raise Exception("Can't find base type for %s" % str(typ))
+            
+            if not pointers:
+                return cls
+                
+            # apply pointers and arrays
+            while len(mods) > 0:
+                m = mods.pop(0)
+                if isinstance(m, basestring):  ## pointer or reference
+                    if m[0] == '*':
+                        for i in m:
+                            cls = POINTER(cls)
+                elif type(m) is list:          ## array
+                    for i in m:
+                        cls = cls * i
+                elif type(m) is tuple:   ## Probably a function pointer
+                    # Find pointer and calling convention
+                    isPtr = False
+                    conv = '__cdecl'
+                    if len(mods) == 0:
+                        raise Exception("Function signature with no pointer:", m, mods)
+                    for i in [0,1]:
+                        if len(mods) < 1:
+                            break
+                        if mods[0] == '*':
+                            mods.pop(0)
+                            isPtr = True
+                        elif mods[0] in ['__stdcall', '__cdecl']:
+                            conv = mods.pop(0)
+                        else:
+                            break
+                    if not isPtr:
+                        raise Exception("Not sure how to handle type (function without single pointer): %s" % str(typ))
+                            
+                    if conv == '__stdcall':
+                        mkfn = WINFUNCTYPE
+                    else:
+                        mkfn = CFUNCTYPE
+                    
+                    args = [self._ctype(arg[1]) for arg in m]
+                    cls = mkfn(cls, *args)
+                            
+                else:
+                    raise Exception("Not sure what to do with this type modifier: '%s'" % str(p))
+            return cls
+        except:
+            print "Error while processing type", typ
+            raise
         
     def _cstruct(self, strType, strName):
         if strName not in self._structs_:
-            defs = self._defs_[strType][strName[1]][:]
+            defs = self._defs_[strType][strName][:]
             if strType == 'structs':
                 class s(Structure):
                     pass

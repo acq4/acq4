@@ -23,12 +23,12 @@ def winDefs(verbose=False):
     (possibly not legal to distribute? Who knows.), some of which have been abridged
     because they take so long to parse. 
     """
-    headerFiles = ['WinNtTypes.h', 'BaseTsd.h', 'WinDef.h', 'WTypes.h', 'WinUser.h']
+    headerFiles = ['WinNt.h', 'WinDef.h', 'BaseTsd.h', 'WTypes.h', 'WinUser.h']
     d = os.path.dirname(__file__)
     p = CParser(
         [os.path.join(d, 'headers', h) for h in headerFiles],
         types={'__int64': ('long long')},
-        macros={'_WIN32': '', '_MSC_VER': '800'},
+        macros={'_WIN32': '', '_MSC_VER': '800', 'CONST': 'const', 'NO_STRICT': None},
         processAll=False
     )
     p.processAll(cache=os.path.join(d, 'headers', 'WinDefs.cache'), noCacheWarning=True, verbose=verbose)
@@ -62,7 +62,7 @@ class CParser():
             print s
     """
     
-    cacheVersion = 9    ## increment every time cache structure or parsing changes to invalidate old cache files.
+    cacheVersion = 17    ## increment every time cache structure or parsing changes to invalidate old cache files.
     
     def __init__(self, files=None, replace=None, copyFrom=None, processAll=True, cache=None, verbose=False, **args):
         """Create a C parser object fiven a file or list of files. Files are read to memory and operated
@@ -900,7 +900,7 @@ class CParser():
         if self.verbose:
             print "VARIABLE:", t
         try:
-            val = self.evalExpr(t)
+            val = self.evalExpr(t[0])
             for d in t[0].declList:
                 (name, typ) = self.processType(t[0].type, d)
                 if type(typ[-1]) is tuple:  ## this is a function prototype
@@ -1033,6 +1033,17 @@ class CParser():
                         res.append((f, t))
         return res
 
+    def findText(self, text):
+        """Search all file strings for text, return matching lines."""
+        res = []
+        for f in self.files:
+            l = self.files[f].split('\n')
+            for i in range(len(l)):
+                if text in l[i]:
+                    res.append((f, i, l[i]))
+        return res
+        
+        
 hasPyParsing = False
 try: 
     from pyparsing import *
@@ -1052,7 +1063,7 @@ if hasPyParsing:
     sizeModifiers = ['short', 'long']
     signModifiers = ['signed', 'unsigned']
     qualifiers = ['const', 'static', 'volatile', 'inline', 'restrict', 'near', 'far']
-    msModifiers = ['__based', '__declspec', '__fastcall', '__restrict', '__sptr', '__uptr', '__w64', '__unaligned']
+    msModifiers = ['__based', '__declspec', '__fastcall', '__restrict', '__sptr', '__uptr', '__w64', '__unaligned', '__nullterminated']
     keywords = ['struct', 'enum', 'union', '__stdcall', '__cdecl'] + qualifiers + baseTypes + sizeModifiers + signModifiers
 
     def kwl(strs):
@@ -1075,10 +1086,19 @@ if hasPyParsing:
     decint = Regex(r'-?\d+[UL]*').setParseAction(lambda t: t[0].rstrip('UL'))
     floating = Regex(r'-?((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?')
     number = (hexint | floating | decint)
+    bitfieldspec = ":" + integer
+    biOperator = oneOf("+ - / * | & || && ! ~ ^ % == != > < >= <= -> . :: << >> = ? :")
+    uniRightOperator = oneOf("++ --")
+    uniLeftOperator = oneOf("++ -- - + * sizeof new")
+    name = (WordStart(wordchars) + Word(alphas+"_",alphanums+"_$") + WordEnd(wordchars))
     #number = Word(hexnums + ".-+xUL").setParseAction(lambda t: t[0].rstrip('UL'))
     #stars = Optional(Word('*&'), default='')('ptrs')  ## may need to separate & from * later?
     callConv = Optional(Keyword('__cdecl')|Keyword('__stdcall'))('callConv')
-    typeQualifier = ZeroOrMore(kwl(qualifiers)).suppress()
+    
+    ## Removes '__name' from all type specs.. may cause trouble.
+    underscore2Ident = (WordStart(wordchars) + ~keyword + '__' + Word(alphanums,alphanums+"_$") + WordEnd(wordchars)).setParseAction(lambda t: t[0])
+    typeQualifier = ZeroOrMore((underscore2Ident + Optional(nestedExpr())) | kwl(qualifiers)).suppress()
+    
     msModifier = ZeroOrMore(kwl(msModifiers) + Optional(nestedExpr())).suppress()
     pointerOperator = (
         '*' + typeQualifier |
@@ -1090,11 +1110,6 @@ if hasPyParsing:
     ## language elements
     fundType = OneOrMore(kwl(signModifiers + sizeModifiers + baseTypes)).setParseAction(lambda t: ' '.join(t))
 
-    bitfieldspec = ":" + integer
-    biOperator = oneOf("+ - / * | & || && ! ~ ^ % == != > < >= <= -> . :: << >> = ? :")
-    uniRightOperator = oneOf("++ --")
-    uniLeftOperator = oneOf("++ -- - + * sizeof new")
-    name = (WordStart(wordchars) + Word(alphas+"_",alphanums+"_$") + WordEnd(wordchars))
 
 
     ## Is there a better way to process expressions with cast operators??
