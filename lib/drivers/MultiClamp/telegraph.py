@@ -7,10 +7,6 @@ import struct, os
 from clibrary import *
 import time
 import weakref
-#from lib.util.CLibrary import *
-#from PyQt4 import QtCore, QtGui
-
-__all__ = ['MultiClamp']
 
 ## Load windows definitions
 windowsDefs = winDefs(verbose=True)
@@ -31,35 +27,6 @@ teleDefs = CParser(
 wmlib = CLibrary(windll.User32, teleDefs, prefix='MCTG_')
 
 
-## Get window handle. Should be a long integer; may change in future windows versions.
-#from PyQt4 import QtGui, QtCore
-
-#class App(QtGui.QApplication):
-    #def winEventFilter(self, msg):
-        #print "got message", msg
-        #print dir(msg)
-        ##return 0
-
-
-#app = App([])
-#app = QtGui.QApplication([])
-#win = QtGui.QMainWindow()
-#win.show()
-
-#evd = QtCore.QAbstractEventDispatcher.instance()
-
-#def eventFilter(*args):
-    #print "event:", args
-    #return False
-#evd.setEventFilter(eventFilter)
-
-#print "Getting hwnd..", win.winId()
-#hWnd = ctypes.pythonapi.PyCObject_AsVoidPtr(py_object(win.winId().ascobject()))
-#print hWnd
-
-
-
-
 
 ## Create hidden window so we can catch messages
 def wndProc(hWnd, msg, wParam, lParam):
@@ -72,6 +39,8 @@ def wndProc(hWnd, msg, wParam, lParam):
             data  = cast(data.lpData, POINTER(wmlib.MC_TELEGRAPH_DATA)).contents
             for f in data._fields_:
                 print "    ", f[0], getattr(data, f[0])
+            global d
+            d = dict([(f[0], getattr(data, f[0])) for f in data._fields_])
         else:
             print "  unknown message type", data.dwData
     return True
