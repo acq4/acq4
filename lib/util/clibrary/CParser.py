@@ -62,7 +62,7 @@ class CParser():
             print s
     """
     
-    cacheVersion = 17    ## increment every time cache structure or parsing changes to invalidate old cache files.
+    cacheVersion = 18    ## increment every time cache structure or parsing changes to invalidate old cache files.
     
     def __init__(self, files=None, replace=None, copyFrom=None, processAll=True, cache=None, verbose=False, **args):
         """Create a C parser object fiven a file or list of files. Files are read to memory and operated
@@ -99,6 +99,7 @@ class CParser():
         
         self.fileOrder = []
         self.files = {}
+        self.packList = {}  ## list describing struct packing rules as defined by #pragma pack
         if files is not None:
             if type(files) is str:
                 files = [files]
@@ -301,6 +302,9 @@ class CParser():
         self.assertPyparsing()
         self.buildParser()  ## we need this so that evalExpr works properly
         self.currentFile = file
+        packStack = [(None,None)]  ## stack for #pragma pack push/pop
+        self.packList[file] = [(0,None)]
+        packing = None  ## current packing value 
         
         text = self.files[file]
         
@@ -330,12 +334,12 @@ class CParser():
         ifHit = []
         for i in range(len(lines)):
             line = lines[i]
+            newLine = ''
             m = directive.match(line)
             if m is None:  # regular code line
                 if ifTrue[-1]:  # only include if we are inside the correct section of an IF block
                     #line = macroExpander.transformString(line)  # expand all known macros
-                    line = self.expandMacros(line)
-                    result.append(line)
+                    newLine = self.expandMacros(line)
             else:  # macro line
                 d = m.groups()[0]
                 rest = m.groups()[1]
@@ -412,11 +416,51 @@ class CParser():
                         if sys.exc_info()[0] is not KeyError:
                             sys.excepthook(*sys.exc_info())
                             print "Error removing macro definition '%s'" % macroName.strip()
+                elif d == 'pragma':  ## Check for changes in structure packing
+                    if not ifTrue[-1]:
+                        continue
+                    m = re.match(r'\s+pack\s*\(([^\)]+)\)', rest)
+                    if m is None:
+                        continue
+                    opts = [s.strip() for s in m.groups()[0].split(',')]
+                    
+                    pushpop = id = val = None
+                    for o in opts:
+                        if o in ['push', 'pop']:
+                            pushpop = o
+                        elif o.isdigit():
+                            val = int(o)
+                        else:
+                            id = o
+                            
+                    if val is not None:
+                        packing = val
                         
+                    if pushpop == 'push':
+                        packStack.append((packing, id))
+                    elif opts[0] == 'pop':
+                        if id is None:
+                            packStack.pop()
+                        else:
+                            ind = None
+                            for i in range(len(packStack)):
+                                if packStack[i][1] == id:
+                                    ind = i
+                                    break
+                            if ind is not None:
+                                packStack = packStack[:ind]
+                        if val is None:
+                            packing = packStack[-1][0]
+                    else:
+                        packing = int(opts[0])
+                    
+                    if self.verbose:
+                        print ">> Packing changed to %s at line %d" % (str(packing), i)
+                    self.packList[file].append((i, packing))
                 else:
                     pass  ## Ignore any other directives
                     
-                
+            result.append(newLine)      
         self.files[file] = '\n'.join(result)
         
     def evalPreprocessorExpr(self, expr):
@@ -853,9 +897,23 @@ class CParser():
             sys.excepthook(*sys.exc_info())
 
 
+    def packingAt(self, line):
+        """Return the structure packing value at the given line number"""
+        packing = None
+        for p in self.packList[self.currentFile]:
+            if p[0] <= line: 
+                packing = p[1]
+            else:
+                break
+        return packing
+
     def processStruct(self, s, l, t):
         try:
             strTyp = t.structType  # struct or union
+            
+            ## check for extra packing rules
+            packing = self.packingAt(lineno(l, s))
+            
             if self.verbose:
                 print strTyp.upper(), t.name, t
             if t.name == '':
@@ -888,7 +946,7 @@ class CParser():
                         struct.append((name, decl, val))
                         if self.verbose:
                             print "      ", name, decl, val
-                self.addDef(strTyp+'s', sname, struct)
+                self.addDef(strTyp+'s', sname, {'pack': packing, 'members': struct})
                 self.addDef('types', strTyp+' '+sname, (strTyp, sname))
                 #self.updateStructDefn()
             return strTyp+' '+sname

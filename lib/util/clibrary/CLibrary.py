@@ -235,16 +235,21 @@ class CLibrary:
         
     def _cstruct(self, strType, strName):
         if strName not in self._structs_:
-            defs = self._defs_[strType][strName][:]
+            defn = self._defs_[strType][strName]
+            defs = defn['members'][:]
             if strType == 'structs':
                 class s(Structure):
                     pass
             elif strType == 'unions':
                 class s(Union):
                     pass
-                
+            
+            
             ## must register struct here to allow recursive definitions.
             self._structs_[strName] = s
+            
+            if defn['pack'] is not None:
+                s._pack_ = defn['pack']
             
             ## assign names to anonymous members
             members = []
