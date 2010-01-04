@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from ctypes import *
 import ctypes
-import struct, os
+import struct, os, threading
 from lib.util.clibrary import *
 import weakref
 #from lib.util.CLibrary import *
@@ -65,9 +65,13 @@ class MultiClamp:
         if MultiClamp.INSTANCE is not None:
             raise Exception("Already created MultiClamp driver object; use MultiClamp.INSTANCE")
         self.handle = None
+        self.telegraphLock = threading.Lock()
+        self.devStates = []  ## Stores basic state of devices reported by telegraph
         
         self.chanHandles = weakref.WeakValueDictionary()  
         self.connect()
+        
+        self.telegraph = MultiClampTelegraph(self.devices, self.telegraphMessage)
         MultiClamp.INSTANCE = self
     
     def __del__(self):
@@ -91,7 +95,6 @@ class MultiClamp:
         h = MultiClampChannel(self, chInd)
         self.chanHandles[channel] = h
         return h
-        
     
     
     def getParam(self, chan, param):
@@ -110,7 +113,8 @@ class MultiClamp:
             return 1.0
             
         return v
-        
+
+
     def setParam(self, chan, param, value):
         self.selectDev(chan)
         fn = "Set" + param
@@ -137,6 +141,7 @@ class MultiClamp:
         for p in params:
             res[p] = self.getParam(chan, p)
         return res
+
 
     def setParams(self, chan, params):
         """Sets multiple parameters on multiclamp.
@@ -331,7 +336,8 @@ class MultiClamp:
                 break
             else:
                 self.devices.append(dev)
-        for h in self.chanHandles:
+        self.devStates = [None] * len(self.devices)
+        for h in self.chanHandles:  ## Update any channel objects that have been created
             try:
                 ind = self.channelIndex(h)
             except:
@@ -365,6 +371,17 @@ class MultiClamp:
         except:
             sys.excepthook(*sys.exc_info())
             return "<could not generate error message>"
+
+    def telegraphMessage(self, msg, devID, state):
+        with self.lock:
+            if msg == 'update':
+                self.devStates[devID] = state
+            elif 'msg' == 'reconnect':
+                self.connect()
+        
+
+
+
 
 
 ### Create instance of driver class
