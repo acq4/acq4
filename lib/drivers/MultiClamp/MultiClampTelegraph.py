@@ -5,6 +5,8 @@ import ctypes
 import struct, os, threading, time, weakref
 from clibrary import *
 
+__all__ = ['MultiClampTelegraph', 'wmlib']
+
 ## Load windows definitions
 windowsDefs = winDefs(verbose=True)
 
@@ -29,13 +31,14 @@ class MultiClampTelegraph:
     This class is automatically invoked by MultiClamp."""
 
     def __init__(self, devices, callback):
-        # device structure looks like:
-        #  {devID: [device_desc, device_state], devID: ...}
-        self.devOrder = devices  # remember order of devices for communicating with MultiClamp driver
-        self.devices = dict([(self.mkDevId(d), [d, None]) for d in devices])
+        #self.devices = dict([(self.mkDevId(d), [d, None]) for d in devices])
+        ## remember index of each device for communicating through callback
+        self.devIndex = dict([(self.mkDevId(devices[i]), i) for i in range(len(devices))])  
+        print "DEV index:", self.devIndex
         self.callback = callback
         self.lock = threading.Lock()
-        self.thread = threading.Thread(self.messageLoop)
+        self.thread = threading.Thread()
+        self.thread.run = self.messageLoop
         self.startMessageThread()
         
     def mkDevId(self, desc):
@@ -62,22 +65,25 @@ class MultiClampTelegraph:
         
 
     def updateState(self, devID, state):
-        with self.lock:
-            self.devices[devID][1] = state
-        self.emit('update', devID)
+        #with self.lock:
+            #self.devices[devID][1] = state
+        self.emit('update', self.devIndex[devID], state)
         
-    def emit(self, msg, devID):
+    def emit(self, *args):
         """Send a message via the registered callback function"""
         with self.lock:
-            self.callback(msg, *self.devices[devID])
+            self.callback(*args)
         
     def messageLoop(self):
         # create hidden window for receiving messages (how silly is this?)
         self.createWindow()
         self.registerMessages()
+        print "window handle:", self.hWnd
+        print "messages:", self.msgIds
         
         # request connection to MCC
-        for d in self.devices:
+        for d in self.devIndex:
+            print "Open:", d
             self.post('OPEN', d)
         
         # listen for changes / reconnect requests / stop requests
@@ -91,6 +97,7 @@ class MultiClampTelegraph:
                     break
                 else:
                     msg = ret[0].message
+                    print "message loop got msg", msg
                     if msg == self.msgIds['RECONNECT']:
                         devID = ret[0].lParam
                         if devID in self.deviceOrder:
@@ -99,20 +106,20 @@ class MultiClampTelegraph:
                 
             with self.lock:
                 if self.stopThread:
-                    for d in self.devices:
+                    for d in self.devIndex:
                         self.post('CLOSE', d)
                     break
         
             time.sleep(0.1)
 
     def createWindow(self):
-        wndClass = wmlib.WNDCLASSA(0, wmlib.WNDPROC(self.wndProc), 0, 0, wmlib.HWND_MESSAGE, 0, 0, 0, "", "AxTelegraphWin")
-        ret = wmlib.RegisterClassA(wndClass)
-        print "Register class:", ret()
+        self.wndClass = wmlib.WNDCLASSA(0, wmlib.WNDPROC(self.wndProc), 0, 0, wmlib.HWND_MESSAGE, 0, 0, 0, "", "AxTelegraphWin")
+        ret = wmlib.RegisterClassA(self.wndClass)
+        #print "Register class:", ret()
         if ret() == 0:
             raise Exception("Error registering window class.")
         cwret = wmlib.CreateWindowExA(
-            0, wndClass.lpszClassName, "title", 
+            0, self.wndClass.lpszClassName, "title", 
             wmlib.WS_OVERLAPPEDWINDOW,
             wmlib.CW_USEDEFAULT,
             wmlib.CW_USEDEFAULT,
@@ -123,7 +130,7 @@ class MultiClampTelegraph:
             raise Exception("Error creating window.", self.getWindowsError())
 
         self.hWnd = cwret.rval
-        print "Create window:", hWnd
+        #print "Create window:", self.hWnd
         
 
     def wndProc(self, hWnd, msg, wParam, lParam):
@@ -132,20 +139,49 @@ class MultiClampTelegraph:
         if msg == wmlib.WM_COPYDATA:
             print "  copydatastruct", lParam
             data = cast(lParam, POINTER(wmlib.COPYDATASTRUCT)).contents
-            if data.dwData == msgIds['REQUEST']:
+            if data.dwData == self.msgIds['REQUEST']:
                 print "  got update from MCC"
                 
                 data  = cast(data.lpData, POINTER(wmlib.MC_TELEGRAPH_DATA)).contents
                 
                 #### Make sure packet is for the correct device!
                 devID = self.mkDevId({'com': data.uComPortID, 'dev': data.uAxoBusID, 'chan': data.uChannelID})
-                if not devID in self.devices:
+                if not devID in self.devIndex:
                     return False
                 
                 #for f in data._fields_:
                     #print "    ", f[0], getattr(data, f[0])
                 #global d
-                state = dict([(f[0], getattr(data, f[0])) for f in data._fields_])
+                #state = dict([(f[0], getattr(data, f[0])) for f in data._fields_])
+                
+                ## translate state into something prettier
+                
+                mode = ['VC', 'IC', 'I=0'][data.uOperatingMode]
+                if mode == 'VC':
+                    priSignal = wmlib.MCTG_OUT_MUX_VC_LONG_NAMES[data.uScaledOutSignal]
+                    secSignal = wmlib.MCTG_OUT_MUX_VC_LONG_NAMES_RAW[data.uRawOutSignal]
+                    priUnits = wmlib.MCTG_OUT_MUX_VC_SHORT_NAMES[data.uScaleFactorUnits]
+                    secUnits = wmlib.MCTG_OUT_MUX_VC_SHORT_NAMES_RAW[data.uRawScaleFactorUnits]
+                else:
+                    priSignal = wmlib.MCTG_OUT_MUX_IC_LONG_NAMES[data.uScaledOutSignal]
+                    secSignal = wmlib.MCTG_OUT_MUX_IC_LONG_NAMES_RAW[data.uRawOutSignal]
+                    priUnits = wmlib.MCTG_OUT_MUX_IC_SHORT_NAMES[data.uScaleFactorUnits]
+                    secUnits = wmlib.MCTG_OUT_MUX_IC_SHORT_NAMES_RAW[data.uRawScaleFactorUnits]
+                    
+                state = {
+                    'mode': mode,
+                    'primarySignal': priSignal,
+                    'primaryGain': data.dAlpha,
+                    'primaryUnits': priUnits,
+                    'primaryScaleFactor': data.dScaleFactor,
+                    'secondarySignal': secSignal,
+                    'secondaryGain': 1.0,
+                    'secondaryUnits': secUnits,
+                    'secondaryScaleFactor': data.dRawScaleFactor,
+                    'membraneCapacitance': data.dMembraneCap,
+                    'LPFCutoff': data.dLPFCutoff,
+                    'extCmdScale': data.dExtCmdSens,
+                }
                 self.updateState(devID, state)
             else:
                 print "  unknown message type", data.dwData

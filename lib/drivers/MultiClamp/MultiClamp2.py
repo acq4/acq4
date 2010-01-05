@@ -2,12 +2,13 @@
 from ctypes import *
 import ctypes
 import struct, os, threading
-from lib.util.clibrary import *
+from clibrary import *
 import weakref
+from MultiClampTelegraph import *
 #from lib.util.CLibrary import *
 #from PyQt4 import QtCore, QtGui
 
-__all__ = ['MultiClamp']
+__all__ = ['MultiClamp', 'axlib', 'wmlib']
 
 ## Load windows definitions
 windowsDefs = winDefs(verbose=True)
@@ -21,15 +22,19 @@ axonDefs = CParser(
     verbose=True
 )
 
+axlib = CLibrary(windll.AxMultiClampMsg, axonDefs, prefix='MCCMSG_')
 
 
 class MultiClampChannel:
     """Class used to run MultiClamp commander functions for a specific channel.
     Uses most of the same functions as MultiClamp, but does not require the channel argument.
     Instances of this class are created via MultiClamp.getChannel"""
-    def __init__(self, mc, chan):
+    def __init__(self, mc, chan, callback):
         self.mc = mc
         self.chan = chan
+        self.callback = callback 
+        self.state = None
+        self.lock = threading.Lock()
         
         ## Proxy functions back to MC object with channel argument automatically supplied
         for fn in ['getParam', 'setParam', 'getParams', 'setParams', 'getMode', 'setMode', 'setPrimarySignalByName', 'setSecondarySignalByName', 'setSignalByName', 'getPrimarySignalInfo', 'getSecondarySignalInfo', 'getSignalInfo', 'listSignals']:
@@ -46,7 +51,14 @@ class MultiClampChannel:
     def setChan(self, ch):
         self.chan = ch
         
+    def getState(self):
+        with self.lock:
+            return self.state
         
+    def updateState(self, state):
+        with self.lock:
+            self.state = state
+        self.callback(state)
 
 class MultiClamp:
     """Class used to interface with remote multiclamp server.
@@ -75,8 +87,12 @@ class MultiClamp:
         MultiClamp.INSTANCE = self
     
     def __del__(self):
+        self.quit()
+        
+    def quit(self):
         ## do other things to shut down driver?
         self.disconnect()
+        self.telegraph.quit()
         MultiClamp.INSTANCE = None
     
     @staticmethod
@@ -87,12 +103,16 @@ class MultiClamp:
 
     ### High-level driver calls
     
-    def getChannel(self, channel):
+    def getChannel(self, channel, callback):
         """Return a MultiClampChannel object for the specified device/channel. The
-        argument should be the same as a single item from listDevices()"""
+        channel argument should be the same as a single item from listDevices().
+        The callback will be called when certain (but not any) changes are made
+        to the multiclamp state."""
+        if channel in self.chanHandles:
+            return self.chanHandles
+        
         chInd = self.channelIndex(channel)
-            
-        h = MultiClampChannel(self, chInd)
+        h = MultiClampChannel(self, chInd, callback)
         self.chanHandles[channel] = h
         return h
     
@@ -195,13 +215,18 @@ class MultiClamp:
         if mode == 'I=0':
             mode = 'IC'
             
-        sig = None
+        #sig = None
+        #sigMap = SIGNAL_MAP[model][mode][priMap[primary]]
+        #for k in sigMap:
+            #if sigMap[k][0] == signal:
+                #sig = "SIGNAL_" + k
+                
         sigMap = SIGNAL_MAP[model][mode][priMap[primary]]
-        for k in sigMap:
-            if sigMap[k][0] == signal:
-                sig = "SIGNAL_" + k
-        if sig is None:
+        if signal not in sigMap:
             raise Exception("Signal name '%s' not found" % signal)
+            
+        sig = 'SIGNAL_' + sigMap[signal]
+                
         if primary == 0:
             self.setParam(chan, 'PrimarySignal', sig)
         elif primary == 1:
@@ -219,53 +244,67 @@ class MultiClamp:
     def setSecondarySignalByName(self, chan, signal):
         return self.setSignalByName(chan, signal, 1)
     
-    def getSignalInfo(self, chan, primary=0):
-        """Return a tuple (signalName, gain, units) for the current signal
+    
+    ## This information is now handled by telegraph
+    #def getSignalInfo(self, chan, primary=0):
+        #"""Return a tuple (signalName, gain, units) for the current signal
         
-        the outputChan argument defaults to 'Primary' and can be set to 'Secondary' instead.
-        """
-        #self.selectDev(devID)
-        model = self.devices[chan]['model']
+        #the outputChan argument defaults to 'Primary' and can be set to 'Secondary' instead.
+        #"""
+        ##self.selectDev(devID)
+        #model = self.devices[chan]['model']
         
-        priMap = ['PRI', 'SEC']
+        #priMap = ['PRI', 'SEC']
         
-        if primary == 0:
-            outputChan = 'Primary'
-        elif primary == 1:
-            outputChan = 'Secondary'
+        #if primary == 0:
+            #outputChan = 'Primary'
+        #elif primary == 1:
+            #outputChan = 'Secondary'
             
-        sig = self.getParam(chan, outputChan+'Signal')[7:]
+        #sig = self.getParam(chan, outputChan+'Signal')[7:]
         
-        mode = self.getMode(chan)
-        if mode == 'I=0':
-            mode = 'IC'
+        #mode = self.getMode(chan)
+        #if mode == 'I=0':
+            #mode = 'IC'
             
-        ##print devID, model, mode, primary, sig
-        (name, gain, units) = SIGNAL_MAP[model][mode][priMap[primary]][sig]
+        ###print devID, model, mode, primary, sig
+        #(name, gain, units) = SIGNAL_MAP[model][mode][priMap[primary]][sig]
         
-        xGain = self.getParam(chan, outputChan + 'SignalGain')
-        ### Silly workaround-- MC700A likes to tell us that secondary signal gain is 0
-        #if xGain < 1e-10:
-                #xGain = 1.0
-        gain2 = float(gain) * xGain
-        #print "%s gain = %f * %f = %f" % (outputChan, float(gain), float(xGain[0]), gain2)
-        return (name, gain2, units)
+        #xGain = self.getParam(chan, outputChan + 'SignalGain')
+        #### Silly workaround-- MC700A likes to tell us that secondary signal gain is 0
+        ##if xGain < 1e-10:
+                ##xGain = 1.0
+        #gain2 = float(gain) * xGain
+        ##print "%s gain = %f * %f = %f" % (outputChan, float(gain), float(xGain[0]), gain2)
+        #return (name, gain2, units)
 
     
     def listSignals(self, chan, mode=None):
         """Return two lists of signal names that may be used for this channel:
-           ( [primary signals], [secondary signals] )
-        If mode is omitted, then the current mode of the channel is used."""
-        
+           #( [primary signals], [secondary signals] )
+        #If mode is omitted, then the current mode of the channel is used."""
         if mode is None:
             mode = self.getMode(chan)
         if mode == 'I=0':
             mode = 'IC'
         model = self.devices[chan]['model']
-        sigmap = SIGNAL_MAP[model][mode]
-        pri = [v[0] for v in sigmap['PRI'].values()]
-        sec = [v[0] for v in sigmap['SEC'].values()]
-        return (pri, sec)
+        return (SIGNAL_MAP[model][mode]['PRI'].keys(), SIGNAL_MAP[model][mode]['SEC'].keys())
+        
+    
+    #def listSignals(self, chan, mode=None):
+        #"""Return two lists of signal names that may be used for this channel:
+           #( [primary signals], [secondary signals] )
+        #If mode is omitted, then the current mode of the channel is used."""
+        
+        #if mode is None:
+            #mode = self.getMode(chan)
+        #if mode == 'I=0':
+            #mode = 'IC'
+        #model = self.devices[chan]['model']
+        #sigmap = SIGNAL_MAP[model][mode]
+        #pri = [v[0] for v in sigmap['PRI'].values()]
+        #sec = [v[0] for v in sigmap['SEC'].values()]
+        #return (pri, sec)
         
     def channelIndex(self, channel):
         devs = self.listDevices()
@@ -376,6 +415,9 @@ class MultiClamp:
         with self.lock:
             if msg == 'update':
                 self.devStates[devID] = state
+                for ch in self.chanHandles.values():  ## run callback for individual channel
+                    if ch.chan == devID:
+                        ch.udpateState(state)
             elif 'msg' == 'reconnect':
                 self.connect()
         
@@ -429,89 +471,174 @@ INV_NAME_MAPS = {
 
 
 
+## Build a map for connecting signal strings from telegraph headers to signal values from axon headers.
+##  Note: Completely retarded.
+
+SIGNAL_MAP = {
+    axlib.HW_TYPE_MC700A: {
+        'VC': {
+            'PRI': {
+                "Membrane Potential": "VC_MEMBPOTENTIAL",
+                "Membrane Current": "VC_MEMBCURRENT",
+                "Pipette Potential": "VC_PIPPOTENTIAL",
+                "100 x AC Pipette Potential": "VC_100XACMEMBPOTENTIAL",
+                "Bath Potential": "VC_AUXILIARY1"
+            },
+            'SEC': {
+                "Membrane plus Offset Potential": "VC_MEMBPOTENTIAL",
+                "Membrane Current": "VC_MEMBCURRENT",
+                "Pipette Potential": "VC_PIPPOTENTIAL",
+                "100 x AC Pipette Potential": "VC_100XACMEMBPOTENTIAL",
+                "Bath Potential": "VC_AUXILIARY1"
+            }   
+        },
+        'IC': {
+            'PRI': {   ## Driver bug? Primary IC signals use VC values. Bah.
+                "Command Current": "VC_MEMBPOTENTIAL",
+                "Membrane Current": "VC_MEMBCURRENT",
+                "Membrane Potential": "VC_MEMBPOTENTIAL",
+                "100 x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
+                "Bath Potential": "VC_AUXILIARY1"
+            },
+            'SEC': {
+                "Command Current": "IC_CMDCURRENT",
+                "Membrane Current": "IC_MEMBCURRENT",
+                "Membrane plus Offset Potential": "IC_MEMBPOTENTIAL",
+                "100 x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
+                "Bath Potential": "IC_AUXILIARY1"
+            }
+        }
+    },
+        
+    #axlib.HW_TYPE_MC700B: {
+        #'VC': {
+            #'PRI': {
+                #"VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
+                #"VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
+                #"VC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
+                #"VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
+                #"VC_EXTCMDPOTENTIAL": ("ExternalCommandPotential", 50., 'V'),
+                #"VC_AUXILIARY1": ("Auxiliaryl", 1., 'V'),
+                #"VC_AUXILIARY2": ("Auxiliary2", 1., 'V')
+            #},
+            #'SEC': {
+                #"VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
+                #"VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
+                #"VC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
+                #"VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
+                #"VC_EXTCMDPOTENTIAL": ("ExternalCommandPotential", 50., 'V'),
+                #"VC_AUXILIARY1": ("Auxiliaryl", 1., 'V'),
+                #"VC_AUXILIARY2": ("Auxiliary2", 1., 'V')
+            #}
+        #},
+        #'IC': {
+            #'PRI': {
+                #"IC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
+                #"IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
+                #"IC_CMDCURRENT": ("CommandCurrent", 0.5e9, 'A'),
+                #"IC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
+                #"IC_EXTCMDCURRENT": ("ExternalCommandCurrent", 2.5e9, 'A'),
+                #"IC_AUXILIARY1": ("Auxiliary1", 1., 'V'),
+                #"IC_AUXILIARY2": ("Auxiliary2", 1., 'V')
+            #},
+            #'SEC': {
+                #"IC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
+                #"IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
+                #"IC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
+                #"IC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
+                #"IC_EXTCMDCURRENT": ("ExternalCommandCurrent", 2.5e9, 'A'),
+                #"IC_AUXILIARY1": ("Auxiliary1", 1., 'V'),
+                #"IC_AUXILIARY2": ("Auxiliary2", 1., 'V')
+            #}
+        #}
+    #}
+}
+    
+
+
 
 
 ## In order to properly interpret the output of getPrimarySignal and getSecondarySignal, 
 ## we also need to know the model and mode of the amplifier and translate via this table
 ## Note: Completely retarded. This should have been handled by the axon library
 
-SIGNAL_MAP = {
-    axlib.HW_TYPE_MC700A: {
-        'VC': {
-            'PRI': {
-                "VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
-                "VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                "VC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
-                "VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                "VC_AUXILIARY1": ("BathPotential", 1., 'V')
-            },
-            'SEC': {
-                "VC_MEMBPOTENTIAL": ("MembranePlusOffsetPotential", 10.0, 'V'),
-                "VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                "VC_PIPPOTENTIAL": ("PipettePotential", 1., 'V'),
-                "VC_100XACMEMBPOTENTIAL": ("100XACPipettePotential", 100., 'V'),
-                "VC_AUXILIARY1": ("BathPotential", 1., 'V')
-            }
-        },
-        'IC': {
-            'PRI': {   ## Driver bug? Primary IC signals use VC values. Bah.
-                "VC_PIPPOTENTIAL": ("MembranePotential", 1.0, 'V'),
-                "VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                "VC_MEMBPOTENTIAL": ("CommandCurrent", 0.5e9, 'A'),
-                "VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                "VC_AUXILIARY1": ("BathPotential", 1., 'V')
-            },
-            'SEC': {
-                "IC_CMDCURRENT": ("CommandCurrent", 0.5e9, 'A'),
-                "IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                "IC_MEMBPOTENTIAL": ("MembranePlusOffsetPotential", 1.0, 'V'),
-                "IC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                "IC_AUXILIARY1": ("BathPotential", 1., 'V')
-            }
-        }
-    },
+#SIGNAL_MAP = {
+    #axlib.HW_TYPE_MC700A: {
+        #'VC': {
+            #'PRI': {
+                #"VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
+                #"VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
+                #"VC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
+                #"VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
+                #"VC_AUXILIARY1": ("BathPotential", 1., 'V')
+            #},
+            #'SEC': {
+                #"VC_MEMBPOTENTIAL": ("MembranePlusOffsetPotential", 10.0, 'V'),
+                #"VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
+                #"VC_PIPPOTENTIAL": ("PipettePotential", 1., 'V'),
+                #"VC_100XACMEMBPOTENTIAL": ("100XACPipettePotential", 100., 'V'),
+                #"VC_AUXILIARY1": ("BathPotential", 1., 'V')
+            #}
+        #},
+        #'IC': {
+            #'PRI': {   ## Driver bug? Primary IC signals use VC values. Bah.
+                #"VC_PIPPOTENTIAL": ("MembranePotential", 1.0, 'V'),
+                #"VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
+                #"VC_MEMBPOTENTIAL": ("CommandCurrent", 0.5e9, 'A'),
+                #"VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
+                #"VC_AUXILIARY1": ("BathPotential", 1., 'V')
+            #},
+            #'SEC': {
+                #"IC_CMDCURRENT": ("CommandCurrent", 0.5e9, 'A'),
+                #"IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
+                #"IC_MEMBPOTENTIAL": ("MembranePlusOffsetPotential", 1.0, 'V'),
+                #"IC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
+                #"IC_AUXILIARY1": ("BathPotential", 1., 'V')
+            #}
+        #}
+    #},
         
-    axlib.HW_TYPE_MC700B: {
-        'VC': {
-            'PRI': {
-                "VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                "VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
-                "VC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
-                "VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                "VC_EXTCMDPOTENTIAL": ("ExternalCommandPotential", 50., 'V'),
-                "VC_AUXILIARY1": ("Auxiliaryl", 1., 'V'),
-                "VC_AUXILIARY2": ("Auxiliary2", 1., 'V')
-            },
-            'SEC': {
-                "VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                "VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
-                "VC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
-                "VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                "VC_EXTCMDPOTENTIAL": ("ExternalCommandPotential", 50., 'V'),
-                "VC_AUXILIARY1": ("Auxiliaryl", 1., 'V'),
-                "VC_AUXILIARY2": ("Auxiliary2", 1., 'V')
-            }
-        },
-        'IC': {
-            'PRI': {
-                "IC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
-                "IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                "IC_CMDCURRENT": ("CommandCurrent", 0.5e9, 'A'),
-                "IC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                "IC_EXTCMDCURRENT": ("ExternalCommandCurrent", 2.5e9, 'A'),
-                "IC_AUXILIARY1": ("Auxiliary1", 1., 'V'),
-                "IC_AUXILIARY2": ("Auxiliary2", 1., 'V')
-            },
-            'SEC': {
-                "IC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
-                "IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                "IC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
-                "IC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                "IC_EXTCMDCURRENT": ("ExternalCommandCurrent", 2.5e9, 'A'),
-                "IC_AUXILIARY1": ("Auxiliary1", 1., 'V'),
-                "IC_AUXILIARY2": ("Auxiliary2", 1., 'V')
-            }
-        }
-    }
-}
+    #axlib.HW_TYPE_MC700B: {
+        #'VC': {
+            #'PRI': {
+                #"VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
+                #"VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
+                #"VC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
+                #"VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
+                #"VC_EXTCMDPOTENTIAL": ("ExternalCommandPotential", 50., 'V'),
+                #"VC_AUXILIARY1": ("Auxiliaryl", 1., 'V'),
+                #"VC_AUXILIARY2": ("Auxiliary2", 1., 'V')
+            #},
+            #'SEC': {
+                #"VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
+                #"VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
+                #"VC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
+                #"VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
+                #"VC_EXTCMDPOTENTIAL": ("ExternalCommandPotential", 50., 'V'),
+                #"VC_AUXILIARY1": ("Auxiliaryl", 1., 'V'),
+                #"VC_AUXILIARY2": ("Auxiliary2", 1., 'V')
+            #}
+        #},
+        #'IC': {
+            #'PRI': {
+                #"IC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
+                #"IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
+                #"IC_CMDCURRENT": ("CommandCurrent", 0.5e9, 'A'),
+                #"IC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
+                #"IC_EXTCMDCURRENT": ("ExternalCommandCurrent", 2.5e9, 'A'),
+                #"IC_AUXILIARY1": ("Auxiliary1", 1., 'V'),
+                #"IC_AUXILIARY2": ("Auxiliary2", 1., 'V')
+            #},
+            #'SEC': {
+                #"IC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
+                #"IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
+                #"IC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
+                #"IC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
+                #"IC_EXTCMDCURRENT": ("ExternalCommandCurrent", 2.5e9, 'A'),
+                #"IC_AUXILIARY1": ("Auxiliary1", 1., 'V'),
+                #"IC_AUXILIARY2": ("Auxiliary2", 1., 'V')
+            #}
+        #}
+    #}
+#}
     

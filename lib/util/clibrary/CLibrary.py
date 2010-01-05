@@ -182,6 +182,8 @@ class CLibrary:
                 cls = self._cstruct('unions', self._defs_['types'][typ[0]][1])
             elif typ[0][:5] == 'enum ':
                 cls = c_int
+            elif typ[0] == 'void':
+                return None
             else:
                 #print typ
                 raise Exception("Can't find base type for %s" % str(typ))
