@@ -155,7 +155,7 @@ class MultiClampTelegraph:
                 #state = dict([(f[0], getattr(data, f[0])) for f in data._fields_])
                 
                 ## translate state into something prettier
-                
+                print "units:", data.uScaleFactorUnits, data.uRawScaleFactorUnits
                 mode = ['VC', 'IC', 'I=0'][data.uOperatingMode]
                 if mode == 'VC':
                     priSignal = wmlib.MCTG_OUT_MUX_VC_LONG_NAMES[data.uScaledOutSignal]

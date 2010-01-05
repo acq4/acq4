@@ -723,7 +723,7 @@ class CParser():
                 self.abstractDeclarator('decl') + 
                 Optional(Literal('=').suppress() + expression, default=None)('val')
             )), default=None) + rparen)('args') + 
-            Group(ZeroOrMore(lbrack + Optional(number, default='-1') + rbrack))('arrays')
+            Group(ZeroOrMore(lbrack + Optional(expression, default='-1') + rbrack))('arrays')
         )
         
         ## Argument list may consist of declarators or abstract declarators
@@ -748,7 +748,7 @@ class CParser():
                 (self.declarator | self.abstractDeclarator)('decl') + 
                 Optional(Literal('=').suppress() + expression, default=None)('val')
             )), default=None) + rparen)('args') + 
-            Group(ZeroOrMore(lbrack + Optional(number, default='-1') + rbrack))('arrays')
+            Group(ZeroOrMore(lbrack + Optional(expression, default='-1') + rbrack))('arrays')
         )
         self.declaratorList = Group(delimitedList(self.declarator))
 
@@ -863,7 +863,7 @@ class CParser():
                 enum = {}
                 for v in t.members:
                     if v.value != '':
-                        i = int(v.value)
+                        i = eval(v.value)
                     enum[v.name] = i
                     self.addDef('values', v.name, i)
                     i += 1
@@ -871,7 +871,7 @@ class CParser():
                         print "  members:", enum
                 self.addDef('enums', name, enum)
                 self.addDef('types', 'enum '+name, ('enum', name))
-            return ('enum:'+name)
+            return ('enum ' + name)
         except:
             if self.verbose:
                 print "Error processing enum:", t
@@ -1132,7 +1132,7 @@ if hasPyParsing:
     keyword = kwl(keywords)
     wordchars = alphanums+'_$'
     ident = (WordStart(wordchars) + ~keyword + Word(alphas+"_",alphanums+"_$") + WordEnd(wordchars)).setParseAction(lambda t: t[0])
-    integer = Combine(Optional("-") + (Word( nums ) | Combine("0x" + Word(hexnums)))) 
+    #integer = Combine(Optional("-") + (Word( nums ) | Combine("0x" + Word(hexnums)))) 
     semi   = Literal(";").ignore(quotedString).suppress()
     lbrace = Literal("{").ignore(quotedString).suppress()
     rbrace = Literal("}").ignore(quotedString).suppress()
@@ -1142,6 +1142,7 @@ if hasPyParsing:
     rparen = Literal(")").ignore(quotedString).suppress()
     hexint = Regex('-?0x[%s]+[UL]*'%hexnums).setParseAction(lambda t: t[0].rstrip('UL'))
     decint = Regex(r'-?\d+[UL]*').setParseAction(lambda t: t[0].rstrip('UL'))
+    integer = (hexint | decint)
     floating = Regex(r'-?((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?')
     number = (hexint | floating | decint)
     bitfieldspec = ":" + integer

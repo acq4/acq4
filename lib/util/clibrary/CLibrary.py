@@ -76,7 +76,7 @@ class CLibrary:
         self._lib_ = lib
         self._headers_ = headers
         self._defs_ = headers.defs
-        if type(prefix) is None:
+        if prefix is None:
             self._prefix_ = []
         elif type(prefix) is list:
             self._prefix_ = prefix
@@ -289,17 +289,19 @@ class CFunction:
     def __init__(self, lib, func, sig, name):
         self.lib = lib
         self.func = func
-        self.sig = sig[:]   # looks like [return_type, [(argName, type, default), (argName, type, default), ...]]
+        print sig
+        self.sig = list(sig) # looks like [return_type, [(argName, type, default), (argName, type, default), ...]]
+        self.sig[1] = [s for s in sig[1] if s[1] != ['void']]  ## remove void args from list
         for conv in ['__stdcall', '__cdecl']:
             if conv in self.sig[0]:
                 self.sig[0].remove(conv)
         self.name = name
-        self.restype = lib._ctype(sig[0])
+        self.restype = lib._ctype(self.sig[0])
         #func.restype = self.restype
-        self.argTypes = [lib._ctype(s[1]) for s in sig[1]]
+        self.argTypes = [lib._ctype(s[1]) for s in self.sig[1]]
         func.argtypes = self.argTypes
-        self.reqArgs = [x[0] for x in sig[1] if x[2] is None]
-        self.argInds = dict([(sig[1][i][0], i) for i in range(len(sig[1]))])  ## mapping from argument names to indices
+        self.reqArgs = [x[0] for x in self.sig[1] if x[2] is None]
+        self.argInds = dict([(self.sig[1][i][0], i) for i in range(len(self.sig[1]))])  ## mapping from argument names to indices
         #print "created func", self, sig, self.argTypes
 
     def __call__(self, *args, **kwargs):
