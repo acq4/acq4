@@ -10,7 +10,7 @@ signatures from C files (preferrably header files).
 
 import sys, re, os
 
-#__all__ = ['winDefs', 'CParser']
+__all__ = ['winDefs', 'CParser']
 
 
 def winDefs(verbose=False):
