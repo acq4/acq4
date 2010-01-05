@@ -18,7 +18,7 @@ class MultiClamp2(Device):
         self.index = None
         self.devRackGui = None
         
-        self.mc = MultiClampDriver.instance().getChannel(self.config['channelID'])
+        self.mc = MultiClampDriver.instance().getChannel(self.config['channelID'], self.mcUpdate)
         
         print "Created MultiClamp device"
     
@@ -38,6 +38,13 @@ class MultiClamp2(Device):
                     self.setMode(mode)
                     self.mc.setParams(self.config['settings'][mode])
         self.setMode('I=0')  ## safest mode to leave clamp in
+
+    def mcUpdate(self, state):
+        """MC state has changed, handle the update."""
+        QtCore.QObject.emit(QtCore.SIGNAL('stateChanged'), state)
+        
+    def getState(self):
+        return self.mc.getState()
 
     def deviceInterface(self):
         with MutexLocker(self.lock):
@@ -86,15 +93,15 @@ class MultiClamp2(Device):
             #print "     setChannelValue", chan, holding
             daqDev.setChannelValue(chan, holding*scale, block=False)
         
-    def getChanIndex(self):
-        """Given a channel name (as defined in the configuration), return the device index to use when making calls to the MC"""
-        with MutexLocker(self.lock):
-            if self.index is None:
-                devs = self.mc.listDevices()
-                if self.channelID not in devs:
-                    raise Exception("Could not find device on multiclamp with description '%s'" % self.channelID)
-                self.index = devs.index(self.channelID)
-            return self.index
+    #def getChanIndex(self):
+        #"""Given a channel name (as defined in the configuration), return the device index to use when making calls to the MC"""
+        #with MutexLocker(self.lock):
+            #if self.index is None:
+                #devs = self.mc.listDevices()
+                #if self.channelID not in devs:
+                    #raise Exception("Could not find device on multiclamp with description '%s'" % self.channelID)
+                #self.index = devs.index(self.channelID)
+            #return self.index
         
     def listSignals(self, mode):
         return self.mc.listSignals(mode)
@@ -149,7 +156,7 @@ class MultiClamp2(Device):
 
 
 class MultiClampTask(DeviceTask):
-    recordParams = ['Holding', 'HoldingEnable', 'PipetteOffset', 'FastCompCap', 'SlowCompCap', 'FastCompTau', 'SlowCompTau', 'NeutralizationEnable', 'NeutralizationCap', 'WholeCellCompEnable', 'WholeCellCompCap', 'WholeCellCompResist', 'RsCompEnable', 'RsCompBandwidth', 'RsCompCorrection', 'PrimarySignalGain', 'PrimarySignalLPF', 'PrimarySignalHPF', 'OutputZeroEnable', 'OutputZeroAmplitude', 'LeakSubEnable', 'LeakSubResist', 'BridgeBalEnable', 'BridgeBalResist']
+    recordParams = ['Holding', 'HoldingEnable', 'PipetteOffset', 'FastCompCap', 'SlowCompCap', 'FastCompTau', 'SlowCompTau', 'NeutralizationEnable', 'NeutralizationCap', 'WholeCellCompEnable', 'WholeCellCompCap', 'WholeCellCompResist', 'RsCompEnable', 'RsCompBandwidth', 'RsCompCorrection', 'PrimarySignalLPF', 'PrimarySignalHPF', 'OutputZeroEnable', 'OutputZeroAmplitude', 'LeakSubEnable', 'LeakSubResist', 'BridgeBalEnable', 'BridgeBalResist']
     
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
@@ -165,9 +172,9 @@ class MultiClampTask(DeviceTask):
             
             ## If primary and secondary modes are not specified, use default values
             defaultModes = {
-                'VC': {'primary': 'MembraneCurrent', 'secondary': 'PipettePotential'},  ## MC700A does not have MembranePotential signal
-                'IC': {'primary': 'MembranePotential', 'secondary': 'MembraneCurrent'},
-                'I=0': {'primary': 'MembranePotential', 'secondary': None},
+                'VC': {'primary': 'Membrane Current', 'secondary': 'Pipette Potential'},  ## MC700A does not have MembranePotential signal
+                'IC': {'primary': 'Membrane Potential', 'secondary': 'Membrane Current'},
+                'I=0': {'primary': 'Membrane Potential', 'secondary': None},
             }
             for ch in ['primary', 'secondary']:
                 if ch not in self.cmd:
@@ -191,12 +198,14 @@ class MultiClampTask(DeviceTask):
             if self.cmd.has_key('parameters'):
                 self.dev.mc.setParams(self.cmd['parameters'])
             
-            self.state = {}
+            self.state = self.dev.getState()
             if self.cmd.has_key('recordState') and self.cmd['recordState']:
-                self.state = self.dev.mc.getParams(MultiClampTask.recordParams)
+                exState = self.dev.mc.getParams(MultiClampTask.recordParams)
+            for k in exState:
+                self.state[k] = exState[k]
                 
-            self.state['primarySignal'] = self.dev.mc.getPrimarySignalInfo()
-            self.state['secondarySignal'] = self.dev.mc.getSecondarySignalInfo()
+            #self.state['primarySignal'] = self.dev.mc.getPrimarySignalInfo()
+            #self.state['secondarySignal'] = self.dev.mc.getSecondarySignalInfo()
             
             ## set holding level
             if 'holding' in self.cmd:

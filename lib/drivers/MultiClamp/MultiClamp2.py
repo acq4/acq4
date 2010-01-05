@@ -37,7 +37,7 @@ class MultiClampChannel:
         self.lock = threading.Lock()
         
         ## Proxy functions back to MC object with channel argument automatically supplied
-        for fn in ['getParam', 'setParam', 'getParams', 'setParams', 'getMode', 'setMode', 'setPrimarySignalByName', 'setSecondarySignalByName', 'setSignalByName', 'getPrimarySignalInfo', 'getSecondarySignalInfo', 'getSignalInfo', 'listSignals']:
+        for fn in ['getParam', 'setParam', 'getParams', 'setParams', 'setMode', 'setPrimarySignalByName', 'setSecondarySignalByName', 'setSignalByName', 'getPrimarySignalInfo', 'getSecondarySignalInfo', 'getSignalInfo', 'listSignals']:
             self.mkProxy(fn)
 
     def mkProxy(self, fn):
@@ -54,7 +54,11 @@ class MultiClampChannel:
     def getState(self):
         with self.lock:
             return self.state
-        
+            
+    def getMode(self):
+        with self.lock:
+            return self.state['mode']
+
     def updateState(self, state):
         with self.lock:
             self.state = state
@@ -181,8 +185,8 @@ class MultiClamp:
                 res[p] = False
         return res
         
-    def getMode(self, chan):
-        return self.getParam(chan, 'Mode')
+    #def getMode(self, chan):
+        #return self.getParam(chan, 'Mode')
         
     def setMode(self, chan, mode):
         return self.setParam(chan, 'Mode', mode)
