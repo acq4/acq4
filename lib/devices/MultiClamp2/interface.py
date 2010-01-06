@@ -191,14 +191,14 @@ class MultiClampTask(DeviceTask):
             ## Set state of clamp
             self.dev.setMode(self.cmd['mode'])
             if self.cmd['primary'] is not None:
-                self.dev.mc.setPrimarySignalByName(self.cmd['primary'])
+                self.dev.mc.setPrimarySignal(self.cmd['primary'])
             if self.cmd['secondary'] is not None:
-                self.dev.mc.setSecondarySignalByName(self.cmd['secondary'])
+                self.dev.mc.setSecondarySignal(self.cmd['secondary'])
             
             if self.cmd.has_key('parameters'):
                 self.dev.mc.setParams(self.cmd['parameters'])
             
-            self.state = self.dev.getState()
+            self.state = self.dev.mc.getState()
             if self.cmd.has_key('recordState') and self.cmd['recordState']:
                 exState = self.dev.mc.getParams(MultiClampTask.recordParams)
             for k in exState:
@@ -237,7 +237,10 @@ class MultiClampTask(DeviceTask):
                 if chConf[0] == daqTask.devName():
                     if ch == 'command':
                         daqTask.addChannel(chConf[1], 'ao')
-                        scale = self.dev.config['cmdScale'][self.cmd['mode']]
+                        #scale = self.dev.config['cmdScale'][self.cmd['mode']]
+                        if self.state['extCmdScale'] == 0.:
+                            raise Exception('Can not execute command--external command sensitivity is disabled by MultiClamp commander!')
+                        scale = 1.0 / self.state['extCmdScale']
                         cmdData = self.cmd['command'] * scale
                         daqTask.setWaveform(chConf[1], cmdData)
                     else:
@@ -271,19 +274,19 @@ class MultiClampTask(DeviceTask):
                 nPts = result[ch]['info']['numPts']
                 rate = result[ch]['info']['rate']
                 if ch == 'command':
-                    result[ch]['data'] = result[ch]['data'] / self.dev.config['cmdScale'][self.cmd['mode']]
+                    #result[ch]['data'] = result[ch]['data'] / self.dev.config['cmdScale'][self.cmd['mode']]
+                    result[ch]['data'] = result[ch]['data'] * self.state['extCmdScale']
                     result[ch]['name'] = 'Command'
                     if self.cmd['mode'] == 'VC':
                         result[ch]['units'] = 'V'
                     else:
                         result[ch]['units'] = 'A'
                 else:
-                    scale = 1.0 / self.state[ch + 'Signal'][1]
+                    #scale = 1.0 / self.state[ch + 'Signal'][1]
+                    scale = self.state[ch + 'ScaleFactor']
                     result[ch]['data'] = result[ch]['data'] * scale
-                    #if ch == 'secondary':
-                        #print scale, result[ch]['data'].max(), result[ch]['data'].min()
-                    result[ch]['units'] = self.state[ch + 'Signal'][2]
-                    #result[ch]['name'] = self.state[ch + 'Signal'][0]
+                    #result[ch]['units'] = self.state[ch + 'Signal'][2]
+                    result[ch]['units'] = self.state[ch + 'Units']
                     result[ch]['name'] = ch
             # print result
                 

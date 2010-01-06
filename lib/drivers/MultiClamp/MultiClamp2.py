@@ -27,29 +27,26 @@ axlib = CLibrary(windll.AxMultiClampMsg, axonDefs, prefix='MCCMSG_')
 
 class MultiClampChannel:
     """Class used to run MultiClamp commander functions for a specific channel.
-    Uses most of the same functions as MultiClamp, but does not require the channel argument.
     Instances of this class are created via MultiClamp.getChannel"""
-    def __init__(self, mc, chan, callback):
+    def __init__(self, mc, desc):
         self.mc = mc
-        self.chan = chan
-        self.callback = callback 
+        self.desc = desc
         self.state = None
+        self.callback = None
         self.lock = threading.Lock()
         
-        ## Proxy functions back to MC object with channel argument automatically supplied
-        #for fn in ['getParam', 'setParam', 'getParams', 'setParams', 'setMode', 'setPrimarySignalByName', 'setSecondarySignalByName', 'setSignalByName', 'getPrimarySignalInfo', 'getSecondarySignalInfo', 'getSignalInfo', 'listSignals']:
-            #self.mkProxy(fn)
-
-    #def mkProxy(self, fn):
-        #setattr(self, fn, lambda *a, **k: self.proxy(fn, *a, **k))
-
-    #def proxy(self, fn, *args, **kwargs):
-        #if self.chan is None:
-            #raise Exception("MultiClamp channel does not exist in system!")
-        #return getattr(self.mc, fn)(self.chan, *args, **kwargs)
+        ## handle for axon mccmsg library 
+        self.axonDesc = {
+            'pszSerialNum': d['sn'], 
+            'uModel': d['model'], 
+            'uCOMPortID': d['com'], 
+            'uDeviceID': d['dev'], 
+            'uChannelID': d['chan']
+        }
         
-    def setChan(self, ch):
-        self.chan = ch
+    def setCallback(self, cb):
+        with self.lock:
+            self.callback = cb
         
     def getState(self):
         with self.lock:
@@ -60,14 +57,17 @@ class MultiClampChannel:
             return self.state['mode']
 
     def updateState(self, state):
+        """Called by MultiClamp when changes have occurred in MCC."""
         with self.lock:
             self.state = state
-        self.callback(state)
+            cb = self.callback
+        if cb is not None:
+            cb(state)
 
     def getParam(self, param):
-        self.selectDev()
+        self.select()
         fn = 'Get' + param
-        v = self.call(fn)[1]
+        v = self.mc.call(fn)[1]
         
         ## perform return value mapping for a few specific functions
         if fn in INV_NAME_MAPS:
@@ -76,14 +76,14 @@ class MultiClampChannel:
             v = INV_NAME_MAPS[fn][v]
             
         ## Silly workaround--MC700A likes to tell us that secondary signal gain is 0
-        if fn == 'GetSecondarySignalGain' and self.devices[chan]['model'] == axlib.HW_TYPE_MC700A:
+        if fn == 'GetSecondarySignalGain' and self.desc['model'] == axlib.HW_TYPE_MC700A:
             return 1.0
             
         return v
 
 
     def setParam(self, param, value):
-        self.selectDev()
+        self.select()
         fn = "Set" + param
         
         ## Perform value mapping for a few functions (SetMode, SetPrimarySignal, SetSecondarySignal)
@@ -92,7 +92,7 @@ class MultiClampChannel:
                 raise Exception("Argument to %s must be one of %s" % (fn, NAME_MAPS[fn].keys()))
             value = NAME_MAPS[fn][value]
         
-        self.call(fn, value)
+        self.mc.call(fn, value)
 
 
     def getParams(self, params):
@@ -128,9 +128,6 @@ class MultiClampChannel:
                 res[p] = False
         return res
         
-    def getMode(self):
-        return self.state['mode']
-        
     def setMode(self, mode):
         return self.setParam('Mode', mode)
 
@@ -139,7 +136,7 @@ class MultiClampChannel:
         
         Use this function instead of setParam('PrimarySignal', ...). Bugs in the axon driver
         prevent that call from working correctly."""
-        model = self.devices[chan]['model']
+        model = self.desc['model']
         priMap = ['PRI', 'SEC']
         
         mode = self.getMode()
@@ -159,9 +156,9 @@ class MultiClampChannel:
         sig = 'SIGNAL_' + sigMap[signal]
                 
         if primary == 0:
-            self.setParam(chan, 'PrimarySignal', sig)
+            self.setParam('PrimarySignal', sig)
         elif primary == 1:
-            self.setParam(chan, 'SecondarySignal', sig)
+            self.setParam('SecondarySignal', sig)
 
     def getPrimarySignalInfo(self):
         return self.getSignalInfo(0)
@@ -183,8 +180,13 @@ class MultiClampChannel:
             mode = self.getMode()
         if mode == 'I=0':
             mode = 'IC'
-        model = self.devices[chan]['model']
+        model = self.desc['model']
         return (SIGNAL_MAP[model][mode]['PRI'].keys(), SIGNAL_MAP[model][mode]['SEC'].keys())
+
+    def select(self):
+        """Select this channel for parameter get/set"""
+        self.mc.call('SelectMultiClamp', **self.axonDesc)
+        
 
 
 class MultiClamp:
@@ -204,18 +206,20 @@ class MultiClamp:
         if MultiClamp.INSTANCE is not None:
             raise Exception("Already created MultiClamp driver object; use MultiClamp.INSTANCE")
         self.handle = None
-        self.telegraphLock = threading.Lock()
-        self.devStates = []  ## Stores basic state of devices reported by telegraph
+        #self.telegraphLock = threading.Lock()
+        #self.devStates = []  ## Stores basic state of devices reported by telegraph
         
-        self.chanHandles = weakref.WeakValueDictionary()  
+        self.channels = weakref.WeakValueDictionary()  
+        self.chanDesc = {}  
         self.connect()
         
-        self.telegraph = MultiClampTelegraph(self.devices, self.telegraphMessage)
+        self.telegraph = MultiClampTelegraph(self.chanDesc, self.telegraphMessage)
         MultiClamp.INSTANCE = self
     
     def __del__(self):
         self.quit()
         
+    
     def quit(self):
         ## do other things to shut down driver?
         self.disconnect()
@@ -226,137 +230,54 @@ class MultiClamp:
     def instance():
         return MultiClamp.INSTANCE
     
-        
-
-    ### High-level driver calls
-    
-    def getChannel(self, channel, callback):
+    def getChannel(self, channel, callback=None):
         """Return a MultiClampChannel object for the specified device/channel. The
         channel argument should be the same as a single item from listDevices().
         The callback will be called when certain (but not any) changes are made
         to the multiclamp state."""
-        if channel in self.chanHandles:
-            return self.chanHandles
-        
-        chInd = self.channelIndex(channel)
-        h = MultiClampChannel(self, chInd, callback)
-        self.chanHandles[channel] = h
-        return h
-    
-    
-    def listDevices(self):
-        """Return a list of strings used to identify devices on a multiclamp.
-        These strings should be used to identify the same device across invocations."""
-        
-        devList = []
-        for d in self.devices:
-            d = d.copy()
-            if MODELS.has_key(d['model']):
-                d['model'] = MODELS[d['model']]
-            else:
-                d['model'] = 'UNKNOWN'
-            ## Make sure the order of keys is well defined; string must be identical every time.
-            strDesc = ",".join("%s:%s" % (k, d[k]) for k in ['model', 'sn', 'com', 'dev', 'chan'])  
-            devList.append(strDesc) 
-        return devList
-    
-    
-    
-    ## This information is now handled by telegraph
-    #def getSignalInfo(self, chan, primary=0):
-        #"""Return a tuple (signalName, gain, units) for the current signal
-        
-        #the outputChan argument defaults to 'Primary' and can be set to 'Secondary' instead.
-        #"""
-        ##self.selectDev(devID)
-        #model = self.devices[chan]['model']
-        
-        #priMap = ['PRI', 'SEC']
-        
-        #if primary == 0:
-            #outputChan = 'Primary'
-        #elif primary == 1:
-            #outputChan = 'Secondary'
+        if channel not in self.channels:
+            raise Exception("No channel with description '%s'. Options are %s" % (str(channel), str(self.listChannels())))
             
-        #sig = self.getParam(chan, outputChan+'Signal')[7:]
-        
-        #mode = self.getMode(chan)
-        #if mode == 'I=0':
-            #mode = 'IC'
-            
-        ###print devID, model, mode, primary, sig
-        #(name, gain, units) = SIGNAL_MAP[model][mode][priMap[primary]][sig]
-        
-        #xGain = self.getParam(chan, outputChan + 'SignalGain')
-        #### Silly workaround-- MC700A likes to tell us that secondary signal gain is 0
-        ##if xGain < 1e-10:
-                ##xGain = 1.0
-        #gain2 = float(gain) * xGain
-        ##print "%s gain = %f * %f = %f" % (outputChan, float(gain), float(xGain[0]), gain2)
-        #return (name, gain2, units)
-
+        ch = self.channels[channel]
+        if callback is not None:
+            ch.setCallback(callback)
+        return ch
     
-        
     
-    #def listSignals(self, chan, mode=None):
-        #"""Return two lists of signal names that may be used for this channel:
-           #( [primary signals], [secondary signals] )
-        #If mode is omitted, then the current mode of the channel is used."""
-        
-        #if mode is None:
-            #mode = self.getMode(chan)
-        #if mode == 'I=0':
-            #mode = 'IC'
-        #model = self.devices[chan]['model']
-        #sigmap = SIGNAL_MAP[model][mode]
-        #pri = [v[0] for v in sigmap['PRI'].values()]
-        #sec = [v[0] for v in sigmap['SEC'].values()]
-        #return (pri, sec)
-        
-    def channelIndex(self, channel):
-        devs = self.listDevices()
-        try:
-            return devs.index(channel)
-        except ValueError:
-            raise Exception("Device not found with description '%s'. Options are: '%s'" % (str(channel), str(devs)))
-    
-    #def stateDiff(self, state):
-        #"""Compare the state of the multiclamp to the expected state (s1), return the keys that differ."""
-        #m = []
-        #for k in state.keys():
-            #v = state[k]
-            #if type(v) == bool:
-                #if (v and s2[k][0] != 'true') or (not v and s2[k][0] != 'false'):
-                    #m.append(k)
-            #elif type(v) == int:
-                #if v != int(s2[k][0]):
-                    #m.append(k)
-            #elif type(v) == float:
-                #if v - float(s2[k][0]) > 1e-30:
-                    #m.append(k)
-        #return m
-    
-
-
-
-    ################   Begin Low-level driver calls    ###########################
-    
+    def listChannels(self):
+        """Return a list of strings used to identify all devices/channels.
+        These strings should be used to identify the same channel across invocations."""
+        return self.channels.keys()
     
     def connect(self):
         """(re)create connection to commander."""
-        if self.handle is not None:
-            self.disconnect()
-        (self.handle, err) = axlib.CreateObject()
-        if self.handle == 0:
-            self.handle = None
-            self.raiseError("Error while initializing Axon library:", err)
-        self.findDevices()
+        with self.lock()
+            if self.handle is not None:
+                self.disconnect()
+            (self.handle, err) = axlib.CreateObject()
+            if self.handle == 0:
+                self.handle = None
+                self.raiseError("Error while initializing Axon library:", err)
+            self.findDevices()
         
     def disconnect(self):
         """Destroy connection to commander"""
         if self.handle is not None:
             axlib.DestroyObject(self.handle)
             self.handle = None
+
+    
+    def findDevices(self):
+        while True:
+            ch = self.findMultiClamp()
+            if ch is None:
+                break
+            else:
+                ## Make sure the order of keys is well defined; string must be identical every time.
+                strDesc = ",".join("%s:%s" % (k, ch[k]) for k in ['model', 'sn', 'com', 'dev', 'chan'])  
+                if strDesc not in self.channels:
+                    self.channels[strDesc] = MultiClampChannel(ch)
+                self.chanDesc[strDesc] = ch
 
 
     def findMultiClamp(self):
@@ -372,29 +293,15 @@ class MultiClamp:
             if sys.exc_info()[1][0] == 6000:  ## We have reached the end of the device list
                 return None
             raise
-        return {'sn': ret['pszSerialNum'], 'model': ret['puModel'], 'com': ret['puCOMPortID'], 'dev': ret['puDeviceID'], 'chan': ret['puChannelID']}
-    
-    def findDevices(self):
-        self.devices = []
-        while True:
-            dev = self.findMultiClamp()
-            if dev is None:
-                break
-            else:
-                self.devices.append(dev)
-        self.devStates = [None] * len(self.devices)
-        for h in self.chanHandles:  ## Update any channel objects that have been created
-            try:
-                ind = self.channelIndex(h)
-            except:
-                ind = None
-            self.chanHandles[h].setChan(ind)
+        
+        desc = {'sn': ret['pszSerialNum'], 'model': ret['puModel'], 'com': ret['puCOMPortID'], 'dev': ret['puDeviceID'], 'chan': ret['puChannelID']}
+        
+        if MODELS.has_key(desc['model']):
+            desc['model'] = MODELS[desc['model']]
+        else:
+            desc['model'] = 'UNKNOWN'
+        return desc
 
-    def selectDev(self, devID):
-        if devID >= len(self.devices):
-            raise Exception("Device %d does not exist" % devID)
-        d = self.devices[devID]
-        self.call('SelectMultiClamp', pszSerialNum=d['sn'], uModel=d['model'], uCOMPortID=d['com'], uDeviceID=d['dev'], uChannelID=d['chan'])
 
 
     def call(self, fName, *args, **kargs):   ## call is only used for functions that return a bool error status and have a pnError argument passed by reference.
@@ -408,9 +315,6 @@ class MultiClamp:
     def raiseError(self, msg, err):
         raise Exception(err, msg + " " + self.errString(err))
 
-    def printError(self, msg, err):
-        print msg + self.errString(err)
-
     def errString(self, err):
         try:
             return axlib.BuildErrorText(self.handle, err, create_string_buffer('\0'*256), 256)['sTxtBuf']
@@ -418,15 +322,11 @@ class MultiClamp:
             sys.excepthook(*sys.exc_info())
             return "<could not generate error message>"
 
-    def telegraphMessage(self, msg, devID=None, state=None):
-        with self.telegraphLock:
-            if msg == 'update':
-                self.devStates[devID] = state
-                for ch in self.chanHandles.values():  ## run callback for individual channel
-                    if ch.chan == devID:
-                        ch.updateState(state)
-            elif 'msg' == 'reconnect':
-                self.connect()
+    def telegraphMessage(self, msg, chID=None, state=None):
+        if msg == 'update':
+            self.channels[chID].updateState(state)
+        elif 'msg' == 'reconnect':
+            self.connect()
         
 
 

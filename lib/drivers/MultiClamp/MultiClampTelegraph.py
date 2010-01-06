@@ -30,10 +30,14 @@ class MultiClampTelegraph:
     """Class for receiving 'telegraph' packets from MultiClamp commander. 
     This class is automatically invoked by MultiClamp."""
 
-    def __init__(self, devices, callback):
+    def __init__(self, channels, callback):
+        """Create a telegraph thread that opens connections to the devices listed in 
+        'channels' and reports changes to the devices through 'callback'. 
+        """
         #self.devices = dict([(self.mkDevId(d), [d, None]) for d in devices])
         ## remember index of each device for communicating through callback
-        self.devIndex = dict([(self.mkDevId(devices[i]), i) for i in range(len(devices))])  
+        self.channels = channels
+        self.devIndex = dict([(self.mkDevId(channels[k]), k) for k in channels])  
         #print "DEV index:", self.devIndex
         self.callback = callback
         self.lock = threading.Lock()
@@ -42,6 +46,7 @@ class MultiClampTelegraph:
         self.startMessageThread()
         
     def mkDevId(self, desc):
+        """Create a device ID used for communicating via telegraph"""
         return desc['com'] | (desc['dev'] << 8) | (desc['chan'] << 16)
         
     def __del__(self):
@@ -89,7 +94,7 @@ class MultiClampTelegraph:
         # listen for changes / reconnect requests / stop requests
         
         while True:
-            while True:
+            while True:  ## pull all waiting messages
                 ## wndProc will be called during PeekMessage if we have received any updates.
                 ## reconnect messages are received directly by PeekMessage
                 ret = wmlib.PeekMessageA(None, self.hWnd, 0, 0, wmlib.PM_REMOVE)
