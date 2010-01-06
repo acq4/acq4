@@ -14,34 +14,76 @@ from lib.util.debug import *
 class MultiClamp2(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Mutex.Recursive)
         self.index = None
         self.devRackGui = None
         
-        self.mc = MultiClampDriver.instance().getChannel(self.config['channelID'], self.mcUpdate)
-        
-        print "Created MultiClamp device"
-    
-        self.holding = {
-            'VC': -50e-3,
-            'IC': 0.0
-        }
-        if 'vcHolding' in self.config:
-            self.holding['VC'] = self.config['vcHolding']
-        if 'icHolding' in self.config:
-            self.holding['IC'] = self.config['icHolding']
+        self.stateLock = Mutex(Mutex.Recursive)  ## only for locking self.lastState and self.lastMode
+        self.lastState = {}
+        self.lastMode = None
 
-        ## Set up default MC settings for each mode, then leave MC in I=0 mode
-        if 'settings' in self.config:
-            for mode in ['IC', 'VC']:
-                if mode in self.config['settings']:
-                    self.setMode(mode)
-                    self.mc.setParams(self.config['settings'][mode])
-        self.setMode('I=0')  ## safest mode to leave clamp in
+
+        try:
+            self.mc = MultiClampDriver.instance().getChannel(self.config['channelID'], self.mcUpdate)
+            
+            print "Created MultiClamp device", self.config['channelID']
+        
+            self.holding = {
+                'VC': -50e-3,
+                'IC': 0.0
+            }
+            if 'vcHolding' in self.config:
+                self.holding['VC'] = self.config['vcHolding']
+            if 'icHolding' in self.config:
+                self.holding['IC'] = self.config['icHolding']
+
+            ## Set up default MC settings for each mode, then leave MC in I=0 mode
+            if 'settings' in self.config:
+                for mode in ['IC', 'VC']:
+                    if mode in self.config['settings']:
+                        #print "set mode", mode
+                        self.setMode(mode)
+                        #print "set params"
+                        self.mc.setParams(self.config['settings'][mode])
+            self.setMode('I=0')  ## safest mode to leave clamp in
+
+        except:
+            try:
+                mc = MultiClampDriver.instance()
+                if mc is not None:
+                    mc.quit()
+            except:
+                pass
+            raise
+
+    def quit(self):
+        mc = MultiClampDriver.instance()
+        if mc is not None:
+            mc.quit()
 
     def mcUpdate(self, state):
         """MC state has changed, handle the update."""
-        QtCore.QObject.emit(QtCore.SIGNAL('stateChanged'), state)
+        #print "lock for update..."
+        with self.stateLock:
+            #print "  got lock for update"
+            self.lastState[state['mode']] = state.copy()
+            self.lastMode = state['mode']
+            ## Has mode changed? has extCmdScale changed?
+            
+        QtCore.QObject.emit(self, QtCore.SIGNAL('stateChanged'), state)
+        
+    def extCmdScale(self, mode):
+        """Return our best guess as to the external command sensitivity for the given mode."""
+        with self.stateLock:
+            if mode == 'I=0':
+                mode = 'IC'
+            if mode in self.lastState:
+                return self.lastState[mode]['extCmdScale']
+            else:
+                if mode == 'VC':
+                    return 50
+                else:
+                    return 2.5e9
         
     def getState(self):
         return self.mc.getState()
@@ -89,7 +131,16 @@ class MultiClamp2(Device):
             holding = self.holding[mode]
             daq, chan = self.config['commandChannel'][:2]
             daqDev = self.dm.getDevice(daq)
-            scale = self.config['cmdScale'][mode]
+            #scale = self.config['cmdScale'][mode]
+            #s = self.mc.getState()['extCmdScale']
+            s = self.extCmdScale(mode)  ## use the scale for the last remembered state from this mode
+            if s == 0:
+                if holding == 0.0:
+                    s = 1.0
+                else:
+                    #print self.mc.getState()
+                    raise Exception('Can not set holding value for multiclamp--external command sensitivity is disabled by commander.')
+            scale = 1.0 / s
             #print "     setChannelValue", chan, holding
             daqDev.setChannelValue(chan, holding*scale, block=False)
         
@@ -125,7 +176,7 @@ class MultiClamp2(Device):
         
     def setMode(self, mode):
         """Set the mode for a multiclamp channel, gracefully switching between VC and IC modes."""
-        with MutexLocker(self.lock):
+        with self.lock:
             mode = mode.upper()
             if mode not in ['VC', 'IC', 'I=0']:
                 raise Exception('MultiClamp mode "%s" not recognized.' % mode)
@@ -138,11 +189,12 @@ class MultiClamp2(Device):
             if (mcMode=='IC' and mode=='VC') or (mcMode=='VC' and mode=='IC'):
                 self.mc.setMode('I=0')
                 mcMode = 'I=0'
-            
+                #print "  set intermediate i0"
             if mcMode=='I=0':
                 ## Set holding level before leaving I=0 mode
+                #print "  set holding"
                 self.setHolding()
-            
+            #print "  set mode"
             self.mc.setMode(mode)
             
             ## Clamp should not be used until it has had time to settle after switching modes. (?)

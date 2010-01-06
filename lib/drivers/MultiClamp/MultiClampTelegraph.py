@@ -4,6 +4,7 @@ sys.path.append('C:\\cygwin\\home\\Experimenters\\luke\\acq4\\lib\\util')
 import ctypes
 import struct, os, threading, time, weakref
 from clibrary import *
+#from Mutex import *
 
 __all__ = ['MultiClampTelegraph', 'wmlib']
 
@@ -40,7 +41,8 @@ class MultiClampTelegraph:
         self.devIndex = dict([(self.mkDevId(channels[k]), k) for k in channels])  
         #print "DEV index:", self.devIndex
         self.callback = callback
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
+        #self.lock = Mutex(Mutex.Recursive)
         self.thread = threading.Thread()
         self.thread.run = self.messageLoop
         self.startMessageThread()
@@ -108,6 +110,8 @@ class MultiClampTelegraph:
                         if devID in self.devIndex:
                             self.emit('reconnect')
                             self.post('OPEN', devID)
+                    elif msg == self.msgIds['COMMAND']:
+                        print "Peeked command."
                 
             with self.lock:
                 if self.stopThread:
@@ -187,7 +191,11 @@ class MultiClampTelegraph:
                     'LPFCutoff': data.dLPFCutoff,
                     'extCmdScale': data.dExtCmdSens,
                 }
+                #print "EXT:", data.dExtCmdSens
                 self.updateState(devID, state)
+            elif data.dwData == self.msgIds['COMMAND']:
+                print "Caught command!"
+                return False
             #else:
                 ##print "  unknown message type", data.dwData
         return True
@@ -201,7 +209,7 @@ class MultiClampTelegraph:
         self.msgIds = {}
         for m in ['OPEN', 'CLOSE', 'REQUEST', 'BROADCAST', 'RECONNECT', 'ID']:
             self.msgIds[m] = wmlib.RegisterWindowMessageA(wmlib('values', 'MCTG_' + m + '_MESSAGE_STR'))()
-
+        self.msgIds['COMMAND'] = wmlib.RegisterWindowMessageA(wmlib('values', 'MC_COMMAND_MESSAGE_STR'))()
 
     def post(self, msg, val):
         ret = wmlib.PostMessageA(wmlib.HWND_BROADCAST, self.msgIds[msg], self.hWnd, val)

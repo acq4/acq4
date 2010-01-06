@@ -3,10 +3,18 @@ from ctypes import *
 import ctypes
 import struct, os, threading
 from clibrary import *
-import weakref
+#import weakref
 from MultiClampTelegraph import *
+#from Mutex import *
 #from lib.util.CLibrary import *
 #from PyQt4 import QtCore, QtGui
+from debug import *
+
+
+#import atexit
+#def test():
+    #print "EXIT"
+#atexit.register(test)
 
 __all__ = ['MultiClamp', 'axlib', 'wmlib']
 
@@ -22,7 +30,7 @@ axonDefs = CParser(
     #verbose=True
 )
 
-axlib = CLibrary(windll.AxMultiClampMsg, axonDefs, prefix='MCCMSG_')
+axlib = CLibrary(windll.LoadLibrary(os.path.join(d, 'AxMultiClampMsg.dll')), axonDefs, prefix='MCCMSG_')
 
 
 class MultiClampChannel:
@@ -33,15 +41,16 @@ class MultiClampChannel:
         self.desc = desc
         self.state = None
         self.callback = None
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
+        #self.lock = Mutex(Mutex.Recursive)
         
         ## handle for axon mccmsg library 
         self.axonDesc = {
-            'pszSerialNum': d['sn'], 
-            'uModel': d['model'], 
-            'uCOMPortID': d['com'], 
-            'uDeviceID': d['dev'], 
-            'uChannelID': d['chan']
+            'pszSerialNum': desc['sn'], 
+            'uModel': desc['model'], 
+            'uCOMPortID': desc['com'], 
+            'uDeviceID': desc['dev'], 
+            'uChannelID': desc['chan']
         }
         
     def setCallback(self, cb):
@@ -91,7 +100,7 @@ class MultiClampChannel:
             if value not in NAME_MAPS[fn]:
                 raise Exception("Argument to %s must be one of %s" % (fn, NAME_MAPS[fn].keys()))
             value = NAME_MAPS[fn][value]
-        
+        #print fn, value
         self.mc.call(fn, value)
 
 
@@ -131,7 +140,7 @@ class MultiClampChannel:
     def setMode(self, mode):
         return self.setParam('Mode', mode)
 
-    def setSignalByName(self, signal, primary):
+    def setSignal(self, signal, primary):
         """Set the signal of a MC primary/secondary channel by name. 
         
         Use this function instead of setParam('PrimarySignal', ...). Bugs in the axon driver
@@ -154,7 +163,7 @@ class MultiClampChannel:
             raise Exception("Signal name '%s' not found" % signal)
             
         sig = 'SIGNAL_' + sigMap[signal]
-                
+        #print "Set signal %d = %s:" % (primary, signal), model, mode, priMap[primary], sig
         if primary == 0:
             self.setParam('PrimarySignal', sig)
         elif primary == 1:
@@ -206,10 +215,11 @@ class MultiClamp:
         if MultiClamp.INSTANCE is not None:
             raise Exception("Already created MultiClamp driver object; use MultiClamp.INSTANCE")
         self.handle = None
-        #self.telegraphLock = threading.Lock()
+        self.lock = threading.RLock()
+        #self.lock = Mutex(Mutex.Recursive)
         #self.devStates = []  ## Stores basic state of devices reported by telegraph
         
-        self.channels = weakref.WeakValueDictionary()  
+        self.channels = {} 
         self.chanDesc = {}  
         self.connect()
         
@@ -251,7 +261,7 @@ class MultiClamp:
     
     def connect(self):
         """(re)create connection to commander."""
-        with self.lock()
+        with self.lock:
             if self.handle is not None:
                 self.disconnect()
             (self.handle, err) = axlib.CreateObject()
@@ -262,9 +272,10 @@ class MultiClamp:
         
     def disconnect(self):
         """Destroy connection to commander"""
-        if self.handle is not None:
-            axlib.DestroyObject(self.handle)
-            self.handle = None
+        with self.lock:
+            if self.handle is not None:
+                axlib.DestroyObject(self.handle)
+                self.handle = None
 
     
     def findDevices(self):
@@ -274,14 +285,16 @@ class MultiClamp:
                 break
             else:
                 ## Make sure the order of keys is well defined; string must be identical every time.
-                strDesc = ",".join("%s:%s" % (k, ch[k]) for k in ['model', 'sn', 'com', 'dev', 'chan'])  
+                ch1 = ch.copy()
+                ch1['model'] = MODELS[ch1['model']]
+                strDesc = ",".join("%s:%s" % (k, ch1[k]) for k in ['model', 'sn', 'com', 'dev', 'chan'])  
                 if strDesc not in self.channels:
-                    self.channels[strDesc] = MultiClampChannel(ch)
+                    self.channels[strDesc] = MultiClampChannel(self, ch)
                 self.chanDesc[strDesc] = ch
 
 
     def findMultiClamp(self):
-        if len(self.devices) == 0:
+        if len(self.channels) == 0:
             fn = 'FindFirstMultiClamp'
         else:
             fn = 'FindNextMultiClamp'
@@ -296,16 +309,17 @@ class MultiClamp:
         
         desc = {'sn': ret['pszSerialNum'], 'model': ret['puModel'], 'com': ret['puCOMPortID'], 'dev': ret['puDeviceID'], 'chan': ret['puChannelID']}
         
-        if MODELS.has_key(desc['model']):
-            desc['model'] = MODELS[desc['model']]
-        else:
-            desc['model'] = 'UNKNOWN'
+        #if MODELS.has_key(desc['model']):
+            #desc['model'] = MODELS[desc['model']]
+        #else:
+            #desc['model'] = 'UNKNOWN'
         return desc
 
 
 
     def call(self, fName, *args, **kargs):   ## call is only used for functions that return a bool error status and have a pnError argument passed by reference.
-        ret = axlib('functions', fName)(self.handle, *args, **kargs)
+        with self.lock:
+            ret = axlib('functions', fName)(self.handle, *args, **kargs)
         if ret() == 0:
             funcStr = "%s(%s)" % (fName, ', '.join(map(str, args) + ["%s=%s" % (k, str(kargs[k])) for k in kargs]))
             self.raiseError("Error while running function  %s\n      Error:" % funcStr, ret['pnError'])
@@ -333,8 +347,6 @@ class MultiClamp:
 
 
 
-### Create instance of driver class
-MultiClamp()
 
 ## Crapton of stuff to remember that is not provided by header files
 
@@ -403,9 +415,14 @@ SIGNAL_MAP = {
             'PRI': {   ## Driver bug? Primary IC signals use VC values. Bah.
                 "Command Current": "VC_MEMBPOTENTIAL",
                 "Membrane Current": "VC_MEMBCURRENT",
-                "Membrane Potential": "VC_MEMBPOTENTIAL",
+                "Membrane Potential": "VC_PIPPOTENTIAL",
                 "100 x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
                 "Bath Potential": "VC_AUXILIARY1"
+                #"Command Current": "IC_CMDCURRENT",
+                #"Membrane Current": "IC_MEMBCURRENT",
+                #"Membrane Potential": "IC_MEMBPOTENTIAL",
+                #"100 x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
+                #"Bath Potential": "IC_AUXILIARY1"
             },
             'SEC': {
                 "Command Current": "IC_CMDCURRENT",
@@ -462,6 +479,8 @@ SIGNAL_MAP = {
 }
     
 
+### Create instance of driver class
+MultiClamp()
 
 
 

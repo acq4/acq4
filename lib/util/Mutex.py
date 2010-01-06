@@ -82,6 +82,14 @@ class Mutex(QtCore.QMutex):
             self.l.unlock()
         return ret
 
+    def __exit__(self, *args):
+        self.unlock()
+
+    def __enter__(self):
+        self.lock()
+        return self
+
+
 class MutexLocker:
     def __init__(self, lock):
         #print self, "lock on init",lock, lock.depth()

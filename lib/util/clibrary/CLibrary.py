@@ -153,6 +153,9 @@ class CLibrary:
         """Used to retrieve a specific dictionary from the headers."""
         return self._defs_[name]
         
+    def __repr__(self):
+        return "<CLibrary instance: %s>" % str(self._lib_)
+        
     def _getFunction(self, funcName):
         try:
             func = getattr(self._lib_, funcName)
