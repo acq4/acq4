@@ -449,8 +449,10 @@ class Task:
         try:
             self.cfg = command['protocol']
         except:
+            print "================== Manager Task.__init__ command: ================="
             print command
-            raise
+            print "==========================================================="
+            raise Exception("Command specified for protocol is invalid. (Must be dictionary with 'protocol' key)")
         self.id = Task.id
         Task.id += 1
         

@@ -44,7 +44,42 @@ class MultiClampProtoGui(ProtocolGui):
         QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.ui.i0ModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
+        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.uiStateChanged)
+        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('stateChanged'), self.devStateChanged)
+        self.devStateChanged()
         
+        
+    def uiStateChanged(self, name, value):
+        checkMap = {
+            'holdingCheck': self.ui.holdingSpin,
+            'primarySignalCheck': self.ui.primarySignalCombo,
+            'secondarySignalCheck': self.ui.secondarySignalCombo,
+            'primaryGainCheck': self.ui.primaryGainSpin,
+            'secondaryGainCheck': self.ui.secondaryGainSpin,
+        }
+        
+        if name in checkMap:
+            checkMap[name].setEnabled(value)
+            self.devStateChanged()
+
+    def devStateChanged(self, state=None):
+        mode = self.getMode()
+        state = self.dev.getLastState(mode)
+        
+        if not self.ui.holdingSpin.isEnabled():
+            self.ui.holdingSpin.setValue(state['holding'] / self.cmdScale)
+        if not self.ui.primaryGainSpin.isEnabled():
+            self.ui.primaryGainSpin.setValue(state['primaryGain'])
+        if not self.ui.secondaryGainSpin.isEnabled():
+            self.ui.secondaryGainSpin.setValue(state['secondaryGain'])
+            
+        psig = ssig = None
+        if not self.ui.primarySignalCombo.isEnabled():
+            psig = state['primarySignal']
+        if not self.ui.secondarySignalCombo.isEnabled():
+            ssig = state['secondarySignal']
+        self.setSignals(psig, ssig)
+
     def saveState(self):
         state = self.stateGroup.state().copy()
         state['mode'] = self.getMode()
@@ -128,10 +163,18 @@ class MultiClampProtoGui(ProtocolGui):
         mode = self.getMode()
         prot['mode'] = mode
         prot['recordState'] = True
-        if self.ui.primarySignalCheck.isChecked():
-            prot['primary'] = self.ui.primarySignalCombo.currentText()
-        if self.ui.secondarySignalCheck.isChecked():
-            prot['secondary'] = self.ui.secondarySignalCombo.currentText()
+        #if self.ui.primarySignalCheck.isChecked():
+            #prot['primary'] = self.ui.primarySignalCombo.currentText()
+        #if self.ui.secondarySignalCheck.isChecked():
+            #prot['secondary'] = self.ui.secondarySignalCombo.currentText()
+        if state['primarySignalCheck']:
+            prot['primarySignal'] = state['primarySignalCombo']
+        if state['secondarySignalCheck']:
+            prot['secondarySignal'] = state['secondarySignalCombo']
+        if state['primaryGainCheck']:
+            prot['primaryGain'] = state['primaryGainSpin']
+        if state['secondaryGainCheck']:
+            prot['secondaryGain'] = state['secondaryGainSpin']
         if mode != 'I=0':
             ## Must scale command to V or A before sending to protocol system.
             wave = self.getSingleWave(params)
@@ -139,14 +182,16 @@ class MultiClampProtoGui(ProtocolGui):
                 prot['command'] = wave
             if state['holdingCheck']:
                 prot['holding'] = state['holdingSpin']
+        print "Protocol:", prot
         return prot
     
     def getSingleWave(self, params=None):
         state = self.stateGroup.state()
-        if state['holdingCheck']:
-            h = state['holdingSpin']
-        else:
-            h = 0.0
+        h = state['holdingSpin']
+        #if state['holdingCheck']:
+            #h = state['holdingSpin']
+        #else:
+            #h = 0.0
         self.ui.waveGeneratorWidget.setOffset(h)
         self.ui.waveGeneratorWidget.setScale(self.cmdScale)
         ## waveGenerator generates values in V or A
@@ -200,8 +245,8 @@ class MultiClampProtoGui(ProtocolGui):
                 self.ui.secondarySignalCheck.setChecked(False)
                 self.ui.holdingCheck.setChecked(False)
                 self.ui.holdingSpin.setValue(0.0)
-                self.ui.setPrimaryGainCheck.setChecked(False)
-                self.ui.setSecondaryGainCheck.setChecked(False)
+                self.ui.primaryGainCheck.setChecked(False)
+                self.ui.secondaryGainCheck.setChecked(False)
             
             # update unit labels and scaling
             if mode == 'VC':
@@ -228,13 +273,19 @@ class MultiClampProtoGui(ProtocolGui):
             else:
                 self.ui.bottomPlotWidget.show()
         
+            self.devStateChanged()
+        
         self.mode = mode
         
     def setSignals(self, pri, sec):
         for c, s in [(self.ui.primarySignalCombo, pri), (self.ui.secondarySignalCombo, sec)]:
+            if s is None:
+                continue
             ind = c.findText(s)
             if ind == -1:
-                raise Exception('Signal %s does not exist' % s)
+                for i in range(c.count()):
+                    print c.itemText(i)
+                raise Exception('Signal "%s" does not exist' % s)
             c.setCurrentIndex(ind)
         
     def handleResult(self, result, params):

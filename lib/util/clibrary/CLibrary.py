@@ -339,14 +339,17 @@ class CFunction:
                 try:
                     sig = self.sig[1][i][1]
                     argType = self.lib._headers_.evalType(sig)
-                    assert len(argType) == 2 and argType[1] == '*' ## Must be 2-part type, second part must be '*'
-                    cls = self.lib._ctype(sig, pointers=False)
+                    if argType == ['void', '**'] or argType == ['void', '*', '*']:
+                        cls = c_void_p
+                    else:
+                        assert len(argType) == 2 and argType[1] == '*' ## Must be 2-part type, second part must be '*'
+                        cls = self.lib._ctype(sig, pointers=False)
                     argList[i] = pointer(cls(0))
                 except:
                     if sys.exc_info()[0] is not AssertionError:
                         sys.excepthook(*sys.exc_info())
                     print "Function signature:", self.prettySignature()
-                    raise Exception('Missing required argument %d "%s"' % (i, self.sig[1][i][0]))
+                    raise Exception("Function call '%s' missing required argument %d '%s'. (See above for signature)" % (self.name, i, self.sig[1][i][0]))
         #print "  args:", argList
         try:
             res = self.func(*argList)

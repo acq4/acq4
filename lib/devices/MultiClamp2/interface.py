@@ -66,24 +66,36 @@ class MultiClamp2(Device):
         #print "lock for update..."
         with self.stateLock:
             #print "  got lock for update"
-            self.lastState[state['mode']] = state.copy()
+            mode = state['mode']
+            if mode == 'I=0':
+                mode = 'IC'
+          
+            state['holding'] = self.holding[mode]
+            self.lastState[mode] = state.copy()
             self.lastMode = state['mode']
             ## Has mode changed? has extCmdScale changed?
             
         QtCore.QObject.emit(self, QtCore.SIGNAL('stateChanged'), state)
         
-    def extCmdScale(self, mode):
-        """Return our best guess as to the external command sensitivity for the given mode."""
+    def getLastState(self, mode):
+        """Return the last known state for the given mode."""
         with self.stateLock:
             if mode == 'I=0':
                 mode = 'IC'
             if mode in self.lastState:
-                return self.lastState[mode]['extCmdScale']
+                return self.lastState[mode]
+        
+        
+    def extCmdScale(self, mode):
+        """Return our best guess as to the external command sensitivity for the given mode."""
+        s = self.getLastState(mode)
+        if s is not None:
+            return s['extCmdScale']
+        else:
+            if mode == 'VC':
+                return 50
             else:
-                if mode == 'VC':
-                    return 50
-                else:
-                    return 2.5e9
+                return 2.5e9
         
     def getState(self):
         return self.mc.getState()
@@ -91,7 +103,7 @@ class MultiClamp2(Device):
     def deviceInterface(self):
         with MutexLocker(self.lock):
             if self.devRackGui is None:
-                self.devRackGui = MCRackGui(self)
+                self.devRackGui = MCDeviceGui(self)
             return self.devRackGui
 
     def protocolInterface(self, prot):
@@ -223,14 +235,15 @@ class MultiClampTask(DeviceTask):
             self.cmd['mode'] = self.cmd['mode'].upper()
             
             ## If primary and secondary modes are not specified, use default values
-            defaultModes = {
-                'VC': {'primary': 'Membrane Current', 'secondary': 'Pipette Potential'},  ## MC700A does not have MembranePotential signal
-                'IC': {'primary': 'Membrane Potential', 'secondary': 'Membrane Current'},
-                'I=0': {'primary': 'Membrane Potential', 'secondary': None},
-            }
-            for ch in ['primary', 'secondary']:
-                if ch not in self.cmd:
-                    self.cmd[ch] = defaultModes[self.cmd['mode']][ch]
+            #### Disabled this -- just use whatever is currently in use.
+            #defaultModes = {
+                #'VC': {'primarySignal': 'Membrane Current', 'secondarySignal': 'Pipette Potential'},  ## MC700A does not have MembranePotential signal
+                #'IC': {'primarySignal': 'Membrane Potential', 'secondarySignal': 'Membrane Current'},
+                #'I=0': {'primarySignal': 'Membrane Potential', 'secondarySignal': None},
+            #}
+            #for ch in ['primarySignal', 'secondarySignal']:
+                #if ch not in self.cmd:
+                    #self.cmd[ch] = defaultModes[self.cmd['mode']][ch]
 
             if 'command' not in self.cmd:
                 self.cmd['command'] = None
@@ -242,11 +255,20 @@ class MultiClampTask(DeviceTask):
                 
             ## Set state of clamp
             self.dev.setMode(self.cmd['mode'])
-            if self.cmd['primary'] is not None:
+            if 'primary' in self.cmd:
                 self.dev.mc.setPrimarySignal(self.cmd['primary'])
-            if self.cmd['secondary'] is not None:
+            if 'secondary' in self.cmd:
                 self.dev.mc.setSecondarySignal(self.cmd['secondary'])
-            
+
+            if 'primaryGain' in self.cmd:
+                self.dev.mc.setParam('PrimarySignalGain', self.cmd['primaryGain'])
+            if 'secondaryGain' in self.cmd:
+                try:
+                    ## this is likely to fail..
+                    self.dev.mc.setParam('SecondarySignalGain', self.cmd['secondaryGain'])
+                except:
+                    printExc("Warning -- set secondary signal gain failed.")
+
             if self.cmd.has_key('parameters'):
                 self.dev.mc.setParams(self.cmd['parameters'])
             

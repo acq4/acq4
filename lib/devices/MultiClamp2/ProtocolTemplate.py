@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Tue Dec 29 11:48:53 2009
+# Created: Wed Jan 06 15:37:17 2010
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(302, 377)
+        Form.resize(302, 110)
         Form.setAutoFillBackground(True)
         self.verticalLayout_3 = QtGui.QVBoxLayout(Form)
         self.verticalLayout_3.setSpacing(0)
@@ -54,6 +54,7 @@ class Ui_Form(object):
         self.holdingCheck.setObjectName("holdingCheck")
         self.horizontalLayout_6.addWidget(self.holdingCheck)
         self.holdingSpin = QtGui.QDoubleSpinBox(self.frame_2)
+        self.holdingSpin.setEnabled(False)
         self.holdingSpin.setMinimum(-1000000.0)
         self.holdingSpin.setMaximum(1000000.0)
         self.holdingSpin.setObjectName("holdingSpin")
@@ -70,6 +71,7 @@ class Ui_Form(object):
         self.secondarySignalCheck.setObjectName("secondarySignalCheck")
         self.gridLayout.addWidget(self.secondarySignalCheck, 1, 0, 1, 1)
         self.primarySignalCombo = QtGui.QComboBox(self.layoutWidget)
+        self.primarySignalCombo.setEnabled(False)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(2)
         sizePolicy.setVerticalStretch(0)
@@ -80,6 +82,7 @@ class Ui_Form(object):
         self.primarySignalCombo.addItem(QtCore.QString())
         self.gridLayout.addWidget(self.primarySignalCombo, 0, 1, 1, 1)
         self.secondarySignalCombo = QtGui.QComboBox(self.layoutWidget)
+        self.secondarySignalCombo.setEnabled(False)
         self.secondarySignalCombo.setMinimumSize(QtCore.QSize(40, 0))
         self.secondarySignalCombo.setObjectName("secondarySignalCombo")
         self.secondarySignalCombo.addItem(QtCore.QString())
@@ -88,20 +91,24 @@ class Ui_Form(object):
         self.horizontalLayout_7 = QtGui.QHBoxLayout()
         self.horizontalLayout_7.setSpacing(0)
         self.horizontalLayout_7.setObjectName("horizontalLayout_7")
-        self.setSecondaryGainCheck = QtGui.QCheckBox(self.layoutWidget)
-        self.setSecondaryGainCheck.setObjectName("setSecondaryGainCheck")
-        self.horizontalLayout_7.addWidget(self.setSecondaryGainCheck)
-        self.secondaryGainSpin = QtGui.QDoubleSpinBox(self.layoutWidget)
+        self.secondaryGainCheck = QtGui.QCheckBox(self.layoutWidget)
+        self.secondaryGainCheck.setObjectName("secondaryGainCheck")
+        self.horizontalLayout_7.addWidget(self.secondaryGainCheck)
+        self.secondaryGainSpin = QtGui.QSpinBox(self.layoutWidget)
+        self.secondaryGainSpin.setEnabled(False)
+        self.secondaryGainSpin.setMaximum(100000)
         self.secondaryGainSpin.setObjectName("secondaryGainSpin")
         self.horizontalLayout_7.addWidget(self.secondaryGainSpin)
         self.gridLayout_2.addLayout(self.horizontalLayout_7, 2, 1, 1, 1)
         self.horizontalLayout_5 = QtGui.QHBoxLayout()
         self.horizontalLayout_5.setSpacing(0)
         self.horizontalLayout_5.setObjectName("horizontalLayout_5")
-        self.setPrimaryGainCheck = QtGui.QCheckBox(self.layoutWidget)
-        self.setPrimaryGainCheck.setObjectName("setPrimaryGainCheck")
-        self.horizontalLayout_5.addWidget(self.setPrimaryGainCheck)
-        self.primaryGainSpin = QtGui.QDoubleSpinBox(self.layoutWidget)
+        self.primaryGainCheck = QtGui.QCheckBox(self.layoutWidget)
+        self.primaryGainCheck.setObjectName("primaryGainCheck")
+        self.horizontalLayout_5.addWidget(self.primaryGainCheck)
+        self.primaryGainSpin = QtGui.QSpinBox(self.layoutWidget)
+        self.primaryGainSpin.setEnabled(False)
+        self.primaryGainSpin.setMaximum(100000)
         self.primaryGainSpin.setObjectName("primaryGainSpin")
         self.horizontalLayout_5.addWidget(self.primaryGainSpin)
         self.gridLayout_2.addLayout(self.horizontalLayout_5, 1, 1, 1, 1)
@@ -153,8 +160,8 @@ class Ui_Form(object):
         self.secondarySignalCheck.setText(QtGui.QApplication.translate("Form", "Secondary:", None, QtGui.QApplication.UnicodeUTF8))
         self.primarySignalCombo.setItemText(0, QtGui.QApplication.translate("Form", "MembranePotential", None, QtGui.QApplication.UnicodeUTF8))
         self.secondarySignalCombo.setItemText(0, QtGui.QApplication.translate("Form", "MembraneCurrent", None, QtGui.QApplication.UnicodeUTF8))
-        self.setSecondaryGainCheck.setText(QtGui.QApplication.translate("Form", "Set Gain", None, QtGui.QApplication.UnicodeUTF8))
-        self.setPrimaryGainCheck.setText(QtGui.QApplication.translate("Form", "Set Gain", None, QtGui.QApplication.UnicodeUTF8))
+        self.secondaryGainCheck.setText(QtGui.QApplication.translate("Form", "Set Gain", None, QtGui.QApplication.UnicodeUTF8))
+        self.primaryGainCheck.setText(QtGui.QApplication.translate("Form", "Set Gain", None, QtGui.QApplication.UnicodeUTF8))
         self.waveGeneratorLabel.setText(QtGui.QApplication.translate("Form", "Function (values in pA)", None, QtGui.QApplication.UnicodeUTF8))
 
 from lib.util.generator.StimGenerator import StimGenerator

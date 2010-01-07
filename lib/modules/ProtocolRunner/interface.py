@@ -995,6 +995,13 @@ class TaskThread(QtCore.QThread):
                 time.sleep(10e-3)
             
             #print "BEFORE:\n", cmd
+            if type(cmd) is not dict:
+                print "========= ProtocolRunner.runOnce cmd: =================="
+                print cmd
+                print "========= ProtocolRunner.runOnce params: =================="
+                print "Params:", params
+                print "==========================="
+                raise Exception("ProtocolRunner.runOnce failed to generate a proper command structure. Object type was '%s', should have been 'dict'." % type(cmd))
             task = self.dm.createTask(cmd)
             self.lastRunTime = time.clock()
             self.emit(QtCore.SIGNAL('taskStarted'), params)

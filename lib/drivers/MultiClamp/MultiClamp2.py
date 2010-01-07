@@ -160,7 +160,7 @@ class MultiClampChannel:
                 
         sigMap = SIGNAL_MAP[model][mode][priMap[primary]]
         if signal not in sigMap:
-            raise Exception("Signal name '%s' not found" % signal)
+            raise Exception("Signal name '%s' not found. (Using map for model=%s, mode=%s, pri=%s)" % (signal, model, mode, priMap[primary]))
             
         sig = 'SIGNAL_' + sigMap[signal]
         #print "Set signal %d = %s:" % (primary, signal), model, mode, priMap[primary], sig
