@@ -183,7 +183,7 @@ class CLibrary:
             elif typ[0][:5] == 'enum ':
                 cls = c_int
             elif typ[0] == 'void':
-                return None
+                cls = None
             else:
                 #print typ
                 raise Exception("Can't find base type for %s" % str(typ))
@@ -289,7 +289,7 @@ class CFunction:
     def __init__(self, lib, func, sig, name):
         self.lib = lib
         self.func = func
-        print sig
+        #print sig
         self.sig = list(sig) # looks like [return_type, [(argName, type, default), (argName, type, default), ...]]
         self.sig[1] = [s for s in sig[1] if s[1] != ['void']]  ## remove void args from list
         for conv in ['__stdcall', '__cdecl']:

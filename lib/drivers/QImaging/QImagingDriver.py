@@ -56,28 +56,42 @@ def openCamera(cameraID): #opens the camera and returns the handle
         raise Exception('There was an error opening camera. Error code = ', a())
     return a[1] #possibly need to keep handle as a c type. use a.args[1] to do so
     
-def grabFrame():
+def mkFrame():
     s = lib.GetInfo(handle, lib.qinfImageSize)[2]
     f = lib.Frame()
-    frame = empty(s, dtype=utype)
+    frame = empty(s, dtype=ubyte)
     f.pBuffer = frame.ctypes.data
     f.bufferSize = s
+    return (f, frame)
+    
+def grabFrame():
+    (f, frame) = mkFrame()
     lib.GrabFrame(handle, byref(f))
-    w = lib.GetInfo(handle, qinfCcdWidth)[2]
-    frame.shape(s/w, w)
+    w = lib.GetInfo(handle, lib.qinfCcdWidth)[2]
+    frame.shape = (s/w, w)
     return frame
+
+def getParamValue(param):
+    s = lib.ReadSettingsFromCam(handle)[1]
+    s.size = sizeof(s)
+    return lib.GetParam(byref(s), param)[2]
+
+
+
+##make function that sets a parameter - takes parameter as an argument
+#    make a settings instance
+#    read settings
+#    use setparam - use if statement with all the different types of parameters to determine which setparam function to use
+#    then send settings to cam
 
 loadDriver()
 cameras = listCameras()
 handle = openCamera(cameras[0])
   
- 
-#s = lib.GetInfo(handle, lib.qinfImageSize)
-#frame = lib.Frame()
-#buffer = empty(s[2], dtype = ubyte)
-#frame.pBuffer = buffer.ctypes.data
-#frame.bufferSize = s[2]
-#lib.GrabFrame(handle, byref(frame))
+def fn(*args):
+    print "CALLBACK:", args
 
+f, a = mkFrame()
+lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, 0)
 
-app = QtGui.QApplication([])
+#app = QtGui.QApplication([])
