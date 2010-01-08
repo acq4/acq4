@@ -8,23 +8,18 @@ from numpy import *
 from pyqtgraph import graphicsWindows as gw
 from PyQt4 import QtGui
 import atexit
-
-def quit():
-    lib.CloseCamera(handle)
-atexit.register(quit)
-    
-
 p = CParser('QCamApi.h')
-
-if sys.platform is 'darwin':
+if sys.platform == 'darwin':
     dll = cdll.LoadLibrary('/Library/Frameworks/QCam.framework/QCam')
 else:
     dll = windll.QCamDriver
-    
 lib = CLibrary(dll, p, prefix = 'QCam_')        #makes it so that functions in the header file can be accessed using lib.nameoffunction, ie: QCam_LoadDriver is lib.LoadDriver
                                                 #also interprets all the typedefs for you....very handy
                                                 #anything from the header needs to be accessed through lib.yourFunctionOrParameter
 
+def quit():
+    lib.CloseCamera(handle)
+atexit.register(quit)
 
 def loadDriver():
     a = lib.LoadDriver()
@@ -65,6 +60,7 @@ def mkFrame():
     return (f, frame)
     
 def grabFrame():
+    s = lib.GetInfo(handle, lib.qinfImageSize)[2]
     (f, frame) = mkFrame()
     lib.GrabFrame(handle, byref(f))
     w = lib.GetInfo(handle, lib.qinfCcdWidth)[2]
@@ -87,11 +83,21 @@ def getParamValue(param):
 loadDriver()
 cameras = listCameras()
 handle = openCamera(cameras[0])
-  
-def fn(*args):
-    print "CALLBACK:", args
 
-f, a = mkFrame()
-lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, 0)
+#b = lib.SetStreaming(handle, 1)
+#n = 0
+#def fn(*args):
+#    #global n
+#    #n +=1
+#    print "CALLBACK:", args
+#    #f, a = mkFrame()
+#    #print '1.1'
+#    #lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, n)
+#    #print '1.2'
+#f, a = mkFrame()
+#
+#qf = lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, 0)
+#print qf()
+#print qf[1]
 
 #app = QtGui.QApplication([])
