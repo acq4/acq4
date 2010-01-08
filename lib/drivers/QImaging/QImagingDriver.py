@@ -4,11 +4,11 @@ import sys, os
 d = os.path.dirname(__file__)
 sys.path.append(os.path.join(d, '../../util'))
 from clibrary import *
-from numpy import *
+from numpy import empty
 from pyqtgraph import graphicsWindows as gw
 from PyQt4 import QtGui
 import atexit
-p = CParser('QCamApi.h')
+p = CParser('QCamApi.h', cache='QCamApi.h.cache')
 if sys.platform == 'darwin':
     dll = cdll.LoadLibrary('/Library/Frameworks/QCam.framework/QCam')
 else:
@@ -72,8 +72,38 @@ def getParamValue(param):
     s.size = sizeof(s)
     return lib.GetParam(byref(s), param)[2]
 
-
-
+### Make lists of the parameters available on the current camera.  
+param = {}
+def listParams():
+    s = lib.ReadSettingsFromCam(handle)[1]
+    s.size = sizeof(s)
+    for x in lib.anonEnum16.keys(): ##FIX this so that the name anonEnum16 is not hardwriten into the function!
+        if lib.IsParamSupported(handle, getattr(lib, x))() == 0:
+            if lib.IsRangeTable(byref(s), getattr(lib,x))() ==0:
+                min = lib.GetParamMin(byref(s), getattr(lib,x))[2]
+                max = lib.GetParamMax(byref(s), getattr(lib,x))[2]
+                param[x] = (min, max)
+            elif lib.IsSparseTable(byref(s), getattr(lib,x))() ==0:
+                table = (c_ulong *32)()
+                r = lib.GetParamSparseTable(byref(s), getattr(lib,x), table, c_long(32))
+                param[x] = list(r[2])[:r[3]]
+            
+            
+paramS32 = []
+def listParamS32s():
+    for x in lib.anonEnum17.keys():
+        if lib.IsParamSupported(handle, getattr(lib, x))() == 0:
+            paramS32.append(x)
+param64 = []
+def listParam64s():
+    for x in lib.anonEnum18.keys():
+        if lib.IsParamSupported(handle, getattr(lib, x))() == 0:
+            param64.append(x)
+def listAvailableParams():
+    listParams()
+    listParamS32s()
+    listParam64s()
+    return
 ##make function that sets a parameter - takes parameter as an argument
 #    make a settings instance
 #    read settings
