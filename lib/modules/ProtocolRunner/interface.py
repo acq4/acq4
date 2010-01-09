@@ -15,6 +15,15 @@ import time
 import sip
 #import pdb
 
+class Window(QtGui.QMainWindow):
+    def __init__(self, pr):
+        QtGui.QMainWindow.__init__(self)
+        self.pr = pr
+        
+    def closeEvent(self, ev):
+        self.pr.quit()
+        ev.ignore()
+        sip.delete(self)
 
 class ProtocolRunner(Module, QtCore.QObject):
     def __init__(self, manager, name, config):
@@ -29,7 +38,9 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.analysisDocks = {}
         self.deleteState = 0
         self.ui = Ui_MainWindow()
-        self.win = QtGui.QMainWindow()
+        self.win = Window(self)
+        
+        
         self.ui.setupUi(self.win)
         #self.win.setCentralWidget(None)  ## get rid of central widget so docks fill the whole screen
         #self.win.centralWidget().setFixedSize(QtCore.QSize(2, 2))
@@ -356,7 +367,7 @@ class ProtocolRunner(Module, QtCore.QObject):
                     self.updateSeqParams(d)
                     #dock.setMinimumWidth(3000)
                     #dock.setMinimumWidth(0)
-                
+        
         
     def clearDocks(self):
         for d in self.docks:
@@ -378,13 +389,10 @@ class ProtocolRunner(Module, QtCore.QObject):
         self.ui.sequenceParamList.clear()
                 
         
-    def closeProtocol(self):
-        ## Remove all docks
+    def quit(self):
         self.clearDocks()
-        
-        ## Clear sequence list
-        self.ui.sequenceList.clearItems()
-        
+        Module.quit(self)
+
     #def protParamsChanged(self):
         #self.currentProtocol.conf = self.protoStateGroup.state()
         ##self.currentProtocol.conf['duration'] = self.ui.protoDurationSpin.value()

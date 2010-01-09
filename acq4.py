@@ -27,9 +27,13 @@ dm = Manager(config, sys.argv[1:])
 ## for debugging with pdb
 #QtCore.pyqtRemoveInputHook()
 
-## Start Qt event loop.
-## Optionally, one could comment out this line and run python interactively 
-## to have direct access to the program internals.
-app.exec_()
-
-print "Qt event loop exited."
+## Start Qt event loop unless running in interactive mode.
+try:
+    assert sys.flags.interactive == 1
+    print "Interactive mode; not starting event loop."
+except:
+    print "Starting Qt event loop.."
+    app.exec_()
+    print "Qt event loop exited."
+    
+    

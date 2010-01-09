@@ -13,6 +13,7 @@ class Module:
         return None
     
     def quit(self):
+        """Must be called after modules exit."""
         self.manager.moduleHasQuit(self)
         
     

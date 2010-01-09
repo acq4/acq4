@@ -19,6 +19,8 @@ import scipy.ndimage
 import time, types, os.path, re, sys
 from lib.util.pyqtgraph.functions import intColor
 from lib.util.debug import *
+from metaarray import *
+import sip
 
 traceDepth = 0
 def trace(func):
@@ -411,6 +413,8 @@ class PVCamera(QtGui.QMainWindow):
             if not self.recordThread.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
             #print "  record thread finished."
+        sip.delete(self)
+        self.module.quit(fromUi=True)
 
     @trace
     def setMouse(self, qpt=None):

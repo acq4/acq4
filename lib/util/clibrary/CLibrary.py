@@ -48,8 +48,10 @@ class CLibrary:
         'unsigned short': c_ushort,
         'unsigned short int': c_ushort,
         'int': c_int,
+        'unsigned': c_uint,
         'unsigned int': c_uint,
         'long': c_long,
+        'long int': c_long,
         'unsigned long': c_ulong,
         'unsigned long int': c_ulong,
         '__int64': c_longlong,
@@ -244,10 +246,12 @@ class CLibrary:
             defs = defn['members'][:]
             if strType == 'structs':
                 class s(Structure):
-                    pass
+                    def __repr__(self):
+                        return "<ctypes struct '%s' (auto-generated)>" % strName
             elif strType == 'unions':
                 class s(Union):
-                    pass
+                    def __repr__(self):
+                        return "<ctypes union '%s' (auto-generated)>" % strName
             
             
             ## must register struct here to allow recursive definitions.

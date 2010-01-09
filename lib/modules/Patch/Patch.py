@@ -3,10 +3,10 @@ from __future__ import with_statement
 from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
 #from PyQt4 import Qwt5 as Qwt
-from lib.util.WidgetGroup import WidgetGroup
-from lib.util.pyqtgraph.PlotWidget import PlotWidget
-from lib.util.metaarray import *
-from lib.util.Mutex import Mutex, MutexLocker
+from WidgetGroup import WidgetGroup
+from pyqtgraph.PlotWidget import PlotWidget
+from metaarray import *
+from Mutex import Mutex, MutexLocker
 import traceback, sys, time
 from numpy import *
 import scipy.optimize
@@ -29,7 +29,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.params = {
             'mode': 'vc',
             'rate': 200000,
-            'downsample': 40,
+            'downsample': 20,
             'cycleTime': .2,
             'recordTime': 0.1,
             'delayTime': 0.03,
@@ -141,17 +141,20 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.vcHoldCheck.setChecked(False)
         self.ui.vcModeRadio.setChecked(True)
         self.ui.cycleTimeSpin.setValue(0.2)
+        self.ui.pulseTimeSpin.setValue(50)
     
     def patchMode(self):
         self.ui.vcPulseCheck.setChecked(True)
         self.ui.vcHoldCheck.setChecked(True)
         self.ui.vcModeRadio.setChecked(True)
         self.ui.cycleTimeSpin.setValue(0.2)
+        self.ui.pulseTimeSpin.setValue(50)
     
     def cellMode(self):
         self.ui.icPulseCheck.setChecked(True)
         self.ui.icModeRadio.setChecked(True)
         self.ui.cycleTimeSpin.setValue(0.2)
+        self.ui.pulseTimeSpin.setValue(150)
     
     def showPlots(self):
         """Show/hide analysis plot widgets"""
@@ -164,7 +167,7 @@ class PatchWindow(QtGui.QMainWindow):
                 p.hide()
     
     def updateParams(self, *args):
-        with MutexLocker(self.paramLock):
+        with self.paramLock:
             if self.ui.icModeRadio.isChecked():
                 mode = 'ic'
             else:
@@ -196,7 +199,7 @@ class PatchWindow(QtGui.QMainWindow):
             self.analysisData[n] = []
         
     def handleNewFrame(self, frame):
-        with MutexLocker(self.paramLock):
+        with self.paramLock:
             mode = self.params['mode']
         
         data = frame['data'][self.clampName]
@@ -206,8 +209,8 @@ class PatchWindow(QtGui.QMainWindow):
         else:
             scale1 = 1e3
             scale2 = 1e12
-        self.patchCurve.setData(data.xvals('Time'), data['scaled']*scale1)
-        self.commandCurve.setData(data.xvals('Time'), data['raw']*scale2)
+        self.patchCurve.setData(data.xvals('Time'), data['primary']*scale1)
+        self.commandCurve.setData(data.xvals('Time'), data['secondary']*scale2)
         #self.ui.patchPlot.replot()
         #self.ui.commandPlot.replot()
         
@@ -221,19 +224,19 @@ class PatchWindow(QtGui.QMainWindow):
             resistance = frame['analysis'][res]
             if resistance >= 0.0:
                 if resistance >= 1e12:
-                    label.setText('%7.3f TOhm' % (resistance*1e-12))
+                    label.setText(u'%7.3f TΩ' % (resistance*1e-12))
                 elif resistance >= 1e9:
-                    label.setText('%7.3f GOhm' % (resistance*1e-9))
+                    label.setText(u'%7.3f GΩ' % (resistance*1e-9))
                 elif resistance >= 1e6:
-                    label.setText('%7.3f MOhm' % (resistance*1e-6))
+                    label.setText(u'%7.3f MΩ' % (resistance*1e-6))
                 elif resistance >= 1e3:
-                    label.setText('%7.3f KOhm' % (resistance*1e-3))
+                    label.setText(u'%7.3f KΩ' % (resistance*1e-3))
                 else:
-                    label.setText('%7.3f  Ohm' % (resistance))
+                    label.setText(u'%7.3f Ω' % (resistance))
             else:
-                label.setText('>   10^15  Ohm')
+                label.setText(u'>   10^15 Ω')
         self.ui.restingPotentialLabel.setText('%7.2f +/- %7.2f mV' % (frame['analysis']['restingPotential']*1e3, frame['analysis']['restingPotentialStd']*1e3))
-        self.ui.restingCurrentLabel.setText('%7.2f +/- %7.2f pA' % (frame['analysis']['restingCurrent']*1e9, frame['analysis']['restingCurrentStd']*1e9))
+        self.ui.restingCurrentLabel.setText('%7.2f +/- %7.2f pA' % (frame['analysis']['restingCurrent']*1e12, frame['analysis']['restingCurrentStd']*1e12))
         self.ui.capacitanceLabel.setText('%7.2f pF' % (frame['analysis']['capacitance']*1e12))
         self.ui.fitErrorLabel.setText('%7.2g' % frame['analysis']['fitError'])
         self.analysisData['time'].append(data._info[-1]['startTime'])
@@ -321,7 +324,7 @@ class PatchThread(QtCore.QThread):
         self.paramsUpdated = True
                 
     def updateParams(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             self.paramsUpdated = True
         
     def run(self):
@@ -341,7 +344,7 @@ class PatchThread(QtCore.QThread):
                     updateCommand = False
                     l.relock()
                     if self.paramsUpdated:
-                        with MutexLocker(self.ui.paramLock):
+                        with self.ui.paramLock:
                             params = self.ui.params.copy()
                             self.paramsUpdated = False
                         updateCommand = True
@@ -376,16 +379,34 @@ class PatchThread(QtCore.QThread):
                         
                     }
                     
-                    ## Create task
-                    ## TODO: reuse tasks to improve efficiency
-                    task = self.manager.createTask(cmd)
                     
-                    ## Execute task
-                    task.execute()
+                    ## Create and execute task.
+                    ## the try/except block is just to catch errors that come up during multiclamp auto pipette offset procedure.
+                    exc = False
+                    count = 0
+                    while not exc:
+                        count += 1
+                        try:
+                            ## Create task
+                            task = self.manager.createTask(cmd)
+                            ## Execute task
+                            task.execute()
+                            exc = True
+                        except:
+                            err = sys.exc_info()[1].args
+                            #print err
+                            if count < 5 and len(err) > 1 and err[1] == 'ExtCmdSensOff':  ## external cmd sensitivity is off, wait to see if it comes back..
+                                time.sleep(1.0)
+                                continue
+                            else:
+                                raise
+                    #print cmd
                     
                     ## analyze trace 
                     result = task.getResult()
                     #print result[clampName]['raw'].max(), result[clampName]['raw'].min()
+                    
+                    #print result[clampName]
                     analysis = self.analyze(result[clampName], params)
                     frame = {'data': result, 'analysis': analysis}
                     
@@ -418,10 +439,10 @@ class PatchThread(QtCore.QThread):
     def analyze(self, data, params):
         #print "\n\nAnalysis parameters:", params
         ## Extract specific time segments
-        base = data['Time': 0.0:params['delayTime']]
-        pulse = data['Time': params['delayTime']:params['delayTime']+params['pulseTime']]
-        pulseEnd = data['Time': params['delayTime']+(params['pulseTime']*2./3.):params['delayTime']+params['pulseTime']]
-        end = data['Time':params['delayTime']+params['pulseTime']:]
+        base = data['Time': 0.0:(params['delayTime']-1e-3)]
+        pulse = data['Time': params['delayTime']:params['delayTime']+params['pulseTime']-1e-3]
+        pulseEnd = data['Time': params['delayTime']+(params['pulseTime']*2./3.):params['delayTime']+params['pulseTime']-1e-3]
+        end = data['Time':params['delayTime']+params['pulseTime']+1e-3:]
         #print "time ranges:", pulse.xvals('Time').min(),pulse.xvals('Time').max(),end.xvals('Time').min(),end.xvals('Time').max()
         ## Exponential fit
         #  v[0] is offset to start of exp
@@ -439,13 +460,12 @@ class PatchThread(QtCore.QThread):
             pred2 = [iri-ari, iri-ari, 1e-3]
         else:
             clamp = self.manager.getDevice(self.clampName)
-            bridge = float(clamp.getParam('BridgeBalResist', cache=False))
-            bridgeOn = clamp.getParam('BridgeBalEnable', cache=False)
-            #print "bridge on: '%s'" % bridgeOn, type(bridgeOn)
-            if bridgeOn != 'True':
+            bridge = float(clamp.getParam('BridgeBalResist'))
+            bridgeOn = clamp.getParam('BridgeBalEnable')
+            if not bridgeOn:
                 bridge = 0.0
-            #print "Bridge:", bridge, bridgeOn, type(bridgeOn)
-            arv = params['icPulse'] * (ar-bridge)
+            #print "bridge:", bridge
+            arv = params['icPulse'] * ar - bridge
             irv = params['icPulse'] * ir
             pred1 = [arv, -irv, 10e-3]
             pred2 = [irv, irv, 50e-3]
@@ -453,11 +473,11 @@ class PatchThread(QtCore.QThread):
         # Fit exponential to pulse and post-pulse traces
         fit1 = scipy.optimize.leastsq(
             lambda v, t, y: y - expFn(v, t), pred1, 
-            args=(pulse.xvals('Time')-pulse.xvals('Time').min(), pulse['scaled'] - base['scaled'].mean()),
+            args=(pulse.xvals('Time')-pulse.xvals('Time').min(), pulse['primary'] - base['primary'].mean()),
             maxfev=200, full_output=1, warning=False)
         fit2 = scipy.optimize.leastsq(
             lambda v, t, y: y - expFn(v, t), pred2, 
-            args=(end.xvals('Time')-end.xvals('Time').min(), end['scaled'] - base['scaled'].mean()),
+            args=(end.xvals('Time')-end.xvals('Time').min(), end['primary'] - base['primary'].mean()),
             maxfev=200, full_output=1, warning=False)
             
         
@@ -465,7 +485,7 @@ class PatchThread(QtCore.QThread):
         #err = max(fit1[2]['nfev'], fit2[2]['nfev'])
         
         #times = pulse.xvals('Time')-pulse.xvals('Time').min()
-        #err = fromfunction(lambda t: pulse['scaled'][t] - expFn(fit1[0], times[t]), pulse['scaled'].shape)
+        #err = fromfunction(lambda t: pulse['primary'][t] - expFn(fit1[0], times[t]), pulse['primary'].shape)
         #err *= err
         #err = err.sum()
         
@@ -480,40 +500,65 @@ class PatchThread(QtCore.QThread):
             0.5 * (fit1[2] + fit2[2])            
         ]
         fitAvg = fit1
-        
-        0.5 * (fit1[0] + (fit2[0] * array([-1, -1, 1])))
+
+        (fitOffset, fitAmp, fitTau) = fit1
+
+        #0.5 * (fit1[0] + (fit2[0] * array([-1, -1, 1])))
         #print pred1, fit1, pred2, fit2, fitAvg
         
         ## Handle anelysis differently depenting on clamp mode
         if params['mode'] == 'vc':
-            iBase = base['Channel': 'scaled']
-            iPulse = pulseEnd['Channel': 'scaled'] 
+            #global iBase, iPulse, iPulseEnd
+            iBase = base['Channel': 'primary']
+            iPulse = pulse['Channel': 'primary'] 
+            iPulseEnd = pulseEnd['Channel': 'primary'] 
             vBase = base['Channel': 'Command']
             vPulse = pulse['Channel': 'Command'] 
-            
             vStep = vPulse.mean() - vBase.mean()
-            aRes = vStep / fitAvg[0]
-            iRes = vStep / (fitAvg[0] - fitAvg[1])
-            cap = fitAvg[2] / aRes
+            sign = [-1, 1][vStep > 0]
+
+            iStep = sign * max(1e-15, sign * (iPulseEnd.mean() - iBase.mean()))
+            iRes = vStep / iStep
+            
+            ## From Santos-Sacchi 1993
+            pTimes = pulse.xvals('Time')
+            iCapEnd = pTimes[-1]
+            iCap = iPulse['Time':pTimes[0]:iCapEnd] - iPulseEnd.mean()
+            Q = sum(iCap) * (iCapEnd - pTimes[0]) / iCap.shape[0]
+            Rin = iRes
+            Vc = vStep
+            Rs = (Rin * fitTau * Vc) / (Q * Rin + fitTau * Vc)
+            Rm = Rin - Rs
+            Cm = (Rin**2 * Q) / (Rm**2 * Vc)
+            aRes = Rs
+            cap = Cm
+            
         if params['mode'] == 'ic':
             iBase = base['Channel': 'Command']
             iPulse = pulse['Channel': 'Command'] 
-            vBase = base['Channel': 'scaled']
-            vPulse = pulseEnd['Channel': 'scaled'] 
-            
+            vBase = base['Channel': 'primary']
+            vPulse = pulse['Channel': 'primary'] 
+            vPulseEnd = pulseEnd['Channel': 'primary'] 
             iStep = iPulse.mean() - iBase.mean()
+            sign = [-1, 1][iStep >= 0]
+            
+            vStep = sign * max(1e-5, sign * (vPulseEnd.mean() - vBase.mean()))
+            if iStep == 0:
+                iStep = 1e-14
+            iRes = (vStep / iStep) + bridge
+            #print iRes, vStep, iStep, bridge
             #print "current step:", iStep
             #print "bridge:", bridge
             aRes = (fitAvg[0] / iStep) + bridge
-            iRes = (-fitAvg[1] / iStep) + bridge
+            #iRes = (-fitAvg[1] / iStep) + bridge
             cap = fitAvg[2] / (iRes-aRes)
-            
             
             
         rmp = vBase.mean()
         rmps = vBase.std()
         rmc = iBase.mean()
         rmcs = iBase.std()
+        #print rmp, rmc
         
             
         return {
@@ -526,7 +571,7 @@ class PatchThread(QtCore.QThread):
         }
             
     def stop(self, block=False):
-        with MutexLocker(self.lock):
+        with self.lock:
             self.stopThread = True
         if block:
             if not self.wait(10000):

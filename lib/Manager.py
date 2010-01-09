@@ -257,6 +257,8 @@ Valid options are:
     def loadModule(self, module, name, config=None):
         """Create a new instance of a module"""
         #print 'Loading module "%s" as "%s"...' % (module, name)
+        if name in self.modules:
+            raise Exception('Module already exists with name "%s"' % name)
         if config is None:
             config = {}
         mod = __import__('lib.modules.%s.interface' % module, fromlist=['*'])
@@ -264,6 +266,7 @@ Valid options are:
         self.modules[name] = modclass(self, name, config)
         self.emit(QtCore.SIGNAL('modulesChanged'))
         return self.modules[name]
+        
         
     def listModules(self):
         return self.modules.keys()[:]
@@ -291,15 +294,38 @@ Valid options are:
         else:
             config = {}
             
-        mod = self.loadModule(mod, name, config)
+        ## Find an unused name for this module
+        mName = name
+        n = 0
+        while mName in self.modules:
+            mName = "%s_%d" % (name, n)
+            n += 1
+            
+        mod = self.loadModule(mod, mName, config)
         win = mod.window()
         if 'shortcut' in conf and win is not None:
             self.createWindowShortcut(conf['shortcut'], win)
+        print "Loaded module '%s'" % mName
     
     def moduleHasQuit(self, mod):
-        del self.modules[mod.name]
-        self.emit(QtCore.SIGNAL('modulesChanged'))
-    
+        if mod.name in self.modules:
+            del self.modules[mod.name]
+            self.emit(QtCore.SIGNAL('modulesChanged'))
+            #print "Module", mod.name, "has quit"
+        
+
+    def unloadModule(self, name):
+        try:
+            self.getModule(name).quit()
+        except:
+            printExc("Error while requesting module '%s' quit." % name)
+            
+        ## Module should have called moduleHasQuit already, but just in case:
+        if name in self.modules:
+            del self.modules[name]
+            self.emit(QtCore.SIGNAL('modulesChanged'))
+        #print "Unloaded module", name
+
     def createWindowShortcut(self, keys, win):
         try:
             sh = QtGui.QShortcut(QtGui.QKeySequence(keys), win)
@@ -405,12 +431,13 @@ Valid options are:
             while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
                 m = self.modules.keys()[0]
                 print "    %s" % m
-                try:
-                    self.modules[m].quit()
-                except:
-                    printExc("Error while requesting module '%s' quit." % m)
-                if m in self.modules:
-                    del self.modules[m]
+                self.unloadModule(m)
+                #try:
+                    #self.modules[m].quit()
+                #except:
+                    #printExc("Error while requesting module '%s' quit." % m)
+                #if m in self.modules:
+                    #del self.modules[m]
             #pdb.set_trace()
                 
             print "Requesting all devices shut down.."
@@ -538,7 +565,7 @@ class Task:
             self.stop()
             #print "  %d execute complete" % self.id
         except: 
-            printExc("==========  Error in protocol execution:  ==============")
+            #printExc("==========  Error in protocol execution:  ==============")
             self.abort()
             self.releaseAll()
             raise
@@ -577,7 +604,7 @@ class Task:
                     #print "   ..task", t, "stopped"
                 self.stopped = True
             
-            if not self.tasksDone():
+            if not abort and not self.tasksDone():
                 raise Exception("Cannot get result; task is still running.")
             
             if not abort and self.result is None:

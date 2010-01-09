@@ -178,11 +178,19 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         #for i in range(len(spotLocations)):
             #print spotLocations[i], spotCommands[i]
+        
+        ## sanity check on spot frame
+        if len(spotFrames) == 0:
+            raise Exception('Calibration never detected laser spot!')
+
         spotFrameMax = concatenate(spotFrames).max(axis=0)
         self.image.updateImage(spotFrameMax, autoRange=True)
         self.ui.view.setRange(self.image.boundingRect())
         
-        
+        if len(spotFrames) == 10:
+            raise Exception('Calibration detected only %d frames with laser spot; need minimum of 10.' % len(spotFrames))
+
+
         ## Fit all data to a map function
         mapParams = self.generateMap(array(spotLocations), array(spotCommands))
         #print 
@@ -201,6 +209,8 @@ class ScannerDeviceGui(QtGui.QWidget):
             
         def erf(v, loc, cmd):
             return fn(v, loc) - cmd
+            
+        ### sanity checks here on loc and cmd
             
         xFit = leastsq(erf, [0, 1, 1, 0, 0], (loc, cmd[:,0]))[0]
         yFit = leastsq(erf, [0, 1, 1, 0, 0], (loc, cmd[:,1]))[0]
@@ -240,7 +250,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## Record 10 camera frames with the shutter closed 
         cmd = {
             'protocol': {'duration': 0.0},
-            camera: {'record': True, 'minFrames': 10},
+            camera: {'record': True, 'minFrames': 10, 'binning': 2, 'exposure': 0.001, 'params': {'CLEAR_MODE': 'CLEAR_PRE_EXPOSURE'}},  ## binning/params are specific for QuantEM512
             laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
         task = lib.Manager.getManager().createTask(cmd)
@@ -254,7 +264,8 @@ class ScannerDeviceGui(QtGui.QWidget):
             'protocol': {'duration': duration},
             camera: {'record': True, 'triggerMode': 'Trigger First', 'recordExposeChannel': True, 'channels': {
                 'exposure': {'record': True}, 
-                'trigger': {'preset': 0, 'command': cameraTrigger}}},
+                'trigger': {'preset': 0, 'command': cameraTrigger}},
+                'binning': 2, 'exposure': 0.001, 'params': {'CLEAR_MODE': 'CLEAR_PRE_EXPOSURE'}},
             laser: {'Shutter': {'preset': 1, 'holding': 0}},
             #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
             self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},

@@ -3,7 +3,7 @@ from ctypes import *
 import sys, numpy, time, types
 import lib.util.cheader as cheader
 
-PVCAM_CREATED = False
+#PVCAM_CREATED = False
 
 class _CameraClass:
     def __init__(self, name, pvcam):
@@ -96,9 +96,9 @@ class _CameraClass:
             raise Exception("Invalid value for %s" % paramName(param))
         self.setParam(param, l[1][val])
         
-    def setParams(self, params):
+    def setParams(self, params, **kargs):
         for p in params:
-            self.setParam(p, params[p])
+            self.setParam(p, params[p], **kargs)
 
 
     def close(self):
@@ -252,14 +252,17 @@ class _CameraClass:
         
     def setParam(self, param, value, autoClip=False, autoQuantize=False, checkValue=True):
         ## Make sure parameter exists on this hardware and is writable
+        #print "PVCam setParam", param, value
         if isinstance(value, basestring):
             if value in self.pvcam.defs:
                 value = self.pvcam.defs[value]
             else:
-                raise Exception("Unrecognized value '%s'" % value)
+                raise Exception("Unrecognized value '%s'. Options are: %s" % (value, str(self.pvcam.defs.keys())))
         
+        #print "   PVCam setParam lookup param"
         param = self.pvcam.param(param)
         self._assertParamWritable(param)
+        #print "   PVCam setParam param writable"
 
         ## Determine the parameter type
         typ = self.getParamType(param)
@@ -294,10 +297,12 @@ class _CameraClass:
             count = self._getParam(param, ATTR_COUNT)
             if len(value) > count:
                 raise Exception("Enum value %d is out of range for parameter" % value)
+        #print "   PVCam setParam checked value"
             
         ## Set value
         val = mkCObj(typ, value)
         self.pvcam.pl_set_param(self.hCam, param, byref(val))
+        #print "   PVCam setParam set done."
 
     def getParamRange(self, param):
         param = self.pvcam.param(param)

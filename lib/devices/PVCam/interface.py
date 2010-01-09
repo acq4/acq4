@@ -189,19 +189,32 @@ class PVCam(DAQGeneric):
         return PVCamDevGui(self)
 
     def setParam(self, param, val):
+        self.setParams({param:val})
+
+    def setParams(self, params):
+        #print "setParams"
         with MutexLocker(self.lock):
             at = self.acqThread
+        #print "   setParams locked"
         
         r = at.isRunning()
         if r: 
             at.stop(block=True)
+        #print "   setParams stopped"
             
         with MutexLocker(self.camLock):
-            self.cam.setParam(param, val)
-        
-        self.emit(QtCore.SIGNAL('paramChanged'), param, val)
+            #print "   setParams camlock"
+            try:
+                self.cam.setParams(params)
+            except:
+                printExc("Failed to set camera params")
+        #print "   setParams set"
+        for k in params:
+            self.emit(QtCore.SIGNAL('paramChanged'), k, params[k])
+        #print "   setParams emit"
         if r: 
             at.start()
+        #print "   setParams restart"
         
     def getParam(self, param):
         with MutexLocker(self.camLock):
@@ -381,20 +394,6 @@ class Task(DAQGenericTask):
         if dis:   ## Must be done only after unlocking mutex
             self.dev.acqThread.disconnect(self.newFrame)
 
-    ### Now handled by DAQGenericTask.createChannels
-    #def createChannels(self, daqTask):
-        ### Are we interested in recording the expose signal?
-        #if ('recordExposeChannel' not in self.camCmd) or (not self.camCmd['recordExposeChannel']):
-            #return
-            
-        ### Is this the correct DAQ device to record the expose signal? 
-        #if daqTask.devName() != self.dev.camConfig['exposeChannel'][0]:
-            #return
-        
-        ### Then: create DI channel
-        #daqTask.addChannel(self.dev.camConfig['exposeChannel'][1], 'di')
-        
-        #self.daqTask = daqTask
         
     def start(self):
         ## arm recording
@@ -403,11 +402,27 @@ class Task(DAQGenericTask):
         self.recording = True
         #self.recordHandle = CameraTask(self.dev.acqThread)  #self.dev.acqThread.startRecord()
         ## start acquisition if needed
-        #print "stopAfter:", self.stopAfter
+        #print "Camera start:", self.camCmd
         
-        #print "Camera start acquire: ", self.camCmd['triggerMode']
+        ## all extra parameters should be passed on to the camera..
+        camState = {'mode': self.camCmd['triggerMode']}
+        for k in ['binning', 'exposure', 'region']:
+            if k in self.camCmd:
+                camState[k] = self.camCmd[k]
+        
+        ## set special camera parameters
+        if 'params' in self.camCmd:
+            params = self.camCmd['params']
+            self.returnState = {}
+            for k in params:
+                self.returnState[k] = self.dev.getParam(k)
+            #print "Set camera params:", params
+            self.dev.setParams(params)
+            #print "   set done"
+                
+        
         if not self.dev.isRunning():
-            self.dev.startAcquire({'mode': self.camCmd['triggerMode']})
+            self.dev.startAcquire(camState)
         
         ## If we requested a trigger mode, wait 300ms for the camera to get ready for the trigger
         ##   (Is there a way to ask the camera when it is ready instead?)
@@ -441,6 +456,7 @@ class Task(DAQGenericTask):
         #print "done"
         
         ## If this task made any changes to the camera state, return them now
+        print "Return state:", self.returnState
         for k in self.returnState:
             self.dev.setParam(k, self.returnState[k])
             

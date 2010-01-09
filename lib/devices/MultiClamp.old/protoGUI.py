@@ -4,8 +4,11 @@ import sys
 from lib.devices.Device import ProtocolGui
 from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
+#from lib.util.generator.StimGenerator import *
+#from PyQt4 import Qwt5 as Qwt
 import numpy
 from ProtocolTemplate import *
+#from lib.util.PlotWidget import PlotCurve
 from lib.util.debug import *
 import sip
 
@@ -16,6 +19,10 @@ class MultiClampProtoGui(ProtocolGui):
         self.daqUI = self.prot.getDevice(daqDev)
         
         self.traces = {}  ## Stores traces from a sequence to allow average plotting
+        #self.avgPlots = {}
+        
+        #self.cmdPlots = []
+        #self.inpPlots = {}
         self.resetInpPlots = False  ## Signals result handler to clear plots before adding a new one
         self.currentCmdPlot = None
         
@@ -30,67 +37,56 @@ class MultiClampProtoGui(ProtocolGui):
         
         self.stateGroup = WidgetGroup(self)
         self.ui.waveGeneratorWidget.setTimeScale(1e-3)
+        #self.ui.topPlotWidget.enableAxis(PlotWidget.xBottom, False)
         self.unitLabels = [self.ui.waveGeneratorLabel, self.ui.holdingCheck]
-        #self.modeSignalList = self.dev.listModeSignals()
+        self.modeSignalList = self.dev.listModeSignals()
         self.mode = None
         self.setMode('I=0')
 
         self.ui.topPlotWidget.registerPlot(self.dev.name + '.Input')
         self.ui.bottomPlotWidget.registerPlot(self.dev.name + '.Command')
 
+
+        #self.stateGroup = WidgetGroup([
+            #(self.ui.scaledSignalCheck, 'setScaledSignal'),
+            #(self.ui.rawSignalCheck, 'setRawSignal'),
+            #(self.ui.setScaledGainCheck, 'setScaledGain'),
+            #(self.ui.scaledGainSpin, 'scaledGain'),
+            #(self.ui.setRawGainCheck, 'setRawGain'),
+            #(self.ui.rawGainSpin, 'rawGain'),
+            #(self.ui.holdingCheck, 'setHolding'),
+            #(self.ui.holdingSpin, 'holding'),
+            #(self.ui.splitter, 'splitter1'),
+            #(self.ui.splitter_2, 'splitter2')
+        #])
+        
         self.daqChanged(self.daqUI.currentState())
+        #for p in [self.ui.topPlotWidget, self.ui.bottomPlotWidget]:
+            #p.setCanvasBackground(QtGui.QColor(0,0,0))
+            #p.plot()
         QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
         QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.ui.i0ModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.uiStateChanged)
-        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('stateChanged'), self.devStateChanged)
-        self.devStateChanged()
         
-        
-    def uiStateChanged(self, name, value):
-        checkMap = {
-            'holdingCheck': self.ui.holdingSpin,
-            'primarySignalCheck': self.ui.primarySignalCombo,
-            'secondarySignalCheck': self.ui.secondarySignalCombo,
-            'primaryGainCheck': self.ui.primaryGainSpin,
-            'secondaryGainCheck': self.ui.secondaryGainSpin,
-        }
-        
-        if name in checkMap:
-            checkMap[name].setEnabled(value)
-            self.devStateChanged()
-
-    def devStateChanged(self, state=None):
-        mode = self.getMode()
-        state = self.dev.getLastState(mode)
-        
-        if not self.ui.holdingSpin.isEnabled():
-            self.ui.holdingSpin.setValue(state['holding'] / self.cmdScale)
-        if not self.ui.primaryGainSpin.isEnabled():
-            self.ui.primaryGainSpin.setValue(state['primaryGain'])
-        if not self.ui.secondaryGainSpin.isEnabled():
-            self.ui.secondaryGainSpin.setValue(state['secondaryGain'])
-            
-        psig = ssig = None
-        if not self.ui.primarySignalCombo.isEnabled():
-            psig = state['primarySignal']
-        if not self.ui.secondarySignalCombo.isEnabled():
-            ssig = state['secondarySignal']
-        self.setSignals(psig, ssig)
-
     def saveState(self):
         state = self.stateGroup.state().copy()
         state['mode'] = self.getMode()
-        state['primarySignal'] = str(self.ui.primarySignalCombo.currentText())
-        state['secondarySignal'] = str(self.ui.secondarySignalCombo.currentText())
+        state['scaledSignal'] = str(self.ui.scaledSignalCombo.currentText())
+        state['rawSignal'] = str(self.ui.rawSignalCombo.currentText())
+        #state['topPlot'] = self.ui.topPlotWidget.saveState()
+        #state['bottomPlot'] = self.ui.bottomPlotWidget.saveState()
+        #state['stim'] = self.ui.waveGeneratorWidget.saveState()
+        #print state['splitter'], state['splitter_2']
         return state
         
     def restoreState(self, state):
         try:
             self.setMode(state['mode'])
-            self.setSignals(state['secondarySignal'], state['primarySignal'])
+            self.setSignal('raw', state['rawSignal'])
+            self.setSignal('scaled', state['scaledSignal'])
+            #self.ui.waveGeneratorWidget.loadState(state['stim'])
             self.stateGroup.setState(state)
         except:
             printExc('Error while restoring MultiClamp protocol GUI state:')
@@ -117,17 +113,22 @@ class MultiClampProtoGui(ProtocolGui):
             params[k] = range(ps[k])
         waves = []
         runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys(), passHash=True)
+        #runSequence(lambda p: waves.append(self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, p)), params, params.keys(), passHash=True)
         for w in waves:
             if w is not None:
                 self.plotCmdWave(w / self.cmdScale, color=QtGui.QColor(100, 100, 100), replot=False)
         
         ## display single-mode wave in red
+        #single = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts)
         single = self.getSingleWave()
         if single is not None:
             self.plotCmdWave(single / self.cmdScale, color=QtGui.QColor(200, 100, 100))
         self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
         
     def clearCmdPlots(self):
+        #for i in self.cmdPlots:
+            #i.detach()
+        #self.cmdPlots = []
         self.ui.bottomPlotWidget.clear()
         self.currentCmdPlot = None
 
@@ -135,6 +136,13 @@ class MultiClampProtoGui(ProtocolGui):
         self.resetInpPlots = True
 
     def clearInpPlots(self):
+        #for k in self.inpPlots:
+            #for i in self.inpPlots[k]:
+                #i.detach()
+        #self.inpPlots = {}
+        #for i in self.avgPlots:
+            #self.avgPlots[i].detach()
+        #self.avgPlots = {}
         self.traces = {}
         self.ui.topPlotWidget.clear()
         
@@ -142,7 +150,9 @@ class MultiClampProtoGui(ProtocolGui):
         ## Draw green trace for current command waveform
         if self.currentCmdPlot is not None:
             self.ui.bottomPlotWidget.removeItem(self.currentCmdPlot)
+            #self.currentCmdPlot.detach()
         params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name])
+        #cur = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
         cur = self.getSingleWave(params) 
         if cur is not None:
             self.currentCmdPlot = self.plotCmdWave(cur / self.cmdScale, color=QtGui.QColor(100, 200, 100))
@@ -151,7 +161,13 @@ class MultiClampProtoGui(ProtocolGui):
         if data is None:
             return
         plot = self.ui.bottomPlotWidget.plot(data, x=self.timeVals)
+        #plot = PlotCurve('cell')
         plot.setPen(QtGui.QPen(color))
+        #plot.setData(self.timeVals, data)
+        #plot.attach(self.ui.bottomPlotWidget)
+        #self.cmdPlots.append(plot)
+        #if replot:
+            #self.ui.bottomPlotWidget.replot()
         
         return plot
         
@@ -163,18 +179,10 @@ class MultiClampProtoGui(ProtocolGui):
         mode = self.getMode()
         prot['mode'] = mode
         prot['recordState'] = True
-        #if self.ui.primarySignalCheck.isChecked():
-            #prot['primary'] = self.ui.primarySignalCombo.currentText()
-        #if self.ui.secondarySignalCheck.isChecked():
-            #prot['secondary'] = self.ui.secondarySignalCombo.currentText()
-        if state['primarySignalCheck']:
-            prot['primarySignal'] = state['primarySignalCombo']
-        if state['secondarySignalCheck']:
-            prot['secondarySignal'] = state['secondarySignalCombo']
-        if state['primaryGainCheck']:
-            prot['primaryGain'] = state['primaryGainSpin']
-        if state['secondaryGainCheck']:
-            prot['secondaryGain'] = state['secondaryGainSpin']
+        if self.ui.scaledSignalCheck.isChecked():
+            prot['scaled'] = self.ui.scaledSignalCombo.currentText()
+        if self.ui.rawSignalCheck.isChecked():
+            prot['raw'] = self.ui.rawSignalCombo.currentText()
         if mode != 'I=0':
             ## Must scale command to V or A before sending to protocol system.
             wave = self.getSingleWave(params)
@@ -182,16 +190,14 @@ class MultiClampProtoGui(ProtocolGui):
                 prot['command'] = wave
             if state['holdingCheck']:
                 prot['holding'] = state['holdingSpin']
-        print "Protocol:", prot
         return prot
     
     def getSingleWave(self, params=None):
         state = self.stateGroup.state()
-        h = state['holdingSpin']
-        #if state['holdingCheck']:
-            #h = state['holdingSpin']
-        #else:
-            #h = 0.0
+        if state['holdingCheck']:
+            h = state['holdingSpin']
+        else:
+            h = 0.0
         self.ui.waveGeneratorWidget.setOffset(h)
         self.ui.waveGeneratorWidget.setScale(self.cmdScale)
         ## waveGenerator generates values in V or A
@@ -227,26 +233,21 @@ class MultiClampProtoGui(ProtocolGui):
                 self.ui.vcModeRadio.setChecked(True)
             
             # update signal lists
-            sigs = self.dev.listSignals(mode)
-            for s, c in [(sigs[0], self.ui.primarySignalCombo),(sigs[1], self.ui.secondarySignalCombo)]:
-                c.clear()
-                for ss in s:
-                    c.addItem(ss)
-            #self.ui.primarySignalCombo.clear()
-            #for s in self.modeSignalList['primary'][mode]:
-                #self.ui.primarySignalCombo.addItem(s)
-            #self.ui.secondarySignalCombo.clear()
-            #for s in self.modeSignalList['secondary'][mode]:
-                #self.ui.secondarySignalCombo.addItem(s)
+            self.ui.scaledSignalCombo.clear()
+            for s in self.modeSignalList['scaled'][mode]:
+                self.ui.scaledSignalCombo.addItem(s)
+            self.ui.rawSignalCombo.clear()
+            for s in self.modeSignalList['raw'][mode]:
+                self.ui.rawSignalCombo.addItem(s)
             
             # Disable signal, holding, and gain checks (only when switching between v and i modes)
             if mode == 'VC' or oldMode == 'VC':
-                self.ui.primarySignalCheck.setChecked(False)
-                self.ui.secondarySignalCheck.setChecked(False)
+                self.ui.scaledSignalCheck.setChecked(False)
+                self.ui.rawSignalCheck.setChecked(False)
                 self.ui.holdingCheck.setChecked(False)
                 self.ui.holdingSpin.setValue(0.0)
-                self.ui.primaryGainCheck.setChecked(False)
-                self.ui.secondaryGainCheck.setChecked(False)
+                self.ui.setScaledGainCheck.setChecked(False)
+                self.ui.setRawGainCheck.setChecked(False)
             
             # update unit labels and scaling
             if mode == 'VC':
@@ -273,28 +274,81 @@ class MultiClampProtoGui(ProtocolGui):
             else:
                 self.ui.bottomPlotWidget.show()
         
-            self.devStateChanged()
-        
         self.mode = mode
         
-    def setSignals(self, pri, sec):
-        for c, s in [(self.ui.primarySignalCombo, pri), (self.ui.secondarySignalCombo, sec)]:
-            if s is None:
-                continue
-            ind = c.findText(s)
-            if ind == -1:
-                for i in range(c.count()):
-                    print c.itemText(i)
-                raise Exception('Signal "%s" does not exist' % s)
-            c.setCurrentIndex(ind)
+    def setSignal(self, chan, sig):
+        if chan == 'scaled':
+            c = self.ui.scaledSignalCombo
+        else:
+            c = self.ui.rawSignalCombo
+        ind = c.findText(sig)
+        if ind == -1:
+            raise Exception('Signal %s does not exist' % sig)
+        c.setCurrentIndex(ind)
         
     def handleResult(self, result, params):
         if self.resetInpPlots:
             self.resetInpPlots = False
             self.clearInpPlots()
 
+        ## Is this result one of repeated trials?
+        #params = params.copy()
+        #repsRunning = ('protocol', 'repetitions') in params
+        
+        ## What is the total number of repeats?
+        #reps = self.prot.getParam('repetitions')
+        #if reps == 0:
+            #reps = 1
+            
+        ## What is the current repetition number?
+        #rep = 1
+        #if repsRunning:
+            #rep += params[('protocol', 'repetitions')]
+            #del params[('protocol', 'repetitions')]
+        #paramKey = tuple(params.items())
+            
+        #if repsRunning:
+            #plotColor = QtGui.QColor(255, 255, 255, int(255./rep))
+        #else:
+            #plotColor = QtGui.QColor(255, 255, 255, 200)
+        
+        #if repsRunning and (reps > 1):
+            ## Add the results into the average plot if requested
+                
+            #if self.stateGroup.state()['displayAverageCheck'] and repsRunning:
+                
+                #if paramKey not in self.traces:
+                    #self.traces[paramKey] = []
+                #self.traces[paramKey].append(result)
+                
+                #for k in self.traces:
+                    #if k not in self.avgPlots:
+                        #plot = self.ui.topPlotWidget.plot(replot=False)
+                        ##plot = PlotCurve('cell')
+                        #plot.setPen(QtGui.QPen(QtGui.QColor(0, 255, 0)))
+                        #plot.setZ(100)
+                        #self.avgPlots[k] = plot
+                        ##plot.attach(self.ui.topPlotWidget)
+                    #avgTrace = numpy.vstack([a['scaled'].view(ndarray) for a in self.traces[k]]).mean(axis=0)
+                    ##print avgTrace.shape
+                    #self.avgPlots[k].setData(self.traces[k][0].xvals('Time'), avgTrace / self.inpScale)
+                
         ## Plot the results
-        plot = self.ui.topPlotWidget.plot(result['primary'].view(numpy.ndarray) / self.inpScale, x=result.xvals('Time'), params=params)
+        plot = self.ui.topPlotWidget.plot(result['scaled'].view(numpy.ndarray) / self.inpScale, x=result.xvals('Time'), params=params)
+        #plot = PlotCurve('cell')
+        #plot.setData(result.xvals('Time'), result['scaled'] / self.inpScale)
+        #plot.attach(self.ui.topPlotWidget)
+        #if paramKey not in self.inpPlots:
+            #self.inpPlots[paramKey] = []
+        #self.inpPlots[paramKey].append(plot)
+        
+        ## Update the color of all plots sharing this parameter set
+        #alpha = 200 / len(self.inpPlots[paramKey])
+        #for p in self.inpPlots[paramKey]:
+            #p.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha)))
+        
+        
+        #self.ui.topPlotWidget.replot()
         
     def quit(self):
         ProtocolGui.quit(self)

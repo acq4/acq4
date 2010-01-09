@@ -12,8 +12,9 @@ class Camera(Module):
     def window(self):
         return self.ui
         
-    def quit(self):
-        self.ui.quit()
+    def quit(self, fromUi=False):
+        if not fromUi:
+            self.ui.quit()
         Module.quit(self)
 
         

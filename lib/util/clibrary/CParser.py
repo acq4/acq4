@@ -23,7 +23,7 @@ def winDefs(verbose=False):
     (possibly not legal to distribute? Who knows.), some of which have been abridged
     because they take so long to parse. 
     """
-    headerFiles = ['WinNt.h', 'WinDef.h', 'BaseTsd.h', 'WTypes.h', 'WinUser.h']
+    headerFiles = ['WinNt.h', 'WinDef.h', 'WinBase.h', 'BaseTsd.h', 'WTypes.h', 'WinUser.h']
     d = os.path.dirname(__file__)
     p = CParser(
         [os.path.join(d, 'headers', h) for h in headerFiles],
@@ -62,7 +62,7 @@ class CParser():
             print s
     """
     
-    cacheVersion = 18    ## increment every time cache structure or parsing changes to invalidate old cache files.
+    cacheVersion = 19    ## increment every time cache structure or parsing changes to invalidate old cache files.
     
     def __init__(self, files=None, replace=None, copyFrom=None, processAll=True, cache=None, verbose=False, **args):
         """Create a C parser object fiven a file or list of files. Files are read to memory and operated
@@ -475,8 +475,9 @@ class CParser():
         try:
             ev = bool(eval(expr2))
         except:
-            print "Error evaluating preprocessor expression: %s [%s]" % (expr, expr2)
-            print "      ", sys.exc_info()[1]
+            if self.verbose:
+                print "Error evaluating preprocessor expression: %s [%s]" % (expr, expr2)
+                print "      ", sys.exc_info()[1]
             ev = False
         return ev
             
@@ -885,6 +886,7 @@ class CParser():
         try:
             (name, decl) = self.processType(t.type, t.decl[0])
             if len(decl) == 0 or type(decl[-1]) != tuple:
+                print t
                 raise Exception("Incorrect declarator type for function definition.")
             if self.verbose:
                 print "  name:", name
