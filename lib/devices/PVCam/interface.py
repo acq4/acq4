@@ -185,8 +185,8 @@ class PVCam(DAQGeneric):
     def protocolInterface(self, prot):
         return PVCamProto(self, prot)
 
-    def deviceInterface(self):
-        return PVCamDevGui(self)
+    def deviceInterface(self, win):
+        return PVCamDevGui(self, win)
 
     def setParam(self, param, val):
         self.setParams({param:val})
@@ -343,13 +343,21 @@ class Task(DAQGenericTask):
         
         ## Determine whether to restart acquisition after protocol
         self.stopAfter = (not self.dev.isRunning())
-        
-        ## if the camera is being triggered by the daq, stop it now
-        if self.camCmd['triggerMode'] != 'Normal':
+
+        ## are we requesting any parameter changes?
+        paramSet = False
+        for k in ['binning', 'exposure', 'region', 'params']:
+            if k in self.camCmd:
+                paramSet = True
+                
+        ## if the camera is being triggered by the daq or if there are parameters to be set, stop it now
+        if self.camCmd['triggerMode'] != 'Normal' or paramSet:
             #print "Stop camera--restarting in trigger mode."
+            print "Stopping camera before protocol run."
             self.dev.stopAcquire(block=True)  
             
         ## If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
+        ##   (daq must be started first so that it is armed to received the camera trigger)
         name = self.dev.devName()
         if self.camCmd['triggerProtocol']:
             #print "Stop camera--will trigger DAQ on start"
@@ -416,12 +424,13 @@ class Task(DAQGenericTask):
             self.returnState = {}
             for k in params:
                 self.returnState[k] = self.dev.getParam(k)
-            #print "Set camera params:", params
+            print "Set camera params:", params
             self.dev.setParams(params)
             #print "   set done"
                 
         
         if not self.dev.isRunning():
+            print "Starting camera:", camState
             self.dev.startAcquire(camState)
         
         ## If we requested a trigger mode, wait 300ms for the camera to get ready for the trigger
@@ -456,7 +465,7 @@ class Task(DAQGenericTask):
         #print "done"
         
         ## If this task made any changes to the camera state, return them now
-        print "Return state:", self.returnState
+        #print "Return state:", self.returnState
         for k in self.returnState:
             self.dev.setParam(k, self.returnState[k])
             

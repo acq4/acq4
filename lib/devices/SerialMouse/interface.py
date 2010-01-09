@@ -63,12 +63,13 @@ class SerialMouse(Device):
         with MutexLocker(self.lock):
             return (self.pos[:], self.buttons[:])
         
-    def deviceInterface(self):
-        return SMInterface(self)
+    def deviceInterface(self, win):
+        return SMInterface(self, win)
     
 class SMInterface(QtGui.QLabel):
-    def __init__(self, dev):
+    def __init__(self, dev, win):
         QtGui.QWidget.__init__(self)
+        self.win = win
         self.dev = dev
         QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.update)
         QtCore.QObject.connect(self.dev, QtCore.SIGNAL('switchChanged'), self.update)

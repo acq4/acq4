@@ -126,8 +126,8 @@ class Microscope(Device):
         with MutexLocker(self.lock):
             return {'position': self.position[:], 'objective': self.objective[:]}
     
-    def deviceInterface(self):
-        iface = ScopeGUI(self)
+    def deviceInterface(self, win):
+        iface = ScopeGUI(self, win)
         iface.objectiveChanged((None, self.currentObjective, None))
         iface.positionChanged({'abs': self.getPosition()})
         return iface
@@ -142,8 +142,9 @@ class Microscope(Device):
 
     
 class ScopeGUI(QtGui.QWidget):
-    def __init__(self, dev):
+    def __init__(self, dev, win):
         QtGui.QWidget.__init__(self)
+        self.win = win
         self.dev = dev
         QtCore.QObject.connect(self.dev, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
         QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.positionChanged)

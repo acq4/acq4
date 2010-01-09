@@ -5,10 +5,11 @@ from lib.util.WidgetGroup import WidgetGroup
 #import pdb
 
 class PVCamDevGui(QtGui.QWidget):
-    def __init__(self, dev):
+    def __init__(self, dev, win):
         #pdb.set_trace()
         QtGui.QWidget.__init__(self)
         self.dev = dev
+        self.win = win
         self.cam = self.dev.cam
         self.ui = Ui_Form()
         self.ui.setupUi(self)

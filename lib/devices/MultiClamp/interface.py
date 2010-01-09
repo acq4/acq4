@@ -117,10 +117,10 @@ class MultiClamp(Device):
     def setParam(self, param, value):
         return self.mc.setParam(param, value)
 
-    def deviceInterface(self):
+    def deviceInterface(self, win):
         with MutexLocker(self.lock):
             if self.devRackGui is None:
-                self.devRackGui = MCDeviceGui(self)
+                self.devRackGui = MCDeviceGui(self, win)
             return self.devRackGui
 
     def protocolInterface(self, prot):

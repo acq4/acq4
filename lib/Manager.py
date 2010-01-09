@@ -234,6 +234,8 @@ Valid options are:
     def loadDefinedConfig(self, name):
         if name in self.config['configurations']:
             self.configure(self.config['configurations'][name])
+        else:
+            raise Exception("Could not find configuration named '%s'" % name)
 
     def __del__(self):
         self.quit()
@@ -311,6 +313,7 @@ Valid options are:
         if mod.name in self.modules:
             del self.modules[mod.name]
             self.emit(QtCore.SIGNAL('modulesChanged'))
+            self.emit(QtCore.SIGNAL('moduleHasQuit'), mod.name)
             #print "Module", mod.name, "has quit"
         
 

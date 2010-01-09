@@ -30,9 +30,9 @@ class Device(QtCore.QObject):
     def quit(self):
         pass
     
-    def deviceInterface(self):
+    def deviceInterface(self, win):
         """Return a widget with a UI to put in the device rack"""
-        return QtGui.QWidget()
+        return None
         
     def protocolInterface(self, prot):
         """Return a widget with a UI to put in the protocol rack"""
