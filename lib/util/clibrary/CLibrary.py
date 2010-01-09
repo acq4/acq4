@@ -188,7 +188,7 @@ class CLibrary:
             elif typ[0][:5] == 'enum ':
                 cls = c_int
             elif typ[0] == 'void':
-                return None
+                cls = None
             else:
                 #print typ
                 raise Exception("Can't find base type for %s" % str(typ))
