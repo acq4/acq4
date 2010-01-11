@@ -36,7 +36,6 @@ def listCameras():
     L = lib.CamListItem * 10
     l = L()
     a = lib.ListCameras(l, number)
-    print a(), a[1]
     if a() != 0:
         raise Exception('There was an error finding cameras. Error code = ', a())
     b = []
@@ -72,8 +71,8 @@ def getParamValue(param):
     s.size = sizeof(s)
     return lib.GetParam(byref(s), param)[2]
 
-### Make lists of the parameters available on the current camera.  
-param = {}
+### Make lists of the parameters available and current value of each parameter on the current camera.  
+parameters = {}
 def listParams():
     s = lib.ReadSettingsFromCam(handle)[1]
     s.size = sizeof(s)
@@ -82,33 +81,63 @@ def listParams():
             if lib.IsRangeTable(byref(s), getattr(lib,x))() ==0:
                 min = lib.GetParamMin(byref(s), getattr(lib,x))[2]
                 max = lib.GetParamMax(byref(s), getattr(lib,x))[2]
-                param[x] = (min, max)
+                value = lib.GetParam(byref(s), getattr(lib,x))[2]
+                parameters[x] = ((min, max), value, 'anonEnum16')
             elif lib.IsSparseTable(byref(s), getattr(lib,x))() ==0:
                 table = (c_ulong *32)()
                 r = lib.GetParamSparseTable(byref(s), getattr(lib,x), table, c_long(32))
-                param[x] = list(r[2])[:r[3]]
-            
-            
-paramS32 = []
-def listParamS32s():
+                value = lib.GetParam(byref(s), getattr(lib,x))[2]
+                parameters[x] = ((list(r[2])[:r[3]]), value, 'anonEnum16')
+    print 'done with params'
     for x in lib.anonEnum17.keys():
-        if lib.IsParamSupported(handle, getattr(lib, x))() == 0:
-            paramS32.append(x)
-param64 = []
-def listParam64s():
+        print '1.0', x
+        if lib.IsParamS32Supported(handle, getattr(lib, x))() == 0:
+            print '1.1', x
+            if lib.IsRangeTableS32(byref(s), getattr(lib,x))() ==0:
+                print '1.2', x
+                min = lib.GetParamS32Min(byref(s), getattr(lib,x))[2]
+                print '1.3', x
+                max = lib.GetParamS32Max(byref(s), getattr(lib,x))[2]
+                print '1.4', x
+                value = lib.GetParamS32(byref(s), getattr(lib,x))[2]
+                parameters[x] = ((min, max), value, 'anonEnum17')
+                print '1.5'
+            elif lib.IsSparseTableS32(byref(s), getattr(lib,x))() ==0:
+                print '1.6'
+                table = (c_ulong *32)()
+                print '1.7'
+                r = lib.GetParamSparseTableS32(byref(s), getattr(lib,x), table, c_long(32))
+                print '1.8'
+                value = lib.GetParamS32(byref(s), getattr(lib,x))[2]
+                parameters[x] = ((list(r[2])[:r[3]]), value, 'anonEnum17')
+    print 'done with S32s'
     for x in lib.anonEnum18.keys():
-        if lib.IsParamSupported(handle, getattr(lib, x))() == 0:
-            param64.append(x)
-def listAvailableParams():
-    listParams()
-    listParamS32s()
-    listParam64s()
-    return
-##make function that sets a parameter - takes parameter as an argument
-#    make a settings instance
-#    read settings
-#    use setparam - use if statement with all the different types of parameters to determine which setparam function to use
-#    then send settings to cam
+        if lib.IsParam64Supported(handle, getattr(lib, x))() == 0:
+            if lib.IsRangeTable64(byref(s), getattr(lib,x))() ==0:
+                min = lib.GetParam64Min(byref(s), getattr(lib,x))[2]
+                max = lib.GetParam64Max(byref(s), getattr(lib,x))[2]
+                value = lib.GetParam64(byref(s), getattr(lib,x))[2]
+                parameters[x] = ((min, max), value, 'anonEnum18')
+            elif lib.IsSparseTable64(byref(s), getattr(lib,x))() ==0:
+                table = (c_ulong *32)()
+                r = lib.GetParamSparseTable64(byref(s), getattr(lib,x), table, c_long(32))
+                value = lib.GetParam64(byref(s), getattr(lib,x))[2]
+                parameters[x] = ((list(r[2])[:r[3]]), value, 'anonEnum18')
+    print 'done with 64s'
+
+
+def setParam(param, value):
+    s = lib.ReadSettingsFromCam(handle)[1]
+    if len(parameters.keys()) == 0:
+        listParams()
+    if parameters[param][1] == 'anonEnum16':
+        lib.SetParam(byref(s), getattr(lib, param), c_ulong(value))
+    elif parameters[param][1] == 'anonEnum17':
+        lib.SetParamS32(byref(s), getattr(lib, param), c_long(value))
+    elif parameters[param][1] == 'anonEnum18':
+        lib.SetParam64(byref(s), getattr(lib, param), c_ulonglong(value))
+    lib.SendSettingsToCam(handle, byref(s))
+
 
 loadDriver()
 cameras = listCameras()
