@@ -112,7 +112,7 @@ class CLibrary:
                 return self._objs_[n]
             
         for n in names:  ## try with and without prefix
-            if n not in self._defs_[typ]:
+            if n not in self._defs_[typ] and not (typ in ['structs', 'unions', 'enums'] and n in self._defs_['types']):
                 continue
                 
             if typ == 'values':
@@ -131,7 +131,7 @@ class CLibrary:
                 if n not in self._defs_['enums']:
                     if n not in self._defs_['types']:
                         raise Exception('No enums named "%s"' % n)
-                    typ = self._defs_.evalType(n)[0]
+                    typ = self._headers_.evalType([n])[0]
                     if typ[:5] != 'enum ':
                         raise Exception('No enums named "%s"' % n)
                     n = self._defs_['types'][typ][1]  ## look up internal name of enum 
@@ -255,9 +255,9 @@ class CLibrary:
             
             ## Resolve struct name--typedef aliases allowed.
             if strName not in self._defs_[strType]:
-                if typ not in self._defs_['types']:
+                if strName not in self._defs_['types']:
                     raise Exception('No struct/union named "%s"' % strName)
-                typ = self._defs_.evalType(strName)[0]
+                typ = self._headers_.evalType([strName])[0]
                 if typ[:7] != 'struct ' and typ[:6] != 'union ':
                     raise Exception('No struct/union named "%s"' % strName)
                 strName = self._defs_['types'][typ][1]
