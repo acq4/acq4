@@ -157,6 +157,9 @@ class PlotItem(QtGui.QGraphicsWidget):
         QtCore.QObject.connect(c.xAutoRadio, QtCore.SIGNAL('clicked()'), self.updateXScale)
         QtCore.QObject.connect(c.yAutoRadio, QtCore.SIGNAL('clicked()'), self.updateYScale)
 
+        QtCore.QObject.connect(c.xAutoPercentSpin, QtCore.SIGNAL('valueChanged(int)'), self.replot)
+        QtCore.QObject.connect(c.yAutoPercentSpin, QtCore.SIGNAL('valueChanged(int)'), self.replot)
+        
         #QtCore.QObject.connect(c.xLogCheck, QtCore.SIGNAL('toggled(bool)'), self.setXLog)
         #QtCore.QObject.connect(c.yLogCheck, QtCore.SIGNAL('toggled(bool)'), self.setYLog)
 
@@ -400,7 +403,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             self.setManualXScale()
         else:
             self.setAutoXScale()
-        #self.replot()
+        self.replot()
         
     def updateYScale(self, b=False):
         """Set plot to autoscale or not depending on state of radio buttons"""
@@ -408,7 +411,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             self.setManualYScale()
         else:
             self.setAutoYScale()
-        #self.replot()
+        self.replot()
 
     def enableManualScale(self, v=[True, True]):
         if v[0]:
@@ -522,12 +525,13 @@ class PlotItem(QtGui.QGraphicsWidget):
         ## Recompute auto range if needed
         for ax in [0, 1]:
             if self.autoScale[ax]:
+                percentScale = [self.ctrl.xAutoPercentSpin.value(), self.ctrl.yAutoPercentSpin.value()][ax] * 0.01
                 mn = None
                 mx = None
                 for c in self.curves + [c[1] for c in self.avgCurves.values()]:
                     if not c.isVisible():
                         continue
-                    cmn, cmx = c.getRange(ax)
+                    cmn, cmx = c.getRange(ax, percentScale)
                     if mn is None or cmn < mn:
                         mn = cmn
                     if mx is None or cmx > mx:

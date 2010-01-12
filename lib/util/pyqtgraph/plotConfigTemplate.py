@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'plotConfigTemplate.ui'
 #
-# Created: Fri Nov 20 08:22:10 2009
-#      by: PyQt4 UI code generator 4.6
+# Created: Tue Jan 12 14:23:16 2010
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -47,11 +47,11 @@ class Ui_Form(object):
         self.xAutoRadio.setObjectName("xAutoRadio")
         self.gridLayout.addWidget(self.xAutoRadio, 1, 0, 1, 1)
         self.xAutoPercentSpin = QtGui.QSpinBox(self.groupBox)
-        self.xAutoPercentSpin.setEnabled(False)
+        self.xAutoPercentSpin.setEnabled(True)
         self.xAutoPercentSpin.setMinimum(1)
         self.xAutoPercentSpin.setMaximum(100)
-        self.xAutoPercentSpin.setSingleStep(10)
-        self.xAutoPercentSpin.setProperty("value", 100)
+        self.xAutoPercentSpin.setSingleStep(1)
+        self.xAutoPercentSpin.setProperty("value", QtCore.QVariant(100))
         self.xAutoPercentSpin.setObjectName("xAutoPercentSpin")
         self.gridLayout.addWidget(self.xAutoPercentSpin, 1, 1, 1, 2)
         self.xLinkCombo = QtGui.QComboBox(self.groupBox)
@@ -88,11 +88,11 @@ class Ui_Form(object):
         self.yAutoRadio.setObjectName("yAutoRadio")
         self.gridLayout_2.addWidget(self.yAutoRadio, 1, 0, 1, 1)
         self.yAutoPercentSpin = QtGui.QSpinBox(self.groupBox_2)
-        self.yAutoPercentSpin.setEnabled(False)
+        self.yAutoPercentSpin.setEnabled(True)
         self.yAutoPercentSpin.setMinimum(1)
         self.yAutoPercentSpin.setMaximum(100)
-        self.yAutoPercentSpin.setSingleStep(10)
-        self.yAutoPercentSpin.setProperty("value", 100)
+        self.yAutoPercentSpin.setSingleStep(1)
+        self.yAutoPercentSpin.setProperty("value", QtCore.QVariant(100))
         self.yAutoPercentSpin.setObjectName("yAutoPercentSpin")
         self.gridLayout_2.addWidget(self.yAutoPercentSpin, 1, 1, 1, 2)
         self.yLinkCombo = QtGui.QComboBox(self.groupBox_2)
@@ -176,7 +176,7 @@ class Ui_Form(object):
         self.horizontalLayout.addWidget(self.autoAlphaCheck)
         self.alphaSlider = QtGui.QSlider(self.alphaGroup)
         self.alphaSlider.setMaximum(1000)
-        self.alphaSlider.setProperty("value", 1000)
+        self.alphaSlider.setProperty("value", QtCore.QVariant(1000))
         self.alphaSlider.setOrientation(QtCore.Qt.Horizontal)
         self.alphaSlider.setObjectName("alphaSlider")
         self.horizontalLayout.addWidget(self.alphaSlider)
@@ -188,7 +188,7 @@ class Ui_Form(object):
         self.verticalLayout_4.setObjectName("verticalLayout_4")
         self.gridAlphaSlider = QtGui.QSlider(self.gridGroup)
         self.gridAlphaSlider.setMaximum(255)
-        self.gridAlphaSlider.setProperty("value", 70)
+        self.gridAlphaSlider.setProperty("value", QtCore.QVariant(70))
         self.gridAlphaSlider.setOrientation(QtCore.Qt.Horizontal)
         self.gridAlphaSlider.setObjectName("gridAlphaSlider")
         self.verticalLayout_4.addWidget(self.gridAlphaSlider)
