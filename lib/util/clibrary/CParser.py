@@ -1071,6 +1071,8 @@ class CParser():
         used = []
         while True:
             if self.isFundType(typ):
+                ## remove 'signed' before returning evaluated type
+                typ[0] = re.sub(r'\bsigned\b', '', typ[0]).strip()
                 return typ
             parent = typ[0]
             if parent in used:
