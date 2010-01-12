@@ -110,21 +110,21 @@
             <number>0</number>
            </property>
            <item row="0" column="0">
-            <widget class="QCheckBox" name="primarySignalCheck">
+            <widget class="QCheckBox" name="scaledSignalCheck">
              <property name="text">
-              <string>Primary:</string>
+              <string>Scaled:</string>
              </property>
             </widget>
            </item>
            <item row="1" column="0">
-            <widget class="QCheckBox" name="secondarySignalCheck">
+            <widget class="QCheckBox" name="rawSignalCheck">
              <property name="text">
-              <string>Secondary:</string>
+              <string>Raw:</string>
              </property>
             </widget>
            </item>
            <item row="0" column="1">
-            <widget class="QComboBox" name="primarySignalCombo">
+            <widget class="QComboBox" name="scaledSignalCombo">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                <horstretch>2</horstretch>
@@ -145,7 +145,7 @@
             </widget>
            </item>
            <item row="1" column="1">
-            <widget class="QComboBox" name="secondarySignalCombo">
+            <widget class="QComboBox" name="rawSignalCombo">
              <property name="minimumSize">
               <size>
                <width>40</width>
@@ -167,14 +167,14 @@
             <number>0</number>
            </property>
            <item>
-            <widget class="QCheckBox" name="setSecondaryGainCheck">
+            <widget class="QCheckBox" name="setRawGainCheck">
              <property name="text">
               <string>Set Gain</string>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QDoubleSpinBox" name="secondaryGainSpin"/>
+            <widget class="QDoubleSpinBox" name="rawGainSpin"/>
            </item>
           </layout>
          </item>
@@ -184,14 +184,14 @@
             <number>0</number>
            </property>
            <item>
-            <widget class="QCheckBox" name="setPrimaryGainCheck">
+            <widget class="QCheckBox" name="setScaledGainCheck">
              <property name="text">
               <string>Set Gain</string>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QDoubleSpinBox" name="primaryGainSpin"/>
+            <widget class="QDoubleSpinBox" name="scaledGainSpin"/>
            </item>
           </layout>
          </item>

@@ -66,7 +66,7 @@ def grabFrame():
     frame.shape = (s/w, w)
     return frame
 
-def getParamValue(param):
+def getParam(param):
     s = lib.ReadSettingsFromCam(handle)[1]
     s.size = sizeof(s)
     return lib.GetParam(byref(s), param)[2]
@@ -74,20 +74,20 @@ def getParamValue(param):
 ### Make lists of the parameters available and current value of each parameter on the current camera.  
 parameters = {}
 def listParams():
+    #take our value and type
     s = lib.ReadSettingsFromCam(handle)[1]
     s.size = sizeof(s)
-    for x in lib.anonEnum16.keys(): ##FIX this so that the name anonEnum16 is not hardwriten into the function!
+    for x in lib('enums', 'QCam_Param'): ##FIX this so that the name anonEnum16 is not hardwriten into the function!
         if lib.IsParamSupported(handle, getattr(lib, x))() == 0:
             if lib.IsRangeTable(byref(s), getattr(lib,x))() ==0:
                 min = lib.GetParamMin(byref(s), getattr(lib,x))[2]
                 max = lib.GetParamMax(byref(s), getattr(lib,x))[2]
-                value = lib.GetParam(byref(s), getattr(lib,x))[2]
-                parameters[x] = ((min, max), value, 'anonEnum16')
+                parameters[x] = (min, max)
             elif lib.IsSparseTable(byref(s), getattr(lib,x))() ==0:
                 table = (c_ulong *32)()
                 r = lib.GetParamSparseTable(byref(s), getattr(lib,x), table, c_long(32))
                 value = lib.GetParam(byref(s), getattr(lib,x))[2]
-                parameters[x] = ((list(r[2])[:r[3]]), value, 'anonEnum16')
+                parameters[x] = (list(r[2])[:r[3]])
     print 'done with params'
     for x in lib.anonEnum17.keys():
         print '1.0', x
@@ -130,7 +130,7 @@ def setParam(param, value):
     s = lib.ReadSettingsFromCam(handle)[1]
     if len(parameters.keys()) == 0:
         listParams()
-    if parameters[param][1] == 'anonEnum16':
+    if param in lib('enums', 'QCam_Param'):
         lib.SetParam(byref(s), getattr(lib, param), c_ulong(value))
     elif parameters[param][1] == 'anonEnum17':
         lib.SetParamS32(byref(s), getattr(lib, param), c_long(value))

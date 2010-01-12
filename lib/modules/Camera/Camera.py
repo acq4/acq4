@@ -19,6 +19,8 @@ import scipy.ndimage
 import time, types, os.path, re, sys
 from lib.util.pyqtgraph.functions import intColor
 from lib.util.debug import *
+from metaarray import *
+import sip
 
 traceDepth = 0
 def trace(func):
@@ -230,6 +232,8 @@ class PVCamera(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.spinBinning, QtCore.SIGNAL('valueChanged(int)'), self.setBinning)
         QtCore.QObject.connect(self.ui.spinExposure, QtCore.SIGNAL('valueChanged(double)'), self.setExposure)
         QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
+        QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
+        QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('recordingFailed'), self.recordingFailed, QtCore.Qt.QueuedConnection)
         QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('newFrame'), self.newFrame)
         QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('finished()'), self.acqThreadStopped)
         QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('started()'), self.acqThreadStarted)
@@ -359,6 +363,15 @@ class PVCamera(QtGui.QMainWindow):
         else:
             self.ui.btnRecord.setChecked(False)
 
+    def recordThreadStopped(self):
+        self.toggleRecord(False)
+        self.ui.btnRecord.setEnabled(False)  ## Recording thread has stopped, can't record anymore.
+        self.showMessage("Recording thread died! See console for error message.")
+            
+    def recordingFailed(self):
+        self.toggleRecord(False)
+        self.showMessage("Recording failed! See console for error message.")
+
     @trace
     def levelsChanged(self):
         self.updateColorScale()
@@ -398,6 +411,16 @@ class PVCamera(QtGui.QMainWindow):
     @trace
     def quit(self):
         #self.frameTimer.stop()
+        
+        QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
+        QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
+        QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('recordingFailed'), self.recordingFailed)
+        QtCore.QObject.disconnect(self.acquireThread, QtCore.SIGNAL('newFrame'), self.newFrame)
+        QtCore.QObject.disconnect(self.acquireThread, QtCore.SIGNAL('finished()'), self.acqThreadStopped)
+        QtCore.QObject.disconnect(self.acquireThread, QtCore.SIGNAL('started()'), self.acqThreadStarted)
+        QtCore.QObject.disconnect(self.acquireThread, QtCore.SIGNAL('showMessage'), self.showMessage)
+        
+        
         self.hasQuit = True
         if self.acquireThread.isRunning():
             #print "Stopping acquisition thread.."
@@ -411,6 +434,8 @@ class PVCamera(QtGui.QMainWindow):
             if not self.recordThread.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
             #print "  record thread finished."
+        sip.delete(self)
+        self.module.quit(fromUi=True)
 
     @trace
     def setMouse(self, qpt=None):
@@ -846,7 +871,8 @@ class RecordThread(QtCore.QThread):
                     self.handleCamFrame(handleCamFrames.pop(0))
             except:
                 printExc('Error in camera recording thread:')
-                break
+                self.toggleRecord(False)
+                self.emit(QtCore.SIGNAL('recordingFailed'))
                 
             time.sleep(10e-3)
             
@@ -871,6 +897,9 @@ class RecordThread(QtCore.QThread):
                 {'name': 'X'},
                 {'name': 'Y'}
             ]
+            #import random
+            #if random.random() < 0.01:
+                #raise Exception("TEST")
             data = MetaArray(data[newaxis], info=arrayInfo)
             if frame['newRec']:
                 self.currentRecord = self.m.getCurrentDir().writeFile(data, 'video', autoIncrement=True, info=info, appendAxis='Time')

@@ -48,8 +48,10 @@ class CLibrary:
         'unsigned short': c_ushort,
         'unsigned short int': c_ushort,
         'int': c_int,
+        'unsigned': c_uint,
         'unsigned int': c_uint,
         'long': c_long,
+        'long int': c_long,
         'unsigned long': c_ulong,
         'unsigned long int': c_ulong,
         '__int64': c_longlong,
@@ -110,21 +112,31 @@ class CLibrary:
                 return self._objs_[n]
             
         for n in names:  ## try with and without prefix
-            if n not in self._defs_[typ]:
+            if n not in self._defs_[typ] and not (typ in ['structs', 'unions', 'enums'] and n in self._defs_['types']):
                 continue
                 
-            obj = self._defs_[typ][n]
             if typ == 'values':
-                return obj
+                return self._defs_[typ][n]
             elif typ == 'functions':
                 return self._getFunction(n)
             elif typ == 'types':
+                obj = self._defs_[typ][n]
                 return self._ctype(obj)
             elif typ == 'structs':
                 return self._cstruct('structs', n)
             elif typ == 'unions':
                 return self._cstruct('unions', n)
             elif typ == 'enums':
+                ## Allow automatic resolving of typedefs that alias enums
+                if n not in self._defs_['enums']:
+                    if n not in self._defs_['types']:
+                        raise Exception('No enums named "%s"' % n)
+                    typ = self._headers_.evalType([n])[0]
+                    if typ[:5] != 'enum ':
+                        raise Exception('No enums named "%s"' % n)
+                    n = self._defs_['types'][typ][1]  ## look up internal name of enum 
+                obj = self._defs_['enums'][n]
+                    
                 return obj
             else:
                 raise Exception("Unknown type %s" % typ)
@@ -152,6 +164,9 @@ class CLibrary:
     def __getitem__(self, name):
         """Used to retrieve a specific dictionary from the headers."""
         return self._defs_[name]
+        
+    def __repr__(self):
+        return "<CLibrary instance: %s>" % str(self._lib_)
         
     def _getFunction(self, funcName):
         try:
@@ -237,14 +252,30 @@ class CLibrary:
         
     def _cstruct(self, strType, strName):
         if strName not in self._structs_:
+            
+            ## Resolve struct name--typedef aliases allowed.
+            if strName not in self._defs_[strType]:
+                if strName not in self._defs_['types']:
+                    raise Exception('No struct/union named "%s"' % strName)
+                typ = self._headers_.evalType([strName])[0]
+                if typ[:7] != 'struct ' and typ[:6] != 'union ':
+                    raise Exception('No struct/union named "%s"' % strName)
+                strName = self._defs_['types'][typ][1]
+                
+            ## Pull struct definition
             defn = self._defs_[strType][strName]
+                
+                
+            ## create ctypes class
             defs = defn['members'][:]
             if strType == 'structs':
                 class s(Structure):
-                    pass
+                    def __repr__(self):
+                        return "<ctypes struct '%s'>" % strName
             elif strType == 'unions':
                 class s(Union):
-                    pass
+                    def __repr__(self):
+                        return "<ctypes union '%s'>" % strName
             
             
             ## must register struct here to allow recursive definitions.
@@ -272,17 +303,6 @@ class CLibrary:
             s._defaults_ = [m[2] for m in defs]
         return self._structs_[strName]
         
-    #def _cunion(self, unionName):
-        #if unionName not in self._unions_:
-            #defs = self._defs_['unions'][unionName[1]]
-            #class s(Union):
-                #pass
-            ### must register struct here to allow recursive definitions.
-            #self._unions_[unionName] = s
-            ##s._anonymous_ =
-            #s._fields_ = [(m[0], self._ctype(m[1])) for m in defs]
-            #s._defaults_ = [m[2] for m in defs]
-        #return self._unions_[unionName]
 
 
 class CFunction:
@@ -336,14 +356,17 @@ class CFunction:
                 try:
                     sig = self.sig[1][i][1]
                     argType = self.lib._headers_.evalType(sig)
-                    assert len(argType) == 2 and argType[1] == '*' ## Must be 2-part type, second part must be '*'
-                    cls = self.lib._ctype(sig, pointers=False)
+                    if argType == ['void', '**'] or argType == ['void', '*', '*']:
+                        cls = c_void_p
+                    else:
+                        assert len(argType) == 2 and argType[1] == '*' ## Must be 2-part type, second part must be '*'
+                        cls = self.lib._ctype(sig, pointers=False)
                     argList[i] = pointer(cls(0))
                 except:
                     if sys.exc_info()[0] is not AssertionError:
                         sys.excepthook(*sys.exc_info())
                     print "Function signature:", self.prettySignature()
-                    raise Exception('Missing required argument %d "%s"' % (i, self.sig[1][i][0]))
+                    raise Exception("Function call '%s' missing required argument %d '%s'. (See above for signature)" % (self.name, i, self.sig[1][i][0]))
         #print "  args:", argList
         try:
             res = self.func(*argList)

@@ -17,7 +17,9 @@ class Manager(Module):
         self.devRackDocks = {}
         for d in self.manager.listDevices():
             try:
-                dw = self.manager.getDevice(d).deviceInterface()
+                dw = self.manager.getDevice(d).deviceInterface(self)
+                if dw is None:
+                    continue
                 dock = QtGui.QDockWidget(d)
                 dock.setFeatures(dock.AllDockWidgetFeatures)
                 dock.setObjectName(d)
@@ -26,6 +28,7 @@ class Manager(Module):
                 self.devRackDocks[d] = dock
                 self.win.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
             except:
+                self.showMessage("Error creating dock for device '%s', see console for details." % d, 10000)
                 printExc("Error while creating dock for device '%s':" % d)
 
         self.updateModList()
@@ -42,6 +45,9 @@ class Manager(Module):
             ws = QtCore.QByteArray.fromPercentEncoding(state['window'])
             self.win.restoreState(ws)
         self.win.show()
+        
+    def showMessage(self, *args):
+        self.ui.statusBar.showMessage(*args)
         
     def updateModList(self):
         self.ui.moduleList.clear()
@@ -62,11 +68,13 @@ class Manager(Module):
     def loadModule(self):
         mod = str(self.ui.moduleList.currentItem().text())
         self.manager.loadDefinedModule(mod)
+        self.showMessage("Loaded module '%s'." % mod, 10000)
         
     def loadConfig(self):
         cfg = str(self.ui.configList.currentItem().text())
         self.manager.loadDefinedConfig(cfg)
         self.updateModList()
+        self.showMessage("Loaded configuration '%s'." % cfg, 10000)
 
     def quit(self):
         ## save ui configuration

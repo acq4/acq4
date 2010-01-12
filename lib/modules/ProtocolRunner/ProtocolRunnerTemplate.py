@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Fri Dec 11 18:18:39 2009
+# Created: Sat Jan 09 12:14:59 2010
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -255,6 +255,9 @@ class Ui_MainWindow(object):
         self.horizontalLayout_4.addWidget(self.analysisList)
         self.dockWidget.setWidget(self.dockWidgetContents_2)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.dockWidget)
+        self.statusBar = QtGui.QStatusBar(MainWindow)
+        self.statusBar.setObjectName("statusBar")
+        MainWindow.setStatusBar(self.statusBar)
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)

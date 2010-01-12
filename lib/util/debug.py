@@ -5,7 +5,7 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-import sys, traceback
+import sys, traceback, time
 
 def ftrace(func):
     ## Use as decorator to mark beginning and end of functions
@@ -23,10 +23,9 @@ def getExc(indent=4, prefix='|  '):
         lines.append(" "*indent + prefix + l)
     return '\n'.join(lines)
 
-def printExc(msg=None, indent=4, prefix='|  '):
-    exc = getExc(indent, prefix)
-    if msg is not None:
-        print msg + '\n'
+def printExc(msg='', indent=4, prefix='|'):
+    exc = getExc(indent, prefix + '  ')
+    print "[%s]  %s\n" % (time.strftime("%H:%M:%S"), msg)
     print " "*indent + prefix + '='*30 + '>>'
     print exc
     print " "*indent + prefix + '='*30 + '<<'

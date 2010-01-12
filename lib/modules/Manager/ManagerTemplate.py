@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ManagerTemplate.ui'
 #
-# Created: Fri Dec 11 18:18:21 2009
+# Created: Sat Jan 09 12:14:41 2010
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -51,6 +51,9 @@ class Ui_MainWindow(object):
         self.verticalLayout.addWidget(self.quitBtn)
         self.verticalLayout_2.addLayout(self.verticalLayout)
         MainWindow.setCentralWidget(self.centralwidget)
+        self.statusBar = QtGui.QStatusBar(MainWindow)
+        self.statusBar.setObjectName("statusBar")
+        MainWindow.setStatusBar(self.statusBar)
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)

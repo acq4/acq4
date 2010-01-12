@@ -284,13 +284,7 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
     """Class representing a single plot curve."""
     def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None):
         QtGui.QGraphicsWidget.__init__(self, parent)
-        self.xData = None  ## raw values
-        self.yData = None
-        self.xDisp = None  ## display values (after log / fft)
-        self.yDisp = None
-        
-        
-        self.path = None
+        self.free()
         #self.dispPath = None
         
         if pen is None:
@@ -517,7 +511,12 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         p.drawPath(path)
         
     def free(self):
-        del self.xData, self.yData, self.xDisp, self.yDisp, self.path
+        self.xData = None  ## raw values
+        self.yData = None
+        self.xDisp = None  ## display values (after log / fft)
+        self.yDisp = None
+        self.path = None
+        #del self.xData, self.yData, self.xDisp, self.yDisp, self.path
         
         
 class ROIPlotItem(PlotCurveItem):

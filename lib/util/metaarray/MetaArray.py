@@ -308,18 +308,19 @@ class MetaArray(ndarray):
                     index = self._getIndex(axis, ind.stop)
                     
                 ## x[Axis:min:max]
-                elif (type(ind.stop) is float or type(ind.step) is float) and ('values' in self._info[axis]):
+                elif (isinstance(ind.stop, float) or isinstance(ind.step, float)) and ('values' in self._info[axis]):
                     #print "    axis value range"
                     if ind.stop is None:
                         mask = self.xvals(axis) < ind.step
                     elif ind.step is None:
-                        mask = self.xvals(axis) > ind.stop
+                        mask = self.xvals(axis) >= ind.stop
                     else:
-                        mask = (self.xvals(axis) > ind.stop) * (self.xvals(axis) < ind.step)
+                        mask = (self.xvals(axis) >= ind.stop) * (self.xvals(axis) < ind.step)
+                    ##print "mask:", mask
                     index = mask
                     
                 ## x[Axis:columnIndex]
-                elif type(ind.stop) is int or type(ind.step) is int:
+                elif isinstance(ind.stop, int) or isinstance(ind.step, int):
                     #print "    normal slice after named axis"
                     if ind.step is None:
                         index = ind.stop
@@ -328,6 +329,7 @@ class MetaArray(ndarray):
                     
                 ## x[Axis: [list]]
                 elif type(ind.stop) is list:
+                    #print "    list of indexes from named axis"
                     index = []
                     for i in ind.stop:
                         if type(i) is int:
@@ -340,7 +342,7 @@ class MetaArray(ndarray):
                             break
                 
                 else:
-                    #print "    other type.. forward on to array for handling"
+                    #print "    other type.. forward on to array for handling", type(ind.stop)
                     index = ind.stop
                 #print "Axis %s (%s) : %s" % (ind.start, str(axis), str(type(index)))
                 #if type(index) is ndarray:

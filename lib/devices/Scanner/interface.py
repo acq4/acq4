@@ -126,10 +126,10 @@ class Scanner(Device):
         with MutexLocker(self.lock):
             return ScannerProtoGui(self, prot)
     
-    def deviceInterface(self):
+    def deviceInterface(self, win):
         with MutexLocker(self.lock):
             if self.devGui is None:
-                self.devGui = ScannerDeviceGui(self)
+                self.devGui = ScannerDeviceGui(self, win)
             return self.devGui
     
     

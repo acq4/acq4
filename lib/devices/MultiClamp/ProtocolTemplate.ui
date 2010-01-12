@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>302</width>
-    <height>377</height>
+    <height>110</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -91,6 +91,9 @@
               </item>
               <item>
                <widget class="QDoubleSpinBox" name="holdingSpin">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
                 <property name="minimum">
                  <double>-1000000.000000000000000</double>
                 </property>
@@ -110,21 +113,24 @@
             <number>0</number>
            </property>
            <item row="0" column="0">
-            <widget class="QCheckBox" name="scaledSignalCheck">
+            <widget class="QCheckBox" name="primarySignalCheck">
              <property name="text">
-              <string>Scaled:</string>
+              <string>Primary:</string>
              </property>
             </widget>
            </item>
            <item row="1" column="0">
-            <widget class="QCheckBox" name="rawSignalCheck">
+            <widget class="QCheckBox" name="secondarySignalCheck">
              <property name="text">
-              <string>Raw:</string>
+              <string>Secondary:</string>
              </property>
             </widget>
            </item>
            <item row="0" column="1">
-            <widget class="QComboBox" name="scaledSignalCombo">
+            <widget class="QComboBox" name="primarySignalCombo">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
              <property name="sizePolicy">
               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                <horstretch>2</horstretch>
@@ -145,7 +151,10 @@
             </widget>
            </item>
            <item row="1" column="1">
-            <widget class="QComboBox" name="rawSignalCombo">
+            <widget class="QComboBox" name="secondarySignalCombo">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
              <property name="minimumSize">
               <size>
                <width>40</width>
@@ -167,14 +176,21 @@
             <number>0</number>
            </property>
            <item>
-            <widget class="QCheckBox" name="setRawGainCheck">
+            <widget class="QCheckBox" name="secondaryGainCheck">
              <property name="text">
               <string>Set Gain</string>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QDoubleSpinBox" name="rawGainSpin"/>
+            <widget class="QSpinBox" name="secondaryGainSpin">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
+             <property name="maximum">
+              <number>100000</number>
+             </property>
+            </widget>
            </item>
           </layout>
          </item>
@@ -184,14 +200,21 @@
             <number>0</number>
            </property>
            <item>
-            <widget class="QCheckBox" name="setScaledGainCheck">
+            <widget class="QCheckBox" name="primaryGainCheck">
              <property name="text">
               <string>Set Gain</string>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QDoubleSpinBox" name="scaledGainSpin"/>
+            <widget class="QSpinBox" name="primaryGainSpin">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
+             <property name="maximum">
+              <number>100000</number>
+             </property>
+            </widget>
            </item>
           </layout>
          </item>

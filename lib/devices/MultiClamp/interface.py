@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.drivers.MultiClamp import MultiClamp as MultiClampDriver
+from lib.drivers.MultiClamp.MultiClamp import MultiClamp as MultiClampDriver
 from lib.devices.Device import *
 from lib.util.metaarray import MetaArray, axis
 from lib.util.Mutex import Mutex, MutexLocker
@@ -14,79 +14,134 @@ from lib.util.debug import *
 class MultiClamp(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.lock = Mutex(Mutex.Recursive)
         self.index = None
         self.devRackGui = None
         
-        if not config.has_key('host') or config['host'] is None:
-            raise Exception("Must specify host running MultiClamp server. (Direct connections not yet supported..)")
-        self.host = self.config['host']
-        if ':' in self.host:
-            (host, c, port) = self.host.partition(':')
-            args = (host, port)
-        else:
-            args = (self.host,)
-        self.mc = MultiClampDriver(*args)
-        self.mc.setUseCache(True)
-        
+        self.stateLock = Mutex(Mutex.Recursive)  ## only for locking self.lastState and self.lastMode
+        self.lastState = {}
+        self.lastMode = None
+
+
         try:
-            mcs = self.mc.listDevices()
-            self.channelID = self.config['channelID']
-            if self.channelID in mcs:
-                print "Connected to host %s, channel %s" % (self.host, self.channelID)
-            else:
-                print "WARNING: Connected to host %s, but channel is not available." % self.host
-                print "  available channels:", mcs
+            # default holding state
+            self.holding = {
+                'VC': -50e-3,
+                'IC': 0.0
+            }
+                
+            self.mc = MultiClampDriver.instance().getChannel(self.config['channelID'], self.mcUpdate)
+            
+            ## wait for first update..
+            c = 0
+            while self.mc.getState() is None:
+                time.sleep(0.1)
+                c += 1
+                if c > 50:
+                    raise Exception("Timed out waiting for first update from multi clamp commander.")
+            
+            print "Created MultiClamp device", self.config['channelID']
+
+            ## set configured holding values
+            if 'vcHolding' in self.config:
+                self.holding['VC'] = self.config['vcHolding']
+            if 'icHolding' in self.config:
+                self.holding['IC'] = self.config['icHolding']
+
+            ## Set up default MC settings for each mode, then leave MC in I=0 mode
+            if 'settings' in self.config:
+                for mode in ['IC', 'VC']:
+                    if mode in self.config['settings']:
+                        #print "set mode", mode
+                        self.setMode(mode)
+                        #print "set params"
+                        self.mc.setParams(self.config['settings'][mode])
+            self.setMode('I=0')  ## safest mode to leave clamp in
+
         except:
-            printExc("Error connecting to MultiClamp commander, will try again when needed. (default settings not loaded)")
+            try:
+                mc = MultiClampDriver.instance()
+                if mc is not None:
+                    mc.quit()
+            except:
+                pass
+            raise
+
+    def quit(self):
+        mc = MultiClampDriver.instance()
+        if mc is not None:
+            mc.quit()
+
+    def mcUpdate(self, state):
+        """MC state has changed, handle the update."""
+        #print "lock for update..."
+        with self.stateLock:
+            #print "  got lock for update"
+            mode = state['mode']
+            if mode == 'I=0':
+                mode = 'IC'
+          
+            state['holding'] = self.holding[mode]
+            self.lastState[mode] = state.copy()
+            self.lastMode = state['mode']
+            ## Has mode changed? has extCmdScale changed?
+            
+        QtCore.QObject.emit(self, QtCore.SIGNAL('stateChanged'), state)
         
-        print "Created MultiClamp device"
-    
-        self.holding = {
-            'VC': -50e-3,
-            'IC': 0.0
-        }
-        if 'vcHolding' in self.config:
-            self.holding['VC'] = self.config['vcHolding']
-        if 'icHolding' in self.config:
-            self.holding['IC'] = self.config['icHolding']
+    def getLastState(self, mode):
+        """Return the last known state for the given mode."""
+        with self.stateLock:
+            if mode == 'I=0':
+                mode = 'IC'
+            if mode in self.lastState:
+                return self.lastState[mode]
+        
+        
+    def extCmdScale(self, mode):
+        """Return our best guess as to the external command sensitivity for the given mode."""
+        s = self.getLastState(mode)
+        if s is not None:
+            return s['extCmdScale']
+        else:
+            if mode == 'VC':
+                return 50
+            else:
+                return 2.5e9
+        
+    def getState(self):
+        return self.mc.getState()
 
-        ## Set up default MC settings for each mode, then leave MC in I=0 mode
-        if 'settings' in self.config:
-            for mode in ['IC', 'VC']:
-                if mode in self.config['settings']:
-                    self.setMode(mode)
-                    self.setParams(self.config['settings'][mode])
-        self.setMode('I=0')
+    def getParam(self, param):
+        return self.mc.getParam(param)
 
-    def deviceInterface(self):
+    def setParam(self, param, value):
+        return self.mc.setParam(param, value)
+
+    def deviceInterface(self, win):
         with MutexLocker(self.lock):
             if self.devRackGui is None:
-                self.devRackGui = MCRackGui(self)
+                self.devRackGui = MCDeviceGui(self, win)
             return self.devRackGui
 
-    def setParams(self, params):
+    def protocolInterface(self, prot):
         with MutexLocker(self.lock):
-            ind = self.getChanIndex()
-            self.mc.setParams(ind, params)
+            return MultiClampProtoGui(self, prot)
+
+    #def setParams(self, params):
+        #with MutexLocker(self.lock):
+            #self.mc.setParams(params)
     
-    def getParam(self, param, cache=None):
-        with MutexLocker(self.lock):
-            ind = self.getChanIndex()
-            return self.mc.readParams(ind, [param], cache=cache)[param][0]
-        
-        
+    #def getParam(self, param, cache=None):
+        #with MutexLocker(self.lock):
+            #return self.getParam(param)
     
     def createTask(self, cmd):
         with MutexLocker(self.lock):
-            return Task(self, cmd)
+            return MultiClampTask(self, cmd)
     
-    def getMode(self):
-        with MutexLocker(self.lock):
-            ind = self.getChanIndex()
-            m = self.mc.runFunction('getMode', [ind])
-            #print "getMode:", m
-            return m[0]
+    #def getMode(self):
+        #with MutexLocker(self.lock):
+            #return self.mc.getMode()
     
     def setHolding(self, mode=None, value=None):
         """Define and set the holding values for this device"""
@@ -96,7 +151,7 @@ class MultiClamp(Device):
                 #print "   update holding value"
                 self.holding[mode] = value
                 
-            mode = self.getMode()
+            mode = self.mc.getMode()
             if mode == 'I=0':
                 mode = 'IC'
             if mode not in self.holding:
@@ -105,72 +160,74 @@ class MultiClamp(Device):
             holding = self.holding[mode]
             daq, chan = self.config['commandChannel'][:2]
             daqDev = self.dm.getDevice(daq)
-            scale = self.config['cmdScale'][mode]
+            #scale = self.config['cmdScale'][mode]
+            #s = self.mc.getState()['extCmdScale']
+            s = self.extCmdScale(mode)  ## use the scale for the last remembered state from this mode
+            if s == 0:
+                if holding == 0.0:
+                    s = 1.0
+                else:
+                    #print self.mc.getState()
+                    raise Exception('Can not set holding value for multiclamp--external command sensitivity is disabled by commander.')
+            scale = 1.0 / s
             #print "     setChannelValue", chan, holding
             daqDev.setChannelValue(chan, holding*scale, block=False)
         
-    def getChanIndex(self):
-        """Given a channel name (as defined in the configuration), return the device index to use when making calls to the MC"""
-        with MutexLocker(self.lock):
-            if self.index is None:
-                devs = self.mc.listDevices()
-                if self.channelID not in devs:
-                    raise Exception("Could not find device on multiclamp with description '%s'" % self.channelID)
-                self.index = devs.index(self.channelID)
-            return self.index
+    #def getChanIndex(self):
+        #"""Given a channel name (as defined in the configuration), return the device index to use when making calls to the MC"""
+        #with MutexLocker(self.lock):
+            #if self.index is None:
+                #devs = self.mc.listDevices()
+                #if self.channelID not in devs:
+                    #raise Exception("Could not find device on multiclamp with description '%s'" % self.channelID)
+                #self.index = devs.index(self.channelID)
+            #return self.index
         
-    def listModeSignals(self):
-        ## Todo: move this upstream to the multiclamp driver (and make it actually correct)
-        with MutexLocker(self.lock):
-            sig = {
-                'scaled': {
-                    'IC': ['MembranePotential'],
-                    'I=0': ['MembranePotential'],
-                    'VC': ['MembraneCurrent']
-                },
-                'raw': {
-                    'IC': ['MembranePotential', 'MembraneCurrent'],
-                    'I=0': ['MembranePotential', 'MembraneCurrent'],
-                    'VC': ['MembraneCurrent', 'MembranePotential']
-                }
-            }
-            return sig
+    def listSignals(self, mode):
+        return self.mc.listSignals(mode)
+        
+    #def listModeSignals(self):
+        ### Todo: move this upstream to the multiclamp driver (and make it actually correct)
+        #with MutexLocker(self.lock):
+            #sig = {
+                #'primary': {
+                    #'IC': ['MembranePotential'],
+                    #'I=0': ['MembranePotential'],
+                    #'VC': ['MembraneCurrent']
+                #},
+                #'secondary': {
+                    #'IC': ['MembranePotential', 'MembraneCurrent'],
+                    #'I=0': ['MembranePotential', 'MembraneCurrent'],
+                    #'VC': ['MembraneCurrent', 'MembranePotential']
+                #}
+            #}
+            #return sig
         
     def setMode(self, mode):
         """Set the mode for a multiclamp channel, gracefully switching between VC and IC modes."""
-        with MutexLocker(self.lock):
+        with self.lock:
             mode = mode.upper()
             if mode not in ['VC', 'IC', 'I=0']:
                 raise Exception('MultiClamp mode "%s" not recognized.' % mode)
             
-            chan = self.getChanIndex()
-
-            mcMode = self.mc.runFunction('getMode', [chan])[0]
-            if mcMode == mode:
+            mcMode = self.mc.getMode()
+            if mcMode == mode:  ## Mode is already correct
                 return
                 
             ## If switching ic <-> vc, switch to i=0 first
             if (mcMode=='IC' and mode=='VC') or (mcMode=='VC' and mode=='IC'):
-                self.mc.runFunction('setMode', [chan,'I=0'])
+                self.mc.setMode('I=0')
                 mcMode = 'I=0'
-            
+                #print "  set intermediate i0"
             if mcMode=='I=0':
                 ## Set holding level before leaving I=0 mode
+                #print "  set holding"
                 self.setHolding()
-            
-            self.mc.runFunction('setMode', [chan, mode])
+            #print "  set mode"
+            self.mc.setMode(mode)
             
             ## Clamp should not be used until it has had time to settle after switching modes. (?)
             #self.readyTime = ptime.time() + 0.1
-
-    def clearCache(self):
-        with MutexLocker(self.lock):
-            self.mc.clearCache()
-            print "Cleared MultiClamp configuration cache."
-
-    def protocolInterface(self, prot):
-        with MutexLocker(self.lock):
-            return MultiClampProtoGui(self, prot)
 
     def getDAQName(self):
         """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
@@ -178,15 +235,13 @@ class MultiClamp(Device):
             daq, chan = self.config['commandChannel'][:2]
             return daq
 
-    def quit(self):
-        with MutexLocker(self.lock):
-            self.mc.disconnect()
 
-class Task(DeviceTask):
+class MultiClampTask(DeviceTask):
+    recordParams = ['Holding', 'HoldingEnable', 'PipetteOffset', 'FastCompCap', 'SlowCompCap', 'FastCompTau', 'SlowCompTau', 'NeutralizationEnable', 'NeutralizationCap', 'WholeCellCompEnable', 'WholeCellCompCap', 'WholeCellCompResist', 'RsCompEnable', 'RsCompBandwidth', 'RsCompCorrection', 'PrimarySignalLPF', 'PrimarySignalHPF', 'OutputZeroEnable', 'OutputZeroAmplitude', 'LeakSubEnable', 'LeakSubResist', 'BridgeBalEnable', 'BridgeBalResist']
+    
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
         with MutexLocker(self.dev.lock):
-            self.recordParams = ['Holding', 'HoldingEnable', 'PipetteOffset', 'FastCompCap', 'SlowCompCap', 'FastCompTau', 'SlowCompTau', 'NeutralizationEnable', 'NeutralizationCap', 'WholeCellCompEnable', 'WholeCellCompCap', 'WholeCellCompResist', 'RsCompEnable', 'RsCompBandwidth', 'RsCompCorrection', 'PrimarySignalGain', 'PrimarySignalLPF', 'PrimarySignalHPF', 'OutputZeroEnable', 'OutputZeroAmplitude', 'LeakSubEnable', 'LeakSubResist', 'BridgeBalEnable', 'BridgeBalResist']
             self.usedChannels = None
             self.daqTasks = {}
 
@@ -196,43 +251,52 @@ class Task(DeviceTask):
                 raise Exception("Multiclamp command must specify clamp mode (IC, VC, or I=0)")
             self.cmd['mode'] = self.cmd['mode'].upper()
             
-            ## If scaled and raw modes are not specified, use default values
-            defaultModes = {
-                'VC': {'scaled': 'MembraneCurrent', 'raw': 'PipettePotential'},  ## MC700A does not have MembranePotential signal
-                'IC': {'scaled': 'MembranePotential', 'raw': 'MembraneCurrent'},
-                'I=0': {'scaled': 'MembranePotential', 'raw': None},
-            }
-            for ch in ['scaled', 'raw']:
+            ## If primary and secondary modes are not specified, use default values
+            #### Disabled this -- just use whatever is currently in use.
+            #defaultModes = {
+                #'VC': {'primarySignal': 'Membrane Current', 'secondarySignal': 'Pipette Potential'},  ## MC700A does not have MembranePotential signal
+                #'IC': {'primarySignal': 'Membrane Potential', 'secondarySignal': 'Membrane Current'},
+                #'I=0': {'primarySignal': 'Membrane Potential', 'secondarySignal': None},
+            #}
+            for ch in ['primary', 'secondary']:
                 if ch not in self.cmd:
-                    self.cmd[ch] = defaultModes[self.cmd['mode']][ch]
+                    self.cmd[ch] = None # defaultModes[self.cmd['mode']][ch]
 
-            if 'command' not in self.cmd:
-                self.cmd['command'] = None
+            #if 'command' not in self.cmd:
+                #self.cmd['command'] = None
 
     def configure(self, tasks, startOrder):
         """Sets the state of a remote multiclamp to prepare for a program run."""
         #print "mc configure"
         with MutexLocker(self.dev.lock):
                 
-            ch = self.dev.getChanIndex()
-            
             ## Set state of clamp
             self.dev.setMode(self.cmd['mode'])
-            if self.cmd['scaled'] is not None:
-                self.dev.mc.setPrimarySignalByName(ch, self.cmd['scaled'])
-            if self.cmd['raw'] is not None:
-                self.dev.mc.setSecondarySignalByName(ch, self.cmd['raw'])
-            
+            if self.cmd['primary'] is not None:
+                self.dev.mc.setPrimarySignal(self.cmd['primary'])
+            if self.cmd['secondary'] is not None:
+                self.dev.mc.setSecondarySignal(self.cmd['secondary'])
+
+            if 'primaryGain' in self.cmd:
+                self.dev.mc.setParam('PrimarySignalGain', self.cmd['primaryGain'])
+            if 'secondaryGain' in self.cmd:
+                try:
+                    ## this is likely to fail..
+                    self.dev.mc.setParam('SecondarySignalGain', self.cmd['secondaryGain'])
+                except:
+                    printExc("Warning -- set secondary signal gain failed.")
+
             if self.cmd.has_key('parameters'):
-                for k in self.cmd['parameters']:
-                    self.dev.mc.setParameter(ch, k, self.cmd['parameters'][k])
+                self.dev.mc.setParams(self.cmd['parameters'])
             
-            self.state = {}
-            if self.cmd.has_key('recordState') and self.cmd['recordState']:
-                self.state = self.dev.mc.readParams(ch, self.recordParams)
+            self.state = self.dev.mc.getState()
+            if self.cmd.has_key('recordState') and self.cmd['recordState'] is True:
+                exState = self.dev.mc.getParams(MultiClampTask.recordParams)
+                for k in exState:
+                    self.state[k] = exState[k]
                 
-            self.state['scaledSignal'] = self.dev.mc.getSignalInfo(ch, 'Primary')
-            self.state['rawSignal'] = self.dev.mc.getSignalInfo(ch, 'Secondary')
+            #self.state['primarySignal'] = self.dev.mc.getPrimarySignalInfo()
+            #self.state['secondarySignal'] = self.dev.mc.getSecondarySignalInfo()
             
             ## set holding level
             if 'holding' in self.cmd:
@@ -245,8 +309,8 @@ class Task(DeviceTask):
         with MutexLocker(self.dev.lock):
             if self.usedChannels is None:
                 self.usedChannels = []
-                for ch in ['scaled', 'raw', 'command']:
-                    if self.cmd[ch] is not None:
+                for ch in ['primary', 'secondary', 'command']:
+                    if ch in self.cmd:
                         self.usedChannels.append(ch)
                         
             return self.usedChannels
@@ -264,7 +328,10 @@ class Task(DeviceTask):
                 if chConf[0] == daqTask.devName():
                     if ch == 'command':
                         daqTask.addChannel(chConf[1], 'ao')
-                        scale = self.dev.config['cmdScale'][self.cmd['mode']]
+                        #scale = self.dev.config['cmdScale'][self.cmd['mode']]
+                        if self.state['extCmdScale'] == 0.:
+                            raise Exception('Can not execute command--external command sensitivity is disabled by MultiClamp commander!', 'ExtCmdSensOff')  ## The second string is a hint for modules that don't care when this happens.
+                        scale = 1.0 / self.state['extCmdScale']
                         cmdData = self.cmd['command'] * scale
                         daqTask.setWaveform(chConf[1], cmdData)
                     else:
@@ -289,6 +356,7 @@ class Task(DeviceTask):
         #self.state['startTime'] = self.daqTasks[self.daqTasks.keys()[0]].getStartTime()
         with MutexLocker(self.dev.lock):
             channels = self.getUsedChannels()
+            #print channels
             result = {}
             #result['info'] = self.state
             for ch in channels:
@@ -298,19 +366,19 @@ class Task(DeviceTask):
                 nPts = result[ch]['info']['numPts']
                 rate = result[ch]['info']['rate']
                 if ch == 'command':
-                    result[ch]['data'] = result[ch]['data'] / self.dev.config['cmdScale'][self.cmd['mode']]
+                    #result[ch]['data'] = result[ch]['data'] / self.dev.config['cmdScale'][self.cmd['mode']]
+                    result[ch]['data'] = result[ch]['data'] * self.state['extCmdScale']
                     result[ch]['name'] = 'Command'
                     if self.cmd['mode'] == 'VC':
                         result[ch]['units'] = 'V'
                     else:
                         result[ch]['units'] = 'A'
                 else:
-                    scale = 1.0 / self.state[ch + 'Signal'][1]
+                    #scale = 1.0 / self.state[ch + 'Signal'][1]
+                    scale = self.state[ch + 'ScaleFactor']
                     result[ch]['data'] = result[ch]['data'] * scale
-                    #if ch == 'raw':
-                        #print scale, result[ch]['data'].max(), result[ch]['data'].min()
-                    result[ch]['units'] = self.state[ch + 'Signal'][2]
-                    #result[ch]['name'] = self.state[ch + 'Signal'][0]
+                    #result[ch]['units'] = self.state[ch + 'Signal'][2]
+                    result[ch]['units'] = self.state[ch + 'Units']
                     result[ch]['name'] = ch
             # print result
                 

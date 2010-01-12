@@ -8,5 +8,6 @@ class MCRackGui(QtGui.QWidget):
         self.dev = dev
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        self.ui.hostText.setText(dev.config['channelID'])
+        self.ui.hostText.setText(dev.config['host'])
+        QtCore.QObject.connect(self.ui.clearCacheBtn, QtCore.SIGNAL('clicked()'), self.dev.clearCache)
         

@@ -4,11 +4,12 @@ sys.path.append('C:\\cygwin\\home\\Experimenters\\luke\\acq4\\lib\\util')
 import ctypes
 import struct, os, threading, time, weakref
 from clibrary import *
+#from Mutex import *
 
 __all__ = ['MultiClampTelegraph', 'wmlib']
 
 ## Load windows definitions
-windowsDefs = winDefs(verbose=True)
+windowsDefs = winDefs() #verbose=True)
 
 d = os.path.dirname(__file__)
 
@@ -17,7 +18,7 @@ teleDefs = CParser(
     os.path.join(d, 'MCTelegraphs.hpp'),
     copyFrom=windowsDefs,
     cache=os.path.join(d, 'MCTelegraphs.hpp.cache'),
-    verbose=True
+    #verbose=True
 ) 
 
 ##  Windows Messaging API 
@@ -30,18 +31,24 @@ class MultiClampTelegraph:
     """Class for receiving 'telegraph' packets from MultiClamp commander. 
     This class is automatically invoked by MultiClamp."""
 
-    def __init__(self, devices, callback):
+    def __init__(self, channels, callback):
+        """Create a telegraph thread that opens connections to the devices listed in 
+        'channels' and reports changes to the devices through 'callback'. 
+        """
         #self.devices = dict([(self.mkDevId(d), [d, None]) for d in devices])
         ## remember index of each device for communicating through callback
-        self.devIndex = dict([(self.mkDevId(devices[i]), i) for i in range(len(devices))])  
-        print "DEV index:", self.devIndex
+        self.channels = channels
+        self.devIndex = dict([(self.mkDevId(channels[k]), k) for k in channels])  
+        #print "DEV index:", self.devIndex
         self.callback = callback
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
+        #self.lock = Mutex(Mutex.Recursive)
         self.thread = threading.Thread()
         self.thread.run = self.messageLoop
         self.startMessageThread()
         
     def mkDevId(self, desc):
+        """Create a device ID used for communicating via telegraph"""
         return desc['com'] | (desc['dev'] << 8) | (desc['chan'] << 16)
         
     def __del__(self):
@@ -78,18 +85,18 @@ class MultiClampTelegraph:
         # create hidden window for receiving messages (how silly is this?)
         self.createWindow()
         self.registerMessages()
-        print "window handle:", self.hWnd
-        print "messages:", self.msgIds
+        #print "window handle:", self.hWnd
+        #print "messages:", self.msgIds
         
         # request connection to MCC
         for d in self.devIndex:
-            print "Open:", d
+            #print "Open:", d
             self.post('OPEN', d)
         
         # listen for changes / reconnect requests / stop requests
         
         while True:
-            while True:
+            while True:  ## pull all waiting messages
                 ## wndProc will be called during PeekMessage if we have received any updates.
                 ## reconnect messages are received directly by PeekMessage
                 ret = wmlib.PeekMessageA(None, self.hWnd, 0, 0, wmlib.PM_REMOVE)
@@ -97,12 +104,14 @@ class MultiClampTelegraph:
                     break
                 else:
                     msg = ret[0].message
-                    print "message loop got msg", msg
+                    #print "message loop got msg", msg
                     if msg == self.msgIds['RECONNECT']:
                         devID = ret[0].lParam
-                        if devID in self.deviceOrder:
+                        if devID in self.devIndex:
                             self.emit('reconnect')
                             self.post('OPEN', devID)
+                    elif msg == self.msgIds['COMMAND']:
+                        print "Peeked command."
                 
             with self.lock:
                 if self.stopThread:
@@ -135,12 +144,12 @@ class MultiClampTelegraph:
 
     def wndProc(self, hWnd, msg, wParam, lParam):
         """Callback function executed by windows when a message has arrived."""
-        print "Window event:", msg
+        #print "Window event:", msg
         if msg == wmlib.WM_COPYDATA:
-            print "  copydatastruct", lParam
+            #print "  copydatastruct", lParam
             data = cast(lParam, POINTER(wmlib.COPYDATASTRUCT)).contents
             if data.dwData == self.msgIds['REQUEST']:
-                print "  got update from MCC"
+                #print "  got update from MCC"
                 
                 data  = cast(data.lpData, POINTER(wmlib.MC_TELEGRAPH_DATA)).contents
                 
@@ -155,36 +164,40 @@ class MultiClampTelegraph:
                 #state = dict([(f[0], getattr(data, f[0])) for f in data._fields_])
                 
                 ## translate state into something prettier
-                print "units:", data.uScaleFactorUnits, data.uRawScaleFactorUnits
+                #print "units:", data.uScaleFactorUnits, data.uRawScaleFactorUnits
                 mode = ['VC', 'IC', 'I=0'][data.uOperatingMode]
                 if mode == 'VC':
                     priSignal = wmlib.MCTG_OUT_MUX_VC_LONG_NAMES[data.uScaledOutSignal]
                     secSignal = wmlib.MCTG_OUT_MUX_VC_LONG_NAMES_RAW[data.uRawOutSignal]
-                    priUnits = wmlib.MCTG_OUT_MUX_VC_SHORT_NAMES[data.uScaleFactorUnits]
-                    secUnits = wmlib.MCTG_OUT_MUX_VC_SHORT_NAMES_RAW[data.uRawScaleFactorUnits]
+                    priUnits = UNIT_MAP[data.uScaleFactorUnits]
+                    secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
                 else:
                     priSignal = wmlib.MCTG_OUT_MUX_IC_LONG_NAMES[data.uScaledOutSignal]
                     secSignal = wmlib.MCTG_OUT_MUX_IC_LONG_NAMES_RAW[data.uRawOutSignal]
-                    priUnits = wmlib.MCTG_OUT_MUX_IC_SHORT_NAMES[data.uScaleFactorUnits]
-                    secUnits = wmlib.MCTG_OUT_MUX_IC_SHORT_NAMES_RAW[data.uRawScaleFactorUnits]
+                    priUnits = UNIT_MAP[data.uScaleFactorUnits]
+                    secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
                     
                 state = {
                     'mode': mode,
                     'primarySignal': priSignal,
                     'primaryGain': data.dAlpha,
-                    'primaryUnits': priUnits,
-                    'primaryScaleFactor': data.dScaleFactor,
+                    'primaryUnits': priUnits[0],
+                    'primaryScaleFactor': priUnits[1] / (data.dScaleFactor * data.dAlpha),
                     'secondarySignal': secSignal,
                     'secondaryGain': 1.0,
-                    'secondaryUnits': secUnits,
-                    'secondaryScaleFactor': data.dRawScaleFactor,
+                    'secondaryUnits': secUnits[0],
+                    'secondaryScaleFactor': secUnits[1] / (data.dRawScaleFactor * 1.0),
                     'membraneCapacitance': data.dMembraneCap,
                     'LPFCutoff': data.dLPFCutoff,
                     'extCmdScale': data.dExtCmdSens,
                 }
+                #print "EXT:", data.dExtCmdSens
                 self.updateState(devID, state)
-            else:
-                print "  unknown message type", data.dwData
+            elif data.dwData == self.msgIds['COMMAND']:
+                print "Caught command!"
+                return False
+            #else:
+                ##print "  unknown message type", data.dwData
         return True
 
 
@@ -196,15 +209,30 @@ class MultiClampTelegraph:
         self.msgIds = {}
         for m in ['OPEN', 'CLOSE', 'REQUEST', 'BROADCAST', 'RECONNECT', 'ID']:
             self.msgIds[m] = wmlib.RegisterWindowMessageA(wmlib('values', 'MCTG_' + m + '_MESSAGE_STR'))()
-
+        self.msgIds['COMMAND'] = wmlib.RegisterWindowMessageA(wmlib('values', 'MC_COMMAND_MESSAGE_STR'))()
 
     def post(self, msg, val):
         ret = wmlib.PostMessageA(wmlib.HWND_BROADCAST, self.msgIds[msg], self.hWnd, val)
         if ret() == 0:
             raise Exception("Error during post.", self.getWindowsError())
     
-    
-
+  
+UNIT_MAP = {
+    wmlib.UNITS_VOLTS_PER_VOLT:       ('V', 1.0),
+    wmlib.UNITS_VOLTS_PER_MILLIVOLT:  ('V', 1e-3),
+    wmlib.UNITS_VOLTS_PER_MICROVOLT:  ('V', 1e-6),
+    wmlib.UNITS_VOLTS_PER_AMP:        ('A', 1.0),
+    wmlib.UNITS_VOLTS_PER_MILLIAMP:   ('A', 1e-3),
+    wmlib.UNITS_VOLTS_PER_MICROAMP:   ('A', 1e-6),
+    wmlib.UNITS_VOLTS_PER_NANOAMP:    ('A', 1e-9),
+    wmlib.UNITS_VOLTS_PER_PICOAMP:    ('A', 1e-12)
+}
+  
+  
+#UNIT_MAP = {}
+#for k in teleDefs.defs['values']:
+    #if k[:17] == 'MCTG_UNITS_VOLTS_':
+        #UNIT_MAP[teleDefs.defs['values'][k]] = k[11:].lower()
 
 
 ## poll for commander windows

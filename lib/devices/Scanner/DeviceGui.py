@@ -9,9 +9,10 @@ from lib.util.imageAnalysis import *
 from lib.util.debug import *
 
 class ScannerDeviceGui(QtGui.QWidget):
-    def __init__(self, dev):
+    def __init__(self, dev, win):
         QtGui.QWidget.__init__(self)
         self.dev = dev
+        self.win = win
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 
@@ -48,8 +49,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.calibrateBtn, QtCore.SIGNAL('clicked()'), self.calibrateClicked)
         QtCore.QObject.connect(self.ui.testBtn, QtCore.SIGNAL('clicked()'), self.testClicked)
         QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteClicked)
-        
-        
+
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
         
@@ -178,11 +178,21 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         #for i in range(len(spotLocations)):
             #print spotLocations[i], spotCommands[i]
+        
+        ## sanity check on spot frame
+        if len(spotFrames) == 0:
+            self.win.showMessage("Error during scanner calibration, see console.", 30000)
+            raise Exception('Calibration never detected laser spot!')
+
         spotFrameMax = concatenate(spotFrames).max(axis=0)
         self.image.updateImage(spotFrameMax, autoRange=True)
         self.ui.view.setRange(self.image.boundingRect())
         
-        
+        if len(spotFrames) == 10:
+            self.win.showMessage("Error during scanner calibration, see console.", 30000)
+            raise Exception('Calibration detected only %d frames with laser spot; need minimum of 10.' % len(spotFrames))
+
+
         ## Fit all data to a map function
         mapParams = self.generateMap(array(spotLocations), array(spotCommands))
         #print 
@@ -202,6 +212,8 @@ class ScannerDeviceGui(QtGui.QWidget):
         def erf(v, loc, cmd):
             return fn(v, loc) - cmd
             
+        ### sanity checks here on loc and cmd
+            
         xFit = leastsq(erf, [0, 1, 1, 0, 0], (loc, cmd[:,0]))[0]
         yFit = leastsq(erf, [0, 1, 1, 0, 0], (loc, cmd[:,1]))[0]
         return (list(xFit), list(yFit))
@@ -214,6 +226,12 @@ class ScannerDeviceGui(QtGui.QWidget):
 
     def scan(self):
         """Scan over x and y ranges in a nPts x nPts grid, return the image recorded at each location."""
+        
+        ## Camera settings to use during scan
+        binning = 2
+        exposure = 0.003
+        params = {'CLEAR_MODE': 'CLEAR_PRE_EXPOSURE', 'GAIN_INDEX': 3}
+        
         camera = str(self.ui.cameraCombo.currentText())
         laser = str(self.ui.laserCombo.currentText())
         
@@ -240,7 +258,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## Record 10 camera frames with the shutter closed 
         cmd = {
             'protocol': {'duration': 0.0},
-            camera: {'record': True, 'minFrames': 10},
+            camera: {'record': True, 'minFrames': 10, 'binning': binning, 'exposure': exposure, 'params': params},  ## binning/params are specific for QuantEM512
             laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
         task = lib.Manager.getManager().createTask(cmd)
@@ -254,7 +272,8 @@ class ScannerDeviceGui(QtGui.QWidget):
             'protocol': {'duration': duration},
             camera: {'record': True, 'triggerMode': 'Trigger First', 'recordExposeChannel': True, 'channels': {
                 'exposure': {'record': True}, 
-                'trigger': {'preset': 0, 'command': cameraTrigger}}},
+                'trigger': {'preset': 0, 'command': cameraTrigger}},
+                'binning': binning, 'exposure': exposure, 'params': params},
             laser: {'Shutter': {'preset': 1, 'holding': 0}},
             #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
             self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},
@@ -276,6 +295,9 @@ class ScannerDeviceGui(QtGui.QWidget):
             t = frames.xvals('Time')[i]
             ind = int((t/duration) * nPts)
             positions.append([xCommand[ind], yCommand[ind]])
+        if background.shape != frames.shape[1:]:
+            self.win.showMessage("Error during scanner calibration, see console.", 30000)
+            raise Exception("Background measurement frame has different shape %s from scan frames %s" % (str(background.shape), str(frames.shape[1:])))
         return (background, frames, positions)
         
 

@@ -3,10 +3,11 @@ from lib.modules.ProtocolRunner.analysisModules import AnalysisModule
 from lib.Manager import getManager
 from PyQt4 import QtCore, QtGui
 from UncagingTemplate import Ui_Form
-from lib.util.pyqtgraph.graphicsItems import ImageItem
+from pyqtgraph.graphicsItems import ImageItem
 from numpy import *
 from scipy.ndimage.filters import gaussian_filter
-from lib.util.metaarray import MetaArray
+from metaarray import MetaArray
+from debug import *
 
 class UncagingModule(AnalysisModule):
     def __init__(self, *args):
@@ -53,6 +54,9 @@ class UncagingModule(AnalysisModule):
 
     def newProt(self):
         n = self.pr.currentProtocol.name()
+        if n is None:
+            n = 'protocol'
+       
         i = 0
         while True:
             name = n + ("_%03d" % i)
@@ -158,13 +162,20 @@ class Prot:
             printExc('The device "%s" does not appear to be a scanner; skipping analysis.' % scannerDev)
         pointSize = scanUi.pointSize()
         
-        camFrame1 = frame['result'][camDev]['frames'][self.state['frame1Spin']]
-        camFrame2 = frame['result'][camDev]['frames'][self.state['frame2Spin']]
-        camFrame = MetaArray(camFrame2.astype(float32) - camFrame1.astype(float32), info=camFrame1.infoCopy())
+        if self.state['displayImageCheck']:
+            camFrame1 = frame['result'][camDev]['frames'][self.state['frame1Spin']]
+            camFrame2 = frame['result'][camDev]['frames'][self.state['frame2Spin']]
+            camInfo = camFrame1.infoCopy()
+            camFrame = MetaArray(camFrame2.astype(float32) - camFrame1.astype(float32), info=camInfo)
+        else:
+            camInfo = frame['result'][camDev]['frames'][self.state['frame1Spin']].infoCopy()
+            camFrame = None
+            
         data = {
             'cam': camFrame,
-            'clamp': frame['result'][clampDev]['scaled'].copy(),
-            'scanner': frame['result'][scannerDev]
+            'clamp': frame['result'][clampDev]['primary'].copy(),
+            'scanner': frame['result'][scannerDev],
+            'camInfo': camInfo
         }
         data['scanner']['spot'] = pointSize
         #print "============\n", data
@@ -213,13 +224,15 @@ class Prot:
         else:
             frames = self.frames[-1:]
         
-        if self.img is None:
-            self.img = zeros(frames[0]['cam'].shape + (4,), dtype=float32)
+        
+        if self.state['displayImageCheck'] and frames[0]['cam'] is not None:
+            if self.img is None:
+                self.img = zeros(frames[0]['cam'].shape + (4,), dtype=float32)
         
         for f in frames:
             (r, g, b) = self.evaluateTrace(f['clamp'])
             
-            if self.state['displayImageCheck']:
+            if self.state['displayImageCheck'] and f['cam'] is not None and self.img is not None and f['cam'].shape == self.img.shape:
                 alpha = gaussian_filter((f['cam'] - f['cam'].min()), (5, 5))
                 tol = self.state['spotToleranceSpin']
                 alpha = clip(alpha-tol, 0, 2**32)
@@ -242,9 +255,12 @@ class Prot:
             
         self.hide()  ## Make sure only correct items are displayed
         self.show()
+        
         if self.state['displayImageCheck']:
             self.updateImage()
-        info = frames[-1]['cam'].infoCopy()[-1]
+
+        # update location of image
+        info = frames[-1]['camInfo'][-1]
         s = info['pixelSize']
         p = info['imagePosition']
         self.items[0][1] = p
@@ -274,6 +290,8 @@ class Prot:
         tstop = self.state['clampTestStopSpin'] * 1e-3
         base = data['Time': bstart:bstop].view(ndarray)
         test = data['Time': tstart:tstop].view(ndarray)
+        if len(test) == 0:
+            raise Exception("Uncaging analysis: No clamp data to evaluate. Check start/stop values?")
         time = data.xvals('Time')
         dt = time[1] - time[0]
         med = median(base)
