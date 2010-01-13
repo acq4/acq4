@@ -11,6 +11,52 @@ from scipy import *
 from scipy.optimize import leastsq
 
 
+## Number <==> string conversion functions
+
+SI_PREFIXES = u'yzafpnµm kMGTPEZY'
+
+def siFormat(x, precision=3, space=True, error=None):
+    """Return the number x formatted in engineering notation with SI prefix."""
+    m = int(floor(log(abs(x))/log(1000)))
+    if m == 0:
+        pref = ''
+    elif m < -8 or m > 8:
+        pref = 'e%d' % (m*3)
+    else:
+        pref = SI_PREFIXES[m+8]
+        if space:
+            pref = ' ' + pref
+    p = .001**m
+    if error is None:
+        fmt = "%%.%dg%%s" % precision
+        return fmt % (x*p, pref)
+    else:
+        fmt = u"%%.%dg±%%.%dg%%s" % (precision, precision)
+        return fmt % (x*p, error*p, pref)
+    
+def siEval(s):
+    """Convert a value written in SI notation to its equivalent prefixless value"""
+    m = re.match(r'-?(((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?)\s*([' + SI_PREFIXES + r']?)', s)
+    if m is None:
+        raise Exception("Can't convert string '%s' to number." % s)
+    v = float(m.groups()[0])
+    p = m.groups()[6]
+    if p not in SI_PREFIXES:
+        raise Exception("Can't convert string '%s' to number--unknown prefix." % s)
+    if p ==  '':
+        n = 0
+    else:
+        n = SI_PREFIXES.index(p) - 8
+    return v * 1000**n
+    
+
+
+
+
+
+
+
+
 ## the built in logspace function is pretty much useless.
 def logSpace(start, stop, num):
     num = int(num)
