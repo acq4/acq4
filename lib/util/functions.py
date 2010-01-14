@@ -15,24 +15,33 @@ from scipy.optimize import leastsq
 
 SI_PREFIXES = u'yzafpnµm kMGTPEZY'
 
-def siFormat(x, precision=3, space=True, error=None):
+def siFormat(x, precision=3, space=True, error=None, minVal=1e-25, suffix=''):
     """Return the number x formatted in engineering notation with SI prefix."""
-    m = int(floor(log(abs(x))/log(1000)))
+    if space is True:
+        space = ' '
+    if space is False:
+        space = ''
+        
+    if abs(x) < minVal:
+        m = 0
+        x = 0
+    else:
+        m = int(clip(floor(log(abs(x))/log(1000)), -9.0, 9.0))
+    
     if m == 0:
         pref = ''
     elif m < -8 or m > 8:
         pref = 'e%d' % (m*3)
     else:
-        pref = SI_PREFIXES[m+8]
-        if space:
-            pref = ' ' + pref
+        pref = space + SI_PREFIXES[m+8]
     p = .001**m
     if error is None:
-        fmt = "%%.%dg%%s" % precision
-        return fmt % (x*p, pref)
+        fmt = "%." + str(precision) + "g%s%s"
+        return fmt % (x*p, pref, suffix)
     else:
-        fmt = u"%%.%dg±%%.%dg%%s" % (precision, precision)
-        return fmt % (x*p, error*p, pref)
+        plusminus = space + u"±" + space
+        fmt = "%." + str(precision) + u"g%s%s%s%s"
+        return fmt % (x*p, pref, suffix, plusminus, siFormat(error, precision, space, minVal=minVal, suffix=suffix))
     
 def siEval(s):
     """Convert a value written in SI notation to its equivalent prefixless value"""

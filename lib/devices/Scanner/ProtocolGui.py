@@ -308,13 +308,32 @@ class ScannerProtoGui(ProtocolGui):
         
         minTime = None
         bestSolution = None
-        for i in range(10):
-            solution = self.findSolution(locations)
-            time = sum([l[1] for l in solution])
-            if minTime is None or time < minTime:
-                #print "  new best time:", time
-                minTime = time
-                bestSolution = solution[:]
+        nTries = 10
+        
+        
+        ## About to compute order/timing of targets; display a progress dialog
+        
+        progressDlg = QtGui.QProgressDialog("Computing pseudo-optimal target sequence...", "Cancel", 0, nTries)
+        progressDlg.setWindowModality(QtCore.Qt.WindowModal)
+        progressDlg.setMinimumDuration(0)
+        
+        try:
+            for i in range(nTries):
+                solution = self.findSolution(locations)
+                time = sum([l[1] for l in solution])
+                if minTime is None or time < minTime:
+                    #print "  new best time:", time
+                    minTime = time
+                    bestSolution = solution[:]
+                QtGui.QApplication.processEvents()
+                progressDlg.setValue(i)
+                if progressDlg.wasCanceled():
+                    raise Exception("Target sequence computation canceled by user.")
+        except:
+            raise
+        finally:
+            ## close progress dialog no matter what happens
+            progressDlg.setValue(nTries)
         
         
         #for i in range(10):
@@ -348,31 +367,31 @@ class ScannerProtoGui(ProtocolGui):
             solution.append((locations.pop(minIndex), minTime))
         return solution
         
-    def swapWorst(self, solution):
-        """Find points very close together, swap elsewhere to improve time"""
-        maxTime = None
-        maxInd = None
-        ## find worst pair
-        for i in range(len(solution)):
-            if maxTime is None or maxTime < solution[i][1]:
-                maxTime = solution[i][1]
-                maxInd = i
+    #def swapWorst(self, solution):
+        #"""Find points very close together, swap elsewhere to improve time"""
+        #maxTime = None
+        #maxInd = None
+        ### find worst pair
+        #for i in range(len(solution)):
+            #if maxTime is None or maxTime < solution[i][1]:
+                #maxTime = solution[i][1]
+                #maxInd = i
         
-        ## Try moving
+        ### Try moving
         
-        minTime = sum([l[1] for l in solution])
-        #print "Trying swap, time is currently", minTime
-        bestSolution = None
-        for i in range(len(solution)):
-            newSoln = solution[:]
-            loc = newSoln.pop(maxInd)
-            newSoln.insert(i, loc)
-            (soln, time) = self.computeTimes([l[0] for l in newSoln])
-            if time < minTime:
-                minTime = time
-                bestSolution = soln
-        #print "  new time is ", minTime
-        return bestSolution
+        #minTime = sum([l[1] for l in solution])
+        ##print "Trying swap, time is currently", minTime
+        #bestSolution = None
+        #for i in range(len(solution)):
+            #newSoln = solution[:]
+            #loc = newSoln.pop(maxInd)
+            #newSoln.insert(i, loc)
+            #(soln, time) = self.computeTimes([l[0] for l in newSoln])
+            #if time < minTime:
+                #minTime = time
+                #bestSolution = soln
+        ##print "  new time is ", minTime
+        #return bestSolution
             
     def costFunction(self):
         state = self.stateGroup.state()
@@ -381,23 +400,8 @@ class ScannerProtoGui(ProtocolGui):
         b = numpy.log(0.1) / minDist**2
         return lambda dist: minTime * numpy.exp(b * dist**2)
 
-    #def computeTimes(self, locations):
-        #result = []
-        #total = 0.0
-        #func = self.costFunction()
-        #for i in range(len(locations)):
-            #t = self.computeTime(locations, i, func)
-            #total += t
-            #result.append((locations[i], t))
-        #return (result, total)
-        
     def computeTime(self, solution, loc, func=None):
         """Return the minimum time that must be waited before stimulating the location, given that solution has already run"""
-        #print "============= computeTime:"
-        #print "Current stack:"
-        #for l in solution:
-            #print l
-        #print "Next point:", loc
         if func is None:
             func = self.costFunction()
         state = self.stateGroup.state()

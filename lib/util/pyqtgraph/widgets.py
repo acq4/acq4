@@ -597,7 +597,7 @@ class Handle(QtGui.QGraphicsItem):
         #ev.accept()
         
     def mouseReleaseEvent(self, ev):
-        print "release"
+        #print "release"
         for r in self.roi:
             r[0].pointReleaseEvent(r[1], ev)
                 

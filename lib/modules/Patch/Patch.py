@@ -237,8 +237,8 @@ class PatchWindow(QtGui.QMainWindow):
                     #label.setText(u'%7.3f Ω' % (resistance))
             #else:
                 #label.setText(u'>   10^15 Ω')
-        self.ui.restingPotentialLabel.setText(u'%sV' % siFormat(frame['analysis']['restingPotential'], error=frame['analysis']['restingPotentialStd']))
-        self.ui.restingCurrentLabel.setText(u'%sA' % siFormat(frame['analysis']['restingCurrent'], error=frame['analysis']['restingCurrentStd']))
+        self.ui.restingPotentialLabel.setText(siFormat(frame['analysis']['restingPotential'], error=frame['analysis']['restingPotentialStd'], suffix='V'))
+        self.ui.restingCurrentLabel.setText(siFormat(frame['analysis']['restingCurrent'], error=frame['analysis']['restingCurrentStd'], suffix='A'))
         self.ui.capacitanceLabel.setText('%sF' % siFormat(frame['analysis']['capacitance']))
         self.ui.fitErrorLabel.setText('%7.2g' % frame['analysis']['fitError'])
         self.analysisData['time'].append(data._info[-1]['startTime'])

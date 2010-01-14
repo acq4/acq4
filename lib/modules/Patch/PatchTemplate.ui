@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>460</width>
-    <height>533</height>
+    <width>172</width>
+    <height>343</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -52,23 +52,78 @@
            <property name="spacing">
             <number>0</number>
            </property>
-           <item row="0" column="0">
-            <widget class="QPushButton" name="startBtn">
+           <item row="2" column="1">
+            <widget class="QCheckBox" name="vcPulseCheck">
              <property name="text">
-              <string>Start</string>
+              <string>Pulse</string>
              </property>
-             <property name="checkable">
+             <property name="checked">
               <bool>true</bool>
              </property>
             </widget>
            </item>
-           <item row="0" column="1">
-            <widget class="QPushButton" name="recordBtn">
+           <item row="3" column="1">
+            <widget class="QCheckBox" name="vcHoldCheck">
              <property name="text">
-              <string>Record</string>
+              <string>Hold</string>
              </property>
-             <property name="checkable">
+            </widget>
+           </item>
+           <item row="4" column="1">
+            <widget class="QCheckBox" name="icPulseCheck">
+             <property name="text">
+              <string>Pulse</string>
+             </property>
+             <property name="checked">
               <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="6" column="1">
+            <widget class="QCheckBox" name="icHoldCheck">
+             <property name="text">
+              <string>Hold</string>
+             </property>
+            </widget>
+           </item>
+           <item row="7" column="1">
+            <spacer name="verticalSpacer">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>40</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item row="10" column="0" colspan="2">
+            <widget class="QLabel" name="label">
+             <property name="text">
+              <string>Cycle Time</string>
+             </property>
+            </widget>
+           </item>
+           <item row="9" column="0" colspan="2">
+            <widget class="QLabel" name="label_3">
+             <property name="text">
+              <string>Pulse Length</string>
+             </property>
+            </widget>
+           </item>
+           <item row="8" column="0" colspan="2">
+            <widget class="QLabel" name="label_4">
+             <property name="text">
+              <string>Delay Length</string>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="0">
+            <widget class="QRadioButton" name="icModeRadio">
+             <property name="text">
+              <string>IC</string>
              </property>
             </widget>
            </item>
@@ -82,13 +137,90 @@
              </property>
             </widget>
            </item>
-           <item row="2" column="1">
-            <widget class="QCheckBox" name="vcPulseCheck">
-             <property name="text">
-              <string>Pulse</string>
+           <item row="0" column="0" colspan="3">
+            <layout class="QHBoxLayout" name="horizontalLayout">
+             <item>
+              <widget class="QPushButton" name="startBtn">
+               <property name="text">
+                <string>Start</string>
+               </property>
+               <property name="checkable">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="recordBtn">
+               <property name="text">
+                <string>Record</string>
+               </property>
+               <property name="checkable">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="4" column="2">
+            <widget class="QDoubleSpinBox" name="icPulseSpin">
+             <property name="maximumSize">
+              <size>
+               <width>70</width>
+               <height>16777215</height>
+              </size>
              </property>
-             <property name="checked">
-              <bool>true</bool>
+             <property name="suffix">
+              <string> pA</string>
+             </property>
+             <property name="minimum">
+              <double>-1000.000000000000000</double>
+             </property>
+             <property name="maximum">
+              <double>1000.000000000000000</double>
+             </property>
+            </widget>
+           </item>
+           <item row="9" column="2">
+            <widget class="QDoubleSpinBox" name="pulseTimeSpin">
+             <property name="maximumSize">
+              <size>
+               <width>70</width>
+               <height>16777215</height>
+              </size>
+             </property>
+             <property name="suffix">
+              <string> ms</string>
+             </property>
+             <property name="minimum">
+              <double>1.000000000000000</double>
+             </property>
+             <property name="maximum">
+              <double>10000.000000000000000</double>
+             </property>
+             <property name="singleStep">
+              <double>10.000000000000000</double>
+             </property>
+            </widget>
+           </item>
+           <item row="8" column="2">
+            <widget class="QDoubleSpinBox" name="delayTimeSpin">
+             <property name="maximumSize">
+              <size>
+               <width>70</width>
+               <height>16777215</height>
+              </size>
+             </property>
+             <property name="suffix">
+              <string> ms</string>
+             </property>
+             <property name="minimum">
+              <double>1.000000000000000</double>
+             </property>
+             <property name="maximum">
+              <double>10000.000000000000000</double>
+             </property>
+             <property name="singleStep">
+              <double>10.000000000000000</double>
              </property>
             </widget>
            </item>
@@ -111,75 +243,6 @@
              </property>
             </widget>
            </item>
-           <item row="3" column="1">
-            <widget class="QCheckBox" name="vcHoldCheck">
-             <property name="text">
-              <string>Hold</string>
-             </property>
-            </widget>
-           </item>
-           <item row="3" column="2">
-            <widget class="QDoubleSpinBox" name="vcHoldSpin">
-             <property name="maximumSize">
-              <size>
-               <width>70</width>
-               <height>16777215</height>
-              </size>
-             </property>
-             <property name="suffix">
-              <string> mV</string>
-             </property>
-             <property name="minimum">
-              <double>-100.000000000000000</double>
-             </property>
-             <property name="maximum">
-              <double>100.000000000000000</double>
-             </property>
-            </widget>
-           </item>
-           <item row="4" column="0">
-            <widget class="QRadioButton" name="icModeRadio">
-             <property name="text">
-              <string>IC</string>
-             </property>
-            </widget>
-           </item>
-           <item row="4" column="1">
-            <widget class="QCheckBox" name="icPulseCheck">
-             <property name="text">
-              <string>Pulse</string>
-             </property>
-             <property name="checked">
-              <bool>true</bool>
-             </property>
-            </widget>
-           </item>
-           <item row="4" column="2">
-            <widget class="QDoubleSpinBox" name="icPulseSpin">
-             <property name="maximumSize">
-              <size>
-               <width>70</width>
-               <height>16777215</height>
-              </size>
-             </property>
-             <property name="suffix">
-              <string> pA</string>
-             </property>
-             <property name="minimum">
-              <double>-1000.000000000000000</double>
-             </property>
-             <property name="maximum">
-              <double>1000.000000000000000</double>
-             </property>
-            </widget>
-           </item>
-           <item row="6" column="1">
-            <widget class="QCheckBox" name="icHoldCheck">
-             <property name="text">
-              <string>Hold</string>
-             </property>
-            </widget>
-           </item>
            <item row="5" column="2" rowspan="2">
             <widget class="QDoubleSpinBox" name="icHoldSpin">
              <property name="maximumSize">
@@ -198,19 +261,6 @@
               <double>1000.000000000000000</double>
              </property>
             </widget>
-           </item>
-           <item row="7" column="1">
-            <spacer name="verticalSpacer">
-             <property name="orientation">
-              <enum>Qt::Vertical</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>20</width>
-               <height>40</height>
-              </size>
-             </property>
-            </spacer>
            </item>
            <item row="10" column="2">
             <widget class="QDoubleSpinBox" name="cycleTimeSpin">
@@ -237,29 +287,8 @@
              </property>
             </widget>
            </item>
-           <item row="10" column="0" colspan="2">
-            <widget class="QLabel" name="label">
-             <property name="text">
-              <string>Cycle Time</string>
-             </property>
-            </widget>
-           </item>
-           <item row="9" column="0" colspan="2">
-            <widget class="QLabel" name="label_3">
-             <property name="text">
-              <string>Pulse Length</string>
-             </property>
-            </widget>
-           </item>
-           <item row="8" column="0" colspan="2">
-            <widget class="QLabel" name="label_4">
-             <property name="text">
-              <string>Delay Length</string>
-             </property>
-            </widget>
-           </item>
-           <item row="8" column="2">
-            <widget class="QDoubleSpinBox" name="delayTimeSpin">
+           <item row="3" column="2">
+            <widget class="QDoubleSpinBox" name="vcHoldSpin">
              <property name="maximumSize">
               <size>
                <width>70</width>
@@ -267,38 +296,13 @@
               </size>
              </property>
              <property name="suffix">
-              <string> ms</string>
+              <string> mV</string>
              </property>
              <property name="minimum">
-              <double>1.000000000000000</double>
+              <double>-100.000000000000000</double>
              </property>
              <property name="maximum">
-              <double>10000.000000000000000</double>
-             </property>
-             <property name="singleStep">
-              <double>10.000000000000000</double>
-             </property>
-            </widget>
-           </item>
-           <item row="9" column="2">
-            <widget class="QDoubleSpinBox" name="pulseTimeSpin">
-             <property name="maximumSize">
-              <size>
-               <width>70</width>
-               <height>16777215</height>
-              </size>
-             </property>
-             <property name="suffix">
-              <string> ms</string>
-             </property>
-             <property name="minimum">
-              <double>1.000000000000000</double>
-             </property>
-             <property name="maximum">
-              <double>10000.000000000000000</double>
-             </property>
-             <property name="singleStep">
-              <double>10.000000000000000</double>
+              <double>100.000000000000000</double>
              </property>
             </widget>
            </item>
@@ -308,21 +312,8 @@
               <number>0</number>
              </property>
              <property name="leftMargin">
-              <number>10</number>
+              <number>0</number>
              </property>
-             <item>
-              <spacer name="horizontalSpacer">
-               <property name="orientation">
-                <enum>Qt::Horizontal</enum>
-               </property>
-               <property name="sizeHint" stdset="0">
-                <size>
-                 <width>40</width>
-                 <height>20</height>
-                </size>
-               </property>
-              </spacer>
-             </item>
              <item>
               <widget class="QToolButton" name="bathModeBtn">
                <property name="text">
@@ -344,6 +335,19 @@
                </property>
               </widget>
              </item>
+             <item>
+              <spacer name="horizontalSpacer">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
             </layout>
            </item>
           </layout>
@@ -360,14 +364,39 @@
           <property name="title">
            <string/>
           </property>
-          <layout class="QGridLayout" name="gridLayout_3">
+          <layout class="QFormLayout" name="formLayout">
+           <property name="horizontalSpacing">
+            <number>0</number>
+           </property>
+           <property name="verticalSpacing">
+            <number>0</number>
+           </property>
            <property name="margin">
             <number>0</number>
            </property>
-           <property name="spacing">
-            <number>0</number>
-           </property>
-           <item row="1" column="2">
+           <item row="0" column="0">
+            <widget class="QToolButton" name="resetBtn">
+             <property name="text">
+              <string>Reset History</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QCheckBox" name="inputResistanceCheck">
+             <property name="font">
+              <font>
+               <pointsize>11</pointsize>
+              </font>
+             </property>
+             <property name="text">
+              <string>Input Res.</string>
+             </property>
+             <property name="checked">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1">
             <widget class="QLabel" name="inputResistanceLabel">
              <property name="font">
               <font>
@@ -377,92 +406,14 @@
               </font>
              </property>
              <property name="text">
-              <string>0 MOhm</string>
+              <string>0</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
              </property>
             </widget>
            </item>
-           <item row="3" column="2">
-            <widget class="QLabel" name="restingPotentialLabel">
-             <property name="font">
-              <font>
-               <pointsize>11</pointsize>
-               <weight>75</weight>
-               <bold>true</bold>
-              </font>
-             </property>
-             <property name="text">
-              <string>0 +/- 0mV</string>
-             </property>
-            </widget>
-           </item>
-           <item row="5" column="2">
-            <widget class="QLabel" name="capacitanceLabel">
-             <property name="font">
-              <font>
-               <weight>75</weight>
-               <bold>true</bold>
-              </font>
-             </property>
-             <property name="text">
-              <string>0 pF</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="0" colspan="2">
-            <widget class="QCheckBox" name="inputResistanceCheck">
-             <property name="font">
-              <font>
-               <pointsize>11</pointsize>
-              </font>
-             </property>
-             <property name="text">
-              <string>Input Resistance</string>
-             </property>
-             <property name="checked">
-              <bool>true</bool>
-             </property>
-            </widget>
-           </item>
-           <item row="3" column="0" colspan="2">
-            <widget class="QCheckBox" name="restingPotentialCheck">
-             <property name="font">
-              <font>
-               <pointsize>11</pointsize>
-              </font>
-             </property>
-             <property name="text">
-              <string>Resting Potential</string>
-             </property>
-            </widget>
-           </item>
-           <item row="5" column="0" colspan="2">
-            <widget class="QCheckBox" name="capacitanceCheck">
-             <property name="text">
-              <string>Capacitance</string>
-             </property>
-            </widget>
-           </item>
-           <item row="4" column="0" colspan="2">
-            <widget class="QCheckBox" name="restingCurrentCheck">
-             <property name="text">
-              <string>Resting Current</string>
-             </property>
-            </widget>
-           </item>
-           <item row="4" column="2">
-            <widget class="QLabel" name="restingCurrentLabel">
-             <property name="font">
-              <font>
-               <weight>75</weight>
-               <bold>true</bold>
-              </font>
-             </property>
-             <property name="text">
-              <string>0 +/- 0pA</string>
-             </property>
-            </widget>
-           </item>
-           <item row="2" column="0" colspan="2">
+           <item row="2" column="0">
             <widget class="QCheckBox" name="accessResistanceCheck">
              <property name="font">
               <font>
@@ -470,11 +421,11 @@
               </font>
              </property>
              <property name="text">
-              <string>Access Resistance</string>
+              <string>Access Res.</string>
              </property>
             </widget>
            </item>
-           <item row="2" column="2">
+           <item row="2" column="1">
             <widget class="QLabel" name="accessResistanceLabel">
              <property name="font">
               <font>
@@ -484,18 +435,96 @@
               </font>
              </property>
              <property name="text">
-              <string>0 MOhm</string>
+              <string>0</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
              </property>
             </widget>
            </item>
-           <item row="6" column="0" colspan="2">
+           <item row="3" column="0">
+            <widget class="QCheckBox" name="restingPotentialCheck">
+             <property name="font">
+              <font>
+               <pointsize>11</pointsize>
+              </font>
+             </property>
+             <property name="text">
+              <string>Rest Potential</string>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="1">
+            <widget class="QLabel" name="restingPotentialLabel">
+             <property name="font">
+              <font>
+               <pointsize>11</pointsize>
+               <weight>75</weight>
+               <bold>true</bold>
+              </font>
+             </property>
+             <property name="text">
+              <string>0</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="0">
+            <widget class="QCheckBox" name="restingCurrentCheck">
+             <property name="text">
+              <string>Rest Current</string>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="1">
+            <widget class="QLabel" name="restingCurrentLabel">
+             <property name="font">
+              <font>
+               <weight>75</weight>
+               <bold>true</bold>
+              </font>
+             </property>
+             <property name="text">
+              <string>0</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item row="5" column="0">
+            <widget class="QCheckBox" name="capacitanceCheck">
+             <property name="text">
+              <string>Capacitance</string>
+             </property>
+            </widget>
+           </item>
+           <item row="5" column="1">
+            <widget class="QLabel" name="capacitanceLabel">
+             <property name="font">
+              <font>
+               <weight>75</weight>
+               <bold>true</bold>
+              </font>
+             </property>
+             <property name="text">
+              <string>0</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item row="6" column="0">
             <widget class="QCheckBox" name="fitErrorCheck">
              <property name="text">
               <string>Fit Error</string>
              </property>
             </widget>
            </item>
-           <item row="6" column="2">
+           <item row="6" column="1">
             <widget class="QLabel" name="fitErrorLabel">
              <property name="font">
               <font>
@@ -506,44 +535,10 @@
              <property name="text">
               <string>0</string>
              </property>
-            </widget>
-           </item>
-           <item row="0" column="2">
-            <widget class="QToolButton" name="resetBtn">
-             <property name="text">
-              <string>Reset History</string>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
              </property>
             </widget>
-           </item>
-           <item row="7" column="2">
-            <widget class="QDoubleSpinBox" name="averagingSpin">
-             <property name="maximumSize">
-              <size>
-               <width>50</width>
-               <height>16777215</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-           <item row="7" column="0" colspan="2">
-            <widget class="QLabel" name="label_6">
-             <property name="text">
-              <string>Averaging:</string>
-             </property>
-            </widget>
-           </item>
-           <item row="8" column="2">
-            <spacer name="verticalSpacer_2">
-             <property name="orientation">
-              <enum>Qt::Vertical</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>20</width>
-               <height>40</height>
-              </size>
-             </property>
-            </spacer>
            </item>
           </layout>
          </widget>

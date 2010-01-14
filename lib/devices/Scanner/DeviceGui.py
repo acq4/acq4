@@ -116,6 +116,38 @@ class ScannerDeviceGui(QtGui.QWidget):
         self.updateCalibrationList()
 
     def runCalibration(self):
+        """Wraps around runCalibrationInner, adds progress dialog and error reporting"""
+        self.progressDlg = QtGui.QProgressDialog("Calibrating scanner: Running protocol..", "Cancel", 0, 100)
+        self.progressDlg.setWindowModality(QtCore.Qt.WindowModal)
+        self.progressDlg.setMinimumDuration(0)
+        
+        try:
+            self.updatePrgDlg(0)
+            return self.runCalibrationInner()
+        except:
+            print "SHOW ERROR"
+            self.win.showMessage("Error during scanner calibration, see console.", 30000)
+            raise
+        finally:
+            self.progressDlg.setValue(100)
+
+    def updatePrgDlg(self, val=None, text=None):
+        if text is not None:
+            self.progressDlg.setLabelText(text)
+        if val is not None:
+            self.progressDlg.setValue(val)
+        QtGui.QApplication.instance().processEvents()
+        if self.progressDlg.wasCanceled():
+            self.progressDlg.setValue(100)
+            raise Exception('Calibration canceled by user.')
+
+    def runCalibrationInner(self):
+        """The scanner calibration routine:
+            1) Measure background frame, then scan mirrors 
+               while collecting frames as fast as possible (self.scan())
+            2) Locate spot in every frame using gaussian fit
+            3) Do linear regression to determine mapping between voltage and position
+        """
         camera = str(self.ui.cameraCombo.currentText())
         laser = str(self.ui.laserCombo.currentText())
         blurRadius = 5
@@ -123,6 +155,8 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## Do fast scan of entire allowed command range
         (background, origFrames, positions) = self.scan()
 
+        self.updatePrgDlg(25, "Calibrating scanner: Computing spot positions..")
+        
         ## Do background subtraction
         frames = origFrames - background
 
@@ -175,28 +209,29 @@ class ScannerDeviceGui(QtGui.QWidget):
             spotLocations.append([x, y])
             spotCommands.append(positions[i])
             spotFrames.append(frame[newaxis])
+            self.updatePrgDlg(30 + 60 * i / frames.shape[0])
         
         #for i in range(len(spotLocations)):
             #print spotLocations[i], spotCommands[i]
         
         ## sanity check on spot frame
         if len(spotFrames) == 0:
-            self.win.showMessage("Error during scanner calibration, see console.", 30000)
-            raise Exception('Calibration never detected laser spot!')
+            raise Exception('Calibration never detected laser spot! (Check: 1. shutter is closed, 2. mirrors on, 3. spot visible when shutter is open)')
 
         spotFrameMax = concatenate(spotFrames).max(axis=0)
         self.image.updateImage(spotFrameMax, autoRange=True)
         self.ui.view.setRange(self.image.boundingRect())
         
         if len(spotFrames) == 10:
-            self.win.showMessage("Error during scanner calibration, see console.", 30000)
             raise Exception('Calibration detected only %d frames with laser spot; need minimum of 10.' % len(spotFrames))
 
-
+        self.updatePrgDlg(90, "Calibrating scanner: Doing linear regression..")
+        
         ## Fit all data to a map function
         mapParams = self.generateMap(array(spotLocations), array(spotCommands))
         #print 
         #print "Map parameters:", mapParams
+        
         return (mapParams, (spotHeight, spotWidth))
 
     def generateMap(self, loc, cmd):
@@ -295,47 +330,12 @@ class ScannerDeviceGui(QtGui.QWidget):
             t = frames.xvals('Time')[i]
             ind = int((t/duration) * nPts)
             positions.append([xCommand[ind], yCommand[ind]])
+            
+        if frames.ndim != 3 or frames.shape[0] < 5:
+            raise Exception("Camera did not collect enough frames (data shape is %s)" % frames.shape)
+            
         if background.shape != frames.shape[1:]:
-            self.win.showMessage("Error during scanner calibration, see console.", 30000)
             raise Exception("Background measurement frame has different shape %s from scan frames %s" % (str(background.shape), str(frames.shape[1:])))
+        
         return (background, frames, positions)
         
-
-    #def measureSpotSize(self, camera, laser):
-        ### Record a background frame
-        #cmd = {
-            #'protocol': {'duration': 0.0},             ## duration will be determined by camera
-            #camera: {'record': True, 'minFrames': 2, 'forceStop': True},  ## Record frames (need at least 2; first frame can have variable exposure)
-            #self.dev.name: {'command': [0.0, 0.0]}     ## Set scan mirror command to 0, 0
-        #}
-        #task = lib.Manager.getManager().createTask(cmd)
-        #task.execute()
-        #result1 = task.getResult()
-
-        ### take another frame with the laser on
-        #cmd[laser] = {'Shutter': {'preset': 1, 'holding': 0}}  ## Open shutter before, close shutter after
-
-        #task = lib.Manager.getManager().createTask(cmd)
-        #task.execute()
-        #result2 = task.getResult()
-
-
-        ### compute difference
-        #im1 = result1[camera]['frames'][1]
-        #im2 = result2[camera]['frames'][1]
-        #diff = im2.astype(int) - im1.astype(int)
-
-        ### display image
-        #self.image.updateImage(diff, autoRange=True)
-        #self.ui.view.setRange(self.image.boundingRect())
-
-        ### fit 2D gaussian
-        ##from numpy import median
-        #diffSmooth = blur(diff, 10)
-        #amp = diffSmooth.max() - diffSmooth.min()
-        #(x, y) = argwhere(diffSmooth == diffSmooth.max())[0]
-        #fit = fitGaussian2D(diff, [amp, x, y, 40., 0.])[0]
-        #pixelSize = im1.infoCopy()[-1]['pixelSize'][0]
-
-
-        #return (fit[0], fit[3]*pixelSize)

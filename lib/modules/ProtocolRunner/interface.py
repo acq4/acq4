@@ -648,6 +648,9 @@ class ProtocolRunner(Module, QtCore.QObject):
         
         ## Find all top-level items in the sequence parameter list
         try:
+            ## make sure all devices are reporting their correct sequence lists
+            
+            
             items = self.ui.sequenceParamList.listParams()
             #for i in self.ui.sequenceParamList.topLevelItems:
                 #items.append(i)

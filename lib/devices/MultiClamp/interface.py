@@ -27,7 +27,8 @@ class MultiClamp(Device):
             # default holding state
             self.holding = {
                 'VC': -50e-3,
-                'IC': 0.0
+                'IC': 0.0,
+                'I=0': 0.0
             }
                 
             self.mc = MultiClampDriver.instance().getChannel(self.config['channelID'], self.mcUpdate)
@@ -72,14 +73,17 @@ class MultiClamp(Device):
         if mc is not None:
             mc.quit()
 
-    def mcUpdate(self, state):
+    def mcUpdate(self, state=None, mode=None):
         """MC state has changed, handle the update."""
+        
         #print "lock for update..."
         with self.stateLock:
+            if state is None:
+                state = self.lastState[mode]
             #print "  got lock for update"
             mode = state['mode']
-            if mode == 'I=0':
-                mode = 'IC'
+            #if mode == 'I=0':
+                #mode = 'IC'
           
             state['holding'] = self.holding[mode]
             self.lastState[mode] = state.copy()
@@ -91,8 +95,8 @@ class MultiClamp(Device):
     def getLastState(self, mode):
         """Return the last known state for the given mode."""
         with self.stateLock:
-            if mode == 'I=0':
-                mode = 'IC'
+            #if mode == 'I=0':
+                #mode = 'IC'
             if mode in self.lastState:
                 return self.lastState[mode]
         
@@ -144,24 +148,29 @@ class MultiClamp(Device):
             #return self.mc.getMode()
     
     def setHolding(self, mode=None, value=None):
-        """Define and set the holding values for this device"""
-        #print "setHolding", mode, value
+        """Define and/or set the holding values for this device"""
+        
         with MutexLocker(self.lock):
-            if mode is not None and value is not None:
-                #print "   update holding value"
-                self.holding[mode] = value
-                
-            mode = self.mc.getMode()
+            currentMode = self.mc.getMode()
+            if mode is None:
+                mode = currentMode
             if mode == 'I=0':
-                mode = 'IC'
-            if mode not in self.holding:
-                #print "    mode %s not in %s" % (mode, str(self.holding))
+                raise Exception("Can't set holding value for I=0 mode.")
+            
+            ## Update stored holding value if value is supplied
+            if value is not None:
+                self.holding[mode] = value
+                self.mcUpdate(mode=mode)
+                
+            ## We only want to set the actual DAQ channel if:
+            ##   - currently in I=0, or 
+            ##   - currently in the mode that was changed
+            if mode != currentMode and currentMode != 'I=0':
                 return
+            
             holding = self.holding[mode]
             daq, chan = self.config['commandChannel'][:2]
             daqDev = self.dm.getDevice(daq)
-            #scale = self.config['cmdScale'][mode]
-            #s = self.mc.getState()['extCmdScale']
             s = self.extCmdScale(mode)  ## use the scale for the last remembered state from this mode
             if s == 0:
                 if holding == 0.0:
@@ -222,7 +231,7 @@ class MultiClamp(Device):
             if mcMode=='I=0':
                 ## Set holding level before leaving I=0 mode
                 #print "  set holding"
-                self.setHolding()
+                self.setHolding(mode)
             #print "  set mode"
             self.mc.setMode(mode)
             
@@ -299,7 +308,7 @@ class MultiClampTask(DeviceTask):
             #self.state['secondarySignal'] = self.dev.mc.getSecondarySignalInfo()
             
             ## set holding level
-            if 'holding' in self.cmd:
+            if 'holding' in self.cmd and self.cmd['mode'] != 'I=0':
                 self.dev.setHolding(self.cmd['mode'], self.cmd['holding'])
             #print "mc configure complete"
         
