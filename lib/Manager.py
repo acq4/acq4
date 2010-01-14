@@ -314,7 +314,7 @@ Valid options are:
             del self.modules[mod.name]
             self.emit(QtCore.SIGNAL('modulesChanged'))
             self.emit(QtCore.SIGNAL('moduleHasQuit'), mod.name)
-            #print "Module", mod.name, "has quit"
+            print "Module", mod.name, "has quit"
         
 
     def unloadModule(self, name):

@@ -372,6 +372,7 @@ class ProtocolRunner(Module, QtCore.QObject):
     def clearDocks(self):
         for d in self.docks:
             try:
+                print "request dock %s quit" % d
                 self.docks[d].widget().quit()
             except:
                 printExc("Error while requesting dock '%s' quit:"% d)

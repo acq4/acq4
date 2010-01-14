@@ -434,7 +434,7 @@ class PVCamera(QtGui.QMainWindow):
             if not self.recordThread.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
             #print "  record thread finished."
-        sip.delete(self)
+        #sip.delete(self)
         self.module.quit(fromUi=True)
 
     @trace
@@ -478,10 +478,11 @@ class PVCamera(QtGui.QMainWindow):
         self.ui.btnAcquire.setEnabled(True)
 
     @trace
-    def setBinning(self, b):
+    def setBinning(self, b=None):
         #sys.stdout.write("+")
         self.backgroundFrame = None
-        self.binning = b
+        if b is not None:
+            self.binning = b
         self.acquireThread.setParam('binning', self.binning)
         #self.acquireThread.reset()
         self.clearFrameBuffer()
@@ -490,8 +491,9 @@ class PVCamera(QtGui.QMainWindow):
         
         
     @trace
-    def setExposure(self, e):
-        self.exposure = e
+    def setExposure(self, e=None):
+        if e is not None:
+            self.exposure = e
         self.acquireThread.setParam('exposure', self.exposure)
         
     @trace
@@ -600,6 +602,9 @@ class PVCamera(QtGui.QMainWindow):
     def toggleAcquire(self):
         if self.ui.btnAcquire.isChecked():
             self.acquireThread.setParam('mode', 'Normal')
+            self.setBinning()
+            self.setExposure()
+            self.updateRegion()
             self.acquireThread.start()
         else:
             self.toggleRecord(False)

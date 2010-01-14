@@ -435,6 +435,7 @@ class ScannerProtoGui(ProtocolGui):
         return [self.items[i] for i in self.items if self.listItem(i).checkState() == QtCore.Qt.Checked]
 
     def quit(self):
+        print "scanner dock quit"
         self.deleteAll()
         s = self.testTarget.scene()
         if s is not None:
@@ -442,9 +443,16 @@ class ScannerProtoGui(ProtocolGui):
         QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
             
         if self.currentCamMod is not None:
-            QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+            try:
+                QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+            except:
+                pass
         if self.currentScope is not None:
-            QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            try:
+                QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            except:
+                pass
+        print "  ..done."
     
 class TargetPoint(EllipseROI):
     def __init__(self, pos, radius, **args):
