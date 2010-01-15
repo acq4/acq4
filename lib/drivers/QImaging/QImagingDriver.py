@@ -17,27 +17,30 @@ lib = CLibrary(dll, p, prefix = 'QCam_')        #makes it so that functions in t
                                                 #also interprets all the typedefs for you....very handy
                                                 #anything from the header needs to be accessed through lib.yourFunctionOrParameter
 
+def call(function, *args):
+    a = function(*args)
+    if a() != 0:
+        for x in lib('enums', 'QCam_Err'):
+            if lib('enums', 'QCam_Err')[x] == a():
+                raise Exception("There was an error running %s. Error code = %s" %(function, x)) ##how do I make this report the name of the function rather than it's type?
+    else:
+        return a
+    
 def quit():
     lib.CloseCamera(handle)
 atexit.register(quit)
 
 def loadDriver():
-    a = lib.LoadDriver()
-    if a() != 0:
-        raise Exception('There was an error loading the driver. Error code = ', a())
-
+    call(lib.LoadDriver)
+ 
 def releaseDriver():
-    a = lib.ReleaseDriver()
-    if a() != 0:
-        raise Exception('There was an error releasing the driver. Error code = ', a())
-        
+    call(lib.ReleaseDriver)
+    
 def listCameras():
     number = c_ulong(10)
     L = lib.CamListItem * 10
     l = L()
-    a = lib.ListCameras(l, number)
-    if a() != 0:
-        raise Exception('There was an error finding cameras. Error code = ', a())
+    call(lib.ListCameras, l, number)
     b = []
     for x in list(l)[:number.value]:
         b.append(x.cameraId)
@@ -45,13 +48,11 @@ def listCameras():
  
 def openCamera(cameraID): #opens the camera and returns the handle
     """Opens the chosen camera and returns the handle. Takes cameraID parameter."""
-    a = lib.OpenCamera(cameraID, lib.Handle())
-    if a() != 0:
-        raise Exception('There was an error opening camera. Error code = ', a())
-    return a[1] #possibly need to keep handle as a c type. use a.args[1] to do so
+    a = call(lib.OpenCamera, cameraID, lib.Handle())
+    return a[1] 
     
 def mkFrame():
-    s = lib.GetInfo(handle, lib.qinfImageSize)[2]
+    s = call(lib.GetInfo, handle, lib.qinfImageSize)[2]
     f = lib.Frame()
     frame = empty(s, dtype=ubyte)
     f.pBuffer = frame.ctypes.data
@@ -61,93 +62,108 @@ def mkFrame():
 def grabFrame():
     s = lib.GetInfo(handle, lib.qinfImageSize)[2]
     (f, frame) = mkFrame()
-    lib.GrabFrame(handle, byref(f))
-    w = lib.GetInfo(handle, lib.qinfCcdWidth)[2]
+    call(lib.GrabFrame, handle, byref(f))
+    w = call(lib.GetInfo, handle, lib.qinfCcdWidth)[2]
     frame.shape = (s/w, w)
     return frame
 
 parameters = {}
 def listParams():
-    """Fills in the 'parameters' dictionary with the parameters available on the camera.
+    """Fills in the 'parameters' dictionary with the state parameters available on the camera.
     The key is the name of the parameter, while the value is the range of possible values."""
-    s = lib.ReadSettingsFromCam(handle)[1]
+    s = call(lib.ReadSettingsFromCam, handle)[1]
     s.size = sizeof(s)
     for x in lib('enums', 'QCam_Param'): 
         if lib.IsParamSupported(handle, getattr(lib, x))() == 0:
-            if lib.IsRangeTable(byref(s), getattr(lib,x))() ==0:
-                min = lib.GetParamMin(byref(s), getattr(lib,x))[2]
-                max = lib.GetParamMax(byref(s), getattr(lib,x))[2]
-                parameters[x] = (min, max)
-            elif lib.IsSparseTable(byref(s), getattr(lib,x))() ==0:
+            if lib.IsSparseTable(byref(s), getattr(lib,x))() ==0:
                 table = (c_ulong *32)()
-                r = lib.GetParamSparseTable(byref(s), getattr(lib,x), table, c_long(32))
-                value = lib.GetParam(byref(s), getattr(lib,x))[2]
+                r = call(lib.GetParamSparseTable, byref(s), getattr(lib,x), table, c_long(32))
                 parameters[x] = (list(r[2])[:r[3]])
+            elif lib.IsRangeTable(byref(s), getattr(lib,x))() ==0:
+                print x
+                min = call(lib.GetParamMin, byref(s), getattr(lib,x))[2]
+                max = call(lib.GetParamMax, byref(s), getattr(lib,x))[2]
+                parameters[x] = (min, max)
+            else:
+                raise Exception('Error finding type for parameter ', x)
     for x in lib('enums', 'QCam_ParamS32'):
         if lib.IsParamS32Supported(handle, getattr(lib, x))() == 0:
             if lib.IsRangeTableS32(byref(s), getattr(lib,x))() ==0:
-                min = lib.GetParamS32Min(byref(s), getattr(lib,x))[2]
-                max = lib.GetParamS32Max(byref(s), getattr(lib,x))[2]
+                min = call(lib.GetParamS32Min, byref(s), getattr(lib,x))[2]
+                max = call(lib.GetParamS32Max, byref(s), getattr(lib,x))[2]
                 parameters[x] = (min, max)
             elif lib.IsSparseTableS32(byref(s), getattr(lib,x))() ==0:
                 table = (c_ulong *32)()
-                r = lib.GetParamSparseTableS32(byref(s), getattr(lib,x), table, c_long(32))
+                r = call(lib.GetParamSparseTableS32, byref(s), getattr(lib,x), table, c_long(32))
                 parameters[x] = (list(r[2])[:r[3]])
+            else:
+                raise Exception('Error finding type for parameter ', x)
     for x in lib('enums', 'QCam_Param64'):
         if lib.IsParam64Supported(handle, getattr(lib, x))() == 0:
             if lib.IsRangeTable64(byref(s), getattr(lib,x))() ==0:
-                min = lib.GetParam64Min(byref(s), getattr(lib,x))[2]
-                max = lib.GetParam64Max(byref(s), getattr(lib,x))[2]
+                min = call(lib.GetParam64Min, byref(s), getattr(lib,x))[2]
+                max = call(lib.GetParam64Max, byref(s), getattr(lib,x))[2]
                 parameters[x] = (min, max)
             elif lib.IsSparseTable64(byref(s), getattr(lib,x))() ==0:
                 table = (c_ulong *32)()
-                r = lib.GetParamSparseTable64(byref(s), getattr(lib,x), table, c_long(32))
+                r = call(lib.GetParamSparseTable64, byref(s), getattr(lib,x), table, c_long(32))
                 parameters[x] = (list(r[2])[:r[3]])
+            else:
+                raise Exception('Error finding type for parameter ', x)
+                
+camerainfo = {}
+def getCameraInfo():
+    for x in lib('enums', 'QCam_Info'):
+        a = call(lib.GetInfo, handle, getattr(lib, x))
+        camerainfo[x] = a[2]
+            
+            
+    
 
 def getParam(param):
-    s = lib.ReadSettingsFromCam(handle)[1]
+    s = call(lib.ReadSettingsFromCam, handle)[1]
     s.size = sizeof(s)
     if param in lib('enums', 'QCam_Param'):
-        value = lib.GetParam(byref(s), getattr(lib, param))[2]
+        value = call(lib.GetParam, byref(s), getattr(lib, param))[2]
     elif param in lib('enums', 'QCam_ParamS32'):
-        value = lib.SetParamS32(byref(s), getattr(lib, param))[2]
+        value = call(lib.SetParamS32, byref(s), getattr(lib, param))[2]
     elif param in lib('enums', 'QCam_Param64'):
-        value = lib.SetParam64(byref(s), getattr(lib, param))[2]
+        value = call(lib.SetParam64, byref(s), getattr(lib, param))[2]
     return value
 
 def setParam(param, value):
-    s = lib.ReadSettingsFromCam(handle)[1]
+    s = call(lib.ReadSettingsFromCam, handle)[1]
     if param in lib('enums', 'QCam_Param'):
-        lib.SetParam(byref(s), getattr(lib, param), c_ulong(value))
+        call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(value))
     elif param in lib('enums', 'QCam_ParamS32'):
-        lib.SetParamS32(byref(s), getattr(lib, param), c_long(value))
+        call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(value))
     elif param in lib('enums', 'QCam_Param64'):
-        lib.SetParam64(byref(s), getattr(lib, param), c_ulonglong(value))
-    lib.SendSettingsToCam(handle, byref(s))
+        call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(value))
+    call(lib.SendSettingsToCam, handle, byref(s))
 
 def getParams(*params):
-    s = lib.ReadSettingsFromCam(handle)[1]
+    s = call(lib.ReadSettingsFromCam, handle)[1]
     dict = {}
     for param in params:
         if param in lib('enums', 'QCam_Param'):
-            value = lib.GetParam(byref(s), getattr(lib, param))[2]
+            value = call(lib.GetParam, byref(s), getattr(lib, param))[2]
         elif param in lib('enums', 'QCam_ParamS32'):
-            value = lib.GetParamS32(byref(s), getattr(lib, param))[2]
+            value = call(lib.GetParamS32, byref(s), getattr(lib, param))[2]
         elif param in lib('enums', 'QCam_Param64'):
-            value = lib.GetParam64(byref(s), getattr(lib, param))[2]
+            value = call(lib.GetParam64, byref(s), getattr(lib, param))[2]
         dict[param]=value
     return dict
 
 def setParams(**params):
-    s = lib.ReadSettingsFromCam(handle)[1]
+    s = call(lib.ReadSettingsFromCam, handle)[1]
     for param in params:
         if param in lib('enums', 'QCam_Param'):
-            lib.SetParam(byref(s), getattr(lib, param), c_ulong(params[param]))
+            call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(params[param]))
         elif param in lib('enums', 'QCam_ParamS32'):
-            lib.SetParamS32(byref(s), getattr(lib, param), c_long(params[param]))
+            call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(params[param]))
         elif param in lib('enums', 'QCam_Param64'):
-            lib.SetParam64(byref(s), getattr(lib, param), c_ulonglong(params[param]))
-    lib.SendSettingsToCam(handle, byref(s))
+            call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(params[param]))
+    call(lib.SendSettingsToCam, handle, byref(s))
     
 loadDriver()
 cameras = listCameras()
