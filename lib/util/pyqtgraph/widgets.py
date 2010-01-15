@@ -746,6 +746,10 @@ class EllipseROI(ROI):
         r = self.boundingRect()
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         p.setPen(self.pen)
+        
+        p.scale(r.width(), r.height())## workaround for GL bug
+        r = QtCore.QRectF(r.x()/r.width(), r.y()/r.height(), 1,1)
+        
         p.drawEllipse(r)
         
     def getArrayRegion(self, arr, img=None):

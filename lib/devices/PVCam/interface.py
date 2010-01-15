@@ -687,12 +687,12 @@ class AcquireThread(QtCore.QThread):
                         #print "scope state changed"
                         scopeState = ss['id']
                         ## regenerate frameInfo here
-                        ps = ss['pixelSize']
+                        ps = ss['pixelSize']  ## size of CCD pixel
                         pos = ss['centerPosition']
                         pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
                         
                         frameInfo = {
-                            'pixelSize': [ps[0] * binning, ps[1] * binning],
+                            'pixelSize': [ps[0] * binning, ps[1] * binning],  ## size of image pixel
                             'scopePosition': ss['scopePosition'],
                             'centerPosition': pos,
                             'objective': ss['objective'],

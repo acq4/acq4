@@ -44,44 +44,47 @@ def listObjs(regex='Q', typ=None):
     else:
         return [x for x in gc.get_objects() if re.match(regex, type(x).__name__)]
         
-def describeObj(funnyNamedObj, depth=4, printResult=True, ignoreNames=None):
+def describeObj(__XX__Obj, depth=4, printResult=True, ignoreNames=None):
     """Return a string describing this object; attempt to find names that refer to it."""
+    gc.collect()
     
     if ignoreNames is None:
         ignoreNames = []
     
-    typName = str(type(funnyNamedObj))
+    typName = str(type(__XX__Obj))
     if depth == 0:
         return [typName]
     
     refStrs = []
-    funnyNamedRefs = gc.get_referrers(funnyNamedObj)
-    for funnyNamedRef in funnyNamedRefs:
-        if hasattr(funnyNamedRef, 'keys'):
-            for k in funnyNamedRef.keys():
-                if k in ['funnyNamedObj', 'funnyNamedRef', 'funnyNamedRefs', '__dict__']:
+    
+    
+    __XX__Refs = gc.get_referrers(__XX__Obj)
+    for __XX__Ref in __XX__Refs:
+        if type(__XX__Ref).__name__ == 'frame':
+            continue
+        if hasattr(__XX__Ref, 'keys'):
+            for k in __XX__Ref.keys():
+                if k[:6] == '__XX__' or k in ignoreNames:
                     continue
-                if k in ignoreNames:
-                    continue
-                if funnyNamedRef[k] is funnyNamedObj:
-                    rs = describeObj(funnyNamedRef, depth=depth-1, printResult=False, ignoreNames=ignoreNames)
+                if __XX__Ref[k] is __XX__Obj:
+                    rs = describeObj(__XX__Ref, depth=depth-1, printResult=False, ignoreNames=ignoreNames)
                     refStrs.extend(["%s ['%s']" % (s, k) for s in rs])
                     break
-        elif isinstance(funnyNamedRef, list) or isinstance(funnyNamedRef, tuple):
-            for k in range(len(funnyNamedRef)):
-                if funnyNamedRef[k] is funnyNamedObj:
-                    rs = describeObj(funnyNamedRef, depth=depth-1, printResult=False, ignoreNames=ignoreNames)
+        elif isinstance(__XX__Ref, list) or isinstance(__XX__Ref, tuple):
+            for k in range(len(__XX__Ref)):
+                if __XX__Ref[k] is __XX__Obj:
+                    rs = describeObj(__XX__Ref, depth=depth-1, printResult=False, ignoreNames=ignoreNames)
                     refStrs.extend(["%s [%d]" % (s, k) for s in rs])
                     break
         else:
-            for k in dir(funnyNamedRef):
+            for k in dir(__XX__Ref):
                 if k in ignoreNames:
                     continue
-                if getattr(funnyNamedRef, k) is funnyNamedObj:
-                    rs = describeObj(funnyNamedRef, depth=depth-1, printResult=False, ignoreNames=ignoreNames)
+                if getattr(__XX__Ref, k) is __XX__Obj:
+                    rs = describeObj(__XX__Ref, depth=depth-1, printResult=False, ignoreNames=ignoreNames)
                     refStrs.extend(["%s .%s" % (s, k) for s in rs])
                     break
-                    
+    
     refStrs = set(refStrs)
     result = [s + ' ' + typName for s in refStrs]
     if printResult:

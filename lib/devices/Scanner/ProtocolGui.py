@@ -522,8 +522,9 @@ class TargetGrid(ROI):
         ROI.paint(self, p, opt, widget)
         ps2 = self.pointSize * 0.5
         p.setPen(self.pen)
+        p.scale(self.pointSize, self.pointSize) ## do scaling here because otherwise we end up with squares instead of circles (GL bug)
         for pt in self.points:
-            p.drawEllipse(QtCore.QRectF(pt[0] - ps2, pt[1] - ps2, self.pointSize, self.pointSize))
+            p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
         
         
 

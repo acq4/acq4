@@ -33,15 +33,15 @@ class ScannerDeviceGui(QtGui.QWidget):
             if d == defLaser:
                 self.ui.laserCombo.setCurrentIndex(self.ui.laserCombo.count()-1)
             
-
+        self.spots = []
         
         ## Populate list of calibrations
         self.updateCalibrationList()
         
         ## create graphics scene
         self.image = ImageItem()
-        self.scene = QtGui.QGraphicsScene()
-        self.ui.view.setScene(self.scene)
+        self.scene = self.ui.view.scene()
+        self.ui.view.enableMouse()
         self.scene.addItem(self.image)
         self.ui.view.setAspectLocked(True)
         self.ui.view.invertY()
@@ -114,6 +114,26 @@ class ScannerDeviceGui(QtGui.QWidget):
         self.dev.writeCalibrationIndex(index)
         
         self.updateCalibrationList()
+
+
+    def addSpot(self, pos, size):
+        """Add a circle to the image"""
+        s2 = size/2.
+        s = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
+        s.scale(size, size)
+        s.setPos(pos[0]-s2, pos[1]-s2)
+        s.setPen(QtGui.QPen(QtGui.QColor(100, 255, 100, 70)))
+        self.scene.addItem(s)
+        s.setZValue(100)
+        self.spots.append(s)
+        
+        
+    def clearSpots(self):
+        """Clear all circles from the image"""
+        for s in self.spots:
+            self.scene.removeItem(s)
+        self.spots = []
+        
 
     def runCalibration(self):
         """Wraps around runCalibrationInner, adds progress dialog and error reporting"""
@@ -220,7 +240,15 @@ class ScannerDeviceGui(QtGui.QWidget):
 
         spotFrameMax = concatenate(spotFrames).max(axis=0)
         self.image.updateImage(spotFrameMax, autoRange=True)
-        self.ui.view.setRange(self.image.boundingRect())
+        self.image.resetTransform()
+        impos = info['imagePosition']
+        self.image.scale(pixelSize, pixelSize)
+        self.image.setPos(impos[0]-center[0], impos[1]-center[1])
+        self.ui.view.setRange(self.image.mapRectToScene(self.image.boundingRect()))
+        
+        self.clearSpots()
+        for sl in spotLocations:
+            self.addSpot(sl, spotWidth)
         
         if len(spotFrames) == 10:
             raise Exception('Calibration detected only %d frames with laser spot; need minimum of 10.' % len(spotFrames))
