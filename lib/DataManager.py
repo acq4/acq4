@@ -14,7 +14,7 @@ import threading, os, re, sys
 ##  import fcntl  ## linux only?
 from lib.util.functions import strncmp
 from lib.util.configfile import *
-from lib.util.metaarray import MetaArray
+from metaarray import MetaArray
 #from lib.util.advancedTypes import Locker
 import lib.util.ptime as ptime
 from lib.util.Mutex import Mutex, MutexLocker

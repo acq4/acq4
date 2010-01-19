@@ -31,14 +31,14 @@
     </widget>
    </item>
    <item row="0" column="2">
-    <widget class="QPushButton" name="newProtocolBtn">
+    <widget class="QPushButton" name="newBtn">
      <property name="text">
       <string>New</string>
      </property>
     </widget>
    </item>
-   <item row="1" column="1" rowspan="6">
-    <widget class="QTreeView" name="protocolList">
+   <item row="1" column="1" rowspan="7">
+    <widget class="QTreeView" name="fileTree">
      <property name="acceptDrops">
       <bool>true</bool>
      </property>
@@ -54,7 +54,7 @@
     </widget>
    </item>
    <item row="1" column="2">
-    <widget class="QPushButton" name="loadProtocolBtn">
+    <widget class="QPushButton" name="loadBtn">
      <property name="text">
       <string>Load</string>
      </property>
@@ -74,7 +74,7 @@
     </spacer>
    </item>
    <item row="3" column="2">
-    <widget class="QPushButton" name="saveProtocolBtn">
+    <widget class="QPushButton" name="saveBtn">
      <property name="enabled">
       <bool>false</bool>
      </property>
@@ -84,7 +84,7 @@
     </widget>
    </item>
    <item row="4" column="2">
-    <widget class="QPushButton" name="saveAsProtocolBtn">
+    <widget class="QPushButton" name="saveAsBtn">
      <property name="enabled">
       <bool>true</bool>
      </property>
@@ -93,7 +93,7 @@
      </property>
     </widget>
    </item>
-   <item row="5" column="2">
+   <item row="6" column="2">
     <spacer name="verticalSpacer">
      <property name="orientation">
       <enum>Qt::Vertical</enum>
@@ -106,8 +106,8 @@
      </property>
     </spacer>
    </item>
-   <item row="6" column="2">
-    <widget class="QPushButton" name="deleteProtocolBtn">
+   <item row="7" column="2">
+    <widget class="QPushButton" name="deleteBtn">
      <property name="enabled">
       <bool>false</bool>
      </property>
@@ -116,7 +116,7 @@
      </property>
     </widget>
    </item>
-   <item row="7" column="0" colspan="3">
+   <item row="8" column="0" colspan="3">
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
       <widget class="QLabel" name="currentTitleLabel">
@@ -132,7 +132,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QLabel" name="currentProtocolLabel">
+      <widget class="QLabel" name="currentLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -151,6 +151,13 @@
       </widget>
      </item>
     </layout>
+   </item>
+   <item row="5" column="2">
+    <widget class="QPushButton" name="newDirBtn">
+     <property name="text">
+      <string>New Dir</string>
+     </property>
+    </widget>
    </item>
   </layout>
  </widget>

@@ -8,17 +8,17 @@
 from __future__ import with_statement
 
 from CameraTemplate import Ui_MainWindow
-from lib.util.pyqtgraph.GraphicsView import *
-from lib.util.pyqtgraph.graphicsItems import *
-from lib.util.pyqtgraph.widgets import ROI
-import lib.util.ptime as ptime
+from pyqtgraph.GraphicsView import *
+from pyqtgraph.graphicsItems import *
+from pyqtgraph.widgets import ROI
+import ptime
 from lib.filetypes.ImageFile import *
-from lib.util.Mutex import Mutex, MutexLocker
+from Mutex import Mutex, MutexLocker
 from PyQt4 import QtGui, QtCore
 import scipy.ndimage
 import time, types, os.path, re, sys
-from lib.util.pyqtgraph.functions import intColor
-from lib.util.debug import *
+from pyqtgraph.functions import intColor
+from debug import *
 from metaarray import *
 import sip
 
@@ -426,14 +426,15 @@ class PVCamera(QtGui.QMainWindow):
             #print "Stopping acquisition thread.."
             self.acquireThread.stop()
             if not self.acquireThread.wait(10000):
-                raise Exception("Timed out while waiting for thread exit!")
+                raise Exception("Timed out while waiting for acq. thread exit!")
         if self.recordThread.isRunning():
             #print "Stopping recording thread.."
             self.recordThread.stop()
             #print "  requested stop, waiting for thread -- running=",self.recordThread.isRunning() 
             if not self.recordThread.wait(10000):
-                raise Exception("Timed out while waiting for thread exit!")
+                raise Exception("Timed out while waiting for rec. thread exit!")
             #print "  record thread finished."
+        del self.recordThread  ## Required due to cyclic reference
         #sip.delete(self)
         self.module.quit(fromUi=True)
 

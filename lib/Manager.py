@@ -23,7 +23,7 @@ sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
 
 
 
-import time, atexit
+import time, atexit, weakref
 from PyQt4 import QtCore, QtGui
 from DataManager import *
 import lib.util.ptime as ptime
@@ -336,7 +336,8 @@ Valid options are:
             QtCore.QObject.connect(sh, QtCore.SIGNAL('activated()'), win.raise_)
         except:
             printExc("Error creating shortcut '%s':" % keys)
-        self.shortcuts.append((sh, keys, win))
+        
+        self.shortcuts.append((sh, keys, weakref.ref(win)))
     
     def runProtocol(self, cmd):
         t = Task(self, cmd)

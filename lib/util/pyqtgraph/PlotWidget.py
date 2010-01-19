@@ -20,6 +20,7 @@ class PlotWidget(GraphicsView):
         ## Explicitly wrap methods from plotItem
         for m in ['addItem', 'autoRange', 'clear']:
             setattr(self, m, getattr(self.plotItem, m))
+        QtCore.QObject.connect(self.plotItem, QtCore.SIGNAL('viewChanged'), self.viewChanged)
                 
     def __getattr__(self, attr):  ## implicitly wrap methods from plotItem
         if hasattr(self.plotItem, attr):
@@ -28,7 +29,8 @@ class PlotWidget(GraphicsView):
                 return m
         raise exceptions.NameError(attr)
             
-            
+    def viewChanged(self, *args):
+        self.emit(QtCore.SIGNAL('viewChanged'), *args)
 
     def widgetGroupInterface(self):
         return (None, PlotWidget.saveState, PlotWidget.restoreState)

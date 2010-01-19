@@ -29,7 +29,7 @@ def siFormat(x, precision=3, space=True, error=None, minVal=1e-25, suffix=''):
         m = int(clip(floor(log(abs(x))/log(1000)), -9.0, 9.0))
     
     if m == 0:
-        pref = ''
+        pref = space
     elif m < -8 or m > 8:
         pref = 'e%d' % (m*3)
     else:
@@ -45,15 +45,17 @@ def siFormat(x, precision=3, space=True, error=None, minVal=1e-25, suffix=''):
     
 def siEval(s):
     """Convert a value written in SI notation to its equivalent prefixless value"""
-    m = re.match(r'-?(((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?)\s*([' + SI_PREFIXES + r']?)', s)
+    m = re.match(r'(-?((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?)\s*([u' + SI_PREFIXES + r']?)', s)
     if m is None:
         raise Exception("Can't convert string '%s' to number." % s)
     v = float(m.groups()[0])
     p = m.groups()[6]
-    if p not in SI_PREFIXES:
-        raise Exception("Can't convert string '%s' to number--unknown prefix." % s)
+    #if p not in SI_PREFIXES:
+        #raise Exception("Can't convert string '%s' to number--unknown prefix." % s)
     if p ==  '':
         n = 0
+    elif p == 'u':
+        n = -2
     else:
         n = SI_PREFIXES.index(p) - 8
     return v * 1000**n

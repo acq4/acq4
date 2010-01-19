@@ -34,7 +34,12 @@ pen.setCosmetic(True)
 p1.setShadowPen(pen)
 p1.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 50)))
 
-
+#l1 = InfiniteLine(pw, 1.5)
+l2 = InfiniteLine(pw, 1.5, 0)
+#l3 = InfiniteLine(pw, [1.5, 1.5], 45)
+#pw.addItem(l1)
+pw.addItem(l2)
+#pw.addItem(l3)
 
 mw.show()
 
