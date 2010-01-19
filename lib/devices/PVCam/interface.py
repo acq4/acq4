@@ -224,6 +224,10 @@ class PVCam(DAQGeneric):
     def listTriggerModes(self):
         with MutexLocker(self.camLock):
             return self.cam.listTriggerModes()
+            
+    def listBinning(self):
+        with MutexLocker(self.camLock):
+            return self.camConfig['allowedBinning']
         
     #@ftrace
     def getPosition(self, justScope=False):
@@ -720,6 +724,7 @@ class AcquireThread(QtCore.QThread):
                             conn = self.connections[:]
                         for c in conn:
                             c(outFrame)
+                        #print "new frame", frameInfo['time']
                         self.emit(QtCore.SIGNAL("newFrame"), outFrame)
                         #print "emit frame", self.frameId
                         

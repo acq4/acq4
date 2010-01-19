@@ -12,7 +12,7 @@ class Manager(Module):
         self.win = QtGui.QMainWindow()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
-        self.stateFile = os.path.join('config', 'managerState.cfg')
+        self.stateFile = os.path.join(self.name + '_ui.cfg')
 
         self.devRackDocks = {}
         for d in self.manager.listDevices():
@@ -36,12 +36,16 @@ class Manager(Module):
         
         QtCore.QObject.connect(self.ui.loadConfigBtn, QtCore.SIGNAL('clicked()'), self.loadConfig)
         QtCore.QObject.connect(self.ui.loadModuleBtn, QtCore.SIGNAL('clicked()'), self.loadModule)
+        QtCore.QObject.connect(self.ui.reloadModuleBtn, QtCore.SIGNAL('clicked()'), self.reloadModule)
         QtCore.QObject.connect(self.ui.configList, QtCore.SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.loadConfig)
         QtCore.QObject.connect(self.ui.moduleList, QtCore.SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.loadModule)
         QtCore.QObject.connect(self.ui.quitBtn, QtCore.SIGNAL('clicked()'), self.requestQuit)
 
-        if os.path.exists(self.stateFile):
-            state = configfile.readConfigFile(self.stateFile)
+        state = self.manager.readConfigFile(self.stateFile)
+        if 'geometry' in state:
+            geom = QtCore.QRect(*state['geometry'])
+            self.win.setGeometry(geom)
+        if 'window' in state:
             ws = QtCore.QByteArray.fromPercentEncoding(state['window'])
             self.win.restoreState(ws)
         self.win.show()
@@ -70,6 +74,11 @@ class Manager(Module):
         self.manager.loadDefinedModule(mod)
         self.showMessage("Loaded module '%s'." % mod, 10000)
         
+    def reloadModule(self):
+        mod = str(self.ui.moduleList.currentItem().text())
+        self.manager.loadDefinedModule(mod, forceReload=True)
+        self.showMessage("Loaded module '%s'." % mod, 10000)
+        
     def loadConfig(self):
         cfg = str(self.ui.configList.currentItem().text())
         self.manager.loadDefinedConfig(cfg)
@@ -78,6 +87,7 @@ class Manager(Module):
 
     def quit(self):
         ## save ui configuration
-        state = {'window': str(self.win.saveState().toPercentEncoding())}
-        configfile.writeConfigFile(state, self.stateFile)
+        geom = self.win.geometry()
+        state = {'window': str(self.win.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
+        self.manager.writeConfigFile(state, self.stateFile)
         Module.quit(self)

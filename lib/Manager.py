@@ -30,7 +30,7 @@ import lib.util.ptime as ptime
 from lib.util import configfile
 from lib.util.Mutex import Mutex
 from lib.util.debug import *
-import getopt
+import getopt, glob
 #import pdb
 
 ### All other modules can use this function to get the manager instance
@@ -240,6 +240,21 @@ Valid options are:
     def __del__(self):
         self.quit()
     
+    def readConfigFile(self, fileName, missingOk=True):
+        fileName = os.path.join(self.configDir, fileName)
+        if os.path.isfile(fileName):
+            return configfile.readConfigFile(fileName)
+        else:
+            if missingOk: 
+                return {}
+            else:
+                raise Exception('Config file "%s" not found.' % fileName)
+            
+    def writeConfigFile(self, data, fileName):
+        fileName = os.path.join(self.configDir, fileName)
+        return configfile.writeConfigFile(data, fileName)
+        
+    
     def loadDevice(self, driverName, conf, name):
         mod = __import__('lib.devices.%s.interface' % driverName, fromlist=['*'])
         devclass = getattr(mod, driverName)
@@ -256,14 +271,26 @@ Valid options are:
     def listDevices(self):
         return self.devices.keys()
 
-    def loadModule(self, module, name, config=None):
+    def loadModule(self, module, name, config=None, forceReload=False):
         """Create a new instance of a module"""
         #print 'Loading module "%s" as "%s"...' % (module, name)
         if name in self.modules:
             raise Exception('Module already exists with name "%s"' % name)
         if config is None:
             config = {}
+            
         mod = __import__('lib.modules.%s.interface' % module, fromlist=['*'])
+        if forceReload:
+            modDir = os.path.join('lib', 'modules', module)
+            files = glob.glob(os.path.join(modDir, '*.py'))
+            files = [os.path.basename(f[:-3]) for f in files]
+            modName = 'lib.modules.' + module
+            modNames = [modName + '.' + m for m in files] + [modName]
+            print "RELOAD", modNames
+            for m in modNames:
+                if m in sys.modules:
+                    reload(sys.modules[m])
+            
         modclass = getattr(mod, module)
         self.modules[name] = modclass(self, name, config)
         self.emit(QtCore.SIGNAL('modulesChanged'))
@@ -283,7 +310,7 @@ Valid options are:
         """List module configurations defined in the config file"""
         return self.definedModules.keys()
             
-    def loadDefinedModule(self, name):
+    def loadDefinedModule(self, name, forceReload=False):
         """Load a module and configure as defined in the config file"""
         if name not in self.definedModules:
             print "Module '%s' is not defined. Options are: %s" % (name, str(self.definedModules.keys()))
@@ -303,7 +330,7 @@ Valid options are:
             mName = "%s_%d" % (name, n)
             n += 1
             
-        mod = self.loadModule(mod, mName, config)
+        mod = self.loadModule(mod, mName, config, forceReload=forceReload)
         win = mod.window()
         if 'shortcut' in conf and win is not None:
             self.createWindowShortcut(conf['shortcut'], win)

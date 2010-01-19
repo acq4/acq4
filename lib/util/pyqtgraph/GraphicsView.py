@@ -86,7 +86,7 @@ class GraphicsView(QtGui.QGraphicsView):
     def resizeEvent(self, ev):
         if self.autoPixelRange:
             self.range = QtCore.QRectF(0, 0, self.size().width(), self.size().height())
-        self.setRange(self.range, padding=0)
+        self.setRange(self.range, padding=0, disableAutoPixel=False)
         self.updateMatrix()
     
     def updateMatrix(self, propagate=True):
@@ -145,7 +145,9 @@ class GraphicsView(QtGui.QGraphicsView):
         
         self.updateMatrix()
 
-    def setRange(self, newRect=None, padding=0.05, lockAspect=None, propagate=True):
+    def setRange(self, newRect=None, padding=0.05, lockAspect=None, propagate=True, disableAutoPixel=True):
+        if disableAutoPixel:
+            self.autoPixelRange=False
         if newRect is None:
             newRect = self.visibleRange()
             padding = 0

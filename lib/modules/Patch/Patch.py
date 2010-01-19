@@ -12,6 +12,8 @@ from numpy import *
 import scipy.optimize
 from lib.util.debug import *
 from functions import siFormat
+from lib.Manager import getManager
+
 
 class PatchWindow(QtGui.QMainWindow):
     def __init__(self, dm, clampName):
@@ -55,7 +57,17 @@ class PatchWindow(QtGui.QMainWindow):
         self.setCentralWidget(self.cw)
         self.ui = Ui_Form()
         self.ui.setupUi(self.cw)
-        
+
+        self.stateFile = self.clampName + '_ui.cfg'
+        uiState = getManager().readConfigFile(self.stateFile)
+        if 'geometry' in uiState:
+            geom = QtCore.QRect(*uiState['geometry'])
+            self.setGeometry(geom)
+        if 'window' in uiState:
+            ws = QtCore.QByteArray.fromPercentEncoding(uiState['window'])
+            self.restoreState(ws)
+
+
         self.plots = {}
         for k in self.analysisItems:
             p = PlotWidget()
@@ -132,6 +144,10 @@ class PatchWindow(QtGui.QMainWindow):
     
     def quit(self):
         #print "Stopping patch thread.."
+        geom = self.geometry()
+        uiState = {'window': str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
+        getManager().writeConfigFile(uiState, self.stateFile)
+        
         self.thread.stop(block=True)
         
     def closeEvent(self, ev):
@@ -166,6 +182,7 @@ class PatchWindow(QtGui.QMainWindow):
                 p.show()
             else:
                 p.hide()
+        self.updateAnalysisPlots()
     
     def updateParams(self, *args):
         with self.paramLock:
@@ -224,19 +241,6 @@ class PatchWindow(QtGui.QMainWindow):
             label = getattr(self.ui, res+'Label')
             resistance = frame['analysis'][res]
             label.setText(siFormat(resistance) + u'Ω')
-            #if resistance >= 0.0:
-                #if resistance >= 1e12:
-                    #label.setText(u'%7.3f TΩ' % (resistance*1e-12))
-                #elif resistance >= 1e9:
-                    #label.setText(u'%7.3f GΩ' % (resistance*1e-9))
-                #elif resistance >= 1e6:
-                    #label.setText(u'%7.3f MΩ' % (resistance*1e-6))
-                #elif resistance >= 1e3:
-                    #label.setText(u'%7.3f KΩ' % (resistance*1e-3))
-                #else:
-                    #label.setText(u'%7.3f Ω' % (resistance))
-            #else:
-                #label.setText(u'>   10^15 Ω')
         self.ui.restingPotentialLabel.setText(siFormat(frame['analysis']['restingPotential'], error=frame['analysis']['restingPotentialStd'], suffix='V'))
         self.ui.restingCurrentLabel.setText(siFormat(frame['analysis']['restingCurrent'], error=frame['analysis']['restingCurrentStd'], suffix='A'))
         self.ui.capacitanceLabel.setText('%sF' % siFormat(frame['analysis']['capacitance']))

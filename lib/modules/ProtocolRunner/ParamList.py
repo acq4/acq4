@@ -133,6 +133,8 @@ class ParamList(QtGui.QTreeWidget):
             return p.takeChild(p.indexOfChild(item))
 
     def listParams(self):
+        """Return a list of tuples, one for each parameter in the list: (device, parameter, number)"""
+        
         params = []
         for i in self.topLevelItems():
             (dev, param, enabled) = self.itemData(i)

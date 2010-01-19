@@ -407,6 +407,9 @@ in loop mode.</string>
      </item>
      <item row="0" column="1" rowspan="2">
       <layout class="QVBoxLayout" name="verticalLayout">
+       <property name="spacing">
+        <number>0</number>
+       </property>
        <item>
         <widget class="QLabel" name="label_9">
          <property name="text">
@@ -482,6 +485,13 @@ in loop mode.</string>
         <widget class="QLabel" name="seqTimeLabel">
          <property name="text">
           <string>0</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="seqCurrentLabel">
+         <property name="text">
+          <string/>
          </property>
         </widget>
        </item>

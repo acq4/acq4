@@ -13,7 +13,8 @@ time = None
 
 def winTime():
     """Return the current time in seconds with high precision (windows version, use Manager.time() to stay platform independent)."""
-    return systime.clock() + START_TIME
+    #return systime.clock() + START_TIME    #### This is not required anymore?? If so, we can get rid of ptime altogether..
+    return systime.time()
 
 def unixTime():
     """Return the current time in seconds with high precision (unix version, use Manager.time() to stay platform independent)."""

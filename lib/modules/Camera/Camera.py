@@ -21,6 +21,8 @@ from pyqtgraph.functions import intColor
 from debug import *
 from metaarray import *
 import sip
+from SignalProxy import proxyConnect
+from lib.Manager import getManager
 
 traceDepth = 0
 def trace(func):
@@ -93,6 +95,7 @@ class ScaleBar(UIGraphicsItem):
 
 class PVCamera(QtGui.QMainWindow):
     def __init__(self, module):
+        
         self.module = module ## handle to the rest of the application
         
         self.roi = None
@@ -120,6 +123,26 @@ class PVCamera(QtGui.QMainWindow):
         QtGui.QMainWindow.__init__(self)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+        
+        self.stateFile = self.module.name + '_ui.cfg'
+        uiState = getManager().readConfigFile(self.stateFile)
+        if 'geometry' in uiState:
+            geom = QtCore.QRect(*uiState['geometry'])
+            self.setGeometry(geom)
+        if 'window' in uiState:
+            ws = QtCore.QByteArray.fromPercentEncoding(uiState['window'])
+            self.restoreState(ws)
+        
+        
+        self.ui.histogram.invertY(False)
+        self.avgLevelLine = QtGui.QGraphicsLineItem()
+        self.avgLevelLine.setPen(QtGui.QPen(QtGui.QColor(200, 200, 0)))
+        self.histogramCurve = PlotCurveItem()
+        self.ui.histogram.scene().addItem(self.avgLevelLine)
+        self.ui.histogram.scene().addItem(self.histogramCurve)
+        self.histogramCurve.rotate(90)
+        self.histogramCurve.scale(1.0, -1.0)
+        self.lastHistogramUpdate = 0
         
         
         ## Set up level thermo and scale widgets
@@ -204,8 +227,9 @@ class PVCamera(QtGui.QMainWindow):
         self.openCamera()
         self.ui.plotWidget.resize(self.ui.plotWidget.size().width(), 40)
         
-        self.ui.spinBinning.setValue(self.binning)
+        self.setUiBinning(self.binning)
         self.ui.spinExposure.setValue(self.exposure)
+        self.ui.spinExposure.setOpts(dec=True, step=0.1, minStep=-2, siPrefix=True, suffix='s', bounds=[0, 10])
 
         ## Initialize values
         self.cameraCenter = self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
@@ -229,8 +253,14 @@ class PVCamera(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
         QtCore.QObject.connect(self.ui.btnAutoGain, QtCore.SIGNAL('toggled(bool)'), self.toggleAutoGain)
         QtCore.QObject.connect(self.ui.btnFullFrame, QtCore.SIGNAL('clicked()'), self.setRegion)
-        QtCore.QObject.connect(self.ui.spinBinning, QtCore.SIGNAL('valueChanged(int)'), self.setBinning)
-        QtCore.QObject.connect(self.ui.spinExposure, QtCore.SIGNAL('valueChanged(double)'), self.setExposure)
+        
+        #QtCore.QObject.connect(self.ui.spinBinning, QtCore.SIGNAL('valueChanged(int)'), self.setBinning)
+        #QtCore.QObject.connect(self.ui.spinExposure, QtCore.SIGNAL('valueChanged(double)'), self.setExposure)
+        
+        ## Use delayed connection for these two widgets
+        self.proxy1 = proxyConnect(self.ui.binningCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.setBinning)
+        self.proxy2 = proxyConnect(self.ui.spinExposure, QtCore.SIGNAL('valueChanged(double)'), self.setExposure)
+        
         QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
         QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
         QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('recordingFailed'), self.recordingFailed, QtCore.Qt.QueuedConnection)
@@ -242,6 +272,7 @@ class PVCamera(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.btnDivideBackground, QtCore.SIGNAL('clicked()'), self.divideClicked)
         
         QtCore.QObject.connect(self.ui.btnAddROI, QtCore.SIGNAL('clicked()'), self.addROI)
+        QtCore.QObject.connect(self.ui.btnClearROIs, QtCore.SIGNAL('clicked()'), self.clearROIs)
         QtCore.QObject.connect(self.ui.checkEnableROIs, QtCore.SIGNAL('valueChanged(bool)'), self.enableROIsChanged)
         QtCore.QObject.connect(self.ui.spinROITime, QtCore.SIGNAL('valueChanged(double)'), self.setROITime)
         QtCore.QObject.connect(self.ui.sliderWhiteLevel, QtCore.SIGNAL('valueChanged(int)'), self.levelsChanged)
@@ -341,6 +372,12 @@ class PVCamera(QtGui.QMainWindow):
         #plot.attach(self.ui.plotWidget)
         self.ROIs.append({'roi': roi, 'plot': plot, 'vals': [], 'times': []})
         
+    def clearROIs(self):
+        for r in self.ROIs:
+            self.scene.removeItem(r['roi'])
+            self.ui.plotWidget.removeItem(r['plot'])
+        self.ROIs = []
+        
     @trace
     def clearFrameBuffer(self):
         #self.frameBuffer = []
@@ -411,7 +448,14 @@ class PVCamera(QtGui.QMainWindow):
     @trace
     def quit(self):
         #self.frameTimer.stop()
+        geom = self.geometry()
+        uiState = {'window': str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
+        getManager().writeConfigFile(uiState, self.stateFile)
         
+        
+        
+        if self.hasQuit:
+            return
         QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
         QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
         QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('recordingFailed'), self.recordingFailed)
@@ -479,17 +523,23 @@ class PVCamera(QtGui.QMainWindow):
         self.ui.btnAcquire.setEnabled(True)
 
     @trace
-    def setBinning(self, b=None):
+    def setBinning(self, ind=None):
+        """Set camera's binning value. If ind is specified, it is the index from binningCombo from which to grab the new binning value."""
         #sys.stdout.write("+")
         self.backgroundFrame = None
-        if b is not None:
-            self.binning = b
+        if ind is not None:
+            self.binning = int(self.ui.binningCombo.itemText(ind))
         self.acquireThread.setParam('binning', self.binning)
         #self.acquireThread.reset()
         self.clearFrameBuffer()
         self.updateRgnLabel()
         #sys.stdout.write("- ")
         
+    def setUiBinning(self, b):
+        ind = self.ui.binningCombo.findText(str(b))
+        if ind == -1:
+            raise Exception("Binning mode %s not in list." % str(b))
+        self.ui.binningCombo.setCurrentIndex(ind)
         
     @trace
     def setExposure(self, e=None):
@@ -502,10 +552,17 @@ class PVCamera(QtGui.QMainWindow):
         try:
             self.cam = self.module.cam.getCamera()
             self.bitDepth = self.cam.getBitDepth()
+            self.ui.histogram.setRange(QtCore.QRectF(0, 0, 1, 2**self.bitDepth))
             self.setLevelRange()
             self.camSize = self.cam.getSize()
             self.ui.statusbar.showMessage("Opened camera %s" % self.cam, 5000)
             self.scope = self.module.cam.getScopeDevice()
+            bins = self.module.cam.listBinning()
+            bins.sort()
+            bins.reverse()
+            for b in bins:
+                self.ui.binningCombo.addItem(str(b))
+            
             
         except:
             self.ui.statusbar.showMessage("Error opening camera")
@@ -602,11 +659,15 @@ class PVCamera(QtGui.QMainWindow):
     @trace
     def toggleAcquire(self):
         if self.ui.btnAcquire.isChecked():
-            self.acquireThread.setParam('mode', 'Normal')
-            self.setBinning()
-            self.setExposure()
-            self.updateRegion()
-            self.acquireThread.start()
+            try:
+                self.acquireThread.setParam('mode', 'Normal')
+                self.setBinning()
+                self.setExposure()
+                self.updateRegion()
+                self.acquireThread.start()
+            except:
+                self.ui.btnAcquire.setChecked(False)
+                
         else:
             self.toggleRecord(False)
             self.acquireThread.stop()
@@ -614,6 +675,9 @@ class PVCamera(QtGui.QMainWindow):
     @trace
     def addPlotFrame(self, frame):
         #sys.stdout.write('+')
+        if self.imageItem.width() is None:
+            return
+        
         ## Get rid of old frames
         minTime = None
         now = ptime.time()
@@ -621,9 +685,11 @@ class PVCamera(QtGui.QMainWindow):
             #while len(self.frameBuffer) > 0 and self.frameBuffer[0][1]['time'] < (now-self.ui.spinROITime.value()):
                 #self.frameBuffer.pop(0)
         for r in self.ROIs:
+            #print " >>", r['times'], now, frame[1]['time'], self.ui.spinROITime.value(), now-self.ui.spinROITime.value()
             while len(r['times']) > 0 and r['times'][0] < (now-self.ui.spinROITime.value()):
                 r['times'].pop(0)
                 r['vals'].pop(0)
+            #print " <<", r['times']
             if len(r['times']) > 0 and (minTime is None or r['times'][0] < minTime):
                 minTime = r['times'][0]
         if minTime is None:
@@ -767,7 +833,11 @@ class PVCamera(QtGui.QMainWindow):
                 
                 wl = minVal + (maxVal-minVal) * wl
                 bl = minVal + (maxVal-minVal) * bl
-                
+            
+            
+            ## Update histogram plot
+            self.updateHistogram(self.currentFrame[0], wl, bl)
+            
             ## Translate and scale image based on ROI and binning
             m = QtGui.QTransform()
             m.translate(info['region'][0], info['region'][1])
@@ -818,6 +888,14 @@ class PVCamera(QtGui.QMainWindow):
 
         #sys.stdout.write('!')
 
+    def updateHistogram(self, data, wl, bl):
+        now = time.time()
+        if now > self.lastHistogramUpdate + 0.1:
+            avg = data.mean()
+            self.avgLevelLine.setLine(0.0, avg, 1.0, avg)
+            h = histogram(data, bins=500)
+            self.histogramCurve.setData(y=h[0].astype(float32)/h[0].max(), x=h[1][:-1])
+            self.lastHistogramUpdate = now
 
 class RecordThread(QtCore.QThread):
     def __init__(self, ui, manager):

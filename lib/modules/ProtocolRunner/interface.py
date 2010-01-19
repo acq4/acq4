@@ -748,8 +748,13 @@ class ProtocolRunner(Module, QtCore.QObject):
     def pauseSequence(self, pause):
         self.taskThread.pause(pause)
         
-    def taskStarted(self):
-        self.emit(QtCore.SIGNAL('taskStarted'))
+    def taskStarted(self, params):
+        cur = 'Current iteration:\n'
+        plist = self.ui.sequenceParamList.listParams()
+        nums = [str(params[p[:2]]) for p in plist]
+        cur += ',  '.join(nums)
+        self.ui.seqCurrentLabel.setText(cur)
+        self.emit(QtCore.SIGNAL('taskStarted'), params)
         
     
     def handleFrame(self, frame):

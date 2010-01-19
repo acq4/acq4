@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ManagerTemplate.ui'
 #
-# Created: Sat Jan 09 12:14:41 2010
+# Created: Tue Jan 19 14:56:43 2010
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -43,6 +43,9 @@ class Ui_MainWindow(object):
         self.loadModuleBtn = QtGui.QPushButton(self.groupBox_2)
         self.loadModuleBtn.setObjectName("loadModuleBtn")
         self.verticalLayout_4.addWidget(self.loadModuleBtn)
+        self.reloadModuleBtn = QtGui.QPushButton(self.groupBox_2)
+        self.reloadModuleBtn.setObjectName("reloadModuleBtn")
+        self.verticalLayout_4.addWidget(self.reloadModuleBtn)
         self.verticalLayout.addWidget(self.groupBox_2)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem)
@@ -64,5 +67,6 @@ class Ui_MainWindow(object):
         self.loadConfigBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Configuration", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox_2.setTitle(QtGui.QApplication.translate("MainWindow", "Modules", None, QtGui.QApplication.UnicodeUTF8))
         self.loadModuleBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Module", None, QtGui.QApplication.UnicodeUTF8))
+        self.reloadModuleBtn.setText(QtGui.QApplication.translate("MainWindow", "Reload Module", None, QtGui.QApplication.UnicodeUTF8))
         self.quitBtn.setText(QtGui.QApplication.translate("MainWindow", "Quit ACQ4", None, QtGui.QApplication.UnicodeUTF8))
 
