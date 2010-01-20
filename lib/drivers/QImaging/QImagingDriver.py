@@ -73,43 +73,37 @@ def listParams():
     The key is the name of the parameter, while the value is the range of possible values."""
     s = call(lib.ReadSettingsFromCam, handle)[1]
     s.size = sizeof(s)
-    for x in lib('enums', 'QCam_Param'): 
-        if lib.IsParamSupported(handle, getattr(lib, x))() == 0:
-            if lib.IsSparseTable(byref(s), getattr(lib,x))() ==0:
+    for x in lib('enums', 'QCam_Param'):
+        if lib.GetParam(byref(s), getattr(lib, x))() == 0:
+            print x
+            try:
                 table = (c_ulong *32)()
                 r = call(lib.GetParamSparseTable, byref(s), getattr(lib,x), table, c_long(32))
                 parameters[x] = (list(r[2])[:r[3]])
-            elif lib.IsRangeTable(byref(s), getattr(lib,x))() ==0:
-                print x
+            except:
                 min = call(lib.GetParamMin, byref(s), getattr(lib,x))[2]
                 max = call(lib.GetParamMax, byref(s), getattr(lib,x))[2]
                 parameters[x] = (min, max)
-            else:
-                raise Exception('Error finding type for parameter ', x)
     for x in lib('enums', 'QCam_ParamS32'):
-        if lib.IsParamS32Supported(handle, getattr(lib, x))() == 0:
-            if lib.IsRangeTableS32(byref(s), getattr(lib,x))() ==0:
+        if lib.GetParamS32(byref(s), getattr(lib, x))() == 0:
+            try:
                 min = call(lib.GetParamS32Min, byref(s), getattr(lib,x))[2]
                 max = call(lib.GetParamS32Max, byref(s), getattr(lib,x))[2]
                 parameters[x] = (min, max)
-            elif lib.IsSparseTableS32(byref(s), getattr(lib,x))() ==0:
+            except:
                 table = (c_ulong *32)()
                 r = call(lib.GetParamSparseTableS32, byref(s), getattr(lib,x), table, c_long(32))
                 parameters[x] = (list(r[2])[:r[3]])
-            else:
-                raise Exception('Error finding type for parameter ', x)
     for x in lib('enums', 'QCam_Param64'):
-        if lib.IsParam64Supported(handle, getattr(lib, x))() == 0:
-            if lib.IsRangeTable64(byref(s), getattr(lib,x))() ==0:
+        if lib.GetParam64(byref(s), getattr(lib, x))() == 0:
+            try:
                 min = call(lib.GetParam64Min, byref(s), getattr(lib,x))[2]
                 max = call(lib.GetParam64Max, byref(s), getattr(lib,x))[2]
                 parameters[x] = (min, max)
-            elif lib.IsSparseTable64(byref(s), getattr(lib,x))() ==0:
+            except:
                 table = (c_ulong *32)()
                 r = call(lib.GetParamSparseTable64, byref(s), getattr(lib,x), table, c_long(32))
                 parameters[x] = (list(r[2])[:r[3]])
-            else:
-                raise Exception('Error finding type for parameter ', x)
                 
 camerainfo = {}
 def getCameraInfo():
