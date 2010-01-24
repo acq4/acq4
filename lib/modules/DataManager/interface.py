@@ -238,7 +238,7 @@ class DataManager(Module):
             
         lines = []
         for msg in log:
-            t = time.strftime('%Y.%m.%d %H:%m:%S', time.localtime(msg['__timestamp__']))
+            t = time.strftime('%Y.%m.%d %H:%M:%S', time.localtime(msg['__timestamp__']))
             style = 'color: #000; font-style: normal'
             sourceStyles = {
                 'user': 'color: #008; font-style: italic'

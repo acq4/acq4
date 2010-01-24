@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'CameraTemplate.ui'
 #
-# Created: Tue Jan 19 17:03:27 2010
+# Created: Tue Jan 19 17:36:11 2010
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -118,28 +118,24 @@ class Ui_MainWindow(object):
         self.histogram.setObjectName("histogram")
         self.hboxlayout2.addWidget(self.histogram)
         self.sliderWhiteLevel = QtGui.QSlider(self.dockWidgetContents_2)
-        self.sliderWhiteLevel.setStyleSheet("""QSlider {
-    background-color: white;
-}""")
         self.sliderWhiteLevel.setMaximum(10000)
         self.sliderWhiteLevel.setSingleStep(10)
         self.sliderWhiteLevel.setPageStep(200)
         self.sliderWhiteLevel.setProperty("value", QtCore.QVariant(10000))
         self.sliderWhiteLevel.setSliderPosition(10000)
         self.sliderWhiteLevel.setOrientation(QtCore.Qt.Vertical)
+        self.sliderWhiteLevel.setTickPosition(QtGui.QSlider.TicksAbove)
+        self.sliderWhiteLevel.setTickInterval(1000)
         self.sliderWhiteLevel.setObjectName("sliderWhiteLevel")
         self.hboxlayout2.addWidget(self.sliderWhiteLevel)
         self.sliderBlackLevel = QtGui.QSlider(self.dockWidgetContents_2)
-        self.sliderBlackLevel.setStyleSheet("""QSlider {
-    background-color: black;
-}""")
         self.sliderBlackLevel.setMaximum(10000)
         self.sliderBlackLevel.setSingleStep(10)
         self.sliderBlackLevel.setPageStep(200)
         self.sliderBlackLevel.setOrientation(QtCore.Qt.Vertical)
         self.sliderBlackLevel.setInvertedAppearance(False)
         self.sliderBlackLevel.setInvertedControls(False)
-        self.sliderBlackLevel.setTickPosition(QtGui.QSlider.NoTicks)
+        self.sliderBlackLevel.setTickPosition(QtGui.QSlider.TicksAbove)
         self.sliderBlackLevel.setTickInterval(1000)
         self.sliderBlackLevel.setObjectName("sliderBlackLevel")
         self.hboxlayout2.addWidget(self.sliderBlackLevel)

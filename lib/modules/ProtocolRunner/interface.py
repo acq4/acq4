@@ -751,7 +751,10 @@ class ProtocolRunner(Module, QtCore.QObject):
     def taskStarted(self, params):
         cur = 'Current iteration:\n'
         plist = self.ui.sequenceParamList.listParams()
-        nums = [str(params[p[:2]]) for p in plist]
+        try:
+            nums = [str(params[p[:2]]) for p in plist]
+        except:
+            nums = []
         cur += ',  '.join(nums)
         self.ui.seqCurrentLabel.setText(cur)
         self.emit(QtCore.SIGNAL('taskStarted'), params)

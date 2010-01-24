@@ -543,6 +543,7 @@ class PVCamera(QtGui.QMainWindow):
         
     @trace
     def setExposure(self, e=None):
+        #print "Set exposure:", e
         if e is not None:
             self.exposure = e
         self.acquireThread.setParam('exposure', self.exposure)

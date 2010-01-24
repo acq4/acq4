@@ -234,9 +234,6 @@ class MultiClamp(Device):
                 self.setHolding(mode)
             #print "  set mode"
             self.mc.setMode(mode)
-            
-            ## Clamp should not be used until it has had time to settle after switching modes. (?)
-            #self.readyTime = ptime.time() + 0.1
 
     def getDAQName(self):
         """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""

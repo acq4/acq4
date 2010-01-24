@@ -602,8 +602,8 @@ class AcquireThread(QtCore.QThread):
             start = True
             #print "Camera.setParam: Stopping camera before setting parameter.."
             self.stop(block=True)
-            #print "Camera.setPAram: camera stopped"
-        with MutexLocker(self.lock):
+            #print "Camera.setParam: camera stopped"
+        with self.lock:
             self.state[param] = value
         if start:
             #self.start(QtCore.QThread.HighPriority)
@@ -644,7 +644,9 @@ class AcquireThread(QtCore.QThread):
             printRingSize = False
             while True:
                 try:
+                    #print "Starting camera: ", self.ringSize, binning, exposure, region
                     self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region, mode=mode)
+                    #print "Camera started."
                     break
                 except Exception, e:
                     if len(e.args) == 2 and e.args[1] == 15:

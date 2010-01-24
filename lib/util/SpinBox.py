@@ -12,7 +12,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
       - Support for sequence variables (for ProtocolRunner)
     """
     
-    def __init__(self, *args):
+    def __init__(self, *args, **kwargs):
         QtGui.QAbstractSpinBox.__init__(self)
         self.opts = {
             'bounds': [None, None],
@@ -33,11 +33,18 @@ class SpinBox(QtGui.QAbstractSpinBox):
             
             'suffix': '',
             'siPrefix': False,
-            'delay': False
+            'delay': False,
+            'delayUntilEditFinished': True
         }
         self.val = 0.0
         self.updateText()
+        self.skipValidate = False
         self.setCorrectionMode(self.CorrectToPreviousValue)
+        self.setOpts(**kwargs)
+        
+        QtCore.QObject.connect(self, QtCore.SIGNAL('editingFinished()'), self.editingFinished)
+        #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('returnPressed()'), self.editingFinished)
+        #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('textChanged()'), self.textChanged)
         
     ##lots of config options, just gonna stuff 'em all in here rather than do the get/set crap.
     def setOpts(self, **opts):
@@ -48,8 +55,8 @@ class SpinBox(QtGui.QAbstractSpinBox):
     def stepEnabled(self):
         return self.StepUpEnabled | self.StepDownEnabled        
     
-    def fixup(self, *args):
-        print "fixup:", args
+    #def fixup(self, *args):
+        #print "fixup:", args
     
     def stepBy(self, n):
         s = [-1, 1][n >= 0]
@@ -66,15 +73,17 @@ class SpinBox(QtGui.QAbstractSpinBox):
                     vs = [-1, 1][val >= 0]
                     exp = int(log(abs(val*(1.01**(s*vs)))) / log(10))
                     exp = max(exp, self.opts['minStep'])
-                step = self.opts['step'] * 10 ** exp
+                step = self.opts['step'] * 10**exp
                 val += s * step
-                if abs(val) < self.opts['minStep']:
-                    val = 0.0
             else:
                 val += s*self.opts['step']
+                
+            if abs(val) < self.opts['minStep']:
+                val = 0.0
         self.setValue(val)
         
-    def setValue(self, value):
+    def setValue(self, value, update=True):
+        #print "setValue:", value
         bounds = self.opts['bounds']
         if bounds[0] is not None and value < bounds[0]:
             return
@@ -82,30 +91,73 @@ class SpinBox(QtGui.QAbstractSpinBox):
             return
             
         self.val = value
-        self.updateText()
+        if update:
+            self.updateText()
         self.emit(QtCore.SIGNAL('valueChanged(double)'), self.val)
-        
+        self.lineEdit().setStyleSheet('border: 0px;')
+
+    def value(self):
+        return self.val
+
     def updateText(self):
+        #print "Update text."
+        self.skipValidate = True
         if self.opts['siPrefix']:
             self.lineEdit().setText(siFormat(self.val, suffix=self.opts['suffix']))
         else:
             self.lineEdit().setText('%g%s' % (self.val , self.opts['suffix']))
+        self.skipValidate = False
         
     def validate(self, strn, pos):
+        if self.skipValidate:
+            return (QtGui.QValidator.Acceptable, pos)
         #print "Validate:", strn, pos
         try:
-            self.interpretText(strn)
+            val = self.interpret()
+            if val is False:
+                return (QtGui.QValidator.Invalid, pos)
+                
+            if not self.opts['delayUntilEditFinished']:
+                self.setValue(val, update=False)
             #print "  OK:", self.val
+            self.lineEdit().setStyleSheet('border: 0px;')
+            
             return (QtGui.QValidator.Acceptable, pos)
         except:
             #print "  BAD"
+            
+            self.lineEdit().setStyleSheet('border: 2px solid #C55;')
             return (QtGui.QValidator.Intermediate, pos)
         
-    def interpretText(self, strn=None):
-        if strn is None:
-            strn = self.lineEdit().text()
-        self.setValue(siEval(strn))
-        QtGui.QAbstractSpinBox.interpretText(self)
+    def interpret(self):
+        """Return value of text. Return False if text is invalid, raise exception if text is intermediate"""
+        strn = self.lineEdit().text()
+        suf = self.opts['suffix']
+        if strn[-len(suf):] != suf:
+            return False
+            #raise Exception("Units are invalid.")
+        strn = strn[:-len(suf)]
+        return siEval(strn)
         
         
+    #def interpretText(self, strn=None):
+        #print "Interpret:", strn
+        #if strn is None:
+            #strn = self.lineEdit().text()
+        #self.setValue(siEval(strn), update=False)
+        ##QtGui.QAbstractSpinBox.interpretText(self)
         
+        
+    def editingFinished(self):
+        """Edit has finished; set value."""
+        #print "Edit finished."
+        try:
+            val = self.interpret()
+            self.setValue(val)  ## allow text update so that values are reformatted pretty-like
+        except:
+            pass
+        
+    #def textChanged(self):
+        #print "Text changed."
+        
+    

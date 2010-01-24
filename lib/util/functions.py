@@ -45,7 +45,7 @@ def siFormat(x, precision=3, space=True, error=None, minVal=1e-25, suffix=''):
     
 def siEval(s):
     """Convert a value written in SI notation to its equivalent prefixless value"""
-    m = re.match(r'(-?((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?)\s*([u' + SI_PREFIXES + r']?)', s)
+    m = re.match(r'(-?((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?)\s*([u' + SI_PREFIXES + r']?)$', s)
     if m is None:
         raise Exception("Can't convert string '%s' to number." % s)
     v = float(m.groups()[0])

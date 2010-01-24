@@ -246,6 +246,8 @@ class ScannerProtoGui(ProtocolGui):
     def delete(self):
         row = self.ui.itemList.currentRow()
         item = self.ui.itemList.takeItem(row)
+        if item is None:
+            return
         name = str(item.text())
         i = self.items[name]
         #self.removeItemPoints(i)
