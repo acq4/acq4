@@ -1,0 +1,153 @@
+// !$*UTF8*$!
+{
+	08FB7793FE84155DC02AAC07 /* Project object */ = {
+		activeBuildConfigurationName = Debug;
+		activeExecutable = 24E1C6D9110A0B54002C9333 /* QImagingTest */;
+		activeTarget = 8DD76FA90486AB0100D96B5E /* QImagingTest */;
+		addToTargets = (
+			8DD76FA90486AB0100D96B5E /* QImagingTest */,
+		);
+		codeSenseManager = 24E1C6DD110A0B75002C9333 /* Code sense */;
+		executables = (
+			24E1C6D9110A0B54002C9333 /* QImagingTest */,
+		);
+		perUserDictionary = {
+			PBXConfiguration.PBXFileTableDataSource3.PBXFileTableDataSource = {
+				PBXFileTableDataSourceColumnSortingDirectionKey = "-1";
+				PBXFileTableDataSourceColumnSortingKey = PBXFileDataSource_Filename_ColumnID;
+				PBXFileTableDataSourceColumnWidthsKey = (
+					20,
+					341,
+					20,
+					48.16259765625,
+					43,
+					43,
+					20,
+				);
+				PBXFileTableDataSourceColumnsKey = (
+					PBXFileDataSource_FiletypeID,
+					PBXFileDataSource_Filename_ColumnID,
+					PBXFileDataSource_Built_ColumnID,
+					PBXFileDataSource_ObjectSize_ColumnID,
+					PBXFileDataSource_Errors_ColumnID,
+					PBXFileDataSource_Warnings_ColumnID,
+					PBXFileDataSource_Target_ColumnID,
+				);
+			};
+			PBXPerProjectTemplateStateSaveDate = 285870932;
+			PBXWorkspaceStateSaveDate = 285870932;
+		};
+		perUserProjectItems = {
+			24E1C6EE110A3CF3002C9333 /* PBXTextBookmark */ = 24E1C6EE110A3CF3002C9333 /* PBXTextBookmark */;
+			24E1C6F9110A3D01002C9333 /* PBXTextBookmark */ = 24E1C6F9110A3D01002C9333 /* PBXTextBookmark */;
+			24E1C6FA110A3D01002C9333 /* PBXTextBookmark */ = 24E1C6FA110A3D01002C9333 /* PBXTextBookmark */;
+			24E1C6FB110A3D01002C9333 /* PBXTextBookmark */ = 24E1C6FB110A3D01002C9333 /* PBXTextBookmark */;
+			24E1C70D110AC707002C9333 /* PBXTextBookmark */ = 24E1C70D110AC707002C9333 /* PBXTextBookmark */;
+		};
+		sourceControlManager = 24E1C6DC110A0B75002C9333 /* Source Control */;
+		userBuildSettings = {
+		};
+	};
+	08FB7796FE84155DC02AAC07 /* main.c */ = {
+		uiCtxt = {
+			sepNavIntBoundsRect = "{{0, 0}, {519, 1240}}";
+			sepNavSelRange = "{19, 21}";
+			sepNavVisRange = "{0, 270}";
+		};
+	};
+	24E1C6D9110A0B54002C9333 /* QImagingTest */ = {
+		isa = PBXExecutable;
+		activeArgIndices = (
+		);
+		argumentStrings = (
+		);
+		autoAttachOnCrash = 1;
+		breakpointsEnabled = 1;
+		configStateDict = {
+		};
+		customDataFormattersEnabled = 1;
+		debuggerPlugin = GDBDebugging;
+		disassemblyDisplayState = 0;
+		enableDebugStr = 1;
+		environmentEntries = (
+		);
+		executableSystemSymbolLevel = 0;
+		executableUserSymbolLevel = 0;
+		libgmallocEnabled = 0;
+		name = QImagingTest;
+		sourceDirectories = (
+		);
+	};
+	24E1C6DC110A0B75002C9333 /* Source Control */ = {
+		isa = PBXSourceControlManager;
+		fallbackIsa = XCSourceControlManager;
+		isSCMEnabled = 0;
+		scmConfiguration = {
+		};
+	};
+	24E1C6DD110A0B75002C9333 /* Code sense */ = {
+		isa = PBXCodeSenseManager;
+		indexTemplatePath = "";
+	};
+	24E1C6EE110A3CF3002C9333 /* PBXTextBookmark */ = {
+		isa = PBXTextBookmark;
+		comments = "error: QCamApi.h: No such file or directory";
+		fRef = 08FB7796FE84155DC02AAC07 /* main.c */;
+		rLen = 1;
+		rLoc = 1;
+		rType = 1;
+	};
+	24E1C6F9110A3D01002C9333 /* PBXTextBookmark */ = {
+		isa = PBXTextBookmark;
+		fRef = C6A0FF2C0290799A04C91782 /* QImagingTest.1 */;
+		name = "QImagingTest.1: 1";
+		rLen = 0;
+		rLoc = 0;
+		rType = 0;
+		vrLen = 926;
+		vrLoc = 0;
+	};
+	24E1C6FA110A3D01002C9333 /* PBXTextBookmark */ = {
+		isa = PBXTextBookmark;
+		fRef = 08FB7796FE84155DC02AAC07 /* main.c */;
+		name = "main.c: 1";
+		rLen = 0;
+		rLoc = 0;
+		rType = 0;
+		vrLen = 137;
+		vrLoc = 0;
+	};
+	24E1C6FB110A3D01002C9333 /* PBXTextBookmark */ = {
+		isa = PBXTextBookmark;
+		fRef = C6A0FF2C0290799A04C91782 /* QImagingTest.1 */;
+		name = "QImagingTest.1: 1";
+		rLen = 0;
+		rLoc = 0;
+		rType = 0;
+		vrLen = 926;
+		vrLoc = 0;
+	};
+	24E1C70D110AC707002C9333 /* PBXTextBookmark */ = {
+		isa = PBXTextBookmark;
+		fRef = 08FB7796FE84155DC02AAC07 /* main.c */;
+		name = "main.c: 2";
+		rLen = 21;
+		rLoc = 19;
+		rType = 0;
+		vrLen = 245;
+		vrLoc = 0;
+	};
+	8DD76FA90486AB0100D96B5E /* QImagingTest */ = {
+		activeExec = 0;
+		executables = (
+			24E1C6D9110A0B54002C9333 /* QImagingTest */,
+		);
+	};
+	C6A0FF2C0290799A04C91782 /* QImagingTest.1 */ = {
+		uiCtxt = {
+			sepNavIntBoundsRect = "{{0, 0}, {546, 1050}}";
+			sepNavSelRange = "{0, 0}";
+			sepNavVisRange = "{0, 926}";
+		};
+	};
+}
