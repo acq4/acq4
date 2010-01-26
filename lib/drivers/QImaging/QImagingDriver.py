@@ -166,15 +166,15 @@ loadDriver()
 cameras = listCameras()
 handle = openCamera(cameras[0])
 setParam(lib.qprmDoPostProcessing, 0)
-setParams(qprmExposure=100)
+setParams(qprmExposure=10000)
 #setParams(qprmExposureRed=0, qprmExposureBlue=0)
 setParams(qprmReadoutSpeed=lib.qcReadout20M)
 
-setParams(qprmTriggerType=lib.qcTriggerFreerun, qprmImageFormat=lib.qfmtMono16)
+setParams(qprmTriggerType=lib.qcTriggerFreerun, qprmImageFormat=lib.qfmtMono8)
 
 
 
-#getCameraInfo()
+getCameraInfo()
 #print camerainfo
 
 
@@ -194,4 +194,10 @@ qf = lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, 10)
 print qf()
 print qf[1]
 
-#app = QtGui.QApplication([])
+app = QtGui.QApplication([])
+
+a.shape = (camerainfo['qinfCcdWidth'], camerainfo['qinfCcdHeight'])
+imw1 = gw.ImageWindow(a)
+imw1.show()
+
+
