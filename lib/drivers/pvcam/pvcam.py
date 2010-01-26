@@ -52,38 +52,9 @@ class _CameraClass:
         
         self.setParams(params)
             
-        ## This stuff should be moved out to separate functions..
         ##   - PARAM_BIT_DEPTH, PARAM_PIX_TIME, and PARAM_GAIN_INDEX(ATTR_MAX)
         ##     are determined by setting PARAM_READOUT_PORT and PARAM_SPDTAB_INDEX 
         ##   - PARAM_GAIN_INDEX must be set AFTER setting PARAM_SPDTAB_INDEX
-
-        #self.setParam(PARAM_READOUT_PORT, 0)  ## Only option for Q57
-        ##self.setParam(PARAM_SPDTAB_INDEX, 2)  ## Fastest option for Q57
-        #self.setParam(PARAM_SPDTAB_INDEX, 0)  ## Fastest option for QM512
-        #self.setParam(PARAM_GAIN_INDEX, 3)
-        #self.setParam(PARAM_PMODE, PMODE_NORMAL)  ## PMODE_FT ?
-        #self.setParam(PARAM_SHTR_OPEN_MODE, OPEN_PRE_SEQUENCE)
-        ##self.setParam(PARAM_CLEAR_MODE, CLEAR_PRE_EXPOSURE)
-        #self.setParam(PARAM_CLEAR_MODE, CLEAR_PRE_SEQUENCE)  ## Overlapping mode for QuantEM cameras
-        #self.setParam(PARAM_CLEAR_CYCLES, 2)
-        
-    #def listTransferModes(self):
-        #return self.getEnumList(PARAM_PMODE)[0]
-        
-    #def setTransferMode(self, mode):
-        #self.setEnum(PARAM_PMODE, mode)
-
-    #def getTransferMode(self):
-        #return self.getEnum(PARAM_PMODE)
-        
-    #def listShutterModes(self):
-        #return self.getEnumList(PARAM_SHTR_OPEN_MODE)[0]
-        
-    #def setShutterMode(self, mode):
-        #self.setEnum(PARAM_SHTR_OPEN_MODE, mode)
-
-    #def getShutterMode(self):
-        #return self.getEnum(PARAM_SHTR_OPEN_MODE)
         
     def getEnum(self, param):
         l = self.getEnumList(param)

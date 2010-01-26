@@ -10,6 +10,7 @@ from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
 from lib.util.Mutex import Mutex, MutexLocker
 from lib.util.debug import *
+import ptime
 import analysisModules
 import time
 import sip
@@ -300,6 +301,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         if len(items) == 0:
             self.ui.paramSpaceLabel.setText('0')
             self.ui.seqTimeLabel.setText('0')
+            tot = 0
         else:
             #ps = [str(i.text(2)) for i in items]
             psi = [i[2] for i in items]
@@ -307,6 +309,14 @@ class ProtocolRunner(Module, QtCore.QObject):
             tot = reduce(lambda x,y: x*y, psi)
             self.ui.paramSpaceLabel.setText(' x '.join(ps) + ' = %d' % tot)
             self.ui.seqTimeLabel.setText('%0.3f sec' % (period*tot))
+            
+        if tot == 0:
+            self.ui.testSequenceBtn.setEnabled(False)
+            self.ui.runSequenceBtn.setEnabled(False)
+        else:
+            self.ui.testSequenceBtn.setEnabled(True)
+            self.ui.runSequenceBtn.setEnabled(True)
+            
         
     def hideDock(self, dev):
         self.docks[dev].hide()
@@ -609,7 +619,7 @@ class ProtocolRunner(Module, QtCore.QObject):
             #traceback.print_stack()
             #print "Task already running."
 
-        self.lastProtoTime = time.clock()
+        self.lastProtoTime = ptime.time()
         ## Disable all start buttons
         self.enableStartBtns(False)
         
@@ -776,7 +786,7 @@ class ProtocolRunner(Module, QtCore.QObject):
         ## If this is a single-mode protocol and looping is turned on, schedule the next run
         if self.loopEnabled:
             ct = self.protoStateGroup.state()['loopCycleTime']
-            t = max(0, ct - (time.clock() - self.lastProtoTime))
+            t = max(0, ct - (ptime.time() - self.lastProtoTime))
             QtCore.QTimer.singleShot(int(t*1000.), self.loop)
             
     def loop(self):
@@ -978,7 +988,7 @@ class TaskThread(QtCore.QThread):
                     
     def runOnce(self, params=None):
         #print "TaskThread:runOnce"
-       
+        startTime = ptime.time()
         if params is None:
             params = {}
         with MutexLocker(self.lock) as l:
@@ -995,7 +1005,7 @@ class TaskThread(QtCore.QThread):
             #print "Protocol:", cmd
                     
             ## Wait before starting if we've already run too recently
-            while (self.lastRunTime is not None) and (time.clock() < self.lastRunTime + cmd['protocol']['cycleTime']):
+            while (self.lastRunTime is not None) and (ptime.time() < self.lastRunTime + cmd['protocol']['cycleTime']):
                 l.relock()
                 if self.abortThread or self.stopThread:
                     l.unlock()
@@ -1022,19 +1032,33 @@ class TaskThread(QtCore.QThread):
                 print "Params:", params
                 print "==========================="
                 raise Exception("ProtocolRunner.runOnce failed to generate a proper command structure. Object type was '%s', should have been 'dict'." % type(cmd))
+                
+            #from debug import Profiler
+            #prof = Profiler()
             task = self.dm.createTask(cmd)
-            self.lastRunTime = time.clock()
+            #prof.mark('create task')
+            
+            self.lastRunTime = ptime.time()
             self.emit(QtCore.SIGNAL('taskStarted'), params)
+            
             try:
                 task.execute(block=False)
+                #prof.mark('execute')
             except:
+                try:
+                    task.stop(abort=True)
+                except:
+                    pass
                 printExc("\nError starting protocol:")
                 raise
-
+            
+            ### Do not put code outside of these try: blocks; may cause device lockup
+            
             try:
                 ## wait for finish, watch for abort requests
                 while True:
                     if task.isDone():
+                        #prof.mark('task done')
                         break
                     l.relock()
                     if self.abortThread:
@@ -1049,42 +1073,17 @@ class TaskThread(QtCore.QThread):
                 ## Make sure the task is fully stopped if there was a failure at any point.
                 printExc("\nError during protocol execution:")
                 print "\nStopping task.."
-                task.stop()
+                task.stop(abort=True)
                 print ""
                 raise
             #print "\nAFTER:\n", cmd
+            #prof.mark('getResult')
             
         frame = {'params': params, 'cmd': cmd, 'result': result}
         self.emit(QtCore.SIGNAL('newFrame'), frame)
         if self.stopThread:
             raise Exception('stop', result)
-        
-        #import gc
-        #from lib.util.PlotWidget import PlotCurve
-        #from PyQt4 import Qwt5
-        #import lib.Manager
-        #from lib.devices.MultiClamp import Task as MCTask
-        #from lib.devices.DAQGeneric import DAQGenericTask
-        ##print "PlotCurve:", len(filter(lambda x: isinstance(x, PlotCurve), gc.get_objects()))
-        ##print "QwtPlotCurve:", len(filter(lambda x: isinstance(x, Qwt5.QwtPlotCurve), gc.get_objects()))
-        ##print "MetaArray:", len(filter(lambda x: isinstance(x, MetaArray), gc.get_objects()))
-        ##print "ndarray:", len(filter(lambda x: isinstance(x, ndarray), gc.get_objects()))
-        #print "list:", len(filter(lambda x: isinstance(x, list), gc.get_objects()))
-        #print "dict:", len(filter(lambda x: isinstance(x, dict), gc.get_objects()))
-        #print "Task:", len(filter(lambda x: isinstance(x, lib.Manager.Task), gc.get_objects()))
-        #print "MCTask:", len(filter(lambda x: isinstance(x, MCTask), gc.get_objects()))
-        #print "DaqTask:", len(filter(lambda x: isinstance(x, DAQGenericTask), gc.get_objects()))
-        #print ""
-        
-        #def fn(x, arr):
-            #try:
-                #return x not in arr
-            #except:
-                #return False
-        #if self.objs is None:
-            #self.objs = gc.get_objects()
-        #objs = filter(lambda x: fn(x, self.objs), gc.get_objects())
-        #print "Currently tracking %d" % len(objs)
+        #print "Total run time: %gms" % ((ptime.time() - startTime) * 1000 )
         
         
         

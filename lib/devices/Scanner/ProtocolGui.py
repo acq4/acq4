@@ -53,9 +53,10 @@ class ScannerProtoGui(ProtocolGui):
         QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('toggled(bool)'), self.showInterface)
         QtCore.QObject.connect(self.ui.cameraCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.camModChanged)
         QtCore.QObject.connect(self.ui.packingSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateSpotSizes)
+        QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
+        QtCore.QObject.connect(self.ui.minDistSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.generateTargets)
         QtCore.QObject.connect(dm, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
-        
 
         self.testTarget = TargetPoint([0,0], self.pointSize())
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
@@ -297,6 +298,7 @@ class ScannerProtoGui(ProtocolGui):
         self.sequenceChanged()
     
     def sequenceChanged(self):
+        self.targets = None
         self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
 
     def generateTargets(self):

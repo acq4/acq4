@@ -765,7 +765,6 @@ class PVCamera(QtGui.QMainWindow):
             if (self.lastDrawTime is not None) and (t - self.lastDrawTime < .016666):
                 #sys.stdout.write('-')
                 return
-            
             ## if there is no new frame and no controls have changed, just exit
             if not self.updateFrame and self.nextFrame is None:
                 #sys.stdout.write('-')
@@ -891,7 +890,7 @@ class PVCamera(QtGui.QMainWindow):
 
     def updateHistogram(self, data, wl, bl):
         now = time.time()
-        if now > self.lastHistogramUpdate + 0.1:
+        if now > self.lastHistogramUpdate + 0.2:
             avg = data.mean()
             self.avgLevelLine.setLine(0.0, avg, 1.0, avg)
             h = histogram(data, bins=500)

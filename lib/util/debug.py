@@ -6,7 +6,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 import sys, traceback, time, gc, re
-
+import ptime
 
 def ftrace(func):
     ## Use as decorator to mark beginning and end of functions
@@ -95,6 +95,11 @@ def describeObj(__XX__Obj, depth=4, printResult=True, ignoreNames=None):
                     
     
     
+class Profiler:
+    def __init__(self):
+        self.t0 = ptime.time()
     
-    
-    
+    def mark(self, msg):
+        t1 = ptime.time()
+        print msg, "%gms" % ((t1-self.t0)*1000)
+        self.t0 = t1

@@ -137,6 +137,7 @@ class ScannerTask(DeviceTask):
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
         self.daqTasks = []
+        self.spotSize = None
 
     def configure(self, tasks, startOrder):
         with MutexLocker(self.dev.lock):
@@ -145,6 +146,8 @@ class ScannerTask(DeviceTask):
                 self.dev.setCommand(self.cmd['command'])
             elif 'position' in self.cmd:
                 self.dev.setPosition(self.cmd['position'], self.cmd['camera'], self.cmd['laser'])
+            if 'camera' in self.cmd and 'laser' in self.cmd:
+                self.spotSize = self.dev.getCalibration(self.cmd['camera'], self.cmd['laser'])['spot'][1]
         
     def createChannels(self, daqTask):
         self.daqTasks = []
@@ -192,6 +195,8 @@ class ScannerTask(DeviceTask):
         for k in ['position', 'command']:
             if k in self.cmd:
                 result[k] = self.cmd[k]
+        if self.spotSize is not None:
+            result['spotSize'] = self.spotSize
         return result
     
     def storeResult(self, dirHandle):

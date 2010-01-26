@@ -31,6 +31,7 @@ from lib.util import configfile
 from lib.util.Mutex import Mutex
 from lib.util.debug import *
 import getopt, glob
+import ptime
 #import pdb
 
 ### All other modules can use this function to get the manager instance
@@ -541,6 +542,9 @@ class Task:
         #print "======================="
         
         ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
+        #from debug import Profiler
+        #prof = Profiler()
+        
         try:
         
             #print "execute:", self.tasks
@@ -556,7 +560,7 @@ class Task:
             finally:
                 self.dm.unlockReserv()
                 
-
+            #prof.mark('reserve')
 
             ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
             ## This is how we allow multiple devices to communicate and decide how to operate together.
@@ -565,10 +569,13 @@ class Task:
             self.startOrder = self.devs.keys()
             for devName in self.tasks:
                 self.tasks[devName].configure(self.tasks, self.startOrder)
+                #prof.mark('configure %s' % devName)
             #print "done"
 
             if 'leadTime' in self.cfg:
                 time.sleep(self.cfg['leadTime'])
+                
+            #prof.mark('leadSleep')
 
             self.result = None
             
@@ -580,6 +587,7 @@ class Task:
                 #print "  ", devName
                 self.tasks[devName].start()
                 self.startedDevs.append(devName)
+                #prof.mark('start %s' % devName)
             self.startTime = ptime.time()
             #print "  %d Task started" % self.id
                 

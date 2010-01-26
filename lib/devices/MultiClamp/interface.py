@@ -275,13 +275,17 @@ class MultiClampTask(DeviceTask):
         """Sets the state of a remote multiclamp to prepare for a program run."""
         #print "mc configure"
         with MutexLocker(self.dev.lock):
-                
+            
+            #from debug import Profiler
+            #prof = Profiler()
             ## Set state of clamp
             self.dev.setMode(self.cmd['mode'])
             if self.cmd['primary'] is not None:
                 self.dev.mc.setPrimarySignal(self.cmd['primary'])
             if self.cmd['secondary'] is not None:
                 self.dev.mc.setSecondarySignal(self.cmd['secondary'])
+
+            #prof.mark('    Multiclamp: set state')   ## ~300ms if the commander has to do a page-switch.
 
             if 'primaryGain' in self.cmd:
                 self.dev.mc.setParam('PrimarySignalGain', self.cmd['primaryGain'])
@@ -292,14 +296,26 @@ class MultiClampTask(DeviceTask):
                 except:
                     printExc("Warning -- set secondary signal gain failed.")
 
+            #prof.mark('    Multiclamp: set gains')
+
+
             if self.cmd.has_key('parameters'):
                 self.dev.mc.setParams(self.cmd['parameters'])
-            
+
+            #prof.mark('    Multiclamp: set params')
+
+
             self.state = self.dev.mc.getState()
+            
+            #prof.mark('    Multiclamp: get state')
+            
             if self.cmd.has_key('recordState') and self.cmd['recordState'] is True:
                 exState = self.dev.mc.getParams(MultiClampTask.recordParams)
                 for k in exState:
                     self.state[k] = exState[k]
+                    
+            #prof.mark('    Multiclamp: recordState?')
+                    
                 
             #self.state['primarySignal'] = self.dev.mc.getPrimarySignalInfo()
             #self.state['secondarySignal'] = self.dev.mc.getSecondarySignalInfo()
@@ -308,6 +324,7 @@ class MultiClampTask(DeviceTask):
             if 'holding' in self.cmd and self.cmd['mode'] != 'I=0':
                 self.dev.setHolding(self.cmd['mode'], self.cmd['holding'])
             #print "mc configure complete"
+            #prof.mark('    Multiclamp: set holding')
         
                 
     def getUsedChannels(self):
