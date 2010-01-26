@@ -1,10 +1,10 @@
-
+import time
 from ctypes import *
 import sys, os
 d = os.path.dirname(__file__)
 sys.path.append(os.path.join(d, '../../util'))
 from clibrary import *
-from numpy import empty, ubyte, ascontiguousarray
+from numpy import empty, uint16, ascontiguousarray
 from pyqtgraph import graphicsWindows as gw
 from PyQt4 import QtGui
 import atexit
@@ -54,7 +54,7 @@ def openCamera(cameraID): #opens the camera and returns the handle
 def mkFrame():
     s = call(lib.GetInfo, handle, lib.qinfImageSize)[2]
     f = lib.Frame()
-    frame = ascontiguousarray(empty(s, dtype=ubyte))
+    frame = ascontiguousarray(empty((10, s/2), dtype=uint16))[5]
     f.pBuffer = frame.ctypes.data
     f.bufferSize = s
     return (f, frame)
@@ -75,35 +75,38 @@ def listParams():
     s.size = sizeof(s)
     for x in lib('enums', 'QCam_Param'):
         if lib.GetParam(byref(s), getattr(lib, x))() == 0:
-            print x
             try:
-                table = (c_ulong *32)()
-                r = call(lib.GetParamSparseTable, byref(s), getattr(lib,x), table, c_long(32))
-                parameters[x] = (list(r[2])[:r[3]])
+                try:
+                    table = (c_ulong *32)()
+                    r = call(lib.GetParamSparseTable, byref(s), getattr(lib,x), table, c_long(32))
+                    parameters[x] = (list(r[2])[:r[3]])
+                except: ###Need to fix this so it only catches exceptions raised by call()
+                    min = call(lib.GetParamMin, byref(s), getattr(lib,x))[2]
+                    max = call(lib.GetParamMax, byref(s), getattr(lib,x))[2]
+                    parameters[x] = (min, max)
             except:
-                min = call(lib.GetParamMin, byref(s), getattr(lib,x))[2]
-                max = call(lib.GetParamMax, byref(s), getattr(lib,x))[2]
-                parameters[x] = (min, max)
+                p = lib.GetParam(byref(s), getattr(lib, x))[2]
+                parameters[x] = p
     for x in lib('enums', 'QCam_ParamS32'):
         if lib.GetParamS32(byref(s), getattr(lib, x))() == 0:
             try:
-                min = call(lib.GetParamS32Min, byref(s), getattr(lib,x))[2]
-                max = call(lib.GetParamS32Max, byref(s), getattr(lib,x))[2]
-                parameters[x] = (min, max)
-            except:
                 table = (c_ulong *32)()
                 r = call(lib.GetParamSparseTableS32, byref(s), getattr(lib,x), table, c_long(32))
                 parameters[x] = (list(r[2])[:r[3]])
+            except:
+                min = call(lib.GetParamS32Min, byref(s), getattr(lib,x))[2]
+                max = call(lib.GetParamS32Max, byref(s), getattr(lib,x))[2]
+                parameters[x] = (min, max)
     for x in lib('enums', 'QCam_Param64'):
         if lib.GetParam64(byref(s), getattr(lib, x))() == 0:
             try:
-                min = call(lib.GetParam64Min, byref(s), getattr(lib,x))[2]
-                max = call(lib.GetParam64Max, byref(s), getattr(lib,x))[2]
-                parameters[x] = (min, max)
-            except:
                 table = (c_ulong *32)()
                 r = call(lib.GetParamSparseTable64, byref(s), getattr(lib,x), table, c_long(32))
                 parameters[x] = (list(r[2])[:r[3]])
+            except:
+                min = call(lib.GetParam64Min, byref(s), getattr(lib,x))[2]
+                max = call(lib.GetParam64Max, byref(s), getattr(lib,x))[2]
+                parameters[x] = (min, max)
                 
 camerainfo = {}
 def getCameraInfo():
@@ -112,7 +115,7 @@ def getCameraInfo():
             a = call(lib.GetInfo, handle, getattr(lib, x))
             camerainfo[x] = a[2]
         except:
-            pass
+            print ("No info for: ", x)
             
             
     
@@ -165,39 +168,49 @@ def setParams(**params):
 loadDriver()
 cameras = listCameras()
 handle = openCamera(cameras[0])
-setParam(lib.qprmDoPostProcessing, 0)
-setParams(qprmExposure=10000)
-#setParams(qprmExposureRed=0, qprmExposureBlue=0)
-setParams(qprmReadoutSpeed=lib.qcReadout20M)
+#setParam(lib.qprmDoPostProcessing, 0)
+#setParams(qprmExposure=10000)
+##setParams(qprmExposureRed=0, qprmExposureBlue=0)
+#setParams(qprmReadoutSpeed=lib.qcReadout20M)
+#
+#setParams(qprmTriggerType=lib.qcTriggerFreerun, qprmImageFormat=lib.qfmtMono16)
 
-setParams(qprmTriggerType=lib.qcTriggerFreerun, qprmImageFormat=lib.qfmtMono8)
 
 
-
-getCameraInfo()
+#getCameraInfo()
 #print camerainfo
 
 
-b = lib.SetStreaming(handle, 1)
-n = 0
-def fn(*args):
-    #global n
-    #n +=1
-    print "CALLBACK:", args
-    #f, a = mkFrame()
-    #print '1.1'
-    #lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, n)
-    #print '1.2'
-f, a = mkFrame()
-
-qf = lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, 10)
-print qf()
-print qf[1]
-
-app = QtGui.QApplication([])
-
-a.shape = (camerainfo['qinfCcdWidth'], camerainfo['qinfCcdHeight'])
-imw1 = gw.ImageWindow(a)
-imw1.show()
-
-
+#b = lib.SetStreaming(handle, 1)
+#n = 0
+#def fn(*args):
+#    #global n
+#    #n +=1
+#    print "CALLBACK:", args
+#    print a.max(), a.min(), a.mean()
+#    #f, a = mkFrame()
+#    #print '1.1'
+#    #lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, n)
+#    #print '1.2'
+#f, a = mkFrame()
+#
+#print "Queue frame.."
+#qf = lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, 10)
+#print "Frame queued."
+##print qf()
+##print qf[1]
+#
+#time.sleep(3.0)
+#print "starting app.."
+#app = QtGui.QApplication([])
+#print "app started."
+#print a.shape, (camerainfo['qinfCcdWidth'], camerainfo['qinfCcdHeight'])
+#a.shape = (camerainfo['qinfCcdWidth'], camerainfo['qinfCcdHeight'])
+#print "create window"
+#imw1 = gw.ImageWindow(a)
+#print "show window"
+#imw1.show()
+#
+#print "Done."
+#
+#app.exec_()
