@@ -4,7 +4,7 @@ import sys, os
 d = os.path.dirname(__file__)
 sys.path.append(os.path.join(d, '../../util'))
 from clibrary import *
-from numpy import empty
+from numpy import empty, ubyte, ascontiguousarray
 from pyqtgraph import graphicsWindows as gw
 from PyQt4 import QtGui
 import atexit
@@ -54,7 +54,7 @@ def openCamera(cameraID): #opens the camera and returns the handle
 def mkFrame():
     s = call(lib.GetInfo, handle, lib.qinfImageSize)[2]
     f = lib.Frame()
-    frame = empty(s, dtype=ubyte)
+    frame = ascontiguousarray(empty(s, dtype=ubyte))
     f.pBuffer = frame.ctypes.data
     f.bufferSize = s
     return (f, frame)
@@ -108,8 +108,11 @@ def listParams():
 camerainfo = {}
 def getCameraInfo():
     for x in lib('enums', 'QCam_Info'):
-        a = call(lib.GetInfo, handle, getattr(lib, x))
-        camerainfo[x] = a[2]
+        try:
+            a = call(lib.GetInfo, handle, getattr(lib, x))
+            camerainfo[x] = a[2]
+        except:
+            pass
             
             
     
@@ -162,21 +165,33 @@ def setParams(**params):
 loadDriver()
 cameras = listCameras()
 handle = openCamera(cameras[0])
+setParam(lib.qprmDoPostProcessing, 0)
+setParams(qprmExposure=100)
+#setParams(qprmExposureRed=0, qprmExposureBlue=0)
+setParams(qprmReadoutSpeed=lib.qcReadout20M)
 
-#b = lib.SetStreaming(handle, 1)
-#n = 0
-#def fn(*args):
-#    #global n
-#    #n +=1
-#    print "CALLBACK:", args
-#    #f, a = mkFrame()
-#    #print '1.1'
-#    #lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, n)
-#    #print '1.2'
-#f, a = mkFrame()
-#
-#qf = lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, 0)
-#print qf()
-#print qf[1]
+setParams(qprmTriggerType=lib.qcTriggerFreerun, qprmImageFormat=lib.qfmtMono16)
+
+
+
+#getCameraInfo()
+#print camerainfo
+
+
+b = lib.SetStreaming(handle, 1)
+n = 0
+def fn(*args):
+    #global n
+    #n +=1
+    print "CALLBACK:", args
+    #f, a = mkFrame()
+    #print '1.1'
+    #lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, n)
+    #print '1.2'
+f, a = mkFrame()
+
+qf = lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, 10)
+print qf()
+print qf[1]
 
 #app = QtGui.QApplication([])
