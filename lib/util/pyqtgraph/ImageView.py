@@ -135,7 +135,7 @@ class ImageView(QtGui.QWidget):
         else:
             self.tVals = arange(img.shape[0])
         self.ui.timeSlider.setValue(0)
-        self.ui.normStartSlider.setValue(0)
+        #self.ui.normStartSlider.setValue(0)
         #self.ui.timeSlider.setMaximum(img.shape[0]-1)
             
         self.imageDisp = None

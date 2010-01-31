@@ -425,7 +425,7 @@ class Task(DAQGenericTask):
         self.stopRecording = False
         self.recording = True
         #self.recordHandle = CameraTask(self.dev.acqThread)  #self.dev.acqThread.startRecord()
-        ## start acquisition if needed
+            ## start acquisition if needed
         #print "Camera start:", self.camCmd
         
         ## all extra parameters should be passed on to the camera..

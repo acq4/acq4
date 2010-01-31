@@ -152,8 +152,10 @@ class MultiClamp(Device):
         
         with MutexLocker(self.lock):
             currentMode = self.mc.getMode()
-            if mode is None:
+            if mode is None:  ## If no mode is specified, use the current mode
                 mode = currentMode
+                if mode == 'I=0':  ## ..and if the current mode is I=0, do nothing.
+                    return
             if mode == 'I=0':
                 raise Exception("Can't set holding value for I=0 mode.")
             
