@@ -41,6 +41,9 @@ class DataManager(Module):
         QtCore.QObject.connect(self.ui.fileDisplayTabs, QtCore.SIGNAL('currentChanged(int)'), self.tabChanged)
         self.win.show()
         
+    def hasInterface(self, interface):
+        return interface in ['DataSource']
+
     def updateNewFolderList(self):
         self.ui.newFolderList.clear()
         conf = self.manager.config['folderTypes']

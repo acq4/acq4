@@ -26,10 +26,9 @@ class Window(QtGui.QMainWindow):
         ev.ignore()
         sip.delete(self)
 
-class ProtocolRunner(Module, QtCore.QObject):
+class ProtocolRunner(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
-        QtCore.QObject.__init__(self)
         self.lastProtoTime = None
         self.loopEnabled = False
         self.devListItems = {}
@@ -96,6 +95,9 @@ class ProtocolRunner(Module, QtCore.QObject):
         QtCore.QObject.connect(self.ui.sequenceParamList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.updateSeqReport)
         QtCore.QObject.connect(self.ui.analysisList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.analysisItemClicked)
         
+    def hasInterface(self, interface):
+        return interface in ['DataSource']
+
         
     def protoGroupChanged(self, param, value):
         self.emit(QtCore.SIGNAL('protocolChanged'), param, value)

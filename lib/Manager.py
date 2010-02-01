@@ -139,7 +139,7 @@ Valid options are:
         win = QtGui.QApplication.instance().activeWindow()
         #if win is None:   ## Breaks on some systems..
             #raise Exception("No GUI windows created during startup, exiting now.")
-        
+        print "active window:", win
         self.quitShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+q'), win)
         self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
         QtCore.QObject.connect(self.quitShortcut, QtCore.SIGNAL('activated()'), self.quit)
@@ -257,7 +257,9 @@ Valid options are:
         
     
     def loadDevice(self, driverName, conf, name):
-        mod = __import__('lib.devices.%s.interface' % driverName, fromlist=['*'])
+        """Load the code for a device. For this to work properly, there must be 
+        a python module called lib.devices.driverName which contains a class called driverName."""
+        mod = __import__('lib.devices.%s' % driverName, fromlist=['*'])
         devclass = getattr(mod, driverName)
         self.devices[name] = devclass(self, conf, name)
         return self.devices[name]
@@ -273,14 +275,18 @@ Valid options are:
         return self.devices.keys()
 
     def loadModule(self, module, name, config=None, forceReload=False):
-        """Create a new instance of a module"""
+        """Create a new instance of an acq4 module. For this to work properly, there must be 
+        a python module called lib.modules.moduleName which contains a class called moduleName.
+        Ugh. Sorry about the "python module" vs "acq4 module" name collision which I
+        should have anticipated."""
+        
         #print 'Loading module "%s" as "%s"...' % (module, name)
         if name in self.modules:
             raise Exception('Module already exists with name "%s"' % name)
         if config is None:
             config = {}
             
-        mod = __import__('lib.modules.%s.interface' % module, fromlist=['*'])
+        mod = __import__('lib.modules.%s' % module, fromlist=['*'])
         if forceReload:
             modDir = os.path.join('lib', 'modules', module)
             files = glob.glob(os.path.join(modDir, '*.py'))
@@ -298,19 +304,28 @@ Valid options are:
         return self.modules[name]
         
         
-    def listModules(self):
-        return self.modules.keys()[:]
-        
+    def listModules(self, interface=None):
+        """List currently loaded modules. 
+        If interface is specified, only list modules that implement the interface."""
+        if interface is None:
+            return self.modules.keys()[:]
+        else:
+            return [m for m in self.modules.keys() if self.modules[m].hasInterface(interface)]
+
+
     def getModule(self, name):
         """Return an already loaded module"""
+        name = str(name)
         if name not in self.modules:
             raise Exception("No module named %s" % name)
         return self.modules[name]
+
         
     def listDefinedModules(self):
         """List module configurations defined in the config file"""
         return self.definedModules.keys()
-            
+
+
     def loadDefinedModule(self, name, forceReload=False):
         """Load a module and configure as defined in the config file"""
         if name not in self.definedModules:
@@ -336,6 +351,7 @@ Valid options are:
         if 'shortcut' in conf and win is not None:
             self.createWindowShortcut(conf['shortcut'], win)
         print "Loaded module '%s'" % mName
+
     
     def moduleHasQuit(self, mod):
         if mod.name in self.modules:
@@ -343,7 +359,7 @@ Valid options are:
             self.emit(QtCore.SIGNAL('modulesChanged'))
             self.emit(QtCore.SIGNAL('moduleHasQuit'), mod.name)
             print "Module", mod.name, "has quit"
-        
+
 
     def unloadModule(self, name):
         try:

@@ -19,22 +19,29 @@ class Analysis(Module):
         self.updateSourceList()
         self.updateModList()
         
-        self.protocolList = DirTreeModel(self.manager.config['protocolDir'])
-        self.ui.protocolList.setModel(self.protocolList)
+        #self.protocolList = DirTreeModel(self.manager.config['protocolDir'])
+        #self.ui.protocolList.setModel(self.protocolList)
         
         QtCore.QObject.connect(self.manager, QtCore.SIGNAL('modulesChanged'), self.updateSourceList)
         QtCore.QObject.connect(self.ui.dataSourceCombo, QtCore.SIGNAL('currentIndexChanged(QString)'), self.dataSourceChanged)
         QtCore.QObject.connect(self.ui.removeDataBtn, QtCore.SIGNAL('clicked()'), self.removeDataClicked)
-        
+
+
     def updateModList(self):
         mods = self.listModules()
         self.ui.modsAvailableList.clear()
         for m in mods:
             self.ui.modsAvailableList.addItem(m)
-        
+
+
     def dataSourceChanged(self, source):
-        mod = self.manager.getModule(mod)
-        self.connectDataSource(mod)
+        source = str(source)
+        if source == '':
+            self.disconnectDataSource()
+        else:
+            mod = self.manager.getModule(source)
+            self.connectDataSource(mod)
+
     
     def connectDataSource(self, mod):
         self.disconnectDataSource()
@@ -43,7 +50,8 @@ class Analysis(Module):
         QtCore.QObject.connect(mod, QtCore.SIGNAL('taskStarted'), self.taskStarted)
         QtCore.QObject.connect(mod, QtCore.SIGNAL('protocolFinished'), self.protocolFinished)
         self.dataSource = mod
-        
+
+
     def disconnectDataSource(self):
         if self.dataSource is None:
             return
@@ -52,9 +60,11 @@ class Analysis(Module):
         QtCore.QObject.disconnect(self.dataSource, QtCore.SIGNAL('taskStarted'), self.taskStarted)
         QtCore.QObject.disconnect(self.dataSource, QtCore.SIGNAL('protocolFinished'), self.protocolFinished)
         self.dataSource = None
-        
+
+
     def protocolStarted(self):
         pass
+
     
     def taskStarted(self):
         pass
@@ -76,7 +86,8 @@ class Analysis(Module):
         pass
         
     def updateSourceList(self):
-        for m in self.manager.listModules():
+        self.ui.dataSourceCombo.clear()
+        for m in self.manager.listModules('DataSource'):
             self.ui.dataSourceCombo.addItem(m)
         
     def window(self):
