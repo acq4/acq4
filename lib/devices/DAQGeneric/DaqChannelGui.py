@@ -119,6 +119,7 @@ class OutputChannelGui(DaqChannelGui):
 
         QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
+        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
 
     def quit(self):
         DaqChannelGui.quit(self)
@@ -133,6 +134,10 @@ class OutputChannelGui(DaqChannelGui):
         
     def listSequence(self):
         return self.ui.waveGeneratorWidget.listSequences()
+    
+    def sequenceChanged(self):
+        self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        
     
     def generateProtocol(self, params=None):
         if params is None:
@@ -177,7 +182,7 @@ class OutputChannelGui(DaqChannelGui):
             self.ui.functionCheck.setChecked(True)
             self.plotCurve(single, color=QtGui.QColor(200, 100, 100))
             #print "===single==", single.min(), single.max()
-        self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
         
     def taskStarted(self, params):
         ## Draw green trace for current command waveform

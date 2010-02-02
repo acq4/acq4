@@ -14,9 +14,8 @@ import threading, os, re, sys
 ##  import fcntl  ## linux only?
 from lib.util.functions import strncmp
 from lib.util.configfile import *
-from lib.util.metaarray import MetaArray
-#from lib.util.advancedTypes import Locker
-import lib.util.ptime as ptime
+from metaarray import MetaArray
+import time
 from lib.util.Mutex import Mutex, MutexLocker
 from PyQt4 import QtCore
 from lib.filetypes.FileType import *
@@ -377,7 +376,7 @@ class DirHandle(FileHandle):
         with MutexLocker(self.lock):
             if type(tags) is not dict:
                 raise Exception("tags argument must be a dict")
-            tags['__timestamp__'] = ptime.time()
+            tags['__timestamp__'] = time.time()
             tags['__message__'] = str(msg)
             
             fd = open(self._logFile(), 'a')
@@ -459,7 +458,7 @@ class DirHandle(FileHandle):
             
             ## Create directory
             ndm = self.manager.getDirHandle(newDir, create=True)
-            t = ptime.time()
+            t = time.time()
             self._childChanged()
             
             if self.isManaged():
@@ -580,7 +579,7 @@ class DirHandle(FileHandle):
         if info is None:
             info = {}   ## never put {} in the function default
         
-        t = ptime.time()
+        t = time.time()
         with MutexLocker(self.lock):
             
             ## Convert object to FileType if needed

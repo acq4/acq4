@@ -53,9 +53,10 @@ class ScannerProtoGui(ProtocolGui):
         QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('toggled(bool)'), self.showInterface)
         QtCore.QObject.connect(self.ui.cameraCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.camModChanged)
         QtCore.QObject.connect(self.ui.packingSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateSpotSizes)
+        QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
+        QtCore.QObject.connect(self.ui.minDistSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.generateTargets)
         QtCore.QObject.connect(dm, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
-        
 
         self.testTarget = TargetPoint([0,0], self.pointSize())
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
@@ -246,6 +247,8 @@ class ScannerProtoGui(ProtocolGui):
     def delete(self):
         row = self.ui.itemList.currentRow()
         item = self.ui.itemList.takeItem(row)
+        if item is None:
+            return
         name = str(item.text())
         i = self.items[name]
         #self.removeItemPoints(i)
@@ -295,6 +298,7 @@ class ScannerProtoGui(ProtocolGui):
         self.sequenceChanged()
     
     def sequenceChanged(self):
+        self.targets = None
         self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
 
     def generateTargets(self):
@@ -308,13 +312,32 @@ class ScannerProtoGui(ProtocolGui):
         
         minTime = None
         bestSolution = None
-        for i in range(10):
-            solution = self.findSolution(locations)
-            time = sum([l[1] for l in solution])
-            if minTime is None or time < minTime:
-                #print "  new best time:", time
-                minTime = time
-                bestSolution = solution[:]
+        nTries = 10
+        
+        
+        ## About to compute order/timing of targets; display a progress dialog
+        
+        progressDlg = QtGui.QProgressDialog("Computing pseudo-optimal target sequence...", "Cancel", 0, nTries)
+        progressDlg.setWindowModality(QtCore.Qt.WindowModal)
+        progressDlg.setMinimumDuration(0)
+        
+        try:
+            for i in range(nTries):
+                solution = self.findSolution(locations)
+                time = sum([l[1] for l in solution])
+                if minTime is None or time < minTime:
+                    #print "  new best time:", time
+                    minTime = time
+                    bestSolution = solution[:]
+                QtGui.QApplication.processEvents()
+                progressDlg.setValue(i)
+                if progressDlg.wasCanceled():
+                    raise Exception("Target sequence computation canceled by user.")
+        except:
+            raise
+        finally:
+            ## close progress dialog no matter what happens
+            progressDlg.setValue(nTries)
         
         
         #for i in range(10):
@@ -348,31 +371,31 @@ class ScannerProtoGui(ProtocolGui):
             solution.append((locations.pop(minIndex), minTime))
         return solution
         
-    def swapWorst(self, solution):
-        """Find points very close together, swap elsewhere to improve time"""
-        maxTime = None
-        maxInd = None
-        ## find worst pair
-        for i in range(len(solution)):
-            if maxTime is None or maxTime < solution[i][1]:
-                maxTime = solution[i][1]
-                maxInd = i
+    #def swapWorst(self, solution):
+        #"""Find points very close together, swap elsewhere to improve time"""
+        #maxTime = None
+        #maxInd = None
+        ### find worst pair
+        #for i in range(len(solution)):
+            #if maxTime is None or maxTime < solution[i][1]:
+                #maxTime = solution[i][1]
+                #maxInd = i
         
-        ## Try moving
+        ### Try moving
         
-        minTime = sum([l[1] for l in solution])
-        #print "Trying swap, time is currently", minTime
-        bestSolution = None
-        for i in range(len(solution)):
-            newSoln = solution[:]
-            loc = newSoln.pop(maxInd)
-            newSoln.insert(i, loc)
-            (soln, time) = self.computeTimes([l[0] for l in newSoln])
-            if time < minTime:
-                minTime = time
-                bestSolution = soln
-        #print "  new time is ", minTime
-        return bestSolution
+        #minTime = sum([l[1] for l in solution])
+        ##print "Trying swap, time is currently", minTime
+        #bestSolution = None
+        #for i in range(len(solution)):
+            #newSoln = solution[:]
+            #loc = newSoln.pop(maxInd)
+            #newSoln.insert(i, loc)
+            #(soln, time) = self.computeTimes([l[0] for l in newSoln])
+            #if time < minTime:
+                #minTime = time
+                #bestSolution = soln
+        ##print "  new time is ", minTime
+        #return bestSolution
             
     def costFunction(self):
         state = self.stateGroup.state()
@@ -381,23 +404,8 @@ class ScannerProtoGui(ProtocolGui):
         b = numpy.log(0.1) / minDist**2
         return lambda dist: minTime * numpy.exp(b * dist**2)
 
-    #def computeTimes(self, locations):
-        #result = []
-        #total = 0.0
-        #func = self.costFunction()
-        #for i in range(len(locations)):
-            #t = self.computeTime(locations, i, func)
-            #total += t
-            #result.append((locations[i], t))
-        #return (result, total)
-        
     def computeTime(self, solution, loc, func=None):
         """Return the minimum time that must be waited before stimulating the location, given that solution has already run"""
-        #print "============= computeTime:"
-        #print "Current stack:"
-        #for l in solution:
-            #print l
-        #print "Next point:", loc
         if func is None:
             func = self.costFunction()
         state = self.stateGroup.state()
@@ -431,6 +439,7 @@ class ScannerProtoGui(ProtocolGui):
         return [self.items[i] for i in self.items if self.listItem(i).checkState() == QtCore.Qt.Checked]
 
     def quit(self):
+        print "scanner dock quit"
         self.deleteAll()
         s = self.testTarget.scene()
         if s is not None:
@@ -438,9 +447,16 @@ class ScannerProtoGui(ProtocolGui):
         QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
             
         if self.currentCamMod is not None:
-            QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+            try:
+                QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+            except:
+                pass
         if self.currentScope is not None:
-            QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            try:
+                QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            except:
+                pass
+        print "  ..done."
     
 class TargetPoint(EllipseROI):
     def __init__(self, pos, radius, **args):
@@ -510,8 +526,9 @@ class TargetGrid(ROI):
         ROI.paint(self, p, opt, widget)
         ps2 = self.pointSize * 0.5
         p.setPen(self.pen)
+        p.scale(self.pointSize, self.pointSize) ## do scaling here because otherwise we end up with squares instead of circles (GL bug)
         for pt in self.points:
-            p.drawEllipse(QtCore.QRectF(pt[0] - ps2, pt[1] - ps2, self.pointSize, self.pointSize))
+            p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
         
         
 

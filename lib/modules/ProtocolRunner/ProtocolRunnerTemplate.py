@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolRunnerTemplate.ui'
 #
-# Created: Sat Jan 09 12:14:59 2010
+# Created: Mon Jan 25 12:44:22 2010
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -29,6 +29,8 @@ class Ui_MainWindow(object):
         self.dockWidgetContents = QtGui.QWidget()
         self.dockWidgetContents.setObjectName("dockWidgetContents")
         self.gridlayout = QtGui.QGridLayout(self.dockWidgetContents)
+        self.gridlayout.setMargin(0)
+        self.gridlayout.setSpacing(0)
         self.gridlayout.setObjectName("gridlayout")
         self.newProtocolBtn = QtGui.QPushButton(self.dockWidgetContents)
         self.newProtocolBtn.setObjectName("newProtocolBtn")
@@ -60,6 +62,7 @@ class Ui_MainWindow(object):
         self.label_3.setObjectName("label_3")
         self.gridlayout.addWidget(self.label_3, 1, 0, 1, 1)
         self.horizontalLayout = QtGui.QHBoxLayout()
+        self.horizontalLayout.setSpacing(0)
         self.horizontalLayout.setObjectName("horizontalLayout")
         self.label_5 = QtGui.QLabel(self.dockWidgetContents)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
@@ -96,6 +99,9 @@ class Ui_MainWindow(object):
         self.dockWidgetContents_5 = QtGui.QWidget()
         self.dockWidgetContents_5.setObjectName("dockWidgetContents_5")
         self.gridLayout = QtGui.QGridLayout(self.dockWidgetContents_5)
+        self.gridLayout.setMargin(0)
+        self.gridLayout.setHorizontalSpacing(5)
+        self.gridLayout.setVerticalSpacing(0)
         self.gridLayout.setObjectName("gridLayout")
         self.label = QtGui.QLabel(self.dockWidgetContents_5)
         self.label.setAlignment(QtCore.Qt.AlignCenter)
@@ -168,11 +174,15 @@ class Ui_MainWindow(object):
         self.dockWidgetContents_7 = QtGui.QWidget()
         self.dockWidgetContents_7.setObjectName("dockWidgetContents_7")
         self.gridLayout_2 = QtGui.QGridLayout(self.dockWidgetContents_7)
+        self.gridLayout_2.setMargin(0)
+        self.gridLayout_2.setHorizontalSpacing(5)
+        self.gridLayout_2.setVerticalSpacing(0)
         self.gridLayout_2.setObjectName("gridLayout_2")
         self.label_10 = QtGui.QLabel(self.dockWidgetContents_7)
         self.label_10.setObjectName("label_10")
         self.gridLayout_2.addWidget(self.label_10, 0, 0, 1, 1)
         self.verticalLayout = QtGui.QVBoxLayout()
+        self.verticalLayout.setSpacing(0)
         self.verticalLayout.setObjectName("verticalLayout")
         self.label_9 = QtGui.QLabel(self.dockWidgetContents_7)
         self.label_9.setObjectName("label_9")
@@ -205,6 +215,9 @@ class Ui_MainWindow(object):
         self.seqTimeLabel = QtGui.QLabel(self.dockWidgetContents_7)
         self.seqTimeLabel.setObjectName("seqTimeLabel")
         self.verticalLayout.addWidget(self.seqTimeLabel)
+        self.seqCurrentLabel = QtGui.QLabel(self.dockWidgetContents_7)
+        self.seqCurrentLabel.setObjectName("seqCurrentLabel")
+        self.verticalLayout.addWidget(self.seqCurrentLabel)
         spacerItem6 = QtGui.QSpacerItem(13, 13, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem6)
         self.gridLayout_2.addLayout(self.verticalLayout, 0, 1, 2, 1)
@@ -220,11 +233,13 @@ class Ui_MainWindow(object):
         self.horizontalLayout_3 = QtGui.QHBoxLayout()
         self.horizontalLayout_3.setObjectName("horizontalLayout_3")
         self.testSequenceBtn = QtGui.QPushButton(self.dockWidgetContents_7)
+        self.testSequenceBtn.setEnabled(False)
         self.testSequenceBtn.setObjectName("testSequenceBtn")
         self.horizontalLayout_3.addWidget(self.testSequenceBtn)
         spacerItem7 = QtGui.QSpacerItem(38, 17, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.horizontalLayout_3.addItem(spacerItem7)
         self.runSequenceBtn = QtGui.QPushButton(self.dockWidgetContents_7)
+        self.runSequenceBtn.setEnabled(False)
         self.runSequenceBtn.setObjectName("runSequenceBtn")
         self.horizontalLayout_3.addWidget(self.runSequenceBtn)
         spacerItem8 = QtGui.QSpacerItem(58, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)

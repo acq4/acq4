@@ -50,7 +50,7 @@ def genString(data, indent=''):
             raise Exception('blank dict keys not allowed')
         if sk[0] == ' ' or ':' in sk:
             raise Exception('dict keys must not contain ":" or start with spaces [offending key is "%s"]' % sk)
-        if type(data[k]) in [dict, OrderedDict]:
+        if isinstance(data[k], dict):
             s += indent + sk + ':\n'
             s += genString(data[k], indent + '    ')
         else:

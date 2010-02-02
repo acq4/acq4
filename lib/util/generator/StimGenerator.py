@@ -105,7 +105,7 @@ class StimGenerator(QtGui.QWidget):
         self.cacheOk = False
         if self.test():
             self.autoUpdate()
-        #self.emit(QtCore.SIGNAL('parametersChanged'))
+        self.emit(QtCore.SIGNAL('parametersChanged'))
         
     def functionString(self):
         return str(self.ui.functionText.toPlainText())
@@ -198,7 +198,11 @@ class StimGenerator(QtGui.QWidget):
         seq = self.paramSpace()
         for k in seq:
             if k in params:  ## select correct value from sequence list
-                ns[k] = float(seq[k][1][params[k]])
+                try:
+                    ns[k] = float(seq[k][1][params[k]])
+                except IndexError:
+                    print "Requested value %d for param %s, but only %d in the param list." % (params[k], str(k), len(seq[k][1]))
+                    raise
             else:  ## just use single value
                 ns[k] = float(seq[k][0])
         

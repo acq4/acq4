@@ -13,6 +13,7 @@ try:
     from metaarray import *
     HAVE_METAARRAY = True
 except:
+    raise
     HAVE_METAARRAY = False
     
     

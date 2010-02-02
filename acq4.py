@@ -31,6 +31,12 @@ dm = Manager(config, sys.argv[1:])
 try:
     assert sys.flags.interactive == 1
     print "Interactive mode; not starting event loop."
+    
+    ## import some things useful on the command line
+    from debug import *
+    from pyqtgraph.graphicsWindows import *
+    from functions import *
+    
 except:
     print "Starting Qt event loop.."
     app.exec_()

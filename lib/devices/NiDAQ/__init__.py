@@ -1,1 +1,1 @@
-from interface import *
+from nidaq import *

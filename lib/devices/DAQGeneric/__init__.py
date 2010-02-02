@@ -1,1 +1,1 @@
-from interface import *
+from DAQGeneric import *

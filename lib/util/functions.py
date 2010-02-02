@@ -11,6 +11,63 @@ from scipy import *
 from scipy.optimize import leastsq
 
 
+## Number <==> string conversion functions
+
+SI_PREFIXES = u'yzafpnµm kMGTPEZY'
+
+def siFormat(x, precision=3, space=True, error=None, minVal=1e-25, suffix=''):
+    """Return the number x formatted in engineering notation with SI prefix."""
+    if space is True:
+        space = ' '
+    if space is False:
+        space = ''
+        
+    if abs(x) < minVal:
+        m = 0
+        x = 0
+    else:
+        m = int(clip(floor(log(abs(x))/log(1000)), -9.0, 9.0))
+    
+    if m == 0:
+        pref = space
+    elif m < -8 or m > 8:
+        pref = 'e%d' % (m*3)
+    else:
+        pref = space + SI_PREFIXES[m+8]
+    p = .001**m
+    if error is None:
+        fmt = "%." + str(precision) + "g%s%s"
+        return fmt % (x*p, pref, suffix)
+    else:
+        plusminus = space + u"±" + space
+        fmt = "%." + str(precision) + u"g%s%s%s%s"
+        return fmt % (x*p, pref, suffix, plusminus, siFormat(error, precision, space, minVal=minVal, suffix=suffix))
+    
+def siEval(s):
+    """Convert a value written in SI notation to its equivalent prefixless value"""
+    m = re.match(r'(-?((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?)\s*([u' + SI_PREFIXES + r']?)$', s)
+    if m is None:
+        raise Exception("Can't convert string '%s' to number." % s)
+    v = float(m.groups()[0])
+    p = m.groups()[6]
+    #if p not in SI_PREFIXES:
+        #raise Exception("Can't convert string '%s' to number--unknown prefix." % s)
+    if p ==  '':
+        n = 0
+    elif p == 'u':
+        n = -2
+    else:
+        n = SI_PREFIXES.index(p) - 8
+    return v * 1000**n
+    
+
+
+
+
+
+
+
+
 ## the built in logspace function is pretty much useless.
 def logSpace(start, stop, num):
     num = int(num)

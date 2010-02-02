@@ -1,0 +1,93 @@
+# -*- coding: utf-8 -*-
+
+# Form implementation generated from reading ui file 'DirTreeTemplate.ui'
+#
+# Created: Mon Jan 18 13:35:25 2010
+#      by: PyQt4 UI code generator 4.6
+#
+# WARNING! All changes made in this file will be lost!
+
+from PyQt4 import QtCore, QtGui
+
+class Ui_Form(object):
+    def setupUi(self, Form):
+        Form.setObjectName("Form")
+        Form.resize(282, 285)
+        self.gridLayout = QtGui.QGridLayout(Form)
+        self.gridLayout.setMargin(0)
+        self.gridLayout.setSpacing(0)
+        self.gridLayout.setObjectName("gridLayout")
+        self.titleLabel = QtGui.QLabel(Form)
+        self.titleLabel.setAlignment(QtCore.Qt.AlignCenter)
+        self.titleLabel.setObjectName("titleLabel")
+        self.gridLayout.addWidget(self.titleLabel, 0, 0, 1, 2)
+        self.newProtocolBtn = QtGui.QPushButton(Form)
+        self.newProtocolBtn.setObjectName("newProtocolBtn")
+        self.gridLayout.addWidget(self.newProtocolBtn, 0, 2, 1, 1)
+        self.protocolList = QtGui.QTreeView(Form)
+        self.protocolList.setAcceptDrops(True)
+        self.protocolList.setEditTriggers(QtGui.QAbstractItemView.SelectedClicked)
+        self.protocolList.setDragEnabled(True)
+        self.protocolList.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
+        self.protocolList.setObjectName("protocolList")
+        self.gridLayout.addWidget(self.protocolList, 1, 1, 7, 1)
+        self.loadProtocolBtn = QtGui.QPushButton(Form)
+        self.loadProtocolBtn.setObjectName("loadProtocolBtn")
+        self.gridLayout.addWidget(self.loadProtocolBtn, 1, 2, 1, 1)
+        spacerItem = QtGui.QSpacerItem(88, 77, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.gridLayout.addItem(spacerItem, 2, 2, 1, 1)
+        self.saveProtocolBtn = QtGui.QPushButton(Form)
+        self.saveProtocolBtn.setEnabled(False)
+        self.saveProtocolBtn.setObjectName("saveProtocolBtn")
+        self.gridLayout.addWidget(self.saveProtocolBtn, 3, 2, 1, 1)
+        self.saveAsProtocolBtn = QtGui.QPushButton(Form)
+        self.saveAsProtocolBtn.setEnabled(True)
+        self.saveAsProtocolBtn.setObjectName("saveAsProtocolBtn")
+        self.gridLayout.addWidget(self.saveAsProtocolBtn, 4, 2, 1, 1)
+        spacerItem1 = QtGui.QSpacerItem(88, 47, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.gridLayout.addItem(spacerItem1, 6, 2, 1, 1)
+        self.deleteProtocolBtn = QtGui.QPushButton(Form)
+        self.deleteProtocolBtn.setEnabled(False)
+        self.deleteProtocolBtn.setObjectName("deleteProtocolBtn")
+        self.gridLayout.addWidget(self.deleteProtocolBtn, 7, 2, 1, 1)
+        self.horizontalLayout = QtGui.QHBoxLayout()
+        self.horizontalLayout.setObjectName("horizontalLayout")
+        self.currentTitleLabel = QtGui.QLabel(Form)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.currentTitleLabel.sizePolicy().hasHeightForWidth())
+        self.currentTitleLabel.setSizePolicy(sizePolicy)
+        self.currentTitleLabel.setObjectName("currentTitleLabel")
+        self.horizontalLayout.addWidget(self.currentTitleLabel)
+        self.currentProtocolLabel = QtGui.QLabel(Form)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.currentProtocolLabel.sizePolicy().hasHeightForWidth())
+        self.currentProtocolLabel.setSizePolicy(sizePolicy)
+        font = QtGui.QFont()
+        font.setWeight(75)
+        font.setBold(True)
+        self.currentProtocolLabel.setFont(font)
+        self.currentProtocolLabel.setObjectName("currentProtocolLabel")
+        self.horizontalLayout.addWidget(self.currentProtocolLabel)
+        self.gridLayout.addLayout(self.horizontalLayout, 8, 0, 1, 3)
+        self.newDirBtn = QtGui.QPushButton(Form)
+        self.newDirBtn.setObjectName("newDirBtn")
+        self.gridLayout.addWidget(self.newDirBtn, 5, 2, 1, 1)
+
+        self.retranslateUi(Form)
+        QtCore.QMetaObject.connectSlotsByName(Form)
+
+    def retranslateUi(self, Form):
+        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
+        self.titleLabel.setText(QtGui.QApplication.translate("Form", "Protocols", None, QtGui.QApplication.UnicodeUTF8))
+        self.newProtocolBtn.setText(QtGui.QApplication.translate("Form", "New", None, QtGui.QApplication.UnicodeUTF8))
+        self.loadProtocolBtn.setText(QtGui.QApplication.translate("Form", "Load", None, QtGui.QApplication.UnicodeUTF8))
+        self.saveProtocolBtn.setText(QtGui.QApplication.translate("Form", "Save", None, QtGui.QApplication.UnicodeUTF8))
+        self.saveAsProtocolBtn.setText(QtGui.QApplication.translate("Form", "Save As..", None, QtGui.QApplication.UnicodeUTF8))
+        self.deleteProtocolBtn.setText(QtGui.QApplication.translate("Form", "Delete", None, QtGui.QApplication.UnicodeUTF8))
+        self.currentTitleLabel.setText(QtGui.QApplication.translate("Form", "Current Protocol:", None, QtGui.QApplication.UnicodeUTF8))
+        self.newDirBtn.setText(QtGui.QApplication.translate("Form", "New Dir", None, QtGui.QApplication.UnicodeUTF8))
+

@@ -597,7 +597,7 @@ class Handle(QtGui.QGraphicsItem):
         #ev.accept()
         
     def mouseReleaseEvent(self, ev):
-        print "release"
+        #print "release"
         for r in self.roi:
             r[0].pointReleaseEvent(r[1], ev)
                 
@@ -746,6 +746,10 @@ class EllipseROI(ROI):
         r = self.boundingRect()
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         p.setPen(self.pen)
+        
+        p.scale(r.width(), r.height())## workaround for GL bug
+        r = QtCore.QRectF(r.x()/r.width(), r.y()/r.height(), 1,1)
+        
         p.drawEllipse(r)
         
     def getArrayRegion(self, arr, img=None):

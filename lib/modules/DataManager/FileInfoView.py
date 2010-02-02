@@ -5,6 +5,7 @@ from lib.DataManager import *
 import lib.Manager as Manager
 import sip
 import time
+import configfile
 
 class FocusEventCatcher(QtCore.QObject):
     def __init__(self):
@@ -100,7 +101,10 @@ class FileInfoView(QtGui.QWidget):
         ## Add fields for any other keys that happen to be present
         #print "Add %d rows.." % len(infoKeys)
         for f in infoKeys:
-            s = str(info[f])
+            if isinstance(info[f], dict):
+                s = configfile.genString(info[f])
+            else:
+                s = str(info[f])
             if f == '__timestamp__':
                 s = time.strftime("%Y.%m.%d   %H:%m:%S", time.localtime(float(s)))
             w = QtGui.QLabel(s)

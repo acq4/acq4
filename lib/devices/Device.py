@@ -2,7 +2,6 @@
 import time, traceback, sys
 #import threading
 from PyQt4 import QtCore, QtGui
-import lib.util.ptime as ptime
 from lib.util.Mutex import Mutex
 #from lib.util.Mutex import Mutex
 from lib.util.debug import *

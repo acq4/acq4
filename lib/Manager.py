@@ -23,14 +23,15 @@ sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
 
 
 
-import time, atexit
+import time, atexit, weakref
 from PyQt4 import QtCore, QtGui
 from DataManager import *
 import lib.util.ptime as ptime
 from lib.util import configfile
 from lib.util.Mutex import Mutex
 from lib.util.debug import *
-import getopt
+import getopt, glob
+import ptime
 #import pdb
 
 ### All other modules can use this function to get the manager instance
@@ -138,7 +139,7 @@ Valid options are:
         win = QtGui.QApplication.instance().activeWindow()
         #if win is None:   ## Breaks on some systems..
             #raise Exception("No GUI windows created during startup, exiting now.")
-        
+        print "active window:", win
         self.quitShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+q'), win)
         self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
         QtCore.QObject.connect(self.quitShortcut, QtCore.SIGNAL('activated()'), self.quit)
@@ -240,8 +241,25 @@ Valid options are:
     def __del__(self):
         self.quit()
     
+    def readConfigFile(self, fileName, missingOk=True):
+        fileName = os.path.join(self.configDir, fileName)
+        if os.path.isfile(fileName):
+            return configfile.readConfigFile(fileName)
+        else:
+            if missingOk: 
+                return {}
+            else:
+                raise Exception('Config file "%s" not found.' % fileName)
+            
+    def writeConfigFile(self, data, fileName):
+        fileName = os.path.join(self.configDir, fileName)
+        return configfile.writeConfigFile(data, fileName)
+        
+    
     def loadDevice(self, driverName, conf, name):
-        mod = __import__('lib.devices.%s.interface' % driverName, fromlist=['*'])
+        """Load the code for a device. For this to work properly, there must be 
+        a python module called lib.devices.driverName which contains a class called driverName."""
+        mod = __import__('lib.devices.%s' % driverName, fromlist=['*'])
         devclass = getattr(mod, driverName)
         self.devices[name] = devclass(self, conf, name)
         return self.devices[name]
@@ -256,14 +274,30 @@ Valid options are:
     def listDevices(self):
         return self.devices.keys()
 
-    def loadModule(self, module, name, config=None):
-        """Create a new instance of a module"""
+    def loadModule(self, module, name, config=None, forceReload=False):
+        """Create a new instance of an acq4 module. For this to work properly, there must be 
+        a python module called lib.modules.moduleName which contains a class called moduleName.
+        Ugh. Sorry about the "python module" vs "acq4 module" name collision which I
+        should have anticipated."""
+        
         #print 'Loading module "%s" as "%s"...' % (module, name)
         if name in self.modules:
             raise Exception('Module already exists with name "%s"' % name)
         if config is None:
             config = {}
-        mod = __import__('lib.modules.%s.interface' % module, fromlist=['*'])
+            
+        mod = __import__('lib.modules.%s' % module, fromlist=['*'])
+        if forceReload:
+            modDir = os.path.join('lib', 'modules', module)
+            files = glob.glob(os.path.join(modDir, '*.py'))
+            files = [os.path.basename(f[:-3]) for f in files]
+            modName = 'lib.modules.' + module
+            modNames = [modName + '.' + m for m in files] + [modName]
+            print "RELOAD", modNames
+            for m in modNames:
+                if m in sys.modules:
+                    reload(sys.modules[m])
+            
         modclass = getattr(mod, module)
         self.modules[name] = modclass(self, name, config)
         self.emit(QtCore.SIGNAL('modulesChanged'))
@@ -271,19 +305,24 @@ Valid options are:
         
         
     def listModules(self):
+        """List currently loaded modules. """
         return self.modules.keys()[:]
-        
+
+
     def getModule(self, name):
         """Return an already loaded module"""
+        name = str(name)
         if name not in self.modules:
             raise Exception("No module named %s" % name)
         return self.modules[name]
+
         
     def listDefinedModules(self):
         """List module configurations defined in the config file"""
         return self.definedModules.keys()
-            
-    def loadDefinedModule(self, name):
+
+
+    def loadDefinedModule(self, name, forceReload=False):
         """Load a module and configure as defined in the config file"""
         if name not in self.definedModules:
             print "Module '%s' is not defined. Options are: %s" % (name, str(self.definedModules.keys()))
@@ -303,19 +342,20 @@ Valid options are:
             mName = "%s_%d" % (name, n)
             n += 1
             
-        mod = self.loadModule(mod, mName, config)
+        mod = self.loadModule(mod, mName, config, forceReload=forceReload)
         win = mod.window()
         if 'shortcut' in conf and win is not None:
             self.createWindowShortcut(conf['shortcut'], win)
         print "Loaded module '%s'" % mName
+
     
     def moduleHasQuit(self, mod):
         if mod.name in self.modules:
             del self.modules[mod.name]
             self.emit(QtCore.SIGNAL('modulesChanged'))
             self.emit(QtCore.SIGNAL('moduleHasQuit'), mod.name)
-            #print "Module", mod.name, "has quit"
-        
+            print "Module", mod.name, "has quit"
+
 
     def unloadModule(self, name):
         try:
@@ -336,7 +376,8 @@ Valid options are:
             QtCore.QObject.connect(sh, QtCore.SIGNAL('activated()'), win.raise_)
         except:
             printExc("Error creating shortcut '%s':" % keys)
-        self.shortcuts.append((sh, keys, win))
+        
+        self.shortcuts.append((sh, keys, weakref.ref(win)))
     
     def runProtocol(self, cmd):
         t = Task(self, cmd)
@@ -513,6 +554,9 @@ class Task:
         #print "======================="
         
         ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
+        #from debug import Profiler
+        #prof = Profiler()
+        
         try:
         
             #print "execute:", self.tasks
@@ -528,7 +572,7 @@ class Task:
             finally:
                 self.dm.unlockReserv()
                 
-
+            #prof.mark('reserve')
 
             ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
             ## This is how we allow multiple devices to communicate and decide how to operate together.
@@ -537,10 +581,13 @@ class Task:
             self.startOrder = self.devs.keys()
             for devName in self.tasks:
                 self.tasks[devName].configure(self.tasks, self.startOrder)
+                #prof.mark('configure %s' % devName)
             #print "done"
 
             if 'leadTime' in self.cfg:
                 time.sleep(self.cfg['leadTime'])
+                
+            #prof.mark('leadSleep')
 
             self.result = None
             
@@ -552,6 +599,7 @@ class Task:
                 #print "  ", devName
                 self.tasks[devName].start()
                 self.startedDevs.append(devName)
+                #prof.mark('start %s' % devName)
             self.startTime = ptime.time()
             #print "  %d Task started" % self.id
                 

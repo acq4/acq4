@@ -116,6 +116,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         if autoRange or self.blackLevel is None:
             self.blackLevel = self.image.min()
             self.whiteLevel = self.image.max()
+        #print "Image item using", self.blackLevel, self.whiteLevel
         
         if self.blackLevel != self.whiteLevel:
             scale = 255. / (self.whiteLevel - self.blackLevel)
@@ -192,7 +193,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
                 im1[..., 0][mask] *= 0.5
                 im1[..., 1][mask] *= 0.5
                 im1[..., 2][mask] = 255
-        
+        #print "Final image:", im1.dtype, im1.min(), im1.max(), im1.shape
         self.ims = im1.tostring()  ## Must be held in memory here because qImage won't do it for us :(
         qimage = QtGui.QImage(self.ims, im1.shape[1], im1.shape[0], QtGui.QImage.Format_ARGB32)
         self.pixmap = QtGui.QPixmap.fromImage(qimage)
@@ -365,10 +366,10 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
             for i in range(bins):
                 mxTot += h[0][-i-1]
                 if mxTot > s:
-                    mxInd = i
+                    mxInd = -i-1
                     break
-            #print mnInd, mxInd, h[1][:mnInd], h[1][mxInd:],
-            return(h[1][mnInd], h[1][-mxInd-1])
+            #print mnInd, mxInd, h[1][mnInd], h[1][mxInd]
+            return(h[1][mnInd], h[1][mxInd])
                 
             
             
@@ -1031,6 +1032,7 @@ class ViewBox(QtGui.QGraphicsWidget):
             #self.ctrl.yMinText.setText('%g' % min)
             #self.ctrl.yMaxText.setText('%g' % max)
             self.emit(QtCore.SIGNAL('yRangeChanged'), self, (min, max))
+            self.emit(QtCore.SIGNAL('viewChanged'), self)
         if update:
             self.updateMatrix()
         
@@ -1045,6 +1047,7 @@ class ViewBox(QtGui.QGraphicsWidget):
             #self.ctrl.xMinText.setText('%g' % min)
             #self.ctrl.xMaxText.setText('%g' % max)
             self.emit(QtCore.SIGNAL('xRangeChanged'), self, (min, max))
+            self.emit(QtCore.SIGNAL('viewChanged'), self)
         if update:
             self.updateMatrix()
 
@@ -1065,6 +1068,60 @@ class ViewBox(QtGui.QGraphicsWidget):
             p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))
             #p.fillRect(bounds, QtGui.QColor(0, 0, 0))
             p.drawRect(bounds)
+
+
+class InfiniteLine(QtGui.QGraphicsLineItem):
+    def __init__(self, view, pos, angle=90, pen=None):
+        QtGui.QGraphicsLineItem.__init__(self)
+        self.view = view
+        self.p = [0, 0]
+        self.setAngle(angle)
+        self.setPos(pos)
+        
+        if pen is None:
+            pen = QtGui.QPen(QtGui.QColor(200, 200, 100))
+        self.setPen(pen)
+        QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.updateLine)
+        
+    def setAngle(self, angle):
+        self.angle = ((angle+45) % 180) - 45   ##  -45 <= angle < 135
+        self.updateLine()
+        
+    def setPos(self, pos):
+        if type(pos) in [list, tuple]:
+            self.p = pos
+        elif isinstance(pos, QtCore.QPointF):
+            self.p = [pos.x(), pos.y()]
+        else:
+            if self.angle == 90:
+                self.p = [pos, 0]
+            elif self.angle == 0:
+                self.p = [0, pos]
+            else:
+                raise Exception("Must specify 2D coordinate for non-orthogonal lines.")
+        self.updateLine()
+                
+    def updateLine(self):
+        vr = self.view.viewRect()
+        
+        if self.angle > 45:
+            m = tan((90-self.angle) * pi / 180.)
+            y1 = vr.bottom()
+            y2 = vr.top()
+            x1 = self.p[0] + (y1 - self.p[1]) * m
+            x2 = self.p[0] + (y2 - self.p[1]) * m
+        else:
+            m = tan(self.angle * pi / 180.)
+            x1 = vr.left()
+            x2 = vr.right()
+            y1 = self.p[1] + (x1 - self.p[0]) * m
+            y2 = self.p[1] + (x2 - self.p[0]) * m
+        #print vr, x1, y1, x2, y2
+        QtGui.QGraphicsLineItem.setLine(self, x1, y1, x2, y2)
+        
+    #def boundingRect(self):
+        #self.updateLine()
+        #return QtGui.QGraphicsLineItem.boundingRect(self)
 
 
 

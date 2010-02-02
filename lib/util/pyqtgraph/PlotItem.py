@@ -52,6 +52,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         QtCore.QObject.connect(self.vb, QtCore.SIGNAL('yRangeChanged'), self.yRangeChanged)
         QtCore.QObject.connect(self.vb, QtCore.SIGNAL('rangeChangedManually'), self.enableManualScale)
         
+        QtCore.QObject.connect(self.vb, QtCore.SIGNAL('viewChanged'), self.viewChanged)
         
         self.layout.addItem(self.vb, 3, 2)
         self.alpha = 1.0
@@ -99,7 +100,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         
 
         ## Wrap a few methods from viewBox
-        for m in ['setXRange', 'setYRange', 'setRange', 'autoRange']:
+        for m in ['setXRange', 'setYRange', 'setRange', 'autoRange', 'viewRect']:
             setattr(self, m, getattr(self.vb, m))
             
         self.items = []
@@ -245,6 +246,9 @@ class PlotItem(QtGui.QGraphicsWidget):
         wr = v.mapFromScene(b).boundingRect()
         pos = v.pos()
         wr.adjust(v.x(), v.y(), v.x(), v.y())
+
+    def viewChanged(self, *args):
+        self.emit(QtCore.SIGNAL('viewChanged'), *args)
 
     def blockLink(self, b):
         self.linksBlocked = b

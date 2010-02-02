@@ -41,6 +41,7 @@ class MultiClampProtoGui(ProtocolGui):
         self.daqChanged(self.daqUI.currentState())
         QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
+        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
         QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.ui.i0ModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
@@ -50,6 +51,16 @@ class MultiClampProtoGui(ProtocolGui):
         
         
     def uiStateChanged(self, name, value):
+        i0Checks = [self.ui.holdingCheck, self.ui.primaryGainCheck, self.ui.secondaryGainCheck]
+        if self.getMode() == 'I=0':
+            for c in i0Checks:
+                c.setChecked(False)
+                c.setEnabled(False)
+        else:
+            for c in i0Checks:
+                c.setEnabled(True)
+            
+            
         checkMap = {
             'holdingCheck': self.ui.holdingSpin,
             'primarySignalCheck': self.ui.primarySignalCombo,
@@ -61,6 +72,8 @@ class MultiClampProtoGui(ProtocolGui):
         if name in checkMap:
             checkMap[name].setEnabled(value)
             self.devStateChanged()
+            
+        
 
     def devStateChanged(self, state=None):
         mode = self.getMode()
@@ -79,6 +92,8 @@ class MultiClampProtoGui(ProtocolGui):
         if not self.ui.secondarySignalCombo.isEnabled():
             ssig = state['secondarySignal']
         self.setSignals(psig, ssig)
+        
+            
 
     def saveState(self):
         state = self.stateGroup.state().copy()
@@ -108,6 +123,9 @@ class MultiClampProtoGui(ProtocolGui):
     def listSequence(self):
         return self.ui.waveGeneratorWidget.listSequences()
 
+    def sequenceChanged(self):
+        self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+
     def updateWaves(self):
         self.clearCmdPlots()
         
@@ -126,7 +144,7 @@ class MultiClampProtoGui(ProtocolGui):
         single = self.getSingleWave()
         if single is not None:
             self.plotCmdWave(single / self.cmdScale, color=QtGui.QColor(200, 100, 100))
-        self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        #self.paramListChanged
         
     def clearCmdPlots(self):
         self.ui.bottomPlotWidget.clear()

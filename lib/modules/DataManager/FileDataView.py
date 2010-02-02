@@ -13,6 +13,7 @@ class FileDataView(QtGui.QWidget):
         self.manager = Manager.getManager()
         self.layout = QtGui.QVBoxLayout(self)
         self.current = None
+        self.currentType = None
         self.widget = None
 
     def setCurrentFile(self, file):
@@ -20,7 +21,8 @@ class FileDataView(QtGui.QWidget):
         if file is self.current:
             return
             
-        self.clear()
+        ## What if we just want to update the data display?
+        #self.clear()
         
         if file is None:
             self.current = None
@@ -46,13 +48,25 @@ class FileDataView(QtGui.QWidget):
                         
         
         if image:
-            self.widget = ImageView(self)
-            self.layout.addWidget(self.widget)
-            self.widget.setImage(data)
+            if self.currentType == 'image':
+                try:
+                    self.widget.setImage(data, autoRange=False)
+                except:
+                    print "widget type:", type(self.widget)
+                    raise
+            else:
+                self.clear()
+                self.widget = ImageView(self)
+                self.layout.addWidget(self.widget)
+                self.widget.setImage(data)
+            self.currentType = 'image'
         else:
+            self.clear()
             self.widget = MultiPlotWidget(self)
             self.layout.addWidget(self.widget)
             self.widget.plot(data)
+            self.currentType = 'plot'
+            
         
     def clear(self):
         if self.widget is not None:

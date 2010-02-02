@@ -147,7 +147,7 @@ class DMModel(QtCore.QAbstractItemModel):
                 self.emit(QtCore.SIGNAL('dataChanged(const QModelIndex &, const QModelIndex &)'), index, index)
                 return True
             except:
-                printExc('Error while renaming file (%s => %s):' % (fn1, fn2))
+                printExc('Error while renaming file %s):' % fn1)
                 return False
         else:
             print "setData ignoring role", int(role)

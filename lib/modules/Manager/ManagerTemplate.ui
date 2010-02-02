@@ -64,6 +64,13 @@
            </property>
           </widget>
          </item>
+         <item>
+          <widget class="QPushButton" name="reloadModuleBtn">
+           <property name="text">
+            <string>Reload Module</string>
+           </property>
+          </widget>
+         </item>
         </layout>
        </widget>
       </item>
