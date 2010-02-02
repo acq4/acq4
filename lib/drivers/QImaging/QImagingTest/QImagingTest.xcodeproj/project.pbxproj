@@ -7,8 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		24D5BD8C1110CEEA00743F3B /* QueueFrameTest.c in Sources */ = {isa = PBXBuildFile; fileRef = 24D5BD8B1110CEEA00743F3B /* QueueFrameTest.c */; };
 		24E1C703110A3D79002C9333 /* QCam.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 24E1C702110A3D79002C9333 /* QCam.framework */; };
-		8DD76FAC0486AB0100D96B5E /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 08FB7796FE84155DC02AAC07 /* main.c */; settings = {ATTRIBUTES = (); }; };
+		8DD76FAC0486AB0100D96B5E /* ParamTest.c in Sources */ = {isa = PBXBuildFile; fileRef = 08FB7796FE84155DC02AAC07 /* ParamTest.c */; settings = {ATTRIBUTES = (); }; };
 		8DD76FB00486AB0100D96B5E /* QImagingTest.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = C6A0FF2C0290799A04C91782 /* QImagingTest.1 */; };
 /* End PBXBuildFile section */
 
@@ -26,7 +27,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		08FB7796FE84155DC02AAC07 /* main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
+		08FB7796FE84155DC02AAC07 /* ParamTest.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ParamTest.c; sourceTree = "<group>"; };
+		24D5BD8A1110CEEA00743F3B /* QueueFrameTest.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = QueueFrameTest.h; sourceTree = "<group>"; };
+		24D5BD8B1110CEEA00743F3B /* QueueFrameTest.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = QueueFrameTest.c; sourceTree = "<group>"; };
 		24E1C702110A3D79002C9333 /* QCam.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QCam.framework; path = /Library/Frameworks/QCam.framework; sourceTree = "<absolute>"; };
 		8DD76FB20486AB0100D96B5E /* QImagingTest */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = QImagingTest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C6A0FF2C0290799A04C91782 /* QImagingTest.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = QImagingTest.1; sourceTree = "<group>"; };
@@ -57,7 +60,9 @@
 		08FB7795FE84155DC02AAC07 /* Source */ = {
 			isa = PBXGroup;
 			children = (
-				08FB7796FE84155DC02AAC07 /* main.c */,
+				24D5BD8A1110CEEA00743F3B /* QueueFrameTest.h */,
+				24D5BD8B1110CEEA00743F3B /* QueueFrameTest.c */,
+				08FB7796FE84155DC02AAC07 /* ParamTest.c */,
 				24E1C702110A3D79002C9333 /* QCam.framework */,
 			);
 			name = Source;
@@ -122,7 +127,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8DD76FAC0486AB0100D96B5E /* main.c in Sources */,
+				8DD76FAC0486AB0100D96B5E /* ParamTest.c in Sources */,
+				24D5BD8C1110CEEA00743F3B /* QueueFrameTest.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -264,11 +264,14 @@
 							<key>PBXSmartGroupTreeModuleOutlineStateExpansionKey</key>
 							<array>
 								<string>08FB7794FE84155DC02AAC07</string>
+								<string>08FB7795FE84155DC02AAC07</string>
 								<string>1C37FABC05509CD000000102</string>
 							</array>
 							<key>PBXSmartGroupTreeModuleOutlineStateSelectionKey</key>
 							<array>
 								<array>
+									<integer>4</integer>
+									<integer>1</integer>
 									<integer>0</integer>
 								</array>
 							</array>
@@ -310,7 +313,7 @@
 								<key>PBXProjectModuleGUID</key>
 								<string>1CE0B20306471E060097A5F4</string>
 								<key>PBXProjectModuleLabel</key>
-								<string>main.c</string>
+								<string>ParamTest.c</string>
 								<key>PBXSplitModuleInNavigatorKey</key>
 								<dict>
 									<key>Split0</key>
@@ -318,20 +321,30 @@
 										<key>PBXProjectModuleGUID</key>
 										<string>1CE0B20406471E060097A5F4</string>
 										<key>PBXProjectModuleLabel</key>
-										<string>main.c</string>
+										<string>ParamTest.c</string>
 										<key>_historyCapacity</key>
 										<integer>0</integer>
 										<key>bookmark</key>
-										<string>24D5BD7E110F79EA00743F3B</string>
+										<string>24D5BD9A1110EDD600743F3B</string>
 										<key>history</key>
 										<array>
 											<string>24E1C6F9110A3D01002C9333</string>
-											<string>24D5BD7D110F79EA00743F3B</string>
+											<string>24D5BD8F1110EDD600743F3B</string>
+											<string>24D5BD901110EDD600743F3B</string>
+											<string>24D5BD911110EDD600743F3B</string>
 										</array>
 										<key>prevStack</key>
 										<array>
 											<string>24E1C6FA110A3D01002C9333</string>
 											<string>24E1C6FB110A3D01002C9333</string>
+											<string>24D5BD921110EDD600743F3B</string>
+											<string>24D5BD931110EDD600743F3B</string>
+											<string>24D5BD941110EDD600743F3B</string>
+											<string>24D5BD951110EDD600743F3B</string>
+											<string>24D5BD961110EDD600743F3B</string>
+											<string>24D5BD971110EDD600743F3B</string>
+											<string>24D5BD981110EDD600743F3B</string>
+											<string>24D5BD991110EDD600743F3B</string>
 										</array>
 									</dict>
 									<key>SplitCount</key>
@@ -525,9 +538,9 @@
 	<integer>5</integer>
 	<key>WindowOrderList</key>
 	<array>
+		<string>1C78EAAD065D492600B07095</string>
 		<string>1CD10A99069EF8BA00B06720</string>
 		<string>24E1C6E9110A3CDF002C9333</string>
-		<string>1C78EAAD065D492600B07095</string>
 		<string>/Users/megankratz/Documents/Manis Lab/QImagingDriver/acq4/lib/drivers/QImaging/QImagingTest/QImagingTest.xcodeproj</string>
 	</array>
 	<key>WindowString</key>
@@ -621,7 +634,7 @@
 			<key>WindowToolGUID</key>
 			<string>24E1C6E9110A3CDF002C9333</string>
 			<key>WindowToolIsVisible</key>
-			<true/>
+			<false/>
 		</dict>
 		<dict>
 			<key>FirstTimeWindowDisplayed</key>
@@ -910,7 +923,7 @@
 			<key>WindowToolGUID</key>
 			<string>1C78EAAD065D492600B07095</string>
 			<key>WindowToolIsVisible</key>
-			<true/>
+			<false/>
 		</dict>
 		<dict>
 			<key>Identifier</key>

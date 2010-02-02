@@ -215,49 +215,49 @@ def setParams(**params):
 loadDriver()
 cameras = listCameras()
 handle = openCamera(cameras[0])
-#setParam(lib.qprmDoPostProcessing, 0)
-#setParams(qprmExposure=10000)
-##setParams(qprmExposureRed=0, qprmExposureBlue=0)
-#setParams(qprmReadoutSpeed=lib.qcReadout20M)
-#
-#setParams(qprmTriggerType=lib.qcTriggerFreerun, qprmImageFormat=lib.qfmtMono16)
+setParam(lib.qprmDoPostProcessing, 0)
+setParams(qprmExposure=10000)
+#setParams(qprmExposureRed=0, qprmExposureBlue=0)
+setParams(qprmReadoutSpeed=lib.qcReadout20M)
+
+setParams(qprmTriggerType=lib.qcTriggerFreerun, qprmImageFormat=lib.qfmtMono16)
 
 
 
-#getCameraInfo()
-#print camerainfo
+getCameraInfo()
+print camerainfo
 
 
-#b = lib.SetStreaming(handle, 1)
-#n = 0
-#def fn(*args):
-#    #global n
-#    #n +=1
-#    print "CALLBACK:", args
-#    print a.max(), a.min(), a.mean()
-#    #f, a = mkFrame()
-#    #print '1.1'
-#    #lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, n)
-#    #print '1.2'
-#f, a = mkFrame()
-#
-#print "Queue frame.."
-#qf = lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, 10)
-#print "Frame queued."
-##print qf()
-##print qf[1]
-#
-#time.sleep(3.0)
-#print "starting app.."
-#app = QtGui.QApplication([])
-#print "app started."
-#print a.shape, (camerainfo['qinfCcdWidth'], camerainfo['qinfCcdHeight'])
-#a.shape = (camerainfo['qinfCcdWidth'], camerainfo['qinfCcdHeight'])
-#print "create window"
-#imw1 = gw.ImageWindow(a)
-#print "show window"
-#imw1.show()
-#
-#print "Done."
-#
-#app.exec_()
+b = lib.SetStreaming(handle, 1)
+n = 0
+def fn(*args):
+    #global n
+    #n +=1
+    print "CALLBACK:", args
+    print a.max(), a.min(), a.mean()
+    #f, a = mkFrame()
+    #print '1.1'
+    lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, n)
+    #print '1.2'
+f, a = mkFrame()
+
+print "Queue frame.."
+qf = lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, 10)
+print "Frame queued."
+#print qf()
+#print qf[1]
+
+time.sleep(3.0)
+print "starting app.."
+app = QtGui.QApplication([])
+print "app started."
+print a.shape, (camerainfo['qinfCcdWidth'], camerainfo['qinfCcdHeight'])
+a.shape = (camerainfo['qinfCcdWidth'], camerainfo['qinfCcdHeight'])
+print "create window"
+imw1 = gw.ImageWindow(a)
+print "show window"
+imw1.show()
+
+print "Done."
+
+app.exec_()
