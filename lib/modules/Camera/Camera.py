@@ -17,8 +17,8 @@ class Camera(Module):
             self.ui.quit()
         Module.quit(self)
 
-    def hasInterface(self, interface):
-        return interface in ['DataSource', 'Canvas']
+    #def hasInterface(self, interface):
+        #return interface in ['DataSource', 'Canvas']
         
     def insertROI(self, roi):
         return handle

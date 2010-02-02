@@ -270,7 +270,7 @@ class CameraTask(DAQGenericTask):
         defaults = {
             'record': True,
             'triggerProtocol': False,
-            'triggerMode': 'Normal',
+            'triggerMode': 'No Trigger',
             #'recordExposeChannel': False
         }
         for k in defaults:
@@ -291,7 +291,7 @@ class CameraTask(DAQGenericTask):
         #prof.mark('    Camera: paramSet?')
                 
         ## if the camera is being triggered by the daq or if there are parameters to be set, stop it now
-        if self.camCmd['triggerMode'] != 'Normal' or paramSet:
+        if self.camCmd['triggerMode'] != 'No Trigger' or paramSet:
             #print "Stop camera--restarting in trigger mode."
             #print "Stopping camera before protocol run."
             self.dev.stopAcquire(block=True)  
@@ -379,7 +379,7 @@ class CameraTask(DAQGenericTask):
         
         ## If we requested a trigger mode, wait 300ms for the camera to get ready for the trigger
         ##   (Is there a way to ask the camera when it is ready instead?)
-        if self.camCmd['triggerMode'] is not 'Normal':
+        if self.camCmd['triggerMode'] is not 'No Trigger':
             time.sleep(0.3)
             
         ## Last I checked, this does nothing. It should be here anyway, though..
@@ -413,9 +413,9 @@ class CameraTask(DAQGenericTask):
         for k in self.returnState:
             self.dev.setParam(k, self.returnState[k])
             
-        if not self.stopAfter and (not self.dev.isRunning() or self.camCmd['triggerMode'] != 'Normal'):
+        if not self.stopAfter and (not self.dev.isRunning() or self.camCmd['triggerMode'] != 'No Trigger'):
             #print "restart camera"
-            self.dev.startAcquire({'mode': 'Normal'})
+            self.dev.startAcquire({'mode': 'No Trigger'})
         #else:
             #print "no restaRT"
         #print "camera task stopped"
@@ -471,7 +471,7 @@ class CameraTask(DAQGenericTask):
             expLen = (offTimes[1:len(onTimes)] - onTimes[1:len(offTimes)]).mean()
             
             
-            if self.camCmd['triggerMode'] == 'Normal':
+            if self.camCmd['triggerMode'] == 'No Trigger':
                 ## Can we make a good guess about frame times even without having triggered the first frame?
                 ## frames are marked with their arrival time. We will assume that a frame most likely 
                 ## corresponds to the last complete exposure signal. 
@@ -505,7 +505,7 @@ class AcquireThread(QtCore.QThread):
         self.dev = dev
         self.cam = self.dev.getCamera()
         size = self.cam.getSize()
-        self.state = {'binning': 1, 'exposure': .001, 'region': [0, 0, size[0]-1, size[1]-1], 'mode': 'Normal'}
+        self.state = {'binning': 1, 'exposure': .001, 'region': [0, 0, size[0]-1, size[1]-1], 'mode': 'No Trigger'}
         self.stopThread = False
         self.lock = Mutex()
         self.acqBuffer = None
@@ -713,7 +713,7 @@ class AcquireThread(QtCore.QThread):
                         #print "    AcquireThread.run: Done with thread stop check"
                         
                         if diff > (10 + exposure):
-                            if mode == 'Normal':
+                            if mode == 'No Trigger':
                                 print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
                                 break
                             else:

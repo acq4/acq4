@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+from PyQt4 import QtCore
 
 class Module(QtCore.QObject):
     def __init__(self, manager, name, config):
@@ -8,10 +8,11 @@ class Module(QtCore.QObject):
         self.manager = manager
         self.config = config
 
-    def hasInterface(self, interface):
-        """Return True if this module implements the named interface.
-            Examples: 'DataSource', 'Canvas'"""
-        return False
+    ## deprecated. Use interfaces instead.
+    #def hasInterface(self, interface):
+        #"""Return True if this module implements the named interface.
+            #Examples: 'DataSource', 'Canvas'"""
+        #return False
     
     def window(self):
         """Return the Qt window for this module"""

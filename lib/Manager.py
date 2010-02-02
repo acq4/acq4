@@ -304,13 +304,9 @@ Valid options are:
         return self.modules[name]
         
         
-    def listModules(self, interface=None):
-        """List currently loaded modules. 
-        If interface is specified, only list modules that implement the interface."""
-        if interface is None:
-            return self.modules.keys()[:]
-        else:
-            return [m for m in self.modules.keys() if self.modules[m].hasInterface(interface)]
+    def listModules(self):
+        """List currently loaded modules. """
+        return self.modules.keys()[:]
 
 
     def getModule(self, name):

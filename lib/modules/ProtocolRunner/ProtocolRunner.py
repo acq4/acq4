@@ -95,8 +95,8 @@ class ProtocolRunner(Module):
         QtCore.QObject.connect(self.ui.sequenceParamList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.updateSeqReport)
         QtCore.QObject.connect(self.ui.analysisList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.analysisItemClicked)
         
-    def hasInterface(self, interface):
-        return interface in ['DataSource']
+    #def hasInterface(self, interface):
+        #return interface in ['DataSource']
 
         
     def protoGroupChanged(self, param, value):

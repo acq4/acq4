@@ -116,6 +116,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         if autoRange or self.blackLevel is None:
             self.blackLevel = self.image.min()
             self.whiteLevel = self.image.max()
+        #print "Image item using", self.blackLevel, self.whiteLevel
         
         if self.blackLevel != self.whiteLevel:
             scale = 255. / (self.whiteLevel - self.blackLevel)
@@ -192,7 +193,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
                 im1[..., 0][mask] *= 0.5
                 im1[..., 1][mask] *= 0.5
                 im1[..., 2][mask] = 255
-        
+        #print "Final image:", im1.dtype, im1.min(), im1.max(), im1.shape
         self.ims = im1.tostring()  ## Must be held in memory here because qImage won't do it for us :(
         qimage = QtGui.QImage(self.ims, im1.shape[1], im1.shape[0], QtGui.QImage.Format_ARGB32)
         self.pixmap = QtGui.QPixmap.fromImage(qimage)
