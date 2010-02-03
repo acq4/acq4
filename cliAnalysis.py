@@ -14,7 +14,8 @@ import sys, os
 pyfile = __file__
 if pyfile[0] != '/':
    pyfile =  os.path.join(os.getcwd(), pyfile)
-sys.path.append(os.path.split(pyfile)[0])
+pyDir = os.path.split(pyfile)[0]
+sys.path.append(pyDir)
 from lib.util.metaarray import *
 from lib.util.pyqtgraph.ImageView import *
 from lib.util.pyqtgraph.GraphicsView import *
@@ -29,7 +30,7 @@ from lib.util.functions import *
 app = QtGui.QApplication(sys.argv)
 
 ## Configuration file to load
-config = 'config/default.cfg'
+config = os.path.join(pyDir, 'config', 'default.cfg')
 
 ## Create Manager. This configures devices and creates the main manager window.
 dm = Manager(config, sys.argv[1:])

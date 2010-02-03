@@ -522,8 +522,12 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
             self.path = self.generatePath(*self.getData())
         path = self.path
             
+        if self.shadow is not None:
+            sp = QtGui.QPen(self.shadow)
+        else:
+            sp = None
+
         ## Copy pens and apply alpha adjustment
-        sp = QtGui.QPen(self.shadow)
         cp = QtGui.QPen(self.pen)
         for pen in [sp, cp]:
             if pen is None:

@@ -18,7 +18,8 @@ from metaarray import MetaArray
 import time
 from lib.util.Mutex import Mutex, MutexLocker
 from PyQt4 import QtCore
-from lib.filetypes.FileType import *
+#from lib.filetypes.FileType import *
+import lib.filetypes as filetypes
 
 def abspath(fileName):
     """Return an absolute path string which is guaranteed to uniquely identify a file."""
@@ -259,24 +260,32 @@ class FileHandle(QtCore.QObject):
         self.checkDeleted()
         with MutexLocker(self.lock):
             typ = self.fileType()
+            
             if typ is None:
                 fd = open(self.name(), 'r')
                 data = fd.read()
                 fd.close()
             else:
-                mod = __import__('lib.filetypes.%s' % typ, fromlist=['*'])
-                func = getattr(mod, 'fromFile')
-                data = func(fileName=self.name())
+                cls = filetypes.getFileType(typ)
+                data = cls.read(self)
+                #mod = __import__('lib.filetypes.%s' % typ, fromlist=['*'])
+                #func = getattr(mod, 'fromFile')
+                #data = func(fileName=self.name())
             
             return data
         
     def fileType(self):
         with MutexLocker(self.lock):
             info = self.info()
+            
+            ## Use the recorded object_type to read the file if possible.
+            ## Otherwise, ask the filetypes to choose the type for us.
             if '__object_type__' not in info:
-                return None
+                typ = filetypes.suggestReadType(self)
             else:
-                return info['__object_type__']
+                typ = info['__object_type__']
+            return typ
+
 
 
     def emitChanged(self, change, *args):
@@ -551,7 +560,8 @@ class DirHandle(FileHandle):
     def _fileInfo(self, file):
         """Return a dict of the meta info stored for file"""
         with MutexLocker(self.lock):
-            
+            if not self.isManaged():
+                return {}
             index = self._readIndex()
             if index.has_key(file):
                 return index[file]
@@ -572,7 +582,7 @@ class DirHandle(FileHandle):
             return os.path.isfile(fn)
         
     
-    def writeFile(self, obj, fileName, info=None, autoIncrement=False, useExt=True, **kwargs):
+    def writeFile(self, obj, fileName, info=None, autoIncrement=False, useExt=True, fileType=None, **kwargs):
         """Write a file to this directory using obj.write(fileName), store info in the index.
         Will try to convert obj into a FileType if the correct type exists.
         """
@@ -583,29 +593,35 @@ class DirHandle(FileHandle):
         with MutexLocker(self.lock):
             
             ## Convert object to FileType if needed
-            if not isinstance(obj, FileType):
-                try:
-                    if hasattr(obj, '__class__'):
-                        objType = obj.__class__.__name__
-                    else:
-                        objType = type(obj).__name__
-                    mod = __import__('lib.filetypes.%s' % objType, fromlist=['*'])
-                    cls = getattr(mod, objType)
-                    obj = cls(obj)
-                except:
-                    raise Exception("Can not create file from object of type %s" % str(type(obj)))
+            #if not isinstance(obj, FileType):
+                #try:
+                    #if hasattr(obj, '__class__'):
+                        #objType = obj.__class__.__name__
+                    #else:
+                        #objType = type(obj).__name__
+                    #mod = __import__('lib.filetypes.%s' % objType, fromlist=['*'])
+                    #cls = getattr(mod, objType)
+                    #obj = cls(obj)
+                #except:
+                    #raise Exception("Can not create file from object of type %s" % str(type(obj)))
+                    
+            if fileType is None:
+                fileType = filetypes.suggestWriteType(obj, fileName)
+                
+            if fileType is None:
+                raise Exception("Can not create file from object of type %s" % str(type(obj)))
 
-            ## Add on default extension if there is one
-            ext = obj.extension(**kwargs)
-            if fileName[-len(ext):] != ext:
-                fileName = fileName + ext
+            ## Add on default extension if there is one   ### Removed--FileTypes now handle this.
+            #ext = obj.extension(**kwargs)
+            #if fileName[-len(ext):] != ext:
+                #fileName = fileName + ext
 
             ## Increment file name
             if autoIncrement:
                 fileName = self.incrementFileName(fileName, useExt=useExt)
                     
             ## Write file
-            obj.write(self, fileName, **kwargs)
+            fileName = filetypes.getFileType(fileType).write(obj, self, fileName, **kwargs)
             self._childChanged()
             
             ## Write meta-info
@@ -624,6 +640,8 @@ class DirHandle(FileHandle):
         if info is None:
             info = {}
         with MutexLocker(self.lock):
+            if not self.isManaged():
+                self.createIndex()
             index = self._readIndex()
             fn = os.path.join(self.path, fileName)
             if not (os.path.isfile(fn) or os.path.isdir(fn)):
@@ -655,7 +673,10 @@ class DirHandle(FileHandle):
             if fileName is None:
                 return True
             else:
-                return (fileName in self._readIndex())
+                ind = self._readIndex(unmanagedOk=True)
+                if ind is None:
+                    return False
+                return (fileName in ind)
 
     
     def setInfo(self, *args):
@@ -683,7 +704,8 @@ class DirHandle(FileHandle):
     def _setFileInfo(self, fileName, info):
         """Set or update meta-information array for fileName. If merge is false, the info dict is completely overwritten."""
         with MutexLocker(self.lock):
-                
+            if not self.isManaged():
+                self.createIndex()
             index = self._readIndex(lock=False)
             append = False
             if fileName not in index:
@@ -699,12 +721,15 @@ class DirHandle(FileHandle):
                 self._writeIndex(index, lock=False)
             self.emitChanged('meta', fileName)
         
-    def _readIndex(self, lock=True):
+    def _readIndex(self, lock=True, unmanagedOk=False):
         with MutexLocker(self.lock):
             indexFile = self._indexFile()
             if self._index is None or os.path.getmtime(indexFile) != self._indexMTime:
                 if not os.path.isfile(indexFile):
-                    raise Exception("Directory '%s' is not managed!" % (self.name()))
+                    if unmanagedOk:
+                        return None
+                    else:
+                        raise Exception("Directory '%s' is not managed!" % (self.name()))
                 try:
                     self._index = readConfigFile(indexFile)
                     self._indexMTime = os.path.getmtime(indexFile)
@@ -722,7 +747,9 @@ class DirHandle(FileHandle):
             self._indexMTime = os.path.getmtime(self._indexFile())
         
     def checkIndex(self):
-        ind = self._readIndex()
+        ind = self._readIndex(unmanagedOk=True)
+        if ind is None:
+            return
         changed = False
         for f in ind:
             if not self.exists(f):
