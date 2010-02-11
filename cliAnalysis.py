@@ -16,14 +16,15 @@ if pyfile[0] != '/':
    pyfile =  os.path.join(os.getcwd(), pyfile)
 pyDir = os.path.split(pyfile)[0]
 sys.path.append(pyDir)
-from lib.util.metaarray import *
-from lib.util.pyqtgraph.ImageView import *
-from lib.util.pyqtgraph.GraphicsView import *
-from lib.util.pyqtgraph.graphicsItems import *
-from lib.util.pyqtgraph.PlotWidget import *
-from lib.util.Canvas import Canvas
+from metaarray import *
+from pyqtgraph.ImageView import *
+from pyqtgraph.GraphicsView import *
+from pyqtgraph.graphicsItems import *
+from pyqtgraph.graphicsWindows import *
+from pyqtgraph.PlotWidget import *
+from Canvas import Canvas
 from PyQt4 import QtCore, QtGui
-from lib.util.functions import *
+from functions import *
 
 
 ## Initialize Qt
@@ -148,7 +149,7 @@ class UncagingWindow(QtGui.QMainWindow):
         return QtGui.QColor(red, 0, blue, 150)
         
 
-win = UncagingWindow()
+#win = UncagingWindow()
 
 
 
@@ -167,33 +168,40 @@ if QtGui.QApplication.instance() is None:
 
 def showPlot(data=None, file=None, title=None):
     global plots
-    if data is None:
-        data = loadMetaArray(file)
-    win = QtGui.QMainWindow()
-    win.resize(800, 600)
-    if data.ndim == 1:
-        plot = PlotWidget()
-        win.setCentralWidget(plot)
-        plot.plot(data)
-        plot.autoRange()
-    elif data.ndim == 2:
-        gv = GraphicsView()
-        win.setCentralWidget(gv)
-        l = QtGui.QGraphicsGridLayout()
-        gv.centralWidget.setLayout(l)
-        for i in range(data.shape[0]):
-            p = PlotItem(gv.centralWidget)
-            l.addItem(p, i, 0)
-            p.plot(data[i])
-            p.autoRange()
-        
-        
     tStr = "Plot %d" % len(plots)
     if title is not None:
         tStr += " - " + title
-    win.setWindowTitle(tStr)
+        
+    if data is None:
+        data = loadMetaArray(file)
+    if data.ndim == 1:
+        win = PlotWindow(title=title)
+        #plot = PlotWidget()
+        #win.setCentralWidget(plot)
+        #plot.plot(data)
+        #plot.autoRange()
+        win.plot(data)
+        win.autoRange()
+    elif data.ndim == 2:
+        win = MultiPlotWindow(title=title)
+        win.plot(data)
+        win.autoRange()
+        #gv = GraphicsView()
+        #win.setCentralWidget(gv)
+        #l = QtGui.QGraphicsGridLayout()
+        #gv.centralWidget.setLayout(l)
+        #for i in range(data.shape[0]):
+            #p = PlotItem(gv.centralWidget)
+            #l.addItem(p, i, 0)
+            #p.plot(data[i])
+            #p.autoRange()
+    win.resize(800, 600)
+        
+        
+    #win.setWindowTitle(tStr)
     plots.append({'win': win, 'data': data})
     win.show()
+    return win
 
 def showImage(data=None, file=None, title=None):
     global images
@@ -211,6 +219,7 @@ def showImage(data=None, file=None, title=None):
     win.setWindowTitle(tStr)
     images.append({'win': win, 'data': data})
     win.show()
+    return win
     
 
 def dirDialog(startDir='', title="Select Directory"):

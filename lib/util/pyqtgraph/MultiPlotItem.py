@@ -40,7 +40,7 @@ class MultiPlotItem(QtGui.QGraphicsWidget):
                 if 'cols' in ic[i]:
                     ax = i
                     break
-                    
+            #print "Plotting using axis %d as columns (%d plots)" % (ax, data.shape[ax])
             for i in range(data.shape[ax]):
                 pi = PlotItem()
                 sl = [slice(None)] * 2

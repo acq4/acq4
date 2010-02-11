@@ -1,9 +1,162 @@
 # -*- coding: utf-8 -*-
 from ctypes import *
 import sys, numpy, time, types
-import lib.util.cheader as cheader
+#import lib.util.cheader as cheader
+from clibrary import *
 
-#PVCAM_CREATED = False
+def init():
+    ## System-specific code
+    headerFiles = ["C:\Program Files\Photometrics\PVCam32\SDK\inc\master.h", "C:\Program Files\Photometrics\PVCam32\SDK\inc\pvcam.h"]
+    #pvcam_header_files = ["master.h", "pvcam.h"]
+    lib = CLibrary(headerFiles, prefix='pl_')
+    #defs = cheader.getDefs(pvcam_header_files)
+    global PVCam
+    PVCam = _PVCamClass(lib)
+    #PVCam.defs = defs
+    
+    ## Export names to global level for easier use
+    #for k in defs:
+        #setattr(sys.modules[__name__], k, defs[k])
+
+
+class _PVCamClass:
+    
+    PVCAM_CREATED = False
+    
+    def __init__(self, lib):
+        self.cams = {}
+        self.lib = lib
+        #self.pvcam = windll.Pvcam32
+        if _PVCamClass.PVCAM_CREATED:
+            raise Exception("Will not create another pvcam instance--use the pre-existing PVCam object.")
+        if self.lib.pvcam_init() < 1:
+            raise Exception("Could not initialize pvcam library (pl_pvcam_init): %s" % self.error())
+        if self.lib.exp_init_seq() < 1:
+            raise Exception("Could not initialize pvcam library (pl_exp_init_seq): %s" % self.error())
+        _PVCamClass.PVCAM_CREATED = True
+
+    def reloadDriver(self):
+        #if self.pvcam.pl_pvcam_uninit() < 1:
+            #raise Exception("Could not un-initialize pvcam library (pl_pvcam_init): %s" % self.error())
+        #self.pvcam = windll.Pvcam32
+        #if self.pvcam.pl_pvcam_init() < 1:
+            #raise Exception("Could not initialize pvcam library (pl_pvcam_init): %s" % self.error())
+        self.quit()
+        self.__init__()
+        
+
+    def listCameras(self):
+        nCam = c_int()
+        cams = []
+        if self.pvcam.pl_cam_get_total(byref(nCam)) < 1:
+            raise Exception("Error getting number of cameras: %s" % self.error())
+        for i in range(0, nCam.value):
+            cName = create_string_buffer('\0' * CAM_NAME_LEN)
+            if self.pvcam.pl_cam_get_name(c_short(i), byref(cName)) < 1:
+                raise Exception("Error getting name for camera %d: %s" % (i, self.error()))
+            cams.append(cName.value)
+        return cams
+
+    def getCamera(self, cam):
+        if not self.cams.has_key(cam):
+            self.cams[cam] = _CameraClass(cam, self)
+        return self.cams[cam]
+    
+    def __getattr__(self, attr):
+        if hasattr(self.pvcam, attr):
+            return lambda *args: self.call(attr, *args)
+        else:
+            raise NameError
+
+    def call(self, func, *args):
+        try:
+            #print "%s(%s)" % (func, str(args))
+            fn = getattr(self.pvcam, func)
+        except:
+            raise Exception("No PVCam function named " + func)
+        if fn(*args) < 1:
+            raise Exception("Function '%s%s' failed: %s" % (func, str(args), self.error()), self.pvcam.pl_error_code())
+
+    def error(self):
+        err = create_string_buffer('\0'*ERROR_MSG_LEN)
+        erc = self.pvcam.pl_error_code()
+        self.pvcam.pl_error_message(erc, byref(err))
+        return "%d: %s" % (erc, err.value)
+
+    def __del__(self):
+        self.quit()
+
+    def quit(self):
+        for c in self.cams:
+            try:
+                self.cams[c].close()
+            except:
+                pass
+        if not hasattr(self, 'pvcam'):
+            return
+        self.pvcam.pl_exp_uninit_seq()
+        self.pvcam.pl_pvcam_uninit()
+        _PVCamClass.PVCAM_CREATED = False
+
+    def param(self, pName):
+        if isinstance(pName, basestring):
+            pName = 'PARAM_'+pName
+            if pName in self.defs:
+                return self.defs[pName]
+            else:
+                raise Exception('No parameter named %s' % pName)
+        else:
+            return pName
+
+    def attr(self, pName):
+        if isinstance(pName, basestring):
+            pName = 'ATTR_'+pName
+            if pName in self.defs:
+                return self.defs[pName]
+            else:
+                raise Exception('No parameter named %s' % pName)
+        else:
+            return pName
+
+    def paramName(self, param):
+        for p in self.listParams():
+            if self.defs[p] == param:
+                return p
+
+    def attrName(self, attr):
+        for p in self.defs:
+            if p[:5] == 'ATTR_' and self.defs[p] == attr:
+                return p
+
+    def typeName(self, typ):
+        for p in self.defs:
+            if p[:5] == 'TYPE_' and self.defs[p] == typ:
+                return p
+
+    def listParams(self):
+        #return [x[6:] for x in self.defs if x[:6] == 'PARAM_']
+        return [
+            'SPDTAB_INDEX',
+            'BIT_DEPTH',
+            'GAIN_INDEX',
+            'GAIN_MULT_ENABLE',
+            'GAIN_MULT_FACTOR',
+            'INTENSIFIER_GAIN',
+            'EXPOSURE_MODE',
+            'PREFLASH',
+            'PIX_TIME',
+            'CLEAR_MODE',
+            'CLEAR_CYCLES',
+            'SHTR_OPEN_MODE',
+            'SHTR_OPEN_DELAY',
+            'PIX_SER_SIZE',
+            'PIX_PAR_SIZE',
+            'ANTI_BLOOMING',
+            'TEMP',
+            'TEMP_SETPOINT',
+            'COOLING_MODE',
+        ]
+
 
 class _CameraClass:
     def __init__(self, name, pvcam):
@@ -384,145 +537,6 @@ class _CameraClass:
             'Bulb': BULB_MODE
         }
     
-class _PVCamClass:
-    
-    PVCAM_CREATED = False
-    
-    def __init__(self):
-        self.cams = {}
-        self.pvcam = windll.Pvcam32
-        if _PVCamClass.PVCAM_CREATED:
-            raise Exception("Will not create another pvcam instance--use the pre-existing PVCam object.")
-        if self.pvcam.pl_pvcam_init() < 1:
-            raise Exception("Could not initialize pvcam library (pl_pvcam_init): %s" % self.error())
-        if self.pvcam.pl_exp_init_seq() < 1:
-            raise Exception("Could not initialize pvcam library (pl_exp_init_seq): %s" % self.error())
-        _PVCamClass.PVCAM_CREATED = True
-
-    def reloadDriver(self):
-        #if self.pvcam.pl_pvcam_uninit() < 1:
-            #raise Exception("Could not un-initialize pvcam library (pl_pvcam_init): %s" % self.error())
-        #self.pvcam = windll.Pvcam32
-        #if self.pvcam.pl_pvcam_init() < 1:
-            #raise Exception("Could not initialize pvcam library (pl_pvcam_init): %s" % self.error())
-        self.quit()
-        self.__init__()
-        
-
-    def listCameras(self):
-        nCam = c_int()
-        cams = []
-        if self.pvcam.pl_cam_get_total(byref(nCam)) < 1:
-            raise Exception("Error getting number of cameras: %s" % self.error())
-        for i in range(0, nCam.value):
-            cName = create_string_buffer('\0' * CAM_NAME_LEN)
-            if self.pvcam.pl_cam_get_name(c_short(i), byref(cName)) < 1:
-                raise Exception("Error getting name for camera %d: %s" % (i, self.error()))
-            cams.append(cName.value)
-        return cams
-
-    def getCamera(self, cam):
-        if not self.cams.has_key(cam):
-            self.cams[cam] = _CameraClass(cam, self)
-        return self.cams[cam]
-    
-    def __getattr__(self, attr):
-        if hasattr(self.pvcam, attr):
-            return lambda *args: self.call(attr, *args)
-        else:
-            raise NameError
-
-    def call(self, func, *args):
-        try:
-            #print "%s(%s)" % (func, str(args))
-            fn = getattr(self.pvcam, func)
-        except:
-            raise Exception("No PVCam function named " + func)
-        if fn(*args) < 1:
-            raise Exception("Function '%s%s' failed: %s" % (func, str(args), self.error()), self.pvcam.pl_error_code())
-
-    def error(self):
-        err = create_string_buffer('\0'*ERROR_MSG_LEN)
-        erc = self.pvcam.pl_error_code()
-        self.pvcam.pl_error_message(erc, byref(err))
-        return "%d: %s" % (erc, err.value)
-
-    def __del__(self):
-        self.quit()
-
-    def quit(self):
-        for c in self.cams:
-            try:
-                self.cams[c].close()
-            except:
-                pass
-        if not hasattr(self, 'pvcam'):
-            return
-        self.pvcam.pl_exp_uninit_seq()
-        self.pvcam.pl_pvcam_uninit()
-        _PVCamClass.PVCAM_CREATED = False
-
-    def param(self, pName):
-        if isinstance(pName, basestring):
-            pName = 'PARAM_'+pName
-            if pName in self.defs:
-                return self.defs[pName]
-            else:
-                raise Exception('No parameter named %s' % pName)
-        else:
-            return pName
-
-    def attr(self, pName):
-        if isinstance(pName, basestring):
-            pName = 'ATTR_'+pName
-            if pName in self.defs:
-                return self.defs[pName]
-            else:
-                raise Exception('No parameter named %s' % pName)
-        else:
-            return pName
-
-    def paramName(self, param):
-        for p in self.listParams():
-            if self.defs[p] == param:
-                return p
-
-    def attrName(self, attr):
-        for p in self.defs:
-            if p[:5] == 'ATTR_' and self.defs[p] == attr:
-                return p
-
-    def typeName(self, typ):
-        for p in self.defs:
-            if p[:5] == 'TYPE_' and self.defs[p] == typ:
-                return p
-
-    def listParams(self):
-        #return [x[6:] for x in self.defs if x[:6] == 'PARAM_']
-        return [
-            'SPDTAB_INDEX',
-            'BIT_DEPTH',
-            'GAIN_INDEX',
-            'GAIN_MULT_ENABLE',
-            'GAIN_MULT_FACTOR',
-            'INTENSIFIER_GAIN',
-            'EXPOSURE_MODE',
-            'PREFLASH',
-            
-            'PIX_TIME',
-            'CLEAR_MODE',
-            'CLEAR_CYCLES',
-            'SHTR_OPEN_MODE',
-            'SHTR_OPEN_DELAY',
-            'PIX_SER_SIZE',
-            'PIX_PAR_SIZE',
-            'ANTI_BLOOMING',
-            'TEMP',
-            'TEMP_SETPOINT',
-            'COOLING_MODE',
-            
-            
-        ]
         
 
 
@@ -557,18 +571,6 @@ class Region(Structure):
     def size(self):
         return ((self.s2-self.s1+1) / self.sbin, (self.p2-self.p1+1) / self.pbin)
 
-def init():
-    ## System-specific code
-    pvcam_header_files = ["C:\Program Files\Photometrics\PVCam32\SDK\inc\master.h", "C:\Program Files\Photometrics\PVCam32\SDK\inc\pvcam.h"]
-    #pvcam_header_files = ["master.h", "pvcam.h"]
-    defs = cheader.getDefs(pvcam_header_files)
-    global PVCam
-    PVCam = _PVCamClass()
-    PVCam.defs = defs
-    
-    ## Export names to global level for easier use
-    for k in defs:
-        setattr(sys.modules[__name__], k, defs[k])
 
 def mkCObj(typ, value=None):
     typs = {

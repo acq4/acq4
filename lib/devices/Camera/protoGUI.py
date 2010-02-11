@@ -7,7 +7,7 @@ from lib.util.WidgetGroup import *
 from numpy import ndarray
 #from PyQt4 import Qwt5 as Qwt
 
-class PVCamProto(DAQGenericProtoGui):
+class CameraProtoGui(DAQGenericProtoGui):
     def __init__(self, dev, prot):
         DAQGenericProtoGui.__init__(self, dev, prot, ownUi=False)  ## When initializing superclass, make sure it knows this class is creating the ui.
         

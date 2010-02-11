@@ -745,7 +745,7 @@ class ScaleItem(QtGui.QGraphicsWidget):
         #print "  start at %f,  %d ticks" % (start, num)
         
         ## Number of decimal places to print
-        places = max(0, int(3 - log10(dif)))
+        places = max(0, int(1.3 - log10(dif)))
         
         if axis == 0:
             xs = -bounds.height() / dif
@@ -1127,8 +1127,79 @@ class InfiniteLine(QtGui.QGraphicsLineItem):
         #self.updateLine()
         #return QtGui.QGraphicsLineItem.boundingRect(self)
 
+class VTickGroup(QtGui.QGraphicsPathItem):
+    def __init__(self, xvals=None, yrange=None, pen=None, yRelative=False):
+        QtGui.QGraphicsPathItem.__init__(self)
+        if yrange is None:
+            yrange = [0, 1]
+        if xvals is None:
+            xvals = []
+        if pen is None:
+            pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
+        self.ticks = []
+        self.xvals = []
+        self.yrange = [0,1]
+        self.setPen(pen)
+        self.setYRange(yrange, yRelative)
+        self.setXVals(xvals)
+        
+    #def setPen(self, pen=None):
+        #if pen is None:
+            #pen = self.pen
+        #self.pen = pen
+        #for t in self.ticks:
+            #t.setPen(pen)
+        ##self.update()
 
+    def setXVals(self, vals):
+        self.xvals = vals
+        self.rebuildTicks()
+        #self.updateBounds()
+        #self.update()
+        
+    def setYRange(self, vals, relative=False):
+        self.yrange = vals
+        #self.updateBounds()
+        self.rebuildTicks()
+        #self.update()
+            
+    def yRange(self):
+        return self.yrange
+            
+    def rebuildTicks(self):
+        path = QtGui.QPainterPath()
+        for x in self.xvals:
+            path.moveTo(x, self.yrange[0])
+            path.lineTo(x, self.yrange[1])
+        self.setPath(path)
+        #self.clear()
+        #y0, y1 = self.yRange()
+        #for i in range(len(self.xvals)):
+            #x = self.xvals[i]
+            #tick = QtGui.QGraphicsLineItem(x, y0, x, y1, self)
+            #self.ticks.append(tick)
+            ##self.addToGroup(tick)
+        #self.setPen()
+        
+    #def clear(self):
+        #for t in self.ticks:
+            #t.scene().removeItem(t)
+            ##self.removeFromGroup(t)
+        #self.ticks = []
+        
+    #def updateBounds(self):
+        #mnx = min(self.xvals)
+        #mxx = max(self.xvals)
+        #self.bounds =  QtCore.QRectF(mnx, self.yrange[0], mxx-mnx, self.yrange[1]-self.yrange[0])
+        
+    #def boundingRect(self):
+        #return self.bounds
 
+    #def paint(self, p, *opts):
+        #p.setPen(self.pen)
+        #print self.yrange
+        #for x in self.xvals:
+            #p.drawLine(QtCore.QPointF(x, self.yrange[0]), QtCore.QPointF(x, self.yrange[1]))
 
 class GridItem(UIGraphicsItem):
     def __init__(self, view, bounds=None, *args):
