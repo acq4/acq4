@@ -37,18 +37,22 @@ def suggestWriteType(data, fileName=None):
     Return the name of the class."""
     maxVal = None
     maxType = None
+    #print "Suggest for type %s, name %s" % (type(data), str(fileName))
     for typ in listFileTypes():
         try:
             cls = getFileType(typ)
         except:
+            debug.printExc("ignoring filetype %s" % typ)
             continue
         priority = cls.acceptsData(data, fileName)
+        #print "filetype %s has priority %d" %(typ, int(priority))
         if priority is False:
             continue
         else:
             if maxVal is None or priority > maxVal:
                 maxVal = priority
                 maxType = typ
+    #print "Suggesting", maxType
     return maxType
 
 def listReadTypes(fileHandle):

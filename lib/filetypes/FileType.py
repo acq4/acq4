@@ -56,7 +56,7 @@ class FileType:
         return False
         
     @classmethod
-    def addExtension(fileName):
+    def addExtension(cls, fileName):
         """Return a file name with extension added if it did not already have one."""
         for ext in cls.extensions:
             if fileName[-len(ext):].lower() == ext.lower():

@@ -21,8 +21,8 @@ class PatchWindow(QtGui.QMainWindow):
         self.setWindowTitle(clampName)
         
         self.analysisItems = {
-            'inputResistance': 'Ohm', 
-            'accessResistance': 'Ohm',
+            'inputResistance': 'Ω', 
+            'accessResistance': 'Ω',
             'capacitance': 'F',
             'restingPotential': 'V', 
             'restingCurrent': 'A', 
@@ -334,7 +334,7 @@ class PatchThread(QtCore.QThread):
             self.paramsUpdated = True
     
     def run(self):
-    """Main loop for patch thread. This is where protocols are executed and data collected."""
+        """Main loop for patch thread. This is where protocols are executed and data collected."""
         try:
             with MutexLocker(self.lock) as l:
                 self.stopThread = False

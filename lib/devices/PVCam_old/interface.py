@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from lib.devices.DAQGeneric.interface import DAQGeneric, DAQGenericTask
-from lib.drivers.pvcam import PVCam as PVCDriver
+from lib.drivers.pvcam_old import PVCam as PVCDriver
 from lib.devices.Device import *
 from PyQt4 import QtCore
 import time, sys, traceback
@@ -13,7 +13,7 @@ import lib.util.ptime as ptime
 from lib.util.Mutex import Mutex, MutexLocker
 from lib.util.debug import *
 
-class PVCam(DAQGeneric):
+class PVCam_old(DAQGeneric):
     def __init__(self, dm, config, name):
         # Generate config to use for DAQ 
         daqConfig = {}

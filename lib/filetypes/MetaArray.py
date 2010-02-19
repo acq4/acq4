@@ -33,8 +33,8 @@ class MetaArray(FileType):
         if fileName[-len(ext):] != ext:
             fileName = fileName + ext
             
-        if not isinstance(data, MetaArray):
-            data = MetaArray(data)
+        if not isinstance(data, MA):
+            data = MA(data)
         data.write(os.path.join(dirHandle.name(), fileName), **args)
         return fileName
         

@@ -1006,7 +1006,7 @@ class RecordThread(QtCore.QThread):
         if frame['snap']:
             fileName = 'image.tif'
             
-            fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType=ImageFile, autoIncrement=True)
+            fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
             fn = fh.name()
             self.showMessage("Saved image %s" % fn)
             with MutexLocker(self.lock):

@@ -626,7 +626,7 @@ class DirHandle(FileHandle):
             
             ## Write meta-info
             if not info.has_key('__object_type__'):
-                info['__object_type__'] = obj.typeName()
+                info['__object_type__'] = fileType
             if not info.has_key('__timestamp__'):
                 info['__timestamp__'] = t
             self._setFileInfo(fileName, info)
