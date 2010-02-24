@@ -4,11 +4,11 @@ import sys, os
 d = os.path.dirname(__file__)
 sys.path.append(os.path.join(d, '../../util'))
 from clibrary import *
-from numpy import empty, uint16, ascontiguousarray
+from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
 from pyqtgraph import graphicsWindows as gw
 from PyQt4 import QtGui
 import atexit
-p = CParser('QCamApi.h', cache='QCamApi.h.cache')
+p = CParser('QCamApi.h', cache='QCamApi.h.cache', macros={'_WIN32': '', '__int64': ('long long')})
 if sys.platform == 'darwin':
     dll = cdll.LoadLibrary('/Library/Frameworks/QCam.framework/QCam')
 else:
@@ -35,7 +35,11 @@ def call(function, *args):
         return a
     
 def quit():
+    lib.Abort(handle)
+    lib.SetStreaming(handle, 0)
     lib.CloseCamera(handle)
+    lib.ReleaseDriver()
+    print 'Closing down...'
 atexit.register(quit)
 
 def loadDriver():
@@ -62,7 +66,8 @@ def openCamera(cameraID): #opens the camera and returns the handle
 def mkFrame():
     s = call(lib.GetInfo, handle, lib.qinfImageSize)[2]
     f = lib.Frame()
-    frame = ascontiguousarray(empty((10, s/2), dtype=uint16))[5]
+    frame = ascontiguousarray(empty(s/2, dtype=uint16))
+    print "made frame", id(f), frame.shape
     f.pBuffer = frame.ctypes.data
     f.bufferSize = s
     return (f, frame)
@@ -161,7 +166,7 @@ def getCameraInfo():
             camerainfo[x] = a[2]
         except QCamFunctionError, err:
             if err.value == 1:
-                print ("No info for: ", x)
+                print "No info for: ", x
             else: raise
             
             
@@ -212,11 +217,23 @@ def setParams(**params):
             call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(params[param]))
     call(lib.SendSettingsToCam, handle, byref(s))
     
+def start():
+    pass
+
+def stop():
+    pass
+
+def lastFrame():
+    pass
+    
+    
 loadDriver()
 cameras = listCameras()
 handle = openCamera(cameras[0])
+
+
 setParam(lib.qprmDoPostProcessing, 0)
-setParams(qprmExposure=10000)
+setParams(qprm64Exposure=10000000)
 #setParams(qprmExposureRed=0, qprmExposureBlue=0)
 setParams(qprmReadoutSpeed=lib.qcReadout20M)
 
@@ -231,33 +248,35 @@ print camerainfo
 b = lib.SetStreaming(handle, 1)
 n = 0
 def fn(*args):
-    #global n
-    #n +=1
-    print "CALLBACK:", args
-    print a.max(), a.min(), a.mean()
-    #f, a = mkFrame()
-    #print '1.1'
-    lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, n)
-    #print '1.2'
-f, a = mkFrame()
+    print "CALLBACK"
+    #print "CALLBACK:", args
+    #print a.max(), a.min(), a.mean()
+fnp = lib.AsyncCallback(fn)    
+frames = []
+arrays = []
+for i in range(5):
+    f, a = mkFrame()
+    frames.append(f)
+    arrays.append(a)
+    print "Queue frame..", id(f)
+    qf = lib.QueueFrame(handle, f, fnp, lib.qcCallbackDone | lib.qcCallbackExposeDone, 0, 10)
+    print "Frame queued."
+   # time.sleep(0.3)
 
-print "Queue frame.."
-qf = lib.QueueFrame(handle, f, lib.AsyncCallback(fn), lib.qcCallbackDone, 0, 10)
-print "Frame queued."
-#print qf()
-#print qf[1]
-
-time.sleep(3.0)
+time.sleep(1.0)
 print "starting app.."
 app = QtGui.QApplication([])
 print "app started."
 print a.shape, (camerainfo['qinfCcdWidth'], camerainfo['qinfCcdHeight'])
-a.shape = (camerainfo['qinfCcdWidth'], camerainfo['qinfCcdHeight'])
+a.shape = (camerainfo['qinfCcdHeight'], camerainfo['qinfCcdWidth'])
 print "create window"
-imw1 = gw.ImageWindow(a)
+imw1 = gw.ImageWindow()
+imw1.setImage(a.transpose())
+#imw1.setImage(concatenate([a.transpose()[newaxis] for a in arrays]))
 print "show window"
 imw1.show()
 
 print "Done."
 
 app.exec_()
+

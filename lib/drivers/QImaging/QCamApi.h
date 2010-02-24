@@ -40,7 +40,7 @@ extern "C" {
 #endif
 
 
-#define QCAMAPI_VERSION		(2006)
+#define QCAMAPI_VERSION		(2008)
 
 
 
@@ -95,13 +95,23 @@ typedef enum
 
 	qcCameraGo21			= 24,		// USB CMOS camera
 
-	qcCameraReserved1		= 25,		
+	qcCameraRoleraEMC2		= 25,		
 	
 	qcCameraRetigaEXL		= 26,		
 	
 	qcCameraRoleraXRL		= 27,		
 	
-	qcCameraRetigaSRVL		= 28,		
+	qcCameraRetigaSRVL		= 28,
+
+	qcCameraRetiga4000DC	= 29,
+
+	qcCameraRetiga2000DC	= 30,
+
+	qcCameraEXiBlue			= 31,
+
+	qcCameraEXiGreen		= 32,
+
+	qcCameraRetigaIndigo	= 33,
 
 	// Reserved numbers
 	qcCameraX				= 1000,
@@ -220,7 +230,18 @@ typedef enum
 	qcCMOS				= 79,
 	qcCcdTX285			= 80,
 
-	qcCcd_last			= 81,
+	qcCcdKAI04022MgC	= 81,
+	qcCcdKAI04022CMgC	= 82,
+	qcCcdKAI04022MgAR	= 83,
+	qcCcdKAI04022CMgAR	= 83,
+	qcCcdKAI04022gAR	= 85,
+	qcCcdKAI04022gQ		= 86,
+	qcCcdKAI04022gC		= 87,
+	qcCcdKAI04022gN		= 88,
+	qcCcdKAI04022MgN	= 89,
+	qcCcdKAI04022CMgN	= 90,
+
+	qcCcd_last			= 91,
 	qcCcdX				= 255	// Reserved 
 }
 QCam_qcCcd;
