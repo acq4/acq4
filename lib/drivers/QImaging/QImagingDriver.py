@@ -7,6 +7,7 @@ from clibrary import *
 from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
 from pyqtgraph import graphicsWindows as gw
 from PyQt4 import QtGui
+from Mutex import Mutex, MutexLocker
 import atexit
 p = CParser('QCamApi.h', cache='QCamApi.h.cache', macros={'_WIN32': '', '__int64': ('long long')})
 if sys.platform == 'darwin':
@@ -67,7 +68,6 @@ def mkFrame():
     s = call(lib.GetInfo, handle, lib.qinfImageSize)[2]
     f = lib.Frame()
     frame = ascontiguousarray(empty(s/2, dtype=uint16))
-    print "made frame", id(f), frame.shape
     f.pBuffer = frame.ctypes.data
     f.bufferSize = s
     return (f, frame)
@@ -143,6 +143,8 @@ def listParams():
             except QCamFunctionError, err:
                 if err.value == 1:  pass
                 else: raise
+    parameters.pop('qprmExposure')
+    parameters.pop('qprmOffset')
     for x in parameters: 
         if type(parameters[x]) == type([]):
             if x in paramenums: ## x is the name of the parameter
@@ -154,9 +156,7 @@ def listParams():
                             parameters[x][i] = b
                             print "old: ", a, "new: ", parameters[x][i]
 
-#for x in lib('enums', 'QCam_Err'):
-#            if lib('enums', 'QCam_Err')[x] == a():
-#                raise QCamFunctionError(a(), "There was an error running a QCam function. Error code = %s" %(x))
+
                     
 camerainfo = {}
 def getCameraInfo():
@@ -191,7 +191,13 @@ def setParam(param, value):
         call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(value))
     elif param in lib('enums', 'QCam_Param64'):
         call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(value))
-    call(lib.SendSettingsToCam, handle, byref(s))
+    m.lock()
+    if stopsignal == True:
+        m.unlock()
+        call(lib.SendSettingsToCam, handle, byref(s))
+    if stopsignal == False:
+        m.unlock()
+        call(lib.QueueSettings, handle, byref(s), null, lib.qcCallbackDone)
 
 def getParams(*params):
     s = call(lib.ReadSettingsFromCam, handle)[1]
@@ -215,68 +221,121 @@ def setParams(**params):
             call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(params[param]))
         elif param in lib('enums', 'QCam_Param64'):
             call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(params[param]))
-    call(lib.SendSettingsToCam, handle, byref(s))
+    m.lock()
+    if stopsignal == True:
+        m.unlock()
+        call(lib.SendSettingsToCam, handle, byref(s))
+    if stopsignal == False:
+        m.unlock()
+        call(lib.QueueSettings, handle, byref(s), 0, lib.qcCallbackDone)
     
+
+
+frames = []
+arrays = []
+i = 0
+stopsignal = True
+m = Mutex()
+
 def start():
-    pass
+    global i, stopsignal
+    m.lock()
+    stopsignal = False
+    i = 0
+    m.unlock()
+    call(lib.SetStreaming, handle, 1)
+    for x in range(200):
+        f, a = mkFrame()
+        frames.append(f)
+        arrays.append(a)
+    for x in range(2):
+        call(lib.QueueFrame, handle, frames[i], fnp1, lib.qcCallbackDone, 0, i)
+        m.lock()
+        i += 1
+        m.unlock()
+    
+def callBack1(*args):
+    global i, lastframe
+    if args[2] != 0:
+        for x in lib('enums', 'QCam_Err'):
+            if lib('enums', 'QCam_Err')[x] == args[2]:
+                raise QCamFunctionError(args[2], "There was an error during QueueFrame/Callback. Error code = %s" %(x))
+    m.lock()
+    lastframe = (args[1], arrays[args[1]]) ### Need to figure out a way to attach settings info (binning, exposure gain region and offset) to frame!!!
+    if i != 199:
+        i += 1
+    else:
+        i = 0
+    if stopsignal == False:
+        m.unlock()
+        call(lib.QueueFrame, handle, frames[i], fnp1, lib.qcCallbackDone, 0, i)
+    else:
+        m.unlock()
 
 def stop():
-    pass
+    global stopsignal
+    m.lock()
+    stopsignal = True
+    call(lib.Abort, handle)
+    m.unlock()
 
 def lastFrame():
-    pass
+    global lastframe
+    m.lock()
+    a = lastframe
+    m.unlock()
+    return a 
     
     
 loadDriver()
 cameras = listCameras()
 handle = openCamera(cameras[0])
+fnp1 = lib.AsyncCallback(callBack1)
+lastframe = (0,0)
 
 
-setParam(lib.qprmDoPostProcessing, 0)
-setParams(qprm64Exposure=10000000)
-#setParams(qprmExposureRed=0, qprmExposureBlue=0)
-setParams(qprmReadoutSpeed=lib.qcReadout20M)
+#setParam(lib.qprmDoPostProcessing, 0)
+#setParams(qprm64Exposure=10000000)
+##setParams(qprmExposureRed=0, qprmExposureBlue=0)
+#setParams(qprmReadoutSpeed=lib.qcReadout20M)
+#
+#setParams(qprmTriggerType=lib.qcTriggerFreerun, qprmImageFormat=lib.qfmtMono16)
+#
+#
+#
+#getCameraInfo()
+#print camerainfo
+#
+#
+#
+#n = 0
+#
+#
+#
+#
+#for i in range(5):
+#    f, a = mkFrame()
+#    frames.append(f)
+#    arrays.append(a)
+#    print "Queue frame..", id(f)
+#    
+#    print "Frame queued."
+#   # time.sleep(0.3)
 
-setParams(qprmTriggerType=lib.qcTriggerFreerun, qprmImageFormat=lib.qfmtMono16)
-
-
-
-getCameraInfo()
-print camerainfo
-
-
-b = lib.SetStreaming(handle, 1)
-n = 0
-def fn(*args):
-    print "CALLBACK"
-    #print "CALLBACK:", args
-    #print a.max(), a.min(), a.mean()
-fnp = lib.AsyncCallback(fn)    
-frames = []
-arrays = []
-for i in range(5):
-    f, a = mkFrame()
-    frames.append(f)
-    arrays.append(a)
-    print "Queue frame..", id(f)
-    qf = lib.QueueFrame(handle, f, fnp, lib.qcCallbackDone | lib.qcCallbackExposeDone, 0, 10)
-    print "Frame queued."
-   # time.sleep(0.3)
-
-time.sleep(1.0)
-print "starting app.."
-app = QtGui.QApplication([])
-print "app started."
-print a.shape, (camerainfo['qinfCcdWidth'], camerainfo['qinfCcdHeight'])
-a.shape = (camerainfo['qinfCcdHeight'], camerainfo['qinfCcdWidth'])
-print "create window"
-imw1 = gw.ImageWindow()
-imw1.setImage(a.transpose())
-#imw1.setImage(concatenate([a.transpose()[newaxis] for a in arrays]))
-print "show window"
-imw1.show()
-
-print "Done."
-
-app.exec_()
+#time.sleep(1.0)
+#print "starting app.."
+#app = QtGui.QApplication([])
+#print "app started."
+#print a.shape, (camerainfo['qinfCcdWidth'], camerainfo['qinfCcdHeight'])
+#a.shape = (camerainfo['qinfCcdHeight'], camerainfo['qinfCcdWidth'])
+#print "create window"
+#imw1 = gw.ImageWindow()
+#imw1.setImage(a.transpose())
+##imw1.setImage(concatenate([a.transpose()[newaxis] for a in arrays]))
+#print "show window"
+#imw1.show()
+#
+#print "Done."
+#
+#app.exec_()
 
