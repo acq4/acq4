@@ -96,10 +96,12 @@ def describeObj(__XX__Obj, depth=4, printResult=True, ignoreNames=None):
     
     
 class Profiler:
-    def __init__(self):
+    def __init__(self, msg="Profiler"):
         self.t0 = ptime.time()
+        self.msg = msg
+        self.mark("start")
     
-    def mark(self, msg):
+    def mark(self, msg=''):
         t1 = ptime.time()
-        print msg, "%gms" % ((t1-self.t0)*1000)
+        print self.msg, msg, "%gms" % ((t1-self.t0)*1000)
         self.t0 = t1

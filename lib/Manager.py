@@ -288,6 +288,7 @@ Valid options are:
             
         mod = __import__('lib.modules.%s' % module, fromlist=['*'])
         if forceReload:
+            ## Reload all .py files in module's directory
             modDir = os.path.join('lib', 'modules', module)
             files = glob.glob(os.path.join(modDir, '*.py'))
             files = [os.path.basename(f[:-3]) for f in files]
@@ -297,6 +298,7 @@ Valid options are:
             for m in modNames:
                 if m in sys.modules:
                     reload(sys.modules[m])
+            mod = __import__('lib.modules.%s' % module, fromlist=['*'])
             
         modclass = getattr(mod, module)
         self.modules[name] = modclass(self, name, config)
@@ -497,10 +499,10 @@ Valid options are:
             QtGui.QApplication.instance().closeAllWindows()
             #print "  done."
             print "\n    ciao."
-            
+        #app= QtGui.QApplication.instance()
         #print app.topLevelWidgets()
         #for w in app.topLevelWidgets():
-            #print w, w.isVisible()
+        #    print w, w.isVisible()
         #print app.quitOnLastWindowClosed()
 
 class Task:

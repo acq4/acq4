@@ -4,6 +4,18 @@ from lib.DataManager import *
 from lib.util.debug import *
 import os
 
+depth = 0
+def profile(fn):
+    def newFn(*args, **kargs):
+        global depth
+        p = Profiler("  " * depth + fn.__name__)
+        depth += 1
+        ret = fn(*args, **kargs)
+        p.mark('finished')
+        depth -= 1
+        return ret
+    return newFn
+
 class DMModel(QtCore.QAbstractItemModel):
     """Based on DirTreeModel, used for displaying the contents of directories created and managed by DataManager"""
     def __init__(self, baseDirHandle=None, parent=None):
@@ -31,6 +43,7 @@ class DMModel(QtCore.QAbstractItemModel):
     def dirChanged(self, path, change, *args):
         self.layoutChanged()
 
+    #@profile
     def handleIndex(self, handle):
         """Create an index from a file handle"""
         if not isinstance(handle, FileHandle):
@@ -49,7 +62,8 @@ class DMModel(QtCore.QAbstractItemModel):
             raise
         return self.createIndex(row, 0, handle)
         
-    def handle(self, index):
+    #@profile
+    def handle(self, index):  ## must be optimized!
         """Return the file handle from an index"""
         if not index.isValid():
             return self.baseDir
@@ -59,7 +73,8 @@ class DMModel(QtCore.QAbstractItemModel):
         else:
             return h
 
-    def index(self, row, column, parent=QtCore.QModelIndex()):
+    #@profile
+    def index(self, row, column, parent=QtCore.QModelIndex()):  ## must be optimized!
         if not self.hasIndex(row, column, parent):
             return QtCore.QModelIndex()
         ph = self.handle(parent)
@@ -69,13 +84,15 @@ class DMModel(QtCore.QAbstractItemModel):
         dh = ph[childs[row]]
         return self.createIndex(row, column, dh)
             
-    def parent(self, index):
+    #@profile
+    def parent(self, index):  ## must be optimized!
         p = self.handle(index).parent()
         if p is self.baseDir or self.baseDir.name() not in p.name():
             return QtCore.QModelIndex()
         return self.handleIndex(p)
             
-    def rowCount(self, index=QtCore.QModelIndex()):
+    #@profile
+    def rowCount(self, index=QtCore.QModelIndex()):  ## must be optimized!
         dh = self.handle(index)
         if index.column() > 0:
             return 0
@@ -86,7 +103,8 @@ class DMModel(QtCore.QAbstractItemModel):
     def columnCount(self, index):
         return 1
     
-    def data(self, index, role):
+    #@profile
+    def data(self, index, role):  ## must be optimized!
         if not index.isValid():
             return QtCore.QVariant()
         dh = self.handle(index)
@@ -111,6 +129,7 @@ class DMModel(QtCore.QAbstractItemModel):
                     ret.setWeight(QtGui.QFont.Bold)
         return QtCore.QVariant(ret)
 
+    #@profile
     def flags(self, index):
         defaults = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEditable
         if index is None:
@@ -123,11 +142,13 @@ class DMModel(QtCore.QAbstractItemModel):
         else:
             return defaults | QtCore.Qt.ItemIsDragEnabled
             
+    #@profile
     def headerData(self, section, orientation, role):
         if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
             return QtCore.QVariant("Files")
         return QtCore.QVariant()
         
+    #@profile
     def setData(self, index, value, role):
         if not index.isValid():
             return False
@@ -159,6 +180,7 @@ class DMModel(QtCore.QAbstractItemModel):
     def supportedDragActions(self):
         return QtCore.Qt.CopyAction | QtCore.Qt.MoveAction
 
+    #@profile
     def dropMimeData(self, data, action, row, column, parent):
         files = str(data.text()).split('\n')
         parent = self.handle(parent)

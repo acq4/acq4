@@ -8,9 +8,9 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 from metaarray import *
 from numpy import zeros
 
-def runSequence(func, params, order, dtype=None, passHash=False):
+def runSequence(func, params, order, dtype=None, passHash=False, linkedParams=None):
     """Convenience function that iterates a function over a given parameter space, inserting the function's return value into an array"""
-    seq = SequenceRunner(params, order, dtype=dtype, passHash=passHash)
+    seq = SequenceRunner(params, order, dtype=dtype, passHash=passHash, linkedParams=linkedParams)
     return seq.start(func)
 
 
@@ -21,14 +21,17 @@ class SequenceRunner:
         order: list of parameter names in the order they should be iterated
         passHash: boolean value. If true, parameters are passed to the kernel function as a single hash.
                 The default value is False; parameters are passed as normal named function arguments.
+        linkedParams: Dictionary of parameters that should be iterated together
+        
                             
     There are two ways to invoke a SequenceRunner object:
         obj.start(func) -- func will be the kernel function invoked by the SR object.
         obj.start() -- the SR object will invoke obj.execute as the kernel function (This function must be defined in a subclass). 
     """
   
-    def __init__(self, params=None, order=None, dtype=None, passHash=False):
+    def __init__(self, params=None, order=None, dtype=None, passHash=False, linkedParams=None):
         self._params = params
+        self._linkedParams = linkedParams
         self._order = order
         self._endFuncs = []
         self._passHash = passHash
@@ -116,7 +119,7 @@ class SequenceRunner:
         else:
             ax = self._order[len(ind)]
             params = self._paramSpace[ax]
-            for i in range(0, len(params)):
+            for i in range(len(params)):
                 ind2 = ind + [i]
                 try:
                     self.nloop(ind2, func=func)
@@ -138,7 +141,9 @@ class SequenceRunner:
     
     def getParams(self, ind):
         d = self._params.copy()
-        for i in range(0, len(self._order)):
+        
+        ## Determine current value for each parameter
+        for i in range(len(self._order)):
             pn = self._order[i]
             val = self._paramSpace[pn][ind[i]]
             if '[' in pn:
@@ -147,6 +152,11 @@ class SequenceRunner:
                 exec('d[name]%s = val' % pind)
             else:
                 d[pn] = val
+                
+            ## check for linked parameters
+            if self._linkedParams is not None and pn in self._linkedParams:
+                for lp in self._linkedParams[pn]:
+                    d[lp] = val
         return d
         
     def makeParamSpace(self):

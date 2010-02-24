@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 from lib.util.advancedTypes import OrderedDict
 
@@ -133,14 +134,20 @@ class ParamList(QtGui.QTreeWidget):
             return p.takeChild(p.indexOfChild(item))
 
     def listParams(self):
-        """Return a list of tuples, one for each parameter in the list: (device, parameter, number)"""
+        """Return a list of tuples, one for each parameter in the list: (device, parameter, number, [childs])
+        If the parameter has children, then (device, parameter) is listed for each enabled parameter."""
         
         params = []
         for i in self.topLevelItems():
             (dev, param, enabled) = self.itemData(i)
             if enabled:
                 num = i.text(2).toInt()[0]
-                params.append((dev, param, num))
+                childs = []
+                for j in range(i.childCount()):
+                    (dev2, param2, en2) = self.itemData(i.child(j))
+                    if en2:
+                        childs.append((dev2, param2))
+                params.append((dev, param, num, childs))
         return params
         
     def removeDevice(self, dev):

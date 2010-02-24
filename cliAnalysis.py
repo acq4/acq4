@@ -104,7 +104,10 @@ class UncagingWindow(QtGui.QMainWindow):
 
     def addScan(self):
         dh = getManager().currentFile
-        dirs = dh.subDirs()
+        if len(dh.info()['protocol']['params']) > 0:
+            dirs = dh.subDirs()
+        else:
+            dirs = [dh.name()]
         for d in dirs:
             d = dh[d]
             pos = d.info()['Scanner']['position']

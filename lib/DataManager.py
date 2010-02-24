@@ -20,6 +20,7 @@ from lib.util.Mutex import Mutex, MutexLocker
 from PyQt4 import QtCore
 #from lib.filetypes.FileType import *
 import lib.filetypes as filetypes
+from debug import *
 
 def abspath(fileName):
     """Return an absolute path string which is guaranteed to uniquely identify a file."""
@@ -340,6 +341,7 @@ class DirHandle(FileHandle):
         FileHandle.__init__(self, path, manager)
         self._index = None
         self.lsCache = None
+        self.cTimeCache = {}
         
         if not os.path.isdir(self.path):
             if create:
@@ -430,34 +432,35 @@ class DirHandle(FileHandle):
             return subdirs
     
     def incrementFileName(self, fileName, useExt=True):
-        """Given fileName.ext, finds the next available fileName_NNN.ext
-        If useExt is False, do not attempt to insert the index number before the extension.
-        """
+        """Given fileName.ext, finds the next available fileName_NNN.ext"""
+        #p = Profiler('   increment:')
         files = self.ls()
+        #p.mark('ls')
         if useExt:
             (fileName, ext) = os.path.splitext(fileName)
-            regex = re.compile(fileName + r'_(\d+)' + ext + '$')
         else:
-            regex = re.compile(fileName + r'_(\d+)$')
+            ext = ''
+        regex = re.compile(fileName + r'_(\d+)')
         files = filter(lambda f: regex.match(f), files)
+        #p.mark('filter')
         if len(files) > 0:
             files.sort()
             maxVal = int(regex.match(files[-1]).group(1)) + 1
         else:
             maxVal = 0
-        if useExt:
-            return fileName + ('_%03d' % maxVal) + ext
-        else:
-            return fileName + ('_%03d' % maxVal)
+        ret = fileName + ('_%03d' % maxVal) + ext
+        #p.mark('done')
+        #print "incremented name %s to %s" %(fileName, ret)
+        return ret
     
-    def mkdir(self, name, autoIncrement=False, info=None, useExt=False):
+    def mkdir(self, name, autoIncrement=False, info=None):
         """Create a new subdirectory, return a new DirHandle object. If autoIncrement is true, add a number to the end of the dir name if it already exists."""
         if info is None:
             info = {}
         with MutexLocker(self.lock):
             
             if autoIncrement:
-                fullName = self.incrementFileName(name, useExt=useExt)
+                fullName = self.incrementFileName(name, useExt=False)
             else:
                 fullName = name
                 
@@ -481,7 +484,7 @@ class DirHandle(FileHandle):
             self.emitChanged('children', newDir)
             return ndm
         
-    def getDir(self, subdir, create=False, autoIncrement=False, useExt=False):
+    def getDir(self, subdir, create=False, autoIncrement=False):
         """Return a DirHandle for the specified subdirectory. If the subdir does not exist, it will be created only if create==True"""
         with MutexLocker(self.lock):
             ndir = os.path.join(self.path, subdir)
@@ -489,11 +492,11 @@ class DirHandle(FileHandle):
                 return self.manager.getDirHandle(ndir)
             else:
                 if create:
-                    return self.mkdir(subdir, autoIncrement=autoIncrement, useExt=useExt)
+                    return self.mkdir(subdir, autoIncrement=autoIncrement)
                 else:
                     raise Exception('Directory %s does not exist.' % ndir)
         
-    def getFile(self, fileName, autoIncrement=False, useExt=True):
+    def getFile(self, fileName):
         """return a File handle for the named file."""
         fullName = os.path.join(self.name(), fileName)
         #if create:
@@ -515,37 +518,62 @@ class DirHandle(FileHandle):
     def ls(self, normcase=False):
         """Return a list of all files in the directory.
         If normcase is True, normalize the case of all names in the list."""
-        
+        #p = Profiler('      DirHandle.ls:')
         with MutexLocker(self.lock):
+            #p.mark('lock')
             #self._readIndex()
             #ls = self.index.keys()
             #ls.remove('.')
             if self.lsCache is None:
-                self.lsCache = os.listdir(self.name())
+                #p.mark('(cache miss)')
+                files = os.listdir(self.name())
+                #p.mark('listdir')
                 for i in ['.index', '.log']:
-                    if i in self.lsCache:
-                        self.lsCache.remove(i)
-                self.lsCache.sort(self._cmpFileTimes)
+                    if i in files:
+                        files.remove(i)
+                #self.lsCache.sort(self._cmpFileTimes)  ## very expensive!
+                
+                ## Sort files by creation time
+                for f in files:
+                    if f not in self.cTimeCache:
+                        self.cTimeCache[f] = self._getFileCTime(f)
+                files.sort(lambda a,b: cmp(self.cTimeCache[a], self.cTimeCache[b]))
+                self.lsCache = files
+                #p.mark('sort')
             if normcase:
-                return map(os.path.normcase, self.lsCache)
+                ret = map(os.path.normcase, self.lsCache)
+                #p.mark('return norm')
+                return ret
             else:
-                return self.lsCache[:]
+                ret = self.lsCache[:]
+                #p.mark('return copy')
+                return ret
     
-    def _cmpFileTimes(self, a, b):
-        with MutexLocker(self.lock):
-            t1 = t2 = None
-            if self.isManaged():
-                index = self._readIndex()
-                if a in index and '__timestamp__' in index[a]:
-                    t1 = index[a]['__timestamp__']
-                if b in index and '__timestamp__' in index[b]:
-                    t2 = index[b]['__timestamp__']
-            if t1 is None:
-                t1 = os.path.getctime(os.path.join(self.name(), a))
-            if t2 is None:
-                t2 = os.path.getctime(os.path.join(self.name(), b))
-            #print "compare", a, b, t1, t2
-            return cmp(t1, t2)
+    def _getFileCTime(self, fileName):
+        if self.isManaged():
+            index = self._readIndex()
+            try:
+                t = index[fileName]['__timestamp__']
+                return t
+            except KeyError:
+                pass
+        return os.path.getctime(os.path.join(self.name(), fileName))
+    
+    #def _cmpFileTimes(self, a, b):
+    #    with MutexLocker(self.lock):
+    #        t1 = t2 = None
+    #        if self.isManaged():
+    #            index = self._readIndex()
+    #            if a in index and '__timestamp__' in index[a]:
+    #                t1 = index[a]['__timestamp__']
+    #            if b in index and '__timestamp__' in index[b]:
+    #                t2 = index[b]['__timestamp__']
+    #        if t1 is None:
+    #            t1 = os.path.getctime(os.path.join(self.name(), a))
+    #        if t2 is None:
+    #            t2 = os.path.getctime(os.path.join(self.name(), b))
+    #        #print "compare", a, b, t1, t2
+    #        return cmp(t1, t2)
     
     def isGrandparentOf(self, child):
         """Return true if child is anywhere in the tree below this directory."""
@@ -582,16 +610,19 @@ class DirHandle(FileHandle):
             return os.path.isfile(fn)
         
     
-    def writeFile(self, obj, fileName, info=None, autoIncrement=False, useExt=True, fileType=None, **kwargs):
+    def writeFile(self, obj, fileName, info=None, autoIncrement=False, fileType=None, **kwargs):
         """Write a file to this directory using obj.write(fileName), store info in the index.
         Will try to convert obj into a FileType if the correct type exists.
         """
+        #print "Write file", fileName
+        #p = Profiler('  ' + fileName + ': ')
+        
         if info is None:
             info = {}   ## never put {} in the function default
         
         t = time.time()
         with MutexLocker(self.lock):
-            
+            #p.mark('lock')
             ## Convert object to FileType if needed
             #if not isinstance(obj, FileType):
                 #try:
@@ -611,27 +642,35 @@ class DirHandle(FileHandle):
             if fileType is None:
                 raise Exception("Can not create file from object of type %s" % str(type(obj)))
 
+            #p.mark('type')
             ## Add on default extension if there is one   ### Removed--FileTypes now handle this.
             #ext = obj.extension(**kwargs)
             #if fileName[-len(ext):] != ext:
                 #fileName = fileName + ext
+                
+            fileClass = filetypes.getFileType(fileType)
+            #p.mark('get class')
 
             ## Increment file name
             if autoIncrement:
-                fileName = self.incrementFileName(fileName, useExt=useExt)
-                    
-            ## Write file
-            fileName = filetypes.getFileType(fileType).write(obj, self, fileName, **kwargs)
-            self._childChanged()
+                fileName = self.incrementFileName(fileName)
             
+            #p.mark('increment')
+            ## Write file
+            fileName = fileClass.write(obj, self, fileName, **kwargs)
+            
+            #p.mark('write')
+            self._childChanged()
+            #p.mark('update')
             ## Write meta-info
             if not info.has_key('__object_type__'):
                 info['__object_type__'] = fileType
             if not info.has_key('__timestamp__'):
                 info['__timestamp__'] = t
             self._setFileInfo(fileName, info)
-            
+            #p.mark('meta')
             self.emitChanged('children', fileName)
+            #p.mark('emit')
             return self[fileName]
     
     def indexFile(self, fileName, info=None, protect=False):

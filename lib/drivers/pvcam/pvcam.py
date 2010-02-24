@@ -68,21 +68,7 @@ externalParams = [
     'COOLING_MODE',
 ]
 
-## Need this for determining how to cast some values
-paramTypes = {
-    LIB.TYPE_INT8: c_byte, 
-    LIB.TYPE_UNS8: c_ubyte,
-    LIB.TYPE_INT16: c_short,
-    LIB.TYPE_UNS16: c_ushort,
-    LIB.TYPE_INT32: c_int,
-    LIB.TYPE_UNS32: c_uint,
-    LIB.TYPE_FLT64: c_double,
-    LIB.TYPE_ENUM: c_ushort,
-    LIB.TYPE_BOOLEAN: c_ushort,
-    LIB.TYPE_CHAR_PTR: c_char_p, ## This is likely to cause bugs--we need to use create_string_buffer
-    LIB.TYPE_VOID_PTR: c_void_p,
-    LIB.TYPE_VOID_PTR_PTR: c_void_p
-}
+
 
 
 
@@ -253,6 +239,8 @@ class _CameraClass:
             'sensorSize': ['PARAM_SER_SIZE', 'PARAM_PAR_SIZE'] 
         }
         
+        size = self.getParam('sensorSize')
+        
         self.params = {
             'binningX': 1,
             'binningY': 1,
@@ -260,11 +248,14 @@ class _CameraClass:
             'triggerMode': None,
             'regionX': 0,
             'regionY': 0,
+            'regionW': size[0]-1,
+            'regionH': size[1]-1
         }
         
-        size = self.getParam('sensorSize')
-        self.params['regionW'] = size[0]
-        self.params['regionH'] = size[1]
+            
+            
+        
+        
 
     def __del__(self):
         self.close()
@@ -285,7 +276,6 @@ class _CameraClass:
             
     def call(self, fn, *args, **kargs):
         return self.pvcam.call(fn, self.hCam, *args, **kargs)
-        
 
     def initCam(self, params=None):
         buf = create_string_buffer('\0' * LIB.CCD_NAME_LEN)
@@ -350,12 +340,9 @@ class _CameraClass:
         if param in self.groupParams:
             return self.getParams(self.groupParams[param])
         
-        if param in self.params:
-            return self.params[param]
-            
         #param = self.pvcam.param(param)
         #self._assertParamReadable(param)
-        return self._getParam(LIB('values', param), LIB.ATTR_CURRENT)
+        return self._getParam(param, ATTR_CURRENT)
         
     def setParam(self, param, value, autoClip=False, autoQuantize=False, checkValue=True):
         ## Make sure parameter exists on this hardware and is writable
@@ -551,16 +538,16 @@ class _CameraClass:
         self._assertParamAvailable(param)
         typ = self.getParamType(param)
 
-        minval = self._getParam(param, LIB.ATTR_MIN)
-        maxval = self._getParam(param, LIB.ATTR_MAX)
-        stepval = self._getParam(param, LIB.ATTR_INCREMENT)
+        minval = self._getParam(param, ATTR_MIN)
+        maxval = self._getParam(param, ATTR_MAX)
+        stepval = self._getParam(param, ATTR_INCREMENT)
 
         return (minval, maxval, stepval)
 
     def getParamType(self, param):
-        #param = self.pvcam.param(param)
-        #self._assertParamAvailable(param)
-        return self._getParam(param, LIB.ATTR_TYPE)
+        param = self.pvcam.param(param)
+        self._assertParamAvailable(param)
+        return self._getParam(param, ATTR_TYPE)
 
     def getParamTypeName(self, param):
         param = self.pvcam.param(param)
@@ -609,57 +596,51 @@ class _CameraClass:
     def paramWritable(self, param):
         param = self.pvcam.param(param)
         self._assertParamAvailable(param)
-        access = self._getParam(param, LIB.ATTR_ACCESS)
-        return access in [LIB.ACC_WRITE_ONLY, LIB.ACC_READ_WRITE]
+        access = self._getParam(param, ATTR_ACCESS)
+        return access in [ACC_WRITE_ONLY, ACC_READ_WRITE]
         
     def _assertParamWritable(self, param):
         param = self.pvcam.param(param)
         self._assertParamAvailable(param)
-        access = self._getParam(param, LIB.ATTR_ACCESS)
-        if access in [LIB.ACC_EXIST_CHECK_ONLY, LIB.ACC_READ_ONLY]:
+        access = self._getParam(param, ATTR_ACCESS)
+        if access in [ACC_EXIST_CHECK_ONLY, ACC_READ_ONLY]:
             raise Exception("Parameter is not writable.")
-        elif access not in [LIB.ACC_WRITE_ONLY, LIB.ACC_READ_WRITE]:
+        elif access not in [ACC_WRITE_ONLY, ACC_READ_WRITE]:
             raise Exception("Unknown access check value!")
 
     def _assertParamReadable(self, param):
         param = self.pvcam.param(param)
         self._assertParamAvailable(param)
-        access = self._getParam(param, LIB.ATTR_ACCESS)
-        if access in [LIB.ACC_EXIST_CHECK_ONLY, LIB.ACC_WRITE_ONLY]:
+        access = self._getParam(param, ATTR_ACCESS)
+        if access in [ACC_EXIST_CHECK_ONLY, ACC_WRITE_ONLY]:
             raise Exception("Parameter is not readable.")
-        elif access not in [LIB.ACC_READ_WRITE, LIB.ACC_READ_ONLY]:
+        elif access not in [ACC_READ_WRITE, ACC_READ_ONLY]:
             raise Exception("Unknown access check value!")
     
-    def _getParam(self, param, attr):
+    def _getParam(self, param, attr, typ=None):
         """Gets parameter/attribute combination. Automatically handles type conversion."""
-        typs = {
-            LIB.ATTR_ACCESS: LIB.TYPE_UNS16,
-            LIB.ATTR_AVAIL: LIB.TYPE_BOOLEAN,
-            LIB.ATTR_COUNT: LIB.TYPE_UNS32,
-            LIB.ATTR_TYPE: LIB.TYPE_UNS16
-        }
-        if typs.has_key(attr):
-            typ = typs[attr]
-        else:
-            typ = self.getParamType(param)
-            
-        print "GetParam %d %d  type: %d" % (param, attr, typ)
-        ctype = paramTypes[typ]
-        #val = mkCObj(typ)
-        #self.pvcam.pl_get_param(self.hCam, param, attr, byref(val))
-        #return val.value
-        val = ctype()
-        ## get_param uses void* for last arg, we have to use getParamType to recast it.
-        self.call('get_param', param, attr, byref(val))
+        if typ is None:
+            typs = {
+                ATTR_ACCESS: TYPE_UNS16,
+                ATTR_AVAIL: TYPE_BOOLEAN,
+                ATTR_COUNT: TYPE_UNS32,
+                ATTR_TYPE: TYPE_UNS16
+            }
+            if typs.has_key(attr):
+                typ = typs[attr]
+            else:
+                typ = self.getParamType(param)
+        val = mkCObj(typ)
+        self.pvcam.pl_get_param(self.hCam, param, attr, byref(val))
         return val.value
 
-    #def listTriggerModes(self):
-        #return {
-            #'Normal': TIMED_MODE,
-            #'Trigger First': TRIGGER_FIRST_MODE,
-            #'Strobed': STROBED_MODE,
-            #'Bulb': BULB_MODE
-        #}
+    def listTriggerModes(self):
+        return {
+            'Normal': TIMED_MODE,
+            'Trigger First': TRIGGER_FIRST_MODE,
+            'Strobed': STROBED_MODE,
+            'Bulb': BULB_MODE
+        }
     
         
 
@@ -698,18 +679,18 @@ class Region(Structure):
 
 def mkCObj(typ, value=None):
     typs = {
-        LIB.TYPE_INT8: c_byte, 
-        LIB.TYPE_UNS8: c_ubyte,
-        LIB.TYPE_INT16: c_short,
-        LIB.TYPE_UNS16: c_ushort,
-        LIB.TYPE_INT32: c_int,
-        LIB.TYPE_UNS32: c_uint,
-        LIB.TYPE_FLT64: c_double,
-        LIB.TYPE_ENUM: c_ushort,
-        LIB.TYPE_BOOLEAN: c_ushort,
-        LIB.TYPE_CHAR_PTR: c_char_p, ## This is likely to cause bugs--we need to use create_string_buffer
-        LIB.TYPE_VOID_PTR: c_void_p,
-        LIB.TYPE_VOID_PTR_PTR: c_void_p
+        TYPE_INT8: c_byte, 
+        TYPE_UNS8: c_ubyte,
+        TYPE_INT16: c_short,
+        TYPE_UNS16: c_ushort,
+        TYPE_INT32: c_int,
+        TYPE_UNS32: c_uint,
+        TYPE_FLT64: c_double,
+        TYPE_ENUM: c_ushort,
+        TYPE_BOOLEAN: c_ushort,
+        TYPE_CHAR_PTR: c_char_p, ## This is likely to cause bugs--we need to use create_string_buffer
+        TYPE_VOID_PTR: c_void_p,
+        TYPE_VOID_PTR_PTR: c_void_p
     }
     if not typs.has_key(typ):
         raise Exception("Unknown type %d" % typ)
