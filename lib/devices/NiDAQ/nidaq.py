@@ -4,6 +4,7 @@ from lib.devices.Device import *
 import threading, time, traceback, sys
 from protoGUI import *
 from numpy import byte
+from scipy.signal import resample
 from lib.util.debug import *
 
 class NiDAQ(Device):
@@ -146,12 +147,14 @@ class Task(DeviceTask):
         if ds > 1:
             data = res['data']
             newLen = int(data.shape[0] / ds) * ds
-            data = data[:newLen]
-            data.shape = (data.shape[0]/ds, ds)
-            if res['info']['type'] in ['di', 'do']:
-                data = data.mean(axis=1).round().astype(byte)
-            else:
-                data = data.mean(axis=1)
+            #data = data[:newLen]
+            #data.shape = (data.shape[0]/ds, ds)
+            #if res['info']['type'] in ['di', 'do']:
+                #data = data.mean(axis=1).round().astype(byte)
+            #else:
+                #data = data.mean(axis=1)
+                
+            data = resample(data, newLen)
             res['data'] = data
             res['info']['numPts'] = data.shape[0]
             res['info']['downsampling'] = ds

@@ -47,7 +47,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
     def __init__(self, image=None, copy=True, *args):
         self.qimage = QtGui.QImage()
         self.pixmap = None
-        self.useWeave = True
+        self.useWeave = False
         self.blackLevel = None
         self.whiteLevel = None
         self.alpha = 1.0
@@ -140,9 +140,9 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
             for( int i=0; i<n; i++ ) {
                 float a = (sim(i)-black) * (float)scale;
                 if( a > 255.0 )
-                a = 255.0;
+                    a = 255.0;
                 else if( a < 0.0 )
-                a = 0.0;
+                    a = 0.0;
                 im(i) = a;
             }
             """
@@ -178,8 +178,12 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
             
             for i in range(0, im.shape[axh['c']]):
                 im1[..., i] = im2[..., i]
-            for i in range(im.shape[axh['c']], 4):
-                im1[..., i] = alpha
+            
+            for i in range(im.shape[axh['c']], 3):
+                im1[..., i] = 0
+            if im.shape[axh['c']] < 4:
+                im1[..., 3] = alpha
+                
         else:
             raise Exception("Image must be 2 or 3 dimensions")
         #self.im1 = im1
@@ -522,8 +526,12 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
             self.path = self.generatePath(*self.getData())
         path = self.path
             
+        if self.shadow is not None:
+            sp = QtGui.QPen(self.shadow)
+        else:
+            sp = None
+
         ## Copy pens and apply alpha adjustment
-        sp = QtGui.QPen(self.shadow)
         cp = QtGui.QPen(self.pen)
         for pen in [sp, cp]:
             if pen is None:
@@ -672,11 +680,18 @@ class ScaleItem(QtGui.QGraphicsWidget):
             self.linkToView(linkView)
             
         self.tickLength = 10
+        self.scale = 1.0
         
         
     def setPen(self, pen):
         self.pen = pen
         self.update()
+        
+    def setScale(self, scale, prefix=''):
+        if scale != self.scale:
+            self.scale = scale
+            self.prefix = prefix
+            self.update()
         
     def setRange(self, mn, mx):
         self.range = [mn, mx]
@@ -740,8 +755,6 @@ class ScaleItem(QtGui.QGraphicsWidget):
         
         #print "  start at %f,  %d ticks" % (start, num)
         
-        ## Number of decimal places to print
-        places = max(0, int(3 - log10(dif)))
         
         if axis == 0:
             xs = -bounds.height() / dif
@@ -755,10 +768,17 @@ class ScaleItem(QtGui.QGraphicsWidget):
             
             ## determine starting tick
             start = ceil(self.range[0] / sp) * sp
-        
+            
             ## determine number of ticks
             num = int(dif / sp) + 1
             
+            ## last tick value
+            last = start + sp * num
+            
+            ## Number of decimal places to print
+            maxVal = max(abs(start), abs(last))
+            places = int(log10(maxVal) - log10(sp)) + 1
+        
             ## length of tick
             h = min(self.tickLength, (self.tickLength*3 / num) - 1.)
             
@@ -781,13 +801,15 @@ class ScaleItem(QtGui.QGraphicsWidget):
                 
                 if p1[1-axis] > [bounds.width(), bounds.height()][1-axis]:
                     continue
+                if p1[1-axis] < 0:
+                    continue
                 p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100, a)))
                 p.drawLine(Point(p1), Point(p2))
                 if i == i1+1:
                     if abs(v) < .001 or abs(v) >= 10000:
-                        vstr = "%g" % v
+                        vstr = "%g" % (v * self.scale)
                     else:
-                        vstr = ("%%0.%df" % places) % v
+                        vstr = ("%%0.%df" % places) % (v * self.scale)
                         
                     textRect = p.boundingRect(QtCore.QRectF(0, 0, 100, 100), QtCore.Qt.AlignCenter, vstr)
                     height = textRect.height()
@@ -1123,8 +1145,79 @@ class InfiniteLine(QtGui.QGraphicsLineItem):
         #self.updateLine()
         #return QtGui.QGraphicsLineItem.boundingRect(self)
 
+class VTickGroup(QtGui.QGraphicsPathItem):
+    def __init__(self, xvals=None, yrange=None, pen=None, yRelative=False):
+        QtGui.QGraphicsPathItem.__init__(self)
+        if yrange is None:
+            yrange = [0, 1]
+        if xvals is None:
+            xvals = []
+        if pen is None:
+            pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
+        self.ticks = []
+        self.xvals = []
+        self.yrange = [0,1]
+        self.setPen(pen)
+        self.setYRange(yrange, yRelative)
+        self.setXVals(xvals)
+        
+    #def setPen(self, pen=None):
+        #if pen is None:
+            #pen = self.pen
+        #self.pen = pen
+        #for t in self.ticks:
+            #t.setPen(pen)
+        ##self.update()
 
+    def setXVals(self, vals):
+        self.xvals = vals
+        self.rebuildTicks()
+        #self.updateBounds()
+        #self.update()
+        
+    def setYRange(self, vals, relative=False):
+        self.yrange = vals
+        #self.updateBounds()
+        self.rebuildTicks()
+        #self.update()
+            
+    def yRange(self):
+        return self.yrange
+            
+    def rebuildTicks(self):
+        path = QtGui.QPainterPath()
+        for x in self.xvals:
+            path.moveTo(x, self.yrange[0])
+            path.lineTo(x, self.yrange[1])
+        self.setPath(path)
+        #self.clear()
+        #y0, y1 = self.yRange()
+        #for i in range(len(self.xvals)):
+            #x = self.xvals[i]
+            #tick = QtGui.QGraphicsLineItem(x, y0, x, y1, self)
+            #self.ticks.append(tick)
+            ##self.addToGroup(tick)
+        #self.setPen()
+        
+    #def clear(self):
+        #for t in self.ticks:
+            #t.scene().removeItem(t)
+            ##self.removeFromGroup(t)
+        #self.ticks = []
+        
+    #def updateBounds(self):
+        #mnx = min(self.xvals)
+        #mxx = max(self.xvals)
+        #self.bounds =  QtCore.QRectF(mnx, self.yrange[0], mxx-mnx, self.yrange[1]-self.yrange[0])
+        
+    #def boundingRect(self):
+        #return self.bounds
 
+    #def paint(self, p, *opts):
+        #p.setPen(self.pen)
+        #print self.yrange
+        #for x in self.xvals:
+            #p.drawLine(QtCore.QPointF(x, self.yrange[0]), QtCore.QPointF(x, self.yrange[1]))
 
 class GridItem(UIGraphicsItem):
     def __init__(self, view, bounds=None, *args):

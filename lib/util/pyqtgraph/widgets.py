@@ -32,9 +32,9 @@ class QObjectWorkaround:
 
 
 class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
-    def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False):
+    def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None):
         QObjectWorkaround.__init__(self)
-        QtGui.QGraphicsItem.__init__(self)
+        QtGui.QGraphicsItem.__init__(self, parent)
         pos = Point(pos)
         size = Point(size)
         self.aspectLocked = False
@@ -57,6 +57,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.translateSnap = translateSnap
         self.rotateSnap = rotateSnap
         self.scaleSnap = scaleSnap
+        self.setFlag(self.ItemIsSelectable, True)
         
     def setZValue(self, z):
         QtGui.QGraphicsItem.setZValue(self, z)
@@ -73,18 +74,20 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.pen = pen
         self.update()
         
-    def setPos(self, pos):
+    def setPos(self, pos, update=True):
         pos = Point(pos)
         self.state['pos'] = pos
         QtGui.QGraphicsItem.setPos(self, pos)
-        self.handleChange()
+        if update:
+            self.handleChange()
         
-    def setSize(self, size):
+    def setSize(self, size, update=True):
         size = Point(size)
         self.prepareGeometryChange()
         self.state['size'] = size
-        self.updateHandles()
-        self.handleChange()
+        if update:
+            self.updateHandles()
+            self.handleChange()
         
     def addTranslateHandle(self, pos, axes=None, item=None):
         pos = Point(pos)
@@ -114,7 +117,9 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
     
     def addHandle(self, info):
         if not info.has_key('item') or info['item'] is None:
+            #print "BEFORE ADD CHILD:", self.childItems()
             h = Handle(self.handleSize, typ=info['type'], pen=self.handlePen, parent=self)
+            #print "AFTER ADD CHILD:", self.childItems()
             h.setPos(info['pos'] * self.state['size'])
             info['item'] = h
         else:
@@ -126,17 +131,37 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         #h.mouseReleaseEvent = lambda ev: self.pointReleaseEvent(iid, ev)
         self.handles.append(info)
         h.setZValue(self.zValue()+1)
+        #if self.isSelected():
+            #h.show()
+        #else:
+            #h.hide()
         return h
         
     def mapSceneToParent(self, pt):
         return self.mapToParent(self.mapFromScene(pt))
 
+    def setSelected(self, s):
+        QtGui.QGraphicsItem.setSelected(self, s)
+        #print "select", self, s
+        if s:
+            for h in self.handles:
+                h['item'].show()
+        else:
+            for h in self.handles:
+                h['item'].hide()
+
     def mousePressEvent(self, ev):
-        if self.translatable:
-            self.cursorOffset = self.scenePos() - ev.scenePos()
-            self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
+        if ev.button() == QtCore.Qt.LeftButton:
+            self.setSelected(True)
+            if self.translatable:
+                self.cursorOffset = self.scenePos() - ev.scenePos()
+                self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
+                ev.accept()
+        else:
+            ev.ignore()
         
     def mouseMoveEvent(self, ev):
+        #print "mouse move", ev.pos()
         if self.translatable:
             snap = None
             if self.translateSnap or (ev.modifiers() & QtCore.Qt.ControlModifier):
@@ -152,11 +177,13 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
     
     
     def pointPressEvent(self, pt, ev):
+        #print "press"
         self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
         #self.pressPos = self.mapFromScene(ev.scenePos())
         #self.pressHandlePos = self.handles[pt]['item'].pos()
     
     def pointReleaseEvent(self, pt, ev):
+        #print "release"
         self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
     
     def stateCopy(self):
@@ -167,10 +194,14 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         return sc
     
     def updateHandles(self):
+        #print "update", self.handles
         for h in self.handles:
-            if h['item'] in self.children():
+            #print "  try", h
+            if h['item'] in self.childItems():
                 p = h['pos']
                 h['item'].setPos(h['pos'] * self.state['size'])
+            #else:
+                #print "    Not child!", self.childItems()
         
     
     def checkPointMove(self, pt, pos, modifiers):
@@ -181,6 +212,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         
         
     def movePoint(self, pt, pos, modifiers=QtCore.Qt.KeyboardModifier()):
+        #print "movePoint", pos
         newState = self.stateCopy()
         h = self.handles[pt]
         #p0 = self.mapToScene(h['item'].pos())
@@ -204,7 +236,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
             snap = None
             if self.translateSnap or (modifiers & QtCore.Qt.ControlModifier):
                 snap = Point(self.snapSize, self.snapSize)
-            self.translate(p1-p0, snap=snap)
+            self.translate(p1-p0, snap=snap, update=False)
         
         elif h['type'] == 's':
             #c = h['center']
@@ -250,7 +282,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
                 if not self.maxBounds.contains(r):
                     return
             
-            self.setPos(newState['pos'])
+            self.setPos(newState['pos'], update=False)
             self.prepareGeometryChange()
             self.state = newState
             
@@ -283,7 +315,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
                 if not self.maxBounds.contains(r):
                     return
             self.setTransform(tr)
-            self.setPos(newState['pos'])
+            self.setPos(newState['pos'], update=False)
             self.state = newState
         
         elif h['type'] == 'sr':
@@ -325,7 +357,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
                 if not self.maxBounds.contains(r):
                     return
             self.setTransform(tr)
-            self.setPos(newState['pos'])
+            self.setPos(newState['pos'], update=False)
             self.prepareGeometryChange()
             self.state = newState
         
@@ -340,6 +372,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         else:
             for k in self.state.keys():
                 if self.state[k] != self.lastState[k]:
+                    #print "state %s has changed; emit signal" % k
                     changed = True
         self.lastState = self.stateCopy()
         if changed:
@@ -392,6 +425,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         
         self.state['pos'] = newState['pos']
         self.setPos(self.state['pos'])
+        #if 'update' not in kargs or kargs['update'] is True:
         self.handleChange()
     
     def stateRect(self, state):
@@ -458,6 +492,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
 
 
     def getArrayRegion(self, data, img, axes=(0,1)):
+        
         ## transpose data so x and y are the first 2 axes
         trAx = range(0, data.ndim)
         trAx.remove(axes[0])
@@ -468,7 +503,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         ## Determine the minimal area of the data we will need
         (dataBounds, roiDataTransform) = self.getArraySlice(data, img, returnSlice=False, axes=axes)
 
-        ## Pad data boundaries by 1px is possible
+        ## Pad data boundaries by 1px if possible
         dataBounds = (
             (max(dataBounds[0][0]-1, 0), min(dataBounds[0][1]+1, arr.shape[0])),
             (max(dataBounds[1][0]-1, 0), min(dataBounds[1][1]+1, arr.shape[1]))
@@ -521,6 +556,10 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         ### Extract needed region from rotated/shifted array
         # 1. map ROI into current data space (round these values off--they should be exact integer values at this point)
         roiBounds = roiDataTransform.mapRect(self.boundingRect())
+        #print self, roiBounds.height()
+        #import traceback
+        #traceback.print_stack()
+        
         roiBounds = QtCore.QRect(round(roiBounds.left()), round(roiBounds.top()), round(roiBounds.width()), round(roiBounds.height()))
         
         #2. intersect ROI with data bounds
@@ -560,6 +599,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
 
 class Handle(QtGui.QGraphicsItem):
     def __init__(self, radius, typ=None, pen=QtGui.QPen(QtGui.QColor(200, 200, 220)), parent=None):
+        #print "   create item with parent", parent
         QtGui.QGraphicsItem.__init__(self, parent)
         self.setZValue(11)
         self.roi = []
@@ -590,11 +630,13 @@ class Handle(QtGui.QGraphicsItem):
         return self.bounds
         
     def mousePressEvent(self, ev):
-        #print "widget press"
+        if ev.button() != QtCore.Qt.LeftButton:
+            ev.ignore()
+            return
         self.cursorOffset = self.scenePos() - ev.scenePos()
         for r in self.roi:
             r[0].pointPressEvent(r[1], ev)
-        #ev.accept()
+        ev.accept()
         
     def mouseReleaseEvent(self, ev):
         #print "release"
@@ -602,6 +644,7 @@ class Handle(QtGui.QGraphicsItem):
             r[0].pointReleaseEvent(r[1], ev)
                 
     def mouseMoveEvent(self, ev):
+        #print "handle mouseMove", ev.pos()
         pos = ev.scenePos() + self.cursorOffset
         self.movePoint(pos, ev.modifiers())
         
@@ -609,6 +652,7 @@ class Handle(QtGui.QGraphicsItem):
         for r in self.roi:
             if not r[0].checkPointMove(r[1], pos, modifiers):
                 return
+        #print "point moved; inform %d ROIs" % len(self.roi)
         for r in self.roi:
             r[0].movePoint(r[1], pos, modifiers)
         
@@ -683,7 +727,7 @@ class LineROI(ROI):
         self.addScaleHandle([0.5, 1], [0.5, 0.5])
         
         
-class MultiLineROI(QtGui.QGraphicsItemGroup, QObjectWorkaround):
+class MultiLineROI(QtGui.QGraphicsItem, QObjectWorkaround):
     def __init__(self, points, width, **args):
         QObjectWorkaround.__init__(self)
         QtGui.QGraphicsItem.__init__(self)
@@ -691,7 +735,7 @@ class MultiLineROI(QtGui.QGraphicsItemGroup, QObjectWorkaround):
         if len(points) < 2:
             raise Exception("Must start with at least 2 points")
         self.lines = []
-        self.lines.append(ROI([0, 0], [1, 5]))
+        self.lines.append(ROI([0, 0], [1, 5], parent=self))
         self.lines[-1].addScaleHandle([0.5, 1], [0.5, 0.5])
         h = self.lines[-1].addScaleRotateHandle([0, 0.5], [1, 0.5])
         h.movePoint(points[0])
@@ -699,17 +743,23 @@ class MultiLineROI(QtGui.QGraphicsItemGroup, QObjectWorkaround):
         for i in range(1, len(points)):
             h = self.lines[-1].addScaleRotateHandle([1, 0.5], [0, 0.5])
             if i < len(points)-1:
-                self.lines.append(ROI([0, 0], [1, 5]))
+                self.lines.append(ROI([0, 0], [1, 5], parent=self))
                 self.lines[-1].addScaleRotateHandle([0, 0.5], [1, 0.5], item=h)
             h.movePoint(points[i])
             h.movePoint(points[i])
             
         for l in self.lines:
             l.translatable = False
-            self.addToGroup(l)
+            #self.addToGroup(l)
             l.connect(QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
             l.connect(QtCore.SIGNAL('regionChangeStarted'), self.roiChangeStartedEvent)
             l.connect(QtCore.SIGNAL('regionChangeFinished'), self.roiChangeFinishedEvent)
+        
+    def paint(self, *args):
+        pass
+    
+    def boundingRect(self):
+        return QtCore.QRectF()
         
     def roiChangedEvent(self):
         w = self.lines[0].state['size'][1]
@@ -730,8 +780,11 @@ class MultiLineROI(QtGui.QGraphicsItemGroup, QObjectWorkaround):
         for l in self.lines:
             rgn = l.getArrayRegion(arr, img)
             if rgn is None:
-                return None
+                continue
+                #return None
             rgns.append(rgn)
+            #print l.state['size']
+        #print [(r.shape) for r in rgns]
         return vstack(rgns)
         
         
@@ -762,6 +815,12 @@ class EllipseROI(ROI):
         mask = fromfunction(lambda x,y: (((x+0.5)/(w/2.)-1)**2+ ((y+0.5)/(h/2.)-1)**2)**0.5 < 1, (w, h))
     
         return arr * mask
+    
+    def shape(self):
+        self.path = QtGui.QPainterPath()
+        self.path.addEllipse(self.boundingRect())
+        return self.path
+        
         
 class CircleROI(EllipseROI):
     def __init__(self, pos, size, **args):

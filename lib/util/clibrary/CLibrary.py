@@ -350,7 +350,7 @@ class CFunction:
             #argList[ind] = self.coerce(kwargs[k], self.argTypes[ind])
             argList[ind] = kwargs[k]
         
-        ## Finally, fill in remaining arguments if they are pointers to int/float values 
+        ## Finally, fill in remaining arguments if they are pointers to int/float/void*/struct values 
         ## (we assume these are to be modified by the function and their initial value is not important)
         for i in range(len(argList)):
             if argList[i] is None:
@@ -373,6 +373,8 @@ class CFunction:
             res = self.func(*argList)
         except:
             print "Function call failed. Signature is:", self.prettySignature()
+            print "Arguments:", argList
+            print "Argtypes:", self.func.argtypes
             raise
         #print "  result:", res
         

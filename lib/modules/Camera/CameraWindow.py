@@ -305,7 +305,9 @@ class CameraWindow(QtGui.QMainWindow):
             
         bounds = self.module.cam.getBoundaries()
         for b in bounds:
-            border = QtGui.QGraphicsRectItem(b)
+            border = QtGui.QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 1))
+            border.scale(b.width(), b.height())
+            border.setPos(b.x(), b.y())
             border.setAcceptedMouseButtons(QtCore.Qt.NoButton)
             border.setPen(QtGui.QPen(QtGui.QColor(50,80,80))) 
             border.setZValue(10)
@@ -1006,7 +1008,7 @@ class RecordThread(QtCore.QThread):
         if frame['snap']:
             fileName = 'image.tif'
             
-            fh = self.m.getCurrentDir().writeFile(ImageFile(data), fileName, info, autoIncrement=True)
+            fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
             fn = fh.name()
             self.showMessage("Saved image %s" % fn)
             with MutexLocker(self.lock):

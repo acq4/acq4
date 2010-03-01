@@ -102,6 +102,8 @@ class MetaArray(ndarray):
                 subarr = array(data, dtype=dtype, copy=copy)
             subarr = subarr.view(subtype)
 
+
+            #### Sanity checks on info
             if info is not None:
                 try:
                     info = list(info)
@@ -111,7 +113,7 @@ class MetaArray(ndarray):
                     info.extend([{}]*(subarr.ndim+1-len(info)))
                 elif len(info) > subarr.ndim+1:
                     raise Exception("Info parameter must be list of length ndim+1 or less.")
-                for i in range(0,len(info)):
+                for i in range(len(info)):
                     if type(info[i]) != types.DictType:
                         if info[i] is None:
                             info[i] = {}
@@ -122,9 +124,18 @@ class MetaArray(ndarray):
                             info[i]['values'] = array(info[i]['values'])
                         elif type(info[i]['values']) is not ndarray:
                             raise Exception("Axis values must be specified as list or ndarray")
+                        if info[i]['values'].ndim != 1 or info[i]['values'].shape[0] != subarr.shape[i]:
+                            raise Exception("Values array for axis %d has incorrect shape. (given %s, but should be %s)" % (i, str(info[i]['values'].shape), str((subarr.shape[i],))))
+                    if info[i].has_key('cols'):
+                        if not isinstance(info[i]['cols'], list):
+                            info[i]['cols'] = list(info[i]['cols'])
+                        if len(info[i]['cols']) != subarr.shape[i]:
+                            raise Exception('Length of column list for axis %d does not match data. (given %d, but should be %d)' % (i, len(info[i]['cols']), subarr.shape[i]))
                 subarr._info = info
             elif hasattr(data, '_info'):
                 subarr._info = data._info
+
+
 
         elif file is not None:
             fd = open(file, 'rb')

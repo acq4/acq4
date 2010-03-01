@@ -1,0 +1,69 @@
+User's Guide
+    Introduction
+        What is ACQ4?
+        Quick Start Guide
+    Principles
+        Devices
+        Modules
+        Manager
+        Protocols
+        Data Handling
+    Configuration
+    Devices
+        DAQGeneric
+        MultiClamp
+        Cameras
+        Scanner
+        Microscope
+    Modules
+        Manager
+        Data Manager
+        Camera
+        Patch
+        Protocol Runner
+    Analysis
+
+
+Developer's Guide
+    Introduction
+        BZR, DVCS, Launchpad
+    Overview of control flow
+        top-level scripts
+        manager / configuration
+        modules
+    Dependencies
+        Python
+        PyQt4
+        Numpy/Scipy
+        PIL
+        pyparsing
+        pyserial
+    Conventions
+        Code style
+        Naming, name collisions
+    Internal Structure
+        Manager
+        Devices
+        Modules
+        Data Manager
+        Interfaces
+    Device Drivers
+        CLibrary, CParser
+    Devices
+        DAQGeneric
+        MultiClamp
+        Cameras
+        Scanner
+        Microscope
+    Modules
+        Manager
+        Data Manager
+        Camera
+        Patch
+        Protocol Runner
+    Utility libraries
+        pyqtgraph
+        clibrary
+        metaarray
+        
+    

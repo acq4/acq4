@@ -669,9 +669,11 @@ class ProtocolRunner(Module):
                 #items.append(i)
             ## Generate parameter space
             params = OrderedDict()
+            linkedParams = {}
             for i in items:
                 key = i[:2]
                 params[key] = range(i[2])
+                linkedParams[key] = i[3]
             
             ## Set storage dir
             self.currentDir = self.manager.getCurrentDir()
@@ -683,8 +685,9 @@ class ProtocolRunner(Module):
             else:
                 dh = None
             
+            #print params, linkedParams
             ## Generate the complete array of command structures
-            prot = runSequence(lambda p: self.generateProtocol(dh, p), params, params.keys(), passHash=True)
+            prot = runSequence(lambda p: self.generateProtocol(dh, p), params, params.keys(), passHash=True, linkedParams=linkedParams)
             #print "==========Sequence Protocol=============="
             #print prot
             self.emit(QtCore.SIGNAL('protocolStarted'), {})
@@ -704,7 +707,7 @@ class ProtocolRunner(Module):
             #'name': self.currentProtocol.fileName,
             #'cycleTime': self.currentProtocol.conf['cycleTime'], 
         #}}
-        
+        #print "generate:", params
         ## Never put {} in the function signature
         if params is None:
             params = {}
@@ -731,6 +734,7 @@ class ProtocolRunner(Module):
         return prot
     
     def protocolInfo(self, params=None):
+        """Generate a complete description of the protocol."""
         info = self.currentProtocol.describe()
         del info['protocol']['windowState']
         del info['protocol']['params']
@@ -775,6 +779,7 @@ class ProtocolRunner(Module):
     def handleFrame(self, frame):
         
         ## Request each device handles its own data
+        ## Note that this is only used to display results; data storage is handled by Manager and the individual devices.
         #print "got frame", frame
         for d in frame['result']:
             try:

@@ -14,14 +14,19 @@ class PlotWindow(QtGui.QMainWindow):
         QtGui.QMainWindow.__init__(self)
         self.cw = PlotWidget()
         self.setCentralWidget(self.cw)
-        for m in ['plot', 'autoRange']:
+        for m in ['plot', 'autoRange', 'addItem']:
             setattr(self, m, getattr(self.cw, m))
+        if title is not None:
+            self.setWindowTitle(title)
+        self.show()
 
 class ImageWindow(QtGui.QMainWindow):
     def __init__(self, title=None):
         QtGui.QMainWindow.__init__(self)
         self.cw = ImageView()
         self.setCentralWidget(self.cw)
-        for m in ['setImage', 'autoRange']:
+        for m in ['setImage', 'autoRange', 'addItem']:
             setattr(self, m, getattr(self.cw, m))
-
+        if title is not None:
+            self.setWindowTitle(title)
+        self.show()

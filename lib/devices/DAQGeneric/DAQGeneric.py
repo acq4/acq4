@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from lib.devices.Device import *
-from lib.util.metaarray import MetaArray, axis
+from metaarray import MetaArray, axis
 from lib.util.Mutex import Mutex, MutexLocker
 from numpy import *
 from protoGUI import *

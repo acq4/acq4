@@ -14,22 +14,25 @@ import sys, os
 pyfile = __file__
 if pyfile[0] != '/':
    pyfile =  os.path.join(os.getcwd(), pyfile)
-sys.path.append(os.path.split(pyfile)[0])
-from lib.util.metaarray import *
-from lib.util.pyqtgraph.ImageView import *
-from lib.util.pyqtgraph.GraphicsView import *
-from lib.util.pyqtgraph.graphicsItems import *
-from lib.util.pyqtgraph.PlotWidget import *
-from lib.util.Canvas import Canvas
+pyDir = os.path.split(pyfile)[0]
+sys.path.append(pyDir)
+from metaarray import *
+from pyqtgraph.ImageView import *
+from pyqtgraph.GraphicsView import *
+from pyqtgraph.graphicsItems import *
+from pyqtgraph.graphicsWindows import *
+from pyqtgraph.PlotWidget import *
+from pyqtgraph.functions import *
+from Canvas import Canvas
 from PyQt4 import QtCore, QtGui
-from lib.util.functions import *
+from functions import *
 
 
 ## Initialize Qt
 app = QtGui.QApplication(sys.argv)
 
 ## Configuration file to load
-config = 'config/default.cfg'
+config = os.path.join(pyDir, 'config', 'default.cfg')
 
 ## Create Manager. This configures devices and creates the main manager window.
 dm = Manager(config, sys.argv[1:])
@@ -103,7 +106,10 @@ class UncagingWindow(QtGui.QMainWindow):
 
     def addScan(self):
         dh = getManager().currentFile
-        dirs = dh.subDirs()
+        if len(dh.info()['protocol']['params']) > 0:
+            dirs = dh.subDirs()
+        else:
+            dirs = [dh.name()]
         for d in dirs:
             d = dh[d]
             if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
@@ -172,7 +178,7 @@ class UncagingWindow(QtGui.QMainWindow):
             pen = QtGui.QPen(colorObj)
             self.loadTrace(i, pen=pen)
         
-            
+
 #win = UncagingWindow()
 
 class STDPWindow(UncagingWindow):
@@ -216,7 +222,38 @@ class STDPWindow(UncagingWindow):
         self.show()
         self.scanItems = []
         self.imageItems = []
+        
+class IVWindow(QtGui.QMainWindow):
+    def __init__(self):
+        QtGui.QMainWindow.__init__(self)
+        self.cw = QtGui.QSplitter()
+        self.cw.setOrientation(QtCore.Qt.Vertical)
+        self.setCentralWidget(self.cw)
+        bw = QtGui.QWidget()
+        bwl = QtGui.QHBoxLayout()
+        bw.setLayout(bwl)
+        self.cw.addWidget(bw)
+        self.loadIVBtn = QtGui.QPushButton('Load I/V')
+        bwl.addWidget(self.loadIVBtn)
+        QtCore.QObject.connect(self.loadIVBtn, QtCore.SIGNAL('clicked()'), self.loadIV)
+        self.plot = PlotWidget()
+        self.cw.addWidget(self.plot)
+        self.resize(800, 800)
+        self.show()
 
+    def loadIV(self):
+        self.plot.clear()
+        dh = getManager().currentFile
+        dirs = dh.subDirs()
+        c = 0.0
+        for d in dirs:
+            d = dh[d]
+            try:
+                data = d['Clamp1.ma'].read()['Channel': 'primary']
+            except:
+                data = d['Clamp2.ma'].read()['Channel': 'primary']
+            self.plot.plot(data, pen=mkPen(hsv=[c, 0.7]))
+            c += 1.0 / len(dirs)
 
 
 
@@ -231,33 +268,40 @@ if QtGui.QApplication.instance() is None:
 
 def showPlot(data=None, file=None, title=None):
     global plots
-    if data is None:
-        data = loadMetaArray(file)
-    win = QtGui.QMainWindow()
-    win.resize(800, 600)
-    if data.ndim == 1:
-        plot = PlotWidget()
-        win.setCentralWidget(plot)
-        plot.plot(data)
-        plot.autoRange()
-    elif data.ndim == 2:
-        gv = GraphicsView()
-        win.setCentralWidget(gv)
-        l = QtGui.QGraphicsGridLayout()
-        gv.centralWidget.setLayout(l)
-        for i in range(data.shape[0]):
-            p = PlotItem(gv.centralWidget)
-            l.addItem(p, i, 0)
-            p.plot(data[i])
-            p.autoRange()
-        
-        
     tStr = "Plot %d" % len(plots)
     if title is not None:
         tStr += " - " + title
-    win.setWindowTitle(tStr)
+        
+    if data is None:
+        data = loadMetaArray(file)
+    if data.ndim == 1:
+        win = PlotWindow(title=title)
+        #plot = PlotWidget()
+        #win.setCentralWidget(plot)
+        #plot.plot(data)
+        #plot.autoRange()
+        win.plot(data)
+        win.autoRange()
+    elif data.ndim == 2:
+        win = MultiPlotWindow(title=title)
+        win.plot(data)
+        win.autoRange()
+        #gv = GraphicsView()
+        #win.setCentralWidget(gv)
+        #l = QtGui.QGraphicsGridLayout()
+        #gv.centralWidget.setLayout(l)
+        #for i in range(data.shape[0]):
+            #p = PlotItem(gv.centralWidget)
+            #l.addItem(p, i, 0)
+            #p.plot(data[i])
+            #p.autoRange()
+    win.resize(800, 600)
+        
+        
+    #win.setWindowTitle(tStr)
     plots.append({'win': win, 'data': data})
     win.show()
+    return win
 
 def showImage(data=None, file=None, title=None):
     global images
@@ -275,6 +319,7 @@ def showImage(data=None, file=None, title=None):
     win.setWindowTitle(tStr)
     images.append({'win': win, 'data': data})
     win.show()
+    return win
     
 
 def dirDialog(startDir='', title="Select Directory"):
