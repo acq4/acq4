@@ -6,16 +6,47 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 from PyQt4 import QtGui
+from numpy import clip, floor, log
 
-def mkPen(color=None, width=1, style=None, cosmetic=True):
+## Copied from acq4/lib/util/functions
+SI_PREFIXES = u'yzafpnµm kMGTPEZY'
+def siScale(x, minVal=1e-25):
+    """Return the recommended scale factor and SI prefix string for x."""
+    if abs(x) < minVal:
+        m = 0
+        x = 0
+    else:
+        m = int(clip(floor(log(abs(x))/log(1000)), -9.0, 9.0))
+    if m == 0:
+        pref = ''
+    elif m < -8 or m > 8:
+        pref = 'e%d' % (m*3)
+    else:
+        pref = SI_PREFIXES[m+8]
+    p = .001**m
+    return (p, pref)
+
+
+
+def mkPen(color=None, hsv=None, width=1, style=None, cosmetic=True):
     if color is None:
         color = [255, 255, 255]
-    pen = QtGui.QPen(QtGui.QBrush(mkColor(color)), width)
+    if hsv is not None:
+        color = hsvColor(*hsv)
+    else:
+        color = mkColor(color)
+        
+    pen = QtGui.QPen(QtGui.QBrush(color), width)
     pen.setCosmetic(cosmetic)
     if style is not None:
         pen.setStyle(style)
     return pen
-    
+
+def hsvColor(h, s=1.0, v=1.0, a=1.0):
+    c = QtGui.QColor()
+    c.setHsvF(h, s, v, a)
+    return c
+
 def mkColor(*args):
     """make a QColor from a variety of argument types"""
     err = 'Not sure how to make a color from "%s"' % str(args)

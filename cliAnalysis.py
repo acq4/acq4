@@ -22,6 +22,7 @@ from pyqtgraph.GraphicsView import *
 from pyqtgraph.graphicsItems import *
 from pyqtgraph.graphicsWindows import *
 from pyqtgraph.PlotWidget import *
+from pyqtgraph.functions import *
 from Canvas import Canvas
 from PyQt4 import QtCore, QtGui
 from functions import *
@@ -155,8 +156,37 @@ class UncagingWindow(QtGui.QMainWindow):
 #win = UncagingWindow()
 
 
+class IVWindow(QtGui.QMainWindow):
+    def __init__(self):
+        QtGui.QMainWindow.__init__(self)
+        self.cw = QtGui.QSplitter()
+        self.cw.setOrientation(QtCore.Qt.Vertical)
+        self.setCentralWidget(self.cw)
+        bw = QtGui.QWidget()
+        bwl = QtGui.QHBoxLayout()
+        bw.setLayout(bwl)
+        self.cw.addWidget(bw)
+        self.loadIVBtn = QtGui.QPushButton('Load I/V')
+        bwl.addWidget(self.loadIVBtn)
+        QtCore.QObject.connect(self.loadIVBtn, QtCore.SIGNAL('clicked()'), self.loadIV)
+        self.plot = PlotWidget()
+        self.cw.addWidget(self.plot)
+        self.resize(800, 800)
+        self.show()
 
-
+    def loadIV(self):
+        self.plot.clear()
+        dh = getManager().currentFile
+        dirs = dh.subDirs()
+        c = 0.0
+        for d in dirs:
+            d = dh[d]
+            try:
+                data = d['Clamp1.ma'].read()['Channel': 'primary']
+            except:
+                data = d['Clamp2.ma'].read()['Channel': 'primary']
+            self.plot.plot(data, pen=mkPen(hsv=[c, 0.7]))
+            c += 1.0 / len(dirs)
 
 
 

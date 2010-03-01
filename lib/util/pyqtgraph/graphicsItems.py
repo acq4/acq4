@@ -47,7 +47,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
     def __init__(self, image=None, copy=True, *args):
         self.qimage = QtGui.QImage()
         self.pixmap = None
-        self.useWeave = True
+        self.useWeave = False
         self.blackLevel = None
         self.whiteLevel = None
         self.alpha = 1.0
@@ -140,9 +140,9 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
             for( int i=0; i<n; i++ ) {
                 float a = (sim(i)-black) * (float)scale;
                 if( a > 255.0 )
-                a = 255.0;
+                    a = 255.0;
                 else if( a < 0.0 )
-                a = 0.0;
+                    a = 0.0;
                 im(i) = a;
             }
             """
@@ -178,8 +178,12 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
             
             for i in range(0, im.shape[axh['c']]):
                 im1[..., i] = im2[..., i]
-            for i in range(im.shape[axh['c']], 4):
-                im1[..., i] = alpha
+            
+            for i in range(im.shape[axh['c']], 3):
+                im1[..., i] = 0
+            if im.shape[axh['c']] < 4:
+                im1[..., 3] = alpha
+                
         else:
             raise Exception("Image must be 2 or 3 dimensions")
         #self.im1 = im1
@@ -676,11 +680,18 @@ class ScaleItem(QtGui.QGraphicsWidget):
             self.linkToView(linkView)
             
         self.tickLength = 10
+        self.scale = 1.0
         
         
     def setPen(self, pen):
         self.pen = pen
         self.update()
+        
+    def setScale(self, scale, prefix=''):
+        if scale != self.scale:
+            self.scale = scale
+            self.prefix = prefix
+            self.update()
         
     def setRange(self, mn, mx):
         self.range = [mn, mx]
@@ -744,8 +755,6 @@ class ScaleItem(QtGui.QGraphicsWidget):
         
         #print "  start at %f,  %d ticks" % (start, num)
         
-        ## Number of decimal places to print
-        places = max(0, int(1.3 - log10(dif)))
         
         if axis == 0:
             xs = -bounds.height() / dif
@@ -759,10 +768,17 @@ class ScaleItem(QtGui.QGraphicsWidget):
             
             ## determine starting tick
             start = ceil(self.range[0] / sp) * sp
-        
+            
             ## determine number of ticks
             num = int(dif / sp) + 1
             
+            ## last tick value
+            last = start + sp * num
+            
+            ## Number of decimal places to print
+            maxVal = max(abs(start), abs(last))
+            places = int(log10(maxVal) - log10(sp)) + 1
+        
             ## length of tick
             h = min(self.tickLength, (self.tickLength*3 / num) - 1.)
             
@@ -785,13 +801,15 @@ class ScaleItem(QtGui.QGraphicsWidget):
                 
                 if p1[1-axis] > [bounds.width(), bounds.height()][1-axis]:
                     continue
+                if p1[1-axis] < 0:
+                    continue
                 p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100, a)))
                 p.drawLine(Point(p1), Point(p2))
                 if i == i1+1:
                     if abs(v) < .001 or abs(v) >= 10000:
-                        vstr = "%g" % v
+                        vstr = "%g" % (v * self.scale)
                     else:
-                        vstr = ("%%0.%df" % places) % v
+                        vstr = ("%%0.%df" % places) % (v * self.scale)
                         
                     textRect = p.boundingRect(QtCore.QRectF(0, 0, 100, 100), QtCore.Qt.AlignCenter, vstr)
                     height = textRect.height()

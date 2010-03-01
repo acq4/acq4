@@ -19,6 +19,7 @@ This class is very heavily featured:
 
 from graphicsItems import *
 from plotConfigTemplate import *
+from functions import siScale
 from PyQt4 import QtGui, QtCore, QtSvg
 import weakref
 
@@ -33,6 +34,8 @@ try:
     HAVE_METAARRAY = True
 except:
     HAVE_METAARRAY = False
+
+
 
 
 class PlotItem(QtGui.QGraphicsWidget):
@@ -73,11 +76,11 @@ class PlotItem(QtGui.QGraphicsWidget):
             
         ## Create and place label items
         self.labels = {
-            'title':  {'item': LabelItem('title', size='11pt'),  'pos': (0, 2)},
-            'top':    {'item': LabelItem('top'),    'pos': (1, 2)},
-            'bottom': {'item': LabelItem('bottom'), 'pos': (5, 2)},
-            'left':   {'item': LabelItem('left'),   'pos': (3, 0)},
-            'right':  {'item': LabelItem('right'),  'pos': (3, 4)}
+            'title':  {'item': LabelItem('title', size='11pt'),  'pos': (0, 2), 'text': ''},
+            'top':    {'item': LabelItem('top'),    'pos': (1, 2), 'text': '', 'units': '', 'unitPrefix': ''},
+            'bottom': {'item': LabelItem('bottom'), 'pos': (5, 2), 'text': '', 'units': '', 'unitPrefix': ''},
+            'left':   {'item': LabelItem('left'),   'pos': (3, 0), 'text': '', 'units': '', 'unitPrefix': ''},
+            'right':  {'item': LabelItem('right'),  'pos': (3, 4), 'text': '', 'units': '', 'unitPrefix': ''}
         }
         self.labels['left']['item'].setAngle(-90)
         self.labels['right']['item'].setAngle(-90)
@@ -387,11 +390,26 @@ class PlotItem(QtGui.QGraphicsWidget):
     def xRangeChanged(self, _, range):
         self.ctrl.xMinText.setText('%0.5g' % range[0])
         self.ctrl.xMaxText.setText('%0.5g' % range[1])
+        
+        ## automatically change unit scale
+        maxVal = max(abs(range[0]), abs(range[1]))
+        (scale, prefix) = siScale(maxVal)
+        for l in ['top', 'bottom']:
+            self.setLabel(l, unitPrefix=prefix)
+            self.getScale(l).setScale(scale)
+        
         self.emit(QtCore.SIGNAL('xRangeChanged'), self, range)
 
     def yRangeChanged(self, _, range):
         self.ctrl.yMinText.setText('%0.5g' % range[0])
         self.ctrl.yMaxText.setText('%0.5g' % range[1])
+        
+        ## automatically change unit scale
+        maxVal = max(abs(range[0]), abs(range[1]))
+        (scale, prefix) = siScale(maxVal)
+        for l in ['left', 'right']:
+            self.setLabel(l, unitPrefix=prefix)
+            self.getScale(l).setScale(scale)
         self.emit(QtCore.SIGNAL('yRangeChanged'), self, range)
 
 
@@ -734,10 +752,22 @@ class PlotItem(QtGui.QGraphicsWidget):
         self._checkScaleKey(key)
         return self.scales[key]['item']
         
-    def setLabel(self, key, text, **args):
-        l = self.getLabel(key)
-        l.setText(text, **args)
-        self.showLabel(key)
+    def setLabel(self, key, text=None, units=None, unitPrefix=None, **args):
+        if text is not None:
+            self.labels[key]['text'] = text
+        if units != None:
+            self.labels[key]['units'] = units
+        if unitPrefix != None:
+            self.labels[key]['unitPrefix'] = unitPrefix
+        
+        text = self.labels[key]['text']
+        units = self.labels[key]['units']
+        unitPrefix = self.labels[key]['unitPrefix']
+        
+        if text is not '' or units is not '':
+            l = self.getLabel(key)
+            l.setText("%s (%s%s)" % (text, unitPrefix, units), **args)
+            self.showLabel(key)
         
         
     def showLabel(self, key, show=True):

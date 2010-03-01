@@ -32,9 +32,12 @@ Developer's Guide
         manager / configuration
         modules
     Dependencies
+        Python
         PyQt4
         Numpy/Scipy
+        PIL
         pyparsing
+        pyserial
     Conventions
         Code style
         Naming, name collisions
