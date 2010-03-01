@@ -7,11 +7,12 @@ class Canvas(QtGui.QWidget):
     def __init__(self, parent=None):
         QtGui.QWidget.__init__(self, parent)
         self.items = {}
-        
+        self.itemList = QtGui.QListWidget()
         self.layout = QtGui.QHBoxLayout()
         self.setLayout(self.layout)
         self.view = GraphicsView()
         self.layout.addWidget(self.view)
+        self.layout.addWidget(self.itemList)
         self.view.enableMouse()
         self.view.setAspectLocked(True)
         
@@ -38,6 +39,7 @@ class Canvas(QtGui.QWidget):
             c += 1
             newName = name + '_%03d' % c
         self.items[newName] = item
+        self.itemList.addItem(QtGui.QListWidgetItem(newName))
         return newName
             
     

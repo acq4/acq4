@@ -266,9 +266,10 @@ class GraphicsView(QtGui.QGraphicsView):
     def mouseReleaseEvent(self, ev):
         QtGui.QGraphicsView.mouseReleaseEvent(self, ev)
         if not self.mouseEnabled:
-            return
+            return 
+        #self.mouseTrail.append(Point(self.mapToScene(ev.pos())))
+        self.emit(QtCore.SIGNAL("mouseReleased"), ev)
         self.lastButtonReleased = ev.button()
-            
         return   ## Everything below disabled for now..
         
         ##self.mouseTrail.append(Point(self.mapToScene(ev.pos())))
@@ -303,6 +304,8 @@ class GraphicsView(QtGui.QGraphicsView):
                 #scale[0] = 1. / scale[0]
             self.scale(scale[0], scale[1], center=self.mapToScene(self.mousePressPos))
             self.emit(QtCore.SIGNAL('regionChanged(QRectF)'), self.range)
+
+
         elif ev.buttons() in [QtCore.Qt.MidButton, QtCore.Qt.LeftButton]:  ## Allow panning by left or mid button.
             tr = -delta / self.currentScale
             

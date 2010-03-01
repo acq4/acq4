@@ -49,7 +49,11 @@ class FileDataView(QtGui.QWidget):
         
         if image:
             if self.currentType == 'image':
-                self.widget.setImage(data, autoRange=False)
+                try:
+                    self.widget.setImage(data, autoRange=False)
+                except:
+                    print "widget type:", type(self.widget)
+                    raise
             else:
                 self.clear()
                 self.widget = ImageView(self)

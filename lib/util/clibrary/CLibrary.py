@@ -239,6 +239,7 @@ class CLibrary:
                         mkfn = WINFUNCTYPE
                     else:
                         mkfn = CFUNCTYPE
+                    print "Create function pointer (%s)" % conv
                     
                     args = [self._ctype(arg[1]) for arg in m]
                     cls = mkfn(cls, *args)
