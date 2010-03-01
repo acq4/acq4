@@ -245,12 +245,13 @@ class GraphicsView(QtGui.QGraphicsView):
         self.emit(QtCore.SIGNAL("mousePressed(PyQt_PyObject)"), self.mouseTrail)
                 
     def mouseReleaseEvent(self, ev):
+       
         QtGui.QGraphicsView.mouseReleaseEvent(self, ev)
         if not self.mouseEnabled:
             return
             
         #self.mouseTrail.append(Point(self.mapToScene(ev.pos())))
-        self.emit(QtCore.SIGNAL("mouseReleased(PyQt_PyObject)"), self.mouseTrail)
+        self.emit(QtCore.SIGNAL("mouseReleased"), ev)
         if self.currentItem is not None:
             pev = self.graphicsSceneEvent(ev, self.pev, self.fev)
             self.pev = pev
