@@ -119,7 +119,8 @@ class UncagingWindow(QtGui.QMainWindow):
                else:
                   size = self.defaultSize
                item = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
-               item.setBrush(QtGui.QBrush(self.traceColor(d)))
+               start = self.getLaserTime(d)
+               item.setBrush(QtGui.QBrush(self.traceColor(d, start)))
                item.source = d
                self.canvas.addItem(item, [pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z)
                #item.connect(QtCore.SIGNAL('clicked'), self.loadTrace)
@@ -129,6 +130,11 @@ class UncagingWindow(QtGui.QMainWindow):
             else:
                print "Skipping directory %s" %d.name()
         self.z += 1
+    
+    def getLaserTime(self, d):
+        q = d.getFile('Laser-UV.ma').read()['QSwitch']
+        return argmax(q)/q.infoCopy()[-1]['rate']
+                    
         
     def clearImage(self):
         for item in self.imageItems:
@@ -154,10 +160,10 @@ class UncagingWindow(QtGui.QMainWindow):
             data = data['Channel': 'scaled']
         return data
         
-    def traceColor(self, dh):
+    def traceColor(self, dh, start = 0.5, dur = 0.1):
         data = self.getClampData(dh)
-        base = data['Time': 0:0.49]
-        signal = data['Time': 0.5:0.6]
+        base = data['Time': 0:(start - 0.01)]
+        signal = data['Time': start:(start+dur)]
         mx = signal.max()
         mn = signal.min()
         mean = base.mean()
