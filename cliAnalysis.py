@@ -28,6 +28,30 @@ from PyQt4 import QtCore, QtGui
 from functions import *
 
 
+
+### Use CLI history
+import atexit
+import os
+historyPath = os.path.expanduser("~/.pyhistory")
+try:
+    import readline
+except ImportError:
+    print "Module readline not available."
+else:
+    import rlcompleter
+    readline.parse_and_bind("tab: complete")
+    if os.path.exists(historyPath):
+        readline.read_history_file(historyPath)
+def save_history(historyPath=historyPath):
+    try:
+        import readline
+    except ImportError:
+        print "Module readline not available."
+    else:
+        readline.write_history_file(historyPath)
+atexit.register(save_history)
+
+
 ## Initialize Qt
 app = QtGui.QApplication(sys.argv)
 
@@ -82,6 +106,7 @@ class UncagingWindow(QtGui.QMainWindow):
         self.show()
         self.scanItems = []
         self.imageItems = []
+        self.currentTraces = []
         
     def addImage(self, img=None):
         if img is None:
@@ -107,11 +132,11 @@ class UncagingWindow(QtGui.QMainWindow):
     def addScan(self):
         dh = getManager().currentFile
         if len(dh.info()['protocol']['params']) > 0:
-            dirs = dh.subDirs()
+            dirs = [dh[d] for d in dh.subDirs()]
         else:
-            dirs = [dh.name()]
+            dirs = [dh]
         for d in dirs:
-            d = dh[d]
+            #d = dh[d]
             if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
                pos = d.info()['Scanner']['position']
                if 'spotSize' in d.info()['Scanner']:
@@ -146,10 +171,16 @@ class UncagingWindow(QtGui.QMainWindow):
             return
         dh = item.source
         data = self.getClampData(dh)
+        self.currentTraces.append(data)
         self.plot.plot(data, pen=pen)
         
     def getClampData(self, dh):
-        data = dh['Clamp1.ma'].read()
+        try:
+            data = dh['Clamp1.ma'].read()
+            print "Loaded", dh['Clamp1.ma'].name()
+        except:
+            data = dh['Clamp2.ma'].read()
+            #print "Loaded", dh['Clamp2.ma'].name()
         if data.hasColumn('Channel', 'primary'):
             data = data['Channel': 'primary']
         elif data.hasColumn('Channel', 'scaled'):
@@ -158,7 +189,7 @@ class UncagingWindow(QtGui.QMainWindow):
         
     def traceColor(self, dh):
         data = self.getClampData(dh)
-        base = data['Time': 0:0.49]
+        base = data['Time': 0.0:0.49]
         signal = data['Time': 0.5:0.6]
         mx = signal.max()
         mn = signal.min()
@@ -172,6 +203,7 @@ class UncagingWindow(QtGui.QMainWindow):
         self.plot.clear()
         spot = self.canvas.view.items(ev.pos())
         n=0.0
+        self.currentData = []
         for i in spot:
             n += 1.0
             color = n/(len(spot))*0.7
@@ -258,7 +290,34 @@ class IVWindow(QtGui.QMainWindow):
             c += 1.0 / len(dirs)
 
 
+class PSPWindow(QtGui.QMainWindow):
+    def __init__(self):
+        QtGui.QMainWindow.__init__(self)
+        self.cw = QtGui.QSplitter()
+        self.cw.setOrientation(QtCore.Qt.Vertical)
+        self.setCentralWidget(self.cw)
+        bw = QtGui.QWidget()
+        bwl = QtGui.QHBoxLayout()
+        bw.setLayout(bwl)
+        self.cw.addWidget(bw)
+        self.loadTraceBtn = QtGui.QPushButton('Load Trace')
+        bwl.addWidget(self.loadTraceBtn)
+        QtCore.QObject.connect(self.loadTraceBtn, QtCore.SIGNAL('clicked()'), self.loadTrace)
+        self.plot = PlotWidget()
+        self.cw.addWidget(self.plot)
+        self.resize(800, 800)
+        self.show()
 
+    def loadTrace(self):
+        self.plot.clear()
+        fh = getManager().currentFile
+        try:
+            data = d['Clamp1.ma'].read()['Channel': 'primary']
+        except:
+            data = d['Clamp2.ma'].read()['Channel': 'primary']
+        self.plot.plot(data)
+        
+        
 
 
 
@@ -268,7 +327,7 @@ if QtGui.QApplication.instance() is None:
     app = QtGui.QApplication([])
 
 
-def showPlot(data=None, file=None, title=None):
+def showPlot(data=None, x=None, file=None, title=None):
     global plots
     tStr = "Plot %d" % len(plots)
     if title is not None:
@@ -282,11 +341,11 @@ def showPlot(data=None, file=None, title=None):
         #win.setCentralWidget(plot)
         #plot.plot(data)
         #plot.autoRange()
-        win.plot(data)
+        win.plot(data, x)
         win.autoRange()
     elif data.ndim == 2:
         win = MultiPlotWindow(title=title)
-        win.plot(data)
+        win.plot(data, x)
         win.autoRange()
         #gv = GraphicsView()
         #win.setCentralWidget(gv)

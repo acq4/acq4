@@ -14,7 +14,7 @@ class PlotWindow(QtGui.QMainWindow):
         QtGui.QMainWindow.__init__(self)
         self.cw = PlotWidget()
         self.setCentralWidget(self.cw)
-        for m in ['plot', 'autoRange', 'addItem']:
+        for m in ['plot', 'autoRange', 'addItem', 'setLabel', 'clear']:
             setattr(self, m, getattr(self.cw, m))
         if title is not None:
             self.setWindowTitle(title)

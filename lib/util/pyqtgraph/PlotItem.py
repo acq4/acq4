@@ -395,8 +395,12 @@ class PlotItem(QtGui.QGraphicsWidget):
         maxVal = max(abs(range[0]), abs(range[1]))
         (scale, prefix) = siScale(maxVal)
         for l in ['top', 'bottom']:
-            self.setLabel(l, unitPrefix=prefix)
-            self.getScale(l).setScale(scale)
+            if self.getLabel(l).isVisible():
+                self.setLabel(l, unitPrefix=prefix)
+                self.getScale(l).setScale(scale)
+            else:
+                self.setLabel(l, unitPrefix='')
+                self.getScale(l).setScale(1.0)
         
         self.emit(QtCore.SIGNAL('xRangeChanged'), self, range)
 
@@ -408,8 +412,12 @@ class PlotItem(QtGui.QGraphicsWidget):
         maxVal = max(abs(range[0]), abs(range[1]))
         (scale, prefix) = siScale(maxVal)
         for l in ['left', 'right']:
-            self.setLabel(l, unitPrefix=prefix)
-            self.getScale(l).setScale(scale)
+            if self.getLabel(l).isVisible():
+                self.setLabel(l, unitPrefix=prefix)
+                self.getScale(l).setScale(scale)
+            else:
+                self.setLabel(l, unitPrefix='')
+                self.getScale(l).setScale(1.0)
         self.emit(QtCore.SIGNAL('yRangeChanged'), self, range)
 
 
@@ -822,7 +830,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             
         
         
-    def _plotMetaArray(self, arr, x=None):
+    def _plotMetaArray(self, arr, x=None, autoLabel=True):
         inf = arr.infoCopy()
         if arr.ndim != 1:
             raise Exception('can only automatically plot 1 dimensional arrays.')
@@ -837,6 +845,15 @@ class PlotItem(QtGui.QGraphicsWidget):
                 xv = x
         c = PlotCurveItem()
         c.setData(x=xv, y=arr.view(ndarray))
+        
+        if autoLabel:
+            name = arr._info[0].get('name', None)
+            units = arr._info[0].get('units', None)
+            self.setLabel('bottom', text=name, units=units)
+            
+            name = arr._info[1].get('name', None)
+            units = arr._info[1].get('units', None)
+            self.setLabel('left', text=name, units=units)
             
         return c
 

@@ -18,6 +18,8 @@ from metaarray import *
 from scipy import *
 from scipy.optimize import leastsq
 from scipy.ndimage import gaussian_filter, generic_filter
+import scipy.signal
+import numpy.ma
 
 ## Number <==> string conversion functions
 
@@ -207,12 +209,39 @@ def getSpikeTemplate(ivc, traces):
         stop += 1
     
     return traces[thrIndex][['Time', 'Inp0'], start:stop]
+
+def sigmoid(v, x):
+    """Sigmoid function value at x. the parameter v is [slope, x-offset, amplitude, y-offset]"""
+    return v[2] / (1.0 + exp(-v[0] * (x-v[1]))) + v[3]
     
-def fitSigmoid(xVals, yVals, guess=[1.0, 0.0, 1.0, 0.0]):
-    """Returns least-squares fit parameters for function v[2] / (1.0 + exp(-v[0] * (x-v[1]))) + v[3]"""
-    fn = lambda v, x: v[2] / (1.0 + exp(-v[0] * (x-v[1]))) + v[3]
-    err = lambda v, x, y: fn(v, x)-y
-    return leastsq(err, guess, args=(xVals, yVals))
+def gaussian(v, x):
+    """Gaussian function value at x. The parameter v is [amplitude, x-offset, sigma, y-offset]"""
+    return v[0] * exp(-((x-v[1])**2) / (2 * v[2]**2)) + v[3]
+
+def fit(function, xVals, yVals, guess, errFn=None, generateResult=False, resultXVals=None):
+    """fit xVals, yVals to the specified function. 
+    If generateResult is True, then the fit is used to generate an array of points from function
+    with the xVals supplied (useful for plotting the fit results with the original data). 
+    The result x values can be explicitly set with resultXVals."""
+    if errFn is None:
+        errFn = lambda v, x, y: function(v, x)-y
+    fit = leastsq(errFn, guess, args=(xVals, yVals))
+    
+    result = None
+    if generateResult:
+        if resultXVals is not None:
+            xVals = resultXVals
+        fn = lambda i: function(fit[0], xVals[i.astype(int)])
+        result = fromfunction(fn, xVals.shape)
+    return fit + (result,)
+        
+def fitSigmoid(xVals, yVals, guess=[1.0, 0.0, 1.0, 0.0], **kargs):
+    """Returns least-squares fit for sigmoid"""
+    return fit(sigmoid, xVals, yVals, guess, **kargs)
+
+def fitGaussian(xVals, yVals, guess=[1.0, 0.0, 1.0, 0.0], **kargs):
+    """Returns least-squares fit parameters for function v[0] * exp(((x-v[1])**2) / (2 * v[2]**2)) + v[3]"""
+    return fit(gaussian, xVals, yVals, guess, **kargs)
 
 
 STRNCMP_REGEX = re.compile(r'(-?\d+(\.\d*)?((e|E)-?\d+)?)')
@@ -495,11 +524,36 @@ def fastRmsMatch(template, data, thresholds=[0.85, 0.75], scales=[0.2, 1.0], min
     return inds.astype(int)
 
 
-def highPass(data, dims):
-    return data - gaussian_filter(data, sigma=dims)
 
-def lowPass(data, dims):
-    gaussian_filter(data, sigma=dims)
+def besselFilter(data, cutoff, order=1, dt=None, btype='low'):
+    """return data passed through bessel filter"""
+    if dt is None:
+        try:
+            tvals = data.xvals('Time')
+            dt = (tvals[-1]-tvals[0]) / (len(tvals)-1)
+        except:
+            raise Exception('Must specify dt for this data.')
+    
+    b,a = scipy.signal.bessel(order, cutoff * 2 * dt, btype=btype) 
+    return scipy.signal.lfilter(b, a, data.view(ndarray))
+
+def highPass(data, cutoff, order=1, dt=None):
+    """return data passed through high-pass bessel filter"""
+    return besselFilter(data, cutoff, order, dt, 'high')
+
+def lowPass(data, cutoff, order=1, dt=None):
+    """return data passed through low-pass bessel filter"""
+    return besselFilter(data, cutoff, order, dt, 'low')
+
+def bandPass(data, low, high, lowOrder=1, highOrder=1, dt=None):
+    """return data passed through low-pass bessel filter"""
+    if dt is None:
+        try:
+            tvals = data.xvals('Time')
+            dt = (tvals[-1]-tvals[0]) / (len(tvals)-1)
+        except:
+            raise Exception('Must specify dt for this data.')
+    return lowPass(highPass(data, low, lowOrder, dt), high, highOrder, dt)
 
 def gaussDivide(data, sigma):
     return data.astype(float32) / gaussian_filter(data, sigma=sigma)
@@ -807,3 +861,113 @@ def matchDistortImg(im1, im2, scale=4, maxDist=40, mapBlur=30, showProgress=Fals
             w.hide()
             
     return im2d
+
+
+def measureBaseline(data, threshold=2.0, iterations=3):
+    """Find the baseline value of a signal by iteratively measuring the median value, then excluding outliers."""
+    data = data.view(ndarray)
+    med = median(data)
+    if iterations > 1:
+        std = data.std()
+        thresh = std * threshold
+        arr = numpy.ma.masked_outside(data, med - thresh, med + thresh)
+        return measureBaseline(arr[~arr.mask], threshold, iterations-1)
+    else:
+        return med
+
+def measureNoise(data):
+    ## Determine the base level of noise
+    ## chop data up into small pieces, measure the std dev of each piece and take the median of those
+    data2 = data.view(ndarray)[:10*(len(data)/10)]
+    data2.shape = (10, len(data2)/10)
+    return median(data2.std(axis=0))
+    
+
+def findEvents(data, minLength=3, noiseThreshold=2.0):
+    """Locate events of any shape in a signal. Makes the following assumptions about the signal:
+      - noise is gaussian
+      - baseline is centered at 0 (high-pass filtering may be required to achieve this).
+      - no 0 crossings within an event due to noise (low-pass filtering may be required to achieve this)
+      - Events last more than minLength samples
+      Return an array of events where each row is (start, length, sum)
+    """
+    ## just make sure this is an ndarray and not a MetaArray before operating..
+    data1 = data.view(ndarray)
+    
+    
+    ## find all 0 crossings
+    mask = data1 > 0
+    diff = mask[1:] - mask[:-1]  ## mask is True every time the trace crosses 0 between i and i+1
+    times = argwhere(diff)[:, 0]  ## index of each point immediately before crossing.
+    
+    ## max number of events found, may cull some of these later..
+    nEvents = len(times) - 1
+    if nEvents < 1:
+        return None
+        
+    ## Measure sum of values within each region between crossings, combine into single array
+    ## At this stage, ignore al events with length < minLength
+    events = empty(nEvents, dtype=[('start',int),('len', int),('sum', float)])  ### rows are [start, length, sum]
+    n = 0
+    for i in range(nEvents):
+        t1 = times[i]+1
+        t2 = times[i+1]+1
+        if t2-t1 >= minLength:
+            events[n][0] = t1
+            events[n][1] = t2-t1
+            events[n][2] = data1[t1:t2].sum()
+            n += 1
+    events = events[:n]
+    
+    ## Fit gaussian to peak in size histogram, use fit sigma as criteria for noise rejection
+    stdev = measureNoise(data1)
+    hist = histogram(events['sum'], bins=100)
+    histx = 0.5*(hist[1][1:] + hist[1][:-1])
+    fit = fitGaussian(histx, hist[0], [hist[0].max(), 0, stdev*3, 0])
+    sigma = fit[0][2]
+    minSize = sigma * noiseThreshold
+    
+    ## Generate new set of events, ignoring those with sum < minSize
+    mask = abs(events['sum'] / events['len']) >= minSize
+    events2 = events[mask]
+    
+    return events2
+    
+    
+def removeBaseline(data, cutoff=5, threshold=1.5, dt=None):
+    """Return the signal with baseline removed. Discards outliers from baseline measurement."""
+    if dt is None:
+        tv = data.xvals('Time')
+        dt = tv[1] - tv[0]
+    d1 = lowPass(data - measureBaseline(data), cutoff)
+    d2 = data - d1
+    stdev = std(d2)
+    mask = abs(d2) > stdev*threshold
+    d3 = where(mask, d1, data.view(ndarray))
+    d4 = lowPass(d3, cutoff, dt=dt)
+    return data - d4
+    
+def clusterSignals(data, num=5):
+    pass
+    
+def denoise(data, radius=2, threshold=4):
+    r2 = radius * 2
+    d1 = data.view(ndarray)
+    d2 = data[radius:-radius] - data[:-r2]
+    d3 = data[r2:] - data[:-r2]
+    d4 = d2 - d3
+    stdev = d4.std()
+    mask = abs(d4) < stdev*threshold
+    d5 = where(mask, d1[radius:-radius], d1[:-r2])
+    d6 = empty(d1.shape, dtype=d1.dtype)
+    d6[:radius] = d1[:radius]
+    d6[-radius:] = d1[-radius:]
+    d6[radius:-radius] = d5
+    
+    if isinstance(data, MetaArray):
+        return MetaArray(d6, info=data.infoCopy())
+    return d6
+
+
+
+

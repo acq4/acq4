@@ -155,9 +155,22 @@ class MetaArray(ndarray):
 
 
     def __array_finalize__(self,obj):
+        ## array_finalize is called every time a MetaArray is created 
+        ## (whereas __new__ is not necessarily called every time)
+        
+        ## obj is the object from which this array was generated (for example, when slicing or view()ing)
+        
         # We use the getattr method to set a default if 'obj' doesn't have the 'info' attribute
-        self._info = getattr(obj, 'info', [{}]*(obj.ndim+1))
-        self._infoOwned = False  ## Do not make changes to _info until it is copied at least once
+        #print "Create new MA from object", str(type(obj))
+        #import traceback
+        #traceback.print_stack()
+        #print "finalize", type(self), type(obj)
+        if not hasattr(self, '_info'):
+            #if isinstance(obj, MetaArray):
+                #print "  copy info:", obj._info
+            self._info = getattr(obj, '_info', [{}]*(obj.ndim+1))
+            self._infoOwned = False  ## Do not make changes to _info until it is copied at least once
+        #print "  self info:", self._info
       
         # We could have checked first whether self._info was already defined:
         #if not hasattr(self, 'info'):
@@ -165,7 +178,12 @@ class MetaArray(ndarray):
     
   
     def __getitem__(self, ind):
+        #print "getitem:", ind
+        
+        ## should catch scalar requests as early as possible to speed things up (?)
+        
         nInd = self._interpretIndexes(ind)
+        
         #print "Indexes:", nInd
         try:
             a = ndarray.__getitem__(self, nInd)
@@ -173,11 +191,56 @@ class MetaArray(ndarray):
             #print nInd, self.shape
             raise
         if type(a) == type(self):  ## generate new info array
+            #print "   new MA:", type(a), a.shape
             a._info = []
+            extraInfo = self._info[-1].copy()
             for i in range(0, len(nInd)):   ## iterate over all axes
-                if type(nInd[i]) in [types.SliceType, types.ListType, ndarray] or ndarray in type(nInd[i]).__bases__:  ## If the axis is sliced, keep the info but chop if necessary
+                #print "   axis", i
+                if type(nInd[i]) in [slice, list] or isinstance(type(nInd[i]), ndarray):  ## If the axis is sliced, keep the info but chop if necessary
+                    #print "      slice axis", i, nInd[i]
+                    #a._info[i] = self._axisSlice(i, nInd[i])
+                    #print "         info:", a._info[i]
                     a._info.append(self._axisSlice(i, nInd[i]))
-            a._info.append(self._info[-1])   ## Tack on extra data
+                else: ## If the axis is indexed, then move the information from that single index to the last info dictionary
+                    #print "indexed:", i, nInd[i]
+                    newInfo = self._axisSlice(i, nInd[i])
+                    name = None
+                    colName = None
+                    for k in newInfo:
+                        if k == 'cols':
+                            if 'cols' not in extraInfo:
+                                extraInfo['cols'] = []
+                            extraInfo['cols'].append(newInfo[k])
+                            if 'units' in newInfo[k]:
+                                extraInfo['units'] = newInfo[k]['units']
+                            if 'name' in newInfo[k]:
+                                colName = newInfo[k]['name']
+                        elif k == 'name':
+                            name = newInfo[k]
+                        else:
+                            if k not in extraInfo:
+                                extraInfo[k] = newInfo[k]
+                            extraInfo[k] = newInfo[k]
+                    if 'name' not in extraInfo:
+                        if name is None:
+                            if colName is not None:
+                                extraInfo['name'] = colName
+                        else:
+                            if colName is not None:
+                                extraInfo['name'] = name + ': ' + colName
+                            else:
+                                extraInfo['name'] = name
+                            
+                            
+                    #print "Lost info:", newInfo
+                    #a._info[i] = None
+                    #if 'name' in newInfo:
+                        #a._info[-1][newInfo['name']] = newInfo
+            a._info.append(extraInfo)
+            
+            self._infoOwned = False
+            #while None in a._info:
+                #a._info.remove(None)
         return a
   
     def __getslice__(self, *args):
@@ -280,13 +343,27 @@ class MetaArray(ndarray):
   
   
     def _interpretIndexes(self, ind):
-        if type(ind) != types.TupleType:
-            ind = (ind,)
+        #print "interpret", ind
+        if not isinstance(ind, tuple):
+            ## a list of slices should be interpreted as a tuple of slices.
+            if isinstance(ind, list) and len(ind) > 0 and isinstance(ind[0], slice):
+                ind = tuple(ind)
+            ## everything else can just be converted to a length-1 tuple
+            else:
+                ind = (ind,)
+                
         nInd = [slice(None)]*self.ndim
         numOk = True  ## Named indices not started yet; numbered sill ok
         for i in range(0,len(ind)):
             (axis, index, isNamed) = self._interpretIndex(ind[i], i, numOk)
+            #try:
             nInd[axis] = index
+            #except:
+                #print "ndim:", self.ndim
+                #print "axis:", axis
+                #print "index spec:", ind[i]
+                #print "index num:", index
+                #raise
             if isNamed:
                 numOk = False
         return tuple(nInd)
@@ -300,7 +377,12 @@ class MetaArray(ndarray):
     def _interpretIndex(self, ind, pos, numOk):
         #print "Interpreting index", ind, pos, numOk
         
-        
+        ## should probably check for int first to speed things up..
+        if type(ind) is int:
+            if not numOk:
+                raise Exception("string and integer indexes may not follow named indexes")
+            #print "  normal numerical index"
+            return (pos, ind, False)
         if MetaArray.isNameType(ind):
             if not numOk:
                 raise Exception("string and integer indexes may not follow named indexes")
@@ -391,18 +473,64 @@ class MetaArray(ndarray):
         return copy.deepcopy(self._info[i])
   
     def _axisSlice(self, i, cols):
+        #print "axisSlice", i, cols
         if self._info[i].has_key('cols') or self._info[i].has_key('values'):
             ax = self._axisCopy(i)
             if ax.has_key('cols'):
-                ax['cols'] = list(array(ax['cols'])[cols])
+                #print "  slicing columns..", array(ax['cols']), cols
+                sl = array(ax['cols'])[cols]
+                if isinstance(sl, ndarray):
+                    sl = list(sl)
+                ax['cols'] = sl
+                #print "  result:", ax['cols']
             if ax.has_key('values'):
                 ax['values'] = array(ax['values'])[cols]
         else:
             ax = self._info[i]
+        #print "     ", ax
         return ax
   
+    def prettyInfo(self):
+        s = ''
+        titles = []
+        maxl = 0
+        for i in range(len(self._info)-1):
+            ax = self._info[i]
+            axs = ''
+            if 'name' in ax:
+                axs += '"%s"' % ax['name']
+            else:
+                axs += "%d" % i
+            if 'units' in ax:
+                axs += " (%s)" % ax['units']
+            titles.append(axs)
+            if len(axs) > maxl:
+                maxl = len(axs)
+        
+        for i in range(len(self._info)-1):
+            ax = self._info[i]
+            axs = titles[i]
+            axs += '%s[%d] :' % (' ' * (maxl + 2 - len(axs)), self.shape[i])
+            if 'values' in ax:
+                v0 = ax['values'][0]
+                v1 = ax['values'][-1]
+                axs += " values: [%g ... %g] (step %g)" % (v0, v1, (v1-v0)/(self.shape[i]-1))
+            if 'cols' in ax:
+                axs += " columns: "
+                colstrs = []
+                for c in range(len(ax['cols'])):
+                    col = ax['cols'][c]
+                    cs = col.get('name', c)
+                    if 'units' in col:
+                        cs += " (%s)" % col['units']
+                    colstrs.append(cs)
+                axs += '[' + ', '.join(colstrs) + ']'
+            s += axs + "\n"
+        s += str(self._info[-1])
+        return s
+  
     def __repr__(self):
-        return "%s\n  axis info: %s" % (ndarray.__repr__(self), str(self._info))
+        return "%s\n-----------------------------------------------\n%s" % (self.view(ndarray).__repr__(), self.prettyInfo())
 
     def __str__(self):
         return self.__repr__()
