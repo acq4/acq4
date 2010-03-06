@@ -249,6 +249,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         wr = v.mapFromScene(b).boundingRect()
         pos = v.pos()
         wr.adjust(v.x(), v.y(), v.x(), v.y())
+        return wr
+
 
     def viewChanged(self, *args):
         self.emit(QtCore.SIGNAL('viewChanged'), *args)
@@ -285,10 +287,14 @@ class PlotItem(QtGui.QGraphicsWidget):
             self.manager.linkY(self, plot)
         
     def linkXChanged(self, plot):
+        #print "update from", plot
         if self.linksBlocked:
             return
         pr = plot.vb.viewRect()
         pg = plot.viewGeometry()
+        if pg is None:
+            #print "   return early"
+            return
         sg = self.viewGeometry()
         upp = float(pr.width()) / pg.width()
         x1 = pr.left() + (sg.x()-pg.x()) * upp

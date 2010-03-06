@@ -6,6 +6,7 @@ import lib.Manager as Manager
 import sip
 import time
 import configfile
+from DictView import *
 
 class FocusEventCatcher(QtCore.QObject):
     def __init__(self):
@@ -102,12 +103,13 @@ class FileInfoView(QtGui.QWidget):
         #print "Add %d rows.." % len(infoKeys)
         for f in infoKeys:
             if isinstance(info[f], dict):
-                s = configfile.genString(info[f])
+                w = DictView(info[f])
+                #s = configfile.genString(info[f])
             else:
                 s = str(info[f])
-            if f == '__timestamp__':
-                s = time.strftime("%Y.%m.%d   %H:%m:%S", time.localtime(float(s)))
-            w = QtGui.QLabel(s)
+                if f == '__timestamp__':
+                    s = time.strftime("%Y.%m.%d   %H:%m:%S", time.localtime(float(s)))
+                w = QtGui.QLabel(s)
             if type(f) is tuple:
                 f = '.'.join(f)
             f = str(f).replace('__', '')
@@ -127,6 +129,7 @@ class FileInfoView(QtGui.QWidget):
             
     def focusLost(self, obj):
         field = self.widgets[obj]
+        print "focus lost", obj, field
         if isinstance(obj, QtGui.QLineEdit):
             val = str(obj.text())
         elif isinstance(obj, QtGui.QTextEdit):
@@ -135,6 +138,9 @@ class FileInfoView(QtGui.QWidget):
             val = str(obj.currentText())
         elif isinstance(obj, QtGui.QCheckBox):
             val = obj.isChecked()
+        else:
+            return
+        #print "Update", field, val
         self.current.setInfo({field: val})
             
     def clear(self):

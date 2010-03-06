@@ -777,7 +777,7 @@ class ScaleItem(QtGui.QGraphicsWidget):
             
             ## Number of decimal places to print
             maxVal = max(abs(start), abs(last))
-            places = int(log10(maxVal) - log10(sp)) + 1
+            places = max(0, 1-int(log10(sp*self.scale)))
         
             ## length of tick
             h = min(self.tickLength, (self.tickLength*3 / num) - 1.)
@@ -1146,7 +1146,7 @@ class InfiniteLine(QtGui.QGraphicsLineItem):
         #return QtGui.QGraphicsLineItem.boundingRect(self)
 
 class VTickGroup(QtGui.QGraphicsPathItem):
-    def __init__(self, xvals=None, yrange=None, pen=None, yRelative=False):
+    def __init__(self, xvals=None, yrange=None, pen=None, relative=False, view=None):
         QtGui.QGraphicsPathItem.__init__(self)
         if yrange is None:
             yrange = [0, 1]
@@ -1156,10 +1156,12 @@ class VTickGroup(QtGui.QGraphicsPathItem):
             pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
         self.ticks = []
         self.xvals = []
+        self.view = view
         self.yrange = [0,1]
         self.setPen(pen)
-        self.setYRange(yrange, yRelative)
+        self.setYRange(yrange, relative)
         self.setXVals(xvals)
+        
         
     #def setPen(self, pen=None):
         #if pen is None:
@@ -1176,19 +1178,41 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         #self.update()
         
     def setYRange(self, vals, relative=False):
+        ### fix for bug while drawing very small things
+        #dy = vals[1]-vals[0]
+        #self.resetTransform()
+        #self.scale(1.0, dy)
+        
         self.yrange = vals
+        self.relative = relative
+        if self.view is not None:
+            if relative:
+                QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.rebuildTicks)
+            else:
+                try:
+                    QtCore.QObject.disconnect(self.view, QtCore.SIGNAL('viewChanged'), self.rebuildTicks)
+                except:
+                    pass
         #self.updateBounds()
         self.rebuildTicks()
         #self.update()
             
     def yRange(self):
-        return self.yrange
+        if self.relative:
+            height = self.view.size().height()
+            p1 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[0]))))
+            p2 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[1]))))
+            return [p1.y(), p2.y()]
+        else:
+            return self.yrange
             
     def rebuildTicks(self):
         path = QtGui.QPainterPath()
+        yrange = self.yRange()
+        #print "rebuild ticks:", yrange
         for x in self.xvals:
-            path.moveTo(x, self.yrange[0])
-            path.lineTo(x, self.yrange[1])
+            path.moveTo(x, yrange[0])
+            path.lineTo(x, yrange[1])
         self.setPath(path)
         #self.clear()
         #y0, y1 = self.yRange()

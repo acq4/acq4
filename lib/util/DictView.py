@@ -30,7 +30,7 @@ class DictView(QtGui.QTreeWidget):
                 node.addChild(newNode)
         else:
             #print "\nadd value", k, str(v)
-            node = QtGui.QTreeWidgetItem([name, str(v)])
+            node = QtGui.QTreeWidgetItem([str(name), str(v)])
         return node
         
         

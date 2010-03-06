@@ -17,7 +17,7 @@ import os, re, math, time, threading
 from metaarray import *
 from scipy import *
 from scipy.optimize import leastsq
-from scipy.ndimage import gaussian_filter, generic_filter
+from scipy.ndimage import gaussian_filter, generic_filter, median_filter
 import scipy.signal
 import numpy.ma
 
@@ -535,7 +535,11 @@ def besselFilter(data, cutoff, order=1, dt=None, btype='low'):
             raise Exception('Must specify dt for this data.')
     
     b,a = scipy.signal.bessel(order, cutoff * 2 * dt, btype=btype) 
-    return scipy.signal.lfilter(b, a, data.view(ndarray))
+    base = data[0]
+    d1 = scipy.signal.lfilter(b, a, data.view(ndarray)-base) + base
+    if isinstance(data, MetaArray):
+        return MetaArray(d1, info=data.infoCopy())
+    return d1
 
 def highPass(data, cutoff, order=1, dt=None):
     """return data passed through high-pass bessel filter"""
@@ -875,12 +879,20 @@ def measureBaseline(data, threshold=2.0, iterations=3):
     else:
         return med
 
-def measureNoise(data):
+def measureNoise(data, threshold=2.0, iterations=2):
     ## Determine the base level of noise
-    ## chop data up into small pieces, measure the std dev of each piece and take the median of those
-    data2 = data.view(ndarray)[:10*(len(data)/10)]
-    data2.shape = (10, len(data2)/10)
-    return median(data2.std(axis=0))
+    data = data.view(ndarray)
+    if iterations > 1:
+        med = median(data)
+        std = data.std()
+        thresh = std * threshold
+        arr = numpy.ma.masked_outside(data, med - thresh, med + thresh)
+        return measureNoise(arr[~arr.mask], threshold, iterations-1)
+    else:
+        return data.std()
+    #data2 = data.view(ndarray)[:10*(len(data)/10)]
+    #data2.shape = (10, len(data2)/10)
+    #return median(data2.std(axis=0))
     
 
 def findEvents(data, minLength=3, noiseThreshold=2.0):
@@ -904,18 +916,24 @@ def findEvents(data, minLength=3, noiseThreshold=2.0):
     nEvents = len(times) - 1
     if nEvents < 1:
         return None
-        
+    
     ## Measure sum of values within each region between crossings, combine into single array
     ## At this stage, ignore al events with length < minLength
-    events = empty(nEvents, dtype=[('start',int),('len', int),('sum', float)])  ### rows are [start, length, sum]
+    events = empty(nEvents, dtype=[('start',int),('len', int),('sum', float),('peak', float)])  ### rows are [start, length, sum]
     n = 0
     for i in range(nEvents):
         t1 = times[i]+1
         t2 = times[i+1]+1
         if t2-t1 >= minLength:
-            events[n][0] = t1
-            events[n][1] = t2-t1
-            events[n][2] = data1[t1:t2].sum()
+            events[n]['start'] = t1
+            events[n]['len'] = t2-t1
+            evData = data1[t1:t2]
+            events[n]['sum'] = evData.sum()
+            if events[n]['sum'] > 0:
+                peak = evData.max()
+            else:
+                peak = evData.min()
+            events[n]['peak'] = peak
             n += 1
     events = events[:n]
     
@@ -928,24 +946,33 @@ def findEvents(data, minLength=3, noiseThreshold=2.0):
     minSize = sigma * noiseThreshold
     
     ## Generate new set of events, ignoring those with sum < minSize
-    mask = abs(events['sum'] / events['len']) >= minSize
+    #mask = abs(events['sum'] / events['len']) >= minSize
+    mask = abs(events['sum']) >= minSize
     events2 = events[mask]
     
     return events2
     
     
-def removeBaseline(data, cutoff=5, threshold=1.5, dt=None):
+def removeBaseline(data, window=100):
     """Return the signal with baseline removed. Discards outliers from baseline measurement."""
-    if dt is None:
-        tv = data.xvals('Time')
-        dt = tv[1] - tv[0]
-    d1 = lowPass(data - measureBaseline(data), cutoff)
-    d2 = data - d1
-    stdev = std(d2)
-    mask = abs(d2) > stdev*threshold
-    d3 = where(mask, d1, data.view(ndarray))
-    d4 = lowPass(d3, cutoff, dt=dt)
-    return data - d4
+    #if dt is None:
+        #tv = data.xvals('Time')
+        #dt = tv[1] - tv[0]
+    #d1 = lowPass(data, cutoff)
+    #d2 = data - d1
+    #stdev = std(d2)
+    #mask = abs(d2) > stdev*threshold
+    #d3 = where(mask, d1, data.view(ndarray))
+    #d4 = lowPass(d3, cutoff, dt=dt)
+    #return data - d4
+    
+    ## Nah, let's try something simpler:
+    d1 = data.view(ndarray)
+    d2 = d1 - median_filter(d1, window)
+    if isinstance(data, MetaArray):
+        return MetaArray(d2, info=data.infoCopy())
+    return d2
+    
     
 def clusterSignals(data, num=5):
     pass

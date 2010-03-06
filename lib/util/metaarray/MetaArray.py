@@ -119,14 +119,14 @@ class MetaArray(ndarray):
                             info[i] = {}
                         else:
                             raise Exception("Axis specification must be Dict or None")
-                    if info[i].has_key('values'):
+                    if i < subarr.ndim and info[i].has_key('values'):
                         if type(info[i]['values']) is types.ListType:
                             info[i]['values'] = array(info[i]['values'])
                         elif type(info[i]['values']) is not ndarray:
                             raise Exception("Axis values must be specified as list or ndarray")
                         if info[i]['values'].ndim != 1 or info[i]['values'].shape[0] != subarr.shape[i]:
                             raise Exception("Values array for axis %d has incorrect shape. (given %s, but should be %s)" % (i, str(info[i]['values'].shape), str((subarr.shape[i],))))
-                    if info[i].has_key('cols'):
+                    if i < subarr.ndim and info[i].has_key('cols'):
                         if not isinstance(info[i]['cols'], list):
                             info[i]['cols'] = list(info[i]['cols'])
                         if len(info[i]['cols']) != subarr.shape[i]:

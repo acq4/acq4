@@ -14,6 +14,8 @@ class SpinBox(QtGui.QAbstractSpinBox):
     
     def __init__(self, *args, **kwargs):
         QtGui.QAbstractSpinBox.__init__(self)
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Preferred)
         self.opts = {
             'bounds': [None, None],
             
@@ -33,7 +35,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
             
             'suffix': '',
             'siPrefix': False,
-            'delay': False,
+            #'delay': False,
             'delayUntilEditFinished': True
         }
         self.val = 0.0
@@ -64,7 +66,8 @@ class SpinBox(QtGui.QAbstractSpinBox):
         for i in range(abs(n)):
             if self.opts['log']:
                 step = abs(val) * self.opts['step']
-                step = max(step, self.opts['minStep'])
+                if 'minStep' in self.opts:
+                    step = max(step, self.opts['minStep'])
                 val += step * s
             elif self.opts['dec']:
                 if val == 0:
@@ -72,18 +75,22 @@ class SpinBox(QtGui.QAbstractSpinBox):
                 else:
                     vs = [-1, 1][val >= 0]
                     exp = int(log(abs(val*(1.01**(s*vs)))) / log(10))
-                    exp = max(exp, self.opts['minStep'])
+                    if 'minStep' in self.opts:
+                        exp = max(exp, self.opts['minStep'])
                 step = self.opts['step'] * 10**exp
                 val += s * step
             else:
                 val += s*self.opts['step']
                 
-            if abs(val) < self.opts['minStep']:
+            if 'minStep' in self.opts and abs(val) < self.opts['minStep']:
                 val = 0.0
         self.setValue(val)
         
     def setValue(self, value, update=True):
         #print "setValue:", value
+        if value == 0.0:
+            import traceback
+            traceback.print_stack()
         bounds = self.opts['bounds']
         if bounds[0] is not None and value < bounds[0]:
             return
@@ -133,12 +140,12 @@ class SpinBox(QtGui.QAbstractSpinBox):
         """Return value of text. Return False if text is invalid, raise exception if text is intermediate"""
         strn = self.lineEdit().text()
         suf = self.opts['suffix']
-        if strn[-len(suf):] != suf:
+        if len(suf) > 0 and strn[-len(suf):] != suf:
             return False
             #raise Exception("Units are invalid.")
         strn = strn[:-len(suf)]
-        return siEval(strn)
-        
+        val = siEval(strn)
+        return val
         
     #def interpretText(self, strn=None):
         #print "Interpret:", strn
@@ -153,6 +160,8 @@ class SpinBox(QtGui.QAbstractSpinBox):
         #print "Edit finished."
         try:
             val = self.interpret()
+            if val is False:
+                return
             self.setValue(val)  ## allow text update so that values are reformatted pretty-like
         except:
             pass
