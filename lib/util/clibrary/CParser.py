@@ -762,11 +762,22 @@ class CParser():
         
         self.variableDecl.setParseAction(self.processVariable)
         
+        ## function definition
+        #self.paramDecl = Group(self.typeSpec + (self.declarator | self.abstractDeclarator)) + Optional(Literal('=').suppress() + expression('value'))
+        self.typelessFunctionDecl = self.declarator('decl') + nestedExpr('{', '}').suppress()
+        self.functionDecl = self.typeSpec('type') + self.declarator('decl') + nestedExpr('{', '}').suppress()
+        self.functionDecl.setParseAction(self.processFunction)
+        
+        
         ## Struct definition
         self.structDecl = Forward()
         structKW = (Keyword('struct') | Keyword('union'))
         #self.structType << structKW('structType') + ((Optional(ident)('name') + lbrace + Group(ZeroOrMore( Group(self.structDecl | self.variableDecl.copy().setParseAction(lambda: None)) ))('members') + rbrace) | ident('name'))
-        self.structMember = Group(self.variableDecl.copy().setParseAction(lambda: None))
+        self.structMember = (
+            Group(self.variableDecl.copy().setParseAction(lambda: None)) |
+            (self.typeSpec + self.declarator + nestedExpr('{', '}')).suppress() |
+            (self.declarator + nestedExpr('{', '}')).suppress()
+        )
         self.declList = lbrace + Group(OneOrMore(self.structMember))('members') + rbrace
         self.structType << (Keyword('struct') | Keyword('union'))('structType') + ((Optional(ident)('name') + self.declList) | ident('name'))
         
@@ -783,10 +794,6 @@ class CParser():
         
         self.enumDecl = self.enumType + semi
 
-        ## function definition
-        #self.paramDecl = Group(self.typeSpec + (self.declarator | self.abstractDeclarator)) + Optional(Literal('=').suppress() + expression('value'))
-        self.functionDecl = self.typeSpec('type') + self.declarator('decl') + nestedExpr('{', '}').suppress()
-        self.functionDecl.setParseAction(self.processFunction)
         
         #self.parser = (self.typeDecl | self.variableDecl | self.structDecl | self.enumDecl | self.functionDecl)
         self.parser = (self.typeDecl | self.variableDecl | self.functionDecl)

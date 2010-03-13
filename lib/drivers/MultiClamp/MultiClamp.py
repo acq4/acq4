@@ -434,48 +434,48 @@ SIGNAL_MAP = {
         }
     },
         
-    #axlib.HW_TYPE_MC700B: {
-        #'VC': {
-            #'PRI': {
-                #"VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                #"VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
-                #"VC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
-                #"VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                #"VC_EXTCMDPOTENTIAL": ("ExternalCommandPotential", 50., 'V'),
-                #"VC_AUXILIARY1": ("Auxiliaryl", 1., 'V'),
-                #"VC_AUXILIARY2": ("Auxiliary2", 1., 'V')
-            #},
-            #'SEC': {
-                #"VC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                #"VC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
-                #"VC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
-                #"VC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                #"VC_EXTCMDPOTENTIAL": ("ExternalCommandPotential", 50., 'V'),
-                #"VC_AUXILIARY1": ("Auxiliaryl", 1., 'V'),
-                #"VC_AUXILIARY2": ("Auxiliary2", 1., 'V')
-            #}
-        #},
-        #'IC': {
-            #'PRI': {
-                #"IC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
-                #"IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                #"IC_CMDCURRENT": ("CommandCurrent", 0.5e9, 'A'),
-                #"IC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                #"IC_EXTCMDCURRENT": ("ExternalCommandCurrent", 2.5e9, 'A'),
-                #"IC_AUXILIARY1": ("Auxiliary1", 1., 'V'),
-                #"IC_AUXILIARY2": ("Auxiliary2", 1., 'V')
-            #},
-            #'SEC': {
-                #"IC_MEMBPOTENTIAL": ("MembranePotential", 10.0, 'V'),
-                #"IC_MEMBCURRENT": ("MembraneCurrent", 0.5e9, 'A'),
-                #"IC_PIPPOTENTIAL": ("PipettePotential", 1.0, 'V'),
-                #"IC_100XACMEMBPOTENTIAL": ("100XACMembranePotential", 100., 'V'),
-                #"IC_EXTCMDCURRENT": ("ExternalCommandCurrent", 2.5e9, 'A'),
-                #"IC_AUXILIARY1": ("Auxiliary1", 1., 'V'),
-                #"IC_AUXILIARY2": ("Auxiliary2", 1., 'V')
-            #}
-        #}
-    #}
+    axlib.HW_TYPE_MC700B: {
+        'VC': {
+            'PRI': {
+                "Membrane Current": "VC_MEMBCURRENT",
+                "Membrane Potential": "VC_MEMBPOTENTIAL",
+                "Pipette Potential": "VC_PIPPOTENTIAL",
+                "100 x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
+                "External Command Potential": "VC_EXTCMDPOTENTIAL",
+                "Auxiliaryl": "VC_AUXILIARY1",
+                "Auxiliary2": "VC_AUXILIARY2",
+            },
+            'SEC': {
+                "Membrane Current":"VC_MEMBCURRENT" ,
+                "Membrane Potential": "VC_MEMBPOTENTIAL",
+                "Pipette Potential": "VC_PIPPOTENTIAL",
+                "100 x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
+                "External Command Potential": "VC_EXTCMDPOTENTIAL",
+                "Auxiliaryl": "VC_AUXILIARY1",
+                "Auxiliary2": "VC_AUXILIARY2",
+            }
+        },
+        'IC': {
+            'PRI': {
+                "Membrane Potential": "IC_MEMBPOTENTIAL",
+                "Membrane Current": "IC_MEMBCURRENT",
+                "Command Current": "IC_CMDCURRENT",
+                "100 x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
+                "External Command Current": "IC_EXTCMDCURRENT",
+                "Auxiliary1": "IC_AUXILIARY1",
+                "Auxiliary2": "IC_AUXILIARY2",
+            },
+            'SEC': {
+                "Membrane Potential": "IC_MEMBPOTENTIAL",
+                "Membrane Current": "IC_MEMBCURRENT",
+                "Pipette Potential": "IC_PIPPOTENTIAL",
+                "100 x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
+                "External Command Current": "IC_EXTCMDCURRENT",
+                "Auxiliary1": "IC_AUXILIARY1",
+                "Auxiliary2": "IC_AUXILIARY2",
+            }
+        }
+    }
 }
     
 

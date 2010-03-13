@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.DAQGeneric.interface import DAQGeneric, DAQGenericTask
+from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 #from lib.devices.Device import *
 from PyQt4 import QtCore
 import time

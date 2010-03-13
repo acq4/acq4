@@ -42,7 +42,7 @@ class _CameraClass:
                 'READOUT_PORT': 0,  ## Only option for Q57, fastest for QuantEM
                 #'SPDTAB_INDEX': 2,  ## Fastest option for Q57
                 'SPDTAB_INDEX': 0,  ## Fastest option for QM512
-                'GAIN_INDEX': 3,
+                #'GAIN_INDEX': 3,
                 'PMODE': PMODE_NORMAL,  ## PMODE_FT ?
                 'SHTR_OPEN_MODE': OPEN_PRE_SEQUENCE,
                 'CLEAR_MODE': CLEAR_PRE_EXPOSURE,
