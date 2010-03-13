@@ -33,8 +33,8 @@ class PVCamProto(DAQGenericProtoGui):
         conf = self.dev.camConfig
         #if 'exposeChannel' not in conf:
             #self.ui.exposureGroupBox.hide()
-        if 'triggerInChannel' not in conf:
-            self.ui.triggerGroupBox.hide()
+        #if 'triggerInChannel' not in conf:
+        #    self.ui.triggerGroupBox.hide()
         #if 'triggerOutChannel' not in conf:
             #self.ui.triggerCheck.hide()
             

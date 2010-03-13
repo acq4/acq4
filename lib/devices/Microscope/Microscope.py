@@ -37,6 +37,8 @@ class Microscope(Device):
             else:
                 self.positionScale = (1.0,) * nax
             QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
+        else:
+            self.position = [0.0, 0.0]
         
         self.allObjectives = self.config['objectives']  ## all available objectives
         for l in self.allObjectives.values():  ## Set default values for each objective

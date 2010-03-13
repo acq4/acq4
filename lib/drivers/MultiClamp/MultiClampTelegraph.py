@@ -15,9 +15,9 @@ d = os.path.dirname(__file__)
 
 # Load telegraph definitions
 teleDefs = CParser(
-    os.path.join(d, 'MCTelegraphs.hpp'),
+    os.path.join(d, 'MultiClampBroadcastMsg.hpp'),
     copyFrom=windowsDefs,
-    cache=os.path.join(d, 'MCTelegraphs.hpp.cache'),
+    cache=os.path.join(d, 'MultiClampBroadcastMsg.hpp.cache'),
     #verbose=True
 ) 
 
@@ -49,7 +49,13 @@ class MultiClampTelegraph:
         
     def mkDevId(self, desc):
         """Create a device ID used for communicating via telegraph"""
-        return desc['com'] | (desc['dev'] << 8) | (desc['chan'] << 16)
+        #print "mkDevId", desc
+        if desc['model'] == 0:
+            return desc['com'] | (desc['dev'] << 8) | (desc['chan'] << 16)
+        elif desc['model'] == 1:
+            return (int(desc['sn']) & 0x0FFFFFFF) | (desc['chan'] << 28)
+        else:
+            raise Exception('Device type not supported:', desc)
         
     def __del__(self):
         self.quit()
@@ -90,7 +96,7 @@ class MultiClampTelegraph:
         
         # request connection to MCC
         for d in self.devIndex:
-            #print "Open:", d
+            print "Open:", d
             self.post('OPEN', d)
         
         # listen for changes / reconnect requests / stop requests
@@ -152,10 +158,11 @@ class MultiClampTelegraph:
                 #print "  got update from MCC"
                 
                 data  = cast(data.lpData, POINTER(wmlib.MC_TELEGRAPH_DATA)).contents
-                
+                #print wmlib.MC_TELEGRAPH_DATA._fields_
                 #### Make sure packet is for the correct device!
-                devID = self.mkDevId({'com': data.uComPortID, 'dev': data.uAxoBusID, 'chan': data.uChannelID})
+                devID = self.mkDevId({'com': data.uComPortID, 'dev': data.uAxoBusID, 'chan': data.uChannelID, 'model': data.uHardwareType, 'sn': data.szSerialNumber})
                 if not devID in self.devIndex:
+                    #print "rejected update for", devID
                     return False
                 
                 #for f in data._fields_:
@@ -166,17 +173,23 @@ class MultiClampTelegraph:
                 ## translate state into something prettier
                 #print "units:", data.uScaleFactorUnits, data.uRawScaleFactorUnits
                 mode = ['VC', 'IC', 'I=0'][data.uOperatingMode]
-                if mode == 'VC':
-                    priSignal = wmlib.MCTG_OUT_MUX_VC_LONG_NAMES[data.uScaledOutSignal]
-                    secSignal = wmlib.MCTG_OUT_MUX_VC_LONG_NAMES_RAW[data.uRawOutSignal]
-                    priUnits = UNIT_MAP[data.uScaleFactorUnits]
-                    secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
-                else:
-                    priSignal = wmlib.MCTG_OUT_MUX_IC_LONG_NAMES[data.uScaledOutSignal]
-                    secSignal = wmlib.MCTG_OUT_MUX_IC_LONG_NAMES_RAW[data.uRawOutSignal]
-                    priUnits = UNIT_MAP[data.uScaleFactorUnits]
-                    secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
-                    
+                #if mode == 'VC':
+                #    priSignal = wmlib.MCTG_OUT_MUX_VC_LONG_NAMES[data.uScaledOutSignal]
+                #    secSignal = wmlib.MCTG_OUT_MUX_VC_LONG_NAMES_RAW[data.uRawOutSignal]
+                #    priUnits = UNIT_MAP[data.uScaleFactorUnits]
+                #    secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
+                #else:
+                #    priSignal = wmlib.MCTG_OUT_MUX_IC_LONG_NAMES[data.uScaledOutSignal]
+                #    secSignal = wmlib.MCTG_OUT_MUX_IC_LONG_NAMES_RAW[data.uRawOutSignal]
+                #    priUnits = UNIT_MAP[data.uScaleFactorUnits]
+                #    secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
+                
+                priSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uScaledOutSignal]
+                secSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uRawOutSignal]
+                priUnits = UNIT_MAP[data.uScaleFactorUnits]
+                secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
+                
+                
                 state = {
                     'mode': mode,
                     'primarySignal': priSignal,
