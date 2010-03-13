@@ -10,6 +10,7 @@ from Canvas import Canvas
 from PyQt4 import QtCore, QtGui
 from functions import *
 from SpinBox import *
+from debug import *
 
 class EventMatchWidget(QtGui.QSplitter):
     def __init__(self):
@@ -41,7 +42,7 @@ class EventMatchWidget(QtGui.QSplitter):
         self.lowPassSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
         self.lowPassSpin.setValue(200.0)
         self.thresholdSpin = SpinBox(log=True, step=0.1, bounds=[0, None])
-        self.thresholdSpin.setValue(2.0)
+        self.thresholdSpin.setValue(10.0)
         self.ctrlLayout.addRow("Low pass", self.lowPassSpin)
         self.ctrlLayout.addRow("Decay const.", self.tauSpin)
         self.ctrlLayout.addRow("Threshold", self.thresholdSpin)
@@ -56,10 +57,6 @@ class EventMatchWidget(QtGui.QSplitter):
         
     def setData(self, data):
         self.data = data
-        self.dataPlot.clear()
-        for d in data:
-            d1 = lowPass(d, self.lowPassSpin.value())
-            self.dataPlot.plot(d1)
         self.recalculate()
         
     def recalculate(self):
@@ -71,27 +68,29 @@ class EventMatchWidget(QtGui.QSplitter):
         return self.events
         
     def processData(self, data, display=False):
+        #p = Profiler('processData')
         if display:
             self.analysisPlot.clear()
+            self.dataPlot.clear()
+            self.templatePlot.clear()
             self.tickGroups = []
         events = []
+        
         for i in range(len(data)):
+            #p.mark('start trace %d' % i)
             d = data[i]
             #print "lowpass:", d
             d1 = lowPass(d, self.lowPassSpin.value())
+            #p.mark('lowpass')
             d2 = d1.view(ndarray) - measureBaseline(d1)
+            #p.mark('subtract baseline')
             dt = d.xvals('Time')[1] - d.xvals('Time')[0]
+            #p.mark('dt')
             d3 = diff(d2) * self.tauSpin.value() / dt + d2[:-1]
-            d4 = removeBaseline(d3)
-            if display:
-                color = i/(len(data))*0.7
-                pen = mkPen(hsv=[color, 0.7, 1.0])
-                self.analysisPlot.plot(d4, x=d.xvals('Time')[:-1], pen=pen)
-                tg = VTickGroup(view=self.analysisPlot)
-                tg.setPen(pen)
-                tg.setYRange([0.8, 1.0], relative=True)
-                self.tickGroups.append(tg)
-                self.analysisPlot.addItem(tg)
+            #p.mark('deconvolve')
+            d4 = removeBaseline(d3, dt=dt)
+            #p.mark('remove baseline')
+            #d4 = d3
                 
             #stdev = measureNoise(d3)
             #print "noise:", stdev
@@ -99,11 +98,39 @@ class EventMatchWidget(QtGui.QSplitter):
             #absd = abs(d3)
             #eventList = argwhere((absd[1:] > thresh) * (absd[:-1] <= thresh))[:, 0] + 1
             
-            eventList = findEvents(d4, noiseThreshold=self.thresholdSpin.value())['start']
+            eventList = findEvents(d4, noiseThreshold=self.thresholdSpin.value())
+            #p.mark('find events')
             events.append(eventList)
             if display:
-                for t in self.tickGroups:
-                    t.setXVals(d.xvals('Time')[eventList])
+                color = float(i)/(len(data))*0.7
+                pen = mkPen(hsv=[color, 0.8, 0.7])
+                self.dataPlot.plot(d1, pen=pen)
+                
+                self.analysisPlot.plot(d4, x=d.xvals('Time')[:-1], pen=pen)
+                tg = VTickGroup(view=self.analysisPlot)
+                tg.setPen(pen)
+                tg.setYRange([0.8, 1.0], relative=True)
+                tg.setXVals(d.xvals('Time')[eventList['start']])
+                self.tickGroups.append(tg)
+                self.analysisPlot.addItem(tg)
+                
+                ## generate triggered stacks for plotting
+                stack = triggerStack(d, eventList['start'], window=[-100, 200])
+                negPen = mkPen([0, 0, 200])
+                posPen = mkPen([200, 0, 0])
+                for j in range(stack.shape[0]):
+                    base = median(stack[j, 80:100])
+                    if eventList[j]['sum'] > 0:
+                        scale = stack[j, 100:100+eventList[j]['len']].max() - base
+                        pen = posPen
+                    else:
+                        scale = base - stack[j, 100:100+eventList[j]['len']].min()
+                        pen = negPen
+                    self.templatePlot.plot((stack[j]-base) / scale, pen=pen)
+                    
+                    
+                
+                
             #print eventList
         
         return events
@@ -168,6 +195,8 @@ class UncagingWindow(QtGui.QMainWindow):
         self.imageItems = []
         self.currentTraces = []
         self.noiseThreshold = 2.0
+        self.eventTimes = []
+        
         
     def addImage(self, img=None):
         if img is None:
@@ -227,6 +256,7 @@ class UncagingWindow(QtGui.QMainWindow):
             self.canvas.removeItem(item)
         self.scanItems = []
         self.currentTraces = []
+        self.eventTimes = []
         
         
         
@@ -253,15 +283,43 @@ class UncagingWindow(QtGui.QMainWindow):
         
     def traceColor(self, dh):
         data = self.getClampData(dh)
-        base = data['Time': 0.0:0.49]
-        signal = data['Time': 0.5:0.6]
-        mx = signal.max()
-        mn = signal.min()
-        mean = base.mean()
-        std = base.std()
-        red = clip((mx-mean) / std * 10, 0, 255)
-        blue = clip((mean-mn) / std * 10, 0, 255)
-        return QtGui.QColor(red, 0, blue, 150)
+        #base = data['Time': 0.0:0.49]
+        #signal = data['Time': 0.5:0.6]
+        #mx = signal.max()
+        #mn = signal.min()
+        #mean = base.mean()
+        #std = base.std()
+        #red = clip((mx-mean) / std * 10, 0, 255)
+        #blue = clip((mean-mn) / std * 10, 0, 255)
+        #return QtGui.QColor(red, 0, blue, 150)
+        
+        events = self.plot.processData([data])[0]
+        
+        times = data.xvals('Time')
+        self.eventTimes.extend(times[events['start']])
+        stimInd = argwhere((times[:-1] <= 0.5) * (times[1:] > 0.5))[0,0]
+        dirInd = argwhere((times[:-1] <= 0.504) * (times[1:] > 0.504))[0,0]
+        endInd = argwhere((times[:-1] <= 0.65) * (times[1:] > 0.65))[0,0]
+        dt = times[1]-times[0]
+        
+        times = events['start']
+        pre = events[times < stimInd]
+        direct = events[(times > stimInd) * (times < dirInd)]
+        post = events[(times > dirInd) * (times < endInd)]
+        
+        pos = (post[post['sum'] > 0]['sum'].sum() / 0.096) - (pre[pre['sum'] > 0]['sum'].sum() / 0.500)
+        neg = (post[post['sum'] < 0]['sum'].sum() / 0.096) - (pre[pre['sum'] < 0]['sum'].sum() / 0.500)
+        
+        dir = (abs(direct['sum']).sum() / 0.004) - (abs(pre['sum']).sum() / 0.500)
+        
+        stdev = data.std() / dt
+        red = clip(log(max(1.0, (pos/stdev)+1))*255, 0, 255) 
+        blue = clip(log(max(1.0, (neg/stdev)+1))*255, 0, 255)
+        green = clip(log(max(1.0, (dir/stdev)+1))*255, 0, 255)
+        
+        #print pos/stdev, neg/stdev, dir/stdev, red, green, blue
+        return QtGui.QColor(red, green, blue, 150)
+        
    
     def mouseClicked(self, ev):
         #self.plot.clear()

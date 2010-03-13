@@ -960,13 +960,18 @@ class ViewBox(QtGui.QGraphicsWidget):
         #print "viewScale:", self.range
         xd = pr[0][1] - pr[0][0]
         yd = pr[1][1] - pr[1][0]
+        if xd == 0 or yd == 0:
+            print "Warning: 0 range in view:", xd, yd
+            return array([1,1])
         
         #cs = self.canvas().size()
         cs = self.boundingRect()
-        return array([cs.width() / xd, cs.height() / yd])
+        scale = array([cs.width() / xd, cs.height() / yd])
+        #print "view scale:", scale
+        return scale
 
     def scaleBy(self, s, center=None):
-        #print "scaleBy", s, center
+        print "scaleBy", s, center
         xr, yr = self.range
         if center is None:
             xc = (xr[1] + xr[0]) * 0.5
@@ -980,19 +985,23 @@ class ViewBox(QtGui.QGraphicsWidget):
         y2 = yc + (yr[1]-yc) * s[1]
         
         #print xr, xc, s, (xr[0]-xc) * s[0], (xr[1]-xc) * s[0]
-        #print [[x1, x2], [y1, y2]]
+        print [[x1, x2], [y1, y2]]
+        
+        
+        
         self.setXRange(x1, x2, update=False, padding=0)
         self.setYRange(y1, y2, padding=0)
         #print self.range
         
     def translateBy(self, t, viewCoords=False):
         t = t.astype(float)
-        #print "translate:", t, self.viewScale()
+        print "translate:", t, self.viewScale()
         if viewCoords:  ## scale from pixels
             t /= self.viewScale()
         xr, yr = self.range
         #self.setAxisScale(self.xBottom, xr[0] + t[0], xr[1] + t[0])
         #self.setAxisScale(self.yLeft, yr[0] + t[1], yr[1] + t[1])
+        print xr, yr, t
         self.setXRange(xr[0] + t[0], xr[1] + t[0], update=False, padding=0)
         self.setYRange(yr[0] + t[1], yr[1] + t[1], padding=0)
         #self.replot(autoRange=False)
@@ -1045,6 +1054,8 @@ class ViewBox(QtGui.QGraphicsWidget):
             
     def setYRange(self, min, max, update=True, padding=0.02):
         #print "setYRange:", min, max
+        if min == max:
+            raise Exception("Tried to set range with 0 width.")
         padding = (max-min) * padding
         min -= padding
         max += padding
@@ -1060,6 +1071,9 @@ class ViewBox(QtGui.QGraphicsWidget):
         
     def setXRange(self, min, max, update=True, padding=0.02):
         #print "setXRange:", min, max
+        if min == max:
+            print "Warning: Tried to set range with 0 width."
+            #raise Exception("Tried to set range with 0 width.")
         padding = (max-min) * padding
         min -= padding
         max += padding
@@ -1161,6 +1175,7 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         self.setPen(pen)
         self.setYRange(yrange, relative)
         self.setXVals(xvals)
+        self.valid = False
         
         
     #def setPen(self, pen=None):
@@ -1173,16 +1188,10 @@ class VTickGroup(QtGui.QGraphicsPathItem):
 
     def setXVals(self, vals):
         self.xvals = vals
-        self.rebuildTicks()
-        #self.updateBounds()
-        #self.update()
+        #self.rebuildTicks()
+        self.valid = False
         
     def setYRange(self, vals, relative=False):
-        ### fix for bug while drawing very small things
-        #dy = vals[1]-vals[0]
-        #self.resetTransform()
-        #self.scale(1.0, dy)
-        
         self.yrange = vals
         self.relative = relative
         if self.view is not None:
@@ -1193,9 +1202,8 @@ class VTickGroup(QtGui.QGraphicsPathItem):
                     QtCore.QObject.disconnect(self.view, QtCore.SIGNAL('viewChanged'), self.rebuildTicks)
                 except:
                     pass
-        #self.updateBounds()
-        self.rebuildTicks()
-        #self.update()
+        #self.rebuildTicks()
+        self.valid = False
             
     def yRange(self):
         if self.relative:
@@ -1214,34 +1222,13 @@ class VTickGroup(QtGui.QGraphicsPathItem):
             path.moveTo(x, yrange[0])
             path.lineTo(x, yrange[1])
         self.setPath(path)
-        #self.clear()
-        #y0, y1 = self.yRange()
-        #for i in range(len(self.xvals)):
-            #x = self.xvals[i]
-            #tick = QtGui.QGraphicsLineItem(x, y0, x, y1, self)
-            #self.ticks.append(tick)
-            ##self.addToGroup(tick)
-        #self.setPen()
+        self.valid = True
         
-    #def clear(self):
-        #for t in self.ticks:
-            #t.scene().removeItem(t)
-            ##self.removeFromGroup(t)
-        #self.ticks = []
+    def paint(self, *args):
+        if not self.valid:
+            self.rebuildTicks()
+        QtGui.QGraphicsPathItem.paint(self, *args)
         
-    #def updateBounds(self):
-        #mnx = min(self.xvals)
-        #mxx = max(self.xvals)
-        #self.bounds =  QtCore.QRectF(mnx, self.yrange[0], mxx-mnx, self.yrange[1]-self.yrange[0])
-        
-    #def boundingRect(self):
-        #return self.bounds
-
-    #def paint(self, p, *opts):
-        #p.setPen(self.pen)
-        #print self.yrange
-        #for x in self.xvals:
-            #p.drawLine(QtCore.QPointF(x, self.yrange[0]), QtCore.QPointF(x, self.yrange[1]))
 
 class GridItem(UIGraphicsItem):
     def __init__(self, view, bounds=None, *args):

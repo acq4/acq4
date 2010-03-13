@@ -132,7 +132,8 @@ class SpinBox(QtGui.QAbstractSpinBox):
             return (QtGui.QValidator.Acceptable, pos)
         except:
             #print "  BAD"
-            
+            import sys
+            sys.excepthook(*sys.exc_info())
             self.lineEdit().setStyleSheet('border: 2px solid #C55;')
             return (QtGui.QValidator.Intermediate, pos)
         
@@ -140,10 +141,11 @@ class SpinBox(QtGui.QAbstractSpinBox):
         """Return value of text. Return False if text is invalid, raise exception if text is intermediate"""
         strn = self.lineEdit().text()
         suf = self.opts['suffix']
-        if len(suf) > 0 and strn[-len(suf):] != suf:
-            return False
+        if len(suf) > 0:
+            if strn[-len(suf):] != suf:
+                return False
             #raise Exception("Units are invalid.")
-        strn = strn[:-len(suf)]
+            strn = strn[:-len(suf)]
         val = siEval(strn)
         return val
         
