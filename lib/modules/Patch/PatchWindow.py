@@ -21,8 +21,8 @@ class PatchWindow(QtGui.QMainWindow):
         self.setWindowTitle(clampName)
         
         self.analysisItems = {
-            'inputResistance': 'Ω', 
-            'accessResistance': 'Ω',
+            'inputResistance': u'Ω', 
+            'accessResistance': u'Ω',
             'capacitance': 'F',
             'restingPotential': 'V', 
             'restingCurrent': 'A', 

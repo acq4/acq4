@@ -20,7 +20,7 @@ class DictView(QtGui.QTreeWidget):
         
     def mkNode(self, name, v):
         if type(v) is list and len(v) > 0 and isinstance(v[0], dict):
-            inds = map(str, range(len(v)))
+            inds = map(unicode, range(len(v)))
             v = OrderedDict(zip(inds, v))
         if isinstance(v, dict):
             #print "\nadd tree", k, v
@@ -30,7 +30,7 @@ class DictView(QtGui.QTreeWidget):
                 node.addChild(newNode)
         else:
             #print "\nadd value", k, str(v)
-            node = QtGui.QTreeWidgetItem([str(name), str(v)])
+            node = QtGui.QTreeWidgetItem([unicode(name), unicode(v)])
         return node
         
         

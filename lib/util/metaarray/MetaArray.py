@@ -550,7 +550,9 @@ class MetaArray(ndarray):
             if line == '':
                 break
             meta += line
-        return eval(meta)
+        ret = eval(meta)
+        #print ret
+        return ret
 
     @staticmethod
     def _readData1(fd, meta, subtype):

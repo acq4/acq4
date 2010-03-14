@@ -12,23 +12,26 @@ class SpinBox(QtGui.QAbstractSpinBox):
       - Support for sequence variables (for ProtocolRunner)
     """
     
-    def __init__(self, *args, **kwargs):
-        QtGui.QAbstractSpinBox.__init__(self)
+    def __init__(self, value=0.0, parent=None, **kwargs):
+        QtGui.QAbstractSpinBox.__init__(self, parent)
         self.setMinimumWidth(0)
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Preferred)
         self.opts = {
             'bounds': [None, None],
             
+            ## Log scaling options
             #'step': 0.1,
             #'minStep': 0.001,
             #'log': True,
             #'dec': False,
             
+            ## decimal scaling option
             #'step': 0.1,
             #'minStep': -2,
             #'log': False,
             #'dec': True,
            
+            ## arithmetic step
             'step': 0.01,
             'log': False,
             'dec': False,
@@ -38,7 +41,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
             #'delay': False,
             'delayUntilEditFinished': True
         }
-        self.val = 0.0
+        self.val = value
         self.updateText()
         self.skipValidate = False
         self.setCorrectionMode(self.CorrectToPreviousValue)
@@ -47,6 +50,9 @@ class SpinBox(QtGui.QAbstractSpinBox):
         QtCore.QObject.connect(self, QtCore.SIGNAL('editingFinished()'), self.editingFinished)
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('returnPressed()'), self.editingFinished)
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('textChanged()'), self.textChanged)
+        
+    def sizeHint(self):
+        return QtCore.QSize(120, 0)
         
     ##lots of config options, just gonna stuff 'em all in here rather than do the get/set crap.
     def setOpts(self, **opts):
@@ -88,9 +94,9 @@ class SpinBox(QtGui.QAbstractSpinBox):
         
     def setValue(self, value, update=True):
         #print "setValue:", value
-        if value == 0.0:
-            import traceback
-            traceback.print_stack()
+        #if value == 0.0:
+            #import traceback
+            #traceback.print_stack()
         bounds = self.opts['bounds']
         if bounds[0] is not None and value < bounds[0]:
             return
@@ -132,8 +138,8 @@ class SpinBox(QtGui.QAbstractSpinBox):
             return (QtGui.QValidator.Acceptable, pos)
         except:
             #print "  BAD"
-            import sys
-            sys.excepthook(*sys.exc_info())
+            #import sys
+            #sys.excepthook(*sys.exc_info())
             self.lineEdit().setStyleSheet('border: 2px solid #C55;')
             return (QtGui.QValidator.Intermediate, pos)
         

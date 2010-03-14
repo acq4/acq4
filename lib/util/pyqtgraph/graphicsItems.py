@@ -749,15 +749,16 @@ class ScaleItem(QtGui.QGraphicsWidget):
             if self.scale == 1.0:
                 units = ''
             else:
-                units = '(x%g)' % (1.0/self.scale)
+                units = u'(x%g)' % (1.0/self.scale)
         else:
-            units = '(%s%s)' % (self.labelUnitPrefix, self.labelUnits)
+            #print repr(self.labelUnitPrefix), repr(self.labelUnits)
+            units = u'(%s%s)' % (self.labelUnitPrefix, self.labelUnits)
             
-        s = '%s %s' % (self.labelText, units)
+        s = u'%s %s' % (self.labelText, units)
         
         style = ';'.join(['%s: "%s"' % (k, self.labelStyle[k]) for k in self.labelStyle])
         
-        return "<span style='%s'>%s</span>" % (style, s)
+        return u"<span style='%s'>%s</span>" % (style, s)
         
     def setHeight(self, h=None):
         if h is None:

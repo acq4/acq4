@@ -62,6 +62,29 @@ config = os.path.join(pyDir, 'config', 'default.cfg')
 dm = Manager(config, sys.argv[1:])
 
 
+## Start Qt event loop unless running in interactive mode.
+try:
+    assert sys.flags.interactive == 1
+    print "Interactive mode; not starting event loop."
+    
+    ## import some things useful on the command line
+    from debug import *
+    from pyqtgraph.graphicsWindows import *
+    from functions import *
+    
+except:
+    ##Make sure pythin core runs requently enough to allow debugger interaction.
+    timer = QtCore.QTimer()
+    QtCore.QObject.connect(timer, QtCore.SIGNAL('timeout()'), lambda: 1+1)
+    timer.start(200)
+    
+    print "Starting Qt event loop.."
+    app.exec_()
+    print "Qt event loop exited."
+
+
+
+
 
 class STDPWindow(UncagingWindow):
     def __init__(self):
