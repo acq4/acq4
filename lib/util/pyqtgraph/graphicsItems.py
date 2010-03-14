@@ -47,7 +47,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
     def __init__(self, image=None, copy=True, *args):
         self.qimage = QtGui.QImage()
         self.pixmap = None
-        self.useWeave = True
+        self.useWeave = False
         self.blackLevel = None
         self.whiteLevel = None
         self.alpha = 1.0
@@ -208,81 +208,6 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
     def getPixmap(self):
         return self.pixmap.copy()
 
-class LabelItem(QtGui.QGraphicsWidget):
-    def __init__(self, text, parent=None, **args):
-        QtGui.QGraphicsWidget.__init__(self, parent)
-        self.item = QtGui.QGraphicsTextItem(self)
-        self.opts = args
-        if 'color' not in args:
-            self.opts['color'] = 'CCC'
-        else:
-            if isinstance(args['color'], QtGui.QColor):
-                self.opts['color'] = colorStr(args['color'])[:6]
-        self.sizeHint = {}
-        self.setText(text)
-        
-            
-    def setAttr(self, attr, value):
-        """Set default text properties. See setText() for accepted parameters."""
-        self.opts[attr] = value
-        
-    def setText(self, text, **args):
-        """Set the text and text properties in the label. Accepts optional arguments for auto-generating
-        a CSS style string:
-           color:   string (example: 'CCFF00')
-           size:    string (example: '8pt')
-           bold:    boolean
-           italic:  boolean
-           """
-        self.text = text
-        opts = self.opts.copy()
-        for k in args:
-            opts[k] = args[k]
-        
-        optlist = []
-        if 'color' in opts:
-            optlist.append('color: #' + opts['color'])
-        if 'size' in opts:
-            optlist.append('font-size: ' + opts['size'])
-        if 'bold' in opts and opts['bold'] in [True, False]:
-            optlist.append('font-weight: ' + {True:'bold', False:'normal'}[opts['bold']])
-        if 'italic' in opts and opts['italic'] in [True, False]:
-            optlist.append('font-style: ' + {True:'italic', False:'normal'}[opts['italic']])
-        full = "<span style='%s'>%s</span>" % ('; '.join(optlist), text)
-        #print full
-        self.item.setHtml(full)
-        self.updateMin()
-        
-    def resizeEvent(self, ev):
-        c1 = self.boundingRect().center()
-        c2 = self.item.mapToParent(self.item.boundingRect().center()) # + self.item.pos()
-        dif = c1 - c2
-        self.item.moveBy(dif.x(), dif.y())
-        #print c1, c2, dif, self.item.pos()
-        
-    def setAngle(self, angle):
-        self.angle = angle
-        self.item.resetMatrix()
-        self.item.rotate(angle)
-        self.updateMin()
-        
-    def updateMin(self):
-        bounds = self.item.mapRectToParent(self.item.boundingRect())
-        self.setMinimumWidth(bounds.width())
-        self.setMinimumHeight(bounds.height())
-        #print self.text, bounds.width(), bounds.height()
-        
-        #self.sizeHint = {
-            #QtCore.Qt.MinimumSize: (bounds.width(), bounds.height()),
-            #QtCore.Qt.PreferredSize: (bounds.width(), bounds.height()),
-            #QtCore.Qt.MaximumSize: (bounds.width()*2, bounds.height()*2),
-            #QtCore.Qt.MinimumDescent: (0, 0)  ##?? what is this?
-        #}
-            
-        
-    #def sizeHint(self, hint, constraint):
-        #return self.sizeHint[hint]
-        
         
 
 class PlotCurveItem(QtGui.QGraphicsWidget):
@@ -643,6 +568,81 @@ class UIGraphicsItem(QtGui.QGraphicsItem):
 
 
 
+class LabelItem(QtGui.QGraphicsWidget):
+    def __init__(self, text, parent=None, **args):
+        QtGui.QGraphicsWidget.__init__(self, parent)
+        self.item = QtGui.QGraphicsTextItem(self)
+        self.opts = args
+        if 'color' not in args:
+            self.opts['color'] = 'CCC'
+        else:
+            if isinstance(args['color'], QtGui.QColor):
+                self.opts['color'] = colorStr(args['color'])[:6]
+        self.sizeHint = {}
+        self.setText(text)
+        
+            
+    def setAttr(self, attr, value):
+        """Set default text properties. See setText() for accepted parameters."""
+        self.opts[attr] = value
+        
+    def setText(self, text, **args):
+        """Set the text and text properties in the label. Accepts optional arguments for auto-generating
+        a CSS style string:
+           color:   string (example: 'CCFF00')
+           size:    string (example: '8pt')
+           bold:    boolean
+           italic:  boolean
+           """
+        self.text = text
+        opts = self.opts.copy()
+        for k in args:
+            opts[k] = args[k]
+        
+        optlist = []
+        if 'color' in opts:
+            optlist.append('color: #' + opts['color'])
+        if 'size' in opts:
+            optlist.append('font-size: ' + opts['size'])
+        if 'bold' in opts and opts['bold'] in [True, False]:
+            optlist.append('font-weight: ' + {True:'bold', False:'normal'}[opts['bold']])
+        if 'italic' in opts and opts['italic'] in [True, False]:
+            optlist.append('font-style: ' + {True:'italic', False:'normal'}[opts['italic']])
+        full = "<span style='%s'>%s</span>" % ('; '.join(optlist), text)
+        #print full
+        self.item.setHtml(full)
+        self.updateMin()
+        
+    def resizeEvent(self, ev):
+        c1 = self.boundingRect().center()
+        c2 = self.item.mapToParent(self.item.boundingRect().center()) # + self.item.pos()
+        dif = c1 - c2
+        self.item.moveBy(dif.x(), dif.y())
+        #print c1, c2, dif, self.item.pos()
+        
+    def setAngle(self, angle):
+        self.angle = angle
+        self.item.resetMatrix()
+        self.item.rotate(angle)
+        self.updateMin()
+        
+    def updateMin(self):
+        bounds = self.item.mapRectToParent(self.item.boundingRect())
+        self.setMinimumWidth(bounds.width())
+        self.setMinimumHeight(bounds.height())
+        #print self.text, bounds.width(), bounds.height()
+        
+        #self.sizeHint = {
+            #QtCore.Qt.MinimumSize: (bounds.width(), bounds.height()),
+            #QtCore.Qt.PreferredSize: (bounds.width(), bounds.height()),
+            #QtCore.Qt.MaximumSize: (bounds.width()*2, bounds.height()*2),
+            #QtCore.Qt.MinimumDescent: (0, 0)  ##?? what is this?
+        #}
+            
+        
+    #def sizeHint(self, hint, constraint):
+        #return self.sizeHint[hint]
+        
 
 
 
@@ -651,23 +651,34 @@ class ScaleItem(QtGui.QGraphicsWidget):
     def __init__(self, orientation, pen=None, linkView=None, parent=None):
         """GraphicsItem showing a single plot axis with ticks and values. Can be configured to fit on any side of a plot, and can automatically synchronize its displayed scale with ViewBox items."""
         QtGui.QGraphicsWidget.__init__(self, parent)
+        self.label = QtGui.QGraphicsTextItem(self)
         self.orientation = orientation
         if orientation not in ['left', 'right', 'top', 'bottom']:
             raise Exception("Orientation argument must be one of 'left', 'right', 'top', or 'bottom'.")
         if orientation in ['left', 'right']:
-            self.setMinimumWidth(15)
-            self.setSizePolicy(QtGui.QSizePolicy(
-                QtGui.QSizePolicy.Minimum,
-                QtGui.QSizePolicy.Expanding
-            ))
-        else:
-            self.setMinimumHeight(15)
-            self.setSizePolicy(QtGui.QSizePolicy(
-                QtGui.QSizePolicy.Expanding,
-                QtGui.QSizePolicy.Minimum
-            ))
-            
-        self.textHeight = 10
+            #self.setMinimumWidth(25)
+            #self.setSizePolicy(QtGui.QSizePolicy(
+                #QtGui.QSizePolicy.Minimum,
+                #QtGui.QSizePolicy.Expanding
+            #))
+            self.label.rotate(-90)
+        #else:
+            #self.setMinimumHeight(50)
+            #self.setSizePolicy(QtGui.QSizePolicy(
+                #QtGui.QSizePolicy.Expanding,
+                #QtGui.QSizePolicy.Minimum
+            #))
+        #self.drawLabel = False
+        
+        self.labelText = ''
+        self.labelUnits = ''
+        self.labelUnitPrefix=''
+        self.labelStyle = {'color': '#CCC'}
+        
+        self.textHeight = 18
+        self.tickLength = 10
+        self.scale = 1.0
+        self.autoScale = True
             
         self.setRange(0, 1)
         
@@ -679,22 +690,121 @@ class ScaleItem(QtGui.QGraphicsWidget):
         if linkView is not None:
             self.linkToView(linkView)
             
-        self.tickLength = 10
-        self.scale = 1.0
+        self.showLabel(False)
+            
         
+    def resizeEvent(self, ev=None):
+        #s = self.size()
+        
+        ## Set the position of the label
+        nudge = 5
+        br = self.label.boundingRect()
+        p = QtCore.QPointF(0, 0)
+        if self.orientation == 'left':
+            p.setY(self.size().height()/2. + br.width() / 2.)
+            p.setX(-nudge)
+            #s.setWidth(10)
+        elif self.orientation == 'right':
+            #s.setWidth(10)
+            p.setY(self.size().height()/2. + br.width() / 2.)
+            p.setX(self.size().width()-br.height()+nudge)
+        elif self.orientation == 'top':
+            #s.setHeight(10)
+            p.setY(-nudge)
+            p.setX(self.size().width()/2. - br.width()/2.)
+        elif self.orientation == 'bottom':
+            p.setX(self.size().width()/2. - br.width()/2.)
+            #s.setHeight(10)
+            p.setY(self.size().height()-br.height()+nudge)
+        #self.label.resize(s)
+        self.label.setPos(p)
+        
+    def showLabel(self, show=True):
+        #self.drawLabel = show
+        self.label.setVisible(show)
+        if self.orientation in ['left', 'right']:
+            self.setWidth()
+        else:
+            self.setHeight()
+        if self.autoScale:
+            self.setScale()
+        
+    def setLabel(self, text=None, units=None, unitPrefix=None, **args):
+        if text is not None:
+            self.labelText = text
+            self.showLabel()
+        if units is not None:
+            self.labelUnits = units
+            self.showLabel()
+        if unitPrefix is not None:
+            self.labelUnitPrefix = unitPrefix
+        if len(args) > 0:
+            self.labelStyle = args
+        self.label.setHtml(self.labelString())
+        self.resizeEvent()
+        self.update()
+            
+    def labelString(self):
+        if self.labelUnits == '':
+            if self.scale == 1.0:
+                units = ''
+            else:
+                units = '(x%g)' % (1.0/self.scale)
+        else:
+            units = '(%s%s)' % (self.labelUnitPrefix, self.labelUnits)
+            
+        s = '%s %s' % (self.labelText, units)
+        
+        style = ';'.join(['%s: "%s"' % (k, self.labelStyle[k]) for k in self.labelStyle])
+        
+        return "<span style='%s'>%s</span>" % (style, s)
+        
+    def setHeight(self, h=None):
+        if h is None:
+            h = self.textHeight + self.tickLength
+            if self.label.isVisible():
+                h += self.textHeight
+        self.setMaximumHeight(h)
+        self.setMinimumHeight(h)
+        
+        
+    def setWidth(self, w=None):
+        if w is None:
+            w = self.tickLength + 40
+            if self.label.isVisible():
+                w += self.textHeight
+        self.setMaximumWidth(w)
+        self.setMinimumWidth(w)
         
     def setPen(self, pen):
         self.pen = pen
         self.update()
         
-    def setScale(self, scale, prefix=''):
+    def setScale(self, scale=None):
+        if scale is None:
+            #if self.drawLabel:  ## If there is a label, then we are free to rescale the values 
+            if self.label.isVisible():
+                d = self.range[1] - self.range[0]
+                #pl = 1-int(log10(d))
+                #scale = 10 ** pl
+                (scale, prefix) = siScale(d / 2.)
+                if self.labelUnits == '' and prefix in ['k', 'm']:  ## If we are not showing units, wait until 1e6 before scaling.
+                    scale = 1.0
+                    prefix = ''
+                self.setLabel(unitPrefix=prefix)
+            else:
+                scale = 1.0
+        
+        
         if scale != self.scale:
             self.scale = scale
-            self.prefix = prefix
+            self.setLabel()
             self.update()
         
     def setRange(self, mn, mx):
         self.range = [mn, mx]
+        if self.autoScale:
+            self.setScale()
         self.update()
         
     def linkToView(self, view):
@@ -717,6 +827,9 @@ class ScaleItem(QtGui.QGraphicsWidget):
     def paint(self, p, opt, widget):
         p.setPen(self.pen)
         bounds = self.boundingRect()
+        #p.setPen(QtGui.QPen(QtGui.QColor(255, 0, 0)))
+        #p.drawRect(bounds)
+        
         if self.orientation == 'left':
             p.drawLine(bounds.topRight(), bounds.bottomRight())
             tickStart = bounds.right()
@@ -831,18 +944,44 @@ class ScaleItem(QtGui.QGraphicsWidget):
                     p.drawText(rect, textFlags, vstr)
                     #p.drawRect(rect)
         
+        ## Draw label
+        #if self.drawLabel:
+            #height = self.size().height()
+            #width = self.size().width()
+            #if self.orientation == 'left':
+                #p.translate(0, height)
+                #p.rotate(-90)
+                #rect = QtCore.QRectF(0, 0, height, self.textHeight)
+                #textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignTop
+            #elif self.orientation == 'right':
+                #p.rotate(10)
+                #rect = QtCore.QRectF(0, 0, height, width)
+                #textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignBottom
+                ##rect = QtCore.QRectF(tickStart+self.tickLength, x-(height/2), 100-self.tickLength, height)
+            #elif self.orientation == 'top':
+                #rect = QtCore.QRectF(0, 0, width, height)
+                #textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignTop
+                ##rect = QtCore.QRectF(x-100, tickStart-self.tickLength-height, 200, height)
+            #elif self.orientation == 'bottom':
+                #rect = QtCore.QRectF(0, 0, width, height)
+                #textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignBottom
+                ##rect = QtCore.QRectF(x-100, tickStart+self.tickLength, 200, height)
+            #p.drawText(rect, textFlags, self.labelString())
+            ##p.drawRect(rect)
+        
     def show(self):
+        
         if self.orientation in ['left', 'right']:
-            self.setMaximumWidth(self.tickLength + 40)
+            self.setWidth()
         else:
-            self.setMaximumHeight(self.textHeight + self.tickLength)
+            self.setHeight()
         QtGui.QGraphicsWidget.show(self)
         
     def hide(self):
         if self.orientation in ['left', 'right']:
-            self.setMaximumWidth(0)
+            self.setWidth(0)
         else:
-            self.setMaximumHeight(0)
+            self.setHeight(0)
         QtGui.QGraphicsWidget.hide(self)
         
     
@@ -971,7 +1110,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         return scale
 
     def scaleBy(self, s, center=None):
-        print "scaleBy", s, center
+        #print "scaleBy", s, center
         xr, yr = self.range
         if center is None:
             xc = (xr[1] + xr[0]) * 0.5
@@ -985,7 +1124,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         y2 = yc + (yr[1]-yc) * s[1]
         
         #print xr, xc, s, (xr[0]-xc) * s[0], (xr[1]-xc) * s[0]
-        print [[x1, x2], [y1, y2]]
+        #print [[x1, x2], [y1, y2]]
         
         
         
@@ -995,13 +1134,13 @@ class ViewBox(QtGui.QGraphicsWidget):
         
     def translateBy(self, t, viewCoords=False):
         t = t.astype(float)
-        print "translate:", t, self.viewScale()
+        #print "translate:", t, self.viewScale()
         if viewCoords:  ## scale from pixels
             t /= self.viewScale()
         xr, yr = self.range
         #self.setAxisScale(self.xBottom, xr[0] + t[0], xr[1] + t[0])
         #self.setAxisScale(self.yLeft, yr[0] + t[1], yr[1] + t[1])
-        print xr, yr, t
+        #print xr, yr, t
         self.setXRange(xr[0] + t[0], xr[1] + t[0], update=False, padding=0)
         self.setYRange(yr[0] + t[1], yr[1] + t[1], padding=0)
         #self.replot(autoRange=False)
@@ -1030,7 +1169,8 @@ class ViewBox(QtGui.QGraphicsWidget):
             dif[0] *= -1
             s = ((mask * 0.02) + 1) ** dif
             #print mask, dif, s
-            self.scaleBy(s, Point(self.childGroup.transform().inverted()[0].map(ev.buttonDownPos(QtCore.Qt.RightButton))))
+            center = Point(self.childGroup.transform().inverted()[0].map(ev.buttonDownPos(QtCore.Qt.RightButton)))
+            self.scaleBy(s, center)
             self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
         
     def mousePressEvent(self, ev):
