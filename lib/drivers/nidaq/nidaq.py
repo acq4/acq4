@@ -3,7 +3,7 @@ from ctypes import *
 import sys, re, types, ctypes, os, time
 from numpy import *
 from lib.util import cheader
-from ptime import time  ## platform-independent precision timing
+import ptime  ## platform-independent precision timing
 dtypes = {
     float64: 'F64',
     int16: 'I16',
@@ -27,7 +27,7 @@ def init():
     for k in defs:
         setattr(sys.modules[__name__], re.sub('^DAQmx_?', '', k), defs[k])
     NIDAQ.functions = cheader.getFuncs(xmlFiles)
-    time.clock()
+    #time.clock()
 
 
 class NIDAQError(Exception):

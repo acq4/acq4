@@ -96,7 +96,7 @@ class MultiClampTelegraph:
         
         # request connection to MCC
         for d in self.devIndex:
-            print "Open:", d
+            #print "Open:", d
             self.post('OPEN', d)
         
         # listen for changes / reconnect requests / stop requests
@@ -183,11 +183,13 @@ class MultiClampTelegraph:
                 #    secSignal = wmlib.MCTG_OUT_MUX_IC_LONG_NAMES_RAW[data.uRawOutSignal]
                 #    priUnits = UNIT_MAP[data.uScaleFactorUnits]
                 #    secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
-                
-                priSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uScaledOutSignal]
-                secSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uRawOutSignal]
-                priUnits = UNIT_MAP[data.uScaleFactorUnits]
-                secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
+                try:
+                    priSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uScaledOutSignal]
+                    secSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uRawOutSignal]
+                    priUnits = UNIT_MAP[data.uScaleFactorUnits]
+                    secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
+                except IndexError:   ## Ignore when signals are out of range (auxiliary). Bah.
+                    return True
                 
                 
                 state = {

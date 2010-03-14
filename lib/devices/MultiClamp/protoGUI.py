@@ -283,8 +283,8 @@ class MultiClampProtoGui(ProtocolGui):
             for l in self.unitLabels:
                 text = str(l.text())
                 l.setText(text.replace(oldUnit, newUnit))
-            self.ui.topPlotWidget.setLabel('left', oldUnit)
-            self.ui.bottomPlotWidget.setLabel('left', newUnit)
+            self.ui.topPlotWidget.setLabel('left', units=oldUnit)
+            self.ui.bottomPlotWidget.setLabel('left', units=newUnit)
                 
             ## Hide stim plot for I=0 mode
             if mode == 'I=0':
