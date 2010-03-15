@@ -72,7 +72,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.plots = {}
         for k in self.analysisItems:
             p = PlotWidget()
-            p.setLabel('left', k)
+            p.setLabel('left', text=k, units=self.analysisItems[k])
             self.ui.plotLayout.addWidget(p)
             self.plots[k] = p
         #irp = self.plots['inputResistance']
@@ -98,18 +98,10 @@ class PatchWindow(QtGui.QMainWindow):
         ])
         self.stateGroup.setState(self.params)
         
-        #for p in [self.ui.patchPlot, self.ui.commandPlot]:
-            #p.setCanvasBackground(QtGui.QColor(0,0,0))
-            #p.replot()
-            
+        self.ui.patchPlot.setLabel('left', text='Primary', units='A')
         self.patchCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        #self.patchCurve = PlotCurve('cell')
-        #self.patchCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        #self.patchCurve.attach(self.ui.patchPlot)
+        self.ui.commandPlot.setLabel('left', text='Secondary', units='V')
         self.commandCurve = self.ui.commandPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        #self.commandCurve = PlotCurve('command')
-        #self.commandCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        #self.commandCurve.attach(self.ui.commandPlot)
         
         QtCore.QObject.connect(self.ui.startBtn, QtCore.SIGNAL('clicked()'), self.startClicked)
         QtCore.QObject.connect(self.ui.recordBtn, QtCore.SIGNAL('clicked()'), self.recordClicked)
@@ -224,10 +216,15 @@ class PatchWindow(QtGui.QMainWindow):
             mode = self.params['mode']
         
         data = frame['data'][self.clampName]
-        #if mode == 'vc':
+        
+        if mode == 'vc':
+            self.ui.patchPlot.setLabel('left', units='A')
+            self.ui.commandPlot.setLabel('left', units='V')
             #scale1 = 1e12
             #scale2 = 1e3
-        #else:
+        else:
+            self.ui.patchPlot.setLabel('left', units='V')
+            self.ui.commandPlot.setLabel('left', units='A')
             #scale1 = 1e3
             #scale2 = 1e12
         self.patchCurve.setData(data.xvals('Time'), data['primary'])

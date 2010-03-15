@@ -403,14 +403,14 @@ SIGNAL_MAP = {
                 "Membrane Potential": "VC_MEMBPOTENTIAL",
                 "Membrane Current": "VC_MEMBCURRENT",
                 "Pipette Potential": "VC_PIPPOTENTIAL",
-                "100x AC Pipette Potential": "VC_100XACMEMBPOTENTIAL",
+                "100 x AC Pipette Potential": "VC_100XACMEMBPOTENTIAL",
                 "Bath Potential": "VC_AUXILIARY1"
             },
             'SEC': {
                 "Membrane plus Offset Potential": "VC_MEMBPOTENTIAL",
                 "Membrane Current": "VC_MEMBCURRENT",
                 "Pipette Potential": "VC_PIPPOTENTIAL",
-                "100x AC Pipette Potential": "VC_100XACMEMBPOTENTIAL",
+                "100 x AC Pipette Potential": "VC_100XACMEMBPOTENTIAL",
                 "Bath Potential": "VC_AUXILIARY1"
             }   
         },
@@ -419,7 +419,7 @@ SIGNAL_MAP = {
                 "Command Current": "VC_MEMBPOTENTIAL",
                 "Membrane Current": "VC_MEMBCURRENT",
                 "Membrane Potential": "VC_PIPPOTENTIAL",
-                "100x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
+                "100 x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
                 "Bath Potential": "VC_AUXILIARY1"
                 #"Command Current": "IC_CMDCURRENT",
                 #"Membrane Current": "IC_MEMBCURRENT",
@@ -431,7 +431,7 @@ SIGNAL_MAP = {
                 "Command Current": "IC_CMDCURRENT",
                 "Membrane Current": "IC_MEMBCURRENT",
                 "Membrane plus Offset Potential": "IC_MEMBPOTENTIAL",
-                "100x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
+                "100 x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
                 "Bath Potential": "IC_AUXILIARY1"
             }
         }

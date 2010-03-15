@@ -138,12 +138,14 @@ class MultiClampProtoGui(ProtocolGui):
         runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys(), passHash=True)
         for w in waves:
             if w is not None:
-                self.plotCmdWave(w / self.cmdScale, color=QtGui.QColor(100, 100, 100), replot=False)
+                #self.plotCmdWave(w / self.cmdScale, color=QtGui.QColor(100, 100, 100), replot=False)
+                self.plotCmdWave(w, color=QtGui.QColor(100, 100, 100), replot=False)
         
         ## display single-mode wave in red
         single = self.getSingleWave()
         if single is not None:
-            self.plotCmdWave(single / self.cmdScale, color=QtGui.QColor(200, 100, 100))
+            #self.plotCmdWave(single / self.cmdScale, color=QtGui.QColor(200, 100, 100))
+            self.plotCmdWave(single, color=QtGui.QColor(200, 100, 100))
         #self.paramListChanged
         
     def clearCmdPlots(self):
@@ -164,7 +166,8 @@ class MultiClampProtoGui(ProtocolGui):
         params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name])
         cur = self.getSingleWave(params) 
         if cur is not None:
-            self.currentCmdPlot = self.plotCmdWave(cur / self.cmdScale, color=QtGui.QColor(100, 200, 100))
+            #self.currentCmdPlot = self.plotCmdWave(cur / self.cmdScale, color=QtGui.QColor(100, 200, 100))
+            self.currentCmdPlot = self.plotCmdWave(cur, color=QtGui.QColor(100, 200, 100))
         
     def plotCmdWave(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
         if data is None:
@@ -237,6 +240,7 @@ class MultiClampProtoGui(ProtocolGui):
             oldMode = self.mode
             if mode is None:
                 mode = self.getMode()
+                #print "Set mode to", mode
             # set radio button
             if mode == 'IC':
                 self.ui.icModeRadio.setChecked(True)
@@ -247,6 +251,8 @@ class MultiClampProtoGui(ProtocolGui):
             
             # update signal lists
             sigs = self.dev.listSignals(mode)
+            #print "Signals:", sigs
+            #print "-------"
             for s, c in [(sigs[0], self.ui.primarySignalCombo),(sigs[1], self.ui.secondarySignalCombo)]:
                 c.clear()
                 for ss in s:
@@ -283,8 +289,8 @@ class MultiClampProtoGui(ProtocolGui):
             for l in self.unitLabels:
                 text = str(l.text())
                 l.setText(text.replace(oldUnit, newUnit))
-            self.ui.topPlotWidget.setLabel('left', units=oldUnit)
-            self.ui.bottomPlotWidget.setLabel('left', units=newUnit)
+            self.ui.topPlotWidget.setLabel('left', units=oldUnit[1])
+            self.ui.bottomPlotWidget.setLabel('left', units=newUnit[1])
                 
             ## Hide stim plot for I=0 mode
             if mode == 'I=0':
@@ -297,6 +303,7 @@ class MultiClampProtoGui(ProtocolGui):
         self.mode = mode
         
     def setSignals(self, pri, sec):
+        #print "setSignals", pri, sec
         for c, s in [(self.ui.primarySignalCombo, pri), (self.ui.secondarySignalCombo, sec)]:
             if s is None:
                 continue
@@ -313,7 +320,8 @@ class MultiClampProtoGui(ProtocolGui):
             self.clearInpPlots()
 
         ## Plot the results
-        plot = self.ui.topPlotWidget.plot(result['primary'].view(numpy.ndarray) / self.inpScale, x=result.xvals('Time'), params=params)
+        #plot = self.ui.topPlotWidget.plot(result['primary'].view(numpy.ndarray) / self.inpScale, x=result.xvals('Time'), params=params)
+        plot = self.ui.topPlotWidget.plot(result['primary'].view(numpy.ndarray), x=result.xvals('Time'), params=params)
         
     def quit(self):
         ProtocolGui.quit(self)

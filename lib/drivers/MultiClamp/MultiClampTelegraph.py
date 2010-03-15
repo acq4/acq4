@@ -26,6 +26,12 @@ teleDefs = CParser(
 #   See: http://msdn.microsoft.com/en-us/library/dd458658(VS.85).aspx
 wmlib = CLibrary(windll.User32, teleDefs, prefix='MCTG_')
 
+## Naturally we can't use the same set of definitions for the 700A and 700B.
+ax700ADefs = CParser(
+    os.path.join(d, 'MCTelegraphs.hpp'),
+    copyFrom=windowsDefs,
+    cache=os.path.join(d, 'MCTelegraphs.hpp.cache'),
+)
 
 class MultiClampTelegraph:
     """Class for receiving 'telegraph' packets from MultiClamp commander. 
@@ -173,23 +179,26 @@ class MultiClampTelegraph:
                 ## translate state into something prettier
                 #print "units:", data.uScaleFactorUnits, data.uRawScaleFactorUnits
                 mode = ['VC', 'IC', 'I=0'][data.uOperatingMode]
-                #if mode == 'VC':
-                #    priSignal = wmlib.MCTG_OUT_MUX_VC_LONG_NAMES[data.uScaledOutSignal]
-                #    secSignal = wmlib.MCTG_OUT_MUX_VC_LONG_NAMES_RAW[data.uRawOutSignal]
-                #    priUnits = UNIT_MAP[data.uScaleFactorUnits]
-                #    secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
-                #else:
-                #    priSignal = wmlib.MCTG_OUT_MUX_IC_LONG_NAMES[data.uScaledOutSignal]
-                #    secSignal = wmlib.MCTG_OUT_MUX_IC_LONG_NAMES_RAW[data.uRawOutSignal]
-                #    priUnits = UNIT_MAP[data.uScaleFactorUnits]
-                #    secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
-                try:
-                    priSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uScaledOutSignal]
-                    secSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uRawOutSignal]
-                    priUnits = UNIT_MAP[data.uScaleFactorUnits]
-                    secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
-                except IndexError:   ## Ignore when signals are out of range (auxiliary). Bah.
-                    return True
+                
+                if data.uHardwareType == wmlib.MCTG_HW_TYPE_MC700A:
+                    if mode == 'VC':
+                        priSignal = ax700ADefs.defs['values']['MCTG_OUT_MUX_VC_LONG_NAMES'][data.uScaledOutSignal]
+                        secSignal = ax700ADefs.defs['values']['MCTG_OUT_MUX_VC_LONG_NAMES_RAW'][data.uRawOutSignal]
+                        priUnits = UNIT_MAP[data.uScaleFactorUnits]
+                        secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
+                    else:
+                        priSignal = ax700ADefs.defs['values']['MCTG_OUT_MUX_IC_LONG_NAMES'][data.uScaledOutSignal]
+                        secSignal = ax700ADefs.defs['values']['MCTG_OUT_MUX_IC_LONG_NAMES_RAW'][data.uRawOutSignal]
+                        priUnits = UNIT_MAP[data.uScaleFactorUnits]
+                        secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
+                else:
+                    try:
+                        priSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uScaledOutSignal]
+                        secSignal = wmlib.MCTG_OUT_GLDR_LONG_NAMES[data.uRawOutSignal]
+                        priUnits = UNIT_MAP[data.uScaleFactorUnits]
+                        secUnits = UNIT_MAP[data.uRawScaleFactorUnits]
+                    except IndexError:   ## Ignore when signals are out of range (auxiliary). Bah.
+                        return True
                 
                 
                 state = {
