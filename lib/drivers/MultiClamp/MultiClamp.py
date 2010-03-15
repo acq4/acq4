@@ -287,7 +287,10 @@ class MultiClamp:
                 ## Make sure the order of keys is well defined; string must be identical every time.
                 ch1 = ch.copy()
                 ch1['model'] = MODELS[ch1['model']]
-                strDesc = ",".join("%s:%s" % (k, ch1[k]) for k in ['model', 'sn', 'com', 'dev', 'chan'])  
+                if ch1['model'] == 'MC700A':
+                    strDesc = ",".join("%s:%s" % (k, ch1[k]) for k in ['model', 'com', 'dev', 'chan'])  
+                elif ch1['model'] == 'MC700B':
+                    strDesc = ",".join("%s:%s" % (k, ch1[k]) for k in ['model', 'sn', 'chan'])  
                 if strDesc not in self.channels:
                     self.channels[strDesc] = MultiClampChannel(self, ch)
                 self.chanDesc[strDesc] = ch
@@ -400,14 +403,14 @@ SIGNAL_MAP = {
                 "Membrane Potential": "VC_MEMBPOTENTIAL",
                 "Membrane Current": "VC_MEMBCURRENT",
                 "Pipette Potential": "VC_PIPPOTENTIAL",
-                "100 x AC Pipette Potential": "VC_100XACMEMBPOTENTIAL",
+                "100x AC Pipette Potential": "VC_100XACMEMBPOTENTIAL",
                 "Bath Potential": "VC_AUXILIARY1"
             },
             'SEC': {
                 "Membrane plus Offset Potential": "VC_MEMBPOTENTIAL",
                 "Membrane Current": "VC_MEMBCURRENT",
                 "Pipette Potential": "VC_PIPPOTENTIAL",
-                "100 x AC Pipette Potential": "VC_100XACMEMBPOTENTIAL",
+                "100x AC Pipette Potential": "VC_100XACMEMBPOTENTIAL",
                 "Bath Potential": "VC_AUXILIARY1"
             }   
         },
@@ -416,7 +419,7 @@ SIGNAL_MAP = {
                 "Command Current": "VC_MEMBPOTENTIAL",
                 "Membrane Current": "VC_MEMBCURRENT",
                 "Membrane Potential": "VC_PIPPOTENTIAL",
-                "100 x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
+                "100x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
                 "Bath Potential": "VC_AUXILIARY1"
                 #"Command Current": "IC_CMDCURRENT",
                 #"Membrane Current": "IC_MEMBCURRENT",
@@ -428,7 +431,7 @@ SIGNAL_MAP = {
                 "Command Current": "IC_CMDCURRENT",
                 "Membrane Current": "IC_MEMBCURRENT",
                 "Membrane plus Offset Potential": "IC_MEMBPOTENTIAL",
-                "100 x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
+                "100x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
                 "Bath Potential": "IC_AUXILIARY1"
             }
         }
@@ -440,7 +443,7 @@ SIGNAL_MAP = {
                 "Membrane Current": "VC_MEMBCURRENT",
                 "Membrane Potential": "VC_MEMBPOTENTIAL",
                 "Pipette Potential": "VC_PIPPOTENTIAL",
-                "100 x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
+                "100x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
                 "External Command Potential": "VC_EXTCMDPOTENTIAL",
                 "Auxiliaryl": "VC_AUXILIARY1",
                 "Auxiliary2": "VC_AUXILIARY2",
@@ -449,7 +452,7 @@ SIGNAL_MAP = {
                 "Membrane Current":"VC_MEMBCURRENT" ,
                 "Membrane Potential": "VC_MEMBPOTENTIAL",
                 "Pipette Potential": "VC_PIPPOTENTIAL",
-                "100 x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
+                "100x AC Membrane Potential": "VC_100XACMEMBPOTENTIAL",
                 "External Command Potential": "VC_EXTCMDPOTENTIAL",
                 "Auxiliaryl": "VC_AUXILIARY1",
                 "Auxiliary2": "VC_AUXILIARY2",
@@ -460,7 +463,7 @@ SIGNAL_MAP = {
                 "Membrane Potential": "IC_MEMBPOTENTIAL",
                 "Membrane Current": "IC_MEMBCURRENT",
                 "Command Current": "IC_CMDCURRENT",
-                "100 x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
+                "100x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
                 "External Command Current": "IC_EXTCMDCURRENT",
                 "Auxiliary1": "IC_AUXILIARY1",
                 "Auxiliary2": "IC_AUXILIARY2",
@@ -469,7 +472,7 @@ SIGNAL_MAP = {
                 "Membrane Potential": "IC_MEMBPOTENTIAL",
                 "Membrane Current": "IC_MEMBCURRENT",
                 "Pipette Potential": "IC_PIPPOTENTIAL",
-                "100 x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
+                "100x AC Membrane Potential": "IC_100XACMEMBPOTENTIAL",
                 "External Command Current": "IC_EXTCMDCURRENT",
                 "Auxiliary1": "IC_AUXILIARY1",
                 "Auxiliary2": "IC_AUXILIARY2",

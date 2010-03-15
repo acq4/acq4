@@ -367,6 +367,8 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         elif data.ndim == 1:
             y = data
             
+        if x.shape != y.shape:
+            raise Exception("X and Y arrays must be the same shape--got %s and %s." % (str(x.shape), str(y.shape)))
         self.prepareGeometryChange()
         if copy:
             self.yData = y.copy()
@@ -1247,9 +1249,9 @@ class ViewBox(QtGui.QGraphicsWidget):
             p.drawRect(bounds)
 
 
-class InfiniteLine(QtGui.QGraphicsLineItem):
+class InfiniteLine(QtGui.QGraphicsItem):
     def __init__(self, view, pos, angle=90, pen=None):
-        QtGui.QGraphicsLineItem.__init__(self)
+        QtGui.QGraphicsItem.__init__(self)
         self.view = view
         self.p = [0, 0]
         self.setAngle(angle)
@@ -1259,6 +1261,9 @@ class InfiniteLine(QtGui.QGraphicsLineItem):
             pen = QtGui.QPen(QtGui.QColor(200, 200, 100))
         self.setPen(pen)
         QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.updateLine)
+        
+    def setPen(self, pen):
+        self.pen = pen
         
     def setAngle(self, angle):
         self.angle = ((angle+45) % 180) - 45   ##  -45 <= angle < 135
@@ -1294,11 +1299,27 @@ class InfiniteLine(QtGui.QGraphicsLineItem):
             y1 = self.p[1] + (x1 - self.p[0]) * m
             y2 = self.p[1] + (x2 - self.p[0]) * m
         #print vr, x1, y1, x2, y2
-        QtGui.QGraphicsLineItem.setLine(self, x1, y1, x2, y2)
+        self.prepareGeometryChange()
+        self.line = (QtCore.QPointF(x1, y1), QtCore.QPointF(x2, y2))
+        self.bounds = QtCore.QRectF(self.line[0], self.line[1])
+        ## Stupid bug causes lines to disappear:
+        if self.bounds.width() == 0:
+            self.bounds.setWidth(1e-9)
+        if self.bounds.height() == 0:
+            self.bounds.setHeight(1e-9)
+        #QtGui.QGraphicsLineItem.setLine(self, x1, y1, x2, y2)
         
-    #def boundingRect(self):
+    def boundingRect(self):
         #self.updateLine()
         #return QtGui.QGraphicsLineItem.boundingRect(self)
+        #print "bounds", self.bounds
+        return self.bounds
+    
+    def paint(self, p, *args):
+        p.setPen(self.pen)
+        #print "paint", self.line
+        p.drawLine(self.line[0], self.line[1])
+        
 
 class VTickGroup(QtGui.QGraphicsPathItem):
     def __init__(self, xvals=None, yrange=None, pen=None, relative=False, view=None):

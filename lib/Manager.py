@@ -292,6 +292,9 @@ Valid options are:
             modDir = os.path.join('lib', 'modules', module)
             files = glob.glob(os.path.join(modDir, '*.py'))
             files = [os.path.basename(f[:-3]) for f in files]
+            if '__init__' in files:  ## Move __init__ to the very end
+                files.remove('__init__')
+                files.append('__init__')
             modName = 'lib.modules.' + module
             modNames = [modName + '.' + m for m in files] + [modName]
             print "RELOAD", modNames

@@ -9,14 +9,17 @@ from graphicsItems import *
 
 app = QtGui.QApplication([])
 mw = QtGui.QMainWindow()
-pw = PlotWidget()
-pw2 = PlotWidget()
 cw = QtGui.QWidget()
 mw.setCentralWidget(cw)
 l = QtGui.QVBoxLayout()
 cw.setLayout(l)
+
+pw = PlotWidget()
 l.addWidget(pw)
+pw2 = PlotWidget()
 l.addWidget(pw2)
+pw3 = PlotWidget()
+l.addWidget(pw3)
 
 pw.registerPlot('Plot1')
 pw2.registerPlot('Plot2')
@@ -34,12 +37,16 @@ pen.setCosmetic(True)
 p1.setShadowPen(pen)
 p1.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 50)))
 
-#l1 = InfiniteLine(pw, 1.5)
+#l1 = QtGui.QGraphicsLineItem(0, 2, 2, 3)
+#l1.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
 l2 = InfiniteLine(pw, 1.5, 0)
 #l3 = InfiniteLine(pw, [1.5, 1.5], 45)
 #pw.addItem(l1)
 pw.addItem(l2)
 #pw.addItem(l3)
+
+pw3.plot(array([100000]*100))
+
 
 mw.show()
 
@@ -70,4 +77,4 @@ for i in range(0, 5):
         yd, xd = rand(10000)
         pw2.plot(yd*(j+1), xd, params={'iter': i, 'val': j})
     
-    
+#app.exec_()
