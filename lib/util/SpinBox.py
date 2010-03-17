@@ -12,7 +12,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
       - Support for sequence variables (for ProtocolRunner)
     """
     
-    def __init__(self, value=0.0, parent=None, **kwargs):
+    def __init__(self, parent=None, value=0.0, **kwargs):
         QtGui.QAbstractSpinBox.__init__(self, parent)
         self.setMinimumWidth(0)
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Preferred)
