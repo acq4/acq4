@@ -44,7 +44,7 @@ class QObjectWorkaround:
 
 
 class ImageItem(QtGui.QGraphicsPixmapItem):
-    def __init__(self, image=None, copy=True, *args):
+    def __init__(self, image=None, copy=True, parent=None, *args):
         self.qimage = QtGui.QImage()
         self.pixmap = None
         self.useWeave = False
@@ -53,7 +53,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         self.alpha = 1.0
         self.image = None
         self.clipLevel = None
-        QtGui.QGraphicsPixmapItem.__init__(self, *args)
+        QtGui.QGraphicsPixmapItem.__init__(self, parent, *args)
         #self.pixmapItem = QtGui.QGraphicsPixmapItem(self)
         if image is not None:
             self.updateImage(image, copy, autoRange=True)
@@ -651,7 +651,8 @@ class LabelItem(QtGui.QGraphicsWidget):
 
 class ScaleItem(QtGui.QGraphicsWidget):
     def __init__(self, orientation, pen=None, linkView=None, parent=None):
-        """GraphicsItem showing a single plot axis with ticks and values. Can be configured to fit on any side of a plot, and can automatically synchronize its displayed scale with ViewBox items."""
+        """GraphicsItem showing a single plot axis with ticks, values, and label.
+        Can be configured to fit on any side of a plot, and can automatically synchronize its displayed scale with ViewBox items."""
         QtGui.QGraphicsWidget.__init__(self, parent)
         self.label = QtGui.QGraphicsTextItem(self)
         self.orientation = orientation
@@ -703,21 +704,21 @@ class ScaleItem(QtGui.QGraphicsWidget):
         br = self.label.boundingRect()
         p = QtCore.QPointF(0, 0)
         if self.orientation == 'left':
-            p.setY(self.size().height()/2. + br.width() / 2.)
+            p.setY(int(self.size().height()/2 + br.width()/2))
             p.setX(-nudge)
             #s.setWidth(10)
         elif self.orientation == 'right':
             #s.setWidth(10)
-            p.setY(self.size().height()/2. + br.width() / 2.)
-            p.setX(self.size().width()-br.height()+nudge)
+            p.setY(int(self.size().height()/2 + br.width()/2))
+            p.setX(int(self.size().width()-br.height()+nudge))
         elif self.orientation == 'top':
             #s.setHeight(10)
             p.setY(-nudge)
-            p.setX(self.size().width()/2. - br.width()/2.)
+            p.setX(int(self.size().width()/2. - br.width()/2.))
         elif self.orientation == 'bottom':
-            p.setX(self.size().width()/2. - br.width()/2.)
+            p.setX(int(self.size().width()/2. - br.width()/2.))
             #s.setHeight(10)
-            p.setY(self.size().height()-br.height()+nudge)
+            p.setY(int(self.size().height()-br.height()+nudge))
         #self.label.resize(s)
         self.label.setPos(p)
         

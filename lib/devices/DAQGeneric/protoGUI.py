@@ -46,7 +46,7 @@ class DAQGenericProtoGui(ProtocolGui):
                 units = ' (%s)' % conf['units']
                 
             #p.setAxisTitle(PlotWidget.yLeft, ch+units)
-            p.setLabel('left', ch+units)
+            p.setLabel('left', title=ch, units=units)
             self.plots[ch] = p
             
             p.registerPlot(self.dev.name + '.' + ch)
