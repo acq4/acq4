@@ -187,7 +187,9 @@ class PlotItem(QtGui.QGraphicsWidget):
         
         QtCore.QObject.connect(self.ctrl.xLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.xLinkComboChanged)
         QtCore.QObject.connect(self.ctrl.yLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.yLinkComboChanged)
-        
+
+        QtCore.QObject.connect(c.downsampleSpin, QtCore.SIGNAL('valueChanged(int)'), self.updateDownsampling)
+
         QtCore.QObject.connect(self.ctrl.avgParamList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.avgParamListClicked)
         QtCore.QObject.connect(self.ctrl.averageGroup, QtCore.SIGNAL('toggled(bool)'), self.avgToggled)
         
@@ -438,6 +440,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.ctrl.xAutoRadio.setChecked(True)
         self.ctrl.yAutoRadio.setChecked(True)
         self.autoBtn.hide()
+        self.updateXScale()
+        self.updateYScale()
         self.replot()
       
     def updateXScale(self):
@@ -678,6 +682,18 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.enableAutoScale()
         self.recomputeAverages()
             
+        
+    def updateDownsampling(self):
+        if self.ctrl.decimateGroup.isChecked():
+            if self.ctrl.manualDecimateRadio.isChecked():
+                ds = self.ctrl.downsampleSpin.value()
+            else:
+                ds = True
+        else:
+            ds = False
+        for c in self.curves:
+            c.setDownsampling(ds)
+        
         
     def updateDecimation(self):
         if self.ctrl.maxTracesCheck.isChecked():

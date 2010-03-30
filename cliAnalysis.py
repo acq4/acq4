@@ -13,7 +13,7 @@ from lib.Manager import *
 import sys, os
 pyfile = __file__
 if pyfile[0] != '/':
-   pyfile =  os.path.join(os.getcwd(), pyfile)
+    pyfile =  os.path.join(os.getcwd(), pyfile)
 pyDir = os.path.split(pyfile)[0]
 sys.path.append(pyDir)
 from metaarray import *
@@ -255,10 +255,10 @@ def showImage(data=None, file=None, title=None):
     
 
 def dirDialog(startDir='', title="Select Directory"):
-  return str(QtGui.QFileDialog.getExistingDirectory(None, title, startDir))
+    return str(QtGui.QFileDialog.getExistingDirectory(None, title, startDir))
 
 def fileDialog():
-  return str(QtGui.QFileDialog.getOpenFileName())
+    return str(QtGui.QFileDialog.getOpenFileName())
 
 def loadMetaArray(file=None):
     if file is None:

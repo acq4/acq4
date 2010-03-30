@@ -297,7 +297,7 @@ class UncagingWindow(QtGui.QMainWindow):
         
         times = data.xvals('Time')
         self.eventTimes.extend(times[events['start']])
-        stimInd = argwhere((times[:-1] <= 0.5) * (times[1:] > 0.5))[0,0]
+        stimInd = argwhere((times[:-1] <= 0.499) * (times[1:] > 0.499))[0,0]
         dirInd = argwhere((times[:-1] <= 0.504) * (times[1:] > 0.504))[0,0]
         endInd = argwhere((times[:-1] <= 0.65) * (times[1:] > 0.65))[0,0]
         dt = times[1]-times[0]
@@ -318,7 +318,7 @@ class UncagingWindow(QtGui.QMainWindow):
         green = clip(log(max(1.0, (dir/stdev)+1))*255, 0, 255)
         
         #print pos/stdev, neg/stdev, dir/stdev, red, green, blue
-        return QtGui.QColor(red, green, blue, 150)
+        return QtGui.QColor(red, green, blue, max(red, green, blue))
         
    
     def mouseClicked(self, ev):
