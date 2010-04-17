@@ -106,12 +106,15 @@ class UncagingWindow(QtGui.QMainWindow):
 
     def addScan(self):
         dh = getManager().currentFile
-        if len(dh.info()['protocol']['params']) > 0:
+        if dh.subDirs() != ['Camera']:
             dirs = dh.subDirs()
         else:
             dirs = [dh.name()]
         for d in dirs:
-            d = dh[d]
+            if len(dirs) > 1:
+                d = dh[d]
+            else:
+                d = dh
             if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
                pos = d.info()['Scanner']['position']
                if 'spotSize' in d.info()['Scanner']:
@@ -148,9 +151,10 @@ class UncagingWindow(QtGui.QMainWindow):
         self.scanItems = []
         
     def loadTrace(self, item, pen=None):
-        dh = item.source
-        data = self.getClampData(dh)
-        self.plot.plot(data, pen=pen)
+        if type(item) == type(QtGui.QGraphicsEllipseItem()):
+            dh = item.source
+            data = self.getClampData(dh)
+            self.plot.plot(data, pen=pen)
         
     def getClampData(self, dh):
         data = dh['Clamp1.ma'].read()
@@ -205,29 +209,90 @@ class STDPWindow(UncagingWindow):
         self.addScanBtn = QtGui.QPushButton('Add Scan')
         self.clearImgBtn = QtGui.QPushButton('Clear Images')
         self.clearScanBtn = QtGui.QPushButton('Clear Scans')
+        self.plotEPSPSlopeBtn = QtGui.QPushButton('Plot EPSP slopes')
         self.defaultSize = 150e-6
         bwl.addWidget(self.addImgBtn)
         bwl.addWidget(self.clearImgBtn)
         bwl.addWidget(self.addScanBtn)
         bwl.addWidget(self.clearScanBtn)
+        bwl.addWidget(self.plotEPSPSlopeBtn)
         QtCore.QObject.connect(self.addImgBtn, QtCore.SIGNAL('clicked()'), self.addImage)
         QtCore.QObject.connect(self.addScanBtn, QtCore.SIGNAL('clicked()'), self.addScan)
         QtCore.QObject.connect(self.clearImgBtn, QtCore.SIGNAL('clicked()'), self.clearImage)
         QtCore.QObject.connect(self.clearScanBtn, QtCore.SIGNAL('clicked()'), self.clearScan)
+        QtCore.QObject.connect(self.plotEPSPSlopeBtn, QtCore.SIGNAL('clicked()'), self.EPSPslope)
         #self.layout = QtGui.QVBoxLayout()
         #self.cw.setLayout(self.layout)
         self.canvas = Canvas()
         QtCore.QObject.connect(self.canvas.view, QtCore.SIGNAL('mouseReleased'), self.mouseClicked)
-        self.traceplot = PlotWidget()
+        self.plot = PlotWidget()
         self.LTPplot = PlotWidget()
         bwtop.addWidget(self.canvas)
-        self.cw.addWidget(self.traceplot)
+        self.cw.addWidget(self.plot)
         bwtop.addWidget(self.LTPplot)
         self.z = 0
         self.resize(800, 600)
         self.show()
         self.scanItems = []
         self.imageItems = []
+        
+    def mouseClicked(self, ev):
+        self.plot.clear()
+        spot = self.canvas.view.items(ev.pos())
+        n=0.0
+        unixtime = []
+        slope = []
+        for i in spot:
+            if type(i) == type(QtGui.QGraphicsEllipseItem()):
+                n += 1.0
+                color = n/(len(spot))*0.7
+                colorObj = QtGui.QColor()
+                colorObj.setHsvF(color, 0.7, 1)
+                pen = QtGui.QPen(colorObj)
+                self.loadTrace(i, pen=pen)
+                t, s = self.EPSPcharge(i)
+                unixtime.append(t)
+                slope.append(s)
+        times = []
+        for i in unixtime:
+            if i != 0:
+                t = (i - min(unixtime))/60
+                times.append(t)
+        for i in slope:
+            if i == 0:
+                slope.remove(i)
+        self.LTPplot.clear()
+        self.LTPplot.plot(data = slope, x = times)
+        
+    def EPSPslope(self, item):
+        dh = item.source
+        data = self.getClampData(dh)
+        time = data.infoCopy()[-1]['startTime']
+        q = self.getLaserTime(dh)
+        base = data['Time': 0.0:(q - 0.01)]
+        pspRgn = data['Time': q:]
+        a = argwhere(pspRgn > base.mean()+4*base.std())
+        if len(a) > 0:
+            epspindex = a[0,0]
+            epsptime = pspRgn.xvals('Time')[epspindex]
+            slope = (data['Time': (epsptime+0.0015):(epsptime+0.0025)].mean() - data['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
+            return time, slope
+        else:
+            return 0,0
+        
+    def EPSPcharge(self, item):
+        dh = item.source
+        data = self.getClampData(dh)
+        time = data.infoCopy()[-1]['startTime']
+        q = self.getLaserTime(dh)
+        base = data['Time': 0.0:(q - 0.01)]
+        pspRgn = data['Time': q:(q+200)]
+        sum = pspRgn.sum() - (base.mean()*pspRgn.shape[0])
+        return time, sum
+        
+        
+
+
         
 class IVWindow(QtGui.QMainWindow):
     def __init__(self):
