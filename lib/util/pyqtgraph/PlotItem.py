@@ -19,7 +19,6 @@ This class is very heavily featured:
 
 from graphicsItems import *
 from plotConfigTemplate import *
-from functions import siScale
 from PyQt4 import QtGui, QtCore, QtSvg
 import weakref
 
@@ -45,11 +44,29 @@ class PlotItem(QtGui.QGraphicsWidget):
     
     def __init__(self, parent=None):
         QtGui.QGraphicsWidget.__init__(self, parent)
+        
+        ## Set up control buttons
+        
+        self.ctrlBtn = QtGui.QToolButton()
+        self.ctrlBtn.setText('?')
+        self.autoBtn = QtGui.QToolButton()
+        self.autoBtn.setText('A')
+        self.autoBtn.hide()
+        
+        for b in [self.ctrlBtn, self.autoBtn]:
+            proxy = QtGui.QGraphicsProxyWidget(self)
+            proxy.setWidget(b)
+            b.setStyleSheet("background-color: #000000; color: #888; font-size: 6pt")
+        QtCore.QObject.connect(self.ctrlBtn, QtCore.SIGNAL('clicked()'), self.ctrlBtnClicked)
+        QtCore.QObject.connect(self.autoBtn, QtCore.SIGNAL('clicked()'), self.enableAutoScale)
+        
+        
         self.layout = QtGui.QGraphicsGridLayout()
         self.layout.setContentsMargins(1,1,1,1)
         self.setLayout(self.layout)
         self.layout.setHorizontalSpacing(0)
         self.layout.setVerticalSpacing(0)
+        
         self.vb = ViewBox()
         QtCore.QObject.connect(self.vb, QtCore.SIGNAL('xRangeChanged'), self.xRangeChanged)
         QtCore.QObject.connect(self.vb, QtCore.SIGNAL('yRangeChanged'), self.yRangeChanged)
@@ -57,7 +74,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         
         QtCore.QObject.connect(self.vb, QtCore.SIGNAL('viewChanged'), self.viewChanged)
         
-        self.layout.addItem(self.vb, 3, 2)
+        self.layout.addItem(self.vb, 2, 1)
         self.alpha = 1.0
         self.autoAlpha = True
         self.spectrumMode = False
@@ -66,40 +83,44 @@ class PlotItem(QtGui.QGraphicsWidget):
          
         ## Create and place scale items
         self.scales = {
-            'top':    {'item': ScaleItem(orientation='top',    linkView=self.vb), 'pos': (2, 2)}, 
-            'bottom': {'item': ScaleItem(orientation='bottom', linkView=self.vb), 'pos': (4, 2)}, 
-            'left':   {'item': ScaleItem(orientation='left',   linkView=self.vb), 'pos': (3, 1)}, 
-            'right':  {'item': ScaleItem(orientation='right',  linkView=self.vb), 'pos': (3, 3)}
+            'top':    {'item': ScaleItem(orientation='top',    linkView=self.vb), 'pos': (1, 1)}, 
+            'bottom': {'item': ScaleItem(orientation='bottom', linkView=self.vb), 'pos': (3, 1)}, 
+            'left':   {'item': ScaleItem(orientation='left',   linkView=self.vb), 'pos': (2, 0)}, 
+            'right':  {'item': ScaleItem(orientation='right',  linkView=self.vb), 'pos': (2, 2)}
         }
         for k in self.scales:
             self.layout.addItem(self.scales[k]['item'], *self.scales[k]['pos'])
             
         ## Create and place label items
-        self.labels = {
-            'title':  {'item': LabelItem('title', size='11pt'),  'pos': (0, 2), 'text': ''},
-            'top':    {'item': LabelItem('top'),    'pos': (1, 2), 'text': '', 'units': '', 'unitPrefix': ''},
-            'bottom': {'item': LabelItem('bottom'), 'pos': (5, 2), 'text': '', 'units': '', 'unitPrefix': ''},
-            'left':   {'item': LabelItem('left'),   'pos': (3, 0), 'text': '', 'units': '', 'unitPrefix': ''},
-            'right':  {'item': LabelItem('right'),  'pos': (3, 4), 'text': '', 'units': '', 'unitPrefix': ''}
-        }
-        self.labels['left']['item'].setAngle(-90)
-        self.labels['right']['item'].setAngle(-90)
-        for k in self.labels:
-            self.layout.addItem(self.labels[k]['item'], *self.labels[k]['pos'])
+        #self.labels = {
+            #'title':  {'item': LabelItem('title', size='11pt'),  'pos': (0, 2), 'text': ''},
+            #'top':    {'item': LabelItem('top'),    'pos': (1, 2), 'text': '', 'units': '', 'unitPrefix': ''},
+            #'bottom': {'item': LabelItem('bottom'), 'pos': (5, 2), 'text': '', 'units': '', 'unitPrefix': ''},
+            #'left':   {'item': LabelItem('left'),   'pos': (3, 0), 'text': '', 'units': '', 'unitPrefix': ''},
+            #'right':  {'item': LabelItem('right'),  'pos': (3, 4), 'text': '', 'units': '', 'unitPrefix': ''}
+        #}
+        #self.labels['left']['item'].setAngle(-90)
+        #self.labels['right']['item'].setAngle(-90)
+        #for k in self.labels:
+            #self.layout.addItem(self.labels[k]['item'], *self.labels[k]['pos'])
+        self.titleLabel = LabelItem('', size='11pt')
+        self.layout.addItem(self.titleLabel, 0, 1)
+        self.setTitle(None)  ## hide
 
-        for i in range(6):
+
+        for i in range(4):
             self.layout.setRowPreferredHeight(i, 0)
             self.layout.setRowMinimumHeight(i, 0)
             self.layout.setRowSpacing(i, 0)
             self.layout.setRowStretchFactor(i, 1)
             
-        for i in range(5):
+        for i in range(3):
             self.layout.setColumnPreferredWidth(i, 0)
             self.layout.setColumnMinimumWidth(i, 0)
             self.layout.setColumnSpacing(i, 0)
             self.layout.setColumnStretchFactor(i, 1)
-        self.layout.setRowStretchFactor(3, 100)
-        self.layout.setColumnStretchFactor(2, 100)
+        self.layout.setRowStretchFactor(2, 100)
+        self.layout.setColumnStretchFactor(1, 100)
         
 
         ## Wrap a few methods from viewBox
@@ -131,20 +152,6 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.yLinkPlot = None
         self.linksBlocked = False
 
-        ## Set up control buttons
-        
-        self.ctrlBtn = QtGui.QToolButton()
-        self.ctrlBtn.setText('?')
-        self.autoBtn = QtGui.QToolButton()
-        self.autoBtn.setText('A')
-        self.autoBtn.hide()
-        
-        for b in [self.ctrlBtn, self.autoBtn]:
-            proxy = QtGui.QGraphicsProxyWidget(self)
-            proxy.setWidget(b)
-            b.setStyleSheet("background-color: #000000; color: #888; font-size: 6pt")
-        QtCore.QObject.connect(self.ctrlBtn, QtCore.SIGNAL('clicked()'), self.ctrlBtnClicked)
-        QtCore.QObject.connect(self.autoBtn, QtCore.SIGNAL('clicked()'), self.enableAutoScale)
         
         #self.ctrlBtn.setFixedWidth(60)
         self.setAcceptHoverEvents(True)
@@ -155,8 +162,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         QtCore.QObject.connect(c.yMinText, QtCore.SIGNAL('editingFinished()'), self.setManualYScale)
         QtCore.QObject.connect(c.yMaxText, QtCore.SIGNAL('editingFinished()'), self.setManualYScale)
         
-        QtCore.QObject.connect(c.xManualRadio, QtCore.SIGNAL('toggled(bool)'), self.updateXScale)
-        QtCore.QObject.connect(c.yManualRadio, QtCore.SIGNAL('toggled(bool)'), self.updateYScale)
+        QtCore.QObject.connect(c.xManualRadio, QtCore.SIGNAL('clicked()'), self.updateXScale)
+        QtCore.QObject.connect(c.yManualRadio, QtCore.SIGNAL('clicked()'), self.updateYScale)
         
         QtCore.QObject.connect(c.xAutoRadio, QtCore.SIGNAL('clicked()'), self.updateXScale)
         QtCore.QObject.connect(c.yAutoRadio, QtCore.SIGNAL('clicked()'), self.updateYScale)
@@ -180,7 +187,9 @@ class PlotItem(QtGui.QGraphicsWidget):
         
         QtCore.QObject.connect(self.ctrl.xLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.xLinkComboChanged)
         QtCore.QObject.connect(self.ctrl.yLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.yLinkComboChanged)
-        
+
+        QtCore.QObject.connect(c.downsampleSpin, QtCore.SIGNAL('valueChanged(int)'), self.updateDownsampling)
+
         QtCore.QObject.connect(self.ctrl.avgParamList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.avgParamListClicked)
         QtCore.QObject.connect(self.ctrl.averageGroup, QtCore.SIGNAL('toggled(bool)'), self.avgToggled)
         
@@ -197,11 +206,11 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.linksBlocked = False
         self.manager = None
         
-        self.showLabel('right', False)
-        self.showLabel('top', False)
-        self.showLabel('title', False)
-        self.showLabel('left', False)
-        self.showLabel('bottom', False)
+        #self.showLabel('right', False)
+        #self.showLabel('top', False)
+        #self.showLabel('title', False)
+        #self.showLabel('left', False)
+        #self.showLabel('bottom', False)
         self.showScale('right', False)
         self.showScale('top', False)
         self.showScale('left', True)
@@ -249,6 +258,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         wr = v.mapFromScene(b).boundingRect()
         pos = v.pos()
         wr.adjust(v.x(), v.y(), v.x(), v.y())
+        return wr
+
 
     def viewChanged(self, *args):
         self.emit(QtCore.SIGNAL('viewChanged'), *args)
@@ -285,10 +296,14 @@ class PlotItem(QtGui.QGraphicsWidget):
             self.manager.linkY(self, plot)
         
     def linkXChanged(self, plot):
+        #print "update from", plot
         if self.linksBlocked:
             return
         pr = plot.vb.viewRect()
         pg = plot.viewGeometry()
+        if pg is None:
+            #print "   return early"
+            return
         sg = self.viewGeometry()
         upp = float(pr.width()) / pg.width()
         x1 = pr.left() + (sg.x()-pg.x()) * upp
@@ -394,9 +409,13 @@ class PlotItem(QtGui.QGraphicsWidget):
         ## automatically change unit scale
         maxVal = max(abs(range[0]), abs(range[1]))
         (scale, prefix) = siScale(maxVal)
-        for l in ['top', 'bottom']:
-            self.setLabel(l, unitPrefix=prefix)
-            self.getScale(l).setScale(scale)
+        #for l in ['top', 'bottom']:
+            #if self.getLabel(l).isVisible():
+                #self.setLabel(l, unitPrefix=prefix)
+                #self.getScale(l).setScale(scale)
+            #else:
+                #self.setLabel(l, unitPrefix='')
+                #self.getScale(l).setScale(1.0)
         
         self.emit(QtCore.SIGNAL('xRangeChanged'), self, range)
 
@@ -407,9 +426,13 @@ class PlotItem(QtGui.QGraphicsWidget):
         ## automatically change unit scale
         maxVal = max(abs(range[0]), abs(range[1]))
         (scale, prefix) = siScale(maxVal)
-        for l in ['left', 'right']:
-            self.setLabel(l, unitPrefix=prefix)
-            self.getScale(l).setScale(scale)
+        #for l in ['left', 'right']:
+            #if self.getLabel(l).isVisible():
+                #self.setLabel(l, unitPrefix=prefix)
+                #self.getScale(l).setScale(scale)
+            #else:
+                #self.setLabel(l, unitPrefix='')
+                #self.getScale(l).setScale(1.0)
         self.emit(QtCore.SIGNAL('yRangeChanged'), self, range)
 
 
@@ -417,6 +440,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.ctrl.xAutoRadio.setChecked(True)
         self.ctrl.yAutoRadio.setChecked(True)
         self.autoBtn.hide()
+        self.updateXScale()
+        self.updateYScale()
         self.replot()
       
     def updateXScale(self):
@@ -658,6 +683,18 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.recomputeAverages()
             
         
+    def updateDownsampling(self):
+        if self.ctrl.decimateGroup.isChecked():
+            if self.ctrl.manualDecimateRadio.isChecked():
+                ds = self.ctrl.downsampleSpin.value()
+            else:
+                ds = True
+        else:
+            ds = False
+        for c in self.curves:
+            c.setDownsampling(ds)
+        
+        
     def updateDecimation(self):
         if self.ctrl.maxTracesCheck.isChecked():
             numCurves = self.ctrl.maxTracesSpin.value()
@@ -736,13 +773,14 @@ class PlotItem(QtGui.QGraphicsWidget):
         #print self.mousePos
         self.ctrlMenu.popup(self.mouseScreenPos)
 
-    def _checkLabelKey(self, key):
-        if key not in self.labels:
-            raise Exception("Label '%s' not found. Labels are: %s" % (key, str(self.labels.keys())))
+    #def _checkLabelKey(self, key):
+        #if key not in self.labels:
+            #raise Exception("Label '%s' not found. Labels are: %s" % (key, str(self.labels.keys())))
         
     def getLabel(self, key):
-        self._checkLabelKey(key)
-        return self.labels[key]['item']
+        pass
+        #self._checkLabelKey(key)
+        #return self.labels[key]['item']
         
     def _checkScaleKey(self, key):
         if key not in self.scales:
@@ -753,43 +791,56 @@ class PlotItem(QtGui.QGraphicsWidget):
         return self.scales[key]['item']
         
     def setLabel(self, key, text=None, units=None, unitPrefix=None, **args):
-        if text is not None:
-            self.labels[key]['text'] = text
-        if units != None:
-            self.labels[key]['units'] = units
-        if unitPrefix != None:
-            self.labels[key]['unitPrefix'] = unitPrefix
+        self.getScale(key).setLabel(text=text, units=units, unitPrefix=unitPrefix, **args)
+        #if text is not None:
+            #self.labels[key]['text'] = text
+        #if units != None:
+            #self.labels[key]['units'] = units
+        #if unitPrefix != None:
+            #self.labels[key]['unitPrefix'] = unitPrefix
         
-        text = self.labels[key]['text']
-        units = self.labels[key]['units']
-        unitPrefix = self.labels[key]['unitPrefix']
+        #text = self.labels[key]['text']
+        #units = self.labels[key]['units']
+        #unitPrefix = self.labels[key]['unitPrefix']
         
-        if text is not '' or units is not '':
-            l = self.getLabel(key)
-            l.setText("%s (%s%s)" % (text, unitPrefix, units), **args)
-            self.showLabel(key)
+        #if text is not '' or units is not '':
+            #l = self.getLabel(key)
+            #l.setText("%s (%s%s)" % (text, unitPrefix, units), **args)
+            #self.showLabel(key)
         
         
     def showLabel(self, key, show=True):
-        l = self.getLabel(key)
-        p = self.labels[key]['pos']
-        if show:
-            l.show()
-            if key in ['left', 'right']:
-                self.layout.setColumnFixedWidth(p[1], l.size().width())
-                l.setMaximumWidth(20)
-            else:
-                self.layout.setRowFixedHeight(p[0], l.size().height())
-                l.setMaximumHeight(20)
+        self.getScale(key).showLabel(show)
+        #l = self.getLabel(key)
+        #p = self.labels[key]['pos']
+        #if show:
+            #l.show()
+            #if key in ['left', 'right']:
+                #self.layout.setColumnFixedWidth(p[1], l.size().width())
+                #l.setMaximumWidth(20)
+            #else:
+                #self.layout.setRowFixedHeight(p[0], l.size().height())
+                #l.setMaximumHeight(20)
+        #else:
+            #l.hide()
+            #if key in ['left', 'right']:
+                #self.layout.setColumnFixedWidth(p[1], 0)
+                #l.setMaximumWidth(0)
+            #else:
+                #self.layout.setRowFixedHeight(p[0], 0)
+                #l.setMaximumHeight(0)
+
+    def setTitle(self, title=None, **args):
+        if title is None:
+            self.titleLabel.setVisible(False)
+            self.layout.setRowFixedHeight(0, 0)
+            self.titleLabel.setMaximumHeight(0)
         else:
-            l.hide()
-            if key in ['left', 'right']:
-                self.layout.setColumnFixedWidth(p[1], 0)
-                l.setMaximumWidth(0)
-            else:
-                self.layout.setRowFixedHeight(p[0], 0)
-                l.setMaximumHeight(0)
-        
+            self.titleLabel.setMaximumHeight(30)
+            self.layout.setRowFixedHeight(0, 30)
+            self.titleLabel.setVisible(True)
+            self.titleLabel.setText(title, **args)
+
     def showScale(self, key, show=True):
         s = self.getScale(key)
         p = self.scales[key]['pos']
@@ -822,7 +873,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             
         
         
-    def _plotMetaArray(self, arr, x=None):
+    def _plotMetaArray(self, arr, x=None, autoLabel=True):
         inf = arr.infoCopy()
         if arr.ndim != 1:
             raise Exception('can only automatically plot 1 dimensional arrays.')
@@ -837,6 +888,15 @@ class PlotItem(QtGui.QGraphicsWidget):
                 xv = x
         c = PlotCurveItem()
         c.setData(x=xv, y=arr.view(ndarray))
+        
+        if autoLabel:
+            name = arr._info[0].get('name', None)
+            units = arr._info[0].get('units', None)
+            self.setLabel('bottom', text=name, units=units)
+            
+            name = arr._info[1].get('name', None)
+            units = arr._info[1].get('units', None)
+            self.setLabel('left', text=name, units=units)
             
         return c
 

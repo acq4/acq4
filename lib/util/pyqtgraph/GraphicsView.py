@@ -48,7 +48,7 @@ class GraphicsView(QtGui.QGraphicsView):
         self.setResizeAnchor(QtGui.QGraphicsView.AnchorViewCenter)
         #self.setResizeAnchor(QtGui.QGraphicsView.NoAnchor)
         self.setViewportUpdateMode(QtGui.QGraphicsView.SmartViewportUpdate)
-        self.setSceneRect(QtCore.QRectF(-1e100, -1e100, 1e100, 1e100))
+        self.setSceneRect(QtCore.QRectF(-1e10, -1e10, 2e10, 2e10))
         #self.setInteractive(False)
         self.lockedViewports = []
         self.lastMousePos = None
@@ -234,11 +234,14 @@ class GraphicsView(QtGui.QGraphicsView):
         
     def mousePressEvent(self, ev):
         QtGui.QGraphicsView.mousePressEvent(self, ev)
+
         #print "Press over:"
         #for i in self.items(ev.pos()):
-            #print i.zValue(), int(i.acceptedMouseButtons()), i, i.scenePos()
+        #    print i.zValue(), int(i.acceptedMouseButtons()), i, i.scenePos()
         #print "Event accepted:", ev.isAccepted()
         #print "Grabber:", self.scene().mouseGrabberItem()
+        
+
         if not self.mouseEnabled:
             return
         self.lastMousePos = Point(ev.pos())

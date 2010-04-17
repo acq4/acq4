@@ -6,15 +6,16 @@ import lib.Manager as Manager
 import sip
 from lib.util.pyqtgraph.MultiPlotWidget import MultiPlotWidget
 from lib.util.pyqtgraph.ImageView import ImageView
+from DictView import *
 
-class FileDataView(QtGui.QWidget):
+class FileDataView(QtGui.QSplitter):
     def __init__(self, parent):
         QtGui.QWidget.__init__(self, parent)
         self.manager = Manager.getManager()
-        self.layout = QtGui.QVBoxLayout(self)
+        self.setOrientation(QtCore.Qt.Vertical)
         self.current = None
         self.currentType = None
-        self.widget = None
+        self.widgets = []
 
     def setCurrentFile(self, file):
         #print "=============== set current file ============"
@@ -50,25 +51,36 @@ class FileDataView(QtGui.QWidget):
         if image:
             if self.currentType == 'image':
                 try:
-                    self.widget.setImage(data, autoRange=False)
+                    self.widgets[0].setImage(data, autoRange=False)
                 except:
-                    print "widget type:", type(self.widget)
+                    print "widget type:", type(self.widgets[0])
                     raise
             else:
                 self.clear()
-                self.widget = ImageView(self)
-                self.layout.addWidget(self.widget)
-                self.widget.setImage(data)
+                w = ImageView(self)
+                self.addWidget(w)
+                w.setImage(data)
+                self.widgets.append(w)
             self.currentType = 'image'
         else:
             self.clear()
-            self.widget = MultiPlotWidget(self)
-            self.layout.addWidget(self.widget)
-            self.widget.plot(data)
+            w = MultiPlotWidget(self)
+            self.addWidget(w)
+            w.plot(data)
             self.currentType = 'plot'
+            self.widgets.append(w)
+        
+        if isinstance(data, MetaArray):
+            w = DictView(data._info)
+            #w.setText(str(data._info[-1]))
+            self.addWidget(w)
+            self.widgets.append(w)
+            h = self.size().height()
+            self.setSizes([h*0.8, h*0.2])
             
         
     def clear(self):
-        if self.widget is not None:
-            sip.delete(self.widget)
-            self.widget = None
+        for w in self.widgets:
+            sip.delete(w)
+        self.widgets = []
+        

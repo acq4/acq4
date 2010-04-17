@@ -11,6 +11,7 @@ as it can be converted to/from a string using repr and eval.
 
 import re, os
 from advancedTypes import OrderedDict
+GLOBAL_PATH = None # so not thread safe.
 
 def writeConfigFile(data, fname):
     s = genString(data)
@@ -19,10 +20,17 @@ def writeConfigFile(data, fname):
     fd.close()
     
 def readConfigFile(fname):
-    cwd = os.getcwd()
-    (newDir, fname) = os.path.split(os.path.abspath(fname))
+    #cwd = os.getcwd()
+    global GLOBAL_PATH
+    if GLOBAL_PATH is not None:
+        fname2 = os.path.join(GLOBAL_PATH, fname)
+        if os.path.exists(fname2):
+            fname = fname2
+            
+    GLOBAL_PATH = os.path.dirname(os.path.abspath(fname))
+        
     try:
-        os.chdir(newDir)  ## bad.
+        #os.chdir(newDir)  ## bad.
         fd = open(fname)
         s = unicode(fd.read(), 'UTF-8')
         fd.close()
@@ -31,8 +39,8 @@ def readConfigFile(fname):
     except:
         print "Error while reading config file %s:"% fname
         raise
-    finally:
-        os.chdir(cwd)
+    #finally:
+        #os.chdir(cwd)
     return data
 
 def appendConfigFile(data, fname):
@@ -58,7 +66,7 @@ def genString(data, indent=''):
     return s
     
 def parseString(lines, start=0):
-    #data = {'__order__': []}
+    
     data = OrderedDict()
     if isinstance(lines, basestring):
         lines = lines.split('\n')

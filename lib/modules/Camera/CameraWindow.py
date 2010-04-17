@@ -39,8 +39,8 @@ def trace(func):
 
 
 class CamROI(ROI):
-    def __init__(self, size):
-        ROI.__init__(self, pos=[0,0], size=size, maxBounds=QtCore.QRectF(0, 0, size[0], size[1]), scaleSnap=True, translateSnap=True)
+    def __init__(self, size, parent=None):
+        ROI.__init__(self, pos=[0,0], size=size, maxBounds=QtCore.QRectF(0, 0, size[0], size[1]), scaleSnap=True, translateSnap=True, parent=parent)
         self.addScaleHandle([0, 0], [1, 1])
         self.addScaleHandle([1, 0], [0, 1])
         self.addScaleHandle([0, 1], [1, 0])
@@ -179,14 +179,18 @@ class CameraWindow(QtGui.QMainWindow):
         self.setCentralWidget(self.ui.centralwidget)
         #self.scene = QtGui.QGraphicsScene(self)
         self.scene = self.gv.scene()
-        self.cameraItemGroup = QtGui.QGraphicsItemGroup()   ## Objects which follow and scale with camera view
-        self.scopeItemGroup = QtGui.QGraphicsItemGroup()    ## Objects which follow scope position
+        
+        #self.cameraItemGroup = QtGui.QGraphicsItemGroup()   ## Parent for objects which follow and scale with camera view
+        #self.scopeItemGroup = QtGui.QGraphicsItemGroup()    ## Parent for objects which follow scope position
+        self.cameraItemGroup = ItemGroup()
+        self.scopeItemGroup = ItemGroup()
+        
         self.scene.addItem(self.cameraItemGroup)
         self.scene.addItem(self.scopeItemGroup)
         self.scopeItemGroup.setZValue(10)
         self.cameraItemGroup.setZValue(0)
-        self.imageItem = ImageItem()
-        self.cameraItemGroup.addToGroup(self.imageItem)
+        self.imageItem = ImageItem(parent=self.cameraItemGroup)
+        #self.cameraItemGroup.addToGroup(self.imageItem)
         
         #grid = Grid(self.gv)
         #self.scene.addItem(grid)
@@ -242,9 +246,9 @@ class CameraWindow(QtGui.QMainWindow):
         if scope is not None:
             QtCore.QObject.connect(scope, QtCore.SIGNAL('objectiveListChanged'), self.updateBorders)
         
-        self.roi = CamROI(self.camSize)
+        self.roi = CamROI(self.camSize, parent=self.cameraItemGroup)
         self.roi.connect(QtCore.SIGNAL('regionChangeFinished'), self.updateRegion)
-        self.cameraItemGroup.addToGroup(self.roi)
+        #self.cameraItemGroup.addToGroup(self.roi)
         self.roi.setZValue(1000)
         self.setRegion()
         
@@ -305,14 +309,14 @@ class CameraWindow(QtGui.QMainWindow):
             
         bounds = self.module.cam.getBoundaries()
         for b in bounds:
-            border = QtGui.QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 1))
+            border = QtGui.QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 1), self.scopeItemGroup)
             border.scale(b.width(), b.height())
             border.setPos(b.x(), b.y())
             border.setAcceptedMouseButtons(QtCore.Qt.NoButton)
             border.setPen(QtGui.QPen(QtGui.QColor(50,80,80))) 
             border.setZValue(10)
             self.scopeItemGroup.resetTransform()
-            self.scopeItemGroup.addToGroup(border)
+            #self.scopeItemGroup.addToGroup(border)
             self.borders.append(border)
         self.updateCameraDecorations()
 
@@ -762,9 +766,9 @@ class CameraWindow(QtGui.QMainWindow):
         #sys.stdout.write('+')
         try:
             
-            ## If we last drew a frame < 1/60s ago, return.
+            ## If we last drew a frame < 1/30s ago, return.
             t = ptime.time()
-            if (self.lastDrawTime is not None) and (t - self.lastDrawTime < .016666):
+            if (self.lastDrawTime is not None) and (t - self.lastDrawTime < .033333):
                 #sys.stdout.write('-')
                 return
             ## if there is no new frame and no controls have changed, just exit

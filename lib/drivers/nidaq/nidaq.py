@@ -3,7 +3,7 @@ from ctypes import *
 import sys, re, types, ctypes, os, time
 from numpy import *
 from lib.util import cheader
-
+import ptime  ## platform-independent precision timing
 dtypes = {
     float64: 'F64',
     int16: 'I16',
@@ -27,7 +27,7 @@ def init():
     for k in defs:
         setattr(sys.modules[__name__], re.sub('^DAQmx_?', '', k), defs[k])
     NIDAQ.functions = cheader.getFuncs(xmlFiles)
-    time.clock()
+    #time.clock()
 
 
 class NIDAQError(Exception):
@@ -548,7 +548,8 @@ class SuperTask:
         for k in keys[:-1]:
             #print "starting task", k
             self.tasks[k].start()
-        self.startTime = time.clock()
+        #self.startTime = time.clock()
+        self.startTime = ptime.time()
         #print "start time:", self.startTime
         self.tasks[keys[-1]].start()
         #print "starting clock task:", keys[-1]

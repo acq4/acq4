@@ -600,12 +600,13 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
 class Handle(QtGui.QGraphicsItem):
     def __init__(self, radius, typ=None, pen=QtGui.QPen(QtGui.QColor(200, 200, 220)), parent=None):
         #print "   create item with parent", parent
+        self.bounds = QtCore.QRectF(-1e-10, -1e-10, 2e-10, 2e-10)
         QtGui.QGraphicsItem.__init__(self, parent)
         self.setZValue(11)
         self.roi = []
         self.radius = radius
         self.typ = typ
-        self.bounds = QtCore.QRectF(-1e-10, -1e-10, 2e-10, 2e-10)
+        self.prepareGeometryChange()
         self.pen = pen
         if typ == 't':
             self.sides = 4
@@ -630,12 +631,14 @@ class Handle(QtGui.QGraphicsItem):
         return self.bounds
         
     def mousePressEvent(self, ev):
+        #print "handle press"
         if ev.button() != QtCore.Qt.LeftButton:
             ev.ignore()
             return
         self.cursorOffset = self.scenePos() - ev.scenePos()
         for r in self.roi:
             r[0].pointPressEvent(r[1], ev)
+        #print "  accepted."
         ev.accept()
         
     def mouseReleaseEvent(self, ev):
@@ -659,8 +662,11 @@ class Handle(QtGui.QGraphicsItem):
     def paint(self, p, opt, widget):
         m = p.transform()
         mi = m.inverted()[0]
+        
+        ## Determine length of unit vector in painter's coords
         size = mi.map(Point(self.radius, self.radius)) - mi.map(Point(0, 0))
         size = (size.x()*size.x() + size.y() * size.y()) ** 0.5
+        
         bounds = QtCore.QRectF(-size, -size, size*2, size*2)
         if bounds != self.bounds:
             self.bounds = bounds

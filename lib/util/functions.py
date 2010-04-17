@@ -17,7 +17,10 @@ import os, re, math, time, threading
 from metaarray import *
 from scipy import *
 from scipy.optimize import leastsq
-from scipy.ndimage import gaussian_filter, generic_filter
+from scipy.ndimage import gaussian_filter, generic_filter, median_filter
+import scipy.signal
+import numpy.ma
+from debug import *
 
 ## Number <==> string conversion functions
 
@@ -63,6 +66,7 @@ def siFormat(x, precision=3, space=True, error=None, minVal=1e-25, suffix=''):
     
 def siEval(s):
     """Convert a value written in SI notation to its equivalent prefixless value"""
+    s = unicode(s)
     m = re.match(r'(-?((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?)\s*([u' + SI_PREFIXES + r']?)$', s)
     if m is None:
         raise Exception("Can't convert string '%s' to number." % s)
@@ -207,12 +211,39 @@ def getSpikeTemplate(ivc, traces):
         stop += 1
     
     return traces[thrIndex][['Time', 'Inp0'], start:stop]
+
+def sigmoid(v, x):
+    """Sigmoid function value at x. the parameter v is [slope, x-offset, amplitude, y-offset]"""
+    return v[2] / (1.0 + exp(-v[0] * (x-v[1]))) + v[3]
     
-def fitSigmoid(xVals, yVals, guess=[1.0, 0.0, 1.0, 0.0]):
-    """Returns least-squares fit parameters for function v[2] / (1.0 + exp(-v[0] * (x-v[1]))) + v[3]"""
-    fn = lambda v, x: v[2] / (1.0 + exp(-v[0] * (x-v[1]))) + v[3]
-    err = lambda v, x, y: fn(v, x)-y
-    return leastsq(err, guess, args=(xVals, yVals))
+def gaussian(v, x):
+    """Gaussian function value at x. The parameter v is [amplitude, x-offset, sigma, y-offset]"""
+    return v[0] * exp(-((x-v[1])**2) / (2 * v[2]**2)) + v[3]
+
+def fit(function, xVals, yVals, guess, errFn=None, generateResult=False, resultXVals=None):
+    """fit xVals, yVals to the specified function. 
+    If generateResult is True, then the fit is used to generate an array of points from function
+    with the xVals supplied (useful for plotting the fit results with the original data). 
+    The result x values can be explicitly set with resultXVals."""
+    if errFn is None:
+        errFn = lambda v, x, y: function(v, x)-y
+    fit = leastsq(errFn, guess, args=(xVals, yVals))
+    
+    result = None
+    if generateResult:
+        if resultXVals is not None:
+            xVals = resultXVals
+        fn = lambda i: function(fit[0], xVals[i.astype(int)])
+        result = fromfunction(fn, xVals.shape)
+    return fit + (result,)
+        
+def fitSigmoid(xVals, yVals, guess=[1.0, 0.0, 1.0, 0.0], **kargs):
+    """Returns least-squares fit for sigmoid"""
+    return fit(sigmoid, xVals, yVals, guess, **kargs)
+
+def fitGaussian(xVals, yVals, guess=[1.0, 0.0, 1.0, 0.0], **kargs):
+    """Returns least-squares fit parameters for function v[0] * exp(((x-v[1])**2) / (2 * v[2]**2)) + v[3]"""
+    return fit(gaussian, xVals, yVals, guess, **kargs)
 
 
 STRNCMP_REGEX = re.compile(r'(-?\d+(\.\d*)?((e|E)-?\d+)?)')
@@ -495,11 +526,40 @@ def fastRmsMatch(template, data, thresholds=[0.85, 0.75], scales=[0.2, 1.0], min
     return inds.astype(int)
 
 
-def highPass(data, dims):
-    return data - gaussian_filter(data, sigma=dims)
 
-def lowPass(data, dims):
-    gaussian_filter(data, sigma=dims)
+def besselFilter(data, cutoff, order=1, dt=None, btype='low'):
+    """return data passed through bessel filter"""
+    if dt is None:
+        try:
+            tvals = data.xvals('Time')
+            dt = (tvals[-1]-tvals[0]) / (len(tvals)-1)
+        except:
+            raise Exception('Must specify dt for this data.')
+    
+    b,a = scipy.signal.bessel(order, cutoff * 2 * dt, btype=btype) 
+    base = data.mean()
+    d1 = scipy.signal.lfilter(b, a, data.view(ndarray)-base) + base
+    if isinstance(data, MetaArray):
+        return MetaArray(d1, info=data.infoCopy())
+    return d1
+
+def highPass(data, cutoff, order=1, dt=None):
+    """return data passed through high-pass bessel filter"""
+    return besselFilter(data, cutoff, order, dt, 'high')
+
+def lowPass(data, cutoff, order=1, dt=None):
+    """return data passed through low-pass bessel filter"""
+    return besselFilter(data, cutoff, order, dt, 'low')
+
+def bandPass(data, low, high, lowOrder=1, highOrder=1, dt=None):
+    """return data passed through low-pass bessel filter"""
+    if dt is None:
+        try:
+            tvals = data.xvals('Time')
+            dt = (tvals[-1]-tvals[0]) / (len(tvals)-1)
+        except:
+            raise Exception('Must specify dt for this data.')
+    return lowPass(highPass(data, low, lowOrder, dt), high, highOrder, dt)
 
 def gaussDivide(data, sigma):
     return data.astype(float32) / gaussian_filter(data, sigma=sigma)
@@ -807,3 +867,256 @@ def matchDistortImg(im1, im2, scale=4, maxDist=40, mapBlur=30, showProgress=Fals
             w.hide()
             
     return im2d
+
+
+def measureBaseline(data, threshold=2.0, iterations=2):
+    """Find the baseline value of a signal by iteratively measuring the median value, then excluding outliers."""
+    data = data.view(ndarray)
+    med = median(data)
+    if iterations > 1:
+        std = data.std()
+        thresh = std * threshold
+        arr = numpy.ma.masked_outside(data, med - thresh, med + thresh)
+        if len(arr) == 0:
+            raise Exception("Masked out all data. min: %f, max: %f, std: %f" % (med - thresh, med + thresh, std))
+        return measureBaseline(arr[~arr.mask], threshold, iterations-1)
+    else:
+        return med
+
+def measureNoise(data, threshold=2.0, iterations=2):
+    ## Determine the base level of noise
+    data = data.view(ndarray)
+    if iterations > 1:
+        med = median(data)
+        std = data.std()
+        thresh = std * threshold
+        arr = numpy.ma.masked_outside(data, med - thresh, med + thresh)
+        return measureNoise(arr[~arr.mask], threshold, iterations-1)
+    else:
+        return data.std()
+    #data2 = data.view(ndarray)[:10*(len(data)/10)]
+    #data2.shape = (10, len(data2)/10)
+    #return median(data2.std(axis=0))
+    
+
+def findEvents(data, minLength=3, noiseThreshold=2.0):
+    """Locate events of any shape in a signal. Works by finding regions of the signal
+    that deviate from noise, using the area beneath the deviation as the detection criteria.
+    
+    Makes the following assumptions about the signal:
+      - noise is gaussian
+      - baseline is centered at 0 (high-pass filtering may be required to achieve this).
+      - no 0 crossings within an event due to noise (low-pass filtering may be required to achieve this)
+      - Events last more than minLength samples
+      Return an array of events where each row is (start, length, sum)
+    """
+    ## just make sure this is an ndarray and not a MetaArray before operating..
+    #p = Profiler('findEvents')
+    data1 = data.view(ndarray)
+    #p.mark('view')
+    
+    ## find all 0 crossings
+    mask = data1 > 0
+    diff = mask[1:] - mask[:-1]  ## mask is True every time the trace crosses 0 between i and i+1
+    times = argwhere(diff)[:, 0]  ## index of each point immediately before crossing.
+    #p.mark('find crossings')
+    
+    ## max number of events found, may cull some of these later..
+    #nEvents = len(times) - 1
+    #if nEvents < 1:
+        #return None
+    
+    ## select only events longer than minLength:
+    longEvents = argwhere(times[1:] - times[:-1] > minLength)
+    if len(longEvents) < 1:
+        return []
+    longEvents = longEvents[:, 0]
+    nEvents = len(longEvents)
+    
+    ## Measure sum of values within each region between crossings, combine into single array
+    ## At this stage, ignore al events with length < minLength
+    events = empty(nEvents, dtype=[('start',int),('len', int),('sum', float),('peak', float)])  ### rows are [start, length, sum]
+    #p.mark('empty %d -> %d'% (len(times), nEvents))
+    #n = 0
+    for i in range(nEvents):
+        t1 = times[longEvents[i]]+1
+        t2 = times[longEvents[i]+1]+1
+        events[i][0] = t1
+        events[i][1] = t2-t1
+        evData = data1[t1:t2]
+        events[i][2] = evData.sum()
+        if events[i][2] > 0:
+            peak = evData.max()
+        else:
+            peak = evData.min()
+        events[i][3] = peak
+    #p.mark('generate event array')
+    
+    ## Fit gaussian to peak in size histogram, use fit sigma as criteria for noise rejection
+    stdev = measureNoise(data1)
+    #p.mark('measureNoise')
+    hist = histogram(events['sum'], bins=100)
+    #p.mark('histogram')
+    histx = 0.5*(hist[1][1:] + hist[1][:-1])
+    #p.mark('histx')
+    fit = fitGaussian(histx, hist[0], [hist[0].max(), 0, stdev*3, 0])
+    #p.mark('fit')
+    sigma = fit[0][2]
+    minSize = sigma * noiseThreshold
+    
+    ## Generate new set of events, ignoring those with sum < minSize
+    #mask = abs(events['sum'] / events['len']) >= minSize
+    mask = abs(events['sum']) >= minSize
+    #p.mark('mask')
+    events2 = events[mask]
+    #p.mark('select')
+    
+    return events2
+    
+    
+def removeBaseline(data, cutoffs=[1.0, 3.0], threshold=4.0, dt=None):
+    """Return the signal with baseline removed. Discards outliers from baseline measurement."""
+    if dt is None:
+        tv = data.xvals('Time')
+        dt = tv[1] - tv[0]
+    
+    d = data.view(ndarray)
+    
+    d1 = lowPass(d, cutoffs[0], dt=dt)
+    d2 = d - d1
+    
+    stdev = d2.std()
+    mask = abs(d2) > stdev*threshold
+    d3 = where(mask, 0, d2)
+    d4 = d2 - lowPass(d3, cutoffs[1], dt=dt)
+    
+    if isinstance(data, MetaArray):
+        return MetaArray(d4, info=data.infoCopy())
+    return d4
+    
+#def removeBaseline(data, windows=[500, 100], threshold=4.0):
+    ## very slow method using median_filter:
+    #d1 = data.view(ndarray)
+    #d2 = d1 - median_filter(d1, windows[0])
+    
+    #stdev = d2.std()
+    #d3 = where(abs(d2) > stdev*threshold, 0, d2)
+    #d4 = d2 - median_filter(d3, windows[1])
+    
+    #if isinstance(data, MetaArray):
+        #return MetaArray(d4, info=data.infoCopy())
+    #return d4
+    
+    
+def clusterSignals(data, num=5):
+    pass
+    
+def denoise(data, radius=2, threshold=4):
+    """Very simple noise removal function. Compares a point to surrounding points,
+    replaces with nearby values if the difference is too large."""
+    
+    
+    r2 = radius * 2
+    d1 = data.view(ndarray)
+    d2 = data[radius:-radius] - data[:-r2]
+    d3 = data[r2:] - data[:-r2]
+    d4 = d2 - d3
+    stdev = d4.std()
+    mask = abs(d4) < stdev*threshold
+    d5 = where(mask, d1[radius:-radius], d1[:-r2])
+    d6 = empty(d1.shape, dtype=d1.dtype)
+    d6[:radius] = d1[:radius]
+    d6[-radius:] = d1[-radius:]
+    d6[radius:-radius] = d5
+    
+    if isinstance(data, MetaArray):
+        return MetaArray(d6, info=data.infoCopy())
+    return d6
+
+
+def rollingSum(data, n):
+    d1 = data.copy()
+    d1[1:] += d1[:-1]  # integrate
+    d2 = empty(len(d1) - n + 1, dtype=data.dtype)
+    d2[0] = d1[n-1]  # copy first point
+    d2[1:] = d1[n:] - d1[:-n]  # subtract
+    return d2
+    
+
+def clementsBekkers(data, template):
+    """Implements Clements-bekkers algorithm: slides template across data,
+    returns array of points indicating goodness of fit.
+    Biophysical Journal, 73: 220-229, 1997.
+    """
+    
+    ## Strip out meta-data for faster computation
+    D = data.view(ndarray)
+    T = template.view(ndarray)
+    
+    ## Prepare a bunch of arrays we'll need later
+    N = len(T)
+    sumT = T.sum()
+    sumT2 = (T**2).sum()
+    sumD = rollingSum(D, N)
+    sumD2 = rollingSum(D**2, N)
+    sumTD = correlate(D, T, mode='valid')
+    
+    ## compute scale factor, offset at each location:
+    scale = (sumTD - sumT * sumD /N) / (sumT2 - sumT**2 /N)
+    offset = (sumD - scale * sumT) /N
+    
+    ## compute SSE at every location
+    SSE = sumD2 + scale**2 * sumT2 + N * offset**2 - 2 * (scale*sumTD + offset*sumD - scale*offset*sumT)
+    
+    ## finally, compute error and detection criterion
+    error = sqrt(SSE / (N-1))
+    DC = scale / error
+    return DC, scale, offset
+    
+def cbTemplateMatch(data, template, threshold=3.0):
+    dc, scale, offset = clementsBekkers(data, template)
+    mask = dc > threshold
+    diff = mask[1:] - mask[:-1]
+    times = argwhere(diff==1)[:, 0]  ## every time we start OR stop a spike
+    
+    ## in the unlikely event that the very first or last point is matched, remove it
+    if abs(dc[0]) > threshold:
+        times = times[1:]
+    if abs(dc[-1]) > threshold:
+        times = times[:-1]
+    
+    nEvents = len(times) / 2
+    
+    result = empty(nEvents, dtype=[('peak', int), ('dc', float), ('scale', float), ('offset', float)])
+    for i in range(nEvents):
+        i1 = times[i*2]
+        i2 = times[(i*2)+1]
+        d = dc[i1:i2]
+        p = argmax(d)
+        result[0] = p+i1
+        result[1] = d[p]
+        result[2] = scale[p+i1]
+        result[3] = offset[p+i1]
+    return result
+
+
+def expTemplate(dt, rise, decay, delay=None, length=None, risePow=2.0):
+    """Create PSP template with sample period dt.
+    rise and decay are the exponential time constants
+    delay is the amount of time before the PSP starts (defaults to rise+decay)
+    length is the amount of time after the PSP starts (defaults to 5 * (rise+decay))
+    """
+    if delay is None:
+        delay = rise+decay
+    if length is None:
+        length = (rise+decay) * 5
+        
+    nPts = int(length / dt)
+    start = int(delay / dt)
+    temp = empty(nPts)
+    times = arange(0.0, dt*(nPts-start), dt)
+    temp[:start] = 0.0
+    temp[start:] = (1.0 - exp(-times/rise))**risePow  *  exp(-times/decay)
+    temp /= temp.max()
+    return temp
+

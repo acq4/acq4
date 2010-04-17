@@ -146,7 +146,9 @@ class Task(DeviceTask):
             
         if ds > 1:
             data = res['data']
-            newLen = int(data.shape[0] / ds) * ds
+            
+            ## decimate by averaging points together (not optimal--should use fourier method instead.)
+            #newLen = int(data.shape[0] / ds) * ds
             #data = data[:newLen]
             #data.shape = (data.shape[0]/ds, ds)
             #if res['info']['type'] in ['di', 'do']:
@@ -154,7 +156,9 @@ class Task(DeviceTask):
             #else:
                 #data = data.mean(axis=1)
                 
+            newLen = int(data.shape[0] / ds)
             data = resample(data, newLen)
+            
             res['data'] = data
             res['info']['numPts'] = data.shape[0]
             res['info']['downsampling'] = ds

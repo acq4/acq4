@@ -105,6 +105,8 @@ struct structName
 {
   int x; typeTypeInt y;
   char str[10] = "brace }  \0"; /* commented brace } */
+  void functionInStruct() {}
+  structName() {}  // constructor
 } structInst; 
 
 typedef struct structName *structNamePtr;

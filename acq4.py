@@ -18,6 +18,8 @@ from PyQt4 import QtGui, QtCore
 ## Initialize Qt
 app = QtGui.QApplication(sys.argv)
 
+
+
 ## Configuration file to load
 config = 'config/default.cfg'
 
@@ -38,6 +40,15 @@ try:
     from functions import *
     
 except:
+    ## Run python code preiodically to allow interactive debuggers to interrupt the qt event loop
+    timer = QtCore.QTimer()
+    def donothing(*args):
+        x = 0
+        for i in range(0, 100):
+            x += i
+    timer.connect(timer, QtCore.SIGNAL("timeout()"), donothing)
+    timer.start(200)
+    
     print "Starting Qt event loop.."
     app.exec_()
     print "Qt event loop exited."

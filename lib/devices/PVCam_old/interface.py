@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-from lib.devices.DAQGeneric.interface import DAQGeneric, DAQGenericTask
+from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from lib.drivers.pvcam_old import PVCam as PVCDriver
 from lib.devices.Device import *
 from PyQt4 import QtCore

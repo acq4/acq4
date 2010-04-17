@@ -19,10 +19,11 @@ class PatchWindow(QtGui.QMainWindow):
     def __init__(self, dm, clampName):
         QtGui.QMainWindow.__init__(self)
         self.setWindowTitle(clampName)
+        self.startTime = None
         
         self.analysisItems = {
-            'inputResistance': 'Ω', 
-            'accessResistance': 'Ω',
+            'inputResistance': u'Ω', 
+            'accessResistance': u'Ω',
             'capacitance': 'F',
             'restingPotential': 'V', 
             'restingCurrent': 'A', 
@@ -71,7 +72,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.plots = {}
         for k in self.analysisItems:
             p = PlotWidget()
-            p.setLabel('left', k)
+            p.setLabel('left', text=k, units=self.analysisItems[k])
             self.ui.plotLayout.addWidget(p)
             self.plots[k] = p
         #irp = self.plots['inputResistance']
@@ -97,18 +98,10 @@ class PatchWindow(QtGui.QMainWindow):
         ])
         self.stateGroup.setState(self.params)
         
-        #for p in [self.ui.patchPlot, self.ui.commandPlot]:
-            #p.setCanvasBackground(QtGui.QColor(0,0,0))
-            #p.replot()
-            
+        self.ui.patchPlot.setLabel('left', text='Primary', units='A')
         self.patchCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        #self.patchCurve = PlotCurve('cell')
-        #self.patchCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        #self.patchCurve.attach(self.ui.patchPlot)
+        self.ui.commandPlot.setLabel('left', text='Secondary', units='V')
         self.commandCurve = self.ui.commandPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        #self.commandCurve = PlotCurve('command')
-        #self.commandCurve.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
-        #self.commandCurve.attach(self.ui.commandPlot)
         
         QtCore.QObject.connect(self.ui.startBtn, QtCore.SIGNAL('clicked()'), self.startClicked)
         QtCore.QObject.connect(self.ui.recordBtn, QtCore.SIGNAL('clicked()'), self.recordClicked)
@@ -149,6 +142,7 @@ class PatchWindow(QtGui.QMainWindow):
         getManager().writeConfigFile(uiState, self.stateFile)
         
         self.thread.stop(block=True)
+        print "Patch thread exited; module quitting."
         
     def closeEvent(self, ev):
         self.quit()
@@ -215,20 +209,26 @@ class PatchWindow(QtGui.QMainWindow):
     def resetClicked(self):
         for n in self.analysisData:
             self.analysisData[n] = []
+        self.startTime = None
         
     def handleNewFrame(self, frame):
         with self.paramLock:
             mode = self.params['mode']
         
         data = frame['data'][self.clampName]
+        
         if mode == 'vc':
-            scale1 = 1e12
-            scale2 = 1e3
+            self.ui.patchPlot.setLabel('left', units='A')
+            self.ui.commandPlot.setLabel('left', units='V')
+            #scale1 = 1e12
+            #scale2 = 1e3
         else:
-            scale1 = 1e3
-            scale2 = 1e12
-        self.patchCurve.setData(data.xvals('Time'), data['primary']*scale1)
-        self.commandCurve.setData(data.xvals('Time'), data['secondary']*scale2)
+            self.ui.patchPlot.setLabel('left', units='V')
+            self.ui.commandPlot.setLabel('left', units='A')
+            #scale1 = 1e3
+            #scale2 = 1e12
+        self.patchCurve.setData(data.xvals('Time'), data['primary'])
+        self.commandCurve.setData(data.xvals('Time'), data['secondary'])
         #self.ui.patchPlot.replot()
         #self.ui.commandPlot.replot()
         
@@ -245,7 +245,10 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.restingCurrentLabel.setText(siFormat(frame['analysis']['restingCurrent'], error=frame['analysis']['restingCurrentStd'], suffix='A'))
         self.ui.capacitanceLabel.setText('%sF' % siFormat(frame['analysis']['capacitance']))
         self.ui.fitErrorLabel.setText('%7.2g' % frame['analysis']['fitError'])
-        self.analysisData['time'].append(data._info[-1]['startTime'])
+        
+        if self.startTime is None:
+            self.startTime = data._info[-1]['startTime']
+        self.analysisData['time'].append(data._info[-1]['startTime'] - self.startTime)
         self.updateAnalysisPlots()
         
         ## Record to disk if requested.
@@ -534,9 +537,15 @@ class PatchThread(QtCore.QThread):
             Q = sum(iCap) * (iCapEnd - pTimes[0]) / iCap.shape[0]
             Rin = iRes
             Vc = vStep
-            Rs = (Rin * fitTau * Vc) / (Q * Rin + fitTau * Vc)
-            Rm = Rin - Rs
-            Cm = (Rin**2 * Q) / (Rm**2 * Vc)
+            Rs_denom = (Q * Rin + fitTau * Vc)
+            if Rs_denom != 0.0:
+                Rs = (Rin * fitTau * Vc) / Rs_denom
+                Rm = Rin - Rs
+                Cm = (Rin**2 * Q) / (Rm**2 * Vc)
+            else:
+                Rs = 0
+                Rm = 0
+                Cm = 0
             aRes = Rs
             cap = Cm
             

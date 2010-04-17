@@ -7,7 +7,8 @@ class Canvas(QtGui.QWidget):
     def __init__(self, parent=None):
         QtGui.QWidget.__init__(self, parent)
         self.items = {}
-        self.itemList = QtGui.QListWidget()
+        self.scans = {}
+        self.itemList = QtGui.QTreeWidget()
         self.layout = QtGui.QHBoxLayout()
         self.setLayout(self.layout)
         self.view = GraphicsView()
@@ -31,16 +32,32 @@ class Canvas(QtGui.QWidget):
         if len(self.items) == 0:
             self.view.setRange(item.mapRectToScene(item.boundingRect()))
             
+        if isinstance(name, basestring):
+            name = [name]
+            
         if name is None:
-            name = 'item'
-        newName = name
-        c = 0
-        while newName in self.items:
+            name = ['item']
+           
+        newname = tuple(name)
+        c=0
+        while newname in self.items:
             c += 1
-            newName = name + '_%03d' % c
-        self.items[newName] = item
-        self.itemList.addItem(QtGui.QListWidgetItem(newName))
-        return newName
+            newname = tuple(name[:-1]) + (name[-1] + '_%03d' %c,)
+        name = newname
+            
+        currentNode = self.itemList.invisibleRootItem()
+        for n in name:
+            nextnode = None
+            for x in range(currentNode.childCount()):
+                if n == currentNode.child(x).text(0):
+                    nextnode = currentNode.child(x)
+            if nextnode == None:
+                currentNode.addChild(QtGui.QTreeWidgetItem([n]))
+                nextnode = currentNode.child(currentNode.childCount() - 1)
+            currentNode = nextnode
+                                          
+        self.items[tuple(name)] = item
+        return name
             
     
     def removeItem(self, item):
