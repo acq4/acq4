@@ -215,7 +215,7 @@ class UncagingWindow(QtGui.QMainWindow):
             img = img.max(axis=0)
         #print pos, ps, img.shape, img.dtype, img.max(), img.min()
         item = ImageItem(img)
-        self.canvas.addItem(item, pos, scale=ps, z=self.z)
+        self.canvas.addItem(item, pos, scale=ps, z=self.z, name=fd.shortName())
         self.z += 1
         self.imageItems.append(item)
 
@@ -236,7 +236,7 @@ class UncagingWindow(QtGui.QMainWindow):
                item = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
                item.setBrush(QtGui.QBrush(self.traceColor(d)))
                item.source = d
-               self.canvas.addItem(item, [pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z)
+               self.canvas.addItem(item, [pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z, name=[dh.shortName(), d.shortName()])
                #item.connect(QtCore.SIGNAL('clicked'), self.loadTrace)
                #print pos, size
                #print item.mapRectToScene(item.boundingRect())
@@ -280,6 +280,9 @@ class UncagingWindow(QtGui.QMainWindow):
         
     #def findEvents(self, data):
         #return findEvents(data, noiseThreshold=self.noiseThreshold)
+    def getLaserTime(self, d):
+        q = d.getFile('Laser-UV.ma').read()['QSwitch']
+        return argmax(q)/q.infoCopy()[-1]['rate']
         
     def traceColor(self, dh):
         data = self.getClampData(dh)
@@ -297,9 +300,13 @@ class UncagingWindow(QtGui.QMainWindow):
         
         times = data.xvals('Time')
         self.eventTimes.extend(times[events['start']])
-        stimInd = argwhere((times[:-1] <= 0.499) * (times[1:] > 0.499))[0,0]
-        dirInd = argwhere((times[:-1] <= 0.504) * (times[1:] > 0.504))[0,0]
-        endInd = argwhere((times[:-1] <= 0.65) * (times[1:] > 0.65))[0,0]
+        q = self.getLaserTime(dh)
+        stimTime = q - 0.001
+        dirTime = q + 0.004
+        endTime = q + 0.15
+        stimInd = argwhere((times[:-1] <= stimTime) * (times[1:] > stimTime))[0,0]
+        dirInd = argwhere((times[:-1] <= dirTime) * (times[1:] > dirTime))[0,0]
+        endInd = argwhere((times[:-1] <= endTime) * (times[1:] > endTime))[0,0]
         dt = times[1]-times[0]
         
         times = events['start']
@@ -354,3 +361,126 @@ class UncagingWindow(QtGui.QMainWindow):
         #print "events:", events
         #self.plot.addItem(tg)
         
+class STDPWindow(UncagingWindow):
+    def __init__(self):
+        UncagingWindow.__init__(self)
+        bwtop = QtGui.QSplitter()
+        bwtop.setOrientation(QtCore.Qt.Horizontal)
+        bwbottom = QtGui.QSplitter()
+        bwbottom.setOrientation(QtCore.Qt.Horizontal)
+        self.cw.insertWidget(1, bwtop)
+        self.cw.insertWidget(2, bwbottom)
+        self.slopePlot = PlotWidget()
+        self.chargePlot = PlotWidget()
+        self.ampPlot = PlotWidget()
+        self.tracePlot = PlotWidget()
+        bwtop.addWidget(self.canvas)
+        bwtop.addWidget(self.slopePlot)
+        bwtop.addWidget(self.chargePlot)
+        bwtop.addWidget(self.ampPlot)
+        bwbottom.addWidget(self.tracePlot)
+        
+        
+    def mouseClicked(self, ev):
+        self.plot.clear()
+        spot = self.canvas.view.items(ev.pos())
+        n=0.0
+        unixtime = []
+        slope = []
+        for i in spot:
+            if type(i) == type(QtGui.QGraphicsEllipseItem()):
+                n += 1.0
+                color = n/(len(spot))*0.7
+                colorObj = QtGui.QColor()
+                colorObj.setHsvF(color, 0.7, 1)
+                pen = QtGui.QPen(colorObj)
+                self.loadTrace(i, pen=pen)
+                t, s = self.EPSPslope(i)
+                unixtime.append(t)
+                slope.append(s)
+        times = []
+        for i in unixtime:
+            if i != 0:
+                t = (i - min(unixtime))/60
+                times.append(t)
+        for i in slope:
+            if i == 0:
+                slope.remove(i)
+        self.LTPplot.clear()
+        self.LTPplot.plot(data = slope, x = times)
+        
+    def EPSPslope(self, item):
+        dh = item.source
+        data = self.getClampData(dh)
+        time = data.infoCopy()[-1]['startTime']
+        q = self.getLaserTime(dh)
+        base = data['Time': 0.0:(q - 0.01)]
+        pspRgn = data['Time': q:]
+        a = argwhere(pspRgn > base.mean()+4*base.std())
+        if len(a) > 0:
+            epspindex = a[0,0]
+            epsptime = pspRgn.xvals('Time')[epspindex]
+            slope = (data['Time': (epsptime+0.0015):(epsptime+0.0025)].mean() - data['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
+            return time, slope
+        else:
+            return 0,0
+        
+class IVWindow(QtGui.QMainWindow):
+    def __init__(self):
+        QtGui.QMainWindow.__init__(self)
+        self.cw = QtGui.QSplitter()
+        self.cw.setOrientation(QtCore.Qt.Vertical)
+        self.setCentralWidget(self.cw)
+        bw = QtGui.QWidget()
+        bwl = QtGui.QHBoxLayout()
+        bw.setLayout(bwl)
+        self.cw.addWidget(bw)
+        self.loadIVBtn = QtGui.QPushButton('Load I/V')
+        bwl.addWidget(self.loadIVBtn)
+        QtCore.QObject.connect(self.loadIVBtn, QtCore.SIGNAL('clicked()'), self.loadIV)
+        self.plot = PlotWidget()
+        self.cw.addWidget(self.plot)
+        self.resize(800, 800)
+        self.show()
+
+    def loadIV(self):
+        self.plot.clear()
+        dh = getManager().currentFile
+        dirs = dh.subDirs()
+        c = 0.0
+        for d in dirs:
+            d = dh[d]
+            try:
+                data = d['Clamp1.ma'].read()['Channel': 'primary']
+            except:
+                data = d['Clamp2.ma'].read()['Channel': 'primary']
+            self.plot.plot(data, pen=mkPen(hsv=[c, 0.7]))
+            c += 1.0 / len(dirs)
+
+
+class PSPWindow(QtGui.QMainWindow):
+    def __init__(self):
+        QtGui.QMainWindow.__init__(self)
+        self.cw = QtGui.QSplitter()
+        self.cw.setOrientation(QtCore.Qt.Vertical)
+        self.setCentralWidget(self.cw)
+        bw = QtGui.QWidget()
+        bwl = QtGui.QHBoxLayout()
+        bw.setLayout(bwl)
+        self.cw.addWidget(bw)
+        self.loadTraceBtn = QtGui.QPushButton('Load Trace')
+        bwl.addWidget(self.loadTraceBtn)
+        QtCore.QObject.connect(self.loadTraceBtn, QtCore.SIGNAL('clicked()'), self.loadTrace)
+        self.plot = PlotWidget()
+        self.cw.addWidget(self.plot)
+        self.resize(800, 800)
+        self.show()
+
+    def loadTrace(self):
+        self.plot.clear()
+        fh = getManager().currentFile
+        try:
+            data = d['Clamp1.ma'].read()['Channel': 'primary']
+        except:
+            data = d['Clamp2.ma'].read()['Channel': 'primary']
+        self.plot.plot(data)
