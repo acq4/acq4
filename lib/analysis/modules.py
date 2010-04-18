@@ -120,13 +120,16 @@ class EventMatchWidget(QtGui.QSplitter):
                 posPen = mkPen([200, 0, 0])
                 for j in range(stack.shape[0]):
                     base = median(stack[j, 80:100])
+                    
                     if eventList[j]['sum'] > 0:
                         scale = stack[j, 100:100+eventList[j]['len']].max() - base
                         pen = posPen
+                        params = {'sign': 1}
                     else:
                         scale = base - stack[j, 100:100+eventList[j]['len']].min()
                         pen = negPen
-                    self.templatePlot.plot((stack[j]-base) / scale, pen=pen)
+                        params = {'sign': -1}
+                    self.templatePlot.plot((stack[j]-base) / scale, pen=pen, params=params)
                     
                     
                 
