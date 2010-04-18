@@ -495,8 +495,8 @@ class CameraWindow(QtGui.QMainWindow):
                 return
             (x, y) = self.mouse
         else:
-            x = qpt.x() / self.binning
-            y = qpt.y() / self.binning
+            x = qpt.x()
+            y = qpt.y()
         self.mouse = [x, y]
         #img = self.imageItem.image
         #if img is None:

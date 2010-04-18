@@ -196,13 +196,13 @@ class MetaArray(ndarray):
             extraInfo = self._info[-1].copy()
             for i in range(0, len(nInd)):   ## iterate over all axes
                 #print "   axis", i
-                if type(nInd[i]) in [slice, list] or isinstance(type(nInd[i]), ndarray):  ## If the axis is sliced, keep the info but chop if necessary
+                if type(nInd[i]) in [slice, list] or isinstance(nInd[i], ndarray):  ## If the axis is sliced, keep the info but chop if necessary
                     #print "      slice axis", i, nInd[i]
                     #a._info[i] = self._axisSlice(i, nInd[i])
                     #print "         info:", a._info[i]
                     a._info.append(self._axisSlice(i, nInd[i]))
                 else: ## If the axis is indexed, then move the information from that single index to the last info dictionary
-                    #print "indexed:", i, nInd[i]
+                    #print "indexed:", i, nInd[i], type(nInd[i])
                     newInfo = self._axisSlice(i, nInd[i])
                     name = None
                     colName = None
