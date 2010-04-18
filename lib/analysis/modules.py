@@ -154,6 +154,13 @@ class EventMatchWidget(QtGui.QSplitter):
     def setThreshold(self, val):
         self.thresholdSpin.setValue(val)
         
+    def clear(self):
+        self.analysisPlot.clear()
+        self.templatePlot.clear()
+        self.dataPlot.clear()
+        self.events = []
+        self.data = []
+        
 
 class UncagingWindow(QtGui.QMainWindow):
     def __init__(self):
@@ -281,6 +288,9 @@ class UncagingWindow(QtGui.QMainWindow):
     #def findEvents(self, data):
         #return findEvents(data, noiseThreshold=self.noiseThreshold)
     def getLaserTime(self, d):
+        """Returns the time of laser stimulation in seconds.
+                Arguments:
+                    d - a directory handle"""
         q = d.getFile('Laser-UV.ma').read()['QSwitch']
         return argmax(q)/q.infoCopy()[-1]['rate']
         
@@ -329,6 +339,8 @@ class UncagingWindow(QtGui.QMainWindow):
         
    
     def mouseClicked(self, ev):
+        """Returns a list of data corresponding to items on a canvas under a mouse click. Each list item is a tuple where the first element
+           is an array of clamp data, and the second is the directory handle for the Clamp.ma file."""
         #self.plot.clear()
         spot = self.canvas.view.items(ev.pos())
         n=0.0
@@ -342,15 +354,16 @@ class UncagingWindow(QtGui.QMainWindow):
             d = self.loadTrace(i)
             if d is not None:
                 self.currentTraces.append(d)
-        self.plot.setData(self.currentTraces)
+        self.plot.setData([i[0] for i in self.currentTraces])
             
     def loadTrace(self, item):
         if not hasattr(item, 'source'):
             return
         dh = item.source
         data = self.getClampData(dh)
+        data.directoryHandle = dh ####CHEATING FIX!!!!!!! Luke says we should store it as a tuple
         #self.currentTraces.append(data)
-        return data
+        return data, dh
         #self.plot.plot(data, pen=pen)
         
         #events = self.findEvents(diff(data))
@@ -366,38 +379,24 @@ class STDPWindow(UncagingWindow):
         UncagingWindow.__init__(self)
         bwtop = QtGui.QSplitter()
         bwtop.setOrientation(QtCore.Qt.Horizontal)
-        bwbottom = QtGui.QSplitter()
-        bwbottom.setOrientation(QtCore.Qt.Horizontal)
         self.cw.insertWidget(1, bwtop)
-        self.cw.insertWidget(2, bwbottom)
-        self.slopePlot = PlotWidget()
-        self.chargePlot = PlotWidget()
-        self.ampPlot = PlotWidget()
-        self.tracePlot = PlotWidget()
+        self.LTPplot = PlotWidget()
         bwtop.addWidget(self.canvas)
-        bwtop.addWidget(self.slopePlot)
-        bwtop.addWidget(self.chargePlot)
-        bwtop.addWidget(self.ampPlot)
-        bwbottom.addWidget(self.tracePlot)
-        
+        bwtop.addWidget(self.LTPplot)
         
     def mouseClicked(self, ev):
-        self.plot.clear()
-        spot = self.canvas.view.items(ev.pos())
-        n=0.0
+        UncagingWindow.mouseClicked(self, ev)
         unixtime = []
         slope = []
-        for i in spot:
-            if type(i) == type(QtGui.QGraphicsEllipseItem()):
-                n += 1.0
-                color = n/(len(spot))*0.7
-                colorObj = QtGui.QColor()
-                colorObj.setHsvF(color, 0.7, 1)
-                pen = QtGui.QPen(colorObj)
-                self.loadTrace(i, pen=pen)
-                t, s = self.EPSPslope(i)
-                unixtime.append(t)
-                slope.append(s)
+        magneticflux= []
+        amp = []
+        for i in self.currentTraces:
+            time, slope, amp, flux = self.EPSPstats(i)
+            unixtime.append(time)
+            slope.append(slope)
+            magneticflux.append(flux)
+            amp.append(amp)
+                
         times = []
         for i in unixtime:
             if i != 0:
@@ -407,23 +406,50 @@ class STDPWindow(UncagingWindow):
             if i == 0:
                 slope.remove(i)
         self.LTPplot.clear()
-        self.LTPplot.plot(data = slope, x = times)
+        self.LTPplot.plot(data = slope, x = times, pen=mkPen([255, 0, 0]))
+        self.LTPplot.plot(data = magneticflux, x = times, pen=mkPen([0, 255, 0]))
+        self.LTPplot.plot(data = amp, x = times, pen = mkPen([0, 0, 255]))
         
-    def EPSPslope(self, item):
-        dh = item.source
-        data = self.getClampData(dh)
-        time = data.infoCopy()[-1]['startTime']
-        q = self.getLaserTime(dh)
-        base = data['Time': 0.0:(q - 0.01)]
-        pspRgn = data['Time': q:]
+    def EPSPstats(self, data):
+        """Returns a four-item tuple with the unixtime of the trace, and the slope, the amplitude and the integral of the epsp.
+                Arguments:
+                    data - a tuple with a 'Clamp.ma' array as the first item and the directory handle of the 'Clamp.ma' file as the second. """
+        time = data[0].infoCopy()[-1]['startTime']
+        q = self.getLaserTime(data[1])
+        base = data[0]['Time': 0.0:(q - 0.01)]
+        pspRgn = data[0]['Time': q:(q+0.2)]
+        flux = pspRgn.sum() - (base.mean()*pspRgn.shape[0])
+        amp = pspRgn.max() - base.mean()
         a = argwhere(pspRgn > base.mean()+4*base.std())
         if len(a) > 0:
             epspindex = a[0,0]
             epsptime = pspRgn.xvals('Time')[epspindex]
-            slope = (data['Time': (epsptime+0.0015):(epsptime+0.0025)].mean() - data['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
-            return time, slope
+            slope = (data[0]['Time': (epsptime+0.0015):(epsptime+0.0025)].mean() - data[0]['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
+            return time, slope, amp, flux
         else:
-            return 0,0
+            return time, None, amp, flux
+        
+    #def EPSPflux(self, data):
+    #    """Returns a tuple with the unixtime of the trace and the integral of the EPSP.
+    #            Arguments:
+    #                data - a tuple with a 'Clamp.ma' array as the first item and the directory handle of the 'Clamp.ma' file as the second. """
+    #    time = data[0].infoCopy()[-1]['startTime']
+    #    q = self.getLaserTime(data[1])
+    #    base = data[0]['Time': 0.0:(q - 0.01)]
+    #    pspRgn = data[0]['Time': q:(q+0.2)]
+    #    flux = pspRgn.sum() - (base.mean()*pspRgn.shape[0])
+    #    return time, flux
+    #
+    #def EPSPamp(self, data):
+    #    """Returns a tuple with the unixtime of the trace and the amplitude of the EPSP.
+    #            Arguments:
+    #                data - a tuple with a 'Clamp.ma' array as the first item and the directory handle of the 'Clamp.ma' file as the second. """
+    #    time = data[0].infoCopy()[-1]['startTime']
+    #    q = self.getLaserTime(data[1])
+    #    base = data[0]['Time': 0.0:(q - 0.01)]
+    #    pspRgn = data[0]['Time': q:(q+0.2)]
+    #    amp = pspRgn.max() - base.mean()
+    #    return time, amp
         
 class IVWindow(QtGui.QMainWindow):
     def __init__(self):
