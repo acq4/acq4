@@ -271,18 +271,26 @@ class UncagingWindow(QtGui.QMainWindow):
         
         
     def getClampData(self, dh):
+        """Returns a clamp.ma
+                Arguments:
+                    dh - a directory handle"""
         try:
             data = dh['Clamp1.ma'].read()
             #print "Loaded", dh['Clamp1.ma'].name()
         except:
             data = dh['Clamp2.ma'].read()
             #print "Loaded", dh['Clamp2.ma'].name()
-        if data.hasColumn('Channel', 'primary'):
-            data = data['Channel': 'primary']
-        elif data.hasColumn('Channel', 'scaled'):
-            data = data['Channel': 'scaled']
+        #if data.hasColumn('Channel', 'primary'):
+        #    data = data['Channel': 'primary']
+        #elif data.hasColumn('Channel', 'scaled'):
+        #    data = data['Channel': 'scaled']
+        if data._info[0]['name'] == 'Channel':   ### Stupid. Rename column to support some older files.
+            cols = data._info[0]['cols']
+            for i in range(len(cols)):
+                if cols[i]['name'] == 'scaled':
+                    cols[i]['name'] = 'primary'
             
-        data = denoise(data)
+        #data = denoise(data)
         #data = removeBaseline(data)
         #data = lowPass(data, 2000)
         return data
@@ -298,7 +306,7 @@ class UncagingWindow(QtGui.QMainWindow):
         return argmax(q)/q.infoCopy()[-1]['rate']
         
     def traceColor(self, dh):
-        data = self.getClampData(dh)
+        data = self.getClampData(dh)['Channel':'primary']
         #base = data['Time': 0.0:0.49]
         #signal = data['Time': 0.5:0.6]
         #mx = signal.max()
@@ -357,14 +365,14 @@ class UncagingWindow(QtGui.QMainWindow):
             d = self.loadTrace(i)
             if d is not None:
                 self.currentTraces.append(d)
-        self.plot.setData([i[0] for i in self.currentTraces])
+        self.plot.setData([i[0]['Channel':'primary'] for i in self.currentTraces])
             
     def loadTrace(self, item):
+        """Returns a tuple where the first element is a clamp.ma, and the second is its directory handle."""
         if not hasattr(item, 'source'):
             return
         dh = item.source
         data = self.getClampData(dh)
-        data.directoryHandle = dh ####CHEATING FIX!!!!!!! Luke says we should store it as a tuple
         #self.currentTraces.append(data)
         return data, dh
         #self.plot.plot(data, pen=pen)
@@ -378,6 +386,7 @@ class UncagingWindow(QtGui.QMainWindow):
         #self.plot.addItem(tg)
         
 class STDPWindow(UncagingWindow):
+    ###NEED: normalize scales on LTP plot, add labels to LTP plot?, figure out how to get/display avg epsp time and avg spike time, make sure EPSPstats excludes conditioning
     def __init__(self):
         UncagingWindow.__init__(self)
         bwtop = QtGui.QSplitter()
@@ -393,21 +402,35 @@ class STDPWindow(UncagingWindow):
         slope = []
         magneticflux= []
         amp = []
+        baseslope = []
+        baseflux=[]
+        baseamp=[]
+        flag = 0
+        condtime = None
         for i in self.currentTraces:
-            time, slope, amp, flux = self.EPSPstats(i)
-            unixtime.append(time)
-            slope.append(slope)
-            magneticflux.append(flux)
-            amp.append(amp)
-                
+            if i[0]['Channel':'Command'].max() < 0.3:
+                t, s, a, f = self.EPSPstats(i)
+                unixtime.append(t)
+                slope.append(s)
+                magneticflux.append(f)
+                amp.append(a)
+            elif i[0]['Channel':'Command'].max() >= 0.3 and flag != 1:
+                condtime = i[0]['Channel':'primary'][0].infoCopy()[-1]['startTime']
+                flag = 1
+        for x in range(len(unixtime)):
+            if unixtime[x] < condtime or condtime == None:
+                baseslope.append(slope[x])
+                baseflux.append(magneticflux[x])
+                baseamp.append(amp[x])
+        for x in range(len(unixtime)):
+            slope[x] = slope[x]/(mean(baseslope))
+            magneticflux[x] = magneticflux[x]/(mean(baseflux))
+            amp[x] = amp[x]/(mean(baseamp))
         times = []
         for i in unixtime:
             if i != 0:
                 t = (i - min(unixtime))/60
                 times.append(t)
-        for i in slope:
-            if i == 0:
-                slope.remove(i)
         self.LTPplot.clear()
         self.LTPplot.plot(data = slope, x = times, pen=mkPen([255, 0, 0]))
         self.LTPplot.plot(data = magneticflux, x = times, pen=mkPen([0, 255, 0]))
@@ -417,20 +440,21 @@ class STDPWindow(UncagingWindow):
         """Returns a four-item tuple with the unixtime of the trace, and the slope, the amplitude and the integral of the epsp.
                 Arguments:
                     data - a tuple with a 'Clamp.ma' array as the first item and the directory handle of the 'Clamp.ma' file as the second. """
-        time = data[0].infoCopy()[-1]['startTime']
+        d = data[0]['Channel':'primary']            
+        time = d.infoCopy()[-1]['startTime']
         q = self.getLaserTime(data[1])
-        base = data[0]['Time': 0.0:(q - 0.01)]
-        pspRgn = data[0]['Time': q:(q+0.2)]
+        base = d['Time': 0.0:(q - 0.01)]
+        pspRgn = d['Time': q:(q+0.2)]
         flux = pspRgn.sum() - (base.mean()*pspRgn.shape[0])
         amp = pspRgn.max() - base.mean()
         a = argwhere(pspRgn > base.mean()+4*base.std())
         if len(a) > 0:
             epspindex = a[0,0]
             epsptime = pspRgn.xvals('Time')[epspindex]
-            slope = (data[0]['Time': (epsptime+0.0015):(epsptime+0.0025)].mean() - data[0]['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
+            slope = (d['Time': (epsptime+0.0015):(epsptime+0.0025)].mean() - d['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
             return time, slope, amp, flux
         else:
-            return time, None, amp, flux
+            return time, 0, amp, flux
         
     #def EPSPflux(self, data):
     #    """Returns a tuple with the unixtime of the trace and the integral of the EPSP.
