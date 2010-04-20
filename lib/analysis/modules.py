@@ -393,51 +393,62 @@ class STDPWindow(UncagingWindow):
         bwtop.setOrientation(QtCore.Qt.Horizontal)
         self.cw.insertWidget(1, bwtop)
         self.LTPplot = PlotWidget()
+        self.dictView = DictView()
         bwtop.addWidget(self.canvas)
         bwtop.addWidget(self.LTPplot)
+        bwtop.addWidget(self.dictView)
         
     def mouseClicked(self, ev):
         UncagingWindow.mouseClicked(self, ev)
-        unixtime = []
-        slope = []
-        magneticflux= []
-        amp = []
-        baseslope = []
-        baseflux=[]
-        baseamp=[]
+        epspStats = {'unixtime':[], 'slope':[], 'amp':[], 'flux':[], 'epsptime':[]}
+        baseStats = {'unixtime':[], 'slope':[], 'amp':[], 'flux':[], 'epsptime':[]}
+        normStats = {'time':[], 'slope':[], 'amp':[], 'flux':[]}
         flag = 0
         condtime = None
+        spiketime = []
+        latencies = {}
         for i in self.currentTraces:
             if i[0]['Channel':'Command'].max() < 0.3:
-                t, s, a, f = self.EPSPstats(i)
-                unixtime.append(t)
-                slope.append(s)
-                magneticflux.append(f)
-                amp.append(a)
-            elif i[0]['Channel':'Command'].max() >= 0.3 and flag != 1:
-                condtime = i[0]['Channel':'primary'][0].infoCopy()[-1]['startTime']
-                flag = 1
-        for x in range(len(unixtime)):
-            if unixtime[x] < condtime or condtime == None:
-                baseslope.append(slope[x])
-                baseflux.append(magneticflux[x])
-                baseamp.append(amp[x])
-        for x in range(len(unixtime)):
-            slope[x] = slope[x]/(mean(baseslope))
-            magneticflux[x] = magneticflux[x]/(mean(baseflux))
-            amp[x] = amp[x]/(mean(baseamp))
-        times = []
-        for i in unixtime:
-            if i != 0:
-                t = (i - min(unixtime))/60
-                times.append(t)
+                t,s,a,f,e = self.EPSPstats(i)
+                espsStats['unixtime'].append(t)
+                espsStats['slope'].append(s)
+                espsStats['amp'].append(a)
+                espsStats['flux'].append(f)
+                espsStats['epsptime'].append(e)
+            elif i[0]['Channel':'Command'].max() >= 0.3:
+                a = argwhere(i[0]['Channel':'primary'].max())
+                if len(a) > 0:
+                    spikeindex = a[0,0]
+                    spike = i[0]['Channel':'primary'].xvals('Time')[spikeindex]
+                    spiketime.append(spike)
+                if flag != 1:
+                    condtime = i[0]['Channel':'primary'][0].infoCopy()[-1]['startTime']
+                    flag = 1
+        for x in range(len(espsStats['unixtime'])):
+            if epspStats['unixtime'][x] < condtime or condtime == None:
+                baseStats['unixtime'].append(epspStats['unixtime'][x])
+                baseStats['slope'].append(epspStats['slope'][x])
+                baseStats['amp'].append(epspStats['amp'][x])
+                baseStats['flux'].append(epspStats['flux'][x])
+                baseStats['epsptime'].append(epspStats['epsptime'][x])
+        for x in range(len(espsStats['unixtime'])):
+            normStats['time'].append((epspStats['unixtime'][x]-(min(baseStats['unixtime'])))/60)
+            normStats['slope'].append((epspStats['slope'][x])/(mean(baseStats['slope'])))
+            normStats['amp'].append((epspStats['amp'][x])/(mean(baseStats['amp'])))
+            normStats['flux'].append((epspStats['flux'][x])/(mean(baseStats['flux'])))
+        
+        
+        latencies['Average EPSP time:'] = mean(baseStats['epsptime'])
+        latencies['Average 1st Spike time:'] = mean(spiketime)
+        latencies['PSP-Spike Delay:']= latencies['Average 1st Spike time:']-latencies['Average EPSP time:']
+        
         self.LTPplot.clear()
-        self.LTPplot.plot(data = slope, x = times, pen=mkPen([255, 0, 0]))
-        self.LTPplot.plot(data = magneticflux, x = times, pen=mkPen([0, 255, 0]))
-        self.LTPplot.plot(data = amp, x = times, pen = mkPen([0, 0, 255]))
+        self.LTPplot.plot(data = normStats['slope'], x = normStats['time'], pen=mkPen([255, 0, 0]))
+        self.LTPplot.plot(data = normStats['flux'], x = normStats['time'], pen=mkPen([0, 255, 0]))
+        self.LTPplot.plot(data = normStats['amp'], x = normStats['time'], pen = mkPen([0, 0, 255]))
         
     def EPSPstats(self, data):
-        """Returns a four-item tuple with the unixtime of the trace, and the slope, the amplitude and the integral of the epsp.
+        """Returns a list with the unixtime of the trace, and the slope, the amplitude and the integral of the epsp.
                 Arguments:
                     data - a tuple with a 'Clamp.ma' array as the first item and the directory handle of the 'Clamp.ma' file as the second. """
         d = data[0]['Channel':'primary']            
@@ -452,9 +463,9 @@ class STDPWindow(UncagingWindow):
             epspindex = a[0,0]
             epsptime = pspRgn.xvals('Time')[epspindex]
             slope = (d['Time': (epsptime+0.0015):(epsptime+0.0025)].mean() - d['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
-            return time, slope, amp, flux
+            return [time, slope, amp, flux, epsptime]
         else:
-            return time, 0, amp, flux
+            return [time, 0, amp, flux, epsptime]
         
     #def EPSPflux(self, data):
     #    """Returns a tuple with the unixtime of the trace and the integral of the EPSP.

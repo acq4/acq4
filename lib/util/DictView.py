@@ -9,6 +9,7 @@ class DictView(QtGui.QTreeWidget):
         self.setHeaderLabels(['key', 'value'])
         
     def setData(self, data):
+        """data should be a dictionary."""
         self.clear()
         node = self.mkNode('', data)
         while node.childCount() > 0:
