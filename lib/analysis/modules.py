@@ -51,9 +51,24 @@ class EventMatchWidget(QtGui.QSplitter):
         QtCore.QObject.connect(self.lowPassSpin, QtCore.SIGNAL('valueChanged(double)'), self.lowPassChanged)
         QtCore.QObject.connect(self.thresholdSpin, QtCore.SIGNAL('valueChanged(double)'), self.thresholdChanged)
         
-        
+        self.analysisEnabled = True
         self.events = []
         self.data = []
+        
+    def enableAnalysis(self, b):
+        if b == self.analysisEnabled:
+            return
+        self.analysisEnabled = b
+        
+        if b:
+            self.recalculate()
+            self.templatePlot.show()
+            self.analysisPlot.show()
+            self.ctrlWidget.show()
+        else:
+            self.templatePlot.hide()
+            self.analysisPlot.hide()
+            self.ctrlWidget.hide()
         
     def setData(self, data):
         self.data = data
@@ -75,6 +90,15 @@ class EventMatchWidget(QtGui.QSplitter):
             self.templatePlot.clear()
             self.tickGroups = []
         events = []
+        
+        for i in range(len(data)):
+            if display:
+                color = float(i)/(len(data))*0.7
+                pen = mkPen(hsv=[color, 0.8, 0.7])
+                self.dataPlot.plot(d1, pen=pen)
+                
+        if not self.analysisEnabled:
+            return []
         
         for i in range(len(data)):
             #p.mark('start trace %d' % i)
@@ -104,7 +128,6 @@ class EventMatchWidget(QtGui.QSplitter):
             if display:
                 color = float(i)/(len(data))*0.7
                 pen = mkPen(hsv=[color, 0.8, 0.7])
-                self.dataPlot.plot(d1, pen=pen)
                 
                 self.analysisPlot.plot(d4, x=d.xvals('Time')[:-1], pen=pen)
                 tg = VTickGroup(view=self.analysisPlot)
