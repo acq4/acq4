@@ -526,7 +526,11 @@ class DirHandle(FileHandle):
             #ls.remove('.')
             if self.lsCache is None:
                 #p.mark('(cache miss)')
-                files = os.listdir(self.name())
+                try:
+                    files = os.listdir(self.name())
+                except:
+                    printExc("Error while listing files in %s:" % self.name())
+                    files = []
                 #p.mark('listdir')
                 for i in ['.index', '.log']:
                     if i in files:
