@@ -11,6 +11,7 @@ from PyQt4 import QtCore, QtGui
 from functions import *
 from SpinBox import *
 from debug import *
+from DictView import DictView
 
 class EventMatchWidget(QtGui.QSplitter):
     def __init__(self):
@@ -95,7 +96,7 @@ class EventMatchWidget(QtGui.QSplitter):
             if display:
                 color = float(i)/(len(data))*0.7
                 pen = mkPen(hsv=[color, 0.8, 0.7])
-                self.dataPlot.plot(d1, pen=pen)
+                self.dataPlot.plot(data[i], pen=pen)
                 
         if not self.analysisEnabled:
             return []
@@ -258,7 +259,7 @@ class UncagingWindow(QtGui.QMainWindow):
             dirs = [dh[d] for d in dh.subDirs()]
         else:
             dirs = [dh]
-        for d in dirs:
+        for d in dirs: #d is a directory handle
             #d = dh[d]
             if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
                pos = d.info()['Scanner']['position']
@@ -329,6 +330,8 @@ class UncagingWindow(QtGui.QMainWindow):
         return argmax(q)/q.infoCopy()[-1]['rate']
         
     def traceColor(self, dh):
+        if not self.plot.analysisEnabled:
+            return QtGui.QColor(100,100,200)
         data = self.getClampData(dh)['Channel':'primary']
         #base = data['Time': 0.0:0.49]
         #signal = data['Time': 0.5:0.6]
@@ -409,69 +412,86 @@ class UncagingWindow(QtGui.QMainWindow):
         #self.plot.addItem(tg)
         
 class STDPWindow(UncagingWindow):
-    ###NEED: normalize scales on LTP plot, add labels to LTP plot?, figure out how to get/display avg epsp time and avg spike time, make sure EPSPstats excludes conditioning
+    ###NEED:  add labels to LTP plot?, figure out how to get/display avg epsp time and avg spike time, 
     def __init__(self):
         UncagingWindow.__init__(self)
         bwtop = QtGui.QSplitter()
         bwtop.setOrientation(QtCore.Qt.Horizontal)
         self.cw.insertWidget(1, bwtop)
         self.LTPplot = PlotWidget()
-        self.dictView = DictView()
+        self.latencies = {}
+        self.dictView = DictView(self.latencies)
         bwtop.addWidget(self.canvas)
         bwtop.addWidget(self.LTPplot)
         bwtop.addWidget(self.dictView)
+        self.plot.enableAnalysis(False)
         
     def mouseClicked(self, ev):
         UncagingWindow.mouseClicked(self, ev)
-        epspStats = {'unixtime':[], 'slope':[], 'amp':[], 'flux':[], 'epsptime':[]}
-        baseStats = {'unixtime':[], 'slope':[], 'amp':[], 'flux':[], 'epsptime':[]}
-        normStats = {'time':[], 'slope':[], 'amp':[], 'flux':[]}
+        epspStats = zeros([len(self.currentTraces)], {'names':('unixtime', 'slope', 'amp', 'flux', 'epsptime', 'time', 'normSlope', 'normAmp', 'normFlux'), 'formats': ((float,)*9)})
+        #print 'lenspots:', len(self.currentTraces)
         flag = 0
         condtime = None
         spiketime = []
-        latencies = {}
-        for i in self.currentTraces:
-            if i[0]['Channel':'Command'].max() < 0.3:
-                t,s,a,f,e = self.EPSPstats(i)
-                espsStats['unixtime'].append(t)
-                espsStats['slope'].append(s)
-                espsStats['amp'].append(a)
-                espsStats['flux'].append(f)
-                espsStats['epsptime'].append(e)
-            elif i[0]['Channel':'Command'].max() >= 0.3:
-                a = argwhere(i[0]['Channel':'primary'].max())
+        for i in range(len(self.currentTraces)):
+            if self.currentTraces[i][0]['Channel':'Command'].max() < 0.1e-09:
+                t,s,a,f,e = self.EPSPstats(self.currentTraces[i])
+                #print 'i:', i, 't:', t, 's:', s, 'a:', a, 'f:', f, 'e:', e
+                if s != None:
+                    epspStats[i]['unixtime'] = t
+                    epspStats[i]['slope'] = s
+                    epspStats[i]['amp'] = a
+                    epspStats[i]['flux'] = f
+                    epspStats[i]['epsptime'] = e
+            elif self.currentTraces[i][0]['Channel':'Command'].max() >= 0.1e-09:
+                a = argwhere(self.currentTraces[i][0]['Channel':'primary'] == self.currentTraces[i][0]['Channel':'primary'].max())
+                #print i, a
                 if len(a) > 0:
-                    spikeindex = a[0,0]
-                    spike = i[0]['Channel':'primary'].xvals('Time')[spikeindex]
+                    spikeindex = a[0]
+                    spike = self.currentTraces[i][0]['Channel':'primary'].xvals('Time')[spikeindex]
+                    #print i, spike
                     spiketime.append(spike)
                 if flag != 1:
-                    condtime = i[0]['Channel':'primary'][0].infoCopy()[-1]['startTime']
+                    condtime = self.currentTraces[i][0]['Channel':'primary'].infoCopy()[-1]['startTime']
                     flag = 1
-        for x in range(len(espsStats['unixtime'])):
-            if epspStats['unixtime'][x] < condtime or condtime == None:
-                baseStats['unixtime'].append(epspStats['unixtime'][x])
-                baseStats['slope'].append(epspStats['slope'][x])
-                baseStats['amp'].append(epspStats['amp'][x])
-                baseStats['flux'].append(epspStats['flux'][x])
-                baseStats['epsptime'].append(epspStats['epsptime'][x])
-        for x in range(len(espsStats['unixtime'])):
-            normStats['time'].append((epspStats['unixtime'][x]-(min(baseStats['unixtime'])))/60)
-            normStats['slope'].append((epspStats['slope'][x])/(mean(baseStats['slope'])))
-            normStats['amp'].append((epspStats['amp'][x])/(mean(baseStats['amp'])))
-            normStats['flux'].append((epspStats['flux'][x])/(mean(baseStats['flux'])))
+        #print 'spiketime', spiketime
+       # print "epspStats before sort:", epspStats, '\n'
+        epspStats.sort(order = 'unixtime') 
+       # print "sortedStats after sort:", epspStats
+        startBase = argwhere(epspStats['unixtime'] > 0)[0]
+        epspStats = epspStats[startBase:]
+        try:
+            endbase = argwhere(epspStats['unixtime'] > condtime)[0]
+        except IndexError:
+            if condtime != None:
+                endbase = -1
+            else: raise
+            
+        for x in range(len(epspStats)):
+            epspStats[x]['time'] =(epspStats[x]['unixtime']-(epspStats[0]['unixtime']))/60
+            epspStats[x]['normSlope'] = (epspStats['slope'][x])/(mean(epspStats[:endbase]['slope']))
+            epspStats[x]['normAmp'] = (epspStats['amp'][x])/(mean(epspStats[:endbase]['amp']))
+            epspStats[x]['normFlux'] = (epspStats['flux'][x])/(mean(epspStats[:endbase]['flux']))
+        #print 'epspSlope', epspStats[:endbase]['slope']
+        #print 'meanSlope', mean(epspStats[:endbase]['slope'])
         
-        
-        latencies['Average EPSP time:'] = mean(baseStats['epsptime'])
-        latencies['Average 1st Spike time:'] = mean(spiketime)
-        latencies['PSP-Spike Delay:']= latencies['Average 1st Spike time:']-latencies['Average EPSP time:']
+        self.latencies['Average EPSP time:'] = mean(epspStats[:endbase]['epsptime']*1000)
+        #print 'spiketime:', spiketime
+        #print 'mean:', mean(spiketime)
+        self.latencies['Average 1st Spike time:'] = mean(spiketime)*1000
+        self.latencies['PSP-Spike Delay:']= self.latencies['Average 1st Spike time:']-self.latencies['Average EPSP time:']
+        self.latencies['Change in slope(red):'] = mean(epspStats[(endbase+1):]['normSlope'])
+        self.latencies['Change in amp(blue):'] = mean(epspStats[(endbase+1):]['normAmp'])
+        self.latencies['Change in flux(green):'] = mean(epspStats[(endbase+1):]['normFlux'])
+        self.dictView.setData(self.latencies)
         
         self.LTPplot.clear()
-        self.LTPplot.plot(data = normStats['slope'], x = normStats['time'], pen=mkPen([255, 0, 0]))
-        self.LTPplot.plot(data = normStats['flux'], x = normStats['time'], pen=mkPen([0, 255, 0]))
-        self.LTPplot.plot(data = normStats['amp'], x = normStats['time'], pen = mkPen([0, 0, 255]))
+        self.LTPplot.plot(data = epspStats['normSlope'], x = epspStats['time'], pen=mkPen([255, 0, 0]))
+        self.LTPplot.plot(data = epspStats['normFlux'], x = epspStats['time'], pen=mkPen([0, 255, 0]))
+        self.LTPplot.plot(data = epspStats['normAmp'], x = epspStats['time'], pen = mkPen([0, 0, 255]))
         
     def EPSPstats(self, data):
-        """Returns a list with the unixtime of the trace, and the slope, the amplitude and the integral of the epsp.
+        """Returns a five-item list with the unixtime of the trace, and the slope, the amplitude and the integral of the epsp, and the time of the epsp.
                 Arguments:
                     data - a tuple with a 'Clamp.ma' array as the first item and the directory handle of the 'Clamp.ma' file as the second. """
         d = data[0]['Channel':'primary']            
@@ -488,7 +508,7 @@ class STDPWindow(UncagingWindow):
             slope = (d['Time': (epsptime+0.0015):(epsptime+0.0025)].mean() - d['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
             return [time, slope, amp, flux, epsptime]
         else:
-            return [time, 0, amp, flux, epsptime]
+            return [time, None, amp, flux, None]
         
     #def EPSPflux(self, data):
     #    """Returns a tuple with the unixtime of the trace and the integral of the EPSP.
