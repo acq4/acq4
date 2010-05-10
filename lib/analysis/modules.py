@@ -84,6 +84,9 @@ class EventMatchWidget(QtGui.QSplitter):
         return self.events
         
     def processData(self, data, display=False):
+        """Returns a list of record arrays - each record array contains the events detected in one trace.
+                Arguments:
+                    data - a list of traces"""
         #p = Profiler('processData')
         if display:
             self.analysisPlot.clear()
@@ -361,8 +364,8 @@ class UncagingWindow(QtGui.QMainWindow):
         direct = events[(times > stimInd) * (times < dirInd)]
         post = events[(times > dirInd) * (times < endInd)]
         
-        pos = (post[post['sum'] > 0]['sum'].sum() / 0.096) - (pre[pre['sum'] > 0]['sum'].sum() / 0.500)
-        neg = (post[post['sum'] < 0]['sum'].sum() / 0.096) - (pre[pre['sum'] < 0]['sum'].sum() / 0.500)
+        pos = (post[post['sum'] > 0]['sum'].sum() / (endTime-dirTime)) - (pre[pre['sum'] > 0]['sum'].sum() / stimTime)
+        neg = -(post[post['sum'] < 0]['sum'].sum() / (endTime-dirTime)) - (pre[pre['sum'] < 0]['sum'].sum() / stimTime)
         
         dir = (abs(direct['sum']).sum() / 0.004) - (abs(pre['sum']).sum() / 0.500)
         
@@ -493,7 +496,7 @@ class STDPWindow(UncagingWindow):
     def EPSPstats(self, data):
         """Returns a five-item list with the unixtime of the trace, and the slope, the amplitude and the integral of the epsp, and the time of the epsp.
                 Arguments:
-                    data - a tuple with a 'Clamp.ma' array as the first item and the directory handle of the 'Clamp.ma' file as the second. """
+                    data - a tuple with a 'Clamp.ma' array as the first item and the directory handle of the 'Clamp.ma' file as the second."""
         d = data[0]['Channel':'primary']            
         time = d.infoCopy()[-1]['startTime']
         q = self.getLaserTime(data[1])
