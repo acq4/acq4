@@ -1018,16 +1018,18 @@ def denoise(data, radius=2, threshold=4):
     
     r2 = radius * 2
     d1 = data.view(ndarray)
-    d2 = data[radius:-radius] - data[:-r2]
-    d3 = data[r2:] - data[:-r2]
-    d4 = d2 - d3
-    stdev = d4.std()
-    mask = abs(d4) < stdev*threshold
-    d5 = where(mask, d1[radius:-radius], d1[:-r2])
-    d6 = empty(d1.shape, dtype=d1.dtype)
+    d2 = data[radius:] - data[:-radius] #a derivative
+    #d3 = data[r2:] - data[:-r2]
+    #d4 = d2 - d3
+    stdev = d2.std()
+    mask1 = d2 > stdev*threshold #where derivative is large and positive
+    mask2 = d2 < -stdev*threshold #where derivative is large and negative
+    mask = mask1[:-radius] * mask2[radius:] #both need to be true
+    d5 = where(mask, d1[:-r2], d1[radius:-radius]) #where both are true replace the value with the value from 2 points before
+    d6 = empty(d1.shape, dtype=d1.dtype) #add points back to the ends
+    d6[radius:-radius] = d5
     d6[:radius] = d1[:radius]
     d6[-radius:] = d1[-radius:]
-    d6[radius:-radius] = d5
     
     if isinstance(data, MetaArray):
         return MetaArray(d6, info=data.infoCopy())
