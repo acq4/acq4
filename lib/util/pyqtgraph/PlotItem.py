@@ -339,6 +339,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.recomputeAverages()
         
     def recomputeAverages(self):
+        if not self.ctrl.averageGroup.isChecked():
+            return
         for k in self.avgCurves:
             self.removeItem(self.avgCurves[k][1])
             #Qwt.QwtPlotCurve.detach(self.avgCurves[k][1])
@@ -637,12 +639,25 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.svg = QtSvg.QSvgGenerator()
         self.svg.setFileName(fileName)
         res = 120.
+        #bounds = self.mapRectToScene(self.boundingRect())
+        view = self.scene().views()[0]
+        bounds = view.geometry()
         self.svg.setResolution(res)
-        self.svg.setSize(QtCore.QSize(self.size().width(), self.size().height()))
+        #self.svg.setSize(QtCore.QSize(self.size().width(), self.size().height()))
+        self.svg.setViewBox(bounds)
+        
+        self.svg.setSize(QtCore.QSize(bounds.width(), bounds.height()))
+        
         painter = QtGui.QPainter(self.svg)
-        #self.scene().render(painter, QtCore.QRectF(), self.mapRectToScene(self.boundingRect()))
-        items = self.scene().items()
-        self.scene().views()[0].drawItems(painter, len(items), items)
+        #self.scene().render(painter, QtCore.QRectF(), bounds)
+        
+        #items = self.scene().items()
+        #self.scene().views()[0].drawItems(painter, len(items), items)
+        
+        #print view, type(view)
+        view.render(painter, QtCore.QRectF(view.geometry()), view.geometry())
+        
+        painter.end()
         
         
         

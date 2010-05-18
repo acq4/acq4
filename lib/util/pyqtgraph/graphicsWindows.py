@@ -8,9 +8,12 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 from PyQt4 import QtCore, QtGui
 from PlotWidget import *
 from ImageView import *
-
+QAPP = None
 class PlotWindow(QtGui.QMainWindow):
     def __init__(self, title=None):
+        if QtGui.QApplication.instance() is None:
+            global QAPP
+            QAPP = QtGui.QApplication([])
         QtGui.QMainWindow.__init__(self)
         self.cw = PlotWidget()
         self.setCentralWidget(self.cw)
@@ -22,6 +25,9 @@ class PlotWindow(QtGui.QMainWindow):
 
 class ImageWindow(QtGui.QMainWindow):
     def __init__(self, title=None):
+        if QtGui.QApplication.instance() is None:
+            global QAPP
+            QAPP = QtGui.QApplication([])
         QtGui.QMainWindow.__init__(self)
         self.cw = ImageView()
         self.setCentralWidget(self.cw)
