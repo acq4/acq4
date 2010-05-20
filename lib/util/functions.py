@@ -1022,9 +1022,12 @@ def denoise(data, radius=2, threshold=4):
     #d3 = data[r2:] - data[:-r2]
     #d4 = d2 - d3
     stdev = d2.std()
+    #print "denoise: stdev of derivative:", stdev
     mask1 = d2 > stdev*threshold #where derivative is large and positive
     mask2 = d2 < -stdev*threshold #where derivative is large and negative
-    mask = mask1[:-radius] * mask2[radius:] #both need to be true
+    maskpos = mask1[:-radius] * mask2[radius:] #both need to be true
+    maskneg = mask1[radius:] * mask2[:-radius]
+    mask = maskpos + maskneg
     d5 = where(mask, d1[:-r2], d1[radius:-radius]) #where both are true replace the value with the value from 2 points before
     d6 = empty(d1.shape, dtype=d1.dtype) #add points back to the ends
     d6[radius:-radius] = d5
