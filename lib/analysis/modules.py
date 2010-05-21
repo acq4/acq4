@@ -13,6 +13,8 @@ from functions import *
 from SpinBox import *
 from debug import *
 from DictView import DictView
+from scipy import stats
+from numpy import log
 
 class UncagingSpot(QtGui.QGraphicsEllipseItem):
     def __init__(self, source): #source is directory handle
@@ -89,6 +91,7 @@ class EventMatchWidget(QtGui.QSplitter):
     def recalculate(self):
         self.events = self.processData(self.data, display=True)
         self.emit(QtCore.SIGNAL('outputChanged'), self)
+        print "Events:", self.events
         ##display events
         
     def getEvents(self):
@@ -287,8 +290,7 @@ class UncagingWindow(QtGui.QMainWindow):
         else:
             dirs = [dh]
         appendIndex = self.analysisCache.size
-        self.analysisCache.resize(self.analysisCache.size + len(dirs))
-        recordsToRemove = 0
+        self.analysisCache.resize(appendIndex + len(dirs))
         for d in dirs: #d is a directory handle
             #d = dh[d]
             if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
@@ -308,8 +310,7 @@ class UncagingWindow(QtGui.QMainWindow):
                 self.scanItems.append(item)
             else:
                 print "Skipping directory %s" %d.name()
-                recordsToRemove += 1
-        self.analysisCache = self.analysisCache[:recordsToRemove]    
+        self.analysisCache = self.analysisCache[:appendIndex]    
         self.z += 1
         
     def clearImage(self):
@@ -337,9 +338,10 @@ class UncagingWindow(QtGui.QMainWindow):
                 i.record['eventsValid'] = True
                 i.laserTime = q
             self.analyzeEvents(i)
+        for i in self.scanItems:
             color = self.spotColor(i)
             i.setBrush(QtGui.QBrush(color))
-               
+            
     def getClampData(self, dh):
         """Returns a clamp.ma
                 Arguments:
@@ -428,22 +430,32 @@ class UncagingWindow(QtGui.QMainWindow):
             item.record['dirCharge'] = 0
             
     def spotColor(self, item):
-        if self.ctrl.rgbRadio.isChecked:
+        if self.ctrl.rgbRadio.isChecked():
             red = clip(log(max(1.0, (item.record['postChargePos']/item.record['stdev'])+1))*255, 0, 255) 
             blue = clip(log(max(1.0, (-item.record['postChargeNeg']/item.record['stdev'])+1))*255, 0, 255)
             green = clip(log(max(1.0, (item.record['dirCharge']/item.record['stdev'])+1))*255, 0, 255)
             return QtGui.QColor(red, green, blue, max(red, green, blue))
             
         if self.ctrl.rainbowRadio.isChecked():
-            if self.analysisCache['postChargeNeg'].sum() > 10*self.analysisCache['postChargePos'].sum():
-                maxcharge = self.analysisCache['postChargeNeg'].min()
-            hue = 255 - (item.record['postChargeNeg']/maxcharge)*255
+            maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = 5)
+            #hue = 255 - (log(1+1000*(item.record['postChargeNeg'] / self.analysisCache['postChargeNeg'].min())))*255/log(1001)
+            #maxcharge = a.max()
+            hue = 255 - (-item.record['postChargeNeg']/maxcharge)*255
+            #print "max charge:", maxcharge, "charge: ", item.record['postChargeNeg'], "hue: ", hue
             sat = 255
+            if hue < 0:
+                hue = 0
+                val = 180
+            if item.record['postChargeNeg'] == 0:
+                alpha = 0
+            else:
+                alpha = 255
             if len(item.record['dirEvents']) > 0:
                 val = 0
             else:
                 val = 255
-            return QtGui.QColor.fromHsv(hue, sat, val)
+            print "Type hue", type(hue), "Type sat", type(sat)
+            return QtGui.QColor.fromHsv(hue, sat, val, alpha)
         
    
     def mouseClicked(self, ev):
