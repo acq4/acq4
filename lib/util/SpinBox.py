@@ -93,7 +93,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.setValue(val)
         
     def setValue(self, value, update=True):
-        #print "setValue:", value
+        print "setValue:", value
         #if value == 0.0:
             #import traceback
             #traceback.print_stack()
@@ -108,6 +108,19 @@ class SpinBox(QtGui.QAbstractSpinBox):
             self.updateText()
         self.emit(QtCore.SIGNAL('valueChanged(double)'), self.val)
         self.lineEdit().setStyleSheet('border: 0px;')
+
+    def setMaximum(self, m):
+        self.opts['bounds'][1] = m
+    
+    def setMinimum(self, m):
+        self.opts['bounds'][0] = m
+        
+    def setProperty(self, prop, val):
+        """setProperty is just for compatibility with QSpinBox"""
+        if prop == 'value':
+            self.setValue(val)
+        else:
+            print "Warning: SpinBox.setProperty('%s', ..) not supported." % prop
 
     def value(self):
         return self.val

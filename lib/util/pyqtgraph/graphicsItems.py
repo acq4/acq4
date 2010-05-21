@@ -14,6 +14,7 @@ import scipy.weave as weave
 from scipy.weave import converters
 from scipy.fftpack import fft
 from scipy.signal import resample
+import scipy.stats
 #from metaarray import MetaArray
 from Point import *
 from functions import *
@@ -287,23 +288,24 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         elif frac <= 0.0:
             raise Exception("Value for parameter 'frac' must be > 0. (got %s)" % str(frac))
         else:
-            bins = 1000
-            h = histogram(d, bins)
-            s = len(d) * (1.0-frac)
-            mnTot = mxTot = 0
-            mnInd = mxInd = 0
-            for i in range(bins):
-                mnTot += h[0][i]
-                if mnTot > s:
-                    mnInd = i
-                    break
-            for i in range(bins):
-                mxTot += h[0][-i-1]
-                if mxTot > s:
-                    mxInd = -i-1
-                    break
-            #print mnInd, mxInd, h[1][mnInd], h[1][mxInd]
-            return(h[1][mnInd], h[1][mxInd])
+            return (scipy.stats.scoreatpercentile(d, 50 - (frac * 50)), scipy.stats.scoreatpercentile(d, 50 + (frac * 50)))
+            #bins = 1000
+            #h = histogram(d, bins)
+            #s = len(d) * (1.0-frac)
+            #mnTot = mxTot = 0
+            #mnInd = mxInd = 0
+            #for i in range(bins):
+                #mnTot += h[0][i]
+                #if mnTot > s:
+                    #mnInd = i
+                    #break
+            #for i in range(bins):
+                #mxTot += h[0][-i-1]
+                #if mxTot > s:
+                    #mxInd = -i-1
+                    #break
+            ##print mnInd, mxInd, h[1][mnInd], h[1][mxInd]
+            #return(h[1][mnInd], h[1][mxInd])
                 
             
             

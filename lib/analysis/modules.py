@@ -14,6 +14,8 @@ from SpinBox import *
 from debug import *
 from DictView import DictView
 
+from EventDetectionCtrlTemplate import *
+
 class EventMatchWidget(QtGui.QSplitter):
     def __init__(self):
         QtGui.QSplitter.__init__(self)
@@ -34,24 +36,31 @@ class EventMatchWidget(QtGui.QSplitter):
         
         self.ctrlWidget = QtGui.QWidget()
         self.hsplitter.addWidget(self.ctrlWidget)
+        self.ctrl = Ui_EventDetectionCtrlForm()
+        self.ctrl.setupUi(self.ctrlWidget)
+        
         self.templatePlot = PlotWidget()
         self.hsplitter.addWidget(self.templatePlot)
         
-        self.ctrlLayout = QtGui.QFormLayout()
-        self.ctrlWidget.setLayout(self.ctrlLayout)
-        self.tauSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
-        self.tauSpin.setValue(0.01)
-        self.lowPassSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
-        self.lowPassSpin.setValue(200.0)
-        self.thresholdSpin = SpinBox(log=True, step=0.1, bounds=[0, None])
-        self.thresholdSpin.setValue(10.0)
-        self.ctrlLayout.addRow("Low pass", self.lowPassSpin)
-        self.ctrlLayout.addRow("Decay const.", self.tauSpin)
-        self.ctrlLayout.addRow("Threshold", self.thresholdSpin)
+        #self.ctrlLayout = QtGui.QFormLayout()
+        #self.ctrlWidget.setLayout(self.ctrlLayout)
         
-        QtCore.QObject.connect(self.tauSpin, QtCore.SIGNAL('valueChanged(double)'), self.tauChanged)
-        QtCore.QObject.connect(self.lowPassSpin, QtCore.SIGNAL('valueChanged(double)'), self.lowPassChanged)
-        QtCore.QObject.connect(self.thresholdSpin, QtCore.SIGNAL('valueChanged(double)'), self.thresholdChanged)
+        self.ctrl.lowPassSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
+        self.ctrl.highPassSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
+        self.ctrl.expDeconvolveSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
+        #self.tauSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
+        #self.tauSpin.setValue(0.01)
+        #self.lowPassSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
+        #self.lowPassSpin.setValue(200.0)
+        #self.thresholdSpin = SpinBox(log=True, step=0.1, bounds=[0, None])
+        #self.thresholdSpin.setValue(10.0)
+        #self.ctrlLayout.addRow("Low pass", self.lowPassSpin)
+        #self.ctrlLayout.addRow("Decay const.", self.tauSpin)
+        #self.ctrlLayout.addRow("Threshold", self.thresholdSpin)
+        
+        #QtCore.QObject.connect(self.tauSpin, QtCore.SIGNAL('valueChanged(double)'), self.tauChanged)
+        #QtCore.QObject.connect(self.lowPassSpin, QtCore.SIGNAL('valueChanged(double)'), self.lowPassChanged)
+        #QtCore.QObject.connect(self.thresholdSpin, QtCore.SIGNAL('valueChanged(double)'), self.thresholdChanged)
         
         self.analysisEnabled = True
         self.events = []
