@@ -8,11 +8,24 @@ from pyqtgraph.graphicsWindows import *
 from pyqtgraph.PlotWidget import *
 from pyqtgraph.functions import *
 from Canvas import Canvas
+from UncagingControlTemplate import *
 from PyQt4 import QtCore, QtGui
 from functions import *
 from SpinBox import *
 from debug import *
 from DictView import DictView
+from scipy import stats
+from numpy import log
+
+class UncagingSpot(QtGui.QGraphicsEllipseItem):
+    def __init__(self, source): #source is directory handle
+        QtGui.QGraphicsEllipseItem.__init__(self, 0, 0, 1, 1)
+        self.source = source
+        self.record = None
+        self.position = None
+        self.size = None
+        self.laserTime = None
+        
 
 from EventDetectionCtrlTemplate import *
 
@@ -88,16 +101,66 @@ class EventMatchWidget(QtGui.QSplitter):
     def recalculate(self):
         self.events = self.processData(self.data, display=True)
         self.emit(QtCore.SIGNAL('outputChanged'), self)
+        print "Events:", self.events
         ##display events
         
     def getEvents(self):
         return self.events
         
+    def preprocess(self, data):
+        """Run all selected preprocessing steps on data, return the resulting array"""
+        dt = data.xvals('Time')[1] - data.xvals('Time')[0]
+        
+        if self.ctrl.denoiseCheck.isChecked():
+            data = denoise(data)
+            
+        if self.ctrl.lowPassCheck.isChecked():
+            data = lowPass(data, self.lowPassSpin.value(), dt=dt)
+        if self.ctrl.highPassCheck.isChecked():
+            data = highPass(data, self.highPassSpin.value(), dt=dt)
+            
+        if self.ctrl.expDeconvolveCheck.isChecked():
+            data = diff(data) * self.expDeconvolveSpin.value() / dt + data[:-1]
+        
+        if self.ctrl.detrendCheck.isChecked():
+            if self.ctrl.linearDetrendRadio.isChecked():
+                data = signal.detrend(data)
+            elif self.ctrl.adaptiveDetrendRadio.isChecked():
+                data = removeBaseline(data, dt=dt)
+            else:
+                raise Exception("detrend method not yet implemented.")
+            
+        return data
+                
+        #d1 = lowPass(d, self.lowPassSpin.value())
+        ##p.mark('lowpass')
+        #d2 = d1.view(ndarray) - measureBaseline(d1)
+        ##p.mark('subtract baseline')
+        #dt = d.xvals('Time')[1] - d.xvals('Time')[0]
+        ##p.mark('dt')
+        #d3 = diff(d2) * self.tauSpin.value() / dt + d2[:-1]
+        ##p.mark('deconvolve')
+        #d4 = removeBaseline(d3, dt=dt)
+        ##p.mark('remove baseline')
+        ##d4 = d3
+        
+        
+    def findEvents(self, data):
+        """Locate events in the data based on GUI settings selected."""
+        if self.ctrl.zeroCrossingRadio.isChecked():
+            events = findEvents(data, noiseThreshold=self.zcSumThresholdSpin.value()
+        elif self.ctrl.clementsBekkersRadio.isChecked():
+            rise = self.ctrl.cbRiseTauSpin.value()
+            decay = self.ctrl.cbFallTauSpin.value()
+            template = expTemplate(dt, rise, decay, rise*2, (rise+decay)*4)
+            events = cbTemplateMatch(data, template, self.ctrl.cbThresholdSpin.value())
+            
+        return events
+        
     def processData(self, data, display=False):
         """Returns a list of record arrays - each record array contains the events detected in one trace.
                 Arguments:
                     data - a list of traces"""
-        #p = Profiler('processData')
         if display:
             self.analysisPlot.clear()
             self.dataPlot.clear()
@@ -117,33 +180,17 @@ class EventMatchWidget(QtGui.QSplitter):
         for i in range(len(data)):
             #p.mark('start trace %d' % i)
             d = data[i]
-            #print "lowpass:", d
-            d1 = lowPass(d, self.lowPassSpin.value())
-            #p.mark('lowpass')
-            d2 = d1.view(ndarray) - measureBaseline(d1)
-            #p.mark('subtract baseline')
-            dt = d.xvals('Time')[1] - d.xvals('Time')[0]
-            #p.mark('dt')
-            d3 = diff(d2) * self.tauSpin.value() / dt + d2[:-1]
-            #p.mark('deconvolve')
-            d4 = removeBaseline(d3, dt=dt)
-            #p.mark('remove baseline')
-            #d4 = d3
-                
-            #stdev = measureNoise(d3)
-            #print "noise:", stdev
-            #thresh = stdev * self.thresholdSpin.value()
-            #absd = abs(d3)
-            #eventList = argwhere((absd[1:] > thresh) * (absd[:-1] <= thresh))[:, 0] + 1
+            ppd = self.preprocess(d)
             
-            eventList = findEvents(d4, noiseThreshold=self.thresholdSpin.value())
+            
+            eventList = self.findEvents(ppd)
             #p.mark('find events')
             events.append(eventList)
             if display:
                 color = float(i)/(len(data))*0.7
                 pen = mkPen(hsv=[color, 0.8, 0.7])
                 
-                self.analysisPlot.plot(d4, x=d.xvals('Time')[:-1], pen=pen)
+                self.analysisPlot.plot(ppd, x=d.xvals('Time')[:-1], pen=pen)
                 tg = VTickGroup(view=self.analysisPlot)
                 tg.setPen(pen)
                 tg.setYRange([0.8, 1.0], relative=True)
@@ -167,11 +214,6 @@ class EventMatchWidget(QtGui.QSplitter):
                         pen = negPen
                         params = {'sign': -1}
                     self.templatePlot.plot((stack[j]-base) / scale, pen=pen, params=params)
-                    
-                    
-                
-                
-            #print eventList
         
         return events
         
@@ -227,22 +269,41 @@ class UncagingWindow(QtGui.QMainWindow):
         QtCore.QObject.connect(self.clearScanBtn, QtCore.SIGNAL('clicked()'), self.clearScan)
         #self.layout = QtGui.QVBoxLayout()
         #self.cw.setLayout(self.layout)
+        bwtop = QtGui.QSplitter()
+        bwtop.setOrientation(QtCore.Qt.Horizontal)
+        self.cw.insertWidget(1, bwtop)
         self.canvas = Canvas()
         QtCore.QObject.connect(self.canvas.view, QtCore.SIGNAL('mouseReleased'), self.mouseClicked)
-        self.cw.addWidget(self.canvas)
+        self.ctrl = Ui_UncagingControlWidget()
+        self.ctrlWidget = QtGui.QWidget()
+        bwtop.addWidget(self.ctrlWidget)
+        self.ctrl.setupUi(self.ctrlWidget)
+        bwtop.addWidget(self.canvas)
+        QtCore.QObject.connect(self.ctrl.recolorBtn, QtCore.SIGNAL('clicked()'), self.recolor)
+        self.ctrl.directTimeSpin.setValue(4.0)
+        self.ctrl.poststimTimeSpin.setRange(1.0, 1000.0)
+        self.ctrl.poststimTimeSpin.setValue(150.0)
+        self.ctrl.eventFindRadio.setChecked(True)
+        self.ctrl.useSpontActCheck.setChecked(True)
+        self.ctrl.rgbRadio.setChecked(True)
+        self.ctrl.absoluteRadio.setChecked(True)
+        
         
         #self.plot = PlotWidget()
         self.plot = EventMatchWidget()
         self.cw.addWidget(self.plot)
         
         self.z = 0
-        self.resize(1000, 800)
+        self.resize(1000, 600)
         self.show()
         self.scanItems = []
         self.imageItems = []
         self.currentTraces = []
         self.noiseThreshold = 2.0
         self.eventTimes = []
+        self.analysisCache = empty(len(self.scanItems),
+            {'names': ('spotID', 'eventsValid', 'eventList', 'preEvents', 'dirEvents', 'postEvents', 'stdev', 'preChargePos', 'preChargeNeg', 'dirCharge', 'postChargePos', 'postChargeNeg'),
+             'formats':(object, object, object, object, object, object, float, float, float, float, float, float)})
         
         
     def addImage(self, img=None):
@@ -272,24 +333,28 @@ class UncagingWindow(QtGui.QMainWindow):
             dirs = [dh[d] for d in dh.subDirs()]
         else:
             dirs = [dh]
+        appendIndex = self.analysisCache.size
+        self.analysisCache.resize(appendIndex + len(dirs))
         for d in dirs: #d is a directory handle
             #d = dh[d]
             if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
-               pos = d.info()['Scanner']['position']
-               if 'spotSize' in d.info()['Scanner']:
-                  size = d.info()['Scanner']['spotSize']
-               else:
-                  size = self.defaultSize
-               item = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
-               item.setBrush(QtGui.QBrush(self.traceColor(d)))
-               item.source = d
-               self.canvas.addItem(item, [pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z, name=[dh.shortName(), d.shortName()])
-               #item.connect(QtCore.SIGNAL('clicked'), self.loadTrace)
-               #print pos, size
-               #print item.mapRectToScene(item.boundingRect())
-               self.scanItems.append(item)
+                pos = d.info()['Scanner']['position']
+                if 'spotSize' in d.info()['Scanner']:
+                    size = d.info()['Scanner']['spotSize']
+                else:
+                    size = self.defaultSize
+                item = UncagingSpot(d)
+                item.record = self.analysisCache[appendIndex]
+                item.record['eventsValid'] = False
+                appendIndex += 1
+                item.position = pos
+                item.size = size
+                item.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200)))                 
+                self.canvas.addItem(item, [pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z, name=[dh.shortName(), d.shortName()])
+                self.scanItems.append(item)
             else:
-               print "Skipping directory %s" %d.name()
+                print "Skipping directory %s" %d.name()
+        self.analysisCache = self.analysisCache[:appendIndex]    
         self.z += 1
         
     def clearImage(self):
@@ -304,9 +369,23 @@ class UncagingWindow(QtGui.QMainWindow):
         self.scanItems = []
         self.currentTraces = []
         self.eventTimes = []
-        
-        
-        
+    
+    def recolor(self):
+        for i in self.scanItems:
+            if i.record['eventsValid'] == False:
+                events, pre, direct, post, q, stdev = self.getEventLists(i.source)
+                i.record['eventList'] = events
+                i.record['preEvents'] = pre
+                i.record['dirEvents'] = direct
+                i.record['postEvents'] = post
+                i.record['stdev'] = stdev
+                i.record['eventsValid'] = True
+                i.laserTime = q
+            self.analyzeEvents(i)
+        for i in self.scanItems:
+            color = self.spotColor(i)
+            i.setBrush(QtGui.QBrush(color))
+            
     def getClampData(self, dh):
         """Returns a clamp.ma
                 Arguments:
@@ -327,7 +406,7 @@ class UncagingWindow(QtGui.QMainWindow):
                 if cols[i]['name'] == 'scaled':
                     cols[i]['name'] = 'primary'
             
-        #data = denoise(data)
+        data['Channel':'primary'] = denoise(data['Channel':'primary'])
         #data = removeBaseline(data)
         #data = lowPass(data, 2000)
         return data
@@ -342,28 +421,18 @@ class UncagingWindow(QtGui.QMainWindow):
         q = d.getFile('Laser-UV.ma').read()['QSwitch']
         return argmax(q)/q.infoCopy()[-1]['rate']
         
-    def traceColor(self, dh):
-        if not self.plot.analysisEnabled:
-            return QtGui.QColor(100,100,200)
+    def getEventLists(self, dh):
+        #if not self.plot.analysisEnabled:
+        #    return QtGui.QColor(100,100,200)
         data = self.getClampData(dh)['Channel':'primary']
-        #base = data['Time': 0.0:0.49]
-        #signal = data['Time': 0.5:0.6]
-        #mx = signal.max()
-        #mn = signal.min()
-        #mean = base.mean()
-        #std = base.std()
-        #red = clip((mx-mean) / std * 10, 0, 255)
-        #blue = clip((mean-mn) / std * 10, 0, 255)
-        #return QtGui.QColor(red, 0, blue, 150)
-        
         events = self.plot.processData([data])[0]
         
         times = data.xvals('Time')
         self.eventTimes.extend(times[events['start']])
         q = self.getLaserTime(dh)
         stimTime = q - 0.001
-        dirTime = q + 0.004
-        endTime = q + 0.15
+        dirTime = q + self.ctrl.directTimeSpin.value()/1000
+        endTime = q + self.ctrl.poststimTimeSpin.value()/1000
         stimInd = argwhere((times[:-1] <= stimTime) * (times[1:] > stimTime))[0,0]
         dirInd = argwhere((times[:-1] <= dirTime) * (times[1:] > dirTime))[0,0]
         endInd = argwhere((times[:-1] <= endTime) * (times[1:] > endTime))[0,0]
@@ -374,55 +443,90 @@ class UncagingWindow(QtGui.QMainWindow):
         direct = events[(times > stimInd) * (times < dirInd)]
         post = events[(times > dirInd) * (times < endInd)]
         
-        pos = (post[post['sum'] > 0]['sum'].sum() / (endTime-dirTime)) - (pre[pre['sum'] > 0]['sum'].sum() / stimTime)
-        neg = -(post[post['sum'] < 0]['sum'].sum() / (endTime-dirTime)) - (pre[pre['sum'] < 0]['sum'].sum() / stimTime)
+        #pos = (post[post['sum'] > 0]['sum'].sum() / (endTime-dirTime)) - (pre[pre['sum'] > 0]['sum'].sum() / stimTime)
+        #neg = -(post[post['sum'] < 0]['sum'].sum() / (endTime-dirTime)) - (pre[pre['sum'] < 0]['sum'].sum() / stimTime)
         
-        dir = (abs(direct['sum']).sum() / (dirTime-stimTime)) - (abs(pre['sum']).sum() / stimTime)
+        #dir = (abs(direct['sum']).sum() / (dirTime-stimTime)) - (abs(pre['sum']).sum() / stimTime)
         
         stdev = data.std() / dt
-        red = clip(log(max(1.0, (pos/stdev)+1))*255, 0, 255) 
-        blue = clip(log(max(1.0, (neg/stdev)+1))*255, 0, 255)
-        green = clip(log(max(1.0, (dir/stdev)+1))*255, 0, 255)
         
-        #print pos/stdev, neg/stdev, dir/stdev, red, green, blue
-        return QtGui.QColor(red, green, blue, max(red, green, blue))
+        return events, pre, direct, post, q, stdev
+        
+    def analyzeEvents(self, item):
+        pre = item.record['preEvents']
+        post = item.record['postEvents']
+        direct = item.record['dirEvents']
+        stimTime = item.laserTime - 0.001
+        dirTime = item.laserTime + self.ctrl.directTimeSpin.value()/1000
+        endTime = item.laserTime + self.ctrl.poststimTimeSpin.value()/1000
+        
+        if self.ctrl.useSpontActCheck.isChecked():
+            pos = (post[post['sum'] > 0]['sum'].sum() / (endTime-dirTime)) - (pre[pre['sum'] > 0]['sum'].sum() / stimTime)
+            neg = ((post[post['sum'] < 0]['sum'].sum() / (endTime-dirTime)) - (pre[pre['sum'] < 0]['sum'].sum() / stimTime))
+            dir = (abs(direct['sum']).sum() / (dirTime-stimTime)) - (abs(pre['sum']).sum() / stimTime)
+            item.record['postChargePos'] = pos
+            item.record['postChargeNeg'] = neg
+            item.record['dirCharge'] = dir
+        else:
+            pos = (post[post['sum'] > 0]['sum'].sum() / (endTime-dirTime))
+            neg = (post[post['sum'] < 0]['sum'].sum() / (endTime-dirTime))
+            prePos = pre[pre['sum'] > 0]['sum'].sum() / stimTime
+            preNeg = (pre[pre['sum'] < 0]['sum'].sum() / stimTime)
+            item.record['postChargePos'] = pos
+            item.record['postChargeNeg'] = neg
+            item.record['preChargePos'] = prePos
+            item.record['preChargeNeg'] = preNeg
+            item.record['dirCharge'] = 0
+            
+    def spotColor(self, item):
+        if self.ctrl.rgbRadio.isChecked():
+            red = clip(log(max(1.0, (item.record['postChargePos']/item.record['stdev'])+1))*255, 0, 255) 
+            blue = clip(log(max(1.0, (-item.record['postChargeNeg']/item.record['stdev'])+1))*255, 0, 255)
+            green = clip(log(max(1.0, (item.record['dirCharge']/item.record['stdev'])+1))*255, 0, 255)
+            return QtGui.QColor(red, green, blue, max(red, green, blue))
+            
+        if self.ctrl.rainbowRadio.isChecked():
+            maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = 5)
+            #hue = 255 - (log(1+1000*(item.record['postChargeNeg'] / self.analysisCache['postChargeNeg'].min())))*255/log(1001)
+            #maxcharge = a.max()
+            hue = 255 - (-item.record['postChargeNeg']/maxcharge)*255
+            #print "max charge:", maxcharge, "charge: ", item.record['postChargeNeg'], "hue: ", hue
+            sat = 255
+            if hue < 0:
+                hue = 0
+                val = 180
+            if item.record['postChargeNeg'] == 0:
+                alpha = 0
+            else:
+                alpha = 255
+            if len(item.record['dirEvents']) > 0:
+                val = 0
+            else:
+                val = 255
+            print "Type hue", type(hue), "Type sat", type(sat)
+            return QtGui.QColor.fromHsv(hue, sat, val, alpha)
         
    
     def mouseClicked(self, ev):
-        """Returns a list of data corresponding to items on a canvas under a mouse click. Each list item is a tuple where the first element
+        ###should probably make mouseClicked faster by using cached data instead of calling processData in eventFinderWidget each time
+        """Makes self.currentTraces a list of data corresponding to items on a canvas under a mouse click. Each list item is a tuple where the first element
            is an array of clamp data, and the second is the directory handle for the Clamp.ma file."""
-        #self.plot.clear()
-        spot = self.canvas.view.items(ev.pos())
-        n=0.0
+        spots = self.canvas.view.items(ev.pos())
         self.currentTraces = []
-        for i in spot:
-            #n += 1.0
-            #color = n/(len(spot))*0.7
-            #colorObj = QtGui.QColor()
-            #colorObj.setHsvF(color, 0.7, 1)
-            #pen = QtGui.QPen(colorObj)
+        for i in spots:
             d = self.loadTrace(i)
             if d is not None:
                 self.currentTraces.append(d)
         self.plot.setData([i[0]['Channel':'primary'] for i in self.currentTraces])
-            
+
+        
     def loadTrace(self, item):
         """Returns a tuple where the first element is a clamp.ma, and the second is its directory handle."""
         if not hasattr(item, 'source'):
             return
         dh = item.source
         data = self.getClampData(dh)
-        #self.currentTraces.append(data)
         return data, dh
-        #self.plot.plot(data, pen=pen)
-        
-        #events = self.findEvents(diff(data))
-        #tg = VTickGroup()
-        #tg.setPen(pen)
-        #tg.setYRange([data.max(), 2*data.max() - data.min()])
-        #tg.setXVals(data.xvals('Time')[events['start']])
-        #print "events:", events
-        #self.plot.addItem(tg)
         
 class STDPWindow(UncagingWindow):
     ###NEED:  add labels to LTP plot?, figure out how to get/display avg epsp time and avg spike time, 
