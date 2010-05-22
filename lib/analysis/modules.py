@@ -20,7 +20,7 @@ class UncagingSpot(QtGui.QGraphicsEllipseItem):
     def __init__(self, source): #source is directory handle
         QtGui.QGraphicsEllipseItem.__init__(self, 0, 0, 1, 1)
         self.source = source
-        self.record = None
+        self.index = None
         self.position = None
         self.size = None
         self.laserTime = None
@@ -238,6 +238,7 @@ class UncagingWindow(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ctrl.recolorBtn, QtCore.SIGNAL('clicked()'), self.recolor)
         self.ctrl.directTimeSpin.setValue(4.0)
         self.ctrl.poststimTimeSpin.setRange(1.0, 1000.0)
+        self.ctrl.colorSpin2.setRange(0, 360.0)
         self.ctrl.poststimTimeSpin.setValue(150.0)
         self.ctrl.eventFindRadio.setChecked(True)
         self.ctrl.useSpontActCheck.setChecked(True)
@@ -290,7 +291,9 @@ class UncagingWindow(QtGui.QMainWindow):
         else:
             dirs = [dh]
         appendIndex = self.analysisCache.size
-        self.analysisCache.resize(appendIndex + len(dirs))
+        a = empty(len(self.scanItems) + len(dirs), dtype = self.analysisCache.dtype)
+        a[:appendIndex] = self.analysisCache
+        self.analysisCache = a
         for d in dirs: #d is a directory handle
             #d = dh[d]
             if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
@@ -300,8 +303,8 @@ class UncagingWindow(QtGui.QMainWindow):
                 else:
                     size = self.defaultSize
                 item = UncagingSpot(d)
-                item.record = self.analysisCache[appendIndex]
-                item.record['eventsValid'] = False
+                item.index = appendIndex
+                self.analysisCache['eventsValid'][appendIndex] = False
                 appendIndex += 1
                 item.position = pos
                 item.size = size
@@ -325,18 +328,20 @@ class UncagingWindow(QtGui.QMainWindow):
         self.scanItems = []
         self.currentTraces = []
         self.eventTimes = []
+        self.analysisCache = empty(len(self.scanItems),
+            {'names': ('spotID', 'eventsValid', 'eventList', 'preEvents', 'dirEvents', 'postEvents', 'stdev', 'preChargePos', 'preChargeNeg', 'dirCharge', 'postChargePos', 'postChargeNeg'),
+             'formats':(object, object, object, object, object, object, float, float, float, float, float, float)})
     
     def recolor(self):
         for i in self.scanItems:
-            if i.record['eventsValid'] == False:
-                events, pre, direct, post, q, stdev = self.getEventLists(i.source)
-                i.record['eventList'] = events
-                i.record['preEvents'] = pre
-                i.record['dirEvents'] = direct
-                i.record['postEvents'] = post
-                i.record['stdev'] = stdev
-                i.record['eventsValid'] = True
-                i.laserTime = q
+            events, pre, direct, post, q, stdev = self.getEventLists(i)
+            self.analysisCache[i.index]['eventList'] = events
+            self.analysisCache[i.index]['eventsValid'] = True
+            self.analysisCache[i.index]['preEvents'] = pre
+            self.analysisCache[i.index]['dirEvents'] = direct
+            self.analysisCache[i.index]['postEvents'] = post
+            self.analysisCache[i.index]['stdev'] = stdev
+            i.laserTime = q
             self.analyzeEvents(i)
         for i in self.scanItems:
             color = self.spotColor(i)
@@ -362,7 +367,7 @@ class UncagingWindow(QtGui.QMainWindow):
                 if cols[i]['name'] == 'scaled':
                     cols[i]['name'] = 'primary'
             
-        data['Channel':'primary'] = denoise(data['Channel':'primary'])
+        data['Channel':'primary'] = denoise(data['Channel':'primary'], threshold = 5)
         #data = removeBaseline(data)
         #data = lowPass(data, 2000)
         return data
@@ -377,15 +382,23 @@ class UncagingWindow(QtGui.QMainWindow):
         q = d.getFile('Laser-UV.ma').read()['QSwitch']
         return argmax(q)/q.infoCopy()[-1]['rate']
         
-    def getEventLists(self, dh):
+    def getEventLists(self, i):
         #if not self.plot.analysisEnabled:
         #    return QtGui.QColor(100,100,200)
-        data = self.getClampData(dh)['Channel':'primary']
-        events = self.plot.processData([data])[0]
-        
+        data = self.getClampData(i.source)['Channel':'primary']
+        if self.analysisCache[i.index]['eventsValid'] == False:
+            print "Recomputing events...."
+            a = self.plot.processData([data])[0] #events is an array
+            events = a[a['len'] > 2] #trying to filter out noise
+        else:
+            events = self.analysisCache[i.index]['eventList']
+        #for i in range(len(events)):
+        #    if events[i]['peak'] > (events[i]['sum'])/10:
+        #        events= delete(events, events[i])
+        #
         times = data.xvals('Time')
         self.eventTimes.extend(times[events['start']])
-        q = self.getLaserTime(dh)
+        q = self.getLaserTime(i.source)
         stimTime = q - 0.001
         dirTime = q + self.ctrl.directTimeSpin.value()/1000
         endTime = q + self.ctrl.poststimTimeSpin.value()/1000
@@ -404,9 +417,9 @@ class UncagingWindow(QtGui.QMainWindow):
         return events, pre, direct, post, q, stdev
         
     def analyzeEvents(self, item):
-        pre = item.record['preEvents']
-        post = item.record['postEvents']
-        direct = item.record['dirEvents']
+        pre = self.analysisCache[item.index]['preEvents']
+        post = self.analysisCache[item.index]['postEvents']
+        direct = self.analysisCache[item.index]['dirEvents']
         stimTime = item.laserTime - 0.001
         dirTime = item.laserTime + self.ctrl.directTimeSpin.value()/1000
         endTime = item.laserTime + self.ctrl.poststimTimeSpin.value()/1000
@@ -415,46 +428,50 @@ class UncagingWindow(QtGui.QMainWindow):
             pos = (post[post['sum'] > 0]['sum'].sum() / (endTime-dirTime)) - (pre[pre['sum'] > 0]['sum'].sum() / stimTime)
             neg = ((post[post['sum'] < 0]['sum'].sum() / (endTime-dirTime)) - (pre[pre['sum'] < 0]['sum'].sum() / stimTime))
             dir = (abs(direct['sum']).sum() / (dirTime-stimTime)) - (abs(pre['sum']).sum() / stimTime)
-            item.record['postChargePos'] = pos
-            item.record['postChargeNeg'] = neg
-            item.record['dirCharge'] = dir
+            self.analysisCache[item.index]['postChargePos'] = pos
+            self.analysisCache[item.index]['postChargeNeg'] = neg
+            self.analysisCache[item.index]['dirCharge'] = dir
         else:
             pos = (post[post['sum'] > 0]['sum'].sum() / (endTime-dirTime))
             neg = (post[post['sum'] < 0]['sum'].sum() / (endTime-dirTime))
             prePos = pre[pre['sum'] > 0]['sum'].sum() / stimTime
             preNeg = (pre[pre['sum'] < 0]['sum'].sum() / stimTime)
-            item.record['postChargePos'] = pos
-            item.record['postChargeNeg'] = neg
-            item.record['preChargePos'] = prePos
-            item.record['preChargeNeg'] = preNeg
-            item.record['dirCharge'] = 0
+            self.analysisCache[item.index]['postChargePos'] = pos
+            self.analysisCache[item.index]['postChargeNeg'] = neg
+            self.analysisCache[item.index]['preChargePos'] = prePos
+            self.analysisCache[item.index]['preChargeNeg'] = preNeg
+            self.analysisCache[item.index]['dirCharge'] = 0
             
     def spotColor(self, item):
         if self.ctrl.rgbRadio.isChecked():
-            red = clip(log(max(1.0, (item.record['postChargePos']/item.record['stdev'])+1))*255, 0, 255) 
-            blue = clip(log(max(1.0, (-item.record['postChargeNeg']/item.record['stdev'])+1))*255, 0, 255)
-            green = clip(log(max(1.0, (item.record['dirCharge']/item.record['stdev'])+1))*255, 0, 255)
+            red = clip(log(max(1.0, (self.analysisCache[item.index]['postChargePos']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255) 
+            blue = clip(log(max(1.0, (-self.analysisCache[item.index]['postChargeNeg']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255)
+            green = clip(log(max(1.0, (self.analysisCache[item.index]['dirCharge']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255)
             return QtGui.QColor(red, green, blue, max(red, green, blue))
             
         if self.ctrl.rainbowRadio.isChecked():
-            maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = 5)
-            #hue = 255 - (log(1+1000*(item.record['postChargeNeg'] / self.analysisCache['postChargeNeg'].min())))*255/log(1001)
+            maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = self.ctrl.colorSpin1.value())
+            #hue = 255 - (log(1+1000*(self.analysisCache[item.index]['postChargeNeg'] / self.analysisCache['postChargeNeg'].min())))*255/log(1001)
             #maxcharge = a.max()
-            hue = 255 - (-item.record['postChargeNeg']/maxcharge)*255
-            #print "max charge:", maxcharge, "charge: ", item.record['postChargeNeg'], "hue: ", hue
+            print "maxCharge:", maxcharge, "spotcharge:", self.analysisCache[item.index]['postChargeNeg'], "spotCharge/maxCharge", self.analysisCache[item.index]['postChargeNeg']/maxcharge
+            hue = self.ctrl.colorSpin2.value() - (self.analysisCache[item.index]['postChargeNeg']/maxcharge)*255
+            #print "max charge:", maxcharge, "charge: ", iself.analysisCache[item.index]['postChargeNeg'], "hue: ", hue
             sat = 255
-            if hue < 0:
+    
+            if abs(self.analysisCache[item.index]['postChargeNeg']) > abs(maxcharge):
                 hue = 0
-                val = 180
-            if item.record['postChargeNeg'] == 0:
+                val = 140
+            if self.analysisCache[item.index]['postChargeNeg'] == 0:
+                alpha = 0
+            elif self.analysisCache[item.index]['postChargeNeg'] > histogram(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg']<0], bins = 1000)[1][-self.ctrl.colorSpin3.value()]:
                 alpha = 0
             else:
                 alpha = 255
-            if len(item.record['dirEvents']) > 0:
+            if len(self.analysisCache[item.index]['dirEvents']) > 0:
                 val = 0
             else:
                 val = 255
-            print "Type hue", type(hue), "Type sat", type(sat)
+            print "hue", hue
             return QtGui.QColor.fromHsv(hue, sat, val, alpha)
         
    
