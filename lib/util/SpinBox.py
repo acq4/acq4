@@ -2,6 +2,7 @@
 from PyQt4 import QtGui, QtCore
 from functions import siEval, siFormat
 from math import log
+from SignalProxy import proxyConnect
 
 class SpinBox(QtGui.QAbstractSpinBox):
     """QSpinBox widget on steroids. Allows selection of numerical value, with extra features:
@@ -48,8 +49,16 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.setOpts(**kwargs)
         
         QtCore.QObject.connect(self, QtCore.SIGNAL('editingFinished()'), self.editingFinished)
+        self.proxy = proxyConnect(self, QtCore.SIGNAL('valueChanged(double)'), self.delayedChange)
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('returnPressed()'), self.editingFinished)
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('textChanged()'), self.textChanged)
+        
+    def delayedChange(self):
+        #print "emit delayed change"
+        self.emit(QtCore.SIGNAL('delayedChange'))
+        
+    def widgetGroupInterface(self):
+        return ('delayedChange', SpinBox.value, SpinBox.setValue)
         
     def sizeHint(self):
         return QtCore.QSize(120, 0)
@@ -93,7 +102,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.setValue(val)
         
     def setValue(self, value, update=True):
-        print "setValue:", value
+        #print "setValue:", value
         #if value == 0.0:
             #import traceback
             #traceback.print_stack()
