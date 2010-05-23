@@ -21,6 +21,7 @@ from functions import *
 import types, sys, struct
 
 
+
 class ItemGroup(QtGui.QGraphicsItem):
     def boundingRect(self):
         return QtCore.QRectF()

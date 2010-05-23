@@ -333,11 +333,16 @@ class UncagingWindow(QtGui.QMainWindow):
         self.ctrl.directTimeSpin.setValue(4.0)
         self.ctrl.poststimTimeSpin.setRange(1.0, 1000.0)
         self.ctrl.colorSpin2.setRange(0, 360.0)
-        self.ctrl.poststimTimeSpin.setValue(150.0)
+        self.ctrl.colorSpin2.setValue(280.0)
+        self.ctrl.colorSpin1.setValue(8.0)
+        self.ctrl.colorSpin3.setValue(99)
+        self.ctrl.poststimTimeSpin.setValue(300.0)
         self.ctrl.eventFindRadio.setChecked(True)
-        self.ctrl.useSpontActCheck.setChecked(True)
-        self.ctrl.rgbRadio.setChecked(True)
+        self.ctrl.useSpontActCheck.setChecked(False)
+        self.ctrl.rainbowRadio.setChecked(True)
         self.ctrl.absoluteRadio.setChecked(True)
+        self.ctrl.medianCheck.setChecked(True)
+        
         
         
         #self.plot = PlotWidget()
@@ -412,17 +417,18 @@ class UncagingWindow(QtGui.QMainWindow):
                 for s in self.scanAvgItems:
                     if s.size == size and abs(s.position[0] - pos[0]) < size/10. and abs(s.position[1] - pos[1]) < size/10.:
                         avgSpot = s
+                        break
                     
                 if avgSpot is None: 
                     ## If not, create a new average spot 
                     avgSpot = UncagingSpot()
-                    avgSpot.sourceItems.append(item)
                     avgSpot.position = pos
                     avgSpot.size = size
                     avgSpot.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200)))                 
                     self.canvas.addItem(avgSpot, [pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z+10000, name=["Averages", "spot%03d"%len(self.scanAvgItems)])
                     self.scanAvgItems.append(avgSpot)
                 
+                avgSpot.sourceItems.append(item)
                 
             else:
                 print "Skipping directory %s" %d.name()
@@ -594,34 +600,39 @@ class UncagingWindow(QtGui.QMainWindow):
                 negCharge = self.analysisCache[item.index]['postChargeNeg']
                 numDirectEvents = len(self.analysisCache[item.index]['dirEvents'])
             else:    ## this is an average item
-                negCharges = [self.analysisCache[i.index]['postChargeNeg'] for i in item.sourceItems]
+                negCharges = array([self.analysisCache[i.index]['postChargeNeg'] for i in item.sourceItems]) 
                 numDirectEventses = [len(self.analysisCache[i.index]['dirEvents']) for i in item.sourceItems]
                 
-                if self.ctrl.medianCheck.isChecked() and len(item.sourceItems) > 2:
-                    negCharge = median(negCharges)  ## Luke thinks this should be median
-                    numDirectEvents = median(numDirectEventses)
-                    
-                else:
-                    negCharge = mean(negCharges)  ## Luke thinks this should be median
-                    numDirectEvents = mean(numDirectEventses)
+                if self.ctrl.medianCheck.isChecked():
+                    if len(negCharges[negCharges < 0]) > len(negCharges)/2: ###Errs on side of false negatives, but averages all non-zero charges
+                        negCharge = mean(negCharges[negCharges<0])
+                        numDirectEvents = median(numDirectEventses)
+                    else:
+                        negCharge = 0
+                        numDirectEvents = mean(numDirectEventses)
+                        
+                #if self.ctrl.medianCheck.isChecked() and len(item.sourceItems) > 2:
+                #    negCharge = median(negCharges)
+                #    print "Compute median:", negCharges, negCharge
+                #    numDirectEvents = median(numDirectEventses)
+                #    
+                #else:
+                #    negCharge = mean(negCharges)
+                #    numDirectEvents = mean(numDirectEventses)
             
             
             ## Set color based on strength of negative events
             hue = self.ctrl.colorSpin2.value() - (negCharge/maxcharge)*255
             #print "max charge:", maxcharge, "charge: ", iself.analysisCache[item.index]['postChargeNeg'], "hue: ", hue
             sat = 255
-            
-            
-           
-                
+         
             ## Traces with no events are transparent
-            #if self.analysisCache[item.index]['postChargeNeg'] == 0:
-                #alpha = 0
+            if negCharge < 1e-16:
+                alpha = 0
                 
-            
             ## Traces with events below threshold are transparent
             #elif self.analysisCache[item.index]['postChargeNeg'] > histogram(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg']<0], bins = 1000)[1][-self.ctrl.colorSpin3.value()]:
-            if negCharge > stats.scoreatpercentile(self.analysisCache['postChargeNeg'], self.ctrl.colorSpin3.value()):
+            if negCharge >= stats.scoreatpercentile(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg'] < 0], self.ctrl.colorSpin3.value()):
                 alpha = 0
             else:
                 alpha = 255
@@ -632,11 +643,11 @@ class UncagingWindow(QtGui.QMainWindow):
             else:
                 val = 255
                 
-            if hue < 0:
+            if hue < 0 and numDirectEvents == 0:
                 val = clip(255+hue, 100, 255)
                 hue = 0
                 
-            print "hue:", hue, "sat:", sat, "val:", val, "alpha:", alpha
+            #print "hue:", hue, "sat:", sat, "val:", val, "alpha:", alpha
 
             return QtGui.QColor.fromHsv(hue, sat, val, alpha)
         
@@ -651,7 +662,11 @@ class UncagingWindow(QtGui.QMainWindow):
             d = self.loadTrace(i)
             if d is not None:
                 self.currentTraces.append(d)
+            if hasattr(i, 'source') and i.source is not None:
+                print 'postEvents:', self.analysisCache[i.index]['postEvents']
+                print 'postChargeNeg:', self.analysisCache[i.index]['postChargeNeg']
         self.plot.setData([i[0]['Channel':'primary'] for i in self.currentTraces])
+        
 
         
     def loadTrace(self, item):
