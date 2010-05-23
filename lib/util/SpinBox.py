@@ -2,6 +2,7 @@
 from PyQt4 import QtGui, QtCore
 from functions import siEval, siFormat
 from math import log
+from SignalProxy import proxyConnect
 
 class SpinBox(QtGui.QAbstractSpinBox):
     """QSpinBox widget on steroids. Allows selection of numerical value, with extra features:
@@ -48,8 +49,16 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.setOpts(**kwargs)
         
         QtCore.QObject.connect(self, QtCore.SIGNAL('editingFinished()'), self.editingFinished)
+        self.proxy = proxyConnect(self, QtCore.SIGNAL('valueChanged(double)'), self.delayedChange)
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('returnPressed()'), self.editingFinished)
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('textChanged()'), self.textChanged)
+        
+    def delayedChange(self):
+        #print "emit delayed change"
+        self.emit(QtCore.SIGNAL('delayedChange'))
+        
+    def widgetGroupInterface(self):
+        return ('delayedChange', SpinBox.value, SpinBox.setValue)
         
     def sizeHint(self):
         return QtCore.QSize(120, 0)
@@ -108,6 +117,19 @@ class SpinBox(QtGui.QAbstractSpinBox):
             self.updateText()
         self.emit(QtCore.SIGNAL('valueChanged(double)'), self.val)
         self.lineEdit().setStyleSheet('border: 0px;')
+
+    def setMaximum(self, m):
+        self.opts['bounds'][1] = m
+    
+    def setMinimum(self, m):
+        self.opts['bounds'][0] = m
+        
+    def setProperty(self, prop, val):
+        """setProperty is just for compatibility with QSpinBox"""
+        if prop == 'value':
+            self.setValue(val)
+        else:
+            print "Warning: SpinBox.setProperty('%s', ..) not supported." % prop
 
     def value(self):
         return self.val

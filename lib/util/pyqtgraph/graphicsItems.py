@@ -14,6 +14,7 @@ import scipy.weave as weave
 from scipy.weave import converters
 from scipy.fftpack import fft
 from scipy.signal import resample
+import scipy.stats
 #from metaarray import MetaArray
 from Point import *
 from functions import *
@@ -287,23 +288,24 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         elif frac <= 0.0:
             raise Exception("Value for parameter 'frac' must be > 0. (got %s)" % str(frac))
         else:
-            bins = 1000
-            h = histogram(d, bins)
-            s = len(d) * (1.0-frac)
-            mnTot = mxTot = 0
-            mnInd = mxInd = 0
-            for i in range(bins):
-                mnTot += h[0][i]
-                if mnTot > s:
-                    mnInd = i
-                    break
-            for i in range(bins):
-                mxTot += h[0][-i-1]
-                if mxTot > s:
-                    mxInd = -i-1
-                    break
-            #print mnInd, mxInd, h[1][mnInd], h[1][mxInd]
-            return(h[1][mnInd], h[1][mxInd])
+            return (scipy.stats.scoreatpercentile(d, 50 - (frac * 50)), scipy.stats.scoreatpercentile(d, 50 + (frac * 50)))
+            #bins = 1000
+            #h = histogram(d, bins)
+            #s = len(d) * (1.0-frac)
+            #mnTot = mxTot = 0
+            #mnInd = mxInd = 0
+            #for i in range(bins):
+                #mnTot += h[0][i]
+                #if mnTot > s:
+                    #mnInd = i
+                    #break
+            #for i in range(bins):
+                #mxTot += h[0][-i-1]
+                #if mxTot > s:
+                    #mxInd = -i-1
+                    #break
+            ##print mnInd, mxInd, h[1][mnInd], h[1][mxInd]
+            #return(h[1][mnInd], h[1][mxInd])
                 
             
             
@@ -1363,7 +1365,7 @@ class VTickGroup(QtGui.QGraphicsPathItem):
 
     def setXVals(self, vals):
         self.xvals = vals
-        #self.rebuildTicks()
+        self.rebuildTicks()
         self.valid = False
         
     def setYRange(self, vals, relative=False):
@@ -1371,37 +1373,58 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         self.relative = relative
         if self.view is not None:
             if relative:
-                QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.rebuildTicks)
+                #QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.rebuildTicks)
+                QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.rescale)
             else:
                 try:
-                    QtCore.QObject.disconnect(self.view, QtCore.SIGNAL('viewChanged'), self.rebuildTicks)
+                    #QtCore.QObject.disconnect(self.view, QtCore.SIGNAL('viewChanged'), self.rebuildTicks)
+                    QtCore.QObject.disconnect(self.view, QtCore.SIGNAL('viewChanged'), self.rescale)
                 except:
                     pass
-        #self.rebuildTicks()
+        self.rebuildTicks()
         self.valid = False
             
+    def rescale(self):
+        self.resetTransform()
+        height = self.view.size().height()
+        p1 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[0]))))
+        p2 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[1]))))
+        yr = [p1.y(), p2.y()]
+        #print yr
+        self.translate(0.0, yr[0])
+        self.scale(1.0, (yr[1]-yr[0]))
+        #print self.mapRectToScene(self.boundingRect())
+        self.update()
+            
     def yRange(self):
-        if self.relative:
-            height = self.view.size().height()
-            p1 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[0]))))
-            p2 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[1]))))
-            return [p1.y(), p2.y()]
-        else:
-            return self.yrange
+        #if self.relative:
+            #height = self.view.size().height()
+            #p1 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[0]))))
+            #p2 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[1]))))
+            #return [p1.y(), p2.y()]
+        #else:
+            #return self.yrange
+            
+        return self.yrange
             
     def rebuildTicks(self):
         path = QtGui.QPainterPath()
         yrange = self.yRange()
         #print "rebuild ticks:", yrange
         for x in self.xvals:
-            path.moveTo(x, yrange[0])
-            path.lineTo(x, yrange[1])
+            #path.moveTo(x, yrange[0])
+            #path.lineTo(x, yrange[1])
+            path.moveTo(x, 0.)
+            path.lineTo(x, 1.)
         self.setPath(path)
         self.valid = True
+        self.rescale()
+        #print "  done..", self.boundingRect()
         
     def paint(self, *args):
         if not self.valid:
             self.rebuildTicks()
+        #print "Paint", self.boundingRect()
         QtGui.QGraphicsPathItem.paint(self, *args)
         
 

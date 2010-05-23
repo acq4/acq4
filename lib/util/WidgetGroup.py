@@ -192,6 +192,7 @@ class WidgetGroup(QtCore.QObject):
         return lambda *args: self.widgetChanged(w, *args)
         
     def widgetChanged(self, w, *args):
+        #print "widget changed"
         n = self.widgetList[w]
         v1 = self.cache[n]
         v2 = self.readWidget(w)
@@ -229,6 +230,10 @@ class WidgetGroup(QtCore.QObject):
             getFunc = WidgetGroup.classes[type(w)][1]
         else:
             getFunc = w.widgetGroupInterface()[1]
+        
+        if getFunc is None:
+            return None
+            
         val = getFunc(w)
         if self.scales[w] is not None:
             val /= self.scales[w]

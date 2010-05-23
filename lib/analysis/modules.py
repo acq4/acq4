@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from lib.Manager import getManager
 from metaarray import *
 from pyqtgraph.ImageView import *
@@ -13,18 +14,22 @@ from functions import *
 from SpinBox import *
 from debug import *
 from DictView import DictView
-from scipy import stats
+from scipy import stats, signal
 from numpy import log
+from WidgetGroup import *
+
 
 class UncagingSpot(QtGui.QGraphicsEllipseItem):
-    def __init__(self, source): #source is directory handle
+    def __init__(self, source=None): #source is directory handle for single-stimulus spots
         QtGui.QGraphicsEllipseItem.__init__(self, 0, 0, 1, 1)
         self.source = source
         self.index = None
         self.position = None
         self.size = None
         self.laserTime = None
-        
+        self.sourceItems = []   ## points to source spots if this is an average
+
+from EventDetectionCtrlTemplate import *
 
 class EventMatchWidget(QtGui.QSplitter):
     def __init__(self):
@@ -46,28 +51,46 @@ class EventMatchWidget(QtGui.QSplitter):
         
         self.ctrlWidget = QtGui.QWidget()
         self.hsplitter.addWidget(self.ctrlWidget)
+        self.ctrl = Ui_EventDetectionCtrlForm()
+        self.ctrl.setupUi(self.ctrlWidget)
+        
         self.templatePlot = PlotWidget()
         self.hsplitter.addWidget(self.templatePlot)
         
-        self.ctrlLayout = QtGui.QFormLayout()
-        self.ctrlWidget.setLayout(self.ctrlLayout)
-        self.tauSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
-        self.tauSpin.setValue(0.01)
-        self.lowPassSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
-        self.lowPassSpin.setValue(200.0)
-        self.thresholdSpin = SpinBox(log=True, step=0.1, bounds=[0, None])
-        self.thresholdSpin.setValue(10.0)
-        self.ctrlLayout.addRow("Low pass", self.lowPassSpin)
-        self.ctrlLayout.addRow("Decay const.", self.tauSpin)
-        self.ctrlLayout.addRow("Threshold", self.thresholdSpin)
+        #self.ctrlLayout = QtGui.QFormLayout()
+        #self.ctrlWidget.setLayout(self.ctrlLayout)
         
-        QtCore.QObject.connect(self.tauSpin, QtCore.SIGNAL('valueChanged(double)'), self.tauChanged)
-        QtCore.QObject.connect(self.lowPassSpin, QtCore.SIGNAL('valueChanged(double)'), self.lowPassChanged)
-        QtCore.QObject.connect(self.thresholdSpin, QtCore.SIGNAL('valueChanged(double)'), self.thresholdChanged)
+        self.ctrl.lowPassSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
+        self.ctrl.highPassSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
+        self.ctrl.expDeconvolveSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
+        #self.tauSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
+        #self.tauSpin.setValue(0.01)
+        #self.lowPassSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
+        #self.lowPassSpin.setValue(200.0)
+        #self.thresholdSpin = SpinBox(log=True, step=0.1, bounds=[0, None])
+        #self.thresholdSpin.setValue(10.0)
+        #self.ctrlLayout.addRow("Low pass", self.lowPassSpin)
+        #self.ctrlLayout.addRow("Decay const.", self.tauSpin)
+        #self.ctrlLayout.addRow("Threshold", self.thresholdSpin)
         
+        #QtCore.QObject.connect(self.tauSpin, QtCore.SIGNAL('valueChanged(double)'), self.tauChanged)
+        #QtCore.QObject.connect(self.lowPassSpin, QtCore.SIGNAL('valueChanged(double)'), self.lowPassChanged)
+        #QtCore.QObject.connect(self.thresholdSpin, QtCore.SIGNAL('valueChanged(double)'), self.thresholdChanged)
+        QtCore.QObject.connect(self.ctrl.detectMethodCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.ctrl.detectMethodStack.setCurrentIndex)
         self.analysisEnabled = True
         self.events = []
         self.data = []
+        
+        self.stateGroup = WidgetGroup(self)
+        
+        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.recalculate)        
+        
+    def widgetGroupInterface(self):
+        return (None, None, None, True) ## Just tells self.stateGroup to automatically add all children
+        
+    #def stateChanged(self):
+        #self.emit(QtCore.SIGNAL('stateChanged'))
+        #self.recompute()
         
     def enableAnalysis(self, b):
         if b == self.analysisEnabled:
@@ -91,11 +114,91 @@ class EventMatchWidget(QtGui.QSplitter):
     def recalculate(self):
         self.events = self.processData(self.data, display=True)
         self.emit(QtCore.SIGNAL('outputChanged'), self)
-        print "Events:", self.events
+        #print "Events:", self.events
         ##display events
         
     def getEvents(self):
         return self.events
+        
+    def preprocess(self, data):
+        """Run all selected preprocessing steps on data, return the resulting array"""
+        orig = data
+        dt = data.xvals('Time')[1] - data.xvals('Time')[0]
+        
+        if self.ctrl.denoiseCheck.isChecked():
+            data = denoise(data)
+            
+        if self.ctrl.lowPassCheck.isChecked():
+            data = lowPass(data, self.ctrl.lowPassSpin.value(), dt=dt)
+        if self.ctrl.highPassCheck.isChecked():
+            data = highPass(data, self.ctrl.highPassSpin.value(), dt=dt)
+            
+        if self.ctrl.expDeconvolveCheck.isChecked():
+            data = diff(data) * self.ctrl.expDeconvolveSpin.value() / dt + data[:-1]
+        
+        if self.ctrl.detrendCheck.isChecked():
+            if self.ctrl.detrendMethodCombo.currentText() == 'Linear':
+                data = signal.detrend(data)
+            elif self.ctrl.detrendMethodCombo.currentText() == 'Adaptive':
+                data = removeBaseline(data, dt=dt)
+            else:
+                raise Exception("detrend method not yet implemented.")
+        #data = MetaArray(data, info=orig.infoCopy())
+        
+        return data
+                
+        #d1 = lowPass(d, self.lowPassSpin.value())
+        ##p.mark('lowpass')
+        #d2 = d1.view(ndarray) - measureBaseline(d1)
+        ##p.mark('subtract baseline')
+        #dt = d.xvals('Time')[1] - d.xvals('Time')[0]
+        ##p.mark('dt')
+        #d3 = diff(d2) * self.tauSpin.value() / dt + d2[:-1]
+        ##p.mark('deconvolve')
+        #d4 = removeBaseline(d3, dt=dt)
+        ##p.mark('remove baseline')
+        ##d4 = d3
+        
+        
+    def findEvents(self, data):
+        """Locate events in the data based on GUI settings selected."""
+        #dt = data.xvals('Time')[1] - data.xvals('Time')[0]
+        if self.ctrl.detectMethodCombo.currentText() == 'Stdev. Threshold':
+            stdev = data.std()
+            mask = abs(data) > stdev * self.ctrl.stThresholdSpin.value()
+            starts = argwhere(mask[1:] * (1-mask[:-1]))[:,0]
+            ends = argwhere((1-mask[1:]) * mask[:-1])[:,0]
+            if len(ends) > 0 and len(starts) > 0:
+                if ends[0] < starts[0]:
+                    ends = ends[1:]
+                if starts[-1] > ends[-1]:
+                    starts = starts[:-1]
+                
+                
+            lengths = ends-starts
+            events = empty(starts.shape, dtype=[('start',int), ('len',float), ('sum',float), ('peak',float)])
+            events['start'] = starts
+            events['len'] = lengths
+            
+            for i in range(len(starts)):
+                d = data[starts[i]:ends[i]]
+                events['sum'][i] = d.sum()
+                if events['sum'][i] > 0:
+                    peak = events['sum'][i].max()
+                else:
+                    peak = events['sum'][i].min()
+                events['peak'][i] = peak
+            
+        elif self.ctrl.detectMethodCombo.currentText() == 'Zero-crossing':
+            events = findEvents(data, noiseThreshold=self.ctrl.zcSumThresholdSpin.value())
+        elif self.ctrl.detectMethodCombo.currentText() == 'Clements-Bekkers':
+            rise = self.ctrl.cbRiseTauSpin.value()
+            decay = self.ctrl.cbFallTauSpin.value()
+            template = expTemplate(dt, rise, decay, rise*2, (rise+decay)*4)
+            events = cbTemplateMatch(data, template, self.ctrl.cbThresholdSpin.value())
+        else:
+            raise Exception("Event detection method not implemented yet.")
+        return events
         
     def processData(self, data, display=False):
         """Returns a list of record arrays - each record array contains the events detected in one trace.
@@ -120,37 +223,24 @@ class EventMatchWidget(QtGui.QSplitter):
         for i in range(len(data)):
             #p.mark('start trace %d' % i)
             d = data[i]
-            #print "lowpass:", d
-            d1 = lowPass(d, self.lowPassSpin.value())
-            #p.mark('lowpass')
-            d2 = d1.view(ndarray) - measureBaseline(d1)
-            #p.mark('subtract baseline')
-            dt = d.xvals('Time')[1] - d.xvals('Time')[0]
-            #p.mark('dt')
-            d3 = diff(d2) * self.tauSpin.value() / dt + d2[:-1]
-            #p.mark('deconvolve')
-            d4 = removeBaseline(d3, dt=dt)
-            #p.mark('remove baseline')
-            #d4 = d3
-                
-            #stdev = measureNoise(d3)
-            #print "noise:", stdev
-            #thresh = stdev * self.thresholdSpin.value()
-            #absd = abs(d3)
-            #eventList = argwhere((absd[1:] > thresh) * (absd[:-1] <= thresh))[:, 0] + 1
+            ppd = self.preprocess(d)
+            timeVals = d.xvals('Time')[:len(ppd)]  ## preprocess may have shortened array, make sure time matches
             
-            eventList = findEvents(d4, noiseThreshold=self.thresholdSpin.value())
+            eventList = self.findEvents(ppd)
+            eventList = eventList[:200]   ## Only take first 200 events to avoid overload
             #p.mark('find events')
+            #print eventList
             events.append(eventList)
             if display:
                 color = float(i)/(len(data))*0.7
                 pen = mkPen(hsv=[color, 0.8, 0.7])
                 
-                self.analysisPlot.plot(d4, x=d.xvals('Time')[:-1], pen=pen)
+                self.analysisPlot.plot(ppd, x=timeVals, pen=pen)
                 tg = VTickGroup(view=self.analysisPlot)
                 tg.setPen(pen)
                 tg.setYRange([0.8, 1.0], relative=True)
                 tg.setXVals(d.xvals('Time')[eventList['start']])
+                #print "set tick locations:", timeVals[eventList['start']]
                 self.tickGroups.append(tg)
                 self.analysisPlot.addItem(tg)
                 
@@ -158,6 +248,7 @@ class EventMatchWidget(QtGui.QSplitter):
                 stack = triggerStack(d, eventList['start'], window=[-100, 200])
                 negPen = mkPen([0, 0, 200])
                 posPen = mkPen([200, 0, 0])
+                #print stack.shape
                 for j in range(stack.shape[0]):
                     base = median(stack[j, 80:100])
                     
@@ -166,7 +257,10 @@ class EventMatchWidget(QtGui.QSplitter):
                         pen = posPen
                         params = {'sign': 1}
                     else:
-                        scale = base - stack[j, 100:100+eventList[j]['len']].min()
+                        length = eventList[j]['len']
+                        if length < 1:
+                            length = 1
+                        scale = base - stack[j, 100:100+length].min()
                         pen = negPen
                         params = {'sign': -1}
                     self.templatePlot.plot((stack[j]-base) / scale, pen=pen, params=params)
@@ -254,6 +348,7 @@ class UncagingWindow(QtGui.QMainWindow):
         self.resize(1000, 600)
         self.show()
         self.scanItems = []
+        self.scanAvgItems = []
         self.imageItems = []
         self.currentTraces = []
         self.noiseThreshold = 2.0
@@ -308,9 +403,27 @@ class UncagingWindow(QtGui.QMainWindow):
                 appendIndex += 1
                 item.position = pos
                 item.size = size
-                item.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200)))                 
+                item.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200,0)))                 
                 self.canvas.addItem(item, [pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z, name=[dh.shortName(), d.shortName()])
                 self.scanItems.append(item)
+                
+                ## Find out if this spot is the "same" as any existing average spots
+                avgSpot = None
+                for s in self.scanAvgItems:
+                    if s.size == size and abs(s.position[0] - pos[0]) < size/10. and abs(s.position[1] - pos[1]) < size/10.:
+                        avgSpot = s
+                    
+                if avgSpot is None: 
+                    ## If not, create a new average spot 
+                    avgSpot = UncagingSpot()
+                    avgSpot.sourceItems.append(item)
+                    avgSpot.position = pos
+                    avgSpot.size = size
+                    avgSpot.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200)))                 
+                    self.canvas.addItem(avgSpot, [pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z+10000, name=["Averages", "spot%03d"%len(self.scanAvgItems)])
+                    self.scanAvgItems.append(avgSpot)
+                
+                
             else:
                 print "Skipping directory %s" %d.name()
         self.analysisCache = self.analysisCache[:appendIndex]    
@@ -333,6 +446,9 @@ class UncagingWindow(QtGui.QMainWindow):
              'formats':(object, object, object, object, object, object, float, float, float, float, float, float)})
     
     def recolor(self):
+        #for i in self.scanItems:
+            #color = self.spotColor(i)
+            #i.setBrush(QtGui.QBrush(color))
         for i in self.scanItems:
             events, pre, direct, post, q, stdev = self.getEventLists(i)
             self.analysisCache[i.index]['eventList'] = events
@@ -343,7 +459,10 @@ class UncagingWindow(QtGui.QMainWindow):
             self.analysisCache[i.index]['stdev'] = stdev
             i.laserTime = q
             self.analyzeEvents(i)
-        for i in self.scanItems:
+        #for i in self.scanItems:
+            #color = self.spotColor(i)
+            #i.setBrush(QtGui.QBrush(color))
+        for i in self.scanAvgItems:
             color = self.spotColor(i)
             i.setBrush(QtGui.QBrush(color))
             
@@ -412,6 +531,11 @@ class UncagingWindow(QtGui.QMainWindow):
         direct = events[(times > stimInd) * (times < dirInd)]
         post = events[(times > dirInd) * (times < endInd)]
         
+        #pos = (post[post['sum'] > 0]['sum'].sum() / (endTime-dirTime)) - (pre[pre['sum'] > 0]['sum'].sum() / stimTime)
+        #neg = -(post[post['sum'] < 0]['sum'].sum() / (endTime-dirTime)) - (pre[pre['sum'] < 0]['sum'].sum() / stimTime)
+        
+        #dir = (abs(direct['sum']).sum() / (dirTime-stimTime)) - (abs(pre['sum']).sum() / stimTime)
+        
         stdev = data.std() / dt
         
         return events, pre, direct, post, q, stdev
@@ -453,25 +577,53 @@ class UncagingWindow(QtGui.QMainWindow):
             maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = self.ctrl.colorSpin1.value())
             #hue = 255 - (log(1+1000*(self.analysisCache[item.index]['postChargeNeg'] / self.analysisCache['postChargeNeg'].min())))*255/log(1001)
             #maxcharge = a.max()
-            print "maxCharge:", maxcharge, "spotcharge:", self.analysisCache[item.index]['postChargeNeg'], "spotCharge/maxCharge", self.analysisCache[item.index]['postChargeNeg']/maxcharge
-            hue = self.ctrl.colorSpin2.value() - (self.analysisCache[item.index]['postChargeNeg']/maxcharge)*255
+            #print "maxCharge:", maxcharge, "spotcharge:", self.analysisCache[item.index]['postChargeNeg'], "spotCharge/maxCharge", self.analysisCache[item.index]['postChargeNeg']/maxcharge
+            
+            if item.source is not None:  ## this is a single item
+                negCharge = self.analysisCache[item.index]['postChargeNeg']
+                numDirectEvents = len(self.analysisCache[item.index]['dirEvents'])
+            else:    ## this is an average item
+                negCharges = [self.analysisCache[i.index]['postChargeNeg'] for i in item.sourceItems]
+                numDirectEventses = [len(self.analysisCache[i.index]['dirEvents']) for i in item.sourceItems]
+                
+                if self.ctrl.medianCheck.isChecked() and len(item.sourceItems) > 2:
+                    negCharge = median(negCharges)  ## Luke thinks this should be median
+                    numDirectEvents = median(numDirectEventses)
+                    
+                else:
+                    negCharge = mean(negCharges)  ## Luke thinks this should be median
+                    numDirectEvents = mean(numDirectEventses)
+            
+            
+            ## Set color based on strength of negative events
+            hue = self.ctrl.colorSpin2.value() - (negCharge/maxcharge)*255
             #print "max charge:", maxcharge, "charge: ", iself.analysisCache[item.index]['postChargeNeg'], "hue: ", hue
             sat = 255
-    
-            if abs(self.analysisCache[item.index]['postChargeNeg']) > abs(maxcharge):
-                hue = 0
-                val = 140
-            if self.analysisCache[item.index]['postChargeNeg'] == 0:
-                alpha = 0
-            elif self.analysisCache[item.index]['postChargeNeg'] > histogram(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg']<0], bins = 1000)[1][-self.ctrl.colorSpin3.value()]:
+            
+            
+            #if abs(self.analysisCache[item.index]['postChargeNeg']) > abs(maxcharge):
+                #hue = 0
+                #val = 140
+                
+            ## Traces with no events are transparent
+            #if self.analysisCache[item.index]['postChargeNeg'] == 0:
+                #alpha = 0
+                
+            
+            ## Traces with events below threshold are transparent
+            #elif self.analysisCache[item.index]['postChargeNeg'] > histogram(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg']<0], bins = 1000)[1][-self.ctrl.colorSpin3.value()]:
+            if negCharge > stats.scoreatprecentile(self.analysisCache['postChargeNeg'], self.ctrl.colorSpin3.value()):
                 alpha = 0
             else:
                 alpha = 255
-            if len(self.analysisCache[item.index]['dirEvents']) > 0:
+                
+            ## Direct events are black
+            if numDirectEvents > 0:
                 val = 0
             else:
                 val = 255
-            print "hue", hue
+                
+            #print "hue", hue
             return QtGui.QColor.fromHsv(hue, sat, val, alpha)
         
    
@@ -490,7 +642,7 @@ class UncagingWindow(QtGui.QMainWindow):
         
     def loadTrace(self, item):
         """Returns a tuple where the first element is a clamp.ma, and the second is its directory handle."""
-        if not hasattr(item, 'source'):
+        if not hasattr(item, 'source') or item.source is None:
             return
         dh = item.source
         data = self.getClampData(dh)
