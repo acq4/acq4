@@ -96,11 +96,16 @@
       <item row="4" column="1">
        <widget class="QComboBox" name="detrendMethodCombo">
         <property name="currentIndex">
-         <number>1</number>
+         <number>0</number>
         </property>
         <item>
          <property name="text">
           <string>Scalar</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Histogram Consensus</string>
          </property>
         </item>
         <item>
@@ -174,7 +179,7 @@
       <item>
        <widget class="QStackedWidget" name="detectMethodStack">
         <property name="currentIndex">
-         <number>2</number>
+         <number>0</number>
         </property>
         <widget class="QWidget" name="page_3">
          <layout class="QGridLayout" name="gridLayout_4">
@@ -234,7 +239,11 @@
              </widget>
             </item>
             <item row="0" column="1">
-             <widget class="QDoubleSpinBox" name="zcSumThresholdSpin"/>
+             <widget class="QDoubleSpinBox" name="zcSumThresholdSpin">
+              <property name="value">
+               <double>8.000000000000000</double>
+              </property>
+             </widget>
             </item>
             <item row="1" column="0">
              <widget class="QLabel" name="label_3">
@@ -244,7 +253,11 @@
              </widget>
             </item>
             <item row="1" column="1">
-             <widget class="QDoubleSpinBox" name="zcAmpThresholdSpin"/>
+             <widget class="QDoubleSpinBox" name="zcAmpThresholdSpin">
+              <property name="value">
+               <double>8.000000000000000</double>
+              </property>
+             </widget>
             </item>
            </layout>
           </item>
@@ -284,7 +297,11 @@
              </widget>
             </item>
             <item row="0" column="1">
-             <widget class="QDoubleSpinBox" name="cbThresholdSpin"/>
+             <widget class="QDoubleSpinBox" name="cbThresholdSpin">
+              <property name="value">
+               <double>4.000000000000000</double>
+              </property>
+             </widget>
             </item>
             <item row="1" column="0">
              <widget class="QLabel" name="label_4">
@@ -294,7 +311,11 @@
              </widget>
             </item>
             <item row="1" column="1">
-             <widget class="QDoubleSpinBox" name="cbRiseTauSpin"/>
+             <widget class="QDoubleSpinBox" name="cbRiseTauSpin">
+              <property name="value">
+               <double>0.010000000000000</double>
+              </property>
+             </widget>
             </item>
             <item row="2" column="0">
              <widget class="QLabel" name="label_5">
@@ -304,7 +325,11 @@
              </widget>
             </item>
             <item row="2" column="1">
-             <widget class="QDoubleSpinBox" name="cbFallTauSpin"/>
+             <widget class="QDoubleSpinBox" name="cbFallTauSpin">
+              <property name="value">
+               <double>0.010000000000000</double>
+              </property>
+             </widget>
             </item>
            </layout>
           </item>
