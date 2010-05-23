@@ -51,47 +51,7 @@ class PlotROI(ROI):
         ROI.__init__(self, pos, size=size)
         self.addScaleHandle([1, 1], [0, 0])
 
-class ScaleBar(UIGraphicsItem):
-    def __init__(self, view, size, width=5, color=(100, 100, 255)):
-        self.size = size
-        UIGraphicsItem.__init__(self, view)
-        self.setAcceptedMouseButtons(QtCore.Qt.NoButton)
-        #self.pen = QtGui.QPen(QtGui.QColor(*color))
-        #self.pen.setWidth(width)
-        #self.pen.setCosmetic(True)
-        #self.pen2 = QtGui.QPen(QtGui.QColor(0,0,0))
-        #self.pen2.setWidth(width+2)
-        #self.pen2.setCosmetic(True)
-        self.brush = QtGui.QBrush(QtGui.QColor(*color))
-        self.pen = QtGui.QPen(QtGui.QColor(0,0,0))
-        self.width = width
-        
-    def paint(self, p, opt, widget):
-        rect = self.boundingRect()
-        unit = self.unitRect()
-        y = rect.bottom() + (rect.top()-rect.bottom()) * 0.02
-        y1 = y + unit.height()*self.width
-        x = rect.right() + (rect.left()-rect.right()) * 0.02
-        x1 = x - self.size
-        
-        
-        p.setPen(self.pen)
-        p.setBrush(self.brush)
-        rect = QtCore.QRectF(
-            QtCore.QPointF(x1, y1), 
-            QtCore.QPointF(x, y)
-        )
-        p.drawRect(rect)
-        
-        alpha = clip(((self.size/unit.width()) - 40.) * 255. / 80., 0, 255)
-        p.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0, alpha)))
-        for i in range(1, 10):
-            x2 = x + (x1-x) * 0.1 * i
-            p.drawLine(QtCore.QPointF(x2, y), QtCore.QPointF(x2, y1))
-        
 
-    def setSize(self, s):
-        self.size = s
 
 class CameraWindow(QtGui.QMainWindow):
     def __init__(self, module):

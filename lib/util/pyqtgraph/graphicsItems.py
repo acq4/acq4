@@ -1515,3 +1515,4 @@ class GridItem(UIGraphicsItem):
             x = tr.map(t[0])
             p.drawText(x, t[1])
         p.end()
+        

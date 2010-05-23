@@ -329,6 +329,7 @@ class UncagingWindow(QtGui.QMainWindow):
         bwtop.addWidget(self.ctrlWidget)
         self.ctrl.setupUi(self.ctrlWidget)
         bwtop.addWidget(self.canvas)
+        scaleBar = ScaleBar(self.canvas, 100e-6)
         QtCore.QObject.connect(self.ctrl.recolorBtn, QtCore.SIGNAL('clicked()'), self.recolor)
         self.ctrl.directTimeSpin.setValue(4.0)
         self.ctrl.poststimTimeSpin.setRange(1.0, 1000.0)
