@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'EventDetectionCtrlTemplate.ui'
 #
-# Created: Sat May 22 20:19:46 2010
+# Created: Sat May 22 20:47:45 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -69,6 +69,8 @@ class Ui_EventDetectionCtrlForm(object):
         self.groupBox = QtGui.QGroupBox(EventDetectionCtrlForm)
         self.groupBox.setObjectName("groupBox")
         self.verticalLayout = QtGui.QVBoxLayout(self.groupBox)
+        self.verticalLayout.setSpacing(0)
+        self.verticalLayout.setMargin(0)
         self.verticalLayout.setObjectName("verticalLayout")
         self.detectMethodCombo = QtGui.QComboBox(self.groupBox)
         self.detectMethodCombo.setObjectName("detectMethodCombo")
@@ -81,6 +83,8 @@ class Ui_EventDetectionCtrlForm(object):
         self.page_3 = QtGui.QWidget()
         self.page_3.setObjectName("page_3")
         self.gridLayout_4 = QtGui.QGridLayout(self.page_3)
+        self.gridLayout_4.setMargin(0)
+        self.gridLayout_4.setSpacing(0)
         self.gridLayout_4.setObjectName("gridLayout_4")
         self.label_6 = QtGui.QLabel(self.page_3)
         self.label_6.setObjectName("label_6")
@@ -89,12 +93,14 @@ class Ui_EventDetectionCtrlForm(object):
         self.stThresholdSpin.setProperty("value", 3.0)
         self.stThresholdSpin.setObjectName("stThresholdSpin")
         self.gridLayout_4.addWidget(self.stThresholdSpin, 0, 1, 1, 1)
-        spacerItem = QtGui.QSpacerItem(20, 45, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        spacerItem = QtGui.QSpacerItem(20, 69, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.gridLayout_4.addItem(spacerItem, 1, 0, 1, 1)
         self.detectMethodStack.addWidget(self.page_3)
         self.page_2 = QtGui.QWidget()
         self.page_2.setObjectName("page_2")
         self.verticalLayout_4 = QtGui.QVBoxLayout(self.page_2)
+        self.verticalLayout_4.setSpacing(0)
+        self.verticalLayout_4.setMargin(0)
         self.verticalLayout_4.setObjectName("verticalLayout_4")
         self.gridLayout = QtGui.QGridLayout()
         self.gridLayout.setSpacing(0)
@@ -118,6 +124,8 @@ class Ui_EventDetectionCtrlForm(object):
         self.page = QtGui.QWidget()
         self.page.setObjectName("page")
         self.verticalLayout_5 = QtGui.QVBoxLayout(self.page)
+        self.verticalLayout_5.setSpacing(0)
+        self.verticalLayout_5.setMargin(0)
         self.verticalLayout_5.setObjectName("verticalLayout_5")
         self.gridLayout_2 = QtGui.QGridLayout()
         self.gridLayout_2.setSpacing(0)
@@ -147,7 +155,7 @@ class Ui_EventDetectionCtrlForm(object):
 
         self.retranslateUi(EventDetectionCtrlForm)
         self.detrendMethodCombo.setCurrentIndex(1)
-        self.detectMethodStack.setCurrentIndex(0)
+        self.detectMethodStack.setCurrentIndex(2)
         QtCore.QMetaObject.connectSlotsByName(EventDetectionCtrlForm)
 
     def retranslateUi(self, EventDetectionCtrlForm):
