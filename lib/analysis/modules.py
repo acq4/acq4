@@ -449,7 +449,11 @@ class UncagingWindow(QtGui.QMainWindow):
         #for i in self.scanItems:
             #color = self.spotColor(i)
             #i.setBrush(QtGui.QBrush(color))
-        for i in self.scanItems:
+        progressDlg = QtGui.QProgressDialog("Detecting events in all traces...", "Cancel", 0, 100)
+        progressDlg.setWindowModality(QtCore.Qt.WindowModal)
+        #self.progressDlg.setMinimumDuration(0)
+        for n in range(len(self.scanItems)):
+            i = self.scanItems[n]
             events, pre, direct, post, q, stdev = self.getEventLists(i)
             self.analysisCache[i.index]['eventList'] = events
             self.analysisCache[i.index]['eventsValid'] = True
@@ -459,6 +463,13 @@ class UncagingWindow(QtGui.QMainWindow):
             self.analysisCache[i.index]['stdev'] = stdev
             i.laserTime = q
             self.analyzeEvents(i)
+            progressDlg.setValue(100.*float(n)/len(self.scanItems))
+            QtGui.QApplication.instance().processEvents()
+            if progressDlg.wasCanceled():
+                progressDlg.setValue(100)
+                return
+        progressDlg.setValue(100)
+
         #for i in self.scanItems:
             #color = self.spotColor(i)
             #i.setBrush(QtGui.QBrush(color))
@@ -506,7 +517,7 @@ class UncagingWindow(QtGui.QMainWindow):
         #    return QtGui.QColor(100,100,200)
         data = self.getClampData(i.source)['Channel':'primary']
         if self.analysisCache[i.index]['eventsValid'] == False:
-            print "Recomputing events...."
+            #print "Recomputing events...."
             a = self.plot.processData([data])[0] #events is an array
             events = a[a['len'] > 2] #trying to filter out noise
         else:
