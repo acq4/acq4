@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'UncagingControlTemplate.ui'
 #
-# Created: Sat May 22 20:47:44 2010
-#      by: PyQt4 UI code generator 4.7.2
+# Created: Sat May 22 21:05:06 2010
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_UncagingControlWidget(object):
     def setupUi(self, UncagingControlWidget):
         UncagingControlWidget.setObjectName("UncagingControlWidget")
-        UncagingControlWidget.resize(357, 199)
+        UncagingControlWidget.resize(365, 221)
         self.gridLayout_4 = QtGui.QGridLayout(UncagingControlWidget)
         self.gridLayout_4.setMargin(0)
         self.gridLayout_4.setSpacing(0)
@@ -46,7 +46,6 @@ class Ui_UncagingControlWidget(object):
         self.horizontalLayout.setMargin(0)
         self.horizontalLayout.setObjectName("horizontalLayout")
         self.groupBox_2 = QtGui.QGroupBox(self.groupBox_4)
-        self.groupBox_2.setTitle("")
         self.groupBox_2.setObjectName("groupBox_2")
         self.gridLayout_3 = QtGui.QGridLayout(self.groupBox_2)
         self.gridLayout_3.setMargin(0)
@@ -71,7 +70,6 @@ class Ui_UncagingControlWidget(object):
         self.gridLayout_3.addItem(spacerItem, 5, 0, 1, 1)
         self.horizontalLayout.addWidget(self.groupBox_2)
         self.groupBox_3 = QtGui.QGroupBox(self.groupBox_4)
-        self.groupBox_3.setTitle("")
         self.groupBox_3.setObjectName("groupBox_3")
         self.verticalLayout = QtGui.QVBoxLayout(self.groupBox_3)
         self.verticalLayout.setSpacing(0)
@@ -102,6 +100,9 @@ class Ui_UncagingControlWidget(object):
         self.useSpontActCheck = QtGui.QCheckBox(self.groupBox)
         self.useSpontActCheck.setObjectName("useSpontActCheck")
         self.gridLayout_2.addWidget(self.useSpontActCheck, 2, 0, 1, 1)
+        self.medianCheck = QtGui.QCheckBox(self.groupBox)
+        self.medianCheck.setObjectName("medianCheck")
+        self.gridLayout_2.addWidget(self.medianCheck, 3, 0, 1, 1)
         self.gridLayout_4.addWidget(self.groupBox, 1, 0, 1, 1)
         self.recolorBtn = QtGui.QPushButton(UncagingControlWidget)
         self.recolorBtn.setObjectName("recolorBtn")
@@ -124,5 +125,6 @@ class Ui_UncagingControlWidget(object):
         self.eventFindRadio.setText(QtGui.QApplication.translate("UncagingControlWidget", "Event Finding", None, QtGui.QApplication.UnicodeUTF8))
         self.chargeTransferRadio.setText(QtGui.QApplication.translate("UncagingControlWidget", "Total Charge Transfer", None, QtGui.QApplication.UnicodeUTF8))
         self.useSpontActCheck.setText(QtGui.QApplication.translate("UncagingControlWidget", "Use Spont. Activity", None, QtGui.QApplication.UnicodeUTF8))
+        self.medianCheck.setText(QtGui.QApplication.translate("UncagingControlWidget", "Use Median", None, QtGui.QApplication.UnicodeUTF8))
         self.recolorBtn.setText(QtGui.QApplication.translate("UncagingControlWidget", "Re-Color", None, QtGui.QApplication.UnicodeUTF8))
 

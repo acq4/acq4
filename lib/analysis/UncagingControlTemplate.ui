@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>357</width>
-    <height>199</height>
+    <width>365</width>
+    <height>221</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -195,6 +195,13 @@
        <widget class="QCheckBox" name="useSpontActCheck">
         <property name="text">
          <string>Use Spont. Activity</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QCheckBox" name="medianCheck">
+        <property name="text">
+         <string>Use Median</string>
         </property>
        </widget>
       </item>

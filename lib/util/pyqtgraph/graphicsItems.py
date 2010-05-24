@@ -21,6 +21,7 @@ from functions import *
 import types, sys, struct
 
 
+
 class ItemGroup(QtGui.QGraphicsItem):
     def boundingRect(self):
         return QtCore.QRectF()
@@ -35,12 +36,10 @@ class ItemGroup(QtGui.QGraphicsItem):
 class QObjectWorkaround:
     def __init__(self):
         self._qObj_ = QtCore.QObject()
-    #def __getattr__(self, attr):
-        #if attr == '_qObj_':
-            #raise Exception("QObjectWorkaround not initialized!")
-        #return getattr(self._qObj_, attr)
     def connect(self, *args):
         return QtCore.QObject.connect(self._qObj_, *args)
+    def disconnect(self, *args):
+        return QtCore.QObject.disconnect(self._qObj_, *args)
     def emit(self, *args):
         return QtCore.QObject.emit(self._qObj_, *args)
 
@@ -535,6 +534,7 @@ class UIGraphicsItem(QtGui.QGraphicsItem):
         self._viewRect = self._view.rect()
         self._viewTransform = self.viewTransform()
         self.setNewBounds()
+        QtCore.QObject.connect(view, QtCore.SIGNAL('viewChanged'), self.viewChangedEvent)
         
     def viewRect(self):
         """Return the viewport widget rect"""
@@ -554,7 +554,7 @@ class UIGraphicsItem(QtGui.QGraphicsItem):
             vr = self._view.rect()
             tr = self.viewTransform()
             if vr != self._viewRect or tr != self._viewTransform:
-                self.viewChangedEvent(vr, self._viewRect)
+                #self.viewChangedEvent(vr, self._viewRect)
                 self._viewRect = vr
                 self._viewTransform = tr
                 self.setNewBounds()
@@ -571,9 +571,10 @@ class UIGraphicsItem(QtGui.QGraphicsItem):
         self.bounds = self.viewTransform().inverted()[0].mapRect(bounds)
         self.prepareGeometryChange()
 
-    def viewChangedEvent(self, newRect, oldRect):
+    def viewChangedEvent(self):
         """Called when the view widget is resized"""
-        pass
+        self.boundingRect()
+        self.update()
         
     def unitRect(self):
         return self.viewTransform().inverted()[0].mapRect(QtCore.QRectF(0, 0, 1, 1))
@@ -1556,3 +1557,90 @@ class ScaleBar(UIGraphicsItem):
 
     def setSize(self, s):
         self.size = s
+        
+class ColorScaleBar(UIGraphicsItem):
+    def __init__(self, view, size, offset):
+        self.size = size
+        self.offset = offset
+        UIGraphicsItem.__init__(self, view)
+        self.setAcceptedMouseButtons(QtCore.Qt.NoButton)
+        self.brush = QtGui.QBrush(QtGui.QColor(200,0,0))
+        self.pen = QtGui.QPen(QtGui.QColor(0,0,0))
+        self.labels = {'max': 1, 'min': 0}
+        self.gradient = QtGui.QLinearGradient()
+        self.gradient.setColorAt(0, QtGui.QColor(0,0,0))
+        self.gradient.setColorAt(1, QtGui.QColor(255,0,0))
+        
+    def setGradient(self, g):
+        self.brush = QtGui.QBrush(g)
+        self.update()
+        
+    def setLabels(self, l):
+        self.labels = l
+        self.update()
+        
+    def paint(self, p, opt, widget):
+        rect = self.boundingRect()   ## Boundaries of visible area in scene coords.
+        unit = self.unitRect()       ## Size of one view pixel in scene coords.
+        
+        ## determine max width of all labels
+        labelWidth = 0
+        labelHeight = 0
+        for k in self.labels:
+            b = p.boundingRect(QtCore.QRectF(0, 0, 0, 0), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, k)
+            labelWidth = max(labelWidth, b.width())
+            labelHeight = max(labelHeight, b.height())
+            
+        labelWidth *= unit.width()
+        labelHeight *= unit.height()
+        
+        textPadding = 2  # in px
+        
+        if self.offset[0] < 0:
+            x3 = rect.right() + unit.width() * self.offset[0]
+            x2 = x3 - labelWidth - unit.width()*textPadding*2
+            x1 = x2 - unit.width() * self.size[0]
+        else:
+            x1 = rect.left() + unit.width() * self.offset[0]
+            x2 = x1 + unit.width() * self.size[0]
+            x3 = x2 + labelWidth + unit.width()*textPadding*2
+        if self.offset[1] < 0:
+            y2 = rect.top() - unit.height() * self.offset[1]
+            y1 = y2 + unit.height() * self.size[1]
+        else:
+            y1 = rect.bottom() - unit.height() * self.offset[1]
+            y2 = y1 - unit.height() * self.size[1]
+        self.b = [x1,x2,x3,y1,y2,labelWidth]
+            
+        ## Draw background
+        p.setPen(self.pen)
+        p.setBrush(QtGui.QBrush(QtGui.QColor(255,255,255,100)))
+        rect = QtCore.QRectF(
+            QtCore.QPointF(x1 - unit.width()*textPadding, y1 + labelHeight/2 + unit.height()*textPadding), 
+            QtCore.QPointF(x3, y2 - labelHeight/2 - unit.height()*textPadding)
+        )
+        p.drawRect(rect)
+        
+        
+        ## Draw color bar
+        self.gradient.setStart(0, y1)
+        self.gradient.setFinalStop(0, y2)
+        p.setBrush(self.gradient)
+        rect = QtCore.QRectF(
+            QtCore.QPointF(x1, y1), 
+            QtCore.QPointF(x2, y2)
+        )
+        p.drawRect(rect)
+        
+        
+        ## draw labels
+        ## Have to scale painter so that text is correct size. Bleh.
+        p.scale(unit.width(), unit.height())
+        p.setPen(QtGui.QPen(QtGui.QColor(0,0,0)))
+        tx = x2 + unit.width()*textPadding
+        lh = labelHeight/unit.height()
+        for k in self.labels:
+            y = y1 + self.labels[k] * (y2-y1)
+            p.drawText(QtCore.QRectF(tx/unit.width(), y/unit.height() - lh/2.0, 1000, lh), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, k)
+        
+        

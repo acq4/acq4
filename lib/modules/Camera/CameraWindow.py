@@ -51,7 +51,6 @@ class PlotROI(ROI):
         ROI.__init__(self, pos, size=size)
         self.addScaleHandle([1, 1], [0, 0])
 
-
 class CameraWindow(QtGui.QMainWindow):
     def __init__(self, module):
         
