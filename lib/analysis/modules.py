@@ -627,14 +627,14 @@ class UncagingWindow(QtGui.QMainWindow):
                         else:
                             negCharge = 0
                             numDirectEvents = mean(numDirectEventses)
-                print "negCharge:", negCharge
+                #print "negCharge:", negCharge, "maxCharge:", maxcharge
             
                 ## Set color based on strength of negative events
-                print "Getting color...."
+                #print "Getting color...."
                 color = self.ctrl.gradientWidget.getColor(clip(negCharge/maxcharge, 0, 1))
-                print "Color retrieved.", color
+                #print "Color retrieved.", color
                 ## Traces with no events are transparent
-                if negCharge < 1e-16:
+                if abs(negCharge) < 1e-16:
                     color = QtGui.QColor(0,0,0,0)
                     
                 ## Traces with events below threshold are transparent
@@ -647,10 +647,10 @@ class UncagingWindow(QtGui.QMainWindow):
                 else:
                     pen = QtGui.QPen()
                 
-                print "Setting color...."
-                i.setBrush(color)
-                i.setPen(pen)
-                print "Color set."
+                #print "Setting color...."
+                item.setBrush(color)
+                item.setPen(pen)
+                #print "Color set."
    
     def mouseClicked(self, ev):
         ###should probably make mouseClicked faster by using cached data instead of calling processData in eventFinderWidget each time
