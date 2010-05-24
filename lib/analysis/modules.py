@@ -28,6 +28,9 @@ class UncagingSpot(QtGui.QGraphicsEllipseItem):
         self.size = None
         self.laserTime = None
         self.sourceItems = []   ## points to source spots if this is an average
+        
+
+        
 
 from EventDetectionCtrlTemplate import *
 
@@ -329,7 +332,11 @@ class UncagingWindow(QtGui.QMainWindow):
         bwtop.addWidget(self.ctrlWidget)
         self.ctrl.setupUi(self.ctrlWidget)
         bwtop.addWidget(self.canvas)
-        scaleBar = ScaleBar(self.canvas, 100e-6)
+        self.scaleBar = ScaleBar(self.canvas.view, 1e-3, width = -5)
+        self.scaleBar.setZValue(1000000)
+        self.canvas.view.scene().addItem(self.scaleBar)
+        self.colorScaleBar = ColorScaleBar(self.canvas.view, [10,150], [-10,-10])
+        self.canvas.view.scene().addItem(self.colorScaleBar)
         QtCore.QObject.connect(self.ctrl.recolorBtn, QtCore.SIGNAL('clicked()'), self.recolor)
         self.ctrl.directTimeSpin.setValue(4.0)
         self.ctrl.poststimTimeSpin.setRange(1.0, 1000.0)
@@ -483,6 +490,9 @@ class UncagingWindow(QtGui.QMainWindow):
         for i in self.scanAvgItems:
             color = self.spotColor(i)
             i.setBrush(QtGui.QBrush(color))
+            
+            
+        #self.canvas.colorScaleBar.setBrush(QtGui.QLinearGradient)
             
     def getClampData(self, dh):
         """Returns a clamp.ma
@@ -641,6 +651,7 @@ class UncagingWindow(QtGui.QMainWindow):
             ## Direct events are black
             if numDirectEvents > 0:
                 val = 0
+                alpha = 255
             else:
                 val = 255
                 
