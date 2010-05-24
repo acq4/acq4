@@ -3,8 +3,8 @@ from PyQt4 import QtGui, QtCore
 
 
 class GradientWidget(QtGui.QGraphicsView):
-    def __init__(self):
-        QtGui.QGraphicsView.__init__(self)
+    def __init__(self, parent=None):
+        QtGui.QGraphicsView.__init__(self, parent)
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.setTransformationAnchor(QtGui.QGraphicsView.NoAnchor)
@@ -58,18 +58,18 @@ class GradientWidget(QtGui.QGraphicsView):
         return self.gradient
         
     def getColor(self, x):
-        x2 = ticks[0].x()
-        for i in range(1,len(ticks)):
+        x2 = self.ticks[0].x()
+        for i in range(1,len(self.ticks)):
             x1 = x2
-            x2 = ticks[i].x()
-            if x1 < x and x2 >= x:
+            x2 = self.ticks[i].x()
+            if x1 <= x and x2 >= x:
                 f = (x-x1) / (x2-x1)
-                c1 = ticks[i-1].color
-                c2 = ticks[i].color
+                c1 = self.ticks[i-1].color
+                c2 = self.ticks[i].color
                 r = c1.red() * (1.-f) + c2.red() * f
                 g = c1.green() * (1.-f) + c2.green() * f
                 b = c1.blue() * (1.-f) + c2.blue() * f
-                c = QtGui.QColor()
+                return QtGui.QColor(r, g, b)
                 
                 
             
