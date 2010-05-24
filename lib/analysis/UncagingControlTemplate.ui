@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>365</width>
-    <height>221</height>
+    <width>379</width>
+    <height>232</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -75,79 +75,53 @@
          <string/>
         </property>
         <layout class="QGridLayout" name="gridLayout_3">
-         <property name="margin">
-          <number>0</number>
-         </property>
-         <property name="spacing">
-          <number>0</number>
-         </property>
-         <item row="0" column="0">
-          <widget class="QRadioButton" name="rainbowRadio">
+         <item row="0" column="0" colspan="2">
+          <widget class="QRadioButton" name="gradientRadio">
            <property name="text">
-            <string>Rainbow</string>
+            <string>Gradient</string>
            </property>
           </widget>
          </item>
-         <item row="1" column="0">
-          <widget class="QDoubleSpinBox" name="colorSpin1"/>
+         <item row="1" column="0" colspan="2">
+          <layout class="QHBoxLayout" name="horizontalLayout_2">
+           <item>
+            <widget class="QLabel" name="label_4">
+             <property name="text">
+              <string>Low % Cutoff</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QDoubleSpinBox" name="colorSpin1"/>
+           </item>
+          </layout>
          </item>
-         <item row="2" column="0">
-          <widget class="QDoubleSpinBox" name="colorSpin2"/>
+         <item row="2" column="0" colspan="2">
+          <layout class="QHBoxLayout" name="horizontalLayout_3">
+           <item>
+            <widget class="QLabel" name="label_5">
+             <property name="text">
+              <string>High % Cutoff</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QSpinBox" name="colorSpin3"/>
+           </item>
+          </layout>
          </item>
-         <item row="3" column="0">
-          <widget class="QSpinBox" name="colorSpin3"/>
+         <item row="3" column="0" colspan="2">
+          <widget class="GradientWidget" name="gradientWidget" native="true"/>
          </item>
-         <item row="4" column="0">
+         <item row="5" column="0">
           <widget class="QRadioButton" name="rgbRadio">
            <property name="text">
             <string>RGB</string>
            </property>
           </widget>
          </item>
-         <item row="5" column="0">
+         <item row="4" column="0">
           <spacer name="verticalSpacer_2">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
-       </widget>
-      </item>
-      <item>
-       <widget class="QGroupBox" name="groupBox_3">
-        <property name="title">
-         <string/>
-        </property>
-        <layout class="QVBoxLayout" name="verticalLayout">
-         <property name="spacing">
-          <number>0</number>
-         </property>
-         <property name="margin">
-          <number>0</number>
-         </property>
-         <item>
-          <widget class="QRadioButton" name="scaledRadio">
-           <property name="text">
-            <string>Scaled</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QRadioButton" name="absoluteRadio">
-           <property name="text">
-            <string>Absolute</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer name="verticalSpacer">
            <property name="orientation">
             <enum>Qt::Vertical</enum>
            </property>
@@ -217,6 +191,14 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>GradientWidget</class>
+   <extends>QWidget</extends>
+   <header>lib.util.GradientWidget</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

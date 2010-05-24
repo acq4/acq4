@@ -336,6 +336,7 @@ class UncagingWindow(QtGui.QMainWindow):
         self.scaleBar.setZValue(1000000)
         self.canvas.view.scene().addItem(self.scaleBar)
         self.colorScaleBar = ColorScaleBar(self.canvas.view, [10,150], [-10,-10])
+        self.colorScaleBar.setZValue(1000000)
         self.canvas.view.scene().addItem(self.colorScaleBar)
         QtCore.QObject.connect(self.ctrl.recolorBtn, QtCore.SIGNAL('clicked()'), self.recolor)
         self.ctrl.directTimeSpin.setValue(4.0)
@@ -347,7 +348,7 @@ class UncagingWindow(QtGui.QMainWindow):
         self.ctrl.poststimTimeSpin.setValue(300.0)
         self.ctrl.eventFindRadio.setChecked(True)
         self.ctrl.useSpontActCheck.setChecked(False)
-        self.ctrl.rainbowRadio.setChecked(True)
+        self.ctrl.gradientRadio.setChecked(True)
         self.ctrl.absoluteRadio.setChecked(True)
         self.ctrl.medianCheck.setChecked(True)
         
@@ -612,7 +613,7 @@ class UncagingWindow(QtGui.QMainWindow):
             green = clip(log(max(1.0, (self.analysisCache[item.index]['dirCharge']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255)
             return QtGui.QColor(red, green, blue, max(red, green, blue))
             
-        if self.ctrl.rainbowRadio.isChecked():
+        if self.ctrl.gradientRadio.isChecked():
             maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = self.ctrl.colorSpin1.value())
             #hue = 255 - (log(1+1000*(self.analysisCache[item.index]['postChargeNeg'] / self.analysisCache['postChargeNeg'].min())))*255/log(1001)
             #maxcharge = a.max()
