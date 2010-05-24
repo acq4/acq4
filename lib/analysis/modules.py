@@ -493,6 +493,7 @@ class UncagingWindow(QtGui.QMainWindow):
                 return
         progressDlg.setValue(100)
         self.colorSpots()
+        self.colorScaleBar.setGradient(self.ctrl.gradientWidget.getGradient())
         #for i in self.scanItems:
             #color = self.spotColor(i)
             #i.setBrush(QtGui.QBrush(color))
