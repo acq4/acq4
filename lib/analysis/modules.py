@@ -271,23 +271,23 @@ class EventMatchWidget(QtGui.QSplitter):
         return events
         
         
-    def tauChanged(self):
-        self.recalculate()
-        
-    def lowPassChanged(self):
-        self.recalculate()
-        
-    def thresholdChanged(self):
-        self.recalculate()
-        
-    def setTau(self, val):
-        self.tauSpin.setValue(val)
-        
-    def setLowPass(self, val):
-        self.lowPassSpin.setValue(val)
-        
-    def setThreshold(self, val):
-        self.thresholdSpin.setValue(val)
+    #def tauChanged(self):
+    #    self.recalculate()
+    #    
+    #def lowPassChanged(self):
+    #    self.recalculate()
+    #    
+    #def thresholdChanged(self):
+    #    self.recalculate()
+    #    
+    #def setTau(self, val):
+    #    self.tauSpin.setValue(val)
+    #    
+    #def setLowPass(self, val):
+    #    self.lowPassSpin.setValue(val)
+    #    
+    #def setThreshold(self, val):
+    #    self.thresholdSpin.setValue(val)
         
     def clear(self):
         self.analysisPlot.clear()
@@ -391,7 +391,7 @@ class UncagingWindow(QtGui.QMainWindow):
             ps = info['pixelSize']
             pos = info['imagePosition']
             
-        img = img.astype(ndarray)
+        img = img.view(ndarray)
         if img.ndim == 3:
             img = img.max(axis=0)
         #print pos, ps, img.shape, img.dtype, img.max(), img.min()
