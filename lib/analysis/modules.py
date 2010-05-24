@@ -357,6 +357,16 @@ class UncagingWindow(QtGui.QMainWindow):
         self.plot = EventMatchWidget()
         self.cw.addWidget(self.plot)
         
+        ### Have changing the event detection parameters clear the analysisCache
+            ##just a few now, should add more
+        QtCore.QObject.connect(self.plot.ctrl.lowPassCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        QtCore.QObject.connect(self.plot.ctrl.lowPassSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        QtCore.QObject.connect(self.plot.ctrl.expDeconvolveCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        QtCore.QObject.connect(self.plot.ctrl.expDeconvolveSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        QtCore.QObject.connect(self.plot.ctrl.detrendCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        QtCore.QObject.connect(self.plot.ctrl.zcSumThresholdSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        
+        
         self.z = 0
         self.resize(1000, 600)
         self.show()
@@ -367,8 +377,8 @@ class UncagingWindow(QtGui.QMainWindow):
         self.noiseThreshold = 2.0
         self.eventTimes = []
         self.analysisCache = empty(len(self.scanItems),
-            {'names': ('spotID', 'eventsValid', 'eventList', 'preEvents', 'dirEvents', 'postEvents', 'stdev', 'preChargePos', 'preChargeNeg', 'dirCharge', 'postChargePos', 'postChargeNeg'),
-             'formats':(object, object, object, object, object, object, float, float, float, float, float, float)})
+            {'names': ('eventsValid', 'eventList', 'preEvents', 'dirEvents', 'postEvents', 'stdev', 'preChargePos', 'preChargeNeg', 'dirCharge', 'postChargePos', 'postChargeNeg'),
+             'formats':(object, object, object, object, object, float, float, float, float, float, float)})
         
         
     def addImage(self, img=None):
@@ -455,10 +465,11 @@ class UncagingWindow(QtGui.QMainWindow):
         self.scanItems = []
         self.currentTraces = []
         self.eventTimes = []
-        self.analysisCache = empty(len(self.scanItems),
-            {'names': ('spotID', 'eventsValid', 'eventList', 'preEvents', 'dirEvents', 'postEvents', 'stdev', 'preChargePos', 'preChargeNeg', 'dirCharge', 'postChargePos', 'postChargeNeg'),
-             'formats':(object, object, object, object, object, object, float, float, float, float, float, float)})
-    
+        self.resetAnalysisCache()
+        
+    def resetAnalysisCache(self):
+        self.analysisCache['eventsValid'] = False
+        
     def recolor(self):
         #for i in self.scanItems:
             #color = self.spotColor(i)
@@ -488,9 +499,9 @@ class UncagingWindow(QtGui.QMainWindow):
             #color = self.spotColor(i)
             #i.setBrush(QtGui.QBrush(color))
         for i in self.scanAvgItems:
-            color = self.spotColor(i)
+            color, pen = self.spotColor(i)
             i.setBrush(QtGui.QBrush(color))
-            
+            i.setPen(pen)
             
         #self.canvas.colorScaleBar.setBrush(QtGui.QLinearGradient)
             
@@ -650,18 +661,20 @@ class UncagingWindow(QtGui.QMainWindow):
                 
             ## Direct events are black
             if numDirectEvents > 0:
-                val = 0
+                pen = mkPen(width = 2)
                 alpha = 255
+            else:
+                pen = QtGui.QPen()
+                
+            if hue < 0:
+                val = clip(255+hue, 100, 255)
+                hue = 0
             else:
                 val = 255
                 
-            if hue < 0 and numDirectEvents == 0:
-                val = clip(255+hue, 100, 255)
-                hue = 0
-                
             #print "hue:", hue, "sat:", sat, "val:", val, "alpha:", alpha
 
-            return QtGui.QColor.fromHsv(hue, sat, val, alpha)
+            return QtGui.QColor.fromHsv(hue, sat, val, alpha), pen
         
    
     def mouseClicked(self, ev):
