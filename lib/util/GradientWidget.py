@@ -24,9 +24,12 @@ class GradientWidget(QtGui.QGraphicsView):
         self.addTick(1, QtGui.QColor(255,0,0), True)
         self.setMaximumHeight(40)
         self.setFrameStyle(QtGui.QFrame.NoFrame | QtGui.QFrame.Plain)
+        self.setBackgroundRole(QtGui.QPalette.NoRole)
      
         
-    def addTick(self, x, c, e=False):
+    def addTick(self, x, c=None, e=False):
+        if c is None:
+            c = self.getColor(x)
         tick = Tick([x*100, 0], c, e)
         self.ticks.append(tick)
         self.scene.addItem(tick)
@@ -44,26 +47,38 @@ class GradientWidget(QtGui.QGraphicsView):
         self.emit(QtCore.SIGNAL('gradientChanged'), self)
         
     def resizeEvent(self, ev):
-        self.fitInView(QtCore.QRectF(-6, -20, 112, 20), QtCore.Qt.KeepAspectRatio)
+        self.fitInView(QtCore.QRectF(-6, -17, 112, 17), QtCore.Qt.KeepAspectRatio)
         
     def mouseReleaseEvent(self, ev):
+        QtGui.QGraphicsView.mouseReleaseEvent(self, ev)
         if ev.button() == QtCore.Qt.LeftButton and len(self.items(ev.pos())) < 1:
             pos = self.mapToScene(ev.pos())
-            self.addTick(pos.x()/100., QtGui.QColor(0,0,0))
+            if pos.x() < 0 or pos.x() > 100:
+                return
+            pos.setX(min(max(pos.x(), 0), 100))
+            self.addTick(pos.x()/100.)
             self.tickChanged()
-        else:
-            return QtGui.QGraphicsView.mouseReleaseEvent(self, ev)
+        QtGui.QGraphicsView.mouseReleaseEvent(self, ev)
         
     def getGradient(self):
         return self.gradient
         
     def getColor(self, x):
+        if x <= 0:
+            return self.ticks[0].color
+        if x >= 1:
+            return self.ticks[-1].color
+            
         x2 = self.ticks[0].x()
         for i in range(1,len(self.ticks)):
             x1 = x2
             x2 = self.ticks[i].x()
             if x1 <= x and x2 >= x:
-                f = (x-x1) / (x2-x1)
+                dx = (x2-x1)
+                if dx == 0:
+                    f = 0.
+                else:
+                    f = (x-x1) / dx
                 c1 = self.ticks[i-1].color
                 c2 = self.ticks[i].color
                 r = c1.red() * (1.-f) + c2.red() * f
@@ -87,8 +102,9 @@ class QObjectWorkaround:
         
         
 class Tick(QtGui.QGraphicsPolygonItem, QObjectWorkaround):
-    def __init__(self, pos, color, endTick=False, scale=10):
+    def __init__(self, pos, color, endTick=False, scale=7):
         QObjectWorkaround.__init__(self)
+            
         self.scale = scale
         self.color = color
         self.endTick = endTick
@@ -97,11 +113,16 @@ class Tick(QtGui.QGraphicsPolygonItem, QObjectWorkaround):
         self.setPos(pos[0], pos[1])
         self.setFlags(QtGui.QGraphicsItem.ItemIsMovable | QtGui.QGraphicsItem.ItemIsSelectable)
         self.setBrush(QtGui.QBrush(QtGui.QColor(self.color)))
+        if endTick:
+            self.setZValue(0)
+        else:
+            self.setZValue(1)
 
     def x(self):
         return self.pos().x()/100.
 
     def mouseMoveEvent(self, ev):
+        #print self, "move", ev.scenePos()
         if self.endTick:
             return
         if not ev.buttons() & QtCore.Qt.LeftButton:
@@ -116,6 +137,7 @@ class Tick(QtGui.QGraphicsPolygonItem, QObjectWorkaround):
         ev.accept()
 
     def mousePressEvent(self, ev):
+        #print self, "press", ev.scenePos()
         if ev.button() == QtCore.Qt.LeftButton:
             ev.accept()
             self.mouseOffset = self.pos() - ev.scenePos()
@@ -127,6 +149,7 @@ class Tick(QtGui.QGraphicsPolygonItem, QObjectWorkaround):
             self.emit(QtCore.SIGNAL('tickChanged'), self, True)
             
     def mouseReleaseEvent(self, ev):
+        #print self, "release", ev.scenePos()
         if ev.button() == QtCore.Qt.LeftButton and ev.scenePos() == self.pressPos:
             self.color = QtGui.QColorDialog.getColor(self.color, None, "Select Color", QtGui.QColorDialog.ShowAlphaChannel)
             self.setBrush(QtGui.QBrush(QtGui.QColor(self.color)))
