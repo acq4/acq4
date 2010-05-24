@@ -1572,7 +1572,7 @@ class ColorScaleBar(UIGraphicsItem):
         self.gradient.setColorAt(1, QtGui.QColor(255,0,0))
         
     def setGradient(self, g):
-        self.brush = QtGui.QBrush(g)
+        self.gradient = g
         self.update()
         
     def setLabels(self, l):
@@ -1622,20 +1622,21 @@ class ColorScaleBar(UIGraphicsItem):
         p.drawRect(rect)
         
         
+        ## Have to scale painter so that text and gradients are correct size. Bleh.
+        p.scale(unit.width(), unit.height())
+        
         ## Draw color bar
-        self.gradient.setStart(0, y1)
-        self.gradient.setFinalStop(0, y2)
+        self.gradient.setStart(0, y1/unit.height())
+        self.gradient.setFinalStop(0, y2/unit.height())
         p.setBrush(self.gradient)
         rect = QtCore.QRectF(
-            QtCore.QPointF(x1, y1), 
-            QtCore.QPointF(x2, y2)
+            QtCore.QPointF(x1/unit.width(), y1/unit.height()), 
+            QtCore.QPointF(x2/unit.width(), y2/unit.height())
         )
         p.drawRect(rect)
         
         
         ## draw labels
-        ## Have to scale painter so that text is correct size. Bleh.
-        p.scale(unit.width(), unit.height())
         p.setPen(QtGui.QPen(QtGui.QColor(0,0,0)))
         tx = x2 + unit.width()*textPadding
         lh = labelHeight/unit.height()

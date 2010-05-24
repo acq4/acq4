@@ -341,15 +341,12 @@ class UncagingWindow(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ctrl.recolorBtn, QtCore.SIGNAL('clicked()'), self.recolor)
         self.ctrl.directTimeSpin.setValue(4.0)
         self.ctrl.poststimTimeSpin.setRange(1.0, 1000.0)
-        self.ctrl.colorSpin2.setRange(0, 360.0)
-        self.ctrl.colorSpin2.setValue(280.0)
         self.ctrl.colorSpin1.setValue(8.0)
         self.ctrl.colorSpin3.setValue(99)
         self.ctrl.poststimTimeSpin.setValue(300.0)
         self.ctrl.eventFindRadio.setChecked(True)
         self.ctrl.useSpontActCheck.setChecked(False)
-        self.ctrl.rainbowRadio.setChecked(True)
-        self.ctrl.absoluteRadio.setChecked(True)
+        self.ctrl.gradientRadio.setChecked(True)
         self.ctrl.medianCheck.setChecked(True)
         
         
@@ -357,6 +354,16 @@ class UncagingWindow(QtGui.QMainWindow):
         #self.plot = PlotWidget()
         self.plot = EventMatchWidget()
         self.cw.addWidget(self.plot)
+        
+        ### Have changing the event detection parameters clear the analysisCache
+            ##just a few now, should add more
+        QtCore.QObject.connect(self.plot.ctrl.lowPassCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        QtCore.QObject.connect(self.plot.ctrl.lowPassSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        QtCore.QObject.connect(self.plot.ctrl.expDeconvolveCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        QtCore.QObject.connect(self.plot.ctrl.expDeconvolveSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        QtCore.QObject.connect(self.plot.ctrl.detrendCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        QtCore.QObject.connect(self.plot.ctrl.zcSumThresholdSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        
         
         self.z = 0
         self.resize(1000, 600)
@@ -368,8 +375,8 @@ class UncagingWindow(QtGui.QMainWindow):
         self.noiseThreshold = 2.0
         self.eventTimes = []
         self.analysisCache = empty(len(self.scanItems),
-            {'names': ('spotID', 'eventsValid', 'eventList', 'preEvents', 'dirEvents', 'postEvents', 'stdev', 'preChargePos', 'preChargeNeg', 'dirCharge', 'postChargePos', 'postChargeNeg'),
-             'formats':(object, object, object, object, object, object, float, float, float, float, float, float)})
+            {'names': ('eventsValid', 'eventList', 'preEvents', 'dirEvents', 'postEvents', 'stdev', 'preChargePos', 'preChargeNeg', 'dirCharge', 'postChargePos', 'postChargeNeg'),
+             'formats':(object, object, object, object, object, float, float, float, float, float, float)})
         
         
     def addImage(self, img=None):
@@ -433,7 +440,7 @@ class UncagingWindow(QtGui.QMainWindow):
                     avgSpot = UncagingSpot()
                     avgSpot.position = pos
                     avgSpot.size = size
-                    avgSpot.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200)))                 
+                    avgSpot.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200, 0)))                 
                     self.canvas.addItem(avgSpot, [pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z+10000, name=["Averages", "spot%03d"%len(self.scanAvgItems)])
                     self.scanAvgItems.append(avgSpot)
                 
@@ -456,10 +463,11 @@ class UncagingWindow(QtGui.QMainWindow):
         self.scanItems = []
         self.currentTraces = []
         self.eventTimes = []
-        self.analysisCache = empty(len(self.scanItems),
-            {'names': ('spotID', 'eventsValid', 'eventList', 'preEvents', 'dirEvents', 'postEvents', 'stdev', 'preChargePos', 'preChargeNeg', 'dirCharge', 'postChargePos', 'postChargeNeg'),
-             'formats':(object, object, object, object, object, object, float, float, float, float, float, float)})
-    
+        self.resetAnalysisCache()
+        
+    def resetAnalysisCache(self):
+        self.analysisCache['eventsValid'] = False
+        
     def recolor(self):
         #for i in self.scanItems:
             #color = self.spotColor(i)
@@ -484,14 +492,11 @@ class UncagingWindow(QtGui.QMainWindow):
                 progressDlg.setValue(100)
                 return
         progressDlg.setValue(100)
-
+        self.colorSpots()
         #for i in self.scanItems:
             #color = self.spotColor(i)
             #i.setBrush(QtGui.QBrush(color))
-        for i in self.scanAvgItems:
-            color = self.spotColor(i)
-            i.setBrush(QtGui.QBrush(color))
-            
+ 
             
         #self.canvas.colorScaleBar.setBrush(QtGui.QLinearGradient)
             
@@ -595,75 +600,58 @@ class UncagingWindow(QtGui.QMainWindow):
             self.analysisCache[item.index]['preChargeNeg'] = preNeg
             self.analysisCache[item.index]['dirCharge'] = 0
             
-    def spotColor(self, item):
-        if self.ctrl.rgbRadio.isChecked():
-            red = clip(log(max(1.0, (self.analysisCache[item.index]['postChargePos']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255) 
-            blue = clip(log(max(1.0, (-self.analysisCache[item.index]['postChargeNeg']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255)
-            green = clip(log(max(1.0, (self.analysisCache[item.index]['dirCharge']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255)
-            return QtGui.QColor(red, green, blue, max(red, green, blue))
+    def colorSpots(self):
+        #if self.ctrl.rgbRadio.isChecked():
+            #for item in self.scanAvgItems:
+                #red = clip(log(max(1.0, (self.analysisCache[item.index]['postChargePos']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255) 
+                #blue = clip(log(max(1.0, (-self.analysisCache[item.index]['postChargeNeg']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255)
+                #green = clip(log(max(1.0, (self.analysisCache[item.index]['dirCharge']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255)
+                #return QtGui.QColor(red, green, blue, max(red, green, blue))
             
-        if self.ctrl.rainbowRadio.isChecked():
+        if self.ctrl.gradientRadio.isChecked():
             maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = self.ctrl.colorSpin1.value())
-            #hue = 255 - (log(1+1000*(self.analysisCache[item.index]['postChargeNeg'] / self.analysisCache['postChargeNeg'].min())))*255/log(1001)
-            #maxcharge = a.max()
-            #print "maxCharge:", maxcharge, "spotcharge:", self.analysisCache[item.index]['postChargeNeg'], "spotCharge/maxCharge", self.analysisCache[item.index]['postChargeNeg']/maxcharge
+            #print "maxCharge: ", maxcharge
             
-            if item.source is not None:  ## this is a single item
-                negCharge = self.analysisCache[item.index]['postChargeNeg']
-                numDirectEvents = len(self.analysisCache[item.index]['dirEvents'])
-            else:    ## this is an average item
-                negCharges = array([self.analysisCache[i.index]['postChargeNeg'] for i in item.sourceItems]) 
-                numDirectEventses = [len(self.analysisCache[i.index]['dirEvents']) for i in item.sourceItems]
+            for item in self.scanAvgItems:
+                if item.source is not None:  ## this is a single item
+                    negCharge = self.analysisCache[item.index]['postChargeNeg']
+                    numDirectEvents = len(self.analysisCache[item.index]['dirEvents'])
+                else:    ## this is an average item
+                    negCharges = array([self.analysisCache[i.index]['postChargeNeg'] for i in item.sourceItems]) 
+                    numDirectEventses = [len(self.analysisCache[i.index]['dirEvents']) for i in item.sourceItems]
                 
-                if self.ctrl.medianCheck.isChecked():
-                    if len(negCharges[negCharges < 0]) > len(negCharges)/2: ###Errs on side of false negatives, but averages all non-zero charges
-                        negCharge = mean(negCharges[negCharges<0])
-                        numDirectEvents = median(numDirectEventses)
-                    else:
-                        negCharge = 0
-                        numDirectEvents = mean(numDirectEventses)
-                        
-                #if self.ctrl.medianCheck.isChecked() and len(item.sourceItems) > 2:
-                #    negCharge = median(negCharges)
-                #    print "Compute median:", negCharges, negCharge
-                #    numDirectEvents = median(numDirectEventses)
-                #    
-                #else:
-                #    negCharge = mean(negCharges)
-                #    numDirectEvents = mean(numDirectEventses)
+                    if self.ctrl.medianCheck.isChecked():
+                        if len(negCharges[negCharges < 0]) > len(negCharges)/2.0: ###Errs on side of false negatives, but averages all non-zero charges
+                            negCharge = mean(negCharges[negCharges<0])
+                            numDirectEvents = median(numDirectEventses)
+                        else:
+                            negCharge = 0
+                            numDirectEvents = mean(numDirectEventses)
+                #print "negCharge:", negCharge
             
-            
-            ## Set color based on strength of negative events
-            hue = self.ctrl.colorSpin2.value() - (negCharge/maxcharge)*255
-            #print "max charge:", maxcharge, "charge: ", iself.analysisCache[item.index]['postChargeNeg'], "hue: ", hue
-            sat = 255
-         
-            ## Traces with no events are transparent
-            if negCharge < 1e-16:
-                alpha = 0
+                ## Set color based on strength of negative events
+                #print "Getting color....", clip(negCharge/maxcharge, 0, 1)
+                color = self.ctrl.gradientWidget.getColor(clip(negCharge/maxcharge, 0, 1))
+                ## Traces with no events are transparent
+                #if abs(negCharge) < 1e-16:
+                    #color = QtGui.QColor(0,0,0,0)
+                    
+                ## Traces with events below threshold are transparent
+                if negCharge >= stats.scoreatpercentile(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg'] < 0], self.ctrl.colorSpin3.value()):
+                    color = QtGui.QColor(0,0,0,0)
                 
-            ## Traces with events below threshold are transparent
-            #elif self.analysisCache[item.index]['postChargeNeg'] > histogram(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg']<0], bins = 1000)[1][-self.ctrl.colorSpin3.value()]:
-            if negCharge >= stats.scoreatpercentile(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg'] < 0], self.ctrl.colorSpin3.value()):
-                alpha = 0
-            else:
-                alpha = 255
+                ## Direct events have white outlines
+                if numDirectEvents > 0:
+                    pen = mkPen(width = 2)
+                else:
+                    pen = QtGui.QPen()
+                #print "Color retrieved.", color.red(), color.green(), color.blue(), color.alpha()
                 
-            ## Direct events are black
-            if numDirectEvents > 0:
-                val = 0
-                alpha = 255
-            else:
-                val = 255
-                
-            if hue < 0 and numDirectEvents == 0:
-                val = clip(255+hue, 100, 255)
-                hue = 0
-                
-            #print "hue:", hue, "sat:", sat, "val:", val, "alpha:", alpha
-
-            return QtGui.QColor.fromHsv(hue, sat, val, alpha)
-        
+                #print "Setting color...."
+                item.setBrush(QtGui.QBrush(color))
+                item.setPen(pen)
+                #print "Color set."
+            self.colorScaleBar.setGradient(self.ctrl.gradientWidget.getGradient())
    
     def mouseClicked(self, ev):
         ###should probably make mouseClicked faster by using cached data instead of calling processData in eventFinderWidget each time
@@ -675,9 +663,9 @@ class UncagingWindow(QtGui.QMainWindow):
             d = self.loadTrace(i)
             if d is not None:
                 self.currentTraces.append(d)
-            if hasattr(i, 'source') and i.source is not None:
-                print 'postEvents:', self.analysisCache[i.index]['postEvents']
-                print 'postChargeNeg:', self.analysisCache[i.index]['postChargeNeg']
+            #if hasattr(i, 'source') and i.source is not None:
+                #print 'postEvents:', self.analysisCache[i.index]['postEvents']
+                #print 'postChargeNeg:', self.analysisCache[i.index]['postChargeNeg']
         self.plot.setData([i[0]['Channel':'primary'] for i in self.currentTraces])
         
 
