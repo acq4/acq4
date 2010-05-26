@@ -348,6 +348,16 @@ class GraphicsView(QtGui.QGraphicsView):
         self.setRenderHints(rh)
         self.png.save(fileName)
         
+    def writePs(self, fileName=None):
+        if fileName is None:
+            fileName = str(QtGui.QFileDialog.getSaveFileName())
+        printer = QtGui.QPrinter(QtGui.QPrinter.HighResolution)
+        printer.setOutputFileName(fileName)
+        painter = QtGui.QPainter(printer)
+        self.render(painter)
+        painter.end()
+        
+        
     #def getFreehandLine(self):
         
         ## Wait for click

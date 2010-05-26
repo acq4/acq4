@@ -63,9 +63,9 @@ class EventMatchWidget(QtGui.QSplitter):
         #self.ctrlLayout = QtGui.QFormLayout()
         #self.ctrlWidget.setLayout(self.ctrlLayout)
         
-        self.ctrl.lowPassSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
-        self.ctrl.highPassSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
-        self.ctrl.expDeconvolveSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
+        self.ctrl.lowPassSpin.setOpts(dec=True, step=0.2, bounds=[0, None], suffix='Hz', siPrefix=True)
+        self.ctrl.highPassSpin.setOpts(dec=True, step=0.2, bounds=[0, None], suffix='Hz', siPrefix=True)
+        self.ctrl.expDeconvolveSpin.setOpts(dec=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
         #self.tauSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
         #self.tauSpin.setValue(0.01)
         #self.lowPassSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
