@@ -162,7 +162,7 @@
             </layout>
            </item>
            <item row="4" column="2">
-            <widget class="QDoubleSpinBox" name="icPulseSpin">
+            <widget class="SpinBox" name="icPulseSpin">
              <property name="maximumSize">
               <size>
                <width>70</width>
@@ -170,18 +170,12 @@
               </size>
              </property>
              <property name="suffix">
-              <string> pA</string>
-             </property>
-             <property name="minimum">
-              <double>-1000.000000000000000</double>
-             </property>
-             <property name="maximum">
-              <double>1000.000000000000000</double>
+              <string>A</string>
              </property>
             </widget>
            </item>
            <item row="9" column="2">
-            <widget class="QDoubleSpinBox" name="pulseTimeSpin">
+            <widget class="SpinBox" name="pulseTimeSpin">
              <property name="maximumSize">
               <size>
                <width>70</width>
@@ -189,21 +183,15 @@
               </size>
              </property>
              <property name="suffix">
-              <string> ms</string>
-             </property>
-             <property name="minimum">
-              <double>1.000000000000000</double>
-             </property>
-             <property name="maximum">
-              <double>10000.000000000000000</double>
+              <string>s</string>
              </property>
              <property name="singleStep">
-              <double>10.000000000000000</double>
+              <double>1.000000000000000</double>
              </property>
             </widget>
            </item>
            <item row="8" column="2">
-            <widget class="QDoubleSpinBox" name="delayTimeSpin">
+            <widget class="SpinBox" name="delayTimeSpin">
              <property name="maximumSize">
               <size>
                <width>70</width>
@@ -211,7 +199,7 @@
               </size>
              </property>
              <property name="suffix">
-              <string> ms</string>
+              <string>s</string>
              </property>
              <property name="minimum">
               <double>1.000000000000000</double>
@@ -220,12 +208,12 @@
               <double>10000.000000000000000</double>
              </property>
              <property name="singleStep">
-              <double>10.000000000000000</double>
+              <double>1.000000000000000</double>
              </property>
             </widget>
            </item>
            <item row="2" column="2">
-            <widget class="QDoubleSpinBox" name="vcPulseSpin">
+            <widget class="SpinBox" name="vcPulseSpin">
              <property name="maximumSize">
               <size>
                <width>70</width>
@@ -233,18 +221,12 @@
               </size>
              </property>
              <property name="suffix">
-              <string> mV</string>
-             </property>
-             <property name="minimum">
-              <double>-100.000000000000000</double>
-             </property>
-             <property name="maximum">
-              <double>100.000000000000000</double>
+              <string>V</string>
              </property>
             </widget>
            </item>
            <item row="5" column="2" rowspan="2">
-            <widget class="QDoubleSpinBox" name="icHoldSpin">
+            <widget class="SpinBox" name="icHoldSpin">
              <property name="maximumSize">
               <size>
                <width>70</width>
@@ -252,18 +234,12 @@
               </size>
              </property>
              <property name="suffix">
-              <string> pA</string>
-             </property>
-             <property name="minimum">
-              <double>-1000.000000000000000</double>
-             </property>
-             <property name="maximum">
-              <double>1000.000000000000000</double>
+              <string>A</string>
              </property>
             </widget>
            </item>
            <item row="10" column="2">
-            <widget class="QDoubleSpinBox" name="cycleTimeSpin">
+            <widget class="SpinBox" name="cycleTimeSpin">
              <property name="maximumSize">
               <size>
                <width>70</width>
@@ -271,16 +247,10 @@
               </size>
              </property>
              <property name="suffix">
-              <string> s</string>
-             </property>
-             <property name="minimum">
-              <double>0.010000000000000</double>
-             </property>
-             <property name="maximum">
-              <double>1000.000000000000000</double>
+              <string>s</string>
              </property>
              <property name="singleStep">
-              <double>0.100000000000000</double>
+              <double>1.000000000000000</double>
              </property>
              <property name="value">
               <double>0.200000000000000</double>
@@ -288,7 +258,7 @@
             </widget>
            </item>
            <item row="3" column="2">
-            <widget class="QDoubleSpinBox" name="vcHoldSpin">
+            <widget class="SpinBox" name="vcHoldSpin">
              <property name="maximumSize">
               <size>
                <width>70</width>
@@ -296,13 +266,7 @@
               </size>
              </property>
              <property name="suffix">
-              <string> mV</string>
-             </property>
-             <property name="minimum">
-              <double>-100.000000000000000</double>
-             </property>
-             <property name="maximum">
-              <double>100.000000000000000</double>
+              <string>V</string>
              </property>
             </widget>
            </item>
@@ -584,6 +548,11 @@
    <extends>QWidget</extends>
    <header>lib.util.pyqtgraph.PlotWidget</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>SpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>lib.util.SpinBox</header>
   </customwidget>
  </customwidgets>
  <resources/>

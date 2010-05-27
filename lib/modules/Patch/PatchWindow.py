@@ -81,21 +81,41 @@ class PatchWindow(QtGui.QMainWindow):
         #irp.setYRange(1e6, 1e11)
             
         
+        self.ui.icPulseSpin.setOpts(dec=True, step=1, minStep=1e-12, bounds=[None,None], siPrefix=True, suffix='A')
+        self.ui.vcPulseSpin.setOpts(dec=True, step=1, minStep=1e-3, bounds=[None,None], siPrefix=True, suffix='V')
+        self.ui.icHoldSpin.setOpts(dec=True, step=1, minStep=1e-12, bounds=[None,None], siPrefix=True, suffix='A')
+        self.ui.vcHoldSpin.setOpts(dec=True, step=1, minStep=1e-3, bounds=[None,None], siPrefix=True, suffix='V')
+        self.ui.cycleTimeSpin.setOpts(dec=True, step=1, minStep=1e-6, bounds=[0,None], siPrefix=True, suffix='s')
+        self.ui.pulseTimeSpin.setOpts(dec=True, step=1, minStep=1e-6, bounds=[0,1.], siPrefix=True, suffix='s')
+        self.ui.delayTimeSpin.setOpts(dec=True, step=1, minStep=1e-6, bounds=[0,1.], siPrefix=True, suffix='s')
         
         
         self.stateGroup = WidgetGroup([
-            (self.ui.icPulseSpin, 'icPulse', 1e12),
-            (self.ui.vcPulseSpin, 'vcPulse', 1e3),
-            (self.ui.icHoldSpin, 'icHolding', 1e12),
-            (self.ui.vcHoldSpin, 'vcHolding', 1e3),
+            (self.ui.icPulseSpin, 'icPulse'),
+            (self.ui.vcPulseSpin, 'vcPulse'),
+            (self.ui.icHoldSpin, 'icHolding'),
+            (self.ui.vcHoldSpin, 'vcHolding'),
             (self.ui.icPulseCheck, 'icPulseEnabled'),
             (self.ui.vcPulseCheck, 'vcPulseEnabled'),
             (self.ui.icHoldCheck, 'icHoldingEnabled'),
             (self.ui.vcHoldCheck, 'vcHoldingEnabled'),
-            (self.ui.cycleTimeSpin, 'cycleTime', 1),
-            (self.ui.pulseTimeSpin, 'pulseTime', 1e3),
-            (self.ui.delayTimeSpin, 'delayTime', 1e3),
+            (self.ui.cycleTimeSpin, 'cycleTime'),
+            (self.ui.pulseTimeSpin, 'pulseTime'),
+            (self.ui.delayTimeSpin, 'delayTime'),
         ])
+        #self.stateGroup = WidgetGroup([
+        #    (self.ui.icPulseSpin, 'icPulse', 1e12),
+        #    (self.ui.vcPulseSpin, 'vcPulse', 1e3),
+        #    (self.ui.icHoldSpin, 'icHolding', 1e12),
+        #    (self.ui.vcHoldSpin, 'vcHolding', 1e3),
+        #    (self.ui.icPulseCheck, 'icPulseEnabled'),
+        #    (self.ui.vcPulseCheck, 'vcPulseEnabled'),
+        #    (self.ui.icHoldCheck, 'icHoldingEnabled'),
+        #    (self.ui.vcHoldCheck, 'vcHoldingEnabled'),
+        #    (self.ui.cycleTimeSpin, 'cycleTime', 1),
+        #    (self.ui.pulseTimeSpin, 'pulseTime', 1e3),
+        #    (self.ui.delayTimeSpin, 'delayTime', 1e3),
+        #])
         self.stateGroup.setState(self.params)
         
         self.ui.patchPlot.setLabel('left', text='Primary', units='A')

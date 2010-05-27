@@ -4,7 +4,8 @@ from lib.devices.Device import *
 import threading, time, traceback, sys
 from protoGUI import *
 from numpy import byte
-from scipy.signal import resample
+#from scipy.signal import resample, bessel, lfilter
+import scipy.signal
 from lib.util.debug import *
 
 class NiDAQ(Device):
@@ -156,9 +157,25 @@ class Task(DeviceTask):
             #else:
                 #data = data.mean(axis=1)
                 
-            newLen = int(data.shape[0] / ds)
-            data = resample(data, newLen)
+            ## Decimate using fourier resampling -- causes artifacts.
+            #newLen = int(data.shape[0] / ds)
+            #data = scipy.signal.resample(data, newLen, window=8) # Use a kaiser window with beta=8
             
+            
+            # Decimate by lowpass filtering, then average points together.
+            # Not as good as signal.resample for removing HF noise, but does not generate artifacts either.
+            b,a = scipy.signal.bessel(8, 2.0/ds, btype='low') 
+            base = data.mean()
+            data = scipy.signal.lfilter(b, a, data-base) + base
+            
+            newLen = int(data.shape[0] / ds) * ds
+            data = data[:newLen]
+            data.shape = (data.shape[0]/ds, ds)
+            if res['info']['type'] in ['di', 'do']:
+                data = data.mean(axis=1).round().astype(byte)
+            else:
+                data = data.mean(axis=1)
+                
             res['data'] = data
             res['info']['numPts'] = data.shape[0]
             res['info']['downsampling'] = ds
