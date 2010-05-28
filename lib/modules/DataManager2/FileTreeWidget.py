@@ -9,7 +9,7 @@ import os
 class FileTreeWidget(QtGui.QTreeWidget):
     def __init__(self, parent, baseDirHandle=None):
         QtGui.QTreeWidget.__init__(self, parent)
-        QtCore.QAbstractItemModel.__init__(self, parent)
+        #QtCore.QAbstractItemModel.__init__(self, parent)
         self.baseDir = baseDirHandle
         self.currentDir = None
         self.handles = {}
@@ -127,63 +127,62 @@ class FileTreeWidget(QtGui.QTreeWidget):
             handle = self.baseDir
         else:
             handle = root.handle
-        print "REBUILD %s:" % handle.name()
+        #print "REBUILD %s:" % handle.name()
         files = handle.ls()
         handles = [handle[f] for f in files]
         
-        for i in range(root.childCount()):
-            c = root.child(i)
-            h = self.handles[c]
-            if h not in handles:
-                root.removeChild(c)
-                print "  - forget", h.shortName()
-                self.forgetHandle(h)
+        
+        #for i in range(root.childCount()):
+            #c = root.child(i)
+            #h = self.handles[c]
+            #if h not in handles:
+                #root.removeChild(c)
+                #print "  - forget", h.shortName()
+                #self.forgetHandle(h)
                 
-        childs = [root.child(i) for i in range(root.childCount())]
-        for h in handles:
-            if h not in self.items:
-                item = self.addHandle(h)
-                print "  - add", h.shortName()
-                #childs.append(item)
-            #else:
-                #item = self.items[h]
-                #if item not in childs:
-                    #childs.append(item)
-        
-        for i in range(len(handles)):
-            h = handles[i]
-            c = self.items[h]
-            root.insertChild(i, c)
-            print "  - insert", h.shortName()
-        
-        
-        
-        
-        
-        
-        #items = []
-        #expanded = {}
-        #while root.childCount() > 0:        ## Remove all nodes
-            #expanded[root.child(0)] = root.child(0).isExpanded()
-            #items.append(root.takeChild(0))
-        
-        #for h in handles:                   ## Re-insert in correct order
-            #if h in self.items:
-                #item = self.items[h]
-                #print "   - reinsert %s" % h.shortName()
-            #else:
+        #childs = [root.child(i) for i in range(root.childCount())]
+        #for h in handles:
+            #if h not in self.items:
                 #item = self.addHandle(h)
+                #print "  - add", h.shortName()
+                ##childs.append(item)
+            ##else:
+                ##item = self.items[h]
+                ##if item not in childs:
+                    ##childs.append(item)
+        
+        #for i in range(len(handles)):
+            #h = handles[i]
+            #c = self.items[h]
+            #root.insertChild(i, c)
+            #print "  - insert", h.shortName()
+        
+        
+        
+        items = []
+        #expanded = {}
+        while root.childCount() > 0:        ## Remove all nodes
+            #expanded[root.child(0)] = root.child(0).isExpanded()
+            items.append(root.takeChild(0))
+        
+        for h in handles:                   ## Re-insert in correct order
+            if h in self.items:
+                item = self.items[h]
+                #print "   - reinsert %s" % h.shortName()
+            else:
+                item = self.addHandle(h)
                 #print "   - create %s" % h.shortName()
-            #if item in items:
-                #items.remove(item)
-            #root.addChild(item)
+            if item in items:
+                items.remove(item)
+            root.addChild(item)
+            item.recallExpand()  ## looks like a bug that improperly closes nodes.
             #if item in expanded:
                 #item.setExpanded(expanded[item])
             
         
-        #for i in items:                     ## ..and remove anything that is left over
+        for i in items:                     ## ..and remove anything that is left over
             #print "   - forget %s" % i.handle.shortName()
-            #self.forgetHandle(i.handle)
+            self.forgetHandle(i.handle)
             
     def editItem(self, handle):
         item = self.items[handle]
@@ -245,7 +244,7 @@ class FileTreeWidget(QtGui.QTreeWidget):
             ev.ignore()
 
     def dropMimeData(self, parent, index, data, action):
-        print "dropMimeData:", parent, self.currentItem()
+        #print "dropMimeData:", parent, self.currentItem()
         source = self.handles[self.currentItem()]
         if parent is None:
             target = self.baseDir
@@ -341,9 +340,20 @@ class FileTreeItem(QtGui.QTreeWidgetItem):
             self.setFlags(QtCore.Qt.ItemIsSelectable|QtCore.Qt.ItemIsEditable|QtCore.Qt.ItemIsDragEnabled|QtCore.Qt.ItemIsDropEnabled|QtCore.Qt.ItemIsEnabled)
         else:
             self.setFlags(QtCore.Qt.ItemIsSelectable|QtCore.Qt.ItemIsEditable|QtCore.Qt.ItemIsDragEnabled|QtCore.Qt.ItemIsEnabled)
+        self.expandState = False
             
             
     def expanded(self):
         """Called whenever this item is expanded or collapsed."""
-        pass
-    
+        #print "Expand:", self.isExpanded()
+        self.expandState = self.isExpanded()
+
+    def recallExpand(self):
+        if self.expandState:
+            #print "re-expanding", self.handle.shortName()
+            self.setExpanded(False)
+            self.setExpanded(True)
+        for i in range(self.childCount()):
+            self.child(i).recallExpand()
+        
+        

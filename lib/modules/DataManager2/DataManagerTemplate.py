@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'DataManagerTemplate.ui'
 #
-# Created: Fri May 28 01:17:25 2010
+# Created: Fri May 28 03:13:49 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -146,7 +146,7 @@ class Ui_MainWindow(object):
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(8), self.logDock)
 
         self.retranslateUi(MainWindow)
-        self.fileDisplayTabs.setCurrentIndex(2)
+        self.fileDisplayTabs.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'FileInfoViewTemplate.ui'
 #
-# Created: Fri May 28 01:17:25 2010
+# Created: Fri May 28 03:13:49 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
