@@ -143,7 +143,8 @@ Valid options are:
         self.quitShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+q'), win)
         self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
         QtCore.QObject.connect(self.quitShortcut, QtCore.SIGNAL('activated()'), self.quit)
-            
+        
+        QtCore.QObject.connect(QtGui.QApplication.instance(), QtCore.SIGNAL('lastWindowClosed()'), self.lastWindowClosed)
             
             
             
@@ -364,7 +365,9 @@ Valid options are:
 
     def unloadModule(self, name):
         try:
+            print "    request quit.."
             self.getModule(name).quit()
+            print "    request quit done"
         except:
             printExc("Error while requesting module '%s' quit." % name)
             
@@ -480,7 +483,9 @@ Valid options are:
             while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
                 m = self.modules.keys()[0]
                 print "    %s" % m
+                
                 self.unloadModule(m)
+                print "Unloaded mod %s, modules left:" % m
                 #try:
                     #self.modules[m].quit()
                 #except:
@@ -506,7 +511,11 @@ Valid options are:
         #print app.topLevelWidgets()
         #for w in app.topLevelWidgets():
         #    print w, w.isVisible()
-        #print app.quitOnLastWindowClosed()
+        print "Manager quits when last window closes:", QtGui.QApplication.instance().quitOnLastWindowClosed()
+        QtGui.QApplication.quit()
+
+    def lastWindowClosed(self):
+        print "QApplication reports last window has closed."
 
 class Task:
     id = 0
