@@ -238,12 +238,14 @@ class FileHandle(QtCore.QObject):
             if os.path.exists(fn2):
                 raise Exception("Destination file %s already exists." % fn2)
             #print "rename", fn1, fn2
+            if parent.isManaged():
+                info = parent._fileInfo(oldName)
+                parent.forget(oldName)
             os.rename(fn1, fn2)
             self.parent()._childChanged()
             self.path = fn2
             if parent.isManaged():
-                parent.indexFile(newName, info=parent._fileInfo(oldName))
-                parent.forget(oldName)
+                parent.indexFile(newName, info=info)
             self.emitChanged('renamed', fn1, fn2)
         
     def delete(self):

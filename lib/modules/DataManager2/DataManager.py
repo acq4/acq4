@@ -138,7 +138,7 @@ class DataManager2(Module):
         if ftype == 'Folder':
             nd = cdir.mkdir('NewFolder', autoIncrement=True)
             #item = self.model.handleIndex(nd)
-            self.ui.fileTreeWidget.edit(nd)
+            self.ui.fileTreeWidget.editItem(nd)
         else:
             spec = self.manager.config['folderTypes'][ftype]
             name = time.strftime(spec['name'])
@@ -174,7 +174,7 @@ class DataManager2(Module):
             #self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Clear)
             #self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Select)
             
-            self.ui.fileTreeView.select(nd)
+            self.ui.fileTreeWidget.select(nd)
             ##self.ui.fileInfo.setCurrentFile(nd)
             
             

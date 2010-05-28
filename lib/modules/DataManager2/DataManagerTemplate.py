@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'DataManagerTemplate.ui'
 #
-# Created: Thu May 27 21:18:29 2010
+# Created: Fri May 28 01:17:25 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -57,6 +57,10 @@ class Ui_MainWindow(object):
         self.newFolderList.setObjectName("newFolderList")
         self.verticalLayout_2.addWidget(self.newFolderList)
         self.fileTreeWidget = FileTreeWidget(self.layoutWidget)
+        self.fileTreeWidget.setEditTriggers(QtGui.QAbstractItemView.EditKeyPressed|QtGui.QAbstractItemView.SelectedClicked)
+        self.fileTreeWidget.setDragEnabled(True)
+        self.fileTreeWidget.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
+        self.fileTreeWidget.setDefaultDropAction(QtCore.Qt.MoveAction)
         self.fileTreeWidget.setObjectName("fileTreeWidget")
         self.fileTreeWidget.headerItem().setText(0, "1")
         self.fileTreeWidget.header().setVisible(False)
