@@ -63,9 +63,9 @@ class EventMatchWidget(QtGui.QSplitter):
         #self.ctrlLayout = QtGui.QFormLayout()
         #self.ctrlWidget.setLayout(self.ctrlLayout)
         
-        self.ctrl.lowPassSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
-        self.ctrl.highPassSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
-        self.ctrl.expDeconvolveSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
+        self.ctrl.lowPassSpin.setOpts(dec=True, step=0.2, bounds=[0, None], suffix='Hz', siPrefix=True)
+        self.ctrl.highPassSpin.setOpts(dec=True, step=0.2, bounds=[0, None], suffix='Hz', siPrefix=True)
+        self.ctrl.expDeconvolveSpin.setOpts(dec=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
         #self.tauSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
         #self.tauSpin.setValue(0.01)
         #self.lowPassSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
@@ -271,23 +271,23 @@ class EventMatchWidget(QtGui.QSplitter):
         return events
         
         
-    def tauChanged(self):
-        self.recalculate()
-        
-    def lowPassChanged(self):
-        self.recalculate()
-        
-    def thresholdChanged(self):
-        self.recalculate()
-        
-    def setTau(self, val):
-        self.tauSpin.setValue(val)
-        
-    def setLowPass(self, val):
-        self.lowPassSpin.setValue(val)
-        
-    def setThreshold(self, val):
-        self.thresholdSpin.setValue(val)
+    #def tauChanged(self):
+    #    self.recalculate()
+    #    
+    #def lowPassChanged(self):
+    #    self.recalculate()
+    #    
+    #def thresholdChanged(self):
+    #    self.recalculate()
+    #    
+    #def setTau(self, val):
+    #    self.tauSpin.setValue(val)
+    #    
+    #def setLowPass(self, val):
+    #    self.lowPassSpin.setValue(val)
+    #    
+    #def setThreshold(self, val):
+    #    self.thresholdSpin.setValue(val)
         
     def clear(self):
         self.analysisPlot.clear()
@@ -391,7 +391,7 @@ class UncagingWindow(QtGui.QMainWindow):
             ps = info['pixelSize']
             pos = info['imagePosition']
             
-        img = img.astype(ndarray)
+        img = img.view(ndarray)
         if img.ndim == 3:
             img = img.max(axis=0)
         #print pos, ps, img.shape, img.dtype, img.max(), img.min()

@@ -191,7 +191,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         self.setUiBinning(self.binning)
         self.ui.spinExposure.setValue(self.exposure)
-        self.ui.spinExposure.setOpts(dec=True, step=0.1, minStep=-2, siPrefix=True, suffix='s', bounds=[0, 10])
+        self.ui.spinExposure.setOpts(dec=True, step=1, minStep=100e-6, siPrefix=True, suffix='s', bounds=[0, 10])
 
         ## Initialize values
         self.cameraCenter = self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
@@ -221,7 +221,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         ## Use delayed connection for these two widgets
         self.proxy1 = proxyConnect(self.ui.binningCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.setBinning)
-        self.proxy2 = proxyConnect(self.ui.spinExposure, QtCore.SIGNAL('valueChanged(double)'), self.setExposure)
+        QtCore.QObject.connect(self.ui.spinExposure, QtCore.SIGNAL('delayedChange'), self.setExposure)
         
         QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
         QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
@@ -254,7 +254,7 @@ class CameraWindow(QtGui.QMainWindow):
         #self.frameTimer.start(1)
         QtCore.QTimer.singleShot(1, self.drawFrame)
 
-    @trace
+    #@trace
     def updateBorders(self):
         """Draw the camera boundaries for each objective"""
         for b in self.borders:
@@ -279,7 +279,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.updateCameraDecorations()
 
 
-    @trace
+    #@trace
     def addPersistentFrame(self):
         """Make a copy of the current camera frame and store it in the background"""
         px = self.imageItem.getPixmap()
@@ -299,7 +299,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.persistentFrames.append(im)
         self.addItem(im, p, s, z)
         
-    @trace
+    #@trace
     def addItem(self, item, pos, scale, z):
         """Adds an item into the scene. The image will be automatically scaled and translated when the scope moves."""
         
@@ -316,14 +316,14 @@ class CameraWindow(QtGui.QMainWindow):
     def removeItem(self, item):
         self.scene.removeItem(item)
     
-    @trace
+    #@trace
     def  clearPersistentFrames(self):
         for i in self.persistentFrames:
             #self.persistentGroup1.removeFromGroup(i)
             self.scene.removeItem(i)
         self.persistentFrames = []
 
-    @trace
+    #@trace
     def addROI(self):
         pen = QtGui.QPen(intColor(len(self.ROIs)))
         roi = PlotROI(self.cameraCenter, self.cameraScale[0] * 10)
@@ -342,47 +342,50 @@ class CameraWindow(QtGui.QMainWindow):
             self.ui.plotWidget.removeItem(r['plot'])
         self.ROIs = []
         
-    @trace
+    #@trace
     def clearFrameBuffer(self):
         #self.frameBuffer = []
         for r in self.ROIs:
             r['vals'] = []
             r['times'] = []
 
-    @trace
+    #@trace
     def enableROIsChanged(self, b):
         pass
     
-    @trace
+    #@trace
     def setROITime(self, val):
         pass
 
-    @trace
+    #@trace
     def toggleRecord(self, b):
         if b:
             self.ui.btnRecord.setChecked(True)
         else:
+            #printExc( "Record button toggled off.")
             self.ui.btnRecord.setChecked(False)
 
     def recordThreadStopped(self):
         self.toggleRecord(False)
         self.ui.btnRecord.setEnabled(False)  ## Recording thread has stopped, can't record anymore.
         self.showMessage("Recording thread died! See console for error message.")
+        #print "Recording thread stopped."
             
     def recordingFailed(self):
         self.toggleRecord(False)
         self.showMessage("Recording failed! See console for error message.")
+        #print "Recording failed."
 
-    @trace
+    #@trace
     def levelsChanged(self):
         self.updateColorScale()
         self.requestFrameUpdate()
 
-    @trace
+    #@trace
     def requestFrameUpdate(self):
         self.updateFrame = True
 
-    @trace
+    #@trace
     def divideClicked(self):
         self.AGCLastMax = None
         self.AGCLastMin = None
@@ -391,11 +394,11 @@ class CameraWindow(QtGui.QMainWindow):
             self.backgroundFrame = None
         self.requestFrameUpdate()
             
-    @trace
+    #@trace
     def showMessage(self, msg):
         self.ui.statusbar.showMessage(str(msg))
         
-    @trace
+    #@trace
     def updateRegion(self, *args):
         self.clearFrameBuffer()
         r = self.roi.parentBounds()
@@ -405,11 +408,11 @@ class CameraWindow(QtGui.QMainWindow):
             self.acquireThread.setParam('region', self.region)
         
         
-    @trace
+    #@trace
     def closeEvent(self, ev):
         self.quit()
 
-    @trace
+    #@trace
     def quit(self):
         #self.frameTimer.stop()
         geom = self.geometry()
@@ -446,7 +449,7 @@ class CameraWindow(QtGui.QMainWindow):
         #sip.delete(self)
         self.module.quit(fromUi=True)
 
-    @trace
+    #@trace
     def setMouse(self, qpt=None):
         if qpt is None:
             if not hasattr(self, 'mouse'):
@@ -471,22 +474,24 @@ class CameraWindow(QtGui.QMainWindow):
         #self.vLabel.setText(z)
             
 
-    @trace
+    #@trace
     def acqThreadStopped(self):
+        #printExc("ACQ stopped; stopping record.")
+        #print "Signal sender was: ", self.sender()
         self.toggleRecord(False)
         if not self.ui.btnLockBackground.isChecked():
             self.backgroundFrame = None
         self.ui.btnAcquire.setChecked(False)
         self.ui.btnAcquire.setEnabled(True)
         
-    @trace
+    #@trace
     def acqThreadStarted(self):
         self.AGCLastMax = None
         self.AGCLastMin = None
         self.ui.btnAcquire.setChecked(True)
         self.ui.btnAcquire.setEnabled(True)
 
-    @trace
+    #@trace
     def setBinning(self, ind=None):
         """Set camera's binning value. If ind is specified, it is the index from binningCombo from which to grab the new binning value."""
         #sys.stdout.write("+")
@@ -505,14 +510,14 @@ class CameraWindow(QtGui.QMainWindow):
             raise Exception("Binning mode %s not in list." % str(b))
         self.ui.binningCombo.setCurrentIndex(ind)
         
-    @trace
+    #@trace
     def setExposure(self, e=None):
         #print "Set exposure:", e
         if e is not None:
             self.exposure = e
         self.acquireThread.setParam('exposure', self.exposure)
         
-    @trace
+    #@trace
     def openCamera(self, ind=0):
         try:
             self.cam = self.module.cam.getCamera()
@@ -534,7 +539,7 @@ class CameraWindow(QtGui.QMainWindow):
             raise
     
 
-    @trace
+    #@trace
     def updateCameraDecorations(self):
         ps = self.cameraScale
         pos = self.cameraCenter
@@ -558,7 +563,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         
 
-    @trace
+    #@trace
     def setRegion(self, rgn=None):
         self.backgroundFrame = None
         if rgn is None:
@@ -567,14 +572,14 @@ class CameraWindow(QtGui.QMainWindow):
         self.roi.setSize([self.camSize[0], self.camSize[1]])
         self.updateRegion()
             
-    @trace
+    #@trace
     def updateRgnLabel(self):
         img = self.imageItem.image
         if img is None:
             return
         self.rgnLabel.setText('[%d, %d, %d, %d] %dx%d' % (self.region[0], self.region[1], (img.shape[0]-1)*self.binning, (img.shape[1]-1)*self.binning, self.binning, self.binning))
     
-    @trace
+    #@trace
     def setLevelRange(self, rmin=None, rmax=None):
         if rmin is None:
             if self.ui.btnAutoGain.isChecked():
@@ -596,7 +601,7 @@ class CameraWindow(QtGui.QMainWindow):
         #self.ui.levelThermo.setMaxValue(2**self.bitDepth - 1)
         #self.ui.levelThermo.setAlarmLevel(self.ui.levelThermo.maxValue() * 0.9)
         
-    @trace
+    #@trace
     def updateColorScale(self):
         pass
         #(b, w) = self.getLevels()
@@ -608,7 +613,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         #self.updateFrame = True
         
-    @trace
+    #@trace
     def getLevels(self):
         w = self.ui.sliderWhiteLevel
         b = self.ui.sliderBlackLevel
@@ -617,11 +622,11 @@ class CameraWindow(QtGui.QMainWindow):
         return (bl, wl)
         
 
-    @trace
+    #@trace
     def toggleAutoGain(self, b):
         self.setLevelRange()
 
-    @trace
+    #@trace
     def toggleAcquire(self):
         if self.ui.btnAcquire.isChecked():
             try:
@@ -632,12 +637,14 @@ class CameraWindow(QtGui.QMainWindow):
                 self.acquireThread.start()
             except:
                 self.ui.btnAcquire.setChecked(False)
+                printExc("Error starting camera:")
                 
         else:
+            #print "ACQ untoggled, stop record"
             self.toggleRecord(False)
             self.acquireThread.stop()
             
-    @trace
+    #@trace
     def addPlotFrame(self, frame):
         #sys.stdout.write('+')
         if self.imageItem.width() is None:
@@ -690,7 +697,7 @@ class CameraWindow(QtGui.QMainWindow):
         #sys.stdout.write('!')
     
             
-    @trace
+    #@trace
     def newFrame(self, frame):
         #if hasattr(self.acquireThread, 'fps') and self.acquireThread.fps is not None:
         #print "    New frame", frame[1]['id']
@@ -717,7 +724,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.nextFrame = frame
 
 
-    @trace
+    #@trace
     def drawFrame(self):
         if self.hasQuit:
             return

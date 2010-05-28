@@ -60,19 +60,21 @@ class DataManager(QtCore.QObject):
     def getFileHandle(self, fileName):
         with MutexLocker(self.lock):
             fileName = os.path.abspath(fileName)
+            if not os.path.exists(fileName):
+                raise Exception("File %s does not exist" % fileName)
             if not os.path.isfile(fileName):
-                if not os.path.exists(fileName):
-                    raise Exception("File %s does not exist" % fileName)
-                else:
-                    raise Exception("Not a regular file: %s" % fileName)
+                raise Exception("Not a regular file: %s" % fileName)
             if not self._cacheHasName(fileName):
                 self._addHandle(fileName, FileHandle(fileName, self))
             return self._getCache(fileName)
         
     def getHandle(self, fileName):
-        try:
+        fn = os.path.abspath(fileName)
+        if not os.path.exists(fn):
+            raise Exception("File '%s' does not exist." % fn)
+        if os.path.isfile(fn):
             return self.getFileHandle(fileName)
-        except:
+        else:
             return self.getDirHandle(fileName)
 
     def _addHandle(self, fileName, handle):
@@ -290,7 +292,7 @@ class FileHandle(QtCore.QObject):
 
 
     def emitChanged(self, change, *args):
-        self.emit(QtCore.SIGNAL('changed'), self.name(), change, *args)
+        self.emit(QtCore.SIGNAL('changed'), self, change, *args)
     
     def hasChildren(self):
         self.checkDeleted()

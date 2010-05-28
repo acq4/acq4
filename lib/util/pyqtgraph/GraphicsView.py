@@ -10,7 +10,7 @@ from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
 #import time
 from Point import *
 #from vector import *
-import os
+import sys
             
         
 class GraphicsView(QtGui.QGraphicsView):
@@ -27,7 +27,7 @@ class GraphicsView(QtGui.QGraphicsView):
         enabled via enableMouse()."""
         
         QtGui.QGraphicsView.__init__(self, *args)
-        if os.uname()[0] != 'Linux':   ## Stupid GL bug in linux.
+        if 'linux' not in sys.platform.lower():   ## Stupid GL bug in linux.
             self.setViewport(QtOpenGL.QGLWidget())
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(0,0,0))
@@ -347,6 +347,16 @@ class GraphicsView(QtGui.QGraphicsView):
         self.render(painter)
         self.setRenderHints(rh)
         self.png.save(fileName)
+        
+    def writePs(self, fileName=None):
+        if fileName is None:
+            fileName = str(QtGui.QFileDialog.getSaveFileName())
+        printer = QtGui.QPrinter(QtGui.QPrinter.HighResolution)
+        printer.setOutputFileName(fileName)
+        painter = QtGui.QPainter(printer)
+        self.render(painter)
+        painter.end()
+        
         
     #def getFreehandLine(self):
         
