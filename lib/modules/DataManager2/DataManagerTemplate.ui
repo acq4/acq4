@@ -90,12 +90,6 @@
           <property name="dragDropMode">
            <enum>QAbstractItemView::InternalMove</enum>
           </property>
-          <property name="defaultDropAction">
-           <enum>Qt::MoveAction</enum>
-          </property>
-          <attribute name="headerVisible">
-           <bool>false</bool>
-          </attribute>
           <attribute name="headerVisible">
            <bool>false</bool>
           </attribute>

@@ -3,7 +3,8 @@ from lib.drivers.nidaq import NIDAQ, SuperTask
 from lib.devices.Device import *
 import threading, time, traceback, sys
 from protoGUI import *
-from numpy import byte
+#from numpy import byte
+import numpy
 #from scipy.signal import resample, bessel, lfilter
 import scipy.signal
 from lib.util.debug import *
@@ -143,38 +144,55 @@ class Task(DeviceTask):
             ds = 1
             
         if res['info']['type'] in ['di', 'do']:
-            res['data'] = (res['data'] > 0).astype(byte)
+            res['data'] = (res['data'] > 0).astype(numpy.byte)
             
         if ds > 1:
             data = res['data']
             
-            ## decimate by averaging points together (not optimal--should use fourier method instead.)
-            #newLen = int(data.shape[0] / ds) * ds
-            #data = data[:newLen]
-            #data.shape = (data.shape[0]/ds, ds)
-            #if res['info']['type'] in ['di', 'do']:
-                #data = data.mean(axis=1).round().astype(byte)
-            #else:
-                #data = data.mean(axis=1)
-                
-            ## Decimate using fourier resampling -- causes artifacts.
-            #newLen = int(data.shape[0] / ds)
-            #data = scipy.signal.resample(data, newLen, window=8) # Use a kaiser window with beta=8
+            ## Method 1:
+                ## decimate by averaging points together (does not remove HF noise, just folds it down.)
+                #newLen = int(data.shape[0] / ds) * ds
+                #data = data[:newLen]
+                #data.shape = (data.shape[0]/ds, ds)
+                #if res['info']['type'] in ['di', 'do']:
+                #    data = data.mean(axis=1).round().astype(byte)
+                #else:
+                #    data = data.mean(axis=1)
+               
+            ## Method 2:
+                ## Decimate using fourier resampling -- causes ringing artifacts.
+                #newLen = int(data.shape[0] / ds)
+                #data = scipy.signal.resample(data, newLen, window=8) # Use a kaiser window with beta=8
             
-            
-            # Decimate by lowpass filtering, then average points together.
-            # Not as good as signal.resample for removing HF noise, but does not generate artifacts either.
-            b,a = scipy.signal.bessel(8, 2.0/ds, btype='low') 
-            base = data.mean()
-            data = scipy.signal.lfilter(b, a, data-base) + base
-            
+            ## Method 3: 
+                ## Decimate by lowpass filtering, then average points together. (slow, artifacts at beginning and end of traces)
+                ## Not as good as signal.resample for removing HF noise, but does not generate artifacts either.
+                #b,a = scipy.signal.bessel(8, 2.0/ds, btype='low') 
+                #base = data.mean()
+                #data = scipy.signal.lfilter(b, a, data-base) + base
+                #
+                #newLen = int(data.shape[0] / ds) * ds
+                #data = data[:newLen]
+                #data.shape = (data.shape[0]/ds, ds)
+                #if res['info']['type'] in ['di', 'do']:
+                #    data = data.mean(axis=1).round().astype(byte)
+                #else:
+                #    data = data.mean(axis=1)
+               
+            #Method 4:
+            ## Pad data, forward+reverse bessel filter, then average down
+            b,a = scipy.signal.bessel(1, 1.0/ds, btype='low') 
+            padded = numpy.hstack([data[:100], data, data[-100:]])   ## can we intelligently decide how many samples to pad with?
+            data = scipy.signal.lfilter(b, a, scipy.signal.lfilter(b, a, data)[::-1])[::-1][100:-100]  ## filter twice; once forward, once reversed. (This eliminates phase changes)
+
             newLen = int(data.shape[0] / ds) * ds
             data = data[:newLen]
             data.shape = (data.shape[0]/ds, ds)
             if res['info']['type'] in ['di', 'do']:
-                data = data.mean(axis=1).round().astype(byte)
+                data = data.mean(axis=1).round().astype(numpy.byte)
             else:
                 data = data.mean(axis=1)
+            
                 
             res['data'] = data
             res['info']['numPts'] = data.shape[0]
