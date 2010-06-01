@@ -25,6 +25,7 @@ class FileTreeWidget(QtGui.QTreeWidget):
     def quit(self):
         ## not sure if any of this is necessary..
         QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
+        QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
         for h in self.items:
             self.unwatch(h)
         self.handles = {}
@@ -47,18 +48,24 @@ class FileTreeWidget(QtGui.QTreeWidget):
             item.setText(0, handle.shortName())
 
     def setBaseDirHandle(self, d):
-        #print "set base", d.name()
+        print "set base", d.name()
         if self.baseDir is not None:
             self.unwatch(self.baseDir)
         self.baseDir = d
         self.watch(self.baseDir)
         
-        self.rebuildTree()
-        #self.layoutChanged()
+        for h in self.items:
+            self.unwatch(h)
+        self.handles = {}
+        self.items = {}
+        self.clear()
+        self.rebuildChildren(self.invisibleRootItem())
+        #self.rebuildTree()
         
     def setCurrentDir(self, d):
+        print "set current", d.name()
         ## uncolor previous current item
-        if self.currentDir not in [None, self.baseDir]:
+        if self.currentDir in self.items:
             item = self.items[self.currentDir]
             item.setBackground(0, QtGui.QBrush(QtGui.QColor(255,255,255)))
             
