@@ -12,10 +12,12 @@ class FileTreeWidget(QtGui.QTreeWidget):
         #QtCore.QAbstractItemModel.__init__(self, parent)
         self.baseDir = baseDirHandle
         self.currentDir = None
-        self.handles = {}
+        #self.handles = {}
         self.items = {}
         QtCore.QObject.connect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
         QtCore.QObject.connect(self, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
+        QtCore.QObject.connect(self, QtCore.SIGNAL('currentItemChanged(QTreeWidgetItem*, QTreeWidgetItem*)'), self.selectionChanged)
+        
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
         
@@ -28,13 +30,41 @@ class FileTreeWidget(QtGui.QTreeWidget):
         QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
         for h in self.items:
             self.unwatch(h)
-        self.handles = {}
+        #self.handles = {}
         self.items = {}
         self.clear()
         
         
+    def selectionChanged(self, item, _=None):
+        if not isinstance(item, FileTreeItem):
+            return
+        #print "select:", item
+        if self.handle(item) is self.currentDir:
+            self.setStyleSheet('selection-background-color: #BB00BB;')
+        else:
+            self.setStyleSheet('')
+        
+    def handle(self, item):
+        """Given a tree item, return the corresponding file handle"""
+        if hasattr(item, 'handle'):
+            return item.handle
+        elif item is self.invisibleRootItem():
+            return self.baseDir
+        else:
+            raise Exception("Can't determine handle for item '%s'" % item.text(0))
+        
+    def item(self, handle, create=False):
+        """Given a file handle, return the corresponding tree item."""
+        if handle in self.items:
+            return self.items[handle]
+        elif create:
+            return self.addHandle(handle)
+        else:
+            raise Exception("Can't find tree item for file '%s'" % handle.name())
+        
+        
     def itemChanged(self, item, col):
-        handle = self.handles[item]
+        handle = self.handle(item)
         try:
             newName = str(item.text(0))
             if handle.shortName() != newName:
@@ -56,8 +86,8 @@ class FileTreeWidget(QtGui.QTreeWidget):
         
         for h in self.items:
             self.unwatch(h)
-        self.handles = {}
-        self.items = {}
+        #self.handles = {}
+        self.items = {self.baseDir: self.invisibleRootItem()}
         self.clear()
         self.rebuildChildren(self.invisibleRootItem())
         #self.rebuildTree()
@@ -73,6 +103,8 @@ class FileTreeWidget(QtGui.QTreeWidget):
         if d is self.baseDir:
             return
         
+        self.expandTo(d)
+        
         try:
             item = self.items[d]
         except:
@@ -83,6 +115,17 @@ class FileTreeWidget(QtGui.QTreeWidget):
         item.setBackground(0, QtGui.QBrush(QtGui.QColor(200, 50, 50)))
         item.setExpanded(True)
         self.scrollToItem(item)
+        
+        self.selectionChanged(item)
+        
+    def expandTo(self, dh):
+        """Expand all nodes from baseDir up to dh"""
+        dirs = dh.name(relativeTo=self.baseDir).split(os.path.sep)
+        node = self.baseDir
+        while len(dirs) > 0:
+            item = self.items[node]
+            item.setExpanded(True)
+            node = node[dirs.pop(0)] 
         
     def watch(self, handle):
         QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self.dirChanged)
@@ -118,91 +161,46 @@ class FileTreeWidget(QtGui.QTreeWidget):
             raise Exception("Tried to add handle '%s' twice." % handle.name())
         item = FileTreeItem(handle)
         self.items[handle] = item
-        self.handles[item] = handle
+        #self.handles[item] = handle
         self.watch(handle)
         return item
 
     def forgetHandle(self, handle):
-        item = self.items[handle]
+        item = self.item(handle)
         del self.items[handle]
-        del self.handles[item]
+        #del self.handles[item]
         self.unwatch(handle)
 
     def rebuildChildren(self, root):
         """Make sure all children are present and in the correct order"""
-        if root is self.invisibleRootItem():
-            handle = self.baseDir
-        else:
-            handle = root.handle
-        #print "REBUILD %s:" % handle.name()
+        handle = self.handle(root)
         files = handle.ls()
         handles = [handle[f] for f in files]
         
-        
-        #for i in range(root.childCount()):
-            #c = root.child(i)
-            #h = self.handles[c]
-            #if h not in handles:
-                #root.removeChild(c)
-                #print "  - forget", h.shortName()
-                #self.forgetHandle(h)
-                
-        #childs = [root.child(i) for i in range(root.childCount())]
-        #for h in handles:
-            #if h not in self.items:
-                #item = self.addHandle(h)
-                #print "  - add", h.shortName()
-                ##childs.append(item)
-            ##else:
-                ##item = self.items[h]
-                ##if item not in childs:
-                    ##childs.append(item)
-        
-        #for i in range(len(handles)):
-            #h = handles[i]
-            #c = self.items[h]
-            #root.insertChild(i, c)
-            #print "  - insert", h.shortName()
-        
-        
-        
         items = []
-        #expanded = {}
         while root.childCount() > 0:        ## Remove all nodes
-            #expanded[root.child(0)] = root.child(0).isExpanded()
             items.append(root.takeChild(0))
         
         for h in handles:                   ## Re-insert in correct order
-            if h in self.items:
-                item = self.items[h]
-                #print "   - reinsert %s" % h.shortName()
-            else:
-                item = self.addHandle(h)
-                #print "   - create %s" % h.shortName()
+            item = self.item(h, create=True)
             if item in items:
                 items.remove(item)
             root.addChild(item)
             item.recallExpand()  ## looks like a bug that improperly closes nodes.
-            #if item in expanded:
-                #item.setExpanded(expanded[item])
-            
         
         for i in items:                     ## ..and remove anything that is left over
-            #print "   - forget %s" % i.handle.shortName()
-            self.forgetHandle(i.handle)
+            self.forgetHandle(self.handle(i))
             
     def editItem(self, handle):
-        item = self.items[handle]
+        item = self.item(handle)
         QtGui.QTreeWidget.editItem(self, item, 0)
 
     def rebuildTree(self, root=None):
         """Completely clear and rebuild the entire tree starting at root"""
-        #print "rebuildTree"
         if root is None:
             root = self.invisibleRootItem()
-            handle = self.baseDir
-        else:
-            handle = root.handle
+            
+        handle = self.handle(root)
             
         self.clearTree(root)
             
@@ -221,9 +219,9 @@ class FileTreeWidget(QtGui.QTreeWidget):
             child = root.child(0)
             if isinstance(child, FileTreeItem):
                 self.clearTree(child)
-                handle = self.handles[child]
+                handle = self.handle(child)
                 self.unwatch(handle)
-                del self.handles[child]
+                #del self.handles[child]
                 del self.items[handle]
             root.removeChild(child)
             
@@ -232,16 +230,20 @@ class FileTreeWidget(QtGui.QTreeWidget):
         """Called whenever an item in the tree is expanded; responsible for loading children if they have not been loaded yet."""
         if not item.childrenLoaded:
             ## Display loading message before starting load
+            loading = None
             if item.handle.isDir():
-                item.addChild(QtGui.QTreeWidgetItem(['loading..']))
-            QtGui.QApplication.instance().processEvents()
+                loading = QtGui.QTreeWidgetItem(['loading..'])
+                item.addChild(loading)
+            QtGui.QApplication.instance().processEvents()  ## make sure the 'loading' item is displayed before building the tree
+            if loading is not None:
+                item.removeChild(loading)
             ## now load all children
-            self.rebuildTree(item)
+            self.rebuildChildren(item)
             item.childrenLoaded = True
         item.expanded()
         
     def select(self, handle):
-        item = self.items[handle]
+        item = self.item(handle)
         self.setCurrentItem(item)
 
     def dropEvent(self, ev):
@@ -252,11 +254,11 @@ class FileTreeWidget(QtGui.QTreeWidget):
 
     def dropMimeData(self, parent, index, data, action):
         #print "dropMimeData:", parent, self.currentItem()
-        source = self.handles[self.currentItem()]
+        source = self.handle(self.currentItem())
         if parent is None:
             target = self.baseDir
         else:
-            target = self.handles[parent]
+            target = self.handle(parent)
         try:
             source.move(target)
             return True
