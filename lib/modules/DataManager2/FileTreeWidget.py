@@ -35,7 +35,10 @@ class FileTreeWidget(QtGui.QTreeWidget):
         self.clear()
         
         
-    def selectionChanged(self, item, _=None):
+    def selectionChanged(self, item=None, _=None):
+        """Selection has changed; check to see whether currentDir item needs to be recolored"""
+        if item is None:
+            item = self.currentItem()
         if not isinstance(item, FileTreeItem):
             return
         #print "select:", item
@@ -64,6 +67,7 @@ class FileTreeWidget(QtGui.QTreeWidget):
         
         
     def itemChanged(self, item, col):
+        """Item text has changed; try renaming the file"""
         handle = self.handle(item)
         try:
             newName = str(item.text(0))
@@ -93,11 +97,12 @@ class FileTreeWidget(QtGui.QTreeWidget):
         #self.rebuildTree()
         
     def setCurrentDir(self, d):
-        print "set current", d.name()
+        print "set current %s -> %s" % (self.currentDir, d)
         ## uncolor previous current item
         if self.currentDir in self.items:
             item = self.items[self.currentDir]
             item.setBackground(0, QtGui.QBrush(QtGui.QColor(255,255,255)))
+            print "  - uncolor item ", item, self.handle(item)
             
         self.currentDir = d
         if d is self.baseDir:
@@ -105,18 +110,19 @@ class FileTreeWidget(QtGui.QTreeWidget):
         
         self.expandTo(d)
         
-        try:
-            item = self.items[d]
-        except:
-            print "DH:", d
-            print
-            print self.items
-            raise
+        if d in self.items:
+            self.updateCurrentDirItem()
+        else:
+            print "   - current dir changed but new dir not yet present in tree."
+        
+    def updateCurrentDirItem(self):
+        """Color the currentDir item, expand, and scroll-to"""
+        print "UpdateCurrentDirItem"
+        item = self.item(self.currentDir)
         item.setBackground(0, QtGui.QBrush(QtGui.QColor(200, 50, 50)))
         item.setExpanded(True)
         self.scrollToItem(item)
-        
-        self.selectionChanged(item)
+        self.selectionChanged()
         
     def expandTo(self, dh):
         """Expand all nodes from baseDir up to dh"""
@@ -163,6 +169,8 @@ class FileTreeWidget(QtGui.QTreeWidget):
         self.items[handle] = item
         #self.handles[item] = handle
         self.watch(handle)
+        if handle is self.currentDir:
+            self.updateCurrentDirItem()
         return item
 
     def forgetHandle(self, handle):
@@ -174,6 +182,7 @@ class FileTreeWidget(QtGui.QTreeWidget):
     def rebuildChildren(self, root):
         """Make sure all children are present and in the correct order"""
         handle = self.handle(root)
+        print "RebuildChildren", root, handle
         files = handle.ls()
         handles = [handle[f] for f in files]
         
@@ -183,12 +192,14 @@ class FileTreeWidget(QtGui.QTreeWidget):
         
         for h in handles:                   ## Re-insert in correct order
             item = self.item(h, create=True)
+            print "   - insert handle", h
             if item in items:
                 items.remove(item)
             root.addChild(item)
             item.recallExpand()  ## looks like a bug that improperly closes nodes.
         
         for i in items:                     ## ..and remove anything that is left over
+            print "   - forget handle", self.handle(i)
             self.forgetHandle(self.handle(i))
             
     def editItem(self, handle):
@@ -241,6 +252,9 @@ class FileTreeWidget(QtGui.QTreeWidget):
             self.rebuildChildren(item)
             item.childrenLoaded = True
         item.expanded()
+        self.scrollToItem(item.child(item.childCount()-1))
+        self.scrollToItem(item)
+        
         
     def select(self, handle):
         item = self.item(handle)

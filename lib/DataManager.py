@@ -79,12 +79,13 @@ class DataManager(QtCore.QObject):
 
     def _addHandle(self, fileName, handle):
         """Cache a handle and watch it for changes"""
+        print "data manager caching new handle", handle
         self._setCache(fileName, handle)
         QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self._handleChanged)
         
     def _handleChanged(self, handle, change, *args):
         with MutexLocker(self.lock):
-            #print "Manager handling changes", handle, change, args
+            print "Manager handling changes", handle, change, args
             if change == 'renamed' or change == 'moved':
                 oldName = args[0]
                 newName = args[1]
@@ -104,7 +105,7 @@ class DataManager(QtCore.QObject):
                         self._getCache(h)._parentMoved(oldName, newName)
                     self._delCache(h)
                 
-            if change == 'deleted':
+            elif change == 'deleted':
                 oldName = args[0]
                 self._delCache(oldName)
 
@@ -113,7 +114,8 @@ class DataManager(QtCore.QObject):
                 for path in tree:
                     self._getCache(path)._deleted()
                     self._delCache(path)
-                
+            else:
+                print "    (ignored)"
 
     def _getTree(self, parent):
         """Return the entire list of cached handles which are children or grandchildren of this handle"""
@@ -159,7 +161,7 @@ class FileHandle(QtCore.QObject):
         self.lock = Mutex(QtCore.QMutex.Recursive)
         
     def __repr__(self):
-        return "<%s '%s'>" % (self.__class__.__name__, self.name())
+        return "<%s '%s' (0x%x)>" % (self.__class__.__name__, self.name(), self.__hash__())
         
     def name(self, relativeTo=None):
         self.checkDeleted()
@@ -229,6 +231,7 @@ class FileHandle(QtCore.QObject):
             self.emitChanged('moved', fn1, fn2)
         
     def rename(self, newName):
+        print "Rename %s -> %s" % (self.name(), newName)
         self.checkDeleted()
         with MutexLocker(self.lock):
             parent = self.parent()
@@ -242,11 +245,11 @@ class FileHandle(QtCore.QObject):
                 info = parent._fileInfo(oldName)
                 parent.forget(oldName)
             os.rename(fn1, fn2)
-            self.parent()._childChanged()
             self.path = fn2
+            self.parent()._childChanged()  ## just clears parent's cache
+            self.emitChanged('renamed', fn1, fn2)
             if parent.isManaged():
                 parent.indexFile(newName, info=info)
-            self.emitChanged('renamed', fn1, fn2)
         
     def delete(self):
         self.checkDeleted()
@@ -683,7 +686,7 @@ class DirHandle(FileHandle):
     
     def indexFile(self, fileName, info=None, protect=False):
         """Add a pre-existing file into the index. Overwrites any pre-existing info for the file unless protect is True"""
-        #print "Adding file %s to index" % fileName
+        print "DirHandle: Adding file %s to index" % fileName
         if info is None:
             info = {}
         with MutexLocker(self.lock):
@@ -704,6 +707,8 @@ class DirHandle(FileHandle):
             self.emitChanged('children', fileName)
     
     def forget(self, fileName):
+        """Remove fileName from the index for this directory"""
+        print "DirHandle: forget", fileName
         with MutexLocker(self.lock):
             if not self.isManaged(fileName):
                 raise Exception("Can not forget %s, not managed" % fileName)
@@ -711,7 +716,8 @@ class DirHandle(FileHandle):
             if fileName in index:
                 index.remove(fileName)
                 self._writeIndex(index, lock=False)
-                self.emitChanged('children', fileName)
+                #self.emitChanged('children', fileName)
+                self.emitChanged('meta', fileName)
         
     def isManaged(self, fileName=None):
         with MutexLocker(self.lock):
