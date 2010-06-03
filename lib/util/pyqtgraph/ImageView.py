@@ -130,7 +130,17 @@ class ImageView(QtGui.QWidget):
             self.roiCurve.setData(y=data, x=self.tVals)
             #self.ui.roiPlot.replot()
 
-    def setImage(self, img, autoRange=True, autoLevels=True, levels=None):
+    def setImage(self, img, autoRange=True, autoLevels=True, levels=None, axes=None):
+        """Set the image to be displayed in the widget.
+        Options are:
+          img:         ndarray; the image to be displayed.
+          autoRange:   bool; whether to scale/pan the view to fit the image.
+          autoLevels:  bool; whether to update the white/black levels to fit the image.
+          levels:      (min, max); the white and black level values to use.
+          axes:        {'t':0, 'x':1, 'y':2, 'c':3}; Dictionary indicating the interpretation for each axis.
+                       This is only needed to override the default guess.
+        """
+        
         self.image = img
         if hasattr(img, 'xvals'):
             self.tVals = img.xvals(0)
@@ -139,16 +149,17 @@ class ImageView(QtGui.QWidget):
         self.ui.timeSlider.setValue(0)
         #self.ui.normStartSlider.setValue(0)
         #self.ui.timeSlider.setMaximum(img.shape[0]-1)
-            
-        if img.ndim == 2:
-            self.axes = {'t': None, 'x': 0, 'y': 1, 'c': None}
-        elif img.ndim == 3:
-            if img.shape[2] <= 3:
-                self.axes = {'t': None, 'x': 0, 'y': 1, 'c': 2}
-            else:
-                self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': None}
-        elif img.ndim == 4:
-            self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': 3}
+        
+        if axes is None:
+            if img.ndim == 2:
+                self.axes = {'t': None, 'x': 0, 'y': 1, 'c': None}
+            elif img.ndim == 3:
+                if img.shape[2] <= 4:
+                    self.axes = {'t': None, 'x': 0, 'y': 1, 'c': 2}
+                else:
+                    self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': None}
+            elif img.ndim == 4:
+                self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': 3}
 
             
         self.imageDisp = None

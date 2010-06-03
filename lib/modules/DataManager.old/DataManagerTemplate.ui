@@ -80,9 +80,12 @@
          </widget>
         </item>
         <item>
-         <widget class="FileTreeWidget" name="fileTreeWidget">
-          <property name="editTriggers">
-           <set>QAbstractItemView::EditKeyPressed|QAbstractItemView::SelectedClicked</set>
+         <widget class="QTreeView" name="fileTreeView">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+            <horstretch>2</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
           </property>
           <property name="dragEnabled">
            <bool>true</bool>
@@ -90,14 +93,6 @@
           <property name="dragDropMode">
            <enum>QAbstractItemView::InternalMove</enum>
           </property>
-          <attribute name="headerVisible">
-           <bool>false</bool>
-          </attribute>
-          <column>
-           <property name="text">
-            <string notr="true">1</string>
-           </property>
-          </column>
          </widget>
         </item>
        </layout>
@@ -136,7 +131,7 @@
            </sizepolicy>
           </property>
           <property name="currentIndex">
-           <number>0</number>
+           <number>2</number>
           </property>
           <widget class="QWidget" name="tab">
            <attribute name="title">
@@ -241,11 +236,6 @@
    <extends>QWidget</extends>
    <header>FileDataView</header>
    <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>FileTreeWidget</class>
-   <extends>QTreeWidget</extends>
-   <header>FileTreeWidget</header>
   </customwidget>
  </customwidgets>
  <resources/>

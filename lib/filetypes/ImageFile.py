@@ -38,4 +38,15 @@ class ImageFile(FileType):
     def read(cls, fileHandle):
         """Read a file, return a data object"""
         img = Image.open(fileHandle.name())
-        return array(img).transpose()
+        arr = array(img)
+        transp = range(arr.ndim)    ## switch axis order y,x to x,y
+        if len(img.size) == 2:
+            transp[0] = 1
+            transp[1] = 0
+        elif len(img.size) == 3:
+            transp[1] = 2
+            transp[2] = 1
+        #print arr.shape
+        arr = arr.transpose(tuple(transp))
+        #print arr.shape
+        return arr
