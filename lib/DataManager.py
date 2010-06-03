@@ -222,11 +222,11 @@ class FileHandle(QtCore.QObject):
             if os.path.exists(fn2):
                 raise Exception("Destination file %s already exists." % fn2)
             os.rename(fn1, fn2)
-            oldDir._childChanged()
-            newDir._childChanged()
             self.path = fn2
             self.parentDir = None
             self.manager._handleChanged(self, 'moved', fn1, fn2)
+            oldDir._childChanged()
+            newDir._childChanged()
             if oldDir.isManaged() and newDir.isManaged():
                 newDir.indexFile(name, info=oldDir._fileInfo(name))
             elif newDir.isManaged():
@@ -251,8 +251,8 @@ class FileHandle(QtCore.QObject):
                 parent.forget(oldName)
             os.rename(fn1, fn2)
             self.path = fn2
-            self.parent()._childChanged()  ## just clears parent's cache
             self.manager._handleChanged(self, 'renamed', fn1, fn2)
+            self.parent()._childChanged()
             if parent.isManaged():
                 parent.indexFile(newName, info=info)
             self.emitChanged('renamed', fn1, fn2)
@@ -376,6 +376,7 @@ class DirHandle(FileHandle):
         pass
     
     def _indexFile(self):
+        """Return the name of the index file for this directory. NOT the same as indexFile()"""
         return os.path.join(self.path, '.index')
     
     def _logFile(self):
@@ -711,8 +712,8 @@ class DirHandle(FileHandle):
                     raise Exception("File %s is already indexed." % fileName)
 
             self._setFileInfo(fileName, info)
-            self.emitChanged('children', fileName)
-            #self.emitChanged('meta', fileName)
+            #self.emitChanged('children', fileName)
+            self.emitChanged('meta', fileName)
     
     def forget(self, fileName):
         """Remove fileName from the index for this directory"""
@@ -822,4 +823,5 @@ class DirHandle(FileHandle):
         
     def _childChanged(self):
         self.lsCache = None
+        self.emitChanged('children')
 

@@ -326,7 +326,13 @@ class FileTreeWidget(QtGui.QTreeWidget):
             #return False
 
 
-
+    def handleScheduledMove(self, item, parent):
+        handle = self.handle(item)
+        try:
+            handle.move(self.handle(parent))
+        except:
+            printExc("Move failed:")
+        
 
     def dropEvent(self, ev):
         ev.ignore()
@@ -336,15 +342,15 @@ class FileTreeWidget(QtGui.QTreeWidget):
             item = self.currentItem()
             handle = self.handle(item)
             #print "dropEvent", parent, handle
-            try:
-                handle.move(self.handle(parent))
-            except:
-                printExc("Move failed:")
             
-            #ev.accept()
-            #return QtGui.QAbstractItemView.dropEvent(self, ev)
-            #return QtGui.QTreeView.dropEvent(self, ev)
-        #else:
+            ## Qt bug: can't mess with tree items until AFTER the drop has been handled.
+            ## Instead, schedule the move to be done later.
+            QtCore.QTimer.singleShot(0, lambda: self.handleScheduledMove(item, parent))
+            
+            #try:
+                #handle.move(self.handle(parent))
+            #except:
+                #printExc("Move failed:")
 
     #def dropMimeData(self, parent, index, data, action):
         #print "dropMimeData:", parent, index, self.currentItem()
