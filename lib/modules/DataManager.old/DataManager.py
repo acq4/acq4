@@ -6,7 +6,7 @@ from lib.DataManager import *
 import os, re, sys, time, sip
 from lib.util.debug import *
 
-class DataManager2(Module):
+class DataManager(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.dm = self.manager.dataManager
@@ -18,8 +18,8 @@ class DataManager2(Module):
         self.dialog = QtGui.QFileDialog()
         self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
         ## Load values into GUI
-        #self.model = DMModel(self.manager.getBaseDir())
-        #self.ui.fileTreeView.setModel(self.model)
+        self.model = DMModel(self.manager.getBaseDir())
+        self.ui.fileTreeView.setModel(self.model)
         self.baseDirChanged()
         self.currentDirChanged()
         self.selFile = None
@@ -36,8 +36,7 @@ class DataManager2(Module):
         QtCore.QObject.connect(self.manager, QtCore.SIGNAL('currentDirChanged'), self.currentDirChanged)
         QtCore.QObject.connect(self.manager, QtCore.SIGNAL('configChanged'), self.updateNewFolderList)
         QtCore.QObject.connect(self.ui.newFolderList, QtCore.SIGNAL('currentIndexChanged(int)'), self.newFolder)
-        #QtCore.QObject.connect(self.ui.fileTreeWidget.selectionModel(), QtCore.SIGNAL('selectionChanged(const QItemSelection&, const QItemSelection&)'), self.fileSelectionChanged)
-        QtCore.QObject.connect(self.ui.fileTreeWidget, QtCore.SIGNAL('itemSelectionChanged()'), self.fileSelectionChanged)
+        QtCore.QObject.connect(self.ui.fileTreeView.selectionModel(), QtCore.SIGNAL('selectionChanged(const QItemSelection&, const QItemSelection&)'), self.fileSelectionChanged)
         QtCore.QObject.connect(self.ui.logEntryText, QtCore.SIGNAL('returnPressed()'), self.logEntry)
         QtCore.QObject.connect(self.ui.fileDisplayTabs, QtCore.SIGNAL('currentChanged(int)'), self.tabChanged)
         self.win.show()
@@ -56,7 +55,7 @@ class DataManager2(Module):
         dh = self.manager.getBaseDir()
         self.baseDir = dh
         self.ui.baseDirText.setText(QtCore.QString(dh.name()))
-        self.ui.fileTreeWidget.setBaseDirHandle(dh)
+        self.model.setBaseDirHandle(dh)
         #self.currentDirChanged()
 
     def setCurrentClicked(self):
@@ -74,10 +73,10 @@ class DataManager2(Module):
             dirName = newDir.name(relativeTo=self.baseDir)
             self.ui.currentDirText.setText(QtCore.QString(dirName))
             self.ui.logDock.setWindowTitle(QtCore.QString('Current Log - ' + dirName))
-            self.ui.fileTreeWidget.setCurrentDir(newDir)
-            #dirIndex = self.ui.fileTreeWidget.handleIndex(newDir)
-            #self.ui.fileTreeWidget.setExpanded(dirIndex, True)
-            #self.ui.fileTreeWidget.scrollTo(dirIndex)
+            self.model.setCurrentDir(newDir)
+            dirIndex = self.model.handleIndex(newDir)
+            self.ui.fileTreeView.setExpanded(dirIndex, True)
+            self.ui.fileTreeView.scrollTo(dirIndex)
         elif change == 'log':
             self.updateLogView(*args)
         if change == None:
@@ -109,23 +108,17 @@ class DataManager2(Module):
             raise Exception("Storage directory is invalid")
             
     def selectedFile(self):
-        """Return the currently selected file"""
-        items = self.ui.fileTreeWidget.selectedItems()
-        if len(items) > 0:
-            return items[0].handle
-        else:
+        sel = list(self.ui.fileTreeView.selectedIndexes())
+        if len(sel) == 0:
             return None
-        #sel = list(self.ui.fileTreeWidget.selectedIndexes())
-        #if len(sel) == 0:
-        #    return None
-        #if len(sel) == 1:
-        #    index = sel[0]
-        #else:
-        #    raise Exception("Error - multiple items selected")
-        ##print "index:", index.internalPointer()
-        #if index.internalPointer() is None:
-        #    return None
-        #return self.model.handle(index)
+        if len(sel) == 1:
+            index = sel[0]
+        else:
+            raise Exception("Error - multiple items selected")
+        #print "index:", index.internalPointer()
+        if index.internalPointer() is None:
+            return None
+        return self.model.handle(index)
 
     def newFolder(self):
         if self.ui.newFolderList.currentIndex() < 1:
@@ -137,8 +130,8 @@ class DataManager2(Module):
         cdir = self.manager.getCurrentDir()
         if ftype == 'Folder':
             nd = cdir.mkdir('NewFolder', autoIncrement=True)
-            #item = self.model.handleIndex(nd)
-            self.ui.fileTreeWidget.editItem(nd)
+            item = self.model.handleIndex(nd)
+            self.ui.fileTreeView.edit(item)
         else:
             spec = self.manager.config['folderTypes'][ftype]
             name = time.strftime(spec['name'])
@@ -170,19 +163,16 @@ class DataManager2(Module):
             ## set display to info
             #self.showFileInfo(nd)
             
-            #index = self.model.handleIndex(nd)
-            #self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Clear)
-            #self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Select)
-            
-            self.ui.fileTreeWidget.select(nd)
-            ##self.ui.fileInfo.setCurrentFile(nd)
+            index = self.model.handleIndex(nd)
+            self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Clear)
+            self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Select)
+            #self.ui.fileInfo.setCurrentFile(nd)
             
             
         self.manager.setCurrentDir(nd)
 
 
     def fileSelectionChanged(self):
-        #print "file selection changed"
         if self.selFile is not None:
             QtCore.QObject.disconnect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
         
@@ -222,10 +212,9 @@ class DataManager2(Module):
 
     def selectedFileAltered(self, name, change, *args):
         if change in ['parent', 'renamed', 'moved'] and self.selFile is not None:
-            #index = self.model.handleIndex(self.selFile)
-            #self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Clear)
-            #self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Select)
-            self.ui.fileTreeWidget.select(self.selFile)  ## re-select file if it has moved.
+            index = self.model.handleIndex(self.selFile)
+            self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Clear)
+            self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Select)
             self.ui.fileNameLabel.setText(self.selFile.name(relativeTo=self.baseDir))
         
         #self.fileSelectionChanged()
@@ -272,12 +261,7 @@ class DataManager2(Module):
             
     def quit(self):
         ## Silly: needed to prevent lockup on some systems.
-        print "      module quitting.."
-        self.ui.fileTreeWidget.quit()
         sip.delete(self.dialog)
-        print "      deleted dialog, calling superclass quit.."
         Module.quit(self)
-        print "      module quit done"
-        #print backtrace()
         
 
