@@ -182,45 +182,46 @@ class FileTreeWidget(QtGui.QTreeWidget):
     def rebuildChildren(self, root):
         """Make sure all children are present and in the correct order"""
         handle = self.handle(root)
-        print "RebuildChildren", root, handle
+#        print "RebuildChildren", root, handle
         files = handle.ls()
         handles = [handle[f] for f in files]
-        for f, h in zip(files, handles):
-            print "     ", f, h
+#        for f, h in zip(files, handles):
+#            print "     ", f, h
         #ph = 0
         #pi = 0
         i = 0
         while True:
             #items = [root.child(i) for i in range(root.childCount())]  ## this does need to be recomputed every time
             if i >= len(handles):
-                ## no more handles; remainder of items should be removed
+                ##  no more handles; remainder of items should be removed
                 while root.childCount() > i:
                     ch = root.takeChild(i)
                     #self.forgetHandle(self.handle(ch))
-                    print "  remove", i, ch
+#                    print "  remove", i, ch
                 break
                 
             h = handles[i]
-            print "  - check handle %d: %s" % (i, h)
+#            print "  - check handle %d: %s" % (i, h)
             #i = items[pi]
             try:
                 if (i >= root.childCount()) or (h not in self.items) or (h is not self.handle(root.child(i))):
                     
                     item = self.item(h, create=True)
-                    if i >= root.childCount():
-                        print "  Insert; past end of item list"
-                    elif h not in self.items:
-                        print "  Insert; no item yet created for this handle"
-                    else:
-                        print "  Insert; %s != %s" % (str(h), str(self.handle(root.child(i))))
-                    print "  insert new:", i, item
+#                    if i >= root.childCount():
+#                        print "  Insert; past end of item list"
+#                    elif h not in self.items:
+#                        print "  Insert; no item yet created for this handle"
+#                    else:
+#                        print "  Insert; %s != %s" % (str(h), str(self.handle(root.child(i))))
+#                    print "  insert new:", i, item
                     
-                    print "     (before) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
-                    if item.parent() is not None:
-                        item.parent().removeChild(item)
-                        print "     (removed) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
+#                    print "     (before) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
+                    parent = self.itemParent(item)
+                    if parent is not None:
+                        parent.removeChild(item)
+#                        print "     (removed) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
                     root.insertChild(i, item)
-                    print "     (after) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
+#                    print "     (after) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
                     
             except:
                 #print "    - item %d is %s; root has %d childs" % (i, str(root.child(i)), root.childCount())
@@ -245,6 +246,18 @@ class FileTreeWidget(QtGui.QTreeWidget):
         #for i in items:                     ## ..and remove anything that is left over
             #print "   - forget handle", self.handle(i)
             #self.forgetHandle(self.handle(i))
+            
+    def itemParent(self,  item):
+        """Return the parent of an item (since item.parent can not be trusted). Note: damn silly."""
+        if item.parent() is None:
+            root = self.invisibleRootItem()
+            tlc = [root.child(i) for i in range(root.childCount())]
+            if item in tlc:
+                return root
+            else:
+                return None
+        else:
+            return item.parent()
             
     def editItem(self, handle):
         item = self.item(handle)
@@ -313,7 +326,7 @@ class FileTreeWidget(QtGui.QTreeWidget):
             #ev.ignore()
 
     def dropMimeData(self, parent, index, data, action):
-        print "dropMimeData:", parent, index, self.currentItem()
+#        print "dropMimeData:", parent, index, self.currentItem()
         source = self.handle(self.currentItem())
         if parent is None:
             target = self.baseDir

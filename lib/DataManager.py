@@ -221,29 +221,29 @@ class FileHandle(QtCore.QObject):
             fn2 = os.path.join(newDir.name(), name)
             if os.path.exists(fn2):
                 raise Exception("Destination file %s already exists." % fn2)
-            print "<> DataManager.move: about to move %s => %s" % (fn1, fn2)
+#            print "<> DataManager.move: about to move %s => %s" % (fn1, fn2)
             os.rename(fn1, fn2)
-            print "<> DataManager.move: moved."
+#            print "<> DataManager.move: moved."
             self.path = fn2
             self.parentDir = None
-            print "<> DataManager.move: inform DM of change.."
+#            print "<> DataManager.move: inform DM of change.."
             self.manager._handleChanged(self, 'moved', fn1, fn2)
             if oldDir.isManaged() and oldDir.isManaged(name):
-                print "<> DataManager.move: old parent forget child.."
+#                print "<> DataManager.move: old parent forget child.."
                 oldDir.forget(name)
             if oldDir.isManaged() and newDir.isManaged():
-                print "<> DataManager.move: new parent index old info.."
+#                print "<> DataManager.move: new parent index old info.."
                 newDir.indexFile(name, info=oldDir._fileInfo(name))
             elif newDir.isManaged():
-                print "<> DataManager.move: new parent index (no info)"
+#                print "<> DataManager.move: new parent index (no info)"
                 newDir.indexFile(name)
                 
-            print "<> DataManager.move: emit 'moved'.."
+#            print "<> DataManager.move: emit 'moved'.."
             self.emitChanged('moved', fn1, fn2)
                 
-            print "<> DataManager.move: oldDir emit 'children'"
+#            print "<> DataManager.move: oldDir emit 'children'"
             oldDir._childChanged()
-            print "<> DataManager.move: newDir emit 'children'"
+#            print "<> DataManager.move: newDir emit 'children'"
             newDir._childChanged()
         
     def rename(self, newName):
