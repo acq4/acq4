@@ -222,6 +222,7 @@ class FileTreeWidget(QtGui.QTreeWidget):
 #                        print "     (removed) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
                     root.insertChild(i, item)
 #                    print "     (after) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
+                    item.recallExpand()
                     
             except:
                 #print "    - item %d is %s; root has %d childs" % (i, str(root.child(i)), root.childCount())
