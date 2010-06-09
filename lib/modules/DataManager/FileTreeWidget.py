@@ -20,7 +20,7 @@ class FileTreeWidget(QtGui.QTreeWidget):
         
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
-        self.setDropIndicatorShown(False)
+        #self.setDropIndicatorShown(False)
         
     def __del__(self):
         self.quit()
@@ -73,7 +73,7 @@ class FileTreeWidget(QtGui.QTreeWidget):
         try:
             newName = str(item.text(0))
             if handle.shortName() != newName:
-                if re.search(os.path.sep, newName):
+                if os.path.sep in newName:
                     raise Exception("Can't rename file to have slashes in it.")
                 handle.rename(newName)
                 #print "Rename %s -> %s" % (handle.shortName(), item.text(0))
@@ -147,21 +147,20 @@ class FileTreeWidget(QtGui.QTreeWidget):
         else:
             item = self.items[handle]
             
-        if change == 'moved':
-            parent = handle.parent()
-            if parent in self.items:           ## this node should be moved elsewhere in the tree
-                pItem = self.items[parent]
-                self.rebuildChildren(pItem)
-            else:                              ## file was moved to a directory not yet loaded into the tree; just forget it
-                self.forgetHandle(handle)
-        elif change == 'renamed':
+        #if change == 'moved':
+        #    parent = handle.parent()
+        #    if parent in self.items:           ## this node should be moved elsewhere in the tree
+        #        pItem = self.items[parent]
+        #        self.rebuildChildren(pItem)
+        #    else:                              ## file was moved to a directory not yet loaded into the tree; just forget it
+        #        self.forgetHandle(handle)
+        if change == 'renamed':
             item.setText(0, handle.shortName())
         elif change == 'deleted':
             self.forgetHandle(handle)
         elif change == 'children':
             self.rebuildChildren(item)
             item.setChildIndicatorPolicy(QtGui.QTreeWidgetItem.ShowIndicator)
-        #self.rebuildTree(self.items[handle])
 
     def addHandle(self, handle):
         if handle in self.items:
@@ -183,44 +182,47 @@ class FileTreeWidget(QtGui.QTreeWidget):
     def rebuildChildren(self, root):
         """Make sure all children are present and in the correct order"""
         handle = self.handle(root)
-        print "RebuildChildren", root, handle
+#        print "RebuildChildren", root, handle
         files = handle.ls()
         handles = [handle[f] for f in files]
-        
+#        for f, h in zip(files, handles):
+#            print "     ", f, h
         #ph = 0
         #pi = 0
         i = 0
         while True:
             #items = [root.child(i) for i in range(root.childCount())]  ## this does need to be recomputed every time
             if i >= len(handles):
-                ## no more handles; remainder of items should be removed
+                ##  no more handles; remainder of items should be removed
                 while root.childCount() > i:
                     ch = root.takeChild(i)
-                    self.forgetHandle(self.handle(ch))
-                    print "  remove", i, ch
+                    #self.forgetHandle(self.handle(ch))
+#                    print "  remove", i, ch
                 break
                 
             h = handles[i]
-            print "  - check handle %d: %s" % (i, h)
+#            print "  - check handle %d: %s" % (i, h)
             #i = items[pi]
             try:
                 if (i >= root.childCount()) or (h not in self.items) or (h is not self.handle(root.child(i))):
                     
                     item = self.item(h, create=True)
-                    if i >= root.childCount():
-                        print "  Insert; past end of item list"
-                    elif h not in self.items:
-                        print "  Insert; no item yed created for this handle"
-                    else:
-                        print "  Insert; %s != %s" % (str(h), str(self.handle(root.child(i))))
-                    print "  insert new:", i, item
+#                    if i >= root.childCount():
+#                        print "  Insert; past end of item list"
+#                    elif h not in self.items:
+#                        print "  Insert; no item yet created for this handle"
+#                    else:
+#                        print "  Insert; %s != %s" % (str(h), str(self.handle(root.child(i))))
+#                    print "  insert new:", i, item
                     
-                    print "     (before) root now has %d childs" % root.childCount()
-                    if item.parent() is not None:
-                        item.parent().removeChild(item)
+#                    print "     (before) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
+                    parent = self.itemParent(item)
+                    if parent is not None:
+                        parent.removeChild(item)
+#                        print "     (removed) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
                     root.insertChild(i, item)
+#                    print "     (after) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
                     
-                    print "     (after) root now has %d childs" % root.childCount()
             except:
                 #print "    - item %d is %s; root has %d childs" % (i, str(root.child(i)), root.childCount())
                 raise
@@ -244,6 +246,18 @@ class FileTreeWidget(QtGui.QTreeWidget):
         #for i in items:                     ## ..and remove anything that is left over
             #print "   - forget handle", self.handle(i)
             #self.forgetHandle(self.handle(i))
+            
+    def itemParent(self,  item):
+        """Return the parent of an item (since item.parent can not be trusted). Note: damn silly."""
+        if item.parent() is None:
+            root = self.invisibleRootItem()
+            tlc = [root.child(i) for i in range(root.childCount())]
+            if item in tlc:
+                return root
+            else:
+                return None
+        else:
+            return item.parent()
             
     def editItem(self, handle):
         item = self.item(handle)
@@ -305,26 +319,26 @@ class FileTreeWidget(QtGui.QTreeWidget):
 
     #def dropEvent(self, ev):
         #if ev.source() is self:
-            #print "dropEvent", self.itemAt(ev.pos())
-            ##return QtGui.QAbstractItemView.dropEvent(self, ev)
-            #return QtGui.QTreeView.dropEvent(self, ev)
+        #    print "dropEvent", self.itemAt(ev.pos())
+        #    #return QtGui.QAbstractItemView.dropEvent(self, ev)
+        #    return QtGui.QTreeView.dropEvent(self, ev)
         #else:
             #ev.ignore()
 
-    #def dropMimeData(self, parent, index, data, action):
-        #print "dropMimeData:", parent, index, self.currentItem()
-        #source = self.handle(self.currentItem())
-        #if parent is None:
-            #target = self.baseDir
-        #else:
-            #target = self.handle(parent)
-        #try:
-            #source.move(target)
-            #return True
-        #except:
-            #printExc('Move failed:')
-            #return False
-
+    def dropMimeData(self, parent, index, data, action):
+#        print "dropMimeData:", parent, index, self.currentItem()
+        source = self.handle(self.currentItem())
+        if parent is None:
+            target = self.baseDir
+        else:
+            target = self.handle(parent)
+        try:
+            source.move(target)
+            return True
+        except:
+            printExc('Move failed:')
+            return False
+        #return True
 
     def handleScheduledMove(self, item, parent):
         handle = self.handle(item)
@@ -334,37 +348,24 @@ class FileTreeWidget(QtGui.QTreeWidget):
             printExc("Move failed:")
         
 
-    def dropEvent(self, ev):
-        ev.ignore()
-        if ev.source() is self:
-            #ev.ignore()
-            parent = self.itemAt(ev.pos())
-            item = self.currentItem()
-            handle = self.handle(item)
-            #print "dropEvent", parent, handle
-            
-            ## Qt bug: can't mess with tree items until AFTER the drop has been handled.
-            ## Instead, schedule the move to be done later.
-            QtCore.QTimer.singleShot(0, lambda: self.handleScheduledMove(item, parent))
-            
-            #try:
-                #handle.move(self.handle(parent))
-            #except:
-                #printExc("Move failed:")
+    #def dropEvent(self, ev):
+    #    #ev.ignore()
+    #    if ev.source() is self:
+    #        #ev.ignore()
+    #        parent = self.itemAt(ev.pos())
+    #        item = self.currentItem()
+    #        handle = self.handle(item)
+    #        #print "dropEvent", parent, handle
+    #        
+    #        ## Qt bug: can't mess with tree items until AFTER the drop has been handled.
+    #        ## Instead, schedule the move to be done later.
+    #        #QtCore.QTimer.singleShot(0, lambda: self.handleScheduledMove(item, parent))
+    #        
+    #        #try:
+    #            #handle.move(self.handle(parent))
+    #        #except:
+    #            #printExc("Move failed:")
 
-    #def dropMimeData(self, parent, index, data, action):
-        #print "dropMimeData:", parent, index, self.currentItem()
-        #source = self.handle(self.currentItem())
-        #if parent is None:
-            #target = self.baseDir
-        #else:
-            #target = self.handle(parent)
-        #try:
-            #source.move(target)
-            #return True
-        #except:
-            #printExc('Move failed:')
-            #return False
         
 
 

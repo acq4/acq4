@@ -221,19 +221,30 @@ class FileHandle(QtCore.QObject):
             fn2 = os.path.join(newDir.name(), name)
             if os.path.exists(fn2):
                 raise Exception("Destination file %s already exists." % fn2)
+#            print "<> DataManager.move: about to move %s => %s" % (fn1, fn2)
             os.rename(fn1, fn2)
+#            print "<> DataManager.move: moved."
             self.path = fn2
             self.parentDir = None
+#            print "<> DataManager.move: inform DM of change.."
             self.manager._handleChanged(self, 'moved', fn1, fn2)
-            oldDir._childChanged()
-            newDir._childChanged()
+            if oldDir.isManaged() and oldDir.isManaged(name):
+#                print "<> DataManager.move: old parent forget child.."
+                oldDir.forget(name)
             if oldDir.isManaged() and newDir.isManaged():
+#                print "<> DataManager.move: new parent index old info.."
                 newDir.indexFile(name, info=oldDir._fileInfo(name))
             elif newDir.isManaged():
+#                print "<> DataManager.move: new parent index (no info)"
                 newDir.indexFile(name)
-            if oldDir.isManaged():
-                oldDir.forget(name)
+                
+#            print "<> DataManager.move: emit 'moved'.."
             self.emitChanged('moved', fn1, fn2)
+                
+#            print "<> DataManager.move: oldDir emit 'children'"
+            oldDir._childChanged()
+#            print "<> DataManager.move: newDir emit 'children'"
+            newDir._childChanged()
         
     def rename(self, newName):
         #print "Rename %s -> %s" % (self.name(), newName)
@@ -252,10 +263,11 @@ class FileHandle(QtCore.QObject):
             os.rename(fn1, fn2)
             self.path = fn2
             self.manager._handleChanged(self, 'renamed', fn1, fn2)
-            self.parent()._childChanged()
             if parent.isManaged():
                 parent.indexFile(newName, info=info)
+                
             self.emitChanged('renamed', fn1, fn2)
+            self.parent()._childChanged()
         
     def delete(self):
         self.checkDeleted()
@@ -265,11 +277,11 @@ class FileHandle(QtCore.QObject):
             oldName = self.shortName()
             os.remove(fn1)
             self.manager._handleChanged(self, 'deleted', fn1)
-            self.parent()._childChanged()
             self.path = None
             if self.isManaged():
                 parent.forget(oldName)
             self.emitChanged('deleted', fn1)
+            self.parent()._childChanged()
         
     def read(self):
         self.checkDeleted()
