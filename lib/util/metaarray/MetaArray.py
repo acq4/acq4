@@ -11,7 +11,7 @@ More info at http://www.scipy.org/Cookbook/MetaArray
 """
 
 
-from numpy import ndarray, array, empty, fromstring, arange, concatenate
+from numpy import ndarray, array, empty, fromstring, arange, concatenate, memmap
 import types, copy, threading, os, re
 import pickle
 #import traceback
@@ -39,7 +39,7 @@ def axis(name=None, cols=None, values=None, units=None):
     return ax
 
 
-
+    
 
 class MetaArray(ndarray):
     """N-dimensional array with meta data such as axis titles, units, and column names.
@@ -94,7 +94,7 @@ class MetaArray(ndarray):
     def isNameType(var):
         return any([isinstance(var, t) for t in MetaArray.nameTypes])
   
-    def __new__(subtype, data=None, file=None, info=None, dtype=None, copy=False):
+    def __new__(subtype, data=None, file=None, info=None, dtype=None, copy=False, **kwargs):
         if data is not None:
             if type(data) is types.TupleType:
                 subarr = empty(data, dtype=dtype)
@@ -148,7 +148,7 @@ class MetaArray(ndarray):
             if not hasattr(MetaArray, rFuncName):
                 raise Exception("This MetaArray library does not support array version '%s'" % ver)
             rFunc = getattr(MetaArray, rFuncName)
-            subarr = rFunc(fd, meta, subtype)
+            subarr = rFunc(fd, meta, subtype, **kwargs)
                 
 
         return subarr
@@ -555,7 +555,7 @@ class MetaArray(ndarray):
         return ret
 
     @staticmethod
-    def _readData1(fd, meta, subtype):
+    def _readData1(fd, meta, subtype, mmap=False):
         """Read array data from the file descriptor for MetaArray v1 files
         """
         ## read in axis values for any axis that specifies a length
@@ -567,14 +567,17 @@ class MetaArray(ndarray):
                 del ax['values_len']
                 del ax['values_type']
         ## the remaining data is the actual array
-        subarr = fromstring(fd.read(), dtype=meta['type'])
+        if mmap:
+            subarr = memmap(fd, dtype=meta['type'], mode='r', shape=meta['shape'])
+        else:
+            subarr = fromstring(fd.read(), dtype=meta['type'])
+            subarr.shape = meta['shape']
         subarr = subarr.view(subtype)
-        subarr.shape = meta['shape']
         subarr._info = meta['info']
         return subarr
             
     @staticmethod
-    def _readData2(fd, meta, subtype):
+    def _readData2(fd, meta, subtype, mmap=False, subset=None):
         ## read in axis values
         dynAxis = None
         frameSize = 1
@@ -594,15 +597,24 @@ class MetaArray(ndarray):
                     
         ## No axes are dynamic, just read the entire array in at once
         if dynAxis is None:
+            #if rewriteDynamic is not None:
+                #raise Exception("")
             if meta['type'] == 'object':
+                if mmap:
+                    raise Exception('memmap not supported for arrays with dtype=object')
                 subarr = pickle.loads(fd.read())
             else:
-                subarr = fromstring(fd.read(), dtype=meta['type'])
+                if mmap:
+                    subarr = memmap(fd, dtype=meta['type'], mode='r', shape=meta['shape'])
+                else:
+                    subarr = fromstring(fd.read(), dtype=meta['type'])
             #subarr = subarr.view(subtype)
             subarr.shape = meta['shape']
             #subarr._info = meta['info']
         ## One axis is dynamic, read in a frame at a time
         else:
+            if mmap:
+                raise Exception('memmap not supported for non-contiguous arrays. Use rewriteContiguous() to convert.')
             ax = meta['info'][dynAxis]
             xVals = []
             frames = []
@@ -637,6 +649,8 @@ class MetaArray(ndarray):
                 shape = list(frameShape)
                 shape[dynAxis] = inf['numFrames']
                 data.shape = shape
+                if subset is not None:
+                    data = data[subset].copy()
                 frames.append(data)
                 
                 n += inf['numFrames']
@@ -733,6 +747,81 @@ class MetaArray(ndarray):
         
 
 
+#def rewriteContiguous(fileName, newName):
+    #"""Rewrite a dynamic array file as contiguous"""
+    #def _readData2(fd, meta, subtype, mmap):
+        ### read in axis values
+        #dynAxis = None
+        #frameSize = 1
+        ### read in axis values for any axis that specifies a length
+        #for i in range(len(meta['info'])):
+            #ax = meta['info'][i]
+            #if ax.has_key('values_len'):
+                #if ax['values_len'] == 'dynamic':
+                    #if dynAxis is not None:
+                        #raise Exception("MetaArray has more than one dynamic axis! (this is not allowed)")
+                    #dynAxis = i
+                #else:
+                    #ax['values'] = fromstring(fd.read(ax['values_len']), dtype=ax['values_type'])
+                    #frameSize *= ax['values_len']
+                    #del ax['values_len']
+                    #del ax['values_type']
+                    
+        ### No axes are dynamic, just read the entire array in at once
+        #if dynAxis is None:
+            #raise Exception('Array has no dynamic axes.')
+        ### One axis is dynamic, read in a frame at a time
+        #else:
+            #if mmap:
+                #raise Exception('memmap not supported for non-contiguous arrays. Use rewriteContiguous() to convert.')
+            #ax = meta['info'][dynAxis]
+            #xVals = []
+            #frames = []
+            #frameShape = list(meta['shape'])
+            #frameShape[dynAxis] = 1
+            #frameSize = reduce(lambda a,b: a*b, frameShape)
+            #n = 0
+            #while True:
+                ### Extract one non-blank line
+                #while True:
+                    #line = fd.readline()
+                    #if line != '\n':
+                        #break
+                #if line == '':
+                    #break
+                    
+                ### evaluate line
+                #inf = eval(line)
+                
+                ### read data block
+                ##print "read %d bytes as %s" % (inf['len'], meta['type'])
+                #if meta['type'] == 'object':
+                    #data = pickle.loads(fd.read(inf['len']))
+                #else:
+                    #data = fromstring(fd.read(inf['len']), dtype=meta['type'])
+                
+                #if data.size != frameSize * inf['numFrames']:
+                    ##print data.size, frameSize, inf['numFrames']
+                    #raise Exception("Wrong frame size in MetaArray file! (frame %d)" % n)
+                    
+                ### read in data block
+                #shape = list(frameShape)
+                #shape[dynAxis] = inf['numFrames']
+                #data.shape = shape
+                #frames.append(data)
+                
+                #n += inf['numFrames']
+                #if 'xVals' in inf:
+                    #xVals.extend(inf['xVals'])
+            #subarr = concatenate(frames, axis=dynAxis)
+            #if len(xVals)> 0:
+                #ax['values'] = array(xVals, dtype=ax['values_type'])
+            #del ax['values_len']
+            #del ax['values_type']
+        #subarr = subarr.view(subtype)
+        #subarr._info = meta['info']
+        #return subarr
+    
 
 
   
