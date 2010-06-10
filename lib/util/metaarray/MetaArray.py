@@ -650,8 +650,23 @@ class MetaArray(ndarray):
                 shape[dynAxis] = inf['numFrames']
                 data.shape = shape
                 if subset is not None:
+                    dSlice = subset[dynAxis]
+                    if dSlice.start is None:
+                        dStart = 0
+                    else:
+                        dStart = max(0, dSlice.start - n)
+                    if dSlice.stop is None:
+                        dStop = data.shape[dynAxis]
+                    else:
+                        dStop = min(data.shape[dynAxis], dSlice.stop - n)
+                    newSubset = list(subset[:])
+                    newSubset[dynAxis] = slice(dStart, dStop)
+                    if dStop > dStart:
+                        #print n, data.shape, " => ", newSubset, data[tuple(newSubset)].shape
+                        frames.append(data[tuple(newSubset)].copy())
+                else:
                     data = data[subset].copy()
-                frames.append(data)
+                    frames.append(data)
                 
                 n += inf['numFrames']
                 if 'xVals' in inf:
