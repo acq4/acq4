@@ -8,6 +8,7 @@ import numpy
 #from scipy.signal import resample, bessel, lfilter
 import scipy.signal
 from lib.util.debug import *
+from debug import *
 
 class NiDAQ(Device):
     def __init__(self, dm, config, name):
@@ -136,7 +137,7 @@ class Task(DeviceTask):
           'info': {'rate': xx, 'numPts': xx, ...}
         }
         """
-        
+        #prof = Profiler("    NiDAQ.getData")
         res = self.st.getResult(channel)
         if 'downsample' in self.cmd:
             ds = self.cmd['downsample']
@@ -145,59 +146,74 @@ class Task(DeviceTask):
             
         if res['info']['type'] in ['di', 'do']:
             res['data'] = (res['data'] > 0).astype(numpy.byte)
+            dsMethod = 0
+        elif res['info']['type'] == 'ao':
+            dsMethod = 1
+        else:
+            dsMethod = 4
             
+        #prof.mark("1")
         if ds > 1:
             data = res['data']
             
+            ## method 0: subsampling
+            if dsMethod == 0:
+                data = data[::ds].copy()
+            
             ## Method 1:
-                ## decimate by averaging points together (does not remove HF noise, just folds it down.)
-                #newLen = int(data.shape[0] / ds) * ds
-                #data = data[:newLen]
-                #data.shape = (data.shape[0]/ds, ds)
-                #if res['info']['type'] in ['di', 'do']:
-                #    data = data.mean(axis=1).round().astype(byte)
-                #else:
-                #    data = data.mean(axis=1)
+            elif dsMethod == 1:
+                # decimate by averaging points together (does not remove HF noise, just folds it down.)
+                newLen = int(data.shape[0] / ds) * ds
+                data = data[:newLen]
+                data.shape = (data.shape[0]/ds, ds)
+                if res['info']['type'] in ['di', 'do']:
+                    data = data.mean(axis=1).round().astype(byte)
+                else:
+                    data = data.mean(axis=1)
                
             ## Method 2:
-                ## Decimate using fourier resampling -- causes ringing artifacts.
-                #newLen = int(data.shape[0] / ds)
-                #data = scipy.signal.resample(data, newLen, window=8) # Use a kaiser window with beta=8
+            elif dsMethod == 2:            
+                # Decimate using fourier resampling -- causes ringing artifacts.
+                newLen = int(data.shape[0] / ds)
+                data = scipy.signal.resample(data, newLen, window=8) # Use a kaiser window with beta=8
             
             ## Method 3: 
-                ## Decimate by lowpass filtering, then average points together. (slow, artifacts at beginning and end of traces)
-                ## Not as good as signal.resample for removing HF noise, but does not generate artifacts either.
-                #b,a = scipy.signal.bessel(8, 2.0/ds, btype='low') 
-                #base = data.mean()
-                #data = scipy.signal.lfilter(b, a, data-base) + base
-                #
-                #newLen = int(data.shape[0] / ds) * ds
-                #data = data[:newLen]
-                #data.shape = (data.shape[0]/ds, ds)
-                #if res['info']['type'] in ['di', 'do']:
-                #    data = data.mean(axis=1).round().astype(byte)
-                #else:
-                #    data = data.mean(axis=1)
+            elif dsMethod == 3:
+                # Decimate by lowpass filtering, then average points together. (slow, artifacts at beginning and end of traces)
+                # Not as good as signal.resample for removing HF noise, but does not generate artifacts either.
+                b,a = scipy.signal.bessel(8, 2.0/ds, btype='low') 
+                base = data.mean()
+                data = scipy.signal.lfilter(b, a, data-base) + base
+                
+                newLen = int(data.shape[0] / ds) * ds
+                data = data[:newLen]
+                data.shape = (data.shape[0]/ds, ds)
+                if res['info']['type'] in ['di', 'do']:
+                    data = data.mean(axis=1).round().astype(byte)
+                else:
+                    data = data.mean(axis=1)
                
             #Method 4:
-            ## Pad data, forward+reverse bessel filter, then average down
-            b,a = scipy.signal.bessel(1, 1.0/ds, btype='low') 
-            padded = numpy.hstack([data[:100], data, data[-100:]])   ## can we intelligently decide how many samples to pad with?
-            data = scipy.signal.lfilter(b, a, scipy.signal.lfilter(b, a, data)[::-1])[::-1][100:-100]  ## filter twice; once forward, once reversed. (This eliminates phase changes)
-
-            newLen = int(data.shape[0] / ds) * ds
-            data = data[:newLen]
-            data.shape = (data.shape[0]/ds, ds)
-            if res['info']['type'] in ['di', 'do']:
-                data = data.mean(axis=1).round().astype(numpy.byte)
-            else:
-                data = data.mean(axis=1)
+            elif dsMethod == 4:
+                ## Pad data, forward+reverse bessel filter, then average down
+                b,a = scipy.signal.bessel(1, 2.0/ds, btype='low') 
+                padded = numpy.hstack([data[:100], data, data[-100:]])   ## can we intelligently decide how many samples to pad with?
+                data = scipy.signal.lfilter(b, a, scipy.signal.lfilter(b, a, padded)[::-1])[::-1][100:-100]  ## filter twice; once forward, once reversed. (This eliminates phase changes)
+    
+                newLen = int(data.shape[0] / ds) * ds
+                data = data[:newLen]
+                data.shape = (data.shape[0]/ds, ds)
+                if res['info']['type'] in ['di', 'do']:
+                    data = data.mean(axis=1).round().astype(numpy.byte)
+                else:
+                    data = data.mean(axis=1)
             
                 
             res['data'] = data
             res['info']['numPts'] = data.shape[0]
             res['info']['downsampling'] = ds
             res['info']['rate'] = res['info']['rate'] / ds
+            #prof.mark("downsample data")
                 
         return res
         

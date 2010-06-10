@@ -653,6 +653,7 @@ class Task:
         
     def stop(self, abort=False):
         """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run."""
+        #prof = Profiler("Stop Task")
         try:
             if not self.stopped:
                 #print "stopping tasks.."
@@ -667,6 +668,7 @@ class Task:
                     except:
                         printExc("Error while stopping task %s:" % t)
                     #print "   ..task", t, "stopped"
+                    #prof.mark("   ..task "+ t+ " stopped")
                 self.stopped = True
             
             if not abort and not self.tasksDone():
@@ -682,6 +684,7 @@ class Task:
                     except:
                         printExc( "Error getting result for task %s (will set result=None for this task):" % devName)
                         result[devName] = None
+                    #prof.mark("get result: "+devName)
                 self.result = result
                 #print "RESULT 1:", self.result
                 
@@ -689,9 +692,11 @@ class Task:
                 if 'storeData' in self.cfg and self.cfg['storeData'] is True:
                     for t in self.tasks:
                         self.tasks[t].storeResult(self.cfg['storageDir'])
+                #prof.mark("store data")
         finally:   ## Regardless of any other problems, at least make sure we release hardware for future use
             ## Release all hardware for use elsewhere
             self.releaseAll()
+            #prof.mark("release all")
             
         #print "tasks:", self.tasks
         #print "RESULT:", self.result        
