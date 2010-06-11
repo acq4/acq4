@@ -67,6 +67,25 @@ class ScannerProtoGui(ProtocolGui):
         self.currentCamMod = None
         self.camModChanged()
         
+        ## load target list from device, allowing targets to persist across protocols
+        oldTargetList = self.dev.getTargetList()
+        self.ui.packingSpin.setValue(oldTargetList[0])
+        for k in oldTargetList[1]:
+            t = oldTargetList[k]
+            if t[0] == 'point':
+                pos = t[1]
+                self.addPoint(pos)
+                #pt.setPos(pos)
+            elif t[0] == 'grid':
+                pos = t[1]
+                size = t[2]
+                angle = t[3]
+                self.addGrid(pos, size, angle)
+                #gr.setPos(pos)
+                #gr.setSize(size)
+                #gr.setAngle(angle)
+        
+        
     def fillModuleList(self):
         man = getManager()
         self.ui.cameraCombo.clear()
@@ -127,6 +146,7 @@ class ScannerProtoGui(ProtocolGui):
         for i in self.items.values():
             i.setPointSize(size)
         self.testTarget.setPointSize(size)
+        self.dev.updateTargetPacking(self.ui.packingSpin.value())
 
     def showInterface(self, b):
         for k in self.items:
@@ -210,14 +230,24 @@ class ScannerProtoGui(ProtocolGui):
     def handleResult(self, result, params):
         pass
 
-    def addPoint(self):
-        pt = TargetPoint([0,0], self.pointSize())
+    def addPoint(self, pos=None):
+        if pos is None:
+            pos = [0,0]
+        pt = TargetPoint(pos, self.pointSize())
         self.addItem(pt, 'Point')
+        return pt
+        
 
-    def addGrid(self):
+    def addGrid(self, pos=None, size=None, angle=0):
+        if pos is None:
+            pos = [0,0]
+        if size is None:
+            size = [s*4, s*4]
         s = self.pointSize()
-        pt = TargetGrid([0,0], [s*4, s*4], s)
+        pt = TargetGrid(pos, size, s, angle)
         self.addItem(pt, 'Grid')
+        return pt
+        
 
     def addItem(self, item, name):
         camMod = self.cameraModule()
@@ -237,6 +267,7 @@ class ScannerProtoGui(ProtocolGui):
         item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
         item.connect(QtCore.SIGNAL('pointsChanged'), self.itemChanged)
         self.itemChanged(item)
+        self.updateDeviceTargetList(item)
 
     def addTarget(self, t, name):
         self.sequenceChanged()
@@ -250,6 +281,7 @@ class ScannerProtoGui(ProtocolGui):
         if item is None:
             return
         name = str(item.text())
+        self.dev.updateTarget(name, None)  ## inform the device that this target is no more
         i = self.items[name]
         #self.removeItemPoints(i)
         i.scene().removeItem(i)
@@ -259,6 +291,7 @@ class ScannerProtoGui(ProtocolGui):
     def deleteAll(self):
         self.ui.itemList.clear()
         for k in self.items:
+            self.dev.updateTarget(k, None)  ## inform the device that this target is no more
             i = self.items[k]
             i.scene().removeItem(i)
             #self.removeItemPoints(i)
@@ -292,10 +325,22 @@ class ScannerProtoGui(ProtocolGui):
 
     def itemMoved(self, item):
         self.targets = None
+        self.updateDeviceTargetList(item)
 
     def itemChanged(self, item):
         self.targets = None
         self.sequenceChanged()
+    
+    def updateDeviceTargetList(self, item):
+        name = str(item.text())
+        state = item.stateCopy()
+        if isinstance(item, PointTarget):
+            info = ['point', state['pos']]
+        if isinstance(item, GridTarget):
+            info = ['grid', state['pos'], state['size'], state['angle']]
+        
+        self.dev.updateTarget(name, info)
+        
     
     def sequenceChanged(self):
         self.targets = None
@@ -472,8 +517,8 @@ class TargetPoint(EllipseROI):
         return [(p.x(), p.y())]
 
 class TargetGrid(ROI):
-    def __init__(self, pos, size, ptSize):
-        ROI.__init__(self, pos=pos, size=size)
+    def __init__(self, pos, size, ptSize, angle):
+        ROI.__init__(self, pos=pos, size=size, angle=angle)
         self.addScaleHandle([0, 0], [1, 1])
         self.addScaleHandle([1, 1], [0, 0])
         self.addRotateHandle([0, 1], [0.5, 0.5])

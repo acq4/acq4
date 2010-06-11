@@ -27,8 +27,10 @@ class GraphicsView(QtGui.QGraphicsView):
         enabled via enableMouse()."""
         
         QtGui.QGraphicsView.__init__(self, *args)
-        if 'linux' not in sys.platform.lower():   ## Stupid GL bug in linux.
-            self.setViewport(QtOpenGL.QGLWidget())
+        
+        #if 'linux' not in sys.platform.lower():   ## Stupid GL bug in linux.
+        self.setViewport(QtOpenGL.QGLWidget())
+        
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(0,0,0))
         brush.setStyle(QtCore.Qt.SolidPattern)

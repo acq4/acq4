@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-from lib.drivers.nidaq import NIDAQ, SuperTask
+from debug import *
+try:
+    from lib.drivers.nidaq import NIDAQ, SuperTask
+except:
+    printExc("Error while loading nidaq library; devices will not be available.")
+    
 from lib.devices.Device import *
 import threading, time, traceback, sys
 from protoGUI import *
@@ -8,7 +13,6 @@ import numpy
 #from scipy.signal import resample, bessel, lfilter
 import scipy.signal
 from lib.util.debug import *
-from debug import *
 
 class NiDAQ(Device):
     def __init__(self, dm, config, name):
@@ -63,6 +67,89 @@ class NiDAQ(Device):
     #def listTriggerPorts(self):
         #p = self.n.listDILines()
         #return [x for x in p if 'PFI' in x]
+
+    @staticmethod
+    def downsample(data, ds, method, **kargs):
+        if method == 'subsample':
+            data = data[::ds].copy()
+        
+        elif method == 'mean':
+            # decimate by averaging points together (does not remove HF noise, just folds it down.)
+            if res['info']['type'] in ['di', 'do']:
+                data = NiDAQ.meanResample(data, ds, binary=True)
+            else:
+                data = NiDAQ.meanResample(data, ds)
+            
+        elif method == 'fourier':            
+            # Decimate using fourier resampling -- causes ringing artifacts, very slow to compute (possibly uses butterworth filter?)
+            newLen = int(data.shape[0] / ds)
+            data = scipy.signal.resample(data, newLen, window=8) # Use a kaiser window with beta=8
+        
+        elif method == 'bessel_mean':
+            # Lowpass, then average. Bessel filter has less efficient lowpass characteristics and filters some of the passband as well.
+            data = NiDAQ.lowpass(data, 2.0/ds, filter='bessel', order=4, bidir=True)
+            data = NiDAQ.meanResample(data, ds)
+        
+        elif method == 'butterworth_mean':
+            # Lowpass, then average. Butterworth filter causes ringing artifacts.
+            data = NiDAQ.lowpass(data, 1.0/ds, bidir=True, filter='butterworth')
+            data = NiDAQ.meanResample(data, ds)
+        
+        elif method == 'lowpass_mean':
+            # Lowpass, then average. (for testing)
+            data = NiDAQ.lowpass(data, **kargs)
+            data = NiDAQ.meanResample(data, ds)
+        
+        return data
+        
+    @staticmethod
+    def meanResample(data, ds, binary=False):
+        """Resample data by taking mean of ds samples at a time"""
+        newLen = int(data.shape[0] / ds) * ds
+        data = data[:newLen]
+        data.shape = (data.shape[0]/ds, ds)
+        if binary:
+            data = data.mean(axis=1).round().astype(numpy.byte)
+        else:
+            data = data.mean(axis=1)
+        return data
+    
+    @staticmethod
+    def lowpass(data, cutoff, order=4, bidir=True, filter='bessel', stopCutoff=None, gpass=1., gstop=60., samplerate=None):
+        """Bi-directional bessel/butterworth lowpass filter"""
+        if samplerate is not None:
+            cutoff /= 0.5*samplerate
+            if stopCutoff is not None:
+                stopCutoff /= 0.5*samplerate
+        
+        if filter == 'bessel':
+            ## How do we compute Wn?
+            ### function determining magnitude transfer of 4th-order bessel filter
+            #from scipy.optimize import fsolve
+
+            #def m(w):  
+                #return 105. / (w**8 + 10*w**6 + 135*w**4 + 1575*w**2 + 11025.)**0.5
+            #v = fsolve(lambda x: m(x)-limit, 1.0)
+            #Wn = cutoff / (sampr*v)
+            b,a = scipy.signal.bessel(order, cutoff, btype='low') 
+        elif filter == 'butterworth':
+            if stopCutoff is None:
+                stopCutoff = cutoff * 2.0
+            ord, Wn = scipy.signal.buttord(cutoff, stopCutoff, gpass, gstop)
+            print "butterworth ord %f   Wn %f   c %f   sc %f" % (ord, Wn, cutoff, stopCutoff)
+            b,a = scipy.signal.butter(ord, Wn, btype='low') 
+        else:
+            raise Exception('Unknown filter type "%s"' % filter)
+            
+        padded = numpy.hstack([data[:100], data, data[-100:]])   ## can we intelligently decide how many samples to pad with?
+
+        if bidir:
+            data = scipy.signal.lfilter(b, a, scipy.signal.lfilter(b, a, padded)[::-1])[::-1][100:-100]  ## filter twice; once forward, once reversed. (This eliminates phase changes)
+        else:
+            data = scipy.signal.lfilter(b, a, padded)[100:-100]
+        return data
+
+
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
@@ -146,76 +233,27 @@ class Task(DeviceTask):
             
         if res['info']['type'] in ['di', 'do']:
             res['data'] = (res['data'] > 0).astype(numpy.byte)
-            dsMethod = 0
+            dsMethod = 'subsample'
         elif res['info']['type'] == 'ao':
-            dsMethod = 1
+            dsMethod = 'mean'
         else:
-            dsMethod = 4
+            dsMethod = 'lowpass_mean'
             
         #prof.mark("1")
         if ds > 1:
-            data = res['data']
+            data = NiDAQ.downsample(res['data'], ds, dsMethod)
             
-            ## method 0: subsampling
-            if dsMethod == 0:
-                data = data[::ds].copy()
-            
-            ## Method 1:
-            elif dsMethod == 1:
-                # decimate by averaging points together (does not remove HF noise, just folds it down.)
-                newLen = int(data.shape[0] / ds) * ds
-                data = data[:newLen]
-                data.shape = (data.shape[0]/ds, ds)
-                if res['info']['type'] in ['di', 'do']:
-                    data = data.mean(axis=1).round().astype(byte)
-                else:
-                    data = data.mean(axis=1)
-               
-            ## Method 2:
-            elif dsMethod == 2:            
-                # Decimate using fourier resampling -- causes ringing artifacts.
-                newLen = int(data.shape[0] / ds)
-                data = scipy.signal.resample(data, newLen, window=8) # Use a kaiser window with beta=8
-            
-            ## Method 3: 
-            elif dsMethod == 3:
-                # Decimate by lowpass filtering, then average points together. (slow, artifacts at beginning and end of traces)
-                # Not as good as signal.resample for removing HF noise, but does not generate artifacts either.
-                b,a = scipy.signal.bessel(8, 2.0/ds, btype='low') 
-                base = data.mean()
-                data = scipy.signal.lfilter(b, a, data-base) + base
-                
-                newLen = int(data.shape[0] / ds) * ds
-                data = data[:newLen]
-                data.shape = (data.shape[0]/ds, ds)
-                if res['info']['type'] in ['di', 'do']:
-                    data = data.mean(axis=1).round().astype(byte)
-                else:
-                    data = data.mean(axis=1)
-               
-            #Method 4:
-            elif dsMethod == 4:
-                ## Pad data, forward+reverse bessel filter, then average down
-                b,a = scipy.signal.bessel(1, 2.0/ds, btype='low') 
-                padded = numpy.hstack([data[:100], data, data[-100:]])   ## can we intelligently decide how many samples to pad with?
-                data = scipy.signal.lfilter(b, a, scipy.signal.lfilter(b, a, padded)[::-1])[::-1][100:-100]  ## filter twice; once forward, once reversed. (This eliminates phase changes)
-    
-                newLen = int(data.shape[0] / ds) * ds
-                data = data[:newLen]
-                data.shape = (data.shape[0]/ds, ds)
-                if res['info']['type'] in ['di', 'do']:
-                    data = data.mean(axis=1).round().astype(numpy.byte)
-                else:
-                    data = data.mean(axis=1)
-            
-                
             res['data'] = data
             res['info']['numPts'] = data.shape[0]
             res['info']['downsampling'] = ds
+            res['info']['downsampleMethod'] = dsMethod
             res['info']['rate'] = res['info']['rate'] / ds
-            #prof.mark("downsample data")
                 
         return res
         
     def devName(self):
         return self.dev.name
+        
+
+
+
