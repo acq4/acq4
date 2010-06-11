@@ -307,7 +307,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         if pos is None:
             pos = self.cameraCenter
-        item.resetTransform()
+#        item.resetTransform()
         item.setPos(QtCore.QPointF(pos[0], pos[1]))
         item.scale(scale[0], scale[1])
         item.setZValue(z)
