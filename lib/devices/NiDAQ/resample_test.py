@@ -15,14 +15,14 @@ pw = PlotWindow()
 time.clock()
 sr = 100000
 dur = 2.0
-
 data = zeros(int(sr*dur))
-xVals = linspace(0, dur, len(data))
+dlen = len(data)
+xVals = linspace(0, dur, dlen)
 
-data += random.normal(size=len(data)) + 20.
-data[100000:300000] += 20
-data[300000:500000] += 30
-data[200000]+= 1000
+data += random.normal(size=dlen) + 20.
+data[dlen*0.102:dlen*0.3] += 20
+data[dlen*0.3:dlen*0.5] += 30
+data[dlen*0.4]+= 1000
 data += sin(xVals*40677*2.0*pi)*4.
 #data = sin(linspace(0, dur, sr*dur)* linspace(0, sr*2, sr*dur))
 
@@ -42,17 +42,17 @@ def run(ds):
     
 def showDownsample(**kwargs):
     d1 = data.copy()
-    d2 = NiDAQ.downsample(**kwargs)
-    pw.plot(data, xVals, clear=True)
-    pw.plot(data2, xVals, pen=mkPen((255, 0, 0)))
+    d2 = NiDAQ.downsample(d1, **kwargs)
+    xv2 = xVals[::kwargs['ds']][:len(d2)]
+    pw.plot(d1, xVals, clear=True)
+    pw.plot(d2[:len(xv2)], xv2, pen=mkPen((255, 0, 0)))
     
 
 
 def showTransfer(**kwargs):
-    sampr = 50000
-    xVals = linspace(0, dur, sampr*dur)
+    xVals = linspace(0, dur, sr*dur)
     #data = sin(xVals* linspace(0, sampr*2, sampr*dur))
-    data = random.normal(size=sampr*dur)
+    data = random.normal(size=sr*dur)
     
     data2 = NiDAQ.lowpass(data, **kwargs)
 
