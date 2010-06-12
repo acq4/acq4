@@ -40,7 +40,7 @@ class ScannerProtoGui(ProtocolGui):
             (self.ui.laserCombo,),
             (self.ui.minTimeSpin, 'minTime'),
             (self.ui.minDistSpin, 'minDist', 1e6),
-            (self.ui.packingSpin, 'packingDensity')
+#            (self.ui.packingSpin, 'packingDensity')  ## packing density should be suggested by device rather than loaded with protocol (I think..)
         ])
         self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6})
 
@@ -52,7 +52,7 @@ class ScannerProtoGui(ProtocolGui):
         QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*,QListWidgetItem*)'), self.itemSelected)
         QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('toggled(bool)'), self.showInterface)
         QtCore.QObject.connect(self.ui.cameraCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.camModChanged)
-        QtCore.QObject.connect(self.ui.packingSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateSpotSizes)
+        QtCore.QObject.connect(self.ui.packingSpin, QtCore.SIGNAL('valueChanged(double)'), self.packingSpinChanged)
         QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         QtCore.QObject.connect(self.ui.minDistSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.generateTargets)
@@ -70,17 +70,17 @@ class ScannerProtoGui(ProtocolGui):
         ## load target list from device, allowing targets to persist across protocols
         oldTargetList = self.dev.getTargetList()
         self.ui.packingSpin.setValue(oldTargetList[0])
-        for k in oldTargetList[1]:
-            t = oldTargetList[k]
+        for k in oldTargetList[1].keys():
+            t = oldTargetList[1][k]
             if t[0] == 'point':
                 pos = t[1]
-                self.addPoint(pos)
+                self.addPoint(pos=pos,  name=k)
                 #pt.setPos(pos)
             elif t[0] == 'grid':
                 pos = t[1]
                 size = t[2]
                 angle = t[3]
-                self.addGrid(pos, size, angle)
+                self.addGrid(pos=pos, size=size, angle=angle,  name=k)
                 #gr.setPos(pos)
                 #gr.setSize(size)
                 #gr.setAngle(angle)
@@ -141,12 +141,15 @@ class ScannerProtoGui(ProtocolGui):
         camMod.ui.removeItem(self.testTarget)
         camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
 
+    def packingSpinChanged(self):
+        self.updateSpotSizes()
+        self.dev.updateTargetPacking(self.ui.packingSpin.value())
+
     def updateSpotSizes(self):
         size = self.pointSize()
         for i in self.items.values():
             i.setPointSize(size)
         self.testTarget.setPointSize(size)
-        self.dev.updateTargetPacking(self.ui.packingSpin.value())
 
     def showInterface(self, b):
         for k in self.items:
@@ -230,30 +233,46 @@ class ScannerProtoGui(ProtocolGui):
     def handleResult(self, result, params):
         pass
 
-    def addPoint(self, pos=None):
+    def addPoint(self, pos=None,  name=None):
+        autoName = False
+        if name is None:
+            name = 'Point'
+            autoName = True
+        autoPos = False
         if pos is None:
             pos = [0,0]
+            autoPos = True
+        else:
+            s = self.pointSize()
+            pos = [pos[i] - s/2.0 for i in [0, 1]]
         pt = TargetPoint(pos, self.pointSize())
-        self.addItem(pt, 'Point')
+        self.addItem(pt, name,  autoPos,  autoName)
         return pt
         
 
-    def addGrid(self, pos=None, size=None, angle=0):
+    def addGrid(self, pos=None, size=None, angle=0,  name=None):
+        autoName = False
+        if name is None:
+            name = 'Grid'
+            autoName = True
+        s = self.pointSize()
+        autoPos = False
         if pos is None:
             pos = [0,0]
+            autoPos = True
         if size is None:
             size = [s*4, s*4]
-        s = self.pointSize()
         pt = TargetGrid(pos, size, s, angle)
-        self.addItem(pt, 'Grid')
+        self.addItem(pt, name,  autoPos,  autoName)
         return pt
         
 
-    def addItem(self, item, name):
+    def addItem(self, item, name,  autoPosition=True,  autoName=True):
         camMod = self.cameraModule()
         if camMod is None:
             return False
-        name = name + str(self.nextId)
+        if autoName:
+            name = name + str(self.nextId)
         item.name = name
         item.objective = self.currentObjective
         self.items[name] = item
@@ -262,8 +281,11 @@ class ScannerProtoGui(ProtocolGui):
         self.ui.itemList.addItem(listitem)
         self.nextId += 1
         self.updateItemColor(listitem)
-        
-        camMod.ui.addItem(item, None, [1,1], 1000)
+        if autoPosition:
+            pos = None
+        else:
+            pos = item.stateCopy()['pos'] 
+        camMod.ui.addItem(item, pos, [1, 1], 1000)
         item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
         item.connect(QtCore.SIGNAL('pointsChanged'), self.itemChanged)
         self.itemChanged(item)
@@ -288,10 +310,11 @@ class ScannerProtoGui(ProtocolGui):
         del self.items[name]
         self.sequenceChanged()
 
-    def deleteAll(self):
+    def deleteAll(self, clearHistory=True):
         self.ui.itemList.clear()
         for k in self.items:
-            self.dev.updateTarget(k, None)  ## inform the device that this target is no more
+            if clearHistory == True:
+                self.dev.updateTarget(k, None)  ## inform the device that this target is no more
             i = self.items[k]
             i.scene().removeItem(i)
             #self.removeItemPoints(i)
@@ -332,11 +355,14 @@ class ScannerProtoGui(ProtocolGui):
         self.sequenceChanged()
     
     def updateDeviceTargetList(self, item):
-        name = str(item.text())
+        name = str(item.name)
         state = item.stateCopy()
-        if isinstance(item, PointTarget):
-            info = ['point', state['pos']]
-        if isinstance(item, GridTarget):
+        if isinstance(item, TargetPoint):
+            pos = state['pos']
+            pos[0] += state['size'][0]/2.0
+            pos[1] += state['size'][1]/2.0
+            info = ['point', pos]
+        if isinstance(item, TargetGrid):
             info = ['grid', state['pos'], state['size'], state['angle']]
         
         self.dev.updateTarget(name, info)
@@ -485,7 +511,7 @@ class ScannerProtoGui(ProtocolGui):
 
     def quit(self):
         print "scanner dock quit"
-        self.deleteAll()
+        self.deleteAll(clearHistory = False)
         s = self.testTarget.scene()
         if s is not None:
             self.testTarget.scene().removeItem(self.testTarget)
