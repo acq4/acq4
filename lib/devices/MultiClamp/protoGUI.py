@@ -145,7 +145,8 @@ class MultiClampProtoGui(ProtocolGui):
         single = self.getSingleWave()
         if single is not None:
             #self.plotCmdWave(single / self.cmdScale, color=QtGui.QColor(200, 100, 100))
-            self.plotCmdWave(single, color=QtGui.QColor(200, 100, 100))
+            p = self.plotCmdWave(single, color=QtGui.QColor(200, 100, 100))
+            p.setZValue(1000)
         #self.paramListChanged
         
     def clearCmdPlots(self):
@@ -168,6 +169,7 @@ class MultiClampProtoGui(ProtocolGui):
         if cur is not None:
             #self.currentCmdPlot = self.plotCmdWave(cur / self.cmdScale, color=QtGui.QColor(100, 200, 100))
             self.currentCmdPlot = self.plotCmdWave(cur, color=QtGui.QColor(100, 200, 100))
+            self.currentCmdPlot.setZValue(1001)
         
     def plotCmdWave(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
         if data is None:

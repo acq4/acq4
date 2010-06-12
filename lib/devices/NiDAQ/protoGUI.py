@@ -21,12 +21,7 @@ class NiDAQProto(ProtocolGui):
         self.ui.rateSpin.setOpts(dec=True, step=1, minStep=10, bounds=[1,None], siPrefix=True, suffix='Hz')
         self.ui.periodSpin.setOpts(dec=True, step=1, minStep=1e-6, bounds=[1e-6,None], siPrefix=True, suffix='s')
         
-        
-        QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('delayedChange'), self.rateChanged)
-        QtCore.QObject.connect(self.ui.periodSpin, QtCore.SIGNAL('delayedChange'), self.periodChanged)
-        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolChanged'), self.protocolChanged)
-        QtCore.QObject.connect(self.filterCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.ui.filterStack.setCurrentIndex)
-        
+        ## important to create widget group before connecting anything else.
         self.stateGroup = WidgetGroup([
             (self.ui.rateSpin, 'rate'),
             (self.ui.downsampleSpin, 'downsample'),
@@ -35,7 +30,6 @@ class NiDAQProto(ProtocolGui):
             (self.ui.denoiseThresholdSpin, 'denoiseThreshold'),
             (self.ui.denoiseWidthSpin, 'denoiseWidth'),
             (self.ui.filterCombo, 'filterMethod'),
-            (self.ui.gaussianWidthSpin, 'gaussianWidth'),
             (self.ui.besselCutoffSpin, 'besselCutoff'),
             (self.ui.besselOrderSpin, 'besselOrder'),
             (self.ui.butterworthPassbandSpin, 'butterworthPassband'),
@@ -44,12 +38,20 @@ class NiDAQProto(ProtocolGui):
             (self.ui.butterworthStopDBSpin, 'butterworthStopDB'),
         ])
         
+        QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('delayedChange'), self.rateChanged)
+        QtCore.QObject.connect(self.ui.periodSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateRateSpin)
+        QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('valueChanged(double)'), self.updatePeriodSpin)
+        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolChanged'), self.protocolChanged)
+        QtCore.QObject.connect(self.ui.filterCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.ui.filterStack.setCurrentIndex)
+        self.ui.rateSpin.setValue(self.rate)
+        
+        
     def quit(self):
         ProtocolGui.quit(self)
         QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolChanged'), self.protocolChanged)
         
     def saveState(self):
-        return self.currentState()
+        return self.stateGroup.state()
         
     def restoreState(self, state):
         
@@ -73,54 +75,55 @@ class NiDAQProto(ProtocolGui):
             printExc("Error while loading DAQ protocol GUI configuration (proceeding with default configuration) :")
         
     def generateProtocol(self, params=None):
-        if params is None:
-            params = {}
         return self.currentState()
         
     def currentState(self):
-        #state = {}
-        #state['rate'] = self.ui.rateSpin.value() * 1e3
-        #self.updateNPts()
-        #state['numPts'] = self.nPts
-        #if self.ui.triggerDevList.currentIndex() > 0:
-            #state['triggerDevice'] = str(self.ui.triggerDevList.currentText())
-        #state['downsample'] = self.ui.downsampleSpin.value()
-        #return state
+        self.updateNPts()
+        state = self.stateGroup.state()
+        ## make sure all of these are up to date:
+        state['numPts'] = self.nPts
+        state['rate'] = self.rate
+        state['downsample'] = self.ui.downsampleSpin.value()
+        if self.ui.triggerDevList.currentIndex() > 0:
+            state['triggerDevice'] = str(self.ui.triggerDevList.currentText())
+        else:
+            del state['triggerDevice']
         
-        return self.stateGroup.state()
+        return state
         
-    def rateChanged(self):
+    def  updatePeriodSpin(self):
         if self.ignoreRate:
             return
         #self.rate = self.ui.rateSpin.value() * 1000.
         #period = 1e6 / self.rate
-        self.rate = self.ui.rateSpin.value()
-        period = 1. / self.rate
+        period = 1. / self.ui.rateSpin.value()
         
         self.ignorePeriod = True
         self.ui.periodSpin.setValue(period)
         self.ignorePeriod = False
-        self.updateNPts()
-        self.emit(QtCore.SIGNAL('changed'), self.currentState())
         
-    def periodChanged(self):
+    def updateRateSpin(self):
         if self.ignorePeriod:
             return
         period = self.ui.periodSpin.value()
         #self.rate = 1e6 / period
-        self.rate = 1.0 / period
+        rate = 1.0 / period
         self.ignoreRate = True
         #self.ui.rateSpin.setValue(self.rate / 1000.)
-        self.ui.rateSpin.setValue(self.rate)
+        self.ui.rateSpin.setValue(rate)
         self.ignoreRate = False
+        
+    def rateChanged(self):
+        self.rate = self.ui.rateSpin.value()
         self.updateNPts()
         self.emit(QtCore.SIGNAL('changed'), self.currentState())
+        
         
     def protocolChanged(self, n, v):
         #print "caught protocol change", n, v
         if n == 'duration':
             self.updateNPts()
-        self.emit(QtCore.SIGNAL('changed'), self.currentState())
+            self.emit(QtCore.SIGNAL('changed'), self.currentState())
         
     def updateNPts(self):
         dur = self.prot.getParam('duration')

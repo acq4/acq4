@@ -137,7 +137,7 @@ class NiDAQ(Device):
             if stopCutoff is None:
                 stopCutoff = cutoff * 2.0
             ord, Wn = scipy.signal.buttord(cutoff, stopCutoff, gpass, gstop)
-            print "butterworth ord %f   Wn %f   c %f   sc %f" % (ord, Wn, cutoff, stopCutoff)
+            #print "butterworth ord %f   Wn %f   c %f   sc %f" % (ord, Wn, cutoff, stopCutoff)
             b,a = scipy.signal.butter(ord, Wn, btype='low') 
         else:
             raise Exception('Unknown filter type "%s"' % filter)
@@ -264,7 +264,7 @@ class Task(DeviceTask):
                 
                 #res['info']['filterMethod'] = method
                 #res['info']['filterWidth'] = width
-            elif method == 'bessel':
+            elif method == 'Bessel':
                 cutoff = self.cmd['besselCutoff']
                 order = self.cmd['besselOrder']
                 
@@ -273,11 +273,11 @@ class Task(DeviceTask):
                 res['info']['filterMethod'] = method
                 res['info']['filterCutoff'] = cutoff
                 res['info']['filterOrder'] = order
-            elif method == 'butterworth':
+            elif method == 'Butterworth':
                 passF = self.cmd['butterworthPassband']
                 stopF = self.cmd['butterworthStopband']
                 passDB = self.cmd['butterworthPassDB']
-                passDB = self.cmd['butterworthStopDB']
+                stopDB = self.cmd['butterworthStopDB']
                 
                 data = NiDAQ.lowpass(data, filter='butterworth', cutoff=passF*fScale, stopCutoff=stopF*fScale, gpass=passDB, gstop=stopDB, samplerate=res['info']['rate'])
                 
