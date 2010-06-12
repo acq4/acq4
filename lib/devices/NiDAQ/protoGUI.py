@@ -3,6 +3,7 @@ from PyQt4 import QtCore, QtGui
 from ProtocolTemplate import *
 from lib.devices.Device import ProtocolGui
 from lib.util.debug import *
+from WidgetGroup import *
 import sys
 
 class NiDAQProto(ProtocolGui):
@@ -17,9 +18,31 @@ class NiDAQProto(ProtocolGui):
         self.updateNPts()
         self.updateDevList()
         #self.devs = []
-        QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('valueChanged(double)'), self.rateChanged)
-        QtCore.QObject.connect(self.ui.periodSpin, QtCore.SIGNAL('valueChanged(double)'), self.periodChanged)
+        self.ui.rateSpin.setOpts(dec=True, step=1, minStep=10, bounds=[1,None], siPrefix=True, suffix='Hz')
+        self.ui.periodSpin.setOpts(dec=True, step=1, minStep=1e-6, bounds=[1e-6,None], siPrefix=True, suffix='s')
+        
+        
+        QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('delayedChange'), self.rateChanged)
+        QtCore.QObject.connect(self.ui.periodSpin, QtCore.SIGNAL('delayedChange'), self.periodChanged)
         QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolChanged'), self.protocolChanged)
+        QtCore.QObject.connect(self.filterCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.ui.filterStack.setCurrentIndex)
+        
+        self.stateGroup = WidgetGroup([
+            (self.ui.rateSpin, 'rate'),
+            (self.ui.downsampleSpin, 'downsample'),
+            (self.ui.triggerDevList, 'triggerDevice'),
+            (self.ui.denoiseCombo, 'denoiseMethod'),
+            (self.ui.denoiseThresholdSpin, 'denoiseThreshold'),
+            (self.ui.denoiseWidthSpin, 'denoiseWidth'),
+            (self.ui.filterCombo, 'filterMethod'),
+            (self.ui.gaussianWidthSpin, 'gaussianWidth'),
+            (self.ui.besselCutoffSpin, 'besselCutoff'),
+            (self.ui.besselOrderSpin, 'besselOrder'),
+            (self.ui.butterworthPassbandSpin, 'butterworthPassband'),
+            (self.ui.butterworthStopbandSpin, 'butterworthStopband'),
+            (self.ui.butterworthPassDBSpin, 'butterworthPassDB'),
+            (self.ui.butterworthStopDBSpin, 'butterworthStopDB'),
+        ])
         
     def quit(self):
         ProtocolGui.quit(self)
@@ -29,18 +52,22 @@ class NiDAQProto(ProtocolGui):
         return self.currentState()
         
     def restoreState(self, state):
+        
         try:
-            if 'downsample' in state:
-                self.ui.downsampleSpin.setValue(state['downsample'])
-            self.ui.rateSpin.setValue(state['rate'] / 1000.)
-            #print "trigger dev:", state['triggerDevice']
-            #print self.devs
-            if 'triggerDevice' in state and state['triggerDevice'] in self.devs:
-                self.ui.triggerDevList.setCurrentIndex(self.devs.index(state['triggerDevice'])+1)
-                #print "Set index to", self.devs.index(state['triggerDevice'])+1
-            else:
-                self.ui.triggerDevList.setCurrentIndex(0)
-                #print "No index"
+            #if 'rate' in state:
+                #if 'downsample' in state:
+                    #self.ui.downsampleSpin.setValue(state['downsample'])
+                #self.ui.rateSpin.setValue(state['rate'] / 1000.)
+                ##print "trigger dev:", state['triggerDevice']
+                ##print self.devs
+                #if 'triggerDevice' in state and state['triggerDevice'] in self.devs:
+                    #self.ui.triggerDevList.setCurrentIndex(self.devs.index(state['triggerDevice'])+1)
+                    ##print "Set index to", self.devs.index(state['triggerDevice'])+1
+                #else:
+                    #self.ui.triggerDevList.setCurrentIndex(0)
+                    ##print "No index"
+            #else:
+            self.stateGroup.setState(state)
         except:
             #sys.excepthook(*sys.exc_info())
             printExc("Error while loading DAQ protocol GUI configuration (proceeding with default configuration) :")
@@ -51,25 +78,28 @@ class NiDAQProto(ProtocolGui):
         return self.currentState()
         
     def currentState(self):
-        state = {}
-        state['rate'] = self.ui.rateSpin.value() * 1e3
-        self.updateNPts()
-        state['numPts'] = self.nPts
-        if self.ui.triggerDevList.currentIndex() > 0:
-            state['triggerDevice'] = str(self.ui.triggerDevList.currentText())
-        state['downsample'] = self.ui.downsampleSpin.value()
-        return state
+        #state = {}
+        #state['rate'] = self.ui.rateSpin.value() * 1e3
+        #self.updateNPts()
+        #state['numPts'] = self.nPts
+        #if self.ui.triggerDevList.currentIndex() > 0:
+            #state['triggerDevice'] = str(self.ui.triggerDevList.currentText())
+        #state['downsample'] = self.ui.downsampleSpin.value()
+        #return state
+        
+        return self.stateGroup.state()
         
     def rateChanged(self):
         if self.ignoreRate:
             return
-        self.rate = self.ui.rateSpin.value() * 1000.
-        period = 1e6 / self.rate
-        #self.ui.periodSpin.blockSignals(True)
+        #self.rate = self.ui.rateSpin.value() * 1000.
+        #period = 1e6 / self.rate
+        self.rate = self.ui.rateSpin.value()
+        period = 1. / self.rate
+        
         self.ignorePeriod = True
         self.ui.periodSpin.setValue(period)
         self.ignorePeriod = False
-        #self.ui.periodSpin.blockSignals(False)
         self.updateNPts()
         self.emit(QtCore.SIGNAL('changed'), self.currentState())
         
@@ -77,12 +107,12 @@ class NiDAQProto(ProtocolGui):
         if self.ignorePeriod:
             return
         period = self.ui.periodSpin.value()
-        self.rate = 1e6 / period
-        #self.ui.rateSpin.blockSignals(True)
+        #self.rate = 1e6 / period
+        self.rate = 1.0 / period
         self.ignoreRate = True
-        self.ui.rateSpin.setValue(self.rate / 1000.)
+        #self.ui.rateSpin.setValue(self.rate / 1000.)
+        self.ui.rateSpin.setValue(self.rate)
         self.ignoreRate = False
-        #self.ui.rateSpin.blockSignals(False)
         self.updateNPts()
         self.emit(QtCore.SIGNAL('changed'), self.currentState())
         
