@@ -11,7 +11,8 @@ from protoGUI import *
 #from numpy import byte
 import numpy
 #from scipy.signal import resample, bessel, lfilter
-import scipy.signal
+import scipy.signal, scipy.ndimage
+
 from lib.util.debug import *
 
 class NiDAQ(Device):
@@ -226,28 +227,89 @@ class Task(DeviceTask):
         """
         #prof = Profiler("    NiDAQ.getData")
         res = self.st.getResult(channel)
+        data = res['data']
+        
+        if 'denoiseMethod' in self.cmd:
+            method = self.cmd['denoiseMethod']
+            if method == 'None':
+                pass
+            elif method == 'Pointwise':
+                width = self.cmd['denoiseWidth']
+                thresh = self.cmd['denoiseThreshold']
+                
+                res['info']['denoiseMethod'] = method
+                res['info']['denoiseWidth'] = width
+                res['info']['denoiseThreshold'] = threshold
+                pass  ## denoise here
+            else:
+                printExc("Unknown denoise method '%s'" % str(method))
+            
+            
         if 'downsample' in self.cmd:
             ds = self.cmd['downsample']
         else:
             ds = 1
             
-        if res['info']['type'] in ['di', 'do']:
-            res['data'] = (res['data'] > 0).astype(numpy.byte)
-            dsMethod = 'subsample'
-        elif res['info']['type'] == 'ao':
-            dsMethod = 'mean'
-        else:
-            dsMethod = 'lowpass_mean'
+        if 'filterMethod' in self.cmd:
+            method = self.cmd['filterMethod']
             
-        #prof.mark("1")
+            fScale = 0.5 * res['info']['rate'] / ds
+            
+            if method == 'None':
+                pass
+            #elif method == 'gaussian':
+                #width = self.cmd['gaussianWidth']
+                
+                #data = scipy.ndimage.gaussian_filter(data, width)
+                
+                #res['info']['filterMethod'] = method
+                #res['info']['filterWidth'] = width
+            elif method == 'bessel':
+                cutoff = self.cmd['besselCutoff']
+                order = self.cmd['besselOrder']
+                
+                data = NiDAQ.lowpass(data, filter='bessel', cutoff=cutoff*fScale, order=order, samplerate=res['info']['rate'])
+                
+                res['info']['filterMethod'] = method
+                res['info']['filterCutoff'] = cutoff
+                res['info']['filterOrder'] = order
+            elif method == 'butterworth':
+                passF = self.cmd['butterworthPassband']
+                stopF = self.cmd['butterworthStopband']
+                passDB = self.cmd['butterworthPassDB']
+                passDB = self.cmd['butterworthStopDB']
+                
+                data = NiDAQ.lowpass(data, filter='butterworth', cutoff=passF*fScale, stopCutoff=stopF*fScale, gpass=passDB, gstop=stopDB, samplerate=res['info']['rate'])
+                
+                res['info']['filterMethod'] = method
+                res['info']['filterPassband'] = passF
+                res['info']['filterStopband'] = stopF
+                res['info']['filterPassbandDB'] = passDB
+                res['info']['filterStopbandDB'] = stopDB
+                
+            else:
+                printExc("Unknown filter method '%s'" % str(method))
+                
+        
         if ds > 1:
-            data = NiDAQ.downsample(res['data'], ds, dsMethod)
-            
-            res['data'] = data
-            res['info']['numPts'] = data.shape[0]
-            res['info']['downsampling'] = ds
-            res['info']['downsampleMethod'] = dsMethod
-            res['info']['rate'] = res['info']['rate'] / ds
+        
+            if res['info']['type'] in ['di', 'do']:
+                res['data'] = (res['data'] > 0).astype(numpy.byte)
+                dsMethod = 'subsample'
+                data = data[::ds]
+                res['info']['downsampling'] = ds
+                res['info']['downsampleMethod'] = 'subsample'
+                res['info']['rate'] = res['info']['rate'] / ds
+            elif res['info']['type'] in ['ai', 'ao']:
+                data = NiDAQ.meanResample(data, ds)
+                res['info']['downsampling'] = ds
+                res['info']['downsampleMethod'] = 'mean'
+                res['info']['rate'] = res['info']['rate'] / ds
+            else:
+                dsMethod = None
+                
+        res['data'] = data
+        res['info']['numPts'] = data.shape[0]
                 
         return res
         

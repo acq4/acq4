@@ -64,7 +64,11 @@
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QComboBox" name="comboBox_3">
+       <widget class="QComboBox" name="denoiseCombo">
+        <property name="toolTip">
+         <string>Denoise method to use.
+- Pointwise method compares each point to its neighbors</string>
+        </property>
         <item>
          <property name="text">
           <string>None</string>
@@ -98,7 +102,37 @@
            </widget>
           </item>
           <item row="0" column="1">
-           <widget class="QDoubleSpinBox" name="doubleSpinBox_3"/>
+           <widget class="QDoubleSpinBox" name="denoiseThresholdSpin">
+            <property name="toolTip">
+             <string>Minimum threshold of detected noise events</string>
+            </property>
+            <property name="value">
+             <double>4.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="label_16">
+            <property name="text">
+             <string>Width</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QSpinBox" name="denoiseWidthSpin">
+            <property name="toolTip">
+             <string>Maximum radius of detected noise events</string>
+            </property>
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="maximum">
+             <number>100000</number>
+            </property>
+            <property name="value">
+             <number>1</number>
+            </property>
+           </widget>
           </item>
          </layout>
         </widget>
@@ -112,15 +146,13 @@
        </widget>
       </item>
       <item row="2" column="1">
-       <widget class="QComboBox" name="comboBox_2">
+       <widget class="QComboBox" name="filterCombo">
+        <property name="toolTip">
+         <string>Lowpass filter types to use for AI channels. Filter is applied before downsampling.</string>
+        </property>
         <item>
          <property name="text">
           <string>None</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Gaussian</string>
          </property>
         </item>
         <item>
@@ -136,7 +168,7 @@
        </widget>
       </item>
       <item row="3" column="1">
-       <widget class="QStackedWidget" name="stackedWidget">
+       <widget class="QStackedWidget" name="filterStack">
         <property name="currentIndex">
          <number>0</number>
         </property>
@@ -148,16 +180,6 @@
           <property name="spacing">
            <number>0</number>
           </property>
-          <item row="0" column="0">
-           <widget class="QLabel" name="label_10">
-            <property name="text">
-             <string>Width</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1">
-           <widget class="QDoubleSpinBox" name="doubleSpinBox"/>
-          </item>
          </layout>
         </widget>
         <widget class="QWidget" name="page_2">
@@ -171,12 +193,16 @@
           <item row="0" column="0">
            <widget class="QLabel" name="label_11">
             <property name="text">
-             <string>Corner</string>
+             <string>Cutoff</string>
             </property>
            </widget>
           </item>
           <item row="0" column="1">
-           <widget class="QDoubleSpinBox" name="doubleSpinBox_2"/>
+           <widget class="QDoubleSpinBox" name="besselCutoffSpin">
+            <property name="value">
+             <double>2.000000000000000</double>
+            </property>
+           </widget>
           </item>
           <item row="1" column="0">
            <widget class="QLabel" name="label_12">
@@ -186,7 +212,17 @@
            </widget>
           </item>
           <item row="1" column="1">
-           <widget class="QSpinBox" name="spinBox"/>
+           <widget class="QSpinBox" name="besselOrderSpin">
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="maximum">
+             <number>16</number>
+            </property>
+            <property name="value">
+             <number>4</number>
+            </property>
+           </widget>
           </item>
          </layout>
         </widget>
@@ -198,14 +234,14 @@
           <property name="spacing">
            <number>0</number>
           </property>
-          <item row="0" column="1" colspan="2">
+          <item row="0" column="1">
            <widget class="QLabel" name="label_14">
             <property name="text">
              <string>Freq.</string>
             </property>
            </widget>
           </item>
-          <item row="0" column="3">
+          <item row="0" column="2" colspan="2">
            <widget class="QLabel" name="label_15">
             <property name="text">
              <string>dB</string>
@@ -220,10 +256,24 @@
            </widget>
           </item>
           <item row="1" column="1">
-           <widget class="QDoubleSpinBox" name="doubleSpinBox_4"/>
+           <widget class="QDoubleSpinBox" name="butterworthPassbandSpin">
+            <property name="toolTip">
+             <string>Upper frequency of butterworth passband in multiples of maximum nyquist frequency (sample rate / 2).</string>
+            </property>
+            <property name="value">
+             <double>1.000000000000000</double>
+            </property>
+           </widget>
           </item>
           <item row="1" column="2" colspan="2">
-           <widget class="QDoubleSpinBox" name="doubleSpinBox_6"/>
+           <widget class="QDoubleSpinBox" name="butterworthPassDBSpin">
+            <property name="toolTip">
+             <string>Maximum amplitude of loss in passband</string>
+            </property>
+            <property name="value">
+             <double>2.000000000000000</double>
+            </property>
+           </widget>
           </item>
           <item row="2" column="0">
            <widget class="QLabel" name="label_6">
@@ -233,10 +283,24 @@
            </widget>
           </item>
           <item row="2" column="1">
-           <widget class="QDoubleSpinBox" name="doubleSpinBox_5"/>
+           <widget class="QDoubleSpinBox" name="butterworthStopbandSpin">
+            <property name="toolTip">
+             <string>Lower frequency of butterworth stopband in multiples of maximum nyquist frequency (sample rate / 2).</string>
+            </property>
+            <property name="value">
+             <double>2.000000000000000</double>
+            </property>
+           </widget>
           </item>
           <item row="2" column="2" colspan="2">
-           <widget class="QDoubleSpinBox" name="doubleSpinBox_7"/>
+           <widget class="QDoubleSpinBox" name="butterworthStopDBSpin">
+            <property name="toolTip">
+             <string>Minimum amplitude of loss in stopband</string>
+            </property>
+            <property name="value">
+             <double>10.000000000000000</double>
+            </property>
+           </widget>
           </item>
          </layout>
         </widget>
@@ -250,31 +314,10 @@
        </widget>
       </item>
       <item row="4" column="1">
-       <widget class="QComboBox" name="comboBox">
-        <item>
-         <property name="text">
-          <string>None</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Subsample</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Mean</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Median</string>
-         </property>
-        </item>
-       </widget>
-      </item>
-      <item row="5" column="1">
        <widget class="QSpinBox" name="downsampleSpin">
+        <property name="toolTip">
+         <string>Amount DAQ data should be downsampled before returning results (output data is not downsampled before sending to the DAQ). DI/DO data is downsampled by subsampling, AI/AO data is downsampled by averaging. </string>
+        </property>
         <property name="suffix">
          <string>x</string>
         </property>
@@ -312,18 +355,18 @@
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QDoubleSpinBox" name="rateSpin">
+       <widget class="SpinBox" name="rateSpin">
         <property name="suffix">
-         <string> kHz</string>
+         <string> Hz</string>
         </property>
         <property name="minimum">
          <double>0.010000000000000</double>
         </property>
         <property name="maximum">
-         <double>2000.000000000000000</double>
+         <double>1000000.000000000000000</double>
         </property>
         <property name="value">
-         <double>40.000000000000000</double>
+         <double>40000.000000000000000</double>
         </property>
        </widget>
       </item>
@@ -335,7 +378,7 @@
        </widget>
       </item>
       <item row="1" column="1">
-       <widget class="QDoubleSpinBox" name="periodSpin">
+       <widget class="SpinBox" name="periodSpin">
         <property name="suffix">
          <string> μs</string>
         </property>
@@ -346,7 +389,7 @@
          <double>10000.000000000000000</double>
         </property>
         <property name="value">
-         <double>25.000000000000000</double>
+         <double>1.000000000000000</double>
         </property>
        </widget>
       </item>
@@ -355,6 +398,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>SpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>lib.util.SpinBox</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>
