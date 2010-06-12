@@ -120,6 +120,7 @@ class PatchWindow(QtGui.QMainWindow):
         
         self.ui.patchPlot.setLabel('left', text='Primary', units='A')
         self.patchCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
+        self.patchFitCurve = self.ui.patchPlot.plot(pen=QtGui.QPen(QtGui.QColor(0, 100, 200)))
         self.ui.commandPlot.setLabel('left', text='Secondary', units='V')
         self.commandCurve = self.ui.commandPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
         
@@ -251,6 +252,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.commandCurve.setData(data.xvals('Time'), data['secondary'])
         #self.ui.patchPlot.replot()
         #self.ui.commandPlot.replot()
+        self.patchFitCurve.setData(data.xvals('Time'), frame['analysis']['fitTrace'])
         
         for k in self.analysisItems:
             if k in frame['analysis']:
@@ -469,10 +471,11 @@ class PatchThread(QtCore.QThread):
     def analyze(self, data, params):
         #print "\n\nAnalysis parameters:", params
         ## Extract specific time segments
-        base = data['Time': 0.0:(params['delayTime']-1e-3)]
-        pulse = data['Time': params['delayTime']:params['delayTime']+params['pulseTime']-1e-3]
-        pulseEnd = data['Time': params['delayTime']+(params['pulseTime']*2./3.):params['delayTime']+params['pulseTime']-1e-3]
-        end = data['Time':params['delayTime']+params['pulseTime']+1e-3:]
+        nudge = 0.1e-3
+        base = data['Time': 0.0:(params['delayTime']-nudge)]
+        pulse = data['Time': params['delayTime']+nudge:params['delayTime']+params['pulseTime']-nudge]
+        pulseEnd = data['Time': params['delayTime']+(params['pulseTime']*2./3.):params['delayTime']+params['pulseTime']-nudge]
+        end = data['Time':params['delayTime']+params['pulseTime']+nudge:]
         #print "time ranges:", pulse.xvals('Time').min(),pulse.xvals('Time').max(),end.xvals('Time').min(),end.xvals('Time').max()
         ## Exponential fit
         #  v[0] is offset to start of exp
@@ -501,13 +504,17 @@ class PatchThread(QtCore.QThread):
             pred2 = [irv, irv, 50e-3]
             
         # Fit exponential to pulse and post-pulse traces
+        tVals1 = pulse.xvals('Time')-pulse.xvals('Time').min()
+        tVals2 = end.xvals('Time')-end.xvals('Time').min()
+        
+        baseMean = base['primary'].mean()
         fit1 = scipy.optimize.leastsq(
             lambda v, t, y: y - expFn(v, t), pred1, 
-            args=(pulse.xvals('Time')-pulse.xvals('Time').min(), pulse['primary'] - base['primary'].mean()),
+            args=(tVals1, pulse['primary'] - baseMean),
             maxfev=200, full_output=1, warning=False)
         fit2 = scipy.optimize.leastsq(
             lambda v, t, y: y - expFn(v, t), pred2, 
-            args=(end.xvals('Time')-end.xvals('Time').min(), end['primary'] - base['primary'].mean()),
+            args=(tVals2, end['primary'] - baseMean),
             maxfev=200, full_output=1, warning=False)
             
         
@@ -536,7 +543,9 @@ class PatchThread(QtCore.QThread):
         #0.5 * (fit1[0] + (fit2[0] * array([-1, -1, 1])))
         #print pred1, fit1, pred2, fit2, fitAvg
         
-        ## Handle anelysis differently depenting on clamp mode
+        fitTrace = empty(len(data))
+        
+        ## Handle analysis differently depenting on clamp mode
         if params['mode'] == 'vc':
             #global iBase, iPulse, iPulseEnd
             iBase = base['Channel': 'primary']
@@ -596,6 +605,19 @@ class PatchThread(QtCore.QThread):
         rmcs = iBase.std()
         #print rmp, rmc
         
+        ## Compute values for fit trace to be plotted over raw data
+        fitTrace = MetaArray((data.shape[1],), info=[{'name': 'Time', 'values': data.xvals('Time')}])
+        if params['mode'] == 'vc':
+            fitTrace[:] = rmc
+        else:
+            fitTrace[:] = rmp
+#        print i1, i2, len(tVals1), len(tVals2), len(expFn(fit1, tVals2)), len(fitTrace[i2:])
+        ## slices from fitTrace must exactly match slices from data at the beginning of the function.
+        fitTrace['Time': params['delayTime']+nudge:params['delayTime']+params['pulseTime']-nudge] = expFn(fit1, tVals1)+baseMean
+        fitTrace['Time':params['delayTime']+params['pulseTime']+nudge:] = expFn(fit2, tVals2)+baseMean
+        
+        
+        
             
         return {
             'inputResistance': iRes, 
@@ -603,7 +625,8 @@ class PatchThread(QtCore.QThread):
             'capacitance': cap,
             'restingPotential': rmp, 'restingPotentialStd': rmps,
             'restingCurrent': rmc, 'restingCurrentStd': rmcs,
-            'fitError': err
+            'fitError': err,
+            'fitTrace': fitTrace
         }
             
     def stop(self, block=False):
