@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'PatchTemplate.ui'
 #
-# Created: Wed May 26 15:31:48 2010
+# Created: Sat Jun 12 15:15:46 2010
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(172, 343)
+        Form.resize(267, 343)
         self.verticalLayout_2 = QtGui.QVBoxLayout(Form)
         self.verticalLayout_2.setSpacing(0)
         self.verticalLayout_2.setMargin(0)
@@ -185,6 +185,7 @@ class Ui_Form(object):
         self.restingPotentialCheck.setObjectName("restingPotentialCheck")
         self.formLayout.setWidget(3, QtGui.QFormLayout.LabelRole, self.restingPotentialCheck)
         self.restingPotentialLabel = QtGui.QLabel(self.groupBox)
+        self.restingPotentialLabel.setMinimumSize(QtCore.QSize(140, 0))
         font = QtGui.QFont()
         font.setPointSize(11)
         font.setWeight(75)
@@ -197,6 +198,7 @@ class Ui_Form(object):
         self.restingCurrentCheck.setObjectName("restingCurrentCheck")
         self.formLayout.setWidget(4, QtGui.QFormLayout.LabelRole, self.restingCurrentCheck)
         self.restingCurrentLabel = QtGui.QLabel(self.groupBox)
+        self.restingCurrentLabel.setMinimumSize(QtCore.QSize(120, 0))
         font = QtGui.QFont()
         font.setWeight(75)
         font.setBold(True)

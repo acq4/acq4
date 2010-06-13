@@ -261,15 +261,19 @@ class MultiClamp:
     
     def connect(self):
         """(re)create connection to commander."""
+        #print "connect to commander.."
         with self.lock:
             if self.handle is not None:
+                #print "   disconnect first"
                 self.disconnect()
             (self.handle, err) = axlib.CreateObject()
             if self.handle == 0:
                 self.handle = None
                 self.raiseError("Error while initializing Axon library:", err)
             self.findDevices()
-        
+            
+            #print "    now connected:", self.chanDesc
+            
     def disconnect(self):
         """Destroy connection to commander"""
         with self.lock:
@@ -342,7 +346,7 @@ class MultiClamp:
     def telegraphMessage(self, msg, chID=None, state=None):
         if msg == 'update':
             self.channels[chID].updateState(state)
-        elif 'msg' == 'reconnect':
+        elif msg == 'reconnect':
             self.connect()
         
 

@@ -121,7 +121,7 @@ class MultiClampTelegraph:
                         devID = ret[0].lParam
                         if devID in self.devIndex:
                             self.emit('reconnect')
-                            self.post('OPEN', devID)
+                            self.post('OPEN', devID)  ## reopen connection to device
                     elif msg == self.msgIds['COMMAND']:
                         print "Peeked command."
                 

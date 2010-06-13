@@ -40,17 +40,20 @@ class ProtocolRunner(Module):
         self.ui = Ui_MainWindow()
         self.win = Window(self)
         
-        
         self.ui.setupUi(self.win)
+        self.ui.protoDurationSpin.setOpts(dec=True, bounds=[1e-3,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
+        self.ui.protoLeadTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=10e-3, suffix='s', siPrefix=True)
+        self.ui.protoCycleTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
+        self.ui.seqCycleTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
         #self.win.setCentralWidget(None)  ## get rid of central widget so docks fill the whole screen
         #self.win.centralWidget().setFixedSize(QtCore.QSize(2, 2))
         self.protoStateGroup = WidgetGroup([
             (self.ui.protoContinuousCheck, 'continuous'),
-            (self.ui.protoDurationSpin, 'duration', 1e3),
-            (self.ui.protoLeadTimeSpin, 'leadTime', 1e3),
+            (self.ui.protoDurationSpin, 'duration'),
+            (self.ui.protoLeadTimeSpin, 'leadTime'),
             (self.ui.protoLoopCheck, 'loop'),
-            (self.ui.protoCycleTimeSpin, 'loopCycleTime', 1e3),
-            (self.ui.seqCycleTimeSpin, 'cycleTime', 1e3),
+            (self.ui.protoCycleTimeSpin, 'loopCycleTime'),
+            (self.ui.seqCycleTimeSpin, 'cycleTime'),
             (self.ui.seqRepetitionSpin, 'repetitions', 1),
         ])
         self.protocolList = DirTreeModel(self.manager.config['protocolDir'])

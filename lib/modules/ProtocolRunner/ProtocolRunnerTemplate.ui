@@ -240,17 +240,17 @@ gaps until stopped (not yet implemented).</string>
      <item row="1" column="0" rowspan="5">
       <widget class="QListWidget" name="deviceList"/>
      </item>
-     <item row="1" column="1" colspan="2">
+     <item row="1" column="1">
       <widget class="QLabel" name="label_8">
        <property name="text">
-        <string>Duration (ms)</string>
+        <string>Duration</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="1" colspan="2">
+     <item row="2" column="1">
       <widget class="QLabel" name="label_6">
        <property name="text">
-        <string>Lead Time (ms)</string>
+        <string>Lead Time</string>
        </property>
       </widget>
      </item>
@@ -267,10 +267,10 @@ will be a time gap between each recording).</string>
        </property>
       </widget>
      </item>
-     <item row="4" column="1" colspan="2">
+     <item row="4" column="1">
       <widget class="QLabel" name="label_7">
        <property name="text">
-        <string>Cycle Time (ms)</string>
+        <string>Cycle Time</string>
        </property>
       </widget>
      </item>
@@ -344,54 +344,39 @@ will be a time gap between each recording).</string>
        </item>
       </layout>
      </item>
-     <item row="1" column="3">
-      <widget class="QSpinBox" name="protoDurationSpin">
+     <item row="1" column="2" colspan="2">
+      <widget class="SpinBox" name="protoDurationSpin">
+       <property name="minimumSize">
+        <size>
+         <width>60</width>
+         <height>0</height>
+        </size>
+       </property>
        <property name="toolTip">
         <string>Duration of stimulus/acquisition in the protocol.</string>
        </property>
-       <property name="maximum">
-        <number>10000000</number>
-       </property>
-       <property name="singleStep">
-        <number>10</number>
-       </property>
        <property name="value">
-        <number>100</number>
+        <double>0.100000000000000</double>
        </property>
       </widget>
      </item>
-     <item row="2" column="3">
-      <widget class="QSpinBox" name="protoLeadTimeSpin">
+     <item row="2" column="2" colspan="2">
+      <widget class="SpinBox" name="protoLeadTimeSpin">
        <property name="toolTip">
         <string>Duration of time to wait before acquisition starts 
 (the hardware is reserved so nothing else can 
 run during this time).</string>
        </property>
-       <property name="maximum">
-        <number>10000000</number>
-       </property>
-       <property name="singleStep">
-        <number>10</number>
-       </property>
        <property name="value">
-        <number>10</number>
+        <double>0.010000000000000</double>
        </property>
       </widget>
      </item>
-     <item row="4" column="3">
-      <widget class="QSpinBox" name="protoCycleTimeSpin">
+     <item row="4" column="2" colspan="2">
+      <widget class="SpinBox" name="protoCycleTimeSpin">
        <property name="toolTip">
         <string>The minimum time to wait between recordings 
 in loop mode.</string>
-       </property>
-       <property name="maximum">
-        <number>10000000</number>
-       </property>
-       <property name="singleStep">
-        <number>10</number>
-       </property>
-       <property name="value">
-        <number>250</number>
        </property>
       </widget>
      </item>
@@ -440,20 +425,14 @@ in loop mode.</string>
        <item>
         <widget class="QLabel" name="label_9">
          <property name="text">
-          <string>Cycle Time (ms)</string>
+          <string>Cycle Time</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QSpinBox" name="seqCycleTimeSpin">
-         <property name="maximum">
-          <number>10000000</number>
-         </property>
-         <property name="singleStep">
-          <number>10</number>
-         </property>
+        <widget class="SpinBox" name="seqCycleTimeSpin">
          <property name="value">
-          <number>250</number>
+          <double>1.000000000000000</double>
          </property>
         </widget>
        </item>
@@ -680,6 +659,11 @@ in loop mode.</string>
   <widget class="QStatusBar" name="statusBar"/>
  </widget>
  <customwidgets>
+  <customwidget>
+   <class>SpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>lib.util.SpinBox</header>
+  </customwidget>
   <customwidget>
    <class>ParamList</class>
    <extends>QTreeWidget</extends>
