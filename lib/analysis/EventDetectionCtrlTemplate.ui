@@ -22,6 +22,9 @@
    </property>
    <item>
     <widget class="QGroupBox" name="groupBox_2">
+     <property name="toolTip">
+      <string>Pre-processing options. Used for processing data before any event detection takes place. Processing is performed in the order listed.</string>
+     </property>
      <property name="title">
       <string>Pre-processing</string>
      </property>
@@ -34,6 +37,10 @@
       </property>
       <item row="1" column="0">
        <widget class="QCheckBox" name="lowPassCheck">
+        <property name="toolTip">
+         <string>Low-pass data using a bessel filter.
+This is particularly helpful when used with exponential deconvolution.</string>
+        </property>
         <property name="text">
          <string>Low-pass</string>
         </property>
@@ -54,6 +61,9 @@
       </item>
       <item row="2" column="0">
        <widget class="QCheckBox" name="highPassCheck">
+        <property name="toolTip">
+         <string>High-pass data using a bessel filter</string>
+        </property>
         <property name="text">
          <string>High-pass</string>
         </property>
@@ -61,6 +71,9 @@
       </item>
       <item row="3" column="0">
        <widget class="QCheckBox" name="expDeconvolveCheck">
+        <property name="toolTip">
+         <string>Use exponential deconvolution to separate events with slow exponential decays.</string>
+        </property>
         <property name="text">
          <string>Exp. Deconvolve</string>
         </property>
@@ -85,6 +98,9 @@
       </item>
       <item row="4" column="0">
        <widget class="QCheckBox" name="detrendCheck">
+        <property name="toolTip">
+         <string>Remove trends in the data (various methods available)</string>
+        </property>
         <property name="text">
          <string>Detrend</string>
         </property>
@@ -127,6 +143,9 @@
       </item>
       <item row="0" column="0">
        <widget class="QCheckBox" name="denoiseCheck">
+        <property name="toolTip">
+         <string>Remove very sharp spikes from data</string>
+        </property>
         <property name="text">
          <string>Denoise</string>
         </property>
@@ -179,7 +198,7 @@
       <item>
        <widget class="QStackedWidget" name="detectMethodStack">
         <property name="currentIndex">
-         <number>2</number>
+         <number>0</number>
         </property>
         <widget class="QWidget" name="page_3">
          <layout class="QGridLayout" name="gridLayout_4">

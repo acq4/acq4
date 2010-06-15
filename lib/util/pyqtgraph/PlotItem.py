@@ -178,6 +178,9 @@ class PlotItem(QtGui.QGraphicsWidget):
         QtCore.QObject.connect(c.alphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateAlpha)
         QtCore.QObject.connect(c.autoAlphaCheck, QtCore.SIGNAL('toggled(bool)'), self.updateAlpha)
 
+        QtCore.QObject.connect(c.gridGroup, QtCore.SIGNAL('toggled(bool)'), self.updateGrid)
+        QtCore.QObject.connect(c.gridAlphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateGrid)
+
         QtCore.QObject.connect(c.powerSpectrumGroup, QtCore.SIGNAL('toggled(bool)'), self.updateSpectrumMode)
         QtCore.QObject.connect(c.saveSvgBtn, QtCore.SIGNAL('clicked()'), self.saveSvgClicked)
         QtCore.QObject.connect(c.saveImgBtn, QtCore.SIGNAL('clicked()'), self.saveImgClicked)
@@ -250,6 +253,13 @@ class PlotItem(QtGui.QGraphicsWidget):
             refs= gc.get_referrers(self)
             print "  error during update. Referrers are:", refs
             raise
+        
+    def updateGrid(self, *args):
+        g = self.ctrl.gridGroup.isChecked()
+        if g:
+            g = self.ctrl.gridAlphaSlider.value()
+        for k in self.scales:
+            self.scales[k]['item'].setGrid(g)
 
     def viewGeometry(self):
         """return the screen geometry of the viewbox"""
@@ -259,6 +269,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         pos = v.pos()
         wr.adjust(v.x(), v.y(), v.x(), v.y())
         return wr
+
+
 
 
     def viewChanged(self, *args):

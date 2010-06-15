@@ -667,7 +667,8 @@ class LabelItem(QtGui.QGraphicsWidget):
 class ScaleItem(QtGui.QGraphicsWidget):
     def __init__(self, orientation, pen=None, linkView=None, parent=None):
         """GraphicsItem showing a single plot axis with ticks, values, and label.
-        Can be configured to fit on any side of a plot, and can automatically synchronize its displayed scale with ViewBox items."""
+        Can be configured to fit on any side of a plot, and can automatically synchronize its displayed scale with ViewBox items.
+        Ticks can be extended to make a grid."""
         QtGui.QGraphicsWidget.__init__(self, parent)
         self.label = QtGui.QGraphicsTextItem(self)
         self.orientation = orientation
@@ -709,7 +710,15 @@ class ScaleItem(QtGui.QGraphicsWidget):
             self.linkToView(linkView)
             
         self.showLabel(False)
+        
+        self.grid = False
             
+        
+    def setGrid(self, grid):
+        """Set the alpha value for the grid, or False to disable."""
+        self.grid = grid
+        self.update()
+        
         
     def resizeEvent(self, ev=None):
         #s = self.size()
@@ -841,32 +850,44 @@ class ScaleItem(QtGui.QGraphicsWidget):
         self.setRange(*newRange)
         
     def boundingRect(self):
-        return self.mapRectFromParent(self.geometry())
+        if self.linkedView is None or self.grid is False:
+            return self.mapRectFromParent(self.geometry())
+        else:
+            return self.mapRectFromParent(self.geometry()) | self.mapRectFromScene(self.linkedView.mapRectToScene(self.linkedView.boundingRect()))
         
     def paint(self, p, opt, widget):
         p.setPen(self.pen)
-        bounds = self.boundingRect()
-        #p.setPen(QtGui.QPen(QtGui.QColor(255, 0, 0)))
-        #p.drawRect(bounds)
+        
+        #bounds = self.boundingRect()
+        bounds = self.mapRectFromParent(self.geometry())
+        
+        if self.linkedView is None or self.grid is False:
+            tbounds = bounds
+        else:
+            tbounds = self.mapRectFromScene(self.linkedView.mapRectToScene(self.linkedView.boundingRect()))
         
         if self.orientation == 'left':
             p.drawLine(bounds.topRight(), bounds.bottomRight())
-            tickStart = bounds.right()
+            tickStart = tbounds.right()
+            tickStop = bounds.right()
             tickDir = -1
             axis = 0
         elif self.orientation == 'right':
             p.drawLine(bounds.topLeft(), bounds.bottomLeft())
-            tickStart = bounds.left()
+            tickStart = tbounds.left()
+            tickStop = bounds.left()
             tickDir = 1
             axis = 0
         elif self.orientation == 'top':
             p.drawLine(bounds.bottomLeft(), bounds.bottomRight())
-            tickStart = bounds.bottom()
+            tickStart = tbounds.bottom()
+            tickStop = bounds.bottom()
             tickDir = -1
             axis = 1
         elif self.orientation == 'bottom':
             p.drawLine(bounds.topLeft(), bounds.topRight())
-            tickStart = bounds.top()
+            tickStart = tbounds.top()
+            tickStop = bounds.top()
             tickDir = 1
             axis = 1
         
@@ -928,7 +949,7 @@ class ScaleItem(QtGui.QGraphicsWidget):
                 p1 = [0, 0]
                 p2 = [0, 0]
                 p1[axis] = tickStart
-                p2[axis] = tickStart + h*tickDir
+                p2[axis] = tickStop + h*tickDir
                 p1[1-axis] = p2[1-axis] = x
                 
                 if p1[1-axis] > [bounds.width(), bounds.height()][1-axis]:
@@ -948,16 +969,16 @@ class ScaleItem(QtGui.QGraphicsWidget):
                     self.textHeight = height
                     if self.orientation == 'left':
                         textFlags = QtCore.Qt.AlignRight|QtCore.Qt.AlignVCenter
-                        rect = QtCore.QRectF(tickStart-100, x-(height/2), 100-self.tickLength, height)
+                        rect = QtCore.QRectF(tickStop-100, x-(height/2), 100-self.tickLength, height)
                     elif self.orientation == 'right':
                         textFlags = QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter
-                        rect = QtCore.QRectF(tickStart+self.tickLength, x-(height/2), 100-self.tickLength, height)
+                        rect = QtCore.QRectF(tickStop+self.tickLength, x-(height/2), 100-self.tickLength, height)
                     elif self.orientation == 'top':
                         textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignBottom
-                        rect = QtCore.QRectF(x-100, tickStart-self.tickLength-height, 200, height)
+                        rect = QtCore.QRectF(x-100, tickStop-self.tickLength-height, 200, height)
                     elif self.orientation == 'bottom':
                         textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignTop
-                        rect = QtCore.QRectF(x-100, tickStart+self.tickLength, 200, height)
+                        rect = QtCore.QRectF(x-100, tickStop+self.tickLength, 200, height)
                     
                     p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))
                     p.drawText(rect, textFlags, vstr)
