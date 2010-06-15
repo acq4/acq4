@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'plotConfigTemplate.ui'
 #
-# Created: Mon Mar 29 22:40:47 2010
-#      by: PyQt4 UI code generator 4.6
+# Created: Tue Jun 15 02:05:29 2010
+#      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(210, 340)
+        Form.resize(250, 340)
         Form.setMaximumSize(QtCore.QSize(250, 350))
         self.gridLayout_3 = QtGui.QGridLayout(Form)
         self.gridLayout_3.setMargin(0)
@@ -187,6 +187,7 @@ class Ui_Form(object):
         self.verticalLayout_3.addWidget(self.alphaGroup)
         self.gridGroup = QtGui.QGroupBox(self.tab_3)
         self.gridGroup.setCheckable(True)
+        self.gridGroup.setChecked(False)
         self.gridGroup.setObjectName("gridGroup")
         self.verticalLayout_4 = QtGui.QVBoxLayout(self.gridGroup)
         self.verticalLayout_4.setObjectName("verticalLayout_4")

@@ -1407,16 +1407,29 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         self.valid = False
             
     def rescale(self):
+        #print "RESCALE:"
         self.resetTransform()
-        height = self.view.size().height()
-        p1 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[0]))))
-        p2 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[1]))))
-        yr = [p1.y(), p2.y()]
-        #print yr
+        #height = self.view.size().height()
+        #p1 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[0]))))
+        #p2 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[1]))))
+        #yr = [p1.y(), p2.y()]
+        vb = self.view.viewRect()
+        p1 = vb.bottom() - vb.height() * self.yrange[0]
+        p2 = vb.bottom() - vb.height() * self.yrange[1]
+        yr = [p1, p2]
+        
+        #print "  ", vb, yr
         self.translate(0.0, yr[0])
         self.scale(1.0, (yr[1]-yr[0]))
-        #print self.mapRectToScene(self.boundingRect())
+        #print "  ", self.mapRectToScene(self.boundingRect())
+        self.boundingRect()
         self.update()
+            
+    def boundingRect(self):
+        #print "--request bounds:"
+        b = QtGui.QGraphicsPathItem.boundingRect(self)
+        #print "  ", self.mapRectToScene(b)
+        return b
             
     def yRange(self):
         #if self.relative:
@@ -1430,15 +1443,15 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         return self.yrange
             
     def rebuildTicks(self):
-        path = QtGui.QPainterPath()
+        self.path = QtGui.QPainterPath()
         yrange = self.yRange()
         #print "rebuild ticks:", yrange
         for x in self.xvals:
             #path.moveTo(x, yrange[0])
             #path.lineTo(x, yrange[1])
-            path.moveTo(x, 0.)
-            path.lineTo(x, 1.)
-        self.setPath(path)
+            self.path.moveTo(x, 0.)
+            self.path.lineTo(x, 1.)
+        self.setPath(self.path)
         self.valid = True
         self.rescale()
         #print "  done..", self.boundingRect()

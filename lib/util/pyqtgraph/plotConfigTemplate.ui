@@ -419,6 +419,9 @@
          <property name="checkable">
           <bool>true</bool>
          </property>
+         <property name="checked">
+          <bool>false</bool>
+         </property>
          <layout class="QVBoxLayout" name="verticalLayout_4">
           <item>
            <widget class="QSlider" name="gridAlphaSlider">

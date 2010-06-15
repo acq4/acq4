@@ -131,6 +131,7 @@ class GraphicsView(QtGui.QGraphicsView):
                 v.setXRange(self.range, padding=0)
         
     def visibleRange(self):
+        ## easier to just return self.range ?
         r = QtCore.QRectF(self.rect())
         return self.viewportTransform().inverted()[0].mapRect(r)
 
