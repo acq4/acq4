@@ -15,7 +15,7 @@ class Scanner(Device):
         self.devGui = None
         self.lastRunTime = None
         self.calibrationIndex = None
-        self.targetList = [0, {}]  ## stores the grids and points used by ProtocolGui so that they persist
+        self.targetList = [1.0, {}]  ## stores the grids and points used by ProtocolGui so that they persist
         if not os.path.isdir(config['calibrationDir']):
             print "Calibration directory '%s' does not exist, creating.." % config['calibrationDir']
             os.mkdir(config['calibrationDir'])
