@@ -17,6 +17,7 @@ from lib.util.configfile import *
 from metaarray import MetaArray
 import time
 from lib.util.Mutex import Mutex, MutexLocker
+from lib.util.SignalProxy import proxyConnect
 from PyQt4 import QtCore, QtGui
 #from lib.filetypes.FileType import *
 import lib.filetypes as filetypes
@@ -163,6 +164,7 @@ class FileHandle(QtCore.QObject):
         self.parentDir = None
         #self.lock = threading.RLock()
         self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.sigproxy = proxyConnect(self, QtCore.SIGNAL('changed'), self.delayedChange)
         
     def __repr__(self):
         return "<%s '%s' (0x%x)>" % (self.__class__.__name__, self.name(), self.__hash__())
@@ -317,6 +319,9 @@ class FileHandle(QtCore.QObject):
 
     def emitChanged(self, change, *args):
         self.emit(QtCore.SIGNAL('changed'), self, change, *args)
+
+    def delayedChange(self, *args):
+        self.emit(QtCore.SIGNAL('delayedChange'), *args)
     
     def hasChildren(self):
         self.checkDeleted()
@@ -482,33 +487,41 @@ class DirHandle(FileHandle):
     
     def mkdir(self, name, autoIncrement=False, info=None):
         """Create a new subdirectory, return a new DirHandle object. If autoIncrement is true, add a number to the end of the dir name if it already exists."""
+        #prof = Profiler('mkdir')
         if info is None:
             info = {}
         with MutexLocker(self.lock):
-            
+            #prof.mark('got lock')
             if autoIncrement:
                 fullName = self.incrementFileName(name, useExt=False)
             else:
                 fullName = name
-                
+            #prof.mark('1')
             newDir = os.path.join(self.path, fullName)
             if os.path.isdir(newDir):
                 raise Exception("Directory %s already exists." % newDir)
+            #prof.mark('2')
             
             ## Create directory
             ndm = self.manager.getDirHandle(newDir, create=True)
+            #prof.mark('3')
             t = time.time()
             self._childChanged()
+            #prof.mark('4')
             
             if self.isManaged():
+                #prof.mark('5')
                 ## Mark the creation time in the parent directory so it can sort its full list of files without 
                 ## going into each subdir
                 self._setFileInfo(fullName, {'__timestamp__': t})
+            #prof.mark('6')
             
             ## create the index file in the new directory
             info['__timestamp__'] = t
             ndm.setInfo(info)
+            #prof.mark('7')
             self.emitChanged('children', newDir)
+            #prof.mark('8')
             return ndm
         
     def getDir(self, subdir, create=False, autoIncrement=False):
@@ -777,23 +790,34 @@ class DirHandle(FileHandle):
 
     def _setFileInfo(self, fileName, info):
         """Set or update meta-information array for fileName. If merge is false, the info dict is completely overwritten."""
+        #prof = Profiler('setFileInfo')
         with MutexLocker(self.lock):
+            #prof.mark('1')
             if not self.isManaged():
                 self.createIndex()
+            #prof.mark('2')
             index = self._readIndex(lock=False)
+            #prof.mark('3')
             append = False
             if fileName not in index:
                 index[fileName] = {}
                 append = True
+            #prof.mark('4')
                 
             for k in info:
                 index[fileName][k] = info[k]
+            #prof.mark('5')
                 
             if append:
-                appendConfigFile({fileName: info}, self._indexFile())
+                self._appendIndex({fileName: info})
+                
+                #prof.mark('6')
             else:
                 self._writeIndex(index, lock=False)
+                #prof.mark('6a')
             self.emitChanged('meta', fileName)
+            #prof.mark('7')
+            #prof.finish()
         
     def _readIndex(self, lock=True, unmanagedOk=False):
         with MutexLocker(self.lock):
@@ -819,6 +843,14 @@ class DirHandle(FileHandle):
             writeConfigFile(newIndex, self._indexFile())
             self._index = newIndex
             self._indexMTime = os.path.getmtime(self._indexFile())
+
+    def _appendIndex(self, info):
+        with MutexLocker(self.lock):
+            indexFile = self._indexFile()
+            appendConfigFile(info, indexFile)
+            for k in info:
+                self._index[k] = info[k]
+            self._indexMTime = os.path.getmtime(indexFile)
         
     def checkIndex(self):
         ind = self._readIndex(unmanagedOk=True)

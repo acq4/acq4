@@ -135,10 +135,10 @@ class FileTreeWidget(QtGui.QTreeWidget):
             node = node[dirs.pop(0)] 
         
     def watch(self, handle):
-        QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self.dirChanged)
+        QtCore.QObject.connect(handle, QtCore.SIGNAL('delayedChange'), self.dirChanged)
         
     def unwatch(self, handle):
-        QtCore.QObject.disconnect(handle, QtCore.SIGNAL('changed'), self.dirChanged)
+        QtCore.QObject.disconnect(handle, QtCore.SIGNAL('delayedChange'), self.dirChanged)
         
     def dirChanged(self, handle, change, *args):
         #print "Change: %s %s"% (change, handle.name())
@@ -181,17 +181,18 @@ class FileTreeWidget(QtGui.QTreeWidget):
 
     def rebuildChildren(self, root):
         """Make sure all children are present and in the correct order"""
+        #prof = Profiler('rebuildChildren')
         handle = self.handle(root)
 #        print "RebuildChildren", root, handle
         files = handle.ls()
         handles = [handle[f] for f in files]
+        #prof.mark('make handle list')
 #        for f, h in zip(files, handles):
 #            print "     ", f, h
         #ph = 0
         #pi = 0
         i = 0
         while True:
-            #items = [root.child(i) for i in range(root.childCount())]  ## this does need to be recomputed every time
             if i >= len(handles):
                 ##  no more handles; remainder of items should be removed
                 while root.childCount() > i:
@@ -203,34 +204,32 @@ class FileTreeWidget(QtGui.QTreeWidget):
             h = handles[i]
 #            print "  - check handle %d: %s" % (i, h)
             #i = items[pi]
-            try:
-                if (i >= root.childCount()) or (h not in self.items) or (h is not self.handle(root.child(i))):
-                    
-                    item = self.item(h, create=True)
-#                    if i >= root.childCount():
-#                        print "  Insert; past end of item list"
-#                    elif h not in self.items:
-#                        print "  Insert; no item yet created for this handle"
-#                    else:
-#                        print "  Insert; %s != %s" % (str(h), str(self.handle(root.child(i))))
-#                    print "  insert new:", i, item
-                    
-#                    print "     (before) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
-                    parent = self.itemParent(item)
-                    if parent is not None:
-                        parent.removeChild(item)
-#                        print "     (removed) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
-                    root.insertChild(i, item)
-#                    print "     (after) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
-                    item.recallExpand()
-                    
-            except:
-                #print "    - item %d is %s; root has %d childs" % (i, str(root.child(i)), root.childCount())
-                raise
-            i += 1
+            if (i >= root.childCount()) or (h not in self.items) or (h is not self.handle(root.child(i))):
+                #print "insert %d" % i
+                item = self.item(h, create=True)
+                #if i >= root.childCount():
+                #    print "  Insert; past end of item list"
+                #elif h not in self.items:
+                #    print "  Insert; no item yet created for this handle"
+                #else:
+                #    print "  Insert; %s != %s" % (str(h), str(self.handle(root.child(i))))
+                #print "  insert new:", i, item
                 
+                #print "     (before) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
+                parent = self.itemParent(item)
+                if parent is not None:
+                    parent.removeChild(item)
+                    #print "     (removed) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
+                root.insertChild(i, item)
+                #print "     (after) root now has %d childs: %s" % (root.childCount(), ', '.join([str(root.child(j).text(0)) for j in range(root.childCount())]))
+                item.recallExpand()
+            #else:
+                #print "item %d ok"%i
+                    
+            i += 1
+            #prof.mark("item %d" % i)
             
-        
+        #prof.mark("done.")
         
         #items = []
         #while root.childCount() > 0:        ## Remove all nodes

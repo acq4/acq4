@@ -389,8 +389,8 @@ class ScannerProtoGui(ProtocolGui):
         ## About to compute order/timing of targets; display a progress dialog
         
         progressDlg = QtGui.QProgressDialog("Computing pseudo-optimal target sequence...", "Cancel", 0, nTries)
-        progressDlg.setWindowModality(QtCore.Qt.WindowModal)
-        progressDlg.setMinimumDuration(0)
+        #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
+        progressDlg.setMinimumDuration(250)
         
         try:
             for i in range(nTries):
@@ -400,8 +400,8 @@ class ScannerProtoGui(ProtocolGui):
                     #print "  new best time:", time
                     minTime = time
                     bestSolution = solution[:]
-                QtGui.QApplication.processEvents()
                 progressDlg.setValue(i)
+                QtGui.QApplication.processEvents()
                 if progressDlg.wasCanceled():
                     raise Exception("Target sequence computation canceled by user.")
         except:

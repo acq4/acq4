@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'PatchTemplate.ui'
 #
-# Created: Sat Jun 12 15:15:46 2010
+# Created: Sat Jun 12 15:35:41 2010
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
