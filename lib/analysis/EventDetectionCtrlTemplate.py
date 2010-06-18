@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'EventDetectionCtrlTemplate.ui'
 #
-# Created: Mon May 24 01:41:37 2010
+# Created: Mon Jun 14 23:40:23 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -162,21 +162,28 @@ class Ui_EventDetectionCtrlForm(object):
 
         self.retranslateUi(EventDetectionCtrlForm)
         self.detrendMethodCombo.setCurrentIndex(2)
-        self.detectMethodStack.setCurrentIndex(2)
+        self.detectMethodStack.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(EventDetectionCtrlForm)
 
     def retranslateUi(self, EventDetectionCtrlForm):
         EventDetectionCtrlForm.setWindowTitle(QtGui.QApplication.translate("EventDetectionCtrlForm", "Form", None, QtGui.QApplication.UnicodeUTF8))
+        self.groupBox_2.setToolTip(QtGui.QApplication.translate("EventDetectionCtrlForm", "Pre-processing options. Used for processing data before any event detection takes place. Processing is performed in the order listed.", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox_2.setTitle(QtGui.QApplication.translate("EventDetectionCtrlForm", "Pre-processing", None, QtGui.QApplication.UnicodeUTF8))
+        self.lowPassCheck.setToolTip(QtGui.QApplication.translate("EventDetectionCtrlForm", "Low-pass data using a bessel filter.\n"
+"This is particularly helpful when used with exponential deconvolution.", None, QtGui.QApplication.UnicodeUTF8))
         self.lowPassCheck.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Low-pass", None, QtGui.QApplication.UnicodeUTF8))
+        self.highPassCheck.setToolTip(QtGui.QApplication.translate("EventDetectionCtrlForm", "High-pass data using a bessel filter", None, QtGui.QApplication.UnicodeUTF8))
         self.highPassCheck.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "High-pass", None, QtGui.QApplication.UnicodeUTF8))
+        self.expDeconvolveCheck.setToolTip(QtGui.QApplication.translate("EventDetectionCtrlForm", "Use exponential deconvolution to separate events with slow exponential decays.", None, QtGui.QApplication.UnicodeUTF8))
         self.expDeconvolveCheck.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Exp. Deconvolve", None, QtGui.QApplication.UnicodeUTF8))
+        self.detrendCheck.setToolTip(QtGui.QApplication.translate("EventDetectionCtrlForm", "Remove trends in the data (various methods available)", None, QtGui.QApplication.UnicodeUTF8))
         self.detrendCheck.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Detrend", None, QtGui.QApplication.UnicodeUTF8))
         self.detrendMethodCombo.setItemText(0, QtGui.QApplication.translate("EventDetectionCtrlForm", "Scalar", None, QtGui.QApplication.UnicodeUTF8))
         self.detrendMethodCombo.setItemText(1, QtGui.QApplication.translate("EventDetectionCtrlForm", "Histogram Consensus", None, QtGui.QApplication.UnicodeUTF8))
         self.detrendMethodCombo.setItemText(2, QtGui.QApplication.translate("EventDetectionCtrlForm", "Linear", None, QtGui.QApplication.UnicodeUTF8))
         self.detrendMethodCombo.setItemText(3, QtGui.QApplication.translate("EventDetectionCtrlForm", "Exponential", None, QtGui.QApplication.UnicodeUTF8))
         self.detrendMethodCombo.setItemText(4, QtGui.QApplication.translate("EventDetectionCtrlForm", "Adaptive", None, QtGui.QApplication.UnicodeUTF8))
+        self.denoiseCheck.setToolTip(QtGui.QApplication.translate("EventDetectionCtrlForm", "Remove very sharp spikes from data", None, QtGui.QApplication.UnicodeUTF8))
         self.denoiseCheck.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Denoise", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox.setTitle(QtGui.QApplication.translate("EventDetectionCtrlForm", "Event Detection", None, QtGui.QApplication.UnicodeUTF8))
         self.detectMethodCombo.setItemText(0, QtGui.QApplication.translate("EventDetectionCtrlForm", "Stdev. Threshold", None, QtGui.QApplication.UnicodeUTF8))

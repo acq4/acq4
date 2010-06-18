@@ -28,8 +28,8 @@ class GraphicsView(QtGui.QGraphicsView):
         
         QtGui.QGraphicsView.__init__(self, *args)
         
-        #if 'linux' not in sys.platform.lower():   ## Stupid GL bug in linux.
-        self.setViewport(QtOpenGL.QGLWidget())
+        if 'linux' not in sys.platform.lower():   ## Stupid GL bug in linux.
+            self.setViewport(QtOpenGL.QGLWidget())
         
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(0,0,0))
@@ -131,6 +131,7 @@ class GraphicsView(QtGui.QGraphicsView):
                 v.setXRange(self.range, padding=0)
         
     def visibleRange(self):
+        ## easier to just return self.range ?
         r = QtCore.QRectF(self.rect())
         return self.viewportTransform().inverted()[0].mapRect(r)
 

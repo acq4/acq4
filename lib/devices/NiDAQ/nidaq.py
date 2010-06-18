@@ -116,7 +116,7 @@ class NiDAQ(Device):
         return data
     
     @staticmethod
-    def lowpass(data, cutoff, order=4, bidir=True, filter='bessel', stopCutoff=None, gpass=1., gstop=60., samplerate=None):
+    def lowpass(data, cutoff, order=4, bidir=True, filter='bessel', stopCutoff=None, gpass=2., gstop=20., samplerate=None):
         """Bi-directional bessel/butterworth lowpass filter"""
         if samplerate is not None:
             cutoff /= 0.5*samplerate
