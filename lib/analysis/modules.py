@@ -379,7 +379,7 @@ class UncagingWindow(QtGui.QMainWindow):
              'formats':(object, object, object, object, object, float, float, float, float, float, float)})
         
         
-    def addImage(self, img=None):
+    def addImage(self, img=None, fd=None):
         if img is None:
             fd = getManager().currentFile
             img = fd.read()
@@ -391,7 +391,7 @@ class UncagingWindow(QtGui.QMainWindow):
             ps = info['pixelSize']
             pos = info['imagePosition']
             
-        img = img.astype(ndarray)
+        img = img.view(ndarray)
         if img.ndim == 3:
             img = img.max(axis=0)
         #print pos, ps, img.shape, img.dtype, img.max(), img.min()
@@ -440,7 +440,7 @@ class UncagingWindow(QtGui.QMainWindow):
                     avgSpot = UncagingSpot()
                     avgSpot.position = pos
                     avgSpot.size = size
-                    avgSpot.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200, 0)))                 
+                    avgSpot.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200, 100)))                 
                     self.canvas.addItem(avgSpot, [pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z+10000, name=["Averages", "spot%03d"%len(self.scanAvgItems)])
                     self.scanAvgItems.append(avgSpot)
                 
@@ -493,13 +493,7 @@ class UncagingWindow(QtGui.QMainWindow):
                 return
         progressDlg.setValue(100)
         self.colorSpots()
-        self.colorScaleBar.setGradient(self.ctrl.gradientWidget.getGradient())
-        #for i in self.scanItems:
-            #color = self.spotColor(i)
-            #i.setBrush(QtGui.QBrush(color))
- 
-            
-        #self.canvas.colorScaleBar.setBrush(QtGui.QLinearGradient)
+
             
     def getClampData(self, dh):
         """Returns a clamp.ma
@@ -602,56 +596,62 @@ class UncagingWindow(QtGui.QMainWindow):
             self.analysisCache[item.index]['dirCharge'] = 0
             
     def colorSpots(self):
-        for item in self.scanAvgItems:
-            if self.ctrl.rgbRadio.isChecked():
-                red = clip(log(max(1.0, (self.analysisCache[item.index]['postChargePos']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255) 
-                blue = clip(log(max(1.0, (-self.analysisCache[item.index]['postChargeNeg']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255)
-                green = clip(log(max(1.0, (self.analysisCache[item.index]['dirCharge']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255)
-                return QtGui.QColor(red, green, blue, max(red, green, blue))
-            
+        #for item in self.scanAvgItems:
+        #    if self.ctrl.rgbRadio.isChecked():
+        #        red = clip(log(max(1.0, (self.analysisCache[item.index]['postChargePos']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255) 
+        #        blue = clip(log(max(1.0, (-self.analysisCache[item.index]['postChargeNeg']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255)
+        #        green = clip(log(max(1.0, (self.analysisCache[item.index]['dirCharge']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255)
+        #        return QtGui.QColor(red, green, blue, max(red, green, blue))
+        #    
         if self.ctrl.gradientRadio.isChecked():
             maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = self.ctrl.colorSpin1.value())
-            print "maxCharge: ", maxcharge
             
             for item in self.scanAvgItems:
                 if item.source is not None:  ## this is a single item
                     negCharge = self.analysisCache[item.index]['postChargeNeg']
                     numDirectEvents = len(self.analysisCache[item.index]['dirEvents'])
+                    if numDirectEvents == 0:
+                        directeventsflag = True
+                    else:
+                        directeventsflag = False
                 else:    ## this is an average item
                     negCharges = array([self.analysisCache[i.index]['postChargeNeg'] for i in item.sourceItems]) 
-                    numDirectEventses = [len(self.analysisCache[i.index]['dirEvents']) for i in item.sourceItems]
-                
+                    numDirectEventses = array([len(self.analysisCache[i.index]['dirEvents']) for i in item.sourceItems])
                     if self.ctrl.medianCheck.isChecked():
                         if len(negCharges[negCharges < 0]) > len(negCharges)/2.0: ###Errs on side of false negatives, but averages all non-zero charges
                             negCharge = mean(negCharges[negCharges<0])
-                            numDirectEvents = median(numDirectEventses)
+                            #numDirectEvents = median(numDirectEventses)
                         else:
                             negCharge = 0
-                            numDirectEvents = mean(numDirectEventses)
-                #print "negCharge:", negCharge, "maxCharge:", maxcharge
-            
+                            #numDirectEvents = mean(numDirectEventses)
+                    if len(numDirectEventses[numDirectEventses > 0]) > len(numDirectEventses)/2:
+                        directeventsflag = True
+                    else:
+                        directeventsflag = False
                 ## Set color based on strength of negative events
-                #print "Getting color...."
                 color = self.ctrl.gradientWidget.getColor(clip(negCharge/maxcharge, 0, 1))
-                #print "Color retrieved.", color
+
                 ## Traces with no events are transparent
                 if abs(negCharge) < 1e-16:
                     color = QtGui.QColor(0,0,0,0)
-                    
+
                 ## Traces with events below threshold are transparent
                 if negCharge >= stats.scoreatpercentile(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg'] < 0], self.ctrl.colorSpin3.value()):
                     color = QtGui.QColor(0,0,0,0)
                 
                 ## Direct events have white outlines
-                if numDirectEvents > 0:
+                if directeventsflag == True:
                     pen = mkPen(width = 2)
+                    if abs(negCharge) < 1e-16: 
+                        color = QtGui.QColor(0,0,0,200)
                 else:
                     pen = QtGui.QPen()
-                
-                #print "Setting color...."
-                item.setBrush(color)
+
+                item.setBrush(QtGui.QBrush(color))
                 item.setPen(pen)
-                #print "Color set."
+               
+            self.colorScaleBar.setGradient(self.ctrl.gradientWidget.getGradient())
+
    
     def mouseClicked(self, ev):
         ###should probably make mouseClicked faster by using cached data instead of calling processData in eventFinderWidget each time
@@ -692,6 +692,8 @@ class STDPWindow(UncagingWindow):
         bwtop.addWidget(self.LTPplot)
         bwtop.addWidget(self.dictView)
         self.plot.enableAnalysis(False)
+        self.ctrlWidget.hide()
+        self.colorScaleBar.hide()
         
     def mouseClicked(self, ev):
         UncagingWindow.mouseClicked(self, ev)
@@ -699,7 +701,8 @@ class STDPWindow(UncagingWindow):
         #print 'lenspots:', len(self.currentTraces)
         flag = 0
         condtime = None
-        spiketime = []
+        firstspiketime = []
+        lastspiketime = []
         for i in range(len(self.currentTraces)):
             if self.currentTraces[i][0]['Channel':'Command'].max() < 0.1e-09:
                 t,s,a,f,e = self.EPSPstats(self.currentTraces[i])
@@ -711,13 +714,19 @@ class STDPWindow(UncagingWindow):
                     epspStats[i]['flux'] = f
                     epspStats[i]['epsptime'] = e
             elif self.currentTraces[i][0]['Channel':'Command'].max() >= 0.1e-09:
-                a = argwhere(self.currentTraces[i][0]['Channel':'primary'] == self.currentTraces[i][0]['Channel':'primary'].max())
+                stimtime = argwhere(self.currentTraces[i][0]['Channel':'Command'] == self.currentTraces[i][0]['Channel':'Command'].max())
+                print "stimtime:", stimtime
+                first = argwhere(self.currentTraces[i][0]['Channel':'primary'] == self.currentTraces[i][0]['Channel':'primary'][stimtime[0]:stimtime[0]+90].max())
+                last = argwhere(self.currentTraces[i][0]['Channel':'primary'] == self.currentTraces[i][0]['Channel':'primary'][stimtime[4]:stimtime[4]+90].max())
                 #print i, a
-                if len(a) > 0:
-                    spikeindex = a[0]
-                    spike = self.currentTraces[i][0]['Channel':'primary'].xvals('Time')[spikeindex]
+                if len(first) > 0:
+                    firstspikeindex = first[0]
+                    lastspikeindex = last[0]
+                    firstspike = self.currentTraces[i][0]['Channel':'primary'].xvals('Time')[firstspikeindex]
+                    lastspike = self.currentTraces[i][0]['Channel':'primary'].xvals('Time')[lastspikeindex]
                     #print i, spike
-                    spiketime.append(spike)
+                    firstspiketime.append(firstspike)
+                    lastspiketime.append(lastspike)
                 if flag != 1:
                     condtime = self.currentTraces[i][0]['Channel':'primary'].infoCopy()[-1]['startTime']
                     flag = 1
@@ -745,7 +754,8 @@ class STDPWindow(UncagingWindow):
         self.latencies['Average EPSP time:'] = mean(epspStats[:endbase]['epsptime']*1000)
         #print 'spiketime:', spiketime
         #print 'mean:', mean(spiketime)
-        self.latencies['Average 1st Spike time:'] = mean(spiketime)*1000
+        self.latencies['Average 1st Spike time:'] = mean(firstspiketime)*1000
+        self.latencies['Average last Spike time:'] = mean(lastspiketime)*1000
         self.latencies['PSP-Spike Delay:']= self.latencies['Average 1st Spike time:']-self.latencies['Average EPSP time:']
         self.latencies['Change in slope(red):'] = mean(epspStats[(endbase+1):]['normSlope'])
         self.latencies['Change in amp(blue):'] = mean(epspStats[(endbase+1):]['normAmp'])

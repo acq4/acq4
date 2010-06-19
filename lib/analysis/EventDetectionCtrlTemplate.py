@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'EventDetectionCtrlTemplate.ui'
 #
-# Created: Sat May 22 20:47:45 2010
+# Created: Mon May 24 01:41:37 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_EventDetectionCtrlForm(object):
     def setupUi(self, EventDetectionCtrlForm):
         EventDetectionCtrlForm.setObjectName("EventDetectionCtrlForm")
-        EventDetectionCtrlForm.resize(228, 313)
+        EventDetectionCtrlForm.resize(305, 313)
         self.verticalLayout_3 = QtGui.QVBoxLayout(EventDetectionCtrlForm)
         self.verticalLayout_3.setSpacing(0)
         self.verticalLayout_3.setMargin(0)
@@ -57,12 +57,14 @@ class Ui_EventDetectionCtrlForm(object):
         self.detrendMethodCombo.addItem("")
         self.detrendMethodCombo.addItem("")
         self.detrendMethodCombo.addItem("")
+        self.detrendMethodCombo.addItem("")
         self.gridLayout_3.addWidget(self.detrendMethodCombo, 4, 1, 1, 1)
         self.denoiseCheck = QtGui.QCheckBox(self.groupBox_2)
         self.denoiseCheck.setChecked(True)
         self.denoiseCheck.setObjectName("denoiseCheck")
         self.gridLayout_3.addWidget(self.denoiseCheck, 0, 0, 1, 1)
         self.denoiseSpin = QtGui.QDoubleSpinBox(self.groupBox_2)
+        self.denoiseSpin.setProperty("value", 4.0)
         self.denoiseSpin.setObjectName("denoiseSpin")
         self.gridLayout_3.addWidget(self.denoiseSpin, 0, 1, 1, 1)
         self.verticalLayout_3.addWidget(self.groupBox_2)
@@ -109,12 +111,14 @@ class Ui_EventDetectionCtrlForm(object):
         self.label.setObjectName("label")
         self.gridLayout.addWidget(self.label, 0, 0, 1, 1)
         self.zcSumThresholdSpin = QtGui.QDoubleSpinBox(self.page_2)
+        self.zcSumThresholdSpin.setProperty("value", 8.0)
         self.zcSumThresholdSpin.setObjectName("zcSumThresholdSpin")
         self.gridLayout.addWidget(self.zcSumThresholdSpin, 0, 1, 1, 1)
         self.label_3 = QtGui.QLabel(self.page_2)
         self.label_3.setObjectName("label_3")
         self.gridLayout.addWidget(self.label_3, 1, 0, 1, 1)
         self.zcAmpThresholdSpin = QtGui.QDoubleSpinBox(self.page_2)
+        self.zcAmpThresholdSpin.setProperty("value", 8.0)
         self.zcAmpThresholdSpin.setObjectName("zcAmpThresholdSpin")
         self.gridLayout.addWidget(self.zcAmpThresholdSpin, 1, 1, 1, 1)
         self.verticalLayout_4.addLayout(self.gridLayout)
@@ -134,18 +138,21 @@ class Ui_EventDetectionCtrlForm(object):
         self.label_2.setObjectName("label_2")
         self.gridLayout_2.addWidget(self.label_2, 0, 0, 1, 1)
         self.cbThresholdSpin = QtGui.QDoubleSpinBox(self.page)
+        self.cbThresholdSpin.setProperty("value", 4.0)
         self.cbThresholdSpin.setObjectName("cbThresholdSpin")
         self.gridLayout_2.addWidget(self.cbThresholdSpin, 0, 1, 1, 1)
         self.label_4 = QtGui.QLabel(self.page)
         self.label_4.setObjectName("label_4")
         self.gridLayout_2.addWidget(self.label_4, 1, 0, 1, 1)
         self.cbRiseTauSpin = QtGui.QDoubleSpinBox(self.page)
+        self.cbRiseTauSpin.setProperty("value", 0.01)
         self.cbRiseTauSpin.setObjectName("cbRiseTauSpin")
         self.gridLayout_2.addWidget(self.cbRiseTauSpin, 1, 1, 1, 1)
         self.label_5 = QtGui.QLabel(self.page)
         self.label_5.setObjectName("label_5")
         self.gridLayout_2.addWidget(self.label_5, 2, 0, 1, 1)
         self.cbFallTauSpin = QtGui.QDoubleSpinBox(self.page)
+        self.cbFallTauSpin.setProperty("value", 0.01)
         self.cbFallTauSpin.setObjectName("cbFallTauSpin")
         self.gridLayout_2.addWidget(self.cbFallTauSpin, 2, 1, 1, 1)
         self.verticalLayout_5.addLayout(self.gridLayout_2)
@@ -154,7 +161,7 @@ class Ui_EventDetectionCtrlForm(object):
         self.verticalLayout_3.addWidget(self.groupBox)
 
         self.retranslateUi(EventDetectionCtrlForm)
-        self.detrendMethodCombo.setCurrentIndex(1)
+        self.detrendMethodCombo.setCurrentIndex(2)
         self.detectMethodStack.setCurrentIndex(2)
         QtCore.QMetaObject.connectSlotsByName(EventDetectionCtrlForm)
 
@@ -166,9 +173,10 @@ class Ui_EventDetectionCtrlForm(object):
         self.expDeconvolveCheck.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Exp. Deconvolve", None, QtGui.QApplication.UnicodeUTF8))
         self.detrendCheck.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Detrend", None, QtGui.QApplication.UnicodeUTF8))
         self.detrendMethodCombo.setItemText(0, QtGui.QApplication.translate("EventDetectionCtrlForm", "Scalar", None, QtGui.QApplication.UnicodeUTF8))
-        self.detrendMethodCombo.setItemText(1, QtGui.QApplication.translate("EventDetectionCtrlForm", "Linear", None, QtGui.QApplication.UnicodeUTF8))
-        self.detrendMethodCombo.setItemText(2, QtGui.QApplication.translate("EventDetectionCtrlForm", "Exponential", None, QtGui.QApplication.UnicodeUTF8))
-        self.detrendMethodCombo.setItemText(3, QtGui.QApplication.translate("EventDetectionCtrlForm", "Adaptive", None, QtGui.QApplication.UnicodeUTF8))
+        self.detrendMethodCombo.setItemText(1, QtGui.QApplication.translate("EventDetectionCtrlForm", "Histogram Consensus", None, QtGui.QApplication.UnicodeUTF8))
+        self.detrendMethodCombo.setItemText(2, QtGui.QApplication.translate("EventDetectionCtrlForm", "Linear", None, QtGui.QApplication.UnicodeUTF8))
+        self.detrendMethodCombo.setItemText(3, QtGui.QApplication.translate("EventDetectionCtrlForm", "Exponential", None, QtGui.QApplication.UnicodeUTF8))
+        self.detrendMethodCombo.setItemText(4, QtGui.QApplication.translate("EventDetectionCtrlForm", "Adaptive", None, QtGui.QApplication.UnicodeUTF8))
         self.denoiseCheck.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Denoise", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox.setTitle(QtGui.QApplication.translate("EventDetectionCtrlForm", "Event Detection", None, QtGui.QApplication.UnicodeUTF8))
         self.detectMethodCombo.setItemText(0, QtGui.QApplication.translate("EventDetectionCtrlForm", "Stdev. Threshold", None, QtGui.QApplication.UnicodeUTF8))

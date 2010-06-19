@@ -1265,9 +1265,9 @@ class ViewBox(QtGui.QGraphicsWidget):
             p.drawRect(bounds)
 
 
-class InfiniteLine(QtGui.QGraphicsItem):
-    def __init__(self, view, pos, angle=90, pen=None):
-        QtGui.QGraphicsItem.__init__(self)
+class InfiniteLine(UIGraphicsItem):
+    def __init__(self, view, pos, angle=90, pen=None, bounds=None):
+        UIGraphicsItem.__init__(self, view, bounds)
         self.view = view
         self.p = [0, 0]
         self.setAngle(angle)
@@ -1301,6 +1301,7 @@ class InfiniteLine(QtGui.QGraphicsItem):
                 
     def updateLine(self):
         vr = self.view.viewRect()
+        unit = self.unitRect()
         
         if self.angle > 45:
             m = tan((90-self.angle) * pi / 180.)
@@ -1320,9 +1321,11 @@ class InfiniteLine(QtGui.QGraphicsItem):
         self.bounds = QtCore.QRectF(self.line[0], self.line[1])
         ## Stupid bug causes lines to disappear:
         if self.bounds.width() == 0:
-            self.bounds.setWidth(1e-9)
+            self.bounds.setWidth(16*unit.width())
+            self.bounds.setLeft(-8*unit.width())
         if self.bounds.height() == 0:
-            self.bounds.setHeight(1e-9)
+            self.bounds.setHeight(16*unit.height())
+            self.bounds.setTop(-8*unit.height())
         #QtGui.QGraphicsLineItem.setLine(self, x1, y1, x2, y2)
         
     def boundingRect(self):
@@ -1335,6 +1338,11 @@ class InfiniteLine(QtGui.QGraphicsItem):
         p.setPen(self.pen)
         #print "paint", self.line
         p.drawLine(self.line[0], self.line[1])
+        
+    def mousePressEvent(self, ev):
+        print 'Infinite line got a click!'
+        ev.ignore()
+        
         
 
 class VTickGroup(QtGui.QGraphicsPathItem):
@@ -1572,7 +1580,7 @@ class ColorScaleBar(UIGraphicsItem):
         self.gradient.setColorAt(1, QtGui.QColor(255,0,0))
         
     def setGradient(self, g):
-        self.brush = QtGui.QBrush(g)
+        self.gradient = g
         self.update()
         
     def setLabels(self, l):
@@ -1622,20 +1630,21 @@ class ColorScaleBar(UIGraphicsItem):
         p.drawRect(rect)
         
         
+        ## Have to scale painter so that text and gradients are correct size. Bleh.
+        p.scale(unit.width(), unit.height())
+        
         ## Draw color bar
-        self.gradient.setStart(0, y1)
-        self.gradient.setFinalStop(0, y2)
+        self.gradient.setStart(0, y1/unit.height())
+        self.gradient.setFinalStop(0, y2/unit.height())
         p.setBrush(self.gradient)
         rect = QtCore.QRectF(
-            QtCore.QPointF(x1, y1), 
-            QtCore.QPointF(x2, y2)
+            QtCore.QPointF(x1/unit.width(), y1/unit.height()), 
+            QtCore.QPointF(x2/unit.width(), y2/unit.height())
         )
         p.drawRect(rect)
         
         
         ## draw labels
-        ## Have to scale painter so that text is correct size. Bleh.
-        p.scale(unit.width(), unit.height())
         p.setPen(QtGui.QPen(QtGui.QColor(0,0,0)))
         tx = x2 + unit.width()*textPadding
         lh = labelHeight/unit.height()

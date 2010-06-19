@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'UncagingControlTemplate.ui'
 #
-# Created: Sun May 23 23:56:45 2010
-#      by: PyQt4 UI code generator 4.5.4
+# Created: Mon May 24 01:41:37 2010
+#      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -46,6 +46,7 @@ class Ui_UncagingControlWidget(object):
         self.horizontalLayout.setMargin(0)
         self.horizontalLayout.setObjectName("horizontalLayout")
         self.groupBox_2 = QtGui.QGroupBox(self.groupBox_4)
+        self.groupBox_2.setTitle("")
         self.groupBox_2.setObjectName("groupBox_2")
         self.gridLayout_3 = QtGui.QGridLayout(self.groupBox_2)
         self.gridLayout_3.setObjectName("gridLayout_3")
@@ -66,7 +67,8 @@ class Ui_UncagingControlWidget(object):
         self.label_5 = QtGui.QLabel(self.groupBox_2)
         self.label_5.setObjectName("label_5")
         self.horizontalLayout_3.addWidget(self.label_5)
-        self.colorSpin3 = QtGui.QSpinBox(self.groupBox_2)
+        self.colorSpin3 = QtGui.QDoubleSpinBox(self.groupBox_2)
+        self.colorSpin3.setMaximum(100.0)
         self.colorSpin3.setObjectName("colorSpin3")
         self.horizontalLayout_3.addWidget(self.colorSpin3)
         self.gridLayout_3.addLayout(self.horizontalLayout_3, 2, 0, 1, 2)

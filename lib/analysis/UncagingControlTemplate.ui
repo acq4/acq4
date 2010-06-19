@@ -106,7 +106,11 @@
             </widget>
            </item>
            <item>
-            <widget class="QSpinBox" name="colorSpin3"/>
+            <widget class="QDoubleSpinBox" name="colorSpin3">
+             <property name="maximum">
+              <double>100.000000000000000</double>
+             </property>
+            </widget>
            </item>
           </layout>
          </item>

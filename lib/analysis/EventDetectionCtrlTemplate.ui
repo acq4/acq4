@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>228</width>
+    <width>305</width>
     <height>313</height>
    </rect>
   </property>
@@ -96,7 +96,7 @@
       <item row="4" column="1">
        <widget class="QComboBox" name="detrendMethodCombo">
         <property name="currentIndex">
-         <number>0</number>
+         <number>2</number>
         </property>
         <item>
          <property name="text">
@@ -179,7 +179,7 @@
       <item>
        <widget class="QStackedWidget" name="detectMethodStack">
         <property name="currentIndex">
-         <number>0</number>
+         <number>2</number>
         </property>
         <widget class="QWidget" name="page_3">
          <layout class="QGridLayout" name="gridLayout_4">
