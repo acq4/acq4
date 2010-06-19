@@ -35,6 +35,12 @@ class FileTreeWidget(QtGui.QTreeWidget):
         self.items = {}
         self.clear()
         
+    def refresh(self, handle):
+        try:
+            item = self.item(handle)
+        except:
+            return
+        self.rebuildChildren(item)
         
     def selectionChanged(self, item=None, _=None):
         """Selection has changed; check to see whether currentDir item needs to be recolored"""
