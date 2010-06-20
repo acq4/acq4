@@ -1268,7 +1268,6 @@ class ViewBox(QtGui.QGraphicsWidget):
 class InfiniteLine(UIGraphicsItem):
     def __init__(self, view, pos, angle=90, pen=None, bounds=None):
         UIGraphicsItem.__init__(self, view, bounds)
-        self.view = view
         self.p = [0, 0]
         self.setAngle(angle)
         self.setPos(pos)
@@ -1276,7 +1275,7 @@ class InfiniteLine(UIGraphicsItem):
         if pen is None:
             pen = QtGui.QPen(QtGui.QColor(200, 200, 100))
         self.setPen(pen)
-        QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.updateLine)
+        QtCore.QObject.connect(self._view, QtCore.SIGNAL('viewChanged'), self.updateLine)
         
     def setPen(self, pen):
         self.pen = pen
@@ -1300,8 +1299,9 @@ class InfiniteLine(UIGraphicsItem):
         self.updateLine()
                 
     def updateLine(self):
-        vr = self.view.viewRect()
+        vr = self._view.viewRect()
         unit = self.unitRect()
+        print 'before', self.bounds
         
         if self.angle > 45:
             m = tan((90-self.angle) * pi / 180.)
@@ -1320,12 +1320,13 @@ class InfiniteLine(UIGraphicsItem):
         self.line = (QtCore.QPointF(x1, y1), QtCore.QPointF(x2, y2))
         self.bounds = QtCore.QRectF(self.line[0], self.line[1])
         ## Stupid bug causes lines to disappear:
-        if self.bounds.width() == 0:
-            self.bounds.setWidth(16*unit.width())
-            self.bounds.setLeft(-8*unit.width())
-        if self.bounds.height() == 0:
-            self.bounds.setHeight(16*unit.height())
-            self.bounds.setTop(-8*unit.height())
+        if self.bounds.width() == 0.0:
+            self.bounds.setWidth(50*unit.width())
+            self.bounds.setLeft(-25*unit.width())
+        if self.bounds.height() == 0.0:
+            self.bounds.setHeight(50*unit.height())
+            self.bounds.setTop(-25*unit.height())
+        print 'after', self.bounds
         #QtGui.QGraphicsLineItem.setLine(self, x1, y1, x2, y2)
         
     def boundingRect(self):
@@ -1340,6 +1341,7 @@ class InfiniteLine(UIGraphicsItem):
         p.drawLine(self.line[0], self.line[1])
         
     def mousePressEvent(self, ev):
+        ev.accept()
         print 'Infinite line got a click!'
         ev.ignore()
         
