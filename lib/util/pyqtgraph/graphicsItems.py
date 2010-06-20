@@ -1041,13 +1041,12 @@ class ViewBox(QtGui.QGraphicsWidget):
         self.range = [[0,1], [0,1]]   ## child coord. range visible [[xmin, xmax], [ymin, ymax]]
         
         self.aspectLocked = False
-        QtGui.QGraphicsItem.__init__(self, parent)
+        #QtGui.QGraphicsItem.__init__(self, parent)
         self.setFlag(QtGui.QGraphicsItem.ItemClipsChildrenToShape)
         #self.setFlag(QtGui.QGraphicsItem.ItemClipsToShape)
         
-        #self.childScale = [1.0, 1.0]
-        #self.childTranslate = [0.0, 0.0]
-        self.childGroup = QtGui.QGraphicsItemGroup(self)
+        #self.childGroup = QtGui.QGraphicsItemGroup(self)
+        self.childGroup = ItemGroup(self)
         self.currentScale = Point(1, 1)
         
         self.yInverted = False
@@ -1203,6 +1202,7 @@ class ViewBox(QtGui.QGraphicsWidget):
             tr = dif*mask
             self.translateBy(tr, viewCoords=True)
             self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
+            ev.accept()
         elif ev.buttons() & QtCore.Qt.RightButton:
             dif = ev.screenPos() - ev.lastScreenPos()
             dif = array([dif.x(), dif.y()])
@@ -1212,11 +1212,14 @@ class ViewBox(QtGui.QGraphicsWidget):
             center = Point(self.childGroup.transform().inverted()[0].map(ev.buttonDownPos(QtCore.Qt.RightButton)))
             self.scaleBy(s, center)
             self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
+            ev.accept()
+        else:
+            ev.ignore()
         
     def mousePressEvent(self, ev):
         self.mousePos = array([ev.pos().x(), ev.pos().y()])
         self.pressPos = self.mousePos.copy()
-        #Qwt.QwtPlot.mousePressEvent(self, ev)
+        ev.accept()
         
     def mouseReleaseEvent(self, ev):
         pos = array([ev.pos().x(), ev.pos().y()])
@@ -1224,7 +1227,7 @@ class ViewBox(QtGui.QGraphicsWidget):
             #if ev.button() == QtCore.Qt.RightButton:
                 #self.ctrlMenu.popup(self.mapToGlobal(ev.pos()))
         self.mousePos = pos
-        #Qwt.QwtPlot.mouseReleaseEvent(self, ev)
+        ev.accept()
         
     def setRange(self, ax, min, max, padding=0.02, update=True):
         if ax == 0:

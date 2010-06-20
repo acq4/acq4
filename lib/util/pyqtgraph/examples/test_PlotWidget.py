@@ -80,4 +80,4 @@ for i in range(0, 5):
         yd, xd = rand(10000)
         pw2.plot(yd*(j+1), xd, params={'iter': i, 'val': j})
     
-app.exec_()
+#app.exec_()
