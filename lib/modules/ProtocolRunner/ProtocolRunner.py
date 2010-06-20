@@ -40,17 +40,20 @@ class ProtocolRunner(Module):
         self.ui = Ui_MainWindow()
         self.win = Window(self)
         
-        
         self.ui.setupUi(self.win)
+        self.ui.protoDurationSpin.setOpts(dec=True, bounds=[1e-3,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
+        self.ui.protoLeadTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=10e-3, suffix='s', siPrefix=True)
+        self.ui.protoCycleTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
+        self.ui.seqCycleTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
         #self.win.setCentralWidget(None)  ## get rid of central widget so docks fill the whole screen
         #self.win.centralWidget().setFixedSize(QtCore.QSize(2, 2))
         self.protoStateGroup = WidgetGroup([
             (self.ui.protoContinuousCheck, 'continuous'),
-            (self.ui.protoDurationSpin, 'duration', 1e3),
-            (self.ui.protoLeadTimeSpin, 'leadTime', 1e3),
+            (self.ui.protoDurationSpin, 'duration'),
+            (self.ui.protoLeadTimeSpin, 'leadTime'),
             (self.ui.protoLoopCheck, 'loop'),
-            (self.ui.protoCycleTimeSpin, 'loopCycleTime', 1e3),
-            (self.ui.seqCycleTimeSpin, 'cycleTime', 1e3),
+            (self.ui.protoCycleTimeSpin, 'loopCycleTime'),
+            (self.ui.seqCycleTimeSpin, 'cycleTime'),
             (self.ui.seqRepetitionSpin, 'repetitions', 1),
         ])
         self.protocolList = DirTreeModel(self.manager.config['protocolDir'])
@@ -670,9 +673,11 @@ class ProtocolRunner(Module):
             ## Generate parameter space
             params = OrderedDict()
             linkedParams = {}
+            pLen = 1
             for i in items:
                 key = i[:2]
                 params[key] = range(i[2])
+                pLen *= i[2]
                 linkedParams[key] = i[3]
             
             ## Set storage dir
@@ -686,8 +691,13 @@ class ProtocolRunner(Module):
                 dh = None
             
             #print params, linkedParams
-            ## Generate the complete array of command structures
-            prot = runSequence(lambda p: self.generateProtocol(dh, p), params, params.keys(), passHash=True, linkedParams=linkedParams)
+            ## Generate the complete array of command structures. This can take a long time, so we start a progress dialog.
+            progressDlg = QtGui.QProgressDialog("Generating protocol commands..", "Cancel", 0, pLen)
+            progressDlg.setMinimumDuration(500)  ## If this takes less than 500ms, progress dialog never appears.
+            self.lastQtProcessTime = ptime.time()
+            prot = runSequence(lambda p: self.generateProtocol(dh, p, progressDlg), params, params.keys(), passHash=True, linkedParams=linkedParams)
+            progressDlg.setValue(pLen)
+            
             #print "==========Sequence Protocol=============="
             #print prot
             self.emit(QtCore.SIGNAL('protocolStarted'), {})
@@ -697,7 +707,8 @@ class ProtocolRunner(Module):
 
             raise
         
-    def generateProtocol(self, dh, params=None):
+    def generateProtocol(self, dh, params=None, progressDlg=None):
+        #prof = Profiler("Generate Protocol: %s" % str(params))
         ## params should be in the form {(dev, param): value, ...}
         ## Generate executable conf from protocol object
         #prot = {'protocol': {
@@ -712,16 +723,19 @@ class ProtocolRunner(Module):
         if params is None:
             params = {}
         prot = {'protocol': self.protoStateGroup.state()}
+        #prof.mark('protocol state')
         store = (dh is not None)
         prot['protocol']['storeData'] = store
         if store:
             if params != {}:
                 name = '_'.join(map(lambda i: '%03d'%i, params.values()))
+                #print "mkdir", name
                 dh1 = dh.mkdir(name, info=params)
-                
+                #prof.mark('create storage dir')
             else:
                 dh1 = dh
             prot['protocol']['storageDir'] = dh1
+        #prof.mark('selected storage dir.')
         prot['protocol']['name'] = self.currentProtocol.fileName
         
         for d in self.currentProtocol.devices:
@@ -730,7 +744,19 @@ class ProtocolRunner(Module):
                 p = dict([(i[1], params[i]) for i in params.keys() if i[0] == d])
                 ## Ask the device to generate its protocol command
                 prot[d] = self.docks[d].widget().generateProtocol(p)
+                #prof.mark("get protocol from %s" % d)
         #print prot['protocol']['storageDir'].name()
+        
+        if progressDlg is not None:
+            progressDlg.setValue(progressDlg.value()+1)
+            ## only do UI updates every 1 sec.
+            now = ptime.time()
+            if now - self.lastQtProcessTime > 1.0:
+                self.lastQtProcessTime = now
+                QtGui.QApplication.processEvents()
+            if progressDlg.wasCanceled():
+                raise Exception("Target sequence computation canceled by user.")
+        #prof.mark('done')
         return prot
     
     def protocolInfo(self, params=None):

@@ -61,6 +61,7 @@ class Camera(DAQGeneric):
         
         self.camConfig = config
         self.acqThread = AcquireThread(self)
+        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('finished()'), self.threadFinished)
         self.stateStack = []
         
         
@@ -94,6 +95,8 @@ class Camera(DAQGeneric):
             self.scopeDev = None
             
 
+    def threadFinished(self):
+        print "Camera: ACQ thread finished"
 
     def listParams(self, onlyWritable=False):
         """Return a dictionary of parameter descriptions. Values may be any of:
@@ -754,10 +757,11 @@ class AcquireThread(QtCore.QThread):
                 pass
             printExc("Error starting camera acquisition:")
             self.emit(QtCore.SIGNAL("showMessage"), "ERROR starting acquisition (see console output)")
-            
+        finally:
+            print "Camera ACQ thread exited."
         
     def stop(self, block=False):
-        #print "AcquireThread.stop: Requesting thread stop, acquiring lock first.."
+        print "AcquireThread.stop: Requesting thread stop, acquiring lock first.."
         with MutexLocker(self.lock):
             self.stopThread = True
         #print "AcquireThread.stop: got lock, requested stop."

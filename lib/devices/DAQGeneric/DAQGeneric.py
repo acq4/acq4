@@ -5,6 +5,7 @@ from metaarray import MetaArray, axis
 from lib.util.Mutex import Mutex, MutexLocker
 from numpy import *
 from protoGUI import *
+from debug import *
 
 class DAQGeneric(Device):
     def __init__(self, dm, config, name):
@@ -165,16 +166,19 @@ class DAQGenericTask(DeviceTask):
         #self.state['startTime'] = self.daqTasks[self.daqTasks.keys()[0]].getStartTime()
         
         ## Collect data and info for each channel in the command
+        #prof = Profiler("  DAQGeneric.getResult")
         result = {}
         #print "buffered channels:", self.bufferedChannels
         for ch in self.bufferedChannels:
             #result[ch] = self.cmd[ch]['task'].getData(self.dev.config[ch]['channel'][1])
             result[ch] = self.daqTasks[ch].getData(self.dev.config[ch]['channel'][1])
+            #prof.mark("get data for channel "+str(ch))
             result[ch]['data'] = result[ch]['data'] / self.getChanScale(ch)
             if 'units' in self.dev.config[ch]:
                 result[ch]['units'] = self.dev.config[ch]['units']
             else:
                 result[ch]['units'] = None
+            #prof.mark("scale data for channel "+str(ch))
             #del self.cmd[ch]['task']
         #print "RESULT:", result    
         ## Todo: Add meta-info about channels that were used but unbuffered
@@ -195,7 +199,8 @@ class DAQGenericTask(DeviceTask):
             arr = concatenate(chanList)
             info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'rate': rate, 'numPts': nPts, 'startTime': meta['startTime']}]
             marr = MetaArray(arr, info=info)
-            #print marr    
+            #print marr
+            #prof.mark("post-process data")
             return marr
             
         else:

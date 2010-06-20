@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ImageViewTemplate.ui'
 #
-# Created: Mon Mar 29 22:40:48 2010
-#      by: PyQt4 UI code generator 4.6
+# Created: Tue Jun 15 02:05:30 2010
+#      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
 

@@ -17,7 +17,8 @@ from lib.util.configfile import *
 from metaarray import MetaArray
 import time
 from lib.util.Mutex import Mutex, MutexLocker
-from PyQt4 import QtCore
+from lib.util.SignalProxy import proxyConnect
+from PyQt4 import QtCore, QtGui
 #from lib.filetypes.FileType import *
 import lib.filetypes as filetypes
 from debug import *
@@ -60,25 +61,32 @@ class DataManager(QtCore.QObject):
     def getFileHandle(self, fileName):
         with MutexLocker(self.lock):
             fileName = os.path.abspath(fileName)
+            if not os.path.exists(fileName):
+                raise Exception("File %s does not exist" % fileName)
             if not os.path.isfile(fileName):
-                if not os.path.exists(fileName):
-                    raise Exception("File %s does not exist" % fileName)
-                else:
-                    raise Exception("Not a regular file: %s" % fileName)
+                raise Exception("Not a regular file: %s" % fileName)
             if not self._cacheHasName(fileName):
                 self._addHandle(fileName, FileHandle(fileName, self))
             return self._getCache(fileName)
         
     def getHandle(self, fileName):
-        try:
+        fn = os.path.abspath(fileName)
+        if not os.path.exists(fn):
+            raise Exception("File '%s' does not exist." % fn)
+        if os.path.isfile(fn):
             return self.getFileHandle(fileName)
-        except:
+        else:
             return self.getDirHandle(fileName)
 
     def _addHandle(self, fileName, handle):
         """Cache a handle and watch it for changes"""
+        #print "*******data manager caching new handle", handle
         self._setCache(fileName, handle)
-        QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self._handleChanged)
+        ## make sure all file handles belong to the main GUI thread
+        handle.moveToThread(QtGui.QApplication.instance().thread())
+        ## No signals; handles should explicitly inform the manager of changes
+        #QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self._handleChanged)
+        
         
     def _handleChanged(self, handle, change, *args):
         with MutexLocker(self.lock):
@@ -102,7 +110,7 @@ class DataManager(QtCore.QObject):
                         self._getCache(h)._parentMoved(oldName, newName)
                     self._delCache(h)
                 
-            if change == 'deleted':
+            elif change == 'deleted':
                 oldName = args[0]
                 self._delCache(oldName)
 
@@ -111,7 +119,8 @@ class DataManager(QtCore.QObject):
                 for path in tree:
                     self._getCache(path)._deleted()
                     self._delCache(path)
-                
+            #else:
+                #print "    (ignored)"
 
     def _getTree(self, parent):
         """Return the entire list of cached handles which are children or grandchildren of this handle"""
@@ -155,9 +164,10 @@ class FileHandle(QtCore.QObject):
         self.parentDir = None
         #self.lock = threading.RLock()
         self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.sigproxy = proxyConnect(self, QtCore.SIGNAL('changed'), self.delayedChange)
         
     def __repr__(self):
-        return "<%s '%s'>" % (self.__class__.__name__, self.name())
+        return "<%s '%s' (0x%x)>" % (self.__class__.__name__, self.name(), self.__hash__())
         
     def name(self, relativeTo=None):
         self.checkDeleted()
@@ -213,20 +223,33 @@ class FileHandle(QtCore.QObject):
             fn2 = os.path.join(newDir.name(), name)
             if os.path.exists(fn2):
                 raise Exception("Destination file %s already exists." % fn2)
+#            print "<> DataManager.move: about to move %s => %s" % (fn1, fn2)
             os.rename(fn1, fn2)
-            oldDir._childChanged()
-            newDir._childChanged()
+#            print "<> DataManager.move: moved."
             self.path = fn2
             self.parentDir = None
+#            print "<> DataManager.move: inform DM of change.."
+            self.manager._handleChanged(self, 'moved', fn1, fn2)
+            if oldDir.isManaged() and oldDir.isManaged(name):
+#                print "<> DataManager.move: old parent forget child.."
+                oldDir.forget(name)
             if oldDir.isManaged() and newDir.isManaged():
+#                print "<> DataManager.move: new parent index old info.."
                 newDir.indexFile(name, info=oldDir._fileInfo(name))
             elif newDir.isManaged():
+#                print "<> DataManager.move: new parent index (no info)"
                 newDir.indexFile(name)
-            if oldDir.isManaged():
-                oldDir.forget(name)
+                
+#            print "<> DataManager.move: emit 'moved'.."
             self.emitChanged('moved', fn1, fn2)
+                
+#            print "<> DataManager.move: oldDir emit 'children'"
+            oldDir._childChanged()
+#            print "<> DataManager.move: newDir emit 'children'"
+            newDir._childChanged()
         
     def rename(self, newName):
+        #print "Rename %s -> %s" % (self.name(), newName)
         self.checkDeleted()
         with MutexLocker(self.lock):
             parent = self.parent()
@@ -236,13 +259,17 @@ class FileHandle(QtCore.QObject):
             if os.path.exists(fn2):
                 raise Exception("Destination file %s already exists." % fn2)
             #print "rename", fn1, fn2
-            os.rename(fn1, fn2)
-            self.parent()._childChanged()
-            self.path = fn2
             if parent.isManaged():
-                parent.indexFile(newName, info=parent._fileInfo(oldName))
+                info = parent._fileInfo(oldName)
                 parent.forget(oldName)
+            os.rename(fn1, fn2)
+            self.path = fn2
+            self.manager._handleChanged(self, 'renamed', fn1, fn2)
+            if parent.isManaged():
+                parent.indexFile(newName, info=info)
+                
             self.emitChanged('renamed', fn1, fn2)
+            self.parent()._childChanged()
         
     def delete(self):
         self.checkDeleted()
@@ -251,11 +278,12 @@ class FileHandle(QtCore.QObject):
             fn1 = self.name()
             oldName = self.shortName()
             os.remove(fn1)
-            self.parent()._childChanged()
+            self.manager._handleChanged(self, 'deleted', fn1)
             self.path = None
             if self.isManaged():
                 parent.forget(oldName)
             self.emitChanged('deleted', fn1)
+            self.parent()._childChanged()
         
     def read(self):
         self.checkDeleted()
@@ -290,7 +318,10 @@ class FileHandle(QtCore.QObject):
 
 
     def emitChanged(self, change, *args):
-        self.emit(QtCore.SIGNAL('changed'), self.name(), change, *args)
+        self.emit(QtCore.SIGNAL('changed'), self, change, *args)
+
+    def delayedChange(self, *args):
+        self.emit(QtCore.SIGNAL('delayedChange'), *args)
     
     def hasChildren(self):
         self.checkDeleted()
@@ -362,6 +393,7 @@ class DirHandle(FileHandle):
         pass
     
     def _indexFile(self):
+        """Return the name of the index file for this directory. NOT the same as indexFile()"""
         return os.path.join(self.path, '.index')
     
     def _logFile(self):
@@ -455,33 +487,41 @@ class DirHandle(FileHandle):
     
     def mkdir(self, name, autoIncrement=False, info=None):
         """Create a new subdirectory, return a new DirHandle object. If autoIncrement is true, add a number to the end of the dir name if it already exists."""
+        #prof = Profiler('mkdir')
         if info is None:
             info = {}
         with MutexLocker(self.lock):
-            
+            #prof.mark('got lock')
             if autoIncrement:
                 fullName = self.incrementFileName(name, useExt=False)
             else:
                 fullName = name
-                
+            #prof.mark('1')
             newDir = os.path.join(self.path, fullName)
             if os.path.isdir(newDir):
                 raise Exception("Directory %s already exists." % newDir)
+            #prof.mark('2')
             
             ## Create directory
             ndm = self.manager.getDirHandle(newDir, create=True)
+            #prof.mark('3')
             t = time.time()
             self._childChanged()
+            #prof.mark('4')
             
             if self.isManaged():
+                #prof.mark('5')
                 ## Mark the creation time in the parent directory so it can sort its full list of files without 
                 ## going into each subdir
                 self._setFileInfo(fullName, {'__timestamp__': t})
+            #prof.mark('6')
             
             ## create the index file in the new directory
             info['__timestamp__'] = t
             ndm.setInfo(info)
+            #prof.mark('7')
             self.emitChanged('children', newDir)
+            #prof.mark('8')
             return ndm
         
     def getDir(self, subdir, create=False, autoIncrement=False):
@@ -679,7 +719,7 @@ class DirHandle(FileHandle):
     
     def indexFile(self, fileName, info=None, protect=False):
         """Add a pre-existing file into the index. Overwrites any pre-existing info for the file unless protect is True"""
-        #print "Adding file %s to index" % fileName
+        #print "DirHandle: Adding file %s to index" % fileName
         if info is None:
             info = {}
         with MutexLocker(self.lock):
@@ -697,9 +737,12 @@ class DirHandle(FileHandle):
                     raise Exception("File %s is already indexed." % fileName)
 
             self._setFileInfo(fileName, info)
-            self.emitChanged('children', fileName)
+            #self.emitChanged('children', fileName)
+            self.emitChanged('meta', fileName)
     
     def forget(self, fileName):
+        """Remove fileName from the index for this directory"""
+        #print "DirHandle: forget", fileName
         with MutexLocker(self.lock):
             if not self.isManaged(fileName):
                 raise Exception("Can not forget %s, not managed" % fileName)
@@ -707,7 +750,8 @@ class DirHandle(FileHandle):
             if fileName in index:
                 index.remove(fileName)
                 self._writeIndex(index, lock=False)
-                self.emitChanged('children', fileName)
+                #self.emitChanged('children', fileName)
+                self.emitChanged('meta', fileName)
         
     def isManaged(self, fileName=None):
         with MutexLocker(self.lock):
@@ -746,23 +790,34 @@ class DirHandle(FileHandle):
 
     def _setFileInfo(self, fileName, info):
         """Set or update meta-information array for fileName. If merge is false, the info dict is completely overwritten."""
+        #prof = Profiler('setFileInfo')
         with MutexLocker(self.lock):
+            #prof.mark('1')
             if not self.isManaged():
                 self.createIndex()
+            #prof.mark('2')
             index = self._readIndex(lock=False)
+            #prof.mark('3')
             append = False
             if fileName not in index:
                 index[fileName] = {}
                 append = True
+            #prof.mark('4')
                 
             for k in info:
                 index[fileName][k] = info[k]
+            #prof.mark('5')
                 
             if append:
-                appendConfigFile({fileName: info}, self._indexFile())
+                self._appendIndex({fileName: info})
+                
+                #prof.mark('6')
             else:
                 self._writeIndex(index, lock=False)
+                #prof.mark('6a')
             self.emitChanged('meta', fileName)
+            #prof.mark('7')
+            #prof.finish()
         
     def _readIndex(self, lock=True, unmanagedOk=False):
         with MutexLocker(self.lock):
@@ -788,6 +843,14 @@ class DirHandle(FileHandle):
             writeConfigFile(newIndex, self._indexFile())
             self._index = newIndex
             self._indexMTime = os.path.getmtime(self._indexFile())
+
+    def _appendIndex(self, info):
+        with MutexLocker(self.lock):
+            indexFile = self._indexFile()
+            appendConfigFile(info, indexFile)
+            for k in info:
+                self._index[k] = info[k]
+            self._indexMTime = os.path.getmtime(indexFile)
         
     def checkIndex(self):
         ind = self._readIndex(unmanagedOk=True)
@@ -804,4 +867,5 @@ class DirHandle(FileHandle):
         
     def _childChanged(self):
         self.lsCache = None
+        self.emitChanged('children')
 

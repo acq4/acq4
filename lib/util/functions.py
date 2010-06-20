@@ -547,9 +547,60 @@ def highPass(data, cutoff, order=1, dt=None):
     """return data passed through high-pass bessel filter"""
     return besselFilter(data, cutoff, order, dt, 'high')
 
-def lowPass(data, cutoff, order=1, dt=None):
-    """return data passed through low-pass bessel filter"""
-    return besselFilter(data, cutoff, order, dt, 'low')
+#def lowPass(data, cutoff, order=1, dt=None):
+    #"""return data passed through low-pass bessel filter"""
+    #return besselFilter(data, cutoff, order, dt, 'low')
+
+
+def lowPass(data, cutoff, order=4, bidir=True, filter='butterworth', stopCutoff=None, gpass=2., gstop=20., samplerate=None, dt=None):
+    """Bi-directional bessel/butterworth lowpass filter"""
+    if dt is None:
+        try:
+            tvals = data.xvals('Time')
+            dt = (tvals[-1]-tvals[0]) / (len(tvals)-1)
+        except:
+            raise Exception('Must specify dt for this data.')
+        
+    if dt is not None:
+        samplerate = 1.0 / dt
+    if samplerate is not None:
+        cutoff /= 0.5*samplerate
+        if stopCutoff is not None:
+            stopCutoff /= 0.5*samplerate
+    
+    if filter == 'bessel':
+        ## How do we compute Wn?
+        ### function determining magnitude transfer of 4th-order bessel filter
+        #from scipy.optimize import fsolve
+
+        #def m(w):  
+            #return 105. / (w**8 + 10*w**6 + 135*w**4 + 1575*w**2 + 11025.)**0.5
+        #v = fsolve(lambda x: m(x)-limit, 1.0)
+        #Wn = cutoff / (sampr*v)
+        b,a = scipy.signal.bessel(order, cutoff, btype='low') 
+    elif filter == 'butterworth':
+        if stopCutoff is None:
+            stopCutoff = cutoff * 2.0
+        ord, Wn = scipy.signal.buttord(cutoff, stopCutoff, gpass, gstop)
+        #print "butterworth ord %f   Wn %f   c %f   sc %f" % (ord, Wn, cutoff, stopCutoff)
+        b,a = scipy.signal.butter(ord, Wn, btype='low') 
+    else:
+        raise Exception('Unknown filter type "%s"' % filter)
+        
+    padded = numpy.hstack([data[:100], data, data[-100:]])   ## can we intelligently decide how many samples to pad with?
+
+    if bidir:
+        data = scipy.signal.lfilter(b, a, scipy.signal.lfilter(b, a, padded)[::-1])[::-1][100:-100]  ## filter twice; once forward, once reversed. (This eliminates phase changes)
+    else:
+        data = scipy.signal.lfilter(b, a, padded)[100:-100]
+        
+    if isinstance(data, MetaArray):
+        return MetaArray(d1, info=data.infoCopy())
+        
+    return data
+
+
+
 
 def bandPass(data, low, high, lowOrder=1, highOrder=1, dt=None):
     """return data passed through low-pass bessel filter"""

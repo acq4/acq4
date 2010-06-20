@@ -61,6 +61,7 @@ config = os.path.join(pyDir, 'config', 'default.cfg')
 ## Create Manager. This configures devices and creates the main manager window.
 dm = Manager(config, sys.argv[1:])
 
+w = UncagingWindow()
 
 ## Start Qt event loop unless running in interactive mode.
 try:
@@ -75,13 +76,14 @@ try:
 except:
     ##Make sure pythin core runs requently enough to allow debugger interaction.
     timer = QtCore.QTimer()
-    QtCore.QObject.connect(timer, QtCore.SIGNAL('timeout()'), lambda: 1+1)
+    def donothing(*args):
+        x = 1+1
+    timer.connect(timer, QtCore.SIGNAL("timeout()"), donothing)
     timer.start(200)
     
     print "Starting Qt event loop.."
     app.exec_()
     print "Qt event loop exited."
-
 
 
 

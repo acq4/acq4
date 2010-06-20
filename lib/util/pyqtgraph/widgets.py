@@ -46,7 +46,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.state = {'pos': pos, 'size': size, 'angle': angle}
         self.lastState = None
         self.setPos(pos)
-        self.rotate(-angle)
+        self.rotate(-angle * 180. / pi)
         self.setZValue(10)
         
         self.handleSize = 4

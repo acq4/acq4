@@ -63,9 +63,9 @@ class EventMatchWidget(QtGui.QSplitter):
         #self.ctrlLayout = QtGui.QFormLayout()
         #self.ctrlWidget.setLayout(self.ctrlLayout)
         
-        self.ctrl.lowPassSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
-        self.ctrl.highPassSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
-        self.ctrl.expDeconvolveSpin.setOpts(log=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
+        self.ctrl.lowPassSpin.setOpts(dec=True, step=0.2, bounds=[0, None], suffix='Hz', siPrefix=True)
+        self.ctrl.highPassSpin.setOpts(dec=True, step=0.2, bounds=[0, None], suffix='Hz', siPrefix=True)
+        self.ctrl.expDeconvolveSpin.setOpts(dec=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
         #self.tauSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
         #self.tauSpin.setValue(0.01)
         #self.lowPassSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
@@ -271,23 +271,23 @@ class EventMatchWidget(QtGui.QSplitter):
         return events
         
         
-    def tauChanged(self):
-        self.recalculate()
-        
-    def lowPassChanged(self):
-        self.recalculate()
-        
-    def thresholdChanged(self):
-        self.recalculate()
-        
-    def setTau(self, val):
-        self.tauSpin.setValue(val)
-        
-    def setLowPass(self, val):
-        self.lowPassSpin.setValue(val)
-        
-    def setThreshold(self, val):
-        self.thresholdSpin.setValue(val)
+    #def tauChanged(self):
+    #    self.recalculate()
+    #    
+    #def lowPassChanged(self):
+    #    self.recalculate()
+    #    
+    #def thresholdChanged(self):
+    #    self.recalculate()
+    #    
+    #def setTau(self, val):
+    #    self.tauSpin.setValue(val)
+    #    
+    #def setLowPass(self, val):
+    #    self.lowPassSpin.setValue(val)
+    #    
+    #def setThreshold(self, val):
+    #    self.thresholdSpin.setValue(val)
         
     def clear(self):
         self.analysisPlot.clear()
@@ -596,13 +596,6 @@ class UncagingWindow(QtGui.QMainWindow):
             self.analysisCache[item.index]['dirCharge'] = 0
             
     def colorSpots(self):
-        #for item in self.scanAvgItems:
-        #    if self.ctrl.rgbRadio.isChecked():
-        #        red = clip(log(max(1.0, (self.analysisCache[item.index]['postChargePos']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255) 
-        #        blue = clip(log(max(1.0, (-self.analysisCache[item.index]['postChargeNeg']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255)
-        #        green = clip(log(max(1.0, (self.analysisCache[item.index]['dirCharge']/self.analysisCache[item.index]['stdev'])+1))*255, 0, 255)
-        #        return QtGui.QColor(red, green, blue, max(red, green, blue))
-        #    
         if self.ctrl.gradientRadio.isChecked():
             maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = self.ctrl.colorSpin1.value())
             
@@ -649,8 +642,35 @@ class UncagingWindow(QtGui.QMainWindow):
 
                 item.setBrush(QtGui.QBrush(color))
                 item.setPen(pen)
-               
+
+                #print "Color set."
+            self.colorScaleBar.show()
+
             self.colorScaleBar.setGradient(self.ctrl.gradientWidget.getGradient())
+
+        else:
+            self.colorScaleBar.hide()
+            for item in self.scanAvgItems:
+                if item.source is not None:  ## this is a single item
+                    items = [item]
+                else:    ## this is an average item
+                    items = item.sourceItems
+                    #negCharges = array([self.analysisCache[i.index]['postChargeNeg'] for i in item.sourceItems]) 
+                    #numDirectEventses = [len(self.analysisCache[i.index]['dirEvents']) for i in item.sourceItems]
+                    
+                postZPos = [self.analysisCache[i.index]['postChargePos'] / self.analysisCache[i.index]['stdev'] for i in items]
+                postZNeg = [-self.analysisCache[i.index]['postChargeNeg'] / self.analysisCache[i.index]['stdev'] for i in items]
+                dirZ = [self.analysisCache[i.index]['dirCharge']/self.analysisCache[i.index]['stdev'] for i in items]
+                    
+                red = clip(log(max(1.0, median(postZPos)+1))*255, 0, 255) 
+                blue = clip(log(max(1.0, median(postZNeg)+1))*255, 0, 255)
+                green = clip(log(max(1.0, min(dirZ)+1))*255, 0, 255)
+                color = QtGui.QColor(red, green, blue, max(red, green, blue))
+            
+                item.setBrush(QtGui.QBrush(color))
+                #item.setPen(pen)
+            
+            
 
    
     def mouseClicked(self, ev):

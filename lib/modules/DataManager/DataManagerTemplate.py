@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'DataManagerTemplate.ui'
 #
-# Created: Mon Jan 18 22:45:17 2010
-#      by: PyQt4 UI code generator 4.6
+# Created: Mon Jun 07 12:50:36 2010
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -56,16 +56,14 @@ class Ui_MainWindow(object):
         self.newFolderList.setSizePolicy(sizePolicy)
         self.newFolderList.setObjectName("newFolderList")
         self.verticalLayout_2.addWidget(self.newFolderList)
-        self.fileTreeView = QtGui.QTreeView(self.layoutWidget)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
-        sizePolicy.setHorizontalStretch(2)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.fileTreeView.sizePolicy().hasHeightForWidth())
-        self.fileTreeView.setSizePolicy(sizePolicy)
-        self.fileTreeView.setDragEnabled(True)
-        self.fileTreeView.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
-        self.fileTreeView.setObjectName("fileTreeView")
-        self.verticalLayout_2.addWidget(self.fileTreeView)
+        self.fileTreeWidget = FileTreeWidget(self.layoutWidget)
+        self.fileTreeWidget.setEditTriggers(QtGui.QAbstractItemView.EditKeyPressed|QtGui.QAbstractItemView.SelectedClicked)
+        self.fileTreeWidget.setDragEnabled(True)
+        self.fileTreeWidget.setDragDropMode(QtGui.QAbstractItemView.DragDrop)
+        self.fileTreeWidget.setObjectName("fileTreeWidget")
+        self.fileTreeWidget.headerItem().setText(0, "1")
+        self.fileTreeWidget.header().setVisible(False)
+        self.verticalLayout_2.addWidget(self.fileTreeWidget)
         self.layoutWidget1 = QtGui.QWidget(self.splitter)
         self.layoutWidget1.setObjectName("layoutWidget1")
         self.verticalLayout_4 = QtGui.QVBoxLayout(self.layoutWidget1)
@@ -146,7 +144,7 @@ class Ui_MainWindow(object):
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(8), self.logDock)
 
         self.retranslateUi(MainWindow)
-        self.fileDisplayTabs.setCurrentIndex(2)
+        self.fileDisplayTabs.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -162,4 +160,5 @@ class Ui_MainWindow(object):
         self.logDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Current Log", None, QtGui.QApplication.UnicodeUTF8))
 
 from FileInfoView import FileInfoView
+from FileTreeWidget import FileTreeWidget
 from FileDataView import FileDataView

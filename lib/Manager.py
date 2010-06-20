@@ -143,7 +143,8 @@ Valid options are:
         self.quitShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+q'), win)
         self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
         QtCore.QObject.connect(self.quitShortcut, QtCore.SIGNAL('activated()'), self.quit)
-            
+        
+        QtCore.QObject.connect(QtGui.QApplication.instance(), QtCore.SIGNAL('lastWindowClosed()'), self.lastWindowClosed)
             
             
             
@@ -364,7 +365,9 @@ Valid options are:
 
     def unloadModule(self, name):
         try:
+            print "    request quit.."
             self.getModule(name).quit()
+            print "    request quit done"
         except:
             printExc("Error while requesting module '%s' quit." % name)
             
@@ -480,7 +483,9 @@ Valid options are:
             while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
                 m = self.modules.keys()[0]
                 print "    %s" % m
+                
                 self.unloadModule(m)
+                print "Unloaded mod %s, modules left:" % m
                 #try:
                     #self.modules[m].quit()
                 #except:
@@ -506,7 +511,11 @@ Valid options are:
         #print app.topLevelWidgets()
         #for w in app.topLevelWidgets():
         #    print w, w.isVisible()
-        #print app.quitOnLastWindowClosed()
+        print "Manager quits when last window closes:", QtGui.QApplication.instance().quitOnLastWindowClosed()
+        QtGui.QApplication.quit()
+
+    def lastWindowClosed(self):
+        print "QApplication reports last window has closed."
 
 class Task:
     id = 0
@@ -644,6 +653,7 @@ class Task:
         
     def stop(self, abort=False):
         """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run."""
+        #prof = Profiler("Stop Task")
         try:
             if not self.stopped:
                 #print "stopping tasks.."
@@ -658,6 +668,7 @@ class Task:
                     except:
                         printExc("Error while stopping task %s:" % t)
                     #print "   ..task", t, "stopped"
+                    #prof.mark("   ..task "+ t+ " stopped")
                 self.stopped = True
             
             if not abort and not self.tasksDone():
@@ -673,6 +684,7 @@ class Task:
                     except:
                         printExc( "Error getting result for task %s (will set result=None for this task):" % devName)
                         result[devName] = None
+                    #prof.mark("get result: "+devName)
                 self.result = result
                 #print "RESULT 1:", self.result
                 
@@ -680,9 +692,11 @@ class Task:
                 if 'storeData' in self.cfg and self.cfg['storeData'] is True:
                     for t in self.tasks:
                         self.tasks[t].storeResult(self.cfg['storageDir'])
+                #prof.mark("store data")
         finally:   ## Regardless of any other problems, at least make sure we release hardware for future use
             ## Release all hardware for use elsewhere
             self.releaseAll()
+            #prof.mark("release all")
             
         #print "tasks:", self.tasks
         #print "RESULT:", self.result        
