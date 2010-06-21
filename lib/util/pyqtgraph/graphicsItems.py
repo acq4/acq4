@@ -1289,9 +1289,10 @@ class ViewBox(QtGui.QGraphicsWidget):
             p.drawRect(bounds)
 
 
-class InfiniteLine(QtGui.QGraphicsItem):
+class InfiniteLine(QtGui.QGraphicsItem, QObjectWorkaround):
     def __init__(self, view, pos, angle=90, pen=None, movable=False):
         QtGui.QGraphicsItem.__init__(self)
+        QObjectWorkaround.__init__(self)
         self.movable = movable
         self.view = view
         self.p = [0, 0]
@@ -1299,6 +1300,7 @@ class InfiniteLine(QtGui.QGraphicsItem):
         self.setPos(pos)
         if movable:
             self.setAcceptHoverEvents(True)
+            
 
         
         if pen is None:
@@ -1338,8 +1340,17 @@ class InfiniteLine(QtGui.QGraphicsItem):
             else:
                 raise Exception("Must specify 2D coordinate for non-orthogonal lines.")
         self.updateLine()
+        self.emit(QtCore.SIGNAL('positionChanged'), self)
     
+    def getXPos(self):
+        return self.p[0]
         
+    def getYPos(self):
+        return self.p[1]
+        
+    def getPos(self):
+        return self.p
+
                 
     def updateLine(self):
 
@@ -1398,9 +1409,15 @@ class InfiniteLine(QtGui.QGraphicsItem):
         #p.drawRect(self.boundingRect())
         
     def mousePressEvent(self, ev):
-        print 'Infinite line got a click!'
-        ev.ignore()
-    
+        if ev.button() == QtCore.Qt.LeftButton:
+            ev.accept()
+            self.pressDelta = self.mapToParent(ev.pos()) - QtCore.QPointF(*self.p)
+        else:
+            ev.ignore()
+            
+    def mouseMoveEvent(self, ev):
+        self.setPos(self.mapToParent(ev.pos()) - self.pressDelta)
+        self.emit(QtCore.SIGNAL('dragged'), self)
  
         
         
