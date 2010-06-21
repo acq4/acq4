@@ -129,7 +129,7 @@ class FileInfoView(QtGui.QWidget):
             
     def focusLost(self, obj):
         field = self.widgets[obj]
-        print "focus lost", obj, field
+        #print "focus lost", obj, field
         if isinstance(obj, QtGui.QLineEdit):
             val = str(obj.text())
         elif isinstance(obj, QtGui.QTextEdit):

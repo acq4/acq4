@@ -569,7 +569,10 @@ class Task(DAQGenericTask):
         dh = dirHandle.mkdir(self.dev.name)
         for k in result:
             if result[k] is not None:
-                dh.writeFile(result[k], k)
+                info = None
+                if k == 'frames':
+                    info = result[k].infoCopy()[-1]
+                dh.writeFile(result[k], k, info=info)
         
 class AcquireThread(QtCore.QThread):
     def __init__(self, dev):

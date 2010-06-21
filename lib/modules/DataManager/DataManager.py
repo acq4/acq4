@@ -173,7 +173,7 @@ class DataManager(Module):
             #index = self.model.handleIndex(nd)
             #self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Clear)
             #self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Select)
-            
+            self.ui.fileTreeWidget.refresh(parent)  ## fileTreeWidget waits a while before updating; force it to refresh immediately.
             self.ui.fileTreeWidget.select(nd)
             ##self.ui.fileInfo.setCurrentFile(nd)
             
