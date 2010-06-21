@@ -1322,7 +1322,7 @@ class InfiniteLine(UIGraphicsItem):
     def updateLine(self):
         vr = self._view.viewRect()
         unit = self.unitRect()
-        print 'before', self.bounds
+        #print 'before', self.bounds
         
         if self.angle > 45:
             m = tan((90-self.angle) * pi / 180.)
@@ -1347,7 +1347,7 @@ class InfiniteLine(UIGraphicsItem):
         if self.bounds.height() == 0.0:
             self.bounds.setHeight(50*unit.height())
             self.bounds.setTop(-25*unit.height())
-        print 'after', self.bounds
+        #print 'after', self.bounds
         #QtGui.QGraphicsLineItem.setLine(self, x1, y1, x2, y2)
         
     def boundingRect(self):
