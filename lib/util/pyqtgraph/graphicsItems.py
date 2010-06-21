@@ -1290,20 +1290,35 @@ class ViewBox(QtGui.QGraphicsWidget):
 
 
 class InfiniteLine(QtGui.QGraphicsItem):
-    def __init__(self, view, pos, angle=90, pen=None):
+    def __init__(self, view, pos, angle=90, pen=None, movable=False):
         QtGui.QGraphicsItem.__init__(self)
+        self.movable = movable
         self.view = view
         self.p = [0, 0]
         self.setAngle(angle)
         self.setPos(pos)
+        if movable:
+            self.setAcceptHoverEvents(True)
         
         if pen is None:
             pen = QtGui.QPen(QtGui.QColor(200, 200, 100))
         self.setPen(pen)
+        self.currentPen = self.pen
         QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.updateLine)
+        
+    def hoverEnterEvent(self, ev):
+        self.currentPen = QtGui.QPen(QtGui.QColor(255, 255, 255))
+        self.update()
+        ev.ignore()
+
+    def hoverLeaveEvent(self, ev):
+        self.currentPen = self.pen
+        self.update()
+        ev.ignore()
         
     def setPen(self, pen):
         self.pen = pen
+        self.currentPen = self.pen
         
     def setAngle(self, angle):
         self.angle = ((angle+45) % 180) - 45   ##  -45 <= angle < 135
@@ -1324,30 +1339,44 @@ class InfiniteLine(QtGui.QGraphicsItem):
         self.updateLine()
                 
     def updateLine(self):
+        unit = QtCore.QRect(0, 0, 1, 1)
+        if self.scene() is not None:
+            gv = self.scene().views()[0]
+            unit = gv.mapToScene(unit).boundingRect()
+            #print unit
+            unit = self.mapRectFromScene(unit)
+            #print unit
+        
+        
         vr = self.view.viewRect()
         
         if self.angle > 45:
             m = tan((90-self.angle) * pi / 180.)
-            y1 = vr.bottom()
-            y2 = vr.top()
+            y2 = vr.bottom()
+            y1 = vr.top()
             x1 = self.p[0] + (y1 - self.p[1]) * m
             x2 = self.p[0] + (y2 - self.p[1]) * m
         else:
             m = tan(self.angle * pi / 180.)
             x1 = vr.left()
             x2 = vr.right()
-            y1 = self.p[1] + (x1 - self.p[0]) * m
-            y2 = self.p[1] + (x2 - self.p[0]) * m
+            y2 = self.p[1] + (x1 - self.p[0]) * m
+            y1 = self.p[1] + (x2 - self.p[0]) * m
         #print vr, x1, y1, x2, y2
         self.prepareGeometryChange()
         self.line = (QtCore.QPointF(x1, y1), QtCore.QPointF(x2, y2))
         self.bounds = QtCore.QRectF(self.line[0], self.line[1])
         ## Stupid bug causes lines to disappear:
-        if self.bounds.width() == 0:
-            self.bounds.setWidth(1e-9)
-        if self.bounds.height() == 0:
-            self.bounds.setHeight(1e-9)
+        if self.angle % 180 == 90:
+            #self.bounds.setWidth(1e-9)
+            self.bounds.setX(x1 + unit.width()*-3)
+            self.bounds.setWidth(unit.width()*6)
+        if self.angle % 180 == 0:
+            #self.bounds.setHeight(1e-9)
+            self.bounds.setY(y1 + unit.height()*-3)
+            self.bounds.setHeight(unit.height()*6)
         #QtGui.QGraphicsLineItem.setLine(self, x1, y1, x2, y2)
+        #self.update()
         
     def boundingRect(self):
         #self.updateLine()
@@ -1356,9 +1385,12 @@ class InfiniteLine(QtGui.QGraphicsItem):
         return self.bounds
     
     def paint(self, p, *args):
-        p.setPen(self.pen)
+        #self.updateLine()
+        p.setPen(self.currentPen)
         #print "paint", self.line
         p.drawLine(self.line[0], self.line[1])
+        #p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
+        #p.drawRect(self.boundingRect())
         
 
 class VTickGroup(QtGui.QGraphicsPathItem):

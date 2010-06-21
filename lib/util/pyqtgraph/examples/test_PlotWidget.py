@@ -34,7 +34,7 @@ rect = QtGui.QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 1))
 rect.setPen(QtGui.QPen(QtGui.QColor(100, 200, 100)))
 pw.addItem(rect)
 
-pen = QtGui.QPen(QtGui.QBrush(QtGui.QColor(255, 255, 255, 10)), 5)
+pen = QtGui.QPen(QtGui.QBrush(QtGui.QColor(255, 255, 255)), 5)
 pen.setCosmetic(True)
 #pen.setJoinStyle(QtCore.Qt.MiterJoin)
 p1.setShadowPen(pen)
@@ -42,10 +42,10 @@ p1.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 50)))
 
 #l1 = QtGui.QGraphicsLineItem(0, 2, 2, 3)
 #l1.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
-l2 = InfiniteLine(pw, 1.5, 0)
+l2 = InfiniteLine(pw2, 1.5, 90)
 #l3 = InfiniteLine(pw, [1.5, 1.5], 45)
 #pw.addItem(l1)
-pw.addItem(l2)
+pw2.addItem(l2)
 #pw.addItem(l3)
 
 pw3.plot(array([100000]*100))
@@ -73,7 +73,7 @@ pw.autoRange()
 
 t = QtCore.QTimer()
 QtCore.QObject.connect(t, QtCore.SIGNAL('timeout()'), updateData)
-t.start(50)
+#t.start(50)
 
 for i in range(0, 5):
     for j in range(0, 3):
