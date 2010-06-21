@@ -1308,7 +1308,7 @@ class InfiniteLine(QtGui.QGraphicsItem):
         QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.updateLine)
         
     def hoverEnterEvent(self, ev):
-        self.currentPen = QtGui.QPen(QtGui.QColor(255, 255, 255))
+        self.currentPen = QtGui.QPen(QtGui.QColor(255, 0,0))
         self.update()
         ev.ignore()
 
@@ -1343,7 +1343,7 @@ class InfiniteLine(QtGui.QGraphicsItem):
                 
     def updateLine(self):
 
-        unit = QtCore.QRect(0, 0, 1, 1)
+        unit = QtCore.QRect(0, 0, 10, 10)
         if self.scene() is not None:
             gv = self.scene().views()[0]
             unit = gv.mapToScene(unit).boundingRect()
@@ -1373,12 +1373,12 @@ class InfiniteLine(QtGui.QGraphicsItem):
         ## Stupid bug causes lines to disappear:
         if self.angle % 180 == 90:
             #self.bounds.setWidth(1e-9)
-            self.bounds.setX(x1 + unit.width()*-3)
-            self.bounds.setWidth(unit.width()*6)
+            self.bounds.setX(x1 + unit.width()/10*-3) #unitRect needs to be width 10 to do mapping to and from scene, divide out 10 here
+            self.bounds.setWidth(unit.width()/10*6)
         if self.angle % 180 == 0:
             #self.bounds.setHeight(1e-9)
-            self.bounds.setY(y1 + unit.height()*-3)
-            self.bounds.setHeight(unit.height()*6)
+            self.bounds.setY(y1 + unit.height()/10*-3)
+            self.bounds.setHeight(unit.height()/10*6)
 
         #QtGui.QGraphicsLineItem.setLine(self, x1, y1, x2, y2)
         #self.update()
@@ -1401,14 +1401,7 @@ class InfiniteLine(QtGui.QGraphicsItem):
         print 'Infinite line got a click!'
         ev.ignore()
     
-    def hoverEnterEvent(self, ev):
-        self.savedPen = self.pen()
-        self.setPen(QtGui.QPen(QtGui.QColor(255, 0, 0)))
-        ev.ignore()
-        
-    def hoverLeaveEvent(self, ev):
-        self.setPen(self.savedPen)
-        ev.ignore()
+ 
         
         
 

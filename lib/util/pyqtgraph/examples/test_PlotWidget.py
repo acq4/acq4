@@ -43,7 +43,7 @@ p1.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 50)))
 #l1 = QtGui.QGraphicsLineItem(0, 2, 2, 3)
 #l1.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
 
-l2 = InfiniteLine(pw2, 1.5, 90)
+l2 = InfiniteLine(pw2, 1.5, 90, movable=True)
 
 #l3 = InfiniteLine(pw, [1.5, 1.5], 45)
 #pw.addItem(l1)
