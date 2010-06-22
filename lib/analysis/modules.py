@@ -723,99 +723,147 @@ class STDPWindow(UncagingWindow):
         
     def canvasClicked(self, ev):
         UncagingWindow.canvasClicked(self, ev)
-        self.epspStats = zeros([len(self.currentTraces)], {'names':('currentTracesIndex', 'unixtime', 'slope', 'amp', 'flux', 'epsptime', 'time', 'normSlope', 'normAmp', 'normFlux'), 'formats': ((float,)*10)})
-        #print 'lenspots:', len(self.currentTraces)
-        flag = 0
-        condtime = None
-        firstspiketime = []
-        lastspiketime = []
+        self.epspStats = zeros([len(self.currentTraces)],
+            {'names':('currentTracesIndex', 'pspMask', 'conditioningMask', 'unixtime', 'slope', 'amp', 'flux', 'epsptime', 'time', 'normSlope', 'normAmp', 'normFlux', 'spikeTime'),
+             'formats': (int, bool, bool, float, float, float, float, float, float, float, float, float, float)})
+ 
         for i in range(len(self.currentTraces)):
             self.epspStats[i]['currentTracesIndex'] = i
+            self.epspStats[i]['pspMask'] = False
+            self.epspStats[i]['conditioningMask'] = False
+            self.epspStats[i]['unixtime'] = self.getUnixTime(self.currentTraces[i])
+            
             if self.currentTraces[i][0]['Channel':'Command'].max() < 0.1e-09:
                 t,s,a,f,e = self.EPSPstats(self.currentTraces[i])
-                #print 'i:', i, 't:', t, 's:', s, 'a:', a, 'f:', f, 'e:', e
+                self.epspStats[i]['amp'] = a
+                self.epspStats[i]['flux'] = f
                 if s != None:
-                    self.epspStats[i]['unixtime'] = t
+                    #print "Setting pspMask index %i to True" %i
+                    self.epspStats[i]['pspMask'] = True
                     self.epspStats[i]['slope'] = s
-                    self.epspStats[i]['amp'] = a
-                    self.epspStats[i]['flux'] = f
                     self.epspStats[i]['epsptime'] = e
+                if self.currentTraces[i][0]['Channel':'primary'].max() > 0:  ##exclude traces with action potentials from plot
+                    #print "Setting pspMask index %i to False" %i
+                    self.epspStats[i]['pspMask'] = False
+                    
             elif self.currentTraces[i][0]['Channel':'Command'].max() >= 0.1e-09:
+                self.epspStats[i]['conditioningMask'] = True
                 stimtime = argwhere(self.currentTraces[i][0]['Channel':'Command'] == self.currentTraces[i][0]['Channel':'Command'].max())
-                #print "stimtime:", stimtime
                 first = argwhere(self.currentTraces[i][0]['Channel':'primary'] == self.currentTraces[i][0]['Channel':'primary'][stimtime[0]:stimtime[0]+90].max())
-                last = argwhere(self.currentTraces[i][0]['Channel':'primary'] == self.currentTraces[i][0]['Channel':'primary'][stimtime[-1]:stimtime[-1]+90].max())
-                #print i, a
                 if len(first) > 0:
                     firstspikeindex = first[0]
-                    lastspikeindex = last[0]
                     firstspike = self.currentTraces[i][0]['Channel':'primary'].xvals('Time')[firstspikeindex]
-                    lastspike = self.currentTraces[i][0]['Channel':'primary'].xvals('Time')[lastspikeindex]
-                    #print i, spike
-                    firstspiketime.append(firstspike)
-                    lastspiketime.append(lastspike)
-                if flag != 1:
-                    condtime = self.currentTraces[i][0]['Channel':'primary'].infoCopy()[-1]['startTime']
-                    flag = 1
-        #print 'spiketime', spiketime
-       # print "epspStats before sort:", epspStats, '\n'
-        self.epspStats.sort(order = 'unixtime') 
+                    self.epspStats[i]['spikeTime'] = firstspike
+
+        #self.epspStats.sort(order = 'unixtime') 
        # print "sortedStats after sort:", epspStats
-        startBase = argwhere(self.epspStats['unixtime'] > 0)[0]
-        self.epspStats = self.epspStats[startBase:]
-        try:
-            endbase = argwhere(self.epspStats['unixtime'] > condtime)[0]
-        except IndexError:
-            if condtime != None:
-                endbase = -1
-            else: raise
-            
+    
+        endbase = self.epspStats[self.epspStats['conditioningMask']]['unixtime'].min()
         for x in range(len(self.epspStats)):
             self.epspStats[x]['time'] =(self.epspStats[x]['unixtime']-(self.epspStats[0]['unixtime']))/60
-            self.epspStats[x]['normSlope'] = (self.epspStats['slope'][x])/(mean(self.epspStats[:endbase]['slope']))
-            self.epspStats[x]['normAmp'] = (self.epspStats['amp'][x])/(mean(self.epspStats[:endbase]['amp']))
-            self.epspStats[x]['normFlux'] = (self.epspStats['flux'][x])/(mean(self.epspStats[:endbase]['flux']))
-        #print 'epspSlope', epspStats[:endbase]['slope']
-        #print 'meanSlope', mean(epspStats[:endbase]['slope'])
-        
-        self.latencies['Average EPSP time:'] = mean(self.epspStats[:endbase]['epsptime']*1000)
+            if self.epspStats[x]['pspMask'] == True:
+                self.epspStats[x]['normSlope'] = (self.epspStats['slope'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['slope']))
+                self.epspStats[x]['normAmp'] = (self.epspStats['amp'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['amp']))
+                self.epspStats[x]['normFlux'] = (self.epspStats['flux'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['flux']))
+                
+        self.latencies['Average EPSP time:'] = mean(self.epspStats[self.epspStats['unixtime']< endbase]['epsptime']*1000)
         #print 'spiketime:', spiketime
         #print 'mean:', mean(spiketime)
-        self.latencies['Average 1st Spike time:'] = mean(firstspiketime)*1000
-        self.latencies['Average last Spike time:'] = mean(lastspiketime)*1000
+        self.latencies['Average 1st Spike time:'] = mean(self.epspStats[self.epspStats['conditioningMask']]['spikeTime'])*1000
+        #self.latencies['Average last Spike time:'] = mean(lastspiketime)*1000
         self.latencies['PSP-Spike Delay:']= self.latencies['Average 1st Spike time:']-self.latencies['Average EPSP time:']
-        self.latencies['Change in slope(red):'] = mean(self.epspStats[(endbase+1):]['normSlope'])
-        self.latencies['Change in amp(blue):'] = mean(self.epspStats[(endbase+1):]['normAmp'])
-        self.latencies['Change in flux(green):'] = mean(self.epspStats[(endbase+1):]['normFlux'])
+        self.latencies['Change in slope(red):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normSlope'])
+        self.latencies['Change in amp(blue):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normAmp'])
+        self.latencies['Change in flux(green):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normFlux'])
         self.dictView.setData(self.latencies)
         
         self.LTPplot.clear()
         self.LTPplot.addItem(self.line)
-        self.LTPplot.plot(data = self.epspStats['normSlope'], x = self.epspStats['time'], pen=mkPen([255, 0, 0]))
-        self.LTPplot.plot(data = self.epspStats['normFlux'], x = self.epspStats['time'], pen=mkPen([0, 255, 0]))
-        self.LTPplot.plot(data = self.epspStats['normAmp'], x = self.epspStats['time'], pen = mkPen([0, 0, 255]))
+        self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normSlope'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen=mkPen([255, 0, 0]))
+        self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normFlux'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen=mkPen([0, 255, 0]))
+        self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normAmp'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen = mkPen([0, 0, 255]))
     
+    def getUnixTime(self, data):
+        time = data[0]['Channel':'primary'].infoCopy()[-1]['startTime']
+        return time
+    
+    def getBaselineRgn(self, data, q=None):
+        if q == None:
+            q = self.getLaserTime(data[1])
+        base = data[0]['Channel':'primary']['Time': 0.0:(q-0.01)]
+        return base
+    
+    def getPspRgn(self, data, cutoff, q=None):
+        if q == None:
+            q = self.getLaserTime(data[1])
+        pspRgn = data[0]['Channel':'primary']['Time': q:(q + cutoff)]
+        return pspRgn
+    
+    def getPspFlux(self, data, pspRgn=None, base=None):
+        if pspRgn == None:
+            pspRgn = self.getPspRgn(data, 0.2)
+        if base == None:
+            base = self.getBaselineRgn(data)
+        flux = pspRgn.sum() -(base.mean()*pspRgn.shape[0])
+        return flux
+    
+    def getPspAmp(self, data, pspRgn=None, base=None):
+        amp = 0
+        if pspRgn == None:
+            pspRgn = self.getPspRgn(data, 0.2)
+        if base == None:
+            base = self.getBaselineRgn(data)
+        max = pspRgn.max() - base.mean()
+        min = pspRgn.min() - base.mean()
+        if abs(max) > abs(min): ### returns EPSP amplitude
+            amp = max
+        elif abs(max) < abs(min): ## returns IPSP amplitude
+            amp = min
+        return amp
+    
+    def getPspSlope(self, data, pspRgn=None, base=None):
+        if pspRgn == None:
+            pspRgn = self.getPspRgn(data, 0.2)
+        if base == None:
+            base = self.getBaselineRgn(data)
+        epsptime = self.getPspTime(data, pspRgn, base)
+        if epsptime != None:
+            slope = (data[0]['Channel':'primary']['Time': (epsptime+0.0015):(epsptime+0.0025)].mean() - data[0]['Channel':'primary']['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
+            return slope    
         
+    def getPspIndex(self, data, pspRgn=None, base=None):
+        if pspRgn == None:
+            pspRgn = self.getPspRgn(data, 0.2)
+        if base == None:
+            base = self.getBaselineRgn(data)
+        a = argwhere(pspRgn > base.mean()+4*base.std())
+        if len(a) > 0:
+            return a[0,0]
+    
+    def getPspTime(self, data, pspRgn=None, base=None):
+        if pspRgn == None:
+            pspRgn = self.getPspRgn(data, 0.2)
+        if base == None:
+            base = self.getBaselineRgn(data)
+        index = self.getPspIndex(data, pspRgn, base)
+        if index != None:
+            time = pspRgn.xvals('Time')[index]
+            return time
+    
     def EPSPstats(self, data):
         """Returns a five-item list with the unixtime of the trace, and the slope, the amplitude and the integral of the epsp, and the time of the epsp.
                 Arguments:
                     data - a tuple with a 'Clamp.ma' array as the first item and the directory handle of the 'Clamp.ma' file as the second."""
         d = data[0]['Channel':'primary']            
-        time = d.infoCopy()[-1]['startTime']
-        q = self.getLaserTime(data[1])
-        base = d['Time': 0.0:(q - 0.01)]
-        pspRgn = d['Time': q:(q+0.2)]
-        flux = pspRgn.sum() - (base.mean()*pspRgn.shape[0])
-        amp = pspRgn.max() - base.mean()
-        a = argwhere(pspRgn > base.mean()+4*base.std())
-        if len(a) > 0:
-            epspindex = a[0,0]
-            epsptime = pspRgn.xvals('Time')[epspindex]
-            slope = (d['Time': (epsptime+0.0015):(epsptime+0.0025)].mean() - d['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
-            return [time, slope, amp, flux, epsptime]
-        else:
-            return [time, None, amp, flux, None]
-            
+        time = self.getUnixTime(data)
+        base = self.getBaselineRgn(data)
+        pspRgn = self.getPspRgn(data, 0.2)
+        flux = self.getPspFlux(data, pspRgn=pspRgn, base=base)
+        amp = self.getPspAmp(data, pspRgn=pspRgn, base=base)
+        slope = self.getPspSlope(data, pspRgn, base)
+        epsptime = self.getPspTime(data, pspRgn, base)
+        return [time, slope, amp, flux, epsptime]
+       
     def lineMoved(self, line):
         if self.epspStats != None:
             pos = line.getXPos()
