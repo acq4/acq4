@@ -20,21 +20,21 @@ def rectStr(r):
     return "[%f, %f] + [%f, %f]" % (r.x(), r.y(), r.width(), r.height())
 
 ## Multiple inheritance not allowed in PyQt. Retarded workaround:
-class QObjectWorkaround:
-    def __init__(self):
-        self._qObj_ = QtCore.QObject()
-    def __getattr__(self, attr):
-        if attr == '_qObj_':
-            raise Exception("QObjectWorkaround not initialized!")
-        return getattr(self._qObj_, attr)
-    def connect(self, *args):
-        return QtCore.QObject.connect(self._qObj_, *args)
+#class QObjectWorkaround:
+    #def __init__(self):
+        #self._qObj_ = QtCore.QObject()
+    #def __getattr__(self, attr):
+        #if attr == '_qObj_':
+            #raise Exception("QObjectWorkaround not initialized!")
+        #return getattr(self._qObj_, attr)
+    #def connect(self, *args):
+        #return QtCore.QObject.connect(self._qObj_, *args)
 
 
-class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
+class ROI(QtGui.QGraphicsObject):
     def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None):
-        QObjectWorkaround.__init__(self)
-        QtGui.QGraphicsItem.__init__(self, parent)
+        #QObjectWorkaround.__init__(self)
+        QtGui.QGraphicsObject.__init__(self, parent)
         pos = Point(pos)
         size = Point(size)
         self.aspectLocked = False
@@ -733,10 +733,10 @@ class LineROI(ROI):
         self.addScaleHandle([0.5, 1], [0.5, 0.5])
         
         
-class MultiLineROI(QtGui.QGraphicsItem, QObjectWorkaround):
+class MultiLineROI(QtGui.QGraphicsObject):
     def __init__(self, points, width, **args):
-        QObjectWorkaround.__init__(self)
-        QtGui.QGraphicsItem.__init__(self)
+        #QObjectWorkaround.__init__(self)
+        QtGui.QGraphicsObject.__init__(self)
         self.roiArgs = args
         if len(points) < 2:
             raise Exception("Must start with at least 2 points")
@@ -757,9 +757,9 @@ class MultiLineROI(QtGui.QGraphicsItem, QObjectWorkaround):
         for l in self.lines:
             l.translatable = False
             #self.addToGroup(l)
-            l.connect(QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
-            l.connect(QtCore.SIGNAL('regionChangeStarted'), self.roiChangeStartedEvent)
-            l.connect(QtCore.SIGNAL('regionChangeFinished'), self.roiChangeFinishedEvent)
+            self.connect(l, QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
+            self.connect(l, QtCore.SIGNAL('regionChangeStarted'), self.roiChangeStartedEvent)
+            self.connect(l, QtCore.SIGNAL('regionChangeFinished'), self.roiChangeFinishedEvent)
         
     def paint(self, *args):
         pass

@@ -286,8 +286,8 @@ class ScannerProtoGui(ProtocolGui):
         else:
             pos = item.stateCopy()['pos'] 
         camMod.ui.addItem(item, pos, [1, 1], 1000)
-        item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
-        item.connect(QtCore.SIGNAL('pointsChanged'), self.itemChanged)
+        QtCore.QObject.connect(item, QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
+        QtCore.QObject.connect(item, QtCore.SIGNAL('pointsChanged'), self.itemChanged)
         self.itemChanged(item)
         self.updateDeviceTargetList(item)
 
@@ -550,7 +550,7 @@ class TargetGrid(ROI):
         self.addRotateHandle([0, 1], [0.5, 0.5])
         self.addRotateHandle([1, 0], [0.5, 0.5])
         self.lastSize = self.state['size']
-        self.connect(QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+        QtCore.QObject.connect(self, QtCore.SIGNAL('regionChanged'), self.rgnChanged)
         self.points = []
         self.pointSize = ptSize
         self.regeneratePoints()

@@ -338,9 +338,12 @@ class MetaArray(ndarray):
         axis = self._interpretAxis(axis)
         return MetaArray(concatenate(self, val, axis), info=self._info)
   
-    def infoCopy(self):
+    def infoCopy(self, axis=None):
         """Return a deep copy of the axis meta info for this object"""
-        return copy.deepcopy(self._info)
+        if axis is None:
+            return copy.deepcopy(self._info)
+        else:
+            return copy.deepcopy(self._info[self._interpretAxis(axis)])
   
     def copy(self):
         a = ndarray.copy(self)
@@ -541,6 +544,27 @@ class MetaArray(ndarray):
     def __str__(self):
         return self.__repr__()
 
+
+    def axisCollapsingFn(self, fn, axis=None, *args, **kargs):
+        arr = self.view(ndarray)
+        fn = getattr(arr, fn)
+        if axis is None:
+            return fn(axis, *args, **kargs)
+        else:
+            info = self.infoCopy()
+            axis = self._interpretAxis(axis)
+            info.pop(axis)
+            return MetaArray(fn(axis, *args, **kargs), info=info)
+
+    def mean(self, axis=None, *args, **kargs):
+        return self.axisCollapsingFn('mean', axis, *args, **kargs)
+            
+
+    def min(self, axis=None, *args, **kargs):
+        return self.axisCollapsingFn('min', axis, *args, **kargs)
+
+    def max(self, axis=None, *args, **kargs):
+        return self.axisCollapsingFn('max', axis, *args, **kargs)
 
     #### File I/O Routines
 
