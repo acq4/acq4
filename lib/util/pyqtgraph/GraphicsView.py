@@ -14,7 +14,7 @@ import sys
             
         
 class GraphicsView(QtGui.QGraphicsView):
-    def __init__(self, *args):
+    def __init__(self, parent=None, useOpenGL=True):
         """Re-implementation of QGraphicsView that removes scrollbars and allows unambiguous control of the 
         viewed coordinate range. Also automatically creates a QGraphicsScene and a central QGraphicsWidget
         that is automatically scaled to the full view geometry.
@@ -26,9 +26,9 @@ class GraphicsView(QtGui.QGraphicsView):
         The view can be panned using the middle mouse button and scaled using the right mouse button if
         enabled via enableMouse()."""
         
-        QtGui.QGraphicsView.__init__(self, *args)
+        QtGui.QGraphicsView.__init__(self, parent)
         
-        if 'linux' not in sys.platform.lower():   ## Stupid GL bug in linux.
+        if useOpenGL:
             self.setViewport(QtOpenGL.QGLWidget())
         
         palette = QtGui.QPalette()
@@ -51,7 +51,8 @@ class GraphicsView(QtGui.QGraphicsView):
         self.setResizeAnchor(QtGui.QGraphicsView.AnchorViewCenter)
         #self.setResizeAnchor(QtGui.QGraphicsView.NoAnchor)
         self.setViewportUpdateMode(QtGui.QGraphicsView.SmartViewportUpdate)
-        self.setSceneRect(QtCore.QRectF(-1e10, -1e10, 2e10, 2e10))
+        #self.setSceneRect(QtCore.QRectF(-1e10, -1e10, 2e10, 2e10))
+        self.setSceneRect(1, 1, 0, 0) ## Set an empty (but non-zero) scene rect so that the view doesn't try to automatically update for us.
         #self.setInteractive(False)
         self.lockedViewports = []
         self.lastMousePos = None
@@ -131,6 +132,7 @@ class GraphicsView(QtGui.QGraphicsView):
                 v.setXRange(self.range, padding=0)
         
     def visibleRange(self):
+        """Return the boundaries of the view in scene coordinates"""
         ## easier to just return self.range ?
         r = QtCore.QRectF(self.rect())
         return self.viewportTransform().inverted()[0].mapRect(r)

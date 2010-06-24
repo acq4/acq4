@@ -80,11 +80,11 @@ def updateImg(roi):
   arr2 = roi.getArrayRegion(arr, img=im2)
   im4.updateImage(arr2, autoRange=True)
 
-roi.connect(QtCore.SIGNAL('regionChanged'), lambda: updateImg(roi))
-roi2.connect(QtCore.SIGNAL('regionChanged'), lambda: updateImg(roi2))
-croi.connect(QtCore.SIGNAL('regionChanged'), lambda: updateImg(croi))
-elroi.connect(QtCore.SIGNAL('regionChanged'), lambda: updateImg(elroi))
-mlroi.connect(QtCore.SIGNAL('regionChanged'), lambda: updateImg(mlroi))
+roi.connect(roi, QtCore.SIGNAL('regionChanged'), lambda: updateImg(roi))
+roi2.connect(roi2, QtCore.SIGNAL('regionChanged'), lambda: updateImg(roi2))
+croi.connect(croi, QtCore.SIGNAL('regionChanged'), lambda: updateImg(croi))
+elroi.connect(elroi, QtCore.SIGNAL('regionChanged'), lambda: updateImg(elroi))
+mlroi.connect(mlroi, QtCore.SIGNAL('regionChanged'), lambda: updateImg(mlroi))
 
 
 v.setRange(QtCore.QRect(-2, -2, 220, 220))

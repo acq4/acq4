@@ -536,7 +536,13 @@ class PlotItem(QtGui.QGraphicsWidget):
         for i in self.items[:]:
             self.removeItem(i)
         self.avgCurves = {}
+    
+    def clearPlots(self):
+        for i in self.curves[:]:
+            self.removeItem(i)
+        self.avgCurves = {}
         
+    
     def plot(self, data=None, x=None, clear=False, params=None, pen=None):
         if clear:
             self.clear()

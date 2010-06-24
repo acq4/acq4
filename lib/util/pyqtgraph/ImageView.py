@@ -17,6 +17,7 @@ from ImageViewTemplate import *
 from graphicsItems import *
 from widgets import ROI
 from PyQt4 import QtCore, QtGui
+import sys
 
 class PlotROI(ROI):
     def __init__(self, size):
@@ -35,6 +36,10 @@ class ImageView(QtGui.QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.scene = self.ui.graphicsView.sceneObj
+        
+        if 'linux' not in sys.platform.lower():   ## Stupid GL bug in linux.
+            self.ui.graphicsView.setViewport(QtGui.QWidget())
+        
         self.ui.graphicsView.enableMouse(True)
         self.ui.graphicsView.autoPixelRange = False
         self.ui.graphicsView.setAspectLocked(True)
@@ -72,7 +77,7 @@ class ImageView(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.whiteSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
         QtCore.QObject.connect(self.ui.blackSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
         QtCore.QObject.connect(self.ui.roiBtn, QtCore.SIGNAL('clicked()'), self.roiClicked)
-        self.roi.connect(QtCore.SIGNAL('regionChanged'), self.roiChanged)
+        QtCore.QObject.connect(self.roi, QtCore.SIGNAL('regionChanged'), self.roiChanged)
         QtCore.QObject.connect(self.ui.normBtn, QtCore.SIGNAL('toggled(bool)'), self.normToggled)
         QtCore.QObject.connect(self.ui.normDivideRadio, QtCore.SIGNAL('clicked()'), self.updateNorm)
         QtCore.QObject.connect(self.ui.normSubtractRadio, QtCore.SIGNAL('clicked()'), self.updateNorm)

@@ -35,23 +35,19 @@ class movableRect(QtGui.QGraphicsRectItem):
     def __init__(self, *args):
         QtGui.QGraphicsRectItem.__init__(self, *args)
         self.setAcceptHoverEvents(True)
-        
     def hoverEnterEvent(self, ev):
         self.savedPen = self.pen()
         self.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255)))
         ev.ignore()
-
     def hoverLeaveEvent(self, ev):
         self.setPen(self.savedPen)
         ev.ignore()
-
     def mousePressEvent(self, ev):
         if ev.button() == QtCore.Qt.LeftButton:
             ev.accept()
             self.pressDelta = self.mapToParent(ev.pos()) - self.pos()
         else:
-            ev.ignore()
-            
+            ev.ignore()     
     def mouseMoveEvent(self, ev):
         self.setPos(self.mapToParent(ev.pos()) - self.pressDelta)
         

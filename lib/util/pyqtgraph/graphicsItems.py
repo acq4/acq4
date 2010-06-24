@@ -21,8 +21,12 @@ from functions import *
 import types, sys, struct
 
 
-
+## Should probably just use QGraphicsGroupItem and instruct it to pass events on to children..
 class ItemGroup(QtGui.QGraphicsItem):
+    def __init__(self, *args):
+        QtGui.QGraphicsItem.__init__(self, *args)
+        self.setFlag(self.ItemHasNoContents)
+    
     def boundingRect(self):
         return QtCore.QRectF()
         
@@ -32,23 +36,130 @@ class ItemGroup(QtGui.QGraphicsItem):
     def addItem(self, item):
         item.setParentItem(self)
 
-## Multiple inheritance not allowed in PyQt. Retarded workaround:
-class QObjectWorkaround:
-    def __init__(self):
-        self._qObj_ = QtCore.QObject()
-    def connect(self, *args):
-        return QtCore.QObject.connect(self._qObj_, *args)
-    def disconnect(self, *args):
-        return QtCore.QObject.disconnect(self._qObj_, *args)
-    def emit(self, *args):
-        return QtCore.QObject.emit(self._qObj_, *args)
+#### OBSOLETE: Now we can use QGraphicsObject
+### Multiple inheritance not allowed in PyQt. Retarded workaround:
+#class QObjectWorkaround:
+    #def __init__(self):
+        #self._qObj_ = QtCore.QObject()
+    #def connect(self, *args):
+        #return QtCore.QObject.connect(self._qObj_, *args)
+    #def disconnect(self, *args):
+        #return QtCore.QObject.disconnect(self._qObj_, *args)
+    #def emit(self, *args):
+        #return QtCore.QObject.emit(self._qObj_, *args)
 
+
+class GraphicsObject(QtGui.QGraphicsObject):
+    """Extends QGraphicsObject with a few important functions. 
+    (Most of these assume that the object is in a scene with a single view)"""
+    
+    def __init__(self, *args):
+        QtGui.QGraphicsObject.__init__(self, *args)
+        self._view = None
+    
+    def getViewWidget(self):
+        """Return the view widget for this item. If the scene has multiple views, only the first view is returned.
+        the view is remembered for the lifetime of the object, so expect trouble if the object is moved to another view."""
+        if self._view is None:
+            scene = self.scene()
+            if scene is None:
+                return None
+            views = scene.views()
+            if len(views) < 1:
+                return None
+            self._view = self.scene().views()[0]
+        return self._view
+    
+    def getBoundingParents(self):
+        """Return a list of parents to this item that have child clipping enabled."""
+        p = self
+        parents = []
+        while True:
+            p = p.parentItem()
+            if p is None:
+                break
+            if p.flags() & self.ItemClipsChildrenToShape:
+                parents.append(p)
+        return parents
+    
+    def viewBounds(self):
+        """Return the allowed visible boundaries for this item. Takes into account the viewport as well as any parents that clip."""
+        bounds = QtCore.QRectF(0, 0, 1, 1)
+        view = self.getViewWidget()
+        if view is None:
+            return None
+        bounds = self.mapRectFromScene(view.visibleRange())
+        
+        for p in self.getBoundingParents():
+            bounds &= self.mapRectFromScene(p.sceneBoundingRect())
+            
+        return bounds
+        
+    def viewTransform(self):
+        """Return the transform that maps from local coordinates to the item's view coordinates"""
+        view = self.getViewWidget()
+        if view is None:
+            return None
+        return self.deviceTransform(view.viewportTransform())
+
+    def pixelVectors(self):
+        """Return vectors in local coordinates representing the width and height of a view pixel."""
+        vt = self.viewTransform()
+        if vt is None:
+            return None
+        vt = vt.inverted()[0]
+        orig = vt.map(QtCore.QPointF(0, 0))
+        return vt.map(QtCore.QPointF(1, 0))-orig, vt.map(QtCore.QPointF(0, 1))-orig
+
+    def pixelWidth(self):
+        vt = self.viewTransform()
+        if vt is None:
+            return 0
+        vt = vt.inverted()[0]
+        return abs((vt.map(QtCore.QPointF(1, 0))-vt.map(QtCore.QPointF(0, 0))).x())
+        
+    def pixelHeight(self):
+        vt = self.viewTransform()
+        if vt is None:
+            return 0
+        vt = vt.inverted()[0]
+        return abs((vt.map(QtCore.QPointF(0, 1))-vt.map(QtCore.QPointF(0, 0))).y())
+
+    def mapToView(self, obj):
+        vt = self.viewTransform()
+        if vt is None:
+            return None
+        return vt.map(obj)
+        
+    def mapRectToView(self, obj):
+        vt = self.viewTransform()
+        if vt is None:
+            return None
+        return vt.mapRect(obj)
+        
+    def mapFromView(self, obj):
+        vt = self.viewTransform()
+        if vt is None:
+            return None
+        vt = vt.inverted()[0]
+        return vt.map(obj)
+
+    def mapRectFromView(self, obj):
+        vt = self.viewTransform()
+        if vt is None:
+            return None
+        vt = vt.inverted()[0]
+        return vt.mapRect(obj)
+        
+        
+        
+        
 
 class ImageItem(QtGui.QGraphicsPixmapItem):
     def __init__(self, image=None, copy=True, parent=None, *args):
         self.qimage = QtGui.QImage()
         self.pixmap = None
-        self.useWeave = False
+        self.useWeave = True
         self.blackLevel = None
         self.whiteLevel = None
         self.alpha = 1.0
@@ -211,10 +322,10 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
 
         
 
-class PlotCurveItem(QtGui.QGraphicsWidget):
+class PlotCurveItem(GraphicsObject):
     """Class representing a single plot curve."""
     def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None):
-        QtGui.QGraphicsWidget.__init__(self, parent)
+        GraphicsObject.__init__(self, parent)
         self.free()
         #self.dispPath = None
         
@@ -447,10 +558,18 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         if x is None or y is None or len(x) == 0 or len(y) == 0:
             return QtCore.QRectF()
             
-        xmin = x.min()
-        xmax = x.max()
-        ymin = y.min()
-        ymax = y.max()
+            
+        if self.shadow is not None:
+            lineWidth = (max(self.pen.width(), self.shadow.width()) + 1)
+        else:
+            lineWidth = (self.pen.width()+1)
+            
+        
+        pixels = self.pixelVectors()
+        xmin = x.min() - pixels[0].x() * lineWidth
+        xmax = x.max() + pixels[0].x() * lineWidth
+        ymin = y.min() - abs(pixels[1].y()) * lineWidth
+        ymax = y.max() + abs(pixels[1].y()) * lineWidth
         return QtCore.QRectF(xmin, ymin, xmax-xmin, ymax-ymin)
 
     def paint(self, p, opt, widget):
@@ -487,6 +606,10 @@ class PlotCurveItem(QtGui.QGraphicsWidget):
         p.setPen(cp)
         p.drawPath(path)
         
+        #p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
+        #p.drawRect(self.boundingRect())
+        
+        
     def free(self):
         self.xData = None  ## raw values
         self.yData = None
@@ -504,7 +627,7 @@ class ROIPlotItem(PlotCurveItem):
         self.axes = axes
         self.xVals = xVals
         PlotCurveItem.__init__(self, self.getRoiData(), x=self.xVals, color=color)
-        roi.connect(QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
+        roi.connect(roi, QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
         #self.roiChangedEvent()
         
     def getRoiData(self):
@@ -522,10 +645,10 @@ class ROIPlotItem(PlotCurveItem):
 
 
 
-class UIGraphicsItem(QtGui.QGraphicsItem):
+class UIGraphicsItem(GraphicsObject):
     """Base class for graphics items with boundaries relative to a GraphicsView widget"""
     def __init__(self, view, bounds=None):
-        QtGui.QGraphicsItem.__init__(self)
+        GraphicsObject.__init__(self)
         self._view = view
         if bounds is None:
             self._bounds = QtCore.QRectF(0, 0, 1, 1)
@@ -892,7 +1015,7 @@ class ScaleItem(QtGui.QGraphicsWidget):
             axis = 1
         
         ## Determine optimal tick spacing
-        intervals = [1., 2., 5., 10., 20., 50.]
+        intervals = [1., 2.5, 5., 10., 25., 50.]
         dif = abs(self.range[1] - self.range[0])
         if dif == 0.0:
             return
@@ -1030,18 +1153,15 @@ class ScaleItem(QtGui.QGraphicsWidget):
         
 
 
-#class ViewBox(QtGui.QGraphicsItem, QObjectWorkaround):
 class ViewBox(QtGui.QGraphicsWidget):
     """Box that allows internal scaling/panning of children by mouse drag. Not compatible with GraphicsView having the same functionality."""
     def __init__(self, parent=None):
-        #QObjectWorkaround.__init__(self)
         QtGui.QGraphicsWidget.__init__(self, parent)
         #self.gView = view
         #self.showGrid = showGrid
         self.range = [[0,1], [0,1]]   ## child coord. range visible [[xmin, xmax], [ymin, ymax]]
         
         self.aspectLocked = False
-        #QtGui.QGraphicsItem.__init__(self, parent)
         self.setFlag(QtGui.QGraphicsItem.ItemClipsChildrenToShape)
         #self.setFlag(QtGui.QGraphicsItem.ItemClipsToShape)
         
@@ -1289,9 +1409,10 @@ class ViewBox(QtGui.QGraphicsWidget):
             p.drawRect(bounds)
 
 
-class InfiniteLine(QtGui.QGraphicsItem):
+class InfiniteLine(GraphicsObject):
     def __init__(self, view, pos, angle=90, pen=None, movable=False):
-        QtGui.QGraphicsItem.__init__(self)
+        GraphicsObject.__init__(self)
+        self.bounds = QtCore.QRectF()
         self.movable = movable
         self.view = view
         self.p = [0, 0]
@@ -1299,15 +1420,20 @@ class InfiniteLine(QtGui.QGraphicsItem):
         self.setPos(pos)
         if movable:
             self.setAcceptHoverEvents(True)
+            
+
         
         if pen is None:
             pen = QtGui.QPen(QtGui.QColor(200, 200, 100))
         self.setPen(pen)
         self.currentPen = self.pen
+        #self.setFlag(self.ItemSendsScenePositionChanges)
+        #for p in self.getBoundingParents():
+            #QtCore.QObject.connect(p, QtCore.SIGNAL('viewChanged'), self.updateLine)
         QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.updateLine)
         
     def hoverEnterEvent(self, ev):
-        self.currentPen = QtGui.QPen(QtGui.QColor(255, 255, 255))
+        self.currentPen = QtGui.QPen(QtGui.QColor(255, 0,0))
         self.update()
         ev.ignore()
 
@@ -1337,18 +1463,53 @@ class InfiniteLine(QtGui.QGraphicsItem):
             else:
                 raise Exception("Must specify 2D coordinate for non-orthogonal lines.")
         self.updateLine()
+        self.emit(QtCore.SIGNAL('positionChanged'), self)
+
+    def getXPos(self):
+        return self.p[0]
+        
+    def getYPos(self):
+        return self.p[1]
+        
+    def getPos(self):
+        return self.p
+
+    def value(self):
+        if self.angle%180 == 0:
+            return self.getYPos()
+        elif self.angle%180 == 90:
+            return self.getXPos()
+        else:
+            return self.getPos()
+                
+    def setValue(self, v):
+        self.setPos(v)
+
+    ## broken in 4.7
+    #def itemChange(self, change, val):
+        #if change in [self.ItemScenePositionHasChanged, self.ItemSceneHasChanged]:
+            #self.updateLine()
+            #print "update", change
+            #print self.getBoundingParents()
+        #else:
+            #print "ignore", change
+        #return GraphicsObject.itemChange(self, change, val)
                 
     def updateLine(self):
-        unit = QtCore.QRect(0, 0, 1, 1)
-        if self.scene() is not None:
-            gv = self.scene().views()[0]
-            unit = gv.mapToScene(unit).boundingRect()
-            #print unit
-            unit = self.mapRectFromScene(unit)
-            #print unit
-        
+
+        #unit = QtCore.QRect(0, 0, 10, 10)
+        #if self.scene() is not None:
+            #gv = self.scene().views()[0]
+            #unit = gv.mapToScene(unit).boundingRect()
+            ##print unit
+            #unit = self.mapRectFromScene(unit)
+            ##print unit
         
         vr = self.view.viewRect()
+        #vr = self.viewBounds()
+        if vr is None:
+            return
+        #print 'before', self.bounds
         
         if self.angle > 45:
             m = tan((90-self.angle) * pi / 180.)
@@ -1368,13 +1529,16 @@ class InfiniteLine(QtGui.QGraphicsItem):
         self.bounds = QtCore.QRectF(self.line[0], self.line[1])
         ## Stupid bug causes lines to disappear:
         if self.angle % 180 == 90:
+            px = self.pixelWidth()
             #self.bounds.setWidth(1e-9)
-            self.bounds.setX(x1 + unit.width()*-3)
-            self.bounds.setWidth(unit.width()*6)
+            self.bounds.setX(x1 + px*-3)
+            self.bounds.setWidth(px*6)
         if self.angle % 180 == 0:
+            px = self.pixelHeight()
             #self.bounds.setHeight(1e-9)
-            self.bounds.setY(y1 + unit.height()*-3)
-            self.bounds.setHeight(unit.height()*6)
+            self.bounds.setY(y1 + px*-3)
+            self.bounds.setHeight(px*6)
+
         #QtGui.QGraphicsLineItem.setLine(self, x1, y1, x2, y2)
         #self.update()
         
@@ -1392,6 +1556,100 @@ class InfiniteLine(QtGui.QGraphicsItem):
         #p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
         #p.drawRect(self.boundingRect())
         
+    def mousePressEvent(self, ev):
+        if self.movable and ev.button() == QtCore.Qt.LeftButton:
+            ev.accept()
+            self.pressDelta = self.mapToParent(ev.pos()) - QtCore.QPointF(*self.p)
+        else:
+            ev.ignore()
+            
+    def mouseMoveEvent(self, ev):
+        self.setPos(self.mapToParent(ev.pos()) - self.pressDelta)
+        self.emit(QtCore.SIGNAL('dragged'), self)
+ 
+
+
+class LinearRegionItem(GraphicsObject):
+    """Used for marking a horizontal or vertical region in plots."""
+    def __init__(self, view, orientation="horizontal", vals=[0,1], brush=None, movable=True):
+        QtGui.QGraphicsObject.__init__(self)
+        self.orientation = orientation
+        self.setFlag(self.ItemHasNoContents)
+        self.rect = QtGui.QGraphicsRectItem(self)
+        self.rect.setParentItem(self)
+        self.bounds = QtCore.QRectF()
+        self.view = view
+        
+        self.setBrush = self.rect.setBrush
+        self.brush = self.rect.brush
+        
+        if orientation[0] == 'h':
+            self.lines = [
+                InfiniteLine(view, QtCore.QPointF(0, vals[0]), 0, movable=movable), 
+                InfiniteLine(view, QtCore.QPointF(0, vals[1]), 0, movable=movable)]
+        else:
+            self.lines = [
+                InfiniteLine(view, QtCore.QPointF(vals[0], 0), 90, movable=movable), 
+                InfiniteLine(view, QtCore.QPointF(vals[1], 0), 90, movable=movable)]
+        QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.updateBounds)
+        
+        for l in self.lines:
+            l.setParentItem(self)
+            QtCore.QObject.connect(l, QtCore.SIGNAL('positionChanged'), self.lineMoved)
+            
+        if brush is None:
+            brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 50))
+        self.setBrush(brush)
+            
+        
+    def boundingRect(self):
+        return self.rect.boundingRect()
+            
+    def lineMoved(self):
+        self.updateBounds()
+        self.emit(QtCore.SIGNAL('regionChanged'), self)
+            
+    def updateBounds(self):
+        vb = self.view.viewRect()
+        vals = [self.lines[0].value(), self.lines[1].value()]
+        if self.orientation[0] == 'h':
+            vb.setTop(max(vals))
+            vb.setBottom(min(vals))
+        else:
+            vb.setLeft(min(vals))
+            vb.setRight(max(vals))
+        if vb != self.bounds:
+            self.bounds = vb
+            self.rect.setRect(vb)
+        
+    def mousePressEvent(self, ev):
+        for l in self.lines:
+            l.mousePressEvent(ev)
+        #if self.movable and ev.button() == QtCore.Qt.LeftButton:
+            #ev.accept()
+            #self.pressDelta = self.mapToParent(ev.pos()) - QtCore.QPointF(*self.p)
+        #else:
+            #ev.ignore()
+            
+    def mouseMoveEvent(self, ev):
+        self.lines[0].blockSignals(True)  # only want to update once
+        for l in self.lines:
+            l.mouseMoveEvent(ev)
+        self.lines[0].blockSignals(False)
+        #self.setPos(self.mapToParent(ev.pos()) - self.pressDelta)
+        #self.emit(QtCore.SIGNAL('dragged'), self)
+
+    def getRegion(self):
+        if self.orientation[0] == 'h':
+            r = (self.bounds.top(), self.bounds.bottom())
+        else:
+            r = (self.bounds.left(), self.bounds.right())
+        return (min(r), max(r))
+
+    def setRegion(self, rgn):
+        self.lines[0].setValue(rgn[0])
+        self.lines[1].setValue(rgn[1])
+
 
 class VTickGroup(QtGui.QGraphicsPathItem):
     def __init__(self, xvals=None, yrange=None, pen=None, relative=False, view=None):
@@ -1615,13 +1873,16 @@ class ScaleBar(UIGraphicsItem):
             QtCore.QPointF(x1, y1), 
             QtCore.QPointF(x, y)
         )
-        p.drawRect(rect)
+        p.translate(x1, y1)
+        p.scale(rect.width(), rect.height())
+        p.drawRect(0, 0, 1, 1)
         
         alpha = clip(((self.size/unit.width()) - 40.) * 255. / 80., 0, 255)
         p.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0, alpha)))
         for i in range(1, 10):
-            x2 = x + (x1-x) * 0.1 * i
-            p.drawLine(QtCore.QPointF(x2, y), QtCore.QPointF(x2, y1))
+            #x2 = x + (x1-x) * 0.1 * i
+            x2 = 0.1 * i
+            p.drawLine(QtCore.QPointF(x2, 0), QtCore.QPointF(x2, 1))
         
 
     def setSize(self, s):
