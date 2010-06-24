@@ -1015,7 +1015,9 @@ class ScaleItem(QtGui.QGraphicsWidget):
             axis = 1
         
         ## Determine optimal tick spacing
-        intervals = [1., 2.5, 5., 10., 25., 50.]
+        #intervals = [1., 2., 5., 10., 20., 50.]
+        #intervals = [1., 2.5, 5., 10., 25., 50.]
+        intervals = [1., 2., 10., 20., 100.]
         dif = abs(self.range[1] - self.range[0])
         if dif == 0.0:
             return
@@ -1026,6 +1028,7 @@ class ScaleItem(QtGui.QGraphicsWidget):
             if dif / (pw*intervals[i]) < 10:
                 break
         
+        textLevel = i1  ## draw text at this scale level
         
         #print "range: %s   dif: %f   power: %f  interval: %f   spacing: %f" % (str(self.range), dif, pw, intervals[i1], sp)
         
@@ -1039,6 +1042,8 @@ class ScaleItem(QtGui.QGraphicsWidget):
             
         ## draw ticks and text
         for i in [i1, i1+1, i1+2]:  ## draw three different intervals
+            if i > len(intervals):
+                continue
             ## spacing for this interval
             sp = pw*intervals[i]
             
@@ -1081,7 +1086,7 @@ class ScaleItem(QtGui.QGraphicsWidget):
                     continue
                 p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100, a)))
                 p.drawLine(Point(p1), Point(p2))
-                if i == i1+1:
+                if i == textLevel:
                     if abs(v) < .001 or abs(v) >= 10000:
                         vstr = "%g" % (v * self.scale)
                     else:
