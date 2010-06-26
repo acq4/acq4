@@ -159,7 +159,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
     def __init__(self, image=None, copy=True, parent=None, *args):
         self.qimage = QtGui.QImage()
         self.pixmap = None
-        self.useWeave = False
+        self.useWeave = True
         self.blackLevel = None
         self.whiteLevel = None
         self.alpha = 1.0
@@ -1015,7 +1015,9 @@ class ScaleItem(QtGui.QGraphicsWidget):
             axis = 1
         
         ## Determine optimal tick spacing
-        intervals = [1., 2., 5., 10., 20., 50.]
+        #intervals = [1., 2., 5., 10., 20., 50.]
+        #intervals = [1., 2.5, 5., 10., 25., 50.]
+        intervals = [1., 2., 10., 20., 100.]
         dif = abs(self.range[1] - self.range[0])
         if dif == 0.0:
             return
@@ -1026,6 +1028,7 @@ class ScaleItem(QtGui.QGraphicsWidget):
             if dif / (pw*intervals[i]) < 10:
                 break
         
+        textLevel = i1  ## draw text at this scale level
         
         #print "range: %s   dif: %f   power: %f  interval: %f   spacing: %f" % (str(self.range), dif, pw, intervals[i1], sp)
         
@@ -1039,6 +1042,8 @@ class ScaleItem(QtGui.QGraphicsWidget):
             
         ## draw ticks and text
         for i in [i1, i1+1, i1+2]:  ## draw three different intervals
+            if i > len(intervals):
+                continue
             ## spacing for this interval
             sp = pw*intervals[i]
             
@@ -1081,7 +1086,7 @@ class ScaleItem(QtGui.QGraphicsWidget):
                     continue
                 p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100, a)))
                 p.drawLine(Point(p1), Point(p2))
-                if i == i1+1:
+                if i == textLevel:
                     if abs(v) < .001 or abs(v) >= 10000:
                         vstr = "%g" % (v * self.scale)
                     else:
@@ -1873,13 +1878,16 @@ class ScaleBar(UIGraphicsItem):
             QtCore.QPointF(x1, y1), 
             QtCore.QPointF(x, y)
         )
-        p.drawRect(rect)
+        p.translate(x1, y1)
+        p.scale(rect.width(), rect.height())
+        p.drawRect(0, 0, 1, 1)
         
         alpha = clip(((self.size/unit.width()) - 40.) * 255. / 80., 0, 255)
         p.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0, alpha)))
         for i in range(1, 10):
-            x2 = x + (x1-x) * 0.1 * i
-            p.drawLine(QtCore.QPointF(x2, y), QtCore.QPointF(x2, y1))
+            #x2 = x + (x1-x) * 0.1 * i
+            x2 = 0.1 * i
+            p.drawLine(QtCore.QPointF(x2, 0), QtCore.QPointF(x2, 1))
         
 
     def setSize(self, s):
