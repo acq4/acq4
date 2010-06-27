@@ -9,6 +9,8 @@ Provides ImageItem, PlotCurveItem, and ViewBox, amongst others.
 
 
 from PyQt4 import QtGui, QtCore
+from ObjectWorkaround import *
+tryWorkaround(QtCore, QtGui)
 from numpy import *
 import scipy.weave as weave
 from scipy.weave import converters
@@ -26,7 +28,8 @@ from debug import *
 class ItemGroup(QtGui.QGraphicsItem):
     def __init__(self, *args):
         QtGui.QGraphicsItem.__init__(self, *args)
-        self.setFlag(self.ItemHasNoContents)
+        if hasattr(self, "ItemHasNoContents"):
+            self.setFlag(self.ItemHasNoContents)
     
     def boundingRect(self):
         return QtCore.QRectF()
@@ -37,19 +40,11 @@ class ItemGroup(QtGui.QGraphicsItem):
     def addItem(self, item):
         item.setParentItem(self)
 
-#### OBSOLETE: Now we can use QGraphicsObject
-### Multiple inheritance not allowed in PyQt. Retarded workaround:
-#class QObjectWorkaround:
-    #def __init__(self):
-        #self._qObj_ = QtCore.QObject()
-    #def connect(self, *args):
-        #return QtCore.QObject.connect(self._qObj_, *args)
-    #def disconnect(self, *args):
-        #return QtCore.QObject.disconnect(self._qObj_, *args)
-    #def emit(self, *args):
-        #return QtCore.QObject.emit(self._qObj_, *args)
 
+    
 
+    
+    
 class GraphicsObject(QtGui.QGraphicsObject):
     """Extends QGraphicsObject with a few important functions. 
     (Most of these assume that the object is in a scene with a single view)"""
@@ -315,8 +310,8 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         self.ims = im1.tostring()  ## Must be held in memory here because qImage won't do it for us :(
         qimage = QtGui.QImage(self.ims, im1.shape[1], im1.shape[0], QtGui.QImage.Format_ARGB32)
         self.pixmap = QtGui.QPixmap.fromImage(qimage)
-        
-        #self.setPixmap(self.pixmap)
+        ##del self.ims
+        self.setPixmap(self.pixmap)
         self.update()
         
     def getPixmap(self):
@@ -1581,7 +1576,8 @@ class LinearRegionItem(GraphicsObject):
     def __init__(self, view, orientation="horizontal", vals=[0,1], brush=None, movable=True):
         QtGui.QGraphicsObject.__init__(self)
         self.orientation = orientation
-        self.setFlag(self.ItemHasNoContents)
+        if hasattr(self, "ItemHasNoContents"):  
+            self.setFlag(self.ItemHasNoContents)
         self.rect = QtGui.QGraphicsRectItem(self)
         self.rect.setParentItem(self)
         self.bounds = QtCore.QRectF()
