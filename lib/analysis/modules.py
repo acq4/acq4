@@ -600,7 +600,8 @@ class UncagingWindow(QtGui.QMainWindow):
     def colorSpots(self):
         if self.ctrl.gradientRadio.isChecked():
             maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = self.ctrl.colorSpin1.value())
-            
+            spont = self.analysisCache['preChargeNeg'].mean()
+            print "spont activity:", spont
             for item in self.scanAvgItems:
                 if item.source is not None:  ## this is a single item
                     negCharge = self.analysisCache[item.index]['postChargeNeg']
@@ -610,7 +611,7 @@ class UncagingWindow(QtGui.QMainWindow):
                     else:
                         directeventsflag = False
                 else:    ## this is an average item
-                    negCharges = array([self.analysisCache[i.index]['postChargeNeg'] for i in item.sourceItems]) 
+                    negCharges = array([self.analysisCache[i.index]['postChargeNeg'] for i in item.sourceItems])
                     numDirectEventses = array([len(self.analysisCache[i.index]['dirEvents']) for i in item.sourceItems])
                     if self.ctrl.medianCheck.isChecked():
                         if len(negCharges[negCharges < 0]) > len(negCharges)/2.0: ###Errs on side of false negatives, but averages all non-zero charges
@@ -623,12 +624,18 @@ class UncagingWindow(QtGui.QMainWindow):
                         directeventsflag = True
                     else:
                         directeventsflag = False
+                
                 ## Set color based on strength of negative events
                 color = self.ctrl.gradientWidget.getColor(clip(negCharge/maxcharge, 0, 1))
+                if negCharge > spont:
+                    color.setAlpha(100)
+                
 
                 ## Traces with no events are transparent
                 if abs(negCharge) < 1e-16:
                     color = QtGui.QColor(0,0,0,0)
+                
+                
 
                 ## Traces with events below threshold are transparent
                 if negCharge >= stats.scoreatpercentile(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg'] < 0], self.ctrl.colorSpin3.value()):
@@ -649,6 +656,9 @@ class UncagingWindow(QtGui.QMainWindow):
             self.colorScaleBar.show()
 
             self.colorScaleBar.setGradient(self.ctrl.gradientWidget.getGradient())
+            self.colorScaleBar.setLabels({str(maxcharge):1,
+                                          str(stats.scoreatpercentile(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg'] < 0], self.ctrl.colorSpin3.value())):0,
+                                          "--spont":spont/(maxcharge - stats.scoreatpercentile(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg'] < 0], self.ctrl.colorSpin3.value()))})
 
         else:
             self.colorScaleBar.hide()
@@ -831,7 +841,7 @@ class STDPWindow(UncagingWindow):
     def getBaselineRgn(self, data, q=None):
         if q == None:
             q = self.getLaserTime(data[1])
-        base = data[0]['Channel':'primary']['Time': 0.0:(q-0.01)]
+        base = data[0]['Channel':'primary']['Time': 0.001:q]
         return base
     
     def getPspRgn(self, data, cutoff, q=None):
@@ -890,10 +900,18 @@ class STDPWindow(UncagingWindow):
         #    epsptime= pspRgn.xvals('Time')[a-b[0,0]]
         #else:
         #    epsptime = pspRgn.xvals('Time')[0]
-        a = argwhere(pspRgn > base.mean()+self.stdpCtrl.thresholdSpin.value()/2*base.std())
+        n=0
+        a = []
+        while len(a) == 0 and n<2*self.stdpCtrl.thresholdSpin.value()-1:
+            a = argwhere(pspRgn > base.mean()+(self.stdpCtrl.thresholdSpin.value()*2-n)*base.std())
+            n+=1
         if len(a)>0:
             rgnPsp = pspRgn[0:a[0,0]][::-1]
-            b = argwhere(rgnPsp < base.mean())
+            n=0
+            b=[]
+            while len(b)==0 and n<self.stdpCtrl.thresholdSpin.value():
+                b = argwhere(rgnPsp < base.mean()+n*base.std())
+                n+=1
             if len(b) > 0:
                 index= a[0,0]-b[0,0]
             else:
@@ -908,10 +926,10 @@ class STDPWindow(UncagingWindow):
             pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0)
         if base == None:
             base = self.getBaselineRgn(data)
-        a = argwhere(pspRgn > max(base.mean()+self.stdpCtrl.thresholdSpin.value()*base.std(), base.mean()+0.0005))
+        a = argwhere(pspRgn > max(base[-100:].mean()+self.stdpCtrl.thresholdSpin.value()*base.std(), base[-100:].mean()+0.0005))
         if len(a) > 0:
             rgnPsp = pspRgn[0:a[0,0]][::-1]
-            b = argwhere(rgnPsp < base.mean())
+            b = argwhere(rgnPsp < base[-100:].mean()+base.std())
             if len(b) > 0:
                 return a[0,0]-b[0,0]
             else:
