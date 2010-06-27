@@ -19,6 +19,7 @@ import scipy.stats
 from Point import *
 from functions import *
 import types, sys, struct
+from debug import *
 
 
 ## Should probably just use QGraphicsGroupItem and instruct it to pass events on to children..
@@ -265,9 +266,10 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         except:
             if self.useWeave:
                 self.useWeave = False
-                sys.excepthook(*sys.exc_info())
-                print "=============================================================================="
-                print "Weave compile failed, falling back to slower version. Original error is above."
+                #sys.excepthook(*sys.exc_info())
+                #print "=============================================================================="
+                #print "Weave compile failed, falling back to slower version. Original error is above."
+                printExc("Weave compile failed, falling back to slower version:")
             self.image.shape = shape
             im = ((self.image - black) * scale).clip(0.,255.).astype(ubyte)
                 
@@ -313,8 +315,8 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         self.ims = im1.tostring()  ## Must be held in memory here because qImage won't do it for us :(
         qimage = QtGui.QImage(self.ims, im1.shape[1], im1.shape[0], QtGui.QImage.Format_ARGB32)
         self.pixmap = QtGui.QPixmap.fromImage(qimage)
-        ##del self.ims
-        self.setPixmap(self.pixmap)
+        
+        #self.setPixmap(self.pixmap)
         self.update()
         
     def getPixmap(self):

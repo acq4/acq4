@@ -695,7 +695,7 @@ class MetaArray(ndarray):
                         #print n, data.shape, " => ", newSubset, data[tuple(newSubset)].shape
                         frames.append(data[tuple(newSubset)].copy())
                 else:
-                    data = data[subset].copy()
+                    #data = data[subset].copy()  ## what's this for??
                     frames.append(data)
                 
                 n += inf['numFrames']
