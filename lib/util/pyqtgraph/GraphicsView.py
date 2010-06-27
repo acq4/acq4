@@ -27,9 +27,7 @@ class GraphicsView(QtGui.QGraphicsView):
         enabled via enableMouse()."""
         
         QtGui.QGraphicsView.__init__(self, parent)
-        
-        if useOpenGL:
-            self.setViewport(QtOpenGL.QGLWidget())
+        self.useOpenGL(useOpenGL)
         
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(0,0,0))
@@ -71,6 +69,17 @@ class GraphicsView(QtGui.QGraphicsView):
         self.mouseEnabled = False
         self.scaleCenter = False  ## should scaling center around view center (True) or mouse click (False)
         self.clickAccepted = False
+        
+    def useOpenGL(self, b=True):
+        if b:
+            v = QtOpenGL.QGLWidget()
+        else:
+            v = QtGui.QWidget()
+            
+        v.setStyleSheet("background-color: #000000;")
+        self.setViewport(v)
+            
+        
         
     def setCentralItem(self, item):
         if self.centralWidget is not None:

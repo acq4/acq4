@@ -37,7 +37,7 @@ class ImageView(QtGui.QWidget):
         self.ui.setupUi(self)
         self.scene = self.ui.graphicsView.sceneObj
         
-        if 'linux' not in sys.platform.lower():   ## Stupid GL bug in linux.
+        if 'linux' in sys.platform.lower():   ## Stupid GL bug in linux.
             self.ui.graphicsView.setViewport(QtGui.QWidget())
         
         self.ui.graphicsView.enableMouse(True)
