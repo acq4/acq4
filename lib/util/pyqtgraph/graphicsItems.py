@@ -9,6 +9,8 @@ Provides ImageItem, PlotCurveItem, and ViewBox, amongst others.
 
 
 from PyQt4 import QtGui, QtCore
+from ObjectWorkaround import *
+tryWorkaround(QtCore, QtGui)
 from numpy import *
 import scipy.weave as weave
 from scipy.weave import converters
@@ -26,7 +28,8 @@ from debug import *
 class ItemGroup(QtGui.QGraphicsItem):
     def __init__(self, *args):
         QtGui.QGraphicsItem.__init__(self, *args)
-        self.setFlag(self.ItemHasNoContents)
+        if hasattr(self, "ItemHasNoContents"):
+            self.setFlag(self.ItemHasNoContents)
     
     def boundingRect(self):
         return QtCore.QRectF()
@@ -37,39 +40,7 @@ class ItemGroup(QtGui.QGraphicsItem):
     def addItem(self, item):
         item.setParentItem(self)
 
-## Multiple inheritance not allowed in PyQt. Retarded workaround:
-if not hasattr(QtGui.QGraphicsObject):
-    class QObjectWorkaround:
-        def __init__(self):
-            self._qObj_ = QtCore.QObject()
-        def connect(self, *args):
-            return QtCore.QObject.connect(self._qObj_, *args)
-        def disconnect(self, *args):
-            return QtCore.QObject.disconnect(self._qObj_, *args)
-        def emit(self, *args):
-            return QtCore.QObject.emit(self._qObj_, *args)
-            
-    class QGraphicsObject(QtGui.QGraphicsItem, QObjectWorkaround):
-        def __init__(self, *args):
-            QtGui.QGraphicsItem.__init__(self, *args)
-            QObjectWorkaround.__init__(self)
-    QtGui.QGraphicsObject = QGraphicsObject
-    
-    QtCore.QObject.connect_original = QtCore.QObject.connect
-    def connect(obj, signal, slot):
-        if isinstance(QtCore.QObject, obj):
-            QtCore.QObject.connect_original(obj, signal, slot)
-        else:
-            obj.connect(signal, slot)
-    QtCore.QObject.connect = connect
-    
-    QtCore.QObject.disconnect_original = QtCore.QObject.disconnect
-    def disconnect(obj, signal, slot):
-        if isinstance(QtCore.QObject, obj):
-            QtCore.QObject.disconnect_original(obj, signal, slot)
-        else:
-            obj.disconnect(signal, slot)
-    QtCore.QObject.disconnect = disconnect
+
     
 
     
@@ -1605,7 +1576,8 @@ class LinearRegionItem(GraphicsObject):
     def __init__(self, view, orientation="horizontal", vals=[0,1], brush=None, movable=True):
         QtGui.QGraphicsObject.__init__(self)
         self.orientation = orientation
-        self.setFlag(self.ItemHasNoContents)
+        if hasattr(self, "ItemHasNoContents"):  
+            self.setFlag(self.ItemHasNoContents)
         self.rect = QtGui.QGraphicsRectItem(self)
         self.rect.setParentItem(self)
         self.bounds = QtCore.QRectF()
