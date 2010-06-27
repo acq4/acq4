@@ -20,8 +20,8 @@ This class is very heavily featured:
 from graphicsItems import *
 from plotConfigTemplate import *
 from PyQt4 import QtGui, QtCore, QtSvg
-from ObjectWorkaround import *
-tryWorkaround(QtCore, QtGui)
+#from ObjectWorkaround import *
+#tryWorkaround(QtCore, QtGui)
 import weakref
 
 try:

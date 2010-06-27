@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 
 
 ## Multiple inheritance not allowed in PyQt. Retarded workaround:
 def tryWorkaround(QtCore, QtGui):
-    if not hasattr(QtGui, "QGraphicsObject"):
+    #if not hasattr(QtGui, "QGraphicsObject"):
+    if True:
         class QObjectWorkaround:
             def __init__(self):
                 self._qObj_ = QtCore.QObject()
