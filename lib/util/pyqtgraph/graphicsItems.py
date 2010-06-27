@@ -37,19 +37,43 @@ class ItemGroup(QtGui.QGraphicsItem):
     def addItem(self, item):
         item.setParentItem(self)
 
-#### OBSOLETE: Now we can use QGraphicsObject
-### Multiple inheritance not allowed in PyQt. Retarded workaround:
-#class QObjectWorkaround:
-    #def __init__(self):
-        #self._qObj_ = QtCore.QObject()
-    #def connect(self, *args):
-        #return QtCore.QObject.connect(self._qObj_, *args)
-    #def disconnect(self, *args):
-        #return QtCore.QObject.disconnect(self._qObj_, *args)
-    #def emit(self, *args):
-        #return QtCore.QObject.emit(self._qObj_, *args)
+## Multiple inheritance not allowed in PyQt. Retarded workaround:
+if not hasattr(QtGui.QGraphicsObject):
+    class QObjectWorkaround:
+        def __init__(self):
+            self._qObj_ = QtCore.QObject()
+        def connect(self, *args):
+            return QtCore.QObject.connect(self._qObj_, *args)
+        def disconnect(self, *args):
+            return QtCore.QObject.disconnect(self._qObj_, *args)
+        def emit(self, *args):
+            return QtCore.QObject.emit(self._qObj_, *args)
+            
+    class QGraphicsObject(QtGui.QGraphicsItem, QObjectWorkaround):
+        def __init__(self, *args):
+            QtGui.QGraphicsItem.__init__(self, *args)
+            QObjectWorkaround.__init__(self)
+    QtGui.QGraphicsObject = QGraphicsObject
+    
+    QtCore.QObject.connect_original = QtCore.QObject.connect
+    def connect(obj, signal, slot):
+        if isinstance(QtCore.QObject, obj):
+            QtCore.QObject.connect_original(obj, signal, slot)
+        else:
+            obj.connect(signal, slot)
+    QtCore.QObject.connect = connect
+    
+    QtCore.QObject.disconnect_original = QtCore.QObject.disconnect
+    def disconnect(obj, signal, slot):
+        if isinstance(QtCore.QObject, obj):
+            QtCore.QObject.disconnect_original(obj, signal, slot)
+        else:
+            obj.disconnect(signal, slot)
+    QtCore.QObject.disconnect = disconnect
+    
 
-
+    
+    
 class GraphicsObject(QtGui.QGraphicsObject):
     """Extends QGraphicsObject with a few important functions. 
     (Most of these assume that the object is in a scene with a single view)"""
@@ -315,8 +339,8 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         self.ims = im1.tostring()  ## Must be held in memory here because qImage won't do it for us :(
         qimage = QtGui.QImage(self.ims, im1.shape[1], im1.shape[0], QtGui.QImage.Format_ARGB32)
         self.pixmap = QtGui.QPixmap.fromImage(qimage)
-        
-        #self.setPixmap(self.pixmap)
+        ##del self.ims
+        self.setPixmap(self.pixmap)
         self.update()
         
     def getPixmap(self):
