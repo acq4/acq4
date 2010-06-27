@@ -10,7 +10,7 @@ of array data from ImageItems.
 """
 
 from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
-from numpy import array, arccos, dot, pi, zeros, vstack, ubyte, fromfunction, ceil, floor
+from numpy import array, arccos, dot, pi, zeros, vstack, ubyte, fromfunction, ceil, floor, arctan2
 from numpy.linalg import norm
 import scipy.ndimage as ndimage
 from Point import *
@@ -20,21 +20,21 @@ def rectStr(r):
     return "[%f, %f] + [%f, %f]" % (r.x(), r.y(), r.width(), r.height())
 
 ## Multiple inheritance not allowed in PyQt. Retarded workaround:
-class QObjectWorkaround:
-    def __init__(self):
-        self._qObj_ = QtCore.QObject()
-    def __getattr__(self, attr):
-        if attr == '_qObj_':
-            raise Exception("QObjectWorkaround not initialized!")
-        return getattr(self._qObj_, attr)
-    def connect(self, *args):
-        return QtCore.QObject.connect(self._qObj_, *args)
+#class QObjectWorkaround:
+    #def __init__(self):
+        #self._qObj_ = QtCore.QObject()
+    #def __getattr__(self, attr):
+        #if attr == '_qObj_':
+            #raise Exception("QObjectWorkaround not initialized!")
+        #return getattr(self._qObj_, attr)
+    #def connect(self, *args):
+        #return QtCore.QObject.connect(self._qObj_, *args)
 
 
-class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
+class ROI(QtGui.QGraphicsObject):
     def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None):
-        QObjectWorkaround.__init__(self)
-        QtGui.QGraphicsItem.__init__(self, parent)
+        #QObjectWorkaround.__init__(self)
+        QtGui.QGraphicsObject.__init__(self, parent)
         pos = Point(pos)
         size = Point(size)
         self.aspectLocked = False
@@ -49,7 +49,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.rotate(-angle * 180. / pi)
         self.setZValue(10)
         
-        self.handleSize = 4
+        self.handleSize = 5
         self.invertible = invertible
         self.maxBounds = maxBounds
         
@@ -439,11 +439,14 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         return QtCore.QRectF(0, 0, self.state['size'][0], self.state['size'][1])
 
     def paint(self, p, opt, widget):
+        p.save()
         r = self.boundingRect()
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         p.setPen(self.pen)
-        p.drawRect(r)
-        
+        p.translate(r.left(), r.top())
+        p.scale(r.width(), r.height())
+        p.drawRect(0, 0, 1, 1)
+        p.restore()
 
     def getArraySlice(self, data, img, axes=(0,1), returnSlice=True):
         """Return a tuple of slice objects that can be used to slice the region from data covered by this ROI.
@@ -602,12 +605,15 @@ class Handle(QtGui.QGraphicsItem):
         #print "   create item with parent", parent
         self.bounds = QtCore.QRectF(-1e-10, -1e-10, 2e-10, 2e-10)
         QtGui.QGraphicsItem.__init__(self, parent)
+        self.setFlag(self.ItemIgnoresTransformations)
         self.setZValue(11)
         self.roi = []
         self.radius = radius
         self.typ = typ
         self.prepareGeometryChange()
         self.pen = pen
+        self.pen.setWidth(0)
+        self.pen.setCosmetic(True)
         if typ == 't':
             self.sides = 4
             self.startAng = pi/4
@@ -660,20 +666,24 @@ class Handle(QtGui.QGraphicsItem):
             r[0].movePoint(r[1], pos, modifiers)
         
     def paint(self, p, opt, widget):
-        m = p.transform()
-        mi = m.inverted()[0]
+        ## determine rotation of transform
+        m = self.sceneTransform()
+        #mi = m.inverted()[0]
+        v = m.map(QtCore.QPointF(1, 0)) - m.map(QtCore.QPointF(0, 0))
+        va = arctan2(v.y(), v.x())
         
         ## Determine length of unit vector in painter's coords
-        size = mi.map(Point(self.radius, self.radius)) - mi.map(Point(0, 0))
-        size = (size.x()*size.x() + size.y() * size.y()) ** 0.5
+        #size = mi.map(Point(self.radius, self.radius)) - mi.map(Point(0, 0))
+        #size = (size.x()*size.x() + size.y() * size.y()) ** 0.5
+        size = self.radius
         
         bounds = QtCore.QRectF(-size, -size, size*2, size*2)
         if bounds != self.bounds:
             self.bounds = bounds
             self.prepareGeometryChange()
-        p.setRenderHint(QtGui.QPainter.Antialiasing)
+        p.setRenderHints(p.Antialiasing | p.TextAntialiasing | p.HighQualityAntialiasing, True)
         p.setPen(self.pen)
-        ang = self.startAng
+        ang = self.startAng + va
         dt = 2*pi / self.sides
         for i in range(0, self.sides):
             x1 = size * cos(ang)
@@ -733,10 +743,10 @@ class LineROI(ROI):
         self.addScaleHandle([0.5, 1], [0.5, 0.5])
         
         
-class MultiLineROI(QtGui.QGraphicsItem, QObjectWorkaround):
+class MultiLineROI(QtGui.QGraphicsObject):
     def __init__(self, points, width, **args):
-        QObjectWorkaround.__init__(self)
-        QtGui.QGraphicsItem.__init__(self)
+        #QObjectWorkaround.__init__(self)
+        QtGui.QGraphicsObject.__init__(self)
         self.roiArgs = args
         if len(points) < 2:
             raise Exception("Must start with at least 2 points")
@@ -757,9 +767,9 @@ class MultiLineROI(QtGui.QGraphicsItem, QObjectWorkaround):
         for l in self.lines:
             l.translatable = False
             #self.addToGroup(l)
-            l.connect(QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
-            l.connect(QtCore.SIGNAL('regionChangeStarted'), self.roiChangeStartedEvent)
-            l.connect(QtCore.SIGNAL('regionChangeFinished'), self.roiChangeFinishedEvent)
+            self.connect(l, QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
+            self.connect(l, QtCore.SIGNAL('regionChangeStarted'), self.roiChangeStartedEvent)
+            self.connect(l, QtCore.SIGNAL('regionChangeFinished'), self.roiChangeFinishedEvent)
         
     def paint(self, *args):
         pass

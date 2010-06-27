@@ -744,6 +744,7 @@ class STDPWindow(UncagingWindow):
         self.ctrlWidget.hide()
         self.colorScaleBar.hide()
         self.epspStats = None
+
         self.slopeMark1 = QtGui.QGraphicsLineItem()
         self.slopeMark1.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
         self.slopeMark2 = QtGui.QGraphicsLineItem()
@@ -758,7 +759,9 @@ class STDPWindow(UncagingWindow):
         self.slopeMark4b.setPen(QtGui.QPen(QtGui.QColor(0,0,255)))
         
         self.plot.analysisPlot.show()
-        self.line.connect(QtCore.SIGNAL('positionChanged'), self.lineMoved)
+
+        QtCore.QObject.connect(self.line, QtCore.SIGNAL('positionChanged'), self.lineMoved)
+
         
         
         
@@ -1019,6 +1022,7 @@ class STDPWindow(UncagingWindow):
 class IVWindow(QtGui.QMainWindow):
     def __init__(self):
         QtGui.QMainWindow.__init__(self)
+        self.traces = None
         self.cw = QtGui.QSplitter()
         self.cw.setOrientation(QtCore.Qt.Vertical)
         self.setCentralWidget(self.cw)
@@ -1029,25 +1033,60 @@ class IVWindow(QtGui.QMainWindow):
         self.loadIVBtn = QtGui.QPushButton('Load I/V')
         bwl.addWidget(self.loadIVBtn)
         QtCore.QObject.connect(self.loadIVBtn, QtCore.SIGNAL('clicked()'), self.loadIV)
-        self.plot = PlotWidget()
-        self.cw.addWidget(self.plot)
+        self.plot1 = PlotWidget()
+        self.cw.addWidget(self.plot1)
+        self.plot2 = PlotWidget()
+        self.cw.addWidget(self.plot2)
         self.resize(800, 800)
         self.show()
+        self.lr = LinearRegionItem(self.plot1, 'vertical', [0, 1])
+        self.plot1.addItem(self.lr)
+        QtCore.QObject.connect(self.lr, QtCore.SIGNAL('regionChanged'), self.updateAnalysis)
+        
 
     def loadIV(self):
-        self.plot.clear()
+        self.plot1.clearPlots()
         dh = getManager().currentFile
         dirs = dh.subDirs()
         c = 0.0
+        traces = []
+        values = []
         for d in dirs:
             d = dh[d]
             try:
-                data = d['Clamp1.ma'].read()['Channel': 'primary']
+                data = d['Clamp1.ma'].read()
             except:
-                data = d['Clamp2.ma'].read()['Channel': 'primary']
-            self.plot.plot(data, pen=mkPen(hsv=[c, 0.7]))
+                data = d['Clamp2.ma'].read()
+            cmd = data['Channel': 'Command']
+            if data.hasColumn('Channel', 'primary'):
+                data = data['Channel': 'primary']
+            else:
+                data = data['Channel': 'scaled']
+            traces.append(data)
+            self.plot1.plot(data, pen=mkPen(hsv=[c, 0.7]))
+            values.append(cmd[len(cmd)/2])
             c += 1.0 / len(dirs)
-
+            
+        if len(dirs) > 0:
+            end = cmd.xvals('Time')[-1]
+            self.lr.setRegion([end *0.5, end * 0.6])
+            self.updateAnalysis()
+            info = [
+                {'name': 'Command', 'units': cmd.axisUnits(-1), 'values': array(values)},
+                data.infoCopy('Time'), 
+                data.infoCopy(-1)]
+            self.traces = MetaArray(vstack(traces), info=info)
+        
+    def updateAnalysis(self):
+        if self.traces is None:
+            return
+        rgn = self.lr.getRegion()
+        data = self.traces['Time': rgn[0]:rgn[1]]
+        self.plot2.plot(data.mean(axis=1), clear=True)
+        self.plot2.plot(data.max(axis=1))
+        self.plot2.plot(data.min(axis=1))
+        
+        
 
 class PSPWindow(QtGui.QMainWindow):
     def __init__(self):

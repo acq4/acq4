@@ -61,7 +61,9 @@ config = os.path.join(pyDir, 'config', 'default.cfg')
 ## Create Manager. This configures devices and creates the main manager window.
 dm = Manager(config, sys.argv[1:])
 
-w = STDPWindow()
+
+w = UncagingWindow()
+
 
 ## Start Qt event loop unless running in interactive mode.
 try:

@@ -527,7 +527,34 @@ def fastRmsMatch(template, data, thresholds=[0.85, 0.75], scales=[0.2, 1.0], min
 
 
 
-def besselFilter(data, cutoff, order=1, dt=None, btype='low'):
+
+def highPass(data, cutoff, order=1, dt=None):
+    """return data passed through high-pass bessel filter"""
+    return besselFilter(data, cutoff, order, dt, 'high')
+
+
+def applyFilter(data, b, a, padding=100, bidir=True):
+    """Apply a linear filter with coefficients a, b. Optionally pad the data before filtering
+    and/or run the filter in both directions."""
+    d1 = data.view(ndarray)
+    
+    if padding > 0:
+        d1 = numpy.hstack([d1[:padding], d1, d1[-padding:]])
+    
+    if bidir:
+        d1 = scipy.signal.lfilter(b, a, scipy.signal.lfilter(b, a, d1)[::-1])[::-1]
+    else:
+        d1 = scipy.signal.lfilter(b, a, d1)
+    
+    if padding > 0:
+        d1 = d1[padding:-padding]
+        
+    if isinstance(data, MetaArray):
+        return MetaArray(d1, info=data.infoCopy())
+    else:
+        return d1
+    
+def besselFilter(data, cutoff, order=1, dt=None, btype='low', bidir=True):
     """return data passed through bessel filter"""
     if dt is None:
         try:
@@ -536,20 +563,32 @@ def besselFilter(data, cutoff, order=1, dt=None, btype='low'):
         except:
             raise Exception('Must specify dt for this data.')
     
-    b,a = scipy.signal.bessel(order, cutoff * 2 * dt, btype=btype) 
-    base = data.mean()
-    d1 = scipy.signal.lfilter(b, a, data.view(ndarray)-base) + base
-    if isinstance(data, MetaArray):
-        return MetaArray(d1, info=data.infoCopy())
-    return d1
+    b,a = scipy.signal.bessel(order, cutoff * dt, btype=btype) 
+    
+    return applyFilter(data, b, a, bidir=bidir)
+    #base = data.mean()
+    #d1 = scipy.signal.lfilter(b, a, data.view(ndarray)-base) + base
+    #if isinstance(data, MetaArray):
+        #return MetaArray(d1, info=data.infoCopy())
+    #return d1
 
-def highPass(data, cutoff, order=1, dt=None):
-    """return data passed through high-pass bessel filter"""
-    return besselFilter(data, cutoff, order, dt, 'high')
+def butterworthFilter(data, wPass, wStop=None, gPass=2.0, gStop=20.0, order=1, dt=None, btype='low', bidir=True):
+    """return data passed through bessel filter"""
+    if dt is None:
+        try:
+            tvals = data.xvals('Time')
+            dt = (tvals[-1]-tvals[0]) / (len(tvals)-1)
+        except:
+            raise Exception('Must specify dt for this data.')
+    
+    if wStop is None:
+        wStop = wPass * 2.0
+    ord, Wn = scipy.signal.buttord(wPass, wStop, gPass, gStop)
+    #print "butterworth ord %f   Wn %f   c %f   sc %f" % (ord, Wn, cutoff, stopCutoff)
+    b,a = scipy.signal.butter(ord, Wn, btype=btype) 
+    
+    return applyFilter(data, b, a, bidir=bidir)
 
-#def lowPass(data, cutoff, order=1, dt=None):
-    #"""return data passed through low-pass bessel filter"""
-    #return besselFilter(data, cutoff, order, dt, 'low')
 
 
 def lowPass(data, cutoff, order=4, bidir=True, filter='butterworth', stopCutoff=None, gpass=2., gstop=20., samplerate=None, dt=None):
@@ -587,18 +626,7 @@ def lowPass(data, cutoff, order=4, bidir=True, filter='butterworth', stopCutoff=
     else:
         raise Exception('Unknown filter type "%s"' % filter)
         
-    padded = numpy.hstack([data[:100], data, data[-100:]])   ## can we intelligently decide how many samples to pad with?
-
-    if bidir:
-        data = scipy.signal.lfilter(b, a, scipy.signal.lfilter(b, a, padded)[::-1])[::-1][100:-100]  ## filter twice; once forward, once reversed. (This eliminates phase changes)
-    else:
-        data = scipy.signal.lfilter(b, a, padded)[100:-100]
-        
-    if isinstance(data, MetaArray):
-        return MetaArray(d1, info=data.infoCopy())
-        
-    return data
-
+    return applyFilter(data, b, a, bidir=bidir)
 
 
 

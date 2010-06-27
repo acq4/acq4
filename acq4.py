@@ -9,7 +9,7 @@ manager with a configuration file and let it go from there.
 """
 
 print "Loading ACQ4..."
-
+import pyconquer
 from lib.Manager import *
 import os, sys
 from numpy import *
@@ -18,7 +18,9 @@ from PyQt4 import QtGui, QtCore
 ## Initialize Qt
 app = QtGui.QApplication(sys.argv)
 
-
+## For logging ALL python activity
+#tr = pyconquer.Logger(fileregex="(Manager|DataManager|modules|devices|drivers)")
+#tr.start()
 
 ## Configuration file to load
 config = 'config/default.cfg'
@@ -54,3 +56,4 @@ except:
     print "Qt event loop exited."
     
     
+#tr.stop()
