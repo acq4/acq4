@@ -9,6 +9,7 @@ from pyqtgraph.PlotWidget import *
 from pyqtgraph.functions import *
 from Canvas import Canvas
 from UncagingControlTemplate import *
+from StdpCtrlTemplate import *
 from PyQt4 import QtCore, QtGui
 from functions import *
 from SpinBox import *
@@ -599,7 +600,8 @@ class UncagingWindow(QtGui.QMainWindow):
     def colorSpots(self):
         if self.ctrl.gradientRadio.isChecked():
             maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = self.ctrl.colorSpin1.value())
-            
+            spont = self.analysisCache['preChargeNeg'].mean()
+            print "spont activity:", spont
             for item in self.scanAvgItems:
                 if item.source is not None:  ## this is a single item
                     negCharge = self.analysisCache[item.index]['postChargeNeg']
@@ -609,7 +611,7 @@ class UncagingWindow(QtGui.QMainWindow):
                     else:
                         directeventsflag = False
                 else:    ## this is an average item
-                    negCharges = array([self.analysisCache[i.index]['postChargeNeg'] for i in item.sourceItems]) 
+                    negCharges = array([self.analysisCache[i.index]['postChargeNeg'] for i in item.sourceItems])
                     numDirectEventses = array([len(self.analysisCache[i.index]['dirEvents']) for i in item.sourceItems])
                     if self.ctrl.medianCheck.isChecked():
                         if len(negCharges[negCharges < 0]) > len(negCharges)/2.0: ###Errs on side of false negatives, but averages all non-zero charges
@@ -622,12 +624,18 @@ class UncagingWindow(QtGui.QMainWindow):
                         directeventsflag = True
                     else:
                         directeventsflag = False
+                
                 ## Set color based on strength of negative events
                 color = self.ctrl.gradientWidget.getColor(clip(negCharge/maxcharge, 0, 1))
+                if negCharge > spont:
+                    color.setAlpha(100)
+                
 
                 ## Traces with no events are transparent
                 if abs(negCharge) < 1e-16:
                     color = QtGui.QColor(0,0,0,0)
+                
+                
 
                 ## Traces with events below threshold are transparent
                 if negCharge >= stats.scoreatpercentile(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg'] < 0], self.ctrl.colorSpin3.value()):
@@ -648,6 +656,9 @@ class UncagingWindow(QtGui.QMainWindow):
             self.colorScaleBar.show()
 
             self.colorScaleBar.setGradient(self.ctrl.gradientWidget.getGradient())
+            self.colorScaleBar.setLabels({str(maxcharge):1,
+                                          str(stats.scoreatpercentile(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg'] < 0], self.ctrl.colorSpin3.value())):0,
+                                          "--spont":spont/(maxcharge - stats.scoreatpercentile(self.analysisCache['postChargeNeg'][self.analysisCache['postChargeNeg'] < 0], self.ctrl.colorSpin3.value()))})
 
         else:
             self.colorScaleBar.hide()
@@ -714,18 +725,51 @@ class STDPWindow(UncagingWindow):
         bwtop.addWidget(self.canvas)
         bwtop.addWidget(self.LTPplot)
         bwtop.addWidget(self.dictView)
+        bwbottom = QtGui.QSplitter()
+        bwbottom.setOrientation(QtCore.Qt.Horizontal)
+        self.cw.insertWidget(2, bwbottom)
+        self.stdpCtrl = Ui_StdpCtrlWidget()
+        self.stdpCtrlWidget = QtGui.QWidget()
+        bwbottom.addWidget(self.stdpCtrlWidget)
+        self.stdpCtrl.setupUi(self.stdpCtrlWidget)
+        self.stdpCtrl.thresholdSpin.setValue(4.0)
+        self.stdpCtrl.durationSpin.setRange(0,1000)
+        self.stdpCtrl.durationSpin.setValue(200)
+        self.stdpCtrl.apthresholdSpin.setRange(-100, 100)
+        self.stdpCtrl.apthresholdSpin.setValue(0)
+        self.stdpCtrl.apExclusionCheck.setChecked(True)
+        self.stdpCtrl.slopeWidthSpin.setValue(2.0)
+        bwbottom.addWidget(self.plot)
         self.plot.enableAnalysis(False)
         self.ctrlWidget.hide()
         self.colorScaleBar.hide()
         self.epspStats = None
+
+        self.slopeMark1 = QtGui.QGraphicsLineItem()
+        self.slopeMark1.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
+        self.slopeMark2 = QtGui.QGraphicsLineItem()
+        self.slopeMark2.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
+        self.slopeMark3a = QtGui.QGraphicsLineItem()
+        self.slopeMark3a.setPen(QtGui.QPen(QtGui.QColor(0,255,0)))
+        self.slopeMark4a = QtGui.QGraphicsLineItem()
+        self.slopeMark4a.setPen(QtGui.QPen(QtGui.QColor(0,0,255)))
+        self.slopeMark3b = QtGui.QGraphicsLineItem()
+        self.slopeMark3b.setPen(QtGui.QPen(QtGui.QColor(0,255,0)))
+        self.slopeMark4b = QtGui.QGraphicsLineItem()
+        self.slopeMark4b.setPen(QtGui.QPen(QtGui.QColor(0,0,255)))
+        
+        self.plot.analysisPlot.show()
+
         QtCore.QObject.connect(self.line, QtCore.SIGNAL('positionChanged'), self.lineMoved)
+
+        
         
         
     def canvasClicked(self, ev):
         UncagingWindow.canvasClicked(self, ev)
         self.epspStats = zeros([len(self.currentTraces)],
-            {'names':('currentTracesIndex', 'pspMask', 'conditioningMask', 'unixtime', 'slope', 'amp', 'flux', 'epsptime', 'time', 'normSlope', 'normAmp', 'normFlux', 'spikeTime'),
-             'formats': (int, bool, bool, float, float, float, float, float, float, float, float, float, float)})
+            {'names':('currentTracesIndex', 'pspMask', 'conditioningMask', 'unixtime', 'slope', 'derslope','derslopetime', 'amp', 'flux', 'epsptime', 'derepsptime', 'time', 'normSlope', 'normDerSlope','normAmp', 'normFlux', 'spikeTime'),
+             'formats': (int, bool, bool, float, float, float, float, float, float, float, float, float, float, float, float, float, float)})
  
         for i in range(len(self.currentTraces)):
             self.epspStats[i]['currentTracesIndex'] = i
@@ -734,17 +778,21 @@ class STDPWindow(UncagingWindow):
             self.epspStats[i]['unixtime'] = self.getUnixTime(self.currentTraces[i])
             
             if self.currentTraces[i][0]['Channel':'Command'].max() < 0.1e-09:
-                t,s,a,f,e = self.EPSPstats(self.currentTraces[i])
+                t,s,a,f,e,ds,dst,de = self.EPSPstats(self.currentTraces[i])
                 self.epspStats[i]['amp'] = a
                 self.epspStats[i]['flux'] = f
+                self.epspStats[i]['derslope'] = ds
+                self.epspStats[i]['derepsptime'] = de
+                self.epspStats[i]['derslopetime'] = dst
                 if s != None:
                     #print "Setting pspMask index %i to True" %i
                     self.epspStats[i]['pspMask'] = True
                     self.epspStats[i]['slope'] = s
                     self.epspStats[i]['epsptime'] = e
-                if self.currentTraces[i][0]['Channel':'primary'].max() > 0:  ##exclude traces with action potentials from plot
-                    #print "Setting pspMask index %i to False" %i
-                    self.epspStats[i]['pspMask'] = False
+                if self.stdpCtrl.apExclusionCheck.isChecked():
+                    if self.currentTraces[i][0]['Channel':'primary'].max() > self.stdpCtrl.apthresholdSpin.value()/1000:  ##exclude traces with action potentials from plot
+                        #print "Setting pspMask index %i to False" %i
+                        self.epspStats[i]['pspMask'] = False
                     
             elif self.currentTraces[i][0]['Channel':'Command'].max() >= 0.1e-09:
                 self.epspStats[i]['conditioningMask'] = True
@@ -765,16 +813,21 @@ class STDPWindow(UncagingWindow):
                 self.epspStats[x]['normSlope'] = (self.epspStats['slope'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['slope']))
                 self.epspStats[x]['normAmp'] = (self.epspStats['amp'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['amp']))
                 self.epspStats[x]['normFlux'] = (self.epspStats['flux'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['flux']))
+                self.epspStats[x]['normDerSlope'] = (self.epspStats['derslope'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['derslope']))
+
                 
         self.latencies['Average EPSP time:'] = mean(self.epspStats[self.epspStats['unixtime']< endbase]['epsptime']*1000)
+        self.latencies['Average derEPSP time:'] = mean(self.epspStats[self.epspStats['unixtime']< endbase]['derepsptime']*1000)
         #print 'spiketime:', spiketime
         #print 'mean:', mean(spiketime)
         self.latencies['Average 1st Spike time:'] = mean(self.epspStats[self.epspStats['conditioningMask']]['spikeTime'])*1000
         #self.latencies['Average last Spike time:'] = mean(lastspiketime)*1000
         self.latencies['PSP-Spike Delay:']= self.latencies['Average 1st Spike time:']-self.latencies['Average EPSP time:']
+        self.latencies['derPSP-Spike Delay:']= self.latencies['Average 1st Spike time:']-self.latencies['Average derEPSP time:']
         self.latencies['Change in slope(red):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normSlope'])
         self.latencies['Change in amp(blue):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normAmp'])
         self.latencies['Change in flux(green):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normFlux'])
+        self.latencies['Change in derslope(purple):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normDerSlope'])
         self.dictView.setData(self.latencies)
         
         self.LTPplot.clear()
@@ -782,7 +835,8 @@ class STDPWindow(UncagingWindow):
         self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normSlope'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen=mkPen([255, 0, 0]))
         self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normFlux'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen=mkPen([0, 255, 0]))
         self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normAmp'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen = mkPen([0, 0, 255]))
-    
+        self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normDerSlope'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen = mkPen([255, 0, 255]))
+   
     def getUnixTime(self, data):
         time = data[0]['Channel':'primary'].infoCopy()[-1]['startTime']
         return time
@@ -790,7 +844,7 @@ class STDPWindow(UncagingWindow):
     def getBaselineRgn(self, data, q=None):
         if q == None:
             q = self.getLaserTime(data[1])
-        base = data[0]['Channel':'primary']['Time': 0.0:(q-0.01)]
+        base = data[0]['Channel':'primary']['Time': 0.001:q]
         return base
     
     def getPspRgn(self, data, cutoff, q=None):
@@ -801,7 +855,7 @@ class STDPWindow(UncagingWindow):
     
     def getPspFlux(self, data, pspRgn=None, base=None):
         if pspRgn == None:
-            pspRgn = self.getPspRgn(data, 0.2)
+            pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0)
         if base == None:
             base = self.getBaselineRgn(data)
         flux = pspRgn.sum() -(base.mean()*pspRgn.shape[0])
@@ -810,7 +864,7 @@ class STDPWindow(UncagingWindow):
     def getPspAmp(self, data, pspRgn=None, base=None):
         amp = 0
         if pspRgn == None:
-            pspRgn = self.getPspRgn(data, 0.2)
+            pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0)
         if base == None:
             base = self.getBaselineRgn(data)
         max = pspRgn.max() - base.mean()
@@ -823,26 +877,70 @@ class STDPWindow(UncagingWindow):
     
     def getPspSlope(self, data, pspRgn=None, base=None):
         if pspRgn == None:
-            pspRgn = self.getPspRgn(data, 0.2)
+            pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0)
         if base == None:
             base = self.getBaselineRgn(data)
         epsptime = self.getPspTime(data, pspRgn, base)
         if epsptime != None:
-            slope = (data[0]['Channel':'primary']['Time': (epsptime+0.0015):(epsptime+0.0025)].mean() - data[0]['Channel':'primary']['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
-            return slope    
+            slope = (data[0]['Channel':'primary']['Time': (epsptime+self.stdpCtrl.slopeWidthSpin.value()/1000-0.0005):(epsptime+self.stdpCtrl.slopeWidthSpin.value()/1000+0.0005)].mean() - data[0]['Channel':'primary']['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
+            return slope
+    
+    def getDerSlope(self, data):
+        d = data[0]['Channel':'primary']
+        #pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0+0.1)
+        q = self.getLaserTime(data[1])*d.infoCopy()[-1]['rate']
+        #base = self.getBaselineRgn(data)
+        lp = lowPass(d, 200)
+        der = diff(lp)
+        pspRgn = der[q:q+self.stdpCtrl.durationSpin.value()*d.infoCopy()[-1]['rate']/1000]
+        base = der[:q]
+        slope = pspRgn.max()
+        a = argwhere(der == pspRgn.max())[0,0]
+        slopetime = d.xvals('Time')[a]
+        #rgnPsp = pspRgn[0:a][::-1]
+        #b = argwhere(rgnPsp < base.mean()+base.std())
+        #if len(b>0):
+        #    epsptime= pspRgn.xvals('Time')[a-b[0,0]]
+        #else:
+        #    epsptime = pspRgn.xvals('Time')[0]
+        n=0
+        a = []
+        while len(a) == 0 and n<2*self.stdpCtrl.thresholdSpin.value()-1:
+            a = argwhere(pspRgn > base.mean()+(self.stdpCtrl.thresholdSpin.value()*2-n)*base.std())
+            n+=1
+        if len(a)>0:
+            rgnPsp = pspRgn[0:a[0,0]][::-1]
+            n=0
+            b=[]
+            while len(b)==0 and n<self.stdpCtrl.thresholdSpin.value():
+                b = argwhere(rgnPsp < base.mean()+n*base.std())
+                n+=1
+            if len(b) > 0:
+                index= a[0,0]-b[0,0]
+            else:
+                index = 0
+        else:
+            index = 0
+        epsptime = self.getPspRgn(data,self.stdpCtrl.durationSpin.value()/1000.0).xvals('Time')[index]
+        return slope, slopetime, epsptime
         
     def getPspIndex(self, data, pspRgn=None, base=None):
         if pspRgn == None:
-            pspRgn = self.getPspRgn(data, 0.2)
+            pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0)
         if base == None:
             base = self.getBaselineRgn(data)
-        a = argwhere(pspRgn > base.mean()+4*base.std())
+        a = argwhere(pspRgn > max(base[-100:].mean()+self.stdpCtrl.thresholdSpin.value()*base.std(), base[-100:].mean()+0.0005))
         if len(a) > 0:
-            return a[0,0]
+            rgnPsp = pspRgn[0:a[0,0]][::-1]
+            b = argwhere(rgnPsp < base[-100:].mean()+base.std())
+            if len(b) > 0:
+                return a[0,0]-b[0,0]
+            else:
+                return 0
     
     def getPspTime(self, data, pspRgn=None, base=None):
         if pspRgn == None:
-            pspRgn = self.getPspRgn(data, 0.2)
+            pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0)
         if base == None:
             base = self.getBaselineRgn(data)
         index = self.getPspIndex(data, pspRgn, base)
@@ -857,19 +955,47 @@ class STDPWindow(UncagingWindow):
         d = data[0]['Channel':'primary']            
         time = self.getUnixTime(data)
         base = self.getBaselineRgn(data)
-        pspRgn = self.getPspRgn(data, 0.2)
+        pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0)
         flux = self.getPspFlux(data, pspRgn=pspRgn, base=base)
         amp = self.getPspAmp(data, pspRgn=pspRgn, base=base)
         slope = self.getPspSlope(data, pspRgn, base)
         epsptime = self.getPspTime(data, pspRgn, base)
-        return [time, slope, amp, flux, epsptime]
+        ds, dst, det = self.getDerSlope(data)
+        return [time, slope, amp, flux, epsptime, ds, dst, det]
        
     def lineMoved(self, line):
         if self.epspStats != None:
             pos = line.getXPos()
             d = argwhere(abs(self.epspStats['time'] - pos) == abs(self.epspStats['time']-pos).min())
             dataindex = int(self.epspStats[d]['currentTracesIndex'])
-            self.plot.dataPlot.plot(self.currentTraces[dataindex][0]['Channel':'primary'], clear = True)
+            data = self.currentTraces[dataindex][0]['Channel':'primary']
+            self.plot.dataPlot.plot(data, clear = True)
+            self.plot.dataPlot.addItem(self.slopeMark3a)
+            self.plot.dataPlot.addItem(self.slopeMark4a)
+            x3 = self.epspStats[d]['derepsptime']
+            y3a = data[int(x3*data.infoCopy()[-1]['rate'])]
+            x4 = self.epspStats[d]['derslopetime']
+            y4a = data[int(x4*data.infoCopy()[-1]['rate'])]
+            self.slopeMark3a.setLine(x3, y3a-0.001, x3, y3a+0.001)
+            self.slopeMark4a.setLine(x4, y4a-0.001, x4, y4a+0.001)
+            der = diff(lowPass(data,200))
+            self.plot.analysisPlot.plot(der, x = data.xvals('Time')[:-1], clear=True)
+            y3b = der[int(x3*data.infoCopy()[-1]['rate'])]
+            y4b = der[int(x4*data.infoCopy()[-1]['rate'])]
+            self.plot.analysisPlot.addItem(self.slopeMark3b)
+            self.plot.analysisPlot.addItem(self.slopeMark4b)
+            self.slopeMark3b.setLine(x3, y3b-0.001, x3, y3b+0.001)
+            self.slopeMark4b.setLine(x4, y4b-0.001, x4, y4b+0.001)
+            
+            if self.epspStats[d]['pspMask']:
+                self.plot.dataPlot.addItem(self.slopeMark1)
+                self.plot.dataPlot.addItem(self.slopeMark2)
+                x1 = self.epspStats[d]['epsptime']
+                x2 = x1 + self.stdpCtrl.slopeWidthSpin.value()/1000
+                y1 = data[int(x1*data.infoCopy()[-1]['rate'])]
+                y2 = data[int(x2*data.infoCopy()[-1]['rate'])]
+                self.slopeMark1.setLine(x1, y1-0.001, x1, y1+0.001)
+                self.slopeMark2.setLine(x2, y2-0.001, x2, y2+0.001)
         
     #def EPSPflux(self, data):
     #    """Returns a tuple with the unixtime of the trace and the integral of the EPSP.
@@ -878,7 +1004,7 @@ class STDPWindow(UncagingWindow):
     #    time = data[0].infoCopy()[-1]['startTime']
     #    q = self.getLaserTime(data[1])
     #    base = data[0]['Time': 0.0:(q - 0.01)]
-    #    pspRgn = data[0]['Time': q:(q+0.2)]
+    #    pspRgn = data[0]['Time': q:(q+self.stdpCtrl.durationSpin.value()/1000.0)]
     #    flux = pspRgn.sum() - (base.mean()*pspRgn.shape[0])
     #    return time, flux
     #
@@ -889,7 +1015,7 @@ class STDPWindow(UncagingWindow):
     #    time = data[0].infoCopy()[-1]['startTime']
     #    q = self.getLaserTime(data[1])
     #    base = data[0]['Time': 0.0:(q - 0.01)]
-    #    pspRgn = data[0]['Time': q:(q+0.2)]
+    #    pspRgn = data[0]['Time': q:(q+self.stdpCtrl.durationSpin.value()/1000.0)]
     #    amp = pspRgn.max() - base.mean()
     #    return time, amp
         

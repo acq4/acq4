@@ -76,7 +76,7 @@ class GraphicsView(QtGui.QGraphicsView):
         else:
             v = QtGui.QWidget()
             
-        v.setStyleSheet("background-color: #000000;")
+        #v.setStyleSheet("background-color: #000000;")
         self.setViewport(v)
             
         
