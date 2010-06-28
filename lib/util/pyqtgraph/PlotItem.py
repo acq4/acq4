@@ -532,7 +532,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             self.curves.remove(item)
             self.updateDecimation()
             self.updateParamList()
-            QtCore.QObject.connect(item, QtCore.SIGNAL('plotChanged'), self.plotChanged)
+            item.connect(QtCore.SIGNAL('plotChanged'), self.plotChanged)
 
     def clear(self):
         for i in self.items[:]:
@@ -591,7 +591,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         if self.ctrl.averageGroup.isChecked():
             self.addAvgCurve(c)
             
-        QtCore.QObject.connect(c, QtCore.SIGNAL('plotChanged'), self.plotChanged)
+        c.connect(QtCore.SIGNAL('plotChanged'), self.plotChanged)
         self.plotChanged()
 
     def plotChanged(self, curve=None):
