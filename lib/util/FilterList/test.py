@@ -36,7 +36,7 @@ data[5500] += 20
 data[6000:7000] -= 3
 data += linspace(1, 3, 10000)
 data += sin(linspace(0, 15, 10000))
-
+data = MetaArray(data, info=[{'name': 'Time', 'values': linspace(0, 1, 10000)}])
 
 p1.plot(data)
 
