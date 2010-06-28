@@ -49,8 +49,8 @@ class GraphicsView(QtGui.QGraphicsView):
         self.setResizeAnchor(QtGui.QGraphicsView.AnchorViewCenter)
         #self.setResizeAnchor(QtGui.QGraphicsView.NoAnchor)
         self.setViewportUpdateMode(QtGui.QGraphicsView.SmartViewportUpdate)
-        #self.setSceneRect(QtCore.QRectF(-1e10, -1e10, 2e10, 2e10))
-        self.setSceneRect(1, 1, 0, 0) ## Set an empty (but non-zero) scene rect so that the view doesn't try to automatically update for us.
+        self.setSceneRect(QtCore.QRectF(-1e10, -1e10, 2e10, 2e10))
+        #self.setSceneRect(1, 1, 0, 0) ## Set an empty (but non-zero) scene rect so that the view doesn't try to automatically update for us.
         #self.setInteractive(False)
         self.lockedViewports = []
         self.lastMousePos = None

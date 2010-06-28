@@ -6,7 +6,8 @@ from SpinBox import *
 from functions import *
 from scipy.signal import detrend
 from scipy.ndimage import median_filter, gaussian_filter
-    
+
+
 class Filter(QtCore.QObject):
     """Abstract filter class. All filters should subclass from here.
     Filters emit the signal "changed" to indicate immediate changes to their settings, and
@@ -81,6 +82,20 @@ class Filter(QtCore.QObject):
         group = WidgetGroup(widget)
         return widget, group, ctrls
         
+def metaArrayWrapper(fn):
+    def newFn(self, data, *args, **kargs):
+        if isinstance(data, MetaArray):
+            d1 = fn(self, data.view(ndarray), *args, **kargs)
+            info = data.infoCopy()
+            if d1.shape != data.shape:
+                for i in range(data.ndim):
+                    if 'values' in info[i]:
+                        info[i]['values'] = info[i]['values'][:d1.shape[i]]
+            return MetaArray(d1, info=info)
+        else:
+            return fn(self, data, *args, **kargs)
+    return newFn
+
 
 class Downsample(Filter):
     """Downsample by averaging samples together."""
@@ -104,14 +119,14 @@ class Subsample(Filter):
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
     def processData(self, data):
-        return self.data[::self.ctrls['n'].value()]
+        return data[::self.ctrls['n'].value()]
 
 class Bessel(Filter):
     def __init__(self):
         Filter.__init__(self)
         self.ui, self.stateGroup, self.ctrls = self.generateUi({
             'band': ('combo', {'values': ['lowpass', 'highpass'], 'index': 0}),
-            'cutoff': ('spin', {'value': 1000., 'dec': True, 'range': [0.0, None], 'units': 'Hz', 'siPrefix': True}),
+            'cutoff': ('spin', {'value': 1000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
             'order': ('intSpin', {'value': 4, 'min': 1, 'max': 16}),
             'bidir': ('check', {'checked': True})
         })
@@ -130,10 +145,10 @@ class Butterworth(Filter):
         Filter.__init__(self)
         self.ui, self.stateGroup, self.ctrls = self.generateUi({
             'band': ('combo', {'values': ['lowpass', 'highpass'], 'index': 0}),
-            'wPass': ('spin', {'value': 1000., 'dec': True, 'range': [0.0, None], 'units': 'Hz', 'siPrefix': True}),
-            'wStop': ('spin', {'value': 2000., 'dec': True, 'range': [0.0, None], 'units': 'Hz', 'siPrefix': True}),
-            'gPass': ('spin', {'value': 2.0, 'dec': True, 'range': [0.0, None], 'units': 'dB', 'siPrefix': True}),
-            'gStop': ('spin', {'value': 20.0, 'dec': True, 'range': [0.0, None], 'units': 'dB', 'siPrefix': True}),
+            'wPass': ('spin', {'value': 1000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
+            'wStop': ('spin', {'value': 2000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
+            'gPass': ('spin', {'value': 2.0, 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
+            'gStop': ('spin', {'value': 20.0, 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'dB', 'siPrefix': True}),
             'bidir': ('check', {'checked': True})
         })
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
@@ -144,7 +159,7 @@ class Butterworth(Filter):
             mode = 'low'
         else:
             mode = 'high'
-        return besselFilter(data, bidir=s['bidir'], btype=mode, wPass=s['wPass'], wStop=s['wStop'], gPass=s['gPass'], gStop=s['gStop'])
+        return butterworthFilter(data, bidir=s['bidir'], btype=mode, wPass=s['wPass'], wStop=s['wStop'], gPass=s['gPass'], gStop=s['gStop'])
 
 class Mean(Filter):
     def __init__(self):
@@ -154,6 +169,7 @@ class Mean(Filter):
         })
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
+    @metaArrayWrapper
     def processData(self, data):
         n = self.ctrls['n'].value()
         return rollingSum(data, n) / n
@@ -162,10 +178,11 @@ class Median(Filter):
     def __init__(self):
         Filter.__init__(self)
         self.ui, self.stateGroup, self.ctrls = self.generateUi({
-            'n': ('intSpin', {'min': 0, 'max': 1000000})
+            'n': ('intSpin', {'min': 1, 'max': 1000000})
         })
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
+    @metaArrayWrapper
     def processData(self, data):
         return median_filter(data, self.ctrls['n'].value())
 
@@ -190,18 +207,28 @@ class Gaussian(Filter):
         })
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
 
+    @metaArrayWrapper
     def processData(self, data):
         return gaussian_filter(data, self.ctrls['sigma'].value())
 
 class Derivative(Filter):
     def __init__(self):
         Filter.__init__(self)
+        
     def processData(self, data):
-        return data[1:] - data[:-1]
+        if isinstance(data, MetaArray):
+            info = data.infoCopy()
+            if 'values' in info[0]:
+                info[0]['values'] = info[0]['values'][:-1]
+            return MetaArray(data[1:] - data[:-1], info=info)
+        else:
+            return data[1:] - data[:-1]
 
 class Integral(Filter):
     def __init__(self):
         Filter.__init__(self)
+        
+    @metaArrayWrapper
     def processData(self, data):
         data[1:] += data[:-1]
         return data
@@ -209,6 +236,8 @@ class Integral(Filter):
 class Detrend(Filter):
     def __init__(self):
         Filter.__init__(self)
+        
+    @metaArrayWrapper
     def processData(self, data):
         return detrend(data)
 
@@ -216,13 +245,22 @@ class ExpDeconvolve(Filter):
     def __init__(self):
         Filter.__init__(self)
         self.ui, self.stateGroup, self.ctrls = self.generateUi({
-            'tau': ('spin', {'value': 10e-3, 'step': 1, 'minStep': 100e-6, 'dec': True, 'range': [0.0, None], 'units': 's', 'siPrefix': True})
+            'tau': ('spin', {'value': 10e-3, 'step': 1, 'minStep': 100e-6, 'dec': True, 'range': [0.0, None], 'suffix': 's', 'siPrefix': True})
         })
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
 
     def processData(self, data):
-        d = data[1:] - data[:-1]
-        return data[:-1] + self.ctrls['tau'].value() * d
+        dt = 1
+        if isinstance(data, MetaArray):
+            dt = data.xvals(0)[1] - data.xvals(0)[0]
+        d = data[:-1] + (self.ctrls['tau'].value() / dt) * (data[1:] - data[:-1])
+        if isinstance(data, MetaArray):
+            info = data.infoCopy()
+            if 'values' in info[0]:
+                info[0]['values'] = info[0]['values'][:-1]
+            return MetaArray(d, info=info)
+        else:
+            return d
 
 
 ## Collect list of filters

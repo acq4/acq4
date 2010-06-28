@@ -11,11 +11,11 @@ import exceptions
 
 class PlotWidget(GraphicsView):
     """Widget implementing a graphicsView with a single PlotItem inside."""
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, **kargs):
         GraphicsView.__init__(self, parent)
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         self.enableMouse(False)
-        self.plotItem = PlotItem()
+        self.plotItem = PlotItem(**kargs)
         self.setCentralItem(self.plotItem)
         ## Explicitly wrap methods from plotItem
         for m in ['addItem', 'autoRange', 'clear']:

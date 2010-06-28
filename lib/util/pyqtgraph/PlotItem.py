@@ -44,7 +44,7 @@ class PlotItem(QtGui.QGraphicsWidget):
     lastFileDir = None
     managers = {}
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, name=None):
         QtGui.QGraphicsWidget.__init__(self, parent)
         
         ## Set up control buttons
@@ -220,6 +220,10 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.showScale('top', False)
         self.showScale('left', True)
         self.showScale('bottom', True)
+        
+        if name is not None:
+            self.registerPlot(name)
+        
 
     def __del__(self):
         if self.manager is not None:

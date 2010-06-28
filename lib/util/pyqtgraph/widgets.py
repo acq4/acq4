@@ -15,7 +15,7 @@ from numpy.linalg import norm
 import scipy.ndimage as ndimage
 from Point import *
 from math import cos, sin
-from ObjectWorkaround import *
+#from ObjectWorkaround import *
 
 def rectStr(r):
     return "[%f, %f] + [%f, %f]" % (r.x(), r.y(), r.width(), r.height())

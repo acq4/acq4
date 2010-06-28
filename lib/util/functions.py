@@ -259,15 +259,25 @@ def strncmp(a, b):
                 return c
     return cmp(a, b)
 
-def downsample(data, n, axis):
+def downsample(data, n, axis=0, xvals='subsample'):
     """Downsample by averaging points together across axis.
-    If multiple axes are specified, runs once per axis."""
+    If multiple axes are specified, runs once per axis.
+    If a metaArray is given, then the axis values can be either subsampled
+    or downsampled to match.
+    """
+    ma = None
+    if isinstance(data, MetaArray):
+        ma = data
+        data = data.view(ndarray)
+        
+    
     if hasattr(axis, '__len__'):
         if not hasattr(n, '__len__'):
             n = [n]*len(axis)
         for i in range(len(axis)):
             data = downsample(data, n[i], axis[i])
         return data
+    
     nPts = int(data.shape[axis] / n)
     s = list(data.shape)
     s[axis] = nPts
@@ -277,7 +287,19 @@ def downsample(data, n, axis):
     d1 = data[tuple(sl)]
     #print d1.shape, s
     d1.shape = tuple(s)
-    return d1.mean(axis+1)
+    d2 = d1.mean(axis+1)
+    
+    if ma is None:
+        return d2
+    else:
+        info = ma.infoCopy()
+        if 'values' in info[axis]:
+            if xvals == 'subsample':
+                info[axis]['values'] = info[axis]['values'][::n][:nPts]
+            elif xvals == 'downsample':
+                info[axis]['values'] = downsample(info[axis]['values'], n)
+        return MetaArray(d2, info=info)
+    
         
 def downsamplend(data, div):
     """Downsample multiple axes at once. Probably slower than just using downsample multiple times."""
@@ -583,7 +605,7 @@ def butterworthFilter(data, wPass, wStop=None, gPass=2.0, gStop=20.0, order=1, d
     
     if wStop is None:
         wStop = wPass * 2.0
-    ord, Wn = scipy.signal.buttord(wPass, wStop, gPass, gStop)
+    ord, Wn = scipy.signal.buttord(wPass*dt*2., wStop*dt*2., gPass, gStop)
     #print "butterworth ord %f   Wn %f   c %f   sc %f" % (ord, Wn, cutoff, stopCutoff)
     b,a = scipy.signal.butter(ord, Wn, btype=btype) 
     

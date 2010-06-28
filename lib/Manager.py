@@ -139,7 +139,7 @@ Valid options are:
         win = QtGui.QApplication.instance().activeWindow()
         #if win is None:   ## Breaks on some systems..
             #raise Exception("No GUI windows created during startup, exiting now.")
-        print "active window:", win
+        #print "active window:", win
         self.quitShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+q'), win)
         self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
         QtCore.QObject.connect(self.quitShortcut, QtCore.SIGNAL('activated()'), self.quit)
@@ -505,17 +505,18 @@ Valid options are:
                 
             print "Closing windows.."
             QtGui.QApplication.instance().closeAllWindows()
+            QtGui.QApplication.instance().processEvents()
             #print "  done."
             print "\n    ciao."
         #app= QtGui.QApplication.instance()
         #print app.topLevelWidgets()
         #for w in app.topLevelWidgets():
         #    print w, w.isVisible()
-        print "Manager quits when last window closes:", QtGui.QApplication.instance().quitOnLastWindowClosed()
+        #print "Manager quits when last window closes:", QtGui.QApplication.instance().quitOnLastWindowClosed()
         QtGui.QApplication.quit()
 
-    def lastWindowClosed(self):
-        print "QApplication reports last window has closed."
+    #def lastWindowClosed(self):
+        #print "QApplication reports last window has closed."
 
 class Task:
     id = 0
