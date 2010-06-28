@@ -9,8 +9,8 @@ Provides ImageItem, PlotCurveItem, and ViewBox, amongst others.
 
 
 from PyQt4 import QtGui, QtCore
-from ObjectWorkaround import *
-tryWorkaround(QtCore, QtGui)
+#from ObjectWorkaround import *
+#tryWorkaround(QtCore, QtGui)
 from numpy import *
 import scipy.weave as weave
 from scipy.weave import converters
@@ -21,7 +21,7 @@ import scipy.stats
 from Point import *
 from functions import *
 import types, sys, struct
-from debug import *
+#from debug import *
 
 
 ## Should probably just use QGraphicsGroupItem and instruct it to pass events on to children..
@@ -41,16 +41,32 @@ class ItemGroup(QtGui.QGraphicsItem):
         item.setParentItem(self)
 
 
-    
+if hasattr(QtGui, "QGraphicsObject"):
+    QGraphicsObject = QtGui.QGraphicsObject
+else:
+    class QObjectWorkaround:
+        def __init__(self):
+            self._qObj_ = QtCore.QObject()
+        def connect(self, *args):
+            return QtCore.QObject.connect(self._qObj_, *args)
+        def disconnect(self, *args):
+            return QtCore.QObject.disconnect(self._qObj_, *args)
+        def emit(self, *args):
+            return QtCore.QObject.emit(self._qObj_, *args)
+            
+    class QGraphicsObject(QtGui.QGraphicsItem, QObjectWorkaround):
+        def __init__(self, *args):
+            QtGui.QGraphicsItem.__init__(self, *args)
+            QObjectWorkaround.__init__(self)
 
     
     
-class GraphicsObject(QtGui.QGraphicsObject):
+class GraphicsObject(QGraphicsObject):
     """Extends QGraphicsObject with a few important functions. 
     (Most of these assume that the object is in a scene with a single view)"""
     
     def __init__(self, *args):
-        QtGui.QGraphicsObject.__init__(self, *args)
+        QGraphicsObject.__init__(self, *args)
         self._view = None
     
     def getViewWidget(self):
@@ -263,8 +279,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
                 self.useWeave = False
                 #sys.excepthook(*sys.exc_info())
                 #print "=============================================================================="
-                #print "Weave compile failed, falling back to slower version. Original error is above."
-                printExc("Weave compile failed, falling back to slower version:")
+                print "Weave compile failed, falling back to slower version."
             self.image.shape = shape
             im = ((self.image - black) * scale).clip(0.,255.).astype(ubyte)
                 
@@ -1574,7 +1589,7 @@ class InfiniteLine(GraphicsObject):
 class LinearRegionItem(GraphicsObject):
     """Used for marking a horizontal or vertical region in plots."""
     def __init__(self, view, orientation="horizontal", vals=[0,1], brush=None, movable=True):
-        QtGui.QGraphicsObject.__init__(self)
+        GraphicsObject.__init__(self)
         self.orientation = orientation
         if hasattr(self, "ItemHasNoContents"):  
             self.setFlag(self.ItemHasNoContents)

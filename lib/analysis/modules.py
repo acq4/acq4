@@ -760,7 +760,7 @@ class STDPWindow(UncagingWindow):
         
         self.plot.analysisPlot.show()
 
-        QtCore.QObject.connect(self.line, QtCore.SIGNAL('positionChanged'), self.lineMoved)
+        self.line.connect(QtCore.SIGNAL('positionChanged'), self.lineMoved)
 
         
         
