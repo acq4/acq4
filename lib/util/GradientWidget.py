@@ -42,7 +42,7 @@ class GradientWidget(QtGui.QGraphicsView):
             self.ticks.remove(tick)
             self.scene.removeItem(tick)
         self.ticks.sort(lambda a,b: cmp(a.pos().x(), b.pos().x()))
-        self.gradient.setStops([(t.x(), t.color) for t in self.ticks])
+        self.gradient = self.getGradient()
         self.gradRect.setBrush(QtGui.QBrush(self.gradient))
         self.emit(QtCore.SIGNAL('gradientChanged'), self)
         
@@ -68,13 +68,16 @@ class GradientWidget(QtGui.QGraphicsView):
         QtGui.QGraphicsView.mouseReleaseEvent(self, ev)
         
     def getGradient(self):
-        return self.gradient
+        g = QtGui.QLinearGradient(QtCore.QPointF(0,0), QtCore.QPointF(100,0))
+        
+        g.setStops([(t.x(), QtGui.QColor(t.color)) for t in self.ticks])
+        return g
         
     def getColor(self, x):
         if x <= 0:
-            return self.ticks[0].color
+            return QtGui.QColor(self.ticks[0].color)
         if x >= 1:
-            return self.ticks[-1].color
+            return QtGui.QColor(self.ticks[-1].color)
             
         x2 = self.ticks[0].x()
         for i in range(1,len(self.ticks)):
