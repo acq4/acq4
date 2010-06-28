@@ -67,6 +67,10 @@ class Filter(QtCore.QObject):
                 w = QtGui.QCheckBox()
                 if 'checked' in o:
                     w.setChecked(o['checked'])
+            elif t == 'combo':
+                w = QtGui.QComboBox()
+                for i in o['values']:
+                    w.addItem(i)
             else:
                 raise Exception("Unknown widget type '%s'" % str(t))
             if 'tip' in o:
@@ -119,13 +123,28 @@ class Bessel(Filter):
             mode = 'low'
         else:
             mode = 'high'
-        return besselFilter(data, bidir=s['bidir'], btype=mode, cutoff=s['cutoff'])
+        return besselFilter(data, bidir=s['bidir'], btype=mode, cutoff=s['cutoff'], order=s['order'])
 
 class Butterworth(Filter):
     def __init__(self):
         Filter.__init__(self)
+        self.ui, self.stateGroup, self.ctrls = self.generateUi({
+            'band': ('combo', {'values': ['lowpass', 'highpass'], 'index': 0}),
+            'wPass': ('spin', {'value': 1000., 'dec': True, 'range': [0.0, None], 'units': 'Hz', 'siPrefix': True}),
+            'wStop': ('spin', {'value': 2000., 'dec': True, 'range': [0.0, None], 'units': 'Hz', 'siPrefix': True}),
+            'gPass': ('spin', {'value': 2.0, 'dec': True, 'range': [0.0, None], 'units': 'dB', 'siPrefix': True}),
+            'gStop': ('spin', {'value': 20.0, 'dec': True, 'range': [0.0, None], 'units': 'dB', 'siPrefix': True}),
+            'bidir': ('check', {'checked': True})
+        })
+        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        
     def processData(self, data):
-        pass
+        s = self.stateGroup.state()
+        if s['band'] == 'lowpass':
+            mode = 'low'
+        else:
+            mode = 'high'
+        return besselFilter(data, bidir=s['bidir'], btype=mode, wPass=s['wPass'], wStop=s['wStop'], gPass=s['gPass'], gStop=s['gStop'])
 
 class Mean(Filter):
     def __init__(self):

@@ -75,7 +75,7 @@ class GradientWidget(QtGui.QGraphicsView):
         
     def getColor(self, x):
         if x <= 0:
-            return QtGui.QColor(self.ticks[0].color)
+            return QtGui.QColor(self.ticks[0].color)  # always copy colors before handing them out
         if x >= 1:
             return QtGui.QColor(self.ticks[-1].color)
             

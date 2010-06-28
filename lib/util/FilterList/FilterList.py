@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from filters import FILTER_LIST
 from PyQt4 import QtGui, QtCore
+from metaarray import *
 
 class FilterList(QtGui.QWidget):
     """This widget presents a customizable filter chain. The user (or program) can add and remove
@@ -67,10 +68,18 @@ class FilterList(QtGui.QWidget):
     def listFilters(self):
         pass
     
-    def processData(self, data):
+    def processData(self, data, x=None):
+        if isinstance(data, MetaArray):
+            x = data.xvals(0)
+            y = data.view(ndarray)
+            
         for filter, item, ctrl in self.filters:
             if item.checkState(0) == QtCore.Qt.Checked:
-                data = filter.processData(data)
+                x, y = filter.processData(x, y)
+                
+        if isinstance(data, MetaArray):
+            
+                
         return data
     
     def saveState(self):

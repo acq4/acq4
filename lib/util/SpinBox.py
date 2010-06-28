@@ -82,8 +82,12 @@ class SpinBox(QtGui.QAbstractSpinBox):
                         self.opts[k][i] = D(str(opts[k][i]))
             elif k in ['step', 'minStep']:
                 self.opts[k] = D(str(opts[k]))
+            elif k == 'value':
+                pass   ## don't set value until bounds have been set
             else:
                 self.opts[k] = opts[k]
+        if 'value' in opts:
+            self.setValue(opts['value'])
         self.updateText()
     
     def stepEnabled(self):

@@ -661,7 +661,9 @@ class PlotItem(QtGui.QGraphicsWidget):
         res = 120.
         #bounds = self.mapRectToScene(self.boundingRect())
         view = self.scene().views()[0]
-        bounds = view.geometry()
+        bounds = view.viewport().rect()
+        bounds = QtCore.QRectF(0, 0, bounds.width(), bounds.height())
+        
         self.svg.setResolution(res)
         #self.svg.setSize(QtCore.QSize(self.size().width(), self.size().height()))
         self.svg.setViewBox(bounds)
@@ -669,13 +671,13 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.svg.setSize(QtCore.QSize(bounds.width(), bounds.height()))
         
         painter = QtGui.QPainter(self.svg)
-        #self.scene().render(painter, QtCore.QRectF(), bounds)
+        #self.scene().render(painter, QtCore.QRectF(), view.mapToScene(bounds).boundingRect())
         
         #items = self.scene().items()
         #self.scene().views()[0].drawItems(painter, len(items), items)
         
         #print view, type(view)
-        view.render(painter, QtCore.QRectF(view.geometry()), view.geometry())
+        view.render(painter, bounds)
         
         painter.end()
         
