@@ -205,7 +205,8 @@ class CameraWindow(QtGui.QMainWindow):
             QtCore.QObject.connect(scope, QtCore.SIGNAL('objectiveListChanged'), self.updateBorders)
         
         self.roi = CamROI(self.camSize, parent=self.cameraItemGroup)
-        QtCore.QObject.connect(self.roi, QtCore.SIGNAL('regionChangeFinished'), self.updateRegion)
+        #QtCore.QObject.connect(self.roi, QtCore.SIGNAL('regionChangeFinished'), self.updateRegion)
+        self.roi.connect(QtCore.SIGNAL('regionChangeFinished'), self.updateRegion)
         #self.cameraItemGroup.addToGroup(self.roi)
         self.roi.setZValue(1000)
         self.setRegion()
