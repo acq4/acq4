@@ -35,7 +35,7 @@ class QObjectWorkaround:
 class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
     def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None):
         QObjectWorkaround.__init__(self)
-        QtGui.QGraphicsObject.__init__(self, parent)
+        QtGui.QGraphicsItem.__init__(self, parent)
         pos = Point(pos)
         size = Point(size)
         self.aspectLocked = False
@@ -747,7 +747,7 @@ class LineROI(ROI):
 class MultiLineROI(QtGui.QGraphicsItem, QObjectWorkaround):
     def __init__(self, points, width, **args):
         QObjectWorkaround.__init__(self)
-        QtGui.QGraphicsObject.__init__(self)
+        QtGui.QGraphicsItem.__init__(self)
         self.roiArgs = args
         if len(points) < 2:
             raise Exception("Must start with at least 2 points")

@@ -77,7 +77,7 @@ class ImageView(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.whiteSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
         QtCore.QObject.connect(self.ui.blackSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
         QtCore.QObject.connect(self.ui.roiBtn, QtCore.SIGNAL('clicked()'), self.roiClicked)
-        QtCore.QObject.connect(self.roi, QtCore.SIGNAL('regionChanged'), self.roiChanged)
+        self.roi.connect(QtCore.SIGNAL('regionChanged'), self.roiChanged)
         QtCore.QObject.connect(self.ui.normBtn, QtCore.SIGNAL('toggled(bool)'), self.normToggled)
         QtCore.QObject.connect(self.ui.normDivideRadio, QtCore.SIGNAL('clicked()'), self.updateNorm)
         QtCore.QObject.connect(self.ui.normSubtractRadio, QtCore.SIGNAL('clicked()'), self.updateNorm)
