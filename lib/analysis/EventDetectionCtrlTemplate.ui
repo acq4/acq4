@@ -22,6 +22,12 @@
    </property>
    <item>
     <widget class="QGroupBox" name="groupBox_2">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>100</verstretch>
+      </sizepolicy>
+     </property>
      <property name="toolTip">
       <string>Pre-processing options. Used for processing data before any event detection takes place. Processing is performed in the order listed.</string>
      </property>
@@ -35,137 +41,20 @@
       <property name="spacing">
        <number>0</number>
       </property>
-      <item row="1" column="0">
-       <widget class="QCheckBox" name="lowPassCheck">
-        <property name="toolTip">
-         <string>Low-pass data using a bessel filter.
-This is particularly helpful when used with exponential deconvolution.</string>
-        </property>
-        <property name="text">
-         <string>Low-pass</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="SpinBox" name="lowPassSpin">
-        <property name="maximum">
-         <double>10000.000000000000000</double>
-        </property>
-        <property name="value">
-         <double>200.000000000000000</double>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="0">
-       <widget class="QCheckBox" name="highPassCheck">
-        <property name="toolTip">
-         <string>High-pass data using a bessel filter</string>
-        </property>
-        <property name="text">
-         <string>High-pass</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="0">
-       <widget class="QCheckBox" name="expDeconvolveCheck">
-        <property name="toolTip">
-         <string>Use exponential deconvolution to separate events with slow exponential decays.</string>
-        </property>
-        <property name="text">
-         <string>Exp. Deconvolve</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="SpinBox" name="highPassSpin">
-        <property name="value">
-         <double>1.000000000000000</double>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="1">
-       <widget class="SpinBox" name="expDeconvolveSpin">
-        <property name="value">
-         <double>0.010000000000000</double>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="0">
-       <widget class="QCheckBox" name="detrendCheck">
-        <property name="toolTip">
-         <string>Remove trends in the data (various methods available)</string>
-        </property>
-        <property name="text">
-         <string>Detrend</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="1">
-       <widget class="QComboBox" name="detrendMethodCombo">
-        <property name="currentIndex">
-         <number>2</number>
-        </property>
-        <item>
-         <property name="text">
-          <string>Scalar</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Histogram Consensus</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Linear</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Exponential</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Adaptive</string>
-         </property>
-        </item>
-       </widget>
-      </item>
       <item row="0" column="0">
-       <widget class="QCheckBox" name="denoiseCheck">
-        <property name="toolTip">
-         <string>Remove very sharp spikes from data</string>
-        </property>
-        <property name="text">
-         <string>Denoise</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="1">
-       <widget class="QDoubleSpinBox" name="denoiseSpin">
-        <property name="value">
-         <double>4.000000000000000</double>
-        </property>
-       </widget>
+       <widget class="FilterList" name="preFilterList" native="true"/>
       </item>
      </layout>
     </widget>
    </item>
    <item>
     <widget class="QGroupBox" name="groupBox">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>1</verstretch>
+      </sizepolicy>
+     </property>
      <property name="title">
       <string>Event Detection</string>
      </property>
@@ -230,7 +119,7 @@ This is particularly helpful when used with exponential deconvolution.</string>
             <property name="sizeHint" stdset="0">
              <size>
               <width>20</width>
-              <height>69</height>
+              <height>40</height>
              </size>
             </property>
            </spacer>
@@ -366,6 +255,12 @@ This is particularly helpful when used with exponential deconvolution.</string>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
    <header>lib.util.SpinBox</header>
+  </customwidget>
+  <customwidget>
+   <class>FilterList</class>
+   <extends>QWidget</extends>
+   <header>FilterList</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources/>

@@ -55,8 +55,11 @@ class FilterList(QtGui.QWidget):
     def __init__(self, *args):
         QtGui.QWidget.__init__(self, *args)
         self.setMinimumWidth(250)
+        self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding))
         ## Set up GUI
         self.vl = QtGui.QVBoxLayout()
+        self.vl.setSpacing(0)
+        self.vl.setContentsMargins(0,0,0,0)
         self.setLayout(self.vl)
         self.filterCombo = QtGui.QComboBox()
         self.filterList = Tree()
@@ -64,7 +67,8 @@ class FilterList(QtGui.QWidget):
         self.filterList.setHeaderLabels(['Filter', 'X', 'time'])
         self.filterList.setColumnWidth(0, 200)
         self.filterList.setColumnWidth(1, 20)
-        
+        self.filterList.setVerticalScrollMode(self.filterList.ScrollPerPixel)
+        self.filterList.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.vl.addWidget(self.filterCombo)
         self.vl.addWidget(self.filterList)
         
@@ -78,7 +82,10 @@ class FilterList(QtGui.QWidget):
         QtCore.QObject.connect(self.filterList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.itemChanged)
         QtCore.QObject.connect(self.filterList, QtCore.SIGNAL('itemMoved'), self.emitChange)
         #self.filters = []
-        
+
+    def widgetGroupInterface(self):
+        return ('changed', FilterList.saveState, FilterList.restoreState)
+
     def filterComboChanged(self, ind):
         if ind == 0:
             return
