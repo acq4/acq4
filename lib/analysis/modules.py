@@ -40,33 +40,35 @@ class EventMatchWidget(QtGui.QSplitter):
         QtGui.QSplitter.__init__(self)
         
         ## set up GUI
-        self.hsplitter = QtGui.QSplitter()
-        self.addWidget(self.hsplitter)
-        self.setOrientation(QtCore.Qt.Vertical)
-        self.hsplitter.setOrientation(QtCore.Qt.Horizontal)
-        self.analysisPlot = PlotWidget()
-        self.addWidget(self.analysisPlot)
-        self.dataPlot = PlotWidget()
-        self.addWidget(self.dataPlot)
+        self.setOrientation(QtCore.Qt.Horizontal)
         
-        self.analysisPlot.registerPlot('UncagingAnalysis')
-        self.dataPlot.registerPlot('UncagingData')
-        self.analysisPlot.setXLink('UncagingData')
+        self.vsplitter = QtGui.QSplitter()
+        self.vsplitter.setOrientation(QtCore.Qt.Vertical)
         
         self.ctrlWidget = QtGui.QWidget()
-        self.hsplitter.addWidget(self.ctrlWidget)
         self.ctrl = Ui_EventDetectionCtrlForm()
         self.ctrl.setupUi(self.ctrlWidget)
+        self.addWidget(self.ctrlWidget)        
+        self.addWidget(self.vsplitter)
+        
+        self.dataPlot = PlotWidget(name='UncagingData')
+        self.vsplitter.addWidget(self.dataPlot)
+        
+        self.analysisPlot = PlotWidget(name='UncagingAnalysis')
+        self.vsplitter.addWidget(self.analysisPlot)
+        
+        self.analysisPlot.setXLink('UncagingData')
         
         self.templatePlot = PlotWidget()
-        self.hsplitter.addWidget(self.templatePlot)
+        self.vsplitter.addWidget(self.templatePlot)
+        
         
         #self.ctrlLayout = QtGui.QFormLayout()
         #self.ctrlWidget.setLayout(self.ctrlLayout)
         
-        self.ctrl.lowPassSpin.setOpts(dec=True, step=0.2, bounds=[0, None], suffix='Hz', siPrefix=True)
-        self.ctrl.highPassSpin.setOpts(dec=True, step=0.2, bounds=[0, None], suffix='Hz', siPrefix=True)
-        self.ctrl.expDeconvolveSpin.setOpts(dec=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
+        #self.ctrl.lowPassSpin.setOpts(dec=True, step=0.2, bounds=[0, None], suffix='Hz', siPrefix=True)
+        #self.ctrl.highPassSpin.setOpts(dec=True, step=0.2, bounds=[0, None], suffix='Hz', siPrefix=True)
+        #self.ctrl.expDeconvolveSpin.setOpts(dec=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
         #self.tauSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
         #self.tauSpin.setValue(0.01)
         #self.lowPassSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
@@ -80,6 +82,17 @@ class EventMatchWidget(QtGui.QSplitter):
         #QtCore.QObject.connect(self.tauSpin, QtCore.SIGNAL('valueChanged(double)'), self.tauChanged)
         #QtCore.QObject.connect(self.lowPassSpin, QtCore.SIGNAL('valueChanged(double)'), self.lowPassChanged)
         #QtCore.QObject.connect(self.thresholdSpin, QtCore.SIGNAL('valueChanged(double)'), self.thresholdChanged)
+        
+        
+        self.ctrl.preFilterList.addFilter('Denoise')
+        self.ctrl.preFilterList.addFilter('Butterworth', wPass=400, wStop=600, band='lowpass')
+        self.ctrl.preFilterList.addFilter('ExpDeconvolve')
+        self.ctrl.preFilterList.addFilter('Detrend')
+        
+        
+        
+        
+        
         QtCore.QObject.connect(self.ctrl.detectMethodCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.ctrl.detectMethodStack.setCurrentIndex)
         self.analysisEnabled = True
         self.events = []
@@ -126,42 +139,34 @@ class EventMatchWidget(QtGui.QSplitter):
         
     def preprocess(self, data):
         """Run all selected preprocessing steps on data, return the resulting array"""
-        orig = data
-        dt = data.xvals('Time')[1] - data.xvals('Time')[0]
+        return self.ctrl.preFilterList.processData(data)
         
-        if self.ctrl.denoiseCheck.isChecked():
-            data = denoise(data)
+        
+        #orig = data
+        #dt = data.xvals('Time')[1] - data.xvals('Time')[0]
+        
+        #if self.ctrl.denoiseCheck.isChecked():
+            #data = denoise(data)
             
-        if self.ctrl.lowPassCheck.isChecked():
-            data = lowPass(data, self.ctrl.lowPassSpin.value(), dt=dt)
-        if self.ctrl.highPassCheck.isChecked():
-            data = highPass(data, self.ctrl.highPassSpin.value(), dt=dt)
+        #if self.ctrl.lowPassCheck.isChecked():
+            #data = lowPass(data, self.ctrl.lowPassSpin.value(), dt=dt)
+        #if self.ctrl.highPassCheck.isChecked():
+            #data = highPass(data, self.ctrl.highPassSpin.value(), dt=dt)
             
-        if self.ctrl.expDeconvolveCheck.isChecked():
-            data = diff(data) * self.ctrl.expDeconvolveSpin.value() / dt + data[:-1]
+        #if self.ctrl.expDeconvolveCheck.isChecked():
+            #data = diff(data) * self.ctrl.expDeconvolveSpin.value() / dt + data[:-1]
         
-        if self.ctrl.detrendCheck.isChecked():
-            if self.ctrl.detrendMethodCombo.currentText() == 'Linear':
-                data = signal.detrend(data)
-            elif self.ctrl.detrendMethodCombo.currentText() == 'Adaptive':
-                data = removeBaseline(data, dt=dt)
-            else:
-                raise Exception("detrend method not yet implemented.")
-        #data = MetaArray(data, info=orig.infoCopy())
+        #if self.ctrl.detrendCheck.isChecked():
+            #if self.ctrl.detrendMethodCombo.currentText() == 'Linear':
+                #data = signal.detrend(data)
+            #elif self.ctrl.detrendMethodCombo.currentText() == 'Adaptive':
+                #data = removeBaseline(data, dt=dt)
+            #else:
+                #raise Exception("detrend method not yet implemented.")
+        ##data = MetaArray(data, info=orig.infoCopy())
         
-        return data
+        #return data
                 
-        #d1 = lowPass(d, self.lowPassSpin.value())
-        ##p.mark('lowpass')
-        #d2 = d1.view(ndarray) - measureBaseline(d1)
-        ##p.mark('subtract baseline')
-        #dt = d.xvals('Time')[1] - d.xvals('Time')[0]
-        ##p.mark('dt')
-        #d3 = diff(d2) * self.tauSpin.value() / dt + d2[:-1]
-        ##p.mark('deconvolve')
-        #d4 = removeBaseline(d3, dt=dt)
-        ##p.mark('remove baseline')
-        ##d4 = d3
         
         
     def findEvents(self, data):
@@ -359,13 +364,13 @@ class UncagingWindow(QtGui.QMainWindow):
         
         ### Have changing the event detection parameters clear the analysisCache
             ##just a few now, should add more
-        QtCore.QObject.connect(self.plot.ctrl.lowPassCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
-        QtCore.QObject.connect(self.plot.ctrl.lowPassSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
-        QtCore.QObject.connect(self.plot.ctrl.expDeconvolveCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
-        QtCore.QObject.connect(self.plot.ctrl.expDeconvolveSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
-        QtCore.QObject.connect(self.plot.ctrl.detrendCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
-        QtCore.QObject.connect(self.plot.ctrl.zcSumThresholdSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
-        
+        #QtCore.QObject.connect(self.plot.ctrl.lowPassCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        #QtCore.QObject.connect(self.plot.ctrl.lowPassSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        #QtCore.QObject.connect(self.plot.ctrl.expDeconvolveCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        #QtCore.QObject.connect(self.plot.ctrl.expDeconvolveSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        #QtCore.QObject.connect(self.plot.ctrl.detrendCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        #QtCore.QObject.connect(self.plot.ctrl.zcSumThresholdSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
+        QtCore.QObject.connect(self.plot.stateGroup, QtCore.SIGNAL('changed'), self.resetAnalysisCache)
         
         self.z = 0
         self.resize(1000, 600)

@@ -9,7 +9,6 @@ manager with a configuration file and let it go from there.
 """
 
 print "Loading ACQ4..."
-import pyconquer
 from lib.Manager import *
 import os, sys
 from numpy import *
@@ -19,6 +18,7 @@ from PyQt4 import QtGui, QtCore
 app = QtGui.QApplication(sys.argv)
 
 ## For logging ALL python activity
+#import pyconquer
 #tr = pyconquer.Logger(fileregex="(Manager|DataManager|modules|devices|drivers)")
 #tr.start()
 
