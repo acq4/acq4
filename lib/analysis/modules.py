@@ -775,7 +775,9 @@ class STDPWindow(UncagingWindow):
         self.epspStats = zeros([len(self.currentTraces)],
             {'names':('currentTracesIndex', 'pspMask', 'conditioningMask', 'unixtime', 'slope', 'derslope','derslopetime', 'amp', 'flux', 'epsptime', 'derepsptime', 'time', 'normSlope', 'normDerSlope','normAmp', 'normFlux', 'spikeTime'),
              'formats': (int, bool, bool, float, float, float, float, float, float, float, float, float, float, float, float, float, float)})
- 
+#Adding comments so that code looks different for commit
+#here we go
+#more comments
         for i in range(len(self.currentTraces)):
             self.epspStats[i]['currentTracesIndex'] = i
             self.epspStats[i]['pspMask'] = False
