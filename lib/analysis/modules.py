@@ -751,9 +751,9 @@ class STDPWindow(UncagingWindow):
         self.epspStats = None
 
         self.slopeMark1 = QtGui.QGraphicsLineItem()
-        self.slopeMark1.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
+        self.slopeMark1.setPen(QtGui.QPen(QtGui.QColor(255,255,255)))
         self.slopeMark2 = QtGui.QGraphicsLineItem()
-        self.slopeMark2.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
+        self.slopeMark2.setPen(QtGui.QPen(QtGui.QColor(255,255,255)))
         self.slopeMark3a = QtGui.QGraphicsLineItem()
         self.slopeMark3a.setPen(QtGui.QPen(QtGui.QColor(0,255,0)))
         self.slopeMark4a = QtGui.QGraphicsLineItem()
@@ -782,8 +782,19 @@ class STDPWindow(UncagingWindow):
             self.epspStats[i]['conditioningMask'] = False
             self.epspStats[i]['unixtime'] = self.getUnixTime(self.currentTraces[i])
             
+            if self.currentTraces[i][0]['Channel':'Command'].max() >= 0.1e-09:
+                self.epspStats[i]['conditioningMask'] = True
+                stimtime = argwhere(self.currentTraces[i][0]['Channel':'Command'] == self.currentTraces[i][0]['Channel':'Command'].max())
+                first = argwhere(self.currentTraces[i][0]['Channel':'primary'] == self.currentTraces[i][0]['Channel':'primary'][stimtime[0]:stimtime[0]+90].max())
+                if len(first) > 0:
+                    firstspikeindex = first[0]
+                    firstspike = self.currentTraces[i][0]['Channel':'primary'].xvals('Time')[firstspikeindex]
+                    self.epspStats[i]['spikeTime'] = firstspike
+        
+        for i in range(len(self.currentTraces)):
             if self.currentTraces[i][0]['Channel':'Command'].max() < 0.1e-09:
                 t,s,a,f,e,ds,dst,de = self.EPSPstats(self.currentTraces[i])
+                print i, s, e
                 self.epspStats[i]['amp'] = a
                 self.epspStats[i]['flux'] = f
                 self.epspStats[i]['derslope'] = ds
@@ -799,14 +810,7 @@ class STDPWindow(UncagingWindow):
                         #print "Setting pspMask index %i to False" %i
                         self.epspStats[i]['pspMask'] = False
                     
-            elif self.currentTraces[i][0]['Channel':'Command'].max() >= 0.1e-09:
-                self.epspStats[i]['conditioningMask'] = True
-                stimtime = argwhere(self.currentTraces[i][0]['Channel':'Command'] == self.currentTraces[i][0]['Channel':'Command'].max())
-                first = argwhere(self.currentTraces[i][0]['Channel':'primary'] == self.currentTraces[i][0]['Channel':'primary'][stimtime[0]:stimtime[0]+90].max())
-                if len(first) > 0:
-                    firstspikeindex = first[0]
-                    firstspike = self.currentTraces[i][0]['Channel':'primary'].xvals('Time')[firstspikeindex]
-                    self.epspStats[i]['spikeTime'] = firstspike
+            
 
         #self.epspStats.sort(order = 'unixtime') 
        # print "sortedStats after sort:", epspStats
@@ -837,11 +841,11 @@ class STDPWindow(UncagingWindow):
         
         self.LTPplot.clear()
         self.LTPplot.addItem(self.line)
-        self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normSlope'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen=mkPen([255, 0, 0]))
         self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normFlux'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen=mkPen([0, 255, 0]))
         self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normAmp'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen = mkPen([0, 0, 255]))
         self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normDerSlope'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen = mkPen([255, 0, 255]))
-   
+        self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normSlope'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen=mkPen([255, 0, 0]))
+
     def getUnixTime(self, data):
         time = data[0]['Channel':'primary'].infoCopy()[-1]['startTime']
         return time
@@ -880,15 +884,20 @@ class STDPWindow(UncagingWindow):
             amp = min
         return amp
     
-    def getPspSlope(self, data, pspRgn=None, base=None):
-        if pspRgn == None:
-            pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0)
-        if base == None:
-            base = self.getBaselineRgn(data)
-        epsptime = self.getPspTime(data, pspRgn, base)
+    def getPspSlope(self, data, pspStart=None, base=None):
+        if pspStart == None:
+            pspStart = self.getEpspSearchStart()
+            if pspStart == None:
+                print 'pspStart', pspStart
+                return None, None
+        e = self.plot.findEvents()
+        epsptime = e[0]['start'][argwhere(e[0]['start'] > pspStart)[0]]
+        print 'epsptime', epsptime
         if epsptime != None:
-            slope = (data[0]['Channel':'primary']['Time': (epsptime+self.stdpCtrl.slopeWidthSpin.value()/1000-0.0005):(epsptime+self.stdpCtrl.slopeWidthSpin.value()/1000+0.0005)].mean() - data[0]['Channel':'primary']['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
-            return slope
+            #slope = (data[0]['Channel':'primary']['Time': (epsptime+self.stdpCtrl.slopeWidthSpin.value()/1000-0.0005):(epsptime+self.stdpCtrl.slopeWidthSpin.value()/1000+0.0005)].mean() - data[0]['Channel':'primary']['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
+            slope = linregress(data[0]['Channel':'primary'][epsptime:epsptime+self.stdpCtrl.slopeWidthSpin.value()*10], data[0]['Channel':'primary'][epsptime:epsptime+self.stdpCtrl.slopeWidthSpin.value()*10].xvals('Time'))[0]
+            print 'slope', slope
+            return slope, epsptime/10
     
     def getDerSlope(self, data):
         d = data[0]['Channel':'primary']
@@ -963,8 +972,8 @@ class STDPWindow(UncagingWindow):
         pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0)
         flux = self.getPspFlux(data, pspRgn=pspRgn, base=base)
         amp = self.getPspAmp(data, pspRgn=pspRgn, base=base)
-        slope = self.getPspSlope(data, pspRgn, base)
-        epsptime = self.getPspTime(data, pspRgn, base)
+        slope, epsptime = self.getPspSlope(data)
+        #epsptime = self.getPspTime(data, pspRgn, base)
         ds, dst, det = self.getDerSlope(data)
         return [time, slope, amp, flux, epsptime, ds, dst, det]
     
@@ -979,6 +988,17 @@ class STDPWindow(UncagingWindow):
                 eventstarts.append(self.plot.events[0][x][0])
         eventstarts = array(eventstarts)
         return eventstarts
+    
+    def getEpspSearchStart(self):
+        e = self.getBaselineEventTimes()
+        print 'got event list'
+        if len(e[(e>500)*(e<2000)]) > 0:
+            print 'finding event start'
+            h = histogram(e[(e>500)*(e<2000)], bins = 100)
+            g = gausian_filter(h[0], h[1][:-1], 2)
+            start = argwhere(g > g.max()/3)[0]
+            return start
+    
             
         
     def lineMoved(self, line):
@@ -1005,15 +1025,15 @@ class STDPWindow(UncagingWindow):
             #self.slopeMark3b.setLine(x3, y3b-0.001, x3, y3b+0.001)
             #self.slopeMark4b.setLine(x4, y4b-0.001, x4, y4b+0.001)
             
-            #if self.epspStats[d]['pspMask']:
-            #    self.plot.dataPlot.addItem(self.slopeMark1)
-            #    self.plot.dataPlot.addItem(self.slopeMark2)
-            #    x1 = self.epspStats[d]['epsptime']
-            #    x2 = x1 + self.stdpCtrl.slopeWidthSpin.value()/1000
-            #    y1 = data[int(x1*data.infoCopy()[-1]['rate'])]
-            #    y2 = data[int(x2*data.infoCopy()[-1]['rate'])]
-            #    self.slopeMark1.setLine(x1, y1-0.001, x1, y1+0.001)
-            #    self.slopeMark2.setLine(x2, y2-0.001, x2, y2+0.001)
+            if self.epspStats[d]['pspMask']:
+                self.plot.dataPlot.addItem(self.slopeMark1)
+                self.plot.dataPlot.addItem(self.slopeMark2)
+                x1 = self.epspStats[d]['epsptime']
+                x2 = x1 + self.stdpCtrl.slopeWidthSpin.value()/1000
+                y1 = data[int(x1*data.infoCopy()[-1]['rate'])]
+                y2 = data[int(x2*data.infoCopy()[-1]['rate'])]
+                self.slopeMark1.setLine(x1, y1-0.001, x1, y1+0.001)
+                self.slopeMark2.setLine(x2, y2-0.001, x2, y2+0.001)
         
     #def EPSPflux(self, data):
     #    """Returns a tuple with the unixtime of the trace and the integral of the EPSP.
