@@ -965,6 +965,8 @@ class ScaleItem(QtGui.QGraphicsWidget):
             self.update()
         
     def setRange(self, mn, mx):
+        if mn in [nan, inf, -inf] or mx in [nan, inf, -inf]:
+            raise Exception("Not setting range to [%s, %s]" % (str(mn), str(mx)))
         self.range = [mn, mx]
         if self.autoScale:
             self.setScale()
@@ -1376,6 +1378,9 @@ class ViewBox(QtGui.QGraphicsWidget):
         #print "setYRange:", min, max
         if min == max:
             raise Exception("Tried to set range with 0 width.")
+        if any(isnan([min, max])) or any(isinf([min, max])):
+            raise Exception("Not setting range [%s, %s]" % (str(min), str(max)))
+            
         padding = (max-min) * padding
         min -= padding
         max += padding
@@ -1394,6 +1399,8 @@ class ViewBox(QtGui.QGraphicsWidget):
         if min == max:
             print "Warning: Tried to set range with 0 width."
             #raise Exception("Tried to set range with 0 width.")
+        if any(isnan([min, max])) or any(isinf([min, max])):
+            raise Exception("Not setting range [%s, %s]" % (str(min), str(max)))
         padding = (max-min) * padding
         min -= padding
         max += padding

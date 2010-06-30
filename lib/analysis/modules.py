@@ -193,9 +193,9 @@ class EventMatchWidget(QtGui.QSplitter):
                 d = data[starts[i]:ends[i]]
                 events['sum'][i] = d.sum()
                 if events['sum'][i] > 0:
-                    peak = events['sum'][i].max()
+                    peak = d.max()
                 else:
-                    peak = events['sum'][i].min()
+                    peak = d.min()
                 events['peak'][i] = peak
             
         elif self.ctrl.detectMethodCombo.currentText() == 'Zero-crossing':
@@ -213,6 +213,8 @@ class EventMatchWidget(QtGui.QSplitter):
         """Returns a list of record arrays - each record array contains the events detected in one trace.
                 Arguments:
                     data - a list of traces"""
+                    
+        ## Clear plots
         if display:
             self.analysisPlot.clear()
             self.dataPlot.clear()
@@ -220,27 +222,31 @@ class EventMatchWidget(QtGui.QSplitter):
             self.tickGroups = []
         events = []
 
+        ## Plot raw data
         for i in range(len(data)):
             if display:
                 color = float(i)/(len(data))*0.7
                 pen = mkPen(hsv=[color, 0.8, 0.7])
                 self.dataPlot.plot(data[i], pen=pen)
         
-                    
         if not self.analysisEnabled:
             return []
         
+        ## Find events in all traces
         for i in range(len(data)):
             #p.mark('start trace %d' % i)
             d = data[i]
+            
+            ## Preprocess this trace
             ppd = self.preprocess(d)
             timeVals = d.xvals('Time')[:len(ppd)]  ## preprocess may have shortened array, make sure time matches
             
+            ## Find events
             eventList = self.findEvents(ppd)
             eventList = eventList[:200]   ## Only take first 200 events to avoid overload
-            #p.mark('find events')
-            #print eventList
             events.append(eventList)
+            
+            ## Plot filtered data, stacked events
             if display:
                 color = float(i)/(len(data))*0.7
                 pen = mkPen(hsv=[color, 0.8, 0.7])

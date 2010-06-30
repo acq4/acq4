@@ -1000,7 +1000,7 @@ def measureNoise(data, threshold=2.0, iterations=2):
     #return median(data2.std(axis=0))
     
 
-def findEvents(data, minLength=3, noiseThreshold=2.0):
+def findEvents(data, minLength=3, peakStd=2.0, sumStd=2.0):
     """Locate events of any shape in a signal. Works by finding regions of the signal
     that deviate from noise, using the area beneath the deviation as the detection criteria.
     
@@ -1022,12 +1022,8 @@ def findEvents(data, minLength=3, noiseThreshold=2.0):
     times = argwhere(diff)[:, 0]  ## index of each point immediately before crossing.
     #p.mark('find crossings')
     
-    ## max number of events found, may cull some of these later..
-    #nEvents = len(times) - 1
-    #if nEvents < 1:
-        #return None
-    
-    ## select only events longer than minLength:
+    ## select only events longer than minLength.
+    ## We do this check early for performance--it eliminates the vast majority of events
     longEvents = argwhere(times[1:] - times[:-1] > minLength)
     if len(longEvents) < 1:
         return []
@@ -1035,7 +1031,6 @@ def findEvents(data, minLength=3, noiseThreshold=2.0):
     nEvents = len(longEvents)
     
     ## Measure sum of values within each region between crossings, combine into single array
-    ## At this stage, ignore al events with length < minLength
     events = empty(nEvents, dtype=[('start',int),('len', int),('sum', float),('peak', float)])  ### rows are [start, length, sum]
     #p.mark('empty %d -> %d'% (len(times), nEvents))
     #n = 0
@@ -1053,26 +1048,27 @@ def findEvents(data, minLength=3, noiseThreshold=2.0):
         events[i][3] = peak
     #p.mark('generate event array')
     
-    ## Fit gaussian to peak in size histogram, use fit sigma as criteria for noise rejection
-    stdev = measureNoise(data1)
-    #p.mark('measureNoise')
-    hist = histogram(events['sum'], bins=100)
-    #p.mark('histogram')
-    histx = 0.5*(hist[1][1:] + hist[1][:-1])
-    #p.mark('histx')
-    fit = fitGaussian(histx, hist[0], [hist[0].max(), 0, stdev*3, 0])
-    #p.mark('fit')
-    sigma = fit[0][2]
-    minSize = sigma * noiseThreshold
+    if noiseThreshold is not None:
+        ## Fit gaussian to peak in size histogram, use fit sigma as criteria for noise rejection
+        stdev = measureNoise(data1)
+        #p.mark('measureNoise')
+        hist = histogram(events['sum'], bins=100)
+        #p.mark('histogram')
+        histx = 0.5*(hist[1][1:] + hist[1][:-1])
+        #p.mark('histx')
+        fit = fitGaussian(histx, hist[0], [hist[0].max(), 0, stdev*3, 0])
+        #p.mark('fit')
+        sigma = fit[0][2]
+        minSize = sigma * noiseThreshold
+        
+        ## Generate new set of events, ignoring those with sum < minSize
+        #mask = abs(events['sum'] / events['len']) >= minSize
+        mask = abs(events['sum']) >= minSize
+        #p.mark('mask')
+        events = events[mask]
+        #p.mark('select')
     
-    ## Generate new set of events, ignoring those with sum < minSize
-    #mask = abs(events['sum'] / events['len']) >= minSize
-    mask = abs(events['sum']) >= minSize
-    #p.mark('mask')
-    events2 = events[mask]
-    #p.mark('select')
-    
-    return events2
+    return events
     
     
 def removeBaseline(data, cutoffs=[1.0, 3.0], threshold=4.0, dt=None):
