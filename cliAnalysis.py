@@ -62,7 +62,7 @@ config = os.path.join(pyDir, 'config', 'default.cfg')
 dm = Manager(config, sys.argv[1:])
 
 
-w = UncagingWindow()
+w = STDPWindow()
 
 
 ## Start Qt event loop unless running in interactive mode.
