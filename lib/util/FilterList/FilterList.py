@@ -14,17 +14,27 @@ class Tree(QtGui.QTreeWidget):
         self.setEditTriggers(QtGui.QAbstractItemView.EditKeyPressed|QtGui.QAbstractItemView.SelectedClicked)
 
     def setItemWidget(self, item, col, wid):
+        #print "setItem", wid
+        
         w = QtGui.QWidget()
+        wid.pw = w
+        #print wid.parent()
         exp = item.isExpanded()
         QtGui.QTreeWidget.setItemWidget(self, item, col, w)
+        #print wid.parent()
         l = QtGui.QVBoxLayout()
         l.setContentsMargins(0,0,0,0)
         w.setLayout(l)
         l.addWidget(wid)
+        #print wid.parent()
         w.realChild = wid
+        #print wid.parent()
         item.setExpanded(False)
+        #print wid.parent()
         QtGui.QApplication.instance().processEvents()
+        #print wid.parent()
         item.setExpanded(exp)
+        #print wid.parent()
 
     def dropMimeData(self, parent, index, data, action):
         item = self.currentItem()

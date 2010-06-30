@@ -745,7 +745,7 @@ class STDPWindow(UncagingWindow):
         self.stdpCtrl.apExclusionCheck.setChecked(True)
         self.stdpCtrl.slopeWidthSpin.setValue(2.0)
         bwbottom.addWidget(self.plot)
-        self.plot.enableAnalysis(False)
+        self.plot.enableAnalysis(True)
         self.ctrlWidget.hide()
         self.colorScaleBar.hide()
         self.epspStats = None
@@ -967,40 +967,53 @@ class STDPWindow(UncagingWindow):
         epsptime = self.getPspTime(data, pspRgn, base)
         ds, dst, det = self.getDerSlope(data)
         return [time, slope, amp, flux, epsptime, ds, dst, det]
-       
+    
+    def getBaselineEventTimes(self):
+        eventstarts = []
+        condtime = self.epspStats[self.epspStats['conditioningMask']]['time'].min()
+        preIndexes = self.epspStats[self.epspStats['time'] < condtime]['currentTracesIndex']
+        for i in preIndexes:
+            data = self.currentTraces[i][0]['Channel':'primary']
+            self.plot.setData([data])
+            for x in range(len(self.plot.events[0])):
+                eventstarts.append(self.plot.events[0][x][0])
+        eventstarts = array(eventstarts)
+        return eventstarts
+            
+        
     def lineMoved(self, line):
         if self.epspStats != None:
             pos = line.getXPos()
             d = argwhere(abs(self.epspStats['time'] - pos) == abs(self.epspStats['time']-pos).min())
             dataindex = int(self.epspStats[d]['currentTracesIndex'])
             data = self.currentTraces[dataindex][0]['Channel':'primary']
-            self.plot.dataPlot.plot(data, clear = True)
-            self.plot.dataPlot.addItem(self.slopeMark3a)
-            self.plot.dataPlot.addItem(self.slopeMark4a)
-            x3 = self.epspStats[d]['derepsptime']
-            y3a = data[int(x3*data.infoCopy()[-1]['rate'])]
-            x4 = self.epspStats[d]['derslopetime']
-            y4a = data[int(x4*data.infoCopy()[-1]['rate'])]
-            self.slopeMark3a.setLine(x3, y3a-0.001, x3, y3a+0.001)
-            self.slopeMark4a.setLine(x4, y4a-0.001, x4, y4a+0.001)
-            der = diff(lowPass(data,200))
-            self.plot.analysisPlot.plot(der, x = data.xvals('Time')[:-1], clear=True)
-            y3b = der[int(x3*data.infoCopy()[-1]['rate'])]
-            y4b = der[int(x4*data.infoCopy()[-1]['rate'])]
-            self.plot.analysisPlot.addItem(self.slopeMark3b)
-            self.plot.analysisPlot.addItem(self.slopeMark4b)
-            self.slopeMark3b.setLine(x3, y3b-0.001, x3, y3b+0.001)
-            self.slopeMark4b.setLine(x4, y4b-0.001, x4, y4b+0.001)
+            self.plot.setData([data])
+            #self.plot.dataPlot.addItem(self.slopeMark3a)
+            #self.plot.dataPlot.addItem(self.slopeMark4a)
+            #x3 = self.epspStats[d]['derepsptime']
+            #y3a = data[int(x3*data.infoCopy()[-1]['rate'])]
+            #x4 = self.epspStats[d]['derslopetime']
+            #y4a = data[int(x4*data.infoCopy()[-1]['rate'])]
+            #self.slopeMark3a.setLine(x3, y3a-0.001, x3, y3a+0.001)
+            #self.slopeMark4a.setLine(x4, y4a-0.001, x4, y4a+0.001)
+            #der = diff(lowPass(data,200))
+            #self.plot.analysisPlot.plot(der, x = data.xvals('Time')[:-1], clear=True)
+            #y3b = der[int(x3*data.infoCopy()[-1]['rate'])]
+            #y4b = der[int(x4*data.infoCopy()[-1]['rate'])]
+            #self.plot.analysisPlot.addItem(self.slopeMark3b)
+            #self.plot.analysisPlot.addItem(self.slopeMark4b)
+            #self.slopeMark3b.setLine(x3, y3b-0.001, x3, y3b+0.001)
+            #self.slopeMark4b.setLine(x4, y4b-0.001, x4, y4b+0.001)
             
-            if self.epspStats[d]['pspMask']:
-                self.plot.dataPlot.addItem(self.slopeMark1)
-                self.plot.dataPlot.addItem(self.slopeMark2)
-                x1 = self.epspStats[d]['epsptime']
-                x2 = x1 + self.stdpCtrl.slopeWidthSpin.value()/1000
-                y1 = data[int(x1*data.infoCopy()[-1]['rate'])]
-                y2 = data[int(x2*data.infoCopy()[-1]['rate'])]
-                self.slopeMark1.setLine(x1, y1-0.001, x1, y1+0.001)
-                self.slopeMark2.setLine(x2, y2-0.001, x2, y2+0.001)
+            #if self.epspStats[d]['pspMask']:
+            #    self.plot.dataPlot.addItem(self.slopeMark1)
+            #    self.plot.dataPlot.addItem(self.slopeMark2)
+            #    x1 = self.epspStats[d]['epsptime']
+            #    x2 = x1 + self.stdpCtrl.slopeWidthSpin.value()/1000
+            #    y1 = data[int(x1*data.infoCopy()[-1]['rate'])]
+            #    y2 = data[int(x2*data.infoCopy()[-1]['rate'])]
+            #    self.slopeMark1.setLine(x1, y1-0.001, x1, y1+0.001)
+            #    self.slopeMark2.setLine(x2, y2-0.001, x2, y2+0.001)
         
     #def EPSPflux(self, data):
     #    """Returns a tuple with the unixtime of the trace and the integral of the EPSP.
