@@ -1000,7 +1000,7 @@ def measureNoise(data, threshold=2.0, iterations=2):
     #return median(data2.std(axis=0))
     
 
-def findEvents(data, minLength=3, peakStd=2.0, sumStd=2.0):
+def findEvents(data, minLength=3, peakStd=2.0, sumStd=2.0, noiseThreshold=None):
     """Locate events of any shape in a signal. Works by finding regions of the signal
     that deviate from noise, using the area beneath the deviation as the detection criteria.
     
