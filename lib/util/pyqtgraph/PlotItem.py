@@ -434,6 +434,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.vb.setMouseEnabled(*state)
         
     def xRangeChanged(self, _, range):
+        if any(isnan(range)) or any(isinf(range)):
+            raise Exception("yRange invalid: %s. Signal came from %s" % (str(range), str(self.sender())))
         self.ctrl.xMinText.setText('%0.5g' % range[0])
         self.ctrl.xMaxText.setText('%0.5g' % range[1])
         
@@ -451,6 +453,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.emit(QtCore.SIGNAL('xRangeChanged'), self, range)
 
     def yRangeChanged(self, _, range):
+        if any(isnan(range)) or any(isinf(range)):
+            raise Exception("yRange invalid: %s. Signal came from %s" % (str(range), str(self.sender())))
         self.ctrl.yMinText.setText('%0.5g' % range[0])
         self.ctrl.yMaxText.setText('%0.5g' % range[1])
         
@@ -621,7 +625,7 @@ class PlotItem(QtGui.QGraphicsWidget):
                         mn = cmn
                     if mx is None or cmx > mx:
                         mx = cmx
-                if mn is None or mx is None:
+                if mn is None or mx is None or any(isnan([mn, mx])) or any(isinf([mn, mx])):
                     continue
                 if mn == mx:
                     mn -= 1
