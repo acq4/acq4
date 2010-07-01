@@ -804,27 +804,32 @@ class STDPWindow(UncagingWindow):
                     firstspike = self.currentTraces[i][0]['Channel':'primary'].xvals('Time')[firstspikeindex]
                     self.epspStats[i]['spikeTime'] = firstspike
         
-        searchStart = self.getEpspSearchStart()
-
+        preSearchStart = self.getEpspSearchStart(period = 'pre')
+        postSearchStart = self.getEpspSearchStart(period = 'post')
+        
+        condtime = (self.epspStats[self.epspStats['conditioningMask']]['unixtime'].min(), self.epspStats[self.epspStats['conditioningMask']]['unixtime'].max())
+        preIndexes = self.epspStats[self.epspStats['unixtime'] < condtime[0]]['currentTracesIndex']
+        postIndexes = self.epspStats[self.epspStats['unixtime'] > condtime[1]]['currentTracesIndex']
         
         for i in range(len(self.currentTraces)):
-            if self.currentTraces[i][0]['Channel':'Command'].max() < 0.1e-09:
-                t,s,a,f,e,ds,dst,de = self.EPSPstats(self.currentTraces[i], searchStart)
-               # print i, s, e
-                self.epspStats[i]['amp'] = a
-                self.epspStats[i]['flux'] = f
-                self.epspStats[i]['derslope'] = ds
-                self.epspStats[i]['derepsptime'] = de
-                self.epspStats[i]['derslopetime'] = dst
-                if s != None:
-                    #print "Setting pspMask index %i to True" %i
-                    self.epspStats[i]['pspMask'] = True
-                    self.epspStats[i]['slope'] = s
-                    self.epspStats[i]['epsptime'] = e
-                if self.stdpCtrl.apExclusionCheck.isChecked():
-                    if self.currentTraces[i][0]['Channel':'primary'].max() > self.stdpCtrl.apthresholdSpin.value()/1000:  ##exclude traces with action potentials from plot
-                        #print "Setting pspMask index %i to False" %i
-                        self.epspStats[i]['pspMask'] = False
+            if i in preIndexes:
+                t,s,a,f,e,ds,dst,de = self.EPSPstats(self.currentTraces[i], preSearchStart)
+            elif i in postIndexes:
+                t,s,a,f,e,ds,dst,de = self.EPSPstats(self.currentTraces[i], postSearchStart)
+            self.epspStats[i]['amp'] = a
+            self.epspStats[i]['flux'] = f
+            self.epspStats[i]['derslope'] = ds
+            self.epspStats[i]['derepsptime'] = de
+            self.epspStats[i]['derslopetime'] = dst
+            if s != None:
+                #print "Setting pspMask index %i to True" %i
+                self.epspStats[i]['pspMask'] = True
+                self.epspStats[i]['slope'] = s
+                self.epspStats[i]['epsptime'] = e
+            if self.stdpCtrl.apExclusionCheck.isChecked():
+                if self.currentTraces[i][0]['Channel':'primary'].max() > self.stdpCtrl.apthresholdSpin.value()/1000:  ##exclude traces with action potentials from plot
+                    #print "Setting pspMask index %i to False" %i
+                    self.epspStats[i]['pspMask'] = False
                     
             
 
@@ -1011,11 +1016,15 @@ class STDPWindow(UncagingWindow):
         #p.mark('8')
         return [time, slope, amp, flux, epsptime, ds, dst, det]
     
-    def getBaselineEventTimes(self):
+    def getBaselineEventTimes(self, period='pre'):
         eventstarts = []
-        condtime = self.epspStats[self.epspStats['conditioningMask']]['unixtime'].min()
-        preIndexes = self.epspStats[self.epspStats['unixtime'] < condtime]['currentTracesIndex']
-        for i in preIndexes:
+        if period == 'pre':
+            condtime = self.epspStats[self.epspStats['conditioningMask']]['unixtime'].min()
+            indexes = self.epspStats[self.epspStats['unixtime'] < condtime]['currentTracesIndex']
+        elif period == 'post':
+            condtime = self.epspStats[self.epspStats['conditioningMask']]['unixtime'].min()
+            indexes = self.epspStats[self.epspStats['unixtime'] > condtime]['currentTracesIndex']
+        for i in indexes:
             data = self.currentTraces[i][0]['Channel':'primary']
             self.plot.setData([data])
             for x in range(len(self.plot.events[0])):
@@ -1023,9 +1032,9 @@ class STDPWindow(UncagingWindow):
         eventstarts = array(eventstarts)
         return eventstarts
     
-    def getEpspSearchStart(self):
+    def getEpspSearchStart(self, period):
         """Return index of earliest expected PSP"""
-        e = self.getBaselineEventTimes()
+        e = self.getBaselineEventTimes(period)
         print 'got event list'
         if len(e[(e>500)*(e<2000)]) > 0:
             print 'finding event start'
