@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'stdpCtrlTemplate.ui'
+# Form implementation generated from reading ui file 'StdpCtrlTemplate.ui'
 #
-# Created: Wed Jun 23 12:36:52 2010
-#      by: PyQt4 UI code generator 4.5.4
+# Created: Wed Jun 30 19:43:29 2010
+#      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -38,7 +38,7 @@ class Ui_StdpCtrlWidget(object):
         self.label_4 = QtGui.QLabel(StdpCtrlWidget)
         self.label_4.setObjectName("label_4")
         self.horizontalLayout_5.addWidget(self.label_4)
-        self.slopeWidthSpin = QtGui.QDoubleSpinBox(StdpCtrlWidget)
+        self.slopeWidthSpin = SpinBox(StdpCtrlWidget)
         self.slopeWidthSpin.setObjectName("slopeWidthSpin")
         self.horizontalLayout_5.addWidget(self.slopeWidthSpin)
         self.gridLayout.addLayout(self.horizontalLayout_5, 2, 0, 1, 2)
@@ -69,7 +69,8 @@ class Ui_StdpCtrlWidget(object):
         StdpCtrlWidget.setWindowTitle(QtGui.QApplication.translate("StdpCtrlWidget", "Form", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("StdpCtrlWidget", "PspThreshold:", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("StdpCtrlWidget", "Post-stim Duration (ms):", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("StdpCtrlWidget", "Slope width(ms):", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_4.setText(QtGui.QApplication.translate("StdpCtrlWidget", "Slope width:", None, QtGui.QApplication.UnicodeUTF8))
         self.apExclusionCheck.setText(QtGui.QApplication.translate("StdpCtrlWidget", "Exclude APs", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("StdpCtrlWidget", "Exclusion Threshold (mV):", None, QtGui.QApplication.UnicodeUTF8))
 
+from SpinBox import SpinBox

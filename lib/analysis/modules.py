@@ -15,7 +15,7 @@ from functions import *
 from SpinBox import *
 from debug import *
 from DictView import DictView
-from scipy import stats, signal
+from scipy import stats, signal, ndimage
 from numpy import log
 from WidgetGroup import *
 
@@ -124,12 +124,12 @@ class EventMatchWidget(QtGui.QSplitter):
             self.analysisPlot.hide()
             self.ctrlWidget.hide()
         
-    def setData(self, data):
+    def setData(self, data, analyze=True):
         self.data = data
-        self.recalculate()
+        self.recalculate(analyze=analyze)
         
-    def recalculate(self):
-        self.events = self.processData(self.data, display=True)
+    def recalculate(self, analyze=True):
+        self.events = self.processData(self.data, display=True, analyze=analyze)
         self.emit(QtCore.SIGNAL('outputChanged'), self)
         #print "Events:", self.events
         ##display events
@@ -170,7 +170,7 @@ class EventMatchWidget(QtGui.QSplitter):
         
         
     def findEvents(self, data):
-        """Locate events in the data based on GUI settings selected."""
+        """Locate events in the data based on GUI settings selected. Generally only for internal use."""
         #dt = data.xvals('Time')[1] - data.xvals('Time')[0]
         if self.ctrl.detectMethodCombo.currentText() == 'Stdev. Threshold':
             stdev = data.std()
@@ -209,7 +209,7 @@ class EventMatchWidget(QtGui.QSplitter):
             raise Exception("Event detection method not implemented yet.")
         return events
         
-    def processData(self, data, display=False):
+    def processData(self, data, display=False, analyze=True):
         """Returns a list of record arrays - each record array contains the events detected in one trace.
                 Arguments:
                     data - a list of traces"""
@@ -229,6 +229,9 @@ class EventMatchWidget(QtGui.QSplitter):
                 pen = mkPen(hsv=[color, 0.8, 0.7])
                 self.dataPlot.plot(data[i], pen=pen)
         
+        if not analyze:
+            return []
+            
         if not self.analysisEnabled:
             return []
         
@@ -696,7 +699,7 @@ class UncagingWindow(QtGui.QMainWindow):
             
 
    
-    def canvasClicked(self, ev):
+    def canvasClicked(self, ev, analyze=True):
         ###should probably make mouseClicked faster by using cached data instead of calling processData in eventFinderWidget each time
         """Makes self.currentTraces a list of data corresponding to items on a canvas under a mouse click. Each list item is a tuple where the first element
            is an array of clamp data, and the second is the directory handle for the Clamp.ma file."""
@@ -709,7 +712,7 @@ class UncagingWindow(QtGui.QMainWindow):
             #if hasattr(i, 'source') and i.source is not None:
                 #print 'postEvents:', self.analysisCache[i.index]['postEvents']
                 #print 'postChargeNeg:', self.analysisCache[i.index]['postChargeNeg']
-        self.plot.setData([i[0]['Channel':'primary'] for i in self.currentTraces])
+        self.plot.setData([i[0]['Channel':'primary'] for i in self.currentTraces], analyze=analyze)
         
 
         
@@ -768,6 +771,7 @@ class STDPWindow(UncagingWindow):
         self.slopeMark3b.setPen(QtGui.QPen(QtGui.QColor(0,255,0)))
         self.slopeMark4b = QtGui.QGraphicsLineItem()
         self.slopeMark4b.setPen(QtGui.QPen(QtGui.QColor(0,0,255)))
+        self.stdpCtrl.slopeWidthSpin.setOpts(value=2e-3, dec=True, step=1, minStep=1e-4, bounds=[1e-4, None], suffix='s', siPrefix=True)
         
         self.plot.analysisPlot.show()
 
@@ -777,7 +781,7 @@ class STDPWindow(UncagingWindow):
         
         
     def canvasClicked(self, ev):
-        UncagingWindow.canvasClicked(self, ev)
+        UncagingWindow.canvasClicked(self, ev, analyze=False)
         self.epspStats = zeros([len(self.currentTraces)],
             {'names':('currentTracesIndex', 'pspMask', 'conditioningMask', 'unixtime', 'slope', 'derslope','derslopetime', 'amp', 'flux', 'epsptime', 'derepsptime', 'time', 'normSlope', 'normDerSlope','normAmp', 'normFlux', 'spikeTime'),
              'formats': (int, bool, bool, float, float, float, float, float, float, float, float, float, float, float, float, float, float)})
@@ -799,9 +803,12 @@ class STDPWindow(UncagingWindow):
                     firstspike = self.currentTraces[i][0]['Channel':'primary'].xvals('Time')[firstspikeindex]
                     self.epspStats[i]['spikeTime'] = firstspike
         
+        searchStart = self.getEpspSearchStart()
+
+        
         for i in range(len(self.currentTraces)):
             if self.currentTraces[i][0]['Channel':'Command'].max() < 0.1e-09:
-                t,s,a,f,e,ds,dst,de = self.EPSPstats(self.currentTraces[i])
+                t,s,a,f,e,ds,dst,de = self.EPSPstats(self.currentTraces[i], searchStart)
                 print i, s, e
                 self.epspStats[i]['amp'] = a
                 self.epspStats[i]['flux'] = f
@@ -893,19 +900,25 @@ class STDPWindow(UncagingWindow):
         return amp
     
     def getPspSlope(self, data, pspStart=None, base=None):
+        data = data[0]['Channel': 'primary']
+        dt = data.xvals('Time')[1] - data.xvals('Time')[0]
         if pspStart == None:
             pspStart = self.getEpspSearchStart()
             if pspStart == None:
                 print 'pspStart', pspStart
                 return None, None
-        e = self.plot.findEvents()
-        epsptime = e[0]['start'][argwhere(e[0]['start'] > pspStart)[0]]
+        e = self.plot.processData(data=[data], display=False, analyze=True)
+        starts = e[0]['start']
+        epsptime = starts[starts > pspStart][0]
         print 'epsptime', epsptime
         if epsptime != None:
             #slope = (data[0]['Channel':'primary']['Time': (epsptime+self.stdpCtrl.slopeWidthSpin.value()/1000-0.0005):(epsptime+self.stdpCtrl.slopeWidthSpin.value()/1000+0.0005)].mean() - data[0]['Channel':'primary']['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
-            slope = linregress(data[0]['Channel':'primary'][epsptime:epsptime+self.stdpCtrl.slopeWidthSpin.value()*10], data[0]['Channel':'primary'][epsptime:epsptime+self.stdpCtrl.slopeWidthSpin.value()*10].xvals('Time'))[0]
+            ## TODO: fixme
+            width = self.stdpCtrl.slopeWidthSpin.value()
+            epspRgn = data[epsptime:epsptime+width/dt]
+            slope = stats.linregress(epspRgn.xvals('Time'), epspRgn)[0]
             print 'slope', slope
-            return slope, epsptime/10
+            return slope, epsptime*dt
     
     def getDerSlope(self, data):
         d = data[0]['Channel':'primary']
@@ -970,25 +983,34 @@ class STDPWindow(UncagingWindow):
             time = pspRgn.xvals('Time')[index]
             return time
     
-    def EPSPstats(self, data):
+    def EPSPstats(self, data, start):
         """Returns a five-item list with the unixtime of the trace, and the slope, the amplitude and the integral of the epsp, and the time of the epsp.
                 Arguments:
                     data - a tuple with a 'Clamp.ma' array as the first item and the directory handle of the 'Clamp.ma' file as the second."""
-        d = data[0]['Channel':'primary']            
+        d = data[0]['Channel':'primary']
+        #p = Profiler('EPSPStats')
         time = self.getUnixTime(data)
+        #p.mark('1')
         base = self.getBaselineRgn(data)
+        #p.mark('2')
         pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0)
+        #p.mark('3')
         flux = self.getPspFlux(data, pspRgn=pspRgn, base=base)
+        #p.mark('4')
         amp = self.getPspAmp(data, pspRgn=pspRgn, base=base)
-        slope, epsptime = self.getPspSlope(data)
+        #p.mark('5')
+        #p.mark('6')
+        slope, epsptime = self.getPspSlope(data, pspStart=start)
+        #p.mark('7')
         #epsptime = self.getPspTime(data, pspRgn, base)
         ds, dst, det = self.getDerSlope(data)
+        #p.mark('8')
         return [time, slope, amp, flux, epsptime, ds, dst, det]
     
     def getBaselineEventTimes(self):
         eventstarts = []
-        condtime = self.epspStats[self.epspStats['conditioningMask']]['time'].min()
-        preIndexes = self.epspStats[self.epspStats['time'] < condtime]['currentTracesIndex']
+        condtime = self.epspStats[self.epspStats['conditioningMask']]['unixtime'].min()
+        preIndexes = self.epspStats[self.epspStats['unixtime'] < condtime]['currentTracesIndex']
         for i in preIndexes:
             data = self.currentTraces[i][0]['Channel':'primary']
             self.plot.setData([data])
@@ -998,13 +1020,14 @@ class STDPWindow(UncagingWindow):
         return eventstarts
     
     def getEpspSearchStart(self):
+        """Return index of earliest expected PSP"""
         e = self.getBaselineEventTimes()
         print 'got event list'
         if len(e[(e>500)*(e<2000)]) > 0:
             print 'finding event start'
             h = histogram(e[(e>500)*(e<2000)], bins = 100)
-            g = gausian_filter(h[0], h[1][:-1], 2)
-            start = argwhere(g > g.max()/3)[0]
+            g = ndimage.gaussian_filter(h[0], 2)
+            start = argwhere(g > g.max()/3)[0,0]
             return start
     
             
@@ -1037,7 +1060,7 @@ class STDPWindow(UncagingWindow):
                 self.plot.dataPlot.addItem(self.slopeMark1)
                 self.plot.dataPlot.addItem(self.slopeMark2)
                 x1 = self.epspStats[d]['epsptime']
-                x2 = x1 + self.stdpCtrl.slopeWidthSpin.value()/1000
+                x2 = x1 + self.stdpCtrl.slopeWidthSpin.value()
                 y1 = data[int(x1*data.infoCopy()[-1]['rate'])]
                 y2 = data[int(x2*data.infoCopy()[-1]['rate'])]
                 self.slopeMark1.setLine(x1, y1-0.001, x1, y1+0.001)

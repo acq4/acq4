@@ -47,12 +47,12 @@
      <item>
       <widget class="QLabel" name="label_4">
        <property name="text">
-        <string>Slope width(ms):</string>
+        <string>Slope width:</string>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QDoubleSpinBox" name="slopeWidthSpin"/>
+      <widget class="SpinBox" name="slopeWidthSpin"/>
      </item>
     </layout>
    </item>
@@ -109,6 +109,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>SpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>SpinBox</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>
