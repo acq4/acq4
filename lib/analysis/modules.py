@@ -782,12 +782,13 @@ class STDPWindow(UncagingWindow):
         
     def canvasClicked(self, ev):
         UncagingWindow.canvasClicked(self, ev, analyze=False)
+        if len(self.currentTraces) == 0:
+            return
+        
         self.epspStats = zeros([len(self.currentTraces)],
             {'names':('currentTracesIndex', 'pspMask', 'conditioningMask', 'unixtime', 'slope', 'derslope','derslopetime', 'amp', 'flux', 'epsptime', 'derepsptime', 'time', 'normSlope', 'normDerSlope','normAmp', 'normFlux', 'spikeTime'),
              'formats': (int, bool, bool, float, float, float, float, float, float, float, float, float, float, float, float, float, float)})
-#Adding comments so that code looks different for commit
-#here we go
-#more comments
+
         for i in range(len(self.currentTraces)):
             self.epspStats[i]['currentTracesIndex'] = i
             self.epspStats[i]['pspMask'] = False
@@ -809,7 +810,7 @@ class STDPWindow(UncagingWindow):
         for i in range(len(self.currentTraces)):
             if self.currentTraces[i][0]['Channel':'Command'].max() < 0.1e-09:
                 t,s,a,f,e,ds,dst,de = self.EPSPstats(self.currentTraces[i], searchStart)
-                print i, s, e
+               # print i, s, e
                 self.epspStats[i]['amp'] = a
                 self.epspStats[i]['flux'] = f
                 self.epspStats[i]['derslope'] = ds
@@ -827,27 +828,29 @@ class STDPWindow(UncagingWindow):
                     
             
 
-        #self.epspStats.sort(order = 'unixtime') 
+        self.epspStats.sort(order = 'unixtime') 
        # print "sortedStats after sort:", epspStats
     
         endbase = self.epspStats[self.epspStats['conditioningMask']]['unixtime'].min()
         for x in range(len(self.epspStats)):
-            self.epspStats[x]['time'] =(self.epspStats[x]['unixtime']-(self.epspStats[0]['unixtime']))/60
+            self.epspStats[x]['time'] =(self.epspStats[x]['unixtime']-(self.epspStats['unixtime'].min()))/60
             if self.epspStats[x]['pspMask'] == True:
                 self.epspStats[x]['normSlope'] = (self.epspStats['slope'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['slope']))
                 self.epspStats[x]['normAmp'] = (self.epspStats['amp'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['amp']))
                 self.epspStats[x]['normFlux'] = (self.epspStats['flux'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['flux']))
                 self.epspStats[x]['normDerSlope'] = (self.epspStats['derslope'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['derslope']))
 
-                
-        self.latencies['Average EPSP time:'] = mean(self.epspStats[self.epspStats['unixtime']< endbase]['epsptime']*1000)
-        self.latencies['Average derEPSP time:'] = mean(self.epspStats[self.epspStats['unixtime']< endbase]['derepsptime']*1000)
+        preEpspTimes = self.epspStats[(self.epspStats['unixtime'] < endbase)*(self.epspStats['pspMask'])]['epsptime']
+        postEpspTimes = self.epspStats[(self.epspStats['unixtime'] > endbase)*(self.epspStats['pspMask'])]['epsptime']
+        self.latencies['Average EPSP time (pre):'] = ((preEpspTimes*1000).mean(), (preEpspTimes*1000).std()) 
+        self.latencies['Average EPSP time (post):'] = ((postEpspTimes*1000).mean(), (postEpspTimes*1000).std())
+        #self.latencies['Average derEPSP time:'] = mean(self.epspStats[self.epspStats['unixtime']< endbase]['derepsptime']*1000)
         #print 'spiketime:', spiketime
         #print 'mean:', mean(spiketime)
         self.latencies['Average 1st Spike time:'] = mean(self.epspStats[self.epspStats['conditioningMask']]['spikeTime'])*1000
         #self.latencies['Average last Spike time:'] = mean(lastspiketime)*1000
-        self.latencies['PSP-Spike Delay:']= self.latencies['Average 1st Spike time:']-self.latencies['Average EPSP time:']
-        self.latencies['derPSP-Spike Delay:']= self.latencies['Average 1st Spike time:']-self.latencies['Average derEPSP time:']
+        self.latencies['PSP-Spike Delay:']= self.latencies['Average 1st Spike time:']-self.latencies['Average EPSP time (pre):']
+        #self.latencies['derPSP-Spike Delay:']= self.latencies['Average 1st Spike time:']-self.latencies['Average derEPSP time:']
         self.latencies['Change in slope(red):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normSlope'])
         self.latencies['Change in amp(blue):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normAmp'])
         self.latencies['Change in flux(green):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normFlux'])
@@ -904,8 +907,9 @@ class STDPWindow(UncagingWindow):
         dt = data.xvals('Time')[1] - data.xvals('Time')[0]
         if pspStart == None:
             pspStart = self.getEpspSearchStart()
+            print 'pspStart', pspStart
             if pspStart == None:
-                print 'pspStart', pspStart
+                #print 'pspStart', pspStart
                 return None, None
         e = self.plot.processData(data=[data], display=False, analyze=True)
         starts = e[0]['start']
@@ -1025,9 +1029,10 @@ class STDPWindow(UncagingWindow):
         print 'got event list'
         if len(e[(e>500)*(e<2000)]) > 0:
             print 'finding event start'
-            h = histogram(e[(e>500)*(e<2000)], bins = 100)
+            h = histogram(e[(e>500)*(e<2000)], bins = 100, range = (0,2000))
             g = ndimage.gaussian_filter(h[0], 2)
-            start = argwhere(g > g.max()/3)[0,0]
+            i = argwhere(g > g.max()/3)[0,0]
+            start = h[1][i]
             return start
     
             
