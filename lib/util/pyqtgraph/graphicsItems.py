@@ -168,10 +168,12 @@ class GraphicsObject(QGraphicsObject):
         
 
 class ImageItem(QtGui.QGraphicsPixmapItem):
+    useWeave = True
+    
     def __init__(self, image=None, copy=True, parent=None, *args):
         self.qimage = QtGui.QImage()
         self.pixmap = None
-        self.useWeave = True
+        #self.useWeave = True
         self.blackLevel = None
         self.whiteLevel = None
         self.alpha = 1.0
@@ -253,7 +255,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         shape = self.image.shape
         black = float(self.blackLevel)
         try:
-            if not self.useWeave:
+            if not ImageItem.useWeave:
                 raise Exception('Skipping weave compile')
             sim = ascontiguousarray(self.image)
             sim.shape = sim.size
@@ -275,8 +277,8 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
             sim.shape = shape
             im.shape = shape
         except:
-            if self.useWeave:
-                self.useWeave = False
+            if ImageItem.useWeave:
+                ImageItem.useWeave = False
                 #sys.excepthook(*sys.exc_info())
                 #print "=============================================================================="
                 print "Weave compile failed, falling back to slower version."

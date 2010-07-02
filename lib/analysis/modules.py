@@ -62,36 +62,10 @@ class EventMatchWidget(QtGui.QSplitter):
         self.templatePlot = PlotWidget()
         self.vsplitter.addWidget(self.templatePlot)
         
-        
-        #self.ctrlLayout = QtGui.QFormLayout()
-        #self.ctrlWidget.setLayout(self.ctrlLayout)
-        
-        #self.ctrl.lowPassSpin.setOpts(dec=True, step=0.2, bounds=[0, None], suffix='Hz', siPrefix=True)
-        #self.ctrl.highPassSpin.setOpts(dec=True, step=0.2, bounds=[0, None], suffix='Hz', siPrefix=True)
-        #self.ctrl.expDeconvolveSpin.setOpts(dec=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
-        #self.tauSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='s', siPrefix=True)
-        #self.tauSpin.setValue(0.01)
-        #self.lowPassSpin = SpinBox(log=True, step=0.1, bounds=[0, None], suffix='Hz', siPrefix=True)
-        #self.lowPassSpin.setValue(200.0)
-        #self.thresholdSpin = SpinBox(log=True, step=0.1, bounds=[0, None])
-        #self.thresholdSpin.setValue(10.0)
-        #self.ctrlLayout.addRow("Low pass", self.lowPassSpin)
-        #self.ctrlLayout.addRow("Decay const.", self.tauSpin)
-        #self.ctrlLayout.addRow("Threshold", self.thresholdSpin)
-        
-        #QtCore.QObject.connect(self.tauSpin, QtCore.SIGNAL('valueChanged(double)'), self.tauChanged)
-        #QtCore.QObject.connect(self.lowPassSpin, QtCore.SIGNAL('valueChanged(double)'), self.lowPassChanged)
-        #QtCore.QObject.connect(self.thresholdSpin, QtCore.SIGNAL('valueChanged(double)'), self.thresholdChanged)
-        
-        
         self.ctrl.preFilterList.addFilter('Denoise')
-        self.ctrl.preFilterList.addFilter('Butterworth', wPass=400, wStop=600, band='lowpass')
+        self.ctrl.preFilterList.addFilter('Bessel', cutoff=1000, order=4, band='lowpass')
         self.ctrl.preFilterList.addFilter('ExpDeconvolve')
-        self.ctrl.preFilterList.addFilter('Detrend')
-        
-        
-        
-        
+        self.ctrl.preFilterList.addFilter('AdaptiveDetrend', threshold=2.0)
         
         QtCore.QObject.connect(self.ctrl.detectMethodCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.ctrl.detectMethodStack.setCurrentIndex)
         self.analysisEnabled = True
@@ -101,7 +75,8 @@ class EventMatchWidget(QtGui.QSplitter):
         self.stateGroup = WidgetGroup(self)
         
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.recalculate)        
-        
+
+
     def widgetGroupInterface(self):
         return (None, None, None, True) ## Just tells self.stateGroup to automatically add all children
         
@@ -126,7 +101,10 @@ class EventMatchWidget(QtGui.QSplitter):
         
     def setData(self, data, analyze=True):
         self.data = data
-        self.recalculate(analyze=analyze)
+        if (type(data) is list and isinstance(data[0], ndarray)) or (isinstance(data, ndarray) and data.ndim >= 2):
+            self.recalculate(analyze=analyze)
+        else:
+            raise Exception("Data for event match widget must be a list of arrays or an array with ndim >= 2.")
         
     def recalculate(self, analyze=True):
         self.events = self.processData(self.data, display=True, analyze=analyze)
@@ -189,6 +167,9 @@ class EventMatchWidget(QtGui.QSplitter):
             events['start'] = starts
             events['len'] = lengths
             
+            if len(starts) == 0 or len(ends) == 0:
+                return events
+            
             for i in range(len(starts)):
                 d = data[starts[i]:ends[i]]
                 events['sum'][i] = d.sum()
@@ -229,16 +210,15 @@ class EventMatchWidget(QtGui.QSplitter):
                 pen = mkPen(hsv=[color, 0.8, 0.7])
                 self.dataPlot.plot(data[i], pen=pen)
         
-        if not analyze:
+        if not (analyze and self.analysisEnabled):
             return []
             
-        if not self.analysisEnabled:
-            return []
-        
         ## Find events in all traces
         for i in range(len(data)):
             #p.mark('start trace %d' % i)
             d = data[i]
+            if len(d) < 2:
+                raise Exception("Data appears to be invalid for event detection: %s" % str(data))
             
             ## Preprocess this trace
             ppd = self.preprocess(d)
@@ -246,6 +226,8 @@ class EventMatchWidget(QtGui.QSplitter):
             
             ## Find events
             eventList = self.findEvents(ppd)
+            if len(eventList) > 200:
+                print "Warning--detected %d events; only showing first 200." % len(eventList)
             eventList = eventList[:200]   ## Only take first 200 events to avoid overload
             events.append(eventList)
             
@@ -264,25 +246,25 @@ class EventMatchWidget(QtGui.QSplitter):
                 self.analysisPlot.addItem(tg)
                 
                 ## generate triggered stacks for plotting
-                stack = triggerStack(d, eventList['start'], window=[-100, 200])
-                negPen = mkPen([0, 0, 200])
-                posPen = mkPen([200, 0, 0])
+                #stack = triggerStack(d, eventList['start'], window=[-100, 200])
+                #negPen = mkPen([0, 0, 200])
+                #posPen = mkPen([200, 0, 0])
                 #print stack.shape
-                for j in range(stack.shape[0]):
-                    base = median(stack[j, 80:100])
+                #for j in range(stack.shape[0]):
+                    #base = median(stack[j, 80:100])
                     
-                    if eventList[j]['sum'] > 0:
-                        scale = stack[j, 100:100+eventList[j]['len']].max() - base
-                        pen = posPen
-                        params = {'sign': 1}
-                    else:
-                        length = eventList[j]['len']
-                        if length < 1:
-                            length = 1
-                        scale = base - stack[j, 100:100+length].min()
-                        pen = negPen
-                        params = {'sign': -1}
-                    self.templatePlot.plot((stack[j]-base) / scale, pen=pen, params=params)
+                    #if eventList[j]['sum'] > 0:
+                        #scale = stack[j, 100:100+eventList[j]['len']].max() - base
+                        #pen = posPen
+                        #params = {'sign': 1}
+                    #else:
+                        #length = eventList[j]['len']
+                        #if length < 1:
+                            #length = 1
+                        #scale = base - stack[j, 100:100+length].min()
+                        #pen = negPen
+                        #params = {'sign': -1}
+                    #self.templatePlot.plot((stack[j]-base) / scale, pen=pen, params=params)
         
         return events
         
@@ -371,14 +353,6 @@ class UncagingWindow(QtGui.QMainWindow):
         self.plot = EventMatchWidget()
         self.cw.addWidget(self.plot)
         
-        ### Have changing the event detection parameters clear the analysisCache
-            ##just a few now, should add more
-        #QtCore.QObject.connect(self.plot.ctrl.lowPassCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
-        #QtCore.QObject.connect(self.plot.ctrl.lowPassSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
-        #QtCore.QObject.connect(self.plot.ctrl.expDeconvolveCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
-        #QtCore.QObject.connect(self.plot.ctrl.expDeconvolveSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
-        #QtCore.QObject.connect(self.plot.ctrl.detrendCheck, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
-        #QtCore.QObject.connect(self.plot.ctrl.zcSumThresholdSpin, QtCore.SIGNAL('toggled()'), self.resetAnalysisCache)
         QtCore.QObject.connect(self.plot.stateGroup, QtCore.SIGNAL('changed'), self.resetAnalysisCache)
         
         self.z = 0
@@ -615,7 +589,7 @@ class UncagingWindow(QtGui.QMainWindow):
         if self.ctrl.gradientRadio.isChecked():
             maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = self.ctrl.colorSpin1.value())
             spont = self.analysisCache['preChargeNeg'].mean()
-            print "spont activity:", spont
+            #print "spont activity:", spont
             for item in self.scanAvgItems:
                 if item.source is not None:  ## this is a single item
                     negCharge = self.analysisCache[item.index]['postChargeNeg']
@@ -703,16 +677,23 @@ class UncagingWindow(QtGui.QMainWindow):
         ###should probably make mouseClicked faster by using cached data instead of calling processData in eventFinderWidget each time
         """Makes self.currentTraces a list of data corresponding to items on a canvas under a mouse click. Each list item is a tuple where the first element
            is an array of clamp data, and the second is the directory handle for the Clamp.ma file."""
+        if ev.button() != QtCore.Qt.LeftButton:
+            return []
+           
         spots = self.canvas.view.items(ev.pos())
+        spots = [s for s in spots if isinstance(s, UncagingSpot)]
+        if len(spots) == 0:
+            return []
         self.currentTraces = []
-        for i in spots:
-            d = self.loadTrace(i)
+        for s in spots:
+            d = self.loadTrace(s)
             if d is not None:
                 self.currentTraces.append(d)
             #if hasattr(i, 'source') and i.source is not None:
                 #print 'postEvents:', self.analysisCache[i.index]['postEvents']
                 #print 'postChargeNeg:', self.analysisCache[i.index]['postChargeNeg']
         self.plot.setData([i[0]['Channel':'primary'] for i in self.currentTraces], analyze=analyze)
+        return spots
         
 
         
@@ -781,14 +762,36 @@ class STDPWindow(UncagingWindow):
         
         
     def canvasClicked(self, ev):
-        UncagingWindow.canvasClicked(self, ev, analyze=False)
-        if len(self.currentTraces) == 0:
+        if ev.button() != QtCore.Qt.LeftButton:
+            return
+        spots = UncagingWindow.canvasClicked(self, ev)
+        if len(spots) == 0:
             return
         
-        self.epspStats = zeros([len(self.currentTraces)],
-            {'names':('currentTracesIndex', 'pspMask', 'conditioningMask', 'unixtime', 'slope', 'derslope','derslopetime', 'amp', 'flux', 'epsptime', 'derepsptime', 'time', 'normSlope', 'normDerSlope','normAmp', 'normFlux', 'spikeTime'),
-             'formats': (int, bool, bool, float, float, float, float, float, float, float, float, float, float, float, float, float, float)})
-
+        self.epspStats = zeros(len(self.currentTraces), dtype=[
+            ('currentTracesIndex', int), 
+            ('pspMask', bool), 
+            ('conditioningMask', bool), 
+            ('unixtime', float), 
+            ('slope', float), 
+            #('derslope', float), 
+            #('derslopetime', float), 
+            ('amp', float), 
+            ('flux', float), 
+            ('epsptime', float), 
+            #('derepsptime', float), 
+            ('time', float), 
+            ('normSlope', float), 
+            #('normDerSlope', float), 
+            ('normAmp', float), 
+            ('normFlux', float), 
+            ('spikeTime', float),
+        ])
+            #{'names':('currentTracesIndex', 'pspMask', 'conditioningMask', 'unixtime', 'slope', 'derslope','derslopetime', 'amp', 'flux', 'epsptime', 'derepsptime', 'time', 'normSlope', 'normDerSlope','normAmp', 'normFlux', 'spikeTime'),
+             #'formats': (int, bool, bool, float, float, float, float, float, float, float, float, float, float, float, float, float, float)})
+             
+    
+        ## Initialize PSP stats array
         for i in range(len(self.currentTraces)):
             self.epspStats[i]['currentTracesIndex'] = i
             self.epspStats[i]['pspMask'] = False
@@ -804,6 +807,7 @@ class STDPWindow(UncagingWindow):
                     firstspike = self.currentTraces[i][0]['Channel':'primary'].xvals('Time')[firstspikeindex]
                     self.epspStats[i]['spikeTime'] = firstspike
         
+        ## determine likely times for first response after stim.
         preSearchStart = self.getEpspSearchStart(period = 'pre')
         postSearchStart = self.getEpspSearchStart(period = 'post')
         
@@ -811,25 +815,29 @@ class STDPWindow(UncagingWindow):
         preIndexes = self.epspStats[self.epspStats['unixtime'] < condtime[0]]['currentTracesIndex']
         postIndexes = self.epspStats[self.epspStats['unixtime'] > condtime[1]]['currentTracesIndex']
         
-        for i in range(len(self.currentTraces)):
-            if i in preIndexes:
-                t,s,a,f,e,ds,dst,de = self.EPSPstats(self.currentTraces[i], preSearchStart)
-            elif i in postIndexes:
-                t,s,a,f,e,ds,dst,de = self.EPSPstats(self.currentTraces[i], postSearchStart)
-            self.epspStats[i]['amp'] = a
-            self.epspStats[i]['flux'] = f
-            self.epspStats[i]['derslope'] = ds
-            self.epspStats[i]['derepsptime'] = de
-            self.epspStats[i]['derslopetime'] = dst
-            if s != None:
-                #print "Setting pspMask index %i to True" %i
-                self.epspStats[i]['pspMask'] = True
-                self.epspStats[i]['slope'] = s
-                self.epspStats[i]['epsptime'] = e
-            if self.stdpCtrl.apExclusionCheck.isChecked():
-                if self.currentTraces[i][0]['Channel':'primary'].max() > self.stdpCtrl.apthresholdSpin.value()/1000:  ##exclude traces with action potentials from plot
-                    #print "Setting pspMask index %i to False" %i
-                    self.epspStats[i]['pspMask'] = False
+        
+        if preSearchStart is None or postSearchStart is None:
+            print "Could not determine start time for PSP search; will not calculate stats.", preSearchStart, postSearchStart
+        else:
+            for i in range(len(self.currentTraces)):
+                if i in preIndexes:
+                    t,s,a,f,e = self.EPSPstats(self.currentTraces[i], preSearchStart)
+                elif i in postIndexes:
+                    t,s,a,f,e = self.EPSPstats(self.currentTraces[i], postSearchStart)
+                self.epspStats[i]['amp'] = a
+                self.epspStats[i]['flux'] = f
+                #self.epspStats[i]['derslope'] = ds
+                #self.epspStats[i]['derepsptime'] = de
+                #self.epspStats[i]['derslopetime'] = dst
+                if s != None:
+                    #print "Setting pspMask index %i to True" %i
+                    self.epspStats[i]['pspMask'] = True
+                    self.epspStats[i]['slope'] = s
+                    self.epspStats[i]['epsptime'] = e
+                if self.stdpCtrl.apExclusionCheck.isChecked():
+                    if self.currentTraces[i][0]['Channel':'primary'].max() > self.stdpCtrl.apthresholdSpin.value()/1000:  ##exclude traces with action potentials from plot
+                        #print "Setting pspMask index %i to False" %i
+                        self.epspStats[i]['pspMask'] = False
                     
             
 
@@ -837,18 +845,25 @@ class STDPWindow(UncagingWindow):
        # print "sortedStats after sort:", epspStats
     
         endbase = self.epspStats[self.epspStats['conditioningMask']]['unixtime'].min()
+        ## mask for all traces in the base region with no APs
+        basePspMask = (self.epspStats['unixtime'] < endbase) * self.epspStats['pspMask']  
+        basePspStats = self.epspStats[basePspMask]
         for x in range(len(self.epspStats)):
-            self.epspStats[x]['time'] =(self.epspStats[x]['unixtime']-(self.epspStats['unixtime'].min()))/60
+            self.epspStats[x]['time'] = (self.epspStats[x]['unixtime'] - self.epspStats['unixtime'].min()) / 60
             if self.epspStats[x]['pspMask'] == True:
-                self.epspStats[x]['normSlope'] = (self.epspStats['slope'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['slope']))
-                self.epspStats[x]['normAmp'] = (self.epspStats['amp'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['amp']))
-                self.epspStats[x]['normFlux'] = (self.epspStats['flux'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['flux']))
-                self.epspStats[x]['normDerSlope'] = (self.epspStats['derslope'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*(self.epspStats['unixtime']< endbase)]['derslope']))
+                self.epspStats[x]['normSlope'] = self.epspStats[x]['slope'] / basePspStats['slope'].mean()
+                self.epspStats[x]['normAmp'] = self.epspStats[x]['amp'] / basePspStats['amp'].mean()
+                self.epspStats[x]['normFlux'] = self.epspStats[x]['flux'] / basePspStats['flux'].mean()
+                #self.epspStats[x]['normDerSlope'] = (self.epspStats['derslope'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*baseStats]['derslope']))
 
         preEpspTimes = self.epspStats[(self.epspStats['unixtime'] < endbase)*(self.epspStats['pspMask'])]['epsptime']
         postEpspTimes = self.epspStats[(self.epspStats['unixtime'] > endbase)*(self.epspStats['pspMask'])]['epsptime']
         self.latencies['Average EPSP time (pre):'] = ((preEpspTimes*1000).mean(), (preEpspTimes*1000).std()) 
         self.latencies['Average EPSP time (post):'] = ((postEpspTimes*1000).mean(), (postEpspTimes*1000).std())
+        self.latencies['Median EPSP time (pre):'] = median(preEpspTimes)*1000 
+        self.latencies['Median EPSP time (post):'] = median(postEpspTimes)*1000
+        self.latencies['Average 1st PSP time:'] = mean(self.epspStats[self.epspStats['conditioningMask']]['epsptime'])*1000
+        self.latencies['Median 1st PSP time:'] = median(self.epspStats[self.epspStats['conditioningMask']]['epsptime'])*1000
         #self.latencies['Average derEPSP time:'] = mean(self.epspStats[self.epspStats['unixtime']< endbase]['derepsptime']*1000)
         #print 'spiketime:', spiketime
         #print 'mean:', mean(spiketime)
@@ -859,15 +874,16 @@ class STDPWindow(UncagingWindow):
         self.latencies['Change in slope(red):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normSlope'])
         self.latencies['Change in amp(blue):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normAmp'])
         self.latencies['Change in flux(green):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normFlux'])
-        self.latencies['Change in derslope(purple):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normDerSlope'])
+        #self.latencies['Change in derslope(purple):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normDerSlope'])
         self.dictView.setData(self.latencies)
         
         self.LTPplot.clear()
         self.LTPplot.addItem(self.line)
         self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normFlux'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen=mkPen([0, 255, 0]))
         self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normAmp'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen = mkPen([0, 0, 255]))
-        self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normDerSlope'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen = mkPen([255, 0, 255]))
+        #self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normDerSlope'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen = mkPen([255, 0, 255]))
         self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normSlope'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen=mkPen([255, 0, 0]))
+        self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normSlope'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen=mkPen([255, 0, 255]))
 
     def getUnixTime(self, data):
         time = data[0]['Channel':'primary'].infoCopy()[-1]['startTime']
@@ -908,65 +924,67 @@ class STDPWindow(UncagingWindow):
         return amp
     
     def getPspSlope(self, data, pspStart=None, base=None):
+        """Return the slope of the first PSP after pspStart"""
         data = data[0]['Channel': 'primary']
         dt = data.xvals('Time')[1] - data.xvals('Time')[0]
         if pspStart == None:
             pspStart = self.getEpspSearchStart()
-            print 'pspStart', pspStart
             if pspStart == None:
-                #print 'pspStart', pspStart
                 return None, None
-        e = self.plot.processData(data=[data], display=False, analyze=True)
-        starts = e[0]['start']
-        epsptime = starts[starts > pspStart][0]
-        print 'epsptime', epsptime
-        if epsptime != None:
-            #slope = (data[0]['Channel':'primary']['Time': (epsptime+self.stdpCtrl.slopeWidthSpin.value()/1000-0.0005):(epsptime+self.stdpCtrl.slopeWidthSpin.value()/1000+0.0005)].mean() - data[0]['Channel':'primary']['Time': (epsptime-0.0005):(epsptime+0.0005)].mean())/ 2
-            ## TODO: fixme
-            width = self.stdpCtrl.slopeWidthSpin.value()
-            epspRgn = data[epsptime:epsptime+width/dt]
-            slope = stats.linregress(epspRgn.xvals('Time'), epspRgn)[0]
-            print 'slope', slope
-            return slope, epsptime*dt
+        e = self.plot.processData(data=[data], display=False, analyze=True)[0]
+        e = e[e['peak'] > 0]  ## select only positive events
+        starts = e['start']
+        pspTimes = starts[starts > pspStart]
+        if len(pspTimes) < 1:
+            return None, None
+        pspTime = pspTimes[0]
+        width = self.stdpCtrl.slopeWidthSpin.value() / dt
+        slopeRgn = gaussian_filter(data[pspTime : pspTime + 2*width].view(ndarray), 2)  ## slide forward to point of max slope
+        peak = argmax(slopeRgn[1:]-slopeRgn[:-1])
+        pspTime += peak
+        
+        pspRgn = data[pspTime-(width/2) : pspTime+(width/2)]
+        slope = stats.linregress(pspRgn.xvals('Time'), pspRgn)[0]
+        return slope, pspTime*dt
     
-    def getDerSlope(self, data):
-        d = data[0]['Channel':'primary']
-        #pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0+0.1)
-        q = self.getLaserTime(data[1])*d.infoCopy()[-1]['rate']
-        #base = self.getBaselineRgn(data)
-        lp = lowPass(d, 200)
-        der = diff(lp)
-        pspRgn = der[q:q+self.stdpCtrl.durationSpin.value()*d.infoCopy()[-1]['rate']/1000]
-        base = der[:q]
-        slope = pspRgn.max()
-        a = argwhere(der == pspRgn.max())[0,0]
-        slopetime = d.xvals('Time')[a]
-        #rgnPsp = pspRgn[0:a][::-1]
-        #b = argwhere(rgnPsp < base.mean()+base.std())
-        #if len(b>0):
-        #    epsptime= pspRgn.xvals('Time')[a-b[0,0]]
+    #def getDerSlope(self, data):
+        #d = data[0]['Channel':'primary']
+        ##pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0+0.1)
+        #q = self.getLaserTime(data[1])*d.infoCopy()[-1]['rate']
+        ##base = self.getBaselineRgn(data)
+        #lp = lowPass(d, 200)
+        #der = diff(lp)
+        #pspRgn = der[q:q+self.stdpCtrl.durationSpin.value()*d.infoCopy()[-1]['rate']/1000]
+        #base = der[:q]
+        #slope = pspRgn.max()
+        #a = argwhere(der == pspRgn.max())[0,0]
+        #slopetime = d.xvals('Time')[a]
+        ##rgnPsp = pspRgn[0:a][::-1]
+        ##b = argwhere(rgnPsp < base.mean()+base.std())
+        ##if len(b>0):
+        ##    epsptime= pspRgn.xvals('Time')[a-b[0,0]]
+        ##else:
+        ##    epsptime = pspRgn.xvals('Time')[0]
+        #n=0
+        #a = []
+        #while len(a) == 0 and n<2*self.stdpCtrl.thresholdSpin.value()-1:
+            #a = argwhere(pspRgn > base.mean()+(self.stdpCtrl.thresholdSpin.value()*2-n)*base.std())
+            #n+=1
+        #if len(a)>0:
+            #rgnPsp = pspRgn[0:a[0,0]][::-1]
+            #n=0
+            #b=[]
+            #while len(b)==0 and n<self.stdpCtrl.thresholdSpin.value():
+                #b = argwhere(rgnPsp < base.mean()+n*base.std())
+                #n+=1
+            #if len(b) > 0:
+                #index= a[0,0]-b[0,0]
+            #else:
+                #index = 0
         #else:
-        #    epsptime = pspRgn.xvals('Time')[0]
-        n=0
-        a = []
-        while len(a) == 0 and n<2*self.stdpCtrl.thresholdSpin.value()-1:
-            a = argwhere(pspRgn > base.mean()+(self.stdpCtrl.thresholdSpin.value()*2-n)*base.std())
-            n+=1
-        if len(a)>0:
-            rgnPsp = pspRgn[0:a[0,0]][::-1]
-            n=0
-            b=[]
-            while len(b)==0 and n<self.stdpCtrl.thresholdSpin.value():
-                b = argwhere(rgnPsp < base.mean()+n*base.std())
-                n+=1
-            if len(b) > 0:
-                index= a[0,0]-b[0,0]
-            else:
-                index = 0
-        else:
-            index = 0
-        epsptime = self.getPspRgn(data,self.stdpCtrl.durationSpin.value()/1000.0).xvals('Time')[index]
-        return slope, slopetime, epsptime
+            #index = 0
+        #epsptime = self.getPspRgn(data,self.stdpCtrl.durationSpin.value()/1000.0).xvals('Time')[index]
+        #return slope, slopetime, epsptime
         
     def getPspIndex(self, data, pspRgn=None, base=None):
         if pspRgn == None:
@@ -1012,35 +1030,45 @@ class STDPWindow(UncagingWindow):
         slope, epsptime = self.getPspSlope(data, pspStart=start)
         #p.mark('7')
         #epsptime = self.getPspTime(data, pspRgn, base)
-        ds, dst, det = self.getDerSlope(data)
+        #ds, dst, det = self.getDerSlope(data)
         #p.mark('8')
-        return [time, slope, amp, flux, epsptime, ds, dst, det]
+        return [time, slope, amp, flux, epsptime]
     
-    def getBaselineEventTimes(self, period='pre'):
+    def getEventTimes(self, period='pre'):
         eventstarts = []
+        condStats = self.epspStats[self.epspStats['conditioningMask']]
+        if len(condStats) < 1:
+            raise Exception("No conditioning data found.")
+        
         if period == 'pre':
-            condtime = self.epspStats[self.epspStats['conditioningMask']]['unixtime'].min()
+            condtime = condStats['unixtime'].min()
             indexes = self.epspStats[self.epspStats['unixtime'] < condtime]['currentTracesIndex']
         elif period == 'post':
-            condtime = self.epspStats[self.epspStats['conditioningMask']]['unixtime'].min()
+            condtime = condStats['unixtime'].max()
             indexes = self.epspStats[self.epspStats['unixtime'] > condtime]['currentTracesIndex']
         for i in indexes:
             data = self.currentTraces[i][0]['Channel':'primary']
-            self.plot.setData([data])
-            for x in range(len(self.plot.events[0])):
-                eventstarts.append(self.plot.events[0][x][0])
-        eventstarts = array(eventstarts)
+            #self.plot.setData([data])
+            #for x in range(len(self.plot.events[i])):
+            eventstarts.append(self.plot.events[i]['start'])
+        eventstarts = hstack(eventstarts)
         return eventstarts
     
     def getEpspSearchStart(self, period):
         """Return index of earliest expected PSP"""
-        e = self.getBaselineEventTimes(period)
-        print 'got event list'
+        e = self.getEventTimes(period)
+        #print 'got event list'
         if len(e[(e>500)*(e<2000)]) > 0:
-            print 'finding event start'
+            #print 'finding event start'
             h = histogram(e[(e>500)*(e<2000)], bins = 100, range = (0,2000))
-            g = ndimage.gaussian_filter(h[0], 2)
-            i = argwhere(g > g.max()/3)[0,0]
+            g = ndimage.gaussian_filter(h[0].astype(float32), 2)
+            i = argwhere(g > g.max()/3)
+            if len(i) < 1:
+                print "Coundn't find %s search start." % period
+                print "Event times:", e
+                print "histogram:", g
+                return None
+            i = i[0,0]
             start = h[1][i]
             return start
     
@@ -1049,7 +1077,7 @@ class STDPWindow(UncagingWindow):
     def lineMoved(self, line):
         if self.epspStats != None:
             pos = line.getXPos()
-            d = argwhere(abs(self.epspStats['time'] - pos) == abs(self.epspStats['time']-pos).min())
+            d = argmin(abs(self.epspStats['time'] - pos))
             dataindex = int(self.epspStats[d]['currentTracesIndex'])
             data = self.currentTraces[dataindex][0]['Channel':'primary']
             self.plot.setData([data])

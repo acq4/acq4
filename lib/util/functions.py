@@ -18,6 +18,7 @@ from metaarray import *
 from scipy import *
 from scipy.optimize import leastsq
 from scipy.ndimage import gaussian_filter, generic_filter, median_filter
+from scipy import stats
 import scipy.signal
 import numpy.ma
 from debug import *
@@ -1071,25 +1072,53 @@ def findEvents(data, minLength=3, peakStd=2.0, sumStd=2.0, noiseThreshold=None):
     return events
     
     
-def removeBaseline(data, cutoffs=[1.0, 3.0], threshold=4.0, dt=None):
+def adaptiveDetrend(data, x=None, threshold=3.0):
     """Return the signal with baseline removed. Discards outliers from baseline measurement."""
-    if dt is None:
-        tv = data.xvals('Time')
-        dt = tv[1] - tv[0]
+    if x is None:
+        x = data.xvals(0)
     
     d = data.view(ndarray)
     
-    d1 = lowPass(d, cutoffs[0], dt=dt)
-    d2 = d - d1
+    d2 = scipy.signal.detrend(d)
     
     stdev = d2.std()
-    mask = abs(d2) > stdev*threshold
-    d3 = where(mask, 0, d2)
-    d4 = d2 - lowPass(d3, cutoffs[1], dt=dt)
+    mask = abs(d2) < stdev*threshold
+    #d3 = where(mask, 0, d2)
+    #d4 = d2 - lowPass(d3, cutoffs[1], dt=dt)
+    
+    lr = stats.linregress(x[mask], d[mask])
+    base = lr[1] + lr[0]*x
+    d4 = d - base
     
     if isinstance(data, MetaArray):
         return MetaArray(d4, info=data.infoCopy())
     return d4
+    
+def subtractMedian(data, time=None, width=100, dt=None):
+    """Subtract rolling median from signal. 
+    Arguments:
+      width:  the width of the filter window in samples
+      time: the width of the filter window in x value 
+            if specified, then width is ignored.
+      dt:   the conversion factor for time -> width
+    """
+        
+    if time is not None:
+        if dt is None:
+            x = data.xvals(0)
+            dt = x[1] - x[0]
+        width = time / dt
+    
+    d1 = data.view(ndarray)
+    width = int(width)
+    med = median_filter(d1, size=width)
+    d2 = d1 - med
+    
+    if isinstance(data, MetaArray):
+        return MetaArray(d2, info=data.infoCopy())
+    return d2
+    
+    
     
 #def removeBaseline(data, windows=[500, 100], threshold=4.0):
     ## very slow method using median_filter:
