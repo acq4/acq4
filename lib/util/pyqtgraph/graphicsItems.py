@@ -1622,7 +1622,7 @@ class LinearRegionItem(GraphicsObject):
         
         for l in self.lines:
             l.setParentItem(self)
-            QtCore.QObject.connect(l, QtCore.SIGNAL('positionChanged'), self.lineMoved)
+            l.connect(QtCore.SIGNAL('positionChanged'), self.lineMoved)
             
         if brush is None:
             brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 50))

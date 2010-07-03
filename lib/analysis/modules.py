@@ -14,11 +14,11 @@ from PyQt4 import QtCore, QtGui
 from functions import *
 from SpinBox import *
 from debug import *
-from DictView import DictView
+#from DictView import DictView
 from scipy import stats, signal, ndimage
 from numpy import log
 from WidgetGroup import *
-
+from advancedTypes import OrderedDict
 
 class UncagingSpot(QtGui.QGraphicsEllipseItem):
     def __init__(self, source=None): #source is directory handle for single-stimulus spots
@@ -60,12 +60,15 @@ class EventMatchWidget(QtGui.QSplitter):
         self.analysisPlot.setXLink('UncagingData')
         
         self.templatePlot = PlotWidget()
-        self.vsplitter.addWidget(self.templatePlot)
+        #self.vsplitter.addWidget(self.templatePlot)
         
         self.ctrl.preFilterList.addFilter('Denoise')
         self.ctrl.preFilterList.addFilter('Bessel', cutoff=1000, order=4, band='lowpass')
         self.ctrl.preFilterList.addFilter('ExpDeconvolve')
         self.ctrl.preFilterList.addFilter('AdaptiveDetrend', threshold=2.0)
+        
+        self.ctrl.zcSumAbsThresholdSpin.setOpts(value=0, step=1, minStep=1e-12, bounds=[0,None], dec=True)
+        self.ctrl.zcAmpAbsThresholdSpin.setOpts(value=0, step=1, minStep=1e-12, bounds=[0,None], dec=True)
         
         QtCore.QObject.connect(self.ctrl.detectMethodCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.ctrl.detectMethodStack.setCurrentIndex)
         self.analysisEnabled = True
@@ -180,7 +183,11 @@ class EventMatchWidget(QtGui.QSplitter):
                 events['peak'][i] = peak
             
         elif self.ctrl.detectMethodCombo.currentText() == 'Zero-crossing':
-            events = findEvents(data, noiseThreshold=self.ctrl.zcSumThresholdSpin.value())
+            minLen = self.ctrl.zcLenAbsThresholdSpin.value()
+            minPeak = self.ctrl.zcAmpAbsThresholdSpin.value()
+            minSum = self.ctrl.zcSumAbsThresholdSpin.value()
+            noiseThresh = self.ctrl.zcSumRelThresholdSpin.value()
+            events = findEvents(data, minLength=minLen, minPeak=minPeak, minSum=minSum, noiseThreshold=noiseThresh)
         elif self.ctrl.detectMethodCombo.currentText() == 'Clements-Bekkers':
             rise = self.ctrl.cbRiseTauSpin.value()
             decay = self.ctrl.cbFallTauSpin.value()
@@ -352,6 +359,10 @@ class UncagingWindow(QtGui.QMainWindow):
         #self.plot = PlotWidget()
         self.plot = EventMatchWidget()
         self.cw.addWidget(self.plot)
+        
+        self.cw.setStretchFactor(0, 1)
+        self.cw.setStretchFactor(1, 5)
+        self.cw.setStretchFactor(2, 20)
         
         QtCore.QObject.connect(self.plot.stateGroup, QtCore.SIGNAL('changed'), self.resetAnalysisCache)
         
@@ -712,14 +723,22 @@ class STDPWindow(UncagingWindow):
         bwtop = QtGui.QSplitter()
         bwtop.setOrientation(QtCore.Qt.Horizontal)
         self.cw.insertWidget(1, bwtop)
+        self.plotBox = QtGui.QTabWidget()
         self.LTPplot = PlotWidget()
         self.line = InfiniteLine(self.LTPplot, 1.0, movable = True)
+        self.finalTimeRgn = LinearRegionItem(self.LTPplot, orientation='vertical', vals=[30, 50])
         self.LTPplot.addItem(self.line)
-        self.latencies = {}
-        self.dictView = DictView(self.latencies)
+        self.LTPplot.addItem(self.finalTimeRgn)
+        self.plotBox.addTab(self.LTPplot, 'LTP')
+        self.avgPlot = PlotWidget()
+        self.plotBox.addTab(self.avgPlot, 'Averages')
+        self.results = {}
+        #self.dictView = DictView(self.results)
+        self.resultsTable = QtGui.QTableWidget()
         bwtop.addWidget(self.canvas)
-        bwtop.addWidget(self.LTPplot)
-        bwtop.addWidget(self.dictView)
+        bwtop.addWidget(self.plotBox)
+        #bwtop.addWidget(self.dictView)
+        bwtop.addWidget(self.resultsTable)
         bwbottom = QtGui.QSplitter()
         bwbottom.setOrientation(QtCore.Qt.Horizontal)
         self.cw.insertWidget(2, bwbottom)
@@ -757,6 +776,9 @@ class STDPWindow(UncagingWindow):
         self.plot.analysisPlot.show()
 
         self.line.connect(QtCore.SIGNAL('positionChanged'), self.lineMoved)
+        bwtop.setStretchFactor(0, 2)
+        bwtop.setStretchFactor(1, 5)
+        bwtop.setStretchFactor(0, 5)
 
         
         
@@ -771,6 +793,9 @@ class STDPWindow(UncagingWindow):
         self.epspStats = zeros(len(self.currentTraces), dtype=[
             ('currentTracesIndex', int), 
             ('pspMask', bool), 
+            ('preMask', bool), 
+            ('postMask', bool), 
+            ('finalMask', bool),
             ('conditioningMask', bool), 
             ('unixtime', float), 
             ('slope', float), 
@@ -794,96 +819,242 @@ class STDPWindow(UncagingWindow):
         ## Initialize PSP stats array
         for i in range(len(self.currentTraces)):
             self.epspStats[i]['currentTracesIndex'] = i
-            self.epspStats[i]['pspMask'] = False
-            self.epspStats[i]['conditioningMask'] = False
-            self.epspStats[i]['unixtime'] = self.getUnixTime(self.currentTraces[i])
+            self.epspStats[i]['pspMask']            = False
+            self.epspStats[i]['conditioningMask']   = False
+            self.epspStats[i]['unixtime']           = self.getUnixTime(self.currentTraces[i])
             
             if self.currentTraces[i][0]['Channel':'Command'].max() >= 0.1e-09:
                 self.epspStats[i]['conditioningMask'] = True
-                stimtime = argwhere(self.currentTraces[i][0]['Channel':'Command'] == self.currentTraces[i][0]['Channel':'Command'].max())
-                first = argwhere(self.currentTraces[i][0]['Channel':'primary'] == self.currentTraces[i][0]['Channel':'primary'][stimtime[0]:stimtime[0]+90].max())
+                cmdChannel = self.currentTraces[i][0]['Channel':'Command']
+                priChannel = self.currentTraces[i][0]['Channel':'primary']
+                stimtime = argwhere(cmdChannel == cmdChannel.max())
+                first    = argwhere(priChannel == priChannel[stimtime[0]:stimtime[0]+90].max())
                 if len(first) > 0:
                     firstspikeindex = first[0]
-                    firstspike = self.currentTraces[i][0]['Channel':'primary'].xvals('Time')[firstspikeindex]
+                    firstspike = priChannel.xvals('Time')[firstspikeindex]
                     self.epspStats[i]['spikeTime'] = firstspike
         
+        ## Sort all trace analysis records. 
+        ##   Note that indexes in epspStats and currentTraces will no longer match.
+        self.epspStats.sort(order = 'unixtime') 
+        
+        ## compute normalized time in minutes past start
+        mintime = self.epspStats['unixtime'].min()
+        self.epspStats['time'] = (self.epspStats['unixtime'] - mintime) / 60
+            
+        
+        
+        
+        ## Sort data into pre- and post- regions
+        condtime = (
+            self.epspStats[self.epspStats['conditioningMask']]['unixtime'].min(), 
+            self.epspStats[self.epspStats['conditioningMask']]['unixtime'].max()
+        )
+        self.epspStats['preMask']  = self.epspStats['unixtime'] < condtime[0]
+        self.epspStats['postMask'] = self.epspStats['unixtime'] > condtime[1]
+        finalRange = self.finalTimeRgn.getRegion()
+        self.epspStats['finalMask'] = self.epspStats['postMask'] * (self.epspStats['time'] > finalRange[0]) * (self.epspStats['time'] < finalRange[1])
+        preIndexes  = self.epspStats[self.epspStats['preMask' ]]['currentTracesIndex']
+        postIndexes = self.epspStats[self.epspStats['postMask']]['currentTracesIndex']
+        
+        
         ## determine likely times for first response after stim.
-        preSearchStart = self.getEpspSearchStart(period = 'pre')
-        postSearchStart = self.getEpspSearchStart(period = 'post')
+        preEvents  = self.getEventTimes(self.epspStats['preMask'])
+        postEvents = self.getEventTimes(self.epspStats['postMask'])
+        finalEvents = self.getEventTimes(self.epspStats['finalMask'])
+        preSearchStart  = self.getEpspSearchStart(preEvents)
+        postSearchStart = self.getEpspSearchStart(postEvents)
         
-        condtime = (self.epspStats[self.epspStats['conditioningMask']]['unixtime'].min(), self.epspStats[self.epspStats['conditioningMask']]['unixtime'].max())
-        preIndexes = self.epspStats[self.epspStats['unixtime'] < condtime[0]]['currentTracesIndex']
-        postIndexes = self.epspStats[self.epspStats['unixtime'] > condtime[1]]['currentTracesIndex']
         
-        
+        ## Analyze pre and post traces for events
         if preSearchStart is None or postSearchStart is None:
             print "Could not determine start time for PSP search; will not calculate stats.", preSearchStart, postSearchStart
         else:
-            for i in range(len(self.currentTraces)):
+            for j in range(len(self.epspStats)):
+                i = self.epspStats[j]['currentTracesIndex']
                 if i in preIndexes:
                     t,s,a,f,e = self.EPSPstats(self.currentTraces[i], preSearchStart)
                 elif i in postIndexes:
                     t,s,a,f,e = self.EPSPstats(self.currentTraces[i], postSearchStart)
-                self.epspStats[i]['amp'] = a
-                self.epspStats[i]['flux'] = f
+                self.epspStats[j]['amp'] = a
+                self.epspStats[j]['flux'] = f
                 #self.epspStats[i]['derslope'] = ds
                 #self.epspStats[i]['derepsptime'] = de
                 #self.epspStats[i]['derslopetime'] = dst
                 if s != None:
                     #print "Setting pspMask index %i to True" %i
-                    self.epspStats[i]['pspMask'] = True
-                    self.epspStats[i]['slope'] = s
-                    self.epspStats[i]['epsptime'] = e
+                    self.epspStats[j]['pspMask']  = True
+                    self.epspStats[j]['slope']    = s
+                    self.epspStats[j]['epsptime'] = e
                 if self.stdpCtrl.apExclusionCheck.isChecked():
                     if self.currentTraces[i][0]['Channel':'primary'].max() > self.stdpCtrl.apthresholdSpin.value()/1000:  ##exclude traces with action potentials from plot
                         #print "Setting pspMask index %i to False" %i
-                        self.epspStats[i]['pspMask'] = False
+                        self.epspStats[j]['pspMask'] = False
                     
             
-
-        self.epspStats.sort(order = 'unixtime') 
-       # print "sortedStats after sort:", epspStats
-    
-        endbase = self.epspStats[self.epspStats['conditioningMask']]['unixtime'].min()
         ## mask for all traces in the base region with no APs
-        basePspMask = (self.epspStats['unixtime'] < endbase) * self.epspStats['pspMask']  
-        basePspStats = self.epspStats[basePspMask]
+        prePspMask    = self.epspStats['preMask']  * self.epspStats['pspMask']  
+        postPspMask   = self.epspStats['postMask'] * self.epspStats['pspMask']  
+        finalPspMask  = self.epspStats['finalMask'] * self.epspStats['pspMask']  
+        prePspStats   = self.epspStats[prePspMask]
+        postPspStats  = self.epspStats[postPspMask]
+        finalPspStats = self.epspStats[finalPspMask]
+        
+        ## Times (indexes) of first event selected from each trace
+        preEpspTimes  = self.epspStats[prePspMask]['epsptime']
+        postEpspTimes = self.epspStats[postPspMask]['epsptime']
+        finalEpspTimes = self.epspStats[finalPspMask]['epsptime']
+        
+        ## Times of all events within search region in pre and post traces
+        dt = 1e-4  ## FIXME
+        #allPreEventTimes  = self.getEventTimes('pre')
+        allPreEventTimes  = preEvents[preEvents>preSearchStart] * dt
+        #allPostEventTimes = self.getEventTimes('post')
+        allPostEventTimes = postEvents[postEvents>postSearchStart] * dt
+        allFinalEventTimes = finalEvents[finalEvents>postSearchStart] * dt
+        
+        ## Compute normalized values
         for x in range(len(self.epspStats)):
-            self.epspStats[x]['time'] = (self.epspStats[x]['unixtime'] - self.epspStats['unixtime'].min()) / 60
+            #self.epspStats[x]['time'] = (self.epspStats[x]['unixtime'] - self.epspStats['unixtime'].min()) / 60
             if self.epspStats[x]['pspMask'] == True:
-                self.epspStats[x]['normSlope'] = self.epspStats[x]['slope'] / basePspStats['slope'].mean()
-                self.epspStats[x]['normAmp'] = self.epspStats[x]['amp'] / basePspStats['amp'].mean()
-                self.epspStats[x]['normFlux'] = self.epspStats[x]['flux'] / basePspStats['flux'].mean()
+                self.epspStats[x]['normSlope'] = self.epspStats[x]['slope'] / prePspStats['slope'].mean()
+                self.epspStats[x]['normAmp']   = self.epspStats[x]['amp']   / prePspStats['amp'].mean()
+                self.epspStats[x]['normFlux']  = self.epspStats[x]['flux']  / prePspStats['flux'].mean()
                 #self.epspStats[x]['normDerSlope'] = (self.epspStats['derslope'][x])/(mean(self.epspStats[(self.epspStats['pspMask'])*baseStats]['derslope']))
 
-        preEpspTimes = self.epspStats[(self.epspStats['unixtime'] < endbase)*(self.epspStats['pspMask'])]['epsptime']
-        postEpspTimes = self.epspStats[(self.epspStats['unixtime'] > endbase)*(self.epspStats['pspMask'])]['epsptime']
-        self.latencies['Average EPSP time (pre):'] = ((preEpspTimes*1000).mean(), (preEpspTimes*1000).std()) 
-        self.latencies['Average EPSP time (post):'] = ((postEpspTimes*1000).mean(), (postEpspTimes*1000).std())
-        self.latencies['Median EPSP time (pre):'] = median(preEpspTimes)*1000 
-        self.latencies['Median EPSP time (post):'] = median(postEpspTimes)*1000
-        self.latencies['Average 1st PSP time:'] = mean(self.epspStats[self.epspStats['conditioningMask']]['epsptime'])*1000
-        self.latencies['Median 1st PSP time:'] = median(self.epspStats[self.epspStats['conditioningMask']]['epsptime'])*1000
-        #self.latencies['Average derEPSP time:'] = mean(self.epspStats[self.epspStats['unixtime']< endbase]['derepsptime']*1000)
+        
+        self.results = OrderedDict()
+        statSet = [
+            ('1st EPSP Time (pre)',  preEpspTimes),
+            ('1st EPSP Time (post)', postEpspTimes),
+            ('1st EPSP Time (final)',finalEpspTimes),
+            ('EPSP Time (pre)',      allPreEventTimes),
+            ('EPSP Time (post)',     allPostEventTimes),
+            ('EPSP Time (final)',    allFinalEventTimes),
+            ('Flux (pre)',           prePspStats['flux']),
+            ('Flux (post)',          postPspStats['flux']),
+            ('Flux (final)',         finalPspStats['flux']),
+            ('Slope (pre)',          prePspStats['slope']),
+            ('Slope (post)',         postPspStats['slope']),
+            ('Slope (final)',        finalPspStats['slope']),
+        ]
+        for name, vals in statSet:
+            self.results['Median '+name] = median(vals)
+            self.results['Mean '  +name] = mean(vals)
+            self.results['Stdev ' +name] = std(vals)
+        #self.results['Average 1st EPSP time (pre):'] = (preEpspTimes.mean()*1000, preEpspTimes.std()*1000) 
+        #self.results['Average 1st EPSP time (post):'] = (postEpspTimes.mean()*1000, postEpspTimes.std()*1000)
+        #self.results['Median 1st EPSP time (pre):'] = median(preEpspTimes)*1000 
+        #self.results['Median 1st EPSP time (post):'] = median(postEpspTimes)*1000
+        
+        #self.results['Average EPSP time (pre):'] = (allPreEventTimes.mean()*1000, allPreEventTimes.std()*1000)
+        #self.results['Average EPSP time (post):'] = (allPostEventTimes.mean()*1000, allPostEventTimes.std()*1000)
+        #self.results['Median EPSP time (pre):'] = median(allPreEventTimes)*1000
+        #self.results['Median EPSP time (post):'] = median(allPostEventTimes)*1000
+        
+        #self.results['Average derEPSP time:'] = mean(self.epspStats[self.epspStats['unixtime']< endbase]['derepsptime']*1000)
         #print 'spiketime:', spiketime
         #print 'mean:', mean(spiketime)
-        self.latencies['Average 1st Spike time:'] = mean(self.epspStats[self.epspStats['conditioningMask']]['spikeTime'])*1000
-        #self.latencies['Average last Spike time:'] = mean(lastspiketime)*1000
-        self.latencies['PSP-Spike Delay:']= self.latencies['Average 1st Spike time:']-self.latencies['Average EPSP time (pre):']
-        #self.latencies['derPSP-Spike Delay:']= self.latencies['Average 1st Spike time:']-self.latencies['Average derEPSP time:']
-        self.latencies['Change in slope(red):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normSlope'])
-        self.latencies['Change in amp(blue):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normAmp'])
-        self.latencies['Change in flux(green):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normFlux'])
-        #self.latencies['Change in derslope(purple):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normDerSlope'])
-        self.dictView.setData(self.latencies)
         
-        self.LTPplot.clear()
-        self.LTPplot.addItem(self.line)
-        self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normFlux'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen=mkPen([0, 255, 0]))
-        self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normAmp'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen = mkPen([0, 0, 255]))
+        
+        #self.results['Average flux (pre)'] = (prePspStats['flux'].mean(), prePspStats['flux'].std())
+        #self.results['Average flux (post)'] = (postPspStats['flux'].mean(), postPspStats['flux'].std())
+        #self.results['Average slope (pre)'] = (prePspStats['slope'].mean(), prePspStats['slope'].std())
+        #self.results['Average slope (post)'] = (postPspStats['slope'].mean(), postPspStats['slope'].std())
+        
+        self.results['Number of Pre Traces']   = sum(self.epspStats['preMask'])
+        self.results['Number of Post Traces']  = sum(self.epspStats['postMask'])
+        self.results['Number of Final Traces'] = sum(self.epspStats['finalMask'])
+        self.results['Final Period Start']     = finalRange[0]
+        self.results['Final Period End']       = finalRange[1]
+        
+        self.results['Average 1st Spike time:'] = mean(self.epspStats[self.epspStats['conditioningMask']]['spikeTime'])*1000
+        
+        #self.results['Average last Spike time:'] = mean(lastspiketime)*1000
+        #self.results['PSP-Spike Delay:'] = self.results['Average 1st Spike time:']-self.results['Median EPSP Time (pre):']
+        #self.results['derPSP-Spike Delay:']= self.results['Average 1st Spike time:']-self.results['Average derEPSP time:']
+        self.results['Change in slope(red):']      = mean(finalPspStats['normSlope'])
+        self.results['Change in amp(blue):']       = mean(finalPspStats['normAmp'])
+        self.results['Change in flux(green):']     = mean(finalPspStats['normFlux'])
+        self.results['Change in latency(purple):'] = mean(finalPspStats['epsptime']) / mean(prePspStats['epsptime'])
+        #self.results['Change in derslope(purple):'] = mean(self.epspStats[(self.epspStats['unixtime']> endbase)*(self.epspStats['pspMask'])]['normDerSlope'])
+        self.setResultsTable(self.results)
+        #self.dictView.setData(self.results)
+        
+        self.LTPplot.clearPlots()
+        #self.LTPplot.addItem(self.line)
+        
+        pspStats = self.epspStats[self.epspStats['pspMask']]
+        
+        ## plot flux
+        self.LTPplot.plot(data = pspStats['normFlux'], x=pspStats['time'], pen=mkPen([0, 255, 0]))
+        
+        ## plot amplitude
+        self.LTPplot.plot(data = pspStats['normAmp'], x=pspStats['time'], pen=mkPen([0, 0, 255]))
         #self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normDerSlope'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen = mkPen([255, 0, 255]))
-        self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normSlope'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen=mkPen([255, 0, 0]))
-        self.LTPplot.plot(data = self.epspStats[self.epspStats['pspMask']]['normSlope'], x = self.epspStats[self.epspStats['pspMask']]['time'], pen=mkPen([255, 0, 255]))
+        
+        ## plot slope
+        self.LTPplot.plot(data = pspStats['normSlope'], x=pspStats['time'], pen=mkPen([255, 0, 0]))
+        
+        ## plot latency
+        self.LTPplot.plot(data = pspStats['epsptime'] / preEpspTimes.mean(), x=pspStats['time'], pen=mkPen([255, 0, 255]))
+        
+        self.showAveragePlots()
+        
+
+    def setResultsTable(self, data):
+        t = self.resultsTable
+        t.setColumnCount(3)
+        t.setRowCount(len(data))
+        for i in range(len(data)):
+            k = data.keys()[i]
+            v = data[k]
+            i1 = QtGui.QTableWidgetItem(k)
+            t.setItem(i, 0, i1)
+            if type(v) is tuple:
+                i2 = [QtGui.QTableWidgetItem("%0.04g" % x) for x in v]
+                for j in range(len(i2)):
+                    t.setItem(i, j+1, i2[j])
+            else:
+                i2 = QtGui.QTableWidgetItem("%0.04g" % v)
+                t.setItem(i, 1, i2)
+        self.copyResultsTable()
+                
+    def copyResultsTable(self):
+        """Copy results table to clipboard."""
+        s = ''
+        t = self.resultsTable
+        for r in range(t.rowCount()):
+            row = []
+            for c in range(t.columnCount()):
+                item = t.item(r, c)
+                if item is not None:
+                    row.append(str(item.text()))
+                else:
+                    row.append('')
+            s += ('\t'.join(row) + '\n')
+        QtGui.QApplication.clipboard().setText(s)
+
+    def showAveragePlots(self):
+        stats = self.epspStats
+        masks = [
+            (stats['preMask'],                     mkPen((0, 0, 255))),
+            (stats['preMask'] * stats['pspMask'],  mkPen((0, 150, 255))),
+            (stats['conditioningMask'],            mkPen((255, 0, 255))),
+            (stats['postMask'],                    mkPen((255, 0, 0))),
+            (stats['postMask'] * stats['pspMask'], mkPen((255, 150, 0))),
+            (stats['finalMask'],                    mkPen((0, 255, 0))),
+            (stats['finalMask'] * stats['pspMask'], mkPen((150, 255, 0))),
+        ]
+        self.avgPlot.clear()
+        for mask, pen in masks:
+            inds = stats[mask]['currentTracesIndex']
+            traces = [self.currentTraces[i][0]['Channel': 'primary'] for i in inds]
+            avg = vstack(traces).mean(axis=0)
+            ma = MetaArray(avg, info=traces[0].infoCopy())
+            self.avgPlot.plot(ma, pen=pen)
+        
+    
 
     def getUnixTime(self, data):
         time = data[0]['Channel':'primary'].infoCopy()[-1]['startTime']
@@ -1034,38 +1205,49 @@ class STDPWindow(UncagingWindow):
         #p.mark('8')
         return [time, slope, amp, flux, epsptime]
     
-    def getEventTimes(self, period='pre'):
-        eventstarts = []
-        condStats = self.epspStats[self.epspStats['conditioningMask']]
-        if len(condStats) < 1:
-            raise Exception("No conditioning data found.")
+    def getEventTimes(self, mask, crop=True):
+        """Return a list of event times for all traces within mask"""
+        events = []
+        #condStats = self.epspStats[self.epspStats['conditioningMask']]
+        #if len(condStats) < 1:
+            #raise Exception("No conditioning data found.")
         
-        if period == 'pre':
-            condtime = condStats['unixtime'].min()
-            indexes = self.epspStats[self.epspStats['unixtime'] < condtime]['currentTracesIndex']
-        elif period == 'post':
-            condtime = condStats['unixtime'].max()
-            indexes = self.epspStats[self.epspStats['unixtime'] > condtime]['currentTracesIndex']
+        #if period == 'pre':
+            #condtime = condStats['unixtime'].min()
+            #indexes = self.epspStats[self.epspStats['unixtime'] < condtime]['currentTracesIndex']
+        #elif period == 'post':
+            #condtime = condStats['unixtime'].max()
+            #indexes = self.epspStats[self.epspStats['unixtime'] > condtime]['currentTracesIndex']
+        indexes = self.epspStats[mask]['currentTracesIndex']
         for i in indexes:
-            data = self.currentTraces[i][0]['Channel':'primary']
+            #data = self.currentTraces[i][0]['Channel':'primary']
             #self.plot.setData([data])
             #for x in range(len(self.plot.events[i])):
-            eventstarts.append(self.plot.events[i]['start'])
-        eventstarts = hstack(eventstarts)
-        return eventstarts
+            events.append(self.plot.events[i]['start'])
+        if len(events) == 0:
+            events = array([])
+        else:
+            events = hstack(events)
+            if crop:
+                #FIXME
+                stopInd = 500 + self.stdpCtrl.durationSpin.value()*10
+                events = events[(events>500)*(events<stopInd)]
+        
+        return events
     
-    def getEpspSearchStart(self, period):
-        """Return index of earliest expected PSP"""
-        e = self.getEventTimes(period)
+    def getEpspSearchStart(self, events):
+        """Return index of earliest expected PSP. 
+        -events is a list of event times (indexes) from which to search"""
+        #e = self.getEventTimes(period)
         #print 'got event list'
-        if len(e[(e>500)*(e<2000)]) > 0:
+        if len(events) > 0:
             #print 'finding event start'
-            h = histogram(e[(e>500)*(e<2000)], bins = 100, range = (0,2000))
+            h = histogram(events, bins = 100, range = (0,2000))
             g = ndimage.gaussian_filter(h[0].astype(float32), 2)
             i = argwhere(g > g.max()/3)
             if len(i) < 1:
                 print "Coundn't find %s search start." % period
-                print "Event times:", e
+                print "Event times:", events
                 print "histogram:", g
                 return None
             i = i[0,0]

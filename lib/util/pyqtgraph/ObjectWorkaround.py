@@ -10,6 +10,8 @@ class QObjectWorkaround:
         return QtCore.QObject.disconnect(self._qObj_, *args)
     def emit(self, *args):
         return QtCore.QObject.emit(self._qObj_, *args)
+    def blockSignals(self, b):
+        return self._qObj_.blockSignals(b)
         
 class QGraphicsObject(QtGui.QGraphicsItem, QObjectWorkaround):
     def __init__(self, *args):
