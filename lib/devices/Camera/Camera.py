@@ -353,8 +353,6 @@ class CameraTask(DAQGenericTask):
     def configure(self, tasks, startOrder):
         ## Merge command into default values:
         params = {
-            'record': True,
-            'triggerProtocol': False,
             'triggerMode': 'Normal',
             #'recordExposeChannel': False
         }
@@ -458,7 +456,8 @@ class CameraTask(DAQGenericTask):
         
         if not self.dev.isRunning():
             #print "Starting camera:", camState
-            self.dev.startAcquire(camState)
+            #self.dev.setParams(camState)
+            self.dev.start()
         
         ## If we requested a trigger mode, wait 300ms for the camera to get ready for the trigger
         ##   (Is there a way to ask the camera when it is ready instead?)

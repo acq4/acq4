@@ -264,7 +264,10 @@ class _PVCamClass:
         if isinstance(p, basestring):
             if p == 'bitDepth':
                 p = 'BIT_DEPTH'
-            return LIB('values', 'PARAM_' + p)
+            try:
+                return LIB('values', 'PARAM_' + p)
+            except NameError:
+                raise Exception("No parameter named '%s'" % p)
         else:
             return p
             
@@ -275,13 +278,13 @@ class _PVCamClass:
             ps = 'bitDepth'
         return ps
         
-    def typeFromString(self, p):
-        """Return the driver's type ID for the given type name."""
-        return p
-            
-    def typeToString(self, p):
-        """Return the type name given the driver's type ID."""
-        return p
+    #def typeFromString(self, p):
+    #    """Return the driver's type ID for the given type name."""
+    #    return p
+    #        
+    #def typeToString(self, p):
+    #    """Return the type name given the driver's type ID."""
+    #    return p
             
         
 
@@ -496,6 +499,7 @@ class _CameraClass:
         
         if param in self.groupParams:
             return self.setParams(zip(self.groupParams[param], value))
+        
         
         if param in self.params:
             return self._setLocalParam(param, value, autoCorrect)
