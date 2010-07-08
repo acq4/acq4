@@ -15,11 +15,12 @@ from lib.util.Mutex import Mutex, MutexLocker
 from lib.util.debug import *
 
 class PVCam(Camera):
-    def __init__(self, ):
-        Camera.__init__(self)
-        
+    def __init__(self, *args, **kargs):
         self.camLock = Mutex()  ## Lock to protect access to camera
-        
+        Camera.__init__(self, *args, **kargs)  ## superclass will call setupCamera when it is ready.
+    
+    def setupCamera(self):
+        self.pvc = PVCDriver
         cams = self.pvc.listCameras()
         print "Cameras:", cams
         if len(cams) < 1:
@@ -34,6 +35,7 @@ class PVCam(Camera):
                 raise Exception('Can not find pvcam camera "%s"' % str(self.camConfig['serial']))
         print "Selected camera:", cams[ind]
         self.cam = self.pvc.getCamera(cams[ind])
+        
     
     #def reconnect(self):
         #print "Stopping acquisition.."
@@ -59,19 +61,20 @@ class PVCam(Camera):
         Camera.quit(self)
         self.pvc.quit()
         
-    def listParams(self):
+    def listParams(self, params=None):
+        """List properties of specified parameters, or of all parameters if None"""
         with self.camLock:
-            return self.cam.listParams()
+            return self.cam.listParams(params)
         
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
         with self.camLock:
-            (newVals, restart) = self.cam.setParams(params)
+            newVals = self.cam.setParams(params, autoCorrect=autoCorrect)
+        restart = True  ## pretty much _always_ need a restart with these cameras.
         
-        self.emit(QtCore.SIGNAL('paramsChanged'), newVals)
-
         if autoRestart and restart:
             self.restart()
+        self.emit(QtCore.SIGNAL('paramsChanged'), newVals)
         return (newVals, restart)
 
     def getParams(self, params=None):

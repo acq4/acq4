@@ -60,8 +60,6 @@ class Camera(DAQGeneric):
         DAQGeneric.__init__(self, dm, daqConfig, name)
         
         self.camConfig = config
-        self.acqThread = AcquireThread(self)
-        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('finished()'), self.threadFinished)
         self.stateStack = []
         
         
@@ -80,9 +78,6 @@ class Camera(DAQGeneric):
             'objective': ''
         }
         
-        if 'params' in config:
-            self.setParams(config['params'])
-            
         
         if 'scopeDevice' in config:
             self.scopeDev = self.dm.getDevice(config['scopeDevice'])
@@ -94,22 +89,42 @@ class Camera(DAQGeneric):
         else:
             self.scopeDev = None
             
+            
+        self.setupCamera()  
+            
+        self.acqThread = AcquireThread(self)
+        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('finished()'), self.threadFinished)
+        
+        if 'params' in config:
+            self.setParams(config['params'])
+            
+    def setupCamera(self):
+        """Prepare the camera at least so that get/setParams will function correctly"""
+        raise Exception("Function must be reimplemented in subclass.")
 
     def threadFinished(self):
         print "Camera: ACQ thread finished"
 
-    def listParams(self, onlyWritable=False):
-        """Return a dictionary of parameter descriptions. Values may be any of:
+    def listParams(self, params=None):
+        """Return a dictionary of parameter descriptions. By default, all parameters are listed.
+        Each description is a tuple: (values, isWritable, isReadable, dependencies)
+        
+        values may be any of:
           - Tuple of ints or floats indicating minimum and maximum values
           - List of int / float / string values
           - Tuple of strings, indicating that the parameter is made up of multiple sub-parameters
              (eg, 'region' should be ('regionX', 'regionY', 'regionW', 'regionH')
-          """
+             
+        dependencies is a list of other parameters which affect the allowable values of this parameter.
+        
+        eg:
+        {  'paramName': ([list of values], True, False, []) }
+        """
         raise Exception("Function must be reimplemented in subclass.")
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
         """Set camera parameters. Options are:
-           params: a dictionary of param:value pairs to be set
+           params: a list of (param, value) pairs to be set. Parameters are set in the order specified.
            autoRestart: If true, restart the camera if required to enact the parameter changes
            autoCorrect: If true, correct values that are out of range to their nearest acceptable value
         

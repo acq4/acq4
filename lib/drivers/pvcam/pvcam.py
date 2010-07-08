@@ -3,6 +3,7 @@ from ctypes import *
 import sys, numpy, time, types
 #import lib.util.cheader as cheader
 from clibrary import *
+from advancedTypes import OrderedDict
 
 __all__ = ['PVCam']
 
@@ -19,28 +20,48 @@ LIB = CLibrary(windll.Pvcam32, HEADERS, prefix='pl_')
 ### Default configuration parameters. 
 ### All cameras use the parameters under 'ALL'
 ### If a camera model matches another key, then those values override.
+### format for each camera is ( [list of default values], {dict of value ranges} )
 
 cameraDefaults = {
-    'ALL': {
-        'READOUT_PORT': 0,  ## Only option for Q57, fastest for QuantEM
-        'SPDTAB_INDEX': 0,
-        'GAIN_INDEX': 3,
-        'PMODE': LIB.PMODE_NORMAL,  ## PMODE_FT ?
-        'SHTR_OPEN_MODE': LIB.OPEN_PRE_SEQUENCE,
-        'CLEAR_MODE': LIB.CLEAR_PRE_EXPOSURE,
-        'CLEAR_CYCLES': 2,
-    },
+    'ALL': ([
+            ('READOUT_PORT', 0),  ## Only option for Q57, fastest for QuantEM
+            ('SPDTAB_INDEX', 0),
+            ('GAIN_INDEX', 3),
+            ('PMODE', LIB.PMODE_NORMAL),  ## PMODE_FT ?
+            ('SHTR_OPEN_MODE', LIB.OPEN_PRE_SEQUENCE),
+            ('CLEAR_MODE', LIB.CLEAR_PRE_EXPOSURE),
+            ('CLEAR_CYCLES', 2),
+        ],
+        {
+            
+            
+            
+        }
+    ),
     
-    'QUANTEM:512SC': {
-        'SPDTAB_INDEX': 0,  ## Fastest option for QM512
-        'CLEAR_MODE': LIB.CLEAR_PRE_SEQUENCE,  ## Overlapping mode for QuantEM cameras
-        'GAIN_INDEX': 2,
-    },
+    'QUANTEM:512SC': (
+        [
+            ('SPDTAB_INDEX', 0),  ## Fastest option for QM512
+            ('CLEAR_MODE', LIB.CLEAR_PRE_SEQUENCE),  ## Overlapping mode for QuantEM cameras
+            ('GAIN_INDEX', 2),
+        ],
+        {
+            'binningX': ([1,2,3,4,5,6,7,8],),
+            'binningY': ([1,2,3,4,5,6,7,8],),
+        }
+    ),
     
-    'Quantix57': {
-        'SPDTAB_INDEX': 2,  ## Fastest option for Q57
-    }
+    'Quantix57': ([
+            ('SPDTAB_INDEX', 2),  ## Fastest option for Q57
+        ],
+        {
+            'binningX': ([1,2,4,8,16,32,64,128,256],),
+            'binningY': ([1,2,4,8,16,32,64,128,256],),
+        }
+    )
 }
+
+
 
 
 ### List of parameters we want exposed to the outside
@@ -53,7 +74,7 @@ externalParams = [
     'GAIN_MULT_ENABLE',
     'GAIN_MULT_FACTOR',
     'INTENSIFIER_GAIN',
-    'EXPOSURE_MODE',
+    #'EXPOSURE_MODE',
     'PREFLASH',
     'PIX_TIME',
     'CLEAR_MODE',
@@ -79,7 +100,7 @@ def init():
 
 
 class _PVCamClass:
-    
+    """This class is an interface to the PVCam driver; NOT an interface to any particular camera."""
     PVCAM_CREATED = False
     
     def __init__(self):
@@ -90,11 +111,42 @@ class _PVCamClass:
             raise Exception("Will not create another pvcam instance--use the pre-existing PVCam object.")
         if LIB.pvcam_init() < 1:
             raise Exception("Could not initialize pvcam library (pl_pvcam_init): %s" % self.error())
-            
         # This should happen before every new exposure (?)
-        #if self.lib.exp_init_seq() < 1:
-        #    raise Exception("Could not initialize pvcam library (pl_exp_init_seq): %s" % self.error())
+        if LIB.exp_init_seq() < 1:
+            raise Exception("Could not initialize pvcam library (pl_exp_init_seq): %s" % self.error())
         _PVCamClass.PVCAM_CREATED = True
+        
+        #self.paramList = [
+        #    'SPDTAB_INDEX',
+        #    'BIT_DEPTH',
+        #    'GAIN_INDEX',
+        #    'GAIN_MULT_ENABLE',
+        #    'GAIN_MULT_FACTOR',
+        #    'INTENSIFIER_GAIN',
+        #    #'EXPOSURE_MODE',  ## this is mostly exposed through triggerMode
+        #    'PREFLASH',
+        #    'PIX_TIME',
+        #    'CLEAR_MODE',
+        #    'CLEAR_CYCLES',
+        #    'SHTR_OPEN_MODE',
+        #    'SHTR_OPEN_DELAY',
+        #    'PIX_SER_SIZE',
+        #    'PIX_PAR_SIZE',
+        #    'SER_SIZE',
+        #    'PAR_SIZE',
+        #    'ANTI_BLOOMING',
+        #    'TEMP',
+        #    'TEMP_SETPOINT',
+        #    'COOLING_MODE',
+        #]
+        
+        global externalParams
+        
+        self.paramTable = {}
+        for p in externalParams:
+            self.paramTable[p] = self.paramFromString(p)
+        
+        
 
     def reloadDriver(self):
         #if self.pvcam.pl_pvcam_uninit() < 1:
@@ -111,7 +163,11 @@ class _PVCamClass:
         cams = []
         nCams = LIB.cam_get_total()[0]
         if nCams < 1:
-            raise Exception("Error getting number of cameras: %s" % self.error())
+            err = self.errno()
+            if err == 0:
+                return []
+            else:
+                raise Exception("Error getting number of cameras: %s" % self.error(err))
         for i in range(nCams):
             cName = create_string_buffer('\0' * LIB.CAM_NAME_LEN)
             if LIB.cam_get_name(i, cName)() < 1:
@@ -134,14 +190,19 @@ class _PVCamClass:
         fn = LIB('functions', func)
         res = fn(*args, **kargs)
         if res() < 1:
-            raise Exception("Function '%s%s' failed: %s" % (func, str(args), self.error()), self.pvcam.pl_error_code())
+            raise Exception("Function '%s%s' failed: %s" % (func, str(args), self.error()), self.errno())
         return res
 
-    def error(self):
-        err = create_string_buffer('\0'*ERROR_MSG_LEN)
+    def errno(self):
         erc = LIB.error_code()()
-        LIB.error_message(erc, err)
-        return "%d: %s" % (erc, err.value)
+        return erc
+
+    def error(self, erno=None):
+        if erno is None:
+            erno = LIB.error_code()()
+        err = create_string_buffer('\0'*LIB.ERROR_MSG_LEN)
+        LIB.error_message(erno, err)
+        return "%d: %s" % (erno, err.value)
 
     def __del__(self):
         self.quit()
@@ -193,30 +254,31 @@ class _PVCamClass:
     #        if p[:5] == 'TYPE_' and self.defs[p] == typ:
     #            return p
 
-    #def listParams(self):
-        ##return [x[6:] for x in self.defs if x[:6] == 'PARAM_']
-        #return [
-            #'SPDTAB_INDEX',
-            #'BIT_DEPTH',
-            #'GAIN_INDEX',
-            #'GAIN_MULT_ENABLE',
-            #'GAIN_MULT_FACTOR',
-            #'INTENSIFIER_GAIN',
-            #'EXPOSURE_MODE',
-            #'PREFLASH',
-            #'PIX_TIME',
-            #'CLEAR_MODE',
-            #'CLEAR_CYCLES',
-            #'SHTR_OPEN_MODE',
-            #'SHTR_OPEN_DELAY',
-            #'PIX_SER_SIZE',
-            #'PIX_PAR_SIZE',
-            #'ANTI_BLOOMING',
-            #'TEMP',
-            #'TEMP_SETPOINT',
-            #'COOLING_MODE',
-        #]
-
+    def listParams(self):
+        #return [x[6:] for x in self.defs if x[:6] == 'PARAM_']
+        return self.paramTable.keys()
+    
+    def paramFromString(self, p):
+        """Return the driver's param ID for the given parameter name."""
+        
+        if isinstance(p, basestring):
+            return LIB('values', 'PARAM_' + p)
+        else:
+            return p
+            
+    def paramToString(self, p):
+        """Return the parameter name given the driver's param ID."""
+        return self.paramTable[p]
+        
+    def typeFromString(self, p):
+        """Return the driver's type ID for the given type name."""
+        return p
+            
+    def typeToString(self, p):
+        """Return the type name given the driver's type ID."""
+        return p
+            
+        
 
 class _CameraClass:
     def __init__(self, name, pvcam):
@@ -224,38 +286,83 @@ class _CameraClass:
         self.pvcam = pvcam
         self.isOpen = False
         self.open()
-        self.initCam()
         
-        self.exposure = 0.01
-        self.binning = [1, 1]
+        #self.exposure = 0.01
+        #self.binning = [1, 1]
         self.mode = 0
-        self.frameSize = 1
-        self.ringSize = 10
+        #self.frameSize = 1
+        #self.ringSize = 10
         self.buf = None
         
+        self.params = {}
         self.groupParams = {
             'binning': ['binningX', 'binningY'],
             'region': ['regionX', 'regionY', 'regionW', 'regionH'],
-            'sensorSize': ['PARAM_SER_SIZE', 'PARAM_PAR_SIZE'] 
+            'sensorSize': ['SER_SIZE', 'PAR_SIZE'] 
         }
         
-        size = self.getParam('sensorSize')
+        self.paramList = OrderedDict()
+        for p in ['exposure', 'binningX', 'binningY', 'regionX', 'regionY', 'regionW', 'regionH', 'triggerMode']:
+            ## get these in the list now so they show up first
+            self.paramList[p] = None
+            
+        self.paramList.update(self.buildParamList())  ## list of acceptable values for each parameter
         
-        self.params = {
+        size = self.getParam('sensorSize')
+        self.params = {  ## list of current values for parameters not handled by driver
             'binningX': 1,
             'binningY': 1,
             'exposure': 0.001,
-            'triggerMode': None,
+            'triggerMode': 'Normal',
             'regionX': 0,
             'regionY': 0,
-            'regionW': size[0]-1,
-            'regionH': size[1]-1
+            'regionW': size[0],
+            'regionH': size[1],
+            'ringSize': 10,
         }
         
+        
+        self.paramList.update({
+            'binningX': [(1, size[0], 1), True, True, []],  
+            'binningY': [(1, size[1], 1), True, True, []],
+            'exposure': [(0, None, None), True, True, []],
+            'triggerMode': [['Normal', 'TriggerStart', 'Strobe', 'Bulb'], True, True, []],
+            'regionX': [(0, size[0]-1, 1), True, True, []],
+            'regionY': [(0, size[1]-1, 1), True, True, []],
+            'regionW': [(1, size[0], 1), True, True, []],
+            'regionH': [(1, size[1], 1), True, True, []],
+            'ringSize': [(2, None, 1), True, True, []],
+        })
+        
+        self.initCam()
             
             
         
+    def buildParamList(self):
+        plist = self.pvcam.listParams()
+        plist = filter(self.paramAvailable, plist)
+        rem = ['ADC_OFFSET']  ## Set by manufacturer; do not change.
+        for r in rem:
+            if r in plist:
+                plist.remove(r)
+        params = OrderedDict()
         
+        numTypes = [LIB.TYPE_INT8, LIB.TYPE_UNS8, LIB.TYPE_INT16, LIB.TYPE_UNS16, LIB.TYPE_INT32, LIB.TYPE_UNS32, LIB.TYPE_FLT64]
+        for p in plist:
+            typ = self.getParamType(p)
+            if typ in numTypes:
+                (minval, maxval, stepval) = self.getParamRange(p)
+                if stepval == 0:
+                    vals = (minval, maxval, None)
+                else:
+                    vals = (minval, maxval, stepval)
+            elif typ == LIB.TYPE_ENUM:
+                vals = self.getEnumList(p)[0]
+            else:
+                vals = None
+            params[p] = [vals, self.paramWritable(p), self.paramReadable(p), []]
+        
+        return params
 
     def __del__(self):
         self.close()
@@ -263,9 +370,9 @@ class _CameraClass:
     def open(self):
         ## Driver bug; try opening twice.
         try:
-            self.hCam = self.pvcam.call('cam_open', self.name, o_mode=LIB.OPEN_EXCLUSIVE)[2]
+            self.hCam = LIB.cam_open(self.name, o_mode=LIB.OPEN_EXCLUSIVE)[2]
         except:
-            self.hCam = self.pvcam.call('cam_open', self.name, o_mode=LIB.OPEN_EXCLUSIVE)[2]
+            self.hCam = LIB.cam_open(self.name, o_mode=LIB.OPEN_EXCLUSIVE)[2]
         self.isOpen = True
 
     def close(self):
@@ -283,11 +390,16 @@ class _CameraClass:
         print "Camera type:", camType
         
         ## Implement default settings for this camera model
-        defaults = cameraDefaults['ALL']
+        defaults = OrderedDict(cameraDefaults['ALL'][0])
+        ranges = cameraDefaults['ALL'][1]
         if camType in cameraDefaults:
-            for k in cameraDefaults[camType]:
-                defaults[k] = cameraDefaults[camType][k]
-                
+            defaults.update(cameraDefaults[camType][0])
+            ranges.update(cameraDefaults[camType][1])
+        
+        for k,v in ranges.items():
+            #print self.paramList[k], k, v
+            for i in range(len(v)):
+                self.paramList[k][i] = v[i]
         
         self.setParams(defaults)
             
@@ -316,14 +428,15 @@ class _CameraClass:
         for p in keys:
             self.setParam(p, params[p], **kargs)
 
-    def listParams(self):
-        p = self.pvcam.listParams()
-        p = filter(self.paramAvailable, p)
-        rem = ['ADC_OFFSET']
-        for r in rem:
-            if r in p:
-                p.remove(r)
-        return p
+    def listParams(self, params=None):
+        if params is None:
+            return self.paramList
+        else:
+            plist = params
+            params = {}
+            for p in plist:
+                params[p] = self.paramList[p]
+            return params
 
 
     def getParams(self, params):
@@ -335,70 +448,132 @@ class _CameraClass:
             raise Exception('getParams requires list or dict as argument')
 
     def getParam(self, param):
-        ## Make sure parameter exists on this hardware and is writable
+        ## Make sure parameter exists on this hardware and is readable
+        #print "GetParam:", param
         
         if param in self.groupParams:
             return self.getParams(self.groupParams[param])
         
-        #param = self.pvcam.param(param)
-        #self._assertParamReadable(param)
-        return self._getParam(param, ATTR_CURRENT)
+        if param in self.params:
+            return self.params[param]
+                        
+        param = self.pvcam.paramFromString(param)
+        self._assertParamReadable(param)
+        return self._getParam(param, LIB.ATTR_CURRENT)
         
-    def setParam(self, param, value, autoClip=False, autoQuantize=False, checkValue=True):
+    def setParams(self, params, autoCorrect=True):
+        res = {}
+        if isinstance(params, dict):
+            plist = params.items()
+        else:
+            plist = params
+            
+        for p, v in plist:
+            res[p] = self.setParam(p, v, autoCorrect)
+        return res
+        
+    def setParam(self, param, value, autoCorrect=True):
         ## Make sure parameter exists on this hardware and is writable
-        print "PVCam setParam", param, value
-        return
+        #print "PVCam setParam", param, value
+        
+        if param in self.groupParams:
+            return self.setParams(zip(self.groupParams[param], value))
+        
+        if param in self.params:
+            return self._setLocalParam(param, value, autoCorrect)
+        
+        param = self.pvcam.paramFromString(param)
+        self._assertParamReadable(param)
+
         if isinstance(value, basestring):
             if value in self.pvcam.defs:
                 value = self.pvcam.defs[value]
             else:
                 raise Exception("Unrecognized value '%s'. Options are: %s" % (value, str(self.pvcam.defs.keys())))
+
         
         #print "   PVCam setParam lookup param"
-        param = self.pvcam.param(param)
+        #param = self.pvcam.param(param)
         self._assertParamWritable(param)
         #print "   PVCam setParam param writable"
 
         ## Determine the parameter type
         typ = self.getParamType(param)
+        
         ## Make sure value is in range
-        if checkValue and typ in [TYPE_INT8, TYPE_UNS8, TYPE_INT16, TYPE_UNS16, TYPE_INT32, TYPE_UNS32, TYPE_FLT64]:
+        if typ in [LIB.TYPE_INT8, LIB.TYPE_UNS8, LIB.TYPE_INT16, LIB.TYPE_UNS16, LIB.TYPE_INT32, LIB.TYPE_UNS32, LIB.TYPE_FLT64]:
             (minval, maxval, stepval) = self.getParamRange(param)
             if value < minval:
-                if autoClip:
+                if autoCorrect:
                     value = minval
-                    print "Warning: Clipped value to %s" % str(value)
+                    #print "Warning: Clipped value to %s" % str(value)
                 else:
                     raise Exception("Minimum value for parameter is %s (requested %s)" % (str(minval), str(value)))
             if value > maxval:
-                if autoClip:
+                if autoCorrect:
                     value = maxval
-                    print "Warning: Clipped value to %s" % str(value)
+                    #print "Warning: Clipped value to %s" % str(value)
                 else:
                     raise Exception("Maximum value for parameter is %s (requested %s)" % (str(maxval), str(value)))
-            if stepval != 0.0:   ## No idea what to do if stepval == 0
+            if stepval != 0:
                 inc = (value - minval) / stepval
                 if (inc%1.0) != 0.0:
-                    if autoQuantize:
+                    if autoCorrect:
                         value = minval + round(inc) * stepval
-                        print "Warning: Quantized value to %s" % str(value)
+                        #print "Warning: Quantized value to %s" % str(value)
                     else:
                         raise Exception("Value for parameter must be in increments of %s (requested %s)" % (str(stepval), str(value)))
         #elif typ == TYPE_ENUM:
         #    count = self._getParam(param, ATTR_COUNT)
         #    if value > (count-1):
         #        raise Exception("Enum value %d is out of range for parameter" % value)
-        elif typ == TYPE_CHAR_PTR:
-            count = self._getParam(param, ATTR_COUNT)
+        elif typ == LIB.TYPE_CHAR_PTR:
+            count = self._getParam(param, LIB.ATTR_COUNT)
             if len(value) > count:
                 raise Exception("Enum value %d is out of range for parameter" % value)
         #print "   PVCam setParam checked value"
             
         ## Set value
         val = mkCObj(typ, value)
-        self.pvcam.pl_set_param(self.hCam, param, byref(val))
+        LIB.pl_set_param(self.hCam, param, byref(val))
+        return val
         #print "   PVCam setParam set done."
 
+    def _setLocalParam(self, param, value, autoCorrect=True):
+        """Set a parameter that is stored locally; no communication with camera needed (until camera restart)"""
+        if param in self.paramList:  ## check writable flag, bounds
+            rules = self.paramList[param]
+            
+            ## Sanity checks
+            if not rules[1]:
+                raise Exception('Parameter %s is not writable.' % param)
+            if type(rules[0]) is list:
+                if value not in rules[0]:
+                    raise Exception('Value %s not allowed for parameter %s. Options are: %s' % (str(value), param, rules[0]))
+            elif type(rules[0]) is tuple:
+                minval, maxval, stepval = rules[0]
+                if minval is not None and value < minval:
+                    if autoCorrect:
+                        value = minval
+                    else:
+                        raise Exception('Value %s not allowed for parameter %s. Range is: %s' % (str(value), param, rules[0]))
+                elif maxval is not None and value > maxval:
+                    if autoCorrect:
+                        value = maxval
+                    else:
+                        raise Exception('Value %s not allowed for parameter %s. Range is: %s' % (str(value), param, rules[0]))
+                
+                if stepval is not None and stepval > 0:
+                    inc = (value - minval) / stepval
+                    if (inc%1.0) != 0.0:
+                        if autoCorrect:
+                            value = minval + round(inc) * stepval
+                            #print "Warning: Quantized value to %s" % str(value)
+                        else:
+                            raise Exception("Value for parameter %s must be in increments of %s (requested %s)" % (param, str(stepval), str(value)))
+        
+        self.params[param] = value
+        return value
 
     #def getSize(self):
         #return (self.getParam(PARAM_SER_SIZE), self.getParam(PARAM_PAR_SIZE))
@@ -424,40 +599,64 @@ class _CameraClass:
     #def setRingSize(self, s):
         #self.ringSize = s
 
-    def getRegion(self, region=None, binning=None):
+    def _getRegion(self, region=None, binning=None):
         """Create a Region object based on current settings."""
         if region is None: region = self.getParam('region')
         if binning is None: binning = self.getParam('binning')
-        return Region(region, binning)
+        rgn = LIB.rgn_type(region[0], region[2]-region[0]-1, binning[0], region[1], region[3]-region[1]-1, binning[1])
+        rgn.width = int(region[2] / binning[0])
+        rgn.height = int(region[3] / binning[1])
+        return rgn
+        #return Region(region, binning)
 
-    def acq(self, frames=None, exposure=None, region=None, binning=None):
+    def acquire(self, frames=None):
         """Acquire a specific number of frames."""
         if self.mode != 0:
             raise Exception("Camera is not ready to start new acquisition")
-        if exposure is None: exposure = self.exposure
-        exp = self._parseExposure(exposure)
-        
+            
+        exposure = self.getParam('exposure')
         ## Convert exposure to indexed value
+        exp = self._parseExposure(exposure)
+        expMode = self.exposureMode()
         
-        ssize = c_uint()
-        rgn = self.getRegion(region, binning)
+        
+        rgn = self._getRegion()
+        #rptr = pointer(rgn)
+        #print rgn
         if frames is None:
-            self.buf = numpy.empty((rgn.size()[1], rgn.size()[0]), dtype=numpy.uint16)
+            self.buf = numpy.empty((rgn.height, rgn.width), dtype=numpy.uint16)
             frames = 1
         else:
-            self.buf = numpy.empty((frames, rgn.size()[1], rgn.size()[0]), dtype=numpy.uint16)
-        self.pvcam.pl_exp_setup_seq(self.hCam, c_ushort(frames), c_ushort(1), byref(rgn), TIMED_MODE, c_uint(exp), byref(ssize))
-        if len(self.buf.data) != ssize.value:
-            raise Exception('Created wrong size buffer! %d != %d' %(len(self.buf.data), ssize.value))
-        self.pvcam.pl_exp_start_seq(self.hCam, self.buf.ctypes.data)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
+            self.buf = numpy.empty((frames, rgn.height, rgn.width), dtype=numpy.uint16)
+        #print "REGION:", rgn.s1, rgn.s2, rgn.p1, rgn.p2
+        #
+        #print "FRAMES:", frames
+        #print "EXP:", exp
+        res = LIB.pl_exp_setup_seq(self.hCam, frames, 1, rgn, expMode, exp)
+        ssize = res[6]
+        #print [x for x in res]
+        
+        #ssize = c_uint(0)
+        #
+        #windll.Pvcam32.pl_exp_setup_seq(self.hCam, c_ushort(frames), c_ushort(1), byref(rgn), LIB.TIMED_MODE, c_uint(exp), byref(ssize))
+        ##self.pvcam.pl_exp_setup_seq(self.hCam, c_ushort(frames), c_ushort(1), byref(rgn), TIMED_MODE, c_uint(exp), byref(ssize))
+        #print "SIZE:", ssize.value
+        
+        #print "ERROR:", self.pvcam.error()
+        
+        if len(self.buf.data) != ssize:
+            raise Exception('Created wrong size buffer! %d != %d' %(len(self.buf.data), ssize))
+        LIB.pl_exp_start_seq(self.hCam, self.buf.ctypes.data)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
         self.mode = 1
         while True:
-            status = c_short()
-            bcount = c_uint()
-            self.pvcam.pl_exp_check_status(self.hCam, byref(status), byref(bcount))
-            if status.value in [READOUT_COMPLETE, READOUT_NOT_ACTIVE]:
+            #status = c_short()
+            #bcount = c_uint()
+            ret = LIB.pl_exp_check_status(self.hCam)
+            status = ret[1]
+            bcount = ret[2]
+            if status in [LIB.READOUT_COMPLETE, LIB.READOUT_NOT_ACTIVE]:
                 break
-            elif status.value == READOUT_FAILED:
+            elif status == LIB.READOUT_FAILED:
                 raise Exception("Readout failed: " + self.pvcam.error())
             time.sleep(exposure * 0.5)
         self.mode = 0
@@ -471,55 +670,80 @@ class _CameraClass:
         return int(exp * 1000.)
         
 
-    def start(self, frames=None, exposure=None, region=None, binning=None, mode='Normal'):
+    def start(self):
         """Start continuous frame acquisition."""
         if self.mode != 0:
             raise Exception("Camera is not ready to start new acquisition")
-        assert(frames > 0)
-        self._assertParamAvailable(PARAM_CIRC_BUFFER)
-        if exposure is None: exposure = self.exposure
-        if region is None: region = self.region
-        if binning is None: binning = self.binning
-        if frames is None: frames = self.ringSize
-        tModes = self.listTriggerModes()
-        if mode not in tModes:
-            raise Exception('Trigger mode "%s" is invalid. Must be one of %s' % (mode, str(tModes.keys())))
-        exp = self._parseExposure(exposure)
+        #assert(frames > 0)
+        self._assertParamAvailable(LIB.PARAM_CIRC_BUFFER)
         
-        ssize = c_uint()
-        rgn = Region(region, binning)
-        rSize = rgn.size()
-        self.frameSize = rSize[0] * rSize[1] * 2
-        self.buf = numpy.ascontiguousarray(numpy.empty((frames, rgn.size()[1], rgn.size()[0]), dtype=numpy.uint16))
+        exposure = self.getParam('exposure')
+        ## Convert exposure to indexed value
+        exp = self._parseExposure(exposure)
+        expMode = self.exposureMode()
+        rgn = self._getRegion()
+        ringSize = self.getParam('ringSize')
+        
+        
+        #if exposure is None: exposure = self.exposure
+        #if region is None: region = self.region
+        #if binning is None: binning = self.binning
+        #if frames is None: frames = self.ringSize
+        #tModes = self.listTriggerModes()
+        #if mode not in tModes:
+        #    raise Exception('Trigger mode "%s" is invalid. Must be one of %s' % (mode, str(tModes.keys())))
+        #exp = self._parseExposure(exposure)
+        
+        #ssize = c_uint()
+        #rgn = Region(region, binning)
+        #rSize = rgn.size()
+        self.frameSize = rgn.width * rgn.height * 2
+        self.buf = numpy.ascontiguousarray(numpy.empty((ringSize, rgn.height, rgn.width), dtype=numpy.uint16))
         #self.buf = numpy.empty((frames, rgn.size()[1], rgn.size()[0]), dtype=numpy.uint16)
         #print "Created buffer:", self.buf.shape, self.buf.size, self.buf.dtype
         #print "frameSize:", self.frameSize
         #print "Setup camera:", region, binning, mode, exp, ssize
         
-        self.pvcam.pl_exp_setup_cont(self.hCam, c_ushort(1), byref(rgn), tModes[mode], c_uint(exp), byref(ssize), CIRC_OVERWRITE)
-        ssize = c_ulong(ssize.value*frames)
+        res = LIB.pl_exp_setup_cont(self.hCam, 1, rgn, expMode, exp, buffer_mode=LIB.CIRC_OVERWRITE)
+        ssize = res[5]
+        ssize = ssize*ringSize
         #print "   done"
-        if len(self.buf.data) != ssize.value:
-            raise Exception('Created wrong size buffer! %d != %d' %(len(self.buf.data), ssize.value))
+        if len(self.buf.data) != ssize:
+            raise Exception('Created wrong size buffer! %d != %d' %(len(self.buf.data), ssize))
         #print "Start continuous:"
-        self.pvcam.pl_exp_start_cont(self.hCam, self.buf.ctypes.data, ssize)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
+        LIB.pl_exp_start_cont(self.hCam, self.buf.ctypes.data, ssize)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
         #print "  done"
         self.mode = 2
 
         return self.buf.transpose((0, 2, 1))
 
+    def exposureMode(self):
+        """Return the exposure mode enum value to use based on the triggerMode parameter"""
+        tm = self.getParam('triggerMode')
+        if tm == 'Normal':
+            return LIB.TIMED_MODE
+        elif tm == 'TriggerStart':
+            return LIB.TRIGGER_FIRST_MODE
+        elif tm == 'Strobe':
+            return LIB.STROBED_MODE
+        elif tm == 'Bulb':
+            return LIB.BULB_MODE
+        else:
+            raise Exception('Unknown trigger mode %s.' % tm)
+   
+    
+
     def lastFrame(self):
         """Return the index of the last frame transferred."""
         assert(self.buf is not None)
-        frame = c_void_p()
         try:
-            self.pvcam.pl_exp_get_latest_frame(self.hCam, byref(frame))
+            frame = LIB.pl_exp_get_latest_frame(self.hCam)[1]
         except:
             if sys.exc_info()[1][1] == 3029:  ## No frame is ready yet (?)
                 return None
             else:
                 raise
-        index = (frame.value - self.buf.ctypes.data) / self.frameSize
+        index = (frame - self.buf.ctypes.data) / self.frameSize
         if index < 0 or index > (self.buf.shape[0]-1):
             print "Warning: lastFrame got %d!" % index
             return None
@@ -527,50 +751,52 @@ class _CameraClass:
 
     def stop(self):
         if self.mode == 1:
-            self.pvcam.pl_exp_abort(self.hCam, CCS_CLEAR_CLOSE_SHTR)
+            LIB.pl_exp_abort(self.hCam, LIB.CCS_CLEAR_CLOSE_SHTR)
         elif self.mode == 2:
-            self.pvcam.pl_exp_stop_cont(self.hCam, CCS_CLEAR_CLOSE_SHTR)
+            LIB.pl_exp_stop_cont(self.hCam, LIB.CCS_CLEAR_CLOSE_SHTR)
         self.mode = 0
 
 
     def getParamRange(self, param):
-        param = self.pvcam.param(param)
+        param = self.pvcam.paramFromString(param)
         self._assertParamAvailable(param)
-        typ = self.getParamType(param)
+        #typ = self.getParamType(param)
 
-        minval = self._getParam(param, ATTR_MIN)
-        maxval = self._getParam(param, ATTR_MAX)
-        stepval = self._getParam(param, ATTR_INCREMENT)
+        minval = self._getParam(param, LIB.ATTR_MIN)
+        maxval = self._getParam(param, LIB.ATTR_MAX)
+        stepval = self._getParam(param, LIB.ATTR_INCREMENT)
 
         return (minval, maxval, stepval)
 
     def getParamType(self, param):
-        param = self.pvcam.param(param)
+        param = self.pvcam.paramFromString(param)
         self._assertParamAvailable(param)
-        return self._getParam(param, ATTR_TYPE)
+        return self._getParam(param, LIB.ATTR_TYPE)
 
     def getParamTypeName(self, param):
-        param = self.pvcam.param(param)
+        param = self.pvcam.paramFromString(param)
         typ = self.getParamType(param)
-        return self.pvcam.typeName(typ)
+        return self.pvcam.typeToString(typ)
 
     def getEnumList(self, param):
-        param = self.pvcam.param(param)
+        param = self.pvcam.paramFromString(param)
         self._assertParamAvailable(param)
-        if self.getParamType(param) != TYPE_ENUM:
-          raise Exception('Parameter is not enum type.')
-        num = self._getParam(param, ATTR_COUNT)
+        if self.getParamType(param) != LIB.TYPE_ENUM:
+            raise Exception('Parameter is not enum type.')
+        num = self._getParam(param, LIB.ATTR_COUNT)
         names = []
         vals = []
         for i in range(0, num):
-          ind = c_int(i)
-          slen = c_int()
-          self.pvcam.pl_enum_str_length(self.hCam, param, ind, byref(slen))
-          strn = create_string_buffer('\0' * (slen.value+1))
-          val = c_int()
-          self.pvcam.pl_get_enum_param(self.hCam, param, ind, byref(val), byref(strn), slen)
-          names.append(strn.value)
-          vals.append(val.value)
+            #ind = c_int(i)
+            #slen = c_int()
+            #LIB.pl_enum_str_length(self.hCam, param, i, byref(slen))
+            ret = LIB.pl_enum_str_length(self.hCam, param, i)
+            slen = ret[3]
+            strn = create_string_buffer('\0' * (slen))
+            val = c_int()
+            LIB.pl_get_enum_param(self.hCam, param, i, byref(val), strn, c_ulong(slen))
+            names.append(strn.value)
+            vals.append(val.value)
         return (names, vals)
 
 
@@ -580,9 +806,10 @@ class _CameraClass:
     
     def paramAvailable(self, param):
         try:
-            param = self.pvcam.param(param)
+            param = self.pvcam.paramFromString(param)
+            #param = self.pvcam.param(param)
             self._assertCameraOpen()
-            return self._getParam(param, ATTR_AVAIL) > 0
+            return self._getParam(param, LIB.ATTR_AVAIL) > 0
         except:
             sys.excepthook(*sys.exc_info())
             print "=============================================="
@@ -591,47 +818,54 @@ class _CameraClass:
             
     def _assertParamAvailable(self, param):
         if not self.paramAvailable(param):
-            raise Exception("Parameter is not available.")
+            raise Exception("Parameter %s is not available.", self.pvcam.paramToString(param))
         
     def paramWritable(self, param):
-        param = self.pvcam.param(param)
+        param = self.pvcam.paramFromString(param)
         self._assertParamAvailable(param)
-        access = self._getParam(param, ATTR_ACCESS)
-        return access in [ACC_WRITE_ONLY, ACC_READ_WRITE]
+        access = self._getParam(param, LIB.ATTR_ACCESS)
+        return access in [LIB.ACC_WRITE_ONLY, LIB.ACC_READ_WRITE]
+        
+    def paramReadable(self, param):
+        param = self.pvcam.paramFromString(param)
+        self._assertParamAvailable(param)
+        access = self._getParam(param, LIB.ATTR_ACCESS)
+        return access in [LIB.ACC_READ_ONLY, LIB.ACC_READ_WRITE]
         
     def _assertParamWritable(self, param):
-        param = self.pvcam.param(param)
+        param = self.pvcam.paramFromString(param)
         self._assertParamAvailable(param)
-        access = self._getParam(param, ATTR_ACCESS)
-        if access in [ACC_EXIST_CHECK_ONLY, ACC_READ_ONLY]:
+        access = self._getParam(param, LIB.ATTR_ACCESS)
+        if access in [LIB.ACC_EXIST_CHECK_ONLY, LIB.ACC_READ_ONLY]:
             raise Exception("Parameter is not writable.")
-        elif access not in [ACC_WRITE_ONLY, ACC_READ_WRITE]:
+        elif access not in [LIB.ACC_WRITE_ONLY, LIB.ACC_READ_WRITE]:
             raise Exception("Unknown access check value!")
 
     def _assertParamReadable(self, param):
-        param = self.pvcam.param(param)
+        param = self.pvcam.paramFromString(param)
         self._assertParamAvailable(param)
-        access = self._getParam(param, ATTR_ACCESS)
-        if access in [ACC_EXIST_CHECK_ONLY, ACC_WRITE_ONLY]:
+        access = self._getParam(param, LIB.ATTR_ACCESS)
+        if access in [LIB.ACC_EXIST_CHECK_ONLY, LIB.ACC_WRITE_ONLY]:
             raise Exception("Parameter is not readable.")
-        elif access not in [ACC_READ_WRITE, ACC_READ_ONLY]:
+        elif access not in [LIB.ACC_READ_WRITE, LIB.ACC_READ_ONLY]:
             raise Exception("Unknown access check value!")
     
     def _getParam(self, param, attr, typ=None):
         """Gets parameter/attribute combination. Automatically handles type conversion."""
+        #param = self.pvcam.paramFromString(param)
         if typ is None:
             typs = {
-                ATTR_ACCESS: TYPE_UNS16,
-                ATTR_AVAIL: TYPE_BOOLEAN,
-                ATTR_COUNT: TYPE_UNS32,
-                ATTR_TYPE: TYPE_UNS16
+                LIB.ATTR_ACCESS: LIB.TYPE_UNS16,
+                LIB.ATTR_AVAIL: LIB.TYPE_BOOLEAN,
+                LIB.ATTR_COUNT: LIB.TYPE_UNS32,
+                LIB.ATTR_TYPE: LIB.TYPE_UNS16
             }
             if typs.has_key(attr):
                 typ = typs[attr]
             else:
                 typ = self.getParamType(param)
         val = mkCObj(typ)
-        self.pvcam.pl_get_param(self.hCam, param, attr, byref(val))
+        LIB.pl_get_param(self.hCam, param, attr, byref(val))
         return val.value
 
     def listTriggerModes(self):
@@ -672,6 +906,7 @@ class Region(Structure):
             #rgn[2] = rgn[0] + (int((rgn[2]-rgn[0]+1)/bin[0]) * bin[0]) - 1
             #rgn[3] = rgn[1] + (int((rgn[3]-rgn[1]+1)/bin[1]) * bin[1]) - 1
             Structure.__init__(self, rgn[0], rgn[2], bin[0], rgn[1], rgn[3], bin[1])
+            self.width, self.height = self.size()
             
     def size(self):
         return ((self.s2-self.s1+1) / self.sbin, (self.p2-self.p1+1) / self.pbin)
@@ -679,18 +914,18 @@ class Region(Structure):
 
 def mkCObj(typ, value=None):
     typs = {
-        TYPE_INT8: c_byte, 
-        TYPE_UNS8: c_ubyte,
-        TYPE_INT16: c_short,
-        TYPE_UNS16: c_ushort,
-        TYPE_INT32: c_int,
-        TYPE_UNS32: c_uint,
-        TYPE_FLT64: c_double,
-        TYPE_ENUM: c_ushort,
-        TYPE_BOOLEAN: c_ushort,
-        TYPE_CHAR_PTR: c_char_p, ## This is likely to cause bugs--we need to use create_string_buffer
-        TYPE_VOID_PTR: c_void_p,
-        TYPE_VOID_PTR_PTR: c_void_p
+        LIB.TYPE_INT8: c_byte, 
+        LIB.TYPE_UNS8: c_ubyte,
+        LIB.TYPE_INT16: c_short,
+        LIB.TYPE_UNS16: c_ushort,
+        LIB.TYPE_INT32: c_int,
+        LIB.TYPE_UNS32: c_uint,
+        LIB.TYPE_FLT64: c_double,
+        LIB.TYPE_ENUM: c_ushort,
+        LIB.TYPE_BOOLEAN: c_ushort,
+        LIB.TYPE_CHAR_PTR: c_char_p, ## This is likely to cause bugs--we need to use create_string_buffer
+        LIB.TYPE_VOID_PTR: c_void_p,
+        LIB.TYPE_VOID_PTR_PTR: c_void_p
     }
     if not typs.has_key(typ):
         raise Exception("Unknown type %d" % typ)
