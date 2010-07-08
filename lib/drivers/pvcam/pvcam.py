@@ -486,9 +486,9 @@ class _CameraClass:
         self._assertParamReadable(param)
 
         if isinstance(value, basestring):
-            if value in self.pvcam.defs:
-                value = self.pvcam.defs[value]
-            else:
+            try:
+                value = getattr(LIB, value)
+            except:
                 raise Exception("Unrecognized value '%s'. Options are: %s" % (value, str(self.pvcam.defs.keys())))
 
         

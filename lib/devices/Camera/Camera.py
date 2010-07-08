@@ -153,7 +153,17 @@ class Camera(DAQGeneric):
             self.stateStack = self.stateStack[:inds[-1]]
         self.setParams(state)
         
+
+    def start(self):
+        self.acqThread.start()
         
+    def stop(self, block=True):
+        self.acqThread.stop(block=block)
+        
+    def restart(self):
+        if self.acqThread.isRunning():
+            self.stop()
+            self.start()
     
     def quit(self):
         if hasattr(self, 'acqThread') and self.acqThread.isRunning():
