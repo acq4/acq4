@@ -15,6 +15,8 @@ from lib.util.debug import *
 class DAQGenericProtoGui(ProtocolGui):
     def __init__(self, dev, prot, ownUi=True):
         ProtocolGui.__init__(self, dev, prot)
+        self.plots = weakref.WeakValueDictionary()
+        self.channels = {}
         
         if ownUi:
             self.ui = Ui_Form()
@@ -33,34 +35,63 @@ class DAQGenericProtoGui(ProtocolGui):
             self.stateGroup = None
         
     def createChannelWidgets(self, ctrlParent, plotParent):
-        self.plots = weakref.WeakValueDictionary()
-        self.channels = {}
         
         ## Create plots and control widgets
         for ch in self.dev.config:
-            conf = self.dev.config[ch]
-            p = PlotWidget(plotParent)
+            #conf = self.dev.config[ch]
+            #p = PlotWidget(plotParent)
+            #
+            #units = ''
+            #if 'units' in conf:
+            #    units = ' (%s)' % conf['units']
+            #    
+            ##p.setAxisTitle(PlotWidget.yLeft, ch+units)
+            #p.setLabel('left', title=ch, units=units)
+            #self.plots[ch] = p
+            #
+            #p.registerPlot(self.dev.name + '.' + ch)
+            #
+            #if conf['type'] in ['ao', 'do']:
+            #    w = OutputChannelGui(ctrlParent, ch, conf, p, self.dev, self.prot)
+            #    QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
+            #elif conf['type'] in ['ai', 'di']:
+            #    w = InputChannelGui(ctrlParent, ch, conf, p, self.dev, self.prot)
+            #else:
+            #    raise Exception("Unrecognized device type '%s'" % conf['type'])
+            #w.ui.groupBox.setTitle(ch + units)
+            #self.channels[ch] = w
             
-            units = ''
-            if 'units' in conf:
-                units = ' (%s)' % conf['units']
-                
-            #p.setAxisTitle(PlotWidget.yLeft, ch+units)
-            p.setLabel('left', title=ch, units=units)
-            self.plots[ch] = p
-            
-            p.registerPlot(self.dev.name + '.' + ch)
-            
-            if conf['type'] in ['ao', 'do']:
-                w = OutputChannelGui(ctrlParent, ch, conf, p, self.dev, self.prot)
-                QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
-            elif conf['type'] in ['ai', 'di']:
-                w = InputChannelGui(ctrlParent, ch, conf, p, self.dev, self.prot)
-            else:
-                raise Exception("Unrecognized device type '%s'" % conf['type'])
-            w.ui.groupBox.setTitle(ch + units)
-            self.channels[ch] = w
+            (w, p) = self.createChannelWidget(ch)
+            plotParent.addWidget(p)
+            ctrlParent.addWidget(w)
         
+
+    def createChannelWidget(self, ch):
+        conf = self.dev.config[ch]
+        p = PlotWidget()
+        
+        units = ''
+        if 'units' in conf:
+            units = conf['units']
+            
+        #p.setAxisTitle(PlotWidget.yLeft, ch+units)
+        p.setLabel('left', text=ch, units=units)
+        print "Plot label:", ch, units
+        self.plots[ch] = p
+        
+        p.registerPlot(self.dev.name + '.' + ch)
+        
+        if conf['type'] in ['ao', 'do']:
+            w = OutputChannelGui(None, ch, conf, p, self.dev, self.prot)
+            QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
+        elif conf['type'] in ['ai', 'di']:
+            w = InputChannelGui(None, ch, conf, p, self.dev, self.prot)
+        else:
+            raise Exception("Unrecognized device type '%s'" % conf['type'])
+        w.setUnits(units)
+        self.channels[ch] = w
+        
+        return (w, p)
 
     def saveState(self):
         if self.stateGroup is not None:

@@ -39,6 +39,15 @@ class DAQGeneric(Device):
             scale = self.config[channel]['scale']
             daqDev.setChannelValue(chan, self.holding[channel]*scale, block=False)
         
+    def getChannelValue(self, channel):
+        daq, chan = self.config[channel]['channel']
+        daqDev = self.dm.getDevice(daq)
+        if 'scale' in self.config[channel]:
+            scale = self.config[channel]['scale']
+        else:
+            scale = 1.0            
+        return daqDev.getChannelValue(chan)/scale
+
         
     #def devRackInterface(self):
         #"""Return a widget with a UI to put in the device rack"""
@@ -210,5 +219,5 @@ class DAQGenericTask(DeviceTask):
         DeviceTask.storeResult(self, dirHandle)
         for ch in self.cmd:
             if 'recordInit' in self.cmd[ch] and self.cmd[ch]['recordInit']:
-                dirHandle.setAttribute((self.dev.name, ch), self.initialState[ch])
+                dirHandle.setInfo({(self.dev.name, ch): self.initialState[ch]})
            

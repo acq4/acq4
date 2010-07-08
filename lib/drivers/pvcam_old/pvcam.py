@@ -564,7 +564,7 @@ class Region(Structure):
 
 def init():
     ## System-specific code
-    pvcam_header_files = ["C:\Program Files\Photometrics\PVCam32\SDK\inc\master.h", "C:\Program Files\Photometrics\PVCam32\SDK\inc\pvcam.h"]
+    pvcam_header_files = ["C:\Program Files\Photometrics\PVCam\SDK\Headers\master.h", "C:\Program Files\Photometrics\PVCam\SDK\Headers\pvcam.h"]
     #pvcam_header_files = ["master.h", "pvcam.h"]
     defs = cheader.getDefs(pvcam_header_files)
     global PVCam

@@ -6,7 +6,7 @@ from lib.util.Mutex import Mutex, MutexLocker
 from debug import *
 #import pdb
 
-class SerialSutterMP285(Device):
+class SutterMP285(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.lock = Mutex(QtCore.QMutex.Recursive)
