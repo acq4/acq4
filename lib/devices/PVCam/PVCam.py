@@ -82,3 +82,19 @@ class PVCam(Camera):
             params = self.listParams().keys()
         with self.camLock:
             return self.cam.getParams(params)
+
+
+    def setParam(self, param, value, autoRestart=True, autoCorrect=True):
+        with self.camLock:
+            newVal = self.cam.setParam(param, value, autoCorrect=autoCorrect)
+        restart = True  ## pretty much _always_ need a restart with these cameras.
+        
+        if autoRestart and restart:
+            self.restart()
+        self.emit(QtCore.SIGNAL('paramsChanged'), {param: newVal})
+        return (newVal, restart)
+
+    def getParam(self, param):
+        with self.camLock:
+            return self.cam.getParam(param)
+

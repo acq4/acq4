@@ -2,9 +2,10 @@
 from DevTemplate import Ui_Form
 from PyQt4 import QtCore, QtGui
 from lib.util.WidgetGroup import WidgetGroup
+from SpinBox import *
 #import pdb
 
-class PVCamDevGui(QtGui.QWidget):
+class CameraDeviceGui(QtGui.QWidget):
     def __init__(self, dev, win):
         #pdb.set_trace()
         QtGui.QWidget.__init__(self)
@@ -17,46 +18,51 @@ class PVCamDevGui(QtGui.QWidget):
         self.stateGroup = WidgetGroup([])
         
         
-        for p in self.params:
+        for k in self.params:
+            p = self.params[k]
             #print p
-            if not self.cam.paramWritable(p):
+            if not p[1]:
                 continue
             try:
-                val = self.cam.getParam(p)
+                val = self.cam.getParam(k)
             except:
                 continue
-            typ = self.cam.getParamTypeName(p)
-            if 'INT' in typ or 'UNS' in typ:
-                w = QtGui.QSpinBox()
-                (mn, mx, step) = self.cam.getParamRange(p)
-                intmax = (2**16)-1
-                if mx > intmax:
-                    mx = intmax
-                w.setRange(int(mn), int(mx))
-                w.setSingleStep(int(step))
-                w.setValue(val)
-            elif 'FLT' in typ:
-                w = QtGui.QDoubleSpinBox()
-                (mn, mx, step) = self.cam.getParamRange(p)
-                w.setRange(mn, mx)
-                w.setSingleStep(step)
-                w.setValue(val)
-            elif 'ENUM' in typ:
+            
+            #typ = self.cam.getParamTypeName(p)
+            if type(p[0]) is tuple:
+                (mn, mx, step) = p[0]
+                if step == 1:
+                    w = QtGui.QSpinBox()
+                    intmax = (2**16)-1
+                    if mx is None or mx > intmax:
+                        mx = intmax
+                    mn = int(mn)
+                    mx = int(mx)
+                    step = int(step)
+                    w.setRange(mn, mx)
+                    w.setSingleStep(step)
+                    w.setValue(val)
+                else:
+                    w = SpinBox()
+                    w.setOpts(value=val, range=(mn, mx), dec=True, step=1)
+                    
+                    
+            elif type(p[0]) is list:
                 w = QtGui.QComboBox()
-                (opts, vals) = self.cam.getEnumList(p)
-                for i in range(len(opts)):
-                    w.addItem(opts[i], QtCore.QVariant(vals[i]))
-                    if vals[i] == val:
+                #(opts, vals) = self.cam.getEnumList(p)
+                for i in range(len(p[0])):
+                    w.addItem(str(p[0][i]))
+                    if p[0][i] == val:
                         w.setCurrentIndex(i)
-            elif 'BOOL' in typ:
-                w = QtGui.QCheckBox()
-                w.setChecked(val)
+            #elif 'BOOL' in typ:
+            #    w = QtGui.QCheckBox()
+            #    w.setChecked(val)
             else:
-                print "    Ignoring parameter '%s' (%s)" % (p, typ)
+                print "    Ignoring parameter '%s': %s" % (k, str(p))
                 continue
             
-            self.ui.formLayout_2.addRow(p, w)
-            self.stateGroup.addWidget(w, p)
+            self.ui.formLayout_2.addRow(k, w)
+            self.stateGroup.addWidget(w, k)
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
         QtCore.QObject.connect(self.ui.reconnectBtn, QtCore.SIGNAL('clicked()'), self.reconnect)
         #print "Done with UI"

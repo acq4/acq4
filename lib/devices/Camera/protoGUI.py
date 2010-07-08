@@ -40,9 +40,9 @@ class CameraProtoGui(DAQGenericProtoGui):
             
         #self.exposeCurve = None
             
-        tModes = self.dev.listTriggerModes().keys()
-        tModes.remove('Normal')
-        tModes = ['Normal'] + tModes
+        tModes = self.dev.listParams('triggerMode')[0]
+        #tModes.remove('Normal')
+        #tModes = ['Normal'] + tModes
         for m in tModes:
             item = self.ui.triggerModeCombo.addItem(m)
         

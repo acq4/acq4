@@ -262,13 +262,18 @@ class _PVCamClass:
         """Return the driver's param ID for the given parameter name."""
         
         if isinstance(p, basestring):
+            if p == 'bitDepth':
+                p = 'BIT_DEPTH'
             return LIB('values', 'PARAM_' + p)
         else:
             return p
             
     def paramToString(self, p):
         """Return the parameter name given the driver's param ID."""
-        return self.paramTable[p]
+        ps = self.paramTable[p]
+        if ps == 'BIT_DEPTH':
+            ps = 'bitDepth'
+        return ps
         
     def typeFromString(self, p):
         """Return the driver's type ID for the given type name."""
@@ -387,7 +392,7 @@ class _CameraClass:
     def initCam(self, params=None):
         buf = create_string_buffer('\0' * LIB.CCD_NAME_LEN)
         camType = self.call('get_param', LIB.PARAM_CHIP_NAME, LIB.ATTR_CURRENT, buf)[3]
-        print "Camera type:", camType
+        #print "Camera type:", camType
         
         ## Implement default settings for this camera model
         defaults = OrderedDict(cameraDefaults['ALL'][0])
@@ -430,29 +435,42 @@ class _CameraClass:
 
     def listParams(self, params=None):
         if params is None:
-            return self.paramList
+            return self.paramList.copy()
         else:
+            if isinstance(params, basestring):
+                try:
+                    return self.paramList[params]
+                except KeyError:
+                    raise Exception("No parameter named '%s'" % params)
+                
             plist = params
             params = {}
             for p in plist:
-                params[p] = self.paramList[p]
+                try:
+                    params[p] = self.paramList[p]
+                except KeyError:
+                    raise Exception("No parameter named '%s'" % p)
             return params
 
 
-    def getParams(self, params):
-        if isinstance(params, list):
+    def getParams(self, params, asList=False):
+        #if isinstance(params, list):
+        #    return [self.getParam(p) for p in params]
+        #elif isinstance(params, dict):
+        #    return dict([(p, self.getParam(p)) for p in params])
+        #else:
+        #    raise Exception('getParams requires list or dict as argument')
+        if asList:
             return [self.getParam(p) for p in params]
-        elif isinstance(params, dict):
-            return dict([(p, self.getParam(p)) for p in params])
         else:
-            raise Exception('getParams requires list or dict as argument')
+            return OrderedDict([(p, self.getParam(p)) for p in params])
 
     def getParam(self, param):
         ## Make sure parameter exists on this hardware and is readable
         #print "GetParam:", param
         
         if param in self.groupParams:
-            return self.getParams(self.groupParams[param])
+            return self.getParams(self.groupParams[param], asList=True)
         
         if param in self.params:
             return self.params[param]
@@ -603,9 +621,10 @@ class _CameraClass:
         """Create a Region object based on current settings."""
         if region is None: region = self.getParam('region')
         if binning is None: binning = self.getParam('binning')
-        rgn = LIB.rgn_type(region[0], region[2]-region[0]-1, binning[0], region[1], region[3]-region[1]-1, binning[1])
+        rgn = LIB.rgn_type(region[0], region[2]+region[0]-1, binning[0], region[1], region[3]+region[1]-1, binning[1])
         rgn.width = int(region[2] / binning[0])
         rgn.height = int(region[3] / binning[1])
+        print region, binning, rgn.s1, rgn.s2, rgn.p1, rgn.p2, rgn.width, rgn.height
         return rgn
         #return Region(region, binning)
 
@@ -743,6 +762,8 @@ class _CameraClass:
                 return None
             else:
                 raise
+        if frame is None:
+            return None
         index = (frame - self.buf.ctypes.data) / self.frameSize
         if index < 0 or index > (self.buf.shape[0]-1):
             print "Warning: lastFrame got %d!" % index
