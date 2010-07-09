@@ -65,6 +65,7 @@ class CameraDeviceGui(QtGui.QWidget):
             self.stateGroup.addWidget(w, k)
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
         QtCore.QObject.connect(self.ui.reconnectBtn, QtCore.SIGNAL('clicked()'), self.reconnect)
+        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('paramsChanged'), self.paramsChanged)
         #print "Done with UI"
             
     def stateChanged(self, p, val):
@@ -74,6 +75,17 @@ class CameraDeviceGui(QtGui.QWidget):
         #if typ[5:8] in ['INT', 'UNS', 'FLT']:
         #print val, type(val)
         self.dev.setParam(p, val)    
+        
+    def paramsChanged(self, params):
+        for p in params.keys()[:]:  ## flatten out nested dicts
+            if isinstance(params[p], dict):
+                for k in params[p]:
+                    params[k] = params[p][k]
+        #print "Change:", params
+        self.stateGroup.blockSignals(True)
+        self.stateGroup.setState(params)
+        self.stateGroup.blockSignals(False)
+        #print "State:", self.stateGroup.state()
         
     def reconnect(self):
         self.dev.reconnect()

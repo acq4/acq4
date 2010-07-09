@@ -38,9 +38,11 @@ def comboState(w):
     
 def setComboState(w, v):
     if type(v) is int:
-        w.setCurrentIndex(w.findData(QtCore.QVariant(v)))    
-    elif isinstance(v, basestring):
-        w.setCurrentIndex(w.findText(v))
+        ind = w.findData(QtCore.QVariant(v))
+        if ind > -1:
+            w.setCurrentIndex(ind)
+            return
+    w.setCurrentIndex(w.findText(str(v)))
         
 
 class WidgetGroup(QtCore.QObject):

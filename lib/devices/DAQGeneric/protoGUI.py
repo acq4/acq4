@@ -68,7 +68,7 @@ class DAQGenericProtoGui(ProtocolGui):
 
     def createChannelWidget(self, ch):
         conf = self.dev.config[ch]
-        p = PlotWidget()
+        p = PlotWidget(self)
         
         units = ''
         if 'units' in conf:
@@ -82,10 +82,10 @@ class DAQGenericProtoGui(ProtocolGui):
         p.registerPlot(self.dev.name + '.' + ch)
         
         if conf['type'] in ['ao', 'do']:
-            w = OutputChannelGui(None, ch, conf, p, self.dev, self.prot)
+            w = OutputChannelGui(self, ch, conf, p, self.dev, self.prot)
             QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
         elif conf['type'] in ['ai', 'di']:
-            w = InputChannelGui(None, ch, conf, p, self.dev, self.prot)
+            w = InputChannelGui(self, ch, conf, p, self.dev, self.prot)
         else:
             raise Exception("Unrecognized device type '%s'" % conf['type'])
         w.setUnits(units)

@@ -138,6 +138,12 @@ class Camera(DAQGeneric):
     def getParams(self, params=None):
         raise Exception("Function must be reimplemented in subclass.")
         
+    def setParam(self, param, val, autoCorrect=True, autoRestart=True):
+        return self.setParams([(param, val)], autoCorrect=autoCorrect, autoRestart=autoRestart)[0]
+        
+    def getParam(self, param):
+        return self.getParams([param])[param]
+        
     def pushState(self, name=None):
         params = self.listParams()
         for k in params.keys():    ## remove non-writable parameters
@@ -155,12 +161,6 @@ class Camera(DAQGeneric):
             state = self.stateStack[inds[-1]]
             self.stateStack = self.stateStack[:inds[-1]]
         self.setParams(state)
-        
-    def setParam(self, param, val, autoCorrect=True, autoRestart=True):
-        self.setParams([(param, val)], autoCorrect=autoCorrect, autoRestart=autoRestart)
-        
-    def getParam(self, param):
-        return self.getParams([param])[param]
         
 
     def start(self):
@@ -822,10 +822,11 @@ class AcquireThread(QtCore.QThread):
             printExc("Error starting camera acquisition:")
             self.emit(QtCore.SIGNAL("showMessage"), "ERROR starting acquisition (see console output)")
         finally:
-            print "Camera ACQ thread exited."
+            pass
+            #print "Camera ACQ thread exited."
         
     def stop(self, block=False):
-        print "AcquireThread.stop: Requesting thread stop, acquiring lock first.."
+        #print "AcquireThread.stop: Requesting thread stop, acquiring lock first.."
         with MutexLocker(self.lock):
             self.stopThread = True
         #print "AcquireThread.stop: got lock, requested stop."

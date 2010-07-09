@@ -621,7 +621,7 @@ class _CameraClass:
         rgn = LIB.rgn_type(region[0], region[2]+region[0]-1, binning[0], region[1], region[3]+region[1]-1, binning[1])
         rgn.width = int(region[2] / binning[0])
         rgn.height = int(region[3] / binning[1])
-        print region, binning, rgn.s1, rgn.s2, rgn.p1, rgn.p2, rgn.width, rgn.height
+        #print region, binning, rgn.s1, rgn.s2, rgn.p1, rgn.p2, rgn.width, rgn.height
         return rgn
         #return Region(region, binning)
 
