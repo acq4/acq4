@@ -360,7 +360,7 @@ Valid options are:
             del self.modules[mod.name]
             self.emit(QtCore.SIGNAL('modulesChanged'))
             self.emit(QtCore.SIGNAL('moduleHasQuit'), mod.name)
-            print "Module", mod.name, "has quit"
+            #print "Module", mod.name, "has quit"
 
 
     def unloadModule(self, name):
@@ -485,7 +485,7 @@ Valid options are:
                 print "    %s" % m
                 
                 self.unloadModule(m)
-                print "Unloaded mod %s, modules left:" % m
+                #print "Unloaded mod %s, modules left:" % m
                 #try:
                     #self.modules[m].quit()
                 #except:

@@ -517,6 +517,7 @@ class CameraTask(DAQGenericTask):
                 times = array([f[1]['time'] for f in data])
                 times -= times[0]
                 info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), data[0][1]]
+                #print info
                 marr = MetaArray(arr, info=info)
                 #print "returning frames:", marr.shape
             else:
@@ -654,7 +655,7 @@ class AcquireThread(QtCore.QThread):
         lastFrame = None
         lastFrameTime = None
         
-        camState = self.cam.getParams(['binning', 'exposure', 'region', 'triggerMode'])
+        camState = dict(self.cam.getParams(['binning', 'exposure', 'region', 'triggerMode']))
         binning = camState['binning']
         exposure = camState['exposure']
         region = camState['region']

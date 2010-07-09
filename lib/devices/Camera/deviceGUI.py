@@ -11,10 +11,10 @@ class CameraDeviceGui(QtGui.QWidget):
         QtGui.QWidget.__init__(self)
         self.dev = dev
         self.win = win
-        self.cam = self.dev.cam
+        #self.cam = self.dev.cam
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        self.params = self.cam.listParams()
+        self.params = self.dev.listParams()
         self.stateGroup = WidgetGroup([])
         
         
@@ -24,7 +24,7 @@ class CameraDeviceGui(QtGui.QWidget):
             if not p[1]:
                 continue
             try:
-                val = self.cam.getParam(k)
+                val = self.dev.getParam(k)
             except:
                 continue
             

@@ -20,45 +20,32 @@ LIB = CLibrary(windll.Pvcam32, HEADERS, prefix='pl_')
 ### Default configuration parameters. 
 ### All cameras use the parameters under 'ALL'
 ### If a camera model matches another key, then those values override.
-### format for each camera is ( [list of default values], {dict of value ranges} )
+### format for each camera is [ (paramName, value, range, writable, readable, deps), ... ]
 
 cameraDefaults = {
-    'ALL': ([
-            ('READOUT_PORT', 0),  ## Only option for Q57, fastest for QuantEM
-            ('SPDTAB_INDEX', 0),
-            ('GAIN_INDEX', 3),
-            ('PMODE', LIB.PMODE_NORMAL),  ## PMODE_FT ?
-            ('SHTR_OPEN_MODE', LIB.OPEN_PRE_SEQUENCE),
-            ('CLEAR_MODE', LIB.CLEAR_PRE_EXPOSURE),
-            ('CLEAR_CYCLES', 2),
-        ],
-        {
-            
-            
-            
-        }
-    ),
+    'ALL': [
+        ('READOUT_PORT', 0),  ## Only option for Q57, fastest for QuantEM
+        ('SPDTAB_INDEX', 0),
+        ('GAIN_INDEX', 3),
+        ('PMODE', LIB.PMODE_NORMAL),  ## PMODE_FT ?
+        ('SHTR_OPEN_MODE', LIB.OPEN_PRE_SEQUENCE),
+        ('CLEAR_MODE', LIB.CLEAR_PRE_EXPOSURE),
+        ('CLEAR_CYCLES', 2),
+    ],
+        
+    'QUANTEM:512SC': [
+        ('SPDTAB_INDEX', 0),  ## Fastest option for QM512
+        ('CLEAR_MODE', LIB.CLEAR_PRE_SEQUENCE),  ## Overlapping mode for QuantEM cameras
+        ('GAIN_INDEX', 2),
+        ('binningX', 1, range(1,9)),
+        ('binningY', 1, range(1,9)),
+    ],
     
-    'QUANTEM:512SC': (
-        [
-            ('SPDTAB_INDEX', 0),  ## Fastest option for QM512
-            ('CLEAR_MODE', LIB.CLEAR_PRE_SEQUENCE),  ## Overlapping mode for QuantEM cameras
-            ('GAIN_INDEX', 2),
-        ],
-        {
-            'binningX': ([1,2,3,4,5,6,7,8],),
-            'binningY': ([1,2,3,4,5,6,7,8],),
-        }
-    ),
-    
-    'Quantix57': ([
-            ('SPDTAB_INDEX', 2),  ## Fastest option for Q57
-        ],
-        {
-            'binningX': ([1,2,4,8,16,32,64,128,256],),
-            'binningY': ([1,2,4,8,16,32,64,128,256],),
-        }
-    )
+    'Quantix57': [
+        ('SPDTAB_INDEX', 2),  ## Fastest option for Q57
+        ('binningX', 1, [2**x for x in range(9)]),
+        ('binningY', 1, [2**x for x in range(9)]),
+    ],
 }
 
 
@@ -68,6 +55,7 @@ cameraDefaults = {
 ### (We could just list all parameters from the DLL, but it turns out there are many that we do not 
 ### want to expose)
 externalParams = [
+    'READOUT_PORT',
     'SPDTAB_INDEX',
     'BIT_DEPTH',
     'GAIN_INDEX',
@@ -366,6 +354,8 @@ class _CameraClass:
                     vals = (minval, maxval, stepval)
             elif typ == LIB.TYPE_ENUM:
                 vals = self.getEnumList(p)[0]
+            elif typ == LIB.TYPE_BOOLEAN:
+                vals = [True, False]
             else:
                 vals = None
             params[p] = [vals, self.paramWritable(p), self.paramReadable(p), []]
@@ -398,11 +388,14 @@ class _CameraClass:
         #print "Camera type:", camType
         
         ## Implement default settings for this camera model
-        defaults = OrderedDict(cameraDefaults['ALL'][0])
-        ranges = cameraDefaults['ALL'][1]
+        defaults = OrderedDict([(p[0], p[1]) for p in cameraDefaults['ALL']])
+        ranges = dict([(p[0], p[2:]) for p in cameraDefaults['ALL']])
+        
         if camType in cameraDefaults:
-            defaults.update(cameraDefaults[camType][0])
-            ranges.update(cameraDefaults[camType][1])
+            camDefaults = OrderedDict([(p[0], p[1]) for p in cameraDefaults[camType]])
+            camRanges = dict([(p[0], p[2:]) for p in cameraDefaults[camType]])
+            defaults.update(camDefaults)
+            ranges.update(camRanges)
         
         for k,v in ranges.items():
             #print self.paramList[k], k, v
@@ -668,7 +661,7 @@ class _CameraClass:
         #print "ERROR:", self.pvcam.error()
         
         if len(self.buf.data) != ssize:
-            raise Exception('Created wrong size buffer! %d != %d' %(len(self.buf.data), ssize))
+            raise Exception('Created wrong size buffer! (%d != %d) Error: %s' %(len(self.buf.data), ssize, self.pvcam.error()))
         LIB.pl_exp_start_seq(self.hCam, self.buf.ctypes.data)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
         self.mode = 1
         while True:
@@ -732,7 +725,7 @@ class _CameraClass:
         ssize = ssize*ringSize
         #print "   done"
         if len(self.buf.data) != ssize:
-            raise Exception('Created wrong size buffer! %d != %d' %(len(self.buf.data), ssize))
+            raise Exception('Created wrong size buffer! (%d != %d) Error: %s' %(len(self.buf.data), ssize, self.pvcam.error()))
         #print "Start continuous:"
         LIB.pl_exp_start_cont(self.hCam, self.buf.ctypes.data, ssize)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
         #print "  done"

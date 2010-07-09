@@ -22,7 +22,7 @@ class Module(QtCore.QObject):
     
     def quit(self):
         """Must be called after modules exit."""
-        print "inform quit", self.name
+        #print "inform quit", self.name
         self.manager.moduleHasQuit(self)
         
     

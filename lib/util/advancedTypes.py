@@ -62,6 +62,9 @@ class OrderedDict(dict):
             for k,v in data:
                 self[k] = v
 
+    def copy(self):
+        return OrderedDict(self.items())
+
 class ReverseDict(dict):
     """extends dict so that reverse lookups are possible by requesting the key as a list of length 1:
        d = BiDict({'x': 1, 'y': 2})
