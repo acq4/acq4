@@ -120,7 +120,7 @@ class MetaArray(ndarray):
                 elif len(info) > subarr.ndim+1:
                     raise Exception("Info parameter must be list of length ndim+1 or less.")
                 for i in range(len(info)):
-                    if type(info[i]) != types.DictType:
+                    if not isinstance(info[i], dict):
                         if info[i] is None:
                             info[i] = {}
                         else:

@@ -11,7 +11,7 @@ Includes:
 """
 
 import threading, sys
-from lib.util.debug import *
+from debug import *
 
 class OrderedDict(dict):
     """extends dict so that elements are iterated in the order that they were added.
@@ -42,7 +42,8 @@ class OrderedDict(dict):
     def items(self):
         it = []
         for k in self.keys():
-            it.append(k, self[k])
+            it.append((k, self[k]))
+        return it
     
     def remove(self, key):
         del self[key]
@@ -51,6 +52,18 @@ class OrderedDict(dict):
     def __iter__(self):
         for k in self.keys():
             yield k
+            
+    def update(self, data):
+        """Works like dict.update, but accepts list-of-tuples as well as dict."""
+        if isinstance(data, dict):
+            for k in data.keys():
+                self[k] = data[k]
+        else:
+            for k,v in data:
+                self[k] = v
+
+    def copy(self):
+        return OrderedDict(self.items())
 
 class ReverseDict(dict):
     """extends dict so that reverse lookups are possible by requesting the key as a list of length 1:

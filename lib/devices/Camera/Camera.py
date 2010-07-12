@@ -60,8 +60,6 @@ class Camera(DAQGeneric):
         DAQGeneric.__init__(self, dm, daqConfig, name)
         
         self.camConfig = config
-        self.acqThread = AcquireThread(self)
-        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('finished()'), self.threadFinished)
         self.stateStack = []
         
         
@@ -80,9 +78,6 @@ class Camera(DAQGeneric):
             'objective': ''
         }
         
-        if 'params' in config:
-            self.setParams(config['params'])
-            
         
         if 'scopeDevice' in config:
             self.scopeDev = self.dm.getDevice(config['scopeDevice'])
@@ -94,22 +89,42 @@ class Camera(DAQGeneric):
         else:
             self.scopeDev = None
             
+            
+        self.setupCamera()  
+            
+        self.acqThread = AcquireThread(self)
+        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('finished()'), self.acqThreadFinished)
+        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('started()'), self.acqThreadStarted)
+        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('showMessage'), self.showMessage)
+        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('newFrame'), self.newFrame)
+        
+        if 'params' in config:
+            self.setParams(config['params'])
+            
+    def setupCamera(self):
+        """Prepare the camera at least so that get/setParams will function correctly"""
+        raise Exception("Function must be reimplemented in subclass.")
 
-    def threadFinished(self):
-        print "Camera: ACQ thread finished"
-
-    def listParams(self, onlyWritable=False):
-        """Return a dictionary of parameter descriptions. Values may be any of:
+    def listParams(self, params=None):
+        """Return a dictionary of parameter descriptions. By default, all parameters are listed.
+        Each description is a tuple: (values, isWritable, isReadable, dependencies)
+        
+        values may be any of:
           - Tuple of ints or floats indicating minimum and maximum values
           - List of int / float / string values
           - Tuple of strings, indicating that the parameter is made up of multiple sub-parameters
              (eg, 'region' should be ('regionX', 'regionY', 'regionW', 'regionH')
-          """
+             
+        dependencies is a list of other parameters which affect the allowable values of this parameter.
+        
+        eg:
+        {  'paramName': ([list of values], True, False, []) }
+        """
         raise Exception("Function must be reimplemented in subclass.")
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
         """Set camera parameters. Options are:
-           params: a dictionary of param:value pairs to be set
+           params: a list of (param, value) pairs to be set. Parameters are set in the order specified.
            autoRestart: If true, restart the camera if required to enact the parameter changes
            autoCorrect: If true, correct values that are out of range to their nearest acceptable value
         
@@ -123,9 +138,18 @@ class Camera(DAQGeneric):
     def getParams(self, params=None):
         raise Exception("Function must be reimplemented in subclass.")
         
+    def setParam(self, param, val, autoCorrect=True, autoRestart=True):
+        return self.setParams([(param, val)], autoCorrect=autoCorrect, autoRestart=autoRestart)[0]
+        
+    def getParam(self, param):
+        return self.getParams([param])[param]
+        
     def pushState(self, name=None):
-        params = self.listParams(onlyWritable=True)
-        self.stateStack.append((name, self.getParams(params)))
+        params = self.listParams()
+        for k in params.keys():    ## remove non-writable parameters
+            if not params[k][1]:
+                del params[k]
+        self.stateStack.append((name, self.getParams(params.keys())))
         
     def popState(self, name=None):
         if name is None:
@@ -138,7 +162,17 @@ class Camera(DAQGeneric):
             self.stateStack = self.stateStack[:inds[-1]]
         self.setParams(state)
         
+
+    def start(self):
+        self.acqThread.start()
         
+    def stop(self, block=True):
+        self.acqThread.stop(block=block)
+        
+    def restart(self):
+        if self.acqThread.isRunning():
+            self.stop()
+            self.start()
     
     def quit(self):
         if hasattr(self, 'acqThread') and self.acqThread.isRunning():
@@ -179,13 +213,7 @@ class Camera(DAQGeneric):
         return CameraProtoGui(self, prot)
 
     def deviceInterface(self, win):
-        return CameraDeviceInterface(self, win)
-
-
-
-
-
-
+        return CameraDeviceGui(self, win)
     
     ### Scope interface functions below
 
@@ -229,7 +257,7 @@ class Camera(DAQGeneric):
         
         with MutexLocker(self.lock):
             sf = self.camConfig['scaleFactor']
-            size = self.cam.getSize()
+            size = self.cam.getParam('sensorSize')
             sx = size[0] * obj['scale'] * sf[0]
             sy = size[1] * obj['scale'] * sf[1]
             bounds = QtCore.QRectF(-sx * 0.5 + obj['offset'][0], -sy * 0.5 + obj['offset'][1], sx, sy)
@@ -276,6 +304,30 @@ class Camera(DAQGeneric):
             self.scopeState['id'] += 1
         #print self.scopeState
         
+    def getCamera(self):
+        return self.cam
+        
+        
+    ### Proxy signals and functions for acqThread:
+    ###############################################
+    
+    def acqThreadFinished(self):
+        self.emit(QtCore.SIGNAL('cameraStopped'))
+
+    def acqThreadStarted(self):
+        self.emit(QtCore.SIGNAL('cameraStarted'))
+
+    def showMessage(self, *args):
+        self.emit(QtCore.SIGNAL('showMessage'), *args)
+
+    def newFrame(self, *args):
+        self.emit(QtCore.SIGNAL('newFrame'), *args)
+        
+    def isRunning(self):
+        return self.acqThread.isRunning()
+    
+    def wait(self, *args, **kargs):
+        self.acqThread.wait(*args, **kargs)
 
 class CameraTask(DAQGenericTask):
     """Default implementation of camera protocol task.
@@ -301,14 +353,15 @@ class CameraTask(DAQGenericTask):
     def configure(self, tasks, startOrder):
         ## Merge command into default values:
         params = {
-            'record': True,
-            'triggerProtocol': False,
-            'triggerMode': 'No Trigger',
+            'triggerMode': 'Normal',
             #'recordExposeChannel': False
         }
         
+        
+        nonCameraParams = ['channels', 'record', 'triggerProtocol']
         for k in self.camCmd:
-            params[k] = self.camCmd[k]
+            if k not in nonCameraParams:
+                params[k] = self.camCmd[k]
         #for k in defaults:
             #if k not in self.camCmd:
                 #self.camCmd[k] = defaults[k]
@@ -327,7 +380,8 @@ class CameraTask(DAQGenericTask):
         #if self.camCmd['triggerMode'] != 'No Trigger' or paramSet:
             #self.dev.stopAcquire(block=True)  
             
-        (newParams, restart) = self.dev.setParams(self.camCmd, autoCorrect=True)
+        print params
+        (newParams, restart) = self.dev.setParams(params, autoCorrect=True)
         
         ## If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
         ##   (daq must be started first so that it is armed to received the camera trigger)
@@ -402,7 +456,8 @@ class CameraTask(DAQGenericTask):
         
         if not self.dev.isRunning():
             #print "Starting camera:", camState
-            self.dev.startAcquire(camState)
+            #self.dev.setParams(camState)
+            self.dev.start()
         
         ## If we requested a trigger mode, wait 300ms for the camera to get ready for the trigger
         ##   (Is there a way to ask the camera when it is ready instead?)
@@ -462,6 +517,7 @@ class CameraTask(DAQGenericTask):
                 times = array([f[1]['time'] for f in data])
                 times -= times[0]
                 info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), data[0][1]]
+                #print info
                 marr = MetaArray(arr, info=info)
                 #print "returning frames:", marr.shape
             else:
@@ -525,10 +581,10 @@ class AcquireThread(QtCore.QThread):
     def __init__(self, dev):
         QtCore.QThread.__init__(self)
         self.dev = dev
-        #self.cam = self.dev.getCamera()
+        self.cam = self.dev.getCamera()
         #size = self.cam.getSize()
         #self.state = {'binning': 1, 'exposure': .001, 'region': [0, 0, size[0]-1, size[1]-1], 'mode': 'No Trigger'}
-        self.state = self.dev.getParams(['binning', 'exposure', 'region', 'triggerMode'])
+        #self.state = self.dev.getParams(['binning', 'exposure', 'region', 'triggerMode'])
         self.stopThread = False
         self.lock = Mutex()
         self.acqBuffer = None
@@ -560,44 +616,50 @@ class AcquireThread(QtCore.QThread):
     def disconnect(self, method):
         with MutexLocker(self.connectMutex):
             self.connections.remove(method)
-    
-    def setParam(self, param, value):
-        #print "PVCam:setParam", param, value
-        start = False
-        if self.isRunning():
-            start = True
-            #print "Camera.setParam: Stopping camera before setting parameter.."
-            self.stop(block=True)
-            #print "Camera.setParam: camera stopped"
-        with self.lock:
-            self.state[param] = value
-        if start:
-            #self.start(QtCore.QThread.HighPriority)
-            self.start()
-        
+    #
+    #def setParam(self, param, value):
+    #    #print "PVCam:setParam", param, value
+    #    start = False
+    #    if self.isRunning():
+    #        start = True
+    #        #print "Camera.setParam: Stopping camera before setting parameter.."
+    #        self.stop(block=True)
+    #        #print "Camera.setParam: camera stopped"
+    #    with self.lock:
+    #        self.state[param] = value
+    #    if start:
+    #        #self.start(QtCore.QThread.HighPriority)
+    #        self.start()
+    #    
     
     def run(self):
         #print "Starting up camera acquisition thread."
-        binning = self.state['binning']
+        #binning = self.state['binning']
         
         ## Make sure binning value is acceptable (stupid driver problem)
-        if 'allowedBinning' in self.dev.camConfig and binning not in self.dev.camConfig['allowedBinning']:
-            ab = self.dev.camConfig['allowedBinning'][:]
-            ab.sort()
-            if binning < ab[0]:
-                binning = ab[0]
-            while binning not in ab:
-                binning -= 1
-            msg = "Requested binning %d not allowed, using %d instead" % (self.state['binning'], binning)
-            print msg
-            self.emit(QtCore.SIGNAL("showMessage"), msg)
+        #if 'allowedBinning' in self.dev.camConfig and binning not in self.dev.camConfig['allowedBinning']:
+        #    ab = self.dev.camConfig['allowedBinning'][:]
+        #    ab.sort()
+        #    if binning < ab[0]:
+        #        binning = ab[0]
+        #    while binning not in ab:
+        #        binning -= 1
+        #    msg = "Requested binning %d not allowed, using %d instead" % (self.state['binning'], binning)
+        #    print msg
+        #    self.emit(QtCore.SIGNAL("showMessage"), msg)
         #print "Will use binning", binning
-        exposure = self.state['exposure']
-        region = self.state['region']
-        mode = self.state['mode']
-        size = self.cam.getSize()
+        #exposure = self.state['exposure']
+        #region = self.state['region']
+        #mode = self.state['mode']
+        size = self.cam.getParam('sensorSize')
         lastFrame = None
         lastFrameTime = None
+        
+        camState = dict(self.cam.getParams(['binning', 'exposure', 'region', 'triggerMode']))
+        binning = camState['binning']
+        exposure = camState['exposure']
+        region = camState['region']
+        
         #print "AcquireThread.run: Lock for startup.."
         #print "AcquireThread.run: ..unlocked from startup"
         #self.fps = None
@@ -611,7 +673,9 @@ class AcquireThread(QtCore.QThread):
             while True:
                 try:
                     #print "Starting camera: ", self.ringSize, binning, exposure, region
-                    self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region, mode=mode)
+                    #self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region, mode=mode)
+                    self.cam.setParam('ringSize', self.ringSize)
+                    self.acqBuffer = self.cam.start()
                     #print "Camera started."
                     break
                 except Exception, e:
@@ -650,7 +714,7 @@ class AcquireThread(QtCore.QThread):
                         
                     #print type(diff), type(frame), type(lastFrame), type(self.ringSize)
                     ## Build meta-info for this frame(s)
-                    info = {'binning': binning, 'exposure': exposure, 'region': region}
+                    info = camState.copy()
                     
                     ## frameInfo includes pixelSize, objective, centerPosition, scopePosition, imagePosition
                     ss = self.dev.getScopeState()
@@ -664,7 +728,7 @@ class AcquireThread(QtCore.QThread):
                         pos2 = [pos[0] - size[0]*ps[0]*0.5 + region[0]*ps[0], pos[1] - size[1]*ps[1]*0.5 + region[1]*ps[1]]
                         
                         frameInfo = {
-                            'pixelSize': [ps[0] * binning, ps[1] * binning],  ## size of image pixel
+                            'pixelSize': [ps[0] * binning[0], ps[1] * binning[1]],  ## size of image pixel
                             'scopePosition': ss['scopePosition'],
                             'centerPosition': pos,
                             'objective': ss['objective'],
@@ -758,10 +822,11 @@ class AcquireThread(QtCore.QThread):
             printExc("Error starting camera acquisition:")
             self.emit(QtCore.SIGNAL("showMessage"), "ERROR starting acquisition (see console output)")
         finally:
-            print "Camera ACQ thread exited."
+            pass
+            #print "Camera ACQ thread exited."
         
     def stop(self, block=False):
-        print "AcquireThread.stop: Requesting thread stop, acquiring lock first.."
+        #print "AcquireThread.stop: Requesting thread stop, acquiring lock first.."
         with MutexLocker(self.lock):
             self.stopThread = True
         #print "AcquireThread.stop: got lock, requested stop."

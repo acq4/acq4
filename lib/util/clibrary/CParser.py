@@ -62,7 +62,7 @@ class CParser():
             print s
     """
     
-    cacheVersion = 19    ## increment every time cache structure or parsing changes to invalidate old cache files.
+    cacheVersion = 20    ## increment every time cache structure or parsing changes to invalidate old cache files.
     
     def __init__(self, files=None, replace=None, copyFrom=None, processAll=True, cache=None, verbose=False, **args):
         """Create a C parser object fiven a file or list of files. Files are read to memory and operated
@@ -787,7 +787,7 @@ class CParser():
         self.structDecl = self.structType + semi
 
         ## enum definition
-        enumVarDecl = Group(ident('name')  + Optional(Literal('=').suppress() + integer('value')))
+        enumVarDecl = Group(ident('name')  + Optional(Literal('=').suppress() + (integer('value') | ident('valueName'))))
         
         self.enumType << Keyword('enum') + (Optional(ident)('name') + lbrace + Group(delimitedList(enumVarDecl))('members') + rbrace | ident('name'))
         self.enumType.setParseAction(self.processEnum)
@@ -872,6 +872,8 @@ class CParser():
                 for v in t.members:
                     if v.value != '':
                         i = eval(v.value)
+                    if v.valueName != '':
+                        i = enum[v.valueName]
                     enum[v.name] = i
                     self.addDef('values', v.name, i)
                     i += 1
