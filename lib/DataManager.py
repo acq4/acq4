@@ -410,7 +410,7 @@ class DirHandle(FileHandle):
     def createIndex(self):
         if self.isManaged():
             raise Exception("Directory is already managed!")
-        self._writeIndex({'.': {}})
+        self._writeIndex(OrderedDict([('.', {})]))
         
     def logMsg(self, msg, tags=None):
         """Write a message into the log for this directory."""
@@ -748,7 +748,11 @@ class DirHandle(FileHandle):
                 raise Exception("Can not forget %s, not managed" % fileName)
             index = self._readIndex(lock=False)
             if fileName in index:
-                index.remove(fileName)
+                try:
+                    index.remove(fileName)
+                except:
+                    print type(index)
+                    raise
                 self._writeIndex(index, lock=False)
                 #self.emitChanged('children', fileName)
                 self.emitChanged('meta', fileName)
@@ -835,12 +839,16 @@ class DirHandle(FileHandle):
                 except:
                     print "***************Error while reading index file %s!*******************" % indexFile
                     raise
+                print "fresh index:", type(self._index)
+            else:
+                print "cached index:", type(self._index)
             return self._index
         
     def _writeIndex(self, newIndex, lock=True):
         with MutexLocker(self.lock):
             
             writeConfigFile(newIndex, self._indexFile())
+            print "Write", type(newIndex)
             self._index = newIndex
             self._indexMTime = os.path.getmtime(self._indexFile())
 

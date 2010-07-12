@@ -659,6 +659,7 @@ class AcquireThread(QtCore.QThread):
         binning = camState['binning']
         exposure = camState['exposure']
         region = camState['region']
+        mode = camState['triggerMode']
         
         #print "AcquireThread.run: Lock for startup.."
         #print "AcquireThread.run: ..unlocked from startup"
@@ -800,7 +801,7 @@ class AcquireThread(QtCore.QThread):
                         #print "    AcquireThread.run: Done with thread stop check"
                         
                         if diff > (10 + exposure):
-                            if mode == 'No Trigger':
+                            if mode == 'Normal':
                                 print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
                                 break
                             else:
