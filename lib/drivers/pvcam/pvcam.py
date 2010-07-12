@@ -416,18 +416,6 @@ class _CameraClass:
     #        raise Exception("Invalid value for %s" % paramName(param))
     #    self.setParam(param, l[1][val])
         
-    def setParams(self, params, **kargs):
-        ##   - PARAM_BIT_DEPTH, PARAM_PIX_TIME, and PARAM_GAIN_INDEX(ATTR_MAX)
-        ##     are determined by setting PARAM_READOUT_PORT and PARAM_SPDTAB_INDEX 
-        ##   - PARAM_GAIN_INDEX must be set AFTER setting PARAM_SPDTAB_INDEX
-        keys = params.keys()
-        for k in ['PARAM_READOUT_PORT', 'PARAM_SPDTAB_INDEX']:
-            if k in keys:
-                keys.remove(k)
-                keys = [k] + keys
-        
-        for p in keys:
-            self.setParam(p, params[p], **kargs)
 
     def listParams(self, params=None):
         if params is None:
@@ -449,6 +437,7 @@ class _CameraClass:
             return params
 
 
+            
     def getParams(self, params, asList=False):
         #if isinstance(params, list):
         #    return [self.getParam(p) for p in params]
@@ -476,6 +465,17 @@ class _CameraClass:
         return self._getParam(param, LIB.ATTR_CURRENT)
         
     def setParams(self, params, autoCorrect=True):
+        ###   - PARAM_BIT_DEPTH, PARAM_PIX_TIME, and PARAM_GAIN_INDEX(ATTR_MAX)
+        ###     are determined by setting PARAM_READOUT_PORT and PARAM_SPDTAB_INDEX 
+        ###   - PARAM_GAIN_INDEX must be set AFTER setting PARAM_SPDTAB_INDEX
+        #keys = params.keys()
+        #for k in ['PARAM_READOUT_PORT', 'PARAM_SPDTAB_INDEX']:
+            #if k in keys:
+                #keys.remove(k)
+                #keys = [k] + keys
+        #for p in keys:
+            #self.setParam(p, params[p], **kargs)
+        
         res = {}
         if isinstance(params, dict):
             plist = params.items()
@@ -590,29 +590,6 @@ class _CameraClass:
         self.params[param] = value
         return value
 
-    #def getSize(self):
-        #return (self.getParam(PARAM_SER_SIZE), self.getParam(PARAM_PAR_SIZE))
-      
-    #def getBitDepth(self):
-        #return self.getParam(PARAM_BIT_DEPTH)
-
-    #def setExposure(self, exp):
-        #self.exposure = exp
-
-    #def setBinning(self, sbin, pbin=None):
-        #if pbin is None:
-            #pbin = sbin
-        #self.binning = [sbin, pbin]
-
-    #def setROI(self, s1, p1, s2, p2):
-        #self.region = [s1, p1, s2, p2]
-
-    #def clearROI(self):
-        #size = self.getSize()
-        #self.region = [0, 0, size[0]-1, size[1]-1]
-
-    #def setRingSize(self, s):
-        #self.ringSize = s
 
     def _getRegion(self, region=None, binning=None):
         """Create a Region object based on current settings."""
@@ -635,38 +612,20 @@ class _CameraClass:
         exp = self._parseExposure(exposure)
         expMode = self.exposureMode()
         
-        
         rgn = self._getRegion()
-        #rptr = pointer(rgn)
-        #print rgn
         if frames is None:
             self.buf = numpy.empty((rgn.height, rgn.width), dtype=numpy.uint16)
             frames = 1
         else:
             self.buf = numpy.empty((frames, rgn.height, rgn.width), dtype=numpy.uint16)
-        #print "REGION:", rgn.s1, rgn.s2, rgn.p1, rgn.p2
-        #
-        #print "FRAMES:", frames
-        #print "EXP:", exp
         res = LIB.pl_exp_setup_seq(self.hCam, frames, 1, rgn, expMode, exp)
         ssize = res[6]
-        #print [x for x in res]
-        
-        #ssize = c_uint(0)
-        #
-        #windll.Pvcam32.pl_exp_setup_seq(self.hCam, c_ushort(frames), c_ushort(1), byref(rgn), LIB.TIMED_MODE, c_uint(exp), byref(ssize))
-        ##self.pvcam.pl_exp_setup_seq(self.hCam, c_ushort(frames), c_ushort(1), byref(rgn), TIMED_MODE, c_uint(exp), byref(ssize))
-        #print "SIZE:", ssize.value
-        
-        #print "ERROR:", self.pvcam.error()
         
         if len(self.buf.data) != ssize:
             raise Exception('Created wrong size buffer! (%d != %d) Error: %s' %(len(self.buf.data), ssize, self.pvcam.error()))
         LIB.pl_exp_start_seq(self.hCam, self.buf.ctypes.data)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
         self.mode = 1
         while True:
-            #status = c_short()
-            #bcount = c_uint()
             ret = LIB.pl_exp_check_status(self.hCam)
             status = ret[1]
             bcount = ret[2]
@@ -700,25 +659,8 @@ class _CameraClass:
         rgn = self._getRegion()
         ringSize = self.getParam('ringSize')
         
-        
-        #if exposure is None: exposure = self.exposure
-        #if region is None: region = self.region
-        #if binning is None: binning = self.binning
-        #if frames is None: frames = self.ringSize
-        #tModes = self.listTriggerModes()
-        #if mode not in tModes:
-        #    raise Exception('Trigger mode "%s" is invalid. Must be one of %s' % (mode, str(tModes.keys())))
-        #exp = self._parseExposure(exposure)
-        
-        #ssize = c_uint()
-        #rgn = Region(region, binning)
-        #rSize = rgn.size()
         self.frameSize = rgn.width * rgn.height * 2
         self.buf = numpy.ascontiguousarray(numpy.empty((ringSize, rgn.height, rgn.width), dtype=numpy.uint16))
-        #self.buf = numpy.empty((frames, rgn.size()[1], rgn.size()[0]), dtype=numpy.uint16)
-        #print "Created buffer:", self.buf.shape, self.buf.size, self.buf.dtype
-        #print "frameSize:", self.frameSize
-        #print "Setup camera:", region, binning, mode, exp, ssize
         
         res = LIB.pl_exp_setup_cont(self.hCam, 1, rgn, expMode, exp, buffer_mode=LIB.CIRC_OVERWRITE)
         ssize = res[5]
@@ -726,9 +668,7 @@ class _CameraClass:
         #print "   done"
         if len(self.buf.data) != ssize:
             raise Exception('Created wrong size buffer! (%d != %d) Error: %s' %(len(self.buf.data), ssize, self.pvcam.error()))
-        #print "Start continuous:"
         LIB.pl_exp_start_cont(self.hCam, self.buf.ctypes.data, ssize)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
-        #print "  done"
         self.mode = 2
 
         return self.buf.transpose((0, 2, 1))
@@ -774,7 +714,6 @@ class _CameraClass:
             LIB.pl_exp_stop_cont(self.hCam, LIB.CCS_CLEAR_CLOSE_SHTR)
         self.mode = 0
 
-
     def getParamRange(self, param):
         param = self.pvcam.paramFromString(param)
         self._assertParamAvailable(param)
@@ -805,9 +744,6 @@ class _CameraClass:
         names = []
         vals = []
         for i in range(0, num):
-            #ind = c_int(i)
-            #slen = c_int()
-            #LIB.pl_enum_str_length(self.hCam, param, i, byref(slen))
             ret = LIB.pl_enum_str_length(self.hCam, param, i)
             slen = ret[3]
             strn = create_string_buffer('\0' * (slen))
@@ -886,48 +822,48 @@ class _CameraClass:
         LIB.pl_get_param(self.hCam, param, attr, byref(val))
         return val.value
 
-    def listTriggerModes(self):
-        return {
-            'Normal': TIMED_MODE,
-            'Trigger First': TRIGGER_FIRST_MODE,
-            'Strobed': STROBED_MODE,
-            'Bulb': BULB_MODE
-        }
+    #def listTriggerModes(self):
+        #return {
+            #'Normal': TIMED_MODE,
+            #'Trigger First': TRIGGER_FIRST_MODE,
+            #'Strobed': STROBED_MODE,
+            #'Bulb': BULB_MODE
+        #}
     
         
 
 
-class Region(Structure):
-    _fields_ = [
-        ('s1', c_ushort),
-        ('s2', c_ushort),
-        ('sbin', c_ushort),
-        ('p1', c_ushort),
-        ('p2', c_ushort),
-        ('pbin', c_ushort)
-    ]
+#class Region(Structure):
+    #_fields_ = [
+        #('s1', c_ushort),
+        #('s2', c_ushort),
+        #('sbin', c_ushort),
+        #('p1', c_ushort),
+        #('p2', c_ushort),
+        #('pbin', c_ushort)
+    #]
     
-    def __init__(self, *args):
-        if len(args) == 6:
-            Structure.__init__(self, *args)
-        else:
-            #print "creating region:", args
-            rgn = args[0][:]
-            if type(args[1]) is types.IntType:
-                bin = [args[1], args[1]]
-            else:
-                bin = args[1][:]
-            assert( hasattr(rgn, '__len__') and len(rgn) == 4 )
-            assert( hasattr(bin, '__len__') and len(bin) == 2 )
-            ## Quantize region size based on binning parameter
-            # (is this needed at all?)
-            #rgn[2] = rgn[0] + (int((rgn[2]-rgn[0]+1)/bin[0]) * bin[0]) - 1
-            #rgn[3] = rgn[1] + (int((rgn[3]-rgn[1]+1)/bin[1]) * bin[1]) - 1
-            Structure.__init__(self, rgn[0], rgn[2], bin[0], rgn[1], rgn[3], bin[1])
-            self.width, self.height = self.size()
+    #def __init__(self, *args):
+        #if len(args) == 6:
+            #Structure.__init__(self, *args)
+        #else:
+            ##print "creating region:", args
+            #rgn = args[0][:]
+            #if type(args[1]) is types.IntType:
+                #bin = [args[1], args[1]]
+            #else:
+                #bin = args[1][:]
+            #assert( hasattr(rgn, '__len__') and len(rgn) == 4 )
+            #assert( hasattr(bin, '__len__') and len(bin) == 2 )
+            ### Quantize region size based on binning parameter
+            ## (is this needed at all?)
+            ##rgn[2] = rgn[0] + (int((rgn[2]-rgn[0]+1)/bin[0]) * bin[0]) - 1
+            ##rgn[3] = rgn[1] + (int((rgn[3]-rgn[1]+1)/bin[1]) * bin[1]) - 1
+            #Structure.__init__(self, rgn[0], rgn[2], bin[0], rgn[1], rgn[3], bin[1])
+            #self.width, self.height = self.size()
             
-    def size(self):
-        return ((self.s2-self.s1+1) / self.sbin, (self.p2-self.p1+1) / self.pbin)
+    #def size(self):
+        #return ((self.s2-self.s1+1) / self.sbin, (self.p2-self.p1+1) / self.pbin)
 
 
 def mkCObj(typ, value=None):

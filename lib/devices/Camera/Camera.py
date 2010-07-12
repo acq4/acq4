@@ -149,21 +149,29 @@ class Camera(DAQGeneric):
         for k in params.keys():    ## remove non-writable parameters
             if not params[k][1]:
                 del params[k]
-        self.stateStack.append((name, self.getParams(params.keys())))
+        params = self.getParams(params.keys())
+        params['isRunning'] = self.isRunning()
+        
+        self.stateStack.append((name, params))
         
     def popState(self, name=None):
         if name is None:
-            state = self.stateStack.pop()
+            state = self.stateStack.pop()[1]
         else:
             inds = [i for i in range(len(self.stateStack)) if self.stateStack[i][0] == name]
             if len(inds) == 0:
                 raise Exception("Can not find camera state named '%s'" % name)
-            state = self.stateStack[inds[-1]]
+            state = self.stateStack[inds[-1]][1]
             self.stateStack = self.stateStack[:inds[-1]]
+            
+        run = state['isRunning']
+        del state['isRunning']
         self.setParams(state)
+        if run and not self.isRunning():
+            self.start()
         
 
-    def start(self):
+    def start(self, block=True):
         self.acqThread.start()
         
     def stop(self, block=True):
@@ -335,6 +343,7 @@ class CameraTask(DAQGenericTask):
 
 
     def __init__(self, dev, cmd):
+        print "Camera task:", cmd
         daqCmd = {}
         if 'channels' in cmd:
             daqCmd = cmd['channels']
@@ -344,6 +353,7 @@ class CameraTask(DAQGenericTask):
         self.lock = Mutex()
         self.recordHandle = None
         self.stopAfter = False
+        self.stoppedCam = False
         self.returnState = {}
         self.frames = []
         self.recording = False
@@ -358,7 +368,11 @@ class CameraTask(DAQGenericTask):
         }
         
         
-        nonCameraParams = ['channels', 'record', 'triggerProtocol']
+        if 'pushState' in self.camCmd:
+            stateName = self.camCmd['pushState']
+            self.dev.pushState(stateName)
+        
+        nonCameraParams = ['channels', 'record', 'triggerProtocol', 'pushState', 'popState']
         for k in self.camCmd:
             if k not in nonCameraParams:
                 params[k] = self.camCmd[k]
@@ -379,8 +393,12 @@ class CameraTask(DAQGenericTask):
         ## if the camera is being triggered by the daq or if there are parameters to be set, stop it now
         #if self.camCmd['triggerMode'] != 'No Trigger' or paramSet:
             #self.dev.stopAcquire(block=True)  
+
+        ## If we are sending a one-time trigger to start the camera, then it must be restarted to arm the trigger        
+        if self.camCmd['triggerMode'] == 'TriggerStart':
+            restart = True
             
-        print params
+        #print params
         (newParams, restart) = self.dev.setParams(params, autoCorrect=True)
         
         ## If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
@@ -404,7 +422,8 @@ class CameraTask(DAQGenericTask):
             
         ## We want to avoid this if at all possible since it may be very expensive
         if restart:
-            self.dev.stop(block=True)
+            self.dev.stop(block=False)  ## don't wait for the camera to stop; we'll check again later.
+            self.stoppedCam = True
             
         ## connect using acqThread's connect method because there may be no event loop
         ## to deliver signals here.
@@ -454,15 +473,19 @@ class CameraTask(DAQGenericTask):
             ##print "   set done"
                 
         
+        if self.stoppedCam:
+            self.wait()
+            
         if not self.dev.isRunning():
             #print "Starting camera:", camState
             #self.dev.setParams(camState)
-            self.dev.start()
+            self.dev.start(block=True)  ## wait until camera is actually ready to acquire
         
-        ## If we requested a trigger mode, wait 300ms for the camera to get ready for the trigger
-        ##   (Is there a way to ask the camera when it is ready instead?)
-        #if self.camCmd['triggerMode'] is not 'No Trigger':
-            #time.sleep(0.3)
+            ### If we requested a trigger mode, wait 300ms for the camera to get ready for the trigger
+            ###   (Is there a way to ask the camera when it is ready instead?)
+            #if self.camCmd['triggerMode'] != 'Normal':
+                #time.sleep(0.3)
+                
             
         ## Last I checked, this does nothing. It should be here anyway, though..
         DAQGenericTask.start(self)
@@ -485,8 +508,8 @@ class CameraTask(DAQGenericTask):
         #if self.stopAfter:
             #self.dev.stopAcquire()
         
-        if 'returnState' in self.camCmd:
-            self.dev.popState(self.camCmd['returnState'])
+        if 'popState' in self.camCmd:
+            self.dev.popState(self.camCmd['popState'])
                 
             
         

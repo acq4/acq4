@@ -713,8 +713,8 @@ class PlotItem(QtGui.QGraphicsWidget):
                 if scale == 0 or scale == 1.0:
                     continue
                 data[i] = g[0] + ' stroke-width="%0.2g" ' % (1.0/scale) + g[1] + '\n'
-                print "old line:", line
-                print "new line:", data[i]
+                #print "old line:", line
+                #print "new line:", data[i]
         open(fileName, 'w').write(''.join(data))
         
         

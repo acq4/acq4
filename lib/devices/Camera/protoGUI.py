@@ -94,6 +94,8 @@ class CameraProtoGui(DAQGenericProtoGui):
             'triggerMode': state['triggerModeCombo']
         }
         prot['channels'] = daqProt
+        prot['pushState'] = None
+        prot['popState'] = None
         return prot
         
         

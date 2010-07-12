@@ -441,7 +441,7 @@ class CameraWindow(QtGui.QMainWindow):
             #print "Stopping acquisition thread.."
             self.cam.stop()
             if not self.cam.wait(10000):
-                raise Exception("Timed out while waiting for acq. thread exit!")
+                printExc("Timed out while waiting for acq thread exit!")
         if self.recordThread.isRunning():
             #print "Stopping recording thread.."
             self.recordThread.stop()

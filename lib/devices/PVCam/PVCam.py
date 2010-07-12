@@ -16,7 +16,7 @@ from lib.util.debug import *
 
 class PVCam(Camera):
     def __init__(self, *args, **kargs):
-        self.camLock = Mutex()  ## Lock to protect access to camera
+        self.camLock = Mutex(Mutex.Recursive)  ## Lock to protect access to camera
         Camera.__init__(self, *args, **kargs)  ## superclass will call setupCamera when it is ready.
     
     def setupCamera(self):
@@ -37,6 +37,21 @@ class PVCam(Camera):
         self.cam = self.pvc.getCamera(cams[ind])
         
     
+    def start(self, block=True):
+        if not self.isRunning():
+            Camera.start(self, block)
+            self.startTime = ptime.time()
+        if block:
+            tm = self.getParam('triggerMode')
+            if tm != 'Normal':
+                waitTime = 300e-3  ## trigger needs about 300ms to prepare (?)
+            else:
+                waitTime = 0
+            
+            sleepTime = ptime.time() - (self.startTime + waitTime)
+            if sleepTime > 0:
+                time.sleep(sleepTime)
+        
     #def reconnect(self):
         #print "Stopping acquisition.."
         #try:
@@ -69,8 +84,18 @@ class PVCam(Camera):
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
         with self.camLock:
+            names = dict(params).keys()
+            oldVals = self.getParams(names)
             newVals = self.cam.setParams(params, autoCorrect=autoCorrect)
-        restart = True  ## pretty much _always_ need a restart with these cameras.
+            
+            ## If any values have changed, we need to restart.
+            restart = False
+            for k in newVals:
+                if newVals[k] != oldVals[k]:
+                    print "key %s has changed; restart needed" % k
+                    restart = True
+                    break
+        #restart = True  ## pretty much _always_ need a restart with these cameras.
         
         if autoRestart and restart:
             self.restart()
@@ -85,14 +110,15 @@ class PVCam(Camera):
 
 
     def setParam(self, param, value, autoRestart=True, autoCorrect=True):
-        with self.camLock:
-            newVal = self.cam.setParam(param, value, autoCorrect=autoCorrect)
-        restart = True  ## pretty much _always_ need a restart with these cameras.
+        return self.setParams({param: value}, autoRestart=autoRestart, autoCorrect=autoCorrect)
+        #with self.camLock:
+            #newVal, restart = self.cam.setParam(param, value, autoCorrect=autoCorrect)
+        ##restart = True  ## pretty much _always_ need a restart with these cameras.
         
-        if autoRestart and restart:
-            self.restart()
-        self.emit(QtCore.SIGNAL('paramsChanged'), {param: newVal})
-        return (newVal, restart)
+        #if autoRestart and restart:
+            #self.restart()
+        #self.emit(QtCore.SIGNAL('paramsChanged'), {param: newVal})
+        #return (newVal, restart)
 
     def getParam(self, param):
         with self.camLock:
