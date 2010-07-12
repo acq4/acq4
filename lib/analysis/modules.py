@@ -727,8 +727,8 @@ class STDPWindow(UncagingWindow):
         self.LTPplot = PlotWidget()
         self.line = InfiniteLine(self.LTPplot, 1.0, movable = True)
         self.finalTimeRgn = LinearRegionItem(self.LTPplot, orientation='vertical', vals=[30, 50])
-        self.LTPplot.addItem(self.line)
         self.LTPplot.addItem(self.finalTimeRgn)
+        self.LTPplot.addItem(self.line)
         self.plotBox.addTab(self.LTPplot, 'LTP')
         self.avgPlot = PlotWidget()
         self.plotBox.addTab(self.avgPlot, 'Averages')
@@ -859,9 +859,10 @@ class STDPWindow(UncagingWindow):
         
         
         ## determine likely times for first response after stim.
-        preEvents  = self.getEventTimes(self.epspStats['preMask'])
-        postEvents = self.getEventTimes(self.epspStats['postMask'])
-        finalEvents = self.getEventTimes(self.epspStats['finalMask'])
+        preEvents  = self.getEvents(self.epspStats['preMask'])
+        postEvents = self.getEvents(self.epspStats['postMask'])
+        finalEvents = self.getEvents(self.epspStats['finalMask'])
+        
         preSearchStart  = self.getEpspSearchStart(preEvents)
         postSearchStart = self.getEpspSearchStart(postEvents)
         
@@ -908,10 +909,10 @@ class STDPWindow(UncagingWindow):
         ## Times of all events within search region in pre and post traces
         dt = 1e-4  ## FIXME
         #allPreEventTimes  = self.getEventTimes('pre')
-        allPreEventTimes  = preEvents[preEvents>preSearchStart] * dt
+        allPreEventTimes  = preEvents['start'][preEvents['start']>preSearchStart] * dt
         #allPostEventTimes = self.getEventTimes('post')
-        allPostEventTimes = postEvents[postEvents>postSearchStart] * dt
-        allFinalEventTimes = finalEvents[finalEvents>postSearchStart] * dt
+        allPostEventTimes = postEvents['start'][postEvents['start']>postSearchStart] * dt
+        allFinalEventTimes = finalEvents['start'][finalEvents['start']>postSearchStart] * dt
         
         ## Compute normalized values
         for x in range(len(self.epspStats)):
@@ -1094,14 +1095,14 @@ class STDPWindow(UncagingWindow):
             amp = min
         return amp
     
-    def getPspSlope(self, data, pspStart=None, base=None):
+    def getPspSlope(self, data, pspStart, base=None):
         """Return the slope of the first PSP after pspStart"""
         data = data[0]['Channel': 'primary']
         dt = data.xvals('Time')[1] - data.xvals('Time')[0]
-        if pspStart == None:
-            pspStart = self.getEpspSearchStart()
-            if pspStart == None:
-                return None, None
+        #if pspStart == None:
+            #pspStart = self.getEpspSearchStart()
+            #if pspStart == None:
+                #return None, None
         e = self.plot.processData(data=[data], display=False, analyze=True)[0]
         e = e[e['peak'] > 0]  ## select only positive events
         starts = e['start']
@@ -1205,7 +1206,7 @@ class STDPWindow(UncagingWindow):
         #p.mark('8')
         return [time, slope, amp, flux, epsptime]
     
-    def getEventTimes(self, mask, crop=True):
+    def getEvents(self, mask, crop=True):
         """Return a list of event times for all traces within mask"""
         events = []
         #condStats = self.epspStats[self.epspStats['conditioningMask']]
@@ -1223,15 +1224,15 @@ class STDPWindow(UncagingWindow):
             #data = self.currentTraces[i][0]['Channel':'primary']
             #self.plot.setData([data])
             #for x in range(len(self.plot.events[i])):
-            events.append(self.plot.events[i]['start'])
+            events.append(self.plot.events[i])
         if len(events) == 0:
-            events = array([])
+            events = array([], dtype=[('start', int), ('sum', float), ('peak', float), ('len', int)])
         else:
             events = hstack(events)
             if crop:
                 #FIXME
                 stopInd = 500 + self.stdpCtrl.durationSpin.value()*10
-                events = events[(events>500)*(events<stopInd)]
+                events = events[(events['start']>500)*(events['start']<stopInd)]
         
         return events
     
@@ -1242,7 +1243,7 @@ class STDPWindow(UncagingWindow):
         #print 'got event list'
         if len(events) > 0:
             #print 'finding event start'
-            h = histogram(events, bins = 100, range = (0,2000))
+            h = histogram(events['start'], weights=events['sum'], bins=100, range=(0,2000))
             g = ndimage.gaussian_filter(h[0].astype(float32), 2)
             i = argwhere(g > g.max()/3)
             if len(i) < 1:
