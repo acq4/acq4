@@ -38,12 +38,14 @@ class PVCam(Camera):
         
     
     def start(self, block=True):
+        print "PVCam: start"
         if not self.isRunning():
             Camera.start(self, block)
             self.startTime = ptime.time()
         if block:
             tm = self.getParam('triggerMode')
             if tm != 'Normal':
+                print "  waiting for trigger to arm"
                 waitTime = 300e-3  ## trigger needs about 300ms to prepare (?)
             else:
                 waitTime = 0
@@ -83,18 +85,9 @@ class PVCam(Camera):
         
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
+        print "PVCam: setParams", params
         with self.camLock:
-            names = dict(params).keys()
-            oldVals = self.getParams(names)
-            newVals = self.cam.setParams(params, autoCorrect=autoCorrect)
-            
-            ## If any values have changed, we need to restart.
-            restart = False
-            for k in newVals:
-                if newVals[k] != oldVals[k]:
-                    print "key %s has changed; restart needed" % k
-                    restart = True
-                    break
+            newVals, restart = self.cam.setParams(params, autoCorrect=autoCorrect)
         #restart = True  ## pretty much _always_ need a restart with these cameras.
         
         if autoRestart and restart:

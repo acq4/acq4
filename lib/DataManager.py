@@ -839,16 +839,16 @@ class DirHandle(FileHandle):
                 except:
                     print "***************Error while reading index file %s!*******************" % indexFile
                     raise
-                print "fresh index:", type(self._index)
-            else:
-                print "cached index:", type(self._index)
+                #print "fresh index:", type(self._index)
+            #else:
+                #print "cached index:", type(self._index)
             return self._index
         
     def _writeIndex(self, newIndex, lock=True):
         with MutexLocker(self.lock):
             
             writeConfigFile(newIndex, self._indexFile())
-            print "Write", type(newIndex)
+            #print "Write", type(newIndex)
             self._index = newIndex
             self._indexMTime = os.path.getmtime(self._indexFile())
 

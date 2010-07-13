@@ -1100,10 +1100,16 @@ class CParser():
             for t in fd:
                 typ = fd[t]
                 for k in typ:
-                    if k == name:
-                        res.append((f, t))
+                    if isinstance(name, basestring):
+                        if k == name:
+                            res.append((f, t))
+                    else:
+                        if re.match(name, k):
+                            res.append((f, t, k))
         return res
 
+    
+    
     def findText(self, text):
         """Search all file strings for text, return matching lines."""
         res = []
