@@ -412,13 +412,13 @@ class _CameraClass:
             currentVal = self.getParam(paramName)
                 
             if (currentVal == value):
-                print "not setting parameter %s; unchanged" % paramName
+                #print "not setting parameter %s; unchanged" % paramName
                 return (value, False)
             elif  (paramName in self.enumTable) and (currentVal == strVal):
-                print "not setting parameter %s; unchanged" % paramName
+                #print "not setting parameter %s; unchanged" % paramName
                 return (strVal, False)
-            else:
-                print "will set parameter %s: new %s != old %s" % (paramName, str(value), str(currentVal))
+            #else:
+                #print "will set parameter %s: new %s != old %s" % (paramName, str(value), str(currentVal))
         
         if paramName in self.localParamNames:
             return self._setLocalParam(paramName, value, autoCorrect)
@@ -475,7 +475,7 @@ class _CameraClass:
         #print "   PVCam setParam checked value"
             
         ## Set value
-        print "pvcam setting parameter", paramName
+        #print "pvcam setting parameter", paramName
         val = mkCObj(typ, value)
         LIB.pl_set_param(self.hCam, param, byref(val))
         
