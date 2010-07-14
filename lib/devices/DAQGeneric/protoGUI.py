@@ -88,7 +88,7 @@ class DAQGenericProtoGui(ProtocolGui):
             w = InputChannelGui(self, ch, conf, p, self.dev, self.prot)
         else:
             raise Exception("Unrecognized device type '%s'" % conf['type'])
-        w.setUnits(units)
+        # w.setUnits(units)
         self.channels[ch] = w
         
         return (w, p)
