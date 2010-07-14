@@ -22,6 +22,11 @@ LIB = CLibrary(windll.Pvcam32, HEADERS, prefix='pl_')
 ### If a camera model matches another key, then those values override.
 ### format for each camera is [ (paramName, value, range, writable, readable, deps), ... ]
 
+###   - PARAM_BIT_DEPTH, PARAM_PIX_TIME, and PARAM_GAIN_INDEX(ATTR_MAX)
+###     are determined by setting PARAM_READOUT_PORT and PARAM_SPDTAB_INDEX 
+###   - PARAM_GAIN_INDEX must be set AFTER setting PARAM_SPDTAB_INDEX
+
+
 cameraDefaults = {
     'ALL': [
         ('READOUT_PORT', 0),  ## Only option for Q57, fastest for QuantEM
@@ -105,29 +110,6 @@ class _PVCamClass:
             raise Exception("Could not initialize pvcam library (pl_exp_init_seq): %s" % self.error())
         _PVCamClass.PVCAM_CREATED = True
         
-        #self.paramList = [
-        #    'SPDTAB_INDEX',
-        #    'BIT_DEPTH',
-        #    'GAIN_INDEX',
-        #    'GAIN_MULT_ENABLE',
-        #    'GAIN_MULT_FACTOR',
-        #    'INTENSIFIER_GAIN',
-        #    #'EXPOSURE_MODE',  ## this is mostly exposed through triggerMode
-        #    'PREFLASH',
-        #    'PIX_TIME',
-        #    'CLEAR_MODE',
-        #    'CLEAR_CYCLES',
-        #    'SHTR_OPEN_MODE',
-        #    'SHTR_OPEN_DELAY',
-        #    'PIX_SER_SIZE',
-        #    'PIX_PAR_SIZE',
-        #    'SER_SIZE',
-        #    'PAR_SIZE',
-        #    'ANTI_BLOOMING',
-        #    'TEMP',
-        #    'TEMP_SETPOINT',
-        #    'COOLING_MODE',
-        #]
         
         global externalParams
         
@@ -169,12 +151,6 @@ class _PVCamClass:
             self.cams[cam] = _CameraClass(cam, self)
         return self.cams[cam]
     
-    #def __getattr__(self, attr):
-    #    if hasattr(self.pvcam, attr):
-    #        return lambda *args: self.call(attr, *args)
-    #    else:
-    #        raise NameError
-
     def call(self, func, *args, **kargs):
         fn = LIB('functions', func)
         res = fn(*args, **kargs)
@@ -208,41 +184,6 @@ class _PVCamClass:
         self.call('pvcam_uninit')
         _PVCamClass.PVCAM_CREATED = False
 
-    #def param(self, pName):
-    #    if isinstance(pName, basestring):
-    #        pName = 'PARAM_'+pName
-    #        if pName in self.defs:
-    #            return self.defs[pName]
-    #        else:
-    #            raise Exception('No parameter named %s' % pName)
-    #    else:
-    #        return pName
-    #
-    #def attr(self, pName):
-    #    if isinstance(pName, basestring):
-    #        pName = 'ATTR_'+pName
-    #        if pName in self.defs:
-    #            return self.defs[pName]
-    #        else:
-    #            raise Exception('No parameter named %s' % pName)
-    #    else:
-    #        return pName
-    #
-    #def paramName(self, param):
-    #    for p in self.listParams():
-    #        if self.defs[p] == param:
-    #            return p
-    #
-    #def attrName(self, attr):
-    #    for p in self.defs:
-    #        if p[:5] == 'ATTR_' and self.defs[p] == attr:
-    #            return p
-    #
-    #def typeName(self, typ):
-    #    for p in self.defs:
-    #        if p[:5] == 'TYPE_' and self.defs[p] == typ:
-    #            return p
-
     def listParams(self, allParams=False):
         #return [x[6:] for x in self.defs if x[:6] == 'PARAM_']
         if allParams:
@@ -270,15 +211,6 @@ class _PVCamClass:
             ps = 'bitDepth'
         return ps
         
-    #def typeFromString(self, p):
-    #    """Return the driver's type ID for the given type name."""
-    #    return p
-    #        
-    #def typeToString(self, p):
-    #    """Return the type name given the driver's type ID."""
-    #    return p
-            
-        
 
 class _CameraClass:
     def __init__(self, name, pvcam):
@@ -287,32 +219,36 @@ class _CameraClass:
         self.isOpen = False
         self.open()
         
-        #self.exposure = 0.01
-        #self.binning = [1, 1]
         self.mode = 0
-        #self.frameSize = 1
-        #self.ringSize = 10
         self.buf = None
         
         self.enumTable = self.buildEnumTable()  ## stores bi-directional hashes of enum strings and values
-        #print "EnumTable:", self.enumTable
-        self.params = {}  ## Stores local parameter values
+        
+        ## Some parameters are just locally stored variables, all the rest actually reside on the camera
+        self.localParamNames = ['triggerMode', 'exposure', 'binningX', 'binningY', 'regionX', 'regionY', 'regionW', 'regionH', 'ringSize']
+
+        ## Some parameters can be accessed as groups
         self.groupParams = {
             'binning': ['binningX', 'binningY'],
             'region': ['regionX', 'regionY', 'regionW', 'regionH'],
             'sensorSize': ['SER_SIZE', 'PAR_SIZE'] 
         }
+
+
+        self.paramValues = {}  ## storage for local params and cache for remote params
+                               ## remote params must be cached because reading them can cause
+                               ## the camera to stop.
         
-        self.paramList = OrderedDict()   ## list of all available parameters and ranges
-        for p in ['exposure', 'binningX', 'binningY', 'regionX', 'regionY', 'regionW', 'regionH', 'triggerMode']:
+        self.paramAttrs = OrderedDict()   ## dict of all parameters available to the user and ranges, read/write, dependencies.
+                                          ## Note this dict is ordered so we can display params to the user in a logical fashion 
+        for p in self.localParamNames:
             ## get these in the list now so they show up first
-            self.paramList[p] = None
-            
-            
-        self.paramList.update(self.buildParamList())  ## list of acceptable values for each parameter
+            self.paramAttrs[p] = None
+        
+        self.paramAttrs.update(self.buildParamList())  ## list of acceptable values for each parameter
         
         size = self.getParam('sensorSize')
-        self.params = {  ## list of current values for parameters not handled by driver
+        self.paramValues = {  ## list of current values for parameters not handled by driver
             'binningX': 1,
             'binningY': 1,
             'exposure': 0.001,
@@ -322,10 +258,9 @@ class _CameraClass:
             'regionW': size[0],
             'regionH': size[1],
             'ringSize': 10,
-        }
+        }        
         
-        
-        self.paramList.update({
+        self.paramAttrs.update({
             'binningX': [(1, size[0], 1), True, True, []],  
             'binningY': [(1, size[1], 1), True, True, []],
             'exposure': [(0, None, None), True, True, []],
@@ -337,53 +272,16 @@ class _CameraClass:
             'ringSize': [(2, None, 1), True, True, []],
         })
         
+        ## Generate list of all remote parameter names
+        self.remoteParamNames = self.paramAttrs.keys()
+        for k in self.localParamNames:
+            self.remoteParamNames.remove(k)
+        
+        ## Read and cache all parameter values
+        self.paramValues.update(self.getParams(self.remoteParamNames))
+        
+        ## Determine camera type; load default settings
         self.initCam()
-            
-    def buildEnumTable(self):
-        enums = {}
-        plist = self.pvcam.listParams(allParams=True)
-        #print plist
-        for n in plist:
-            if not self.paramAvailable(n):
-                continue
-            typ = self.getParamType(n)
-            if typ != LIB.TYPE_ENUM:
-                continue
-            enum = self.getEnumList(n)
-            enums[n] = (dict(zip(enum[0], enum[1])), dict(zip(enum[1], enum[0])))
-            paramId = self.pvcam.paramFromString(n)
-            enums[paramId] = enums[n]
-            
-        return enums
-        
-    def buildParamList(self):
-        plist = self.pvcam.listParams()
-        plist = filter(self.paramAvailable, plist)
-        rem = ['ADC_OFFSET']  ## Set by manufacturer; do not change.
-        for r in rem:
-            if r in plist:
-                plist.remove(r)
-        params = OrderedDict()
-        
-        numTypes = [LIB.TYPE_INT8, LIB.TYPE_UNS8, LIB.TYPE_INT16, LIB.TYPE_UNS16, LIB.TYPE_INT32, LIB.TYPE_UNS32, LIB.TYPE_FLT64]
-        for p in plist:
-            typ = self.getParamType(p)
-            if typ in numTypes:
-                (minval, maxval, stepval) = self.getParamRange(p)
-                if stepval == 0:
-                    vals = (minval, maxval, None)
-                else:
-                    vals = (minval, maxval, stepval)
-            elif typ == LIB.TYPE_ENUM:
-                #vals = self.getEnumList(p)[0]
-                vals = self.enumTable[p][0].keys()
-            elif typ == LIB.TYPE_BOOLEAN:
-                vals = [True, False]
-            else:
-                vals = None
-            params[p] = [vals, self.paramWritable(p), self.paramReadable(p), []]
-        
-        return params
 
     def __del__(self):
         self.close()
@@ -421,32 +319,22 @@ class _CameraClass:
             ranges.update(camRanges)
         
         for k,v in ranges.items():
-            #print self.paramList[k], k, v
+            #print self.paramAttrs[k], k, v
             for i in range(len(v)):
-                self.paramList[k][i] = v[i]
+                self.paramAttrs[k][i] = v[i]
         
         self.setParams(defaults)
-            
-        
-    #def getEnum(self, param):
-    #    l = self.getEnumList(param)
-    #    v = self.getParam(param)
-    #    return l[1].index(v)
-    #    
-    #def setEnum(self, param, val):
-    #    l = self.getEnumList(param)
-    #    if val >= len(l[0]):
-    #        raise Exception("Invalid value for %s" % paramName(param))
-    #    self.setParam(param, l[1][val])
         
 
     def listParams(self, params=None):
+        """Return the list of all parameters with bounds, read/write access, and dependencies"""
+        
         if params is None:
-            return self.paramList.copy()
+            return self.paramAttrs.copy()
         else:
             if isinstance(params, basestring):
                 try:
-                    return self.paramList[params]
+                    return self.paramAttrs[params]
                 except KeyError:
                     raise Exception("No parameter named '%s'" % params)
                 
@@ -454,7 +342,7 @@ class _CameraClass:
             params = {}
             for p in plist:
                 try:
-                    params[p] = self.paramList[p]
+                    params[p] = self.paramAttrs[p]
                 except KeyError:
                     raise Exception("No parameter named '%s'" % p)
             return params
@@ -462,43 +350,27 @@ class _CameraClass:
 
             
     def getParams(self, params, asList=False):
-        #if isinstance(params, list):
-        #    return [self.getParam(p) for p in params]
-        #elif isinstance(params, dict):
-        #    return dict([(p, self.getParam(p)) for p in params])
-        #else:
-        #    raise Exception('getParams requires list or dict as argument')
+        """Get a list of parameter values. Return a dictionary of name: value pairs"""
         if asList:
             return [self.getParam(p) for p in params]
         else:
             return OrderedDict([(p, self.getParam(p)) for p in params])
 
     def getParam(self, param):
-        ## Make sure parameter exists on this hardware and is readable
+        """Get the value of a single parameter."""
         #print "GetParam:", param
         
         if param in self.groupParams:
             return self.getParams(self.groupParams[param], asList=True)
         
-        if param in self.params:
-            return self.params[param]
-                        
-        param = self.pvcam.paramFromString(param)
-        self._assertParamReadable(param)
-        return self._getParam(param, LIB.ATTR_CURRENT)
+        if param not in self.paramValues:
+            param = self.pvcam.paramFromString(param)
+            self._assertParamReadable(param)
+            self.paramValues[param] = self._getParam(param, LIB.ATTR_CURRENT)
+        return self.paramValues[param]
         
     def setParams(self, params, autoCorrect=True, forceSet=False):
-        ###   - PARAM_BIT_DEPTH, PARAM_PIX_TIME, and PARAM_GAIN_INDEX(ATTR_MAX)
-        ###     are determined by setting PARAM_READOUT_PORT and PARAM_SPDTAB_INDEX 
-        ###   - PARAM_GAIN_INDEX must be set AFTER setting PARAM_SPDTAB_INDEX
-        #keys = params.keys()
-        #for k in ['PARAM_READOUT_PORT', 'PARAM_SPDTAB_INDEX']:
-            #if k in keys:
-                #keys.remove(k)
-                #keys = [k] + keys
-        #for p in keys:
-            #self.setParam(p, params[p], **kargs)
-        
+        """Set the values of multiple parameters. Format may be {name: value, ...} or [(name, value), ...]"""
         newVals = {}
         if isinstance(params, dict):
             plist = params.items()
@@ -511,47 +383,47 @@ class _CameraClass:
             restart.append(res)
         return (newVals, any(restart))
         
-    def setParam(self, param, value, autoCorrect=True, forceSet=False):
+    def setParam(self, paramName, value, autoCorrect=True, forceSet=False):
         """Set a single parameter. This can be a local or camera parameter, and can also be a grouped parameter.
         Returns a tuple of the value set and a boolean indicating whether the camera must be reset to activate the
         new settings.
         
         If autoCorrect is True, then value is adjusted to fit in bounds and quantized, and the new value is returned.
         Normally, camera parameters that do not need to be set (because they are already) will be ignored. However, this can be
-        overridden with forceSet."""
+        overridden with forceSet. If delaySet is true, then parameters will not be changed on-camera until it is restarted."""
         
         
         ## Make sure parameter exists on this hardware and is writable
         #print "PVCam setParam", param, value
         
-        if param in self.groupParams:
-            return self.setParams(zip(self.groupParams[param], value))
+        if paramName in self.groupParams:
+            return self.setParams(zip(self.groupParams[paramName], value))
         
         ## If this is an enum parameter, convert string values to int before setting
-        if param in self.enumTable:
+        if paramName in self.enumTable:
             if isinstance(value, basestring):
                 strVal = value
-                value = self.enumTable[param][0][value]
+                value = self.enumTable[paramName][0][value]
             else:
-                strVal = self.enumTable[param][1][value]
+                strVal = self.enumTable[paramName][1][value]
         
         ## see if we can ignore parameter set because it is already set
         if not forceSet:
-            currentVal = self.getParam(param)
+            currentVal = self.getParam(paramName)
                 
             if (currentVal == value):
-                print "not setting parameter %s; unchanged" % param
+                print "not setting parameter %s; unchanged" % paramName
                 return (value, False)
-            elif  (param in self.enumTable) and (currentVal == strVal):
-                print "not setting parameter %s; unchanged" % param
+            elif  (paramName in self.enumTable) and (currentVal == strVal):
+                print "not setting parameter %s; unchanged" % paramName
                 return (strVal, False)
             else:
-                print "will set parameter: new %s != old %s" % (str(value), str(currentVal))
+                print "will set parameter %s: new %s != old %s" % (paramName, str(value), str(currentVal))
         
-        if param in self.params:
-            return self._setLocalParam(param, value, autoCorrect)
+        if paramName in self.localParamNames:
+            return self._setLocalParam(paramName, value, autoCorrect)
         
-        param = self.pvcam.paramFromString(param)
+        param = self.pvcam.paramFromString(paramName)
         self._assertParamReadable(param)
 
         if isinstance(value, basestring):
@@ -603,7 +475,7 @@ class _CameraClass:
         #print "   PVCam setParam checked value"
             
         ## Set value
-        print "pvcam setting parameter", param
+        print "pvcam setting parameter", paramName
         val = mkCObj(typ, value)
         LIB.pl_set_param(self.hCam, param, byref(val))
         
@@ -612,13 +484,14 @@ class _CameraClass:
         else:
             val = val.value
         
+        self.paramValues[paramName] = val
         return (val, True)
         #print "   PVCam setParam set done."
 
     def _setLocalParam(self, param, value, autoCorrect=True):
         """Set a parameter that is stored locally; no communication with camera needed (until camera restart)"""
-        if param in self.paramList:  ## check writable flag, bounds
-            rules = self.paramList[param]
+        if param in self.paramAttrs:  ## check writable flag, bounds
+            rules = self.paramAttrs[param]
             
             ## Sanity checks
             if not rules[1]:
@@ -648,7 +521,7 @@ class _CameraClass:
                         else:
                             raise Exception("Value for parameter %s must be in increments of %s (requested %s)" % (param, str(stepval), str(value)))
         
-        self.params[param] = value
+        self.paramValues[param] = value
         return (value, True)
 
 
@@ -902,6 +775,54 @@ class _CameraClass:
         #}
     
         
+            
+    def buildEnumTable(self):
+        """Builds dicts that link enum names to their values for each parameter."""
+        enums = {}
+        plist = self.pvcam.listParams(allParams=True)
+        #print plist
+        for n in plist:
+            if not self.paramAvailable(n):
+                continue
+            typ = self.getParamType(n)
+            if typ != LIB.TYPE_ENUM:
+                continue
+            enum = self.getEnumList(n)
+            enums[n] = (dict(zip(enum[0], enum[1])), dict(zip(enum[1], enum[0])))
+            paramId = self.pvcam.paramFromString(n)
+            enums[paramId] = enums[n]
+            
+        return enums
+        
+    def buildParamList(self):
+        """Builds the list of attributes for each remote parameter"""
+        plist = self.pvcam.listParams()
+        plist = filter(self.paramAvailable, plist)
+        rem = ['ADC_OFFSET']  ## Set by manufacturer; do not change.
+        for r in rem:
+            if r in plist:
+                plist.remove(r)
+        params = OrderedDict()
+        
+        numTypes = [LIB.TYPE_INT8, LIB.TYPE_UNS8, LIB.TYPE_INT16, LIB.TYPE_UNS16, LIB.TYPE_INT32, LIB.TYPE_UNS32, LIB.TYPE_FLT64]
+        for p in plist:
+            typ = self.getParamType(p)
+            if typ in numTypes:
+                (minval, maxval, stepval) = self.getParamRange(p)
+                if stepval == 0:
+                    vals = (minval, maxval, None)
+                else:
+                    vals = (minval, maxval, stepval)
+            elif typ == LIB.TYPE_ENUM:
+                #vals = self.getEnumList(p)[0]
+                vals = self.enumTable[p][0].keys()
+            elif typ == LIB.TYPE_BOOLEAN:
+                vals = [True, False]
+            else:
+                vals = None
+            params[p] = [vals, self.paramWritable(p), self.paramReadable(p), []]
+        
+        return params
 
 
 #class Region(Structure):

@@ -94,9 +94,20 @@ class CameraProtoGui(DAQGenericProtoGui):
             'triggerMode': state['triggerModeCombo']
         }
         prot['channels'] = daqProt
-        prot['pushState'] = None
-        prot['popState'] = None
+        if state['releaseBetweenRadio']:
+            prot['pushState'] = None
+            prot['popState'] = None
         return prot
+        
+    def protocolStarted(self):
+        DAQGenericProtoGui.protocolStarted(self)
+        if self.ui.releaseAfterRadio.isChecked():
+            self.dev.pushState('cam_proto_state')
+        
+    def protocolFinished(self):
+        DAQGenericProtoGui.protocolFinished(self)
+        if self.ui.releaseAfterRadio.isChecked():
+            self.dev.popState('cam_proto_state')
         
         
     def currentState(self):

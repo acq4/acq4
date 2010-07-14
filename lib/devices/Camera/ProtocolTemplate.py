@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Fri Dec 11 09:08:52 2009
+# Created: Wed Jul 14 15:38:16 2010
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(252, 141)
+        Form.resize(209, 134)
         self.horizontalLayout = QtGui.QHBoxLayout(Form)
         self.horizontalLayout.setSpacing(0)
         self.horizontalLayout.setMargin(0)
@@ -63,6 +63,21 @@ class Ui_Form(object):
         self.triggerCheck.setFont(font)
         self.triggerCheck.setObjectName("triggerCheck")
         self.gridLayout.addWidget(self.triggerCheck, 2, 0, 1, 2)
+        self.releaseBetweenRadio = QtGui.QRadioButton(self.cameraGroupBox)
+        font = QtGui.QFont()
+        font.setWeight(50)
+        font.setBold(False)
+        self.releaseBetweenRadio.setFont(font)
+        self.releaseBetweenRadio.setObjectName("releaseBetweenRadio")
+        self.gridLayout.addWidget(self.releaseBetweenRadio, 3, 0, 1, 2)
+        self.releaseAfterRadio = QtGui.QRadioButton(self.cameraGroupBox)
+        font = QtGui.QFont()
+        font.setWeight(50)
+        font.setBold(False)
+        self.releaseAfterRadio.setFont(font)
+        self.releaseAfterRadio.setChecked(True)
+        self.releaseAfterRadio.setObjectName("releaseAfterRadio")
+        self.gridLayout.addWidget(self.releaseAfterRadio, 4, 0, 1, 2)
         self.plotSplitter = QtGui.QSplitter(self.horizSplitter)
         self.plotSplitter.setOrientation(QtCore.Qt.Vertical)
         self.plotSplitter.setObjectName("plotSplitter")
@@ -91,5 +106,7 @@ class Ui_Form(object):
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">other devices in the protocol have started so that it</p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">can correctly act as a starting trigger.</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
         self.triggerCheck.setText(QtGui.QApplication.translate("Form", "Camera triggers protocol", None, QtGui.QApplication.UnicodeUTF8))
+        self.releaseBetweenRadio.setText(QtGui.QApplication.translate("Form", "Release between protocols", None, QtGui.QApplication.UnicodeUTF8))
+        self.releaseAfterRadio.setText(QtGui.QApplication.translate("Form", "Release after sequence", None, QtGui.QApplication.UnicodeUTF8))
 
 from lib.util.pyqtgraph.ImageView import ImageView

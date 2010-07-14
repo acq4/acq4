@@ -501,7 +501,7 @@ class CameraTask(DAQGenericTask):
         
         if self.stoppedCam:
             #print "  waiting for camera to stop.."
-            self.wait()
+            self.dev.wait()
             
         if not self.dev.isRunning():
             #print "  Starting camera again..", camState
