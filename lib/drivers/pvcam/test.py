@@ -17,6 +17,9 @@ print "\nCameras:", cams
 print "\ngetCamera..."
 cam = p.getCamera(cams[0])
 print "\nParameters:"
-params = cam.listParams()
-for p in params:
-    print p, "\t", params[p]
+def listParams():
+    params = cam.listParams()
+    for p in params:
+        v = str(cam.getParam(p))
+        print p, " "*(20-len(p)), v, " "*(30-len(v)), params[p]
+listParams()
