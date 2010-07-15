@@ -145,28 +145,56 @@ class Camera(DAQGeneric):
         return self.getParams([param])[param]
         
     def pushState(self, name=None):
+        print "Camera: pushState", name
         params = self.listParams()
         for k in params.keys():    ## remove non-writable parameters
             if not params[k][1]:
                 del params[k]
-        self.stateStack.append((name, self.getParams(params.keys())))
+        params = self.getParams(params.keys())
+        params['isRunning'] = self.isRunning()
+        
+        self.stateStack.append((name, params))
         
     def popState(self, name=None):
+        print "Camera: popState", name
         if name is None:
-            state = self.stateStack.pop()
+            state = self.stateStack.pop()[1]
         else:
             inds = [i for i in range(len(self.stateStack)) if self.stateStack[i][0] == name]
             if len(inds) == 0:
                 raise Exception("Can not find camera state named '%s'" % name)
-            state = self.stateStack[inds[-1]]
+            state = self.stateStack[inds[-1]][1]
             self.stateStack = self.stateStack[:inds[-1]]
-        self.setParams(state)
+            
+        run = state['isRunning']
+        del state['isRunning']
+        nv, restart = self.setParams(state, autoRestart=False)
+        print "    run:", run, "isRunning:", self.isRunning(), "restart:", restart
+        
+        if self.isRunning():
+            if run:
+                if restart:
+                    self.restart()
+            else:
+                self.stop()
+        else:
+            if run:
+                self.start()
+            
+        
+        #if not run and self.isRuning():
+            #self.stop()
+        
+        #if run and (restart or (not self.isRunning()):
+            #self.start()
         
 
-    def start(self):
+    def start(self, block=True):
+        print "Camera: start"
         self.acqThread.start()
         
     def stop(self, block=True):
+        print "Camera: stop"
         self.acqThread.stop(block=block)
         
     def restart(self):
@@ -175,9 +203,9 @@ class Camera(DAQGeneric):
             self.start()
     
     def quit(self):
-        if hasattr(self, 'acqThread') and self.acqThread.isRunning():
-            self.stopAcquire()
-            if not self.acqThread.wait(10000):
+        if hasattr(self, 'acqThread') and self.isRunning():
+            self.stop()
+            if not self.wait(10000):
                 raise Exception("Timed out while waiting for thread exit!")
         #self.cam.close()
         DAQGeneric.quit(self)
@@ -327,7 +355,7 @@ class Camera(DAQGeneric):
         return self.acqThread.isRunning()
     
     def wait(self, *args, **kargs):
-        self.acqThread.wait(*args, **kargs)
+        return self.acqThread.wait(*args, **kargs)
 
 class CameraTask(DAQGenericTask):
     """Default implementation of camera protocol task.
@@ -335,6 +363,7 @@ class CameraTask(DAQGenericTask):
 
 
     def __init__(self, dev, cmd):
+        print "Camera task:", cmd
         daqCmd = {}
         if 'channels' in cmd:
             daqCmd = cmd['channels']
@@ -344,6 +373,7 @@ class CameraTask(DAQGenericTask):
         self.lock = Mutex()
         self.recordHandle = None
         self.stopAfter = False
+        self.stoppedCam = False
         self.returnState = {}
         self.frames = []
         self.recording = False
@@ -352,13 +382,19 @@ class CameraTask(DAQGenericTask):
         
     def configure(self, tasks, startOrder):
         ## Merge command into default values:
+        print "CameraTask.configure"
         params = {
             'triggerMode': 'Normal',
             #'recordExposeChannel': False
         }
         
+        print "pushState..."
+        if 'pushState' in self.camCmd:
+            stateName = self.camCmd['pushState']
+            self.dev.pushState(stateName)
+        time.sleep(0.5)
         
-        nonCameraParams = ['channels', 'record', 'triggerProtocol']
+        nonCameraParams = ['channels', 'record', 'triggerProtocol', 'pushState', 'popState']
         for k in self.camCmd:
             if k not in nonCameraParams:
                 params[k] = self.camCmd[k]
@@ -379,8 +415,12 @@ class CameraTask(DAQGenericTask):
         ## if the camera is being triggered by the daq or if there are parameters to be set, stop it now
         #if self.camCmd['triggerMode'] != 'No Trigger' or paramSet:
             #self.dev.stopAcquire(block=True)  
+
+        ## If we are sending a one-time trigger to start the camera, then it must be restarted to arm the trigger        
+        if self.camCmd['triggerMode'] == 'TriggerStart':
+            restart = True
             
-        print params
+        #print params
         (newParams, restart) = self.dev.setParams(params, autoCorrect=True)
         
         ## If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
@@ -403,8 +443,10 @@ class CameraTask(DAQGenericTask):
             
             
         ## We want to avoid this if at all possible since it may be very expensive
+        print "CameraTask: configure: restart camera:", restart
         if restart:
-            self.dev.stop(block=True)
+            self.dev.stop(block=False)  ## don't wait for the camera to stop; we'll check again later.
+            self.stoppedCam = True
             
         ## connect using acqThread's connect method because there may be no event loop
         ## to deliver signals here.
@@ -433,6 +475,9 @@ class CameraTask(DAQGenericTask):
         self.frames = []
         self.stopRecording = False
         self.recording = True
+        
+        #print "CameraTask start"
+        #time.sleep(0.5)
         #self.recordHandle = CameraTask(self.dev.acqThread)  #self.dev.acqThread.startRecord()
         ## start acquisition if needed
         #print "Camera start:", self.camCmd
@@ -454,18 +499,27 @@ class CameraTask(DAQGenericTask):
             ##print "   set done"
                 
         
+        if self.stoppedCam:
+            #print "  waiting for camera to stop.."
+            self.wait()
+            
         if not self.dev.isRunning():
-            #print "Starting camera:", camState
+            #print "  Starting camera again..", camState
             #self.dev.setParams(camState)
-            self.dev.start()
+            self.dev.start(block=True)  ## wait until camera is actually ready to acquire
         
-        ## If we requested a trigger mode, wait 300ms for the camera to get ready for the trigger
-        ##   (Is there a way to ask the camera when it is ready instead?)
-        #if self.camCmd['triggerMode'] is not 'No Trigger':
-            #time.sleep(0.3)
+            ### If we requested a trigger mode, wait 300ms for the camera to get ready for the trigger
+            ###   (Is there a way to ask the camera when it is ready instead?)
+            #if self.camCmd['triggerMode'] != 'Normal':
+                #time.sleep(0.3)
+                
             
         ## Last I checked, this does nothing. It should be here anyway, though..
+        #print "  start daq task"
         DAQGenericTask.start(self)
+        #time.sleep(0.5)
+        
+        #print "  done"
         
         
     def isDone(self):
@@ -485,8 +539,8 @@ class CameraTask(DAQGenericTask):
         #if self.stopAfter:
             #self.dev.stopAcquire()
         
-        if 'returnState' in self.camCmd:
-            self.dev.popState(self.camCmd['returnState'])
+        if 'popState' in self.camCmd:
+            self.dev.popState(self.camCmd['popState'])  ## restores previous settings, stops/restarts camera if needed
                 
             
         
@@ -549,7 +603,7 @@ class CameraTask(DAQGenericTask):
             expLen = (offTimes[1:len(onTimes)] - onTimes[1:len(offTimes)]).mean()
             
             
-            if self.camCmd['triggerMode'] == 'No Trigger':
+            if self.camCmd['triggerMode'] == 'Normal':
                 ## Can we make a good guess about frame times even without having triggered the first frame?
                 ## frames are marked with their arrival time. We will assume that a frame most likely 
                 ## corresponds to the last complete exposure signal. 
@@ -659,6 +713,7 @@ class AcquireThread(QtCore.QThread):
         binning = camState['binning']
         exposure = camState['exposure']
         region = camState['region']
+        mode = camState['triggerMode']
         
         #print "AcquireThread.run: Lock for startup.."
         #print "AcquireThread.run: ..unlocked from startup"
@@ -702,7 +757,7 @@ class AcquireThread(QtCore.QThread):
                 #times[ti] = ptime.time(); ti += 1  ## +40us
                 ## If a new frame is available, process it and inform other threads
                 if frame is not None and frame != lastFrame:
-                    #print 'frame'
+                    #print 'frame', frame
                     if lastFrame is not None:
                         diff = (frame - lastFrame) % self.ringSize
                         if diff > (self.ringSize / 2):
@@ -785,7 +840,7 @@ class AcquireThread(QtCore.QThread):
                 if now - lastStopCheck > 10e-3: 
                     lastStopCheck = now
                     #print "stop check"
-                    ## If no frame has arrived yet, do NOT stop the camera (this can hang the driver)
+                    ## If no frame has arrived yet, do NOT allow the camera to stop (this can hang the driver)   << bug should be fixed in pvcam driver, not here.
                     diff = ptime.time()-lastFrameTime
                     if frame is not None or diff > 1:
                         #print "    AcquireThread.run: Locking thread to check for stop request"
@@ -800,7 +855,7 @@ class AcquireThread(QtCore.QThread):
                         #print "    AcquireThread.run: Done with thread stop check"
                         
                         if diff > (10 + exposure):
-                            if mode == 'No Trigger':
+                            if mode == 'Normal':
                                 print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
                                 break
                             else:
@@ -826,7 +881,7 @@ class AcquireThread(QtCore.QThread):
             #print "Camera ACQ thread exited."
         
     def stop(self, block=False):
-        #print "AcquireThread.stop: Requesting thread stop, acquiring lock first.."
+        print "AcquireThread.stop: Requesting thread stop, acquiring lock first.."
         with MutexLocker(self.lock):
             self.stopThread = True
         #print "AcquireThread.stop: got lock, requested stop."
@@ -834,7 +889,7 @@ class AcquireThread(QtCore.QThread):
         if block:
           if not self.wait(10000):
               raise Exception("Timed out waiting for thread exit!")
-        #print "AcquireThread.stop: thread exited"
+        print "AcquireThread.stop: thread exited"
 
     def reset(self):
         if self.isRunning():
