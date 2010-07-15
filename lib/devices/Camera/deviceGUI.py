@@ -102,7 +102,8 @@ class CameraDeviceGui(QtGui.QWidget):
                     if type(newBounds) is tuple:
                         
                         (mn, mx, step) = newBounds
-                        if step == 1:
+                        
+                        if isinstance(w, QtGui.QSpinBox):
                             intmax = (2**16)-1
                             if mx is None or mx > intmax:
                                 mx = intmax
