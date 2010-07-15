@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from ctypes import *
-import sys, numpy, time, re
+import sys, numpy, time, re, os
 #import lib.util.cheader as cheader
 from clibrary import *
 from advancedTypes import OrderedDict
@@ -9,11 +9,14 @@ __all__ = ['PVCam']
 
 
 ### Load header files, open DLL
+modDir = os.path.dirname(__file__)
 headerFiles = [
-    "C:\Program Files\Photometrics\PVCam32\SDK\inc\master.h",
-    "C:\Program Files\Photometrics\PVCam32\SDK\inc\pvcam.h"
+    #"C:\Program Files\Photometrics\PVCam32\SDK\inc\master.h",
+    #"C:\Program Files\Photometrics\PVCam32\SDK\inc\pvcam.h"
+    os.path.join(modDir, "master.h"),
+    os.path.join(modDir, "pvcam.h")
 ]
-HEADERS = CParser(headerFiles, cache='pvcam_headers.cache', copyFrom=winDefs())
+HEADERS = CParser(headerFiles, cache=os.path.join(modDir, 'pvcam_headers.cache'), copyFrom=winDefs())
 LIB = CLibrary(windll.Pvcam32, HEADERS, prefix='pl_')
 
 
@@ -29,9 +32,6 @@ LIB = CLibrary(windll.Pvcam32, HEADERS, prefix='pl_')
 
 cameraDefaults = {
     'ALL': [
-        ('READOUT_PORT', 0),  ## Only option for Q57, fastest for QuantEM
-        ('SPDTAB_INDEX', 0),
-        ('GAIN_INDEX', 3),
         ('PMODE', LIB.PMODE_NORMAL),  ## PMODE_FT ?
         ('SHTR_OPEN_MODE', LIB.OPEN_PRE_SEQUENCE),
         ('CLEAR_MODE', LIB.CLEAR_PRE_EXPOSURE),
@@ -39,6 +39,7 @@ cameraDefaults = {
     ],
         
     'QUANTEM:512SC': [
+        ('READOUT_PORT', 0),  ## fastest for QuantEM
         ('SPDTAB_INDEX', 0),  ## Fastest option for QM512
         ('CLEAR_MODE', LIB.CLEAR_PRE_SEQUENCE),  ## Overlapping mode for QuantEM cameras
         ('GAIN_INDEX', 2),
@@ -47,12 +48,13 @@ cameraDefaults = {
     ],
     
     'Quantix57': [
+        ('READOUT_PORT', 0),  ## Only option for Q57
         ('SPDTAB_INDEX', 2),  ## Fastest option for Q57
-        ('binningX', 1, [2**x for x in range(9)]),
-        ('binningY', 1, [2**x for x in range(9)]),
+        ('binningX', 1, [1,2,3,4,8,12,16,24,32,48,64]),
+        ('binningY', 1, [1,2,3,4,8,12,16,24,32,48,64]),
     ],
 }
-
+cameraDefaults['Quantix EEV57  '] = cameraDefaults['Quantix57']  ## different names, same camera.
 
 
 
@@ -274,8 +276,10 @@ class _CameraClass:
         }        
         
         self.paramAttrs.update({
-            'binningX': [(1, size[0], 1), True, True, []],  
-            'binningY': [(1, size[1], 1), True, True, []],
+            #'binningX': [(1, size[0], 1), True, True, []],  
+            #'binningY': [(1, size[1], 1), True, True, []],
+            'binningX': [[1,2,4,8,16], True, True, []],    ## Just a guess.. this should be overwritten once we know what the camera model is.
+            'binningY': [[1,2,4,8,16], True, True, []],
             'exposure': [(0, None, None), True, True, []],
             'triggerMode': [['Normal', 'TriggerStart', 'Strobe', 'Bulb'], True, True, []],
             'regionX': [(0, size[0]-1, 1), True, True, []],
@@ -319,17 +323,20 @@ class _CameraClass:
     def initCam(self, params=None):
         buf = create_string_buffer('\0' * LIB.CCD_NAME_LEN)
         camType = self.call('get_param', LIB.PARAM_CHIP_NAME, LIB.ATTR_CURRENT, buf)[3]
-        #print "Camera type:", camType
         
         ## Implement default settings for this camera model
         defaults = OrderedDict([(p[0], p[1]) for p in cameraDefaults['ALL']])
         ranges = dict([(p[0], p[2:]) for p in cameraDefaults['ALL']])
         
+        
         if camType in cameraDefaults:
+            print "Loading default settings for", camType
             camDefaults = OrderedDict([(p[0], p[1]) for p in cameraDefaults[camType]])
             camRanges = dict([(p[0], p[2:]) for p in cameraDefaults[camType]])
             defaults.update(camDefaults)
             ranges.update(camRanges)
+        else:
+            print "Warning--camera model '%s' is unrecognized; default settings may be incorrect." % camType
         
         for k,v in ranges.items():
             #print self.paramAttrs[k], k, v
