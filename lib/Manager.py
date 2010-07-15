@@ -569,8 +569,8 @@ class Task:
         #print "======================="
         
         ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
-        #from debug import Profiler
-        #prof = Profiler()
+        from debug import Profiler
+        prof = Profiler('Manager.Task.execute', disabled=True)
         
         try:
         
@@ -587,7 +587,7 @@ class Task:
             finally:
                 self.dm.unlockReserv()
                 
-            #prof.mark('reserve')
+            prof.mark('reserve')
 
             ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
             ## This is how we allow multiple devices to communicate and decide how to operate together.
@@ -596,13 +596,13 @@ class Task:
             self.startOrder = self.devs.keys()
             for devName in self.tasks:
                 self.tasks[devName].configure(self.tasks, self.startOrder)
-                #prof.mark('configure %s' % devName)
+                prof.mark('configure %s' % devName)
             #print "done"
 
             if 'leadTime' in self.cfg:
                 time.sleep(self.cfg['leadTime'])
                 
-            #prof.mark('leadSleep')
+            prof.mark('leadSleep')
 
             self.result = None
             
@@ -614,11 +614,12 @@ class Task:
                 #print "  ", devName
                 self.tasks[devName].start()
                 self.startedDevs.append(devName)
-                #prof.mark('start %s' % devName)
+                prof.mark('start %s' % devName)
             self.startTime = ptime.time()
             #print "  %d Task started" % self.id
                 
             if not block:
+                prof.finish()
                 #print "  %d Not blocking; execute complete" % self.id
                 return
             
@@ -654,7 +655,7 @@ class Task:
         
     def stop(self, abort=False):
         """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run."""
-        #prof = Profiler("Stop Task")
+        prof = Profiler("Manager.Task.stop", disabled=True)
         try:
             if not self.stopped:
                 #print "stopping tasks.."
@@ -669,7 +670,7 @@ class Task:
                     except:
                         printExc("Error while stopping task %s:" % t)
                     #print "   ..task", t, "stopped"
-                    #prof.mark("   ..task "+ t+ " stopped")
+                    prof.mark("   ..task "+ t+ " stopped")
                 self.stopped = True
             
             if not abort and not self.tasksDone():
@@ -685,7 +686,7 @@ class Task:
                     except:
                         printExc( "Error getting result for task %s (will set result=None for this task):" % devName)
                         result[devName] = None
-                    #prof.mark("get result: "+devName)
+                    prof.mark("get result: "+devName)
                 self.result = result
                 #print "RESULT 1:", self.result
                 
@@ -693,11 +694,13 @@ class Task:
                 if 'storeData' in self.cfg and self.cfg['storeData'] is True:
                     for t in self.tasks:
                         self.tasks[t].storeResult(self.cfg['storageDir'])
-                #prof.mark("store data")
+                prof.mark("store data")
         finally:   ## Regardless of any other problems, at least make sure we release hardware for future use
             ## Release all hardware for use elsewhere
+            
             self.releaseAll()
-            #prof.mark("release all")
+            prof.mark("release all")
+            prof.finish()
             
         #print "tasks:", self.tasks
         #print "RESULT:", self.result        

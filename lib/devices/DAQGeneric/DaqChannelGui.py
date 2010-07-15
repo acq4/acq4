@@ -21,17 +21,9 @@ class DaqChannelGui(QtGui.QWidget):
         ## Configuration for this channel defined in the device configuration file
         self.config = config
         
-        if 'scale' in config:
-            self.scale = config['scale']
-        else:
-            self.scale = 1.0
-        #print "device %s scale=%f" % (name, self.scale)
+        self.scale = 1.0
+        self.units = ''
         
-        if 'units' in config:
-            self.units = config['units']
-        else:
-            self.units = ''
-            
         ## The device handle for this channel's DAQGeneric device
         self.dev = dev
         
@@ -50,6 +42,7 @@ class DaqChannelGui(QtGui.QWidget):
         ## Curves displayed in self.plot
         #self.plots = []
         
+        
             
     def postUiInit(self):
         ## Automatically locate all read/writable widgets and group them together for easy 
@@ -59,6 +52,16 @@ class DaqChannelGui(QtGui.QWidget):
         self.displayCheckChanged()
         QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('stateChanged(int)'), self.displayCheckChanged)
         QtCore.QObject.connect(self.ui.groupBox, QtCore.SIGNAL('toggled(bool)'), self.groupBoxClicked)
+        
+        if 'userScale' in self.config:
+            self.setScale(self.config['userScale'])
+        else:
+            self.setScale(1.0)
+        
+        if 'units' in self.config:
+            self.setUnits(self.config['units'])
+        else:
+            self.setUnits('')
             
     def updateTitle(self):
         if self.ui.groupBox.isChecked():
@@ -81,7 +84,6 @@ class DaqChannelGui(QtGui.QWidget):
         return []
 
     def setScale(self, scale):
-        self.ui.waveGeneratorWidget.setScale(scale)
         self.scale = scale
         self.updateTitle()
         
@@ -158,6 +160,11 @@ class OutputChannelGui(DaqChannelGui):
 
     def getSpins(self):
         return (self.ui.preSetSpin, self.ui.holdingSpin)
+        
+    def setScale(self, scale):
+        self.ui.waveGeneratorWidget.setScale(scale)
+        self.scale = scale
+        self.updateTitle()
         
     def quit(self):
         DaqChannelGui.quit(self)

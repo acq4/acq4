@@ -62,6 +62,7 @@ class CameraProtoGui(DAQGenericProtoGui):
         
         #QtCore.QObject.connect(self.ui.recordExposeCheck, QtCore.SIGNAL('clicked()'), self.recordExposeClicked)
         QtCore.QObject.connect(self.ui.imageView, QtCore.SIGNAL('timeChanged'), self.timeChanged)
+        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolPaused'), self.protocolPaused)
             
     def timeChanged(self, i, t):
         #for l in self.vLines:
@@ -94,9 +95,25 @@ class CameraProtoGui(DAQGenericProtoGui):
             'triggerMode': state['triggerModeCombo']
         }
         prot['channels'] = daqProt
-        prot['pushState'] = None
-        prot['popState'] = None
+        if state['releaseBetweenRadio']:
+            prot['pushState'] = None
+            prot['popState'] = None
         return prot
+        
+    def protocolStarted(self):
+        DAQGenericProtoGui.protocolStarted(self)
+        if self.ui.releaseAfterRadio.isChecked():
+            self.dev.pushState('cam_proto_state')
+        
+    def protocolFinished(self):
+        DAQGenericProtoGui.protocolFinished(self)
+        if self.ui.releaseAfterRadio.isChecked():
+            self.dev.popState('cam_proto_state')
+
+    def protocolPaused(self):  ## If the protocol is paused, return the camera to its previous state until we start again
+        if self.ui.releaseAfterRadio.isChecked():
+            self.dev.popState('cam_proto_state')
+            self.dev.pushState('cam_proto_state')
         
         
     def currentState(self):

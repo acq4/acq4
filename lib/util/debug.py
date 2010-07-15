@@ -96,19 +96,33 @@ def describeObj(__XX__Obj, depth=4, printResult=True, ignoreNames=None):
     
     
 class Profiler:
-    def __init__(self, msg="Profiler"):
+    depth = 0
+    
+    def __init__(self, msg="Profiler", disabled=False):
+        self.depth = Profiler.depth 
+        Profiler.depth += 1
+        
+        self.disabled = disabled
+        if disabled: 
+            return
         self.t0 = ptime.time()
         self.t1 = self.t0
-        self.msg = msg
-        self.mark("start")
+        self.msg = "  "*self.depth + msg
+        print self.msg, ">>> Started"
     
     def mark(self, msg=''):
+        if self.disabled: 
+            return
         t1 = ptime.time()
-        print self.msg, msg, "%gms" % ((t1-self.t1)*1000)
+        print "  "+self.msg, msg, "%gms" % ((t1-self.t1)*1000)
         self.t1 = t1
         
     def finish(self):
+        if self.disabled: 
+            return
         t1 = ptime.time()
-        print self.msg, 'finished, total time:', "%gms" % ((t1-self.t0)*1000)
+        print self.msg, '<<< Finished, total time:', "%gms" % ((t1-self.t0)*1000)
         
+    def __del__(self):
+        Profiler.depth -= 1
         

@@ -14,6 +14,7 @@ import ptime
 import analysisModules
 import time
 import sip
+from debug import Profiler
 #import pdb
 
 class Window(QtGui.QMainWindow):
@@ -91,6 +92,7 @@ class ProtocolRunner(Module):
         QtCore.QObject.connect(self.protocolList, QtCore.SIGNAL('fileRenamed(PyQt_PyObject, PyQt_PyObject)'), self.fileRenamed)
         QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('finished()'), self.taskThreadStopped)
         QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('newFrame'), self.handleFrame)
+        QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('paused'), self.taskThreadPaused)
         QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('taskStarted'), self.taskStarted)
         #QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.deviceItemChanged)
         QtCore.QObject.connect(self.protoStateGroup, QtCore.SIGNAL('changed'), self.protoGroupChanged)
@@ -387,7 +389,7 @@ class ProtocolRunner(Module):
     def clearDocks(self):
         for d in self.docks:
             try:
-                print "request dock %s quit" % d
+                #print "request dock %s quit" % d
                 self.docks[d].widget().quit()
             except:
                 printExc("Error while requesting dock '%s' quit:"% d)
@@ -779,6 +781,9 @@ class ProtocolRunner(Module):
         if not self.loopEnabled:
             self.enableStartBtns(True)
     
+    def taskThreadPaused(self):
+        self.emit(QtCore.SIGNAL('protocolPaused'))
+            
     def stopSingle(self):
         self.loopEnabled = False
         self.taskThread.abort()
@@ -1021,6 +1026,7 @@ class TaskThread(QtCore.QThread):
                     
     def runOnce(self, params=None):
         #print "TaskThread:runOnce"
+        prof = Profiler("ProtocolRunner.TaskThread.runOnce", disabled=True)
         startTime = ptime.time()
         if params is None:
             params = {}
@@ -1034,7 +1040,7 @@ class TaskThread(QtCore.QThread):
                 for p in params:
                     #print "Selecting %s: %s from sequence array" % (str(p), str(params[p]))
                     cmd = cmd[p: params[p]]
-                    
+            prof.mark('select command')        
             #print "Protocol:", cmd
                     
             ## Wait before starting if we've already run too recently
@@ -1046,16 +1052,22 @@ class TaskThread(QtCore.QThread):
                     return
                 l.unlock()
                 time.sleep(1e-3)
-            
+            prof.mark('sleep')
             
             # If paused, hang here for a bit.
+            emitSig = True
             while True:
                 l.relock()
                 pause = self.paused
                 l.unlock()
                 if not pause:
                     break
+                if emitSig:
+                    emitSig = False
+                    self.emit(QtCore.SIGNAL('paused'))
                 time.sleep(10e-3)
+            
+            prof.mark('pause')
             
             #print "BEFORE:\n", cmd
             if type(cmd) is not dict:
@@ -1066,17 +1078,16 @@ class TaskThread(QtCore.QThread):
                 print "==========================="
                 raise Exception("ProtocolRunner.runOnce failed to generate a proper command structure. Object type was '%s', should have been 'dict'." % type(cmd))
                 
-            #from debug import Profiler
-            #prof = Profiler()
+            
             task = self.dm.createTask(cmd)
-            #prof.mark('create task')
+            prof.mark('create task')
             
             self.lastRunTime = ptime.time()
             self.emit(QtCore.SIGNAL('taskStarted'), params)
             
             try:
                 task.execute(block=False)
-                #prof.mark('execute')
+                prof.mark('execute')
             except:
                 try:
                     task.stop(abort=True)
@@ -1085,13 +1096,14 @@ class TaskThread(QtCore.QThread):
                 printExc("\nError starting protocol:")
                 raise
             
+            prof.mark('start task')
             ### Do not put code outside of these try: blocks; may cause device lockup
             
             try:
                 ## wait for finish, watch for abort requests
                 while True:
                     if task.isDone():
-                        #prof.mark('task done')
+                        prof.mark('task done')
                         break
                     l.relock()
                     if self.abortThread:
@@ -1110,13 +1122,15 @@ class TaskThread(QtCore.QThread):
                 print ""
                 raise
             #print "\nAFTER:\n", cmd
-            #prof.mark('getResult')
+            prof.mark('getResult')
             
         frame = {'params': params, 'cmd': cmd, 'result': result}
         self.emit(QtCore.SIGNAL('newFrame'), frame)
+        prof.mark('emit newFrame')
         if self.stopThread:
             raise Exception('stop', result)
         #print "Total run time: %gms" % ((ptime.time() - startTime) * 1000 )
+        prof.finish()
         
         
         

@@ -111,9 +111,9 @@ class ProtocolGui(QtGui.QWidget):
         QtGui.QWidget.__init__(self)
         self.dev = dev
         self.prot = prot
-        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)
-        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('taskStarted'), self.taskStarted)
-        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('finished()'), self.protocolFinished)
+        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)        ## called at the beginning of a protocol/sequence
+        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('taskStarted'), self.taskStarted)     ## called at the beginning of all protocol runs
+        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('finished()'), self.protocolFinished) ## called at the end of a protocol/sequence
         
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""

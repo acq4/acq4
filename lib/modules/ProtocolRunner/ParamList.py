@@ -32,7 +32,10 @@ class ParamList(QtGui.QTreeWidget):
                     QtCore.Qt.ItemIsEnabled)
                 item.setCheckState(0, QtCore.Qt.Checked)
                 items[p] = item
-                self.addTopLevelItem(item)
+                if dev == 'protocol' and p == 'repetitions':
+                    self.insertTopLevelItem(0, item)
+                else:
+                    self.addTopLevelItem(item)
                 item.setExpanded(True)  ## Must happen AFTER adding to tree.
             items[p].setData(2, QtCore.Qt.DisplayRole, QtCore.QVariant(str(params[p])))
             
