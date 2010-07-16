@@ -46,6 +46,13 @@ class ImageView(QtGui.QWidget):
         self.ui.graphicsView.invertY()
         self.ui.graphicsView.enableMouse()
         
+        self. ticks = [t[0] for t in self.ui.gradientWidget.listTicks()]
+        self.ticks[0].colorChangeAllowed = False
+        self.ticks[1].colorChangeAllowed = False
+        self.ui.gradientWidget.allowAdd = False
+        self.ui.gradientWidget.setTickColor(self.ticks[1], QtGui.QColor(255,255,255))
+        self.ui.gradientWidget.setOrientation('right')
+        
         self.imageItem = ImageItem()
         self.scene.addItem(self.imageItem)
         self.currentIndex = 0
@@ -56,26 +63,31 @@ class ImageView(QtGui.QWidget):
         self.roi.setZValue(20)
         self.scene.addItem(self.roi)
         self.roi.hide()
-        self.ui.roiPlot.hide()
+        #self.ui.roiPlot.hide()
         self.roiCurve = self.ui.roiPlot.plot()
-        self.roiTimeLine = InfiniteLine(self.ui.roiPlot, 0)
+        self.roiTimeLine = InfiniteLine(self.ui.roiPlot, 0, movable=True)
         self.roiTimeLine.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 200)))
         self.ui.roiPlot.addItem(self.roiTimeLine)
         
-        self.normLines = []
-        for i in [0,1]:
-            l = InfiniteLine(self.ui.roiPlot, 0)
-            l.setPen(QtGui.QPen(QtGui.QColor(0, 100, 200, 200)))
-            self.ui.roiPlot.addItem(l)
-            self.normLines.append(l)
-            l.hide()
+        #self.normLines = []
+        #for i in [0,1]:
+            #l = InfiniteLine(self.ui.roiPlot, 0)
+            #l.setPen(QtGui.QPen(QtGui.QColor(0, 100, 200, 200)))
+            #self.ui.roiPlot.addItem(l)
+            #self.normLines.append(l)
+            #l.hide()
+        self.normRgn = LinearRegionItem(self.ui.roiPlot)
+        self.ui.roiPlot.addItem(self.normRgn)
+        self.normRgn.hide()
             
         for fn in ['addItem']:
             setattr(self, fn, getattr(self.ui.graphicsView, fn))
 
-        QtCore.QObject.connect(self.ui.timeSlider, QtCore.SIGNAL('valueChanged(int)'), self.timeChanged)
-        QtCore.QObject.connect(self.ui.whiteSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
-        QtCore.QObject.connect(self.ui.blackSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
+        #QtCore.QObject.connect(self.ui.timeSlider, QtCore.SIGNAL('valueChanged(int)'), self.timeChanged)
+        self.roiTimeLine.connect(QtCore.SIGNAL('positionChanged'), self.timeChanged)
+        #QtCore.QObject.connect(self.ui.whiteSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
+        #QtCore.QObject.connect(self.ui.blackSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
+        QtCore.QObject.connect(self.ui.gradientWidget, QtCore.SIGNAL('gradientChanged'), self.updateImage)
         QtCore.QObject.connect(self.ui.roiBtn, QtCore.SIGNAL('clicked()'), self.roiClicked)
         self.roi.connect(QtCore.SIGNAL('regionChanged'), self.roiChanged)
         QtCore.QObject.connect(self.ui.normBtn, QtCore.SIGNAL('toggled(bool)'), self.normToggled)
@@ -85,20 +97,36 @@ class ImageView(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.normROICheck, QtCore.SIGNAL('clicked()'), self.updateNorm)
         QtCore.QObject.connect(self.ui.normFrameCheck, QtCore.SIGNAL('clicked()'), self.updateNorm)
         QtCore.QObject.connect(self.ui.normTimeRangeCheck, QtCore.SIGNAL('clicked()'), self.updateNorm)
-        QtCore.QObject.connect(self.ui.normStartSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
-        QtCore.QObject.connect(self.ui.normStopSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
+        
+        ##QtCore.QObject.connect(self.ui.normStartSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
+        #QtCore.QObject.connect(self.ui.normStopSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
         
         self.ui.roiPlot.registerPlot(self.name + '_ROI')
 
+    def keyPressEvent(self, ev):
+        if ev.key() == QtCore.Qt.Key_Right:
+            self.jumpFrames(1)
+        elif ev.key() == QtCore.Qt.Key_Left:
+            self.jumpFrames(-1)
+        elif ev.key() == QtCore.Qt.Key_PageUp:
+            self.jumpFrames(10)
+        elif ev.key() == QtCore.Qt.Key_PageDown:
+            self.jumpFrames(-10)
+        else:
+            ev.ignore()
+
+    def jumpFrames(self, n):
+        """If this is a video, move ahead n frames"""
+
     def updateNorm(self):
-        for l, sl in zip(self.normLines, [self.ui.normStartSlider, self.ui.normStopSlider]):
-            if self.ui.normTimeRangeCheck.isChecked():
-                l.show()
-            else:
-                l.hide()
+        #for l, sl in zip(self.normLines, [self.ui.normStartSlider, self.ui.normStopSlider]):
+            #if self.ui.normTimeRangeCheck.isChecked():
+                #l.show()
+            #else:
+                #l.hide()
             
-            i, t = self.timeIndex(sl)
-            l.setPos(t)
+            #i, t = self.timeIndex(sl)
+            #l.setPos(t)
         
         
         self.imageDisp = None
@@ -151,7 +179,7 @@ class ImageView(QtGui.QWidget):
             self.tVals = img.xvals(0)
         else:
             self.tVals = arange(img.shape[0])
-        self.ui.timeSlider.setValue(0)
+        #self.ui.timeSlider.setValue(0)
         #self.ui.normStartSlider.setValue(0)
         #self.ui.timeSlider.setMaximum(img.shape[0]-1)
         
@@ -182,8 +210,11 @@ class ImageView(QtGui.QWidget):
     def autoLevels(self):
         image = self.getProcessedImage()
         
-        self.ui.whiteSlider.setValue(self.ui.whiteSlider.maximum())
-        self.ui.blackSlider.setValue(0)
+        #self.ui.whiteSlider.setValue(self.ui.whiteSlider.maximum())
+        #self.ui.blackSlider.setValue(0)
+        
+        self.ui.gradientWidget.setTickValue(self.ticks[0], 0.0)
+        self.ui.gradientWidget.setTickValue(self.ticks[1], 1.0)
         self.imageItem.setLevels(white=self.whiteLevel(), black=self.blackLevel())
             
     def autoRange(self):
@@ -214,8 +245,8 @@ class ImageView(QtGui.QWidget):
             norm = norm.astype(float32)
             
         if self.ui.normTimeRangeCheck.isChecked() and image.ndim == 3:
-            (sind, start) = self.timeIndex(self.ui.normStartSlider)
-            (eind, end) = self.timeIndex(self.ui.normStopSlider)
+            (sind, start) = self.timeIndex(self.normRgn.lines[0])
+            (eind, end) = self.timeIndex(self.normRgn.lines[1])
             #print start, end, sind, eind
             n = image[sind:eind+1].mean(axis=0)
             n.shape = (1,) + n.shape
@@ -237,12 +268,12 @@ class ImageView(QtGui.QWidget):
         
         
     def timeChanged(self):
-        (ind, time) = self.timeIndex(self.ui.timeSlider)
+        #(ind, time) = self.timeIndex(self.ui.timeSlider)
+        (ind, time) = self.timeIndex(self.roiTimeLine)
         if ind != self.currentIndex:
             self.currentIndex = ind
             self.updateImage()
-        self.roiTimeLine.setPos(time)
-        #self.ui.roiPlot.replot()
+        #self.roiTimeLine.setPos(time)
         self.emit(QtCore.SIGNAL('timeChanged'), ind, time)
 
     def updateImage(self):
@@ -253,19 +284,24 @@ class ImageView(QtGui.QWidget):
         image = self.getProcessedImage()
         #print "update:", image.ndim, image.max(), image.min(), self.blackLevel(), self.whiteLevel()
         if self.axes['t'] is None:
-            self.ui.timeSlider.hide()
+            #self.ui.timeSlider.hide()
             self.imageItem.updateImage(image, white=self.whiteLevel(), black=self.blackLevel())
+            self.ui.roiPlot.hide()
+            self.ui.roiBtn.hide()
         else:
-            self.ui.timeSlider.show()
+            #self.ui.timeSlider.show()
             self.imageItem.updateImage(image[self.currentIndex], white=self.whiteLevel(), black=self.blackLevel())
             
     def timeIndex(self, slider):
         """Return the time and frame index indicated by a slider"""
         if self.image is None:
             return (0,0)
-        v = slider.value()
-        vmax = slider.maximum()
-        f = float(v) / vmax
+        #v = slider.value()
+        #vmax = slider.maximum()
+        #f = float(v) / vmax
+        
+        f = slider.value()
+        
         t = 0.0
         #xv = self.image.xvals('Time') 
         xv = self.tVals
@@ -284,8 +320,10 @@ class ImageView(QtGui.QWidget):
         return ind, t
 
     def whiteLevel(self):
-        return self.levelMin + (self.levelMax-self.levelMin) * self.ui.whiteSlider.value() / self.ui.whiteSlider.maximum() 
+        return self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[1])
+        #return self.levelMin + (self.levelMax-self.levelMin) * self.ui.whiteSlider.value() / self.ui.whiteSlider.maximum() 
     
     def blackLevel(self):
-        return self.levelMin + ((self.levelMax-self.levelMin) / self.ui.blackSlider.maximum()) * self.ui.blackSlider.value()
+        return self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[0])
+        #return self.levelMin + ((self.levelMax-self.levelMin) / self.ui.blackSlider.maximum()) * self.ui.blackSlider.value()
         

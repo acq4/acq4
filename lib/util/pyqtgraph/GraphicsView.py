@@ -79,7 +79,8 @@ class GraphicsView(QtGui.QGraphicsView):
         #v.setStyleSheet("background-color: #000000;")
         self.setViewport(v)
             
-        
+    def keyPressEvent(self, ev):
+        ev.ignore()
         
     def setCentralItem(self, item):
         if self.centralWidget is not None:

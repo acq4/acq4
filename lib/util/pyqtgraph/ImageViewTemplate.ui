@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>757</width>
-    <height>495</height>
+    <width>726</width>
+    <height>588</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -30,68 +30,17 @@
        <property name="spacing">
         <number>0</number>
        </property>
-       <item row="0" column="0" rowspan="3">
+       <item row="1" column="0" rowspan="3">
         <widget class="GraphicsView" name="graphicsView" native="true">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
+           <horstretch>10</horstretch>
+           <verstretch>10</verstretch>
           </sizepolicy>
          </property>
-         <zorder>normGroup</zorder>
-         <zorder>normGroup</zorder>
         </widget>
        </item>
-       <item row="0" column="1">
-        <widget class="QSlider" name="blackSlider">
-         <property name="maximum">
-          <number>4096</number>
-         </property>
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
-         </property>
-         <property name="invertedAppearance">
-          <bool>false</bool>
-         </property>
-         <property name="invertedControls">
-          <bool>false</bool>
-         </property>
-         <property name="tickPosition">
-          <enum>QSlider::TicksBelow</enum>
-         </property>
-         <property name="tickInterval">
-          <number>410</number>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="2" colspan="2">
-        <widget class="QSlider" name="whiteSlider">
-         <property name="maximum">
-          <number>4096</number>
-         </property>
-         <property name="value">
-          <number>4096</number>
-         </property>
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="1">
-        <widget class="QLabel" name="label">
-         <property name="text">
-          <string>B</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="2">
-        <widget class="QLabel" name="label_2">
-         <property name="text">
-          <string>W</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="1" colspan="3">
+       <item row="3" column="3">
         <widget class="QPushButton" name="roiBtn">
          <property name="maximumSize">
           <size>
@@ -107,17 +56,10 @@
          </property>
         </widget>
        </item>
-       <item row="4" column="0">
-        <widget class="QSlider" name="timeSlider">
-         <property name="maximum">
-          <number>65535</number>
-         </property>
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-        </widget>
+       <item row="1" column="3">
+        <widget class="GradientWidget" name="gradientWidget" native="true"/>
        </item>
-       <item row="4" column="1" colspan="2">
+       <item row="2" column="3">
         <widget class="QPushButton" name="normBtn">
          <property name="maximumSize">
           <size>
@@ -133,7 +75,7 @@
          </property>
         </widget>
        </item>
-       <item row="5" column="0" colspan="4">
+       <item row="0" column="0" colspan="4">
         <widget class="QGroupBox" name="normGroup">
          <property name="title">
           <string>Normalization</string>
@@ -188,7 +130,7 @@
             </property>
            </widget>
           </item>
-          <item row="4" column="0">
+          <item row="2" column="0">
            <widget class="QLabel" name="label_4">
             <property name="font">
              <font>
@@ -208,30 +150,10 @@
             </property>
            </widget>
           </item>
-          <item row="2" column="0" colspan="6">
-           <widget class="QSlider" name="normStartSlider">
-            <property name="maximum">
-             <number>65535</number>
-            </property>
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="0" colspan="6">
-           <widget class="QSlider" name="normStopSlider">
-            <property name="maximum">
-             <number>65535</number>
-            </property>
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="2">
+          <item row="2" column="2">
            <widget class="QDoubleSpinBox" name="normXBlurSpin"/>
           </item>
-          <item row="4" column="1">
+          <item row="2" column="1">
            <widget class="QLabel" name="label_8">
             <property name="text">
              <string>X</string>
@@ -241,7 +163,7 @@
             </property>
            </widget>
           </item>
-          <item row="4" column="3">
+          <item row="2" column="3">
            <widget class="QLabel" name="label_9">
             <property name="text">
              <string>Y</string>
@@ -251,30 +173,16 @@
             </property>
            </widget>
           </item>
-          <item row="4" column="4">
+          <item row="2" column="4">
            <widget class="QDoubleSpinBox" name="normYBlurSpin"/>
           </item>
-          <item row="4" column="5">
+          <item row="2" column="5">
            <widget class="QLabel" name="label_10">
             <property name="text">
              <string>T</string>
             </property>
             <property name="alignment">
              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="6">
-           <widget class="QLabel" name="normStopLabel">
-            <property name="text">
-             <string>Stop</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="6">
-           <widget class="QLabel" name="normStartLabel">
-            <property name="text">
-             <string>Start</string>
             </property>
            </widget>
           </item>
@@ -302,7 +210,7 @@
             </property>
            </widget>
           </item>
-          <item row="4" column="6">
+          <item row="2" column="6">
            <widget class="QDoubleSpinBox" name="normTBlurSpin"/>
           </item>
          </layout>
@@ -311,12 +219,19 @@
       </layout>
      </widget>
      <widget class="PlotWidget" name="roiPlot" native="true">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
       <property name="minimumSize">
        <size>
         <width>0</width>
         <height>40</height>
        </size>
       </property>
+      <zorder>normGroup</zorder>
      </widget>
     </widget>
    </item>
@@ -333,6 +248,12 @@
    <class>PlotWidget</class>
    <extends>QWidget</extends>
    <header>PlotWidget</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>GradientWidget</class>
+   <extends>QWidget</extends>
+   <header>GradientWidget</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

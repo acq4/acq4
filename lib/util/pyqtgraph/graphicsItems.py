@@ -1478,18 +1478,20 @@ class InfiniteLine(GraphicsObject):
         
     def setPos(self, pos):
         if type(pos) in [list, tuple]:
-            self.p = pos
+            newPos = pos
         elif isinstance(pos, QtCore.QPointF):
-            self.p = [pos.x(), pos.y()]
+            newPos = [pos.x(), pos.y()]
         else:
             if self.angle == 90:
-                self.p = [pos, 0]
+                newPos = [pos, 0]
             elif self.angle == 0:
-                self.p = [0, pos]
+                newPos = [0, pos]
             else:
                 raise Exception("Must specify 2D coordinate for non-orthogonal lines.")
-        self.updateLine()
-        self.emit(QtCore.SIGNAL('positionChanged'), self)
+        if self.p != newPos:
+            self.p = newPos
+            self.updateLine()
+            self.emit(QtCore.SIGNAL('positionChanged'), self)
 
     def getXPos(self):
         return self.p[0]
