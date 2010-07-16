@@ -87,6 +87,11 @@ def siEval(s):
 
 
 
+def dirDialog(startDir='', title="Select Directory"):
+  return str(QtGui.QFileDialog.getExistingDirectory(None, title, startDir))
+
+def fileDialog():
+  return str(QtGui.QFileDialog.getOpenFileName())
 
 
 

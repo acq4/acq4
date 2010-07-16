@@ -126,7 +126,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         
 
         ## Wrap a few methods from viewBox
-        for m in ['setXRange', 'setYRange', 'setRange', 'autoRange', 'viewRect']:
+        for m in ['setXRange', 'setYRange', 'setRange', 'autoRange', 'viewRect', 'setMouseEnabled']:
             setattr(self, m, getattr(self.vb, m))
             
         self.items = []
@@ -588,6 +588,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         return curve
 
     def addCurve(self, c, params=None):
+        if params is None:
+            params = {}
         c.setMeta(params)
         self.curves.append(c)
         #Qwt.QwtPlotCurve.attach(c, self)

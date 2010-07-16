@@ -2,12 +2,122 @@
 # -*- coding: utf-8 -*-
 import sys, os, re
 from glob import glob
-sys.path = ['/home/lcampagn/work/manis_lab/code/libs'] + sys.path
+#sys.path = ['/home/lcampagn/work/manis_lab/code/libs'] + sys.path
+localDir = os.path.dirname(__file__)
+sys.path.append(os.path.join(localDir, '..'))
+sys.path.append(os.path.join(localDir, '../util'))
 
-from helpers import *
-from qtgraph.widgets import *
-from qtgraph.graphicsWindows import *
+
+#from helpers import *
+from PyQt4 import QtGui, QtCore
+from pyqtgraph.widgets import *
+from pyqtgraph.graphicsWindows import *
+import Image
+from functions import *
 from scipy.ndimage import *
+from scipy.ndimage import correlate
+
+app = QtGui.QApplication([])
+
+def dirDialog(startDir='', title="Select Directory"):
+  return str(QtGui.QFileDialog.getExistingDirectory(None, title, startDir))
+  
+images = []
+def showImg(data=None, parent=None, title='', copy=True):
+    if data is None:
+        fileName = fileDialog()
+        title = fileName
+        data = loadImg(fileName)
+    elif type(data) is types.StringType:
+        title = data
+        data = loadImg(data)
+    title = "Image %d: %s" % (len(images), title)
+    i = ImageWindow(title=title)
+    i.setImage(data)
+    images.append(i)
+    return i
+
+def loadImageDir(dirName=None):
+    if dirName is None:
+        dirName = dirDialog()
+        
+    # Generate list of files, sort
+    files = os.listdir(dirName)
+    files.sort()
+    files = filter(lambda f: os.path.splitext(f)[1][1:] in IMAGE_EXTENSIONS, files)
+    files = [os.path.join(dirName, f) for f in files]
+    return loadImageList(files)
+
+def loadImageList(files):
+    # open first image to get dimensions
+    img = asarray(Image.open(files[0]))
+    
+    # Create empty 3D array, fill first frame
+    data = empty((len(files),) + img.shape, dtype=img.dtype)
+    data[0] = img
+    
+    # Fill array with image data
+    for i in range(1, len(files)):
+        img = Image.open(files[i])
+        data[i] = asarray(img)
+        
+    return data.transpose((0, 2, 1))
+
+def loadImg(fileName=None):
+    if fileName is None:
+        fileName = fileDialog()
+    if not os.path.isfile(fileName):
+        raise Exception("No file named %s", fileName)
+    img = Image.open(fileName)
+    numFrames = 0
+    try:
+        while True:
+            img.seek( numFrames )
+            numFrames += 1
+    except EOFError:
+        img.seek( 0 )
+        pass
+    
+    im1 = numpy.asarray(img)
+    axes = range(0, im1.ndim)
+    #print axes
+    axes[0:2] = [1,0]
+    axes = tuple(axes)
+    #print axes
+    im1 = im1.transpose(axes)
+
+    if numFrames == 1:
+        return im1
+    
+    imgArray = numpy.empty((numFrames,) + im1.shape, im1.dtype)
+    frame = 0
+    try:
+        while True:
+            img.seek( frame )
+            imgArray[frame] = numpy.asarray(img).transpose(axes)
+            frame += 1
+    except EOFError:
+        img.seek( 0 )
+        pass
+    return imgArray
+
+def meanDivide(data, axis, inplace=False):
+    if not inplace:
+        d = empty(data.shape, dtype=float32)
+    ind = [slice(None)] * data.ndim
+    for i in range(0, data.shape[axis]):
+        ind[axis] = i
+        if inplace:
+            data[tuple(ind)] /= data[tuple(ind)].mean()
+        else:
+            d[tuple(ind)] = data[tuple(ind)].astype(float32) / data[tuple(ind)].mean()
+    if not inplace:
+        return d
+
+
+
+
+
 
 if len(sys.argv) > 1:
     dataDir = sys.argv[1]
@@ -119,30 +229,30 @@ def addROI():
     global rois, img, images, plots, cTimes, plotVBox
     c = intColor(len(rois))
     roi = RectROI([0, 0], [5, 5], translateSnap=True, scaleSnap=True)
-    roi.setPen(QtGui.QPen(QtGui.QColor(*c)))
+    roi.setPen(QtGui.QPen(c))
     rois.append(roi)
-    images[0].scene.addItem(roi)
-    p = PlotWidget()
-    p.ui.btnHorizScale.setChecked(True)
-    p.addPlot(ROIPlot(roi, img, images[0].imageItem, axes=(1,2), xVals=cTimes, color=c))
+    images[0].addItem(roi)
+    p = PlotWidget(None, name='ROI-%03d' % len(rois))
+    #p.ui.btnHorizScale.setChecked(True)
+    p.addCurve(ROIPlotItem(roi, img, images[0].imageItem, axes=(1,2), xVals=cTimes, color=c))
     p.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.MinimumExpanding))
     p.setMinimumSize(100, 100)
     plotVBox.addWidget(p)
     
     
     p.line = QtGui.QGraphicsLineItem(0, 1e100, 0, -1e100)
-    p.scene.addItem(p.line)
+    p.addItem(p.line)
     p.line.setPen(QtGui.QPen(QtGui.QColor(200, 200, 0)))
-    QtCore.QObject.connect(images[0].ui.timeSlider, QtCore.SIGNAL('valueChanged(int)'), lambda i: p.line.setLine(cTimes[i], 1e100, cTimes[i], -1e100))
-    QtCore.QObject.connect(images[0].ui.timeSlider, QtCore.SIGNAL('valueChanged(int)'), p.scene.invalidate)
+    QtCore.QObject.connect(images[0].cw, QtCore.SIGNAL('timeChanged'), lambda i,t: p.line.setLine(cTimes[i], 1e100, cTimes[i], -1e100))
+    #QtCore.QObject.connect(images[0].cw, QtCore.SIGNAL('timeChanged'), p.scene.invalidate)
     ## improves performance
     #images[0].ui.timeSlider.setTracking(False)
     
-    QtCore.QObject.connect(p, QtCore.SIGNAL('closed'), lambda: images[0].scene.removeItem(roi))
+    QtCore.QObject.connect(p, QtCore.SIGNAL('closed'), lambda: images[0].removeItem(roi))
     
-    for pp in plots:
-        p.view.lockXRange(pp.view)
-        pp.view.lockXRange(p.view)
+    #for pp in plots:
+        #p.view.lockXRange(pp.view)
+        #pp.view.lockXRange(p.view)
     plots.append(p)
     
 
@@ -161,6 +271,7 @@ def enhanceCells(img, radius=2.0):
     ## Create a 'center-surround' mask to enhance cell bodies
     im2 = img - (img.max()+img.min())*0.5
     c2 = c - c.max()*0.5
+    print im2.shape, c2.shape
     mask = correlate(im2, c2)
     #showImg(mask, title='correlation mask')
     
@@ -182,7 +293,7 @@ def buildROIs():
     img = enhImage.data.copy()
     
     ## Threshold enhanced image
-    img -= enhImage.imageItem.blackLevel
+    img -= enhImage.blackLevel()
     img[img < 0] = 0.
     #showImg(img, title="Masked, thresholded image")
     
@@ -193,7 +304,7 @@ def buildROIs():
         r = rois[-1]
         r.setPos([l[0].start-2, l[1].start-2])
         r.setSize([5, 5])
-    plots[0].view.setXRange(QtCore.QRectF(0, 0, cTimes[-1], 1))
+    plots[0].setXRange(0, cTimes[-1])
 
 def export():
     data = empty((len(plots)+1, img.shape[0]))
@@ -217,7 +328,8 @@ enhImage = showImg(zeros((2, 2)), "Active regions (enhanced)")
 def updateEnhancedImage(r):
     global act, enhImage
     enh = enhanceCells(act, radius=r)
-    enhImage.updateImage(enh, autoRange=True)
+    enhImage.setImage(enh, autoRange=True)
+    enhImage.data = enh
     #showImg(enh, title="Active region (Enhanced for cells)")
 
 

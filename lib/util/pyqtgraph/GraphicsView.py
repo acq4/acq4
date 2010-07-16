@@ -91,6 +91,9 @@ class GraphicsView(QtGui.QGraphicsView):
     def addItem(self, *args):
         return self.scene().addItem(*args)
         
+    def removeItem(self, *args):
+        return self.scene().removeItem(*args)
+        
     def enableMouse(self, b=True):
         self.mouseEnabled = b
         self.autoPixelRange = (not b)

@@ -338,13 +338,16 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
 
 class PlotCurveItem(GraphicsObject):
     """Class representing a single plot curve."""
-    def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None):
+    def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None, color=None):
         GraphicsObject.__init__(self, parent)
         self.free()
         #self.dispPath = None
         
         if pen is None:
-            pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
+            if color is None:
+                pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
+            else:
+                pen = QtGui.QPen(color)
         self.pen = pen
         
         self.shadow = shadow
@@ -352,7 +355,7 @@ class PlotCurveItem(GraphicsObject):
             self.updateData(y, x, copy)
         #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
-        self.metaDict = {}
+        self.metaData = {}
         self.opts = {
             'spectrumMode': False,
             'logMode': [False, False],
@@ -641,7 +644,7 @@ class ROIPlotItem(PlotCurveItem):
         self.axes = axes
         self.xVals = xVals
         PlotCurveItem.__init__(self, self.getRoiData(), x=self.xVals, color=color)
-        roi.connect(roi, QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
+        roi.connect(QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
         #self.roiChangedEvent()
         
     def getRoiData(self):

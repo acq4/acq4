@@ -18,6 +18,7 @@ from graphicsItems import *
 from widgets import ROI
 from PyQt4 import QtCore, QtGui
 import sys
+from numpy import ndarray
 
 class PlotROI(ROI):
     def __init__(self, size):
@@ -68,6 +69,8 @@ class ImageView(QtGui.QWidget):
         self.roiTimeLine = InfiniteLine(self.ui.roiPlot, 0, movable=True)
         self.roiTimeLine.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 200)))
         self.ui.roiPlot.addItem(self.roiTimeLine)
+        self.ui.splitter.setSizes([self.height()-30, 30])
+        self.ui.roiPlot.showScale('left', False)
         
         #self.normLines = []
         #for i in [0,1]:
@@ -80,7 +83,8 @@ class ImageView(QtGui.QWidget):
         self.ui.roiPlot.addItem(self.normRgn)
         self.normRgn.hide()
             
-        for fn in ['addItem']:
+        ## wrap functions from graphics view
+        for fn in ['addItem', 'removeItem']:
             setattr(self, fn, getattr(self.ui.graphicsView, fn))
 
         #QtCore.QObject.connect(self.ui.timeSlider, QtCore.SIGNAL('valueChanged(int)'), self.timeChanged)
@@ -128,6 +132,11 @@ class ImageView(QtGui.QWidget):
             #i, t = self.timeIndex(sl)
             #l.setPos(t)
         
+        if self.ui.normTimeRangeCheck.isChecked():
+            print "show!"
+            self.normRgn.show()
+        else:
+            self.normRgn.hide()
         
         self.imageDisp = None
         self.updateImage()
@@ -139,11 +148,14 @@ class ImageView(QtGui.QWidget):
     def roiClicked(self):
         if self.ui.roiBtn.isChecked():
             self.roi.show()
-            self.ui.roiPlot.show()
+            #self.ui.roiPlot.show()
             self.roiChanged()
+            self.ui.roiPlot.setMouseEnabled(True, True)
         else:
             self.roi.hide()
-            self.ui.roiPlot.hide()
+            self.ui.roiPlot.setMouseEnabled(False, False)
+            self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
+            #self.ui.roiPlot.hide()
 
     def roiChanged(self):
         if self.image is None:
@@ -174,7 +186,10 @@ class ImageView(QtGui.QWidget):
                        This is only needed to override the default guess.
         """
         
+        if not isinstance(img, ndarray):
+            raise Exception("Image must be specified as ndarray.")
         self.image = img
+        
         if hasattr(img, 'xvals'):
             self.tVals = img.xvals(0)
         else:
@@ -206,6 +221,11 @@ class ImageView(QtGui.QWidget):
         self.updateImage()
         if self.ui.roiBtn.isChecked():
             self.roiChanged()
+            
+            
+        if self.axes['t'] is not None:
+            self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
+            self.ui.roiPlot.setMouseEnabled(False, False)
             
     def autoLevels(self):
         image = self.getProcessedImage()
@@ -300,18 +320,19 @@ class ImageView(QtGui.QWidget):
         #vmax = slider.maximum()
         #f = float(v) / vmax
         
-        f = slider.value()
+        t = slider.value()
         
-        t = 0.0
+        #t = 0.0
         #xv = self.image.xvals('Time') 
         xv = self.tVals
         if xv is None:
-            ind = int(f * self.image.shape[0])
+            ind = int(t)
+            #ind = int(f * self.image.shape[0])
         else:
             if len(xv) < 2:
                 return (0,0)
             totTime = xv[-1] + (xv[-1]-xv[-2])
-            t = f * totTime
+            #t = f * totTime
             inds = argwhere(xv < t)
             if len(inds) < 1:
                 return (0,t)
