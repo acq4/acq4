@@ -19,6 +19,9 @@ from widgets import ROI
 from PyQt4 import QtCore, QtGui
 import sys
 from numpy import ndarray
+import ptime
+
+from SignalProxy import proxyConnect
 
 class PlotROI(ROI):
     def __init__(self, size):
@@ -37,6 +40,8 @@ class ImageView(QtGui.QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.scene = self.ui.graphicsView.sceneObj
+        
+        self.ignoreTimeLine = False
         
         if 'linux' in sys.platform.lower():   ## Stupid GL bug in linux.
             self.ui.graphicsView.setViewport(QtGui.QWidget())
@@ -66,11 +71,17 @@ class ImageView(QtGui.QWidget):
         self.roi.hide()
         #self.ui.roiPlot.hide()
         self.roiCurve = self.ui.roiPlot.plot()
-        self.roiTimeLine = InfiniteLine(self.ui.roiPlot, 0, movable=True)
-        self.roiTimeLine.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 200)))
-        self.ui.roiPlot.addItem(self.roiTimeLine)
+        self.timeLine = InfiniteLine(self.ui.roiPlot, 0, movable=True)
+        self.timeLine.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 200)))
+        self.timeLine.setZValue(1)
+        self.ui.roiPlot.addItem(self.timeLine)
         self.ui.splitter.setSizes([self.height()-30, 30])
         self.ui.roiPlot.showScale('left', False)
+        
+        self.keysPressed = {}
+        self.playTimer = QtCore.QTimer()
+        self.playRate = 0
+        self.lastPlayTime = 0
         
         #self.normLines = []
         #for i in [0,1]:
@@ -79,7 +90,8 @@ class ImageView(QtGui.QWidget):
             #self.ui.roiPlot.addItem(l)
             #self.normLines.append(l)
             #l.hide()
-        self.normRgn = LinearRegionItem(self.ui.roiPlot)
+        self.normRgn = LinearRegionItem(self.ui.roiPlot, 'vertical')
+        self.normRgn.setZValue(0)
         self.ui.roiPlot.addItem(self.normRgn)
         self.normRgn.hide()
             
@@ -88,7 +100,7 @@ class ImageView(QtGui.QWidget):
             setattr(self, fn, getattr(self.ui.graphicsView, fn))
 
         #QtCore.QObject.connect(self.ui.timeSlider, QtCore.SIGNAL('valueChanged(int)'), self.timeChanged)
-        self.roiTimeLine.connect(QtCore.SIGNAL('positionChanged'), self.timeChanged)
+        self.timeLine.connect(QtCore.SIGNAL('positionChanged'), self.timeLineChanged)
         #QtCore.QObject.connect(self.ui.whiteSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
         #QtCore.QObject.connect(self.ui.blackSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
         QtCore.QObject.connect(self.ui.gradientWidget, QtCore.SIGNAL('gradientChanged'), self.updateImage)
@@ -101,26 +113,111 @@ class ImageView(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.normROICheck, QtCore.SIGNAL('clicked()'), self.updateNorm)
         QtCore.QObject.connect(self.ui.normFrameCheck, QtCore.SIGNAL('clicked()'), self.updateNorm)
         QtCore.QObject.connect(self.ui.normTimeRangeCheck, QtCore.SIGNAL('clicked()'), self.updateNorm)
+        QtCore.QObject.connect(self.playTimer, QtCore.SIGNAL('timeout()'), self.timeout)
         
         ##QtCore.QObject.connect(self.ui.normStartSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
         #QtCore.QObject.connect(self.ui.normStopSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
+        self.normProxy = proxyConnect(self.normRgn, QtCore.SIGNAL('regionChanged'), self.updateNorm)
         
         self.ui.roiPlot.registerPlot(self.name + '_ROI')
 
     def keyPressEvent(self, ev):
-        if ev.key() == QtCore.Qt.Key_Right:
-            self.jumpFrames(1)
-        elif ev.key() == QtCore.Qt.Key_Left:
-            self.jumpFrames(-1)
-        elif ev.key() == QtCore.Qt.Key_PageUp:
-            self.jumpFrames(10)
-        elif ev.key() == QtCore.Qt.Key_PageDown:
-            self.jumpFrames(-10)
+        if ev.key() == QtCore.Qt.Key_Space:
+            if self.playRate == 0:
+                fps = (self.getProcessedImage().shape[0]-1) / (self.tVals[-1] - self.tVals[0])
+                self.play(fps)
+                #print fps
+            else:
+                self.playRate = 0
+            return
+        
+        
+        if ev.isAutoRepeat():
+            return
+            
+        #if ev.key() == QtCore.Qt.Key_Right:
+            #self.play(20)
+            ##self.jumpFrames(1)
+        #elif ev.key() == QtCore.Qt.Key_Left:
+            #self.play(-20)
+            ##self.jumpFrames(-1)
+        #elif ev.key() == QtCore.Qt.Key_PageUp:
+            #self.play(100)
+        #elif ev.key() == QtCore.Qt.Key_PageDown:
+            #self.play(-100)
+        #else:
+            #ev.ignore()
+            
+        self.keysPressed[ev.key()] = 1
+        self.evalKeyState()
+
+    def keyReleaseEvent(self, ev):
+        if ev.key() == QtCore.Qt.Key_Space:
+            return
+            
+        if ev.isAutoRepeat():
+            return
+        #self.play(0)
+        
+        try:
+            del self.keysPressed[ev.key()]
+        except:
+            self.keysPressed = {}
+        self.evalKeyState()
+        
+    def evalKeyState(self):
+        if len(self.keysPressed) == 1:
+            key = self.keysPressed.keys()[0]
+            if key == QtCore.Qt.Key_Right:
+                self.play(20)
+                self.lastPlayTime = ptime.time() + 0.2  ## 2ms wait before start
+                self.jumpFrames(1)
+            elif key == QtCore.Qt.Key_Left:
+                self.play(-20)
+                self.lastPlayTime = ptime.time() + 0.2
+                self.jumpFrames(-1)
+            elif key == QtCore.Qt.Key_PageUp:
+                self.play(100)
+            elif key == QtCore.Qt.Key_PageDown:
+                self.play(-100)
+            
         else:
-            ev.ignore()
+            self.play(0)
+        
+    def play(self, rate):
+        #print "play:", rate
+        self.playRate = rate
+        if rate == 0:
+            self.playTimer.stop()
+            return
+            
+        self.lastPlayTime = ptime.time()
+        if not self.playTimer.isActive():
+            self.playTimer.start(16)
+            
+        
+    def timeout(self):
+        now = ptime.time()
+        dt = now - self.lastPlayTime
+        if dt < 0:
+            return
+        n = int(self.playRate * dt)
+        #print n, dt
+        if n != 0:
+            #print n, dt, self.lastPlayTime
+            self.jumpFrames(n)
+            self.lastPlayTime += (float(n)/self.playRate)
+        
+        
 
     def jumpFrames(self, n):
         """If this is a video, move ahead n frames"""
+        if self.axes['t'] is not None:
+            self.currentIndex = clip(self.currentIndex + n, 0, self.getProcessedImage().shape[0]-1)
+            self.updateImage()
+            self.ignoreTimeLine = True
+            self.timeLine.setValue(self.tVals[self.currentIndex])
+            self.ignoreTimeLine = False
 
     def updateNorm(self):
         #for l, sl in zip(self.normLines, [self.ui.normStartSlider, self.ui.normStopSlider]):
@@ -133,7 +230,7 @@ class ImageView(QtGui.QWidget):
             #l.setPos(t)
         
         if self.ui.normTimeRangeCheck.isChecked():
-            print "show!"
+            #print "show!"
             self.normRgn.show()
         else:
             self.normRgn.hide()
@@ -151,11 +248,16 @@ class ImageView(QtGui.QWidget):
             #self.ui.roiPlot.show()
             self.roiChanged()
             self.ui.roiPlot.setMouseEnabled(True, True)
+            self.ui.splitter.setSizes([self.height()*0.6, self.height()*0.4])
+            self.roiCurve.show()
+            self.ui.roiPlot.showScale('left', True)
         else:
             self.roi.hide()
             self.ui.roiPlot.setMouseEnabled(False, False)
             self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
-            #self.ui.roiPlot.hide()
+            self.ui.splitter.setSizes([self.height()-30, 30])
+            self.roiCurve.hide()
+            self.ui.roiPlot.showScale('left', False)
 
     def roiChanged(self):
         if self.image is None:
@@ -175,7 +277,7 @@ class ImageView(QtGui.QWidget):
             self.roiCurve.setData(y=data, x=self.tVals)
             #self.ui.roiPlot.replot()
 
-    def setImage(self, img, autoRange=True, autoLevels=True, levels=None, axes=None):
+    def setImage(self, img, autoRange=True, autoLevels=True, levels=None, axes=None, xvals=None):
         """Set the image to be displayed in the widget.
         Options are:
           img:         ndarray; the image to be displayed.
@@ -190,7 +292,9 @@ class ImageView(QtGui.QWidget):
             raise Exception("Image must be specified as ndarray.")
         self.image = img
         
-        if hasattr(img, 'xvals'):
+        if xvals is not None:
+            self.tVals = xvals
+        elif hasattr(img, 'xvals'):
             self.tVals = img.xvals(0)
         else:
             self.tVals = arange(img.shape[0])
@@ -224,8 +328,16 @@ class ImageView(QtGui.QWidget):
             
             
         if self.axes['t'] is not None:
+            self.ui.roiPlot.show()
             self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
             self.ui.roiPlot.setMouseEnabled(False, False)
+            start = self.tVals.min()
+            stop = self.tVals.max() + abs(self.tVals[-1] - self.tVals[-2])
+            for s in [self.timeLine, self.normRgn]:
+                s.setBounds([start, stop])
+        else:
+            self.ui.roiPlot.hide()
+            
             
     def autoLevels(self):
         image = self.getProcessedImage()
@@ -285,15 +397,16 @@ class ImageView(QtGui.QWidget):
             
         return norm
         
-        
-        
-    def timeChanged(self):
+    def timeLineChanged(self):
         #(ind, time) = self.timeIndex(self.ui.timeSlider)
-        (ind, time) = self.timeIndex(self.roiTimeLine)
+        if self.ignoreTimeLine:
+            return
+        
+        (ind, time) = self.timeIndex(self.timeLine)
         if ind != self.currentIndex:
             self.currentIndex = ind
             self.updateImage()
-        #self.roiTimeLine.setPos(time)
+        #self.timeLine.setPos(time)
         self.emit(QtCore.SIGNAL('timeChanged'), ind, time)
 
     def updateImage(self):
@@ -311,6 +424,7 @@ class ImageView(QtGui.QWidget):
         else:
             #self.ui.timeSlider.show()
             self.imageItem.updateImage(image[self.currentIndex], white=self.whiteLevel(), black=self.blackLevel())
+            
             
     def timeIndex(self, slider):
         """Return the time and frame index indicated by a slider"""

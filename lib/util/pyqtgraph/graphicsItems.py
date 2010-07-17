@@ -1439,14 +1439,20 @@ class ViewBox(QtGui.QGraphicsWidget):
 
 
 class InfiniteLine(GraphicsObject):
-    def __init__(self, view, pos, angle=90, pen=None, movable=False):
+    def __init__(self, view, pos, angle=90, pen=None, movable=False, bounds=None):
         GraphicsObject.__init__(self)
-        self.bounds = QtCore.QRectF()
+        self.bounds = QtCore.QRectF()   ## graphicsitem boundary
+        
+        if bounds is None:              ## allowed value boundaries for orthogonal lines
+            self.maxRange = [None, None]
+        else:
+            self.maxRange = bounds
         self.movable = movable
         self.view = view
         self.p = [0, 0]
         self.setAngle(angle)
         self.setPos(pos)
+            
         if movable:
             self.setAcceptHoverEvents(True)
             
@@ -1460,6 +1466,10 @@ class InfiniteLine(GraphicsObject):
         #for p in self.getBoundingParents():
             #QtCore.QObject.connect(p, QtCore.SIGNAL('viewChanged'), self.updateLine)
         QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.updateLine)
+        
+    def setBounds(self, bounds):
+        self.maxRange = bounds
+        self.setValue(self.value())
         
     def hoverEnterEvent(self, ev):
         self.currentPen = QtGui.QPen(QtGui.QColor(255, 0,0))
@@ -1491,6 +1501,20 @@ class InfiniteLine(GraphicsObject):
                 newPos = [0, pos]
             else:
                 raise Exception("Must specify 2D coordinate for non-orthogonal lines.")
+            
+        ## check bounds (only works for orthogonal lines)
+        if self.angle == 90:
+            if self.maxRange[0] is not None:    
+                newPos[0] = max(newPos[0], self.maxRange[0])
+            if self.maxRange[1] is not None:
+                newPos[0] = min(newPos[0], self.maxRange[1])
+        elif self.angle == 0:
+            if self.maxRange[0] is not None:
+                newPos[1] = max(newPos[1], self.maxRange[0])
+            if self.maxRange[1] is not None:
+                newPos[1] = min(newPos[1], self.maxRange[1])
+            
+            
         if self.p != newPos:
             self.p = newPos
             self.updateLine()
@@ -1602,7 +1626,7 @@ class InfiniteLine(GraphicsObject):
 
 class LinearRegionItem(GraphicsObject):
     """Used for marking a horizontal or vertical region in plots."""
-    def __init__(self, view, orientation="horizontal", vals=[0,1], brush=None, movable=True):
+    def __init__(self, view, orientation="horizontal", vals=[0,1], brush=None, movable=True, bounds=None):
         GraphicsObject.__init__(self)
         self.orientation = orientation
         if hasattr(self, "ItemHasNoContents"):  
@@ -1617,12 +1641,12 @@ class LinearRegionItem(GraphicsObject):
         
         if orientation[0] == 'h':
             self.lines = [
-                InfiniteLine(view, QtCore.QPointF(0, vals[0]), 0, movable=movable), 
-                InfiniteLine(view, QtCore.QPointF(0, vals[1]), 0, movable=movable)]
+                InfiniteLine(view, QtCore.QPointF(0, vals[0]), 0, movable=movable, bounds=bounds), 
+                InfiniteLine(view, QtCore.QPointF(0, vals[1]), 0, movable=movable, bounds=bounds)]
         else:
             self.lines = [
-                InfiniteLine(view, QtCore.QPointF(vals[0], 0), 90, movable=movable), 
-                InfiniteLine(view, QtCore.QPointF(vals[1], 0), 90, movable=movable)]
+                InfiniteLine(view, QtCore.QPointF(vals[0], 0), 90, movable=movable, bounds=bounds), 
+                InfiniteLine(view, QtCore.QPointF(vals[1], 0), 90, movable=movable, bounds=bounds)]
         QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.updateBounds)
         
         for l in self.lines:
@@ -1633,6 +1657,10 @@ class LinearRegionItem(GraphicsObject):
             brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 50))
         self.setBrush(brush)
             
+    def setBounds(self, bounds):
+        for l in self.lines:
+            l.setBounds(bounds)
+        
         
     def boundingRect(self):
         return self.rect.boundingRect()

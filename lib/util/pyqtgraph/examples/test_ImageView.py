@@ -4,7 +4,7 @@ import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from pyqtgraph.ImageView import *
-from numpy import random
+from numpy import random, linspace
 from PyQt4 import QtCore, QtGui
 from scipy.ndimage import *
 
@@ -25,6 +25,6 @@ for i in range(data.shape[0]):
 data += 10    
 
 ## Display the data
-imv.setImage(data)
+imv.setImage(data, xvals=linspace(1., 3., data.shape[0]))
 
 app.exec_()
