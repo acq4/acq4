@@ -127,6 +127,7 @@ class ImageView(QtGui.QWidget):
         
         self.ui.roiPlot.registerPlot(self.name + '_ROI')
         
+        self.noRepeatKeys = [QtCore.Qt.Key_Right, QtCore.Qt.Key_Left, QtCore.Qt.Key_Up, QtCore.Qt.Key_Down, QtCore.Qt.Key_PageUp, QtCore.Qt.Key_PageDown]
 
     def keyPressEvent(self, ev):
         if ev.key() == QtCore.Qt.Key_Space:
@@ -136,47 +137,39 @@ class ImageView(QtGui.QWidget):
                 #print fps
             else:
                 self.play(0)
-            return
+            ev.accept()
         elif ev.key() == QtCore.Qt.Key_Home:
             self.setCurrentIndex(0)
             self.play(0)
-            return
+            ev.accept()
         elif ev.key() == QtCore.Qt.Key_End:
             self.setCurrentIndex(self.getProcessedImage().shape[0]-1)
             self.play(0)
-            return
-        if ev.isAutoRepeat():
-            return
-            
-        #if ev.key() == QtCore.Qt.Key_Right:
-            #self.play(20)
-            ##self.jumpFrames(1)
-        #elif ev.key() == QtCore.Qt.Key_Left:
-            #self.play(-20)
-            ##self.jumpFrames(-1)
-        #elif ev.key() == QtCore.Qt.Key_PageUp:
-            #self.play(100)
-        #elif ev.key() == QtCore.Qt.Key_PageDown:
-            #self.play(-100)
-        #else:
-            #ev.ignore()
-            
-        self.keysPressed[ev.key()] = 1
-        self.evalKeyState()
+            ev.accept()
+        elif ev.key() in self.noRepeatKeys:
+            ev.accept()
+            if ev.isAutoRepeat():
+                return
+            self.keysPressed[ev.key()] = 1
+            self.evalKeyState()
+        else:
+            QtGui.QWidget.keyPressEvent(self, ev)
 
     def keyReleaseEvent(self, ev):
-        if ev.key() == QtCore.Qt.Key_Space:
-            return
-            
-        if ev.isAutoRepeat():
-            return
-        #self.play(0)
+        if ev.key() in [QtCore.Qt.Key_Space, QtCore.Qt.Key_Home, QtCore.Qt.Key_End]:
+            ev.accept()
+        elif ev.key() in self.noRepeatKeys:
+            ev.accept()
+            if ev.isAutoRepeat():
+                return
+            try:
+                del self.keysPressed[ev.key()]
+            except:
+                self.keysPressed = {}
+            self.evalKeyState()
+        else:
+            QtGui.QWidget.keyReleaseEvent(self, ev)
         
-        try:
-            del self.keysPressed[ev.key()]
-        except:
-            self.keysPressed = {}
-        self.evalKeyState()
         
     def evalKeyState(self):
         if len(self.keysPressed) == 1:
@@ -197,7 +190,6 @@ class ImageView(QtGui.QWidget):
                 self.play(-1000)
             elif key == QtCore.Qt.Key_PageDown:
                 self.play(1000)
-            
         else:
             self.play(0)
         
@@ -222,10 +214,10 @@ class ImageView(QtGui.QWidget):
         #print n, dt
         if n != 0:
             #print n, dt, self.lastPlayTime
-            self.jumpFrames(n)
             self.lastPlayTime += (float(n)/self.playRate)
-            if self.currentIndex > self.image.shape[0]:
+            if self.currentIndex+n > self.image.shape[0]:
                 self.play(0)
+            self.jumpFrames(n)
         
     def setCurrentIndex(self, ind):
         self.currentIndex = clip(ind, 0, self.getProcessedImage().shape[0]-1)
@@ -440,7 +432,7 @@ class ImageView(QtGui.QWidget):
         #(ind, time) = self.timeIndex(self.ui.timeSlider)
         if self.ignoreTimeLine:
             return
-        
+        self.play(0)
         (ind, time) = self.timeIndex(self.timeLine)
         if ind != self.currentIndex:
             self.currentIndex = ind
