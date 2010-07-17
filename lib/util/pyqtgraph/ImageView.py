@@ -69,6 +69,11 @@ class ImageView(QtGui.QWidget):
         self.roi.setZValue(20)
         self.scene.addItem(self.roi)
         self.roi.hide()
+        self.normRoi = PlotROI(10)
+        self.normRoi.setPen(QtGui.QPen(QtGui.QColor(255,255,0)))
+        self.normRoi.setZValue(20)
+        self.scene.addItem(self.normRoi)
+        self.normRoi.hide()
         #self.ui.roiPlot.hide()
         self.roiCurve = self.ui.roiPlot.plot()
         self.timeLine = InfiniteLine(self.ui.roiPlot, 0, movable=True)
@@ -118,6 +123,7 @@ class ImageView(QtGui.QWidget):
         ##QtCore.QObject.connect(self.ui.normStartSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
         #QtCore.QObject.connect(self.ui.normStopSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
         self.normProxy = proxyConnect(self.normRgn, QtCore.SIGNAL('regionChanged'), self.updateNorm)
+        self.normRoi.connect(QtCore.SIGNAL('regionChangeFinished'), self.updateNorm)
         
         self.ui.roiPlot.registerPlot(self.name + '_ROI')
 
@@ -128,10 +134,16 @@ class ImageView(QtGui.QWidget):
                 self.play(fps)
                 #print fps
             else:
-                self.playRate = 0
+                self.play(0)
             return
-        
-        
+        elif ev.key() == QtCore.Qt.Key_Home:
+            self.setCurrentIndex(0)
+            self.play(0)
+            return
+        elif ev.key() == QtCore.Qt.Key_End:
+            self.setCurrentIndex(self.getProcessedImage().shape[0]-1)
+            self.play(0)
+            return
         if ev.isAutoRepeat():
             return
             
@@ -208,16 +220,17 @@ class ImageView(QtGui.QWidget):
             self.jumpFrames(n)
             self.lastPlayTime += (float(n)/self.playRate)
         
-        
+    def setCurrentIndex(self, ind):
+        self.currentIndex = clip(ind, 0, self.getProcessedImage().shape[0]-1)
+        self.updateImage()
+        self.ignoreTimeLine = True
+        self.timeLine.setValue(self.tVals[self.currentIndex])
+        self.ignoreTimeLine = False
 
     def jumpFrames(self, n):
         """If this is a video, move ahead n frames"""
         if self.axes['t'] is not None:
-            self.currentIndex = clip(self.currentIndex + n, 0, self.getProcessedImage().shape[0]-1)
-            self.updateImage()
-            self.ignoreTimeLine = True
-            self.timeLine.setValue(self.tVals[self.currentIndex])
-            self.ignoreTimeLine = False
+            self.setCurrentIndex(self.currentIndex + n)
 
     def updateNorm(self):
         #for l, sl in zip(self.normLines, [self.ui.normStartSlider, self.ui.normStopSlider]):
@@ -234,6 +247,12 @@ class ImageView(QtGui.QWidget):
             self.normRgn.show()
         else:
             self.normRgn.hide()
+        
+        if self.ui.normROICheck.isChecked():
+            #print "show!"
+            self.normRoi.show()
+        else:
+            self.normRoi.hide()
         
         self.imageDisp = None
         self.updateImage()
@@ -368,7 +387,7 @@ class ImageView(QtGui.QWidget):
             return image
             
         div = self.ui.normDivideRadio.isChecked()
-        norm = image.copy()
+        norm = image.view(ndarray).copy()
         #if div:
             #norm = ones(image.shape)
         #else:
@@ -395,6 +414,15 @@ class ImageView(QtGui.QWidget):
             else:
                 norm -= n
             
+        if self.ui.normROICheck.isChecked() and image.ndim == 3:
+            n = self.normRoi.getArrayRegion(norm, self.imageItem, (1, 2)).mean(axis=1).mean(axis=1)
+            n = n[:,newaxis,newaxis]
+            #print start, end, sind, eind
+            if div:
+                norm /= n
+            else:
+                norm -= n
+                
         return norm
         
     def timeLineChanged(self):

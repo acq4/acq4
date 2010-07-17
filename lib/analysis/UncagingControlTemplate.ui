@@ -199,7 +199,7 @@
   <customwidget>
    <class>GradientWidget</class>
    <extends>QWidget</extends>
-   <header>lib.util.GradientWidget</header>
+   <header>pyqtgraph.GradientWidget</header>
    <container>1</container>
   </customwidget>
  </customwidgets>
