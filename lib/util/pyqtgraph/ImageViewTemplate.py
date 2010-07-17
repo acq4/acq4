@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ImageViewTemplate.ui'
 #
-# Created: Fri Jul 16 15:07:58 2010
+# Created: Sat Jul 17 00:28:44 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -34,7 +34,7 @@ class Ui_Form(object):
         self.graphicsView.setObjectName("graphicsView")
         self.gridLayout.addWidget(self.graphicsView, 1, 0, 3, 1)
         self.roiBtn = QtGui.QPushButton(self.layoutWidget)
-        self.roiBtn.setMaximumSize(QtCore.QSize(40, 16777215))
+        self.roiBtn.setMaximumSize(QtCore.QSize(30, 16777215))
         self.roiBtn.setCheckable(True)
         self.roiBtn.setObjectName("roiBtn")
         self.gridLayout.addWidget(self.roiBtn, 3, 3, 1, 1)
@@ -42,7 +42,7 @@ class Ui_Form(object):
         self.gradientWidget.setObjectName("gradientWidget")
         self.gridLayout.addWidget(self.gradientWidget, 1, 3, 1, 1)
         self.normBtn = QtGui.QPushButton(self.layoutWidget)
-        self.normBtn.setMaximumSize(QtCore.QSize(50, 16777215))
+        self.normBtn.setMaximumSize(QtCore.QSize(30, 16777215))
         self.normBtn.setCheckable(True)
         self.normBtn.setObjectName("normBtn")
         self.gridLayout.addWidget(self.normBtn, 2, 3, 1, 1)
@@ -130,8 +130,8 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.roiBtn.setText(QtGui.QApplication.translate("Form", "ROI", None, QtGui.QApplication.UnicodeUTF8))
-        self.normBtn.setText(QtGui.QApplication.translate("Form", "Norm", None, QtGui.QApplication.UnicodeUTF8))
+        self.roiBtn.setText(QtGui.QApplication.translate("Form", "R", None, QtGui.QApplication.UnicodeUTF8))
+        self.normBtn.setText(QtGui.QApplication.translate("Form", "N", None, QtGui.QApplication.UnicodeUTF8))
         self.normGroup.setTitle(QtGui.QApplication.translate("Form", "Normalization", None, QtGui.QApplication.UnicodeUTF8))
         self.normSubtractRadio.setText(QtGui.QApplication.translate("Form", "Subtract", None, QtGui.QApplication.UnicodeUTF8))
         self.normDivideRadio.setText(QtGui.QApplication.translate("Form", "Divide", None, QtGui.QApplication.UnicodeUTF8))
@@ -146,6 +146,6 @@ class Ui_Form(object):
         self.normTimeRangeCheck.setText(QtGui.QApplication.translate("Form", "Time range", None, QtGui.QApplication.UnicodeUTF8))
         self.normFrameCheck.setText(QtGui.QApplication.translate("Form", "Frame", None, QtGui.QApplication.UnicodeUTF8))
 
-from GradientWidget import GradientWidget
 from GraphicsView import GraphicsView
+from pyqtgraph.GradientWidget import GradientWidget
 from PlotWidget import PlotWidget

@@ -80,7 +80,7 @@ class ImageView(QtGui.QWidget):
         self.timeLine.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 200)))
         self.timeLine.setZValue(1)
         self.ui.roiPlot.addItem(self.timeLine)
-        self.ui.splitter.setSizes([self.height()-30, 30])
+        self.ui.splitter.setSizes([self.height()-35, 35])
         self.ui.roiPlot.showScale('left', False)
         
         self.keysPressed = {}
@@ -126,6 +126,7 @@ class ImageView(QtGui.QWidget):
         self.normRoi.connect(QtCore.SIGNAL('regionChangeFinished'), self.updateNorm)
         
         self.ui.roiPlot.registerPlot(self.name + '_ROI')
+        
 
     def keyPressEvent(self, ev):
         if ev.key() == QtCore.Qt.Key_Space:
@@ -188,10 +189,14 @@ class ImageView(QtGui.QWidget):
                 self.play(-20)
                 self.lastPlayTime = ptime.time() + 0.2
                 self.jumpFrames(-1)
-            elif key == QtCore.Qt.Key_PageUp:
-                self.play(100)
-            elif key == QtCore.Qt.Key_PageDown:
+            elif key == QtCore.Qt.Key_Up:
                 self.play(-100)
+            elif key == QtCore.Qt.Key_Down:
+                self.play(100)
+            elif key == QtCore.Qt.Key_PageUp:
+                self.play(-1000)
+            elif key == QtCore.Qt.Key_PageDown:
+                self.play(1000)
             
         else:
             self.play(0)
@@ -219,6 +224,8 @@ class ImageView(QtGui.QWidget):
             #print n, dt, self.lastPlayTime
             self.jumpFrames(n)
             self.lastPlayTime += (float(n)/self.playRate)
+            if self.currentIndex > self.image.shape[0]:
+                self.play(0)
         
     def setCurrentIndex(self, ind):
         self.currentIndex = clip(ind, 0, self.getProcessedImage().shape[0]-1)
@@ -260,21 +267,23 @@ class ImageView(QtGui.QWidget):
 
     def normToggled(self, b):
         self.ui.normGroup.setVisible(b)
+        self.normRoi.setVisible(b and self.ui.normROICheck.isChecked())
+        self.normRgn.setVisible(b and self.ui.normTimeRangeCheck.isChecked())
 
     def roiClicked(self):
         if self.ui.roiBtn.isChecked():
             self.roi.show()
             #self.ui.roiPlot.show()
-            self.roiChanged()
             self.ui.roiPlot.setMouseEnabled(True, True)
             self.ui.splitter.setSizes([self.height()*0.6, self.height()*0.4])
             self.roiCurve.show()
+            self.roiChanged()
             self.ui.roiPlot.showScale('left', True)
         else:
             self.roi.hide()
             self.ui.roiPlot.setMouseEnabled(False, False)
             self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
-            self.ui.splitter.setSizes([self.height()-30, 30])
+            self.ui.splitter.setSizes([self.height()-35, 35])
             self.roiCurve.hide()
             self.ui.roiPlot.showScale('left', False)
 
@@ -347,15 +356,17 @@ class ImageView(QtGui.QWidget):
             
             
         if self.axes['t'] is not None:
-            self.ui.roiPlot.show()
+            #self.ui.roiPlot.show()
             self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
-            self.ui.roiPlot.setMouseEnabled(False, False)
+            #self.ui.roiPlot.setMouseEnabled(False, False)
             start = self.tVals.min()
             stop = self.tVals.max() + abs(self.tVals[-1] - self.tVals[-2])
             for s in [self.timeLine, self.normRgn]:
                 s.setBounds([start, stop])
-        else:
-            self.ui.roiPlot.hide()
+        #else:
+            #self.ui.roiPlot.hide()
+            
+        self.roiClicked()
             
             
     def autoLevels(self):

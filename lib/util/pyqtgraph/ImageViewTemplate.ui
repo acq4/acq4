@@ -44,12 +44,12 @@
         <widget class="QPushButton" name="roiBtn">
          <property name="maximumSize">
           <size>
-           <width>40</width>
+           <width>30</width>
            <height>16777215</height>
           </size>
          </property>
          <property name="text">
-          <string>ROI</string>
+          <string>R</string>
          </property>
          <property name="checkable">
           <bool>true</bool>
@@ -63,12 +63,12 @@
         <widget class="QPushButton" name="normBtn">
          <property name="maximumSize">
           <size>
-           <width>50</width>
+           <width>30</width>
            <height>16777215</height>
           </size>
          </property>
          <property name="text">
-          <string>Norm</string>
+          <string>N</string>
          </property>
          <property name="checkable">
           <bool>true</bool>
@@ -231,13 +231,18 @@
         <height>40</height>
        </size>
       </property>
-      <zorder>normGroup</zorder>
      </widget>
     </widget>
    </item>
   </layout>
  </widget>
  <customwidgets>
+  <customwidget>
+   <class>GradientWidget</class>
+   <extends>QWidget</extends>
+   <header>pyqtgraph.GradientWidget</header>
+   <container>1</container>
+  </customwidget>
   <customwidget>
    <class>GraphicsView</class>
    <extends>QWidget</extends>
@@ -248,12 +253,6 @@
    <class>PlotWidget</class>
    <extends>QWidget</extends>
    <header>PlotWidget</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>GradientWidget</class>
-   <extends>QWidget</extends>
-   <header>GradientWidget</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

@@ -1586,13 +1586,13 @@ class InfiniteLine(GraphicsObject):
         if self.angle % 180 == 90:
             px = self.pixelWidth()
             #self.bounds.setWidth(1e-9)
-            self.bounds.setX(x1 + px*-3)
-            self.bounds.setWidth(px*6)
+            self.bounds.setX(x1 + px*-5)
+            self.bounds.setWidth(px*10)
         if self.angle % 180 == 0:
             px = self.pixelHeight()
             #self.bounds.setHeight(1e-9)
-            self.bounds.setY(y1 + px*-3)
-            self.bounds.setHeight(px*6)
+            self.bounds.setY(y1 + px*-5)
+            self.bounds.setHeight(px*10)
 
         #QtGui.QGraphicsLineItem.setLine(self, x1, y1, x2, y2)
         #self.update()
@@ -1604,10 +1604,21 @@ class InfiniteLine(GraphicsObject):
         return self.bounds
     
     def paint(self, p, *args):
+        w,h  = self.pixelWidth()*5, self.pixelHeight()*5*1.1547
         #self.updateLine()
+        l = self.line
+        
         p.setPen(self.currentPen)
         #print "paint", self.line
-        p.drawLine(self.line[0], self.line[1])
+        p.drawLine(l[0], l[1])
+        
+        p.setBrush(QtGui.QBrush(self.currentPen.color()))
+        p.drawConvexPolygon(QtGui.QPolygonF([
+            l[0] + QtCore.QPointF(-w, 0),
+            l[0] + QtCore.QPointF(0, h),
+            l[0] + QtCore.QPointF(w, 0),
+        ]))
+        
         #p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
         #p.drawRect(self.boundingRect())
         
