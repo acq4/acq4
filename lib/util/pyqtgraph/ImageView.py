@@ -129,6 +129,17 @@ class ImageView(QtGui.QWidget):
         
         self.noRepeatKeys = [QtCore.Qt.Key_Right, QtCore.Qt.Key_Left, QtCore.Qt.Key_Up, QtCore.Qt.Key_Down, QtCore.Qt.Key_PageUp, QtCore.Qt.Key_PageDown]
 
+    #def __dtor__(self):
+        ##print "Called ImageView sip destructor"
+        #self.quit()
+        #QtGui.QWidget.__dtor__(self)
+        
+    def quit(self):
+        self.scene.clear()
+        del self.image
+        del self.imageDisp
+        
+        
     def keyPressEvent(self, ev):
         if ev.key() == QtCore.Qt.Key_Space:
             if self.playRate == 0:
@@ -351,8 +362,15 @@ class ImageView(QtGui.QWidget):
             #self.ui.roiPlot.show()
             self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
             #self.ui.roiPlot.setMouseEnabled(False, False)
-            start = self.tVals.min()
-            stop = self.tVals.max() + abs(self.tVals[-1] - self.tVals[-2])
+            if len(self.tVals) > 1:
+                start = self.tVals.min()
+                stop = self.tVals.max() + abs(self.tVals[-1] - self.tVals[0]) * 0.02
+            elif len(self.tVals) == 1:
+                start = self.tVals[0] - 0.5
+                stop = self.tVals[0] + 0.5
+            else:
+                start = 0
+                stop = 1
             for s in [self.timeLine, self.normRgn]:
                 s.setBounds([start, stop])
         #else:

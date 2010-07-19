@@ -183,9 +183,12 @@ class GarbageWatcher:
         self.objs = weakref.WeakValueDictionary()
         self.allNames = []
         
-    def addObj(self, obj, name):
+    def add(self, obj, name):
         self.objs[name] = obj
         self.allNames.append(name)
+        
+    def __setitem__(self, name, obj):
+        self.add(obj, name)
         
     def check(self):
         gc.collect()
@@ -197,7 +200,8 @@ class GarbageWatcher:
         print "Deleted objects:", dead
         print "Live objects:", alive
         
-
+    def __getitem__(self, item):
+        return self.objs[item]
 
     
 class Profiler:
@@ -230,4 +234,79 @@ class Profiler:
         
     def __del__(self):
         Profiler.depth -= 1
+        
+        
+class ObjectWatcher:
+    def __init__(self):
+        self.objs = weakref.WeakKeyDictionary()
+        self.ids = {}
+        self.collect(self.objs, self.ids)
+        self.newObjs = None
+        
+    def collect(self, objs, ids):
+        for o in gc.get_objects():
+            try:
+                ids[id(o)] = type(o)
+                objs[o] = type(o)
+            except:
+                pass
+            
+    def diff(self):
+        gc.collect()
+        objs = weakref.WeakKeyDictionary()
+        ids = {}
+        self.collect(objs, ids)
+        newObjs = weakref.WeakKeyDictionary()
+        self.delIDs = {}
+        for o in objs:
+            try:
+                if o not in self.objs:
+                    newObjs[o] = objs[o]
+            except:
+                pass
+        for i in self.ids:
+            try:
+                if i not in ids:
+                    self.delIDs[i] = self.ids[i]
+            except:
+                pass
+                
+        
+        self.objs = objs
+        self.ids = ids
+        print "-----------  Deleted: ------------"
+        self.report(self.delIDs)
+        print "-----------  Created: ------------"
+        self.report(newObjs)
+        if self.newObjs is not None:
+            print "----------- Persisted: -----------"
+            self.report(self.newObjs)  ## if any objects are left from the last round of new objects, then they have persisted
+            self.persistObjs = self.newObjs
+        
+        self.newObjs = newObjs
+        
+    def report(self, d):
+        typs = d.values()
+        typSet = list(set(typs))
+        typSet.sort(lambda a,b: cmp(typs.count(a), typs.count(b)))
+        
+        for t in typSet:
+            print "  ", typs.count(t), "\t", t
+        
+    def findTypes(self, d, regex):
+        objs = weakref.WeakKeyDictionary()
+        r = re.compile(regex)
+        for k in d:
+            if r.search(str(d[k])):
+                objs[k] = d[k]
+        return objs
+        
+    def findNew(self, regex):
+        return self.findTypes(self.newObjs, regex)
+    
+    def findPersist(self, regex):
+        return self.findTypes(self.persistObjs, regex)
+    
+    
+    
         

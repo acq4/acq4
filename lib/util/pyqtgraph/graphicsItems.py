@@ -21,6 +21,7 @@ import scipy.stats
 from Point import *
 from functions import *
 import types, sys, struct
+import weakref
 #from debug import *
 
 
@@ -79,8 +80,8 @@ class GraphicsObject(QGraphicsObject):
             views = scene.views()
             if len(views) < 1:
                 return None
-            self._view = self.scene().views()[0]
-        return self._view
+            self._view = weakref.ref(self.scene().views()[0])
+        return self._view()
     
     def getBoundingParents(self):
         """Return a list of parents to this item that have child clipping enabled."""
@@ -666,32 +667,32 @@ class UIGraphicsItem(GraphicsObject):
     """Base class for graphics items with boundaries relative to a GraphicsView widget"""
     def __init__(self, view, bounds=None):
         GraphicsObject.__init__(self)
-        self._view = view
+        self._view = weakref.ref(view)
         if bounds is None:
             self._bounds = QtCore.QRectF(0, 0, 1, 1)
         else:
             self._bounds = bounds
-        self._viewRect = self._view.rect()
+        self._viewRect = self._view().rect()
         self._viewTransform = self.viewTransform()
         self.setNewBounds()
         QtCore.QObject.connect(view, QtCore.SIGNAL('viewChanged'), self.viewChangedEvent)
         
     def viewRect(self):
         """Return the viewport widget rect"""
-        return self._view.rect()
+        return self._view().rect()
     
     def viewTransform(self):
         """Returns a matrix that maps viewport coordinates onto scene coordinates"""
-        if self._view is None:
+        if self._view() is None:
             return QtGui.QTransform()
         else:
-            return self._view.viewportTransform()
+            return self._view().viewportTransform()
         
     def boundingRect(self):
-        if self._view is None:
+        if self._view() is None:
             self.bounds = self._bounds
         else:
-            vr = self._view.rect()
+            vr = self._view().rect()
             tr = self.viewTransform()
             if vr != self._viewRect or tr != self._viewTransform:
                 #self.viewChangedEvent(vr, self._viewRect)
@@ -1449,7 +1450,7 @@ class ViewBox(QtGui.QGraphicsWidget):
 
 
 class InfiniteLine(GraphicsObject):
-    def __init__(self, view, pos, angle=90, pen=None, movable=False, bounds=None):
+    def __init__(self, view, pos=0, angle=90, pen=None, movable=False, bounds=None):
         GraphicsObject.__init__(self)
         self.bounds = QtCore.QRectF()   ## graphicsitem boundary
         
@@ -1458,7 +1459,7 @@ class InfiniteLine(GraphicsObject):
         else:
             self.maxRange = bounds
         self.movable = movable
-        self.view = view
+        self.view = weakref.ref(view)
         self.p = [0, 0]
         self.setAngle(angle)
         self.setPos(pos)
@@ -1475,7 +1476,7 @@ class InfiniteLine(GraphicsObject):
         #self.setFlag(self.ItemSendsScenePositionChanges)
         #for p in self.getBoundingParents():
             #QtCore.QObject.connect(p, QtCore.SIGNAL('viewChanged'), self.updateLine)
-        QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.updateLine)
+        QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.updateLine)
         
     def setBounds(self, bounds):
         self.maxRange = bounds
@@ -1570,7 +1571,7 @@ class InfiniteLine(GraphicsObject):
             #unit = self.mapRectFromScene(unit)
             ##print unit
         
-        vr = self.view.viewRect()
+        vr = self.view().viewRect()
         #vr = self.viewBounds()
         if vr is None:
             return
@@ -1655,7 +1656,7 @@ class LinearRegionItem(GraphicsObject):
         self.rect = QtGui.QGraphicsRectItem(self)
         self.rect.setParentItem(self)
         self.bounds = QtCore.QRectF()
-        self.view = view
+        self.view = weakref.ref(view)
         
         self.setBrush = self.rect.setBrush
         self.brush = self.rect.brush
@@ -1668,7 +1669,7 @@ class LinearRegionItem(GraphicsObject):
             self.lines = [
                 InfiniteLine(view, QtCore.QPointF(vals[0], 0), 90, movable=movable, bounds=bounds), 
                 InfiniteLine(view, QtCore.QPointF(vals[1], 0), 90, movable=movable, bounds=bounds)]
-        QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.updateBounds)
+        QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.updateBounds)
         
         for l in self.lines:
             l.setParentItem(self)
@@ -1691,7 +1692,7 @@ class LinearRegionItem(GraphicsObject):
         self.emit(QtCore.SIGNAL('regionChanged'), self)
             
     def updateBounds(self):
-        vb = self.view.viewRect()
+        vb = self.view().viewRect()
         vals = [self.lines[0].value(), self.lines[1].value()]
         if self.orientation[0] == 'h':
             vb.setTop(max(vals))
@@ -1743,7 +1744,10 @@ class VTickGroup(QtGui.QGraphicsPathItem):
             pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
         self.ticks = []
         self.xvals = []
-        self.view = view
+        if view is None:
+            self.view = None
+        else:
+            self.view = weakref.ref(view)
         self.yrange = [0,1]
         self.setPen(pen)
         self.setYRange(yrange, relative)
@@ -1770,11 +1774,11 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         if self.view is not None:
             if relative:
                 #QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.rebuildTicks)
-                QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.rescale)
+                QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.rescale)
             else:
                 try:
                     #QtCore.QObject.disconnect(self.view, QtCore.SIGNAL('viewChanged'), self.rebuildTicks)
-                    QtCore.QObject.disconnect(self.view, QtCore.SIGNAL('viewChanged'), self.rescale)
+                    QtCore.QObject.disconnect(self.view(), QtCore.SIGNAL('viewChanged'), self.rescale)
                 except:
                     pass
         self.rebuildTicks()
@@ -1787,7 +1791,7 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         #p1 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[0]))))
         #p2 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[1]))))
         #yr = [p1.y(), p2.y()]
-        vb = self.view.viewRect()
+        vb = self.view().viewRect()
         p1 = vb.bottom() - vb.height() * self.yrange[0]
         p2 = vb.bottom() - vb.height() * self.yrange[1]
         yr = [p1, p2]

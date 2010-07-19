@@ -9,12 +9,11 @@ from lib.util.advancedTypes import OrderedDict
 from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
 from lib.util.Mutex import Mutex, MutexLocker
-from lib.util.debug import *
+from debug import *
 import ptime
 import analysisModules
 import time
 import sip
-from debug import Profiler
 #import pdb
 
 class Window(QtGui.QMainWindow):
@@ -396,7 +395,7 @@ class ProtocolRunner(Module):
             try:
                 self.win.removeDockWidget(self.docks[d])
                 self.docks[d].close()
-                sip.delete(self.docks[d])
+                #sip.delete(self.docks[d])
             except:
                 printExc("Error while closing dock '%s':" % d)
         self.docks = {}

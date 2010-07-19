@@ -226,7 +226,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         if name is not None:
             self.registerPlot(name)
         
-
+            
     def __del__(self):
         if self.manager is not None:
             self.manager.removeWidget(self.name)
