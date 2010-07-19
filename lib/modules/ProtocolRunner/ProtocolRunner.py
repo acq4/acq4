@@ -812,7 +812,7 @@ class ProtocolRunner(Module):
         ## Request each device handles its own data
         ## Note that this is only used to display results; data storage is handled by Manager and the individual devices.
         #print "got frame", frame
-        prof = Profiler('ProtocolRunner.handleFrame', disabled=False)
+        prof = Profiler('ProtocolRunner.handleFrame', disabled=True)
         for d in frame['result']:
             try:
                 if d != 'protocol':
@@ -1048,6 +1048,7 @@ class TaskThread(QtCore.QThread):
             #print "Protocol:", cmd
                     
             ## Wait before starting if we've already run too recently
+            #print "sleep until next run time..", ptime.time(), self.lastRunTime, cmd['protocol']['cycleTime']
             while (self.lastRunTime is not None) and (ptime.time() < self.lastRunTime + cmd['protocol']['cycleTime']):
                 l.relock()
                 if self.abortThread or self.stopThread:
@@ -1056,6 +1057,7 @@ class TaskThread(QtCore.QThread):
                     return
                 l.unlock()
                 time.sleep(1e-3)
+            #print "slept until", ptime.time()
             prof.mark('sleep')
             
             # If paused, hang here for a bit.

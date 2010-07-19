@@ -545,7 +545,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         if not item in self.items:
             return
         self.items.remove(item)
-        self.vb.removeItem(item)
+        if item.scene() is not None:
+            self.vb.removeItem(item)
         if item in self.curves:
             self.curves.remove(item)
             self.updateDecimation()

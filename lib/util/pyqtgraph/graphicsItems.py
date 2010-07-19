@@ -1381,8 +1381,13 @@ class ViewBox(QtGui.QGraphicsWidget):
             
     def setYRange(self, min, max, update=True, padding=0.02):
         #print "setYRange:", min, max
-        if min == max:
-            raise Exception("Tried to set range with 0 width.")
+        if min == max:   ## If we requested no range, try to preserve previous scale. Otherwise just pick an arbitrary scale.
+            dy = self.range[1][1] - self.range[1][0]
+            if dy == 0:
+                dy = 1
+            min -= dy*0.5
+            max += dy*0.5
+            #raise Exception("Tried to set range with 0 width.")
         if any(isnan([min, max])) or any(isinf([min, max])):
             raise Exception("Not setting range [%s, %s]" % (str(min), str(max)))
             
@@ -1402,7 +1407,12 @@ class ViewBox(QtGui.QGraphicsWidget):
     def setXRange(self, min, max, update=True, padding=0.02):
         #print "setXRange:", min, max
         if min == max:
-            print "Warning: Tried to set range with 0 width."
+            dx = self.range[0][1] - self.range[0][0]
+            if dx == 0:
+                dx = 1
+            min -= dx*0.5
+            max += dx*0.5
+            #print "Warning: Tried to set range with 0 width."
             #raise Exception("Tried to set range with 0 width.")
         if any(isnan([min, max])) or any(isinf([min, max])):
             raise Exception("Not setting range [%s, %s]" % (str(min), str(max)))

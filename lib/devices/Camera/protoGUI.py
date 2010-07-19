@@ -23,7 +23,7 @@ class CameraProtoGui(DAQGenericProtoGui):
         self.ui.plotSplitter.setStretchFactor(2, 1)
         
         ## plots should not be storing more than one trace at a time.
-        for p in self.plots:
+        for p in self.plots.values():
             p.plotItem.ctrl.maxTracesCheck.setChecked(True)
             p.plotItem.ctrl.maxTracesSpin.setValue(1)
             p.plotItem.ctrl.forgetTracesCheck.setChecked(True)

@@ -679,7 +679,7 @@ class Task:
             if not abort and self.result is None:
                 #print "Get results.."
                 ## Let each device generate its own output structure.
-                result = {}
+                result = {'protocol': {'startTime': self.startTime}}
                 for devName in self.tasks:
                     try:
                         result[devName] = self.tasks[devName].getResult()
@@ -692,6 +692,7 @@ class Task:
                 
                 ## Store data if requested
                 if 'storeData' in self.cfg and self.cfg['storeData'] is True:
+                    self.cfg['storageDir'].setInfo(result['protocol'])
                     for t in self.tasks:
                         self.tasks[t].storeResult(self.cfg['storageDir'])
                 prof.mark("store data")
