@@ -812,20 +812,24 @@ class ProtocolRunner(Module):
         ## Request each device handles its own data
         ## Note that this is only used to display results; data storage is handled by Manager and the individual devices.
         #print "got frame", frame
+        prof = Profiler('ProtocolRunner.handleFrame', disabled=False)
         for d in frame['result']:
             try:
                 if d != 'protocol':
                     self.docks[d].widget().handleResult(frame['result'][d], frame['params'])
+                    prof.mark('finished %s' % d)
             except:
                 printExc("Error while handling result from device '%s'" % d)
                 
         self.emit(QtCore.SIGNAL('newFrame'), frame)
+        prof.mark('emit newFrame')
                 
         ## If this is a single-mode protocol and looping is turned on, schedule the next run
         if self.loopEnabled:
             ct = self.protoStateGroup.state()['loopCycleTime']
             t = max(0, ct - (ptime.time() - self.lastProtoTime))
             QtCore.QTimer.singleShot(int(t*1000.), self.loop)
+        prof.finish()
             
     def loop(self):
         """Run one iteration when in loop mode"""
@@ -1130,9 +1134,11 @@ class TaskThread(QtCore.QThread):
         if self.stopThread:
             raise Exception('stop', result)
         #print "Total run time: %gms" % ((ptime.time() - startTime) * 1000 )
+        
+        ## Give everyone else a chance to catch up
+        QtCore.QThread.yieldCurrentThread()
+        prof.mark('yield')
         prof.finish()
-        
-        
         
     def checkStop(self):
         with MutexLocker(self.lock):

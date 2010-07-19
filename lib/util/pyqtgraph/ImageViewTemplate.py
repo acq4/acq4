@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ImageViewTemplate.ui'
 #
-# Created: Sat Jul 17 00:28:44 2010
-#      by: PyQt4 UI code generator 4.7.2
+# Created: Sat Jul 17 13:05:44 2010
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -23,6 +23,7 @@ class Ui_Form(object):
         self.layoutWidget = QtGui.QWidget(self.splitter)
         self.layoutWidget.setObjectName("layoutWidget")
         self.gridLayout = QtGui.QGridLayout(self.layoutWidget)
+        self.gridLayout.setMargin(0)
         self.gridLayout.setSpacing(0)
         self.gridLayout.setObjectName("gridLayout")
         self.graphicsView = GraphicsView(self.layoutWidget)
@@ -34,14 +35,29 @@ class Ui_Form(object):
         self.graphicsView.setObjectName("graphicsView")
         self.gridLayout.addWidget(self.graphicsView, 1, 0, 3, 1)
         self.roiBtn = QtGui.QPushButton(self.layoutWidget)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(1)
+        sizePolicy.setHeightForWidth(self.roiBtn.sizePolicy().hasHeightForWidth())
+        self.roiBtn.setSizePolicy(sizePolicy)
         self.roiBtn.setMaximumSize(QtCore.QSize(30, 16777215))
         self.roiBtn.setCheckable(True)
         self.roiBtn.setObjectName("roiBtn")
         self.gridLayout.addWidget(self.roiBtn, 3, 3, 1, 1)
         self.gradientWidget = GradientWidget(self.layoutWidget)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(100)
+        sizePolicy.setHeightForWidth(self.gradientWidget.sizePolicy().hasHeightForWidth())
+        self.gradientWidget.setSizePolicy(sizePolicy)
         self.gradientWidget.setObjectName("gradientWidget")
         self.gridLayout.addWidget(self.gradientWidget, 1, 3, 1, 1)
         self.normBtn = QtGui.QPushButton(self.layoutWidget)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(1)
+        sizePolicy.setHeightForWidth(self.normBtn.sizePolicy().hasHeightForWidth())
+        self.normBtn.setSizePolicy(sizePolicy)
         self.normBtn.setMaximumSize(QtCore.QSize(30, 16777215))
         self.normBtn.setCheckable(True)
         self.normBtn.setObjectName("normBtn")

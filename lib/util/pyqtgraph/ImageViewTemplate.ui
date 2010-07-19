@@ -27,6 +27,9 @@
      </property>
      <widget class="QWidget" name="layoutWidget">
       <layout class="QGridLayout" name="gridLayout">
+       <property name="margin">
+        <number>0</number>
+       </property>
        <property name="spacing">
         <number>0</number>
        </property>
@@ -42,6 +45,12 @@
        </item>
        <item row="3" column="3">
         <widget class="QPushButton" name="roiBtn">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
          <property name="maximumSize">
           <size>
            <width>30</width>
@@ -57,10 +66,23 @@
         </widget>
        </item>
        <item row="1" column="3">
-        <widget class="GradientWidget" name="gradientWidget" native="true"/>
+        <widget class="GradientWidget" name="gradientWidget" native="true">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>100</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
        </item>
        <item row="2" column="3">
         <widget class="QPushButton" name="normBtn">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
          <property name="maximumSize">
           <size>
            <width>30</width>

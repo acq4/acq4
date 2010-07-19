@@ -453,6 +453,8 @@ class ImageView(QtGui.QWidget):
             self.ui.roiPlot.hide()
             self.ui.roiBtn.hide()
         else:
+            self.ui.roiBtn.show()
+            self.ui.roiPlot.show()
             #self.ui.timeSlider.show()
             self.imageItem.updateImage(image[self.currentIndex], white=self.whiteLevel(), black=self.blackLevel())
             
