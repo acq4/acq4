@@ -5,8 +5,10 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-import sys, traceback, time, gc, re
+import sys, traceback, time, gc, re, types, weakref
 import ptime
+from numpy import ndarray
+from PyQt4 import QtCore, QtGui
 
 def ftrace(func):
     ## Use as decorator to mark beginning and end of functions
@@ -64,7 +66,7 @@ def describeObj(__XX__Obj, depth=4, printResult=True, ignoreNames=None):
             continue
         if hasattr(__XX__Ref, 'keys'):
             for k in __XX__Ref.keys():
-                if k[:6] == '__XX__' or k in ignoreNames:
+                if isinstance(k, basestring) and k[:6] == '__XX__' or k in ignoreNames:
                     continue
                 if __XX__Ref[k] is __XX__Obj:
                     rs = describeObj(__XX__Ref, depth=depth-1, printResult=False, ignoreNames=ignoreNames)
@@ -93,7 +95,110 @@ def describeObj(__XX__Obj, depth=4, printResult=True, ignoreNames=None):
     else:
         return result
                     
+
+def objectSize(obj, ignore=None, verbose=False, depth=0):
+    """Guess how much memory an object is using"""
+    ignoreTypes = [types.MethodType, types.UnboundMethodType, types.BuiltinMethodType, types.FunctionType, types.BuiltinFunctionType]
+    ignoreRegex = re.compile('(method-wrapper|Flag|ItemChange|Option|Mode)')
     
+    
+    if ignore is None:
+        ignore = {}
+        
+    indent = '  '*depth
+    
+    try:
+        hash(obj)
+        hsh = obj
+    except:
+        hsh = "%s:%d" % (str(type(obj)), id(obj))
+        
+    if hsh in ignore:
+        return 0
+    ignore[hsh] = 1
+    
+    size = sys.getsizeof(obj)
+    if isinstance(obj, ndarray):
+        size += len(obj.data)
+    elif type(obj) in [list, tuple]:
+        if verbose:
+            print indent+"list:"
+        for o in obj:
+            s = objectSize(o, ignore=ignore, verbose=verbose, depth=depth+1)
+            if verbose:
+                print indent+'  +', s
+            size += s
+    elif isinstance(obj, dict):
+        if verbose:
+            print indent+"list:"
+        for k in obj:
+            s = objectSize(obj[k], ignore=ignore, verbose=verbose, depth=depth+1)
+            if verbose:
+                print indent+'  +', k, s
+            size += s
+    elif isinstance(obj, QtCore.QObject):
+        try:
+            childs = obj.children()
+            if verbose:
+                print indent+"Qt children:"
+            for ch in childs:
+                s = objectSize(obj, ignore=ignore, verbose=verbose, depth=depth+1)
+                size += s
+                if verbose:
+                    print indent + '  +', ch.objectName(), s
+                
+        except:
+            pass
+    #if isinstance(obj, types.InstanceType):
+    gc.collect()
+    if verbose:
+        print indent+'attrs:'
+    for k in dir(obj):
+        if k in ['__dict__']:
+            continue
+        o = getattr(obj, k)
+        if type(o) in ignoreTypes:
+            continue
+        strtyp = str(type(o))
+        if ignoreRegex.search(strtyp):
+            continue
+        #if isinstance(o, types.ObjectType) and strtyp == "<type 'method-wrapper'>":
+            #continue
+        
+        #if verbose:
+            #print indent, k, '?'
+        refs = [r for r in gc.get_referrers(o) if type(r) != types.FrameType]
+        if len(refs) == 1:
+            s = objectSize(o, ignore=ignore, verbose=verbose, depth=depth+1)
+            size += s
+            if verbose:
+                print indent + "  +", k, s
+        #else:
+            #if verbose:
+                #print indent + '  -', k, len(refs)
+    return size
+
+class GarbageWatcher:
+    def __init__(self):
+        self.objs = weakref.WeakValueDictionary()
+        self.allNames = []
+        
+    def addObj(self, obj, name):
+        self.objs[name] = obj
+        self.allNames.append(name)
+        
+    def check(self):
+        gc.collect()
+        dead = self.allNames[:]
+        alive = []
+        for k in self.objs:
+            dead.remove(k)
+            alive.append(k)
+        print "Deleted objects:", dead
+        print "Live objects:", alive
+        
+
+
     
 class Profiler:
     depth = 0

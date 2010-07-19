@@ -58,6 +58,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         for b in [self.ctrlBtn, self.autoBtn]:
             proxy = QtGui.QGraphicsProxyWidget(self)
             proxy.setWidget(b)
+            proxy.setAcceptHoverEvents(False)
             b.setStyleSheet("background-color: #000000; color: #888; font-size: 6pt")
         QtCore.QObject.connect(self.ctrlBtn, QtCore.SIGNAL('clicked()'), self.ctrlBtnClicked)
         QtCore.QObject.connect(self.autoBtn, QtCore.SIGNAL('clicked()'), self.enableAutoScale)
@@ -770,8 +771,18 @@ class PlotItem(QtGui.QGraphicsWidget):
             raise Exception("State save/restore requires WidgetGroup class.")
         if 'paramList' in state:
             self.paramList = state['paramList'].copy()
-            self.stateGroup.setState(state)
+            
+        self.stateGroup.setState(state)
+        self.updateSpectrumMode()
+        self.updateDownsampling()
+        self.updateAlpha()
+        self.updateDecimation()
+        
+        self.stateGroup.setState(state)
+        self.updateXScale()
+        self.updateYScale()
         self.updateParamList()
+        
         #print "\nRESTORE %s:\n" % str(self.name), state
         #print "Restoring state. averageGroup.isChecked(): %s  state: %s" % (str(self.ctrl.averageGroup.isChecked()), str(state['averageGroup']))
         #avg = self.ctrl.averageGroup.isChecked()
@@ -885,7 +896,6 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.mouseScreenPos = ev.screenPos()
         
     def ctrlBtnClicked(self):
-        #print self.mousePos
         self.ctrlMenu.popup(self.mouseScreenPos)
 
     #def _checkLabelKey(self, key):
