@@ -436,7 +436,8 @@ class ProtocolRunner(Module):
             'leadTime': 0.01,
             'loop': False,
             'loopCycleTime': 0.3,
-            'cycleTime': 0.3
+            'cycleTime': 0.3,
+            'repetitions': 0
         })
         
         #self.currentProtocol.conf = self.protoStateGroup.state()
@@ -447,6 +448,7 @@ class ProtocolRunner(Module):
         #self.updateProtParams()
         
         ## Clear sequence parameters, disable sequence dock
+        self.updateSeqParams()
         
         self.ui.currentProtocolLabel.setText('[ new ]')
         

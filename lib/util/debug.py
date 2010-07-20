@@ -46,22 +46,33 @@ def listObjs(regex='Q', typ=None):
     else:
         return [x for x in gc.get_objects() if re.match(regex, type(x).__name__)]
         
-def describeObj(__XX__Obj, depth=4, printResult=True, ignoreNames=None):
+def describeObj(__XX__Obj, depth=4, printResult=True, returnResult=False, ignoreNames=None, ignorePaths=None, start=True):
     """Return a string describing this object; attempt to find names that refer to it."""
     gc.collect()
     
     if ignoreNames is None:
-        ignoreNames = []
+        ignoreNames = ['_']
+    if ignorePaths is None:
+        ignorePaths = {}
     
-    typName = str(type(__XX__Obj))
+    #typName = str(type(__XX__Obj))
     if depth == 0:
-        return [typName]
+        return []
+        #if printResult:
+            #print "  "*depth + str(type(__XX__Obj))
+        #return [__XX__Obj]
     
-    refStrs = []
+    #refStrs = []
+    refs = []
     
     
     __XX__Refs = gc.get_referrers(__XX__Obj)
     for __XX__Ref in __XX__Refs:
+        #if startObj is not None and startObj is not __XX__Ref:
+            #continue
+            
+        ## First determine how to get from this reference to the object (key, index, or attribure)
+        path = ('?',)*3
         if type(__XX__Ref).__name__ == 'frame':
             continue
         if hasattr(__XX__Ref, 'keys'):
@@ -69,32 +80,83 @@ def describeObj(__XX__Obj, depth=4, printResult=True, ignoreNames=None):
                 if isinstance(k, basestring) and k[:6] == '__XX__' or k in ignoreNames:
                     continue
                 if __XX__Ref[k] is __XX__Obj:
-                    rs = describeObj(__XX__Ref, depth=depth-1, printResult=False, ignoreNames=ignoreNames)
-                    refStrs.extend(["%s ['%s']" % (s, k) for s in rs])
+                    path = ('key', k, hash(k))
                     break
         elif isinstance(__XX__Ref, list) or isinstance(__XX__Ref, tuple):
-            for k in range(len(__XX__Ref)):
-                if __XX__Ref[k] is __XX__Obj:
-                    rs = describeObj(__XX__Ref, depth=depth-1, printResult=False, ignoreNames=ignoreNames)
-                    refStrs.extend(["%s [%d]" % (s, k) for s in rs])
+            junk = False
+            for v in __XX__Ref[:10]:  ## lists containing frames are ubiquitous and unhelpful.
+                if type(v) is types.FrameType:
+                    junk = True
                     break
+            if junk:
+                continue
+            
+            try:
+                i = __XX__Ref.index(__XX__Obj)
+                path = ('index', i, '%d'%i)
+            except:
+                pass
         else:
             for k in dir(__XX__Ref):
                 if k in ignoreNames:
                     continue
                 if getattr(__XX__Ref, k) is __XX__Obj:
-                    rs = describeObj(__XX__Ref, depth=depth-1, printResult=False, ignoreNames=ignoreNames)
-                    refStrs.extend(["%s .%s" % (s, k) for s in rs])
+                    path = ('attr', k, k)
                     break
-    
-    refStrs = set(refStrs)
-    result = [s + ' ' + typName for s in refStrs]
-    if printResult:
-        for r in result:
-            print r
-    else:
-        return result
                     
+        ## Make sure we haven't already been here
+        #pathKey = (id(__XX__Ref), path[0], path[2])
+        #if pathKey in ignorePaths:
+            #continue
+        #ignorePaths[pathKey] = None
+        
+        
+        nextRefs = describeObj(__XX__Ref, depth=depth-1, printResult=printResult, ignoreNames=ignoreNames, ignorePaths=ignorePaths, start=False)
+        
+        
+        desc = ''
+        if path[0] == 'key':
+            strPath = "[%s]" % repr(path[1])
+            desc = str([type(v).__name__ for v in __XX__Ref.values()])[:80]
+        elif path[0] == 'index':
+            strPath = "[%d]" % path[1]
+            desc = str([type(v).__name__ for v in __XX__Ref])[:80]
+        elif path[0] == 'attr':
+            strPath = '.%s' % path[1]
+        else:
+            strPath = path[0]
+        refs.append((__XX__Ref, path[:2]+(strPath,), nextRefs))
+        
+        if printResult:
+                
+            objStr = str(__XX__Ref)
+            if len(objStr) > 50:
+                objStr = str(type(__XX__Ref).__name__)
+            print "    "*(depth-1) + objStr, strPath, desc
+    
+    #refStrs = set(refStrs)
+    
+    #result = [s + ' ' + typName for s in refStrs]
+    if start and printResult:
+        print "    "*(depth) + str(type(__XX__Obj))
+        
+        print "-------------------"
+        
+        def printPaths(paths, suffix=''):
+            for p in paths:
+                suf = p[1][2]+suffix
+                if len(p[2]) == 0:
+                    line = str(type(p[0]))+suf
+                    line = re.sub(r"\.__dict__\['([^\]]+)'\]", r'.\1', line)
+                    print line
+                else:
+                    printPaths(p[2], suf)
+        
+        printPaths(refs)
+        
+        
+    if not start or returnResult:
+        return refs
 
 def objectSize(obj, ignore=None, verbose=False, depth=0):
     """Guess how much memory an object is using"""
