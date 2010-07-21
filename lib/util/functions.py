@@ -18,6 +18,7 @@ from metaarray import *
 from scipy import *
 from scipy.optimize import leastsq
 from scipy.ndimage import gaussian_filter, generic_filter, median_filter
+from scipy import stats
 import scipy.signal
 import numpy.ma
 from debug import *
@@ -86,6 +87,11 @@ def siEval(s):
 
 
 
+def dirDialog(startDir='', title="Select Directory"):
+  return str(QtGui.QFileDialog.getExistingDirectory(None, title, startDir))
+
+def fileDialog():
+  return str(QtGui.QFileDialog.getOpenFileName())
 
 
 
@@ -1000,7 +1006,7 @@ def measureNoise(data, threshold=2.0, iterations=2):
     #return median(data2.std(axis=0))
     
 
-def findEvents(data, minLength=3, peakStd=2.0, sumStd=2.0, noiseThreshold=None):
+def findEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshold=None):
     """Locate events of any shape in a signal. Works by finding regions of the signal
     that deviate from noise, using the area beneath the deviation as the detection criteria.
     
@@ -1048,7 +1054,13 @@ def findEvents(data, minLength=3, peakStd=2.0, sumStd=2.0, noiseThreshold=None):
         events[i][3] = peak
     #p.mark('generate event array')
     
-    if noiseThreshold is not None:
+    if minPeak > 0:
+        events = events[abs(events['peak']) > minPeak]
+    
+    if minSum > 0:
+        events = events[abs(events['sum']) > minSum]
+    
+    if noiseThreshold  > 0:
         ## Fit gaussian to peak in size histogram, use fit sigma as criteria for noise rejection
         stdev = measureNoise(data1)
         #p.mark('measureNoise')
@@ -1071,25 +1083,53 @@ def findEvents(data, minLength=3, peakStd=2.0, sumStd=2.0, noiseThreshold=None):
     return events
     
     
-def removeBaseline(data, cutoffs=[1.0, 3.0], threshold=4.0, dt=None):
+def adaptiveDetrend(data, x=None, threshold=3.0):
     """Return the signal with baseline removed. Discards outliers from baseline measurement."""
-    if dt is None:
-        tv = data.xvals('Time')
-        dt = tv[1] - tv[0]
+    if x is None:
+        x = data.xvals(0)
     
     d = data.view(ndarray)
     
-    d1 = lowPass(d, cutoffs[0], dt=dt)
-    d2 = d - d1
+    d2 = scipy.signal.detrend(d)
     
     stdev = d2.std()
-    mask = abs(d2) > stdev*threshold
-    d3 = where(mask, 0, d2)
-    d4 = d2 - lowPass(d3, cutoffs[1], dt=dt)
+    mask = abs(d2) < stdev*threshold
+    #d3 = where(mask, 0, d2)
+    #d4 = d2 - lowPass(d3, cutoffs[1], dt=dt)
+    
+    lr = stats.linregress(x[mask], d[mask])
+    base = lr[1] + lr[0]*x
+    d4 = d - base
     
     if isinstance(data, MetaArray):
         return MetaArray(d4, info=data.infoCopy())
     return d4
+    
+def subtractMedian(data, time=None, width=100, dt=None):
+    """Subtract rolling median from signal. 
+    Arguments:
+      width:  the width of the filter window in samples
+      time: the width of the filter window in x value 
+            if specified, then width is ignored.
+      dt:   the conversion factor for time -> width
+    """
+        
+    if time is not None:
+        if dt is None:
+            x = data.xvals(0)
+            dt = x[1] - x[0]
+        width = time / dt
+    
+    d1 = data.view(ndarray)
+    width = int(width)
+    med = median_filter(d1, size=width)
+    d2 = d1 - med
+    
+    if isinstance(data, MetaArray):
+        return MetaArray(d2, info=data.infoCopy())
+    return d2
+    
+    
     
 #def removeBaseline(data, windows=[500, 100], threshold=4.0):
     ## very slow method using median_filter:

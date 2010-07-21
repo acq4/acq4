@@ -16,6 +16,7 @@ class FileDataView(QtGui.QSplitter):
         self.current = None
         self.currentType = None
         self.widgets = []
+        self.dictWidget = None
 
     def setCurrentFile(self, file):
         #print "=============== set current file ============"
@@ -71,16 +72,21 @@ class FileDataView(QtGui.QSplitter):
             self.widgets.append(w)
         
         if isinstance(data, MetaArray):
-            w = DictView(data._info)
-            #w.setText(str(data._info[-1]))
-            self.addWidget(w)
-            self.widgets.append(w)
-            h = self.size().height()
-            self.setSizes([h*0.8, h*0.2])
+            if self.dictWidget is None:
+                w = DictView(data._info)
+                self.dictWidget = w
+                #w.setText(str(data._info[-1]))
+                self.addWidget(w)
+                self.widgets.append(w)
+                h = self.size().height()
+                self.setSizes([h*0.8, h*0.2])
+            else:
+                self.dictWidget.setData(data._info)
             
         
     def clear(self):
         for w in self.widgets:
             sip.delete(w)
         self.widgets = []
+        self.dictWidget = None
         

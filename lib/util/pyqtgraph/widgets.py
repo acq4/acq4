@@ -682,7 +682,7 @@ class Handle(QtGui.QGraphicsItem):
         if bounds != self.bounds:
             self.bounds = bounds
             self.prepareGeometryChange()
-        p.setRenderHints(p.Antialiasing | p.TextAntialiasing | p.HighQualityAntialiasing, True)
+        p.setRenderHints(p.Antialiasing, True)
         p.setPen(self.pen)
         ang = self.startAng + va
         dt = 2*pi / self.sides

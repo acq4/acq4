@@ -58,6 +58,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         for b in [self.ctrlBtn, self.autoBtn]:
             proxy = QtGui.QGraphicsProxyWidget(self)
             proxy.setWidget(b)
+            proxy.setAcceptHoverEvents(False)
             b.setStyleSheet("background-color: #000000; color: #888; font-size: 6pt")
         QtCore.QObject.connect(self.ctrlBtn, QtCore.SIGNAL('clicked()'), self.ctrlBtnClicked)
         QtCore.QObject.connect(self.autoBtn, QtCore.SIGNAL('clicked()'), self.enableAutoScale)
@@ -126,7 +127,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         
 
         ## Wrap a few methods from viewBox
-        for m in ['setXRange', 'setYRange', 'setRange', 'autoRange', 'viewRect']:
+        for m in ['setXRange', 'setYRange', 'setRange', 'autoRange', 'viewRect', 'setMouseEnabled']:
             setattr(self, m, getattr(self.vb, m))
             
         self.items = []
@@ -186,6 +187,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         QtCore.QObject.connect(c.powerSpectrumGroup, QtCore.SIGNAL('toggled(bool)'), self.updateSpectrumMode)
         QtCore.QObject.connect(c.saveSvgBtn, QtCore.SIGNAL('clicked()'), self.saveSvgClicked)
         QtCore.QObject.connect(c.saveImgBtn, QtCore.SIGNAL('clicked()'), self.saveImgClicked)
+        QtCore.QObject.connect(c.saveCsvBtn, QtCore.SIGNAL('clicked()'), self.saveCsvClicked)
         
         #QtCore.QObject.connect(c.gridGroup, QtCore.SIGNAL('toggled(bool)'), self.updateGrid)
         #QtCore.QObject.connect(c.gridAlphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateGrid)
@@ -224,7 +226,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         if name is not None:
             self.registerPlot(name)
         
-
+            
     def __del__(self):
         if self.manager is not None:
             self.manager.removeWidget(self.name)
@@ -543,7 +545,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         if not item in self.items:
             return
         self.items.remove(item)
-        self.vb.removeItem(item)
+        if item.scene() is not None:
+            self.vb.removeItem(item)
         if item in self.curves:
             self.curves.remove(item)
             self.updateDecimation()
@@ -587,6 +590,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         return curve
 
     def addCurve(self, c, params=None):
+        if params is None:
+            params = {}
         c.setMeta(params)
         self.curves.append(c)
         #Qwt.QwtPlotCurve.attach(c, self)
@@ -670,7 +675,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         if fileName is None:
             fileName = QtGui.QFileDialog.getSaveFileName()
         fileName = str(fileName)
-        
+        PlotItem.lastFileDir = os.path.dirname(fileName)
         
         self.svg = QtSvg.QSvgGenerator()
         self.svg.setFileName(fileName)
@@ -697,12 +702,31 @@ class PlotItem(QtGui.QGraphicsWidget):
         
         painter.end()
         
+        ## Workaround to set pen widths correctly
+        import re
+        data = open(fileName).readlines()
+        for i in range(len(data)):
+            line = data[i]
+            m = re.match(r'(<g .*)stroke-width="1"(.*transform="matrix\(([^\)]+)\)".*)', line)
+            if m is not None:
+                #print "Matched group:", line
+                g = m.groups()
+                matrix = map(float, g[2].split(','))
+                #print "matrix:", matrix
+                scale = max(abs(matrix[0]), abs(matrix[3]))
+                if scale == 0 or scale == 1.0:
+                    continue
+                data[i] = g[0] + ' stroke-width="%0.2g" ' % (1.0/scale) + g[1] + '\n'
+                #print "old line:", line
+                #print "new line:", data[i]
+        open(fileName, 'w').write(''.join(data))
         
         
     def writeImage(self, fileName=None):
         if fileName is None:
             fileName = QtGui.QFileDialog.getSaveFileName()
         fileName = str(fileName)
+        PlotItem.lastFileDir = os.path.dirname(fileName)
         self.png = QtGui.QImage(int(self.size().width()), int(self.size().height()), QtGui.QImage.Format_ARGB32)
         painter = QtGui.QPainter(self.png)
         painter.setRenderHints(painter.Antialiasing | painter.TextAntialiasing)
@@ -710,6 +734,29 @@ class PlotItem(QtGui.QGraphicsWidget):
         painter.end()
         self.png.save(fileName)
         
+    def writeCsv(self, fileName=None):
+        if fileName is None:
+            fileName = QtGui.QFileDialog.getSaveFileName()
+        fileName = str(fileName)
+        PlotItem.lastFileDir = os.path.dirname(fileName)
+        
+        fd = open(fileName, 'w')
+        data = [c.getData() for c in self.curves]
+        i = 0
+        while True:
+            done = True
+            for d in data:
+                if i < len(d[0]):
+                    fd.write('%g,%g,'%(d[0][i], d[1][i]))
+                    done = False
+                else:
+                    fd.write(' , ,')
+            fd.write('\n')
+            if done:
+                break
+            i += 1
+        fd.close()
+
 
     def saveState(self):
         if not HAVE_WIDGETGROUP:
@@ -725,8 +772,18 @@ class PlotItem(QtGui.QGraphicsWidget):
             raise Exception("State save/restore requires WidgetGroup class.")
         if 'paramList' in state:
             self.paramList = state['paramList'].copy()
-            self.stateGroup.setState(state)
+            
+        self.stateGroup.setState(state)
+        self.updateSpectrumMode()
+        self.updateDownsampling()
+        self.updateAlpha()
+        self.updateDecimation()
+        
+        self.stateGroup.setState(state)
+        self.updateXScale()
+        self.updateYScale()
         self.updateParamList()
+        
         #print "\nRESTORE %s:\n" % str(self.name), state
         #print "Restoring state. averageGroup.isChecked(): %s  state: %s" % (str(self.ctrl.averageGroup.isChecked()), str(state['averageGroup']))
         #avg = self.ctrl.averageGroup.isChecked()
@@ -840,7 +897,6 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.mouseScreenPos = ev.screenPos()
         
     def ctrlBtnClicked(self):
-        #print self.mousePos
         self.ctrlMenu.popup(self.mouseScreenPos)
 
     #def _checkLabelKey(self, key):
@@ -976,6 +1032,8 @@ class PlotItem(QtGui.QGraphicsWidget):
             #self.fileDialog.setDirectory(PlotItem.lastFileDir)
         self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
         self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+        if PlotItem.lastFileDir is not None:
+            self.fileDialog.setDirectory(PlotItem.lastFileDir)
         self.fileDialog.show()
         QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.writeSvg)
             
@@ -987,11 +1045,23 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.fileDialog = QtGui.QFileDialog()
         #if PlotItem.lastFileDir is not None:
             #self.fileDialog.setDirectory(PlotItem.lastFileDir)
+        if PlotItem.lastFileDir is not None:
+            self.fileDialog.setDirectory(PlotItem.lastFileDir)
         self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
         self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
         self.fileDialog.show()
         QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.writeImage)
             
+    def saveCsvClicked(self):
+        self.fileDialog = QtGui.QFileDialog()
+        #if PlotItem.lastFileDir is not None:
+            #self.fileDialog.setDirectory(PlotItem.lastFileDir)
+        if PlotItem.lastFileDir is not None:
+            self.fileDialog.setDirectory(PlotItem.lastFileDir)
+        self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+        self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+        self.fileDialog.show()
+        QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.writeCsv)
     #def imgFileSelected(self, fileName):
         ##PlotWidget.lastFileDir = os.path.split(fileName)[0]
         #self.writeImage(str(fileName))

@@ -167,7 +167,6 @@ class MultiClampProtoGui(ProtocolGui):
         params = dict([(p[1], params[p]) for p in params if p[0] == self.dev.name])
         cur = self.getSingleWave(params) 
         if cur is not None:
-            #self.currentCmdPlot = self.plotCmdWave(cur / self.cmdScale, color=QtGui.QColor(100, 200, 100))
             self.currentCmdPlot = self.plotCmdWave(cur, color=QtGui.QColor(100, 200, 100))
             self.currentCmdPlot.setZValue(1001)
         
@@ -329,3 +328,4 @@ class MultiClampProtoGui(ProtocolGui):
         ProtocolGui.quit(self)
         if not sip.isdeleted(self.daqUI):
             QtCore.QObject.disconnect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
+        

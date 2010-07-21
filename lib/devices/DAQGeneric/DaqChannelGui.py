@@ -8,6 +8,8 @@ from lib.util.WidgetGroup import *
 #from lib.util.pyqtgraph.PlotWidget import PlotCurveItem
 import numpy
 import sip
+from functions import siFormat
+from SpinBox import *
 
 class DaqChannelGui(QtGui.QWidget):
     def __init__(self, parent, name, config, plot, dev, prot):
@@ -19,11 +21,8 @@ class DaqChannelGui(QtGui.QWidget):
         ## Configuration for this channel defined in the device configuration file
         self.config = config
         
-        if 'scale' in config:
-            self.scale = config['scale']
-        else:
-            self.scale = 1.0
-        #print "device %s scale=%f" % (name, self.scale)
+        self.scale = 1.0
+        self.units = ''
         
         ## The device handle for this channel's DAQGeneric device
         self.dev = dev
@@ -43,6 +42,7 @@ class DaqChannelGui(QtGui.QWidget):
         ## Curves displayed in self.plot
         #self.plots = []
         
+        
             
     def postUiInit(self):
         ## Automatically locate all read/writable widgets and group them together for easy 
@@ -52,13 +52,48 @@ class DaqChannelGui(QtGui.QWidget):
         self.displayCheckChanged()
         QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('stateChanged(int)'), self.displayCheckChanged)
         QtCore.QObject.connect(self.ui.groupBox, QtCore.SIGNAL('toggled(bool)'), self.groupBoxClicked)
+        
+        if 'userScale' in self.config:
+            self.setScale(self.config['userScale'])
+        else:
+            self.setScale(1.0)
+        
+        if 'units' in self.config:
+            self.setUnits(self.config['units'])
+        else:
+            self.setUnits('')
             
+    def updateTitle(self):
+        if self.ui.groupBox.isChecked():
+            plus = ""
+        else:
+            plus = "[+] "
+        
+        units = " (x%s)" % siFormat(self.scale, suffix=self.units)
+        
+        self.ui.groupBox.setTitle(plus + self.name + units)
+    
+    def setUnits(self, units):
+        self.units = units
+        for s in self.getSpins():
+            if isinstance(s, SpinBox):
+                s.setOpts(suffix=units)
+        self.updateTitle()
+
+    def getSpins(self):
+        return []
+
+    def setScale(self, scale):
+        self.scale = scale
+        self.updateTitle()
+        
     def groupBoxClicked(self, b):
         self.setChildrenVisible(self.ui.groupBox, b)
-        if b:
-            self.ui.groupBox.setTitle(unicode(self.ui.groupBox.title())[4:])
-        else:
-            self.ui.groupBox.setTitle("[+] " + unicode(self.ui.groupBox.title()))
+        self.updateTitle()
+        #if b:
+        #    self.ui.groupBox.setTitle(unicode(self.ui.groupBox.title())[4:])
+        #else:
+        #    self.ui.groupBox.setTitle("[+] " + unicode(self.ui.groupBox.title()))
             
     def setChildrenVisible(self, obj, vis):
         for c in obj.children():
@@ -100,7 +135,7 @@ class DaqChannelGui(QtGui.QWidget):
 class OutputChannelGui(DaqChannelGui):
     def __init__(self, *args):
         DaqChannelGui.__init__(self, *args)
-        
+        self.units = ''
         self.currentPlot = None
         if self.config['type'] == 'ao':
             self.ui = AOChannelTemplate.Ui_Form()
@@ -115,12 +150,22 @@ class OutputChannelGui(DaqChannelGui):
         
         self.daqChanged(self.daqUI.currentState())
         
-            
+        if self.config['type'] == 'ao':
+            for s in self.getSpins():
+                s.setOpts(dec=True, range=[None, None], step=1.0, minStep=1e-12, siPrefix=True)
 
         QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
 
+    def getSpins(self):
+        return (self.ui.preSetSpin, self.ui.holdingSpin)
+        
+    def setScale(self, scale):
+        self.ui.waveGeneratorWidget.setScale(scale)
+        self.scale = scale
+        self.updateTitle()
+        
     def quit(self):
         DaqChannelGui.quit(self)
         if not sip.isdeleted(self.daqUI):
@@ -211,13 +256,6 @@ class OutputChannelGui(DaqChannelGui):
         
     def plotCurve(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
         plot = self.plot.plot(data, self.timeVals, pen=QtGui.QPen(color))
-        #plot = PlotCurve('cell')
-        #plot.setPen(QtGui.QPen(color))
-        #plot.setData(self.timeVals, data)
-        #plot.attach(self.plot)
-        #self.plots.append(plot)
-        #if replot:
-            #self.plot.replot()
         return plot
 
     def getSingleWave(self, params=None):
@@ -232,6 +270,7 @@ class OutputChannelGui(DaqChannelGui):
         wave = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
         
         return wave
+        
         
 class InputChannelGui(DaqChannelGui):
     def __init__(self, *args):

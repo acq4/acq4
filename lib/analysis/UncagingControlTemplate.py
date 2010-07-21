@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'UncagingControlTemplate.ui'
 #
-# Created: Wed Jun 30 19:43:29 2010
+# Created: Fri Jul 16 23:20:53 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -125,4 +125,4 @@ class Ui_UncagingControlWidget(object):
         self.medianCheck.setText(QtGui.QApplication.translate("UncagingControlWidget", "Use Median", None, QtGui.QApplication.UnicodeUTF8))
         self.recolorBtn.setText(QtGui.QApplication.translate("UncagingControlWidget", "Re-Color", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.GradientWidget import GradientWidget
+from pyqtgraph.GradientWidget import GradientWidget

@@ -33,13 +33,22 @@
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>394</width>
-        <height>294</height>
+        <width>398</width>
+        <height>298</height>
        </rect>
       </property>
       <layout class="QFormLayout" name="formLayout_2">
        <property name="fieldGrowthPolicy">
         <enum>QFormLayout::ExpandingFieldsGrow</enum>
+       </property>
+       <property name="horizontalSpacing">
+        <number>0</number>
+       </property>
+       <property name="verticalSpacing">
+        <number>0</number>
+       </property>
+       <property name="margin">
+        <number>0</number>
        </property>
       </layout>
      </widget>

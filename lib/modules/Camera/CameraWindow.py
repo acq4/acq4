@@ -55,14 +55,14 @@ class CameraWindow(QtGui.QMainWindow):
     def __init__(self, module):
         
         self.module = module ## handle to the rest of the application
-        
+        self.cam = self.module.cam
         self.roi = None
         self.exposure = 0.001
         self.binning = 1
         self.region = None
-        self.acquireThread = self.module.cam.acqThread
-        self.acquireThread.setParam('binning', self.binning)
-        self.acquireThread.setParam('exposure', self.exposure)
+        #self.acquireThread = self.module.cam.acqThread
+        #self.acquireThread.setParam('binning', self.binning)
+        #self.acquireThread.setParam('exposure', self.exposure)
         
         #self.frameBuffer = []
         self.lastPlotTime = None
@@ -120,8 +120,6 @@ class CameraWindow(QtGui.QMainWindow):
         
         self.hasQuit = False
         
-        self.recordThread = RecordThread(self, self.module.manager)
-        self.recordThread.start()
         
         ## Set up camera graphicsView
         l = QtGui.QVBoxLayout(self.ui.graphicsWidget)
@@ -193,6 +191,11 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.spinExposure.setValue(self.exposure)
         self.ui.spinExposure.setOpts(dec=True, step=1, minStep=100e-6, siPrefix=True, suffix='s', bounds=[0, 10])
 
+        self.recordThread = RecordThread(self, self.module.manager)
+        self.recordThread.start()
+
+
+
         ## Initialize values
         self.cameraCenter = self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
         self.cameraScale = [1, 1]
@@ -227,10 +230,10 @@ class CameraWindow(QtGui.QMainWindow):
         QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
         QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
         QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('recordingFailed'), self.recordingFailed, QtCore.Qt.QueuedConnection)
-        QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('newFrame'), self.newFrame)
-        QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('finished()'), self.acqThreadStopped)
-        QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('started()'), self.acqThreadStarted)
-        QtCore.QObject.connect(self.acquireThread, QtCore.SIGNAL('showMessage'), self.showMessage)
+        QtCore.QObject.connect(self.cam, QtCore.SIGNAL('newFrame'), self.newFrame)
+        QtCore.QObject.connect(self.cam, QtCore.SIGNAL('cameraStopped'), self.cameraStopped)
+        QtCore.QObject.connect(self.cam, QtCore.SIGNAL('cameraStarted'), self.cameraStarted)
+        QtCore.QObject.connect(self.cam, QtCore.SIGNAL('showMessage'), self.showMessage)
         QtCore.QObject.connect(self.gv, QtCore.SIGNAL("sceneMouseMoved(PyQt_PyObject)"), self.setMouse)
         QtCore.QObject.connect(self.ui.btnDivideBackground, QtCore.SIGNAL('clicked()'), self.divideClicked)
         
@@ -403,10 +406,10 @@ class CameraWindow(QtGui.QMainWindow):
     def updateRegion(self, *args):
         self.clearFrameBuffer()
         r = self.roi.parentBounds()
-        newRegion = [int(r.left()), int(r.top()), int(r.right())-1, int(r.bottom())-1]
+        newRegion = [int(r.left()), int(r.top()), int(r.width()), int(r.height())]
         if self.region != newRegion:
             self.region = newRegion
-            self.acquireThread.setParam('region', self.region)
+            self.cam.setParam('region', self.region)
         
         
     #@trace
@@ -427,18 +430,18 @@ class CameraWindow(QtGui.QMainWindow):
         QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
         QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
         QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('recordingFailed'), self.recordingFailed)
-        QtCore.QObject.disconnect(self.acquireThread, QtCore.SIGNAL('newFrame'), self.newFrame)
-        QtCore.QObject.disconnect(self.acquireThread, QtCore.SIGNAL('finished()'), self.acqThreadStopped)
-        QtCore.QObject.disconnect(self.acquireThread, QtCore.SIGNAL('started()'), self.acqThreadStarted)
-        QtCore.QObject.disconnect(self.acquireThread, QtCore.SIGNAL('showMessage'), self.showMessage)
+        QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('newFrame'), self.newFrame)
+        QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('cameraStopped'), self.cameraStopped)
+        QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('cameraStarted'), self.cameraStarted)
+        QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('showMessage'), self.showMessage)
         
         
         self.hasQuit = True
-        if self.acquireThread.isRunning():
+        if self.cam.isRunning():
             #print "Stopping acquisition thread.."
-            self.acquireThread.stop()
-            if not self.acquireThread.wait(10000):
-                raise Exception("Timed out while waiting for acq. thread exit!")
+            self.cam.stop()
+            if not self.cam.wait(10000):
+                printExc("Timed out while waiting for acq thread exit!")
         if self.recordThread.isRunning():
             #print "Stopping recording thread.."
             self.recordThread.stop()
@@ -476,7 +479,7 @@ class CameraWindow(QtGui.QMainWindow):
             
 
     #@trace
-    def acqThreadStopped(self):
+    def cameraStopped(self):
         #printExc("ACQ stopped; stopping record.")
         #print "Signal sender was: ", self.sender()
         self.toggleRecord(False)
@@ -486,7 +489,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.btnAcquire.setEnabled(True)
         
     #@trace
-    def acqThreadStarted(self):
+    def cameraStarted(self):
         self.AGCLastMax = None
         self.AGCLastMin = None
         self.ui.btnAcquire.setChecked(True)
@@ -499,7 +502,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.backgroundFrame = None
         if ind is not None:
             self.binning = int(self.ui.binningCombo.itemText(ind))
-        self.acquireThread.setParam('binning', self.binning)
+        self.cam.setParam('binning', (self.binning, self.binning))
         #self.acquireThread.reset()
         self.clearFrameBuffer()
         self.updateRgnLabel()
@@ -516,19 +519,20 @@ class CameraWindow(QtGui.QMainWindow):
         #print "Set exposure:", e
         if e is not None:
             self.exposure = e
-        self.acquireThread.setParam('exposure', self.exposure)
+        self.cam.setParam('exposure', self.exposure)
         
     #@trace
     def openCamera(self, ind=0):
         try:
-            self.cam = self.module.cam.getCamera()
-            self.bitDepth = self.cam.getBitDepth()
+            #self.cam = self.module.cam.getCamera()
+            self.bitDepth = self.cam.getParam('bitDepth')
             self.ui.histogram.setRange(QtCore.QRectF(0, 0, 1, 2**self.bitDepth))
             self.setLevelRange()
-            self.camSize = self.cam.getSize()
+            self.camSize = self.cam.getParam('sensorSize')
             self.ui.statusbar.showMessage("Opened camera %s" % self.cam, 5000)
             self.scope = self.module.cam.getScopeDevice()
-            bins = self.module.cam.listBinning()
+            
+            bins = self.cam.listParams('binningX')[0]
             bins.sort()
             bins.reverse()
             for b in bins:
@@ -631,11 +635,11 @@ class CameraWindow(QtGui.QMainWindow):
     def toggleAcquire(self):
         if self.ui.btnAcquire.isChecked():
             try:
-                self.acquireThread.setParam('mode', 'Normal')
+                self.cam.setParam('triggerMode', 'Normal')
                 self.setBinning()
                 self.setExposure()
                 self.updateRegion()
-                self.acquireThread.start()
+                self.cam.start()
             except:
                 self.ui.btnAcquire.setChecked(False)
                 printExc("Error starting camera:")
@@ -643,7 +647,7 @@ class CameraWindow(QtGui.QMainWindow):
         else:
             #print "ACQ untoggled, stop record"
             self.toggleRecord(False)
-            self.acquireThread.stop()
+            self.cam.stop()
             
     #@trace
     def addPlotFrame(self, frame):
@@ -813,7 +817,7 @@ class CameraWindow(QtGui.QMainWindow):
             ## Translate and scale image based on ROI and binning
             m = QtGui.QTransform()
             m.translate(info['region'][0], info['region'][1])
-            m.scale(info['binning'], info['binning'])
+            m.scale(*info['binning'])
             #m.translate(info['imagePosition'][0], info['imagePosition'][1])
             #m.scale(info['pixelSize'][0], info['pixelSize'][1])
             
@@ -833,7 +837,7 @@ class CameraWindow(QtGui.QMainWindow):
                 self.scopeCenter = info['scopePosition']
                 self.updateCameraDecorations()
             
-            newScale = [info['pixelSize'][0] / info['binning'], info['pixelSize'][1] / info['binning']]
+            newScale = [info['pixelSize'][0] / info['binning'][0], info['pixelSize'][1] / info['binning'][1]]
             if newScale != self.cameraScale:
                 self.emit(QtCore.SIGNAL('cameraScaleChanged'))
                 diff = [self.cameraScale[0] / newScale[0], self.cameraScale[1] /newScale[1]]
@@ -874,7 +878,7 @@ class RecordThread(QtCore.QThread):
         QtCore.QThread.__init__(self)
         self.ui = ui
         self.m = manager
-        QtCore.QObject.connect(self.ui.acquireThread, QtCore.SIGNAL('newFrame'), self.newCamFrame)
+        QtCore.QObject.connect(self.ui.cam, QtCore.SIGNAL('newFrame'), self.newCamFrame)
         
         QtCore.QObject.connect(ui.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
         QtCore.QObject.connect(ui.ui.btnSnap, QtCore.SIGNAL('clicked()'), self.snapClicked)
@@ -1000,7 +1004,7 @@ class RecordThread(QtCore.QThread):
                     self.recordStop = True
 
     def stop(self):
-        QtCore.QObject.disconnect(self.ui.acquireThread, QtCore.SIGNAL('newFrame'), self.newCamFrame)
+        QtCore.QObject.disconnect(self.ui.cam, QtCore.SIGNAL('newFrame'), self.newCamFrame)
         #print "RecordThread stop.."    
         with MutexLocker(self.lock):
         #print "  RecordThread stop: locked"

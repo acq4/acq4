@@ -38,9 +38,11 @@ def comboState(w):
     
 def setComboState(w, v):
     if type(v) is int:
-        w.setCurrentIndex(w.findData(QtCore.QVariant(v)))    
-    elif isinstance(v, basestring):
-        w.setCurrentIndex(w.findText(v))
+        ind = w.findData(QtCore.QVariant(v))
+        if ind > -1:
+            w.setCurrentIndex(ind)
+            return
+    w.setCurrentIndex(w.findText(str(v)))
         
 
 class WidgetGroup(QtCore.QObject):
@@ -113,9 +115,9 @@ class WidgetGroup(QtCore.QObject):
         """
         QtCore.QObject.__init__(self)
         self.widgetList = weakref.WeakKeyDictionary() # Make sure widgets don't stick around just because they are listed here
-        self.scales = {}
-        self.cache = {}
-        self.uncachedWidgets = []
+        self.scales = weakref.WeakKeyDictionary()
+        self.cache = {}  ## name:value pairs
+        self.uncachedWidgets = weakref.WeakKeyDictionary()
         if isinstance(widgetList, QtCore.QObject):
             self.autoAdd(widgetList)
         elif isinstance(widgetList, list):
@@ -141,7 +143,7 @@ class WidgetGroup(QtCore.QObject):
         if signal is not None:
             QtCore.QObject.connect(w, QtCore.SIGNAL(signal), self.mkChangeCallback(w))
         else:
-            self.uncachedWidgets.append(w)
+            self.uncachedWidgets[w] = None
        
     def findWidget(self, name):
         for w in self.widgetList:

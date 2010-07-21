@@ -9,7 +9,7 @@ from lib.util.advancedTypes import OrderedDict
 from lib.util.SequenceRunner import *
 from lib.util.WidgetGroup import *
 from lib.util.Mutex import Mutex, MutexLocker
-from lib.util.debug import *
+from debug import *
 import ptime
 import analysisModules
 import time
@@ -91,6 +91,7 @@ class ProtocolRunner(Module):
         QtCore.QObject.connect(self.protocolList, QtCore.SIGNAL('fileRenamed(PyQt_PyObject, PyQt_PyObject)'), self.fileRenamed)
         QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('finished()'), self.taskThreadStopped)
         QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('newFrame'), self.handleFrame)
+        QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('paused'), self.taskThreadPaused)
         QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('taskStarted'), self.taskStarted)
         #QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.deviceItemChanged)
         QtCore.QObject.connect(self.protoStateGroup, QtCore.SIGNAL('changed'), self.protoGroupChanged)
@@ -387,14 +388,14 @@ class ProtocolRunner(Module):
     def clearDocks(self):
         for d in self.docks:
             try:
-                print "request dock %s quit" % d
+                #print "request dock %s quit" % d
                 self.docks[d].widget().quit()
             except:
                 printExc("Error while requesting dock '%s' quit:"% d)
             try:
                 self.win.removeDockWidget(self.docks[d])
                 self.docks[d].close()
-                sip.delete(self.docks[d])
+                #sip.delete(self.docks[d])
             except:
                 printExc("Error while closing dock '%s':" % d)
         self.docks = {}
@@ -435,7 +436,8 @@ class ProtocolRunner(Module):
             'leadTime': 0.01,
             'loop': False,
             'loopCycleTime': 0.3,
-            'cycleTime': 0.3
+            'cycleTime': 0.3,
+            'repetitions': 0
         })
         
         #self.currentProtocol.conf = self.protoStateGroup.state()
@@ -446,6 +448,7 @@ class ProtocolRunner(Module):
         #self.updateProtParams()
         
         ## Clear sequence parameters, disable sequence dock
+        self.updateSeqParams()
         
         self.ui.currentProtocolLabel.setText('[ new ]')
         
@@ -779,6 +782,9 @@ class ProtocolRunner(Module):
         if not self.loopEnabled:
             self.enableStartBtns(True)
     
+    def taskThreadPaused(self):
+        self.emit(QtCore.SIGNAL('protocolPaused'))
+            
     def stopSingle(self):
         self.loopEnabled = False
         self.taskThread.abort()
@@ -807,20 +813,24 @@ class ProtocolRunner(Module):
         ## Request each device handles its own data
         ## Note that this is only used to display results; data storage is handled by Manager and the individual devices.
         #print "got frame", frame
+        prof = Profiler('ProtocolRunner.handleFrame', disabled=True)
         for d in frame['result']:
             try:
                 if d != 'protocol':
                     self.docks[d].widget().handleResult(frame['result'][d], frame['params'])
+                    prof.mark('finished %s' % d)
             except:
                 printExc("Error while handling result from device '%s'" % d)
                 
         self.emit(QtCore.SIGNAL('newFrame'), frame)
+        prof.mark('emit newFrame')
                 
         ## If this is a single-mode protocol and looping is turned on, schedule the next run
         if self.loopEnabled:
             ct = self.protoStateGroup.state()['loopCycleTime']
             t = max(0, ct - (ptime.time() - self.lastProtoTime))
             QtCore.QTimer.singleShot(int(t*1000.), self.loop)
+        prof.finish()
             
     def loop(self):
         """Run one iteration when in loop mode"""
@@ -1021,6 +1031,7 @@ class TaskThread(QtCore.QThread):
                     
     def runOnce(self, params=None):
         #print "TaskThread:runOnce"
+        prof = Profiler("ProtocolRunner.TaskThread.runOnce", disabled=True)
         startTime = ptime.time()
         if params is None:
             params = {}
@@ -1034,10 +1045,11 @@ class TaskThread(QtCore.QThread):
                 for p in params:
                     #print "Selecting %s: %s from sequence array" % (str(p), str(params[p]))
                     cmd = cmd[p: params[p]]
-                    
+            prof.mark('select command')        
             #print "Protocol:", cmd
                     
             ## Wait before starting if we've already run too recently
+            #print "sleep until next run time..", ptime.time(), self.lastRunTime, cmd['protocol']['cycleTime']
             while (self.lastRunTime is not None) and (ptime.time() < self.lastRunTime + cmd['protocol']['cycleTime']):
                 l.relock()
                 if self.abortThread or self.stopThread:
@@ -1046,16 +1058,23 @@ class TaskThread(QtCore.QThread):
                     return
                 l.unlock()
                 time.sleep(1e-3)
-            
+            #print "slept until", ptime.time()
+            prof.mark('sleep')
             
             # If paused, hang here for a bit.
+            emitSig = True
             while True:
                 l.relock()
                 pause = self.paused
                 l.unlock()
                 if not pause:
                     break
+                if emitSig:
+                    emitSig = False
+                    self.emit(QtCore.SIGNAL('paused'))
                 time.sleep(10e-3)
+            
+            prof.mark('pause')
             
             #print "BEFORE:\n", cmd
             if type(cmd) is not dict:
@@ -1066,17 +1085,16 @@ class TaskThread(QtCore.QThread):
                 print "==========================="
                 raise Exception("ProtocolRunner.runOnce failed to generate a proper command structure. Object type was '%s', should have been 'dict'." % type(cmd))
                 
-            #from debug import Profiler
-            #prof = Profiler()
+            
             task = self.dm.createTask(cmd)
-            #prof.mark('create task')
+            prof.mark('create task')
             
             self.lastRunTime = ptime.time()
             self.emit(QtCore.SIGNAL('taskStarted'), params)
             
             try:
                 task.execute(block=False)
-                #prof.mark('execute')
+                prof.mark('execute')
             except:
                 try:
                     task.stop(abort=True)
@@ -1085,13 +1103,14 @@ class TaskThread(QtCore.QThread):
                 printExc("\nError starting protocol:")
                 raise
             
+            prof.mark('start task')
             ### Do not put code outside of these try: blocks; may cause device lockup
             
             try:
                 ## wait for finish, watch for abort requests
                 while True:
                     if task.isDone():
-                        #prof.mark('task done')
+                        prof.mark('task done')
                         break
                     l.relock()
                     if self.abortThread:
@@ -1110,15 +1129,19 @@ class TaskThread(QtCore.QThread):
                 print ""
                 raise
             #print "\nAFTER:\n", cmd
-            #prof.mark('getResult')
+            prof.mark('getResult')
             
         frame = {'params': params, 'cmd': cmd, 'result': result}
         self.emit(QtCore.SIGNAL('newFrame'), frame)
+        prof.mark('emit newFrame')
         if self.stopThread:
             raise Exception('stop', result)
         #print "Total run time: %gms" % ((ptime.time() - startTime) * 1000 )
         
-        
+        ## Give everyone else a chance to catch up
+        QtCore.QThread.yieldCurrentThread()
+        prof.mark('yield')
+        prof.finish()
         
     def checkStop(self):
         with MutexLocker(self.lock):

@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'AOChannelTemplate.ui'
 #
-# Created: Thu Aug 13 00:15:16 2009
-#      by: PyQt4 UI code generator 4.5.2
+# Created: Thu Jul 08 18:13:42 2010
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -38,7 +38,7 @@ class Ui_Form(object):
         self.preSetCheck.setFont(font)
         self.preSetCheck.setObjectName("preSetCheck")
         self.gridLayout.addWidget(self.preSetCheck, 0, 0, 1, 1)
-        self.preSetSpin = QtGui.QDoubleSpinBox(self.groupBox)
+        self.preSetSpin = SpinBox(self.groupBox)
         font = QtGui.QFont()
         font.setWeight(50)
         font.setBold(False)
@@ -54,7 +54,7 @@ class Ui_Form(object):
         self.holdingCheck.setFont(font)
         self.holdingCheck.setObjectName("holdingCheck")
         self.gridLayout.addWidget(self.holdingCheck, 1, 0, 1, 1)
-        self.holdingSpin = QtGui.QDoubleSpinBox(self.groupBox)
+        self.holdingSpin = SpinBox(self.groupBox)
         font = QtGui.QFont()
         font.setWeight(50)
         font.setBold(False)
@@ -117,3 +117,4 @@ class Ui_Form(object):
         self.displayCheck.setText(QtGui.QApplication.translate("Form", "Display", None, QtGui.QApplication.UnicodeUTF8))
 
 from lib.util.generator.StimGenerator import StimGenerator
+from SpinBox import SpinBox

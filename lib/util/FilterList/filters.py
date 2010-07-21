@@ -257,6 +257,32 @@ class Detrend(Filter):
     def processData(self, data):
         return detrend(data)
 
+class AdaptiveDetrend(Filter):
+    def __init__(self, **opts):
+        Filter.__init__(self)
+        self.ui, self.stateGroup, self.ctrls = self.generateUi([
+            ('threshold', 'doubleSpin', {'value': 3.0, 'min': 0, 'max': 1000000})
+        ])
+        self.stateGroup.setState(opts)
+        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        
+    def processData(self, data):
+        return adaptiveDetrend(data, threshold=self.ctrls['threshold'].value())
+
+class SubtractMedian(Filter):
+    def __init__(self, **opts):
+        Filter.__init__(self)
+        self.ui, self.stateGroup, self.ctrls = self.generateUi([
+            ('width', 'spin', {'value': 0.1, 'step': 1, 'minStep': 100e-6, 'dec': True, 'range': [0.0, None], 'suffix': 's', 'siPrefix': True})
+        ])
+        self.stateGroup.setState(opts)
+        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        
+    def processData(self, data):
+        return subtractMedian(data, time=self.ctrls['width'].value())
+
+
+
 class ExpDeconvolve(Filter):
     def __init__(self, **opts):
         Filter.__init__(self)

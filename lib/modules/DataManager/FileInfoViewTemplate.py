@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'FileInfoViewTemplate.ui'
 #
-# Created: Fri May 28 03:13:49 2010
-#      by: PyQt4 UI code generator 4.7.2
+# Created: Sat Jul 17 13:02:20 2010
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -22,10 +22,12 @@ class Ui_Form(object):
         self.scrollArea.setWidgetResizable(True)
         self.scrollArea.setObjectName("scrollArea")
         self.scrollAreaWidgetContents = QtGui.QWidget(self.scrollArea)
-        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 394, 294))
+        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 398, 298))
         self.scrollAreaWidgetContents.setObjectName("scrollAreaWidgetContents")
         self.formLayout_2 = QtGui.QFormLayout(self.scrollAreaWidgetContents)
         self.formLayout_2.setFieldGrowthPolicy(QtGui.QFormLayout.ExpandingFieldsGrow)
+        self.formLayout_2.setMargin(0)
+        self.formLayout_2.setSpacing(0)
         self.formLayout_2.setObjectName("formLayout_2")
         self.scrollArea.setWidget(self.scrollAreaWidgetContents)
         self.verticalLayout.addWidget(self.scrollArea)

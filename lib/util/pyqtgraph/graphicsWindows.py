@@ -17,7 +17,7 @@ class PlotWindow(QtGui.QMainWindow):
         QtGui.QMainWindow.__init__(self)
         self.cw = PlotWidget()
         self.setCentralWidget(self.cw)
-        for m in ['plot', 'autoRange', 'addItem', 'setLabel', 'clear']:
+        for m in ['plot', 'autoRange', 'addItem', 'removeItem', 'setLabel', 'clear']:
             setattr(self, m, getattr(self.cw, m))
         if title is not None:
             self.setWindowTitle(title)
@@ -31,7 +31,7 @@ class ImageWindow(QtGui.QMainWindow):
         QtGui.QMainWindow.__init__(self)
         self.cw = ImageView()
         self.setCentralWidget(self.cw)
-        for m in ['setImage', 'autoRange', 'addItem']:
+        for m in ['setImage', 'autoRange', 'addItem', 'removeItem', 'blackLevel', 'whiteLevel', 'imageItem']:
             setattr(self, m, getattr(self.cw, m))
         if title is not None:
             self.setWindowTitle(title)

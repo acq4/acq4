@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'EventDetectionCtrlTemplate.ui'
 #
-# Created: Wed Jun 30 19:43:29 2010
+# Created: Fri Jul 16 23:20:53 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_EventDetectionCtrlForm(object):
     def setupUi(self, EventDetectionCtrlForm):
         EventDetectionCtrlForm.setObjectName("EventDetectionCtrlForm")
-        EventDetectionCtrlForm.resize(305, 313)
+        EventDetectionCtrlForm.resize(264, 340)
         self.verticalLayout_3 = QtGui.QVBoxLayout(EventDetectionCtrlForm)
         self.verticalLayout_3.setSpacing(0)
         self.verticalLayout_3.setMargin(0)
@@ -78,18 +78,44 @@ class Ui_EventDetectionCtrlForm(object):
         self.gridLayout.setObjectName("gridLayout")
         self.label = QtGui.QLabel(self.page_2)
         self.label.setObjectName("label")
-        self.gridLayout.addWidget(self.label, 0, 0, 1, 1)
-        self.zcSumThresholdSpin = QtGui.QDoubleSpinBox(self.page_2)
-        self.zcSumThresholdSpin.setProperty("value", 8.0)
-        self.zcSumThresholdSpin.setObjectName("zcSumThresholdSpin")
-        self.gridLayout.addWidget(self.zcSumThresholdSpin, 0, 1, 1, 1)
+        self.gridLayout.addWidget(self.label, 1, 0, 1, 1)
         self.label_3 = QtGui.QLabel(self.page_2)
         self.label_3.setObjectName("label_3")
-        self.gridLayout.addWidget(self.label_3, 1, 0, 1, 1)
-        self.zcAmpThresholdSpin = QtGui.QDoubleSpinBox(self.page_2)
-        self.zcAmpThresholdSpin.setProperty("value", 8.0)
-        self.zcAmpThresholdSpin.setObjectName("zcAmpThresholdSpin")
-        self.gridLayout.addWidget(self.zcAmpThresholdSpin, 1, 1, 1, 1)
+        self.gridLayout.addWidget(self.label_3, 2, 0, 1, 1)
+        self.zcSumAbsThresholdSpin = SpinBox(self.page_2)
+        self.zcSumAbsThresholdSpin.setObjectName("zcSumAbsThresholdSpin")
+        self.gridLayout.addWidget(self.zcSumAbsThresholdSpin, 1, 2, 1, 1)
+        self.zcAmpAbsThresholdSpin = SpinBox(self.page_2)
+        self.zcAmpAbsThresholdSpin.setEnabled(True)
+        self.zcAmpAbsThresholdSpin.setObjectName("zcAmpAbsThresholdSpin")
+        self.gridLayout.addWidget(self.zcAmpAbsThresholdSpin, 2, 2, 1, 1)
+        self.label_8 = QtGui.QLabel(self.page_2)
+        self.label_8.setObjectName("label_8")
+        self.gridLayout.addWidget(self.label_8, 0, 2, 1, 1)
+        self.label_9 = QtGui.QLabel(self.page_2)
+        self.label_9.setObjectName("label_9")
+        self.gridLayout.addWidget(self.label_9, 3, 0, 1, 1)
+        self.zcAmpRelThresholdSpin = QtGui.QDoubleSpinBox(self.page_2)
+        self.zcAmpRelThresholdSpin.setEnabled(False)
+        self.zcAmpRelThresholdSpin.setProperty("value", 8.0)
+        self.zcAmpRelThresholdSpin.setObjectName("zcAmpRelThresholdSpin")
+        self.gridLayout.addWidget(self.zcAmpRelThresholdSpin, 2, 3, 1, 1)
+        self.zcSumRelThresholdSpin = QtGui.QDoubleSpinBox(self.page_2)
+        self.zcSumRelThresholdSpin.setProperty("value", 8.0)
+        self.zcSumRelThresholdSpin.setObjectName("zcSumRelThresholdSpin")
+        self.gridLayout.addWidget(self.zcSumRelThresholdSpin, 1, 3, 1, 1)
+        self.label_7 = QtGui.QLabel(self.page_2)
+        self.label_7.setObjectName("label_7")
+        self.gridLayout.addWidget(self.label_7, 0, 3, 1, 1)
+        self.doubleSpinBox_2 = QtGui.QDoubleSpinBox(self.page_2)
+        self.doubleSpinBox_2.setEnabled(False)
+        self.doubleSpinBox_2.setObjectName("doubleSpinBox_2")
+        self.gridLayout.addWidget(self.doubleSpinBox_2, 3, 3, 1, 1)
+        self.zcLenAbsThresholdSpin = QtGui.QSpinBox(self.page_2)
+        self.zcLenAbsThresholdSpin.setMaximum(100000)
+        self.zcLenAbsThresholdSpin.setProperty("value", 3)
+        self.zcLenAbsThresholdSpin.setObjectName("zcLenAbsThresholdSpin")
+        self.gridLayout.addWidget(self.zcLenAbsThresholdSpin, 3, 2, 1, 1)
         self.verticalLayout_4.addLayout(self.gridLayout)
         spacerItem1 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout_4.addItem(spacerItem1)
@@ -130,7 +156,8 @@ class Ui_EventDetectionCtrlForm(object):
         self.verticalLayout_3.addWidget(self.groupBox)
 
         self.retranslateUi(EventDetectionCtrlForm)
-        self.detectMethodStack.setCurrentIndex(0)
+        self.detectMethodCombo.setCurrentIndex(1)
+        self.detectMethodStack.setCurrentIndex(1)
         QtCore.QMetaObject.connectSlotsByName(EventDetectionCtrlForm)
 
     def retranslateUi(self, EventDetectionCtrlForm):
@@ -144,6 +171,9 @@ class Ui_EventDetectionCtrlForm(object):
         self.label_6.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Threshold", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Sum Thresh.", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Amp. Thresh.", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_8.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Abs.", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_9.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Len. Thresh.", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_7.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Rel.", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Threshold", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Rise Tau", None, QtGui.QApplication.UnicodeUTF8))
         self.label_5.setText(QtGui.QApplication.translate("EventDetectionCtrlForm", "Fall Tau", None, QtGui.QApplication.UnicodeUTF8))

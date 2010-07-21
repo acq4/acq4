@@ -122,7 +122,12 @@ class _CameraClass:
             frames = 1
         else:
             self.buf = numpy.empty((frames, rgn.size()[1], rgn.size()[0]), dtype=numpy.uint16)
+            
+        #print "REGION:", rgn.s1, rgn.s2, rgn.p1, rgn.p2
+        #print "FRAMES:", frames
         self.pvcam.pl_exp_setup_seq(self.hCam, c_ushort(frames), c_ushort(1), byref(rgn), TIMED_MODE, c_uint(exp), byref(ssize))
+        #print "SIZE:", ssize.value
+        
         if len(self.buf.data) != ssize.value:
             raise Exception('Created wrong size buffer! %d != %d' %(len(self.buf.data), ssize.value))
         self.pvcam.pl_exp_start_seq(self.hCam, self.buf.ctypes.data)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
@@ -559,7 +564,7 @@ class Region(Structure):
 
 def init():
     ## System-specific code
-    pvcam_header_files = ["C:\Program Files\Photometrics\PVCam32\SDK\inc\master.h", "C:\Program Files\Photometrics\PVCam32\SDK\inc\pvcam.h"]
+    pvcam_header_files = ["C:\Program Files\Photometrics\PVCam\SDK\Headers\master.h", "C:\Program Files\Photometrics\PVCam\SDK\Headers\pvcam.h"]
     #pvcam_header_files = ["master.h", "pvcam.h"]
     defs = cheader.getDefs(pvcam_header_files)
     global PVCam

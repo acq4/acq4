@@ -189,6 +189,8 @@ class FilterList(QtGui.QWidget):
                 try:
                     now = ptime.time()
                     data = filter.processData(data)
+                    #print "----------"
+                    #print data
                     item.setForeground(0, QtGui.QBrush(QtGui.QColor(0,0,0)))
                     item.setText(2, '%0.2fms'% ((ptime.time()-now)*1e3))
                 except:

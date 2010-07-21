@@ -7,7 +7,7 @@ def proxyConnect(source, signal, slot, delay=0.3):
     object that was created. Be sure to store this object so it is not
     garbage-collected immediately."""
     sp = SignalProxy(source, signal, delay)
-    QtCore.QObject.connect(sp, signal, slot)
+    sp.connect(sp, signal, slot)
     return sp
 
 class SignalProxy(QtCore.QObject):
@@ -18,7 +18,7 @@ class SignalProxy(QtCore.QObject):
     
     def __init__(self, source, signal, delay=0.3):
         QtCore.QObject.__init__(self)
-        QtCore.QObject.connect(source, signal, self.signal)
+        source.connect(source, signal, self.signal)
         self.delay = delay
         self.waitUntil = 0
         self.args = None

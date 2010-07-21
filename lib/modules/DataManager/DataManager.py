@@ -6,11 +6,17 @@ from lib.DataManager import *
 import os, re, sys, time, sip
 from lib.util.debug import *
 
+
+class Window(QtGui.QMainWindow):
+    def closeEvent(self, ev):
+        ev.accept()
+        self.emit(QtCore.SIGNAL('closed'))
+
 class DataManager(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.dm = self.manager.dataManager
-        self.win = QtGui.QMainWindow()
+        self.win = Window()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
         w = self.ui.splitter.width()
@@ -40,6 +46,7 @@ class DataManager(Module):
         QtCore.QObject.connect(self.ui.fileTreeWidget, QtCore.SIGNAL('itemSelectionChanged()'), self.fileSelectionChanged)
         QtCore.QObject.connect(self.ui.logEntryText, QtCore.SIGNAL('returnPressed()'), self.logEntry)
         QtCore.QObject.connect(self.ui.fileDisplayTabs, QtCore.SIGNAL('currentChanged(int)'), self.tabChanged)
+        QtCore.QObject.connect(self.win, QtCore.SIGNAL('closed'), self.quit)
         self.win.show()
         
     #def hasInterface(self, interface):
@@ -272,12 +279,11 @@ class DataManager(Module):
             
     def quit(self):
         ## Silly: needed to prevent lockup on some systems.
-        print "      module quitting.."
+        #print "      module quitting.."
         self.ui.fileTreeWidget.quit()
         sip.delete(self.dialog)
-        print "      deleted dialog, calling superclass quit.."
+        #print "      deleted dialog, calling superclass quit.."
         Module.quit(self)
-        print "      module quit done"
+        #print "      module quit done"
         #print backtrace()
         
-

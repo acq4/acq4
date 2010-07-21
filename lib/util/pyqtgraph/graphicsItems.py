@@ -21,6 +21,7 @@ import scipy.stats
 from Point import *
 from functions import *
 import types, sys, struct
+import weakref
 #from debug import *
 
 
@@ -79,8 +80,8 @@ class GraphicsObject(QGraphicsObject):
             views = scene.views()
             if len(views) < 1:
                 return None
-            self._view = self.scene().views()[0]
-        return self._view
+            self._view = weakref.ref(self.scene().views()[0])
+        return self._view()
     
     def getBoundingParents(self):
         """Return a list of parents to this item that have child clipping enabled."""
@@ -168,10 +169,12 @@ class GraphicsObject(QGraphicsObject):
         
 
 class ImageItem(QtGui.QGraphicsPixmapItem):
+    useWeave = True
+    
     def __init__(self, image=None, copy=True, parent=None, *args):
         self.qimage = QtGui.QImage()
         self.pixmap = None
-        self.useWeave = True
+        #self.useWeave = True
         self.blackLevel = None
         self.whiteLevel = None
         self.alpha = 1.0
@@ -253,7 +256,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
         shape = self.image.shape
         black = float(self.blackLevel)
         try:
-            if not self.useWeave:
+            if not ImageItem.useWeave:
                 raise Exception('Skipping weave compile')
             sim = ascontiguousarray(self.image)
             sim.shape = sim.size
@@ -275,8 +278,8 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
             sim.shape = shape
             im.shape = shape
         except:
-            if self.useWeave:
-                self.useWeave = False
+            if ImageItem.useWeave:
+                ImageItem.useWeave = False
                 #sys.excepthook(*sys.exc_info())
                 #print "=============================================================================="
                 print "Weave compile failed, falling back to slower version."
@@ -336,13 +339,16 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
 
 class PlotCurveItem(GraphicsObject):
     """Class representing a single plot curve."""
-    def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None):
+    def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None, color=None):
         GraphicsObject.__init__(self, parent)
         self.free()
         #self.dispPath = None
         
         if pen is None:
-            pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
+            if color is None:
+                pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
+            else:
+                pen = QtGui.QPen(color)
         self.pen = pen
         
         self.shadow = shadow
@@ -350,7 +356,7 @@ class PlotCurveItem(GraphicsObject):
             self.updateData(y, x, copy)
         #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
-        self.metaDict = {}
+        self.metaData = {}
         self.opts = {
             'spectrumMode': False,
             'logMode': [False, False],
@@ -639,7 +645,7 @@ class ROIPlotItem(PlotCurveItem):
         self.axes = axes
         self.xVals = xVals
         PlotCurveItem.__init__(self, self.getRoiData(), x=self.xVals, color=color)
-        roi.connect(roi, QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
+        roi.connect(QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
         #self.roiChangedEvent()
         
     def getRoiData(self):
@@ -661,32 +667,32 @@ class UIGraphicsItem(GraphicsObject):
     """Base class for graphics items with boundaries relative to a GraphicsView widget"""
     def __init__(self, view, bounds=None):
         GraphicsObject.__init__(self)
-        self._view = view
+        self._view = weakref.ref(view)
         if bounds is None:
             self._bounds = QtCore.QRectF(0, 0, 1, 1)
         else:
             self._bounds = bounds
-        self._viewRect = self._view.rect()
+        self._viewRect = self._view().rect()
         self._viewTransform = self.viewTransform()
         self.setNewBounds()
         QtCore.QObject.connect(view, QtCore.SIGNAL('viewChanged'), self.viewChangedEvent)
         
     def viewRect(self):
         """Return the viewport widget rect"""
-        return self._view.rect()
+        return self._view().rect()
     
     def viewTransform(self):
         """Returns a matrix that maps viewport coordinates onto scene coordinates"""
-        if self._view is None:
+        if self._view() is None:
             return QtGui.QTransform()
         else:
-            return self._view.viewportTransform()
+            return self._view().viewportTransform()
         
     def boundingRect(self):
-        if self._view is None:
+        if self._view() is None:
             self.bounds = self._bounds
         else:
-            vr = self._view.rect()
+            vr = self._view().rect()
             tr = self.viewTransform()
             if vr != self._viewRect or tr != self._viewTransform:
                 #self.viewChangedEvent(vr, self._viewRect)
@@ -1376,8 +1382,13 @@ class ViewBox(QtGui.QGraphicsWidget):
             
     def setYRange(self, min, max, update=True, padding=0.02):
         #print "setYRange:", min, max
-        if min == max:
-            raise Exception("Tried to set range with 0 width.")
+        if min == max:   ## If we requested no range, try to preserve previous scale. Otherwise just pick an arbitrary scale.
+            dy = self.range[1][1] - self.range[1][0]
+            if dy == 0:
+                dy = 1
+            min -= dy*0.5
+            max += dy*0.5
+            #raise Exception("Tried to set range with 0 width.")
         if any(isnan([min, max])) or any(isinf([min, max])):
             raise Exception("Not setting range [%s, %s]" % (str(min), str(max)))
             
@@ -1397,7 +1408,12 @@ class ViewBox(QtGui.QGraphicsWidget):
     def setXRange(self, min, max, update=True, padding=0.02):
         #print "setXRange:", min, max
         if min == max:
-            print "Warning: Tried to set range with 0 width."
+            dx = self.range[0][1] - self.range[0][0]
+            if dx == 0:
+                dx = 1
+            min -= dx*0.5
+            max += dx*0.5
+            #print "Warning: Tried to set range with 0 width."
             #raise Exception("Tried to set range with 0 width.")
         if any(isnan([min, max])) or any(isinf([min, max])):
             raise Exception("Not setting range [%s, %s]" % (str(min), str(max)))
@@ -1434,14 +1450,20 @@ class ViewBox(QtGui.QGraphicsWidget):
 
 
 class InfiniteLine(GraphicsObject):
-    def __init__(self, view, pos, angle=90, pen=None, movable=False):
+    def __init__(self, view, pos=0, angle=90, pen=None, movable=False, bounds=None):
         GraphicsObject.__init__(self)
-        self.bounds = QtCore.QRectF()
+        self.bounds = QtCore.QRectF()   ## graphicsitem boundary
+        
+        if bounds is None:              ## allowed value boundaries for orthogonal lines
+            self.maxRange = [None, None]
+        else:
+            self.maxRange = bounds
         self.movable = movable
-        self.view = view
+        self.view = weakref.ref(view)
         self.p = [0, 0]
         self.setAngle(angle)
         self.setPos(pos)
+            
         if movable:
             self.setAcceptHoverEvents(True)
             
@@ -1454,7 +1476,11 @@ class InfiniteLine(GraphicsObject):
         #self.setFlag(self.ItemSendsScenePositionChanges)
         #for p in self.getBoundingParents():
             #QtCore.QObject.connect(p, QtCore.SIGNAL('viewChanged'), self.updateLine)
-        QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.updateLine)
+        QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.updateLine)
+        
+    def setBounds(self, bounds):
+        self.maxRange = bounds
+        self.setValue(self.value())
         
     def hoverEnterEvent(self, ev):
         self.currentPen = QtGui.QPen(QtGui.QColor(255, 0,0))
@@ -1476,18 +1502,34 @@ class InfiniteLine(GraphicsObject):
         
     def setPos(self, pos):
         if type(pos) in [list, tuple]:
-            self.p = pos
+            newPos = pos
         elif isinstance(pos, QtCore.QPointF):
-            self.p = [pos.x(), pos.y()]
+            newPos = [pos.x(), pos.y()]
         else:
             if self.angle == 90:
-                self.p = [pos, 0]
+                newPos = [pos, 0]
             elif self.angle == 0:
-                self.p = [0, pos]
+                newPos = [0, pos]
             else:
                 raise Exception("Must specify 2D coordinate for non-orthogonal lines.")
-        self.updateLine()
-        self.emit(QtCore.SIGNAL('positionChanged'), self)
+            
+        ## check bounds (only works for orthogonal lines)
+        if self.angle == 90:
+            if self.maxRange[0] is not None:    
+                newPos[0] = max(newPos[0], self.maxRange[0])
+            if self.maxRange[1] is not None:
+                newPos[0] = min(newPos[0], self.maxRange[1])
+        elif self.angle == 0:
+            if self.maxRange[0] is not None:
+                newPos[1] = max(newPos[1], self.maxRange[0])
+            if self.maxRange[1] is not None:
+                newPos[1] = min(newPos[1], self.maxRange[1])
+            
+            
+        if self.p != newPos:
+            self.p = newPos
+            self.updateLine()
+            self.emit(QtCore.SIGNAL('positionChanged'), self)
 
     def getXPos(self):
         return self.p[0]
@@ -1529,7 +1571,7 @@ class InfiniteLine(GraphicsObject):
             #unit = self.mapRectFromScene(unit)
             ##print unit
         
-        vr = self.view.viewRect()
+        vr = self.view().viewRect()
         #vr = self.viewBounds()
         if vr is None:
             return
@@ -1555,13 +1597,13 @@ class InfiniteLine(GraphicsObject):
         if self.angle % 180 == 90:
             px = self.pixelWidth()
             #self.bounds.setWidth(1e-9)
-            self.bounds.setX(x1 + px*-3)
-            self.bounds.setWidth(px*6)
+            self.bounds.setX(x1 + px*-5)
+            self.bounds.setWidth(px*10)
         if self.angle % 180 == 0:
             px = self.pixelHeight()
             #self.bounds.setHeight(1e-9)
-            self.bounds.setY(y1 + px*-3)
-            self.bounds.setHeight(px*6)
+            self.bounds.setY(y1 + px*-5)
+            self.bounds.setHeight(px*10)
 
         #QtGui.QGraphicsLineItem.setLine(self, x1, y1, x2, y2)
         #self.update()
@@ -1573,10 +1615,21 @@ class InfiniteLine(GraphicsObject):
         return self.bounds
     
     def paint(self, p, *args):
+        w,h  = self.pixelWidth()*5, self.pixelHeight()*5*1.1547
         #self.updateLine()
+        l = self.line
+        
         p.setPen(self.currentPen)
         #print "paint", self.line
-        p.drawLine(self.line[0], self.line[1])
+        p.drawLine(l[0], l[1])
+        
+        p.setBrush(QtGui.QBrush(self.currentPen.color()))
+        p.drawConvexPolygon(QtGui.QPolygonF([
+            l[0] + QtCore.QPointF(-w, 0),
+            l[0] + QtCore.QPointF(0, h),
+            l[0] + QtCore.QPointF(w, 0),
+        ]))
+        
         #p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
         #p.drawRect(self.boundingRect())
         
@@ -1595,7 +1648,7 @@ class InfiniteLine(GraphicsObject):
 
 class LinearRegionItem(GraphicsObject):
     """Used for marking a horizontal or vertical region in plots."""
-    def __init__(self, view, orientation="horizontal", vals=[0,1], brush=None, movable=True):
+    def __init__(self, view, orientation="horizontal", vals=[0,1], brush=None, movable=True, bounds=None):
         GraphicsObject.__init__(self)
         self.orientation = orientation
         if hasattr(self, "ItemHasNoContents"):  
@@ -1603,29 +1656,33 @@ class LinearRegionItem(GraphicsObject):
         self.rect = QtGui.QGraphicsRectItem(self)
         self.rect.setParentItem(self)
         self.bounds = QtCore.QRectF()
-        self.view = view
+        self.view = weakref.ref(view)
         
         self.setBrush = self.rect.setBrush
         self.brush = self.rect.brush
         
         if orientation[0] == 'h':
             self.lines = [
-                InfiniteLine(view, QtCore.QPointF(0, vals[0]), 0, movable=movable), 
-                InfiniteLine(view, QtCore.QPointF(0, vals[1]), 0, movable=movable)]
+                InfiniteLine(view, QtCore.QPointF(0, vals[0]), 0, movable=movable, bounds=bounds), 
+                InfiniteLine(view, QtCore.QPointF(0, vals[1]), 0, movable=movable, bounds=bounds)]
         else:
             self.lines = [
-                InfiniteLine(view, QtCore.QPointF(vals[0], 0), 90, movable=movable), 
-                InfiniteLine(view, QtCore.QPointF(vals[1], 0), 90, movable=movable)]
-        QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.updateBounds)
+                InfiniteLine(view, QtCore.QPointF(vals[0], 0), 90, movable=movable, bounds=bounds), 
+                InfiniteLine(view, QtCore.QPointF(vals[1], 0), 90, movable=movable, bounds=bounds)]
+        QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.updateBounds)
         
         for l in self.lines:
             l.setParentItem(self)
-            QtCore.QObject.connect(l, QtCore.SIGNAL('positionChanged'), self.lineMoved)
+            l.connect(QtCore.SIGNAL('positionChanged'), self.lineMoved)
             
         if brush is None:
             brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 50))
         self.setBrush(brush)
             
+    def setBounds(self, bounds):
+        for l in self.lines:
+            l.setBounds(bounds)
+        
         
     def boundingRect(self):
         return self.rect.boundingRect()
@@ -1635,7 +1692,7 @@ class LinearRegionItem(GraphicsObject):
         self.emit(QtCore.SIGNAL('regionChanged'), self)
             
     def updateBounds(self):
-        vb = self.view.viewRect()
+        vb = self.view().viewRect()
         vals = [self.lines[0].value(), self.lines[1].value()]
         if self.orientation[0] == 'h':
             vb.setTop(max(vals))
@@ -1687,7 +1744,10 @@ class VTickGroup(QtGui.QGraphicsPathItem):
             pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
         self.ticks = []
         self.xvals = []
-        self.view = view
+        if view is None:
+            self.view = None
+        else:
+            self.view = weakref.ref(view)
         self.yrange = [0,1]
         self.setPen(pen)
         self.setYRange(yrange, relative)
@@ -1714,11 +1774,11 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         if self.view is not None:
             if relative:
                 #QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.rebuildTicks)
-                QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.rescale)
+                QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.rescale)
             else:
                 try:
                     #QtCore.QObject.disconnect(self.view, QtCore.SIGNAL('viewChanged'), self.rebuildTicks)
-                    QtCore.QObject.disconnect(self.view, QtCore.SIGNAL('viewChanged'), self.rescale)
+                    QtCore.QObject.disconnect(self.view(), QtCore.SIGNAL('viewChanged'), self.rescale)
                 except:
                     pass
         self.rebuildTicks()
@@ -1731,7 +1791,7 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         #p1 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[0]))))
         #p2 = self.mapFromScene(self.view.mapToScene(QtCore.QPoint(0, height * (1.0-self.yrange[1]))))
         #yr = [p1.y(), p2.y()]
-        vb = self.view.viewRect()
+        vb = self.view().viewRect()
         p1 = vb.bottom() - vb.height() * self.yrange[0]
         p2 = vb.bottom() - vb.height() * self.yrange[1]
         yr = [p1, p2]

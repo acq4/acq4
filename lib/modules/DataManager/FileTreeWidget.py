@@ -23,7 +23,10 @@ class FileTreeWidget(QtGui.QTreeWidget):
         #self.setDropIndicatorShown(False)
         
     def __del__(self):
-        self.quit()
+        try:
+            self.quit()
+        except:
+            pass
         
     def quit(self):
         ## not sure if any of this is necessary..

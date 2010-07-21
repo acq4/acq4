@@ -5,6 +5,7 @@ from lib.devices.DAQGeneric.protoGUI import DAQGenericProtoGui
 from lib.devices.Device import ProtocolGui
 from lib.util.WidgetGroup import *
 from numpy import ndarray
+from pyqtgraph.graphicsItems import InfiniteLine
 #from PyQt4 import Qwt5 as Qwt
 
 class CameraProtoGui(DAQGenericProtoGui):
@@ -21,6 +22,12 @@ class CameraProtoGui(DAQGenericProtoGui):
         self.ui.plotSplitter.setStretchFactor(0, 10)
         self.ui.plotSplitter.setStretchFactor(1, 1)
         self.ui.plotSplitter.setStretchFactor(2, 1)
+        
+        ## plots should not be storing more than one trace at a time.
+        for p in self.plots.values():
+            p.plotItem.ctrl.maxTracesCheck.setChecked(True)
+            p.plotItem.ctrl.maxTracesSpin.setValue(1)
+            p.plotItem.ctrl.forgetTracesCheck.setChecked(True)
         
         #self.stateGroup = WidgetGroup([
             #(self.ui.recordCheck, 'record'),
@@ -40,21 +47,19 @@ class CameraProtoGui(DAQGenericProtoGui):
             
         #self.exposeCurve = None
             
-        tModes = self.dev.listTriggerModes().keys()
-        tModes.remove('Normal')
-        tModes = ['Normal'] + tModes
+        tModes = self.dev.listParams('triggerMode')[0]
+        #tModes.remove('Normal')
+        #tModes = ['Normal'] + tModes
         for m in tModes:
             item = self.ui.triggerModeCombo.addItem(m)
         
         self.vLines = []
-        #for i in range(2):
-            #l = Qwt.QwtPlotMarker()
-            #self.vLines.append(l)
-            #l.setLineStyle(Qwt.QwtPlotMarker.VLine)
-            #l.setLinePen(QtGui.QPen(QtGui.QColor(255, 255, 0)))
-            #l.setXValue(0.0)
-        #self.vLines[0].attach(self.ui.exposePlot)
-        #self.vLines[1].attach(self.ui.triggerPlot)
+        l = InfiniteLine(self.plots['trigger'])
+        self.vLines.append(l)
+        l = InfiniteLine(self.plots['exposure'])
+        self.vLines.append(l)
+        self.plots['trigger'].addItem(self.vLines[0])
+        self.plots['exposure'].addItem(self.vLines[1])
         
         #self.ui.exposePlot.registerPlot(self.dev.name + '.Expose')
         #self.ui.triggerPlot.registerPlot(self.dev.name + '.Trigger')
@@ -62,13 +67,11 @@ class CameraProtoGui(DAQGenericProtoGui):
         
         #QtCore.QObject.connect(self.ui.recordExposeCheck, QtCore.SIGNAL('clicked()'), self.recordExposeClicked)
         QtCore.QObject.connect(self.ui.imageView, QtCore.SIGNAL('timeChanged'), self.timeChanged)
+        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolPaused'), self.protocolPaused)
             
     def timeChanged(self, i, t):
-        #for l in self.vLines:
-            #l.setXValue(t)
-        #self.ui.exposePlot.replot()
-        #self.ui.triggerPlot.replot()
-        pass
+        for l in self.vLines:
+            l.setValue(t)
         
 
     def saveState(self):
@@ -94,7 +97,25 @@ class CameraProtoGui(DAQGenericProtoGui):
             'triggerMode': state['triggerModeCombo']
         }
         prot['channels'] = daqProt
+        if state['releaseBetweenRadio']:
+            prot['pushState'] = None
+            prot['popState'] = None
         return prot
+        
+    def protocolStarted(self):
+        DAQGenericProtoGui.protocolStarted(self)
+        if self.ui.releaseAfterRadio.isChecked():
+            self.dev.pushState('cam_proto_state')
+        
+    def protocolFinished(self):
+        DAQGenericProtoGui.protocolFinished(self)
+        if self.ui.releaseAfterRadio.isChecked():
+            self.dev.popState('cam_proto_state')
+
+    def protocolPaused(self):  ## If the protocol is paused, return the camera to its previous state until we start again
+        if self.ui.releaseAfterRadio.isChecked():
+            self.dev.popState('cam_proto_state')
+            self.dev.pushState('cam_proto_state')
         
         
     def currentState(self):

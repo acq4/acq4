@@ -18,10 +18,19 @@ class PlotWidget(GraphicsView):
         self.plotItem = PlotItem(**kargs)
         self.setCentralItem(self.plotItem)
         ## Explicitly wrap methods from plotItem
-        for m in ['addItem', 'autoRange', 'clear']:
+        for m in ['addItem', 'removeItem', 'autoRange', 'clear', 'setXRange', 'setYRange']:
             setattr(self, m, getattr(self.plotItem, m))
         QtCore.QObject.connect(self.plotItem, QtCore.SIGNAL('viewChanged'), self.viewChanged)
                 
+    #def __dtor__(self):
+        ##print "Called plotWidget sip destructor"
+        #self.quit()
+        
+        
+    def quit(self):
+        self.plotItem.clear()
+        self.scene().clear()
+        
     def __getattr__(self, attr):  ## implicitly wrap methods from plotItem
         if hasattr(self.plotItem, attr):
             m = getattr(self.plotItem, attr)
