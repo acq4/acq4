@@ -574,6 +574,7 @@ class CameraTask(DAQGenericTask):
             
         ## generate MetaArray of images collected during recording
         #data = self.recordHandle.data()
+        times = None
         with MutexLocker(self.lock):
             data = self.frames
             if len(data) > 0:
@@ -627,10 +628,17 @@ class CameraTask(DAQGenericTask):
                 #print "Original times:", vals
                 vals[:len(onTimes)] = onTimes[:len(vals)]
                 lastTime = onTimes[-1]
-                for i in range(len(onTimes), len(vals)):
-                    lastTime += txLen+expLen
-                    #print "Guessing time for frame %d: %f" % (i, lastTime)
-                    vals[i] = lastTime 
+                if len(onTimes) > 1:
+                    framePeriod = (onTimes[-1] - onTimes[0]) / (len(onTimes) - 1)
+                elif times is not None:
+                    framePeriod = (times[-1] - times[0]) / (len(times) - 1)
+                else:
+                    framePeriod = None
+                    
+                if framePeriod is not None:
+                    for i in range(len(onTimes), len(vals)):
+                        lastTime += framePeriod
+                        vals[i] = lastTime 
             
         ## Generate final result, incorporating data from DAQ
         return {'frames': marr, 'channels': daqResult}
