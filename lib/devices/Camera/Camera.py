@@ -607,7 +607,7 @@ class CameraTask(DAQGenericTask):
             
             ## If camera triggered DAQ, then it is likely we missed the first 0->1 transition
             if self.camCmd.get('triggerProtocol', False) and ex[0] > 0.5:
-                onTimes = array([timeVals[0]] + list(onTimes)))
+                onTimes = array([timeVals[0]] + list(onTimes))
             
             #print "onTimes:", onTimes
             inds = argwhere(exd < 0.5)[:, 0] + 1
