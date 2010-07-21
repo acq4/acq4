@@ -1054,12 +1054,6 @@ def findEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshold=None):
         events[i][3] = peak
     #p.mark('generate event array')
     
-    if minPeak > 0:
-        events = events[abs(events['peak']) > minPeak]
-    
-    if minSum > 0:
-        events = events[abs(events['sum']) > minSum]
-    
     if noiseThreshold  > 0:
         ## Fit gaussian to peak in size histogram, use fit sigma as criteria for noise rejection
         stdev = measureNoise(data1)
@@ -1079,7 +1073,14 @@ def findEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshold=None):
         #p.mark('mask')
         events = events[mask]
         #p.mark('select')
+
+    if minPeak > 0:
+        events = events[abs(events['peak']) > minPeak]
     
+    if minSum > 0:
+        events = events[abs(events['sum']) > minSum]
+    
+        
     return events
     
     

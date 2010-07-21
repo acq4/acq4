@@ -461,10 +461,15 @@ class UncagingWindow(QtGui.QMainWindow):
     def clearScan(self):
         for item in self.scanItems:
             self.canvas.removeItem(item)
+        for item in self.scanAvgItems:
+            self.canvas.removeItem(item)
         self.scanItems = []
+        self.scanAvgItems = []
         self.currentTraces = []
         self.eventTimes = []
-        self.resetAnalysisCache()
+        self.analysisCache = empty(len(self.scanItems),
+            {'names': ('eventsValid', 'eventList', 'preEvents', 'dirEvents', 'postEvents', 'stdev', 'preChargePos', 'preChargeNeg', 'dirCharge', 'postChargePos', 'postChargeNeg'),
+             'formats':(object, object, object, object, object, float, float, float, float, float, float)})
         
     def resetAnalysisCache(self):
         self.analysisCache['eventsValid'] = False
