@@ -599,12 +599,18 @@ class CameraTask(DAQGenericTask):
             ## Extract times from trace
             ex = expose.view(ndarray)
             exd = ex[1:] - ex[:-1]
+
             
             timeVals = expose.xvals('Time')
-            inds = argwhere(exd > 0)[:, 0] + 1
+            inds = argwhere(exd > 0.5)[:, 0] + 1
             onTimes = timeVals[inds]
+            
+            ## If camera triggered DAQ, then it is likely we missed the first 0->1 transition
+            if self.camCmd.get('triggerProtocol', False) and ex[0] > 0.5:
+                onTimes = array([timeVals[0]] + list(onTimes)))
+            
             #print "onTimes:", onTimes
-            inds = argwhere(exd < 0)[:, 0] + 1
+            inds = argwhere(exd < 0.5)[:, 0] + 1
             offTimes = timeVals[inds]
             
             ## Determine average frame transfer time
