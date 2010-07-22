@@ -281,7 +281,7 @@ class DataManager(Module):
         ## Silly: needed to prevent lockup on some systems.
         #print "      module quitting.."
         self.ui.fileTreeWidget.quit()
-        sip.delete(self.dialog)
+        #sip.delete(self.dialog)
         #print "      deleted dialog, calling superclass quit.."
         Module.quit(self)
         #print "      module quit done"

@@ -395,7 +395,7 @@ class CameraTask(DAQGenericTask):
             self.dev.pushState(stateName)
         #time.sleep(0.5)
         
-        nonCameraParams = ['channels', 'record', 'triggerProtocol', 'pushState', 'popState']
+        nonCameraParams = ['channels', 'record', 'triggerProtocol', 'pushState', 'popState', 'minFrames']
         for k in self.camCmd:
             if k not in nonCameraParams:
                 params[k] = self.camCmd[k]
@@ -419,7 +419,7 @@ class CameraTask(DAQGenericTask):
             #self.dev.stopAcquire(block=True)  
 
         ## If we are sending a one-time trigger to start the camera, then it must be restarted to arm the trigger        
-        if self.camCmd['triggerMode'] == 'TriggerStart':
+        if params['triggerMode'] == 'TriggerStart':
             restart = True
             
         #print params
@@ -430,7 +430,7 @@ class CameraTask(DAQGenericTask):
         ## If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
         ##   (daq must be started first so that it is armed to received the camera trigger)
         name = self.dev.devName()
-        if self.camCmd['triggerProtocol']:
+        if self.camCmd.get('triggerProtocol', False):
             restart = True
             daqName = self.dev.camConfig['triggerOutChannel'][0]
             startOrder.remove(name)

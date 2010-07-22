@@ -61,6 +61,9 @@ class CameraProtoGui(DAQGenericProtoGui):
         self.plots['trigger'].addItem(self.vLines[0])
         self.plots['exposure'].addItem(self.vLines[1])
         
+        #self.roiRect = QtGui.QGraphicsRectItem()
+        #self.cameraModule = None
+        
         #self.ui.exposePlot.registerPlot(self.dev.name + '.Expose')
         #self.ui.triggerPlot.registerPlot(self.dev.name + '.Trigger')
         #self.ui.imageView.ui.roiPlot.registerPlot(self.dev.name + '.ROI')
@@ -68,6 +71,15 @@ class CameraProtoGui(DAQGenericProtoGui):
         #QtCore.QObject.connect(self.ui.recordExposeCheck, QtCore.SIGNAL('clicked()'), self.recordExposeClicked)
         QtCore.QObject.connect(self.ui.imageView, QtCore.SIGNAL('timeChanged'), self.timeChanged)
         QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolPaused'), self.protocolPaused)
+        #QtCore.QObject.connect(self.ui.imageView.ui.roiBtn, QtCore.SIGNAL('clicked'), self.connectROI)
+        
+        
+    #def connectROI(self):
+        #"""Display (or hide) the ImageView's ROI in the camera's module, if there is one"""
+        
+    #def updateROI(self):
+        
+        
             
     def timeChanged(self, i, t):
         for l in self.vLines:

@@ -293,9 +293,10 @@ Valid options are:
             modDir = os.path.join('lib', 'modules', module)
             files = glob.glob(os.path.join(modDir, '*.py'))
             files = [os.path.basename(f[:-3]) for f in files]
-            if '__init__' in files:  ## Move __init__ to the very end
-                files.remove('__init__')
-                files.append('__init__')
+            for f in [module, '__init__']:
+                if f in files:  ## try to rearrange so we load in correct order
+                    files.remove('__init__')
+                    files.append('__init__')
             modName = 'lib.modules.' + module
             modNames = [modName + '.' + m for m in files] + [modName]
             print "RELOAD", modNames
@@ -655,7 +656,8 @@ class Task:
         
     def stop(self, abort=False):
         """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run."""
-        prof = Profiler("Manager.Task.stop", disabled=True)
+        prof = Profiler("Manager.Task.stop", disabled=True
+)
         try:
             if not self.stopped:
                 #print "stopping tasks.."
