@@ -20,6 +20,7 @@ class PatchWindow(QtGui.QMainWindow):
         QtGui.QMainWindow.__init__(self)
         self.setWindowTitle(clampName)
         self.startTime = None
+        self.redrawCommand = 1
         
         self.analysisItems = {
             'inputResistance': u'Ω', 
@@ -45,7 +46,8 @@ class PatchWindow(QtGui.QMainWindow):
             'icHoldingEnabled': False,
             'icPulseEnabled': True,
             'vcHoldingEnabled': False,
-            'vcPulseEnabled': True
+            'vcPulseEnabled': True,
+            'drawFit': True,
         }
         
         
@@ -102,6 +104,7 @@ class PatchWindow(QtGui.QMainWindow):
             (self.ui.cycleTimeSpin, 'cycleTime'),
             (self.ui.pulseTimeSpin, 'pulseTime'),
             (self.ui.delayTimeSpin, 'delayTime'),
+            (self.ui.drawFitCheck, 'drawFit'),
         ])
         #self.stateGroup = WidgetGroup([
         #    (self.ui.icPulseSpin, 'icPulse', 1e12),
@@ -212,13 +215,24 @@ class PatchWindow(QtGui.QMainWindow):
                     self.params[p] = state[p]
             self.params['recordTime'] = self.params['delayTime'] *2.0 + self.params['pulseTime']
         self.thread.updateParams()
+        self.redrawCommand = 2   ## may need to redraw twice to make sure the update has gone through
         
     def recordClicked(self):
         if self.ui.recordBtn.isChecked():
             data = self.makeAnalysisArray()
-            sd = self.storageDir()
-            self.storageFile = sd.writeFile(data, self.clampName, autoIncrement=True, appendAxis='Time', newFile=True)
+            if data.shape[0] == 0:  ## no data yet; don't start the file
+                self.storageFile = None
+                return
+            self.newFile(data)
+        else:
+            self.storageFile = None
             
+    def newFile(self, data):
+        sd = self.storageDir()
+        self.storageFile = sd.writeFile(data, self.clampName, autoIncrement=True, appendAxis='Time', newFile=True)
+        if self.startTime is not None:
+            self.storageFile.setInfo({'startTime': self.startTime})
+                
     def storageDir(self):
         return self.manager.getCurrentDir().getDir('Patch', create=True)
                 
@@ -228,6 +242,8 @@ class PatchWindow(QtGui.QMainWindow):
             
         
     def resetClicked(self):
+        self.ui.recordBtn.setChecked(False)
+        self.recordClicked()
         for n in self.analysisData:
             self.analysisData[n] = []
         self.startTime = None
@@ -249,10 +265,16 @@ class PatchWindow(QtGui.QMainWindow):
             #scale1 = 1e3
             #scale2 = 1e12
         self.patchCurve.setData(data.xvals('Time'), data['primary'])
-        self.commandCurve.setData(data.xvals('Time'), data['secondary'])
+        if self.redrawCommand > 0:
+            self.redrawCommand -= 1
+            self.commandCurve.setData(data.xvals('Time'), data['Command'])
         #self.ui.patchPlot.replot()
         #self.ui.commandPlot.replot()
-        self.patchFitCurve.setData(data.xvals('Time'), frame['analysis']['fitTrace'])
+        if frame['analysis']['fitTrace'] is not None:
+            self.patchFitCurve.show()
+            self.patchFitCurve.setData(data.xvals('Time'), frame['analysis']['fitTrace'])
+        else:
+            self.patchFitCurve.hide()
         
         for k in self.analysisItems:
             if k in frame['analysis']:
@@ -270,6 +292,8 @@ class PatchWindow(QtGui.QMainWindow):
         
         if self.startTime is None:
             self.startTime = data._info[-1]['startTime']
+            if self.ui.recordBtn.isChecked() and self.storageFile is not None:
+                self.storageFile.setInfo({'startTime': self.startTime})
         self.analysisData['time'].append(data._info[-1]['startTime'] - self.startTime)
         self.updateAnalysisPlots()
         
@@ -278,7 +302,10 @@ class PatchWindow(QtGui.QMainWindow):
             
             arr = self.makeAnalysisArray(lastOnly=True)
             #print "appending array", arr.shape
-            arr.write(self.storageFile.name(), appendAxis='Time')
+            if self.storageFile is None:
+                self.newFile(arr)
+            else:
+                arr.write(self.storageFile.name(), appendAxis='Time')
         
     def makeAnalysisArray(self, lastOnly=False):
         ## Determine how much of the data to include in this array
@@ -512,36 +539,29 @@ class PatchThread(QtCore.QThread):
             lambda v, t, y: y - expFn(v, t), pred1, 
             args=(tVals1, pulse['primary'] - baseMean),
             maxfev=200, full_output=1, warning=False)
-        fit2 = scipy.optimize.leastsq(
-            lambda v, t, y: y - expFn(v, t), pred2, 
-            args=(tVals2, end['primary'] - baseMean),
-            maxfev=200, full_output=1, warning=False)
+        #fit2 = scipy.optimize.leastsq(
+            #lambda v, t, y: y - expFn(v, t), pred2, 
+            #args=(tVals2, end['primary'] - baseMean),
+            #maxfev=200, full_output=1, warning=False)
             
         
-        err = max(abs(fit1[2]['fvec']).sum(), abs(fit2[2]['fvec']).sum())
-        #err = max(fit1[2]['nfev'], fit2[2]['nfev'])
-        
-        #times = pulse.xvals('Time')-pulse.xvals('Time').min()
-        #err = fromfunction(lambda t: pulse['primary'][t] - expFn(fit1[0], times[t]), pulse['primary'].shape)
-        #err *= err
-        #err = err.sum()
+        #err = max(abs(fit1[2]['fvec']).sum(), abs(fit2[2]['fvec']).sum())
+        err = abs(fit1[2]['fvec']).sum()
         
         
         # Average fit1 with fit2 (needs massaging since fits have different starting points)
         #print fit1
         fit1 = fit1[0]
-        fit2 = fit2[0]
-        fitAvg = [
-            0.5 * (fit1[0] - (fit2[0] - (fit1[0] - fit1[1]))),
-            0.5 * (fit1[1] - fit2[1]),
-            0.5 * (fit1[2] + fit2[2])            
-        ]
+        #fit2 = fit2[0]
+        #fitAvg = [   ## Let's just not do this.
+            #0.5 * (fit1[0] - (fit2[0] - (fit1[0] - fit1[1]))),
+            #0.5 * (fit1[1] - fit2[1]),
+            #0.5 * (fit1[2] + fit2[2])            
+        #]
         fitAvg = fit1
 
         (fitOffset, fitAmp, fitTau) = fit1
-
-        #0.5 * (fit1[0] + (fit2[0] * array([-1, -1, 1])))
-        #print pred1, fit1, pred2, fit2, fitAvg
+        #print fit1
         
         fitTrace = empty(len(data))
         
@@ -585,18 +605,23 @@ class PatchThread(QtCore.QThread):
             vPulse = pulse['Channel': 'primary'] 
             vPulseEnd = pulseEnd['Channel': 'primary'] 
             iStep = iPulse.mean() - iBase.mean()
-            sign = [-1, 1][iStep >= 0]
             
-            vStep = sign * max(1e-5, sign * (vPulseEnd.mean() - vBase.mean()))
+            if iStep >= 0:
+                vStep = max(1e-5, -fitAmp)
+            else:
+                vStep = min(-1e-5, -fitAmp)
+            #sign = [-1, 1][iStep >= 0]
+            #vStep = sign * max(1e-5, sign * (vPulseEnd.mean() - vBase.mean()))
+            #vStep = sign * max(1e-5, sign * fitAmp)
             if iStep == 0:
                 iStep = 1e-14
-            iRes = (vStep / iStep) + bridge
+            iRes = (vStep / iStep)
             #print iRes, vStep, iStep, bridge
             #print "current step:", iStep
             #print "bridge:", bridge
-            aRes = (fitAvg[0] / iStep) + bridge
+            aRes = (fitOffset / iStep) + bridge
             #iRes = (-fitAvg[1] / iStep) + bridge
-            cap = fitAvg[2] / (iRes-aRes)
+            cap = fitTau / iRes
             
             
         rmp = vBase.mean()
@@ -606,15 +631,18 @@ class PatchThread(QtCore.QThread):
         #print rmp, rmc
         
         ## Compute values for fit trace to be plotted over raw data
-        fitTrace = MetaArray((data.shape[1],), info=[{'name': 'Time', 'values': data.xvals('Time')}])
-        if params['mode'] == 'vc':
-            fitTrace[:] = rmc
+        if params['drawFit']:
+            fitTrace = MetaArray((data.shape[1],), info=[{'name': 'Time', 'values': data.xvals('Time')}])
+            if params['mode'] == 'vc':
+                fitTrace[:] = rmc
+            else:
+                fitTrace[:] = rmp
+    #        print i1, i2, len(tVals1), len(tVals2), len(expFn(fit1, tVals2)), len(fitTrace[i2:])
+            ## slices from fitTrace must exactly match slices from data at the beginning of the function.
+            fitTrace['Time': params['delayTime']+nudge:params['delayTime']+params['pulseTime']-nudge] = expFn(fit1, tVals1)+baseMean
+            #fitTrace['Time':params['delayTime']+params['pulseTime']+nudge:] = expFn(fit2, tVals2)+baseMean
         else:
-            fitTrace[:] = rmp
-#        print i1, i2, len(tVals1), len(tVals2), len(expFn(fit1, tVals2)), len(fitTrace[i2:])
-        ## slices from fitTrace must exactly match slices from data at the beginning of the function.
-        fitTrace['Time': params['delayTime']+nudge:params['delayTime']+params['pulseTime']-nudge] = expFn(fit1, tVals1)+baseMean
-        fitTrace['Time':params['delayTime']+params['pulseTime']+nudge:] = expFn(fit2, tVals2)+baseMean
+            fitTrace = None
         
         
         

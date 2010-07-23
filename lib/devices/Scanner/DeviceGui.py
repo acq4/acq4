@@ -306,7 +306,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         """Scan over x and y ranges in a nPts x nPts grid, return the image recorded at each location."""
         
         ## Camera settings to use during scan
-        binning = 2
+        binning = (2, 2)
         exposure = 0.003
         params = {'CLEAR_MODE': 'CLEAR_PRE_EXPOSURE', 'GAIN_INDEX': 3}
         
@@ -336,7 +336,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## Record 10 camera frames with the shutter closed 
         cmd = {
             'protocol': {'duration': 0.0},
-            camera: {'record': True, 'minFrames': 10, 'binning': binning, 'exposure': exposure, 'params': params},  ## binning/params are specific for QuantEM512
+            camera: {'record': True, 'minFrames': 10, 'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3},  ## binning/params are specific for QuantEM512
             laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
         task = lib.Manager.getManager().createTask(cmd)
@@ -348,10 +348,10 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## Record full scan.
         cmd = {
             'protocol': {'duration': duration},
-            camera: {'record': True, 'triggerMode': 'Trigger First', 'recordExposeChannel': True, 'channels': {
+            camera: {'record': True, 'triggerMode': 'TriggerStart', 'channels': {
                 'exposure': {'record': True}, 
                 'trigger': {'preset': 0, 'command': cameraTrigger}},
-                'binning': binning, 'exposure': exposure, 'params': params},
+                'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3},
             laser: {'Shutter': {'preset': 1, 'holding': 0}},
             #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
             self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},

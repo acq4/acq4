@@ -149,7 +149,7 @@ class FileTreeWidget(QtGui.QTreeWidget):
     def unwatch(self, handle):
         QtCore.QObject.disconnect(handle, QtCore.SIGNAL('delayedChange'), self.dirChanged)
         
-    def dirChanged(self, handle, change, *args):
+    def dirChanged(self, handle, changes):
         #print "Change: %s %s"% (change, handle.name())
         if handle is self.baseDir:
             item = self.invisibleRootItem()
@@ -163,11 +163,11 @@ class FileTreeWidget(QtGui.QTreeWidget):
         #        self.rebuildChildren(pItem)
         #    else:                              ## file was moved to a directory not yet loaded into the tree; just forget it
         #        self.forgetHandle(handle)
-        if change == 'renamed':
+        if 'renamed' in changes:
             item.setText(0, handle.shortName())
-        elif change == 'deleted':
+        if 'deleted' in changes:
             self.forgetHandle(handle)
-        elif change == 'children':
+        if 'children' in changes:
             self.rebuildChildren(item)
             item.setChildIndicatorPolicy(QtGui.QTreeWidgetItem.ShowIndicator)
 

@@ -395,7 +395,7 @@ class CameraTask(DAQGenericTask):
             self.dev.pushState(stateName)
         #time.sleep(0.5)
         
-        nonCameraParams = ['channels', 'record', 'triggerProtocol', 'pushState', 'popState']
+        nonCameraParams = ['channels', 'record', 'triggerProtocol', 'pushState', 'popState', 'minFrames']
         for k in self.camCmd:
             if k not in nonCameraParams:
                 params[k] = self.camCmd[k]
@@ -419,7 +419,7 @@ class CameraTask(DAQGenericTask):
             #self.dev.stopAcquire(block=True)  
 
         ## If we are sending a one-time trigger to start the camera, then it must be restarted to arm the trigger        
-        if self.camCmd['triggerMode'] == 'TriggerStart':
+        if params['triggerMode'] == 'TriggerStart':
             restart = True
             
         #print params
@@ -430,7 +430,7 @@ class CameraTask(DAQGenericTask):
         ## If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
         ##   (daq must be started first so that it is armed to received the camera trigger)
         name = self.dev.devName()
-        if self.camCmd['triggerProtocol']:
+        if self.camCmd.get('triggerProtocol', False):
             restart = True
             daqName = self.dev.camConfig['triggerOutChannel'][0]
             startOrder.remove(name)
@@ -574,6 +574,7 @@ class CameraTask(DAQGenericTask):
             
         ## generate MetaArray of images collected during recording
         #data = self.recordHandle.data()
+        times = None
         with MutexLocker(self.lock):
             data = self.frames
             if len(data) > 0:
@@ -598,12 +599,18 @@ class CameraTask(DAQGenericTask):
             ## Extract times from trace
             ex = expose.view(ndarray)
             exd = ex[1:] - ex[:-1]
+
             
             timeVals = expose.xvals('Time')
-            inds = argwhere(exd > 0)[:, 0] + 1
+            inds = argwhere(exd > 0.5)[:, 0] + 1
             onTimes = timeVals[inds]
+            
+            ## If camera triggered DAQ, then it is likely we missed the first 0->1 transition
+            if self.camCmd.get('triggerProtocol', False) and ex[0] > 0.5:
+                onTimes = array([timeVals[0]] + list(onTimes))
+            
             #print "onTimes:", onTimes
-            inds = argwhere(exd < 0)[:, 0] + 1
+            inds = argwhere(exd < 0.5)[:, 0] + 1
             offTimes = timeVals[inds]
             
             ## Determine average frame transfer time
@@ -613,23 +620,31 @@ class CameraTask(DAQGenericTask):
             expLen = (offTimes[1:len(onTimes)] - onTimes[1:len(offTimes)]).mean()
             
             
-            if self.camCmd['triggerMode'] == 'Normal':
+            if self.camCmd['triggerMode'] == 'Normal' and (('triggerProtocol' not in self.camCmd) or (not self.camCmd['triggerProtocol'])):
                 ## Can we make a good guess about frame times even without having triggered the first frame?
                 ## frames are marked with their arrival time. We will assume that a frame most likely 
                 ## corresponds to the last complete exposure signal. 
                 pass
                 
             else:
-                ## If we triggered the camera, then we know frame 0 occurred at the same time as the first expose signal.
+                ## If we triggered the camera (or if the camera triggered the DAQ), 
+                ## then we know frame 0 occurred at the same time as the first expose signal.
                 ## New times list is onTimes, any extra frames just increment by tx+exp time
                 vals = marr.xvals('Time')
                 #print "Original times:", vals
                 vals[:len(onTimes)] = onTimes[:len(vals)]
                 lastTime = onTimes[-1]
-                for i in range(len(onTimes), len(vals)):
-                    lastTime += txLen+expLen
-                    #print "Guessing time for frame %d: %f" % (i, lastTime)
-                    vals[i] = lastTime 
+                if len(onTimes) > 1:
+                    framePeriod = (onTimes[-1] - onTimes[0]) / (len(onTimes) - 1)
+                elif times is not None:
+                    framePeriod = (times[-1] - times[0]) / (len(times) - 1)
+                else:
+                    framePeriod = None
+                    
+                if framePeriod is not None:
+                    for i in range(len(onTimes), len(vals)):
+                        lastTime += framePeriod
+                        vals[i] = lastTime 
             
         ## Generate final result, incorporating data from DAQ
         return {'frames': marr, 'channels': daqResult}
@@ -897,8 +912,8 @@ class AcquireThread(QtCore.QThread):
         #print "AcquireThread.stop: got lock, requested stop."
         #print "AcquireThread.stop: Unlocked, waiting for thread exit (%s)" % block
         if block:
-          if not self.wait(10000):
-              raise Exception("Timed out waiting for thread exit!")
+            if not self.wait(10000):
+                raise Exception("Timed out waiting for thread exit!")
         #print "AcquireThread.stop: thread exited"
 
     def reset(self):

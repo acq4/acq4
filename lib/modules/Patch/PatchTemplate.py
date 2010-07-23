@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'PatchTemplate.ui'
 #
-# Created: Sat Jun 12 15:35:41 2010
+# Created: Thu Jul 22 12:55:25 2010
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -228,6 +228,10 @@ class Ui_Form(object):
         self.fitErrorLabel.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.fitErrorLabel.setObjectName("fitErrorLabel")
         self.formLayout.setWidget(6, QtGui.QFormLayout.FieldRole, self.fitErrorLabel)
+        self.drawFitCheck = QtGui.QCheckBox(self.groupBox)
+        self.drawFitCheck.setChecked(True)
+        self.drawFitCheck.setObjectName("drawFitCheck")
+        self.formLayout.setWidget(0, QtGui.QFormLayout.FieldRole, self.drawFitCheck)
         self.verticalLayout.addWidget(self.groupBox)
         self.splitter = QtGui.QSplitter(self.splitter_2)
         self.splitter.setOrientation(QtCore.Qt.Vertical)
@@ -292,6 +296,7 @@ class Ui_Form(object):
         self.capacitanceLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
         self.fitErrorCheck.setText(QtGui.QApplication.translate("Form", "Fit Error", None, QtGui.QApplication.UnicodeUTF8))
         self.fitErrorLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
+        self.drawFitCheck.setText(QtGui.QApplication.translate("Form", "Draw Fit", None, QtGui.QApplication.UnicodeUTF8))
 
 from lib.util.SpinBox import SpinBox
 from lib.util.pyqtgraph.PlotWidget import PlotWidget

@@ -160,6 +160,7 @@ class FileHandle(QtCore.QObject):
     def __init__(self, path, manager):
         QtCore.QObject.__init__(self)
         self.manager = manager
+        self.delayedChanges = []
         self.path = os.path.abspath(path)
         self.parentDir = None
         #self.lock = threading.RLock()
@@ -318,10 +319,13 @@ class FileHandle(QtCore.QObject):
 
 
     def emitChanged(self, change, *args):
+        self.delayedChanges.append(change)
         self.emit(QtCore.SIGNAL('changed'), self, change, *args)
 
     def delayedChange(self, *args):
-        self.emit(QtCore.SIGNAL('delayedChange'), *args)
+        changes = list(set(self.delayedChanges))
+        self.delayedChanges = []
+        self.emit(QtCore.SIGNAL('delayedChange'), self, changes)
     
     def hasChildren(self):
         self.checkDeleted()
