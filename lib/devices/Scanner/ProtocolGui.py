@@ -16,6 +16,7 @@ class ScannerProtoGui(ProtocolGui):
         dm = getManager()
         self.targets = None
         self.items = {}
+        self.occlusions = {}
         self.nextId = 0
 
         ## Populate module/device lists, auto-select based on device defaults 
@@ -67,6 +68,7 @@ class ScannerProtoGui(ProtocolGui):
         self.currentScope = None
         self.currentCamMod = None
         self.camModChanged()
+
         
         ## load target list from device, allowing targets to persist across protocols
         oldTargetList = self.dev.getTargetList()
@@ -201,9 +203,7 @@ class ScannerProtoGui(ProtocolGui):
         
     def listSequence(self):
         items = self.activeItems()
-        targets = 0
-        for i in items:
-            targets += len(i.listPoints())
+        targets = len(self.getTargetList())
         if targets > 0:
             return {'targets': targets}
         else:
@@ -267,11 +267,17 @@ class ScannerProtoGui(ProtocolGui):
         self.addItem(pt, name,  autoPos,  autoName)
         return pt
     
-    def addOcclusion(self, pos=None, size=None, angle=0, name=None):
+    def addOcclusion(self, name=None):
         autoName = False
         if name is None:
             name = 'Occlusion'
             autoName = True
+        s = self.pointSize()
+        pos = ([0,0], [0,s*3], [s*3,0])
+        pt = TargetOcclusion(pos)
+        self.addItem(pt, name, autoName=autoName)
+        return pt
+        
 
     def addItem(self, item, name,  autoPosition=True,  autoName=True):
         camMod = self.cameraModule()
@@ -282,6 +288,8 @@ class ScannerProtoGui(ProtocolGui):
         item.name = name
         item.objective = self.currentObjective
         self.items[name] = item
+        if isinstance(item, TargetOcclusion):
+            self.occlusions[name] = item
         listitem = QtGui.QListWidgetItem(name)
         listitem.setCheckState(QtCore.Qt.Checked)
         self.ui.itemList.addItem(listitem)
@@ -293,6 +301,7 @@ class ScannerProtoGui(ProtocolGui):
             pos = item.stateCopy()['pos'] 
         camMod.ui.addItem(item, pos, [1, 1], 1000)
         item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
+        item.connect(QtCore.SIGNAL('regionChanged'), self.getTargetList)
         item.connect(QtCore.SIGNAL('pointsChanged'), self.itemChanged)
         #QtCore.QObject.connect(item, QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
         #QtCore.QObject.connect(item, QtCore.SIGNAL('pointsChanged'), self.itemChanged)
@@ -316,6 +325,7 @@ class ScannerProtoGui(ProtocolGui):
         #self.removeItemPoints(i)
         i.scene().removeItem(i)
         del self.items[name]
+        self.occlusions.get(name)
         self.sequenceChanged()
 
     def deleteAll(self, clearHistory=True):
@@ -327,6 +337,7 @@ class ScannerProtoGui(ProtocolGui):
             i.scene().removeItem(i)
             #self.removeItemPoints(i)
         self.items = {}
+        self.occlusions = {}
         self.sequenceChanged()
         
     def itemToggled(self, item):
@@ -357,12 +368,14 @@ class ScannerProtoGui(ProtocolGui):
     def itemMoved(self, item):
         self.targets = None
         self.updateDeviceTargetList(item)
+        
 
     def itemChanged(self, item):
         self.targets = None
         self.sequenceChanged()
     
     def updateDeviceTargetList(self, item):
+        """For keeping track of items outside of an individual scanner device. Allows multiple protocols to access the same items."""
         name = str(item.name)
         state = item.stateCopy()
         if isinstance(item, TargetPoint):
@@ -370,24 +383,46 @@ class ScannerProtoGui(ProtocolGui):
             pos[0] += state['size'][0]/2.0
             pos[1] += state['size'][1]/2.0
             info = ['point', pos]
-        if isinstance(item, TargetGrid):
+        elif isinstance(item, TargetGrid):
             info = ['grid', state['pos'], state['size'], state['angle']]
+        elif isinstance(item, TargetOcclusion):
+            info = ['occlusion']
+            return
         
         self.dev.updateTarget(name, info)
-        
+    
+    def getTargetList(self):
+        items = self.activeItems()
+        locations = []
+        for i in items:
+            pts = i.listPoints()
+            for x in self.occlusions.keys():  ##can we just join the occlusion areas together?
+                area = self.occlusions[x].mapToScene(self.occlusions[x].shape())
+                for j in range(len(pts)):
+                    p=pts[j]
+                    point = QtCore.QPointF(p[0], p[1])
+                    if area.contains(point):
+                        i.setTargetPen(j, QtGui.QPen(QtGui.QColor(0,0,0,160)))
+                    else:
+                        locations.append(p)
+                        i.setTargetPen(j, None)
+        return locations
+
     
     def sequenceChanged(self):
         self.targets = None
         self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
 
     def generateTargets(self):
-        items = self.activeItems()
+        #items = self.activeItems()
         self.targets = []
-        locations = []
-        for i in items:
-            pts = i.listPoints()
-            for p in pts:
-                locations.append(p)
+        locations = self.getTargetList()
+        #locations = []
+        #for i in items:
+        #    pts = i.listPoints()
+        #    for p in pts:
+        #        locations.append(p)
+
         
         minTime = None
         bestSolution = None
@@ -549,6 +584,7 @@ class TargetPoint(EllipseROI):
     def listPoints(self):
         p = self.mapToScene(self.boundingRect().center())
         return [(p.x(), p.y())]
+        
 
 class TargetGrid(ROI):
     def __init__(self, pos, size, ptSize, angle):
@@ -560,6 +596,7 @@ class TargetGrid(ROI):
         self.lastSize = self.state['size']
         self.connect(QtCore.SIGNAL('regionChanged'), self.rgnChanged)
         self.points = []
+        self.pens = []
         self.pointSize = ptSize
         self.regeneratePoints()
         
@@ -574,6 +611,7 @@ class TargetGrid(ROI):
 
     def regeneratePoints(self):
         self.points = []
+        self.pens = []
         sq3 = 3. ** 0.5
         sepx = self.pointSize
         sepy = sq3 * self.pointSize
@@ -587,7 +625,12 @@ class TargetGrid(ROI):
         for p in self.points:
             p1 = self.mapToScene(p[0], p[1])
             pts.append((p1.x(), p1.y()))
+        
         return pts
+
+    def setTargetPen(self, index, pen):
+        self.pens[index] = pen
+        self.update()
 
     def generateGrid(self, start, sep):
         nx = 1 + int(((self.state['size'][0] - start[0]) - self.pointSize*0.5) / sep[0])
@@ -597,6 +640,7 @@ class TargetGrid(ROI):
             y = start[1]
             for j in range(ny):
                 self.points.append((x, y))
+                self.pens.append(None)
                 y += sep[1]
             x += sep[0]
         
@@ -604,11 +648,21 @@ class TargetGrid(ROI):
     def paint(self, p, opt, widget):
         ROI.paint(self, p, opt, widget)
         ps2 = self.pointSize * 0.5
-        p.setPen(self.pen)
+        #p.setPen(self.pen)
         p.scale(self.pointSize, self.pointSize) ## do scaling here because otherwise we end up with squares instead of circles (GL bug)
-        for pt in self.points:
+        for i in range(len(self.points)):
+            pt = self.points[i]
+            if self.pens[i] != None:
+                p.setPen(self.pens[i])
+            else:
+                p.setPen(self.pen)
             p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
         
+class TargetOcclusion(PolygonROI):
+    def __init__(self, pos):
+        PolygonROI.__init__(self, pos)
         
-
-
+        
+    def listPoints(self):
+        pts = []
+        return pts

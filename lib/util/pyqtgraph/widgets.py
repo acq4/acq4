@@ -858,7 +858,7 @@ class CircleROI(EllipseROI):
         
 class PolygonROI(ROI):
     def __init__(self, positions):
-        ROI.__init__(self, [0,0], [100,100])
+        ROI.__init__(self, positions[0])
         for p in positions:
             self.addFreeHandle(p)
             
