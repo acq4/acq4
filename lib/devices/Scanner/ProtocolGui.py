@@ -46,6 +46,7 @@ class ScannerProtoGui(ProtocolGui):
 
         QtCore.QObject.connect(self.ui.addPointBtn, QtCore.SIGNAL('clicked()'), self.addPoint)
         QtCore.QObject.connect(self.ui.addGridBtn, QtCore.SIGNAL('clicked()'), self.addGrid)
+        QtCore.QObject.connect(self.ui.addOcclusionBtn, QtCore.SIGNAL('clicked()'), self.addOcclusion)
         QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.delete)
         QtCore.QObject.connect(self.ui.deleteAllBtn, QtCore.SIGNAL('clicked()'), self.deleteAll)
         QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemToggled)
@@ -265,7 +266,12 @@ class ScannerProtoGui(ProtocolGui):
         pt = TargetGrid(pos, size, s, angle)
         self.addItem(pt, name,  autoPos,  autoName)
         return pt
-        
+    
+    def addOcclusion(self, pos=None, size=None, angle=0, name=None):
+        autoName = False
+        if name is None:
+            name = 'Occlusion'
+            autoName = True
 
     def addItem(self, item, name,  autoPosition=True,  autoName=True):
         camMod = self.cameraModule()

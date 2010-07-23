@@ -1413,3 +1413,44 @@ class PSPWindow(QtGui.QMainWindow):
         except:
             data = d['Clamp2.ma'].read()['Channel': 'primary']
         self.plot.plot(data)
+        
+class CellHealthWindow(QtGui.QMainWindow):
+    def __init__(self):
+        QtGui.QMainWindow.__init__(self)
+        self.cw = QtGui.QSplitter()
+        self.cw.setOrientation(QtCore.Qt.Vertical)
+        self.setCentralWidget(self.cw)
+        bw = QtGui.QWidget()
+        bwl = QtGui.QHBoxLayout()
+        bw.setLayout(bwl)
+        self.cw.addWidget(bw)
+        self.loadDataBtn = QtGui.QPushButton('Load Data')
+        bwl.addWidget(self.loadDataBtn)
+        QtCore.QObject.connect(self.loadDataBtn, QtCore.SIGNAL('clicked()'), self.loadData)
+        self.riPlot = PlotWidget()
+        self.raPlot = PlotWidget()
+        self.vmPlot = PlotWidget()
+        self.iPlot = PlotWidget()
+        self.cw.addWidget(self.riPlot)
+        self.cw.addWidget(self.raPlot)
+        self.cw.addWidget(self.vmPlot)
+        self.cw.addWidget(self.iPlot)
+        self.resize(600,600)
+        self.show()
+        
+    def loadData(self):
+        self.clear()
+        d = getManager().currentFile.read()
+        self.riPlot.plot(d['Value':'inputResistance'])
+        self.riPlot.setYRange(0, 1e9)
+        self.raPlot.plot(d['Value':'accessResistance'])
+        self.raPlot.setYRange(0, 0.1e9)
+        self.vmPlot.plot(d['Value':'restingPotential'])
+        self.iPlot.plot(d['Value':'restingCurrent'])
+        self.iPlot.setYRange(-500e-12, 0)
+        
+    def clear(self):
+        self.riPlot.clear()
+        self.raPlot.clear()
+        self.vmPlot.clear()
+        self.iPlot.clear()
