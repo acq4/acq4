@@ -65,6 +65,7 @@ dm = Manager(config, sys.argv[1:])
 w = UncagingWindow()
 
 
+
 ## Start Qt event loop unless running in interactive mode.
 try:
     assert sys.flags.interactive == 1
