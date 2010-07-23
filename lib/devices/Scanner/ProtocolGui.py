@@ -267,11 +267,16 @@ class ScannerProtoGui(ProtocolGui):
         self.addItem(pt, name,  autoPos,  autoName)
         return pt
     
-    def addOcclusion(self, pos=None, size=None, angle=0, name=None):
+    def addOcclusion(self, name=None):
         autoName = False
         if name is None:
             name = 'Occlusion'
             autoName = True
+        pos = ([0,0], [0,1], [1,0])
+        pt = PolygonROI(pos)
+        self.addItem(pt, name, autoName=autoName)
+        return pt
+        
 
     def addItem(self, item, name,  autoPosition=True,  autoName=True):
         camMod = self.cameraModule()
@@ -549,6 +554,7 @@ class TargetPoint(EllipseROI):
     def listPoints(self):
         p = self.mapToScene(self.boundingRect().center())
         return [(p.x(), p.y())]
+        
 
 class TargetGrid(ROI):
     def __init__(self, pos, size, ptSize, angle):
