@@ -19,7 +19,7 @@ class Win(QtGui.QMainWindow):
   pass
 
 w = Win()
-v = GraphicsView()
+v = GraphicsView(useOpenGL=False)
 v.invertY(True)
 v.setAspectLocked(True)
 v.enableMouse(True)
@@ -72,6 +72,9 @@ elroi = EllipseROI([110, 10], [30, 20])
 s.addItem(elroi)
 croi = CircleROI([110, 50], [20, 20])
 s.addItem(croi)
+troi = PolygonROI([[0,0], [1,0], [0,1]])
+s.addItem(troi)
+
 
 def updateImg(roi):
   global im1, im2, im3, im4, arr

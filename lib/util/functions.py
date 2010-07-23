@@ -226,7 +226,11 @@ def gaussian(v, x):
     """Gaussian function value at x. The parameter v is [amplitude, x-offset, sigma, y-offset]"""
     return v[0] * exp(-((x-v[1])**2) / (2 * v[2]**2)) + v[3]
 
-def fit(function, xVals, yVals, guess, errFn=None, generateResult=False, resultXVals=None):
+def expDecay(v, x):
+    """Exponential decay function valued at x. Parameter vector is [amplitude, tau, yOffset]"""
+    return v[0] * exp(-x / v[1]) + v[2]
+
+def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateResult=False, resultXVals=None):
     """fit xVals, yVals to the specified function. 
     If generateResult is True, then the fit is used to generate an array of points from function
     with the xVals supplied (useful for plotting the fit results with the original data). 
@@ -234,14 +238,16 @@ def fit(function, xVals, yVals, guess, errFn=None, generateResult=False, resultX
     if errFn is None:
         errFn = lambda v, x, y: function(v, x)-y
     fit = leastsq(errFn, guess, args=(xVals, yVals))
-    
+    error = None
+    if measureError:
+        error = errFn(fit[0], xVals, yVals)
     result = None
     if generateResult:
         if resultXVals is not None:
             xVals = resultXVals
         fn = lambda i: function(fit[0], xVals[i.astype(int)])
         result = fromfunction(fn, xVals.shape)
-    return fit + (result,)
+    return fit + (result, error)
         
 def fitSigmoid(xVals, yVals, guess=[1.0, 0.0, 1.0, 0.0], **kargs):
     """Returns least-squares fit for sigmoid"""
@@ -250,6 +256,10 @@ def fitSigmoid(xVals, yVals, guess=[1.0, 0.0, 1.0, 0.0], **kargs):
 def fitGaussian(xVals, yVals, guess=[1.0, 0.0, 1.0, 0.0], **kargs):
     """Returns least-squares fit parameters for function v[0] * exp(((x-v[1])**2) / (2 * v[2]**2)) + v[3]"""
     return fit(gaussian, xVals, yVals, guess, **kargs)
+
+def fitExpDecay(xVals, yVals, guess=[1.0, 1.0, 0.0], **kargs):
+    return fit(expDecay, xVals, yVals, guess, **kargs)
+
 
 
 STRNCMP_REGEX = re.compile(r'(-?\d+(\.\d*)?((e|E)-?\d+)?)')
@@ -1263,3 +1273,14 @@ def expTemplate(dt, rise, decay, delay=None, length=None, risePow=2.0):
     temp /= temp.max()
     return temp
 
+
+def tauiness(data, w):
+    ivals = range(0, len(data)-w-1, int(w/10))
+    result = empty(len(ivals), dtype=[('amp', float), ('tau', float), ('offset', float), ('error', float)])
+    for i in range(len(ivals)):
+        j = ivals[i]
+        v = fitExpDecay(arange(w), data[j:j+w], measureError=True)
+        result[i] = array(list(v[0]) + [sum(abs(v[3]))])
+    return result
+        
+        

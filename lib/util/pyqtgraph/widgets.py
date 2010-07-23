@@ -15,21 +15,21 @@ from numpy.linalg import norm
 import scipy.ndimage as ndimage
 from Point import *
 from math import cos, sin
-#from ObjectWorkaround import *
+from ObjectWorkaround import *
 
 def rectStr(r):
     return "[%f, %f] + [%f, %f]" % (r.x(), r.y(), r.width(), r.height())
 
 # Multiple inheritance not allowed in PyQt. Retarded workaround:
-class QObjectWorkaround:
-    def __init__(self):
-        self._qObj_ = QtCore.QObject()
-    def __getattr__(self, attr):
-        if attr == '_qObj_':
-            raise Exception("QObjectWorkaround not initialized!")
-        return getattr(self._qObj_, attr)
-    def connect(self, *args):
-        return QtCore.QObject.connect(self._qObj_, *args)
+#class QObjectWorkaround:
+    #def __init__(self):
+        #self._qObj_ = QtCore.QObject()
+    #def __getattr__(self, attr):
+        #if attr == '_qObj_':
+            #raise Exception("QObjectWorkaround not initialized!")
+        #return getattr(self._qObj_, attr)
+    #def connect(self, *args):
+        #return QtCore.QObject.connect(self._qObj_, *args)
 
 
 class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
@@ -93,6 +93,10 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
     def addTranslateHandle(self, pos, axes=None, item=None):
         pos = Point(pos)
         return self.addHandle({'type': 't', 'pos': pos, 'item': item})
+    
+    def addFreeHandle(self, pos, axes=None, item=None):
+        pos = Point(pos)
+        return self.addHandle({'type': 'f', 'pos': pos, 'item': item})
     
     def addScaleHandle(self, pos, center, axes=None, item=None):
         pos = Point(pos)
@@ -239,6 +243,9 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
                 snap = Point(self.snapSize, self.snapSize)
             self.translate(p1-p0, snap=snap, update=False)
         
+        elif h['type'] == 'f':
+            h['item'].setPos(self.mapFromScene(pos))
+            
         elif h['type'] == 's':
             #c = h['center']
             #cs = c * self.state['size']
@@ -618,6 +625,9 @@ class Handle(QtGui.QGraphicsItem):
         if typ == 't':
             self.sides = 4
             self.startAng = pi/4
+        elif typ == 'f':
+            self.sides = 4
+            self.startAng = pi/4
         elif typ == 's':
             self.sides = 4
             self.startAng = 0
@@ -768,9 +778,9 @@ class MultiLineROI(QtGui.QGraphicsItem, QObjectWorkaround):
         for l in self.lines:
             l.translatable = False
             #self.addToGroup(l)
-            self.connect(l, QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
-            self.connect(l, QtCore.SIGNAL('regionChangeStarted'), self.roiChangeStartedEvent)
-            self.connect(l, QtCore.SIGNAL('regionChangeFinished'), self.roiChangeFinishedEvent)
+            l.connect(l, QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
+            l.connect(l, QtCore.SIGNAL('regionChangeStarted'), self.roiChangeStartedEvent)
+            l.connect(l, QtCore.SIGNAL('regionChangeFinished'), self.roiChangeFinishedEvent)
         
     def paint(self, *args):
         pass
@@ -846,3 +856,34 @@ class CircleROI(EllipseROI):
         #self.addTranslateHandle([0.5, 0.5])
         self.addScaleHandle([0.5*2.**-0.5 + 0.5, 0.5*2.**-0.5 + 0.5], [0.5, 0.5])
         
+class PolygonROI(ROI):
+    def __init__(self, positions):
+        ROI.__init__(self, [0,0], [100,100])
+        for p in positions:
+            self.addFreeHandle(p)
+            
+    def movePoint(self, *args, **kargs):
+        ROI.movePoint(self, *args, **kargs)
+        self.prepareGeometryChange()
+            
+    def paint(self, p, *args):
+        p.setRenderHint(QtGui.QPainter.Antialiasing)
+        p.setPen(self.pen)
+        for i in range(len(self.handles)):
+            h1 = self.handles[i]['item'].pos()
+            h2 = self.handles[i-1]['item'].pos()
+            p.drawLine(h1, h2)
+        
+    def boundingRect(self):
+        r = QtCore.QRectF()
+        for h in self.handles:
+            r |= self.mapFromItem(h['item'], h['item'].boundingRect()).boundingRect()
+        return r
+    
+    def shape(self):
+        p = QtGui.QPainterPath()
+        p.moveTo(self.handles[0]['item'].pos())
+        for i in range(len(self.handles)):
+            p.lineTo(self.handles[i]['item'].pos())
+        return p
+                
