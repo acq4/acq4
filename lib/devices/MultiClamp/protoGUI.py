@@ -42,24 +42,29 @@ class MultiClampProtoGui(ProtocolGui):
         QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
-        QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
-        QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
-        QtCore.QObject.connect(self.ui.i0ModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
+        #QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
+        #QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
+        #QtCore.QObject.connect(self.ui.i0ModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.uiStateChanged)
         QtCore.QObject.connect(self.dev, QtCore.SIGNAL('stateChanged'), self.devStateChanged)
         self.devStateChanged()
         
         
     def uiStateChanged(self, name, value):
-        i0Checks = [self.ui.holdingCheck, self.ui.primaryGainCheck, self.ui.secondaryGainCheck]
+        if 'ModeRadio' in name:
+            self.setMode()
+        
+        #i0Checks = [self.ui.holdingCheck, self.ui.primaryGainCheck, self.ui.secondaryGainCheck]
         if self.getMode() == 'I=0':
-            for c in i0Checks:
-                c.setChecked(False)
-                c.setEnabled(False)
+            self.ui.holdingCheck.setChecked(False)
+            self.ui.holdingCheck.setEnabled(False)
+            #for c in i0Checks:
+                #c.setChecked(False)
+                #c.setEnabled(False)
         else:
-            for c in i0Checks:
-                c.setEnabled(True)
-            
+            self.ui.holdingCheck.setEnabled(True)
+            #for c in i0Checks:
+                #c.setEnabled(True)
             
         checkMap = {
             'holdingCheck': self.ui.holdingSpin,
@@ -251,6 +256,7 @@ class MultiClampProtoGui(ProtocolGui):
                 self.ui.vcModeRadio.setChecked(True)
             
             # update signal lists
+            self.stateGroup.blockSignals(True)
             sigs = self.dev.listSignals(mode)
             #print "Signals:", sigs
             #print "-------"
@@ -258,6 +264,8 @@ class MultiClampProtoGui(ProtocolGui):
                 c.clear()
                 for ss in s:
                     c.addItem(ss)
+            self.stateGroup.blockSignals(False)
+            
             #self.ui.primarySignalCombo.clear()
             #for s in self.modeSignalList['primary'][mode]:
                 #self.ui.primarySignalCombo.addItem(s)

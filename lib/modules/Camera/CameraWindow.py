@@ -812,7 +812,7 @@ class CameraWindow(QtGui.QMainWindow):
             
             
             ## Update histogram plot
-            self.updateHistogram(self.currentFrame[0], wl, bl)
+            #self.updateHistogram(self.currentFrame[0], wl, bl)
             
             ## Translate and scale image based on ROI and binning
             m = QtGui.QTransform()
