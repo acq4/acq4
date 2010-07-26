@@ -145,7 +145,7 @@ class ScannerDeviceGui(QtGui.QWidget):
             self.updatePrgDlg(0)
             return self.runCalibrationInner()
         except:
-            print "SHOW ERROR"
+            #print "SHOW ERROR"
             self.win.showMessage("Error during scanner calibration, see console.", 30000)
             raise
         finally:
@@ -211,7 +211,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         spotFrames = []
         margin = fit[3]
         #print "Spot size is %f x %g (%f px)" % (size, spotWidth, fit[3])
-        for i in range(frames.shape[0]):
+        for i in range(len(positions)):
             frame = frames[i]
             fBlur = blur(frame, blurRadius)
             mx = fBlur.max()
@@ -235,8 +235,8 @@ class ScannerDeviceGui(QtGui.QWidget):
             ## x,y are currently in sensor coords, now convert to absolute scale relative to center
             #print "======="
             #print x, y, region
-            x = (x - (region[2]*0.5 / binning)) * info['pixelSize'][0]
-            y = (y - (region[3]*0.5 / binning)) * info['pixelSize'][1]
+            x = (x - (region[2]*0.5 / binning[0])) * info['pixelSize'][0]
+            y = (y - (region[3]*0.5 / binning[1])) * info['pixelSize'][1]
             #print x, y
             
             spotLocations.append([x, y])
@@ -249,7 +249,8 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         ## sanity check on spot frame
         if len(spotFrames) == 0:
-            raise Exception('Calibration never detected laser spot! (Check: 1. shutter is closed, 2. mirrors on, 3. spot visible when shutter is open)')
+            self.image.updateImage(frames.max(axis=0))
+            raise Exception('Calibration never detected laser spot! (Check: 1. shutter is closed, 2. mirrors on, 3. objective is clean, 4. spot visible (and bright enough) when shutter is open)')
 
         spotFrameMax = concatenate(spotFrames).max(axis=0)
         #self.image.updateImage(maxFrame, autoRange=True)
@@ -369,6 +370,8 @@ class ScannerDeviceGui(QtGui.QWidget):
         for i in range(frames.shape[0]):
             t = frames.xvals('Time')[i]
             ind = int((t/duration) * nPts)
+            if ind >= len(xCommand):
+                break
             positions.append([xCommand[ind], yCommand[ind]])
             
         if frames.ndim != 3 or frames.shape[0] < 5:
