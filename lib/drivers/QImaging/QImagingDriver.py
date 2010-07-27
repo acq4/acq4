@@ -43,6 +43,11 @@ def quit():
     print 'Closing down...'
 atexit.register(quit)
 
+###functions that are called from CameraDevice:
+# setUpCamera(self) - """Prepare the camera at least so that get/setParams will function correctly"""
+# listParams(self, params=None)
+# setParams(self, params, autoRestart=True, autoCorrect=True)
+# getParams(self, params=None)
 def loadDriver():
     call(lib.LoadDriver)
  
