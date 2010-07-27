@@ -24,8 +24,7 @@ class QCamFunctionError(Exception):
         self.message = message
     def __str__(self):
         return repr(self.message)
-
-
+      
 def call(function, *args):
     a = function(*args)
     if a() != 0:
