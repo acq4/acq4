@@ -25,6 +25,25 @@ lib = CLibrary(dll, p, prefix = 'QCam_')        #makes it so that functions in t
 # setParams(self, params, autoRestart=True, autoCorrect=True)
 # getParams(self, params=None)
 
+externalParams = ['triggerMode',
+                  'exposure',
+                  'binningX',
+                  'binningY',
+                  'regionX',
+                  'regionY',
+                  'regionW',
+                  'regionH',
+                  'qprmNormalizedGain',
+                  'qprmS32NormalizedGaindB',
+                  'qprmS32AbsoluteOffset',
+                  'qprmReadoutSpeed',
+                  'qprmCoolerActive',
+                  'qprmS32RegulatedCoolingTemp'
+                  'qprmBlackoutMode',
+                  'qprmImageFormat',
+                  'qprmSyncb',
+                  ]
+
 
 class QCamFunctionError(Exception):
     def __init__(self, value, message):
@@ -40,6 +59,10 @@ class _QCamDriverClass:
         
         self.loadDriver()
         
+        
+        global externalParams
+        for p in externalParams:
+            self.paramTable[p] = p        
     
     def call(self, function, *args):
         a = function(*args)
@@ -85,24 +108,55 @@ class _QCameraClass:
         self.driver = driver
         self.isOpen = False
         self.handle = self.open()
-        self.parameters = {}
+        self.paramAttrs = OrderedDict()
         self.cameraInfo = {}
+        self.getCameraInfo()
         self.frames = []
         self.arrays = []
         self.i = 0
         self.stopSignal = True
-        self.mutex = Mutex()
+        self.mutex = Mutex(Mutex.Recursive)
         self.lastFrame = (0,0)
         self.fnp1 = lib.AsyncCallback(self.callBack1)
+        
+        ## Some parameters can be accessed as groups
+        self.groupParams = {
+            'binning': ['binningX', 'binningY'],
+            'region': ['regionX', 'regionY', 'regionW', 'regionH'],
+            'sensorSize': [self.cameraInfo['qinfCcdHeight'], self.cameraInfo['qinfCcdWidth']] 
+        }
 
         self.paramEnums = {
             'qprmImageFormat': 'QCam_ImageFormat',
-            'qprmPostProcessImageFormat': 'QCam_ImageFormat',
+            #'qprmPostProcessImageFormat': 'QCam_ImageFormat',
             'qprmSyncb': 'QCam_qcSyncb',
             'qprmReadoutSpeed': 'QCam_qcReadoutSpeed',
-            'qprmColorWheel': 'QCam_qcWheelColor',
-            'qprmTriggerType': 'QCam_qcTriggerType'
+            #'qprmColorWheel': 'QCam_qcWheelColor',
+            'triggerMode': 'QCam_qcTriggerType'
         }
+        
+        self.userToCameraDict = {
+            'triggerMode':'qprmTriggerType',
+            'exposure':'qprm64Exposure',
+            'binningX':'qprmBinning',
+            'binningY':'qprmBinning',
+            'regionX':'qprmRoiX',
+            'regionY':'qprmRoiY',
+            'regionW':'qprmRoiWidth',
+            'regionH':'qprmRoiHeight'
+        }
+        
+        self.cameraToUserDict = {
+            'qprmTriggerType':'triggerMode',
+            'qprm64Exposure':'exposure',
+            'qprmBinning':'binningX',
+            'qprmRoiX':'regionX',
+            'qprmRoiY':'regionY',
+            'qprmRoiWidth':'regionW',
+            'qprmRoiHeight':'regionH'
+        }
+            
+       
         
     def call(self, function, *args):
         a = function(*args)
@@ -118,6 +172,7 @@ class _QCameraClass:
         if not self.isOpen: 
             a = self.call(lib.OpenCamera, self.name, lib.Handle())
             self.isOpen = True
+            #self.call(lib.SetStreaming, a[1], 1)
             return a[1]   
   
     def __del__(self):
@@ -128,6 +183,17 @@ class _QCameraClass:
         self.call(lib.SetStreaming, self.handle, 0)
         self.call(lib.CloseCamera, self.handle)
         self.isOpen = False
+        
+    def translateToCamera(self, arg):
+        return self.userToCameraDict.get(arg, arg)
+            
+    def translateToUser(self, arg):
+        return self.cameraToUserDict.get(arg, arg)
+        
+    def readSettings(self):
+        s = self.call(lib.ReadSettingsFromCam, self.handle)[1]
+        s.size = sizeof(s)
+        return s
 
     def mkFrame(self):
         s = call(lib.GetInfo, handle, lib.qinfImageSize)[2]
@@ -145,99 +211,112 @@ class _QCameraClass:
         frame.shape = (s/w, w)
         return frame
 
-    def listParams(self):
-        """Fills in the 'parameters' dictionary with the state parameters available on the camera.
-        The key is the name of the parameter, while the value is a tuple: (values, isWritable, isReadable, [dependencies]."""
-        s = self.call(lib.ReadSettingsFromCam, self.handle)[1]
-        s.size = sizeof(s)
-        for x in lib('enums', 'QCam_Param'):
+    def listParams(self, allParams=False):
+        """Fills in the 'paramAttrs' dictionary with the state parameters available on the camera.
+        The key is the name of the parameter, while the value is a tuple: (acceptablevalues, isWritable, isReadable, [dependencies]."""
+        s = self.readSettings()
+        if allParams:
+            p = (lib('enums', 'QCam_Param'), lib('enums', 'QCam_ParamS32'), lib('enums', 'QCam_Param64'))
+        else:
+            p = (externalParams, externalParams, externalParams)
+        #for x in lib('enums', 'QCam_Param'):
+        for x in p[0]:
+            x = self.translateToCamera(x)
             try:
                 if self.call(lib.GetParam, byref(s), getattr(lib, x))() == 0:
                     try: ###first try to get a SparseTable
                         table = (c_ulong *32)()
                         r = self.call(lib.GetParamSparseTable, byref(s), getattr(lib,x), table, c_long(32))
-                        self.parameters[x] = (list(r[2])[:r[3]])
+                        self.paramAttrs[self.translateToUser(x)] = (list(r[2])[:r[3]])
                     except QCamFunctionError, err: ###if sparse table doesn't work try getting a RangeTable
                         if err.value == 1:  
                             min = self.call(lib.GetParamMin, byref(s), getattr(lib,x))[2]
                             max = self.call(lib.GetParamMax, byref(s), getattr(lib,x))[2]
-                            self.parameters[x] = (min, max)
+                            self.paramAttrs[self.translateToUser(x)] = (min, max)
                         else: raise      
             except QCamFunctionError, err:
                 if err.value == 1: pass    
                 else: raise
-        for x in lib('enums', 'QCam_ParamS32'):
+        #for x in lib('enums', 'QCam_ParamS32'):
+        for x in p[1]:
+            x = self.translateToCamera(x)
             try:
                 if self.call(lib.GetParamS32, byref(s), getattr(lib, x))() == 0:
                     try:
                         table = (c_long *32)()
                         r = self.call(lib.GetParamSparseTableS32, byref(s), getattr(lib,x), table, c_long(32))
-                        self.parameters[x] = (list(r[2])[:r[3]])
+                        self.paramAttrs[self.translateToUser(x)] = (list(r[2])[:r[3]])
                     except QCamFunctionError, err:
                         if err.value == 1:
                             min = self.call(lib.GetParamS32Min, byref(s), getattr(lib,x))[2]
                             max = self.call(lib.GetParamS32Max, byref(s), getattr(lib,x))[2]
-                            self.parameters[x] = (min, max)
+                            self.paramAttrs[self.translateToUser(x)] = (min, max)
                         else: raise
             except QCamFunctionError, err:
                 if err.value == 1: pass
                 else: raise
-        for x in lib('enums', 'QCam_Param64'):
+        #for x in lib('enums', 'QCam_Param64'):
+        for x in p[2]:
+            x = self.translateToCamera(x)
             try:
                 if self.call(lib.GetParam64, byref(s), getattr(lib, x))() == 0:
                     try:
                         table = (c_ulonglong *32)()
                         r = self.call(lib.GetParamSparseTable64, byref(s), getattr(lib,x), table, c_long(32))
-                        self.parameters[x] = (list(r[2])[:r[3]])
+                        self.paramAttrs[self.translateToUser(x)] = (list(r[2])[:r[3]])
                     except QCamFunctionError, err:
                         if err.value == 1:
                             min = self.call(lib.GetParam64Min, byref(s), getattr(lib,x))[2]
                             max = self.call(lib.GetParam64Max, byref(s), getattr(lib,x))[2]
-                            self.parameters[x] = (min, max)
+                            self.paramAttrs[self.translateToUser(x)] = (min, max)
                         else: raise
             except QCamFunctionError, err:
                 if err.value == 1:  pass
                 else: raise
-        self.parameters.pop('qprmExposure')
-        self.parameters.pop('qprmOffset')
-        for x in self.parameters: 
-            if type(self.parameters[x]) == type([]):
+        #self.paramAttrs.pop('qprmExposure')
+        #self.paramAttrs.pop('qprmOffset')
+        ### Replace qcam enum numbers with qcam strings
+        for x in self.paramAttrs: 
+            if type(self.paramAttrs[x]) == type([]):
                 if x in self.paramEnums: ## x is the name of the parameter
-                    print "Param: ", x, self.parameters[x]
-                    for i in range(len(self.parameters[x])): ## i is the index
-                        a = self.parameters[x][i] ## a is the value
+                    #print "Param: ", x, self.paramAttrs[x]
+                    for i in range(len(self.paramAttrs[x])): ## i is the index
+                        a = self.paramAttrs[x][i] ## a is the value
                         for b in lib('enums', self.paramEnums[x]): # b is the number code for the parameter option
                             if lib('enums', self.paramEnums[x])[b] == a:
-                                self.parameters[x][i] = b
-                                print "old: ", a, "new: ", self.parameters[x][i]
+                                self.paramAttrs[x][i] = b
+                                #print "old: ", a, "new: ", self.paramAttrs[x][i]
         ##### For camera on rig1, listParams returns: {                       
         ##    'qprmBlackoutMode': [0L, 1L],
         ##    'qprmBinning': [1L, 2L, 4L, 8L],
-        ##    'qprmExposureRed': (10L, 1073741823L),
+        ##          'qprmExposureRed': (10L, 1073741823L),
         ##    'qprm64Exposure': (10000L, 1073741823000L),
-        ##    'qprmPostProcessBayerAlgorithm': [1L, 2L, 3L, 4L],
+        ##          'qprmPostProcessBayerAlgorithm': [1L, 2L, 3L, 4L],
         ##    'qprmImageFormat': ['qfmtRaw8', 'qfmtRaw16', 'qfmtMono8', 'qfmtMono16', 'qfmtRgbPlane8', 'qfmtRgbPlane16', 'qfmtBgr24', 'qfmtXrgb32', 'qfmtRgb48', 'qfmtBgrx32', 'qfmtRgb24'],
-        ##    'qprmCoolerActive': [0L, 1L],
+        ##    'qprmCoolerActive': [0L, 1L], # 0=disable cooler
         ##    'qprmRoiHeight': (1L, 1200L),
-        ##    'qprmColorWheel': ['qcWheelRed', 'qcWheelGreen', 'qcWheelBlue'],
-        ##    'qprm64ExposureRed': (10000L,1073741823000L),
+        ##          'qprmColorWheel': ['qcWheelRed', 'qcWheelGreen', 'qcWheelBlue'], #color of the RGB filter
+        ##          'qprm64ExposureRed': (10000L,1073741823000L),
         ##    'qprmRoiX': (0L, 1599L),
         ##    'qprmRoiY': (0L, 1199L),
         ##    'qprmS32NormalizedGaindB': (-6930000, 26660000),
-        ##    'qprmPostProcessGainBlue': (10L, 100000L),
+        ##          'qprmPostProcessGainBlue': (10L, 100000L),
         ##    'qprmTriggerType': ['qcTriggerNone', 'qcTriggerEdgeHi', 'qcTriggerEdgeLow', 'qcTriggerPulseHi', 'qcTriggerPulseLow', 'qcTriggerSoftware', 'qcTriggerStrobeHi', 'qcTriggerStrobeLow'],
-        ##    'qprmPostProcessImageFormat': ['qfmtRaw8', 'qfmtRaw16','qfmtMono8', 'qfmtMono16', 'qfmtRgbPlane8', 'qfmtRgbPlane16', 'qfmtBgr24', 'qfmtXrgb32', 'qfmtRgb48', 'qfmtBgrx32', 'qfmtRgb24'],
-        ##    'qprm64ExposureBlue': (10000L, 1073741823000L),
-        ##    'qprmExposureBlue': (10L, 1073741823L),
+        ##          'qprmPostProcessImageFormat': ['qfmtRaw8', 'qfmtRaw16','qfmtMono8', 'qfmtMono16', 'qfmtRgbPlane8', 'qfmtRgbPlane16', 'qfmtBgr24', 'qfmtXrgb32', 'qfmtRgb48', 'qfmtBgrx32', 'qfmtRgb24'],
+        ##          'qprm64ExposureBlue': (10000L, 1073741823000L),
+        ##          'qprmExposureBlue': (10L, 1073741823L),
         ##    'qprmSyncb': ['qcSyncbOem1', 'qcSyncbExpose'],
         ##    'qprmRoiWidth': (1L, 1600L),
-        ##    'qprmPostProcessGainRed': (10L, 100000L),
-        ##    'qprmGain': (0L, 4095L),
+        ##          'qprmPostProcessGainRed': (10L, 100000L),
+        ##          'qprmGain': (0L, 4095L), #DEPRECATED
         ##    'qprmS32RegulatedCoolingTemp': (-45, 0),
         ##    'qprmS32AbsoluteOffset': (-2048, 2047),
-        ##    'qprmNormalizedGain': (451000L, 21500000L),
-        ##    'qprmPostProcessGainGreen': (10L, 100000L),
+        ##    'qprmNormalizedGain': (451000L, 21500000L),#default is 1
+        ##          'qprmPostProcessGainGreen': (10L, 100000L),
         ##    'qprmReadoutSpeed': ['qcReadout20M', 'qcReadout10M', 'qcReadout5M']}
+        
+
+        
                                 
     def getCameraInfo(self):
         for x in lib('enums', 'QCam_Info'):
@@ -246,12 +325,16 @@ class _QCameraClass:
                 self.cameraInfo[x] = a[2]
             except QCamFunctionError, err:
                 if err.value == 1:
-                    print "No info for: ", x
+                    #print "No info for: ", x
+                    pass
                 else: raise
 
     def getParam(self, param):
-        s = self.call(lib.ReadSettingsFromCam, self.handle)[1]
-        s.size = sizeof(s)
+        if param in self.groupParams:
+            return self.getParams(self.groupParams[param], asList=True)
+        s = self.readSettings()
+        #s.size = sizeof(s)
+        param = self.translateToCamera(param)
         if param in lib('enums', 'QCam_Param'):
             value = self.call(lib.GetParam, byref(s), getattr(lib, param))[2]
         elif param in lib('enums', 'QCam_ParamS32'):
@@ -261,59 +344,73 @@ class _QCameraClass:
         return value
 
     def setParam(self, param, value):
-        s = self.call(lib.ReadSettingsFromCam, self.handle)[1]
+        s = self.readSettings()
+        param = self.translateToCamera(param)
         if param in lib('enums', 'QCam_Param'):
             self.call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(value))
         elif param in lib('enums', 'QCam_ParamS32'):
             self.call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(value))
         elif param in lib('enums', 'QCam_Param64'):
             self.call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(value))
-        self.mutex.lock()
-        if self.stopSignal == True:
-            self.mutex.unlock()
-            self.call(lib.SendSettingsToCam, self.handle, byref(s))
-        if self.stopSignal == False:
-            self.mutex.unlock()
-            self.call(lib.QueueSettings, self.handle, byref(s), null, lib.qcCallbackDone)
+        with self.mutex:
+            if self.stopSignal == True:
+                #self.mutex.unlock()
+                self.call(lib.SendSettingsToCam, self.handle, byref(s))
+            if self.stopSignal == False:
+                #self.mutex.unlock()
+                self.call(lib.QueueSettings, self.handle, byref(s), null, lib.qcCallbackDone)
 
-    def getParams(self, *params):
-        s = self.call(lib.ReadSettingsFromCam, self.handle)[1]
-        dict = {}
-        for param in params:
-            if param in lib('enums', 'QCam_Param'):
-                value = self.call(lib.GetParam, byref(s), getattr(lib, param))[2]
-            elif param in lib('enums', 'QCam_ParamS32'):
-                value = self.call(lib.GetParamS32, byref(s), getattr(lib, param))[2]
-            elif param in lib('enums', 'QCam_Param64'):
-                value = self.call(lib.GetParam64, byref(s), getattr(lib, param))[2]
-            dict[param]=value
-        return dict
+    #def getParams(self, *params):
+    #    s = self.readSettings()
+    #    dict = {}
+    #    for param in params:
+    #        param = self.translateToCamera(param)
+    #        if param in lib('enums', 'QCam_Param'):
+    #            value = self.call(lib.GetParam, byref(s), getattr(lib, param))[2]
+    #        elif param in lib('enums', 'QCam_ParamS32'):
+    #            value = self.call(lib.GetParamS32, byref(s), getattr(lib, param))[2]
+    #        elif param in lib('enums', 'QCam_Param64'):
+    #            value = self.call(lib.GetParam64, byref(s), getattr(lib, param))[2]
+    #        param = self.translateToUser(param)
+    #        dict[param]=value
+    #    return dict
+    
+    def getParams(self, params, asList=False):
+        """Get a list of parameter values. Return a dictionary of name: value pairs"""
+        if asList:
+            return [self.getParam(p) for p in params]
+        else:
+            return OrderedDict([(p, self.getParam(p)) for p in params])
 
-    def setParams(self, **params):
-        s = self.call(lib.ReadSettingsFromCam, self.handle)[1]
+    def setParams(self, **params): ### need to make this work with group params
+        s = self.readSettings()
         for param in params:
+            param = self.translateToCamera(param)
             if param in lib('enums', 'QCam_Param'):
                 self.call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(params[param]))
             elif param in lib('enums', 'QCam_ParamS32'):
                 self.call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(params[param]))
             elif param in lib('enums', 'QCam_Param64'):
                 self.call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(params[param]))
-        self.mutex.lock()
-        if self.stopSignal == True:
-            self.mutex.unlock()
-            self.call(lib.SendSettingsToCam, self.handle, byref(s))
-        if self.stopSignal == False:
-            self.mutex.unlock()
-            self.call(lib.QueueSettings, self.handle, byref(s), 0, lib.qcCallbackDone)
+        with self.mutex:
+            if self.stopSignal == True:
+                #self.mutex.unlock()
+                self.call(lib.SendSettingsToCam, self.handle, byref(s))
+            if self.stopSignal == False:
+                #self.mutex.unlock()
+                self.call(lib.QueueSettings, self.handle, byref(s), 0, lib.qcCallbackDone)
 
     def start(self):
         #global i, stopsignal
-        self.mutex.lock()
-        self.stopSignal = False
-        self.i = 0
-        self.mutex.unlock()
+        #self.mutex.lock()
+        #self.stopSignal = False
+        #self.i = 0
+        #self.mutex.unlock()
+        with self.mutex:
+            self.stopSignal = False
+            self.i=0
         self.call(lib.SetStreaming, self.handle, 1)
-        for x in range(200):
+        for x in range(10):
             f, a = self.mkFrame()
             self.frames.append(f)
             self.arrays.append(a)
@@ -329,31 +426,33 @@ class _QCameraClass:
             for x in lib('enums', 'QCam_Err'):
                 if lib('enums', 'QCam_Err')[x] == args[2]:
                     raise QCamFunctionError(args[2], "There was an error during QueueFrame/Callback. Error code = %s" %(x))
-        self.mutex.lock()
-        self.lastFrame = (args[1], arrays[args[1]]) ### Need to figure out a way to attach settings info (binning, exposure gain region and offset) to frame!!!
-        if self.i != 199:
-            self.i += 1
-        else:
-            self.i = 0
-        if self.stopSignal == False:
-            self.mutex.unlock()
-            self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone, 0, self.i)
-        else:
-            self.mutex.unlock()
+        #self.mutex.lock()
+        with self.mutex:
+            self.lastFrame = (args[1], arrays[args[1]]) ### Need to figure out a way to attach settings info (binning, exposure gain region and offset) to frame!!!
+            if self.i != 9:
+                self.i += 1
+            else:
+                self.i = 0
+            if self.stopSignal == False:
+                #self.mutex.unlock()
+                self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone, 0, self.i)
+            #else:
+            #    self.mutex.unlock()
 
     def stop(self):
         #global stopsignal
-        self.mutex.lock()
-        self.stopSignal = True
-        self.call(lib.Abort, self.handle)
-        self.mutex.unlock()
+        #self.mutex.lock()
+        with self.mutex:
+            self.stopSignal = True
+            self.call(lib.Abort, self.handle)
+        #self.mutex.unlock()
 
     def getLastFrame(self):
         #global lastframe
-        self.mutex.lock()
-        a = self.lastFrame
-        self.mutex.unlock()
-        return a 
+        with self.mutex:
+            a = self.lastFrame
+            #self.mutex.unlock()
+            return a 
     
     
 #loadDriver()
