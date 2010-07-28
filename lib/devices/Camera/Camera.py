@@ -752,7 +752,7 @@ class AcquireThread(QtCore.QThread):
             printRingSize = False
             while True:
                 try:
-                    #print "Starting camera: ", self.ringSize, binning, exposure, region
+                    #print "Starting camera: ", self.ringSize, binning, exposure, region, mode
                     #self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region, mode=mode)
                     self.cam.setParam('ringSize', self.ringSize)
                     self.acqBuffer = self.cam.start()
