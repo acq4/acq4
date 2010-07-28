@@ -8,6 +8,7 @@ from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
 from pyqtgraph import graphicsWindows as gw
 from PyQt4 import QtGui
 from Mutex import Mutex, MutexLocker
+from advancedTypes import OrderedDict
 import atexit
 p = CParser('QCamApi.h', cache='QCamApi.h.cache', macros={'_WIN32': '', '__int64': ('long long')})
 if sys.platform == 'darwin':
@@ -59,7 +60,7 @@ class _QCamDriverClass:
         number = c_ulong(10)
         L = lib.CamListItem * 10
         l = L()
-        call(lib.ListCameras, l, number)
+        self.call(lib.ListCameras, l, number)
         cams = []
         for x in list(l)[:number.value]:
             cams.append(x.cameraId)
@@ -67,7 +68,7 @@ class _QCamDriverClass:
     
     def getCamera(self, cam):
         if not self.cams.has_key(cam):
-            self.cams[cam] = _CameraClass(cam, self)
+            self.cams[cam] = _QCameraClass(cam, self)
         return self.cams[cam]
         
     def __del__(self):
@@ -75,7 +76,7 @@ class _QCamDriverClass:
 
     def quit(self):
         for c in self.cams:
-            self.cams[c].close()
+            self.cams[c].quit()
         self.releaseDriver()
         
 class _QCameraClass:
@@ -83,7 +84,7 @@ class _QCameraClass:
         self.name = name
         self.driver = driver
         self.isOpen = False
-        self.handle = self.open(name)
+        self.handle = self.open()
         self.parameters = {}
         self.cameraInfo = {}
         self.frames = []
@@ -112,10 +113,10 @@ class _QCameraClass:
         else:
             return a
 
-    def open(self, name): #opens the camera and returns the handle
+    def open(self): #opens the camera and returns the handle
         """Opens the chosen camera and returns the handle. Takes cameraID parameter."""
         if not self.isOpen: 
-            a = self.call(lib.OpenCamera, name, lib.Handle())
+            a = self.call(lib.OpenCamera, self.name, lib.Handle())
             self.isOpen = True
             return a[1]   
   
@@ -125,10 +126,10 @@ class _QCameraClass:
     def quit(self):
         self.call(lib.Abort, self.handle)
         self.call(lib.SetStreaming, self.handle, 0)
-        self.call(lib.CloseCamera, handle)
+        self.call(lib.CloseCamera, self.handle)
         self.isOpen = False
 
-    def mkFrame():
+    def mkFrame(self):
         s = call(lib.GetInfo, handle, lib.qinfImageSize)[2]
         f = lib.Frame()
         frame = ascontiguousarray(empty(s/2, dtype=uint16))
@@ -136,7 +137,7 @@ class _QCameraClass:
         f.bufferSize = s
         return (f, frame)
     
-    def grabFrame():
+    def grabFrame(self):
         s = lib.GetInfo(handle, lib.qinfImageSize)[2]
         (f, frame) = mkFrame()
         call(lib.GrabFrame, handle, byref(f))
@@ -150,8 +151,8 @@ class _QCameraClass:
         s = self.call(lib.ReadSettingsFromCam, self.handle)[1]
         s.size = sizeof(s)
         for x in lib('enums', 'QCam_Param'):
-            if self.call(lib.GetParam, byref(s), getattr(lib, x))() == 0:
-                try:
+            try:
+                if self.call(lib.GetParam, byref(s), getattr(lib, x))() == 0:
                     try: ###first try to get a SparseTable
                         table = (c_ulong *32)()
                         r = self.call(lib.GetParamSparseTable, byref(s), getattr(lib,x), table, c_long(32))
@@ -162,12 +163,12 @@ class _QCameraClass:
                             max = self.call(lib.GetParamMax, byref(s), getattr(lib,x))[2]
                             self.parameters[x] = (min, max)
                         else: raise      
-                except QCamFunctionError, err:
-                    if err.value == 1: pass    
-                    else: raise
+            except QCamFunctionError, err:
+                if err.value == 1: pass    
+                else: raise
         for x in lib('enums', 'QCam_ParamS32'):
-            if self.call(lib.GetParamS32, byref(s), getattr(lib, x))() == 0:
-                try:
+            try:
+                if self.call(lib.GetParamS32, byref(s), getattr(lib, x))() == 0:
                     try:
                         table = (c_long *32)()
                         r = self.call(lib.GetParamSparseTableS32, byref(s), getattr(lib,x), table, c_long(32))
@@ -178,12 +179,12 @@ class _QCameraClass:
                             max = self.call(lib.GetParamS32Max, byref(s), getattr(lib,x))[2]
                             self.parameters[x] = (min, max)
                         else: raise
-                except QCamFunctionError, err:
-                    if err.value == 1: pass
-                    else: raise
+            except QCamFunctionError, err:
+                if err.value == 1: pass
+                else: raise
         for x in lib('enums', 'QCam_Param64'):
-            if self.call(lib.GetParam64, byref(s), getattr(lib, x))() == 0:
-                try:
+            try:
+                if self.call(lib.GetParam64, byref(s), getattr(lib, x))() == 0:
                     try:
                         table = (c_ulonglong *32)()
                         r = self.call(lib.GetParamSparseTable64, byref(s), getattr(lib,x), table, c_long(32))
@@ -194,9 +195,9 @@ class _QCameraClass:
                             max = self.call(lib.GetParam64Max, byref(s), getattr(lib,x))[2]
                             self.parameters[x] = (min, max)
                         else: raise
-                except QCamFunctionError, err:
-                    if err.value == 1:  pass
-                    else: raise
+            except QCamFunctionError, err:
+                if err.value == 1:  pass
+                else: raise
         self.parameters.pop('qprmExposure')
         self.parameters.pop('qprmOffset')
         for x in self.parameters: 
@@ -208,7 +209,35 @@ class _QCameraClass:
                         for b in lib('enums', self.paramEnums[x]): # b is the number code for the parameter option
                             if lib('enums', self.paramEnums[x])[b] == a:
                                 self.parameters[x][i] = b
-                                print "old: ", a, "new: ", parameters[x][i]
+                                print "old: ", a, "new: ", self.parameters[x][i]
+        ##### For camera on rig1, listParams returns: {                       
+        ##    'qprmBlackoutMode': [0L, 1L],
+        ##    'qprmBinning': [1L, 2L, 4L, 8L],
+        ##    'qprmExposureRed': (10L, 1073741823L),
+        ##    'qprm64Exposure': (10000L, 1073741823000L),
+        ##    'qprmPostProcessBayerAlgorithm': [1L, 2L, 3L, 4L],
+        ##    'qprmImageFormat': ['qfmtRaw8', 'qfmtRaw16', 'qfmtMono8', 'qfmtMono16', 'qfmtRgbPlane8', 'qfmtRgbPlane16', 'qfmtBgr24', 'qfmtXrgb32', 'qfmtRgb48', 'qfmtBgrx32', 'qfmtRgb24'],
+        ##    'qprmCoolerActive': [0L, 1L],
+        ##    'qprmRoiHeight': (1L, 1200L),
+        ##    'qprmColorWheel': ['qcWheelRed', 'qcWheelGreen', 'qcWheelBlue'],
+        ##    'qprm64ExposureRed': (10000L,1073741823000L),
+        ##    'qprmRoiX': (0L, 1599L),
+        ##    'qprmRoiY': (0L, 1199L),
+        ##    'qprmS32NormalizedGaindB': (-6930000, 26660000),
+        ##    'qprmPostProcessGainBlue': (10L, 100000L),
+        ##    'qprmTriggerType': ['qcTriggerNone', 'qcTriggerEdgeHi', 'qcTriggerEdgeLow', 'qcTriggerPulseHi', 'qcTriggerPulseLow', 'qcTriggerSoftware', 'qcTriggerStrobeHi', 'qcTriggerStrobeLow'],
+        ##    'qprmPostProcessImageFormat': ['qfmtRaw8', 'qfmtRaw16','qfmtMono8', 'qfmtMono16', 'qfmtRgbPlane8', 'qfmtRgbPlane16', 'qfmtBgr24', 'qfmtXrgb32', 'qfmtRgb48', 'qfmtBgrx32', 'qfmtRgb24'],
+        ##    'qprm64ExposureBlue': (10000L, 1073741823000L),
+        ##    'qprmExposureBlue': (10L, 1073741823L),
+        ##    'qprmSyncb': ['qcSyncbOem1', 'qcSyncbExpose'],
+        ##    'qprmRoiWidth': (1L, 1600L),
+        ##    'qprmPostProcessGainRed': (10L, 100000L),
+        ##    'qprmGain': (0L, 4095L),
+        ##    'qprmS32RegulatedCoolingTemp': (-45, 0),
+        ##    'qprmS32AbsoluteOffset': (-2048, 2047),
+        ##    'qprmNormalizedGain': (451000L, 21500000L),
+        ##    'qprmPostProcessGainGreen': (10L, 100000L),
+        ##    'qprmReadoutSpeed': ['qcReadout20M', 'qcReadout10M', 'qcReadout5M']}
                                 
     def getCameraInfo(self):
         for x in lib('enums', 'QCam_Info'):
@@ -285,7 +314,7 @@ class _QCameraClass:
         self.mutex.unlock()
         self.call(lib.SetStreaming, self.handle, 1)
         for x in range(200):
-            f, a = mkFrame()
+            f, a = self.mkFrame()
             self.frames.append(f)
             self.arrays.append(a)
         for x in range(2):
