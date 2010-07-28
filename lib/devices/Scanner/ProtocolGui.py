@@ -394,18 +394,22 @@ class ScannerProtoGui(ProtocolGui):
     def getTargetList(self):
         items = self.activeItems()
         locations = []
+        occArea = QtGui.QPainterPath()
+        for o in self.occlusions.values():
+            occArea |= o.mapToScene(o.shape())
+            
         for i in items:
             pts = i.listPoints()
-            for x in self.occlusions.keys():  ##can we just join the occlusion areas together?
-                area = self.occlusions[x].mapToScene(self.occlusions[x].shape())
-                for j in range(len(pts)):
-                    p=pts[j]
-                    point = QtCore.QPointF(p[0], p[1])
-                    if area.contains(point):
-                        i.setTargetPen(j, QtGui.QPen(QtGui.QColor(0,0,0,160)))
-                    else:
-                        locations.append(p)
-                        i.setTargetPen(j, None)
+            #for x in self.occlusions.keys():  ##can we just join the occlusion areas together?
+                #area = self.occlusions[x].mapToScene(self.occlusions[x].shape())
+            for j in range(len(pts)):
+                p=pts[j]
+                point = QtCore.QPointF(p[0], p[1])
+                if occArea.contains(point):
+                    i.setTargetPen(j, QtGui.QPen(QtGui.QColor(0,0,0,160)))
+                else:
+                    locations.append(p)
+                    i.setTargetPen(j, None)
         return locations
 
     
@@ -666,3 +670,6 @@ class TargetOcclusion(PolygonROI):
     def listPoints(self):
         pts = []
         return pts
+    
+    def setPointSize(self, size):
+        pass

@@ -4,6 +4,8 @@ import sys, numpy, time, re, os
 #import lib.util.cheader as cheader
 from clibrary import *
 from advancedTypes import OrderedDict
+from debug import backtrace
+import ptime
 
 __all__ = ['PVCam']
 
@@ -306,23 +308,32 @@ class _CameraClass:
     def open(self):
         ## Driver bug; try opening twice.
         try:
-            self.hCam = LIB.cam_open(self.name, o_mode=LIB.OPEN_EXCLUSIVE)[2]
+            self.hCam = self.call('cam_open', self.name, o_mode=LIB.OPEN_EXCLUSIVE)[2]
+            #self.hCam = LIB.cam_open(self.name, o_mode=LIB.OPEN_EXCLUSIVE)[2]
         except:
-            self.hCam = LIB.cam_open(self.name, o_mode=LIB.OPEN_EXCLUSIVE)[2]
+            self.hCam = self.call('cam_open', self.name, o_mode=LIB.OPEN_EXCLUSIVE)[2]
+            #self.hCam = LIB.cam_open(self.name, o_mode=LIB.OPEN_EXCLUSIVE)[2]
         self.isOpen = True
 
     def close(self):
         if self.isOpen:
             #self.pvcam.pl_exp_abort(CCS_HALT_CLOSE_SHUTTER)
-            self.call('cam_close')
+            self.call('cam_close', self.hCam)
             self.isOpen = False
             
     def call(self, fn, *args, **kargs):
-        return self.pvcam.call(fn, self.hCam, *args, **kargs)
+        t = ptime.time()
+        ret = LIB('functions', fn)(*args, **kargs)
+        t2 = ptime.time()
+        if t2-t > 4.0:
+            print backtrace()
+            print "function took %f sec:" % (t2-t), fn, args, kargs
+        return ret
+        #return self.pvcam.call(fn, self.hCam, *args, **kargs)
 
     def initCam(self, params=None):
         buf = create_string_buffer('\0' * LIB.CCD_NAME_LEN)
-        camType = self.call('get_param', LIB.PARAM_CHIP_NAME, LIB.ATTR_CURRENT, buf)[3]
+        camType = self.call('get_param', self.hCam, LIB.PARAM_CHIP_NAME, LIB.ATTR_CURRENT, buf)[3]
         
         ## Implement default settings for this camera model
         defaults = OrderedDict([(p[0], p[1]) for p in cameraDefaults['ALL']])
@@ -437,7 +448,7 @@ class _CameraClass:
                 return ({paramName:value}, False)
             elif  (paramName in self.enumTable) and (currentVal == strVal):
                 #print "not setting parameter %s; unchanged" % paramName
-                return ({paramName:value}, False)
+                return ({paramName:strVal}, False)
             #else:
                 #print "will set parameter %s: new %s != old %s" % (paramName, str(value), str(currentVal))
         
@@ -498,7 +509,8 @@ class _CameraClass:
         ## Set value
         #print "pvcam setting parameter", paramName
         val = mkCObj(typ, value)
-        LIB.pl_set_param(self.hCam, param, byref(val))
+        self.call('pl_set_param', self.hCam, param, byref(val))
+        #LIB.pl_set_param(self.hCam, param, byref(val))
         
         if param in self.enumTable:
             val = self.enumTable[param][1][val.value]
@@ -591,15 +603,18 @@ class _CameraClass:
             frames = 1
         else:
             self.buf = numpy.empty((frames, rgn.height, rgn.width), dtype=numpy.uint16)
-        res = LIB.pl_exp_setup_seq(self.hCam, frames, 1, rgn, expMode, exp)
+        res = self.call('pl_exp_setup_seq', self.hCam, frames, 1, rgn, expMode, exp)
+        #res = LIB.pl_exp_setup_seq(self.hCam, frames, 1, rgn, expMode, exp)
         ssize = res[6]
         
         if len(self.buf.data) != ssize:
             raise Exception('Created wrong size buffer! (%d != %d) Error: %s' %(len(self.buf.data), ssize, self.pvcam.error()))
-        LIB.pl_exp_start_seq(self.hCam, self.buf.ctypes.data)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
+        self.call('pl_exp_start_seq', self.hCam, self.buf.ctypes.data)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
+        #LIB.pl_exp_start_seq(self.hCam, self.buf.ctypes.data)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
         self.mode = 1
         while True:
-            ret = LIB.pl_exp_check_status(self.hCam)
+            ret = self.call('pl_exp_check_status', self.hCam)
+            #ret = LIB.pl_exp_check_status(self.hCam)
             status = ret[1]
             bcount = ret[2]
             if status in [LIB.READOUT_COMPLETE, LIB.READOUT_NOT_ACTIVE]:
@@ -635,13 +650,15 @@ class _CameraClass:
         self.frameSize = rgn.width * rgn.height * 2
         self.buf = numpy.ascontiguousarray(numpy.empty((ringSize, rgn.height, rgn.width), dtype=numpy.uint16))
         
-        res = LIB.pl_exp_setup_cont(self.hCam, 1, rgn, expMode, exp, buffer_mode=LIB.CIRC_OVERWRITE)
+        res = self.call('pl_exp_setup_cont', self.hCam, 1, rgn, expMode, exp, buffer_mode=LIB.CIRC_OVERWRITE)
+        #res = LIB.pl_exp_setup_cont(self.hCam, 1, rgn, expMode, exp, buffer_mode=LIB.CIRC_OVERWRITE)
         ssize = res[5]
         ssize = ssize*ringSize
         #print "   done"
         if len(self.buf.data) != ssize:
             raise Exception('Created wrong size buffer! (%d != %d) Error: %s' %(len(self.buf.data), ssize, self.pvcam.error()))
-        LIB.pl_exp_start_cont(self.hCam, self.buf.ctypes.data, ssize)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
+        self.call('pl_exp_start_cont', self.hCam, self.buf.ctypes.data, ssize)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
+        #LIB.pl_exp_start_cont(self.hCam, self.buf.ctypes.data, ssize)   ## Warning: this memory is not locked, may cause errors if the system starts swapping.
         self.mode = 2
 
         return self.buf.transpose((0, 2, 1))
@@ -666,7 +683,8 @@ class _CameraClass:
         """Return the index of the last frame transferred."""
         assert(self.buf is not None)
         try:
-            frame = LIB.pl_exp_get_latest_frame(self.hCam)[1]
+            frame = self.call('pl_exp_get_latest_frame', self.hCam)[1]
+            #frame = LIB.pl_exp_get_latest_frame(self.hCam)[1]
         except:
             if sys.exc_info()[1][1] == 3029:  ## No frame is ready yet (?)
                 return None
@@ -682,9 +700,11 @@ class _CameraClass:
 
     def stop(self):
         if self.mode == 1:
-            LIB.pl_exp_abort(self.hCam, LIB.CCS_CLEAR_CLOSE_SHTR)
+            self.call('pl_exp_abort', self.hCam, LIB.CCS_CLEAR_CLOSE_SHTR)
+            #LIB.pl_exp_abort(self.hCam, LIB.CCS_CLEAR_CLOSE_SHTR)
         elif self.mode == 2:
-            LIB.pl_exp_stop_cont(self.hCam, LIB.CCS_CLEAR_CLOSE_SHTR)
+            self.call('pl_exp_stop_cont', self.hCam, LIB.CCS_CLEAR_CLOSE_SHTR)
+            #LIB.pl_exp_stop_cont(self.hCam, LIB.CCS_CLEAR_CLOSE_SHTR)
         self.mode = 0
 
     def getParamRange(self, param):
@@ -717,11 +737,13 @@ class _CameraClass:
         names = []
         vals = []
         for i in range(0, num):
-            ret = LIB.pl_enum_str_length(self.hCam, param, i)
+            ret = self.call('pl_enum_str_length', self.hCam, param, i)
+            #ret = LIB.pl_enum_str_length(self.hCam, param, i)
             slen = ret[3]
             strn = create_string_buffer('\0' * (slen))
             val = c_int()
-            LIB.pl_get_enum_param(self.hCam, param, i, byref(val), strn, c_ulong(slen))
+            self.call('pl_get_enum_param', self.hCam, param, i, byref(val), strn, c_ulong(slen))
+            #LIB.pl_get_enum_param(self.hCam, param, i, byref(val), strn, c_ulong(slen))
             names.append(strn.value)
             vals.append(val.value)
         return (names, vals)
@@ -792,7 +814,8 @@ class _CameraClass:
             else:
                 typ = self.getParamType(param)
         val = mkCObj(typ)
-        LIB.pl_get_param(self.hCam, param, attr, byref(val))
+        self.call('pl_get_param', self.hCam, param, attr, byref(val))
+        #LIB.pl_get_param(self.hCam, param, attr, byref(val))
 
         ## If this is an enum, return the string instead of the value
         if typ == LIB.TYPE_ENUM:

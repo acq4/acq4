@@ -43,12 +43,12 @@ class NiDAQ(Device):
         finally:
             self.release()
         
-    def getChannelValue(self, chan):
+    def getChannelValue(self, chan, mode=None):
         self.reserve(block=True)
         #print "Setting channel %s to %f" % (chan, value)
         try:
             if 'ai' in chan:
-                val = self.n.readAnalogSample(chan)
+                val = self.n.readAnalogSample(chan, mode=mode)
             else:
                 val = self.n.readDigitalSample(chan)
                 if val <= 0:
@@ -56,7 +56,7 @@ class NiDAQ(Device):
                 else:
                     val = 1
         except:
-            printExc("Error while setting channel %s to %s:" % (chan, str(value)))
+            printExc("Error while getting channel value %s:" % (chan))
             raise
         finally:
             self.release()

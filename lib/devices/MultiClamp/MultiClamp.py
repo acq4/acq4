@@ -434,11 +434,11 @@ class MultiClampTask(DeviceTask):
                 
             return marr
     
-    def stop(self):
+    def stop(self, abort=False):
         with MutexLocker(self.dev.lock):
             ## This is just a bit sketchy, but these tasks have to be stopped before the holding level can be reset.
             for ch in self.daqTasks:
-                self.daqTasks[ch].stop()
+                self.daqTasks[ch].stop(abort=abort)
             self.dev.setHolding()
         
         

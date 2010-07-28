@@ -212,6 +212,7 @@ class MultiClamp:
     INSTANCE = None
     
     def __init__(self):
+        self.telegraph = None
         if MultiClamp.INSTANCE is not None:
             raise Exception("Already created MultiClamp driver object; use MultiClamp.INSTANCE")
         self.handle = None
@@ -233,7 +234,8 @@ class MultiClamp:
     def quit(self):
         ## do other things to shut down driver?
         self.disconnect()
-        self.telegraph.quit()
+        if self.telegraph is not None:
+            self.telegraph.quit()
         MultiClamp.INSTANCE = None
     
     @staticmethod
@@ -277,7 +279,7 @@ class MultiClamp:
     def disconnect(self):
         """Destroy connection to commander"""
         with self.lock:
-            if self.handle is not None:
+            if self.handle is not None and axlib is not None:
                 axlib.DestroyObject(self.handle)
                 self.handle = None
 
