@@ -158,7 +158,7 @@ def describeObj(__XX__Obj, depth=4, printResult=True, returnResult=False, ignore
     if not start or returnResult:
         return refs
 
-def objectSize(obj, ignore=None, verbose=False, depth=0):
+def objectSize(obj, ignore=None, verbose=False, depth=0, recursive=False):
     """Guess how much memory an object is using"""
     ignoreTypes = [types.MethodType, types.UnboundMethodType, types.BuiltinMethodType, types.FunctionType, types.BuiltinFunctionType]
     ignoreRegex = re.compile('(method-wrapper|Flag|ItemChange|Option|Mode)')
@@ -179,65 +179,75 @@ def objectSize(obj, ignore=None, verbose=False, depth=0):
         return 0
     ignore[hsh] = 1
     
-    size = sys.getsizeof(obj)
+    try:
+        size = sys.getsizeof(obj)
+    except TypeError:
+        size = 0
+        
     if isinstance(obj, ndarray):
-        size += len(obj.data)
-    elif type(obj) in [list, tuple]:
-        if verbose:
-            print indent+"list:"
-        for o in obj:
-            s = objectSize(o, ignore=ignore, verbose=verbose, depth=depth+1)
-            if verbose:
-                print indent+'  +', s
-            size += s
-    elif isinstance(obj, dict):
-        if verbose:
-            print indent+"list:"
-        for k in obj:
-            s = objectSize(obj[k], ignore=ignore, verbose=verbose, depth=depth+1)
-            if verbose:
-                print indent+'  +', k, s
-            size += s
-    elif isinstance(obj, QtCore.QObject):
         try:
-            childs = obj.children()
-            if verbose:
-                print indent+"Qt children:"
-            for ch in childs:
-                s = objectSize(obj, ignore=ignore, verbose=verbose, depth=depth+1)
-                size += s
-                if verbose:
-                    print indent + '  +', ch.objectName(), s
-                
+            size += len(obj.data)
         except:
             pass
-    #if isinstance(obj, types.InstanceType):
-    gc.collect()
-    if verbose:
-        print indent+'attrs:'
-    for k in dir(obj):
-        if k in ['__dict__']:
-            continue
-        o = getattr(obj, k)
-        if type(o) in ignoreTypes:
-            continue
-        strtyp = str(type(o))
-        if ignoreRegex.search(strtyp):
-            continue
-        #if isinstance(o, types.ObjectType) and strtyp == "<type 'method-wrapper'>":
-            #continue
+            
         
-        #if verbose:
-            #print indent, k, '?'
-        refs = [r for r in gc.get_referrers(o) if type(r) != types.FrameType]
-        if len(refs) == 1:
-            s = objectSize(o, ignore=ignore, verbose=verbose, depth=depth+1)
-            size += s
+    if recursive:
+        if type(obj) in [list, tuple]:
             if verbose:
-                print indent + "  +", k, s
-        #else:
+                print indent+"list:"
+            for o in obj:
+                s = objectSize(o, ignore=ignore, verbose=verbose, depth=depth+1)
+                if verbose:
+                    print indent+'  +', s
+                size += s
+        elif isinstance(obj, dict):
+            if verbose:
+                print indent+"list:"
+            for k in obj:
+                s = objectSize(obj[k], ignore=ignore, verbose=verbose, depth=depth+1)
+                if verbose:
+                    print indent+'  +', k, s
+                size += s
+        elif isinstance(obj, QtCore.QObject):
+            try:
+                childs = obj.children()
+                if verbose:
+                    print indent+"Qt children:"
+                for ch in childs:
+                    s = objectSize(obj, ignore=ignore, verbose=verbose, depth=depth+1)
+                    size += s
+                    if verbose:
+                        print indent + '  +', ch.objectName(), s
+                    
+            except:
+                pass
+    #if isinstance(obj, types.InstanceType):
+        gc.collect()
+        if verbose:
+            print indent+'attrs:'
+        for k in dir(obj):
+            if k in ['__dict__']:
+                continue
+            o = getattr(obj, k)
+            if type(o) in ignoreTypes:
+                continue
+            strtyp = str(type(o))
+            if ignoreRegex.search(strtyp):
+                continue
+            #if isinstance(o, types.ObjectType) and strtyp == "<type 'method-wrapper'>":
+                #continue
+            
             #if verbose:
-                #print indent + '  -', k, len(refs)
+                #print indent, k, '?'
+            refs = [r for r in gc.get_referrers(o) if type(r) != types.FrameType]
+            if len(refs) == 1:
+                s = objectSize(o, ignore=ignore, verbose=verbose, depth=depth+1)
+                size += s
+                if verbose:
+                    print indent + "  +", k, s
+            #else:
+                #if verbose:
+                    #print indent + '  -', k, len(refs)
     return size
 
 class GarbageWatcher:
@@ -300,67 +310,89 @@ class Profiler:
         
 class ObjectWatcher:
     def __init__(self):
-        self.objs = weakref.WeakKeyDictionary()
-        self.ids = {}
-        self.collect(self.objs, self.ids)
-        self.newObjs = None
+        self.objs = self.newObjs = self.persistObjs = None
+        self.rev = {}  ## reverse lookup
+        self.objs = self.collect()
         
-    def collect(self, objs, ids):
+    def collect(self):
+        ids = {}
+        rev = {}
+        gc.collect()
         for o in gc.get_objects():
+            if id(o) in self.rev:  ## ignore everything this object generates
+                continue
+            s = objectSize(o)
+            ref = None
             try:
-                ids[id(o)] = type(o)
-                objs[o] = type(o)
+                ref = weakref.ref(o)
+                rev[id(ref)] = None
             except:
                 pass
+            desc = (type(o), s, ref)
+            ids[id(o)] = desc
+            rev[id(desc)] = None
+            
+        for o in [ids, rev, self.objs, self.newObjs, self.persistObjs, self.rev]:
+            rev[id(o)] = None
+        self.rev = rev
+        return ids
             
     def diff(self):
-        gc.collect()
-        objs = weakref.WeakKeyDictionary()
-        ids = {}
-        self.collect(objs, ids)
-        newObjs = weakref.WeakKeyDictionary()
-        self.delIDs = {}
+        objs = self.collect()
+        #objs, allIds, onlyIds = self.collect()
+        
+        delObjs = {}
+        for i in self.objs:
+            if i not in objs:
+                delObjs[i] = self.objs[i]
+        
+        newObjs = {}
         for o in objs:
-            try:
-                if o not in self.objs:
-                    newObjs[o] = objs[o]
-            except:
-                pass
-        for i in self.ids:
-            try:
-                if i not in ids:
-                    self.delIDs[i] = self.ids[i]
-            except:
-                pass
-                
+            if o not in self.objs:
+                newObjs[o] = objs[o]
         
         self.objs = objs
-        self.ids = ids
         print "-----------  Deleted: ------------"
-        self.report(self.delIDs)
+        self.report(delObjs)
         print "-----------  Created: ------------"
         self.report(newObjs)
-        if self.newObjs is not None:
-            print "----------- Persisted: -----------"
-            self.report(self.newObjs)  ## if any objects are left from the last round of new objects, then they have persisted
-            self.persistObjs = self.newObjs
         
+        if self.newObjs is not None:
+            perObjs = {}
+            for o in self.newObjs:  ## if any objects are left from the last round of new objects, then they have persisted
+                if o in self.objs:
+                    perObjs[o] = self.objs[o]
+            print "----------- Persisted: -----------"
+            self.report(perObjs)  
+            self.persistObjs = self.newObjs
         self.newObjs = newObjs
         
     def report(self, d):
-        typs = d.values()
-        typSet = list(set(typs))
-        typSet.sort(lambda a,b: cmp(typs.count(a), typs.count(b)))
+        #typs = d.values()
+        #typSet = list(set(typs))
+        #typSet.sort(lambda a,b: cmp(typs.count(a), typs.count(b)))
         
-        for t in typSet:
-            print "  ", typs.count(t), "\t", t
+        count = {}
+        for o in d:
+            typ, size, ref = d[o]
+            if typ not in count:
+                count[typ] = [1, size]
+            else:
+                count[typ][0] += 1
+                count[typ][1] += size
+                
+        typs = count.keys()
+        typs.sort(lambda a,b: cmp(count[a][1], count[b][1]))
+        
+        for t in typs:
+            print "  ", count[t][0], "\t", count[t][1], "\t", t
         
     def findTypes(self, d, regex):
-        objs = weakref.WeakKeyDictionary()
+        objs = []
         r = re.compile(regex)
         for k in d:
-            if r.search(str(d[k])):
-                objs[k] = d[k]
+            if r.search(str(d[k][0])):
+                objs.append(d[k])
         return objs
         
     def findNew(self, regex):

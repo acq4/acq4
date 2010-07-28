@@ -75,10 +75,10 @@ Valid options are:
         self.alreadyQuit = False
         self.taskLock = Mutex(QtCore.QMutex.Recursive)
         atexit.register(self.quit)
-        self.devices = {}
-        self.modules = {}
-        self.config = {}
-        self.definedModules = {}
+        self.devices = OrderedDict()
+        self.modules = OrderedDict()
+        self.config = OrderedDict()
+        self.definedModules = OrderedDict()
         #self.devRack = None
         self.dataManager = DataManager()
         self.currentDir = None
@@ -565,6 +565,7 @@ class Task:
         self.lockedDevs = []
         self.startedDevs = []
         self.stopped = False
+        self.abortRequested = False
         #print "======  Executing task %d:" % self.id
         #print self.cfg
         #print "======================="
@@ -640,9 +641,10 @@ class Task:
         
         
     def isDone(self):
-        t = ptime.time()
-        if t - self.startTime < self.cfg['duration']:
-            return False
+        if not self.abort:
+            t = ptime.time()
+            if t - self.startTime < self.cfg['duration']:
+                return False
         d = self.tasksDone()
         #print "Is done:", d
         return d
@@ -656,8 +658,8 @@ class Task:
         
     def stop(self, abort=False):
         """Stop all tasks and read data. If abort is True, does not attempt to collect data from the run."""
-        prof = Profiler("Manager.Task.stop", disabled=True
-)
+        prof = Profiler("Manager.Task.stop", disabled=True)
+        self.abortRequested = abort
         try:
             if not self.stopped:
                 #print "stopping tasks.."
@@ -667,7 +669,7 @@ class Task:
                     ## Force all tasks to stop immediately.
                     #print "Stopping task", t, "..."
                     try:
-                        self.tasks[t].stop()
+                        self.tasks[t].stop(abort=abort)
                         self.startedDevs.remove(t)
                     except:
                         printExc("Error while stopping task %s:" % t)

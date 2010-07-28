@@ -209,7 +209,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         self.roi = CamROI(self.camSize, parent=self.cameraItemGroup)
         #QtCore.QObject.connect(self.roi, QtCore.SIGNAL('regionChangeFinished'), self.updateRegion)
-        self.roi.connect(QtCore.SIGNAL('regionChangeFinished'), self.updateRegion)
+        self.roi.connect(QtCore.SIGNAL('regionChangeFinished'), self.regionWidgetChanged)
         #self.cameraItemGroup.addToGroup(self.roi)
         self.roi.setZValue(1000)
         self.setRegion()
@@ -402,14 +402,17 @@ class CameraWindow(QtGui.QMainWindow):
     def showMessage(self, msg):
         self.ui.statusbar.showMessage(str(msg))
         
+    def regionWidgetChanged(self, *args):
+        self.updateRegion()
+        
     #@trace
-    def updateRegion(self, *args):
+    def updateRegion(self, autoRestart=True):
         self.clearFrameBuffer()
         r = self.roi.parentBounds()
         newRegion = [int(r.left()), int(r.top()), int(r.width()), int(r.height())]
         if self.region != newRegion:
             self.region = newRegion
-            self.cam.setParam('region', self.region)
+            self.cam.setParam('region', self.region, autoRestart=autoRestart)
         
         
     #@trace
@@ -496,13 +499,13 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.btnAcquire.setEnabled(True)
 
     #@trace
-    def setBinning(self, ind=None):
+    def setBinning(self, ind=None, autoRestart=True):
         """Set camera's binning value. If ind is specified, it is the index from binningCombo from which to grab the new binning value."""
         #sys.stdout.write("+")
         self.backgroundFrame = None
         if ind is not None:
             self.binning = int(self.ui.binningCombo.itemText(ind))
-        self.cam.setParam('binning', (self.binning, self.binning))
+        self.cam.setParam('binning', (self.binning, self.binning), autoRestart=autoRestart)
         #self.acquireThread.reset()
         self.clearFrameBuffer()
         self.updateRgnLabel()
@@ -515,11 +518,11 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.binningCombo.setCurrentIndex(ind)
         
     #@trace
-    def setExposure(self, e=None):
+    def setExposure(self, e=None, autoRestart=True):
         #print "Set exposure:", e
         if e is not None:
             self.exposure = e
-        self.cam.setParam('exposure', self.exposure)
+        self.cam.setParam('exposure', self.exposure, autoRestart=autoRestart)
         
     #@trace
     def openCamera(self, ind=0):
@@ -635,10 +638,10 @@ class CameraWindow(QtGui.QMainWindow):
     def toggleAcquire(self):
         if self.ui.btnAcquire.isChecked():
             try:
-                self.cam.setParam('triggerMode', 'Normal')
-                self.setBinning()
-                self.setExposure()
-                self.updateRegion()
+                self.cam.setParam('triggerMode', 'Normal', autoRestart=False)
+                self.setBinning(autoRestart=False)
+                self.setExposure(autoRestart=False)
+                self.updateRegion(autoRestart=False)
                 self.cam.start()
             except:
                 self.ui.btnAcquire.setChecked(False)

@@ -79,6 +79,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.update()
         
     def setPos(self, pos, update=True):
+        #print "setPos() called."
         pos = Point(pos)
         self.state['pos'] = pos
         QtGui.QGraphicsItem.setPos(self, pos)
@@ -220,7 +221,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         
         
     def movePoint(self, pt, pos, modifiers=QtCore.Qt.KeyboardModifier()):
-        #print "movePoint", pos
+        #print "movePoint() called."
         newState = self.stateCopy()
         h = self.handles[pt]
         #p0 = self.mapToScene(h['item'].pos())
@@ -248,6 +249,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         
         elif h['type'] == 'f':
             h['item'].setPos(self.mapFromScene(pos))
+            self.emit(QtCore.SIGNAL('regionChanged'), self)
             
         elif h['type'] == 's':
             #c = h['center']
@@ -377,16 +379,21 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.handleChange()
     
     def handleChange(self):
+        #print "handleChange() called."
         changed = False
+        #print "self.lastState:", self.lastState
         if self.lastState is None:
             changed = True
         else:
             for k in self.state.keys():
+                #print k, self.state[k], self.lastState[k]
                 if self.state[k] != self.lastState[k]:
                     #print "state %s has changed; emit signal" % k
                     changed = True
         self.lastState = self.stateCopy()
+        #print "changed =", changed
         if changed:
+            #print "handle changed."
             self.update()
             self.emit(QtCore.SIGNAL('regionChanged'), self)
             
@@ -863,6 +870,7 @@ class CircleROI(EllipseROI):
 class PolygonROI(ROI):
     def __init__(self, positions, **args):
         ROI.__init__(self, [0,0], [100,100], **args)
+        #ROI.__init__(self, positions[0])
         for p in positions:
             self.addFreeHandle(p)
             

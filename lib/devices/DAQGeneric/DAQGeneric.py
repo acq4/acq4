@@ -40,13 +40,18 @@ class DAQGeneric(Device):
             daqDev.setChannelValue(chan, self.holding[channel]*scale, block=False)
         
     def getChannelValue(self, channel):
-        daq, chan = self.config[channel]['channel']
+        chConf = self.config[channel]['channel']
+        daq, chan = chConf[:2]
+        mode = None
+        if len(chConf) > 2:
+            mode = chConf[2]
+
         daqDev = self.dm.getDevice(daq)
         if 'scale' in self.config[channel]:
             scale = self.config[channel]['scale']
         else:
             scale = 1.0            
-        return daqDev.getChannelValue(chan)/scale
+        return daqDev.getChannelValue(chan, mode=mode)/scale
 
         
     #def devRackInterface(self):
@@ -134,7 +139,10 @@ class DAQGenericTask(DeviceTask):
                     self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                     daqTask.setWaveform(chConf['channel'][1], cmdData)
                 else:
-                    daqTask.addChannel(chConf['channel'][1], chConf['type'])
+                    mode = None
+                    if len(chConf['channel']) > 2:
+                        mode = chConf['channel'][2]
+                    daqTask.addChannel(chConf['channel'][1], chConf['type'], mode=mode)
                     self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                 #print "  done: ", self.daqTasks.keys()
         

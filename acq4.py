@@ -42,7 +42,7 @@ try:
     from functions import *
     
 except:
-    ## Run python code preiodically to allow interactive debuggers to interrupt the qt event loop
+    ## Run python code periodically to allow interactive debuggers to interrupt the qt event loop
     timer = QtCore.QTimer()
     def donothing(*args):
         x = 0

@@ -308,7 +308,7 @@ class ImageView(QtGui.QWidget):
             self.roiCurve.setData(y=data, x=self.tVals)
             #self.ui.roiPlot.replot()
 
-    def setImage(self, img, autoRange=True, autoLevels=True, levels=None, axes=None, xvals=None):
+    def setImage(self, img, autoRange=True, autoLevels=True, levels=None, axes=None, xvals=None, pos=None, scale=None):
         """Set the image to be displayed in the widget.
         Options are:
           img:         ndarray; the image to be displayed.
@@ -326,7 +326,10 @@ class ImageView(QtGui.QWidget):
         if xvals is not None:
             self.tVals = xvals
         elif hasattr(img, 'xvals'):
-            self.tVals = img.xvals(0)
+            try:
+                self.tVals = img.xvals(0)
+            except:
+                self.tVals = arange(img.shape[0])
         else:
             self.tVals = arange(img.shape[0])
         #self.ui.timeSlider.setValue(0)
@@ -346,8 +349,6 @@ class ImageView(QtGui.QWidget):
 
             
         self.imageDisp = None
-        if autoRange:
-            self.autoRange()
         if autoLevels:
             self.autoLevels()
         if levels is not None:
@@ -376,6 +377,14 @@ class ImageView(QtGui.QWidget):
         #else:
             #self.ui.roiPlot.hide()
             
+        self.imageItem.resetTransform()
+        if scale is not None:
+            self.imageItem.scale(*scale)
+        if scale is not None:
+            self.imageItem.setPos(*pos)
+            
+        if autoRange:
+            self.autoRange()
         self.roiClicked()
             
             
@@ -392,7 +401,8 @@ class ImageView(QtGui.QWidget):
     def autoRange(self):
         image = self.getProcessedImage()
         
-        self.ui.graphicsView.setRange(QtCore.QRectF(0, 0, image.shape[self.axes['x']], image.shape[self.axes['y']]), padding=0., lockAspect=True)        
+        #self.ui.graphicsView.setRange(QtCore.QRectF(0, 0, image.shape[self.axes['x']], image.shape[self.axes['y']]), padding=0., lockAspect=True)        
+        self.ui.graphicsView.setRange(self.imageItem.sceneBoundingRect(), padding=0., lockAspect=True)
         
     def getProcessedImage(self):
         if self.imageDisp is None:
