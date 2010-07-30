@@ -10,48 +10,58 @@ from debug import *
 class DAQGeneric(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self._DGLock = Mutex(QtCore.QMutex.Recursive)
         ## Do some sanity checks here on the configuration
-        
-        self.holding = {}
+        self._DGConfig = config
+        self._DGHolding = {}
         for ch in config:
             if 'scale' not in config[ch]:
                 config[ch]['scale'] = 1.0
             #print "chan %s scale %f" % (ch, config[ch]['scale'])
-            self.holding[ch] = None
+            self._DGHolding[ch] = None
         
     
     def createTask(self, cmd):
         return DAQGenericTask(self, cmd)
     
         
-    def setHolding(self, channel, level=None):
+    def setChanHolding(self, channel, level=None, scale=None):
         """Define and set the holding values for this channel"""
-        with MutexLocker(self.lock):
+        with self._DGLock:
             #print "set holding", channel, level
             ### Set correct holding level here...
-            if level is not None:
-                self.holding[channel] = level
-            if self.holding[channel] is None:
-                return
-            daq, chan = self.config[channel]['channel']
+            if level is None:
+                level = self._DGHolding[channel]
+                if level is None:
+                    raise Exception("No remembered holding level for channel %s" % channel)
+            else:
+                self._DGHolding[channel] = level
+            daq, chan = self._DGConfig[channel]['channel']
             daqDev = self.dm.getDevice(daq)
-            scale = self.config[channel]['scale']
-            daqDev.setChannelValue(chan, self.holding[channel]*scale, block=False)
+            if scale is None:
+                scale = self.getChanScale(channel)
+            #print "set", chan, self._DGHolding[channel]*scale
+            daqDev.setChannelValue(chan, self._DGHolding[channel]*scale, block=False)
+            self.emit(QtCore.SIGNAL('holdingChanged'))
+        
+    def getChanHolding(self, chan):
+        with self._DGLock:
+            return self._DGHolding[chan]
         
     def getChannelValue(self, channel):
-        chConf = self.config[channel]['channel']
-        daq, chan = chConf[:2]
-        mode = None
-        if len(chConf) > 2:
-            mode = chConf[2]
-
-        daqDev = self.dm.getDevice(daq)
-        if 'scale' in self.config[channel]:
-            scale = self.config[channel]['scale']
-        else:
-            scale = 1.0            
-        return daqDev.getChannelValue(chan, mode=mode)/scale
+        with self._DGLock:
+            chConf = self._DGConfig[channel]['channel']
+            daq, chan = chConf[:2]
+            mode = None
+            if len(chConf) > 2:
+                mode = chConf[2]
+    
+            daqDev = self.dm.getDevice(daq)
+            if 'scale' in self._DGConfig[channel]:
+                scale = self._DGConfig[channel]['scale']
+            else:
+                scale = 1.0            
+            return daqDev.getChannelValue(chan, mode=mode)/scale
 
         
     #def devRackInterface(self):
@@ -63,69 +73,79 @@ class DAQGeneric(Device):
         return DAQGenericProtoGui(self, prot)
 
     def getDAQName(self, channel):
-        return self.config[channel]['channel'][0]
+        return self._DGConfig[channel]['channel'][0]
 
     def quit(self):
         pass
+
+    def getChanScale(self, chan):
+        with MutexLocker(self._DGLock):
+            ## Scale defaults to 1.0
+            ## - can be overridden in configuration
+            scale = 1.0
+            if 'scale' in self._DGConfig[chan]:
+                scale = self._DGConfig[chan]['scale']
+            return scale
+
 
 class DAQGenericTask(DeviceTask):
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
         self.daqTasks = {}
         self.initialState = {}
-        
+        self._DAQCmd = cmd
         ## Stores the list of channels that will generate or acquire buffered samples
         self.bufferedChannels = []
         
     def configure(self, tasks, startOrder):
         ## Record initial state or set initial value
-        with MutexLocker(self.dev.lock):
+        with MutexLocker(self.dev._DGLock):
             #self.daqTasks = {}
             self.initialState = {}
-            for ch in self.cmd:
-                dev = self.dev.dm.getDevice(self.dev.config[ch]['channel'][0])
-                if 'preset' in self.cmd[ch]:
-                    dev.setChannelValue(self.dev.config[ch]['channel'][1], self.cmd[ch]['preset'])
-                elif 'holding' in self.cmd[ch]:
-                    self.dev.setHolding(ch, self.cmd[ch]['holding'])
-                if 'recordInit' in self.cmd[ch] and self.cmd[ch]['recordInit']:
+            for ch in self._DAQCmd:
+                dev = self.dev.dm.getDevice(self.dev._DGConfig[ch]['channel'][0])
+                if 'preset' in self._DAQCmd[ch]:
+                    dev.setChannelValue(self.dev._DGConfig[ch]['channel'][1], self._DAQCmd[ch]['preset'])
+                elif 'holding' in self._DAQCmd[ch]:
+                    self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
+                if 'recordInit' in self._DAQCmd[ch] and self._DAQCmd[ch]['recordInit']:
                     self.initialState[ch] = self.dev.getChannelValue(ch)
                 
     def createChannels(self, daqTask):
         self.daqTasks = {}
         #print "createChannels"
-        with MutexLocker(self.dev.lock):
+        with MutexLocker(self.dev._DGLock):
             ## Is this the correct DAQ device for any of my channels?
             ## create needed channels + info
             ## write waveform to command channel if needed
             
-            for ch in self.dev.config:
+            for ch in self.dev._DGConfig:
                 #print "  creating channel %s.." % ch
-                if ch not in self.cmd:
+                if ch not in self._DAQCmd:
                     #print "    ignoring channel", ch, "not in command"
                     continue
-                chConf = self.dev.config[ch]
+                chConf = self.dev._DGConfig[ch]
                 if chConf['channel'][0] != daqTask.devName():
                     #print "    ignoring channel", ch, "wrong device"
                     continue
                 
                 ## Input channels are only used if the command has record: True
                 if chConf['type'] in ['ai', 'di']:
-                    if ('record' not in self.cmd[ch]) or (not self.cmd[ch]['record']):
+                    if ('record' not in self._DAQCmd[ch]) or (not self._DAQCmd[ch]['record']):
                         #print "    ignoring channel", ch, "recording disabled"
                         continue
                     
                 ## Output channels are only added if they have a command waveform specified
                 elif chConf['type'] in ['ao', 'do']:
-                    if 'command' not in self.cmd[ch]:
+                    if 'command' not in self._DAQCmd[ch]:
                         #print "    ignoring channel", ch, "no command"
                         continue
                 
                 self.bufferedChannels.append(ch)
-                #self.cmd[ch]['task'] = daqTask  ## ALSO DON't FORGET TO DELETE IT, ASS.
+                #_DAQCmd[ch]['task'] = daqTask  ## ALSO DON't FORGET TO DELETE IT, ASS.
                 if chConf['type'] in ['ao', 'do']:
                     scale = self.getChanScale(ch)
-                    cmdData = self.cmd[ch]['command']
+                    cmdData = self._DAQCmd[ch]['command']
                     if cmdData is None:
                         #print "No command for channel %s, skipping." % ch
                         continue
@@ -147,16 +167,10 @@ class DAQGenericTask(DeviceTask):
                 #print "  done: ", self.daqTasks.keys()
         
     def getChanScale(self, chan):
-        with MutexLocker(self.dev.lock):
-            ## Scale defaults to 1.0
-            ## - can be overridden in configuration
-            ## - can be overridden again in command
-            scale = 1.0
-            if 'scale' in self.dev.config[chan]:
-                scale = self.dev.config[chan]['scale']
-            if 'scale' in self.cmd[chan]:
-                scale = self.cmd[chan]['scale']
-            return scale
+        if 'scale' in self._DAQCmd[chan]:
+            return self._DAQCmd[chan]['scale']
+        else:
+            return self.dev.getChanScale(chan)
         
     def start(self):
         ## possibly nothing required here, DAQ will start recording without our help.
@@ -167,15 +181,15 @@ class DAQGenericTask(DeviceTask):
         return True
         
     def stop(self, abort=False):
-        with MutexLocker(self.dev.lock):
+        with MutexLocker(self.dev._DGLock):
             ## This is just a bit sketchy, but these tasks have to be stopped before the holding level can be reset.
             #print "STOP"
             for ch in self.daqTasks:
                 #print "Stop task", ch
                 self.daqTasks[ch].stop(abort=abort)
-            for ch in self.cmd:
-                if 'holding' in self.cmd[ch]:
-                    self.dev.setHolding(ch, self.cmd[ch]['holding'])
+            for ch in self._DAQCmd:
+                if 'holding' in self._DAQCmd[ch]:
+                    self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
         
     def getResult(self):
         ## Access data recorded from DAQ task
@@ -187,16 +201,16 @@ class DAQGenericTask(DeviceTask):
         result = {}
         #print "buffered channels:", self.bufferedChannels
         for ch in self.bufferedChannels:
-            #result[ch] = self.cmd[ch]['task'].getData(self.dev.config[ch]['channel'][1])
-            result[ch] = self.daqTasks[ch].getData(self.dev.config[ch]['channel'][1])
+            #result[ch] = _DAQCmd[ch]['task'].getData(self.dev.config[ch]['channel'][1])
+            result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'][1])
             #prof.mark("get data for channel "+str(ch))
             result[ch]['data'] = result[ch]['data'] / self.getChanScale(ch)
-            if 'units' in self.dev.config[ch]:
-                result[ch]['units'] = self.dev.config[ch]['units']
+            if 'units' in self.dev._DGConfig[ch]:
+                result[ch]['units'] = self.dev._DGConfig[ch]['units']
             else:
                 result[ch]['units'] = None
             #prof.mark("scale data for channel "+str(ch))
-            #del self.cmd[ch]['task']
+            #del _DAQCmd[ch]['task']
         #print "RESULT:", result    
         ## Todo: Add meta-info about channels that were used but unbuffered
         
@@ -225,7 +239,7 @@ class DAQGenericTask(DeviceTask):
             
     def storeResult(self, dirHandle):
         DeviceTask.storeResult(self, dirHandle)
-        for ch in self.cmd:
-            if 'recordInit' in self.cmd[ch] and self.cmd[ch]['recordInit']:
+        for ch in self._DAQCmd:
+            if 'recordInit' in self._DAQCmd[ch] and self._DAQCmd[ch]['recordInit']:
                 dirHandle.setInfo({(self.dev.name, ch): self.initialState[ch]})
            
