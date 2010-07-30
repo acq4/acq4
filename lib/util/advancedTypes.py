@@ -45,6 +45,9 @@ class OrderedDict(dict):
             it.append((k, self[k]))
         return it
     
+    def values(self):
+        return [self[k] for k in self.order]
+    
     def remove(self, key):
         del self[key]
         #self.order.remove(key)

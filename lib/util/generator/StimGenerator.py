@@ -60,16 +60,19 @@ class StimGenerator(QtGui.QWidget):
         if self.timeScale != s:
             self.timeScale = s
             self.clearCache()
+            self.autoUpdate()
 
     def setScale(self, s):
         if self.scale != s:
             self.scale = s
             self.clearCache()
+            self.autoUpdate()
 
     def setOffset(self, o):
         if self.offset != o:
             self.offset = o
             self.clearCache()
+            self.autoUpdate()
 
     def clearCache(self):
         self.cache = {}
@@ -96,7 +99,7 @@ class StimGenerator(QtGui.QWidget):
         self.clearCache()
         if self.test():
             self.autoUpdate()
-            #self.emit(QtCore.SIGNAL('functionChanged'))
+            self.emit(QtCore.SIGNAL('functionChanged'))
         
         
     def paramChanged(self):

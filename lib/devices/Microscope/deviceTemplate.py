@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'deviceTemplate.ui'
 #
-# Created: Wed Jul 15 14:06:46 2009
-#      by: PyQt4 UI code generator 4.4.3
+# Created: Thu Jul 29 17:59:39 2010
+#      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -38,6 +38,8 @@ class Ui_Form(object):
         self.gridLayout.addItem(spacerItem, 1, 3, 1, 1)
         spacerItem1 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.gridLayout.addItem(spacerItem1, 0, 3, 1, 1)
+        spacerItem2 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.gridLayout.addItem(spacerItem2, 2, 0, 1, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)

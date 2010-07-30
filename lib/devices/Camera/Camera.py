@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from Mutex import Mutex
 #from lib.devices.Device import *
 from PyQt4 import QtCore
 import time
@@ -50,6 +51,7 @@ class Camera(DAQGeneric):
 
 
     def __init__(self, dm, config, name):
+        self.lock = Mutex(Mutex.Recursive)
 
         # Generate config to use for DAQ 
         daqConfig = {}

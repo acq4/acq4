@@ -37,7 +37,7 @@ class DAQGenericProtoGui(ProtocolGui):
     def createChannelWidgets(self, ctrlParent, plotParent):
         
         ## Create plots and control widgets
-        for ch in self.dev.config:
+        for ch in self.dev._DGConfig:
             #conf = self.dev.config[ch]
             #p = PlotWidget(plotParent)
             #
@@ -67,7 +67,7 @@ class DAQGenericProtoGui(ProtocolGui):
         
 
     def createChannelWidget(self, ch):
-        conf = self.dev.config[ch]
+        conf = self.dev._DGConfig[ch]
         p = PlotWidget(self)
         
         units = ''
@@ -179,6 +179,9 @@ class DAQGenericProtoGui(ProtocolGui):
             if result.hasColumn(0, ch):
                 self.channels[ch].handleResult(result[ch], params)
             
+    def getChanHolding(self, chan):
+        """Return the holding value that this channel will use when the protocol is run."""
+        return self.dev.getChanHolding(chan)
             
     def quit(self):
         ProtocolGui.quit(self)

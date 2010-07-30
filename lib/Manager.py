@@ -60,7 +60,7 @@ class Manager(QtCore.QObject):
         
         if argv is not None:
             try:
-                opts, args = getopt.getopt(argv, 'c:m:b:s:n', ['config=', 'module=', 'baseDir=', 'storageDir=', 'noManager'])
+                opts, args = getopt.getopt(argv, 'c:m:b:s:d:n', ['config=', 'module=', 'baseDir=', 'storageDir=', 'disable=', 'noManager'])
             except getopt.GetoptError, err:
                 print str(err)
                 print """
@@ -70,6 +70,7 @@ Valid options are:
     -b --baseDir=    base directory to use
     -s --storageDir= storage directory to use
     -n --noManager   Do not load manager module
+    -d --disable=    Disable the device specified
 """
         QtCore.QObject.__init__(self)
         self.alreadyQuit = False
@@ -85,6 +86,7 @@ Valid options are:
         self.baseDir = None
         self.interface = None
         self.shortcuts = []
+        self.disableDevs = []
         
         ## Handle command line options
         loadModules = []
@@ -102,6 +104,8 @@ Valid options are:
                 setStorageDir = a
             elif o in ['-n', '--noManager']:
                 loadManager = False
+            elif o in ['-d', '--disable']:
+                self.disableDevs.append(a)
             else:
                 print "Unhandled option", o, a
         
@@ -174,6 +178,9 @@ Valid options are:
         for key in cfg:
             if key == 'devices':
                 for k in cfg['devices']:
+                    if k in self.disableDevs:
+                        print "=== Ignoring device '%s' -- disabled by request ===" % k
+                        continue
                     print "\n=== Configuring device '%s' ===" % k
                     try:
                         conf = None
