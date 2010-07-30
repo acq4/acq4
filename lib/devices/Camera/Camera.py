@@ -198,7 +198,7 @@ class Camera(DAQGeneric):
         self.acqThread.stop(block=block)
         
     def restart(self):
-        if self.acqThread.isRunning():
+        if self.isRunning():
             self.stop()
             self.start()
     
@@ -533,6 +533,10 @@ class CameraTask(DAQGenericTask):
         
         
     def isDone(self):
+        ## If camera stopped, then probably there was a problem and we are finished.
+        if not self.dev.isRunning():
+            return True    
+        
         ## should return false if recording is required to run for a specific time.
         if 'minFrames' in self.camCmd:
             with MutexLocker(self.lock):
@@ -540,7 +544,7 @@ class CameraTask(DAQGenericTask):
                     return False
         return DAQGenericTask.isDone(self)  ## Should return True.
         
-    def stop(self):
+    def stop(self, abort=False):
         ## Stop DAQ first
         DAQGenericTask.stop(self)
         
@@ -661,6 +665,7 @@ class AcquireThread(QtCore.QThread):
         QtCore.QThread.__init__(self)
         self.dev = dev
         self.cam = self.dev.getCamera()
+        self.camLock = self.dev.camLock
         #size = self.cam.getSize()
         #self.state = {'binning': 1, 'exposure': .001, 'region': [0, 0, size[0]-1, size[1]-1], 'mode': 'No Trigger'}
         #self.state = self.dev.getParams(['binning', 'exposure', 'region', 'triggerMode'])
@@ -754,8 +759,9 @@ class AcquireThread(QtCore.QThread):
                 try:
                     #print "Starting camera: ", self.ringSize, binning, exposure, region, mode
                     #self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region, mode=mode)
-                    self.cam.setParam('ringSize', self.ringSize)
-                    self.acqBuffer = self.cam.start()
+                    self.dev.setParam('ringSize', self.ringSize, autoRestart=False)
+                    with self.camLock:
+                        self.acqBuffer = self.cam.start()
                     #print "Camera started."
                     break
                 except Exception, e:
@@ -778,7 +784,8 @@ class AcquireThread(QtCore.QThread):
                 ti = 0
                 #times[ti] = ptime.time(); ti += 1
                 now = ptime.time()
-                frame = self.cam.lastFrame()
+                with self.camLock:
+                    frame = self.cam.lastFrame()
                 #times[ti] = ptime.time(); ti += 1  ## +40us
                 ## If a new frame is available, process it and inform other threads
                 if frame is not None and frame != lastFrame:
@@ -892,11 +899,13 @@ class AcquireThread(QtCore.QThread):
                 
             #from debug import Profiler
             #prof = Profiler()
-            self.cam.stop()
+            with self.camLock:
+                self.cam.stop()
             #prof.mark('      camera stop:')
         except:
             try:
-                self.cam.stop()
+                with self.camLock:
+                    self.cam.stop()
             except:
                 pass
             printExc("Error starting camera acquisition:")

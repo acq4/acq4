@@ -12,8 +12,11 @@ from PyQt4 import QtGui, QtCore
 from ObjectWorkaround import *
 #tryWorkaround(QtCore, QtGui)
 from numpy import *
-import scipy.weave as weave
-from scipy.weave import converters
+try:
+    import scipy.weave as weave
+    from scipy.weave import converters
+except:
+    pass
 from scipy.fftpack import fft
 from scipy.signal import resample
 import scipy.stats
@@ -373,8 +376,9 @@ class PlotCurveItem(GraphicsObject):
         if self.xData is None:
             return (None, None)
         if self.xDisp is None:
-            x = self.xData
-            y = self.yData
+            nanMask = isnan(self.xData) | isnan(self.yData)
+            x = self.xData[~nanMask]
+            y = self.yData[~nanMask]
             ds = self.opts['downsample']
             if ds > 1:
                 x = x[::ds]
@@ -509,8 +513,6 @@ class PlotCurveItem(GraphicsObject):
         elif data.ndim == 1:
             y = data
             
-        if x.shape != y.shape:
-            raise Exception("X and Y arrays must be the same shape--got %s and %s." % (str(x.shape), str(y.shape)))
         self.prepareGeometryChange()
         if copy:
             self.yData = y.copy()
@@ -523,8 +525,11 @@ class PlotCurveItem(GraphicsObject):
             self.xData = x
         
         if x is None:
-            self.xData = arange(0, self.y.shape[0])
+            self.xData = arange(0, self.yData.shape[0])
 
+        if self.xData.shape != self.yData.shape:
+            raise Exception("X and Y arrays must be the same shape--got %s and %s." % (str(x.shape), str(y.shape)))
+        
         self.path = None
         #self.specPath = None
         self.xDisp = self.yDisp = None
@@ -588,6 +593,8 @@ class PlotCurveItem(GraphicsObject):
         xmax = x.max() + pixels[0].x() * lineWidth
         ymin = y.min() - abs(pixels[1].y()) * lineWidth
         ymax = y.max() + abs(pixels[1].y()) * lineWidth
+        
+            
         return QtCore.QRectF(xmin, ymin, xmax-xmin, ymax-ymin)
 
     def paint(self, p, opt, widget):

@@ -199,10 +199,10 @@ class ScannerTask(DeviceTask):
                 self.daqTasks.append(daqTask)  ## remember task so we can stop it later on
                 daqTask.setWaveform(chConf[1], self.cmd[cmdName])
 
-    def stop(self):
+    def stop(self, abort=False):
         with MutexLocker(self.dev.lock):
             for t in self.daqTasks:
-                t.stop()
+                t.stop(abort=abort)
             self.dev.lastRunTime = ptime.time()
             #for ch in self.cmd:
                 #if 'holding' in self.cmd[ch]:

@@ -368,6 +368,7 @@ class ScannerProtoGui(ProtocolGui):
     def itemMoved(self, item):
         self.targets = None
         self.updateDeviceTargetList(item)
+        self.sequenceChanged()
         
 
     def itemChanged(self, item):
@@ -394,18 +395,22 @@ class ScannerProtoGui(ProtocolGui):
     def getTargetList(self):
         items = self.activeItems()
         locations = []
+        occArea = QtGui.QPainterPath()
+        for o in self.occlusions.values():
+            occArea |= o.mapToScene(o.shape())
+            
         for i in items:
             pts = i.listPoints()
-            for x in self.occlusions.keys():  ##can we just join the occlusion areas together?
-                area = self.occlusions[x].mapToScene(self.occlusions[x].shape())
-                for j in range(len(pts)):
-                    p=pts[j]
-                    point = QtCore.QPointF(p[0], p[1])
-                    if area.contains(point):
-                        i.setTargetPen(j, QtGui.QPen(QtGui.QColor(0,0,0,160)))
-                    else:
-                        locations.append(p)
-                        i.setTargetPen(j, None)
+            #for x in self.occlusions.keys():  ##can we just join the occlusion areas together?
+                #area = self.occlusions[x].mapToScene(self.occlusions[x].shape())
+            for j in range(len(pts)):
+                p=pts[j]
+                point = QtCore.QPointF(p[0], p[1])
+                if occArea.contains(point):
+                    i.setTargetPen(j, QtGui.QPen(QtGui.QColor(0,0,0,160)))
+                else:
+                    locations.append(p)
+                    i.setTargetPen(j, None)
         return locations
 
     
@@ -576,6 +581,8 @@ class TargetPoint(EllipseROI):
     def __init__(self, pos, radius, **args):
         ROI.__init__(self, pos, [radius] * 2, **args)
         self.aspectLocked = True
+        self.overPen = None
+        self.underPen = self.pen
         
     def setPointSize(self, size):
         s = size / self.state['size'][0]
@@ -584,6 +591,16 @@ class TargetPoint(EllipseROI):
     def listPoints(self):
         p = self.mapToScene(self.boundingRect().center())
         return [(p.x(), p.y())]
+        
+    def setPen(self, pen):
+        self.underPen = pen
+        EllipseROI.setPen(self, pen)
+    
+    def setTargetPen(self, index, pen):
+        self.overPen = pen
+        if pen is None:
+            pen = self.underPen
+        EllipseROI.setPen(self, pen)
         
 
 class TargetGrid(ROI):
@@ -666,3 +683,6 @@ class TargetOcclusion(PolygonROI):
     def listPoints(self):
         pts = []
         return pts
+    
+    def setPointSize(self, size):
+        pass

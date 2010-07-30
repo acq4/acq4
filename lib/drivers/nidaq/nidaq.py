@@ -122,6 +122,20 @@ class _NIDAQ:
     def createTask(self):
         return Task(self)
 
+    def interpretMode(self, mode):
+        modes = {
+            'rse': Val_RSE,
+            'nrse': Val_NRSE,
+            'diff': Val_Diff,
+            'chanperline': Val_ChanPerLine,
+            'chanforalllines': Val_ChanForAllLines
+        }
+        if isinstance(mode, basestring):
+            mode = mode.lower()
+            mode = modes.get(mode, None)
+        return mode
+        
+    
     def writeAnalogSample(self, chan, value, vRange=[-10., 10.], timeout=10.0):
         """Set the value of an AO or DO port"""
         t = self.createTask()
@@ -133,6 +147,8 @@ class _NIDAQ:
         """Get the value of an AI port"""
         if mode is None:
             mode = Val_Cfg_Default
+        else:
+            mode = self.interpretMode(mode)
         t = self.createTask()
         t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], Val_Volts, None)
         val = c_double(0.)

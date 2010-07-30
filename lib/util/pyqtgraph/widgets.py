@@ -33,7 +33,7 @@ def rectStr(r):
 
 
 class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
-    def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None):
+    def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None):
         QObjectWorkaround.__init__(self)
         QtGui.QGraphicsItem.__init__(self, parent)
         pos = Point(pos)
@@ -41,7 +41,10 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.aspectLocked = False
         self.translatable = True
         
-        self.pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
+        if pen is None:
+            self.pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
+        else:
+            self.pen = pen
         self.handlePen = QtGui.QPen(QtGui.QColor(150, 255, 255))
         self.handles = []
         self.state = {'pos': pos, 'size': size, 'angle': angle}
@@ -76,6 +79,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.update()
         
     def setPos(self, pos, update=True):
+        #print "setPos() called."
         pos = Point(pos)
         self.state['pos'] = pos
         QtGui.QGraphicsItem.setPos(self, pos)
@@ -217,7 +221,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         
         
     def movePoint(self, pt, pos, modifiers=QtCore.Qt.KeyboardModifier()):
-        #print "movePoint", pos
+        #print "movePoint() called."
         newState = self.stateCopy()
         h = self.handles[pt]
         #p0 = self.mapToScene(h['item'].pos())
@@ -245,6 +249,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         
         elif h['type'] == 'f':
             h['item'].setPos(self.mapFromScene(pos))
+            self.emit(QtCore.SIGNAL('regionChanged'), self)
             
         elif h['type'] == 's':
             #c = h['center']
@@ -374,16 +379,21 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.handleChange()
     
     def handleChange(self):
+        #print "handleChange() called."
         changed = False
+        #print "self.lastState:", self.lastState
         if self.lastState is None:
             changed = True
         else:
             for k in self.state.keys():
+                #print k, self.state[k], self.lastState[k]
                 if self.state[k] != self.lastState[k]:
                     #print "state %s has changed; emit signal" % k
                     changed = True
         self.lastState = self.stateCopy()
+        #print "changed =", changed
         if changed:
+            #print "handle changed."
             self.update()
             self.emit(QtCore.SIGNAL('regionChanged'), self)
             
@@ -755,14 +765,15 @@ class LineROI(ROI):
         
         
 class MultiLineROI(QtGui.QGraphicsItem, QObjectWorkaround):
-    def __init__(self, points, width, **args):
+    def __init__(self, points, width, pen=None, **args):
         QObjectWorkaround.__init__(self)
         QtGui.QGraphicsItem.__init__(self)
+        self.pen = pen
         self.roiArgs = args
         if len(points) < 2:
             raise Exception("Must start with at least 2 points")
         self.lines = []
-        self.lines.append(ROI([0, 0], [1, 5], parent=self))
+        self.lines.append(ROI([0, 0], [1, 5], parent=self, pen=pen, **args))
         self.lines[-1].addScaleHandle([0.5, 1], [0.5, 0.5])
         h = self.lines[-1].addScaleRotateHandle([0, 0.5], [1, 0.5])
         h.movePoint(points[0])
@@ -770,7 +781,7 @@ class MultiLineROI(QtGui.QGraphicsItem, QObjectWorkaround):
         for i in range(1, len(points)):
             h = self.lines[-1].addScaleRotateHandle([1, 0.5], [0, 0.5])
             if i < len(points)-1:
-                self.lines.append(ROI([0, 0], [1, 5], parent=self))
+                self.lines.append(ROI([0, 0], [1, 5], parent=self, pen=pen, **args))
                 self.lines[-1].addScaleRotateHandle([0, 0.5], [1, 0.5], item=h)
             h.movePoint(points[i])
             h.movePoint(points[i])
@@ -857,8 +868,9 @@ class CircleROI(EllipseROI):
         self.addScaleHandle([0.5*2.**-0.5 + 0.5, 0.5*2.**-0.5 + 0.5], [0.5, 0.5])
         
 class PolygonROI(ROI):
-    def __init__(self, positions):
-        ROI.__init__(self, positions[0])
+    def __init__(self, positions, **args):
+        ROI.__init__(self, [0,0], [100,100], **args)
+        #ROI.__init__(self, positions[0])
         for p in positions:
             self.addFreeHandle(p)
             

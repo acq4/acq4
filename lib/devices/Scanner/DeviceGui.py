@@ -39,12 +39,12 @@ class ScannerDeviceGui(QtGui.QWidget):
         self.updateCalibrationList()
         
         ## create graphics scene
-        self.image = ImageItem()
-        self.scene = self.ui.view.scene()
-        self.ui.view.enableMouse()
-        self.scene.addItem(self.image)
-        self.ui.view.setAspectLocked(True)
-        self.ui.view.invertY()
+        #self.image = ImageItem()
+        self.scene = self.ui.view.scene
+        #self.ui.view.enableMouse()
+        #self.scene.addItem(self.image)
+        #self.ui.view.setAspectLocked(True)
+        #self.ui.view.invertY()
 
         QtCore.QObject.connect(self.ui.calibrateBtn, QtCore.SIGNAL('clicked()'), self.calibrateClicked)
         QtCore.QObject.connect(self.ui.testBtn, QtCore.SIGNAL('clicked()'), self.testClicked)
@@ -177,6 +177,10 @@ class ScannerDeviceGui(QtGui.QWidget):
 
         self.updatePrgDlg(25, "Calibrating scanner: Computing spot size...")
         
+        ## Forget first 2 frames since some cameras can't seem to get these right.
+        origFrames = origFrames[2:]
+        positions = positions[2:]
+        
         ## Do background subtraction
         frames = origFrames - background
 
@@ -189,8 +193,8 @@ class ScannerDeviceGui(QtGui.QWidget):
 
         ## Determine spot intensity and width
         mfBlur = blur(maxFrame, blurRadius)
-        amp = mfBlur.max() - median(mfBlur)  # guess intensity of spot
-        (x, y) = argwhere(mfBlur == mfBlur.max())[0]   # guess location of spot
+        amp = mfBlur.max() - median(mfBlur)  ## guess intensity of spot
+        (x, y) = argwhere(mfBlur == mfBlur.max())[0]   ## guess location of spot
         fit = fitGaussian2D(maxFrame, [amp, x, y, maxFrame.shape[0] / 10, 0.])[0]  ## gaussian fit to locate spot exactly
         info = origFrames.infoCopy()[-1]
         pixelSize = info['pixelSize'][0]
@@ -249,17 +253,19 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         ## sanity check on spot frame
         if len(spotFrames) == 0:
-            self.image.updateImage(frames.max(axis=0))
-            raise Exception('Calibration never detected laser spot! (Check: 1. shutter is closed, 2. mirrors on, 3. objective is clean, 4. spot visible (and bright enough) when shutter is open)')
+            #self.image.updateImage(frames.max(axis=0))
+            self.ui.view.setImage(frames)
+            raise Exception('Calibration never detected laser spot!\n  Looking for spots that are %f pixels wide.\n  (Check: 1. shutter is closed, 2. mirrors on, 3. objective is clean, 4. spot visible (and bright enough) when shutter is open)' % fit[3])
 
         spotFrameMax = concatenate(spotFrames).max(axis=0)
         #self.image.updateImage(maxFrame, autoRange=True)
-        self.image.updateImage(spotFrameMax, autoRange=True)
-        self.image.resetTransform()
+        #self.image.updateImage(spotFrameMax, autoRange=True)
+        #self.image.resetTransform()
         impos = info['imagePosition']
-        self.image.scale(pixelSize, pixelSize)
-        self.image.setPos(impos[0]-center[0], impos[1]-center[1])
-        self.ui.view.setRange(self.image.mapRectToScene(self.image.boundingRect()))
+        self.ui.view.setImage(spotFrameMax, scale=[pixelSize, pixelSize], pos=[impos[0]-center[0], impos[1]-center[1]])
+        #self.image.scale(pixelSize, pixelSize)
+        #self.image.setPos(impos[0]-center[0], impos[1]-center[1])
+        #self.ui.view.setRange(self.image.mapRectToScene(self.image.boundingRect()))
         
         self.clearSpots()
         for sl in spotLocations:
@@ -337,7 +343,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## Record 10 camera frames with the shutter closed 
         cmd = {
             'protocol': {'duration': 0.0},
-            camera: {'record': True, 'minFrames': 10, 'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3},  ## binning/params are specific for QuantEM512
+            camera: {'record': True, 'minFrames': 10, 'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3, 'pushState': 'scanProt', 'popState': 'scanProt'},  ## binning/params are specific for QuantEM512
             laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
         task = lib.Manager.getManager().createTask(cmd)
@@ -352,7 +358,8 @@ class ScannerDeviceGui(QtGui.QWidget):
             camera: {'record': True, 'triggerMode': 'TriggerStart', 'channels': {
                 'exposure': {'record': True}, 
                 'trigger': {'preset': 0, 'command': cameraTrigger}},
-                'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3},
+                'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3, 
+                'pushState': 'scanProt', 'popState': 'scanProt'},
             laser: {'Shutter': {'preset': 1, 'holding': 0}},
             #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
             self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},
@@ -375,7 +382,7 @@ class ScannerDeviceGui(QtGui.QWidget):
             positions.append([xCommand[ind], yCommand[ind]])
             
         if frames.ndim != 3 or frames.shape[0] < 5:
-            raise Exception("Camera did not collect enough frames (data shape is %s)" % frames.shape)
+            raise Exception("Camera did not collect enough frames (data shape is %s)" % str(frames.shape))
             
         if background.shape != frames.shape[1:]:
             raise Exception("Background measurement frame has different shape %s from scan frames %s" % (str(background.shape), str(frames.shape[1:])))

@@ -1115,7 +1115,7 @@ class TaskThread(QtCore.QThread):
                     l.relock()
                     if self.abortThread:
                         l.unlock()
-                        task.stop()
+                        task.stop(abort=True)
                         return
                     l.unlock()
                     time.sleep(1e-3)
