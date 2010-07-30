@@ -20,18 +20,14 @@ class Camera(DAQGeneric):
      - Subclasses may need to create their own AcquireThread
 
     The list/get/setParams functions should implement a few standard items:
-    (Note: these values are just examples, but the data types must be the same.)
+    (Note: these number values are just examples, but the data types and strings must be the same.)
         acquire:         bool
-        triggerMode:     str, ['NoTrigger', 'TriggerStart', 'Strobe', 'Bulb']
+        triggerMode:     str, ['Normal', 'TriggerStart', 'Strobe', 'Bulb']
         triggerType:     str, ['Software', 'Hardware']
         exposure:        float, (0.0, 10.0)
         exposureMode:    str, ['Exact', 'Maximize']
-        binning:         int, [1,2,4,8,16]
-        region:          dict, {
-                            'x': (int, (0, 511)), 
-                            'y': (int, (0, 511)), 
-                            'w': (int, (1, 512)), 
-                            'h': (int, (1, 512))  } 
+        binning:         (int,int) , [[1,2,4,8,16], [1,2,4,8,16]]
+        region:          (int, int, int, int), [(0, 511), (0, 511), (1, 512), (1, 512)] #[x, y, w, h]
         gain:            float, (0.1, 10.0)
 
     The configuration for these devices should look like:
