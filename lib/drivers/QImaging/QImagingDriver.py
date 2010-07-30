@@ -130,7 +130,7 @@ class _QCameraClass:
         self.isOpen = False
 
     def mkFrame(self):
-        s = call(lib.GetInfo, handle, lib.qinfImageSize)[2]
+        s = self.call(lib.GetInfo, self.handle, lib.qinfImageSize)[2]
         f = lib.Frame()
         frame = ascontiguousarray(empty(s/2, dtype=uint16))
         f.pBuffer = frame.ctypes.data
@@ -140,8 +140,8 @@ class _QCameraClass:
     def grabFrame(self):
         s = lib.GetInfo(handle, lib.qinfImageSize)[2]
         (f, frame) = mkFrame()
-        call(lib.GrabFrame, handle, byref(f))
-        w = call(lib.GetInfo, handle, lib.qinfCcdWidth)[2]
+        self.call(lib.GrabFrame, self.handle, byref(f))
+        w = self.call(lib.GetInfo, self.handle, lib.qinfCcdWidth)[2]
         frame.shape = (s/w, w)
         return frame
 
@@ -330,7 +330,7 @@ class _QCameraClass:
                 if lib('enums', 'QCam_Err')[x] == args[2]:
                     raise QCamFunctionError(args[2], "There was an error during QueueFrame/Callback. Error code = %s" %(x))
         self.mutex.lock()
-        self.lastFrame = (args[1], arrays[args[1]]) ### Need to figure out a way to attach settings info (binning, exposure gain region and offset) to frame!!!
+        self.lastFrame = (args[1], self.arrays[args[1]]) ### Need to figure out a way to attach settings info (binning, exposure gain region and offset) to frame!!!
         if self.i != 199:
             self.i += 1
         else:
