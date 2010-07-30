@@ -270,8 +270,8 @@ class OutputChannelGui(DaqChannelGui):
     def getSingleWave(self, params=None):
         state = self.stateGroup.state()
         h = self.getHoldingValue()
-            
-        self.ui.waveGeneratorWidget.setOffset(h)
+        if h is not None:
+            self.ui.waveGeneratorWidget.setOffset(h)
         
         wave = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
         
@@ -283,14 +283,16 @@ class OutputChannelGui(DaqChannelGui):
         
     def holdingSpinChanged(self, *args):
         hv = self.getHoldingValue()
-        self.ui.waveGeneratorWidget.setOffset(hv)
+        if hv is not None:
+            self.ui.waveGeneratorWidget.setOffset(hv)
         
         
     def updateHolding(self):
         hv = self.getHoldingValue()
-        if not self.ui.holdingCheck.isChecked():
-            self.ui.holdingSpin.setValue(hv)
-        self.ui.waveGeneratorWidget.setOffset(hv)
+        if hv is not None:
+            if not self.ui.holdingCheck.isChecked():
+                self.ui.holdingSpin.setValue(hv)
+            self.ui.waveGeneratorWidget.setOffset(hv)
             
     def getHoldingValue(self):
         """Return the value for this channel that will be used when the protocol is run
