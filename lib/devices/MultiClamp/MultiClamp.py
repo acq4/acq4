@@ -68,6 +68,12 @@ class MultiClamp(Device):
                 pass
             raise
 
+    def listChannels(self):
+        chans = {}
+        for ch in ['commandChannel', 'scaledChannel', 'rawChannel']:
+            chans[ch] = self.config[ch]
+        return chans
+
     def quit(self):
         mc = MultiClampDriver.instance()
         if mc is not None:
