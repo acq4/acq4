@@ -70,7 +70,7 @@ class MultiClamp(Device):
 
     def listChannels(self):
         chans = {}
-        for ch in ['commandChannel', 'scaledChannel', 'rawChannel']:
+        for ch in ['commandChannel', 'primaryChannel', 'secondaryChannel']:
             chans[ch] = self.config[ch]
         return chans
 
