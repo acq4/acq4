@@ -89,8 +89,8 @@ class DAQGeneric(Device):
 
     def getChanUnits(self, ch):
         with MutexLocker(self._DGLock):
-            if 'units' in self.dev._DGConfig[ch]:
-                return self.dev._DGConfig[ch]['units']
+            if 'units' in self._DGConfig[ch]:
+                return self._DGConfig[ch]['units']
             else:
                 return None
 

@@ -3,12 +3,13 @@ from __future__ import with_statement
 from lib.modules.Module import *
 from ProtocolRunnerTemplate import *
 from PyQt4 import QtGui, QtCore
-from lib.util.DirTreeModel import *
-from lib.util.configfile import *
-from lib.util.advancedTypes import OrderedDict
-from lib.util.SequenceRunner import *
-from lib.util.WidgetGroup import *
-from lib.util.Mutex import Mutex, MutexLocker
+from DirTreeModel import *
+from configfile import *
+from advancedTypes import OrderedDict
+from SequenceRunner import *
+from WidgetGroup import *
+from Mutex import Mutex, MutexLocker
+from lib.Manager import getManager
 from debug import *
 import ptime
 import analysisModules
@@ -20,8 +21,20 @@ class Window(QtGui.QMainWindow):
     def __init__(self, pr):
         QtGui.QMainWindow.__init__(self)
         self.pr = pr
+
+        self.stateFile = self.pr.name + '_ui.cfg'
+        uiState = getManager().readConfigFile(self.stateFile)
+        if 'geometry' in uiState:
+            geom = QtCore.QRect(*uiState['geometry'])
+            self.setGeometry(geom)
+            print "set geometry", geom
+
         
     def closeEvent(self, ev):
+        geom = self.geometry()
+        uiState = {'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
+        getManager().writeConfigFile(uiState, self.stateFile)
+        
         self.pr.quit()
         ev.ignore()
         sip.delete(self)
@@ -40,7 +53,10 @@ class ProtocolRunner(Module):
         self.ui = Ui_MainWindow()
         self.win = Window(self)
         
+        g = self.win.geometry()
         self.ui.setupUi(self.win)
+        self.win.setGeometry(g)
+        
         self.ui.protoDurationSpin.setOpts(dec=True, bounds=[1e-3,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
         self.ui.protoLeadTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=10e-3, suffix='s', siPrefix=True)
         self.ui.protoCycleTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)

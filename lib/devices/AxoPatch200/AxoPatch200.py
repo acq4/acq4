@@ -10,9 +10,7 @@ import numpy as np
 from WidgetGroup import *
 from advancedTypes import OrderedDict
 from debug import printExc
-
 from devGuiTemplate import *
-from protoCtrlTemplate import *
 
 # telegraph voltage/output translation from the Axopatch 200 amplifier
 mode_tel = np.array([6, 4, 3, 2, 1])

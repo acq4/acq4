@@ -158,7 +158,7 @@ class OutputChannelGui(DaqChannelGui):
                 s.setOpts(dec=True, range=[None, None], step=1.0, minStep=1e-12, siPrefix=True)
 
         QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
-        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
+        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('dataChanged'), self.updateWaves)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('functionChanged'), self.waveFunctionChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
         QtCore.QObject.connect(self.ui.holdingCheck, QtCore.SIGNAL('stateChanged(int)'), self.holdingCheckChanged)
@@ -179,6 +179,12 @@ class OutputChannelGui(DaqChannelGui):
         DaqChannelGui.quit(self)
         if not sip.isdeleted(self.daqUI):
             QtCore.QObject.disconnect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
+        QtCore.QObject.disconnect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('dataChanged'), self.updateWaves)
+        QtCore.QObject.disconnect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('functionChanged'), self.waveFunctionChanged)
+        QtCore.QObject.disconnect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
+        QtCore.QObject.disconnect(self.ui.holdingCheck, QtCore.SIGNAL('stateChanged(int)'), self.holdingCheckChanged)
+        QtCore.QObject.disconnect(self.ui.holdingSpin, QtCore.SIGNAL('delayedChange'), self.holdingSpinChanged)
+        QtCore.QObject.disconnect(self.dev, QtCore.SIGNAL('holdingChanged'), self.updateHolding)
     
     def daqChanged(self, state):
         self.rate = state['rate']
@@ -303,7 +309,10 @@ class OutputChannelGui(DaqChannelGui):
             return self.protoGui.getChanHolding(self.name)
         
     def waveFunctionChanged(self):
-        self.ui.functionCheck.setChecked(True)
+        if self.ui.waveGeneratorWidget.functionString() != "":
+            self.ui.functionCheck.setChecked(True)
+        else:
+            self.ui.functionCheck.setChecked(False)
         
 class InputChannelGui(DaqChannelGui):
     def __init__(self, *args):
