@@ -40,7 +40,7 @@ class MultiClampProtoGui(ProtocolGui):
 
         self.daqChanged(self.daqUI.currentState())
         QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
-        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
+        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('dataChanged'), self.updateWaves)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
         #QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         #QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
