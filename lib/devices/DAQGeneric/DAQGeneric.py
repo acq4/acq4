@@ -87,6 +87,19 @@ class DAQGeneric(Device):
                 scale = self._DGConfig[chan]['scale']
             return scale
 
+    def getChanUnits(self, ch):
+        with MutexLocker(self._DGLock):
+            if 'units' in self.dev._DGConfig[ch]:
+                return self.dev._DGConfig[ch]['units']
+            else:
+                return None
+
+
+    def listChannels(self):
+        with self._DGLock:
+            return dict([(ch, self._DGConfig[ch]['channel']) for ch in self._DGConfig])
+            
+            
 
 class DAQGenericTask(DeviceTask):
     def __init__(self, dev, cmd):
@@ -172,6 +185,12 @@ class DAQGenericTask(DeviceTask):
         else:
             return self.dev.getChanScale(chan)
         
+    def getChanUnits(self, chan):
+        if 'units' in self._DAQCmd[chan]:
+            return self._DAQCmd[chan]['units']
+        else:
+            return self.dev.getChanUnits(chan)
+    
     def start(self):
         ## possibly nothing required here, DAQ will start recording without our help.
         pass
@@ -204,11 +223,9 @@ class DAQGenericTask(DeviceTask):
             #result[ch] = _DAQCmd[ch]['task'].getData(self.dev.config[ch]['channel'][1])
             result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'][1])
             #prof.mark("get data for channel "+str(ch))
+            #print "get data", ch, self.getChanScale(ch), result[ch]['data'].max()
             result[ch]['data'] = result[ch]['data'] / self.getChanScale(ch)
-            if 'units' in self.dev._DGConfig[ch]:
-                result[ch]['units'] = self.dev._DGConfig[ch]['units']
-            else:
-                result[ch]['units'] = None
+            result[ch]['units'] = self.getChanUnits(ch)
             #prof.mark("scale data for channel "+str(ch))
             #del _DAQCmd[ch]['task']
         #print "RESULT:", result    

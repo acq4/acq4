@@ -19,12 +19,13 @@ mode_tel = np.array([6, 4, 3, 2, 1])
 #mode_char = ['V', 'T', '0', 'I', 'F']
 modeNames = OrderedDict([(0, 'V-Clamp'), (2, 'I=0'), (4, 'I-Clamp Fast'), (3, 'I-Clamp Normal'), (1, 'Track'), ])
 ivModes = {'V-Clamp':'vc', 'Track':'vc', 'I=0':'ic', 'I-Clamp Fast':'ic', 'I-Clamp Normal':'ic', 'vc':'vc', 'ic':'ic'}
+modeAliases = {'ic': 'I-Clamp Fast', 'i=0': 'I=0', 'vc': 'V-Clamp'}
 
 # Axopatch gain telegraph
 # telegraph should not read below 2 V in CC mode
 gain_tel = np.array([0.5,  1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5])
-gain_vm  = np.array([0.5,  0.5, 0.5, 0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500]) * 1e9
-gain_im  = np.array([0.05, 0.1, 0.2, 0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500]) * 1e3
+gain_vm  = np.array([0.5,  0.5, 0.5, 0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500]) * 1e9  ## values in mv/pA
+gain_im  = np.array([0.05, 0.1, 0.2, 0.5, 1,   2,   5,   10,  20,  50,  100, 200, 500])        ## values in mV/mV
 
 # Axopatch LPF telegraph
 lpf_tel = np.array([2.0, 4.0, 6.0, 8.0, 10.0])
@@ -127,9 +128,13 @@ class AxoPatch200(DAQGeneric):
         
     def setMode(self, mode):
         """Set the mode of the AxoPatch (by requesting user intervention). Takes care of switching holding levels in I=0 mode if needed."""
+        global modeAliases
         startMode = self.getMode()
+        if mode in modeAliases:
+            mode = modeAliases[mode]
         if startMode == mode:
             return
+        
         startIvMode = ivModes[startMode]
         ivMode = ivModes[mode]
         if (startIvMode == 'vc' and ivMode == 'ic') or (startIvMode == 'ic' and ivMode == 'vc'):
@@ -206,14 +211,14 @@ class AxoPatch200(DAQGeneric):
         
     def getGain(self):
         with self.devLock:
-            global gain_tel, gain_vm, gain_im
+            global gain_tel, gain_vm, gain_im, ivModes
             mode = self.getMode()
             if mode is None:
                 return None
             g = self.readChannel('GainChannel')
             if g is None:
                 return None
-            if mode in ['V', 'T']:
+            if ivModes[mode] == 'vc':
                 return gain_vm[np.argmin(np.abs(gain_tel-g))]
             else:
                 return gain_im[np.argmin(np.abs(gain_tel-g))]
@@ -236,6 +241,19 @@ class AxoPatch200(DAQGeneric):
         else:
             raise Exception("No scale for channel %s" % chan)
         
+    def getChanUnits(self, chan):
+        global ivModes
+        iv = ivModes[self.getMode()]
+        if iv == 'vc':
+            units = ['V', 'A']
+        else:
+            units = ['A', 'V']
+            
+        if chan == 'Command':
+            return units[0]
+        elif chan == 'primary':
+            return units[1]
+        
     def readChannel(self, ch):
         if ch in self.config:
             chOpts = self.config[ch]
@@ -252,6 +270,15 @@ class AxoPatch200(DAQGeneric):
         
 class AxoPatch200Task(DAQGenericTask):
     def __init__(self, dev, cmd):
+        ## make a few changes for compatibility with multiclamp
+        if 'daqProtocol' not in cmd:
+            cmd['daqProtocol'] = {}
+        if 'command' in cmd:
+            if 'holding' in cmd:
+                cmd['daqProtocol']['Command'] = {'command': cmd['command'], 'holding': cmd['holding']}
+            else:
+                cmd['daqProtocol']['Command'] = {'command': cmd['command']}
+            
         cmd['daqProtocol']['primary'] = {'record': True}
         DAQGenericTask.__init__(self, dev, cmd['daqProtocol'])
         self.cmd = cmd
