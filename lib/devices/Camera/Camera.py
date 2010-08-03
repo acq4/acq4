@@ -21,8 +21,8 @@ class Camera(DAQGeneric):
 
     The list/get/setParams functions should implement a few standard items:
     (Note: these values are just examples, but the data types must be the same.)
-        acquire:         bool
-        triggerMode:     str, ['NoTrigger', 'TriggerStart', 'Strobe', 'Bulb']
+
+        triggerMode:     str, ['Normal', 'TriggerStart', 'Strobe', 'Bulb']
         triggerType:     str, ['Software', 'Hardware']
         exposure:        float, (0.0, 10.0)
         exposureMode:    str, ['Exact', 'Maximize']

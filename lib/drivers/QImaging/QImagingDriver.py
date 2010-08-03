@@ -26,15 +26,16 @@ lib = CLibrary(dll, p, prefix = 'QCam_')        #makes it so that functions in t
 # getParams(self, params=None)
 
 externalParams = ['triggerMode',
+                  #'triggerType', ## Add this in when we figure out TriggerModes
                   'exposure',
+                  #'exposureMode',
                   'binningX',
                   'binningY',
                   'regionX',
                   'regionY',
                   'regionW',
                   'regionH',
-                  'qprmNormalizedGain',
-                  'qprmS32NormalizedGaindB',
+                  'gain',
                   'qprmS32AbsoluteOffset',
                   'qprmReadoutSpeed',
                   'qprmCoolerActive',
@@ -43,8 +44,11 @@ externalParams = ['triggerMode',
                   'qprmImageFormat',
                   'qprmSyncb',
                   ]
-
-
+cameraDefaults = {
+    'ALL':{
+        'qprmImageFormat':'qfmtMono16',
+    }}
+        
 class QCamFunctionError(Exception):
     def __init__(self, value, message):
         self.value = value
@@ -76,8 +80,8 @@ class _QCamDriverClass:
     def loadDriver(self):
         self.call(lib.LoadDriver)
  
-    def releaseDriver(self):
-        self.call(lib.ReleaseDriver)
+    #def releaseDriver(self):
+    #    self.call(lib.ReleaseDriver)
         
     def listCameras(self):
         number = c_ulong(10)
@@ -100,7 +104,7 @@ class _QCamDriverClass:
     def quit(self):
         for c in self.cams:
             self.cams[c].quit()
-        self.releaseDriver()
+
         
 class _QCameraClass:
     def __init__(self, name, driver):
@@ -144,9 +148,8 @@ class _QCameraClass:
             'regionY':'qprmRoiY',
             'regionW':'qprmRoiWidth',
             'regionH':'qprmRoiHeight',
+            'gain':'qprmNormalizedGain',
             'Normal':'qcTriggerFreerun',
-            
-            
         }
         
         self.cameraToUserDict = {
@@ -157,6 +160,7 @@ class _QCameraClass:
             'qprmRoiY':'regionY',
             'qprmRoiWidth':'regionW',
             'qprmRoiHeight':'regionH',
+            'qprmNormalizedGain':'gain',
             'qcTriggerFreerun':'Normal',
             'qcTriggerNone':'Normal'
         }
@@ -232,12 +236,12 @@ class _QCameraClass:
                     try: ###first try to get a SparseTable
                         table = (c_ulong *32)()
                         r = self.call(lib.GetParamSparseTable, byref(s), getattr(lib,x), table, c_long(32))
-                        self.paramAttrs[self.translateToUser(x)] = (list(r[2])[:r[3]])
+                        self.paramAttrs[self.translateToUser(x)] = (list(r[2])[:r[3]], True, True, [])
                     except QCamFunctionError, err: ###if sparse table doesn't work try getting a RangeTable
                         if err.value == 1:  
                             min = self.call(lib.GetParamMin, byref(s), getattr(lib,x))[2]
                             max = self.call(lib.GetParamMax, byref(s), getattr(lib,x))[2]
-                            self.paramAttrs[self.translateToUser(x)] = (min, max)
+                            self.paramAttrs[self.translateToUser(x)] = ((min, max), True, True, [])
                         else: raise      
             except QCamFunctionError, err:
                 if err.value == 1: pass    
@@ -250,12 +254,12 @@ class _QCameraClass:
                     try:
                         table = (c_long *32)()
                         r = self.call(lib.GetParamSparseTableS32, byref(s), getattr(lib,x), table, c_long(32))
-                        self.paramAttrs[self.translateToUser(x)] = (list(r[2])[:r[3]])
+                        self.paramAttrs[self.translateToUser(x)] = (list(r[2])[:r[3]], True, True, []))
                     except QCamFunctionError, err:
                         if err.value == 1:
                             min = self.call(lib.GetParamS32Min, byref(s), getattr(lib,x))[2]
                             max = self.call(lib.GetParamS32Max, byref(s), getattr(lib,x))[2]
-                            self.paramAttrs[self.translateToUser(x)] = (min, max)
+                            self.paramAttrs[self.translateToUser(x)] = ((min, max), True, True, [])
                         else: raise
             except QCamFunctionError, err:
                 if err.value == 1: pass
@@ -268,12 +272,12 @@ class _QCameraClass:
                     try:
                         table = (c_ulonglong *32)()
                         r = self.call(lib.GetParamSparseTable64, byref(s), getattr(lib,x), table, c_long(32))
-                        self.paramAttrs[self.translateToUser(x)] = (list(r[2])[:r[3]])
+                        self.paramAttrs[self.translateToUser(x)] = (list(r[2])[:r[3]], True, True, []))
                     except QCamFunctionError, err:
                         if err.value == 1:
                             min = self.call(lib.GetParam64Min, byref(s), getattr(lib,x))[2]
                             max = self.call(lib.GetParam64Max, byref(s), getattr(lib,x))[2]
-                            self.paramAttrs[self.translateToUser(x)] = (min, max)
+                            self.paramAttrs[self.translateToUser(x)] = ((min, max), True, True, [])
                         else: raise
             except QCamFunctionError, err:
                 if err.value == 1:  pass
@@ -373,7 +377,9 @@ class _QCameraClass:
         value = self.getNameFromEnum(param, value)
         return value
 
-    def setParam(self, param, value):
+    def setParam(self, param, value, autoRestart=True, autoCorrect=True):
+        if param in self.groupParams:
+            return self.setParams(zip(self.groupParams[paramName], value))
         s = self.readSettings()
         param = self.translateToCamera(param)
         value = self.translateToCamera(value)
@@ -392,6 +398,7 @@ class _QCameraClass:
             if self.stopSignal == False:
                 #self.mutex.unlock()
                 self.call(lib.QueueSettings, self.handle, byref(s), null, lib.qcCallbackDone)
+        
 
     #def getParams(self, *params):
     #    s = self.readSettings()
@@ -415,20 +422,23 @@ class _QCameraClass:
         else:
             return OrderedDict([(p, self.getParam(p)) for p in params])
 
-    def setParams(self, **params): ### need to make this work with group params
+    def setParams(self, params, autoRestart=True, autoCorrect=True): 
         s = self.readSettings()
         for x in params:
-            param = self.translateToCamera(x)
-            params[x] = self.translateToCamera(params[x])
+            if x[0] in self.groupParams:
+                return self.setParams(zip(self.groupParams[x[0]], x[1]))
+        for x in params:
+            param = self.translateToCamera(x[0])
+            value = self.translateToCamera(x[1])
             #params[param] = params[x]
             if param in self.paramEnums:
-                params[x] = self.getEnumFromName(param, params[x])
+                value = self.getEnumFromName(param, value)
             if param in lib('enums', 'QCam_Param'):
-                self.call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(params[x]))
+                self.call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(value))
             elif param in lib('enums', 'QCam_ParamS32'):
-                self.call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(params[x]))
+                self.call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(value))
             elif param in lib('enums', 'QCam_Param64'):
-                self.call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(params[x]))
+                self.call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(value))
         with self.mutex:
             if self.stopSignal == True:
                 #self.mutex.unlock()
@@ -436,6 +446,10 @@ class _QCameraClass:
             if self.stopSignal == False:
                 #self.mutex.unlock()
                 self.call(lib.QueueSettings, self.handle, byref(s), 0, lib.qcCallbackDone)
+        for x in params:
+            dict = {}
+            dict[x[0]] = self.getParam(x[0])
+        return dict
 
     def start(self):
         #global i, stopsignal
