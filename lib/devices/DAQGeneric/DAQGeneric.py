@@ -244,7 +244,12 @@ class DAQGenericTask(DeviceTask):
             chanList = [atleast_2d(result[x]['data']) for x in result]
             cols = [(x, result[x]['units']) for x in result]
             # print cols
-            arr = concatenate(chanList)
+            try:
+                arr = concatenate(chanList)
+            except:
+                print chanList
+                print [a.shape for a in chanList]
+                raise
             info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'rate': rate, 'numPts': nPts, 'startTime': meta['startTime']}]
             marr = MetaArray(arr, info=info)
             #print marr

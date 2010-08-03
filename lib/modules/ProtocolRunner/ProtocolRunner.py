@@ -27,7 +27,7 @@ class Window(QtGui.QMainWindow):
         if 'geometry' in uiState:
             geom = QtCore.QRect(*uiState['geometry'])
             self.setGeometry(geom)
-            print "set geometry", geom
+            #print "set geometry", geom
 
         
     def closeEvent(self, ev):
@@ -36,8 +36,8 @@ class Window(QtGui.QMainWindow):
         getManager().writeConfigFile(uiState, self.stateFile)
         
         self.pr.quit()
-        ev.ignore()
-        sip.delete(self)
+        #ev.ignore()
+        #sip.delete(self)
 
 class ProtocolRunner(Module):
     def __init__(self, manager, name, config):
@@ -272,7 +272,7 @@ class ProtocolRunner(Module):
         except:
             printExc("Error closing analysis dock:")
         self.win.removeDockWidget(self.analysisDocks[mod])
-        sip.delete(self.analysisDocks[mod])
+        #sip.delete(self.analysisDocks[mod])
         del self.analysisDocks[mod]
         items = self.ui.analysisList.findItems(mod, QtCore.Qt.MatchExactly)
         items[0].setCheckState(QtCore.Qt.Unchecked)

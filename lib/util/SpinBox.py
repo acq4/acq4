@@ -60,7 +60,13 @@ class SpinBox(QtGui.QAbstractSpinBox):
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('returnPressed()'), self.editingFinished)
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('textChanged()'), self.textChanged)
         
+    ## can't rely on __del__ since it may not be called for a long time
+    #def __del__(self):
+        #print "delete", self
+        #QtCore.QObject.disconnect(self.proxy, QtCore.SIGNAL('valueChanged(double)'), self.delayedChange)
+        
     def delayedChange(self):
+        #print "delayedChange", self
         #print "emit delayed change"
         self.emit(QtCore.SIGNAL('delayedChange'), self.value())
         
