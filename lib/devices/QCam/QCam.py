@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 from __future__ import with_statement
 #from lib.devices.DAQGeneric.interface import DAQGeneric, DAQGenericTask
 from lib.devices.Camera import Camera
@@ -21,23 +20,23 @@ class QCam(Camera):
         Camera.__init__(self, *args, **kargs)  ## superclass will call setupCamera when it is ready.
         
     def setupCamera(self):
-        self.qcd = _QCamDriverClass()
-        cams = self.pvc.listCameras()
+        self.qcd = QCamDriverClass()
+        cams = self.qcd.listCameras()
         print "Cameras:", cams
         if len(cams) < 1:
             raise Exception('No cameras found by QCam driver')
         
-        if self.camConfig['serial'] is None:  ## Just pick first camera
-            ind = 0
-        else:
-            if self.camConfig['serial'] in cams:
-                ind = cams.index(self.camConfig['serial'])
-            else:
-                raise Exception('Can not find pvcam camera "%s"' % str(self.camConfig['serial']))
-        print "Selected camera:", cams[ind]
-        self.cam = self.pvc.getCamera(cams[ind])
+        #if self.camConfig['serial'] is None:  ## Just pick first camera
+        #    ind = 0
+        #else:
+        #    if self.camConfig['serial'] in cams:
+        #        ind = cams.index(self.camConfig['serial'])
+        #    else:
+        #        raise Exception('Can not find pvcam camera "%s"' % str(self.camConfig['serial']))
+        #print "Selected camera:", cams[ind]
+        #self.cam = self.pvc.getCamera(cams[ind])
         
-        #self.cam = self.qcd.getCamera(cams[0]) #open first camera
+        self.cam = self.qcd.getCamera(cams[0]) #open first camera
         
     def start(self, block=True):
         if not self.isRunning():

@@ -98,7 +98,7 @@ class Camera(DAQGeneric):
         QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('showMessage'), self.showMessage)
         QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('newFrame'), self.newFrame)
         
-        if 'params' in config:
+        if config != None and 'params' in config:
             self.setParams(config['params'])
             
     def setupCamera(self):

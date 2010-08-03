@@ -1,3 +1,5 @@
+print __file__
+
 import time
 from ctypes import *
 import sys, os
@@ -10,7 +12,8 @@ from PyQt4 import QtGui
 from Mutex import Mutex, MutexLocker
 from advancedTypes import OrderedDict
 import atexit
-p = CParser('QCamApi.h', cache='QCamApi.h.cache', macros={'_WIN32': '', '__int64': ('long long')})
+modDir = os.path.dirname(__file__)
+p = CParser(os.path.join(modDir, "QCamApi.h"), cache=os.path.join(modDir, 'QCamApi.h.cache'), macros={'_WIN32': '', '__int64': ('long long')})
 if sys.platform == 'darwin':
     dll = cdll.LoadLibrary('/Library/Frameworks/QCam.framework/QCam')
 else:
@@ -18,7 +21,19 @@ else:
 lib = CLibrary(dll, p, prefix = 'QCam_')        #makes it so that functions in the header file can be accessed using lib.nameoffunction, ie: QCam_LoadDriver is lib.LoadDriver
                                                 #also interprets all the typedefs for you....very handy
                                                 #anything from the header needs to be accessed through lib.yourFunctionOrParamete
-    
+
+
+#modDir = os.path.dirname(__file__)
+#headerFiles = [
+#    #"C:\Program Files\Photometrics\PVCam32\SDK\inc\master.h",
+#    #"C:\Program Files\Photometrics\PVCam32\SDK\inc\pvcam.h"
+#    os.path.join(modDir, "QCamApi.h")
+#    #os.path.join(modDir, "pvcam.h")
+#]
+#HEADERS = CParser(headerFiles, cache=os.path.join(modDir, 'pvcam_headers.cache'), copyFrom=winDefs())
+#LIB = CLibrary(windll.Pvcam32, HEADERS, prefix='pl_')
+#
+
 ###functions that are called from CameraDevice:
 # setUpCamera(self) - """Prepare the camera at least so that get/setParams will function correctly"""
 # listParams(self, params=None)
@@ -48,6 +63,11 @@ cameraDefaults = {
     'ALL':{
         'qprmImageFormat':'qfmtMono16',
     }}
+
+#def init():
+#    ## System-specific code
+#    global QCam
+#    QCam = _QCamDriverClass()
         
 class QCamFunctionError(Exception):
     def __init__(self, value, message):
@@ -55,8 +75,8 @@ class QCamFunctionError(Exception):
         self.message = message
     def __str__(self):
         return repr(self.message)
-        
-class _QCamDriverClass:
+
+class QCamDriverClass:
     def __init__(self):
         self.cams = {}
         self.paramTable = OrderedDict()
@@ -95,7 +115,7 @@ class _QCamDriverClass:
     
     def getCamera(self, cam):
         if not self.cams.has_key(cam):
-            self.cams[cam] = _QCameraClass(cam, self)
+            self.cams[cam] = QCameraClass(cam, self)
         return self.cams[cam]
         
     def __del__(self):
@@ -106,7 +126,7 @@ class _QCamDriverClass:
             self.cams[c].quit()
 
         
-class _QCameraClass:
+class QCameraClass:
     def __init__(self, name, driver):
         self.name = name
         self.driver = driver
@@ -254,7 +274,7 @@ class _QCameraClass:
                     try:
                         table = (c_long *32)()
                         r = self.call(lib.GetParamSparseTableS32, byref(s), getattr(lib,x), table, c_long(32))
-                        self.paramAttrs[self.translateToUser(x)] = (list(r[2])[:r[3]], True, True, []))
+                        self.paramAttrs[self.translateToUser(x)] = (list(r[2])[:r[3]], True, True, [])
                     except QCamFunctionError, err:
                         if err.value == 1:
                             min = self.call(lib.GetParamS32Min, byref(s), getattr(lib,x))[2]
@@ -272,7 +292,7 @@ class _QCameraClass:
                     try:
                         table = (c_ulonglong *32)()
                         r = self.call(lib.GetParamSparseTable64, byref(s), getattr(lib,x), table, c_long(32))
-                        self.paramAttrs[self.translateToUser(x)] = (list(r[2])[:r[3]], True, True, []))
+                        self.paramAttrs[self.translateToUser(x)] = (list(r[2])[:r[3]], True, True, [])
                     except QCamFunctionError, err:
                         if err.value == 1:
                             min = self.call(lib.GetParam64Min, byref(s), getattr(lib,x))[2]
@@ -296,6 +316,7 @@ class _QCameraClass:
         #                        self.paramAttrs[x][i] = self.translateToUser(b)
         for x in self.paramAttrs:
             self.paramAttrs[x] = self.getNameFromEnum(x, self.paramAttrs[x])
+        return self.paramAttrs
                                 
     def getNameFromEnum(self, enum, value):
         enum = self.translateToCamera(enum)
