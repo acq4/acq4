@@ -46,161 +46,105 @@ def listObjs(regex='Q', typ=None):
     else:
         return [x for x in gc.get_objects() if re.match(regex, type(x).__name__)]
         
-def describeObj(__XX__Obj, depth=4, printResult=True, returnResult=False, ignoreNames=None, ignorePaths=None, start=True):
-    """Return a string describing this object; attempt to find names that refer to it."""
-    gc.collect()
-    
-    if ignoreNames is None:
-        ignoreNames = ['_']
-    if ignorePaths is None:
-        ignorePaths = {}
-    
-    #typName = str(type(__XX__Obj))
-    if depth == 0:
-        return []
-        #if printResult:
-            #print "  "*depth + str(type(__XX__Obj))
-        #return [__XX__Obj]
-    
-    #refStrs = []
-    refs = []
-    
-    
-    __XX__Refs = gc.get_referrers(__XX__Obj)
-    for __XX__Ref in __XX__Refs:
-        #if startObj is not None and startObj is not __XX__Ref:
-            #continue
-            
-        ## First determine how to get from this reference to the object (key, index, or attribure)
-        path = ('?',)*3
-        if type(__XX__Ref).__name__ == 'frame':
-            continue
-        if hasattr(__XX__Ref, 'keys'):
-            for k in __XX__Ref.keys():
-                if isinstance(k, basestring) and k[:6] == '__XX__' or k in ignoreNames:
-                    continue
-                if __XX__Ref[k] is __XX__Obj:
-                    path = ('key', k, hash(k))
-                    break
-        elif isinstance(__XX__Ref, list) or isinstance(__XX__Ref, tuple):
-            junk = False
-            for v in __XX__Ref[:10]:  ## lists containing frames are ubiquitous and unhelpful.
-                if type(v) is types.FrameType:
-                    junk = True
-                    break
-            if junk:
-                continue
-            
-            try:
-                i = __XX__Ref.index(__XX__Obj)
-                path = ('index', i, '%d'%i)
-            except:
-                pass
-        else:
-            for k in dir(__XX__Ref):
-                if k in ignoreNames:
-                    continue
-                if getattr(__XX__Ref, k) is __XX__Obj:
-                    path = ('attr', k, k)
-                    break
-                    
-        ## Make sure we haven't already been here
-        #pathKey = (id(__XX__Ref), path[0], path[2])
-        #if pathKey in ignorePaths:
-            #continue
-        #ignorePaths[pathKey] = None
-        
-        
-        nextRefs = describeObj(__XX__Ref, depth=depth-1, printResult=printResult, ignoreNames=ignoreNames, ignorePaths=ignorePaths, start=False)
-        
-        
-        desc = ''
-        if path[0] == 'key':
-            strPath = "[%s]" % repr(path[1])
-            desc = str([type(v).__name__ for v in __XX__Ref.values()])[:80]
-        elif path[0] == 'index':
-            strPath = "[%d]" % path[1]
-            desc = str([type(v).__name__ for v in __XX__Ref])[:80]
-        elif path[0] == 'attr':
-            strPath = '.%s' % path[1]
-        else:
-            strPath = path[0]
-        refs.append((__XX__Ref, path[:2]+(strPath,), nextRefs))
-        
-        if printResult:
-                
-            objStr = str(__XX__Ref)
-            if len(objStr) > 50:
-                objStr = str(type(__XX__Ref).__name__)
-            print "    "*(depth-1) + objStr, strPath, desc
-    
-    #refStrs = set(refStrs)
-    
-    #result = [s + ' ' + typName for s in refStrs]
-    if start and printResult:
-        print "    "*(depth) + str(type(__XX__Obj))
-        
-        print "-------------------"
-        def printPaths(paths, suffix=''):
-            for p in paths:
-                suf = p[1][2]+suffix
-                if len(p[2]) == 0:
-                    line = str(type(p[0]))+suf
-                    line = re.sub(r"\.__dict__\['([^\]]+)'\]", r'.\1', line)
-                    print line
-                else:
-                    printPaths(p[2], suf)
-        
-        printPaths(refs)
-        
-        
-    if not start or returnResult:
-        return refs
 
     
-def findObjChains(startObj, endObj, maxLen=8, restart=True, seen={}, path=None):
+def findRefPath(startObj, endObj, maxLen=8, restart=True, seen={}, path=None):
     """Determine all paths of object references from startObj to endObj"""
     refs = []
     if path is None:
         path = [endObj]
+    prefix = " "*(8-maxLen)
+    #print prefix + str(map(type, path))
+    prefix += " "
     if restart:
+        #gc.collect()
         seen.clear()
+    gc.collect()
     newRefs = gc.get_referrers(endObj)
     for r in newRefs:
+        #print prefix+"->"+str(type(r))
+        if type(r).__name__ in ['frame', 'function', 'listiterator']:
+            #print prefix+"  FRAME"
+            continue
+        try:
+            if any([r is x for x in  path]):
+                #print prefix+"  LOOP", objChainString([r]+path)
+                continue
+        except:
+            print r
+            print path
+            raise
         if r is startObj:
             refs.append([r])
-            print "FOUND:", objChainString(path)
+            print refPathString([startObj]+path)
             continue
-        if seen.get(id(r), 0) >= maxLen:   ## Skip this object if it has already been searched in greater-or-equal detail than we will
-            #print "SKIP FRAME"
-            #print "SKIP :", objChainString(path)
+        if maxLen == 0:
+            #print prefix+"  END:", objChainString([r]+path)
             continue
-        elif maxLen == 0:
-            print "END  :", objChainString(path)
-            continue
-        if type(r).__name__ == 'frame':
-            continue
-        seen[id(r)] = maxLen
-        tree = findObjChains(startObj, r, maxLen-1, restart=False, path=[r]+path)
+        
+        ## See if we have already searched this node.
+        ## If not, recurse.
+        tree = None
+        try:
+            cache = seen[id(r)]
+            if cache[0] >= maxLen:
+                tree = cache[1]
+                for p in tree:
+                    print refPathString(p+path)
+        except KeyError:
+            pass
+        if tree is None:
+            tree = findRefPath(startObj, r, maxLen-1, restart=False, path=[r]+path)
+            seen[id(r)] = [maxLen, tree]
+            
+        ## integrate any returned results
         if len(tree) == 0:
+            #print prefix+"  EMPTY TREE"
             continue
         else:
             for p in tree:
-                refs.append([r] + p)
+                refs.append(p+[r])
+        #seen[id(r)] = [maxLen, refs]
     return refs
 
+def objString(obj):
+    """Return a short but descriptive string for any object"""
+    try:
+        if isinstance(obj, dict):
+            if len(obj) > 5:
+                return "<dict {%s,...}>" % (",".join(obj.keys()[:5]))
+            else:
+                return "<dict {%s}>" % (",".join(obj.keys()))
+        elif isinstance(obj, basestring):
+            return '"%s"' % obj[:50]
+        elif isinstance(obj, ndarray):
+            return "<ndarray %s %s>" % (str(obj.dtype), str(obj.shape))
+        elif hasattr(obj, '__len__'):
+            if len(obj) > 5:
+                return "<%s [%s,...]>" % (type(obj).__name__, ",".join([type(o).__name__ for o in obj[:5]]))
+            else:
+                return "<%s [%s]>" % (type(obj).__name__, ",".join([type(o).__name__ for o in obj]))
+        else:
+            return "<%s %s>" % (type(obj).__name__, obj.__class__.__name__)
+    except:
+        return str(type(obj))
 
-
-def objChainString(chain):
-    s = str(chain[0])
-    if len(s) > 50:
-        s = s[:50]+"(...)"
+def refPathString(chain):
+    """Given a list of adjacent objects in a reference path, print the 'natural' path
+    names (ie, attribute names, keys, and indexes) that follow from one object to the next ."""
+    s = objString(chain[0])
     i = 0
     while i < len(chain)-1:
+        #print " -> ", i
         i += 1
         o1 = chain[i-1]
         o2 = chain[i]
         cont = False
+        if isinstance(o1, list) or isinstance(o1, tuple):
+            if o2 in o1:
+                s += "[%d]" % o1.index(o2)
+                continue
+        #print "  not list"
         if isinstance(o2, dict) and hasattr(o1, '__dict__') and o2 == o1.__dict__:
             i += 1
             if i >= len(chain):
@@ -212,33 +156,31 @@ def objChainString(chain):
                     s += '.%s' % k
                     cont = True
                     continue
+        #print "  not __dict__"
         if isinstance(o1, dict):
             try:
                 if o2 in o1:
-                    s += "[key:%s]" % str(o2)[:30]
+                    s += "[key:%s]" % objString(o2)
                     continue
             except TypeError:
                 pass
             for k in o1:
                 if o1[k] is o2:
-                    s += "[%s]" % str(k)[:30]
+                    s += "[%s]" % objString(k)
                     cont = True
                     continue
-        if isinstance(o1, list) or isinstance(o1, tuple):
-            if o2 in o1:
-                s += "[%d]" % o1.index(o2)
-                continue
+        #print "  not dict"
         for k in dir(o1):
             if getattr(o1, k) is o2:
                 s += ".%s" % k
                 cont = True
                 continue
+        #print "  not attr"
         if cont:
             continue
         s += " ? "
+        sys.stdout.flush()
     return s
-
-findObjChains(a,c,4)
 
     
 def objectSize(obj, ignore=None, verbose=False, depth=0, recursive=False):
@@ -399,31 +341,42 @@ class Profiler:
 # Recursively expand slist's objects
 # into olist, using seen to track
 # already processed objects.
-def _getr(slist, olist, seen):
+def _getr(slist, olist, first=True):
+    i = 0 
     for e in slist:
-        if id(e) in seen:
+        oid = id(e)
+        if oid in olist:
             continue
-        seen[id(e)] = None
-        olist.append(e)
+        #seen[oid] = None
+        #olist.append(e)
+        olist[oid] = e
+        if first and (i%100) == 0:
+            gc.collect()
         tl = gc.get_referents(e)
         if tl:
-            _getr(tl, olist, seen)
+            _getr(tl, olist, first=False)
+        i += 1
 # The public function.
 def get_all_objects():
     """Return a list of all live Python  objects, not including the list itself."""
+    gc.collect()
     gcl = gc.get_objects()
-    olist = []
-    seen = {}
+    olist = {}
+    #seen = {}
     # Just in case:
-    seen[id(gcl)] = None
-    seen[id(olist)] = None
-    seen[id(seen)] = None
+    #seen[id(gcl)] = None
+    #seen[id(olist)] = None
+    #seen[id(seen)] = None
     # _getr does the real work.
-    _getr(gcl, olist, seen)
-    d = {}
-    for o in olist:
-        d[id(o)] = o
-    return d    
+    _getr(gcl, olist)
+    
+    del olist[id(olist)]
+    del olist[id(gcl)]
+    return olist
+    #d = {}
+    #for o in olist:
+        #d[id(o)] = o
+    #return d    
         
         
         
@@ -443,15 +396,23 @@ class ObjRef:
         self.type = type(obj)
         #self.size = objectSize(obj)
         self.uid = "%d %s" % (self.id, str(self.type))
-        self.objs = [self, self.__dict__, self.ref, self.id, self.type, self.uid]
+        self.objs = [self.__dict__, self.ref, self.id, self.type, self.uid]
         self.objs.append(self.objs)
+        ObjRef.allObjs[id(self)] = None
         for v in self.objs:
             ObjRef.allObjs[id(v)] = None
             
     def __del__(self):
+        try:
+            del ObjRef.allObjs[id(self)]
+        except KeyError:
+            pass
         for v in self.objs:
-            del ObjRef.allObjs[id(v)]
-        
+            try:
+                del ObjRef.allObjs[id(v)]
+            except KeyError:
+                pass
+            
     @classmethod
     def isObjVar(cls, o):
         return type(o) is cls or id(o) in cls.allObjs
@@ -498,16 +459,28 @@ class ObjTracker:
         #for v in self.__dict__.values():
             #ObjTracker.allObjs[id(v)] = None
             
-        self.objs = [self, self.__dict__, self.startRefs, self.startCount, self.lastRefs]
+        ObjTracker.allObjs[id(self)] = None
+        self.objs = [self.__dict__, self.startRefs, self.startCount, self.lastRefs]
         self.objs.append(self.objs)
         for v in self.objs:
-            ObjRef.allObjs[id(v)] = None
+            ObjTracker.allObjs[id(v)] = None
             
         self.start()
             
     def __del__(self):
+        self.startRefs.clear()
+        self.startCount.clear()
+        self.lastRefs.clear()
+        try:
+            del ObjTracker.allObjs[id(self)]
+        except KeyError:
+            print ObjTracker.allObjs.keys()
         for v in self.objs:
-            del ObjTracker.allObjs[id(v)]
+            try:
+                del ObjTracker.allObjs[id(v)]
+            except KeyError:
+                print ObjTracker.allObjs.keys()
+                pass
     #def objId(self, obj):
         #return (id(obj), str(type(obj)))
             
@@ -536,7 +509,7 @@ class ObjTracker:
         #self.ignore[self.objId(ignore)] = None
         gc.collect()
         objs = get_all_objects()
-        print "got all objects"
+        print "got all objects (%d)" % len(objs)
         refs = {}
         count = {}
         for k in objs:
@@ -704,3 +677,113 @@ class ObjTracker:
         return self.findTypes(self.lastRefs, regex)
     
     
+def describeObj(__XX__Obj, depth=4, printResult=True, returnResult=False, ignoreNames=None, ignorePaths=None, start=True):
+    """Return a string describing this object; attempt to find names that refer to it."""
+    gc.collect()
+    
+    if ignoreNames is None:
+        ignoreNames = ['_']
+    if ignorePaths is None:
+        ignorePaths = {}
+    
+    #typName = str(type(__XX__Obj))
+    if depth == 0:
+        return []
+        #if printResult:
+            #print "  "*depth + str(type(__XX__Obj))
+        #return [__XX__Obj]
+    
+    #refStrs = []
+    refs = []
+    
+    
+    __XX__Refs = gc.get_referrers(__XX__Obj)
+    for __XX__Ref in __XX__Refs:
+        #if startObj is not None and startObj is not __XX__Ref:
+            #continue
+            
+        ## First determine how to get from this reference to the object (key, index, or attribure)
+        path = ('?',)*3
+        if type(__XX__Ref).__name__ == 'frame':
+            continue
+        if hasattr(__XX__Ref, 'keys'):
+            for k in __XX__Ref.keys():
+                if isinstance(k, basestring) and k[:6] == '__XX__' or k in ignoreNames:
+                    continue
+                if __XX__Ref[k] is __XX__Obj:
+                    path = ('key', k, hash(k))
+                    break
+        elif isinstance(__XX__Ref, list) or isinstance(__XX__Ref, tuple):
+            junk = False
+            for v in __XX__Ref[:10]:  ## lists containing frames are ubiquitous and unhelpful.
+                if type(v) is types.FrameType:
+                    junk = True
+                    break
+            if junk:
+                continue
+            
+            try:
+                i = __XX__Ref.index(__XX__Obj)
+                path = ('index', i, '%d'%i)
+            except:
+                pass
+        else:
+            for k in dir(__XX__Ref):
+                if k in ignoreNames:
+                    continue
+                if getattr(__XX__Ref, k) is __XX__Obj:
+                    path = ('attr', k, k)
+                    break
+                    
+        ## Make sure we haven't already been here
+        #pathKey = (id(__XX__Ref), path[0], path[2])
+        #if pathKey in ignorePaths:
+            #continue
+        #ignorePaths[pathKey] = None
+        
+        
+        nextRefs = describeObj(__XX__Ref, depth=depth-1, printResult=printResult, ignoreNames=ignoreNames, ignorePaths=ignorePaths, start=False)
+        
+        
+        desc = ''
+        if path[0] == 'key':
+            strPath = "[%s]" % repr(path[1])
+            desc = str([type(v).__name__ for v in __XX__Ref.values()])[:80]
+        elif path[0] == 'index':
+            strPath = "[%d]" % path[1]
+            desc = str([type(v).__name__ for v in __XX__Ref])[:80]
+        elif path[0] == 'attr':
+            strPath = '.%s' % path[1]
+        else:
+            strPath = path[0]
+        refs.append((__XX__Ref, path[:2]+(strPath,), nextRefs))
+        
+        if printResult:
+                
+            objStr = str(__XX__Ref)
+            if len(objStr) > 50:
+                objStr = str(type(__XX__Ref).__name__)
+            print "    "*(depth-1) + objStr, strPath, desc
+    
+    #refStrs = set(refStrs)
+    
+    #result = [s + ' ' + typName for s in refStrs]
+    if start and printResult:
+        print "    "*(depth) + str(type(__XX__Obj))
+        
+        print "-------------------"
+        def printPaths(paths, suffix=''):
+            for p in paths:
+                suf = p[1][2]+suffix
+                if len(p[2]) == 0:
+                    line = str(type(p[0]))+suf
+                    line = re.sub(r"\.__dict__\['([^\]]+)'\]", r'.\1', line)
+                    print line
+                else:
+                    printPaths(p[2], suf)
+        
+        printPaths(refs)
+        
+        
+    if not start or returnResult:
+        return refs
