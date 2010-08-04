@@ -347,7 +347,8 @@ def _getr(slist, olist, first=True):
     for e in slist:
         
         oid = id(e)
-        if oid in olist or (type(e) is int and e in olist):  ## Ignore objects we've already noted as well as objects that are just keys in olist
+        typ = type(e)
+        if oid in olist or typ is int or typ is long:    ## or e in olist:     ## since we're excluding all ints, there is no longer a need to check for olist keys
             continue
         #seen[oid] = None
         #olist.append(e)
@@ -361,7 +362,7 @@ def _getr(slist, olist, first=True):
 # The public function.
 #ALL_OBJS_CACHE = {}
 def get_all_objects():
-    """Return a list of all live Python  objects, not including the list itself."""
+    """Return a list of all live Python objects (excluding int and long), not including the list itself."""
     #global ALL_OBJS_CACHE
     #if useCache and len(ALL_OBJS_CACHE) > 0:
         #return ALL_OBJS_CACHE
@@ -390,7 +391,7 @@ def lookup(oid, objects=None):
     """Return an object given its ID, if it exists."""
     if objects is None:
         objects = get_all_objects()
-    return get_all_objects(useCache=useCache)[oid]
+    return objects[oid]
         
         
 #class ObjRef:
@@ -456,7 +457,7 @@ class ObjTracker:
     def __init__(self):
         self.startRefs = {}
         self.startCount = {}
-        self.lastRefs = {}
+        self.newRefs = {}
         #self.objs = self.newObjs = self.persistObjs = None
         #self.typeCount = None
         #self.ignoreObjs = {}
@@ -472,7 +473,7 @@ class ObjTracker:
             #ObjTracker.allObjs[id(v)] = None
             
         ObjTracker.allObjs[id(self)] = None
-        self.objs = [self.__dict__, self.startRefs, self.startCount, self.lastRefs]
+        self.objs = [self.__dict__, self.startRefs, self.startCount, self.newRefs]
         self.objs.append(self.objs)
         for v in self.objs:
             ObjTracker.allObjs[id(v)] = None
@@ -482,17 +483,10 @@ class ObjTracker:
     def __del__(self):
         self.startRefs.clear()
         self.startCount.clear()
-        self.lastRefs.clear()
-        try:
-            del ObjTracker.allObjs[id(self)]
-        except KeyError:
-            print ObjTracker.allObjs.keys()
+        self.newRefs.clear()
+        del ObjTracker.allObjs[id(self)]
         for v in self.objs:
-            try:
-                del ObjTracker.allObjs[id(v)]
-            except KeyError:
-                print ObjTracker.allObjs.keys()
-                pass
+            del ObjTracker.allObjs[id(v)]
     #def objId(self, obj):
         #return (id(obj), str(type(obj)))
             
@@ -519,6 +513,7 @@ class ObjTracker:
         #self.ignore[self.objId(ids)] = None
         #self.ignore[self.objId(count)] = None
         #self.ignore[self.objId(ignore)] = None
+        print "Collecting list of all objects..."
         gc.collect()
         objs = get_all_objects()
         ignoreTypes = [int, long]
@@ -566,8 +561,8 @@ class ObjTracker:
         for r in refs:
             self.rememberRef(r)
         self.startCount = count
-        #self.lastRefs.clear()
-        #self.lastRefs.update(refs)
+        #self.newRefs.clear()
+        #self.newRefs.update(refs)
     
     def forgetRef(self, ref):
         if ref is not None:
@@ -590,6 +585,11 @@ class ObjTracker:
                 delRefs[i] = self.startRefs[i]
                 del self.startRefs[i]
                 self.forgetRef(delRefs[i])
+        for i in self.newRefs.keys():
+            if i not in refs:
+                delRefs[i] = self.newRefs[i]
+                del self.newRefs[i]
+                self.forgetRef(delRefs[i])
         #print "deleted:", len(delRefs)
                 
         ## Also check for expired weakrefs (?)
@@ -603,20 +603,20 @@ class ObjTracker:
         createRefs = {}
         for o in refs:
             if o not in self.startRefs:
-                if o not in self.lastRefs:
+                if o not in self.newRefs:
                     createRefs[o] = refs[o]
                 else:
                     newRefs[o] = refs[o]
         #print "new:", len(newRefs)
                 
-        ## lastRefs holds the entire set of objects created since start()
-        for r in self.lastRefs:
-            self.forgetRef(self.lastRefs[r])
-        self.lastRefs.clear()
-        self.lastRefs.update(newRefs)
-        self.lastRefs.update(createRefs)
-        for r in self.lastRefs:
-            self.rememberRef(self.lastRefs[r])
+        ## newRefs holds the entire set of objects created since start()
+        for r in self.newRefs:
+            self.forgetRef(self.newRefs[r])
+        self.newRefs.clear()
+        self.newRefs.update(newRefs)
+        self.newRefs.update(createRefs)
+        for r in self.newRefs:
+            self.rememberRef(self.newRefs[r])
         #print "created:", len(createRefs)
         
         ## See if any of the newly created refs collide with previous ones
@@ -646,11 +646,11 @@ class ObjTracker:
             num = "%d" % c1[t]
             print "  " + num + " "*(10-len(num)) + str(t)
             
-        print "-----------  Deleted since last diff: ------------"
+        print "-----------  %d Deleted since last diff: ------------" % len(delRefs)
         self.report(delRefs, objs)
-        print "-----------  Created since last diff: ------------"
+        print "-----------  %d Created since last diff: ------------" % len(createRefs)
         self.report(createRefs, objs)
-        print "-----------  Created since start (persistent): ------------"
+        print "-----------  %d Created since start (persistent): ------------" % len(newRefs)
         self.report(newRefs, objs)
         
         #if self.newObjs is not None:
@@ -697,7 +697,7 @@ class ObjTracker:
         #typs = d.values()
         #typSet = list(set(typs))
         #typSet.sort(lambda a,b: cmp(typs.count(a), typs.count(b)))
-        print len(refs)
+        #print len(refs)
         count = {}
         for oid in refs:
             obj = self.lookup(oid, refs[oid], allobjs)
@@ -722,7 +722,7 @@ class ObjTracker:
         return objs
         
     def findNew(self, regex):
-        return self.findTypes(self.lastRefs, regex)
+        return self.findTypes(self.newRefs, regex)
     
     
 def describeObj(__XX__Obj, depth=4, printResult=True, returnResult=False, ignoreNames=None, ignorePaths=None, start=True):
@@ -835,3 +835,18 @@ def describeObj(__XX__Obj, depth=4, printResult=True, returnResult=False, ignore
         
     if not start or returnResult:
         return refs
+
+    
+def searchRefs(obj, *args):
+    for a in args:
+        gc.collect()
+        refs = gc.get_referrers(obj)
+        if type(a) is int:
+            obj = refs[a]
+        elif a == 't':
+            print map(type, refs)
+        elif a == 'o':
+            print obj
+    
+    
+    
