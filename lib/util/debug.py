@@ -5,7 +5,7 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-import sys, traceback, time, gc, re, types, weakref
+import sys, traceback, time, gc, re, types, weakref, inspect
 import ptime
 from numpy import ndarray
 #from PyQt4 import QtCore, QtGui
@@ -48,11 +48,16 @@ def listObjs(regex='Q', typ=None):
         
 
     
-def findRefPath(startObj, endObj, maxLen=8, restart=True, seen={}, path=None):
+def findRefPath(startObj, endObj, maxLen=8, restart=True, seen={}, path=None, ignore=None):
     """Determine all paths of object references from startObj to endObj"""
     refs = []
     if path is None:
         path = [endObj]
+    if ignore is None:
+        ignore = {}
+    ignore[id(sys._getframe())] = None
+    ignore[id(path)] = None
+    ignore[id(seen)] = None
     prefix = " "*(8-maxLen)
     #print prefix + str(map(type, path))
     prefix += " "
@@ -60,7 +65,17 @@ def findRefPath(startObj, endObj, maxLen=8, restart=True, seen={}, path=None):
         #gc.collect()
         seen.clear()
     gc.collect()
-    newRefs = gc.get_referrers(endObj)
+    newRefs = [r for r in gc.get_referrers(endObj) if id(r) not in ignore]
+    ignore[id(newRefs)] = None
+    #fo = allFrameObjs()
+    #newRefs = []
+    #for r in gc.get_referrers(endObj):
+        #try:
+            #if r not in fo:
+                #newRefs.append(r)
+        #except:
+            #newRefs.append(r)            
+        
     for r in newRefs:
         #print prefix+"->"+str(type(r))
         if type(r).__name__ in ['frame', 'function', 'listiterator']:
@@ -81,7 +96,6 @@ def findRefPath(startObj, endObj, maxLen=8, restart=True, seen={}, path=None):
         if maxLen == 0:
             #print prefix+"  END:", objChainString([r]+path)
             continue
-        
         ## See if we have already searched this node.
         ## If not, recurse.
         tree = None
@@ -93,10 +107,11 @@ def findRefPath(startObj, endObj, maxLen=8, restart=True, seen={}, path=None):
                     print refPathString(p+path)
         except KeyError:
             pass
+        
+        ignore[id(tree)] = None
         if tree is None:
-            tree = findRefPath(startObj, r, maxLen-1, restart=False, path=[r]+path)
+            tree = findRefPath(startObj, r, maxLen-1, restart=False, path=[r]+path, ignore=ignore)
             seen[id(r)] = [maxLen, tree]
-            
         ## integrate any returned results
         if len(tree) == 0:
             #print prefix+"  EMPTY TREE"
@@ -110,13 +125,18 @@ def findRefPath(startObj, endObj, maxLen=8, restart=True, seen={}, path=None):
 def objString(obj):
     """Return a short but descriptive string for any object"""
     try:
-        if isinstance(obj, dict):
+        if type(obj) in [int, long, float]:
+            return str(obj)
+        elif isinstance(obj, dict):
             if len(obj) > 5:
                 return "<dict {%s,...}>" % (",".join(obj.keys()[:5]))
             else:
                 return "<dict {%s}>" % (",".join(obj.keys()))
         elif isinstance(obj, basestring):
-            return '"%s"' % obj[:50]
+            if len(obj) > 50:
+                return '"%s..."' % obj[:50]
+            else:
+                return obj[:]
         elif isinstance(obj, ndarray):
             return "<ndarray %s %s>" % (str(obj.dtype), str(obj.shape))
         elif hasattr(obj, '__len__'):
@@ -170,11 +190,11 @@ def refPathString(chain):
                     cont = True
                     continue
         #print "  not dict"
-        for k in dir(o1):
-            if getattr(o1, k) is o2:
-                s += ".%s" % k
-                cont = True
-                continue
+        #for k in dir(o1):  ## Not safe to request attributes like this.
+            #if getattr(o1, k) is o2:
+                #s += ".%s" % k
+                #cont = True
+                #continue
         #print "  not attr"
         if cont:
             continue
@@ -353,7 +373,7 @@ def _getr(slist, olist, first=True):
         #seen[oid] = None
         #olist.append(e)
         olist[oid] = e
-        if first and (i%100) == 0:
+        if first and (i%1000) == 0:
             gc.collect()
         tl = gc.get_referents(e)
         if tl:
@@ -379,6 +399,7 @@ def get_all_objects():
     
     del olist[id(olist)]
     del olist[id(gcl)]
+    del olist[id(sys._getframe())]
     #del olist[id(ALL_OBJS_CACHE)]
     #ALL_OBJS_CACHE = olist
     return olist
@@ -458,6 +479,7 @@ class ObjTracker:
         self.startRefs = {}
         self.startCount = {}
         self.newRefs = {}
+        self.objTypes = {}
         #self.objs = self.newObjs = self.persistObjs = None
         #self.typeCount = None
         #self.ignoreObjs = {}
@@ -473,7 +495,7 @@ class ObjTracker:
             #ObjTracker.allObjs[id(v)] = None
             
         ObjTracker.allObjs[id(self)] = None
-        self.objs = [self.__dict__, self.startRefs, self.startCount, self.newRefs]
+        self.objs = [self.__dict__, self.startRefs, self.startCount, self.newRefs, self.objTypes]
         self.objs.append(self.objs)
         for v in self.objs:
             ObjTracker.allObjs[id(v)] = None
@@ -516,6 +538,13 @@ class ObjTracker:
         print "Collecting list of all objects..."
         gc.collect()
         objs = get_all_objects()
+        frame = sys._getframe()
+        del objs[id(frame)]  ## ignore the current frame 
+        del objs[id(frame.f_code)]
+        #del objs[id(frame.f_locals)]
+        #del objs[id(frame.f_globals)]
+        #del objs[id(frame.f_builtins)]
+        
         ignoreTypes = [int, long]
         refs = {}
         count = {}
@@ -543,6 +572,9 @@ class ObjTracker:
                 ref = None
             refs[oid] = ref
             typ = type(o)
+            typStr = typeStr(o)
+            self.objTypes[oid] = typStr
+            ObjTracker.allObjs[id(typStr)] = None
             count[typ] = count.get(typ, 0) + 1
             
         print "All objects: %d   Tracked objects: %d" % (len(objs), len(refs))
@@ -560,7 +592,8 @@ class ObjTracker:
         self.startRefs.update(refs)
         for r in refs:
             self.rememberRef(r)
-        self.startCount = count
+        self.startCount.clear()
+        self.startCount.update(count)
         #self.newRefs.clear()
         #self.newRefs.update(refs)
     
@@ -573,7 +606,7 @@ class ObjTracker:
         if ref is not None:
             ObjTracker.allObjs[id(ref)] = None
             
-    def diff(self):
+    def diff(self, **kargs):
         """Compute all differences between the current object set and the reference set."""
         refs, count, objs = self.collect()
         #objs, allIds, onlyIds = self.collect()
@@ -647,11 +680,11 @@ class ObjTracker:
             print "  " + num + " "*(10-len(num)) + str(t)
             
         print "-----------  %d Deleted since last diff: ------------" % len(delRefs)
-        self.report(delRefs, objs)
+        self.report(delRefs, objs, **kargs)
         print "-----------  %d Created since last diff: ------------" % len(createRefs)
-        self.report(createRefs, objs)
+        self.report(createRefs, objs, **kargs)
         print "-----------  %d Created since start (persistent): ------------" % len(newRefs)
-        self.report(newRefs, objs)
+        self.report(newRefs, objs, **kargs)
         
         #if self.newObjs is not None:
             #perObjs = {}
@@ -690,7 +723,7 @@ class ObjTracker:
         return obj
                     
                     
-    def report(self, refs, allobjs=None):
+    def report(self, refs, allobjs=None, showIDs=False):
         if allobjs is None:
             allobjs = get_all_objects()
         
@@ -699,16 +732,26 @@ class ObjTracker:
         #typSet.sort(lambda a,b: cmp(typs.count(a), typs.count(b)))
         #print len(refs)
         count = {}
+        rev = {}
         for oid in refs:
             obj = self.lookup(oid, refs[oid], allobjs)
-            typ = type(obj)
+            if obj is None:
+                typ = "[del] " + self.objTypes[oid]
+            else:
+                typ = typeStr(obj)
+            if typ not in rev:
+                rev[typ] = []
+            rev[typ].append(oid)
             c = count.get(typ, [0,0])
             count[typ] =  [c[0]+1, c[1]+objectSize(obj)]
         typs = count.keys()
         typs.sort(lambda a,b: cmp(count[a][1], count[b][1]))
         
         for t in typs:
-            print "  ", count[t][0], "\t", count[t][1], "\t", t
+            line = "  %d\t%d\t%s" % (count[t][0], count[t][1], t)
+            if showIDs:
+                line += "\t"+",".join(map(str,rev[t]))
+            print line
         
     def findTypes(self, refs, regex):
         allObjs = get_all_objects()
@@ -716,137 +759,223 @@ class ObjTracker:
         objs = []
         r = re.compile(regex)
         for k in refs:
-            obj = self.lookup(k, refs[k], allObjs)
-            if r.search(str(type(obj))):
-                objs.append(obj)
+            if r.search(self.objTypes[k]):
+                objs.append(self.lookup(k, refs[k], allObjs))
         return objs
         
     def findNew(self, regex):
         return self.findTypes(self.newRefs, regex)
     
-    
-def describeObj(__XX__Obj, depth=4, printResult=True, returnResult=False, ignoreNames=None, ignorePaths=None, start=True):
-    """Return a string describing this object; attempt to find names that refer to it."""
+def describeObj(obj, depth=4, path=None, ignore=None):
+    if path is None:
+        path = [obj]
+    if ignore is None:
+        ignore = {}   ## holds IDs of objects used within the function.
+    ignore[id(sys._getframe())] = None
+    ignore[id(path)] = None
     gc.collect()
-    
-    if ignoreNames is None:
-        ignoreNames = ['_']
-    if ignorePaths is None:
-        ignorePaths = {}
-    
-    #typName = str(type(__XX__Obj))
-    if depth == 0:
-        return []
-        #if printResult:
-            #print "  "*depth + str(type(__XX__Obj))
-        #return [__XX__Obj]
-    
-    #refStrs = []
-    refs = []
-    
-    
-    __XX__Refs = gc.get_referrers(__XX__Obj)
-    for __XX__Ref in __XX__Refs:
-        #if startObj is not None and startObj is not __XX__Ref:
-            #continue
-            
-        ## First determine how to get from this reference to the object (key, index, or attribure)
-        path = ('?',)*3
-        if type(__XX__Ref).__name__ == 'frame':
+    refs = gc.get_referrers(obj)
+    ignore[id(refs)] = None
+    printed=False
+    for ref in refs:
+        if id(ref) in ignore:
             continue
-        if hasattr(__XX__Ref, 'keys'):
-            for k in __XX__Ref.keys():
-                if isinstance(k, basestring) and k[:6] == '__XX__' or k in ignoreNames:
-                    continue
-                if __XX__Ref[k] is __XX__Obj:
-                    path = ('key', k, hash(k))
-                    break
-        elif isinstance(__XX__Ref, list) or isinstance(__XX__Ref, tuple):
-            junk = False
-            for v in __XX__Ref[:10]:  ## lists containing frames are ubiquitous and unhelpful.
-                if type(v) is types.FrameType:
-                    junk = True
-                    break
-            if junk:
-                continue
+        if id(ref) in map(id, path):
+            print "Cyclic reference: " + refPathString([ref]+path)
+            printed = True
+            continue
+        newPath = [ref]+path
+        if len(newPath) >= depth:
+            print refPathString(newPath)
+            printed = True
+        else:
+            describeObj(ref, depth, newPath, ignore)
+            printed = True
+    if not printed:
+        print "Dead end: " + refPathString(path)
+        
+    
+    
+    
+    
+    
+#def describeObj(__XX__Obj, depth=4, printResult=True, returnResult=False, ignoreNames=None, ignorePaths=None, start=True):
+    #"""Return a string describing this object; attempt to find names that refer to it."""
+    #gc.collect()
+    
+    #if ignoreNames is None:
+        #ignoreNames = ['_']
+    #if ignorePaths is None:
+        #ignorePaths = {}
+    
+    ##typName = str(type(__XX__Obj))
+    #if depth == 0:
+        #return []
+        ##if printResult:
+            ##print "  "*depth + str(type(__XX__Obj))
+        ##return [__XX__Obj]
+    
+    ##refStrs = []
+    #refs = []
+    
+    
+    #__XX__Refs = gc.get_referrers(__XX__Obj)
+    ##fo = allFrameObjs()
+    ##__XX__Refs = [r for r in __XX__Refs if r not in fo]
+    #for __XX__Ref in __XX__Refs:
+        ##if startObj is not None and startObj is not __XX__Ref:
+            ##continue
             
-            try:
-                i = __XX__Ref.index(__XX__Obj)
-                path = ('index', i, '%d'%i)
-            except:
-                pass
-        else:
-            for k in dir(__XX__Ref):
-                if k in ignoreNames:
-                    continue
-                if getattr(__XX__Ref, k) is __XX__Obj:
-                    path = ('attr', k, k)
-                    break
-                    
-        ## Make sure we haven't already been here
-        #pathKey = (id(__XX__Ref), path[0], path[2])
-        #if pathKey in ignorePaths:
+        ### First determine how to get from this reference to the object (key, index, or attribure)
+        #path = ('?',)*3
+        #if type(__XX__Ref).__name__ == 'frame':
             #continue
-        #ignorePaths[pathKey] = None
+        #if hasattr(__XX__Ref, 'keys'):
+            #for k in __XX__Ref.keys():
+                #if isinstance(k, basestring) and k[:6] == '__XX__' or k in ignoreNames:
+                    #continue
+                #if __XX__Ref[k] is __XX__Obj:
+                    #path = ('key', k, hash(k))
+                    #break
+        #elif isinstance(__XX__Ref, list) or isinstance(__XX__Ref, tuple):
+            #junk = False
+            #for v in __XX__Ref[:10]:  ## lists containing frames are ubiquitous and unhelpful.
+                #if type(v) is types.FrameType:
+                    #junk = True
+                    #break
+            #if junk:
+                #continue
+            
+            #try:
+                #i = __XX__Ref.index(__XX__Obj)
+                #path = ('index', i, '%d'%i)
+            #except:
+                #pass
+        #else:
+            #for k in dir(__XX__Ref):
+                #if k in ignoreNames:
+                    #continue
+                #if getattr(__XX__Ref, k) is __XX__Obj:
+                    #path = ('attr', k, k)
+                    #break
+                    
+        ### Make sure we haven't already been here
+        ##pathKey = (id(__XX__Ref), path[0], path[2])
+        ##if pathKey in ignorePaths:
+            ##continue
+        ##ignorePaths[pathKey] = None
         
         
-        nextRefs = describeObj(__XX__Ref, depth=depth-1, printResult=printResult, ignoreNames=ignoreNames, ignorePaths=ignorePaths, start=False)
+        #nextRefs = describeObj(__XX__Ref, depth=depth-1, printResult=printResult, ignoreNames=ignoreNames, ignorePaths=ignorePaths, start=False)
         
         
-        desc = ''
-        if path[0] == 'key':
-            strPath = "[%s]" % repr(path[1])
-            desc = str([type(v).__name__ for v in __XX__Ref.values()])[:80]
-        elif path[0] == 'index':
-            strPath = "[%d]" % path[1]
-            desc = str([type(v).__name__ for v in __XX__Ref])[:80]
-        elif path[0] == 'attr':
-            strPath = '.%s' % path[1]
-        else:
-            strPath = path[0]
-        refs.append((__XX__Ref, path[:2]+(strPath,), nextRefs))
+        #desc = ''
+        #if path[0] == 'key':
+            #strPath = "[%s]" % repr(path[1])
+            #desc = str([type(v).__name__ for v in __XX__Ref.values()])[:80]
+        #elif path[0] == 'index':
+            #strPath = "[%d]" % path[1]
+            #desc = str([type(v).__name__ for v in __XX__Ref])[:80]
+        #elif path[0] == 'attr':
+            #strPath = '.%s' % path[1]
+        #else:
+            #strPath = path[0]
+        #refs.append((__XX__Ref, path[:2]+(strPath,), nextRefs))
         
-        if printResult:
+        #if printResult:
                 
-            objStr = str(__XX__Ref)
-            if len(objStr) > 50:
-                objStr = str(type(__XX__Ref).__name__)
-            print "    "*(depth-1) + objStr, strPath, desc
+            #objStr = str(__XX__Ref)
+            #if len(objStr) > 50:
+                #objStr = str(type(__XX__Ref).__name__)
+            #print "    "*(depth-1) + objStr, strPath, desc
     
-    #refStrs = set(refStrs)
+    ##refStrs = set(refStrs)
     
-    #result = [s + ' ' + typName for s in refStrs]
-    if start and printResult:
-        print "    "*(depth) + str(type(__XX__Obj))
+    ##result = [s + ' ' + typName for s in refStrs]
+    #if start and printResult:
+        #print "    "*(depth) + str(type(__XX__Obj))
         
-        print "-------------------"
-        def printPaths(paths, suffix=''):
-            for p in paths:
-                suf = p[1][2]+suffix
-                if len(p[2]) == 0:
-                    line = str(type(p[0]))+suf
-                    line = re.sub(r"\.__dict__\['([^\]]+)'\]", r'.\1', line)
-                    print line
-                else:
-                    printPaths(p[2], suf)
+        #print "-------------------"
+        #def printPaths(paths, suffix=''):
+            #for p in paths:
+                #suf = p[1][2]+suffix
+                #if len(p[2]) == 0:
+                    #line = str(type(p[0]))+suf
+                    #line = re.sub(r"\.__dict__\['([^\]]+)'\]", r'.\1', line)
+                    #print line
+                #else:
+                    #printPaths(p[2], suf)
         
-        printPaths(refs)
+        #printPaths(refs)
         
         
-    if not start or returnResult:
-        return refs
+    #if not start or returnResult:
+        #return refs
 
     
+def typeStr(obj):
+    typ = type(obj)
+    if typ == types.InstanceType:
+        return "<instance of %s>" % obj.__class__.__name__
+    else:
+        return str(typ)
+    
 def searchRefs(obj, *args):
+    ignore = {id(sys._getframe()): None}
+    gc.collect()
+    refs = gc.get_referrers(obj)
+    ignore[id(refs)] = None
+    refs = [r for r in refs if id(r) not in ignore]
     for a in args:
-        gc.collect()
-        refs = gc.get_referrers(obj)
+        
+        #fo = allFrameObjs()
+        #refs = [r for r in refs if r not in fo]
+        
         if type(a) is int:
             obj = refs[a]
+            gc.collect()
+            refs = gc.get_referrers(obj)
+            ignore[id(refs)] = None
+            refs = [r for r in refs if id(r) not in ignore]
         elif a == 't':
-            print map(type, refs)
+            print map(typeStr, refs)
+        elif a == 'i':
+            print map(id, refs)
+        elif a == 'l':
+            def slen(o):
+                if hasattr(o, '__len__'):
+                    return len(o)
+                else:
+                    return None
+            print map(slen, refs)
         elif a == 'o':
             print obj
+        elif a == 'ro':
+            return obj
+        elif a == 'rr':
+            return refs
     
+def allFrameObjs():
+    f = sys._getframe()
+    objs = []
+    while f is not None:
+        objs.append(f)
+        objs.append(f.f_code)
+        #objs.append(f.f_locals)
+        #objs.append(f.f_globals)
+        #objs.append(f.f_builtins)
+        f = f.f_back
+    return objs
+        
+    
+def findObj(regex):
+    allObjs = get_all_objects()
+    objs = []
+    r = re.compile(regex)
+    for i in allObjs:
+        obj = allObjs[i]
+        if r.search(typeStr(obj)):
+            objs.append(obj)
+    return objs
     
     

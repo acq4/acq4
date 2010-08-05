@@ -19,7 +19,7 @@ class DaqChannelGui(QtGui.QWidget):
         self.name = name
         
         ## PArent protoGui object
-        self.protoGui = parent
+        self.protoGui = weakref.ref(parent)
         
         ## Configuration for this channel defined in the device configuration file
         self.config = config
@@ -31,11 +31,11 @@ class DaqChannelGui(QtGui.QWidget):
         self.dev = dev
         
         ## The protocol GUI window which contains this object
-        self.prot = prot
+        self.prot = weakref.ref(prot)
         
         ## Make sure protocol interface includes our DAQ device
         self.daqDev = self.dev.getDAQName(self.name)
-        self.daqUI = self.prot.getDevice(self.daqDev)
+        self.daqUI = self.prot().getDevice(self.daqDev)
         
         ## plot widget
         self.plot = plot
@@ -306,7 +306,7 @@ class OutputChannelGui(DaqChannelGui):
         if self.ui.holdingCheck.isChecked():
             return self.ui.holdingSpin.value()
         else:
-            return self.protoGui.getChanHolding(self.name)
+            return self.protoGui().getChanHolding(self.name)
         
     def waveFunctionChanged(self):
         if self.ui.waveGeneratorWidget.functionString() != "":
