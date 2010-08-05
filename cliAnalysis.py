@@ -29,6 +29,11 @@ from functions import *
 from lib.analysis import *
 
 
+## Disable long-term storage of exception stack frames
+## This fixes a potentially major memory leak, but
+## may break some debuggers.
+import disableExceptionStorage
+
 ### Use CLI history
 import atexit
 import os

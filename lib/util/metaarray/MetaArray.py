@@ -708,6 +708,7 @@ class MetaArray(ndarray):
             del ax['values_type']
         subarr = subarr.view(subtype)
         subarr._info = meta['info']
+        #raise Exception()  ## stress-testing
         return subarr
                     
     def write(self, fileName, appendAxis=None, newFile=False):
