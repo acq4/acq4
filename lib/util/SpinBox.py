@@ -18,6 +18,16 @@ class SpinBox(QtGui.QAbstractSpinBox):
       
     """
     
+    ## There's a PyQt bug that leaks a reference to the 
+    ## QLineEdit returned from QAbstractSpinBox.lineEdit()
+    ## This makes it possible to crash the entire program 
+    ## by making accesses to the LineEdit after the spinBox has been deleted.
+    
+    ## As a workaround, all SpinBoxes are disabled and stored permanently 
+    ## after the call to __del__
+    dead_spins = []
+    
+    
     def __init__(self, parent=None, value=0.0, **kwargs):
         QtGui.QAbstractSpinBox.__init__(self, parent)
         self.setMinimumWidth(0)
@@ -61,10 +71,21 @@ class SpinBox(QtGui.QAbstractSpinBox):
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('returnPressed()'), self.editingFinished)
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('textChanged()'), self.textChanged)
         
-    ## can't rely on __del__ since it may not be called for a long time
-    #def __del__(self):
-        #print "delete", self
-        #QtCore.QObject.disconnect(self.proxy, QtCore.SIGNAL('valueChanged(double)'), self.delayedChange)
+        
+    ## Note: can't rely on __del__ since it may not be called for a long time
+    def __del__(self):
+        print "deleted"
+        QtCore.QObject.disconnect(self.proxy, QtCore.SIGNAL('valueChanged(double)'), self.delayedChange)
+        QtCore.QObject.disconnect(self, QtCore.SIGNAL('editingFinished()'), self.editingFinished)
+        del self.proxy
+        del self.opts
+        del self.decOpts
+        del self.val
+        
+        ## Don't let the spinbox be deleted--this can activate a PyQt bug and crash the program.
+        ## Just let the memory leak instead :/
+        SpinBox.dead_spins.append(self)
+        
         
     def delayedChange(self):
         #print "delayedChange", self
