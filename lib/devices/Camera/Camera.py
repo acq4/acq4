@@ -107,7 +107,7 @@ class Camera(DAQGeneric):
 
     def listParams(self, params=None):
         """Return a dictionary of parameter descriptions. By default, all parameters are listed.
-        Each description is a tuple: (values, isWritable, isReadable, dependencies)
+        Each description is a tuple or list: (values, isWritable, isReadable, dependencies)
         
         values may be any of:
           - Tuple of ints or floats indicating minimum and maximum values
