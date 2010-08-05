@@ -5,6 +5,7 @@ from math import log
 from SignalProxy import proxyConnect
 from decimal import Decimal as D  ## Use decimal to avoid accumulating floating-point errors
 from decimal import *
+import sip
 
 class SpinBox(QtGui.QAbstractSpinBox):
     """QSpinBox widget on steroids. Allows selection of numerical value, with extra features:

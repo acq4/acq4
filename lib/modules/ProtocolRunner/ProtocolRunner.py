@@ -13,7 +13,7 @@ from lib.Manager import getManager
 from debug import *
 import ptime
 import analysisModules
-import time
+import time, gc
 import sip
 #import pdb
 
@@ -420,6 +420,10 @@ class ProtocolRunner(Module):
             self.removeAnalysisDock(d)
 
         self.ui.sequenceParamList.clear()
+        
+        ## now's a good time to gree up some memory.
+        QtGui.QApplication.instance().processEvents()
+        gc.collect()
                 
         
     def quit(self):
@@ -1040,6 +1044,8 @@ class TaskThread(QtCore.QThread):
                 runSequence(self.runOnce, self.paramSpace, self.paramSpace.keys(), passHash=True)
             
         except:
+            self.protocol = None  ## free up this memory
+            self.paramSpace = None
             printExc("Error in protocol thread, exiting.")
         #finally:
             #self.emit(QtCore.SIGNAL("protocolFinished()"))
