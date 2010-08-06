@@ -3,6 +3,7 @@ from __future__ import with_statement
 from lib.devices.Device import *
 import serial
 from lib.util.Mutex import Mutex, MutexLocker
+from SignalProxy import *
 #import pdb
 
 class SerialMouse(Device):
@@ -14,8 +15,18 @@ class SerialMouse(Device):
         self.mThread = MouseThread(self)
         self.pos = [0, 0]
         self.buttons = [0, 0]
+        
+        ## Reload the last known state of the mouse if it was last modified recently enough 
+        self.stateFile = self.name + "_last_state.cfg"
+        if os.isfile(self.stateFile) and time.time()-os.stat(self.stateFile).st_mtime < 36000:  # 10-hour expiration
+            state = dm.loadConfigFile(self.stateFile)
+            self.pos = state['pos']
+            self.buttons = state['buttons']
+        
         QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('positionChanged'), self.posChanged)
         QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('buttonChanged'), self.btnChanged)
+        self.proxy1 = proxyConnect(self, QtCore.SIGNAL('positionChanged'), self.storeState, 5.0) ## wait 5 seconds before writing changes 
+        self.proxy2 = proxyConnect(self, QtCore.SIGNAL('switchChanged'), self.storeState, 5.0) ## wait 5 seconds before writing changes 
         self.mThread.start()
         
     def quit(self):
@@ -34,7 +45,10 @@ class SerialMouse(Device):
         #print "Mouse: posChanged emit.."
         self.emit(QtCore.SIGNAL('positionChanged'), {'rel': rel, 'abs': ab})
         #print "Mouse: posChanged done"
-        
+
+    def storeState(self, *args):
+        self.dm.writeConfigFile(self.stateFile, {'pos': self.pos, 'buttons': self.buttons})
+
     def btnChanged(self, btns):
         #print "Mouse: btnChanged"
         with MutexLocker(self.lock):
