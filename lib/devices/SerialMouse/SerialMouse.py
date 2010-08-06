@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from lib.devices.Device import *
-import serial
-from lib.util.Mutex import Mutex, MutexLocker
 from SignalProxy import *
+import serial, os, time
+from lib.util.Mutex import Mutex, MutexLocker
 #import pdb
 
 class SerialMouse(Device):
@@ -18,8 +18,8 @@ class SerialMouse(Device):
         
         ## Reload the last known state of the mouse if it was last modified recently enough 
         self.stateFile = self.name + "_last_state.cfg"
-        if os.isfile(self.stateFile) and time.time()-os.stat(self.stateFile).st_mtime < 36000:  # 10-hour expiration
-            state = dm.loadConfigFile(self.stateFile)
+        state = dm.readConfigFile(self.stateFile)
+        if state != {} and time.time() - state.get('time', 0) > 36000:
             self.pos = state['pos']
             self.buttons = state['buttons']
         
@@ -47,7 +47,7 @@ class SerialMouse(Device):
         #print "Mouse: posChanged done"
 
     def storeState(self, *args):
-        self.dm.writeConfigFile(self.stateFile, {'pos': self.pos, 'buttons': self.buttons})
+        self.dm.writeConfigFile({'pos': self.pos, 'buttons': self.buttons, 'time': time.time()}, self.stateFile)
 
     def btnChanged(self, btns):
         #print "Mouse: btnChanged"

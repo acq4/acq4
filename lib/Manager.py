@@ -250,7 +250,7 @@ Valid options are:
         self.quit()
     
     def readConfigFile(self, fileName, missingOk=True):
-        fileName = os.path.join(self.configDir, fileName)
+        fileName = self.configFileName(fileName)
         if os.path.isfile(fileName):
             return configfile.readConfigFile(fileName)
         else:
@@ -260,9 +260,11 @@ Valid options are:
                 raise Exception('Config file "%s" not found.' % fileName)
             
     def writeConfigFile(self, data, fileName):
-        fileName = os.path.join(self.configDir, fileName)
+        fileName = self.configFileName(fileName)
         return configfile.writeConfigFile(data, fileName)
         
+    def configFileName(self, name):
+        return os.path.join(self.configDir, name)
     
     def loadDevice(self, driverName, conf, name):
         """Load the code for a device. For this to work properly, there must be 

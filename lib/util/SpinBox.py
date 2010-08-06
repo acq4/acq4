@@ -5,7 +5,7 @@ from math import log
 from SignalProxy import proxyConnect
 from decimal import Decimal as D  ## Use decimal to avoid accumulating floating-point errors
 from decimal import *
-import sip
+import sip, weakref
 
 class SpinBox(QtGui.QAbstractSpinBox):
     """QSpinBox widget on steroids. Allows selection of numerical value, with extra features:
@@ -71,26 +71,33 @@ class SpinBox(QtGui.QAbstractSpinBox):
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('returnPressed()'), self.editingFinished)
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('textChanged()'), self.textChanged)
         
+        self.lineEditCache = weakref.ref(self.lineEdit())  ## Need this so se can work around a pyqt bug in __del__
+        
         
     ## Note: can't rely on __del__ since it may not be called for a long time
     def __del__(self):
-        print "deleted"
-        QtCore.QObject.disconnect(self.proxy, QtCore.SIGNAL('valueChanged(double)'), self.delayedChange)
-        QtCore.QObject.disconnect(self, QtCore.SIGNAL('editingFinished()'), self.editingFinished)
-        del self.proxy
-        del self.opts
-        del self.decOpts
-        del self.val
+        #print "deleted"
+        #QtCore.QObject.disconnect(self.proxy, QtCore.SIGNAL('valueChanged(double)'), self.delayedChange)
+        #QtCore.QObject.disconnect(self, QtCore.SIGNAL('editingFinished()'), self.editingFinished)
+        #del self.proxy
+        #del self.opts
+        #del self.decOpts
+        #del self.val
         
-        ## Don't let the spinbox be deleted--this can activate a PyQt bug and crash the program.
-        ## Just let the memory leak instead :/
-        SpinBox.dead_spins.append(self)
+        lec = self.lineEditCache()
+        if lec is not None:
+            sip.setdeleted(lec)  ## PyQt should handle this, but does not. Potentially leads to crashes.
+        #del self.lineEditCache
+        
         
         
     def delayedChange(self):
         #print "delayedChange", self
         #print "emit delayed change"
-        self.emit(QtCore.SIGNAL('delayedChange'), self.value())
+        try:
+            self.emit(QtCore.SIGNAL('delayedChange'), self.value())
+        except RuntimeError:
+            pass  ## This can happen if we try to handle a delayed signal after someone else has already deleted the underlying C++ object.
         
     def widgetGroupInterface(self):
         return ('delayedChange', SpinBox.value, SpinBox.setValue)
