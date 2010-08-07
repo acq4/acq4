@@ -382,10 +382,13 @@ class CameraTask(DAQGenericTask):
         ## Merge command into default values:
         prof = Profiler('Camera.CameraTask.configure', disabled=True)
         #print "CameraTask.configure"
+        
+        ## set default parameters, load params from command
         params = {
             'triggerMode': 'Normal',
             #'recordExposeChannel': False
         }
+        params.update(self.camCmd['params'])
         
         #print "pushState..."
         if 'pushState' in self.camCmd:
@@ -393,10 +396,10 @@ class CameraTask(DAQGenericTask):
             self.dev.pushState(stateName)
         #time.sleep(0.5)
         
-        nonCameraParams = ['channels', 'record', 'triggerProtocol', 'pushState', 'popState', 'minFrames']
-        for k in self.camCmd:
-            if k not in nonCameraParams:
-                params[k] = self.camCmd[k]
+        #nonCameraParams = ['channels', 'record', 'triggerProtocol', 'pushState', 'popState', 'minFrames']
+        #for k in self.camCmd:
+            #if k not in nonCameraParams:
+                #params[k] = self.camCmd[k]
         #for k in defaults:
             #if k not in self.camCmd:
                 #self.camCmd[k] = defaults[k]

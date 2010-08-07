@@ -600,12 +600,30 @@ class Task:
                 
             prof.mark('reserve')
 
+            ## Determine order of device configuration.
+            configOrder = self.tasks.keys()
+            for devName in self.tasks.keys():
+                before, after = self.tasks[devName].getConfigOrder()
+                for d in before: 
+                    i1 = configOrder.index(devName)
+                    i2 = configOrder.index(d)
+                    if i2 > i1:
+                        configOrder.pop(i2)
+                        configOrder.insert(i1, d)
+                for d in after: 
+                    i1 = configOrder.index(devName)
+                    i2 = configOrder.index(d)
+                    if i2 < i1:
+                        configOrder.pop(i2)
+                        configOrder.insert(i1+1, d)
+                
+
             ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
             ## This is how we allow multiple devices to communicate and decide how to operate together.
             ## Each task may modify the startOrder list to suit its needs.
             #print "Configuring subtasks.."
             self.startOrder = self.devs.keys()
-            for devName in self.tasks:
+            for devName in configOrder:
                 self.tasks[devName].configure(self.tasks, self.startOrder)
                 prof.mark('configure %s' % devName)
             #print "done"

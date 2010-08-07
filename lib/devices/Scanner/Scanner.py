@@ -71,7 +71,7 @@ class Scanner(Device):
     def getCalibrationIndex(self):
         with MutexLocker(self.lock):
             if self.calibrationIndex is None:
-                calDir = self.config['calibrationDir']
+                calDir = self.configDir()
                 fileName = os.path.join(calDir, 'index')
                 if os.path.isfile(fileName):
                     try:
@@ -88,7 +88,7 @@ class Scanner(Device):
         
     def writeCalibrationIndex(self, index):
         with MutexLocker(self.lock):
-            calDir = self.config['calibrationDir']
+            calDir = self.configDir()
             fileName = os.path.join(calDir, 'index')
             configfile.writeConfigFile(index, fileName)
             self.calibrationIndex = index
@@ -127,6 +127,24 @@ class Scanner(Device):
             #raise
         
         return index3.copy()
+        
+    def storeCameraConfig(self, camera):
+        """Store the configuration to be used when calibrating this camera"""
+        camDev = self.dm.getDevice(camera)
+        params = camDev.listParams()
+        params = [p for p in params if params[p][1] and params[p][2]]  ## Select only readable and writable parameters
+        state = camDev.getParams(params)
+        fileName = os.path.join(self.configDir(), camera+'Config.cfg')
+        self.dm.writeConfigFile(params, fileName)
+        
+    def getCameraConfig(self, camera):
+        fileName = os.path.join(self.configDir(), camera+'Config.cfg')
+        return self.dm.readConfigFile(self.fileName)
+        
+        
+    def configDir(self):
+        """Return the name of the directory where configuration/calibration data should be stored"""
+        return self.config.get('calibrationDir', self.name+"Config")
         
     
     def createTask(self, cmd):
@@ -179,8 +197,70 @@ class ScannerTask(DeviceTask):
                 self.dev.setCommand(self.cmd['command'])
             elif 'position' in self.cmd:
                 self.dev.setPosition(self.cmd['position'], self.cmd['camera'], self.cmd['laser'])
+                
+            ## record spot size from calibration data
             if 'camera' in self.cmd and 'laser' in self.cmd:
                 self.spotSize = self.dev.getCalibration(self.cmd['camera'], self.cmd['laser'])['spot'][1]
+                
+            ## If program is specified, generate the command arrays now
+            if 'program' in self.cmd:
+                self.generateProgramArrays(self.cmd['program'])
+        
+    def generateProgramArrays(self, prg):
+        """LASER LOGO
+        Turn a list of movement commands into arrays of x and y values.
+        prg looks like:
+        { 
+            numPts: 10000,
+            duration: 1.0,
+            commands: [
+               ('step', 0.0, None),           ## start with step to "off" position 
+               ('step', 0.2, (1.3e-6, 4e-6)), ## step to the given location after 200ms
+               ('line', (0.2, 0.205), (1.3e-6, 4e-6))  ## 5ms sweep to the new position 
+               ('step', 0.205, None),           ## finish step to "off" position at 205ms
+           ]
+        }
+        
+        Commands we might add in the future:
+          - circle
+          - spiral
+        """
+        dt = prg['duration'] / prg['numPts']
+        arr = numpy.empty((2, prg['numPts']))
+        cmds = prg['commands']
+        lastPos = None
+        for i in range(len(cmds)):
+            cmd = cmds[i]
+            if cmd[0] == 'step':
+                ## determine when to end the step
+                if i+1 < len(cmds):
+                    nextTime = cmds[i+1][1]
+                    if type(nextTime) is tuple:
+                        nextTime = nextTime[0]
+                    stopInd = nextTime / dt
+                else:
+                    stopInd = -1
+                
+                startInd = cmd[1] / dt
+                
+                pos = cmd[2]
+                if pos == None:
+                    pos = self.dev.getOffPosition()
+                lastPos = pos
+                
+                arr[0, startInd:stopInd] = pos[0]
+                arr[1, startInd:stopInd] = pos[1]
+            elif cmd[0] == 'line':
+                if lastPos is None:
+                    raise Exception("'line' command with no defined starting position")
+                startInd = cmd[1][0] / dt
+                stopInd = cmd[1][1] / dt
+                pos = cmd[2]
+                arr[0, startInd:stopInd] = linspace(lastPos[0], pos[0], stopInd-startInd)
+                arr[1, startInd:stopInd] = linspace(lastPos[1], pos[1], stopInd-startInd)
+                lastPos = pos
+        self.cmd['xCommand'] = arr[0]
+        self.cmd['yCommand'] = arr[1]
         
     def createChannels(self, daqTask):
         self.daqTasks = []

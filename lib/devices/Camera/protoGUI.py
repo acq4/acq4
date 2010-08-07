@@ -106,7 +106,9 @@ class CameraProtoGui(DAQGenericProtoGui):
             'record': state['recordCheck'],
             #'recordExposeChannel': state['recordExposeCheck'],
             'triggerProtocol': state['triggerCheck'],
-            'triggerMode': state['triggerModeCombo']
+            'params': {
+                'triggerMode': state['triggerModeCombo']
+            }
         }
         prot['channels'] = daqProt
         if state['releaseBetweenRadio']:

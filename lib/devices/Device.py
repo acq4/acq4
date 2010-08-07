@@ -72,6 +72,10 @@ class DeviceTask:
         self.dev = dev
         self.cmd = cmd
     
+    def getConfigOrder(self):
+        """return lists of devices that should be configured (before, after) this device"""
+        return ([], [])
+    
     def configure(self, tasks, startOrder):
         pass
     

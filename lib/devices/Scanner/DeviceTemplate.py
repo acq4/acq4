@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'DeviceTemplate.ui'
 #
-# Created: Tue Jul 27 17:10:54 2010
-#      by: PyQt4 UI code generator 4.5.4
+# Created: Fri Aug  6 13:04:13 2010
+#      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -53,12 +53,12 @@ class Ui_Form(object):
         self.calibrateBtn = QtGui.QPushButton(self.layoutWidget)
         self.calibrateBtn.setObjectName("calibrateBtn")
         self.horizontalLayout_2.addWidget(self.calibrateBtn)
-        self.testBtn = QtGui.QPushButton(self.layoutWidget)
-        self.testBtn.setObjectName("testBtn")
-        self.horizontalLayout_2.addWidget(self.testBtn)
         self.deleteBtn = QtGui.QPushButton(self.layoutWidget)
         self.deleteBtn.setObjectName("deleteBtn")
         self.horizontalLayout_2.addWidget(self.deleteBtn)
+        self.storeCamConfBtn = QtGui.QPushButton(self.layoutWidget)
+        self.storeCamConfBtn.setObjectName("storeCamConfBtn")
+        self.horizontalLayout_2.addWidget(self.storeCamConfBtn)
         self.verticalLayout.addLayout(self.horizontalLayout_2)
         self.accuracyLabel = QtGui.QLabel(self.layoutWidget)
         self.accuracyLabel.setObjectName("accuracyLabel")
@@ -80,8 +80,8 @@ class Ui_Form(object):
         self.label_2.setText(QtGui.QApplication.translate("Form", "Camera:", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("Form", "Laser:", None, QtGui.QApplication.UnicodeUTF8))
         self.calibrateBtn.setText(QtGui.QApplication.translate("Form", "Calibrate", None, QtGui.QApplication.UnicodeUTF8))
-        self.testBtn.setText(QtGui.QApplication.translate("Form", "Test", None, QtGui.QApplication.UnicodeUTF8))
         self.deleteBtn.setText(QtGui.QApplication.translate("Form", "Delete", None, QtGui.QApplication.UnicodeUTF8))
+        self.storeCamConfBtn.setText(QtGui.QApplication.translate("Form", "Store Camera Config", None, QtGui.QApplication.UnicodeUTF8))
         self.accuracyLabel.setText(QtGui.QApplication.translate("Form", "Accuracy:", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph.ImageView import ImageView

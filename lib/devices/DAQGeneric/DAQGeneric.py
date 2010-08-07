@@ -110,6 +110,10 @@ class DAQGenericTask(DeviceTask):
         ## Stores the list of channels that will generate or acquire buffered samples
         self.bufferedChannels = []
         
+    def getConfigOrder(self):
+        """return lists of devices that should be configured (before, after) this device"""
+        return ([], [self.dev.getDAQName()])  ## this device should be configured before its DAQ
+        
     def configure(self, tasks, startOrder):
         ## Record initial state or set initial value
         with MutexLocker(self.dev._DGLock):
