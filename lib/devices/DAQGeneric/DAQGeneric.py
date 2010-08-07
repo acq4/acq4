@@ -112,7 +112,8 @@ class DAQGenericTask(DeviceTask):
         
     def getConfigOrder(self):
         """return lists of devices that should be configured (before, after) this device"""
-        return ([], [self.dev.getDAQName()])  ## this device should be configured before its DAQ
+        daqs = set([self.dev.getDAQName(ch) for ch in self._DAQCmd])
+        return ([], list(daqs))  ## this device should be configured before its DAQs
         
     def configure(self, tasks, startOrder):
         ## Record initial state or set initial value

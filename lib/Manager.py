@@ -261,6 +261,9 @@ Valid options are:
             
     def writeConfigFile(self, data, fileName):
         fileName = self.configFileName(fileName)
+        dirName = os.path.dirname(fileName)
+        if not os.path.exists(dirName):
+            os.makedirs(dirName)
         return configfile.writeConfigFile(data, fileName)
         
     def configFileName(self, name):
@@ -605,12 +608,16 @@ class Task:
             for devName in self.tasks.keys():
                 before, after = self.tasks[devName].getConfigOrder()
                 for d in before: 
+                    if d not in configOrder:
+                        continue
                     i1 = configOrder.index(devName)
                     i2 = configOrder.index(d)
                     if i2 > i1:
                         configOrder.pop(i2)
                         configOrder.insert(i1, d)
                 for d in after: 
+                    if d not in configOrder:
+                        continue
                     i1 = configOrder.index(devName)
                     i2 = configOrder.index(d)
                     if i2 < i1:

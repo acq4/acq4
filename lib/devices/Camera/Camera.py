@@ -625,7 +625,7 @@ class CameraTask(DAQGenericTask):
             expLen = (offTimes[1:len(onTimes)] - onTimes[1:len(offTimes)]).mean()
             
             
-            if self.camCmd['triggerMode'] == 'Normal' and (('triggerProtocol' not in self.camCmd) or (not self.camCmd['triggerProtocol'])):
+            if self.camCmd['params']['triggerMode'] == 'Normal' and (('triggerProtocol' not in self.camCmd) or (not self.camCmd['triggerProtocol'])):
                 ## Can we make a good guess about frame times even without having triggered the first frame?
                 ## frames are marked with their arrival time. We will assume that a frame most likely 
                 ## corresponds to the last complete exposure signal. 

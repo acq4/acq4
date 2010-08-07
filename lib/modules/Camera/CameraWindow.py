@@ -289,7 +289,7 @@ class CameraWindow(QtGui.QMainWindow):
         px = self.imageItem.getPixmap()
         if px is None:
             return
-        im = QtGui.QGraphicsPixmapItem(px)
+        im = QtGui.QGraphicsPixmapItem(px.copy())
         if len(self.persistentFrames) == 0:
             z = -10000
         else:

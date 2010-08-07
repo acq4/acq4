@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from lib.devices.Device import *
 from lib.util.Mutex import Mutex, MutexLocker
-import lib.util.configfile as configfile
+#import lib.util.configfile as configfile
 from DeviceGui import ScannerDeviceGui
 from ProtocolGui import ScannerProtoGui
 import os, pickle 
@@ -73,16 +73,17 @@ class Scanner(Device):
             if self.calibrationIndex is None:
                 calDir = self.configDir()
                 fileName = os.path.join(calDir, 'index')
-                if os.path.isfile(fileName):
-                    try:
-                        index = configfile.readConfigFile(fileName)
-                    except:
-                        index = {}
-                        printExc("===== Warning: Error while reading scanner calibration index:")
-                        print "    calDir: %s  fileName: %s" % (calDir, fileName)
-                        print "    self.config:", self.config
-                else:
-                    index = {}
+                index = self.dm.readConfigFile(fileName)
+                #if os.path.isfile(fileName):
+                    #try:
+                        #index = configfile.readConfigFile(fileName)
+                    #except:
+                        #index = {}
+                        #printExc("===== Warning: Error while reading scanner calibration index:")
+                        #print "    calDir: %s  fileName: %s" % (calDir, fileName)
+                        #print "    self.config:", self.config
+                #else:
+                    #index = {}
                 self.calibrationIndex = index
             return self.calibrationIndex
         
@@ -90,7 +91,8 @@ class Scanner(Device):
         with MutexLocker(self.lock):
             calDir = self.configDir()
             fileName = os.path.join(calDir, 'index')
-            configfile.writeConfigFile(index, fileName)
+            self.dm.writeConfigFile(index, fileName)
+            #configfile.writeConfigFile(index, fileName)
             self.calibrationIndex = index
         
     def getCalibration(self, camera, laser, objective=None):
@@ -135,16 +137,16 @@ class Scanner(Device):
         params = [p for p in params if params[p][1] and params[p][2]]  ## Select only readable and writable parameters
         state = camDev.getParams(params)
         fileName = os.path.join(self.configDir(), camera+'Config.cfg')
-        self.dm.writeConfigFile(params, fileName)
+        self.dm.writeConfigFile(state, fileName)
         
     def getCameraConfig(self, camera):
         fileName = os.path.join(self.configDir(), camera+'Config.cfg')
-        return self.dm.readConfigFile(self.fileName)
+        return self.dm.readConfigFile(fileName)
         
         
     def configDir(self):
         """Return the name of the directory where configuration/calibration data should be stored"""
-        return self.config.get('calibrationDir', self.name+"Config")
+        return self.name+"Config"
         
     
     def createTask(self, cmd):
