@@ -163,10 +163,14 @@ class TickSlider(QtGui.QGraphicsView):
 class GradientWidget(TickSlider):
     def __init__(self, *args, **kargs):
         TickSlider.__init__(self, *args, **kargs)
+        self.currentTick = None
+        self.currentTickColor = None
         self.rectSize = 15
         self.gradRect = QtGui.QGraphicsRectItem(QtCore.QRectF(0, -self.rectSize, 100, self.rectSize))
         self.colorMode = 'rgb'
-        
+        self.colorDialog = QtGui.QColorDialog(self)
+        QtCore.QObject.connect(self.colorDialog, QtCore.SIGNAL('currentColorChanged(const QColor&)'), self.currentColorChanged)
+        QtCore.QObject.connect(self.colorDialog, QtCore.SIGNAL('rejected()'), self.currentColorRejected)
         
         #self.gradient = QtGui.QLinearGradient(QtCore.QPointF(0,0), QtCore.QPointF(100,0))
         self.scene.addItem(self.gradRect)
@@ -200,16 +204,27 @@ class GradientWidget(TickSlider):
         self.gradRect.setRect(0, -self.rectSize, newLen, self.rectSize)
         self.updateGradient()
         
-        
+    def currentColorChanged(self, color):
+        if color.isValid() and self.currentTick is not None:
+            self.setTickColor(self.currentTick, color)
+            self.updateGradient()
+            
+    def currentColorRejected(self):
+        self.setTickColor(self.currentTick, self.currentTickColor)
+        self.updateGradient()
         
     def tickClicked(self, tick, ev):
         if ev.button() == QtCore.Qt.LeftButton:
             if not tick.colorChangeAllowed:
                 return
-            color = QtGui.QColorDialog.getColor(tick.color, None, "Select Color", QtGui.QColorDialog.ShowAlphaChannel)
-            if color.isValid():
-                self.setTickColor(tick, color)
-                self.updateGradient()
+            self.currentTick = tick
+            self.currentTickColor = tick.color
+            self.colorDialog.setCurrentColor(tick.color)
+            self.colorDialog.open()
+            #color = QtGui.QColorDialog.getColor(tick.color, self, "Select Color", QtGui.QColorDialog.ShowAlphaChannel)
+            #if color.isValid():
+                #self.setTickColor(tick, color)
+                #self.updateGradient()
         elif ev.button() == QtCore.Qt.RightButton:
             if not tick.removeAllowed:
                 return
