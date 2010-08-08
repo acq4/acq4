@@ -168,7 +168,7 @@ class GradientWidget(TickSlider):
         self.rectSize = 15
         self.gradRect = QtGui.QGraphicsRectItem(QtCore.QRectF(0, -self.rectSize, 100, self.rectSize))
         self.colorMode = 'rgb'
-        self.colorDialog = QtGui.QColorDialog(self)
+        self.colorDialog = QtGui.QColorDialog()
         QtCore.QObject.connect(self.colorDialog, QtCore.SIGNAL('currentColorChanged(const QColor&)'), self.currentColorChanged)
         QtCore.QObject.connect(self.colorDialog, QtCore.SIGNAL('rejected()'), self.currentColorRejected)
         

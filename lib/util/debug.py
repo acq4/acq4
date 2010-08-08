@@ -161,7 +161,7 @@ def refPathString(chain):
         o2 = chain[i]
         cont = False
         if isinstance(o1, list) or isinstance(o1, tuple):
-            if o2 in o1:
+            if any([o2 is x for x in o1]):
                 s += "[%d]" % o1.index(o2)
                 continue
         #print "  not list"
@@ -977,5 +977,4 @@ def findObj(regex):
         if r.search(typeStr(obj)):
             objs.append(obj)
     return objs
-    
     
