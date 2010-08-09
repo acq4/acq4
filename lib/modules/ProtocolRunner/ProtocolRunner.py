@@ -84,9 +84,10 @@ class ProtocolRunner(Module):
         
         #self.updateDeviceList()
         
+        self.taskThread = TaskThread(self)
+        
         self.newProtocol()
         
-        self.taskThread = TaskThread(self)
         
         QtCore.QObject.connect(self.ui.newProtocolBtn, QtCore.SIGNAL('clicked()'), self.newProtocol)
         QtCore.QObject.connect(self.ui.saveProtocolBtn, QtCore.SIGNAL('clicked()'), self.saveProtocol)
@@ -342,10 +343,12 @@ class ProtocolRunner(Module):
         
     def hideDock(self, dev):
         self.docks[dev].hide()
+        self.docks[dev].widget().disable()
         self.ui.sequenceParamList.removeDevice(dev)
         
     def showDock(self, dev):
         self.docks[dev].show()
+        self.docks[dev].widget().enable()
         self.updateSeqParams(dev)
         #items = self.ui.sequenceParamList.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0)
         #for i in items:
@@ -427,6 +430,7 @@ class ProtocolRunner(Module):
                 
         
     def quit(self):
+        self.stopSingle()
         self.clearDocks()
         Module.quit(self)
 
@@ -444,6 +448,8 @@ class ProtocolRunner(Module):
             #self.ui.saveProtocolBtn.setEnabled(v)
         
     def newProtocol(self):
+        self.stopSingle()
+        
         ## Remove all docks
         self.clearDocks()
         
@@ -500,7 +506,7 @@ class ProtocolRunner(Module):
         return self.protocolList.getFileName(index)
     
     def loadProtocol(self, index=None):
-        
+        self.stopSingle()
         ## Determine selected item
         if index is None:
             sel = list(self.ui.protocolList.selectedIndexes())
@@ -807,11 +813,15 @@ class ProtocolRunner(Module):
             
     def stopSingle(self):
         self.loopEnabled = False
-        self.taskThread.abort()
+        if self.taskThread.isRunning():
+            self.taskThread.abort()
+        self.ui.pauseSequenceBtn.setChecked(False)
         
     def stopSequence(self):
         self.loopEnabled = False
-        self.taskThread.stop()
+        if self.taskThread.isRunning():
+            self.taskThread.stop()
+        self.ui.pauseSequenceBtn.setChecked(False)
     
     def pauseSequence(self, pause):
         self.taskThread.pause(pause)
@@ -1087,6 +1097,9 @@ class TaskThread(QtCore.QThread):
             emitSig = True
             while True:
                 l.relock()
+                if self.abortThread or self.stopThread:
+                    l.unlock()
+                    return
                 pause = self.paused
                 l.unlock()
                 if not pause:

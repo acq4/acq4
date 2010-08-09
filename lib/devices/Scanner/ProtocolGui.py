@@ -16,7 +16,7 @@ class ScannerProtoGui(ProtocolGui):
         dm = getManager()
         self.targets = None
         self.items = {}
-        self.occlusions = {}
+        #self.occlusions = {}
         self.nextId = 0
 
         ## Populate module/device lists, auto-select based on device defaults 
@@ -87,6 +87,8 @@ class ScannerProtoGui(ProtocolGui):
                 #gr.setPos(pos)
                 #gr.setSize(size)
                 #gr.setAngle(angle)
+            elif t[0] == 'occlusion':
+                self.addOcclusion(t[1], t[2], name=k)
         
         
     def fillModuleList(self):
@@ -267,16 +269,19 @@ class ScannerProtoGui(ProtocolGui):
         self.addItem(pt, name,  autoPos,  autoName)
         return pt
     
-    def addOcclusion(self, name=None):
-        autoName = False
+    def addOcclusion(self, pos=None, points=None, name=None):
+        auto = False
         if name is None:
             name = 'Occlusion'
-            autoName = True
-        s = self.pointSize()
-        pos = ([0,0], [0,s*3], [s*3,0])
-        pt = TargetOcclusion(pos)
-        self.addItem(pt, name, autoName=autoName)
-        return pt
+            auto = True
+        if points is None:
+            s = self.pointSize()
+            points = ([0,0], [0,s*3], [s*3,0])
+        if pos is None:
+            pos = [0,0]
+        item = TargetOcclusion(points, pos=pos)
+        self.addItem(item, name, autoName=auto, autoPosition=auto)
+        return item
         
 
     def addItem(self, item, name,  autoPosition=True,  autoName=True):
@@ -288,8 +293,8 @@ class ScannerProtoGui(ProtocolGui):
         item.name = name
         item.objective = self.currentObjective
         self.items[name] = item
-        if isinstance(item, TargetOcclusion):
-            self.occlusions[name] = item
+        #if isinstance(item, TargetOcclusion):
+            #self.occlusions[name] = item
         listitem = QtGui.QListWidgetItem(name)
         listitem.setCheckState(QtCore.Qt.Checked)
         self.ui.itemList.addItem(listitem)
@@ -325,7 +330,7 @@ class ScannerProtoGui(ProtocolGui):
         #self.removeItemPoints(i)
         i.scene().removeItem(i)
         del self.items[name]
-        self.occlusions.get(name)
+        #self.occlusions.get(name)
         self.sequenceChanged()
 
     def deleteAll(self, clearHistory=True):
@@ -337,7 +342,7 @@ class ScannerProtoGui(ProtocolGui):
             i.scene().removeItem(i)
             #self.removeItemPoints(i)
         self.items = {}
-        self.occlusions = {}
+        #self.occlusions = {}
         self.sequenceChanged()
         
     def itemToggled(self, item):
@@ -387,8 +392,7 @@ class ScannerProtoGui(ProtocolGui):
         elif isinstance(item, TargetGrid):
             info = ['grid', state['pos'], state['size'], state['angle']]
         elif isinstance(item, TargetOcclusion):
-            info = ['occlusion']
-            return
+            info = ['occlusion', item.pos(), item.listPoints()]
         
         self.dev.updateTarget(name, info)
     
@@ -396,10 +400,13 @@ class ScannerProtoGui(ProtocolGui):
         items = self.activeItems()
         locations = []
         occArea = QtGui.QPainterPath()
-        for o in self.occlusions.values():
-            occArea |= o.mapToScene(o.shape())
+        for i in self.items.itervalues():
+            if isinstance(i, TargetOcclusion):
+                occArea |= i.mapToScene(i.shape())
             
         for i in items:
+            if isinstance(i, TargetOcclusion):
+                continue
             pts = i.listPoints()
             #for x in self.occlusions.keys():  ##can we just join the occlusion areas together?
                 #area = self.occlusions[x].mapToScene(self.occlusions[x].shape())
@@ -676,13 +683,10 @@ class TargetGrid(ROI):
             p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
         
 class TargetOcclusion(PolygonROI):
-    def __init__(self, pos):
-        PolygonROI.__init__(self, pos)
+    def __init__(self, points, pos=None):
+        PolygonROI.__init__(self, points, pos)
         
         
-    def listPoints(self):
-        pts = []
-        return pts
     
     def setPointSize(self, size):
         pass
