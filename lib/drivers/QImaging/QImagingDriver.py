@@ -148,7 +148,7 @@ class QCameraClass:
         self.groupParams = {
             'binning': ['binningX', 'binningY'],
             'region': ['regionX', 'regionY', 'regionW', 'regionH'],
-            'sensorSize': ['qinfCcdHeight', 'qinfCcdWidth'] 
+            'sensorSize': ['qinfCcdWidth', 'qinfCcdHeight'] 
         }
 
         self.paramEnums = {
@@ -230,21 +230,7 @@ class QCameraClass:
         s.size = sizeof(s)
         return s
 
-    def mkFrame(self):
-        s = self.call(lib.GetInfo, self.handle, lib.qinfImageSize)[2]
-        f = lib.Frame()
-        frame = ascontiguousarray(empty(s/2, dtype=uint16))
-        f.pBuffer = frame.ctypes.data
-        f.bufferSize = s
-        return (f, frame)
-    
-    def grabFrame(self):
-        s = lib.GetInfo(handle, lib.qinfImageSize)[2]
-        (f, frame) = mkFrame()
-        self.call(lib.GrabFrame, self.handle, byref(f))
-        w = self.call(lib.GetInfo, self.handle, lib.qinfCcdWidth)[2]
-        frame.shape = (s/w, w)
-        return frame
+
     
     def listParams(self, param=None, allParams=False):
         if param == None:
@@ -509,6 +495,28 @@ class QCameraClass:
             dict = {}
             dict[x] = self.getParam(x)
         return dict, autoRestart
+    
+    def mkFrame(self):
+        s = self.call(lib.GetInfo, self.handle, lib.qinfImageWidth)[2] * self.call(lib.GetInfo, self.handle, lib.qinfImageHeight)[2]
+        #s = self.call(lib.GetInfo, self.handle, lib.qinfImageSize)[2] ## ImageSize returns the size in bytes
+        #print 'mkFrame: s', s
+        f = lib.Frame()
+        #frame = ascontiguousarray(empty(s/2, dtype=uint16))
+        frame = ascontiguousarray(empty(s, dtype=uint16))
+        frame.shape=(self.getParam('regionH'), self.getParam('regionW') ) 
+        #frame = frame.transpose()
+        #print 'mkFrame: frame.shape', frame.shape
+        f.pBuffer = frame.ctypes.data
+        f.bufferSize = s
+        return (f, frame)
+    
+    def grabFrame(self):
+        s = lib.GetInfo(handle, lib.qinfImageSize)[2]
+        (f, frame) = mkFrame()
+        self.call(lib.GrabFrame, self.handle, byref(f))
+        w = self.call(lib.GetInfo, self.handle, lib.qinfCcdWidth)[2]
+        frame.shape = (s/w, w)
+        return frame
 
     def start(self):
         #global i, stopsignal
@@ -523,23 +531,25 @@ class QCameraClass:
         for x in range(self.ringSize):
             f, a = self.mkFrame()
             self.frames.append(f)
+            #print "start: a.shape", a.shape
             self.arrays.append(a)
         for x in range(2):
             self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone, 0, self.i)
             self.mutex.lock()
             self.i += 1
             self.mutex.unlock()
+        return self.arrays
     
     def callBack1(self, *args):
-        #global i, lastframe
+        #global i, lastImage
         if args[2] != 0:
             for x in lib('enums', 'QCam_Err'):
                 if lib('enums', 'QCam_Err')[x] == args[2]:
                     raise QCamFunctionError(args[2], "There was an error during QueueFrame/Callback. Error code = %s" %(x))
         #self.mutex.lock()
         with self.mutex:
-            self.lastFrame = (args[1], arrays[args[1]]) ### Need to figure out a way to attach settings info (binning, exposure gain region and offset) to frame!!!
-            if self.i != 9:
+            self.lastImage = (args[1], self.arrays[args[1]]) ### Need to figure out a way to attach settings info (binning, exposure gain region and offset) to frame!!!
+            if self.i != self.ringSize-1:
                 self.i += 1
             else:
                 self.i = 0
@@ -559,7 +569,7 @@ class QCameraClass:
         #self.mutex.unlock()
 
     def lastFrame(self):
-        #global lastframe
+        #global lastImage
         with self.mutex:
             a = self.lastImage
             #self.mutex.unlock()
