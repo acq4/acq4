@@ -58,6 +58,7 @@ externalParams = ['triggerMode',
                   'qprmBlackoutMode',
                   'qprmImageFormat',
                   'qprmSyncb',
+                  'ringSize'
                   ]
 cameraDefaults = {
     'ALL':{
@@ -132,22 +133,22 @@ class QCameraClass:
         self.driver = driver
         self.isOpen = False
         self.handle = self.open()
+        self.ringSize = 10
         self.paramAttrs = OrderedDict()
         self.cameraInfo = {}
-        self.getCameraInfo()
         self.frames = []
         self.arrays = []
         self.i = 0
         self.stopSignal = True
         self.mutex = Mutex(Mutex.Recursive)
-        self.lastFrame = (0,0)
+        self.lastImage = (0,0)
         self.fnp1 = lib.AsyncCallback(self.callBack1)
         
         ## Some parameters can be accessed as groups
         self.groupParams = {
             'binning': ['binningX', 'binningY'],
             'region': ['regionX', 'regionY', 'regionW', 'regionH'],
-            'sensorSize': [self.cameraInfo['qinfCcdHeight'], self.cameraInfo['qinfCcdWidth']] 
+            'sensorSize': ['qinfCcdHeight', 'qinfCcdWidth'] 
         }
 
         self.paramEnums = {
@@ -170,6 +171,7 @@ class QCameraClass:
             'regionH':'qprmRoiHeight',
             'gain':'qprmNormalizedGain',
             'Normal':'qcTriggerFreerun',
+            'bitDepth':'qinfBitDepth'
         }
         
         self.cameraToUserDict = {
@@ -182,8 +184,12 @@ class QCameraClass:
             'qprmRoiHeight':'regionH',
             'qprmNormalizedGain':'gain',
             'qcTriggerFreerun':'Normal',
-            'qcTriggerNone':'Normal'
+            'qcTriggerNone':'Normal',
+            'qinfBitDepth':'bitDepth'
         }
+        
+        self.listParams()
+        self.getCameraInfo()
             
        
         
@@ -239,8 +245,14 @@ class QCameraClass:
         w = self.call(lib.GetInfo, self.handle, lib.qinfCcdWidth)[2]
         frame.shape = (s/w, w)
         return frame
+    
+    def listParams(self, param=None, allParams=False):
+        if param == None:
+            return self.fillParamDict(allParams=allParams)
+        else:
+            return self.paramAttrs[param]
 
-    def listParams(self, allParams=False):
+    def fillParamDict(self, allParams=False):
         """Fills in the 'paramAttrs' dictionary with the state parameters available on the camera.
         The key is the name of the parameter, while the value is a list: [acceptablevalues, isWritable, isReadable, [dependencies]]."""
         s = self.readSettings()
@@ -251,6 +263,9 @@ class QCameraClass:
         #for x in lib('enums', 'QCam_Param'):
         for x in p[0]:
             if x in ['qprmS32AbsoluteOffset', 'qprmS32RegulatedCoolingTemp', 'exposure']:
+                continue
+            if x == 'ringSize':
+                self.paramAttrs[x] = [(2,100), True, True, []]
                 continue
             x = self.translateToCamera(x)
             try:
@@ -270,7 +285,7 @@ class QCameraClass:
                 else: raise
         #for x in lib('enums', 'QCam_ParamS32'):
         for x in p[1]:
-            if x in ['exposure']:
+            if x in ['exposure', 'ringSize']:
                 continue
             x = self.translateToCamera(x)
             try:
@@ -290,7 +305,7 @@ class QCameraClass:
                 else: raise
         #for x in lib('enums', 'QCam_Param64'):
         for x in p[2]:
-            if x in ['qprmS32AbsoluteOffset', 'qprmS32RegulatedCoolingTemp']:
+            if x in ['qprmS32AbsoluteOffset', 'qprmS32RegulatedCoolingTemp', 'ringSize']:
                 continue
             x = self.translateToCamera(x)
             try:
@@ -391,6 +406,8 @@ class QCameraClass:
                 else: raise
 
     def getParam(self, param):
+        if param == 'ringSize':
+            return self.ringSize
         if param in self.groupParams:
             return self.getParams(self.groupParams[param], asList=True)
         s = self.readSettings()
@@ -402,17 +419,23 @@ class QCameraClass:
             value = self.call(lib.GetParamS32, byref(s), getattr(lib, param))[2]
         elif param in lib('enums', 'QCam_Param64'):
             value = self.call(lib.GetParam64, byref(s), getattr(lib, param))[2]
-        value = self.getNameFromEnum(param, value)
-        return value
+        elif param in self.cameraInfo:
+            value = self.cameraInfo[param]
+        else:
+            raise Exception("%s is not recognized as a parameter." %param)
+        v = self.getNameFromEnum(param, value)
+        return v
 
     def setParam(self, param, value, autoRestart=True, autoCorrect=True):
+        if param == 'ringSize':
+            self.ringSize = value
         if param in self.groupParams:
             return self.setParams(zip(self.groupParams[paramName], value))
         s = self.readSettings()
         param = self.translateToCamera(param)
         value = self.translateToCamera(value)
         if param in self.paramEnums:
-                value = self.getEnumFromName(param, value)
+            value = self.getEnumFromName(param, value)
         if param in lib('enums', 'QCam_Param'):
             self.call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(value))
         elif param in lib('enums', 'QCam_ParamS32'):
@@ -453,20 +476,28 @@ class QCameraClass:
     def setParams(self, params, autoRestart=True, autoCorrect=True): 
         s = self.readSettings()
         for x in params:
-            if x[0] in self.groupParams:
-                return self.setParams(zip(self.groupParams[x[0]], x[1]))
+            if x in self.groupParams:
+                tuples = zip(self.groupParams[x], params[x])
+                newDict = {}
+                for y in tuples:
+                    newDict[y[0]]= y[1]
+                return self.setParams(newDict)
         for x in params:
-            param = self.translateToCamera(x[0])
-            value = self.translateToCamera(x[1])
+            if x == 'ringSize':
+                self.ringSize = params[x]
+            param = self.translateToCamera(x)
+            value = self.translateToCamera(params[x])
             #params[param] = params[x]
             if param in self.paramEnums:
                 value = self.getEnumFromName(param, value)
             if param in lib('enums', 'QCam_Param'):
-                self.call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(value))
+                self.call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(int(value)))
             elif param in lib('enums', 'QCam_ParamS32'):
-                self.call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(value))
+                self.call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(int(value)))
             elif param in lib('enums', 'QCam_Param64'):
-                self.call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(value))
+                if param == 'qprm64Exposure':
+                    value = value * 10e9 ### convert seconds(acq4 units) to nanoseconds(qcam units)
+                self.call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(int(value)))
         with self.mutex:
             if self.stopSignal == True:
                 #self.mutex.unlock()
@@ -476,8 +507,8 @@ class QCameraClass:
                 self.call(lib.QueueSettings, self.handle, byref(s), 0, lib.qcCallbackDone)
         for x in params:
             dict = {}
-            dict[x[0]] = self.getParam(x[0])
-        return dict
+            dict[x] = self.getParam(x)
+        return dict, autoRestart
 
     def start(self):
         #global i, stopsignal
@@ -489,7 +520,7 @@ class QCameraClass:
             self.stopSignal = False
             self.i=0
         self.call(lib.SetStreaming, self.handle, 1)
-        for x in range(10):
+        for x in range(self.ringSize):
             f, a = self.mkFrame()
             self.frames.append(f)
             self.arrays.append(a)
@@ -527,12 +558,12 @@ class QCameraClass:
             self.call(lib.Abort, self.handle)
         #self.mutex.unlock()
 
-    def getLastFrame(self):
+    def lastFrame(self):
         #global lastframe
         with self.mutex:
-            a = self.lastFrame
+            a = self.lastImage
             #self.mutex.unlock()
-            return a 
+            return a[0] 
     
     
 #loadDriver()
