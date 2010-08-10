@@ -120,11 +120,15 @@ class QCamDriverClass:
         return self.cams[cam]
         
     def __del__(self):
-        self.quit()
+        if len(self.cams) != 0:
+            self.quit()
+        else:
+            self.call(lib.ReleaseDriver)
 
     def quit(self):
         for c in self.cams:
             self.cams[c].quit()
+        self.call(lib.ReleaseDriver, self.cams[0].handle) ###what if we don't open the camera?
 
         
 class QCameraClass:
@@ -187,6 +191,10 @@ class QCameraClass:
             'qcTriggerNone':'Normal',
             'qinfBitDepth':'bitDepth'
         }
+        self.unitConversionDict = {
+            'gain': 10e-6,     #QCam expects microunits
+            'exposure': 10e-9  #QCam expresses exposure in nanoseconds
+            }
         
         self.listParams()
         self.getCameraInfo()
@@ -224,6 +232,17 @@ class QCameraClass:
             
     def translateToUser(self, arg):
         return self.cameraToUserDict.get(arg, arg)
+    
+    def convertUnitsToCamera(self, param, value):
+        if param in self.unitConversionDict:
+            return value/self.unitConversionDict[param]
+        else: return value
+        
+    def convertUnitsToAcq4(self, param, value):
+        if param in self.unitConversionDict:
+            return value * self.unitConversionDict[param]
+        else: return value
+    
         
     def readSettings(self):
         s = self.call(lib.ReadSettingsFromCam, self.handle)[1]
@@ -324,6 +343,10 @@ class QCameraClass:
         for x in self.paramAttrs:
             if type(self.paramAttrs[x][0]) != tuple:
                 self.paramAttrs[x][0] = self.getNameFromEnum(x, self.paramAttrs[x][0])
+        for x in self.paramAttrs:
+            self.paramAttrs[x][0] = self.convertUnitsToAcq4(x, self.paramAttrs[x][0]) ####problematic because tuples are immutable...
+        
+        
         return self.paramAttrs
                                 
     def getNameFromEnum(self, enum, value):
@@ -497,14 +520,16 @@ class QCameraClass:
         return dict, autoRestart
     
     def mkFrame(self):
-        s = self.call(lib.GetInfo, self.handle, lib.qinfImageWidth)[2] * self.call(lib.GetInfo, self.handle, lib.qinfImageHeight)[2]
-        #s = self.call(lib.GetInfo, self.handle, lib.qinfImageSize)[2] ## ImageSize returns the size in bytes
+        #s = self.call(lib.GetInfo, self.handle, lib.qinfImageWidth)[2] * self.call(lib.GetInfo, self.handle, lib.qinfImageHeight)[2]
+        s = self.call(lib.GetInfo, self.handle, lib.qinfImageSize)[2] ## ImageSize returns the size in bytes
         #print 'mkFrame: s', s
         f = lib.Frame()
         #frame = ascontiguousarray(empty(s/2, dtype=uint16))
         frame = ascontiguousarray(empty(s, dtype=uint16))
-        frame.shape=(self.getParam('regionH'), self.getParam('regionW') ) 
-        #frame = frame.transpose()
+        #print "frameshape:", frame.shape
+        #print "h:", self.getParam('regionH'), 'w:', self.getParam('regionW')
+        frame.shape=(self.getParam('regionH'), self.getParam('regionW') )
+        frame = frame.transpose()
         #print 'mkFrame: frame.shape', frame.shape
         f.pBuffer = frame.ctypes.data
         f.bufferSize = s
@@ -524,6 +549,7 @@ class QCameraClass:
         #self.stopSignal = False
         #self.i = 0
         #self.mutex.unlock()
+        self.setParams({'region':[0,0,self.cameraInfo['qinfCcdWidth'], self.cameraInfo['qinfCcdHeight']]})
         with self.mutex:
             self.stopSignal = False
             self.i=0
