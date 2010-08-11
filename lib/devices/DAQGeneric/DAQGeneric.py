@@ -6,6 +6,7 @@ from lib.util.Mutex import Mutex, MutexLocker
 from numpy import *
 from protoGUI import *
 from debug import *
+from SpinBox import *
 
 class DAQGeneric(Device):
     def __init__(self, dm, config, name):
@@ -18,7 +19,9 @@ class DAQGeneric(Device):
             if 'scale' not in config[ch]:
                 config[ch]['scale'] = 1.0
             #print "chan %s scale %f" % (ch, config[ch]['scale'])
-            self._DGHolding[ch] = None
+            if 'holding' not in config[ch]:
+                config[ch]['holding'] = 0.0
+            self._DGHolding[ch] = config[ch]['holding']
         
     
     def createTask(self, cmd):
@@ -41,8 +44,9 @@ class DAQGeneric(Device):
             if scale is None:
                 scale = self.getChanScale(channel)
             #print "set", chan, self._DGHolding[channel]*scale
-            daqDev.setChannelValue(chan, self._DGHolding[channel]*scale, block=False)
-            self.emit(QtCore.SIGNAL('holdingChanged'))
+            val = self._DGHolding[channel]*scale
+            daqDev.setChannelValue(chan, val, block=False)
+            self.emit(QtCore.SIGNAL('holdingChanged'), channel, val)
         
     def getChanHolding(self, chan):
         with self._DGLock:
@@ -64,9 +68,9 @@ class DAQGeneric(Device):
             return daqDev.getChannelValue(chan, mode=mode)/scale
 
         
-    #def devRackInterface(self):
-        #"""Return a widget with a UI to put in the device rack"""
-        #pass
+    def deviceInterface(self, win):
+        """Return a widget with a UI to put in the device rack"""
+        return DAQDevGui(self)
         
     def protocolInterface(self, prot):
         """Return a widget with a UI to put in the protocol rack"""
@@ -97,7 +101,7 @@ class DAQGeneric(Device):
 
     def listChannels(self):
         with self._DGLock:
-            return dict([(ch, self._DGConfig[ch]['channel']) for ch in self._DGConfig])
+            return dict([(ch, self._DGConfig[ch].copy()) for ch in self._DGConfig])
             
             
 
@@ -270,3 +274,39 @@ class DAQGenericTask(DeviceTask):
             if 'recordInit' in self._DAQCmd[ch] and self._DAQCmd[ch]['recordInit']:
                 dirHandle.setInfo({(self.dev.name, ch): self.initialState[ch]})
            
+                
+class DAQDevGui(QtGui.QWidget):
+    def __init__(self, dev):
+        self.dev = dev
+        QtGui.QWidget.__init__(self)
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        chans = self.dev.listChannels()
+        self.widgets = {}
+        row = 0
+        for ch in chans:
+            l = QtGui.QLabel("%s (%s)" % (ch, chans[ch]['channel'][1]))
+            if chans[ch]['type'] == 'ao':
+                hw = SpinBox(value=self.dev.getChanHolding(ch))
+                QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
+            elif chans[ch]['type'] == 'do':
+                hw = SpinBox(value=self.dev.getChanHolding(ch), step=1, bounds=(0,1))
+                QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
+            else:
+                hw = QtGui.QWidget()
+            hw.channel = ch
+            self.widgets[ch] = (l, hw)
+            self.layout.addWidget(l, row, 0)
+            self.layout.addWidget(hw, row, 1)
+            row += 1
+        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.holdingChanged)
+    
+    def holdingChanged(self, ch, val):
+        self.widgets[ch][1].blockSignals(True)
+        self.widgets[ch][1].setValue(val)
+        self.widgets[ch][1].blockSignals(False)
+        
+    def spinChanged(self, spin):
+        ch = spin.channel
+        self.dev.setChanHolding(ch, spin.value())
+        

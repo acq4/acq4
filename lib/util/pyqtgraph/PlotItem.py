@@ -37,8 +37,6 @@ except:
     HAVE_METAARRAY = False
 
 
-
-
 class PlotItem(QtGui.QGraphicsWidget):
     """Plot graphics item that can be added to any graphics scene. Implements axis titles, scales, interactive viewbox."""
     lastFileDir = None

@@ -30,6 +30,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
     
     def __init__(self, parent=None, value=0.0, **kwargs):
         QtGui.QAbstractSpinBox.__init__(self, parent)
+        self.lastValEmitted = None
         self.setMinimumWidth(0)
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Preferred)
         self.opts = {
@@ -64,10 +65,11 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.updateText()
         self.skipValidate = False
         self.setCorrectionMode(self.CorrectToPreviousValue)
+        self.setKeyboardTracking(False)
         self.setOpts(**kwargs)
         
         QtCore.QObject.connect(self, QtCore.SIGNAL('editingFinished()'), self.editingFinished)
-        self.proxy = proxyConnect(self, QtCore.SIGNAL('valueChanged(double)'), self.delayedChange)
+        self.proxy = proxyConnect(self, QtCore.SIGNAL('valueChanging'), self.delayedChange)
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('returnPressed()'), self.editingFinished)
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('textChanged()'), self.textChanged)
         
@@ -89,18 +91,23 @@ class SpinBox(QtGui.QAbstractSpinBox):
             sip.setdeleted(lec)  ## PyQt should handle this, but does not. Potentially leads to crashes.
         #del self.lineEditCache
         
-        
+    def emitChanged(self):
+        self.lastValEmitted = self.val
+        self.emit(QtCore.SIGNAL('valueChanged(double)'), float(self.val))
+        self.emit(QtCore.SIGNAL('valueChanged'), self)
         
     def delayedChange(self):
         #print "delayedChange", self
         #print "emit delayed change"
         try:
-            self.emit(QtCore.SIGNAL('delayedChange'), self.value())
+            #self.emit(QtCore.SIGNAL('delayedChange'), self.value())
+            if self.val != self.lastValEmitted:
+                self.emitChanged()
         except RuntimeError:
             pass  ## This can happen if we try to handle a delayed signal after someone else has already deleted the underlying C++ object.
         
     def widgetGroupInterface(self):
-        return ('delayedChange', SpinBox.value, SpinBox.setValue)
+        return ('valueChanged(double)', SpinBox.value, SpinBox.setValue)
         
     def sizeHint(self):
         return QtCore.QSize(120, 0)
@@ -163,9 +170,9 @@ class SpinBox(QtGui.QAbstractSpinBox):
                 
             if 'minStep' in self.opts and abs(val) < self.opts['minStep']:
                 val = D(0)
-        self.setValue(val)
+        self.setValue(val, delaySignal=True)  ## note all steps (arrow buttons, wheel, up/down keys..) emit delayed signals only.
         
-    def setValue(self, value, update=True):
+    def setValue(self, value, update=True, delaySignal=False):
         #print "setValue:", value
         #if value == 0.0:
             #import traceback
@@ -183,7 +190,10 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.val = value
         if update:
             self.updateText()
-        self.emit(QtCore.SIGNAL('valueChanged(double)'), float(self.val))
+            
+        self.emit(QtCore.SIGNAL('valueChanging'), float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
+        if not delaySignal:
+            self.emitChanged()
         self.lineEdit().setStyleSheet('border: 0px;')
 
     def setMaximum(self, m):
@@ -275,4 +285,4 @@ class SpinBox(QtGui.QAbstractSpinBox):
     #def textChanged(self):
         #print "Text changed."
         
-    
+        

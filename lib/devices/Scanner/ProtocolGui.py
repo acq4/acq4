@@ -60,6 +60,13 @@ class ScannerProtoGui(ProtocolGui):
         QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.generateTargets)
         QtCore.QObject.connect(dm, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
 
+        #self.currentTargetMarker = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
+        #pen = QtGui.QPen(QtGui.QBrush(QtGui.QColor(255, 255, 255)), 3.0)
+        #pen.setCosmetic(True)
+        #self.currentTargetMarker.setPen(pen)
+        
+        #self.currentTargetMarker.hide()
+        
         self.testTarget = TargetPoint([0,0], self.pointSize())
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
         #camMod = self.cameraModule()
@@ -107,7 +114,9 @@ class ScannerProtoGui(ProtocolGui):
         camMod = self.cameraModule()
         if self.currentCamMod is not None:
             self.currentCamMod.ui.removeItem(self.testTarget)
+            #self.currentCamMod.ui.removeItem(self.currentTargetMarker)
             QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+            
         if self.currentScope is not None:
             QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
             
@@ -121,7 +130,9 @@ class ScannerProtoGui(ProtocolGui):
         
         if self.currentScope is not None:
             QtCore.QObject.connect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            
         camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
+        #camMod.ui.addItem(self.currentTargetMarker, None, [1,1], 1010)
         self.objectiveChanged()
         
         
@@ -396,7 +407,7 @@ class ScannerProtoGui(ProtocolGui):
         
         self.dev.updateTarget(name, info)
     
-    def getTargetList(self):
+    def getTargetList(self):  ## should probably do some caching here.
         items = self.activeItems()
         locations = []
         occArea = QtGui.QPainterPath()
@@ -564,6 +575,12 @@ class ScannerProtoGui(ProtocolGui):
     def activeItems(self):
         return [self.items[i] for i in self.items if self.listItem(i).checkState() == QtCore.Qt.Checked]
 
+    
+    def taskStarted(self, params):
+        """Task has started; color the current and previous targets"""
+        t = params['targets']
+        self.currentTargetMarker.setRect
+    
     def quit(self):
         print "scanner dock quit"
         self.deleteAll(clearHistory = False)

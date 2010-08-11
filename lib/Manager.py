@@ -174,62 +174,64 @@ Valid options are:
     def configure(self, cfg):
         """Load the devices, modules, stylesheet, and storageDir defined in cfg"""
         
-        ## configure new devices
-        for key in cfg:
-            if key == 'devices':
-                for k in cfg['devices']:
-                    if k in self.disableDevs:
-                        print "=== Ignoring device '%s' -- disabled by request ===" % k
-                        continue
-                    print "\n=== Configuring device '%s' ===" % k
-                    try:
-                        conf = None
-                        if cfg['devices'][k].has_key('config'):
-                            conf = cfg['devices'][k]['config']
-                        driverName = cfg['devices'][k]['driver']
-                        self.loadDevice(driverName, conf, k)
-                    except:
-                        printExc("Error configuring device %s:" % k)
+        try:
+            for key in cfg:
+                ## configure new devices
+                if key == 'devices':
+                    for k in cfg['devices']:
+                        if k in self.disableDevs:
+                            print "=== Ignoring device '%s' -- disabled by request ===" % k
+                            continue
+                        print "\n=== Configuring device '%s' ===" % k
+                        try:
+                            conf = None
+                            if cfg['devices'][k].has_key('config'):
+                                conf = cfg['devices'][k]['config']
+                            driverName = cfg['devices'][k]['driver']
+                            self.loadDevice(driverName, conf, k)
+                        except:
+                            printExc("Error configuring device %s:" % k)
+                            
+                ## Copy in new module definitions
+                elif key == 'modules':
+                    for m in cfg['modules']:
+                        self.definedModules[m] = cfg['modules'][m]
                         
-            ## Copy in new module definitions
-            elif key == 'modules':
-                for m in cfg['modules']:
-                    self.definedModules[m] = cfg['modules'][m]
+                ## set new storage directory
+                elif key == 'storageDir':
+                    self.setBaseDir(cfg['storageDir'])
+                
+                ## load stylesheet
+                elif key == 'stylesheet':
+                    try:
+                        css = open(os.path.join(self.configDir, cfg['stylesheet'])).read()
+                        QtGui.QApplication.instance().setStyleSheet(css)
+                    except:
+                        raise
                     
-            ## set new storage directory
-            elif key == 'storageDir':
-                self.setBaseDir(cfg['storageDir'])
-            
-            ## load stylesheet
-            elif key == 'stylesheet':
-                try:
-                    css = open(os.path.join(self.configDir, cfg['stylesheet'])).read()
-                    QtGui.QApplication.instance().setStyleSheet(css)
-                except:
-                    raise
-                
-            ## Copy in any other configurations.
-            ## dicts are extended, all others are overwritten.
-            else:
-                if isinstance(cfg[key], dict):
-                    if key not in self.config:
-                        self.config[key] = {}
-                    for key2 in cfg[key]:
-                        self.config[key][key2] = cfg[key][key2]
+                ## Copy in any other configurations.
+                ## dicts are extended, all others are overwritten.
                 else:
-                    self.config[key] = cfg[key]
-            
-            ### set new protocol directory
-            #if 'protocolDir' in cfg:
-                #self.config['protocolDir'] = cfg['protocolDir']
+                    if isinstance(cfg[key], dict):
+                        if key not in self.config:
+                            self.config[key] = {}
+                        for key2 in cfg[key]:
+                            self.config[key][key2] = cfg[key][key2]
+                    else:
+                        self.config[key] = cfg[key]
                 
-            ### copy in new folder type definitions
-            #if 'folderTypes' in cfg:
-                #if 'folderTypes' not in self.config:
-                    #self.config['folderTypes'] = {}
-                #for t in cfg['folderTypes']:
-                    #self.config['folderTypes'][t] = cfg['folderTypes'][t]
-            
+                ### set new protocol directory
+                #if 'protocolDir' in cfg:
+                    #self.config['protocolDir'] = cfg['protocolDir']
+                    
+                ### copy in new folder type definitions
+                #if 'folderTypes' in cfg:
+                    #if 'folderTypes' not in self.config:
+                        #self.config['folderTypes'] = {}
+                    #for t in cfg['folderTypes']:
+                        #self.config['folderTypes'][t] = cfg['folderTypes'][t]
+        except:
+            printExc("Error while configuring manager:")
         #print self.config
         self.emit(QtCore.SIGNAL('configChanged'))
 

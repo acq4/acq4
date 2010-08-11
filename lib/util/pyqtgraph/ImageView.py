@@ -52,7 +52,7 @@ class ImageView(QtGui.QWidget):
         self.ui.graphicsView.invertY()
         self.ui.graphicsView.enableMouse()
         
-        self. ticks = [t[0] for t in self.ui.gradientWidget.listTicks()]
+        self.ticks = [t[0] for t in self.ui.gradientWidget.listTicks()]
         self.ticks[0].colorChangeAllowed = False
         self.ticks[1].colorChangeAllowed = False
         self.ui.gradientWidget.allowAdd = False

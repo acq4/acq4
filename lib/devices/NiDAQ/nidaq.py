@@ -198,12 +198,23 @@ class Task(DeviceTask):
         ## Determine the sample clock source, configure tasks
         self.st.configureClocks(rate=self.cmd['rate'], nPts=self.cmd['numPts'])
 
+        
+        ## Probably the DAQ should be started last
+        startOrder.remove(self.dev.name)
+        startOrder.append(self.dev.name)
+        
         ## Determine how the protocol will be triggered
         if 'triggerChan' in self.cmd:
             self.st.setTrigger(trigger)
         elif 'triggerDevice' in self.cmd:
-            tDev = self.dev.dm.getDevice(self.cmd['triggerDevice'])
+            tDevName = self.cmd['triggerDevice']
+            tDev = self.dev.dm.getDevice(tDevName)
             self.st.setTrigger(tDev.getTriggerChannel(self.dev.name))
+            
+            ## If there is a trigger device, it needs to start after the DAQ does.
+            startOrder.remove(tDevName)
+            startOrder.append(tDevName)
+            
         #print "daq configure complete"
         
     def addChannel(self, *args, **kwargs):

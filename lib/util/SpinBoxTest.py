@@ -35,6 +35,5 @@ for sb in [s1, s2, s3,s4]:
     #QtCore.QObject.connect(s2, QtCore.SIGNAL('valueChanged(double)'), lambda v: t2.setText(str(v)))
     #QtCore.QObject.connect(s4, QtCore.SIGNAL('valueChanged(double)'), lambda v: t4.setText(str(v)))
     QtCore.QObject.connect(sb, QtCore.SIGNAL('valueChanged(double)'), lambda v: sys.stdout.write(str(sb) + "valueChanged\n"))
-    QtCore.QObject.connect(sb, QtCore.SIGNAL('delayedChange'), lambda: sys.stdout.write(str(sb) + "delayedChange\n"))
     QtCore.QObject.connect(sb, QtCore.SIGNAL('editingFinished()'), lambda: sys.stdout.write(str(sb) + "editingFinished\n"))
 

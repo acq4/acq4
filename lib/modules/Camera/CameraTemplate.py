@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'CameraTemplate.ui'
 #
-# Created: Tue Jan 19 17:36:11 2010
+# Created: Tue Aug 10 19:08:44 2010
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -109,36 +109,14 @@ class Ui_MainWindow(object):
         self.vboxlayout1.setObjectName("vboxlayout1")
         self.hboxlayout2 = QtGui.QHBoxLayout()
         self.hboxlayout2.setObjectName("hboxlayout2")
-        self.verticalSlider = QtGui.QSlider(self.dockWidgetContents_2)
-        self.verticalSlider.setOrientation(QtCore.Qt.Vertical)
-        self.verticalSlider.setObjectName("verticalSlider")
-        self.hboxlayout2.addWidget(self.verticalSlider)
         self.histogram = GraphicsView(self.dockWidgetContents_2)
         self.histogram.setFrameShape(QtGui.QFrame.NoFrame)
         self.histogram.setObjectName("histogram")
         self.hboxlayout2.addWidget(self.histogram)
-        self.sliderWhiteLevel = QtGui.QSlider(self.dockWidgetContents_2)
-        self.sliderWhiteLevel.setMaximum(10000)
-        self.sliderWhiteLevel.setSingleStep(10)
-        self.sliderWhiteLevel.setPageStep(200)
-        self.sliderWhiteLevel.setProperty("value", QtCore.QVariant(10000))
-        self.sliderWhiteLevel.setSliderPosition(10000)
-        self.sliderWhiteLevel.setOrientation(QtCore.Qt.Vertical)
-        self.sliderWhiteLevel.setTickPosition(QtGui.QSlider.TicksAbove)
-        self.sliderWhiteLevel.setTickInterval(1000)
-        self.sliderWhiteLevel.setObjectName("sliderWhiteLevel")
-        self.hboxlayout2.addWidget(self.sliderWhiteLevel)
-        self.sliderBlackLevel = QtGui.QSlider(self.dockWidgetContents_2)
-        self.sliderBlackLevel.setMaximum(10000)
-        self.sliderBlackLevel.setSingleStep(10)
-        self.sliderBlackLevel.setPageStep(200)
-        self.sliderBlackLevel.setOrientation(QtCore.Qt.Vertical)
-        self.sliderBlackLevel.setInvertedAppearance(False)
-        self.sliderBlackLevel.setInvertedControls(False)
-        self.sliderBlackLevel.setTickPosition(QtGui.QSlider.TicksAbove)
-        self.sliderBlackLevel.setTickInterval(1000)
-        self.sliderBlackLevel.setObjectName("sliderBlackLevel")
-        self.hboxlayout2.addWidget(self.sliderBlackLevel)
+        self.gradientWidget = GradientWidget(self.dockWidgetContents_2)
+        self.gradientWidget.setMinimumSize(QtCore.QSize(20, 0))
+        self.gradientWidget.setObjectName("gradientWidget")
+        self.hboxlayout2.addWidget(self.gradientWidget)
         self.vboxlayout1.addLayout(self.hboxlayout2)
         self.btnAutoGain = QtGui.QPushButton(self.dockWidgetContents_2)
         self.btnAutoGain.setCheckable(True)
@@ -331,9 +309,6 @@ class Ui_MainWindow(object):
         self.btnFullFrame.setToolTip(QtGui.QApplication.translate("MainWindow", "Set the region of interest to the maximum possible area.", None, QtGui.QApplication.UnicodeUTF8))
         self.btnFullFrame.setText(QtGui.QApplication.translate("MainWindow", "Full Frame", None, QtGui.QApplication.UnicodeUTF8))
         self.dockWidget_2.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Display Gain", None, QtGui.QApplication.UnicodeUTF8))
-        self.verticalSlider.setToolTip(QtGui.QApplication.translate("MainWindow", "No function. Used for marking intensity levels so that changes in intensity can be seen easily.", None, QtGui.QApplication.UnicodeUTF8))
-        self.sliderWhiteLevel.setToolTip(QtGui.QApplication.translate("MainWindow", "Sets the white level of the image displayed. Does not affect images stored to disk.", None, QtGui.QApplication.UnicodeUTF8))
-        self.sliderBlackLevel.setToolTip(QtGui.QApplication.translate("MainWindow", "Sets the black level of the image displayed. Does not affect images stored to disk.", None, QtGui.QApplication.UnicodeUTF8))
         self.btnAutoGain.setToolTip(QtGui.QApplication.translate("MainWindow", "Determines the behavior of the white/black level sliders.\n"
 "When enabled, the sliders maximum and minimum values are set\n"
 "to the maximum and minimum intensity values in the image.\n"
@@ -375,5 +350,6 @@ class Ui_MainWindow(object):
         self.spinFlattenSize.setToolTip(QtGui.QApplication.translate("MainWindow", "Blurs the background frame before dividing it from the current frame.", None, QtGui.QApplication.UnicodeUTF8))
 
 from SpinBox import SpinBox
+from pyqtgraph.GradientWidget import GradientWidget
 from lib.util.pyqtgraph.PlotWidget import PlotWidget
 from pyqtgraph.GraphicsView import GraphicsView
