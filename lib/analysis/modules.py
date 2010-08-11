@@ -647,7 +647,7 @@ class UncagingWindow(QtGui.QMainWindow):
                 
                 ## Direct events have white outlines
                 if directeventsflag == True:
-                    pen = mkPen(width = 2)
+                    pen = mkPen(color = QtGui.QColor(0,0,0,200), width = 2)
                     if abs(negCharge) < 1e-16: 
                         color = QtGui.QColor(0,0,0,200)
                 else:

@@ -31,6 +31,14 @@ class UncagingModule(AnalysisModule):
         QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.recompute)
         QtCore.QObject.connect(self.man, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
         
+    def quit(self):
+        AnalysisModule.quit(self)
+        for k in self.prots:
+            self.prots[k].close()
+        self.prots.clear()
+        self.currentProt = None
+        
+        
     def fillModuleList(self):
         mods = self.man.listModules()
         self.ui.cameraModCombo.clear()
@@ -143,7 +151,7 @@ class Prot:
     
     def __init__(self, name, ui):
         self.name = name
-        self.ui = ui
+        self.ui = weakref.ref(ui)
         self.frames = []
         self.imgItem = ImageItem()
         self.items = [[self.imgItem, [0,0], [1,1]]]
@@ -152,12 +160,13 @@ class Prot:
         self.z = Prot.z
         Prot.z += 1
         
-    def addFrame(self, frame):
-        camDev = self.ui.cameraDevice()
-        clampDev = self.ui.clampDevice()
-        scannerDev = self.ui.scannerDevice()
         
-        scanUi = self.ui.pr.getDevice(scannerDev)
+    def addFrame(self, frame):
+        camDev = self.ui().cameraDevice()
+        clampDev = self.ui().clampDevice()
+        scannerDev = self.ui().scannerDevice()
+        
+        scanUi = self.ui().pr.getDevice(scannerDev)
         if not hasattr(scanUi, 'pointSize'):
             printExc('The device "%s" does not appear to be a scanner; skipping analysis.' % scannerDev)
         pointSize = scanUi.pointSize()
@@ -184,7 +193,7 @@ class Prot:
         self.recalculate()
         
     def updateParams(self, param=None, val=None):
-        state = self.ui.stateGroup.state().copy()
+        state = self.ui().stateGroup.state().copy()
         self.state = {}
         for k in Prot.params:
             self.state[k] = state[k]
@@ -267,8 +276,8 @@ class Prot:
         self.items[0][2] = s
         
         ## Set correct scene
-        cModName = str(self.ui.ui.cameraModCombo.currentText())
-        camMod = self.ui.man.getModule(cModName)
+        cModName = str(self.ui().ui.cameraModCombo.currentText())
+        camMod = self.ui().man.getModule(cModName)
         scene = camMod.ui.scene
         for i in self.items:
             (item, p, s) = i
@@ -280,7 +289,7 @@ class Prot:
         #print "updateImage", self.img.shape, self.img.max(axis=0).max(axis=0), self.img.min(axis=0).min(axis=0)
         #print "scene:", self.imgItem.scene(), "z", self.imgItem.zValue(), 'visible', self.imgItem.isVisible()
         aImg = self.img.astype(uint8)
-        aImg[..., 3] *= float(self.state['alphaSlider']) / self.ui.ui.alphaSlider.maximum()
+        aImg[..., 3] *= float(self.state['alphaSlider']) / self.ui().ui.alphaSlider.maximum()
         self.imgItem.updateImage(aImg)
 
     def evaluateTrace(self, data):
@@ -350,8 +359,15 @@ class Prot:
     def close(self):
         ## Remove items from scene
         for (item, p, s) in self.items:
-            scene = item.scene()
-            if scene is not None:
-                scene.removeItem(item)
+            try:
+                scene = item.scene()
+                if scene is not None:
+                    scene.removeItem(item)
+            except:
+                printExc("Error while cleaning up uncaging analysis:")
                 
+        del self.imgItem
+        del self.frames
+        del self.img
+        del self.items
         

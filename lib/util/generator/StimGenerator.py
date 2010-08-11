@@ -49,38 +49,45 @@ class StimGenerator(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.functionText, QtCore.SIGNAL('textChanged()'), self.funcChanged)
         QtCore.QObject.connect(self.ui.paramText, QtCore.SIGNAL('textChanged()'), self.paramChanged)
         QtCore.QObject.connect(self.ui.updateBtn, QtCore.SIGNAL('clicked()'), self.update)
-        QtCore.QObject.connect(self.ui.autoUpdateCheck, QtCore.SIGNAL('clicked()'), self.autoUpdate)
+        QtCore.QObject.connect(self.ui.autoUpdateCheck, QtCore.SIGNAL('clicked()'), self.autoUpdateClicked)
         QtCore.QObject.connect(self.ui.errorBtn, QtCore.SIGNAL('clicked()'), self.errorBtnClicked)
         QtCore.QObject.connect(self.ui.helpBtn, QtCore.SIGNAL('clicked()'), self.helpBtnClicked)
 
     def widgetGroupInterface(self):
-        return ('changed', StimGenerator.saveState, StimGenerator.loadState)
+        return ('stateChanged', StimGenerator.saveState, StimGenerator.loadState)
 
     def setTimeScale(self, s):
         if self.timeScale != s:
             self.timeScale = s
             self.clearCache()
+            self.autoUpdate()
 
     def setScale(self, s):
         if self.scale != s:
             self.scale = s
             self.clearCache()
+            self.autoUpdate()
 
     def setOffset(self, o):
         if self.offset != o:
             self.offset = o
             self.clearCache()
+            self.autoUpdate()
 
     def clearCache(self):
         self.cache = {}
 
     def update(self):
         if self.test():
-            self.emit(QtCore.SIGNAL('changed'))
+            self.emit(QtCore.SIGNAL('dataChanged'))
         
     def autoUpdate(self):
         if self.ui.autoUpdateCheck.isChecked():
             self.update()
+            
+    def autoUpdateClicked(self):
+        self.autoUpdate()
+        self.emit(QtCore.SIGNAL('stateChanged'))        
         
     def errorBtnClicked(self):
         self.ui.errorText.setVisible(self.ui.errorBtn.isChecked())
@@ -96,7 +103,8 @@ class StimGenerator(QtGui.QWidget):
         self.clearCache()
         if self.test():
             self.autoUpdate()
-            #self.emit(QtCore.SIGNAL('functionChanged'))
+            self.emit(QtCore.SIGNAL('functionChanged'))
+        self.emit(QtCore.SIGNAL('stateChanged'))
         
         
     def paramChanged(self):
@@ -106,6 +114,7 @@ class StimGenerator(QtGui.QWidget):
         if self.test():
             self.autoUpdate()
         self.emit(QtCore.SIGNAL('parametersChanged'))
+        self.emit(QtCore.SIGNAL('stateChanged'))
         
     def functionString(self):
         return str(self.ui.functionText.toPlainText())

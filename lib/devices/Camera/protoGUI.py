@@ -106,7 +106,9 @@ class CameraProtoGui(DAQGenericProtoGui):
             'record': state['recordCheck'],
             #'recordExposeChannel': state['recordExposeCheck'],
             'triggerProtocol': state['triggerCheck'],
-            'triggerMode': state['triggerModeCombo']
+            'params': {
+                'triggerMode': state['triggerModeCombo']
+            }
         }
         prot['channels'] = daqProt
         if state['releaseBetweenRadio']:
@@ -137,7 +139,7 @@ class CameraProtoGui(DAQGenericProtoGui):
         #print result
         state = self.stateGroup.state()
         if state['displayCheck']:
-            if result['frames'] is None:
+            if result is None or result['frames'] is None:
                 print "No images returned from camera protocol."
             else:
                 self.ui.imageView.setImage(result['frames'])

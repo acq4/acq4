@@ -41,6 +41,9 @@
          <attribute name="headerStretchLastSection">
           <bool>true</bool>
          </attribute>
+         <attribute name="headerStretchLastSection">
+          <bool>true</bool>
+         </attribute>
          <column>
           <property name="text">
            <string>Camera</string>
@@ -108,16 +111,16 @@
           </widget>
          </item>
          <item>
-          <widget class="QPushButton" name="testBtn">
+          <widget class="QPushButton" name="deleteBtn">
            <property name="text">
-            <string>Test</string>
+            <string>Delete</string>
            </property>
           </widget>
          </item>
          <item>
-          <widget class="QPushButton" name="deleteBtn">
+          <widget class="QPushButton" name="storeCamConfBtn">
            <property name="text">
-            <string>Delete</string>
+            <string>Store Camera Config</string>
            </property>
           </widget>
          </item>

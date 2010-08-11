@@ -391,7 +391,7 @@ class PatchThread(QtCore.QThread):
             with MutexLocker(self.lock) as l:
                 self.stopThread = False
                 clamp = self.manager.getDevice(self.clampName)
-                daqName = clamp.config['commandChannel'][0]
+                daqName = clamp.listChannels().values()[0][0]  ## Just guess the DAQ by checking one of the clamp's channels
                 clampName = self.clampName
                 self.paramsUpdated = True
                 l.unlock()
@@ -463,7 +463,7 @@ class PatchThread(QtCore.QThread):
                     
                     ## analyze trace 
                     result = task.getResult()
-                    #print result[clampName]['raw'].max(), result[clampName]['raw'].min()
+                    #print result[clampName]['primary'].max(), result[clampName]['primary'].min()
                     
                     #print result[clampName]
                     analysis = self.analyze(result[clampName], params)
@@ -520,9 +520,12 @@ class PatchThread(QtCore.QThread):
             pred2 = [iri-ari, iri-ari, 1e-3]
         else:
             clamp = self.manager.getDevice(self.clampName)
-            bridge = float(clamp.getParam('BridgeBalResist'))
-            bridgeOn = clamp.getParam('BridgeBalEnable')
-            if not bridgeOn:
+            try:
+                bridge = float(clamp.getParam('BridgeBalResist'))
+                bridgeOn = clamp.getParam('BridgeBalEnable')
+                if not bridgeOn:
+                    bridge = 0.0
+            except:
                 bridge = 0.0
             #print "bridge:", bridge
             arv = params['icPulse'] * ar - bridge

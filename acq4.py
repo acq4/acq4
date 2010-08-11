@@ -14,6 +14,12 @@ import os, sys
 from numpy import *
 from PyQt4 import QtGui, QtCore
 
+
+## Disable long-term storage of exception stack frames
+## This fixes a potentially major memory leak, but
+## may break some debuggers.
+import disableExceptionStorage
+
 ## Initialize Qt
 app = QtGui.QApplication(sys.argv)
 

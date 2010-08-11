@@ -3,16 +3,17 @@ from __future__ import with_statement
 from lib.modules.Module import *
 from ProtocolRunnerTemplate import *
 from PyQt4 import QtGui, QtCore
-from lib.util.DirTreeModel import *
-from lib.util.configfile import *
-from lib.util.advancedTypes import OrderedDict
-from lib.util.SequenceRunner import *
-from lib.util.WidgetGroup import *
-from lib.util.Mutex import Mutex, MutexLocker
+from DirTreeModel import *
+from configfile import *
+from advancedTypes import OrderedDict
+from SequenceRunner import *
+from WidgetGroup import *
+from Mutex import Mutex, MutexLocker
+from lib.Manager import getManager
 from debug import *
 import ptime
 import analysisModules
-import time
+import time, gc
 import sip
 #import pdb
 
@@ -20,11 +21,23 @@ class Window(QtGui.QMainWindow):
     def __init__(self, pr):
         QtGui.QMainWindow.__init__(self)
         self.pr = pr
+
+        self.stateFile = self.pr.name + '_ui.cfg'
+        uiState = getManager().readConfigFile(self.stateFile)
+        if 'geometry' in uiState:
+            geom = QtCore.QRect(*uiState['geometry'])
+            self.setGeometry(geom)
+            #print "set geometry", geom
+
         
     def closeEvent(self, ev):
+        geom = self.geometry()
+        uiState = {'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
+        getManager().writeConfigFile(uiState, self.stateFile)
+        
         self.pr.quit()
-        ev.ignore()
-        sip.delete(self)
+        #ev.ignore()
+        #sip.delete(self)
 
 class ProtocolRunner(Module):
     def __init__(self, manager, name, config):
@@ -40,7 +53,10 @@ class ProtocolRunner(Module):
         self.ui = Ui_MainWindow()
         self.win = Window(self)
         
+        g = self.win.geometry()
         self.ui.setupUi(self.win)
+        self.win.setGeometry(g)
+        
         self.ui.protoDurationSpin.setOpts(dec=True, bounds=[1e-3,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
         self.ui.protoLeadTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=10e-3, suffix='s', siPrefix=True)
         self.ui.protoCycleTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
@@ -68,9 +84,10 @@ class ProtocolRunner(Module):
         
         #self.updateDeviceList()
         
+        self.taskThread = TaskThread(self)
+        
         self.newProtocol()
         
-        self.taskThread = TaskThread(self)
         
         QtCore.QObject.connect(self.ui.newProtocolBtn, QtCore.SIGNAL('clicked()'), self.newProtocol)
         QtCore.QObject.connect(self.ui.saveProtocolBtn, QtCore.SIGNAL('clicked()'), self.saveProtocol)
@@ -256,7 +273,7 @@ class ProtocolRunner(Module):
         except:
             printExc("Error closing analysis dock:")
         self.win.removeDockWidget(self.analysisDocks[mod])
-        sip.delete(self.analysisDocks[mod])
+        #sip.delete(self.analysisDocks[mod])
         del self.analysisDocks[mod]
         items = self.ui.analysisList.findItems(mod, QtCore.Qt.MatchExactly)
         items[0].setCheckState(QtCore.Qt.Unchecked)
@@ -326,10 +343,12 @@ class ProtocolRunner(Module):
         
     def hideDock(self, dev):
         self.docks[dev].hide()
+        self.docks[dev].widget().disable()
         self.ui.sequenceParamList.removeDevice(dev)
         
     def showDock(self, dev):
         self.docks[dev].show()
+        self.docks[dev].widget().enable()
         self.updateSeqParams(dev)
         #items = self.ui.sequenceParamList.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0)
         #for i in items:
@@ -404,9 +423,14 @@ class ProtocolRunner(Module):
             self.removeAnalysisDock(d)
 
         self.ui.sequenceParamList.clear()
+        
+        ## now's a good time to gree up some memory.
+        QtGui.QApplication.instance().processEvents()
+        gc.collect()
                 
         
     def quit(self):
+        self.stopSingle()
         self.clearDocks()
         Module.quit(self)
 
@@ -424,6 +448,8 @@ class ProtocolRunner(Module):
             #self.ui.saveProtocolBtn.setEnabled(v)
         
     def newProtocol(self):
+        self.stopSingle()
+        
         ## Remove all docks
         self.clearDocks()
         
@@ -480,7 +506,7 @@ class ProtocolRunner(Module):
         return self.protocolList.getFileName(index)
     
     def loadProtocol(self, index=None):
-        
+        self.stopSingle()
         ## Determine selected item
         if index is None:
             sel = list(self.ui.protocolList.selectedIndexes())
@@ -787,11 +813,15 @@ class ProtocolRunner(Module):
             
     def stopSingle(self):
         self.loopEnabled = False
-        self.taskThread.abort()
+        if self.taskThread.isRunning():
+            self.taskThread.abort()
+        self.ui.pauseSequenceBtn.setChecked(False)
         
     def stopSequence(self):
         self.loopEnabled = False
-        self.taskThread.stop()
+        if self.taskThread.isRunning():
+            self.taskThread.stop()
+        self.ui.pauseSequenceBtn.setChecked(False)
     
     def pauseSequence(self, pause):
         self.taskThread.pause(pause)
@@ -1024,6 +1054,8 @@ class TaskThread(QtCore.QThread):
                 runSequence(self.runOnce, self.paramSpace, self.paramSpace.keys(), passHash=True)
             
         except:
+            self.protocol = None  ## free up this memory
+            self.paramSpace = None
             printExc("Error in protocol thread, exiting.")
         #finally:
             #self.emit(QtCore.SIGNAL("protocolFinished()"))
@@ -1065,6 +1097,9 @@ class TaskThread(QtCore.QThread):
             emitSig = True
             while True:
                 l.relock()
+                if self.abortThread or self.stopThread:
+                    l.unlock()
+                    return
                 pause = self.paused
                 l.unlock()
                 if not pause:

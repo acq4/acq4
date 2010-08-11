@@ -72,6 +72,10 @@ class DeviceTask:
         self.dev = dev
         self.cmd = cmd
     
+    def getConfigOrder(self):
+        """return lists of devices that should be configured (before, after) this device"""
+        return ([], [])
+    
     def configure(self, tasks, startOrder):
         pass
     
@@ -111,9 +115,22 @@ class ProtocolGui(QtGui.QWidget):
         QtGui.QWidget.__init__(self)
         self.dev = dev
         self.prot = prot
-        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)        ## called at the beginning of a protocol/sequence
-        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('taskStarted'), self.taskStarted)     ## called at the beginning of all protocol runs
-        QtCore.QObject.connect(self.prot.taskThread, QtCore.SIGNAL('finished()'), self.protocolFinished) ## called at the end of a protocol/sequence
+        self._PGConnected = False
+        self.enable()
+        
+    def enable(self):
+        if not self._PGConnected:
+            QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)        ## called at the beginning of a protocol/sequence
+            QtCore.QObject.connect(self.prot, QtCore.SIGNAL('taskStarted'), self.taskStarted)     ## called at the beginning of all protocol runs
+            QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolFinished'), self.protocolFinished) ## called at the end of a protocol/sequence
+            self._PGConnected = True
+        
+    def disable(self):
+        if self._PGConnected:
+            QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)
+            QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('taskStarted'), self.taskStarted)
+            QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolFinished'), self.protocolFinished)
+            self._PGConnected = False
         
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
@@ -151,9 +168,7 @@ class ProtocolGui(QtGui.QWidget):
         pass
 
     def quit(self):
-        QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)
-        QtCore.QObject.disconnect(self.prot.taskThread, QtCore.SIGNAL('taskStarted'), self.taskStarted)
-        QtCore.QObject.disconnect(self.prot.taskThread, QtCore.SIGNAL('finished()'), self.protocolFinished)
+        self.disable()
 
 
 

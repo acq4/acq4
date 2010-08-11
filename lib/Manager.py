@@ -60,7 +60,7 @@ class Manager(QtCore.QObject):
         
         if argv is not None:
             try:
-                opts, args = getopt.getopt(argv, 'c:m:b:s:n', ['config=', 'module=', 'baseDir=', 'storageDir=', 'noManager'])
+                opts, args = getopt.getopt(argv, 'c:m:b:s:d:n', ['config=', 'module=', 'baseDir=', 'storageDir=', 'disable=', 'noManager'])
             except getopt.GetoptError, err:
                 print str(err)
                 print """
@@ -70,6 +70,7 @@ Valid options are:
     -b --baseDir=    base directory to use
     -s --storageDir= storage directory to use
     -n --noManager   Do not load manager module
+    -d --disable=    Disable the device specified
 """
         QtCore.QObject.__init__(self)
         self.alreadyQuit = False
@@ -85,6 +86,7 @@ Valid options are:
         self.baseDir = None
         self.interface = None
         self.shortcuts = []
+        self.disableDevs = []
         
         ## Handle command line options
         loadModules = []
@@ -102,6 +104,8 @@ Valid options are:
                 setStorageDir = a
             elif o in ['-n', '--noManager']:
                 loadManager = False
+            elif o in ['-d', '--disable']:
+                self.disableDevs.append(a)
             else:
                 print "Unhandled option", o, a
         
@@ -174,6 +178,9 @@ Valid options are:
         for key in cfg:
             if key == 'devices':
                 for k in cfg['devices']:
+                    if k in self.disableDevs:
+                        print "=== Ignoring device '%s' -- disabled by request ===" % k
+                        continue
                     print "\n=== Configuring device '%s' ===" % k
                     try:
                         conf = None
@@ -243,7 +250,7 @@ Valid options are:
         self.quit()
     
     def readConfigFile(self, fileName, missingOk=True):
-        fileName = os.path.join(self.configDir, fileName)
+        fileName = self.configFileName(fileName)
         if os.path.isfile(fileName):
             return configfile.readConfigFile(fileName)
         else:
@@ -253,9 +260,14 @@ Valid options are:
                 raise Exception('Config file "%s" not found.' % fileName)
             
     def writeConfigFile(self, data, fileName):
-        fileName = os.path.join(self.configDir, fileName)
+        fileName = self.configFileName(fileName)
+        dirName = os.path.dirname(fileName)
+        if not os.path.exists(dirName):
+            os.makedirs(dirName)
         return configfile.writeConfigFile(data, fileName)
         
+    def configFileName(self, name):
+        return os.path.join(self.configDir, name)
     
     def loadDevice(self, driverName, conf, name):
         """Load the code for a device. For this to work properly, there must be 
@@ -591,12 +603,34 @@ class Task:
                 
             prof.mark('reserve')
 
+            ## Determine order of device configuration.
+            configOrder = self.tasks.keys()
+            for devName in self.tasks.keys():
+                before, after = self.tasks[devName].getConfigOrder()
+                for d in before: 
+                    if d not in configOrder:
+                        continue
+                    i1 = configOrder.index(devName)
+                    i2 = configOrder.index(d)
+                    if i2 > i1:
+                        configOrder.pop(i2)
+                        configOrder.insert(i1, d)
+                for d in after: 
+                    if d not in configOrder:
+                        continue
+                    i1 = configOrder.index(devName)
+                    i2 = configOrder.index(d)
+                    if i2 < i1:
+                        configOrder.pop(i2)
+                        configOrder.insert(i1+1, d)
+                
+
             ## Configure all subtasks. Some devices may need access to other tasks, so we make all available here.
             ## This is how we allow multiple devices to communicate and decide how to operate together.
             ## Each task may modify the startOrder list to suit its needs.
             #print "Configuring subtasks.."
             self.startOrder = self.devs.keys()
-            for devName in self.tasks:
+            for devName in configOrder:
                 self.tasks[devName].configure(self.tasks, self.startOrder)
                 prof.mark('configure %s' % devName)
             #print "done"

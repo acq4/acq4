@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Wed Sep 16 13:30:08 2009
-#      by: PyQt4 UI code generator 4.5.4
+# Created: Fri Aug  6 13:04:13 2010
+#      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -66,7 +66,7 @@ class Ui_Form(object):
         self.packingSpin.setMinimum(0.1)
         self.packingSpin.setMaximum(3.0)
         self.packingSpin.setSingleStep(0.1)
-        self.packingSpin.setProperty("value", QtCore.QVariant(1.0))
+        self.packingSpin.setProperty("value", 1.0)
         self.packingSpin.setObjectName("packingSpin")
         self.gridLayout.addWidget(self.packingSpin, 2, 0, 1, 1)
         self.label_7 = QtGui.QLabel(Form)

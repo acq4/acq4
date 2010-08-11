@@ -26,7 +26,8 @@ class Microscope(Device):
                 self.axisOrder = config['axisOrder']
                 
             self.posDev = dm.getDevice(config['positionDevice'])
-            nax = len(self.posDev.getPosition())
+            pos = self.posDev.getPosition()
+            nax = len(pos)
             self.position = [0.0,] * nax
             if 'positionScale' in config:
                 ps = config['positionScale']
@@ -36,6 +37,7 @@ class Microscope(Device):
                     self.positionScale = (ps,) * nax
             else:
                 self.positionScale = (1.0,) * nax
+            self.positionChanged({'abs': pos, 'rel': pos})
             QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
         else:
             self.position = [0.0, 0.0]

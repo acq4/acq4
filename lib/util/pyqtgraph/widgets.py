@@ -868,11 +868,16 @@ class CircleROI(EllipseROI):
         self.addScaleHandle([0.5*2.**-0.5 + 0.5, 0.5*2.**-0.5 + 0.5], [0.5, 0.5])
         
 class PolygonROI(ROI):
-    def __init__(self, positions, **args):
-        ROI.__init__(self, [0,0], [100,100], **args)
+    def __init__(self, positions, pos=None, **args):
+        if pos is None:
+            pos = [0,0]
+        ROI.__init__(self, pos, [1,1], **args)
         #ROI.__init__(self, positions[0])
         for p in positions:
             self.addFreeHandle(p)
+            
+    def listPoints(self):
+        return [p['item'].pos() for p in self.handles]
             
     def movePoint(self, *args, **kargs):
         ROI.movePoint(self, *args, **kargs)

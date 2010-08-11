@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from lib.devices.Device import *
-import serial
+from SignalProxy import *
+import serial, os, time
 from lib.util.Mutex import Mutex, MutexLocker
 #import pdb
 
@@ -11,11 +12,21 @@ class SerialMouse(Device):
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.port = config['port']
         self.scale = config['scale']
-        self.mThread = MouseThread(self)
         self.pos = [0, 0]
         self.buttons = [0, 0]
+        
+        ## Reload the last known state of the mouse if it was last modified recently enough 
+        self.stateFile = self.name + "_last_state.cfg"
+        state = dm.readConfigFile(self.stateFile)
+        if state != {} and time.time() - state.get('time', 0) < 36000:
+            self.pos = state['pos']
+            self.buttons = state['buttons']
+        
+        self.mThread = MouseThread(self, self.pos[:])
         QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('positionChanged'), self.posChanged)
         QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('buttonChanged'), self.btnChanged)
+        self.proxy1 = proxyConnect(self, QtCore.SIGNAL('positionChanged'), self.storeState, 5.0) ## wait 5 seconds before writing changes 
+        self.proxy2 = proxyConnect(self, QtCore.SIGNAL('switchChanged'), self.storeState, 5.0) ## wait 5 seconds before writing changes 
         self.mThread.start()
         
     def quit(self):
@@ -34,7 +45,10 @@ class SerialMouse(Device):
         #print "Mouse: posChanged emit.."
         self.emit(QtCore.SIGNAL('positionChanged'), {'rel': rel, 'abs': ab})
         #print "Mouse: posChanged done"
-        
+
+    def storeState(self, *args):
+        self.dm.writeConfigFile({'pos': self.pos, 'buttons': self.buttons, 'time': time.time()}, self.stateFile)
+
     def btnChanged(self, btns):
         #print "Mouse: btnChanged"
         with MutexLocker(self.lock):
@@ -83,12 +97,15 @@ class SMInterface(QtGui.QLabel):
     
     
 class MouseThread(QtCore.QThread):
-    def __init__(self, dev):
+    def __init__(self, dev, startPos=None):
         QtCore.QThread.__init__(self)
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.dev = dev
         self.port = self.dev.port
-        self.pos = [0, 0]
+        if startPos is None:
+            self.pos = [0, 0]
+        else:
+            self.pos = startPos
         self.btns = [0, 0]
         
     def run(self):

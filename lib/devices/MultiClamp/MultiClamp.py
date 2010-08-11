@@ -68,6 +68,12 @@ class MultiClamp(Device):
                 pass
             raise
 
+    def listChannels(self):
+        chans = {}
+        for ch in ['commandChannel', 'primaryChannel', 'secondaryChannel']:
+            chans[ch] = self.config[ch]
+        return chans
+
     def quit(self):
         mc = MultiClampDriver.instance()
         if mc is not None:
@@ -273,6 +279,10 @@ class MultiClampTask(DeviceTask):
             #if 'command' not in self.cmd:
                 #self.cmd['command'] = None
 
+    def getConfigOrder(self):
+        """return lists of devices that should be configured (before, after) this device"""
+        return ([], [self.dev.getDAQName()])
+
     def configure(self, tasks, startOrder):
         """Sets the state of a remote multiclamp to prepare for a program run."""
         #print "mc configure"
@@ -345,6 +355,9 @@ class MultiClampTask(DeviceTask):
         ## Is this the correct DAQ device for any of my channels?
         ## create needed channels + info
         ## write waveform to command channel if needed
+        
+        ## NOTE: no guarantee that self.configure has been run before createChannels is called! 
+        
         with MutexLocker(self.dev.lock):
             
             for ch in self.getUsedChannels():

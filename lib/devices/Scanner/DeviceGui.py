@@ -47,7 +47,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         #self.ui.view.invertY()
 
         QtCore.QObject.connect(self.ui.calibrateBtn, QtCore.SIGNAL('clicked()'), self.calibrateClicked)
-        QtCore.QObject.connect(self.ui.testBtn, QtCore.SIGNAL('clicked()'), self.testClicked)
+        QtCore.QObject.connect(self.ui.storeCamConfBtn, QtCore.SIGNAL('clicked()'), self.storeCamConf)
         QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteClicked)
 
     def updateCalibrationList(self):
@@ -64,6 +64,10 @@ class ScannerDeviceGui(QtGui.QWidget):
                     item = QtGui.QTreeWidgetItem([cam, obj, laser, str(spot), date])
                     self.ui.calibrationList.addTopLevelItem(item)
         
+        
+    def storeCamConf(self):
+        cam = str(self.ui.cameraCombo.currentText())
+        self.dev.storeCameraConfig(cam)
         
     def calibrateClicked(self):
         cam = str(self.ui.cameraCombo.currentText())
@@ -89,9 +93,6 @@ class ScannerDeviceGui(QtGui.QWidget):
         #cal.write(os.path.join(self.dev.config['calibrationDir'], fileName))
         
         self.updateCalibrationList()
-
-    def testClicked(self):
-        pass
 
     def deleteClicked(self):
         cur = self.ui.calibrationList.currentItem()
@@ -315,17 +316,18 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## Camera settings to use during scan
         binning = (2, 2)
         exposure = 0.003
-        params = {'CLEAR_MODE': 'CLEAR_PRE_EXPOSURE', 'GAIN_INDEX': 3}
         
         camera = str(self.ui.cameraCombo.currentText())
         laser = str(self.ui.laserCombo.currentText())
+        
+        camParams = self.dev.getCameraConfig(camera)        
         
         duration = 4.0
         rate = 10000
         nPts = int(rate * duration)
         sweeps = 20
 
-        cameraTrigger = ones(nPts, dtype=byte)
+        #cameraTrigger = ones(nPts, dtype=byte)
 
         (cmdMin, cmdMax) = self.dev.config['commandLimits']
         cmdRange = cmdMax - cmdMin
@@ -343,7 +345,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## Record 10 camera frames with the shutter closed 
         cmd = {
             'protocol': {'duration': 0.0},
-            camera: {'record': True, 'minFrames': 10, 'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3, 'pushState': 'scanProt', 'popState': 'scanProt'},  ## binning/params are specific for QuantEM512
+            camera: {'record': True, 'minFrames': 10, 'params': camParams, 'pushState': 'scanProt', 'popState': 'scanProt'},  ## binning/params are specific for QuantEM512
             laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
         task = lib.Manager.getManager().createTask(cmd)
@@ -355,15 +357,16 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## Record full scan.
         cmd = {
             'protocol': {'duration': duration},
-            camera: {'record': True, 'triggerMode': 'TriggerStart', 'channels': {
+            camera: {'record': True, 'triggerProtocol': True, 'params': camParams, 'channels': {
                 'exposure': {'record': True}, 
-                'trigger': {'preset': 0, 'command': cameraTrigger}},
-                'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3, 
+                #'trigger': {'preset': 0, 'command': cameraTrigger}
+                },
+                #'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3, 
                 'pushState': 'scanProt', 'popState': 'scanProt'},
             laser: {'Shutter': {'preset': 1, 'holding': 0}},
             #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
             self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},
-            daqName: {'numPts': nPts, 'rate': rate}
+            daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}
         }
 
         task = lib.Manager.getManager().createTask(cmd)

@@ -18,6 +18,9 @@ class DaqChannelGui(QtGui.QWidget):
         ## Name of this channel
         self.name = name
         
+        ## PArent protoGui object
+        self.protoGui = weakref.ref(parent)
+        
         ## Configuration for this channel defined in the device configuration file
         self.config = config
         
@@ -28,11 +31,11 @@ class DaqChannelGui(QtGui.QWidget):
         self.dev = dev
         
         ## The protocol GUI window which contains this object
-        self.prot = prot
+        self.prot = weakref.ref(prot)
         
         ## Make sure protocol interface includes our DAQ device
         self.daqDev = self.dev.getDAQName(self.name)
-        self.daqUI = self.prot.getDevice(self.daqDev)
+        self.daqUI = self.prot().getDevice(self.daqDev)
         
         ## plot widget
         self.plot = plot
@@ -155,8 +158,14 @@ class OutputChannelGui(DaqChannelGui):
                 s.setOpts(dec=True, range=[None, None], step=1.0, minStep=1e-12, siPrefix=True)
 
         QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
-        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('changed'), self.updateWaves)
+        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('dataChanged'), self.updateWaves)
+        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('functionChanged'), self.waveFunctionChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
+        QtCore.QObject.connect(self.ui.holdingCheck, QtCore.SIGNAL('stateChanged(int)'), self.holdingCheckChanged)
+        QtCore.QObject.connect(self.ui.holdingSpin, QtCore.SIGNAL('delayedChange'), self.holdingSpinChanged)
+        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.updateHolding)
+        
+        self.holdingCheckChanged()
 
     def getSpins(self):
         return (self.ui.preSetSpin, self.ui.holdingSpin)
@@ -170,6 +179,12 @@ class OutputChannelGui(DaqChannelGui):
         DaqChannelGui.quit(self)
         if not sip.isdeleted(self.daqUI):
             QtCore.QObject.disconnect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
+        QtCore.QObject.disconnect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('dataChanged'), self.updateWaves)
+        QtCore.QObject.disconnect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('functionChanged'), self.waveFunctionChanged)
+        QtCore.QObject.disconnect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
+        QtCore.QObject.disconnect(self.ui.holdingCheck, QtCore.SIGNAL('stateChanged(int)'), self.holdingCheckChanged)
+        QtCore.QObject.disconnect(self.ui.holdingSpin, QtCore.SIGNAL('delayedChange'), self.holdingSpinChanged)
+        QtCore.QObject.disconnect(self.dev, QtCore.SIGNAL('holdingChanged'), self.updateHolding)
     
     def daqChanged(self, state):
         self.rate = state['rate']
@@ -260,17 +275,44 @@ class OutputChannelGui(DaqChannelGui):
 
     def getSingleWave(self, params=None):
         state = self.stateGroup.state()
-        if state['holdingCheck']:
-            h = state['holdingSpin']
-        else:
-            h = 0.0
-            
-        self.ui.waveGeneratorWidget.setOffset(h)
+        h = self.getHoldingValue()
+        if h is not None:
+            self.ui.waveGeneratorWidget.setOffset(h)
         
         wave = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
         
         return wave
         
+    def holdingCheckChanged(self, *v):
+        self.ui.holdingSpin.setEnabled(self.ui.holdingCheck.isChecked())
+        self.updateHolding()
+        
+    def holdingSpinChanged(self, *args):
+        hv = self.getHoldingValue()
+        if hv is not None:
+            self.ui.waveGeneratorWidget.setOffset(hv)
+        
+        
+    def updateHolding(self):
+        hv = self.getHoldingValue()
+        if hv is not None:
+            if not self.ui.holdingCheck.isChecked():
+                self.ui.holdingSpin.setValue(hv)
+            self.ui.waveGeneratorWidget.setOffset(hv)
+            
+    def getHoldingValue(self):
+        """Return the value for this channel that will be used when the protocol is run
+        (by default, this is just the current holding value)"""
+        if self.ui.holdingCheck.isChecked():
+            return self.ui.holdingSpin.value()
+        else:
+            return self.protoGui().getChanHolding(self.name)
+        
+    def waveFunctionChanged(self):
+        if self.ui.waveGeneratorWidget.functionString() != "":
+            self.ui.functionCheck.setChecked(True)
+        else:
+            self.ui.functionCheck.setChecked(False)
         
 class InputChannelGui(DaqChannelGui):
     def __init__(self, *args):

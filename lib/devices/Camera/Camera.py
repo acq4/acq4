@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from Mutex import Mutex
 #from lib.devices.Device import *
 from PyQt4 import QtCore
 import time
@@ -20,18 +21,13 @@ class Camera(DAQGeneric):
      - Subclasses may need to create their own AcquireThread
 
     The list/get/setParams functions should implement a few standard items:
-    (Note: these values are just examples, but the data types must be the same.)
-
+    (Note: these number values are just examples, but the data types and strings must be the same.)
         triggerMode:     str, ['Normal', 'TriggerStart', 'Strobe', 'Bulb']
         triggerType:     str, ['Software', 'Hardware']
         exposure:        float, (0.0, 10.0)
         exposureMode:    str, ['Exact', 'Maximize']
-        binning:         int, [1,2,4,8,16]
-        region:          dict, {
-                            'x': (int, (0, 511)), 
-                            'y': (int, (0, 511)), 
-                            'w': (int, (1, 512)), 
-                            'h': (int, (1, 512))  } 
+        binning:         (int,int) , [[1,2,4,8,16], [1,2,4,8,16]]
+        region:          (int, int, int, int), [(0, 511), (0, 511), (1, 512), (1, 512)] #[x, y, w, h]
         gain:            float, (0.1, 10.0)
 
     The configuration for these devices should look like:
@@ -50,6 +46,7 @@ class Camera(DAQGeneric):
 
 
     def __init__(self, dm, config, name):
+        self.lock = Mutex(Mutex.Recursive)
 
         # Generate config to use for DAQ 
         daqConfig = {}
@@ -384,10 +381,13 @@ class CameraTask(DAQGenericTask):
         ## Merge command into default values:
         prof = Profiler('Camera.CameraTask.configure', disabled=True)
         #print "CameraTask.configure"
+        
+        ## set default parameters, load params from command
         params = {
             'triggerMode': 'Normal',
             #'recordExposeChannel': False
         }
+        params.update(self.camCmd['params'])
         
         #print "pushState..."
         if 'pushState' in self.camCmd:
@@ -395,10 +395,10 @@ class CameraTask(DAQGenericTask):
             self.dev.pushState(stateName)
         #time.sleep(0.5)
         
-        nonCameraParams = ['channels', 'record', 'triggerProtocol', 'pushState', 'popState', 'minFrames']
-        for k in self.camCmd:
-            if k not in nonCameraParams:
-                params[k] = self.camCmd[k]
+        #nonCameraParams = ['channels', 'record', 'triggerProtocol', 'pushState', 'popState', 'minFrames']
+        #for k in self.camCmd:
+            #if k not in nonCameraParams:
+                #params[k] = self.camCmd[k]
         #for k in defaults:
             #if k not in self.camCmd:
                 #self.camCmd[k] = defaults[k]
@@ -624,7 +624,7 @@ class CameraTask(DAQGenericTask):
             expLen = (offTimes[1:len(onTimes)] - onTimes[1:len(offTimes)]).mean()
             
             
-            if self.camCmd['triggerMode'] == 'Normal' and (('triggerProtocol' not in self.camCmd) or (not self.camCmd['triggerProtocol'])):
+            if self.camCmd['params']['triggerMode'] == 'Normal' and (('triggerProtocol' not in self.camCmd) or (not self.camCmd['triggerProtocol'])):
                 ## Can we make a good guess about frame times even without having triggered the first frame?
                 ## frames are marked with their arrival time. We will assume that a frame most likely 
                 ## corresponds to the last complete exposure signal. 

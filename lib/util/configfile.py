@@ -55,8 +55,10 @@ def genString(data, indent=''):
     for k in data:
         sk = str(k)
         if len(sk) == 0:
-            raise Exception('blank dict keys not allowed')
+            print data
+            raise Exception('blank dict keys not allowed (see data above)')
         if sk[0] == ' ' or ':' in sk:
+            print data
             raise Exception('dict keys must not contain ":" or start with spaces [offending key is "%s"]' % sk)
         if isinstance(data[k], dict):
             s += indent + sk + ':\n'
