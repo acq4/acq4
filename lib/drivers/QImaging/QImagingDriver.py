@@ -235,12 +235,22 @@ class QCameraClass:
     
     def convertUnitsToCamera(self, param, value):
         if param in self.unitConversionDict:
-            return value/self.unitConversionDict[param]
+            if type(value) == list:
+                for i in range(len(value)):
+                    value[i] = value[i]/self.unitConversionDict[param]
+                return value
+            elif type(value) == tuple:
+                return (value[0]/self.unitConversionDict[param], value[1]/self.unitConversionDict[param])
         else: return value
         
     def convertUnitsToAcq4(self, param, value):
         if param in self.unitConversionDict:
-            return value * self.unitConversionDict[param]
+            if type(value) == list:
+                for i in range(len(value)):
+                    value[i] = value[i]*self.unitConversionDict[param]
+                return value
+            elif type(value) == tuple:
+                return (value[0]*self.unitConversionDict[param], value[1]*self.unitConversionDict[param])        
         else: return value
     
         
@@ -344,7 +354,7 @@ class QCameraClass:
             if type(self.paramAttrs[x][0]) != tuple:
                 self.paramAttrs[x][0] = self.getNameFromEnum(x, self.paramAttrs[x][0])
         for x in self.paramAttrs:
-            self.paramAttrs[x][0] = self.convertUnitsToAcq4(x, self.paramAttrs[x][0]) ####problematic because tuples are immutable...
+            self.paramAttrs[x][0] = self.convertUnitsToAcq4(x, self.paramAttrs[x][0]) 
         
         
         return self.paramAttrs
