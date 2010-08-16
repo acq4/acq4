@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>379</width>
-    <height>232</height>
+    <width>424</width>
+    <height>256</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -136,6 +136,13 @@
             </size>
            </property>
           </spacer>
+         </item>
+         <item row="6" column="0">
+          <widget class="QCheckBox" name="colorTracesCheck">
+           <property name="text">
+            <string>Color Traces by Laser Power</string>
+           </property>
+          </widget>
          </item>
         </layout>
        </widget>

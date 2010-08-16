@@ -542,7 +542,6 @@ class QCameraClass:
             array = ascontiguousarray(empty(s/2, dtype=uint16))
             #array = ascontiguousarray(empty(s, dtype=uint16))
             frame.bufferSize = s*4
-        
         #print "frameshape:", frame.shape
         print 's:', s, "h:", self.getParam('regionH'), 'w:', self.getParam('regionW')
         array.shape=(self.getParam('regionH'), self.getParam('regionW') )

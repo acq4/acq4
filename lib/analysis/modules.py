@@ -102,15 +102,15 @@ class EventMatchWidget(QtGui.QSplitter):
             self.analysisPlot.hide()
             self.ctrlWidget.hide()
         
-    def setData(self, data, analyze=True):
+    def setData(self, data, pens=None, analyze=True):
         self.data = data
         if (type(data) is list and isinstance(data[0], ndarray)) or (isinstance(data, ndarray) and data.ndim >= 2):
-            self.recalculate(analyze=analyze)
+            self.recalculate(pens=pens, analyze=analyze)
         else:
             raise Exception("Data for event match widget must be a list of arrays or an array with ndim >= 2.")
         
-    def recalculate(self, analyze=True):
-        self.events = self.processData(self.data, display=True, analyze=analyze)
+    def recalculate(self, pens=None, analyze=True):
+        self.events = self.processData(self.data, pens=pens, display=True, analyze=analyze)
         self.emit(QtCore.SIGNAL('outputChanged'), self)
         #print "Events:", self.events
         ##display events
@@ -197,10 +197,11 @@ class EventMatchWidget(QtGui.QSplitter):
             raise Exception("Event detection method not implemented yet.")
         return events
         
-    def processData(self, data, display=False, analyze=True):
+    def processData(self, data, pens=None, display=False, analyze=True):
         """Returns a list of record arrays - each record array contains the events detected in one trace.
                 Arguments:
-                    data - a list of traces"""
+                    data - a list of traces
+                    pens - a list of pens to write traces with, if left blank traces will all be different colors"""
                     
         ## Clear plots
         if display:
@@ -211,11 +212,16 @@ class EventMatchWidget(QtGui.QSplitter):
         events = []
 
         ## Plot raw data
-        for i in range(len(data)):
-            if display:
-                color = float(i)/(len(data))*0.7
-                pen = mkPen(hsv=[color, 0.8, 0.7])
-                self.dataPlot.plot(data[i], pen=pen)
+        if display:
+            if pens == None:
+                for i in range(len(data)):
+                    color = float(i)/(len(data))*0.7
+                    pen = mkPen(hsv=[color, 0.8, 0.7])
+                    self.dataPlot.plot(data[i], pen=pen)
+            else:
+                for i in range(len(data)):
+                    self.dataPlot.plot(data[i], pen=pens[i])
+                    
         
         if not (analyze and self.analysisEnabled):
             return []
@@ -240,8 +246,10 @@ class EventMatchWidget(QtGui.QSplitter):
             
             ## Plot filtered data, stacked events
             if display:
-                color = float(i)/(len(data))*0.7
-                pen = mkPen(hsv=[color, 0.8, 0.7])
+                if pens == None:
+                    color = float(i)/(len(data))*0.7
+                    pen = mkPen(hsv=[color, 0.8, 0.7])
+                else: pen = pens[i]
                 
                 self.analysisPlot.plot(ppd, x=timeVals, pen=pen)
                 tg = VTickGroup(view=self.analysisPlot)
@@ -343,6 +351,9 @@ class UncagingWindow(QtGui.QMainWindow):
         self.colorScaleBar = ColorScaleBar(self.canvas.view, [10,150], [-10,-10])
         self.colorScaleBar.setZValue(1000000)
         self.canvas.view.scene().addItem(self.colorScaleBar)
+        #self.traceColorScale = ColorScaleBar(self.plot.dataPlot, [10,150], [-10,-10])
+        #self.traceColorScale.setZValue(1000000)
+        #self.plot.dataPlot.layout.addItem(self.traceColorScale, 2,2)
         QtCore.QObject.connect(self.ctrl.recolorBtn, QtCore.SIGNAL('clicked()'), self.recolor)
         self.ctrl.directTimeSpin.setValue(4.0)
         self.ctrl.poststimTimeSpin.setRange(1.0, 1000.0)
@@ -529,12 +540,16 @@ class UncagingWindow(QtGui.QMainWindow):
         
     #def findEvents(self, data):
         #return findEvents(data, noiseThreshold=self.noiseThreshold)
-    def getLaserTime(self, d):
+    def getLaserTime(self, dh):
         """Returns the time of laser stimulation in seconds.
                 Arguments:
-                    d - a directory handle"""
-        q = d.getFile('Laser-UV.ma').read()['QSwitch']
+                    dh - a directory handle"""
+        q = dh.getFile('Laser-UV.ma').read()['QSwitch']
         return argmax(q)/q.infoCopy()[-1]['rate']
+        
+    def getLaserPower(self, dh):
+        q = dh.getFile('Laser-UV.ma').read()['QSwitch']
+        return len(argwhere(q > 0))/q.infoCopy()[-1]['rate']
         
     def getEventLists(self, i):
         #if not self.plot.analysisEnabled:
@@ -705,13 +720,31 @@ class UncagingWindow(QtGui.QMainWindow):
             d = self.loadTrace(s)
             if d is not None:
                 self.currentTraces.append(d)
-            #if hasattr(i, 'source') and i.source is not None:
-                #print 'postEvents:', self.analysisCache[i.index]['postEvents']
-                #print 'postChargeNeg:', self.analysisCache[i.index]['postChargeNeg']
-        self.plot.setData([i[0]['Channel':'primary'] for i in self.currentTraces], analyze=analyze)
+        if self.ctrl.colorTracesCheck.isChecked():
+            pens, max, min = self.assignPens(self.currentTraces)
+            data = [i[0]['Channel':'primary'] for i in self.currentTraces]
+            self.plot.setData(data, pens=pens, analyze=analyze)
+            #gradient = QtGui.QLinearGradient(QtCore.QPointF(0,0), QtCore.QPointF(1,0))
+            #self.traceColorScale.show()
+            #self.traceColorScale.setGradient
+            #self.colorScaleBar.setLabels({str(max):1, str(min):0}
+        else:
+            self.plot.setData([i[0]['Channel':'primary'] for i in self.currentTraces], analyze=analyze)
         return spots
         
-
+    def assignPens(self, data):
+        laserStrength = []
+        for i in range(len(data)):
+            laserStrength.append(self.getLaserPower(data[i][1]))
+        m = max(laserStrength)
+        n = min(laserStrength)
+        pens = []
+        for x in laserStrength:
+            color = (1-x/m)*0.7
+            pens.append(mkPen(hsv=[color, 0.8, 0.7]))
+        return pens, m, n
+            
+        
         
     def loadTrace(self, item):
         """Returns a tuple where the first element is a clamp.ma, and the second is its directory handle."""
