@@ -532,18 +532,28 @@ class QCameraClass:
     def mkFrame(self):
         #s = self.call(lib.GetInfo, self.handle, lib.qinfImageWidth)[2] * self.call(lib.GetInfo, self.handle, lib.qinfImageHeight)[2]
         s = self.call(lib.GetInfo, self.handle, lib.qinfImageSize)[2] ## ImageSize returns the size in bytes
+        imForm = self.getParam('qprmImageFormat')
         #print 'mkFrame: s', s
-        f = lib.Frame()
-        #frame = ascontiguousarray(empty(s/2, dtype=uint16))
-        frame = ascontiguousarray(empty(s, dtype=uint16))
+        frame = lib.Frame()
+        if imForm in ['qfmtMono8']:
+            array = ascontiguousarray(empty(s, dtype=uint16))
+            frame.bufferSize = s*4
+        elif imForm in ['qfmtMono16']:
+            array = ascontiguousarray(empty(s/2, dtype=uint16))
+            #array = ascontiguousarray(empty(s, dtype=uint16))
+            frame.bufferSize = s*4
+        
         #print "frameshape:", frame.shape
-        #print "h:", self.getParam('regionH'), 'w:', self.getParam('regionW')
-        frame.shape=(self.getParam('regionH'), self.getParam('regionW') )
-        frame = frame.transpose()
+        print 's:', s, "h:", self.getParam('regionH'), 'w:', self.getParam('regionW')
+        array.shape=(self.getParam('regionH'), self.getParam('regionW') )
+        array = array.transpose()
+        frame.pBuffer = array.ctypes.data
+        for x in array:
+            x = 1000
         #print 'mkFrame: frame.shape', frame.shape
-        f.pBuffer = frame.ctypes.data
-        f.bufferSize = s
-        return (f, frame)
+        
+        
+        return (frame, array)
     
     def grabFrame(self):
         s = lib.GetInfo(handle, lib.qinfImageSize)[2]

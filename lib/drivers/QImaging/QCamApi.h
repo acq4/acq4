@@ -704,18 +704,18 @@ QCam_CamListItem;
 //
 typedef struct
 {
-	void*				pBuffer;			// Image buffer, 4-byte aligned					IN / OUT
+	void*			pBuffer;			// Image buffer, 4-byte aligned				IN / OUT
 	unsigned long		bufferSize;			// Length of the buffer (pBuffer), in bytes		IN
 
-	unsigned long		format;				// Format of image								OUT
-	unsigned long		width;				// Image width, in pixels						OUT
-	unsigned long		height;				// Image height, in pixels						OUT
-	unsigned long		size;				// Size of image data, in bytes					OUT
-	unsigned short		bits;				// Bit depth									OUT
-	unsigned short		frameNumber;		// Rolling frame number							OUT
-	unsigned long		bayerPattern;		// For bayer CCDs, the mosaic pattern			OUT
+	unsigned long		format;				// Format of image					OUT
+	unsigned long		width;				// Image width, in pixels				OUT
+	unsigned long		height;				// Image height, in pixels				OUT
+	unsigned long		size;				// Size of image data, in bytes				OUT
+	unsigned short		bits;				// Bit depth						OUT
+	unsigned short		frameNumber;			// Rolling frame number					OUT
+	unsigned long		bayerPattern;			// For bayer CCDs, the mosaic pattern			OUT
 	unsigned long		errorCode;			// Error code for the frame (see QCam_Err)		OUT
-	unsigned long		timeStamp;			// Exposure time stamp							OUT
+	unsigned long		timeStamp;			// Exposure time stamp					OUT
 
 	unsigned long		_reserved[ 8 ];
 }
