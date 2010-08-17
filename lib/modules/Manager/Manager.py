@@ -13,7 +13,6 @@ class Manager(Module):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
         self.stateFile = os.path.join(self.name + '_ui.cfg')
-
         self.devRackDocks = {}
         for d in self.manager.listDevices():
             try:
@@ -33,7 +32,7 @@ class Manager(Module):
 
         self.updateModList()
         self.updateConfList()
-        
+
         QtCore.QObject.connect(self.ui.loadConfigBtn, QtCore.SIGNAL('clicked()'), self.loadConfig)
         QtCore.QObject.connect(self.ui.loadModuleBtn, QtCore.SIGNAL('clicked()'), self.loadModule)
         QtCore.QObject.connect(self.ui.reloadModuleBtn, QtCore.SIGNAL('clicked()'), self.reloadModule)
@@ -48,7 +47,9 @@ class Manager(Module):
         if 'window' in state:
             ws = QtCore.QByteArray.fromPercentEncoding(state['window'])
             self.win.restoreState(ws)
+
         self.win.show()
+
         
     def showMessage(self, *args):
         self.ui.statusBar.showMessage(*args)

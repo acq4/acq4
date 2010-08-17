@@ -44,8 +44,9 @@ externalParams = ['triggerMode',
                   #'triggerType', ## Add this in when we figure out TriggerModes
                   'exposure',
                   #'exposureMode',
-                  'binningX',
-                  'binningY',
+                  'binning',
+                  #'binningX',
+                  #'binningY',
                   'regionX',
                   'regionY',
                   'regionW',
@@ -56,7 +57,7 @@ externalParams = ['triggerMode',
                   'qprmCoolerActive',
                   'qprmS32RegulatedCoolingTemp',
                   'qprmBlackoutMode',
-                  'qprmImageFormat',
+                  #'qprmImageFormat',
                   'qprmSyncb',
                   'ringSize'
                   ]
@@ -150,7 +151,7 @@ class QCameraClass:
         
         ## Some parameters can be accessed as groups
         self.groupParams = {
-            'binning': ['binningX', 'binningY'],
+            #'binning':['binningX', 'binningY']
             'region': ['regionX', 'regionY', 'regionW', 'regionH'],
             'sensorSize': ['qinfCcdWidth', 'qinfCcdHeight'] 
         }
@@ -167,6 +168,7 @@ class QCameraClass:
         self.userToCameraDict = {
             'triggerMode':'qprmTriggerType',
             'exposure':'qprm64Exposure',
+            'binning':'qprmBinning',
             'binningX':'qprmBinning',
             'binningY':'qprmBinning',
             'regionX':'qprmRoiX',
@@ -181,7 +183,7 @@ class QCameraClass:
         self.cameraToUserDict = {
             'qprmTriggerType':'triggerMode',
             'qprm64Exposure':'exposure',
-            'qprmBinning':'binningX',
+            'qprmBinning':'binning',
             'qprmRoiX':'regionX',
             'qprmRoiY':'regionY',
             'qprmRoiWidth':'regionW',
@@ -198,6 +200,8 @@ class QCameraClass:
         
         self.listParams()
         self.getCameraInfo()
+        for x in cameraDefaults['ALL'].keys():
+            self.setParam(x, cameraDefaults['ALL'][x])
             
        
         
@@ -265,6 +269,8 @@ class QCameraClass:
         if param == None:
             return self.fillParamDict(allParams=allParams)
         else:
+            if param in ['binningX', 'binningY']:
+                param = 'binning'
             return self.paramAttrs[param]
 
     def fillParamDict(self, allParams=False):
@@ -442,8 +448,13 @@ class QCameraClass:
             value = self.cameraInfo[param]
         else:
             raise Exception("%s is not recognized as a parameter." %param)
+        if param in ['qprmRoiX', 'qprmRoiY', 'qprmRoiWidth', 'qprmRoiHeight']:
+            value = value * self.getParam('binning')[0]
         v = self.getNameFromEnum(param, value)
-        return v
+        if param != 'qprmBinning':
+            return v
+        elif param == 'qprmBinning':
+            return (v,v)
 
     def setParam(self, param, value, autoRestart=True, autoCorrect=True):
         if param == 'ringSize':
@@ -494,6 +505,7 @@ class QCameraClass:
 
     def setParams(self, params, autoRestart=True, autoCorrect=True): 
         s = self.readSettings()
+        changeTuple = {}
         for x in params:
             if x in self.groupParams:
                 tuples = zip(self.groupParams[x], params[x])
@@ -502,10 +514,17 @@ class QCameraClass:
                     newDict[y[0]]= y[1]
                 return self.setParams(newDict)
         for x in params:
+            changeTuple[x] = False
             if x == 'ringSize':
                 self.ringSize = params[x]
             param = self.translateToCamera(x)
             value = self.translateToCamera(params[x])
+            
+            #### sometimes camera code sends in tuples
+            if type(value) == tuple and value[0]==value[1]:
+                changeTuple[x] = True
+                value = value[0]
+                
             #params[param] = params[x]
             if param in self.paramEnums:
                 value = self.getEnumFromName(param, value)
@@ -536,19 +555,22 @@ class QCameraClass:
         #print 'mkFrame: s', s
         frame = lib.Frame()
         if imForm in ['qfmtMono8']:
-            array = ascontiguousarray(empty(s, dtype=uint16))
-            frame.bufferSize = s*4
+            array = ascontiguousarray(empty(s, dtype=ubyte))
+            frame.bufferSize = s
         elif imForm in ['qfmtMono16']:
             array = ascontiguousarray(empty(s/2, dtype=uint16))
             #array = ascontiguousarray(empty(s, dtype=uint16))
-            frame.bufferSize = s*4
+            frame.bufferSize = s*2
+
         #print "frameshape:", frame.shape
         print 's:', s, "h:", self.getParam('regionH'), 'w:', self.getParam('regionW')
-        array.shape=(self.getParam('regionH'), self.getParam('regionW') )
+        #array.shape=(self.getParam('regionH'), self.getParam('regionW') )
+        array.shape = (self.getParam('regionH')/self.getParam('binning')[0], -1)
         array = array.transpose()
+        print 'array.size', array.size, 'array.shape', array.shape
         frame.pBuffer = array.ctypes.data
-        for x in array:
-            x = 1000
+        #for x in array:
+            #x = 1000
         #print 'mkFrame: frame.shape', frame.shape
         
         
@@ -563,6 +585,8 @@ class QCameraClass:
         return frame
 
     def start(self):
+        self.frames = []
+        self.arrays = []
         #global i, stopsignal
         #self.mutex.lock()
         #self.stopSignal = False
@@ -593,7 +617,7 @@ class QCameraClass:
                     raise QCamFunctionError(args[2], "There was an error during QueueFrame/Callback. Error code = %s" %(x))
         #self.mutex.lock()
         with self.mutex:
-            self.lastImage = (args[1], self.arrays[args[1]]) ### Need to figure out a way to attach settings info (binning, exposure gain region and offset) to frame!!!
+            self.lastImage = (args[1], self.arrays[args[1]]) 
             if self.i != self.ringSize-1:
                 self.i += 1
             else:

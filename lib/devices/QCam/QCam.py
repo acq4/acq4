@@ -38,24 +38,24 @@ class QCam(Camera):
         
         self.cam = self.qcd.getCamera(cams[0]) #open first camera
         
-    def start(self, block=True):
-        if not self.isRunning():
-            #print "  not running already; start camera"
-            Camera.start(self, block)
-            self.startTime = ptime.time()
+    #def start(self, block=True):
+        #if not self.isRunning():
+            ##print "  not running already; start camera"
+            #Camera.start(self, block)
+            #self.startTime = ptime.time()
             
-        if block:
-            tm = self.getParam('triggerMode')
-            if tm != 'Normal':
-                #print "  waiting for trigger to arm"
-                waitTime = 0.3  ## trigger needs about 300ms to prepare (?)
-            else:
-                waitTime = 0
+        #if block:
+            #tm = self.getParam('triggerMode')
+            #if tm != 'Normal':
+                ##print "  waiting for trigger to arm"
+                #waitTime = 0.3  ## trigger needs about 300ms to prepare (?)
+            #else:
+                #waitTime = 0
             
-            sleepTime = (self.startTime + waitTime) - ptime.time()
-            if sleepTime > 0:
-                #print "  sleep for", sleepTime
-                time.sleep(sleepTime)
+            #sleepTime = (self.startTime + waitTime) - ptime.time()
+            #if sleepTime > 0:
+                ##print "  sleep for", sleepTime
+                #time.sleep(sleepTime)
             
     def listParams(self, params=None):
         """List properties of specified parameters, or of all parameters if None"""

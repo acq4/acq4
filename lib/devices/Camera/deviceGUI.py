@@ -51,6 +51,7 @@ class CameraDeviceGui(QtGui.QWidget):
                         step = int(step)
                         w.setRange(mn, mx)
                         w.setSingleStep(step)
+                        #print k, "val:", val, type(val)
                         w.setValue(val)
                     else:
                         w = SpinBox()
