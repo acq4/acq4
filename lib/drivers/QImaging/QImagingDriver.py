@@ -148,6 +148,7 @@ class QCameraClass:
         self.mutex = Mutex(Mutex.Recursive)
         self.lastImage = (0,0)
         self.fnp1 = lib.AsyncCallback(self.callBack1)
+        self.fnpNull = lib.AsyncCallback(self.doNothing)
         
         ## Some parameters can be accessed as groups
         self.groupParams = {
@@ -177,6 +178,9 @@ class QCameraClass:
             'regionH':'qprmRoiHeight',
             'gain':'qprmNormalizedGain',
             'Normal':'qcTriggerFreerun',
+            'TriggerStart':'qcTriggerEdgeHi',
+            'Strobe':'qcTriggerStrobeHi',
+            'Bulb':'qcTriggerPulseHi',
             'bitDepth':'qinfBitDepth'
         }
         
@@ -191,6 +195,9 @@ class QCameraClass:
             'qprmNormalizedGain':'gain',
             'qcTriggerFreerun':'Normal',
             'qcTriggerNone':'Normal',
+            'qcTriggerEdgeHi':'TriggerStart',
+            'qcTriggerStrobeHi':'Strobe',
+            'qcTriggerPulseHi':'Bulb',
             'qinfBitDepth':'bitDepth'
         }
         self.unitConversionDict = {
@@ -239,7 +246,9 @@ class QCameraClass:
     
     def convertUnitsToCamera(self, param, value):
         if param in self.unitConversionDict:
-            if type(value) == list:
+            if type(value) in [int, float]:
+                return value/self.unitConversionDict[param]
+            elif type(value) == list:
                 for i in range(len(value)):
                     value[i] = value[i]/self.unitConversionDict[param]
                 return value
@@ -249,7 +258,9 @@ class QCameraClass:
         
     def convertUnitsToAcq4(self, param, value):
         if param in self.unitConversionDict:
-            if type(value) == list:
+            if type(value) in ['int', 'float']:
+                return value*self.unitConversionDict[param]
+            elif type(value) == list:
                 for i in range(len(value)):
                     value[i] = value[i]*self.unitConversionDict[param]
                 return value
@@ -278,72 +289,71 @@ class QCameraClass:
         The key is the name of the parameter, while the value is a list: [acceptablevalues, isWritable, isReadable, [dependencies]]."""
         s = self.readSettings()
         if allParams:
-            p = (lib('enums', 'QCam_Param'), lib('enums', 'QCam_ParamS32'), lib('enums', 'QCam_Param64'))
+            p = []
+            for x in lib('enums', 'QCam_Param').keys():
+                p.append(x)
+            for x in lib('enums', 'QCam_ParamS32').keys():
+                p.append(x)
+            for x in lib('enums', 'QCam_Param64').keys():
+                p.append(x)
         else:
-            p = (externalParams, externalParams, externalParams)
+            p = externalParams
         #for x in lib('enums', 'QCam_Param'):
-        for x in p[0]:
-            if x in ['qprmS32AbsoluteOffset', 'qprmS32RegulatedCoolingTemp', 'exposure']:
-                continue
+        for x in p:
             if x == 'ringSize':
                 self.paramAttrs[x] = [(2,100), True, True, []]
                 continue
             x = self.translateToCamera(x)
-            try:
-                if self.call(lib.GetParam, byref(s), getattr(lib, x))() == 0:
-                    try: ###first try to get a SparseTable
-                        table = (c_ulong *32)()
-                        r = self.call(lib.GetParamSparseTable, byref(s), getattr(lib,x), table, c_long(32))
-                        self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
-                    except QCamFunctionError, err: ###if sparse table doesn't work try getting a RangeTable
-                        if err.value == 1:  
-                            min = self.call(lib.GetParamMin, byref(s), getattr(lib,x))[2]
-                            max = self.call(lib.GetParamMax, byref(s), getattr(lib,x))[2]
-                            self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
-                        else: raise      
-            except QCamFunctionError, err:
-                if err.value == 1: pass    
-                else: raise
+            if x not in ['qprmS32AbsoluteOffset', 'qprmS32RegulatedCoolingTemp', 'qprm64Exposure']:
+                try:
+                    if self.call(lib.GetParam, byref(s), getattr(lib, x))() == 0:
+                        try: ###first try to get a SparseTable
+                            table = (c_ulong *32)()
+                            r = self.call(lib.GetParamSparseTable, byref(s), getattr(lib,x), table, c_long(32))
+                            self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
+                        except QCamFunctionError, err: ###if sparse table doesn't work try getting a RangeTable
+                            if err.value == 1:  
+                                min = self.call(lib.GetParamMin, byref(s), getattr(lib,x))[2]
+                                max = self.call(lib.GetParamMax, byref(s), getattr(lib,x))[2]
+                                self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
+                            else: raise      
+                except QCamFunctionError, err:
+                    if err.value == 1: pass    
+                    else: raise
         #for x in lib('enums', 'QCam_ParamS32'):
-        for x in p[1]:
-            if x in ['exposure', 'ringSize']:
-                continue
-            x = self.translateToCamera(x)
-            try:
-                if self.call(lib.GetParamS32, byref(s), getattr(lib, x))() == 0:
-                    try:
-                        table = (c_long *32)()
-                        r = self.call(lib.GetParamSparseTableS32, byref(s), getattr(lib,x), table, c_long(32))
-                        self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
-                    except QCamFunctionError, err:
-                        if err.value == 1:
-                            min = self.call(lib.GetParamS32Min, byref(s), getattr(lib,x))[2]
-                            max = self.call(lib.GetParamS32Max, byref(s), getattr(lib,x))[2]
-                            self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
-                        else: raise
-            except QCamFunctionError, err:
-                if err.value == 1: pass
-                else: raise
+            elif x not in ['qprm64Exposure']:
+                try:
+                    if self.call(lib.GetParamS32, byref(s), getattr(lib, x))() == 0:
+                        try:
+                            table = (c_long *32)()
+                            r = self.call(lib.GetParamSparseTableS32, byref(s), getattr(lib,x), table, c_long(32))
+                            self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
+                        except QCamFunctionError, err:
+                            if err.value == 1:
+                                min = self.call(lib.GetParamS32Min, byref(s), getattr(lib,x))[2]
+                                max = self.call(lib.GetParamS32Max, byref(s), getattr(lib,x))[2]
+                                self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
+                            else: raise
+                except QCamFunctionError, err:
+                    if err.value == 1: pass
+                    else: raise
         #for x in lib('enums', 'QCam_Param64'):
-        for x in p[2]:
-            if x in ['qprmS32AbsoluteOffset', 'qprmS32RegulatedCoolingTemp', 'ringSize']:
-                continue
-            x = self.translateToCamera(x)
-            try:
-                if self.call(lib.GetParam64, byref(s), getattr(lib, x))() == 0:
-                    try:
-                        table = (c_ulonglong *32)()
-                        r = self.call(lib.GetParamSparseTable64, byref(s), getattr(lib,x), table, c_long(32))
-                        self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
-                    except QCamFunctionError, err:
-                        if err.value == 1:
-                            min = self.call(lib.GetParam64Min, byref(s), getattr(lib,x))[2]
-                            max = self.call(lib.GetParam64Max, byref(s), getattr(lib,x))[2]
-                            self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
-                        else: raise
-            except QCamFunctionError, err:
-                if err.value == 1:  pass
-                else: raise
+            elif x not in ['qprmS32AbsoluteOffset', 'qprmS32RegulatedCoolingTemp']:
+                try:
+                    if self.call(lib.GetParam64, byref(s), getattr(lib, x))() == 0:
+                        try:
+                            table = (c_ulonglong *32)()
+                            r = self.call(lib.GetParamSparseTable64, byref(s), getattr(lib,x), table, c_long(32))
+                            self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
+                        except QCamFunctionError, err:
+                            if err.value == 1:
+                                min = self.call(lib.GetParam64Min, byref(s), getattr(lib,x))[2]
+                                max = self.call(lib.GetParam64Max, byref(s), getattr(lib,x))[2]
+                                self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
+                            else: raise
+                except QCamFunctionError, err:
+                    if err.value == 1:  pass
+                    else: raise
         #self.paramAttrs.pop('qprmExposure')
         #self.paramAttrs.pop('qprmOffset')
         ### Replace qcam enum numbers with qcam strings
@@ -449,7 +459,7 @@ class QCameraClass:
         else:
             raise Exception("%s is not recognized as a parameter." %param)
         if param in ['qprmRoiX', 'qprmRoiY', 'qprmRoiWidth', 'qprmRoiHeight']:
-            value = value * self.getParam('binning')[0]
+            value = value*self.getParam('binning')[0]
         v = self.getNameFromEnum(param, value)
         if param != 'qprmBinning':
             return v
@@ -460,7 +470,7 @@ class QCameraClass:
         if param == 'ringSize':
             self.ringSize = value
         if param in self.groupParams:
-            return self.setParams(zip(self.groupParams[paramName], value))
+            return self.setParams(zip(self.groupParams[param], value))
         s = self.readSettings()
         param = self.translateToCamera(param)
         value = self.translateToCamera(value)
@@ -481,20 +491,7 @@ class QCameraClass:
                 self.call(lib.QueueSettings, self.handle, byref(s), null, lib.qcCallbackDone)
         
 
-    #def getParams(self, *params):
-    #    s = self.readSettings()
-    #    dict = {}
-    #    for param in params:
-    #        param = self.translateToCamera(param)
-    #        if param in lib('enums', 'QCam_Param'):
-    #            value = self.call(lib.GetParam, byref(s), getattr(lib, param))[2]
-    #        elif param in lib('enums', 'QCam_ParamS32'):
-    #            value = self.call(lib.GetParamS32, byref(s), getattr(lib, param))[2]
-    #        elif param in lib('enums', 'QCam_Param64'):
-    #            value = self.call(lib.GetParam64, byref(s), getattr(lib, param))[2]
-    #        param = self.translateToUser(param)
-    #        dict[param]=value
-    #    return dict
+
     
     def getParams(self, params, asList=False):
         """Get a list of parameter values. Return a dictionary of name: value pairs"""
@@ -518,7 +515,8 @@ class QCameraClass:
             if x == 'ringSize':
                 self.ringSize = params[x]
             param = self.translateToCamera(x)
-            value = self.translateToCamera(params[x])
+            value = self.convertUnitsToCamera(x, params[x])
+            value = self.translateToCamera(value)
             
             #### sometimes camera code sends in tuples
             if type(value) == tuple and value[0]==value[1]:
@@ -533,16 +531,18 @@ class QCameraClass:
             elif param in lib('enums', 'QCam_ParamS32'):
                 self.call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(int(value)))
             elif param in lib('enums', 'QCam_Param64'):
-                if param == 'qprm64Exposure':
-                    value = value * 10e9 ### convert seconds(acq4 units) to nanoseconds(qcam units)
+                #if param == 'qprm64Exposure':
+                    #value = value * 10e9 ### convert seconds(acq4 units) to nanoseconds(qcam units)
                 self.call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(int(value)))
         with self.mutex:
             if self.stopSignal == True:
                 #self.mutex.unlock()
                 self.call(lib.SendSettingsToCam, self.handle, byref(s))
             if self.stopSignal == False:
+                print "about to Queue settings. params:", params
                 #self.mutex.unlock()
-                self.call(lib.QueueSettings, self.handle, byref(s), 0, lib.qcCallbackDone)
+                var = c_void_p(0)
+                self.call(lib.QueueSettings, self.handle, byref(s), self.fnpNull, lib.qcCallbackDone, var, 0)
         for x in params:
             dict = {}
             dict[x] = self.getParam(x)
@@ -563,12 +563,12 @@ class QCameraClass:
             frame.bufferSize = s*2
 
         #print "frameshape:", frame.shape
-        print 's:', s, "h:", self.getParam('regionH'), 'w:', self.getParam('regionW')
+        #print 's:', s, "h:", self.getParam('regionH'), 'w:', self.getParam('regionW')
         #array.shape=(self.getParam('regionH'), self.getParam('regionW') )
         array.shape = (self.getParam('regionH')/self.getParam('binning')[0], -1)
         array = array.transpose()
-        print 'array.size', array.size, 'array.shape', array.shape
-        frame.pBuffer = array.ctypes.data
+        #print 'array.size', array.size, 'array.shape', array.shape
+        frame.pBuffer = array.ctypes.data ###sets the frame buffer pointer to point to the array? So camera writes data directly into the array?
         #for x in array:
             #x = 1000
         #print 'mkFrame: frame.shape', frame.shape
@@ -611,6 +611,7 @@ class QCameraClass:
     
     def callBack1(self, *args):
         #global i, lastImage
+        print "Callback1: args:", args
         if args[2] != 0:
             for x in lib('enums', 'QCam_Err'):
                 if lib('enums', 'QCam_Err')[x] == args[2]:
@@ -627,14 +628,24 @@ class QCameraClass:
                 self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone, 0, self.i)
             #else:
             #    self.mutex.unlock()
-
+            
+    def doNothing(self, *args):
+        v = 0
+        for i in range(5):
+            v += 1
+        return
 
     def stop(self):
+        print "QIm stop() called."
         #global stopsignal
         #self.mutex.lock()
         with self.mutex:
+            print "stop() 1"
             self.stopSignal = True
-            self.call(lib.Abort, self.handle)
+            print "stop() 2, self.stopSignal:", self.stopSignal
+            a = self.call(lib.Abort, self.handle)
+            print "stop() 3", a()
+            
         #self.mutex.unlock()
 
     def lastFrame(self):
