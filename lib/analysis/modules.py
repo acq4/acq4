@@ -1157,44 +1157,7 @@ class STDPWindow(UncagingWindow):
         slope = stats.linregress(pspRgn.xvals('Time'), pspRgn)[0]
         return slope, pspTime*dt
     
-    #def getDerSlope(self, data):
-        #d = data[0]['Channel':'primary']
-        ##pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0+0.1)
-        #q = self.getLaserTime(data[1])*d.infoCopy()[-1]['rate']
-        ##base = self.getBaselineRgn(data)
-        #lp = lowPass(d, 200)
-        #der = diff(lp)
-        #pspRgn = der[q:q+self.stdpCtrl.durationSpin.value()*d.infoCopy()[-1]['rate']/1000]
-        #base = der[:q]
-        #slope = pspRgn.max()
-        #a = argwhere(der == pspRgn.max())[0,0]
-        #slopetime = d.xvals('Time')[a]
-        ##rgnPsp = pspRgn[0:a][::-1]
-        ##b = argwhere(rgnPsp < base.mean()+base.std())
-        ##if len(b>0):
-        ##    epsptime= pspRgn.xvals('Time')[a-b[0,0]]
-        ##else:
-        ##    epsptime = pspRgn.xvals('Time')[0]
-        #n=0
-        #a = []
-        #while len(a) == 0 and n<2*self.stdpCtrl.thresholdSpin.value()-1:
-            #a = argwhere(pspRgn > base.mean()+(self.stdpCtrl.thresholdSpin.value()*2-n)*base.std())
-            #n+=1
-        #if len(a)>0:
-            #rgnPsp = pspRgn[0:a[0,0]][::-1]
-            #n=0
-            #b=[]
-            #while len(b)==0 and n<self.stdpCtrl.thresholdSpin.value():
-                #b = argwhere(rgnPsp < base.mean()+n*base.std())
-                #n+=1
-            #if len(b) > 0:
-                #index= a[0,0]-b[0,0]
-            #else:
-                #index = 0
-        #else:
-            #index = 0
-        #epsptime = self.getPspRgn(data,self.stdpCtrl.durationSpin.value()/1000.0).xvals('Time')[index]
-        #return slope, slopetime, epsptime
+    
         
     def getPspIndex(self, data, pspRgn=None, base=None):
         if pspRgn == None:
@@ -1350,6 +1313,99 @@ class STDPWindow(UncagingWindow):
     #    pspRgn = data[0]['Time': q:(q+self.stdpCtrl.durationSpin.value()/1000.0)]
     #    amp = pspRgn.max() - base.mean()
     #    return time, amp
+from AnalysisPlotWindowTemplate import *
+    
+class AnalysisPlotWindow(QtGui.QMainWindow):
+    def __init__(self):
+        QtGui.QMainWindow.__init__(self)
+        self.cw = QtGui.QWidget()
+        self.setCentralWidget(self.cw)
+        self.ui = Ui_AnalysisPlotWindowTemplate()
+        self.ui.setupUi(self.cw)
+        self.data = [] #storage for (clampData, directory handle)
+        self.traces = None # storage for data as a metaArray
+        self.dataCache = None
+        self.ui.analysisPlot1.setDataSource(self.data)
+        self.ui.analysisPlot1.setHost(self)
+        self.ui.analysisPlot2.setDataSource(self.data)
+        self.ui.analysisPlot2.setHost(self)
+        self.ui.dataSourceCombo.insertItems(0, ['data manager', 'uncaging window', 'stdp window'])
+        
+        QtCore.QObject.connect(self.ui.loadDataBtn, QtCore.SIGNAL('clicked()'), self.loadData)
+        QtCore.QObject.connect(self.ui.addPlotBtn, QtCore.SIGNAL('clicked()'), self.addPlot)
+        
+        self.show()
+        
+    def loadData(self):
+        print "loadData() called."
+        self.ui.tracePlot.clearPlots()
+        
+        if self.ui.dataSourceCombo.currentText() == 'data manager':
+            dh = getManager().currentFile
+            dirs = dh.subDirs()
+            c = 0.0
+            traces = []
+            values = []
+            for d in dirs:
+                d = dh[d] #d is the individual protocol run directory handle
+                try:
+                    data = d['Clamp1.ma'].read()
+                except:
+                    data = d['Clamp2.ma'].read()
+                cmd = data['Channel': 'Command']
+                if data.hasColumn('Channel', 'primary'):
+                    data = data['Channel': 'primary']
+                else:
+                    data = data['Channel': 'scaled']
+                self.data.append((data, d))
+                traces.append(data)
+                self.ui.tracePlot.plot(data, pen=mkPen(hsv=[c, 0.7]))
+                values.append(cmd[len(cmd)/2])
+                c += 1.0 / len(dirs)
+                
+            if len(dirs) > 0:
+                #end = cmd.xvals('Time')[-1]
+                #self.lr.setRegion([end *0.5, end * 0.6])
+                #self.updateAnalysis()
+                info = [
+                    {'name': 'Command', 'units': cmd.axisUnits(-1), 'values': array(values)},
+                    data.infoCopy('Time'), 
+                    data.infoCopy(-1),
+                    ]
+                self.traces = MetaArray(vstack(traces), info=info)
+                
+        elif self.ui.dataSourceCombo.currentText() == 'uncaging window':
+            global win
+            #uw = self.getUncagingWindow() ##need to implement some sort of way for it to find uncaging windows without prior knowledge, but for now will just hard code a name
+            self.data = win.currentTraces
+            traces = []
+            c = 0.0
+            for i in range(len(self.data)):
+                d = self.data[i][0]['Channel':'primary']
+                traces.append(d)
+                self.ui.tracePlot.plot(d, pen = mkPen(hsv=[c, 0.7]))
+                c += 1.0/len(self.data)
+            info = [
+                {'name': 'Command', 'units': cmd.axisUnits(-1), 'values': array(values)},
+                self.data[0].infoCopy('Time'), 
+                self.data[0].infoCopy(-1),
+                ]
+            self.traces = MetaArray(vstack(traces))
+                
+            
+        self.dataCache = zeros(len(self.data)+1, dtype = [
+            ('dataIndex', int),
+            ('amp', float),
+            ('slope', float),
+            ('stimAmp', float),
+            ('latency', float)
+        ])
+        
+    def addPlot(self):
+        ## figure out how to auto name these - ask luke
+        self.ui.autoName = AnalysisPlotWidget(self.ui.splitter)
+        self.ui.autoName.setDataSource(self.data)
+        self.ui.autoName.setHost(self)
         
 class IVWindow(QtGui.QMainWindow):
     def __init__(self):
@@ -1369,11 +1425,11 @@ class IVWindow(QtGui.QMainWindow):
         self.cw.addWidget(self.plot1)
         self.plot2 = PlotWidget()
         self.cw.addWidget(self.plot2)
-        self.resize(800, 800)
+        self.resize(800, 600)
         self.show()
         self.lr = LinearRegionItem(self.plot1, 'vertical', [0, 1])
         self.plot1.addItem(self.lr)
-        QtCore.QObject.connect(self.lr, QtCore.SIGNAL('regionChanged'), self.updateAnalysis)
+        self.lr.connect(self.lr, QtCore.SIGNAL('regionChanged'), self.updateAnalysis)
         
 
     def loadIV(self):

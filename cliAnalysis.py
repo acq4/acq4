@@ -67,7 +67,8 @@ config = os.path.join(pyDir, 'config', 'default.cfg')
 dm = Manager(config, sys.argv[1:])
 
 
-w = UncagingWindow()
+win = UncagingWindow() #### IMPORTANT: the name of the UncagingWindow needs to be win in order for an AnalysisPlotWindow to get data from it - need to fix this, obviously
+w = AnalysisPlotWindow()
 
 
 
