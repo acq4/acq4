@@ -38,13 +38,21 @@ class Terminal:
                 return True
         return False        
         
-    def getInputTerminal(self):
+    def inputTerminal(self):
+        """Return the terminal that gives input to this one."""
         terms = self.extendedConnections()
         for t in terms:
             if t.isOutput():
                 return t
         
-    def connectTo(self, term, graphicsItem=None):
+    def dependentNodes(self):
+        """Return the list of nodes which receive input from this terminal."""
+        conn = self.extendedConnections()
+        del conn[self]
+        return set([t.node() for t in conn])
+        
+        
+    def connectTo(self, term, connectionItem=None):
         if self.connectedTo(term):
             raise Exception('Already connected')
         if term is self:
@@ -56,10 +64,11 @@ class Terminal:
             if self.isOutput() or term.isOutput():
                 raise Exception('Can not connect an output back to the same node.')
         
-        if graphicsItem is None:
-            graphicsItem = Connection(self, term)
-        self._connections[term] = graphicsItem
-        term._connections[self] = graphicsItem
+        if connectionItem is None:
+            connectionItem = ConnectionItem(self.graphicsItem(), term.graphicsItem())
+            self.graphicsItem().scene().addItem(connectionItem)
+        self._connections[term] = connectionItem
+        term._connections[self] = connectionItem
         
         self.recolor()
         
@@ -90,7 +99,7 @@ class Terminal:
 
         
     def __repr__(self):
-        return self.node().name() + "." + self.name()
+        return "<Terminal %s.%s>" % (str(self.node().name()), str(self.name()))
         
     def connections(self):
         return self._connections
@@ -106,6 +115,8 @@ class Terminal:
             terms.update(t.extendedConnections(terms))
         return terms
         
+    def __hash__(self):
+        return id(self)
         
         
 class TerminalGraphicsItem(QtGui.QGraphicsItem):
@@ -167,7 +178,6 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
                         gotTarget = True
                     except:
                         raise
-                        pass
                     break
             
             if not gotTarget:
@@ -226,7 +236,8 @@ class ConnectionItem(QtGui.QGraphicsItem):
         
     def paint(self, p, *args):
         if self.isSelected():
-            self.line.setPen(QtGui.QPen(QtGui.QColor(200, 200, 0), 3))
-            
+            pen = QtGui.QPen(QtGui.QColor(200, 200, 0), 3)
         else:
-            self.line.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), 1))
+            pen = QtGui.QPen(QtGui.QColor(0, 0, 0), 1)
+        if self.line.pen() != pen:
+            self.line.setPen(pen)

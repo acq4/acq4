@@ -39,19 +39,21 @@ class Node(QtCore.QObject):
     def __getattr__(self, attr):
         """Return the terminal with the given name"""
         if attr not in self.terminals:
-            raise NameError()
+            raise NameError(attr)
         else:
-            return self.terminal[attr]
+            return self.terminals[attr]
             
     def name(self):
         return self._name
 
-    def getDependencyTree(self):
-        tree = {}
-        for n, t in self.listInputs().iteritems():
-            inp = t.getInputTerminal()
-            tree[n] = (inp, inp.node().getDependencyTree())
-        return tree
+    def dependentNodes(self):
+        """Return the list of nodes which provide direct input to this node"""
+        return set([t.inputTerminal().node() for t in self.listInputs().itervalues()])
+        
+    def __repr__(self):
+        return "<Node %s>" % self.name()
+        
+        
 
 
 class NodeGraphicsItem(QtGui.QGraphicsItem):

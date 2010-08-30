@@ -7,7 +7,7 @@ from advancedTypes import OrderedDict
 #from TreeWidget import *
 
 class Flowchart(Node):
-    def __init__(self, terminals):
+    def __init__(self, terminals, name=None):
         self.outerTerminals = terminals
         self.innerTerminals = {}
         
@@ -18,10 +18,13 @@ class Flowchart(Node):
             else:
                 self.innerTerminals[n] = ('in',) + t[1:]
             
-        Node.__init__(self, None, self.innerTerminals)
+            
+        if name is None:
+            name = "Flowchart"
+        Node.__init__(self, name, self.innerTerminals)
         
         
-        self.nodes = []
+        self.nodes = {}
         self.connects = []
         self._graphicsItem = FlowchartGraphicsItem(self)
         self._widget = None
@@ -43,19 +46,105 @@ class Flowchart(Node):
             #else:
                 #self.outputs[name] = term
         
-    def addNode(self, node):
+    def addNode(self, nodeType, name=None):
+        if name is None:
+            n = 0
+            while True:
+                name = "%s.%d" % (nodeType, n)
+                if name not in self.nodes:
+                    break
+                n += 1
+                
+        node = functions.NODE_LIST[nodeType](name)
+            
         item = node.graphicsItem()
         item.setParentItem(self.graphicsItem())
         item.moveBy(len(self.nodes)*150, 0)
-        self.nodes.append(node)
+        self.nodes[name] = node
+        return node
         
     def process(self, **args):
-        order = []
-        depTree = self.getDependencyTree()
-        print depTree
+        data = {}  ## Stores terminal:value pairs
         
-        pass
-
+        ## determine order of operations
+        ## order should look like [('p', node1), ('p', node2), ('d', terminal1), ...] 
+        ## Each tuple specifies either (p)rocess this node or (d)elete the result from this terminal
+        order = self.processOrder()
+        print "ORDER:\n", order
+        
+        ## Record inputs given to process()
+        for n, t in self.listOutputs().iteritems():
+            data[t] = args[n]
+        
+        ## process all in order
+        for c, arg in order:
+            if c == 'p':     ## Process a single node
+                node = arg
+                outs = node.listOutputs().values()
+                ins = node.listInputs().values()
+                args = {}
+                for inp in ins:
+                    inpt = inp.inputTerminal()
+                    args[inp.name()] = data[inpt]
+                result = node.process(args)
+                for out in outs:
+                    data[out] = result[out.name()]
+            elif c == 'd':   ## delete a terminal result (no longer needed; may be holding a lot of memory)
+                del data[arg]
+        
+        ## Copy to return dict
+        result = {}
+        for n, t in self.listInputs():
+            inpt = t.inputTerminal()
+            result[n] = data[inpt]
+            
+        return result
+        
+    def processOrder(self):
+        """Return the order of operations required to process this chart.
+        The order returned should look like [('p', node1), ('p', node2), ('d', terminal1), ...] 
+        where each tuple specifies either (p)rocess this node or (d)elete the result from this terminal
+        """
+        
+        ## first collect list of nodes/terminals and their dependencies
+        deps = {}
+        tdeps = {}
+        for name, node in self.nodes.iteritems():
+            deps[node] = node.dependentNodes()
+            for t in node.listOutputs().itervalues():
+                tdeps[t] = t.dependentNodes()
+            
+        
+        ## determine correct node-processing order
+        order = self.nodes.values()
+        def sortfn(a, b):
+            if a in deps[b]:
+                return -1
+            elif b in deps[a]:
+                return 1
+            return 0
+        order.sort(sortfn)
+        
+        ## construct list of operations
+        ops = [('p', n) for n in order]
+        
+        ## determine when it is safe to delete terminal values
+        for t, nodes in tdeps.iteritems():
+            lastInd = 0
+            lastNode = None
+            for n in nodes:
+                if n is self:
+                    ind = -1
+                else:
+                    ind = order.index(n)
+                if lastNode is None or ind > lastInd:
+                    lastNode = n
+                    lastInd = ind
+            #tdeps[t] = lastNode
+            ops.insert(lastInd+1, ('d', t))
+            
+        return ops
+        
 
     def graphicsItem(self):
         return self._graphicsItem
@@ -134,10 +223,9 @@ class FlowchartWidget(QtGui.QSplitter):
         self.setSizes([200, 1000])
         
         self.nodeCombo.addItem("Add..")
-        fl = functions.NODE_LIST
-        self.fl = OrderedDict(fl)
-        for f in fl:
-            self.nodeCombo.addItem(f[0])
+       
+        for f in functions.NODE_LIST:
+            self.nodeCombo.addItem(f)
             
         QtCore.QObject.connect(self.nodeCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.nodeComboChanged)
         QtCore.QObject.connect(self.ctrlList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.itemChanged)
@@ -150,7 +238,7 @@ class FlowchartWidget(QtGui.QSplitter):
             return
         nodeType = str(self.nodeCombo.currentText())
         self.nodeCombo.setCurrentIndex(0)
-        self.chart.addNode(self.fl[nodeType]())
+        self.chart.addNode(nodeType)
 
     def itemChanged(self, *args):
         pass
