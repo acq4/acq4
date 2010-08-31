@@ -86,7 +86,7 @@ class Flowchart(Node):
                 for inp in ins:
                     inpt = inp.inputTerminal()
                     args[inp.name()] = data[inpt]
-                result = node.process(args)
+                result = node.process(**args)
                 for out in outs:
                     data[out] = result[out.name()]
             elif c == 'd':   ## delete a terminal result (no longer needed; may be holding a lot of memory)
@@ -94,7 +94,7 @@ class Flowchart(Node):
         
         ## Copy to return dict
         result = {}
-        for n, t in self.listInputs():
+        for n, t in self.listInputs().iteritems():
             inpt = t.inputTerminal()
             result[n] = data[inpt]
             
@@ -134,14 +134,16 @@ class Flowchart(Node):
             lastNode = None
             for n in nodes:
                 if n is self:
-                    ind = -1
+                    lastInd = None
+                    break
                 else:
                     ind = order.index(n)
                 if lastNode is None or ind > lastInd:
                     lastNode = n
                     lastInd = ind
             #tdeps[t] = lastNode
-            ops.insert(lastInd+1, ('d', t))
+            if lastInd is not None:
+                ops.insert(lastInd+1, ('d', t))
             
         return ops
         

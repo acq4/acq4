@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
 import sys, os
-p = os.path.dirname(__file__)
-sys.path.append(os.path.split(p)[0])
+print __file__
+
+p = os.path.dirname(os.path.abspath(__file__))
+print p
+p = os.path.split(p)[0]
+print p
+sys.path.append(p)
 
 
 from Flowchart import *
@@ -38,4 +43,4 @@ def process(**kargs):
     #time.sleep(1e-3)
 
 
-process()
+process(dataIn=7)

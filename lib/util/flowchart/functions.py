@@ -14,7 +14,7 @@ class AddNode(Node):
         })
         
     def process(self, **args):
-        return args['A'] + args['B']
+        return {'Sum': args['A'] + args['B']}
         
 NODE_LIST = []
 for o in locals().values():

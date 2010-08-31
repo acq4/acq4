@@ -177,6 +177,8 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
                         self.term.connectTo(i.term, self.newConnection)
                         gotTarget = True
                     except:
+                        self.scene().removeItem(self.newConnection)
+                        self.newConnection = None
                         raise
                     break
             
