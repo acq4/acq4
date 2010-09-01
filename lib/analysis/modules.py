@@ -848,12 +848,15 @@ class UncagingWindow(QtGui.QMainWindow):
                         table[i][j]['ap'] = True
                         table[i][j]['apPeakLatency'] = argwhere(trace == trace[laserIndex:].max())/rate - laserTime
                         table[i][j]['apTimeToPeak'] = argwhere(trace == trace[laserIndex:].max())/rate - epspTime
-                        a = argwhere(trace > 0)
+                        a = argwhere(trace > 0.01) # < 10 mV
                         spikes = argwhere(a[1:]-a[:-1] > 5)
-                        table[i][j]['apNumber'] = (len(spikes), 1).max()
+                        #if len(spikes) == 0:
+                        #    table[i][j]['apNumber'] = 1
+                        #else:
+                        table[i][j]['apNumber'] = len(spikes) + 1
                         
         self.table = table
-        print self.table
+        #print self.table
     
 class STDPWindow(UncagingWindow):
     ###NEED:  add labels to LTP plot?, figure out how to get/display avg epsp time and avg spike time, 
