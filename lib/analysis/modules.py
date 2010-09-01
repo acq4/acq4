@@ -326,17 +326,20 @@ class UncagingWindow(QtGui.QMainWindow):
         self.addDrugScanBtn = QtGui.QPushButton('Add Drug Scan')
         self.clearImgBtn = QtGui.QPushButton('Clear Images')
         self.clearScanBtn = QtGui.QPushButton('Clear Scans')
+        self.generateTableBtn = QtGui.QPushButton('GenerateTable')
         self.defaultSize = 150e-6
         bwl.addWidget(self.addImgBtn)
         bwl.addWidget(self.clearImgBtn)
         bwl.addWidget(self.addScanBtn)
         bwl.addWidget(self.addDrugScanBtn)
         bwl.addWidget(self.clearScanBtn)
+        bwl.addWidget(self.generateTableBtn)
         QtCore.QObject.connect(self.addImgBtn, QtCore.SIGNAL('clicked()'), self.addImage)
         QtCore.QObject.connect(self.addScanBtn, QtCore.SIGNAL('clicked()'), self.addScan)
         QtCore.QObject.connect(self.clearImgBtn, QtCore.SIGNAL('clicked()'), self.clearImage)
         QtCore.QObject.connect(self.clearScanBtn, QtCore.SIGNAL('clicked()'), self.clearScan)
         QtCore.QObject.connect(self.addDrugScanBtn, QtCore.SIGNAL('clicked()'), self.addDrugScan)
+        QtCore.QObject.connect(self.generateTableBtn, QtCore.SIGNAL('clicked()'), self.generateDataTable)
         #self.layout = QtGui.QVBoxLayout()
         #self.cw.setLayout(self.layout)
         bwtop = QtGui.QSplitter()
@@ -390,9 +393,12 @@ class UncagingWindow(QtGui.QMainWindow):
         self.currentTraces = []
         self.noiseThreshold = 2.0
         self.eventTimes = []
+        self.table = None
         self.analysisCache = empty(len(self.scanItems),
             {'names': ('eventsValid', 'eventList', 'preEvents', 'dirEvents', 'postEvents', 'stdev', 'preChargePos', 'preChargeNeg', 'dirCharge', 'postChargePos', 'postChargeNeg'),
              'formats':(object, object, object, object, object, float, float, float, float, float, float)})
+        #self.p = PlotWindow()
+        #self.p.show()
         
         
     def addImage(self, img=None, fd=None):
@@ -561,7 +567,7 @@ class UncagingWindow(QtGui.QMainWindow):
         
     def getLaserPower(self, dh):
         q = dh.getFile('Laser-UV.ma').read()['QSwitch']
-        return len(argwhere(q > 0))/q.infoCopy()[-1]['rate']
+        return (len(argwhere(q > 0))-1)/q.infoCopy()[-1]['rate']
         
     def getEventLists(self, i):
         #if not self.plot.analysisEnabled:
@@ -765,7 +771,7 @@ class UncagingWindow(QtGui.QMainWindow):
         dh = item.source
         data = self.getClampData(dh)
         return data, dh
-    def getPspSlope(self, data, pspStart, base=None, width=2):
+    def getPspSlope(self, data, pspStart, base=None, width=0.002):
         """Return the slope of the first PSP after pspStart"""
         #data = data[0]['Channel': 'primary']
         dt = data.xvals('Time')[1] - data.xvals('Time')[0]
@@ -791,21 +797,21 @@ class UncagingWindow(QtGui.QMainWindow):
     
     def generateDataTable(self, data='All'):
         table = zeros((len(self.scanAvgItems), len(self.scanItems)/len(self.scanAvgItems)), dtype=[
-            ('traceID', str),
-            ('drug', bool),
-            ('laserPower', float),
-            ('position', (float, float)),
-            ('epsp', bool),
-            ('epspSlope', float),
-            ('epspLatency', float),
-            ('epspPeak', float),
-            ('epspTimeToPeak', float),
-            ('ap', bool),
-            ('apNumber', int),
+            ('traceID', '|S100'), ## 0 specify a space for a string 100 bytes long
+            ('drug', bool), ## 1
+            ('laserPower', float), ## 2 units = seconds
+            ('position', 'f8', (2,)), ## 3
+            ('epsp', bool), ## 4 
+            ('epspSlope', float), ## 5 in V/sec (=mV/msec)
+            ('epspLatency', float), ## 6 in seconds
+            ('epspPeak', float), ## 7
+            ('epspTimeToPeak', float), ## 8
+            ('ap', bool), ## 9
+            ('apNumber', int), ## 10
             #('apThreshold', float), ## I don't know how to measure this
             #('apStartLatency', float), #same as epspLatency
-            ('apPeakLatency', float),
-            ('apTimeToPeak', float)
+            ('apPeakLatency', float), ## 11
+            ('apTimeToPeak', float) ## 12
         ])
         
         
@@ -814,36 +820,40 @@ class UncagingWindow(QtGui.QMainWindow):
             for j in range(len(spot.sourceItems)):
                 item = spot.sourceItems[j]
                 trace = self.loadTrace(item)[0]['Channel':'primary']
+                #self.p.plot(trace, clear=True)
                 
                 ### get basic trace info
                 table[i][j]['traceID'] = item.source.name()
                 table[i][j]['drug'] = item.drug
                 table[i][j]['laserPower'] = self.getLaserPower(item.source)
-                table[i][j]['position'] = item.position
+                table[i][j]['position'][0] = item.position[0]
+                table[i][j]['position'][1] = item.position[1]
+                
                 
                 rate = trace.infoCopy()[-1]['rate']
-                laserTime = self.getLaserTime(item.source)
+                laserTime = self.getLaserTime(item.source) ## in seconds
                 laserIndex = laserTime * rate
                 
                 ### get epsp/ap info
-                slope, epspTime = self.getPspSlope(trace, laserIndex)
+                slope, epspTime = self.getPspSlope(trace, laserIndex) ## slope in V/sec, epspTime in seconds
                 if slope != None:
                     table[i][j]['epsp'] = True
                     table[i][j]['epspSlope'] = slope
                     table[i][j]['epspLatency'] = epspTime - laserTime
                     if trace[laserIndex:].max() < 0:
                         table[i][j]['ap'] = False
-                        table[i][j]['epspPeak'] = trace[laserIndex:].max()
-                        table[i][j]['epspTimeToPeak'] = argwhere(trace == table[i][j]['epspPeak'])*rate - epspTime
+                        table[i][j]['epspPeak'] = trace[laserIndex:].max() - trace[:laserIndex].mean()
+                        table[i][j]['epspTimeToPeak'] = argwhere(trace == trace[laserIndex:].max())/rate - epspTime
                     else:
                         table[i][j]['ap'] = True
-                        table[i][j]['apPeakLatency'] = argwhere(trace == trace[laserIndex:].max())*rate - laserTime
-                        table[i][j]['apTimeToPeak'] = argwhere(trace == trace[laserIndex:].max())*rate - epspTime
+                        table[i][j]['apPeakLatency'] = argwhere(trace == trace[laserIndex:].max())/rate - laserTime
+                        table[i][j]['apTimeToPeak'] = argwhere(trace == trace[laserIndex:].max())/rate - epspTime
                         a = argwhere(trace > 0)
                         spikes = argwhere(a[1:]-a[:-1] > 5)
-                        table[i][j]['apNumber'] = len(spikes)
+                        table[i][j]['apNumber'] = (len(spikes), 1).max()
                         
-        return table
+        self.table = table
+        print self.table
     
 class STDPWindow(UncagingWindow):
     ###NEED:  add labels to LTP plot?, figure out how to get/display avg epsp time and avg spike time, 
