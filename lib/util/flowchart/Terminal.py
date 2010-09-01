@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+#from PyQt4 import QtCore, QtGui
+from PySide import QtCore, QtGui
 
 class Terminal:
     def __init__(self, node, name, opts):
@@ -224,6 +225,7 @@ class ConnectionItem(QtGui.QGraphicsItem):
             stop = self.target
         else:
             return
+        self.prepareGeometryChange()
         self.line.setLine(start.x(), start.y(), stop.x(), stop.y())
 
     def keyPressEvent(self, ev):

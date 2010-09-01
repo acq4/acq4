@@ -1,10 +1,38 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+#from PyQt4 import QtCore, QtGui
+from PySide import QtCore, QtGui
 from Node import *
 import functions
 from advancedTypes import OrderedDict
 
 #from TreeWidget import *
+
+def toposort(deps, nodes=None, seen=None, stack=None):
+    """Topological sort. Arguments are:
+      deps    dictionary describing dependencies where a:[b,c] means "a depends on b and c"
+      nodes   optional, specifies list of starting nodes (these should be the nodes 
+              which are not depended on by any other nodes) 
+    """
+    if nodes is None:
+        ## run through deps to find nodes that are not depended upon
+        rem = set()
+        for dep in deps.itervalues():
+            rem |= set(dep)
+        nodes = set(deps.keys()) - rem
+    if seen is None:
+        seen = set()
+        stack = []
+    sorted = []
+    for n in nodes:
+        if n in stack:
+            raise Exception("Cyclic dependency detected", stack + [n])
+        if n in seen:
+            continue
+        seen.add(n)
+        sorted.extend( toposort(deps, deps[n], seen, stack+[n]))
+        sorted.append(n)
+    return sorted
+        
 
 class Flowchart(Node):
     def __init__(self, terminals, name=None):
@@ -70,7 +98,7 @@ class Flowchart(Node):
         ## order should look like [('p', node1), ('p', node2), ('d', terminal1), ...] 
         ## Each tuple specifies either (p)rocess this node or (d)elete the result from this terminal
         order = self.processOrder()
-        print "ORDER:\n", order
+        #print "ORDER:\n", order
         
         ## Record inputs given to process()
         for n, t in self.listOutputs().iteritems():
@@ -116,19 +144,14 @@ class Flowchart(Node):
             
         
         ## determine correct node-processing order
-        order = self.nodes.values()
-        def sortfn(a, b):
-            if a in deps[b]:
-                return -1
-            elif b in deps[a]:
-                return 1
-            return 0
-        order.sort(sortfn)
+        deps[self] = []
+        order = toposort(deps)[1:]
         
         ## construct list of operations
         ops = [('p', n) for n in order]
         
         ## determine when it is safe to delete terminal values
+        dels = []
         for t, nodes in tdeps.iteritems():
             lastInd = 0
             lastNode = None
@@ -143,7 +166,10 @@ class Flowchart(Node):
                     lastInd = ind
             #tdeps[t] = lastNode
             if lastInd is not None:
-                ops.insert(lastInd+1, ('d', t))
+                dels.append((lastInd+1, t))
+        dels.sort(lambda a,b: cmp(b[0], a[0]))
+        for i, t in dels:
+            ops.insert(i, ('d', t))
             
         return ops
         

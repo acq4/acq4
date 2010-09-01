@@ -24,13 +24,18 @@ w.resize(800,600)
 w.show()
 
 n1 = fc.addNode('Add')
-n2 = fc.addNode('Add')
+n2 = fc.addNode('Subtract')
+n3 = fc.addNode('Abs')
+n4 = fc.addNode('Add')
 
 fc.dataIn.connectTo(n1.A)
 fc.dataIn.connectTo(n1.B)
-n1.Sum.connectTo(n2.A)
-n1.Sum.connectTo(n2.B)
-n2.Sum.connectTo(fc.dataOut)
+fc.dataIn.connectTo(n2.A)
+n1.Out.connectTo(n4.A)
+n1.Out.connectTo(n2.B)
+n2.Out.connectTo(n3.In)
+n3.Out.connectTo(n4.B)
+n4.Out.connectTo(fc.dataOut)
 
 
 def process(**kargs):
@@ -43,4 +48,4 @@ def process(**kargs):
     #time.sleep(1e-3)
 
 
-process(dataIn=7)
+print process(dataIn=7)
