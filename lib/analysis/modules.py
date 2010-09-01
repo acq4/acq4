@@ -28,6 +28,7 @@ class UncagingSpot(QtGui.QGraphicsEllipseItem):
         self.position = None
         self.size = None
         self.laserTime = None
+        self.drug = None
         self.sourceItems = []   ## points to source spots if this is an average
         
 
@@ -322,17 +323,20 @@ class UncagingWindow(QtGui.QMainWindow):
         self.cw.addWidget(bw)
         self.addImgBtn = QtGui.QPushButton('Add Image')
         self.addScanBtn = QtGui.QPushButton('Add Scan')
+        self.addDrugScanBtn = QtGui.QPushButton('Add Drug Scan')
         self.clearImgBtn = QtGui.QPushButton('Clear Images')
         self.clearScanBtn = QtGui.QPushButton('Clear Scans')
         self.defaultSize = 150e-6
         bwl.addWidget(self.addImgBtn)
         bwl.addWidget(self.clearImgBtn)
         bwl.addWidget(self.addScanBtn)
+        bwl.addWidget(self.addDrugScanBtn)
         bwl.addWidget(self.clearScanBtn)
         QtCore.QObject.connect(self.addImgBtn, QtCore.SIGNAL('clicked()'), self.addImage)
         QtCore.QObject.connect(self.addScanBtn, QtCore.SIGNAL('clicked()'), self.addScan)
         QtCore.QObject.connect(self.clearImgBtn, QtCore.SIGNAL('clicked()'), self.clearImage)
         QtCore.QObject.connect(self.clearScanBtn, QtCore.SIGNAL('clicked()'), self.clearScan)
+        QtCore.QObject.connect(self.addDrugScanBtn, QtCore.SIGNAL('clicked()'), self.addDrugScan)
         #self.layout = QtGui.QVBoxLayout()
         #self.cw.setLayout(self.layout)
         bwtop = QtGui.QSplitter()
@@ -411,8 +415,12 @@ class UncagingWindow(QtGui.QMainWindow):
         self.canvas.addItem(item, pos, scale=ps, z=self.z, name=fd.shortName())
         self.z += 1
         self.imageItems.append(item)
+        
+        
+    def addDrugScan(self):
+        self.addScan(drug=True)
 
-    def addScan(self):
+    def addScan(self, drug=False):
         dh = getManager().currentFile
         if len(dh.info()['protocol']['params']) > 0:
             dirs = [dh[d] for d in dh.subDirs()]
@@ -438,6 +446,10 @@ class UncagingWindow(QtGui.QMainWindow):
                 item.size = size
                 item.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200,0)))                 
                 self.canvas.addItem(item, [pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z, name=[dh.shortName(), d.shortName()])
+                if drug:
+                    item.drug = True
+                else:
+                    item.drug = False
                 self.scanItems.append(item)
                 
                 ## Find out if this spot is the "same" as any existing average spots
@@ -753,7 +765,86 @@ class UncagingWindow(QtGui.QMainWindow):
         dh = item.source
         data = self.getClampData(dh)
         return data, dh
+    def getPspSlope(self, data, pspStart, base=None, width=2):
+        """Return the slope of the first PSP after pspStart"""
+        #data = data[0]['Channel': 'primary']
+        dt = data.xvals('Time')[1] - data.xvals('Time')[0]
+        #if pspStart == None:
+            #pspStart = self.getEpspSearchStart()
+            #if pspStart == None:
+                #return None, None
+        e = self.plot.processData(data=[data], display=False, analyze=True)[0]
+        e = e[e['peak'] > 0]  ## select only positive events
+        starts = e['start']
+        pspTimes = starts[starts > pspStart]
+        if len(pspTimes) < 1:
+            return None, None
+        pspTime = pspTimes[0]
+        width = width / dt
+        slopeRgn = gaussian_filter(data[pspTime : pspTime + 2*width].view(ndarray), 2)  ## slide forward to point of max slope
+        peak = argmax(slopeRgn[1:]-slopeRgn[:-1])
+        pspTime += peak
         
+        pspRgn = data[pspTime-(width/2) : pspTime+(width/2)]
+        slope = stats.linregress(pspRgn.xvals('Time'), pspRgn)[0]
+        return slope, pspTime*dt
+    
+    def generateDataTable(self, data='All'):
+        table = zeros((len(self.scanAvgItems), len(self.scanItems)/len(self.scanAvgItems)), dtype=[
+            ('traceID', str),
+            ('drug', bool),
+            ('laserPower', float),
+            ('position', (float, float)),
+            ('epsp', bool),
+            ('epspSlope', float),
+            ('epspLatency', float),
+            ('epspPeak', float),
+            ('epspTimeToPeak', float),
+            ('ap', bool),
+            ('apNumber', int),
+            #('apThreshold', float), ## I don't know how to measure this
+            #('apStartLatency', float), #same as epspLatency
+            ('apPeakLatency', float),
+            ('apTimeToPeak', float)
+        ])
+        
+        
+        for i in range(len(self.scanAvgItems)):
+            spot = self.scanAvgItems[i]
+            for j in range(len(spot.sourceItems)):
+                item = spot.sourceItems[j]
+                trace = self.loadTrace(item)[0]['Channel':'primary']
+                
+                ### get basic trace info
+                table[i][j]['traceID'] = item.source.name()
+                table[i][j]['drug'] = item.drug
+                table[i][j]['laserPower'] = self.getLaserPower(item.source)
+                table[i][j]['position'] = item.position
+                
+                rate = trace.infoCopy()[-1]['rate']
+                laserTime = self.getLaserTime(item.source)
+                laserIndex = laserTime * rate
+                
+                ### get epsp/ap info
+                slope, epspTime = self.getPspSlope(trace, laserIndex)
+                if slope != None:
+                    table[i][j]['epsp'] = True
+                    table[i][j]['epspSlope'] = slope
+                    table[i][j]['epspLatency'] = epspTime - laserTime
+                    if trace[laserIndex:].max() < 0:
+                        table[i][j]['ap'] = False
+                        table[i][j]['epspPeak'] = trace[laserIndex:].max()
+                        table[i][j]['epspTimeToPeak'] = argwhere(trace == table[i][j]['epspPeak'])*rate - epspTime
+                    else:
+                        table[i][j]['ap'] = True
+                        table[i][j]['apPeakLatency'] = argwhere(trace == trace[laserIndex:].max())*rate - laserTime
+                        table[i][j]['apTimeToPeak'] = argwhere(trace == trace[laserIndex:].max())*rate - epspTime
+                        a = argwhere(trace > 0)
+                        spikes = argwhere(a[1:]-a[:-1] > 5)
+                        table[i][j]['apNumber'] = len(spikes)
+                        
+        return table
+    
 class STDPWindow(UncagingWindow):
     ###NEED:  add labels to LTP plot?, figure out how to get/display avg epsp time and avg spike time, 
     def __init__(self):
@@ -861,16 +952,19 @@ class STDPWindow(UncagingWindow):
             self.epspStats[i]['conditioningMask']   = False
             self.epspStats[i]['unixtime']           = self.getUnixTime(self.currentTraces[i])
             
-            if self.currentTraces[i][0]['Channel':'Command'].max() >= 0.1e-09:
-                self.epspStats[i]['conditioningMask'] = True
-                cmdChannel = self.currentTraces[i][0]['Channel':'Command']
-                priChannel = self.currentTraces[i][0]['Channel':'primary']
-                stimtime = argwhere(cmdChannel == cmdChannel.max())
-                first    = argwhere(priChannel == priChannel[stimtime[0]:stimtime[0]+90].max())
-                if len(first) > 0:
-                    firstspikeindex = first[0]
-                    firstspike = priChannel.xvals('Time')[firstspikeindex]
-                    self.epspStats[i]['spikeTime'] = firstspike
+            try:
+                if self.currentTraces[i][0]['Channel':'Command'].max() >= 0.1e-09:
+                    self.epspStats[i]['conditioningMask'] = True
+                    cmdChannel = self.currentTraces[i][0]['Channel':'Command']
+                    priChannel = self.currentTraces[i][0]['Channel':'primary']
+                    stimtime = argwhere(cmdChannel == cmdChannel.max())
+                    first    = argwhere(priChannel == priChannel[stimtime[0]:stimtime[0]+90].max())
+                    if len(first) > 0:
+                        firstspikeindex = first[0]
+                        firstspike = priChannel.xvals('Time')[firstspikeindex]
+                        self.epspStats[i]['spikeTime'] = firstspike
+            except:
+                pass
         
         ## Sort all trace analysis records. 
         ##   Note that indexes in epspStats and currentTraces will no longer match.
