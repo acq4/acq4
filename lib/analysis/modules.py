@@ -7,6 +7,7 @@ from pyqtgraph.graphicsItems import *
 from pyqtgraph.graphicsWindows import *
 from pyqtgraph.PlotWidget import *
 from pyqtgraph.functions import *
+from pyqtgraph.widgets import *
 from Canvas import Canvas
 from UncagingControlTemplate import *
 from StdpCtrlTemplate import *
@@ -20,6 +21,7 @@ from numpy import log
 from WidgetGroup import *
 from advancedTypes import OrderedDict
 
+
 class UncagingSpot(QtGui.QGraphicsEllipseItem):
     def __init__(self, source=None): #source is directory handle for single-stimulus spots
         QtGui.QGraphicsEllipseItem.__init__(self, 0, 0, 1, 1)
@@ -31,6 +33,41 @@ class UncagingSpot(QtGui.QGraphicsEllipseItem):
         self.drug = None
         self.sourceItems = []   ## points to source spots if this is an average
         
+class tShapeROI(ROI):
+    def __init__(self, pos, size, **args): 
+        ROI.__init__(self, pos, size, **args)
+        self.translatable = False
+        self.addScaleRotateHandle([0.5,0.5], [1.0,0.5], name='L6mark')
+        self.addScaleRotateHandle([1.0, 0.0], [1.0,0.5], name='piaMark1')
+        self.addScaleRotateHandle([1.0, 0.5], [0.5,0.5], name='piaMark2')
+        self.addScaleRotateHandle([1.0, 1.0], [1.0,0.5], name='piaMark3')
+        #self.addFreeHandle([0.1,0.1])
+        self.addTranslateHandle([0.9,0.5])
+        
+    def paint(self, p, opt, widget):
+        r = self.boundingRect()
+        #p.setRenderHint(QtGui.QPainter.Antialiasing)
+        p.setPen(self.pen)
+        #p.drawRect(r)
+        p.drawLine(QtCore.QPointF(r.width(), 0), QtCore.QPointF(r.width(), r.height()))
+        p.drawLine(QtCore.QPointF(0, r.height()/2.0), QtCore.QPointF(r.width(), r.height()/2.0))
+        #p.scale(r.width(), r.height())## workaround for GL bug
+        #r = QtCore.QRectF(r.x()/r.width(), r.y()/r.height(), 1,1)
+        #
+        #p.drawEllipse(r)
+        
+class cellROI(ROI):
+    def __init__(self, **args):
+        ROI.__init__(self, [0,0], [100e-6,100e-6], **args)
+        
+    def paint(self, p, opt, widget):
+        r = self.boundingRect()
+        p.setPen(QtGui.QPen(QtGui.QColor(255,255,255)))
+        p.drawEllipse(r)
+        p.drawLine(QtCore.QPointF(r.width()/2.0, r.height()*0.25), QtCore.QPointF(r.width()/2.0, r.height()*0.75))
+        p.drawLine(QtCore.QPointF(r.width()*0.25, r.height()*0.5), QtCore.QPointF(r.width()*0.75, r.height()*0.5))
+
+
 
         
 
@@ -372,6 +409,11 @@ class UncagingWindow(QtGui.QMainWindow):
         self.ctrl.gradientRadio.setChecked(True)
         self.ctrl.medianCheck.setChecked(True)
         
+        #self.canvas.setMouseTracking(True)
+        self.roi = tShapeROI([0,0], 0.001)
+        self.canvas.addItem(self.roi, [0,0], z=100000)
+        self.cellMarker = cellROI()
+        self.canvas.addItem(self.cellMarker, [0,0], z=100000)
         
         
         #self.plot = PlotWidget()

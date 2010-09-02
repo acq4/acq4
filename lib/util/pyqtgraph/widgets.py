@@ -94,35 +94,35 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
             self.updateHandles()
             self.handleChange()
         
-    def addTranslateHandle(self, pos, axes=None, item=None):
+    def addTranslateHandle(self, pos, axes=None, item=None, name=None):
         pos = Point(pos)
-        return self.addHandle({'type': 't', 'pos': pos, 'item': item})
+        return self.addHandle({'name': name, 'type': 't', 'pos': pos, 'item': item})
     
-    def addFreeHandle(self, pos, axes=None, item=None):
+    def addFreeHandle(self, pos, axes=None, item=None, name=None):
         pos = Point(pos)
-        return self.addHandle({'type': 'f', 'pos': pos, 'item': item})
+        return self.addHandle({'name': name, 'type': 'f', 'pos': pos, 'item': item})
     
-    def addScaleHandle(self, pos, center, axes=None, item=None):
+    def addScaleHandle(self, pos, center, axes=None, item=None, name=None):
         pos = Point(pos)
         center = Point(center)
-        info = {'type': 's', 'center': center, 'pos': pos, 'item': item}
+        info = {'name': name, 'type': 's', 'center': center, 'pos': pos, 'item': item}
         if pos.x() == center.x():
             info['xoff'] = True
         if pos.y() == center.y():
             info['yoff'] = True
         return self.addHandle(info)
     
-    def addRotateHandle(self, pos, center, item=None):
+    def addRotateHandle(self, pos, center, item=None, name=None):
         pos = Point(pos)
         center = Point(center)
-        return self.addHandle({'type': 'r', 'center': center, 'pos': pos, 'item': item})
+        return self.addHandle({'name': name, 'type': 'r', 'center': center, 'pos': pos, 'item': item})
     
-    def addScaleRotateHandle(self, pos, center, item=None):
+    def addScaleRotateHandle(self, pos, center, item=None, name=None):
         pos = Point(pos)
         center = Point(center)
         if pos[0] != center[0] and pos[1] != center[1]:
             raise Exception("Scale/rotate handles must have either the same x or y coordinate as their center point.")
-        return self.addHandle({'type': 'sr', 'center': center, 'pos': pos, 'item': item})
+        return self.addHandle({'name': name, 'type': 'sr', 'center': center, 'pos': pos, 'item': item})
     
     def addHandle(self, info):
         if not info.has_key('item') or info['item'] is None:
@@ -145,6 +145,25 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         #else:
             #h.hide()
         return h
+    
+    def getLocalHandlePositions(self, index=None):
+        if index == None:
+            positions = []
+            for h in self.handles:
+                positions.append((h['name'], h['item'].pos()))
+            return positions
+        else:
+            return (self.handles[index]['name'], self.handles[index]['item'].pos())
+            
+    def getSceneHandlePositions(self, index = None):
+        if index == None:
+            positions = []
+            for h in self.handles:
+                positions.append((h['name'], self.mapToScene(h['item'].pos())))
+            return positions
+        else:
+            return (self.handles[index]['name'], self.mapToScene(self.handles[index]['item'].pos()))
+        
         
     def mapSceneToParent(self, pt):
         return self.mapToParent(self.mapFromScene(pt))
