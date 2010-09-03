@@ -450,8 +450,8 @@ class AxoPatchDevGui(QtGui.QWidget):
         self.ui.icHoldingSpin.setOpts(step=1, minStep=1e-12, dec=True, suffix='A', siPrefix=True)
         self.updateStatus()
         QtCore.QObject.connect(self.ui.modeCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.modeComboChanged)
-        QtCore.QObject.connect(self.ui.vcHoldingSpin, QtCore.SIGNAL('delayedChange'), self.vcHoldingChanged)
-        QtCore.QObject.connect(self.ui.icHoldingSpin, QtCore.SIGNAL('delayedChange'), self.icHoldingChanged)
+        QtCore.QObject.connect(self.ui.vcHoldingSpin, QtCore.SIGNAL('valueChanged(double)'), self.vcHoldingChanged)
+        QtCore.QObject.connect(self.ui.icHoldingSpin, QtCore.SIGNAL('valueChanged(double)'), self.icHoldingChanged)
         QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.devHoldingChanged)
         QtCore.QObject.connect(self.dev, QtCore.SIGNAL('modeChanged'), self.devModeChanged)
         

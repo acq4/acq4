@@ -162,7 +162,7 @@ class OutputChannelGui(DaqChannelGui):
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('functionChanged'), self.waveFunctionChanged)
         QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
         QtCore.QObject.connect(self.ui.holdingCheck, QtCore.SIGNAL('stateChanged(int)'), self.holdingCheckChanged)
-        QtCore.QObject.connect(self.ui.holdingSpin, QtCore.SIGNAL('delayedChange'), self.holdingSpinChanged)
+        QtCore.QObject.connect(self.ui.holdingSpin, QtCore.SIGNAL('valueChanged(double)'), self.holdingSpinChanged)
         QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.updateHolding)
         
         self.holdingCheckChanged()
@@ -183,7 +183,7 @@ class OutputChannelGui(DaqChannelGui):
         QtCore.QObject.disconnect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('functionChanged'), self.waveFunctionChanged)
         QtCore.QObject.disconnect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
         QtCore.QObject.disconnect(self.ui.holdingCheck, QtCore.SIGNAL('stateChanged(int)'), self.holdingCheckChanged)
-        QtCore.QObject.disconnect(self.ui.holdingSpin, QtCore.SIGNAL('delayedChange'), self.holdingSpinChanged)
+        QtCore.QObject.disconnect(self.ui.holdingSpin, QtCore.SIGNAL('valueChanged(double)'), self.holdingSpinChanged)
         QtCore.QObject.disconnect(self.dev, QtCore.SIGNAL('holdingChanged'), self.updateHolding)
     
     def daqChanged(self, state):

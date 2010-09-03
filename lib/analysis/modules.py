@@ -115,7 +115,7 @@ class EventMatchWidget(QtGui.QSplitter):
         
         self.stateGroup = WidgetGroup(self)
         
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.recalculate)        
+        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)        
 
 
     def widgetGroupInterface(self):
@@ -146,6 +146,9 @@ class EventMatchWidget(QtGui.QSplitter):
             self.recalculate(pens=pens, analyze=analyze)
         else:
             raise Exception("Data for event match widget must be a list of arrays or an array with ndim >= 2.")
+        
+    def stateChanged(self, *args):
+        self.recalculate()
         
     def recalculate(self, pens=None, analyze=True):
         self.events = self.processData(self.data, pens=pens, display=True, analyze=analyze)

@@ -291,12 +291,13 @@ class ExpDeconvolve(Filter):
         ])
         self.stateGroup.setState(opts)
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.dt = None
 
     def processData(self, data):
-        dt = 1
+        self.dt = 1
         if isinstance(data, MetaArray):
-            dt = data.xvals(0)[1] - data.xvals(0)[0]
-        d = data[:-1] + (self.ctrls['tau'].value() / dt) * (data[1:] - data[:-1])
+            self.dt = data.xvals(0)[1] - data.xvals(0)[0]
+        d = data[:-1] + (self.ctrls['tau'].value() / self.dt) * (data[1:] - data[:-1])
         if isinstance(data, MetaArray):
             info = data.infoCopy()
             if 'values' in info[0]:
@@ -304,6 +305,42 @@ class ExpDeconvolve(Filter):
             return MetaArray(d, info=info)
         else:
             return d
+        
+    def reconvolve(self, data):
+        d = zeroes(len(data)+200, dtype=float)
+        d[100:len(data)+100] = data
+        tau = self.ctrls['tau'].value()
+        r = zeroes(len(d), dtype=float)
+        for i in range(len(r)):
+            r[i+1] = r[i] + self.dt*((d[i]-r[i])/tau)
+        return r
+    
+class ExpReconvolve(Filter):
+    def __init__(self, **opts):
+        Filter.__init__(self)
+        self.ui, self.stateGroup, self.ctrls = self.generateUi([
+            ('tau', 'spin', {'value': 10e-3, 'step': 1, 'minStep': 100e-6, 'dec': True, 'range': [0.0, None], 'suffix': 's', 'siPrefix': True})
+        ])
+        self.stateGroup.setState(opts)
+        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.dt = None
+
+    def processData(self, data):
+        self.dt = 1
+        if isinstance(data, MetaArray):
+            self.dt = data.xvals(0)[1] - data.xvals(0)[0]
+        tau = self.ctrls['tau'].value()
+        r = zeroes(len(d), dtype=float)
+        for i in range(len(r)):
+            r[i+1] = r[i] + self.dt*((d[i]-r[i])/tau)
+        if isinstance(data, MetaArray):
+            info = data.infoCopy()
+            if 'values' in info[0]:
+                info[0]['values'] = info[0]['values'][:-1]
+            return MetaArray(r, info=info)
+        else:
+            return r
+        
 
 
 ## Collect list of filters

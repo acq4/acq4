@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>206</width>
-    <height>64</height>
+    <width>415</width>
+    <height>206</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -43,16 +43,6 @@
       <string>Objective:</string>
      </property>
     </widget>
-   </item>
-   <item row="1" column="1">
-    <layout class="QVBoxLayout" name="objRadioLayout">
-     <property name="spacing">
-      <number>0</number>
-     </property>
-    </layout>
-   </item>
-   <item row="1" column="2">
-    <layout class="QVBoxLayout" name="objComboLayout"/>
    </item>
    <item row="1" column="3">
     <spacer name="horizontalSpacer">
@@ -92,6 +82,54 @@
       </size>
      </property>
     </spacer>
+   </item>
+   <item row="1" column="1" colspan="2">
+    <layout class="QGridLayout" name="objectiveLayout">
+     <property name="spacing">
+      <number>4</number>
+     </property>
+     <item row="0" column="0">
+      <widget class="QWidget" name="widget" native="true">
+       <property name="minimumSize">
+        <size>
+         <width>20</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QWidget" name="widget_5" native="true">
+       <property name="minimumSize">
+        <size>
+         <width>20</width>
+         <height>0</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="2">
+      <widget class="QLabel" name="label_3">
+       <property name="text">
+        <string>X</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="3">
+      <widget class="QLabel" name="label_4">
+       <property name="text">
+        <string>Y</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="4">
+      <widget class="QLabel" name="label_5">
+       <property name="text">
+        <string>Scale</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>

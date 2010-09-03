@@ -304,6 +304,7 @@ class ScannerTask(DeviceTask):
             #print "  min wait is ", self.cmd['minWaitTime'], "; sleep", wait
             if wait > 0:
                 time.sleep(wait)
+        #print "  >> GO"
             
     def getResult(self):
         result = {}

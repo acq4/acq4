@@ -2,7 +2,8 @@
 from __future__ import with_statement
 from lib.devices.Device import *
 from deviceTemplate import Ui_Form
-from lib.util.Mutex import Mutex, MutexLocker
+from Mutex import Mutex
+from SpinBox import *
 
 def ftrace(func):
     def w(*args, **kargs):
@@ -43,10 +44,12 @@ class Microscope(Device):
             self.position = [0.0, 0.0]
         
         self.allObjectives = self.config['objectives']  ## all available objectives
-        for l in self.allObjectives.values():  ## Set default values for each objective
+        for l in self.allObjectives.itervalues():  ## Set default values for each objective
             for o in l:
                 if 'offset' not in l[o]:
                     l[o]['offset'] = [0,0]
+                else:
+                    l[o]['offset'] = list(l[o]['offset'])
 
         ### Keep track of the objective currently in use for each position
         self.objectives = {}                      ## objective to use for each switch state
@@ -69,7 +72,7 @@ class Microscope(Device):
     
     #@ftrace
     def positionChanged(self, p):
-        with MutexLocker(self.lock):
+        with self.lock:
             #rel = []
             #for i in range(len(self.position)):
                 #rel.append(p['rel'][i] * self.positionScale[i])
@@ -102,14 +105,14 @@ class Microscope(Device):
     #@ftrace
     def getPosition(self):
         """Return x,y,z position of microscope stage"""
-        with MutexLocker(self.lock):
+        with self.lock:
             #print "Microscope:getPosition locked"
             return self.position[:]
         
     #@ftrace
     def getObjective(self):
         """Return a tuple ("objective name", scale)"""
-        with MutexLocker(self.lock):
+        with self.lock:
             #print "Microscope:getObjective locked"
             if self.currentObjective not in self.objectives:
                 return None
@@ -117,17 +120,18 @@ class Microscope(Device):
             return self.allObjectives[self.currentObjective][obj].copy()
         
     def listObjectives(self, allObjs=True):
-        if allObjs:
-            return self.allObjectives
-        else:
-            l = {}
-            for i in self.objectives:
-                l[i] = self.allObjectives[i][self.objectives[i]]
-            return l
+        with self.lock:
+            if allObjs:
+                return self.allObjectives
+            else:
+                l = {}
+                for i in self.objectives:
+                    l[i] = self.allObjectives[i][self.objectives[i]]
+                return l
         
     #@ftrace
     def getState(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             return {'position': self.position[:], 'objective': self.objective[:]}
     
     def deviceInterface(self, win):
@@ -138,12 +142,16 @@ class Microscope(Device):
 
     def selectObjectives(self, sel):
         """Set the objective to be picked from each list when the switch changes"""
-        for i in self.allObjectives:
-            if i in sel:
-                self.objectives[i] = sel[i]
+        with self.lock:
+            for i in self.allObjectives:
+                if i in sel:
+                    self.objectives[i] = sel[i]
         self.emit(QtCore.SIGNAL('objectiveListChanged'))
                 
-
+    def updateObjectives(self, objs):
+        with self.lock:
+            self.allObjectives = objs.copy()
+        self.emit(QtCore.SIGNAL('objectiveListChanged'))
     
 class ScopeGUI(QtGui.QWidget):
     def __init__(self, dev, win):
@@ -156,43 +164,82 @@ class ScopeGUI(QtGui.QWidget):
         self.ui.setupUi(self)
         self.objList = self.dev.listObjectives()
         self.switchN = len(self.objList)
-        self.objCombos = {}
-        self.objRadios = {}
+        #self.objCombos = {}
+        #self.objRadios = {}
+        self.objWidgets = {}
+        row = 1
         for i in self.objList:
+            ## For each objective, create a set of widgets for selecting and updating.
+            #print self.objList[i]
             c = QtGui.QComboBox()
             r = QtGui.QRadioButton(i)
-            self.ui.objRadioLayout.addWidget(r)
-            self.ui.objComboLayout.addWidget(c)
-            self.objCombos[i] = c
-            self.objRadios[i] = r
+            first = self.objList[i].keys()[0]
+            first = self.objList[i][first]
+            xs = SpinBox(value=first['offset'][0], step=1e-6, suffix='m', siPrefix=True)
+            ys = SpinBox(value=first['offset'][1], step=1e-6, suffix='m', siPrefix=True)
+            ss = SpinBox(value=first['scale']    , step=1e-7, bounds=(1e-10, None))
+            xs.obj = ys.obj = ss.obj = i
+            widgets = (r, c, xs, ys, ss)
+            for col in range(5):
+                self.ui.objectiveLayout.addWidget(widgets[col], row, col)
+            self.objWidgets[i] = widgets
+            
             for o in self.objList[i]:
                 c.addItem(self.objList[i][o]['name'], QtCore.QVariant(QtCore.QString(o)))
             QtCore.QObject.connect(r, QtCore.SIGNAL('clicked()'), self.objRadioClicked)
             QtCore.QObject.connect(c, QtCore.SIGNAL('currentIndexChanged(int)'), self.objComboChanged)
+            QtCore.QObject.connect(xs, QtCore.SIGNAL('valueChanged'), self.xSpinChanged)
+            QtCore.QObject.connect(ys, QtCore.SIGNAL('valueChanged'), self.ySpinChanged)
+            QtCore.QObject.connect(ss, QtCore.SIGNAL('valueChanged'), self.sSpinChanged)
+            row += 1
         
     def objectiveChanged(self,obj):
         (obj, oid, old) = obj
-        self.objRadios[oid].setChecked(True)
+        self.objWidgets[oid][0].setChecked(True)
                 
     def positionChanged(self, p):
         self.ui.positionLabel.setText('%0.2f, %0.2f' % (p['abs'][0] * 1e6, p['abs'][1] * 1e6))
                 
     def objRadioClicked(self):
         checked = None
-        for r in self.objRadios:
-            if self.objRadios[r].isChecked():
+        for r in self.objList:
+            if self.objWidgets[r][0].isChecked():
                 checked = r
                 break
         self.dev.setObjective(r)
         
     def objComboChanged(self):
         sel = {}
-        for i in self.objCombos:
-            c = self.objCombos[i]
-            sel[i] = str(c.itemData(c.currentIndex()).toString())
+        for i in self.objList:
+            sel[i] = self.selectedObj(i)
+            xs, ys, ss = self.objWidgets[i][2:]
+            obj = self.objList[i][sel[i]]
+            xs.setValue(obj['offset'][0])
+            ys.setValue(obj['offset'][1])
+            ss.setValue(obj['scale'])
         self.dev.selectObjectives(sel)
         
             
+    def xSpinChanged(self, spin):
+        o = spin.obj
+        o1 = self.selectedObj(o)
+        self.objList[o][o1]['offset'][0] = spin.value()
+        self.dev.updateObjectives(self.objList)
+        
+        
+    def ySpinChanged(self, spin):
+        o = spin.obj
+        o1 = self.selectedObj(o)
+        self.objList[o][o1]['offset'][1] = spin.value()
+        self.dev.updateObjectives(self.objList)
+        
+    def sSpinChanged(self, spin):
+        o = spin.obj
+        o1 = self.selectedObj(o)
+        self.objList[o][o1]['scale'] = spin.value()
+        self.dev.updateObjectives(self.objList)
             
-    
+    def selectedObj(self, i):
+        c = self.objWidgets[i][1]
+        return str(c.itemData(c.currentIndex()).toString())
         

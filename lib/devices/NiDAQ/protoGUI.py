@@ -38,9 +38,9 @@ class NiDAQProto(ProtocolGui):
             (self.ui.butterworthStopDBSpin, 'butterworthStopDB'),
         ])
         
-        QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('delayedChange'), self.rateChanged)
-        QtCore.QObject.connect(self.ui.periodSpin, QtCore.SIGNAL('valueChanged(double)'), self.updateRateSpin)
-        QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('valueChanged(double)'), self.updatePeriodSpin)
+        QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('valueChanged(double)'), self.rateChanged)
+        QtCore.QObject.connect(self.ui.periodSpin, QtCore.SIGNAL('valueChanging'), self.updateRateSpin)
+        QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('valueChanging'), self.updatePeriodSpin)
         QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolChanged'), self.protocolChanged)
         QtCore.QObject.connect(self.ui.filterCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.ui.filterStack.setCurrentIndex)
         self.ui.rateSpin.setValue(self.rate)

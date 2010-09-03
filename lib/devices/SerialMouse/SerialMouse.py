@@ -22,11 +22,11 @@ class SerialMouse(Device):
             self.pos = state['pos']
             self.buttons = state['buttons']
         
-        self.mThread = MouseThread(self, self.pos[:])
+        self.mThread = MouseThread(self, {'pos': self.pos[:], 'btns': self.buttons[:]})
         QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('positionChanged'), self.posChanged)
         QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('buttonChanged'), self.btnChanged)
-        self.proxy1 = proxyConnect(self, QtCore.SIGNAL('positionChanged'), self.storeState, 5.0) ## wait 5 seconds before writing changes 
-        self.proxy2 = proxyConnect(self, QtCore.SIGNAL('switchChanged'), self.storeState, 5.0) ## wait 5 seconds before writing changes 
+        self.proxy1 = proxyConnect(self, QtCore.SIGNAL('positionChanged'), self.storeState, 3.0) ## wait 3 seconds before writing changes 
+        self.proxy2 = proxyConnect(self, QtCore.SIGNAL('switchChanged'), self.storeState, 3.0) 
         self.mThread.start()
         
     def quit(self):
@@ -97,16 +97,17 @@ class SMInterface(QtGui.QLabel):
     
     
 class MouseThread(QtCore.QThread):
-    def __init__(self, dev, startPos=None):
+    def __init__(self, dev, startState=None):
         QtCore.QThread.__init__(self)
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.dev = dev
         self.port = self.dev.port
-        if startPos is None:
+        if startState is None:
             self.pos = [0, 0]
+            self.btns = [0, 0]
         else:
-            self.pos = startPos
-        self.btns = [0, 0]
+            self.pos = startState['pos']
+            self.btns = startState['btns']
         
     def run(self):
         self.stopThread = False

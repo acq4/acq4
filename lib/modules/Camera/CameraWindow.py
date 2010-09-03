@@ -103,6 +103,13 @@ class CameraWindow(QtGui.QMainWindow):
         self.lastHistogramUpdate = 0
         
         
+        self.ticks = [t[0] for t in self.ui.gradientWidget.listTicks()]
+        self.ticks[0].colorChangeAllowed = False
+        self.ticks[1].colorChangeAllowed = False
+        self.ui.gradientWidget.allowAdd = False
+        self.ui.gradientWidget.setTickColor(self.ticks[1], QtGui.QColor(255,255,255))
+        self.ui.gradientWidget.setOrientation('right')
+        
         ## Set up level thermo and scale widgets
         #self.scaleEngine = Qwt.QwtLinearScaleEngine()
         #self.ui.levelThermo.setScalePosition(Qwt.QwtThermo.NoScale)
@@ -201,19 +208,26 @@ class CameraWindow(QtGui.QMainWindow):
         self.cameraScale = [1, 1]
         self.gv.setRange(QtCore.QRect(0, 0, self.camSize[0], self.camSize[1]), lockAspect=True)
         
-        self.borders = []
-        self.updateBorders()
-        scope = self.module.cam.getScopeDevice()
-        if scope is not None:
-            QtCore.QObject.connect(scope, QtCore.SIGNAL('objectiveListChanged'), self.updateBorders)
         
         self.roi = CamROI(self.camSize, parent=self.cameraItemGroup)
         #QtCore.QObject.connect(self.roi, QtCore.SIGNAL('regionChangeFinished'), self.updateRegion)
         self.roi.connect(QtCore.SIGNAL('regionChangeFinished'), self.regionWidgetChanged)
         #self.cameraItemGroup.addToGroup(self.roi)
-        self.roi.setZValue(1000)
+        self.roi.setZValue(10000)
         self.setRegion()
         
+        self.borders = []
+        scope = self.module.cam.getScopeDevice()
+        if scope is not None:
+            QtCore.QObject.connect(scope, QtCore.SIGNAL('objectiveListChanged'), self.updateBorders)
+            #QtCore.QObject.connect(scope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            self.cameraCenter = self.cam.getPosition()
+            self.cameraScale = self.cam.getPixelSize()
+            self.scopeCenter = self.cam.getPosition(justScope=True)
+            #print self.cameraCenter, self.scopeCenter
+            #self.updateBorders()
+            self.centerView()
+        self.updateBorders()
         
         QtCore.QObject.connect(self.ui.btnAcquire, QtCore.SIGNAL('clicked()'), self.toggleAcquire)
         QtCore.QObject.connect(self.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
@@ -225,7 +239,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         ## Use delayed connection for these two widgets
         self.proxy1 = proxyConnect(self.ui.binningCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.setBinning)
-        QtCore.QObject.connect(self.ui.spinExposure, QtCore.SIGNAL('delayedChange'), self.setExposure)
+        QtCore.QObject.connect(self.ui.spinExposure, QtCore.SIGNAL('valueChanged(double)'), self.setExposure)  ## note that this signal (from lib.util.SpinBox) is delayed.
         
         QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
         QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
@@ -241,8 +255,9 @@ class CameraWindow(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.btnClearROIs, QtCore.SIGNAL('clicked()'), self.clearROIs)
         QtCore.QObject.connect(self.ui.checkEnableROIs, QtCore.SIGNAL('valueChanged(bool)'), self.enableROIsChanged)
         QtCore.QObject.connect(self.ui.spinROITime, QtCore.SIGNAL('valueChanged(double)'), self.setROITime)
-        QtCore.QObject.connect(self.ui.sliderWhiteLevel, QtCore.SIGNAL('valueChanged(int)'), self.levelsChanged)
-        QtCore.QObject.connect(self.ui.sliderBlackLevel, QtCore.SIGNAL('valueChanged(int)'), self.levelsChanged)
+        #QtCore.QObject.connect(self.ui.sliderWhiteLevel, QtCore.SIGNAL('valueChanged(int)'), self.levelsChanged)
+        #QtCore.QObject.connect(self.ui.sliderBlackLevel, QtCore.SIGNAL('valueChanged(int)'), self.levelsChanged)
+        QtCore.QObject.connect(self.ui.gradientWidget, QtCore.SIGNAL('gradientChanged'), self.levelsChanged)
         QtCore.QObject.connect(self.ui.spinFlattenSize, QtCore.SIGNAL('valueChanged(int)'), self.requestFrameUpdate)
 
         QtCore.QObject.connect(self.ui.addFrameBtn, QtCore.SIGNAL('clicked()'), self.addPersistentFrame)
@@ -282,7 +297,12 @@ class CameraWindow(QtGui.QMainWindow):
             self.borders.append(border)
         self.updateCameraDecorations()
 
-
+    def centerView(self):
+        center = self.cam.getPosition(justScope=True)
+        bounds = self.cam.getBoundary().adjusted(center[0], center[1], center[0], center[1])
+        self.gv.setRange(bounds, lockAspect=True)
+        self.updateCameraDecorations()
+        
     #@trace
     def addPersistentFrame(self):
         """Make a copy of the current camera frame and store it in the background"""
@@ -290,6 +310,7 @@ class CameraWindow(QtGui.QMainWindow):
         if px is None:
             return
         im = QtGui.QGraphicsPixmapItem(px.copy())
+        im.setCacheMode(im.NoCache)
         if len(self.persistentFrames) == 0:
             z = -10000
         else:
@@ -623,10 +644,13 @@ class CameraWindow(QtGui.QMainWindow):
         
     #@trace
     def getLevels(self):
-        w = self.ui.sliderWhiteLevel
-        b = self.ui.sliderBlackLevel
-        wl = self.levelMin + (self.levelMax-self.levelMin) * (float(w.value())-float(w.minimum())) / (float(w.maximum())-float(w.minimum()))
-        bl = self.levelMin + (self.levelMax-self.levelMin) * (float(b.value())-float(b.minimum())) / (float(b.maximum())-float(b.minimum()))
+        #w = self.ui.sliderWhiteLevel
+        #b = self.ui.sliderBlackLevel
+        #wl = self.levelMin + (self.levelMax-self.levelMin) * (float(w.value())-float(w.minimum())) / (float(w.maximum())-float(w.minimum()))
+        #bl = self.levelMin + (self.levelMax-self.levelMin) * (float(b.value())-float(b.minimum())) / (float(b.maximum())-float(b.minimum()))
+        wl = self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[1])
+        bl = self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[0])
+        
         return (bl, wl)
         
 
@@ -839,14 +863,14 @@ class CameraWindow(QtGui.QMainWindow):
                 self.updateCameraDecorations()
             
             newScale = [info['pixelSize'][0] / info['binning'][0], info['pixelSize'][1] / info['binning'][1]]
-            if newScale != self.cameraScale:
+            if newScale != self.cameraScale:  ## If scale has changed, re-center on new objective.
                 self.emit(QtCore.SIGNAL('cameraScaleChanged'))
-                diff = [self.cameraScale[0] / newScale[0], self.cameraScale[1] /newScale[1]]
-                #print "scale view:", diff
-                #print diff
-                self.gv.scale(diff[0], diff[1])
+                self.centerView()
+                #diff = [self.cameraScale[0] / newScale[0], self.cameraScale[1] /newScale[1]]
+                #self.gv.scale(diff[0], diff[1])
                 self.cameraScale = newScale
                 self.updateCameraDecorations()
+            #print self.cameraCenter, self.scopeCenter
 
 
             ## update info for pixel under mouse pointer
