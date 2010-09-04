@@ -110,6 +110,7 @@ class Downsample(Filter):
             ('n', 'intSpin', {'min': 1, 'max': 1000000})
         ])
         self.stateGroup.setState(opts)
+        self.setObjectName('Downsample')
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
     def processData(self, data):
@@ -123,6 +124,7 @@ class Subsample(Filter):
             ('n', 'intSpin', {'min': 1, 'max': 1000000})
         ])
         self.stateGroup.setState(opts)
+        self.setObjectName('Subsample')
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
     def processData(self, data):
@@ -138,6 +140,7 @@ class Bessel(Filter):
             ('bidir', 'check', {'checked': True})
         ])
         self.stateGroup.setState(opts)
+        self.setObjectName('Bessel')
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
     def processData(self, data):
@@ -160,6 +163,7 @@ class Butterworth(Filter):
             ('bidir', 'check', {'checked': True})
         ])
         self.stateGroup.setState(opts)
+        self.setObjectName('Butterworth')
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
     def processData(self, data):
@@ -177,6 +181,7 @@ class Mean(Filter):
             ('n', 'intSpin', {'min': 1, 'max': 1000000})
         ])
         self.stateGroup.setState(opts)
+        self.setObjectName('Mean')
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
     @metaArrayWrapper
@@ -191,6 +196,7 @@ class Median(Filter):
             ('n', 'intSpin', {'min': 1, 'max': 1000000})
         ])
         self.stateGroup.setState(opts)
+        self.setObjectName('Median')
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
     @metaArrayWrapper
@@ -205,6 +211,7 @@ class Denoise(Filter):
             ('threshold', 'doubleSpin', {'value': 4.0, 'min': 0, 'max': 1000})
         ])
         self.stateGroup.setState(opts)
+        self.setObjectName('Denoise')
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
     def processData(self, data):
@@ -218,6 +225,7 @@ class Gaussian(Filter):
             ('sigma', 'doubleSpin', {'min': 0, 'max': 1000000})
         ])
         self.stateGroup.setState(opts)
+        self.setObjectName('Gaussian')
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
 
     @metaArrayWrapper
@@ -227,6 +235,7 @@ class Gaussian(Filter):
 class Derivative(Filter):
     def __init__(self, **opts):
         Filter.__init__(self)
+        self.setObjectName('Derivative')
         #self.stateGroup.setState(opts)
         
     def processData(self, data):
@@ -241,6 +250,7 @@ class Derivative(Filter):
 class Integral(Filter):
     def __init__(self, **opts):
         Filter.__init__(self)
+        self.setObjectName('Integral')
         #self.stateGroup.setState(opts)
         
     @metaArrayWrapper
@@ -251,6 +261,7 @@ class Integral(Filter):
 class Detrend(Filter):
     def __init__(self, **opts):
         Filter.__init__(self)
+        self.setObjectName('Detrend')
         #self.stateGroup.setState(opts)
         
     @metaArrayWrapper
@@ -264,6 +275,7 @@ class AdaptiveDetrend(Filter):
             ('threshold', 'doubleSpin', {'value': 3.0, 'min': 0, 'max': 1000000})
         ])
         self.stateGroup.setState(opts)
+        self.setObjectName('AdaptiveDetrend')
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
     def processData(self, data):
@@ -276,6 +288,7 @@ class SubtractMedian(Filter):
             ('width', 'spin', {'value': 0.1, 'step': 1, 'minStep': 100e-6, 'dec': True, 'range': [0.0, None], 'suffix': 's', 'siPrefix': True})
         ])
         self.stateGroup.setState(opts)
+        self.setObjectName('SubtractMedian')
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
     def processData(self, data):
@@ -290,6 +303,7 @@ class ExpDeconvolve(Filter):
             ('tau', 'spin', {'value': 10e-3, 'step': 1, 'minStep': 100e-6, 'dec': True, 'range': [0.0, None], 'suffix': 's', 'siPrefix': True})
         ])
         self.stateGroup.setState(opts)
+        self.setObjectName('ExpDeconvolve')
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         self.dt = None
 
@@ -307,11 +321,11 @@ class ExpDeconvolve(Filter):
             return d
         
     def reconvolve(self, data):
-        d = zeroes(len(data)+200, dtype=float)
+        d = zeros(len(data)+200, dtype=float)
         d[100:len(data)+100] = data
         tau = self.ctrls['tau'].value()
-        r = zeroes(len(d), dtype=float)
-        for i in range(len(r)):
+        r = zeros(len(d), dtype=float)
+        for i in range(len(r)-1):
             r[i+1] = r[i] + self.dt*((d[i]-r[i])/tau)
         return r
     
@@ -322,6 +336,7 @@ class ExpReconvolve(Filter):
             ('tau', 'spin', {'value': 10e-3, 'step': 1, 'minStep': 100e-6, 'dec': True, 'range': [0.0, None], 'suffix': 's', 'siPrefix': True})
         ])
         self.stateGroup.setState(opts)
+        self.setObjectName('ExpReconvolve')
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         self.dt = None
 
@@ -330,9 +345,10 @@ class ExpReconvolve(Filter):
         if isinstance(data, MetaArray):
             self.dt = data.xvals(0)[1] - data.xvals(0)[0]
         tau = self.ctrls['tau'].value()
-        r = zeroes(len(d), dtype=float)
-        for i in range(len(r)):
-            r[i+1] = r[i] + self.dt*((d[i]-r[i])/tau)
+        r = zeros(len(data), dtype=float)
+        for i in range(len(r)-1):
+            r[i+1] = r[i] + self.dt*((data[i]-r[i])/tau)
+        r = r[:-1]
         if isinstance(data, MetaArray):
             info = data.infoCopy()
             if 'values' in info[0]:

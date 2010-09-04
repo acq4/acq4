@@ -20,6 +20,7 @@ from scipy import stats, signal, ndimage
 from numpy import log
 from WidgetGroup import *
 from advancedTypes import OrderedDict
+import time
 
 
 class UncagingSpot(QtGui.QGraphicsEllipseItem):
@@ -66,6 +67,9 @@ class cellROI(ROI):
         p.drawEllipse(r)
         p.drawLine(QtCore.QPointF(r.width()/2.0, r.height()*0.25), QtCore.QPointF(r.width()/2.0, r.height()*0.75))
         p.drawLine(QtCore.QPointF(r.width()*0.25, r.height()*0.5), QtCore.QPointF(r.width()*0.75, r.height()*0.5))
+    
+    def getPosition(self):
+        return self.mapToScene(self.pos())
 
 
 
@@ -229,6 +233,17 @@ class EventMatchWidget(QtGui.QSplitter):
             minSum = self.ctrl.zcSumAbsThresholdSpin.value()
             noiseThresh = self.ctrl.zcSumRelThresholdSpin.value()
             events = findEvents(data, minLength=minLen, minPeak=minPeak, minSum=minSum, noiseThreshold=noiseThresh)
+            ### if 'ExpDeconvolve' in self.ctrl.preFilterList.topLevelItems ### Need to only reconvolve if trace was deconvolved, but this is hard - for now we'll just assume that deconvolution is being used
+            for i in range(len(events)):
+                e = data[events[i]['start']:events[i]['start']+events[i]['len']]
+                event = self.ctrl.preFilterList.filterList.topLevelItem(2).filter.reconvolve(e) ### lots of hard-coding happening, don't worry I feel sufficiently guilty about it
+                events[i]['sum'] = event.sum()
+                if events[i]['sum'] > 0:
+                    events[i]['peak'] = event.max()
+                else:
+                    events[i]['peak'] = event.min()
+                
+                
         elif self.ctrl.detectMethodCombo.currentText() == 'Clements-Bekkers':
             rise = self.ctrl.cbRiseTauSpin.value()
             decay = self.ctrl.cbFallTauSpin.value()
@@ -413,8 +428,8 @@ class UncagingWindow(QtGui.QMainWindow):
         self.ctrl.medianCheck.setChecked(True)
         
         #self.canvas.setMouseTracking(True)
-        self.roi = tShapeROI([0,0], 0.001)
-        self.canvas.addItem(self.roi, [0,0], z=100000)
+        self.sliceMarker = tShapeROI([0,0], 0.001)
+        self.canvas.addItem(self.sliceMarker, [0,0], z=100000)
         self.cellMarker = cellROI()
         self.canvas.addItem(self.cellMarker, [0,0], z=100000)
         
@@ -902,6 +917,99 @@ class UncagingWindow(QtGui.QMainWindow):
                         
         self.table = table
         #print self.table
+        
+    def generateEventTable(self, data='All'):
+        table = zeros((len(self.scanItems)*10), dtype=[ ## create a buffer space of 20 events per trace (maybe need more?)
+            ('traceID', '|S100'), ## 0 specify a space for a string 100 bytes long
+            #('laserPower', float), ## 2 units = seconds
+            ('x', float64), ## 3
+            ('y', float64), 
+            ('latency', float64), ##  in seconds
+            ('duration', float64),
+            ('peak', float64), ## 
+            ('charge', float64)
+            
+        ])
+        
+        metaInfo = {} #slice position, cell position, analysis parameters
+        
+        n=0
+        for item in self.scanItems:
+            trace = self.loadTrace(item)[0]['Channel':'primary']
+            
+            rate = trace.infoCopy()[-1]['rate']
+            laserIndex = self.getLaserTime(item.source)*rate ## in seconds
+            
+            traceID = item.source.name()
+            #laserPower = self.getLaserPower(item.source)
+            x = item.position[0]
+            y = item.position[1]
+            
+            events = self.plot.processData([trace], display=False)
+            
+            for e in events[0]:
+                if laserIndex < e['start'] and e['start'] < laserIndex+self.ctrl.poststimTimeSpin.value()*10:
+                    table[n]['traceID'] = traceID
+                    table[n]['x'] = x
+                    table[n]['y'] = y
+                    table[n]['latency']= (e['start']-laserIndex)*rate
+                    table[n]['duration'] = e['len'] * rate
+                    table[n]['peak'] = e['peak']
+                    table[n]['charge'] = e['sum']
+                    n += 1
+                    
+        ## slice/cell positions
+        slice = self.sliceMarker.getSceneHandlePositions()
+        metaInfo['cellPosition'] = self.cellMarker.getPosition()
+        
+        for x in slice:
+            if x[0] is not None:
+                metaInfo[x[0]] = x[1]
+        
+        
+        
+        ## get analysis info
+        metaInfo['postStimTime'] = self.ctrl.poststimTimeSpin.value()/1000
+        metaInfo['Filters'] = {}
+        for i in range(self.plot.ctrl.preFilterList.filterList.topLevelItemCount()):
+            item = self.plot.ctrl.preFilterList.filterList.topLevelItem(i)
+            if item.checkState(0) == QtCore.Qt.Checked:
+                filter = item.filter
+                x={}
+                for k in filter.ctrls.keys():
+                    try:
+                        try:
+                            x[k] = filter.ctrls[k].value()
+                        except AttributeError:
+                            x[k] = filter.ctrls[k].currentText()
+                    except AttributeError:
+                        x[k] = filter.ctrls[k].isChecked()
+                metaInfo['Filters'][filter.objectName()] = x
+        if self.plot.ctrl.detectMethodCombo.currentText() == "Zero-crossing":
+            x = {}
+            x['absLengthTreshold'] = self.plot.ctrl.zcLenAbsThresholdSpin.value()
+            x['absAmpThreshold'] = self.plot.ctrl.zcAmpAbsThresholdSpin.value()
+            x['absSumThreshold'] = self.plot.ctrl.zcSumAbsThresholdSpin.value()
+            x['relSumThreshold'] = self.plot.ctrl.zcSumRelThresholdSpin.value()
+        elif self.ctrl.detectMethodCombo.currentText() == 'Clements-Bekkers':
+            x={}
+            x['riseTau'] = self.plot.ctrl.cbRiseTauSpin.value()
+            x['decayTau'] = self.plot.ctrl.cbFallTauSpin.value()
+            x['threshold'] = self.plot.ctrl.cbThresholdSpin.value()
+        elif self.ctrl.detectMethodCombo.currentText() == 'Stdev. Threshold':
+            x = {}
+            x['threshold'] = self.plot.ctrl.stThresholdSpin.value()
+        metaInfo['eventDetection'] = (self.plot.ctrl.detectMethodCombo.currentText(), x)
+        metaInfo['analysisTime'] = time.ctime()
+        
+        ## get rid of extra buffer
+        a = argwhere(table['charge'] == 0)[0][0]
+        table = table[:a+1] 
+                    
+        self.eventTable = (table, metaInfo)
+                
+                
+    
     
 class STDPWindow(UncagingWindow):
     ###NEED:  add labels to LTP plot?, figure out how to get/display avg epsp time and avg spike time, 
