@@ -47,7 +47,7 @@ class DataManager(QtCore.QObject):
         self.lock = Mutex(QtCore.QMutex.Recursive)
         
     def getDirHandle(self, dirName, create=False):
-        with MutexLocker(self.lock):
+        with self.lock:
             dirName = os.path.abspath(dirName)
             if not (create or os.path.isdir(dirName)):
                 if not os.path.exists(dirName):
@@ -59,7 +59,7 @@ class DataManager(QtCore.QObject):
             return self._getCache(dirName)
         
     def getFileHandle(self, fileName):
-        with MutexLocker(self.lock):
+        with self.lock:
             fileName = os.path.abspath(fileName)
             if not os.path.exists(fileName):
                 raise Exception("File %s does not exist" % fileName)
@@ -89,7 +89,7 @@ class DataManager(QtCore.QObject):
         
         
     def _handleChanged(self, handle, change, *args):
-        with MutexLocker(self.lock):
+        with self.lock:
             #print "Manager handling changes", handle, change, args
             if change == 'renamed' or change == 'moved':
                 oldName = args[0]
@@ -172,7 +172,7 @@ class FileHandle(QtCore.QObject):
         
     def name(self, relativeTo=None):
         self.checkDeleted()
-        with MutexLocker(self.lock):
+        with self.lock:
             path = self.path
             if relativeTo == self:
                 path = ''
@@ -195,7 +195,7 @@ class FileHandle(QtCore.QObject):
         
     def parent(self):
         self.checkDeleted()
-        with MutexLocker(self.lock):
+        with self.lock:
             if self.parentDir is None:
                 dirName = os.path.split(self.name())[0]
                 self.parentDir = self.manager.getDirHandle(dirName)
@@ -217,7 +217,7 @@ class FileHandle(QtCore.QObject):
         
     def move(self, newDir):
         self.checkDeleted()
-        with MutexLocker(self.lock):
+        with self.lock:
             oldDir = self.parent()
             fn1 = self.name()
             name = self.shortName()
@@ -252,7 +252,7 @@ class FileHandle(QtCore.QObject):
     def rename(self, newName):
         #print "Rename %s -> %s" % (self.name(), newName)
         self.checkDeleted()
-        with MutexLocker(self.lock):
+        with self.lock:
             parent = self.parent()
             fn1 = self.name()
             oldName = self.shortName()
@@ -274,7 +274,7 @@ class FileHandle(QtCore.QObject):
         
     def delete(self):
         self.checkDeleted()
-        with MutexLocker(self.lock):
+        with self.lock:
             parent = self.parent()
             fn1 = self.name()
             oldName = self.shortName()
@@ -288,7 +288,7 @@ class FileHandle(QtCore.QObject):
         
     def read(self):
         self.checkDeleted()
-        with MutexLocker(self.lock):
+        with self.lock:
             typ = self.fileType()
             
             if typ is None:
@@ -305,7 +305,7 @@ class FileHandle(QtCore.QObject):
             return data
         
     def fileType(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             info = self.info()
             
             ## Use the recorded object_type to read the file if possible.
@@ -420,7 +420,7 @@ class DirHandle(FileHandle):
         """Write a message into the log for this directory."""
         if tags is None:
             tags = {}
-        with MutexLocker(self.lock):
+        with self.lock:
             if type(tags) is not dict:
                 raise Exception("tags argument must be a dict")
             tags['__timestamp__'] = time.time()
@@ -434,7 +434,7 @@ class DirHandle(FileHandle):
         
     def readLog(self, recursive=0):
         """Return a list containing one dict for each log line"""
-        with MutexLocker(self.lock):
+        with self.lock:
             logf = self._logFile()
             if not os.path.exists(logf):
                 log = []
@@ -462,7 +462,7 @@ class DirHandle(FileHandle):
             return log
         
     def subDirs(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             ls = self.ls()
             subdirs = filter(lambda d: os.path.isdir(os.path.join(self.name(), d)), ls)
             return subdirs
@@ -494,7 +494,7 @@ class DirHandle(FileHandle):
         #prof = Profiler('mkdir')
         if info is None:
             info = {}
-        with MutexLocker(self.lock):
+        with self.lock:
             #prof.mark('got lock')
             if autoIncrement:
                 fullName = self.incrementFileName(name, useExt=False)
@@ -530,7 +530,7 @@ class DirHandle(FileHandle):
         
     def getDir(self, subdir, create=False, autoIncrement=False):
         """Return a DirHandle for the specified subdirectory. If the subdir does not exist, it will be created only if create==True"""
-        with MutexLocker(self.lock):
+        with self.lock:
             ndir = os.path.join(self.path, subdir)
             if os.path.isdir(ndir):
                 return self.manager.getDirHandle(ndir)
@@ -563,7 +563,7 @@ class DirHandle(FileHandle):
         """Return a list of all files in the directory.
         If normcase is True, normalize the case of all names in the list."""
         #p = Profiler('      DirHandle.ls:')
-        with MutexLocker(self.lock):
+        with self.lock:
             #p.mark('lock')
             #self._readIndex()
             #ls = self.index.keys()
@@ -608,7 +608,7 @@ class DirHandle(FileHandle):
         return os.path.getctime(os.path.join(self.name(), fileName))
     
     #def _cmpFileTimes(self, a, b):
-    #    with MutexLocker(self.lock):
+    #    with self.lock:
     #        t1 = t2 = None
     #        if self.isManaged():
     #            index = self._readIndex()
@@ -635,7 +635,7 @@ class DirHandle(FileHandle):
     
     def _fileInfo(self, file):
         """Return a dict of the meta info stored for file"""
-        with MutexLocker(self.lock):
+        with self.lock:
             if not self.isManaged():
                 return {}
             index = self._readIndex()
@@ -646,14 +646,14 @@ class DirHandle(FileHandle):
                 #raise Exception("File %s is not indexed" % file)
     
     def isDir(self, path=None):
-        with MutexLocker(self.lock):
+        with self.lock:
             if path is None:
                 return True
             else:
                 return self[path].isDir()
         
     def isFile(self, fileName):
-        with MutexLocker(self.lock):
+        with self.lock:
             fn = os.path.abspath(os.path.join(self.path, fileName))
             return os.path.isfile(fn)
         
@@ -669,7 +669,7 @@ class DirHandle(FileHandle):
             info = {}   ## never put {} in the function default
         
         t = time.time()
-        with MutexLocker(self.lock):
+        with self.lock:
             #p.mark('lock')
             ## Convert object to FileType if needed
             #if not isinstance(obj, FileType):
@@ -726,7 +726,7 @@ class DirHandle(FileHandle):
         #print "DirHandle: Adding file %s to index" % fileName
         if info is None:
             info = {}
-        with MutexLocker(self.lock):
+        with self.lock:
             if not self.isManaged():
                 self.createIndex()
             index = self._readIndex()
@@ -747,7 +747,7 @@ class DirHandle(FileHandle):
     def forget(self, fileName):
         """Remove fileName from the index for this directory"""
         #print "DirHandle: forget", fileName
-        with MutexLocker(self.lock):
+        with self.lock:
             if not self.isManaged(fileName):
                 raise Exception("Can not forget %s, not managed" % fileName)
             index = self._readIndex(lock=False)
@@ -762,7 +762,7 @@ class DirHandle(FileHandle):
                 self.emitChanged('meta', fileName)
         
     def isManaged(self, fileName=None):
-        with MutexLocker(self.lock):
+        with self.lock:
             if self._index is None:
                 return False
             if fileName is None:
@@ -781,14 +781,14 @@ class DirHandle(FileHandle):
         
         
     #def parent(self):
-        #with MutexLocker(self.lock):
+        #with self.lock:
             #pdir = os.path.normpath(os.path.join(self.path, '..'))
             #return self.manager.getDirHandle(pdir)
 
         
 
     def exists(self, name):
-        with MutexLocker(self.lock):
+        with self.lock:
             try:
                 fn = os.path.abspath(os.path.join(self.path, name))
             except:
@@ -799,7 +799,7 @@ class DirHandle(FileHandle):
     def _setFileInfo(self, fileName, info):
         """Set or update meta-information array for fileName. If merge is false, the info dict is completely overwritten."""
         #prof = Profiler('setFileInfo')
-        with MutexLocker(self.lock):
+        with self.lock:
             #prof.mark('1')
             if not self.isManaged():
                 self.createIndex()
@@ -828,7 +828,7 @@ class DirHandle(FileHandle):
             #prof.finish()
         
     def _readIndex(self, lock=True, unmanagedOk=False):
-        with MutexLocker(self.lock):
+        with self.lock:
             indexFile = self._indexFile()
             if self._index is None or os.path.getmtime(indexFile) != self._indexMTime:
                 if not os.path.isfile(indexFile):
@@ -849,7 +849,7 @@ class DirHandle(FileHandle):
             return self._index
         
     def _writeIndex(self, newIndex, lock=True):
-        with MutexLocker(self.lock):
+        with self.lock:
             
             writeConfigFile(newIndex, self._indexFile())
             #print "Write", type(newIndex)
@@ -857,7 +857,7 @@ class DirHandle(FileHandle):
             self._indexMTime = os.path.getmtime(self._indexFile())
 
     def _appendIndex(self, info):
-        with MutexLocker(self.lock):
+        with self.lock:
             indexFile = self._indexFile()
             appendConfigFile(info, indexFile)
             for k in info:

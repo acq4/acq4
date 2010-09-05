@@ -1,27 +1,56 @@
 # -*- coding: utf-8 -*-
-#from PyQt4 import QtCore, QtGui
-from PySide import QtCore, QtGui
+from PyQt4 import QtCore, QtGui
+#from PySide import QtCore, QtGui
 from Terminal import *
 
 class Node(QtCore.QObject):
     def __init__(self, name, terminals):
         QtCore.QObject.__init__(self)
         self._name = name
+        self._graphicsItem = None
         self.terminals = terminals
         self.inputs = {}
         self.outputs = {}
-        for name, term in terminals.iteritems():
-            if not isinstance(term, Terminal):
+        for name, opts in terminals.iteritems():
+            if not isinstance(opts, Terminal):
                 try:
-                    term = Terminal(self, name, term)
+                    term = Terminal(self, name, opts)
                     terminals[name] = term
                 except:
                     raise Exception('Cannot build Terminal from arguments')
-            
+            else:
+                term = opts
+                
             if term.isInput():
                 self.inputs[name] = term
             else:
                 self.outputs[name] = term
+        
+    def nextTerminalName(self, name):
+        """Return an unused terminal name"""
+        name2 = name
+        i = 1
+        while name2 in self.terminals:
+            name2 = "%s.%d" % (name, i)
+            i += 1
+        return name2
+        
+    def addInput(self, name="Input"):
+        self.addTerminal(name, ('in',))
+        
+    def addOutput(self, name="Output"):
+        self.addTerminal(name, ('out',))
+        
+    def addTerminal(self, name, opts):
+        name = self.nextTerminalName(name)
+        term = Terminal(self, name, opts)
+        self.terminals[name] = term
+        if opts[0] == 'in':
+            self.inputs[name] = term
+        else:
+            self.outputs[name] = term
+        self.graphicsItem().updateTerminals()
+        return name, term
         
     def listInputs(self):
         return self.inputs
@@ -35,7 +64,9 @@ class Node(QtCore.QObject):
     
     def graphicsItem(self):
         """Return a (the?) graphicsitem for this node"""
-        return NodeGraphicsItem(self)
+        if self._graphicsItem is None:
+            self._graphicsItem = NodeGraphicsItem(self)
+        return self._graphicsItem
     
     def __getattr__(self, attr):
         """Return the terminal with the given name"""
@@ -54,7 +85,8 @@ class Node(QtCore.QObject):
     def __repr__(self):
         return "<Node %s>" % self.name()
         
-        
+    def ctrlWidget(self):
+        return None
 
 
 class NodeGraphicsItem(QtGui.QGraphicsItem):
@@ -76,7 +108,11 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         self.nameItem = QtGui.QGraphicsTextItem(self.node.name(), self)
         self.nameItem.moveBy(bounds.width()/2. - self.nameItem.boundingRect().width()/2., 0)
         self.nameItem.setTextInteractionFlags(QtCore.Qt.TextEditorInteraction)
+        self.updateTerminals()
         
+        
+    def updateTerminals(self):
+        bounds = self.boundingRect()
         self.terminals = {}
         inp = self.node.listInputs()
         dy = bounds.height() / (len(inp)+1)
@@ -99,6 +135,7 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
             item.setAnchor(bounds.width(), y)
             self.terminals[i] = (t, item)
             y += dy
+        
         
     def boundingRect(self):
         return QtCore.QRectF(0, 0, 100, 100)

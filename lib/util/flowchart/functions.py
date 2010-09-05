@@ -1,6 +1,30 @@
 # -*- coding: utf-8 -*-
 from Node import *
 from advancedTypes import OrderedDict
+from DirTreeWidget import *
+
+class SubtreeNode(Node):
+    """Selects files from a DirHandle"""
+    nodeName = "Subtree"
+    desc = "Select files from within a directory. Input must be a DirHandle."
+    def __init__(self, name):
+        Node.__init__(self, name, terminals={'In': ('in',)})
+        self.files = []
+        self.lastInput = None
+        self.fileList = DirTreeWidget()
+        
+    def process(self, In, display=True):
+        self.lastInput = In
+        if display:
+            self.fileList.setRoot(In)
+        out = {}
+        for f in files:
+            out[f] = In[f]
+        return out
+        
+    def ctrlWidget(self):
+        return self.fileList
+
 
 class UniOpNode(Node):
     """Generic node for performing any operation like Out = In.fn()"""

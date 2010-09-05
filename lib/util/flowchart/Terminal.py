@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-#from PyQt4 import QtCore, QtGui
-from PySide import QtCore, QtGui
+from PyQt4 import QtCore, QtGui
+#from PySide import QtCore, QtGui
 
 class Terminal:
     def __init__(self, node, name, opts):

@@ -7,7 +7,7 @@ print p
 p = os.path.split(p)[0]
 print p
 sys.path.append(p)
-
+#import PySideImporter
 
 from Flowchart import *
 from PyQt4.QtGui import *

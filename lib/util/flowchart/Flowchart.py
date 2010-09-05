@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
-#from PyQt4 import QtCore, QtGui
-from PySide import QtCore, QtGui
+from PyQt4 import QtCore, QtGui
+#from PySide import QtCore, QtGui
 from Node import *
 import functions
 from advancedTypes import OrderedDict
-
-#from TreeWidget import *
+from TreeWidget import *
 
 def toposort(deps, nodes=None, seen=None, stack=None):
     """Topological sort. Arguments are:
@@ -40,40 +39,30 @@ class Flowchart(Node):
         self.innerTerminals = {}
         
         ## reverse input/output for internal terminals
-        for n, t in terminals.iteritems():
-            if t[0] == 'in':
-                self.innerTerminals[n] = ('out',) + t[1:]
-            else:
-                self.innerTerminals[n] = ('in',) + t[1:]
-            
+        #for n, t in terminals.iteritems():
+            #if t[0] == 'in':
+                #self.innerTerminals[n] = ('out',) + t[1:]
+            #else:
+                #self.innerTerminals[n] = ('in',) + t[1:]
             
         if name is None:
             name = "Flowchart"
         Node.__init__(self, name, self.innerTerminals)
         
-        
         self.nodes = {}
         self.connects = []
-        self._graphicsItem = FlowchartGraphicsItem(self)
+        self._innerGraphicsItem = FlowchartGraphicsItem(self)
         self._widget = None
         self._scene = None
         
-        #self.terminals = terminals
-        #self.inputs = {}
-        #self.outputs = {}
-        #for name, term in terminals.iteritems():
-            #if not isinstance(term, Terminal):
-                #try:
-                    #term = Terminal(self, name, term)
-                    #terminals[name] = term
-                #except:
-                    #raise Exception('Cannot build Terminal from arguments')
-            
-            #if term.isInput():
-                #self.inputs[name] = term
-            #else:
-                #self.outputs[name] = term
-        
+    def addTerminal(self, name, opts):
+        term = Node.addTerminal(self, name, opts)
+        if opts[0] == 'in':
+            opts = ('out',) + opts[1:]
+        else:
+            opts = ('in',) + opts[1:]
+        self.innerTerminals[name] = opts
+
     def addNode(self, nodeType, name=None):
         if name is None:
             n = 0
@@ -89,6 +78,7 @@ class Flowchart(Node):
         item.setParentItem(self.graphicsItem())
         item.moveBy(len(self.nodes)*150, 0)
         self.nodes[name] = node
+        self.widget().addNode(node)
         return node
         
     def process(self, **args):
@@ -174,8 +164,10 @@ class Flowchart(Node):
         return ops
         
 
-    def graphicsItem(self):
-        return self._graphicsItem
+    def innerGraphicsItem(self):
+        """Return the graphicsItem which displays the internals of this flowchart.
+        (graphicsItem() still returns the external-view item)"""
+        return self._innerGraphicsItem
         
     def widget(self):
         if self._widget is None:
@@ -183,13 +175,16 @@ class Flowchart(Node):
             self.scene = self._widget.scene()
             #self._scene = QtGui.QGraphicsScene()
             #self._widget.setScene(self._scene)
-            self.scene.addItem(self.graphicsItem())
+            self.scene.addItem(self.innerGraphicsItem())
         return self._widget
 
 class FlowchartGraphicsItem(QtGui.QGraphicsItem):
     def __init__(self, chart):
         QtGui.QGraphicsItem.__init__(self)
         self.chart = chart
+        self.updateTerminals()
+        
+    def updateTerminals(self):
         self.terminals = {}
         bounds = self.boundingRect()
         inp = self.chart.listInputs()
@@ -211,8 +206,6 @@ class FlowchartGraphicsItem(QtGui.QGraphicsItem):
             item.setAnchor(0, y)
             y += dy
         
-        
-        
     def boundingRect(self):
         return QtCore.QRectF(0, 0, 500, 500)
         
@@ -233,11 +226,11 @@ class FlowchartWidget(QtGui.QSplitter):
         self.vl.setContentsMargins(0,0,0,0)
         self.leftWidget.setLayout(self.vl)
         self.nodeCombo = QtGui.QComboBox()
-        self.ctrlList = QtGui.QTreeWidget()
-        self.ctrlList.setColumnCount(3)
-        self.ctrlList.setHeaderLabels(['Filter', 'X', 'time'])
+        self.ctrlList = TreeWidget()
+        self.ctrlList.setColumnCount(1)
+        #self.ctrlList.setHeaderLabels(['Filter', 'X', 'time'])
         self.ctrlList.setColumnWidth(0, 200)
-        self.ctrlList.setColumnWidth(1, 20)
+        #self.ctrlList.setColumnWidth(1, 20)
         self.ctrlList.setVerticalScrollMode(self.ctrlList.ScrollPerPixel)
         self.ctrlList.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.vl.addWidget(self.nodeCombo)
@@ -250,7 +243,7 @@ class FlowchartWidget(QtGui.QSplitter):
         self.view.setScene(self._scene)
         self.setSizes([200, 1000])
         
-        self.nodeCombo.addItem("Add..")
+        self.nodeCombo.addItem("Add Node..")
        
         for f in functions.NODE_LIST:
             self.nodeCombo.addItem(f)
@@ -270,6 +263,17 @@ class FlowchartWidget(QtGui.QSplitter):
 
     def itemChanged(self, *args):
         pass
+    
+    def addNode(self, node):
+        ctrl = node.ctrlWidget()
+        if ctrl is None:
+            return
+        item = QtGui.QTreeWidgetItem([node.name(), '', ''])
+        self.ctrlList.addTopLevelItem(item)
+        item2 = QtGui.QTreeWidgetItem()
+        item.addChild(item2)
+        self.ctrlList.setItemWidget(item2, 0, ctrl)
+        
 
 class FlowchartNode(Node):
     pass
