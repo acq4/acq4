@@ -2,29 +2,21 @@
 from PyQt4 import QtCore, QtGui
 #from PySide import QtCore, QtGui
 from Terminal import *
+from advancedTypes import OrderedDict
 
 class Node(QtCore.QObject):
-    def __init__(self, name, terminals):
+    def __init__(self, name, terminals=None):
         QtCore.QObject.__init__(self)
         self._name = name
         self._graphicsItem = None
-        self.terminals = terminals
+        self.terminals = OrderedDict()
         self.inputs = {}
         self.outputs = {}
+        if terminals is None:
+            return
         for name, opts in terminals.iteritems():
-            if not isinstance(opts, Terminal):
-                try:
-                    term = Terminal(self, name, opts)
-                    terminals[name] = term
-                except:
-                    raise Exception('Cannot build Terminal from arguments')
-            else:
-                term = opts
-                
-            if term.isInput():
-                self.inputs[name] = term
-            else:
-                self.outputs[name] = term
+            self.addTerminal(name, opts)
+
         
     def nextTerminalName(self, name):
         """Return an unused terminal name"""
@@ -74,6 +66,9 @@ class Node(QtCore.QObject):
             raise NameError(attr)
         else:
             return self.terminals[attr]
+            
+    def __getitem__(self, item):
+        return getattr(self, item)
             
     def name(self):
         return self._name

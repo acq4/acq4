@@ -3,9 +3,7 @@ import sys, os
 print __file__
 
 p = os.path.dirname(os.path.abspath(__file__))
-print p
 p = os.path.split(p)[0]
-print p
 sys.path.append(p)
 #import PySideImporter
 
@@ -23,19 +21,19 @@ w = fc.widget()
 w.resize(800,600)
 w.show()
 
-n1 = fc.addNode('Add')
-n2 = fc.addNode('Subtract')
-n3 = fc.addNode('Abs')
-n4 = fc.addNode('Add')
+n1 = fc.createNode('Add')
+n2 = fc.createNode('Subtract')
+n3 = fc.createNode('Abs')
+n4 = fc.createNode('Add')
 
-fc.dataIn.connectTo(n1.A)
-fc.dataIn.connectTo(n1.B)
-fc.dataIn.connectTo(n2.A)
-n1.Out.connectTo(n4.A)
-n1.Out.connectTo(n2.B)
-n2.Out.connectTo(n3.In)
-n3.Out.connectTo(n4.B)
-n4.Out.connectTo(fc.dataOut)
+fc.connect(fc.dataIn, n1.A)
+fc.connect(fc.dataIn, n1.B)
+fc.connect(fc.dataIn, n2.A)
+fc.connect(n1.Out, n4.A)
+fc.connect(n1.Out, n2.B)
+fc.connect(n2.Out, n3.In)
+fc.connect(n3.Out, n4.B)
+fc.connect(n4.Out, fc.dataOut)
 
 
 def process(**kargs):

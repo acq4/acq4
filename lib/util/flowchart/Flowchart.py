@@ -35,35 +35,36 @@ def toposort(deps, nodes=None, seen=None, stack=None):
 
 class Flowchart(Node):
     def __init__(self, terminals, name=None):
-        self.outerTerminals = terminals
-        self.innerTerminals = {}
-        
-        ## reverse input/output for internal terminals
-        #for n, t in terminals.iteritems():
-            #if t[0] == 'in':
-                #self.innerTerminals[n] = ('out',) + t[1:]
-            #else:
-                #self.innerTerminals[n] = ('in',) + t[1:]
-            
         if name is None:
             name = "Flowchart"
-        Node.__init__(self, name, self.innerTerminals)
-        
+        Node.__init__(self, name)
+            
         self.nodes = {}
         self.connects = []
-        self._innerGraphicsItem = FlowchartGraphicsItem(self)
+        self._chartGraphicsItem = FlowchartGraphicsItem(self)
         self._widget = None
         self._scene = None
         
+        self.inputNode = Node('Input')
+        self.outputNode = Node('Output')
+        self.addNode(self.inputNode, 'Input', [-200, 200])
+        self.addNode(self.outputNode, 'Output', [600, 200])
+            
+        for name, opts in terminals.iteritems():
+            self.addTerminal(name, opts)
+      
+        
+        
     def addTerminal(self, name, opts):
-        term = Node.addTerminal(self, name, opts)
+        name, term = Node.addTerminal(self, name, opts)
         if opts[0] == 'in':
             opts = ('out',) + opts[1:]
+            self.inputNode.addTerminal(name, opts)
         else:
             opts = ('in',) + opts[1:]
-        self.innerTerminals[name] = opts
+            self.outputNode.addTerminal(name, opts)
 
-    def addNode(self, nodeType, name=None):
+    def createNode(self, nodeType, name=None):
         if name is None:
             n = 0
             while True:
@@ -73,13 +74,39 @@ class Flowchart(Node):
                 n += 1
                 
         node = functions.NODE_LIST[nodeType](name)
-            
+        self.addNode(node, name)
+        return node
+        
+    def addNode(self, node, name, pos=None):
+        if pos is None:
+            pos = [0, 0]
         item = node.graphicsItem()
-        item.setParentItem(self.graphicsItem())
-        item.moveBy(len(self.nodes)*150, 0)
+        item.setParentItem(self.chartGraphicsItem())
+        item.moveBy(*pos)
         self.nodes[name] = node
         self.widget().addNode(node)
-        return node
+        
+    def arrangeNodes(self):
+        
+        pass
+        
+    def internalTerminal(self, term):
+        """If the terminal belongs to the external Node, return the corresponding internal terminal"""
+        if term.node() is self:
+            if term.isInput():
+                return self.inputNode[term.name()]
+            else:
+                return self.outputNode[term.name()]
+                
+        else:
+            return term
+        
+    def connect(self, term1, term2):
+        """Connect two terminals together within this flowchart."""
+        term1 = self.internalTerminal(term1)
+        term2 = self.internalTerminal(term2)
+        term1.connectTo(term2)
+        
         
     def process(self, **args):
         data = {}  ## Stores terminal:value pairs
@@ -88,35 +115,50 @@ class Flowchart(Node):
         ## order should look like [('p', node1), ('p', node2), ('d', terminal1), ...] 
         ## Each tuple specifies either (p)rocess this node or (d)elete the result from this terminal
         order = self.processOrder()
-        #print "ORDER:\n", order
+        print "ORDER:\n", order
         
         ## Record inputs given to process()
-        for n, t in self.listOutputs().iteritems():
+        for n, t in self.inputNode.listOutputs().iteritems():
             data[t] = args[n]
         
         ## process all in order
         for c, arg in order:
+            
             if c == 'p':     ## Process a single node
+                print "process:", arg
                 node = arg
                 outs = node.listOutputs().values()
                 ins = node.listInputs().values()
+                print "  ", outs, ins
                 args = {}
                 for inp in ins:
                     inpt = inp.inputTerminal()
+                    
+                    if inpt is None:
+                        continue
                     args[inp.name()] = data[inpt]
-                result = node.process(**args)
-                for out in outs:
-                    data[out] = result[out.name()]
+                if node is self.outputNode:
+                    return args
+                else:
+                    result = node.process(**args)
+                    for out in outs:
+                        print "    Output:", out, out.name()
+                        #print out.name()
+                        try:
+                            data[out] = result[out.name()]
+                        except:
+                            print out, out.name()
+                            raise
             elif c == 'd':   ## delete a terminal result (no longer needed; may be holding a lot of memory)
                 del data[arg]
         
         ## Copy to return dict
-        result = {}
-        for n, t in self.listInputs().iteritems():
-            inpt = t.inputTerminal()
-            result[n] = data[inpt]
+        #result = {}
+        #for n, t in self.outputNode.listInputs().iteritems():
+            ##inpt = t.inputTerminal()
+            #result[n] = data[t]
             
-        return result
+        #return result
         
     def processOrder(self):
         """Return the order of operations required to process this chart.
@@ -132,10 +174,11 @@ class Flowchart(Node):
             for t in node.listOutputs().itervalues():
                 tdeps[t] = t.dependentNodes()
             
-        
+        print "DEPS:", deps
         ## determine correct node-processing order
-        deps[self] = []
+        #deps[self] = []
         order = toposort(deps)[1:]
+        print "ORDER1:", order
         
         ## construct list of operations
         ops = [('p', n) for n in order]
@@ -164,10 +207,10 @@ class Flowchart(Node):
         return ops
         
 
-    def innerGraphicsItem(self):
+    def chartGraphicsItem(self):
         """Return the graphicsItem which displays the internals of this flowchart.
         (graphicsItem() still returns the external-view item)"""
-        return self._innerGraphicsItem
+        return self._chartGraphicsItem
         
     def widget(self):
         if self._widget is None:
@@ -175,7 +218,7 @@ class Flowchart(Node):
             self.scene = self._widget.scene()
             #self._scene = QtGui.QGraphicsScene()
             #self._widget.setScene(self._scene)
-            self.scene.addItem(self.innerGraphicsItem())
+            self.scene.addItem(self.chartGraphicsItem())
         return self._widget
 
 class FlowchartGraphicsItem(QtGui.QGraphicsItem):
@@ -207,10 +250,11 @@ class FlowchartGraphicsItem(QtGui.QGraphicsItem):
             y += dy
         
     def boundingRect(self):
-        return QtCore.QRectF(0, 0, 500, 500)
+        return QtCore.QRectF()
         
     def paint(self, p, *args):
-        p.drawRect(self.boundingRect())
+        pass
+        #p.drawRect(self.boundingRect())
     
 
 class FlowchartWidget(QtGui.QSplitter):
@@ -259,7 +303,7 @@ class FlowchartWidget(QtGui.QSplitter):
             return
         nodeType = str(self.nodeCombo.currentText())
         self.nodeCombo.setCurrentIndex(0)
-        self.chart.addNode(nodeType)
+        self.chart.createNode(nodeType)
 
     def itemChanged(self, *args):
         pass
