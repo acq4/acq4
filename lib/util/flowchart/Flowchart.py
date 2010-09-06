@@ -34,9 +34,11 @@ def toposort(deps, nodes=None, seen=None, stack=None):
         
 
 class Flowchart(Node):
-    def __init__(self, terminals, name=None):
+    def __init__(self, terminals=None, name=None):
         if name is None:
             name = "Flowchart"
+        if terminals is None:
+            terminals = {}
         Node.__init__(self, name)
             
         self.nodes = {}
@@ -115,7 +117,6 @@ class Flowchart(Node):
         ## order should look like [('p', node1), ('p', node2), ('d', terminal1), ...] 
         ## Each tuple specifies either (p)rocess this node or (d)elete the result from this terminal
         order = self.processOrder()
-        print "ORDER:\n", order
         
         ## Record inputs given to process()
         for n, t in self.inputNode.listOutputs().iteritems():
@@ -125,11 +126,11 @@ class Flowchart(Node):
         for c, arg in order:
             
             if c == 'p':     ## Process a single node
-                print "process:", arg
+                #print "process:", arg
                 node = arg
                 outs = node.listOutputs().values()
                 ins = node.listInputs().values()
-                print "  ", outs, ins
+                #print "  ", outs, ins
                 args = {}
                 for inp in ins:
                     inpt = inp.inputTerminal()
@@ -142,7 +143,7 @@ class Flowchart(Node):
                 else:
                     result = node.process(**args)
                     for out in outs:
-                        print "    Output:", out, out.name()
+                        #print "    Output:", out, out.name()
                         #print out.name()
                         try:
                             data[out] = result[out.name()]
@@ -151,7 +152,10 @@ class Flowchart(Node):
                             raise
             elif c == 'd':   ## delete a terminal result (no longer needed; may be holding a lot of memory)
                 del data[arg]
-        
+
+        ## If we got to this point, processing never finished.
+        return {}
+
         ## Copy to return dict
         #result = {}
         #for n, t in self.outputNode.listInputs().iteritems():
@@ -159,6 +163,10 @@ class Flowchart(Node):
             #result[n] = data[t]
             
         #return result
+        
+    def setInput(self, **args):
+        Node.setInput(self, **args)
+        self.inputNode.setOutput(**args)
         
     def processOrder(self):
         """Return the order of operations required to process this chart.
@@ -174,11 +182,11 @@ class Flowchart(Node):
             for t in node.listOutputs().itervalues():
                 tdeps[t] = t.dependentNodes()
             
-        print "DEPS:", deps
+        #print "DEPS:", deps
         ## determine correct node-processing order
         #deps[self] = []
         order = toposort(deps)[1:]
-        print "ORDER1:", order
+        #print "ORDER1:", order
         
         ## construct list of operations
         ops = [('p', n) for n in order]

@@ -10,6 +10,7 @@ class DirTreeWidget(TreeWidget):
         TreeWidget.__init__(self, parent)
         QtCore.QObject.connect(self, QtCore.SIGNAL("itemExpanded(QTreeWidgetItem*)"), self.itemExpanded)
         self.setRoot(dirHandle)
+        self.setHeaderHidden(True)
 
     def setRoot(self, handle):
         if handle == self.handle:
@@ -31,7 +32,7 @@ class DirTreeItem(QtGui.QTreeWidgetItem):
         QtGui.QTreeWidgetItem.__init__(self, [handle.shortName()])
         if flags is None:
             flags = QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled
-        self.handle = handle
+        self._handle = handle
         self.isLoaded = False
         if handle.isDir():
             self.setChildIndicatorPolicy(self.ShowIndicator)
@@ -44,8 +45,10 @@ class DirTreeItem(QtGui.QTreeWidgetItem):
         
     def expanded(self):
         if not self.isLoaded:
-            for f in self.handle.ls():
-                item = DirTreeItem(self.handle[f], flags=self.defaultFlags, checkState=self.defaultCheckState)
+            for f in self._handle.ls():
+                item = DirTreeItem(self._handle[f], flags=self.defaultFlags, checkState=self.defaultCheckState)
                 self.addChild(item)
             self.isLoaded = True
-        
+            
+    def handle(self):
+        return self._handle

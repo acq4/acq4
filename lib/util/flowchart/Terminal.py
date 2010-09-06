@@ -1,18 +1,39 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
+import weakref
 #from PySide import QtCore, QtGui
 
 class Terminal:
     def __init__(self, node, name, opts):
-        self._node = node
+        self._node = weakref.ref(node)
         self._name = name
         self._isOutput = opts[0]=='out'
         self._connections = {}
         self._graphicsItem = TerminalGraphicsItem(self)
+        self._value = None
+        self.valueOk = None
+        self.recolor()
+        
+    def value(self):
+        return self._value
+        
+    def setValue(self, val, process=True):
+        self._value = val
+        self.setValueAcceptable(None)
+        self.recolor()
+        if self.isInput() and process:
+            self.node().processOutput()
+            
+    def valueIsAcceptable(self):
+        """Returns True->acceptable  None->unknown  False->Unacceptable"""
+        return self.valueOk
+        
+    def setValueAcceptable(self, v=True):
+        self.valueOk = v
         self.recolor()
         
     def node(self):
-        return self._node
+        return self._node()
         
     def isInput(self):
         return not self._isOutput
@@ -73,6 +94,9 @@ class Terminal:
         
         self.recolor()
         
+        if self.isOutput():
+            term.setValue(self.value())
+        
     def disconnectFrom(self, term):
         if not self.connectedTo(term):
             return
@@ -83,15 +107,25 @@ class Terminal:
         self.recolor()
         term.recolor()
         
+        if self.isOutput():
+            term.setValue(None)
+        
+    def disconnectAll(self):
+        for t in self._connections.keys():
+            self.disconnectFrom(t)
+        
     def recolor(self, color=None, recurse=True):
         if color is None:
-            if self.isConnected():
-                if self.hasInput():
-                    color = QtGui.QColor(100, 200, 100)
-                else:
-                    color = QtGui.QColor(200, 200, 100)
-            else:
+            if not self.isConnected() or not self.hasInput():
+                color = QtGui.QColor(0,0,0)
+            elif self.value() is None:
                 color = QtGui.QColor(255,255,255)
+            elif self.valueIsAcceptable() is None:
+                color = QtGui.QColor(200, 200, 0)
+            elif self.valueIsAcceptable() is True:
+                color = QtGui.QColor(0, 200, 0)
+            else:
+                color = QtGui.QColor(200, 0, 0)
         self.graphicsItem().setBrush(QtGui.QBrush(color))
         
         if recurse:
@@ -118,7 +152,11 @@ class Terminal:
         
     def __hash__(self):
         return id(self)
-        
+
+    def remove(self):
+        self.disconnectAll()
+        item = self.graphicsItem()
+        item.scene().removeItem(item)
         
 class TerminalGraphicsItem(QtGui.QGraphicsItem):
     def __init__(self, term, parent=None):
@@ -129,6 +167,7 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
         self.label.scale(0.7, 0.7)
         self.setAcceptHoverEvents(True)
         self.newConnection = None
+        self.setAcceptHoverEvents(True)
 
     def setBrush(self, brush):
         self.box.setBrush(brush)
@@ -199,6 +238,11 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
     def nodeMoved(self):
         for t, item in self.term.connections().iteritems():
             item.updateLine()
+
+    def hoverEnterEvent(self, ev):
+        print "Hover", self.term
+        print "  value:", self.term.value()
+
 
 class ConnectionItem(QtGui.QGraphicsItem):
     def __init__(self, source, target=None):

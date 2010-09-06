@@ -3,6 +3,7 @@ from PyQt4 import QtCore, QtGui
 #from PySide import QtCore, QtGui
 from Terminal import *
 from advancedTypes import OrderedDict
+from debug import *
 
 class Node(QtCore.QObject):
     def __init__(self, name, terminals=None):
@@ -12,6 +13,7 @@ class Node(QtCore.QObject):
         self.terminals = OrderedDict()
         self.inputs = {}
         self.outputs = {}
+        self.exception = None
         if terminals is None:
             return
         for name, opts in terminals.iteritems():
@@ -33,6 +35,18 @@ class Node(QtCore.QObject):
     def addOutput(self, name="Output"):
         self.addTerminal(name, ('out',))
         
+    def removeTerminal(self, name):
+        #print "remove", name
+        term = self.terminals[name]
+        term.remove()
+        del self.terminals[name]
+        if name in self.inputs:
+            del self.inputs[name]
+        if name in self.outputs:
+            del self.outputs[name]
+        self.graphicsItem().updateTerminals()
+        
+        
     def addTerminal(self, name, opts):
         name = self.nextTerminalName(name)
         term = Terminal(self, name, opts)
@@ -52,7 +66,7 @@ class Node(QtCore.QObject):
         
     def process(self, **kargs):
         """Process data through this node. Each named argument supplies data to the corresponding terminal."""
-        pass
+        return {}
     
     def graphicsItem(self):
         """Return a (the?) graphicsitem for this node"""
@@ -83,6 +97,64 @@ class Node(QtCore.QObject):
     def ctrlWidget(self):
         return None
 
+    def setInput(self, **args):
+        changed = False
+        for k, v in args.iteritems():
+            term = self.inputs[k]
+            oldVal = term.value()
+            if oldVal != v:
+                changed = True
+            term.setValue(v, process=False)
+        if changed:
+            self.processOutput()
+        
+    def inputValues(self):
+        vals = {}
+        for n, t in self.inputs.iteritems():
+            vals[n] = t.value()
+        return vals
+            
+    def processOutput(self):
+        print "processing", self
+        vals = self.inputValues()
+        print "  inputs:", vals
+        try:
+            out = self.process(**vals)
+            print "  output:", out
+            self.setOutput(**out)
+            for n,t in self.inputs.iteritems():
+                t.setValueAcceptable(True)
+            self.clearException()
+        except:
+            #printExc( "Exception while processing:")
+            for n,t in self.outputs.iteritems():
+                t.setValue(None)
+            self.setException(sys.exc_info())
+            
+            
+    def setOutput(self, **vals):
+        for k, v in vals.iteritems():
+            term = self.outputs[k]
+            term.setValue(v)
+            targets = term.extendedConnections()
+            for t in targets:  ## propagate downstream
+                if t is term:
+                    continue
+                t.node().setInput(**{t.name(): v})
+            term.setValueAcceptable(True)
+            
+    def setException(self, exc):
+        self.exception = exc
+        self.recolor()
+        
+    def clearException(self):
+        self.setException(None)
+        
+    def recolor(self):
+        if self.exception is None:
+            self.graphicsItem().setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
+        else:
+            self.graphicsItem().setPen(QtGui.QPen(QtGui.QColor(150, 0, 0)))
 
 class NodeGraphicsItem(QtGui.QGraphicsItem):
     def __init__(self, node):
@@ -93,6 +165,7 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         #self.shadow.setBlurRadius(10)
         #self.setGraphicsEffect(self.shadow)
         
+        self.pen = QtGui.QPen(QtGui.QColor(0,0,0))
         self.node = node
         self.setFlags(
             self.ItemIsMovable |
@@ -104,7 +177,11 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         self.nameItem.moveBy(bounds.width()/2. - self.nameItem.boundingRect().width()/2., 0)
         self.nameItem.setTextInteractionFlags(QtCore.Qt.TextEditorInteraction)
         self.updateTerminals()
+        self.pen = QtGui.QPen(QtGui.QColor(0,0,0))
         
+    def setPen(self, pen):
+        self.pen = pen
+        self.update()
         
     def updateTerminals(self):
         bounds = self.boundingRect()
@@ -138,10 +215,10 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
     def paint(self, p, *args):
         bounds = self.boundingRect()
         if self.isSelected():
-            p.setPen(QtGui.QPen(QtGui.QColor(200, 200, 100)))
+            p.setPen(self.pen)
             p.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 255)))
         else:
-            p.setPen(QtGui.QPen(QtGui.QColor(150, 150, 150)))
+            p.setPen(self.pen)
             p.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 200)))
         p.drawRect(bounds)
         

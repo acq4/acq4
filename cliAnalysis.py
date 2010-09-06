@@ -67,8 +67,9 @@ config = os.path.join(pyDir, 'config', 'default.cfg')
 dm = Manager(config, sys.argv[1:])
 
 
-w = UncagingWindow()
-
+#w = UncagingWindow()
+from lib.analysis.analyzer import *
+w = AnalyzerWindow()
 
 
 ## Start Qt event loop unless running in interactive mode.

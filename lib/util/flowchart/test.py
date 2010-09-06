@@ -47,3 +47,5 @@ def process(**kargs):
 
 
 print process(dataIn=7)
+
+fc.setInput(dataIn=3)
