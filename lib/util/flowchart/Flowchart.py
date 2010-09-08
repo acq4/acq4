@@ -42,7 +42,7 @@ class Flowchart(Node):
         Node.__init__(self, name)
             
         self.nodes = {}
-        self.connects = []
+        #self.connects = []
         self._chartGraphicsItem = FlowchartGraphicsItem(self)
         self._widget = None
         self._scene = None
@@ -229,6 +229,60 @@ class Flowchart(Node):
             self.scene.addItem(self.chartGraphicsItem())
         return self._widget
 
+    def listConnections(self):
+        conn = set()
+        for n in self.nodes.itervalues():
+            terms = n.listOutputs()
+            for n, t in terms.iteritems():
+                for c in t.connections():
+                    conn.add((t, c))
+        return conn
+
+    def saveState(self):
+        state = Node.saveState(self)
+        state['nodes'] = []
+        state['connects'] = []
+        state['terminals'] = self.saveTerminals()
+        
+        for name, node in self.nodes.iteritems():
+            cls = type(node)
+            if hasattr(cls, 'nodeName'):
+                clsName = cls.nodeName
+                pos = node.graphicsItem().pos()
+                ns = {'class': clsName, 'name': name, 'pos': (pos.x(), pos.y()), 'state': node.saveState()}
+                state['nodes'].append(ns)
+            
+        conn = self.listConnections()
+        for a, b in conn:
+            state['connects'].append((a.node().name(), a.name(), b.node().name(), b.name()))
+        
+        return state
+        
+    def restoreState(self, state):
+        self.clear()
+        Node.restoreState(self, state)
+        for n in state['nodes']:
+            node = self.createNode(n['class'], name=n['name'])
+            node.restoreState(n['state'])
+            node.graphicsItem().moveBy(*n['pos'])
+        self.restoreTerminals(state['terminals'])
+        for n1, t1, n2, t2 in state['connects']:
+            self.connect(self.nodes[n1][t1], self.nodes[n2][t2])
+
+    def clear(self):
+        for n in self.nodes.values():
+            if n is self.inputNode or n is self.outputNode:
+                continue
+            self.widget().removeNode(n)
+            n.close()
+            del self.nodes[n.name()]
+        self.clearTerminals()
+        
+    def clearTerminals(self):
+        Node.clearTerminals(self)
+        self.inputNode.clearTerminals()
+        self.outputNode.clearTerminals()
+
 class FlowchartGraphicsItem(QtGui.QGraphicsItem):
     def __init__(self, chart):
         QtGui.QGraphicsItem.__init__(self)
@@ -269,6 +323,7 @@ class FlowchartWidget(QtGui.QSplitter):
     def __init__(self, chart, *args):
         QtGui.QSplitter.__init__(self, *args)
         self.chart = chart
+        self.items = {}
         self.setMinimumWidth(250)
         self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding))
         
@@ -325,7 +380,12 @@ class FlowchartWidget(QtGui.QSplitter):
         item2 = QtGui.QTreeWidgetItem()
         item.addChild(item2)
         self.ctrlList.setItemWidget(item2, 0, ctrl)
+        self.items[node] = item
         
+    def removeNode(self, node):
+        if node in self.items:
+            item = self.items[node]
+            self.ctrlList.removeTopLevelItem(item)
 
 class FlowchartNode(Node):
     pass

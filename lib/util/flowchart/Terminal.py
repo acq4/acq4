@@ -22,7 +22,7 @@ class Terminal:
         self.setValueAcceptable(None)
         self.recolor()
         if self.isInput() and process:
-            self.node().processOutput()
+            self.node().update()
             
     def valueIsAcceptable(self):
         """Returns True->acceptable  None->unknown  False->Unacceptable"""
@@ -96,6 +96,10 @@ class Terminal:
         
         if self.isOutput():
             term.setValue(self.value())
+        if term.isOutput():
+            self.setValue(term.value())
+            
+        return connectionItem
         
     def disconnectFrom(self, term):
         if not self.connectedTo(term):
@@ -109,6 +113,8 @@ class Terminal:
         
         if self.isOutput():
             term.setValue(None)
+        if term.isOutput():
+            self.setValue(None)
         
     def disconnectAll(self):
         for t in self._connections.keys():
@@ -153,11 +159,17 @@ class Terminal:
     def __hash__(self):
         return id(self)
 
-    def remove(self):
+    def close(self):
         self.disconnectAll()
         item = self.graphicsItem()
-        item.scene().removeItem(item)
+        if item.scene() is not None:
+            item.scene().removeItem(item)
         
+    def saveState(self):
+        io = ['in', 'out'][self.isOutput()]
+        return (io,)
+
+
 class TerminalGraphicsItem(QtGui.QGraphicsItem):
     def __init__(self, term, parent=None):
         self.term = term
@@ -196,6 +208,11 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
         else:
             self.box.setPos(pos.x()-br.width(), pos.y()-br.height()/2.)
             self.label.setPos(pos.x()-br.width()-lr.width(), pos.y()-lr.height()/2.)
+        self.updateConnections()
+        
+    def updateConnections(self):
+        for t, c in self.term.connections().iteritems():
+            c.updateLine()
             
     def mousePressEvent(self, ev):
         ev.accept()

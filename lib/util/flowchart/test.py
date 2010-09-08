@@ -49,3 +49,8 @@ def process(**kargs):
 print process(dataIn=7)
 
 fc.setInput(dataIn=3)
+
+s = fc.saveState()
+fc.clear()
+
+fc.restoreState(s)

@@ -355,6 +355,9 @@ class FileHandle(QtCore.QObject):
     def isDir(self, path=None):
         return False
         
+    def isFile(self):
+        return True
+        
     def _deleted(self):
         self.path = None
     
@@ -652,7 +655,9 @@ class DirHandle(FileHandle):
             else:
                 return self[path].isDir()
         
-    def isFile(self, fileName):
+    def isFile(self, fileName=None):
+        if fileName is None:
+            return False
         with self.lock:
             fn = os.path.abspath(os.path.join(self.path, fileName))
             return os.path.isfile(fn)

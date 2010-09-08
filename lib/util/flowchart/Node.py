@@ -4,6 +4,17 @@ from PyQt4 import QtCore, QtGui
 from Terminal import *
 from advancedTypes import OrderedDict
 from debug import *
+import numpy as np
+
+def eq(a, b):
+    """The great missing equivalence function."""
+    if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
+        return (a == b).all()
+    else:
+        return bool(a == b)
+
+
+
 
 class Node(QtCore.QObject):
     def __init__(self, name, terminals=None):
@@ -38,7 +49,7 @@ class Node(QtCore.QObject):
     def removeTerminal(self, name):
         #print "remove", name
         term = self.terminals[name]
-        term.remove()
+        term.close()
         del self.terminals[name]
         if name in self.inputs:
             del self.inputs[name]
@@ -102,11 +113,11 @@ class Node(QtCore.QObject):
         for k, v in args.iteritems():
             term = self.inputs[k]
             oldVal = term.value()
-            if oldVal != v:
+            if not eq(oldVal, v):
                 changed = True
             term.setValue(v, process=False)
         if changed:
-            self.processOutput()
+            self.update()
         
     def inputValues(self):
         vals = {}
@@ -114,19 +125,20 @@ class Node(QtCore.QObject):
             vals[n] = t.value()
         return vals
             
-    def processOutput(self):
-        print "processing", self
+    def update(self):
+        """Collect all input values, attempt to process new output values, and propagate downstream."""
+        #print "processing", self
         vals = self.inputValues()
-        print "  inputs:", vals
+        #print "  inputs:", vals
         try:
             out = self.process(**vals)
-            print "  output:", out
+            #print "  output:", out
             self.setOutput(**out)
             for n,t in self.inputs.iteritems():
                 t.setValueAcceptable(True)
             self.clearException()
         except:
-            #printExc( "Exception while processing:")
+            printExc( "Exception while processing:")
             for n,t in self.outputs.iteritems():
                 t.setValue(None)
             self.setException(sys.exc_info())
@@ -154,7 +166,49 @@ class Node(QtCore.QObject):
         if self.exception is None:
             self.graphicsItem().setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
         else:
-            self.graphicsItem().setPen(QtGui.QPen(QtGui.QColor(150, 0, 0)))
+            self.graphicsItem().setPen(QtGui.QPen(QtGui.QColor(150, 0, 0), 3))
+
+    def saveState(self):
+        return {}
+        
+    def restoreState(self, state):
+        pass
+        
+    def saveTerminals(self):
+        terms = OrderedDict()
+        for n, t in self.terminals.iteritems():
+            terms[n] = (t.saveState())
+        return terms
+        
+    def restoreTerminals(self, state):
+        for name, opts in state.iteritems():
+            if name in self.terminals:
+                continue
+            self.addTerminal(name, opts)
+        
+    def clearTerminals(self):
+        for t in self.terminals.itervalues():
+            t.close()
+        self.terminals = OrderedDict()
+        self.inputs = {}
+        self.outputs = {}
+        
+    def close(self):
+        """Cleans up after the node--removes terminals, graphicsItem, widget"""
+        self.disconnectAll()
+        self.clearTerminals()
+        item = self.graphicsItem()
+        if item.scene() is not None:
+            item.scene().removeItem(item)
+        self._graphicsItem = None
+        w = self.ctrlWidget()
+        if w is not None:
+            w.setParent(None)
+            
+    def disconnectAll(self):
+        for t in self.terminals.itervalues():
+            t.disconnectAll()
+
 
 class NodeGraphicsItem(QtGui.QGraphicsItem):
     def __init__(self, node):

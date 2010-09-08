@@ -16,6 +16,7 @@ class SubtreeNode(Node):
         QtCore.QObject.connect(self.fileList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
         
     def process(self, In, display=True):
+        #print "subtree process", In
         self.lastInput = In
         if display:
             if In is not self.root:
@@ -39,7 +40,6 @@ class SubtreeNode(Node):
         for f in self.files:
             self.removeTerminal(f)
         self.files = set()
-           
 
     def itemChanged(self, item):
         fname = item.handle().name(relativeTo=self.root)
@@ -51,8 +51,74 @@ class SubtreeNode(Node):
             if fname in self.files:
                 self.files.remove(fname)
                 self.removeTerminal(fname)
+        self.update()
             
-            
+class MetaArrayColumnNode(Node):
+    nodeName = "MetaArrayColumn"
+    desc = "Select named columns from a MetaArray."
+    def __init__(self, name):
+        Node.__init__(self, name, terminals={'In': ('in',)})
+        self.columns = set()
+        #self.lastInput = None
+        #self.fileList = DirTreeWidget(defaultFlags=QtCore.Qt.ItemIsUserCheckable|QtCore.Qt.ItemIsEnabled, defaultCheckState=False)
+        self.columnList = QtGui.QListWidget()
+        self.axis = 0
+        QtCore.QObject.connect(self.columnList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.itemChanged)
+        
+    def process(self, In, display=True):
+        #print "MetaArrayColumn process:"
+        #self.lastInput = In
+        if display:
+            self.updateList(In)
+                
+        out = {}
+        for c in self.columns:
+            out[c] = In[self.axis:c]
+        return out
+        
+    def ctrlWidget(self):
+        return self.columnList
+
+    def updateList(self, data):
+        cols = data.listColumns()
+        for ax in cols:  ## find first axis with columns
+            if len(cols[ax]) > 0:
+                self.axis = ax
+                cols = set(cols[ax])
+                break
+                
+        rem = set()
+        for c in self.columns:
+            if c not in cols:
+                self.removeTerminal(c)
+                rem.add(c)
+        self.columns -= rem
+                
+        self.columnList.blockSignals(True)
+        self.columnList.clear()
+        for c in cols:
+            item = QtGui.QListWidgetItem(c)
+            item.setFlags(QtCore.Qt.ItemIsEnabled|QtCore.Qt.ItemIsUserCheckable)
+            if c in self.columns:
+                item.setCheckState(QtCore.Qt.Checked)
+            else:
+                item.setCheckState(QtCore.Qt.Unchecked)
+            self.columnList.addItem(item)
+        self.columnList.blockSignals(False)
+        
+
+    def itemChanged(self, item):
+        col = str(item.text())
+        if item.checkState() == QtCore.Qt.Checked:
+            if col not in self.columns:
+                self.columns.add(col)
+                self.addOutput(col)
+        else:
+            if col in self.columns:
+                self.columns.remove(col)
+                self.removeTerminal(col)
+        self.update()
+    
 
 class UniOpNode(Node):
     """Generic node for performing any operation like Out = In.fn()"""
@@ -79,9 +145,9 @@ class BinOpNode(Node):
     def process(self, **args):
         fn = getattr(args['A'], self.fn)
         out = fn(args['B'])
-        if out == NotImplemented:
+        if out is NotImplemented:
             raise Exception("Operation %s not implemented between %s and %s" % (fn, str(type(args['A'])), str(type(args['B']))))
-        print "     ", fn, out
+        #print "     ", fn, out
         return {'Out': out}
 
 class AbsNode(UniOpNode):
