@@ -1,19 +1,24 @@
 # -*- coding: utf-8 -*-
 from DirTreeTemplate import Ui_Form
-from lib.util.DirTreeModel import *
+from PyQt4 import QtGui,QtCore
+from debug import *
 
-class DirTreeWidget(QtGui.QWidget):
+class DirTreeLoader(QtGui.QWidget):
     def __init__(self, baseDir, *args):
         QtGui.QWidget.__init__(self, *args)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.baseDir = baseDir
+        self.currentFile = None
         
         #self.fileTree = DirTreeModel(baseDir)
         #self.ui.fileTree.setModel(self.fileTree)
-        self.ui.fileTree.setRoot(baseDir)
+        
+        self.ui.fileTree.setBaseDirHandle(baseDir)
+        
         self.deleteState = 0
 
+        self.ui.deleteBtn.focusOutEvent = self.delBtnLostFocus
 
         QtCore.QObject.connect(self.ui.newBtn, QtCore.SIGNAL('clicked()'), self.newClicked)
         QtCore.QObject.connect(self.ui.newDirBtn, QtCore.SIGNAL('clicked()'), self.newDirClicked)
@@ -23,73 +28,67 @@ class DirTreeWidget(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteClicked)
 
 
+    def selectedFile(self):
+        return self.ui.fileTree.selectedFile()
+
     def newClicked(self):
         if self.new():
-            self.ui.currentLabel.setText('[ new ]')
-            self.ui.saveBtn.setEnabled(False)
+            self.setCurrentFile(None)
+            #self.ui.currentLabel.setText('[ new ]')
+            #self.ui.saveBtn.setEnabled(False)
+            #self.currentFile = None
     
     def new(self):
         raise Exception("Function must be reimplemented in subclass.")
     
     def saveClicked(self):
-        self.save()
+        self.save(self.currentFile)
         
-    def save(self, fileName=None):
+    def save(self, fileHandle):
         raise Exception("Function must be reimplemented in subclass.")
     
     def loadClicked(self):
-        if index is None:
-            sel = list(self.ui.fileTree.selectedIndexes())
-            if len(sel) == 1:
-                index = sel[0]
-            else:
-                raise Exception("Can not load--%d items selected" % len(sel))
-            
-        fn = self.fileTree.getFileName(index)
+        fh = self.ui.fileTree.selectedFile()
         
-        if self.load(fn):
-            pn = fn.replace(self.fileTree.baseDir, '')
-            self.ui.currentLabel.setText(pn)
-            self.ui.saveBtn.setEnabled(True)
+        if self.load(fh):
+            fn = fh.name(relativeTo=self.baseDir)
+            self.setCurrentFile(fh)
+            #self.ui.currentLabel.setText(fn)
+            #self.ui.saveBtn.setEnabled(True)
+            #self.currentFile = fh
 
-    def load(self):
+    def load(self, handle):
         raise Exception("Function must be reimplemented in subclass.")
     
     def saveAsClicked(self):
         ## Decide on new file name
-        baseFile = self.suggestNewFilename()
-            
-        c = 2
-        newFile = None
-        while True:
-            newFile = baseFile + '_%02d' % c
-            if not os.path.exists(newFile):
-                break
-            c += 1
+        fileName = self.suggestNewFilename(self.currentFile)
+        baseDir = self.selectedDir()
+        
+        fh = baseDir.createFile(fileName, autoIncrement=True)
             
         ## write
-        if not self.save(newFile):
+        if not self.save(fh):
+            fh.delete()
             return
         
         
         ## Start editing new file name
-        index = self.fileTree.findIndex(newFile)
-        #self.ui.fileTree.update(index)
-        self.ui.fileTree.scrollTo(index)
-        self.ui.fileTree.edit(index)
+        self.ui.fileTree.flushSignals()
+        self.ui.fileTree.editItem(fh)
         
-        pn = newFile.replace(self.fileTree.baseDir, '')
-        self.ui.currentLabel.setText(pn)
-        self.ui.saveBtn.setEnabled(True)
+        self.setCurrentFile(fh)
+        #self.ui.currentLabel.setText(fh.name(relativeTo=self.baseDir))
+        #self.ui.saveBtn.setEnabled(True)
+        #self.currentFile = fh
 
-    def suggestNewFileName(self):
+    def suggestNewFilename(self, fh):
         """Suggest a file name to use when saveAs is clicked. saveAsClicked will 
         automatically add a numerical suffix if the suggested name exists already."""
-        if self.currentFile is not None:
-            return self.currentFile
+        if fh is None:
+            return "NewFile"
         else:
-            return os.path.join(self.baseDir, 'protocol')
-        
+            return fh.shortName()
 
     def deleteClicked(self):
         ## Delete button must be clicked twice.
@@ -98,9 +97,7 @@ class DirTreeWidget(QtGui.QWidget):
             self.deleteState = 1
         elif self.deleteState == 1:
             try:
-                fn = self.selectedFileName()
-                os.remove(fn)
-                self.protocolList.clearCache()
+                self.selectedFile().delete()
             except:
                 printExc('Error while deleting protocol file:')
                 return
@@ -118,10 +115,47 @@ class DirTreeWidget(QtGui.QWidget):
     
     def resetDeleteState(self):
         self.deleteState = 0
-        self.ui.deleteProtocolBtn.setText('Delete')
-        pass
-    
-    def newDirClicked(self):
-        pass
+        self.ui.deleteBtn.setText('Delete')
+
+    def selectedDir(self):
+        """Return the directory of the selected file"""
+        fh = self.selectedFile()
+        if fh is None:
+            dh = self.baseDir
+        else:
+            if fh.isDir():
+                dh = fh
+            else:
+                dh = fh.parent()
+        return dh
         
-    
+    def newDirClicked(self):
+        dh = self.selectedDir()
+        
+        ndh = dh.mkdir("NewDirectory", autoIncrement=True)
+        self.ui.fileTree.flushSignals()   ## Item may take time to appear in the tree..
+        self.ui.fileTree.editItem(ndh) 
+        
+    def delBtnLostFocus(self, ev):
+        self.resetDeleteState()
+        
+    def setCurrentFile(self, handle):
+        if self.currentFile is not None:
+            QtCore.QObject.disconnect(self.currentFile, QtCore.SIGNAL('changed'), self.currentFileChanged)
+            
+        if handle is None:
+            self.ui.currentLabel.setText("")
+            self.ui.saveBtn.setEnabled(False)
+        else:
+            self.ui.currentLabel.setText(handle.name(relativeTo=self.baseDir))
+            self.ui.saveBtn.setEnabled(True)
+            QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self.currentFileChanged)
+            
+        self.currentFile = handle
+            
+        
+    def currentFileChanged(self, handle, change, *args):
+        if change == 'deleted':
+            self.ui.currentLabel.setText("[deleted]")
+        else:
+            self.ui.currentLabel.setText(self.currentFile.name(relativeTo=self.baseDir))

@@ -5,6 +5,10 @@ from Node import *
 import functions
 from advancedTypes import OrderedDict
 from TreeWidget import *
+from DataTreeWidget import *
+from FlowchartTemplate import *
+from Terminal import Terminal
+from numpy import ndarray
 
 def toposort(deps, nodes=None, seen=None, stack=None):
     """Topological sort. Arguments are:
@@ -49,8 +53,10 @@ class Flowchart(Node):
         
         self.inputNode = Node('Input')
         self.outputNode = Node('Output')
-        self.addNode(self.inputNode, 'Input', [-200, 200])
-        self.addNode(self.outputNode, 'Output', [600, 200])
+        self.addNode(self.inputNode, 'Input', [-150, 0])
+        self.addNode(self.outputNode, 'Output', [300, 0])
+            
+        QtCore.QObject.connect(self.outputNode, QtCore.SIGNAL('outputChanged'), self.outputChanged)
             
         for name, opts in terminals.iteritems():
             self.addTerminal(name, opts)
@@ -167,6 +173,9 @@ class Flowchart(Node):
     def setInput(self, **args):
         Node.setInput(self, **args)
         self.inputNode.setOutput(**args)
+        
+    def outputChanged(self):
+        self.widget().outputChanged(self.outputNode.inputValues())
         
     def processOrder(self):
         """Return the order of operations required to process this chart.
@@ -319,44 +328,58 @@ class FlowchartGraphicsItem(QtGui.QGraphicsItem):
         #p.drawRect(self.boundingRect())
     
 
-class FlowchartWidget(QtGui.QSplitter):
+class FlowchartWidget(QtGui.QWidget):
     def __init__(self, chart, *args):
-        QtGui.QSplitter.__init__(self, *args)
+        QtGui.QWidget.__init__(self, *args)
         self.chart = chart
         self.items = {}
-        self.setMinimumWidth(250)
-        self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding))
+        self.hoverItem = None
+        #self.setMinimumWidth(250)
+        #self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding))
         
-        self.leftWidget = QtGui.QWidget()
-        self.vl = QtGui.QVBoxLayout()
-        self.vl.setSpacing(0)
-        self.vl.setContentsMargins(0,0,0,0)
-        self.leftWidget.setLayout(self.vl)
-        self.nodeCombo = QtGui.QComboBox()
-        self.ctrlList = TreeWidget()
-        self.ctrlList.setColumnCount(1)
-        #self.ctrlList.setHeaderLabels(['Filter', 'X', 'time'])
-        self.ctrlList.setColumnWidth(0, 200)
-        #self.ctrlList.setColumnWidth(1, 20)
-        self.ctrlList.setVerticalScrollMode(self.ctrlList.ScrollPerPixel)
-        self.ctrlList.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.vl.addWidget(self.nodeCombo)
-        self.vl.addWidget(self.ctrlList)
+        self.ui = Ui_Form()
+        self.ui.setupUi(self)
         
-        self.addWidget(self.leftWidget)
-        self.view = QtGui.QGraphicsView()
-        self.addWidget(self.view)
+        #self.leftWidget = QtGui.QWidget()
+        #self.vl = QtGui.QVBoxLayout()
+        #self.vl.setSpacing(0)
+        #self.vl.setContentsMargins(0,0,0,0)
+        #self.leftWidget.setLayout(self.vl)
+        #self.nodeCombo = QtGui.QComboBox()
+        #self.ctrlList = TreeWidget()
+        self.ui.ctrlList.setColumnCount(1)
+        self.ui.ctrlList.setColumnWidth(0, 200)
+        self.ui.ctrlList.setVerticalScrollMode(self.ui.ctrlList.ScrollPerPixel)
+        self.ui.ctrlList.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        #self.vl.addWidget(self.nodeCombo)
+        #self.vl.addWidget(self.ctrlList)
+        
+        #self.addWidget(self.leftWidget)
+        #self.view = QtGui.QGraphicsView()
+        #self.addWidget(self.view)
         self._scene = QtGui.QGraphicsScene()
-        self.view.setScene(self._scene)
-        self.setSizes([200, 1000])
+        self.ui.view.setScene(self._scene)
+        #self.setSizes([200, 1000])
         
-        self.nodeCombo.addItem("Add Node..")
+        self.ui.nodeCombo.addItem("Add Node..")
        
         for f in functions.NODE_LIST:
-            self.nodeCombo.addItem(f)
+            self.ui.nodeCombo.addItem(f)
             
-        QtCore.QObject.connect(self.nodeCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.nodeComboChanged)
-        QtCore.QObject.connect(self.ctrlList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.itemChanged)
+        #self.dataSplitter = QtGui.QSplitter()
+        #self.dataSplitter.setOrientation(QtCore.Qt.Vertical)
+        #self.addWidget(self.dataSplitter)
+        
+        #self.outputTree = DataTreeWidget()
+        #self.selectTree = DataTreeWidget()
+        #self.dataSplitter.addWidget(self.outputTree)
+        #self.dataSplitter.addWidget(self.selectTree)
+            
+        QtCore.QObject.connect(self.ui.nodeCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.nodeComboChanged)
+        QtCore.QObject.connect(self.ui.ctrlList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.itemChanged)
+        QtCore.QObject.connect(self._scene, QtCore.SIGNAL('selectionChanged()'), self.selectionChanged)
+        QtCore.QObject.connect(self.ui.view, QtCore.SIGNAL('hoverOver'), self.hoverOver)
+    
 
     def scene(self):
         return self._scene
@@ -364,8 +387,8 @@ class FlowchartWidget(QtGui.QSplitter):
     def nodeComboChanged(self, ind):
         if ind == 0:
             return
-        nodeType = str(self.nodeCombo.currentText())
-        self.nodeCombo.setCurrentIndex(0)
+        nodeType = str(self.ui.nodeCombo.currentText())
+        self.ui.nodeCombo.setCurrentIndex(0)
         self.chart.createNode(nodeType)
 
     def itemChanged(self, *args):
@@ -376,16 +399,61 @@ class FlowchartWidget(QtGui.QSplitter):
         if ctrl is None:
             return
         item = QtGui.QTreeWidgetItem([node.name(), '', ''])
-        self.ctrlList.addTopLevelItem(item)
+        self.ui.ctrlList.addTopLevelItem(item)
         item2 = QtGui.QTreeWidgetItem()
         item.addChild(item2)
-        self.ctrlList.setItemWidget(item2, 0, ctrl)
+        self.ui.ctrlList.setItemWidget(item2, 0, ctrl)
         self.items[node] = item
         
     def removeNode(self, node):
         if node in self.items:
             item = self.items[node]
-            self.ctrlList.removeTopLevelItem(item)
+            self.ui.ctrlList.removeTopLevelItem(item)
+            
+    def outputChanged(self, data):
+        self.ui.outputTree.setData(data, hideRoot=True)
+
+    def selectionChanged(self):
+        items = self._scene.selectedItems()
+        if len(items) == 0:
+            data = None
+        else:
+            item = items[0]
+            if hasattr(item, 'node') and isinstance(item.node, Node):
+                n = item.node
+                data = {'outputs': n.outputValues(), 'inputs': n.inputValues()}
+                self.ui.selNameLabel.setText(n.name())
+                if hasattr(n, 'nodeName'):
+                    self.ui.selDescLabel.setText("<b>%s</b>: %s" % (n.nodeName, n.desc))
+                else:
+                    self.ui.selDescLabel.setText("")
+                if n.exception is not None:
+                    data['exception'] = n.exception
+            else:
+                data = None
+        self.ui.selectedTree.setData(data, hideRoot=True)
+
+    def hoverOver(self, items):
+        term = None
+        for item in items:
+            if item is self.hoverItem:
+                return
+            self.hoverItem = item
+            if hasattr(item, 'term') and isinstance(item.term, Terminal):
+                term = item.term
+                break
+        if term is None:
+            self.ui.hoverLabel.setText("")
+        else:
+            if isinstance(term, ndarray):
+                val = term.value()
+                val = "%s %s %s" % (type(val).__name__, str(term.shape), str(term.dtype))
+            else:
+                val = str(term.value())
+                if len(val) > 400:
+                    val = val[:400] + "..."
+            self.ui.hoverLabel.setText("%s.%s = %s" % (term.node().name(), term.name(), val))
+
 
 class FlowchartNode(Node):
     pass

@@ -10,7 +10,7 @@ probably only need to be created via functions in the Manager class.
 """
 
 from __future__ import with_statement
-import threading, os, re, sys
+import threading, os, re, sys, shutil
 ##  import fcntl  ## linux only?
 from lib.util.functions import strncmp
 from lib.util.configfile import *
@@ -112,13 +112,14 @@ class DataManager(QtCore.QObject):
                 
             elif change == 'deleted':
                 oldName = args[0]
-                self._delCache(oldName)
 
                 ## Inform all children that they have been deleted and remove from cache
                 tree = self._getTree(oldName)
                 for path in tree:
                     self._getCache(path)._deleted()
                     self._delCache(path)
+                    
+                #self._delCache(oldName)
             #else:
                 #print "    (ignored)"
 
@@ -171,7 +172,7 @@ class FileHandle(QtCore.QObject):
         return "<%s '%s' (0x%x)>" % (self.__class__.__name__, self.name(), self.__hash__())
         
     def name(self, relativeTo=None):
-        self.checkDeleted()
+        #self.checkDeleted()
         with self.lock:
             path = self.path
             if relativeTo == self:
@@ -184,14 +185,8 @@ class FileHandle(QtCore.QObject):
             return path
         
     def shortName(self):
-        self.checkDeleted()
+        #self.checkDeleted()
         return os.path.split(self.name())[1]
-        
-    #def name(self, full=True):
-        #if full:
-            #return self.path
-        #else:
-            #return os.path.split(self.path)[1]
         
     def parent(self):
         self.checkDeleted()
@@ -260,13 +255,14 @@ class FileHandle(QtCore.QObject):
             if os.path.exists(fn2):
                 raise Exception("Destination file %s already exists." % fn2)
             #print "rename", fn1, fn2
-            if parent.isManaged():
+            info = {}
+            if parent.isManaged(oldName):
                 info = parent._fileInfo(oldName)
                 parent.forget(oldName)
             os.rename(fn1, fn2)
             self.path = fn2
             self.manager._handleChanged(self, 'renamed', fn1, fn2)
-            if parent.isManaged():
+            if parent.isManaged(oldName):
                 parent.indexFile(newName, info=info)
                 
             self.emitChanged('renamed', fn1, fn2)
@@ -278,13 +274,16 @@ class FileHandle(QtCore.QObject):
             parent = self.parent()
             fn1 = self.name()
             oldName = self.shortName()
-            os.remove(fn1)
+            if self.isFile():
+                os.remove(fn1)
+            else:
+                shutil.rmtree(fn1)
             self.manager._handleChanged(self, 'deleted', fn1)
             self.path = None
-            if self.isManaged():
+            if parent.isManaged():
                 parent.forget(oldName)
             self.emitChanged('deleted', fn1)
-            self.parent()._childChanged()
+            parent._childChanged()
         
     def read(self):
         self.checkDeleted()
@@ -370,8 +369,9 @@ class FileHandle(QtCore.QObject):
         self.parent().writeFile(data, self.shortName(), **kwargs)
         
 
-
-
+    def flushSignals(self):
+        """If any delayed signals are pending, send them now."""
+        self.sigproxy.flush()
 
 
 class DirHandle(FileHandle):
@@ -662,7 +662,29 @@ class DirHandle(FileHandle):
             fn = os.path.abspath(os.path.join(self.path, fileName))
             return os.path.isfile(fn)
         
-    
+    def createFile(self, fileName, info=None, autoIncrement=False):
+        """Create a blank file"""
+        if info is None:
+            info = {}   ## never put {} in the function default
+        
+        t = time.time()
+        with self.lock:
+            ## Increment file name
+            if autoIncrement:
+                fileName = self.incrementFileName(fileName)
+            
+            ## Write file
+            open(os.path.join(self.name(), fileName), 'w')
+            
+            self._childChanged()
+            
+            ## Write meta-info
+            if not info.has_key('__timestamp__'):
+                info['__timestamp__'] = t
+            self._setFileInfo(fileName, info)
+            self.emitChanged('children', fileName)
+            return self[fileName]
+        
     def writeFile(self, obj, fileName, info=None, autoIncrement=False, fileType=None, **kwargs):
         """Write a file to this directory using obj.write(fileName), store info in the index.
         Will try to convert obj into a FileType if the correct type exists.

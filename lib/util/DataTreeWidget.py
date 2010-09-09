@@ -1,18 +1,20 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 from advancedTypes import OrderedDict
+import types, traceback
 
 class DataTreeWidget(QtGui.QTreeWidget):
-    def __init__(self, data, parent=None):
+    def __init__(self, parent=None, data=None):
         QtGui.QTreeWidget.__init__(self, parent)
+        self.setVerticalScrollMode(self.ScrollPerPixel)
         self.setData(data)
         self.setColumnCount(3)
         self.setHeaderLabels(['key', 'type', 'value'])
         
-    def setData(self, data):
+    def setData(self, data, hideRoot=False):
         """data should be a dictionary."""
         self.clear()
-        self.buildTree(data, self.invisibleRootItem())
+        self.buildTree(data, self.invisibleRootItem(), hideRoot=hideRoot)
         #node = self.mkNode('', data)
         #while node.childCount() > 0:
             #c = node.child(0)
@@ -21,16 +23,25 @@ class DataTreeWidget(QtGui.QTreeWidget):
         self.expandToDepth(3)
         self.resizeColumnToContents(0)
         
-    def buildTree(self, data, parent, name=''):
-        node = QtGui.QTreeWidgetItem([name, str(type(data)), ""])
-        parent.addChild(node)
+    def buildTree(self, data, parent, name='', hideRoot=False):
+        if hideRoot:
+            node = parent
+        else:
+            typeStr = type(data).__name__
+            if typeStr == 'instance':
+                typeStr += ": " + data.__class__.__name__
+            node = QtGui.QTreeWidgetItem([name, typeStr, ""])
+            parent.addChild(node)
         
+        if isinstance(data, types.TracebackType):
+            data = map(str.strip, traceback.format_list(traceback.extract_tb(data)))
+            
         if isinstance(data, dict):
             for k in data:
                 self.buildTree(data[k], node, k)
         elif isinstance(data, list) or isinstance(data, tuple):
             for i in range(len(data)):
-                self.buildTree(data[k], node, str(k))
+                self.buildTree(data[i], node, str(i))
         else:
             node.setText(2, str(data))
         

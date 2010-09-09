@@ -5,6 +5,7 @@ from Terminal import *
 from advancedTypes import OrderedDict
 from debug import *
 import numpy as np
+from pyqtgraph.ObjectWorkaround import QObjectWorkaround
 
 def eq(a, b):
     """The great missing equivalence function."""
@@ -125,6 +126,12 @@ class Node(QtCore.QObject):
             vals[n] = t.value()
         return vals
             
+    def outputValues(self):
+        vals = {}
+        for n, t in self.outputs.iteritems():
+            vals[n] = t.value()
+        return vals
+            
     def update(self):
         """Collect all input values, attempt to process new output values, and propagate downstream."""
         #print "processing", self
@@ -138,11 +145,11 @@ class Node(QtCore.QObject):
                 t.setValueAcceptable(True)
             self.clearException()
         except:
-            printExc( "Exception while processing:")
+            #printExc( "Exception while processing:")
             for n,t in self.outputs.iteritems():
                 t.setValue(None)
             self.setException(sys.exc_info())
-            
+        self.emit(QtCore.SIGNAL('outputChanged'))
             
     def setOutput(self, **vals):
         for k, v in vals.iteritems():
@@ -208,11 +215,12 @@ class Node(QtCore.QObject):
     def disconnectAll(self):
         for t in self.terminals.itervalues():
             t.disconnectAll()
-
+    
 
 class NodeGraphicsItem(QtGui.QGraphicsItem):
     def __init__(self, node):
         QtGui.QGraphicsItem.__init__(self)
+        #QObjectWorkaround.__init__(self)
         
         #self.shadow = QtGui.QGraphicsDropShadowEffect()
         #self.shadow.setOffset(5,5)
@@ -220,6 +228,7 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         #self.setGraphicsEffect(self.shadow)
         
         self.pen = QtGui.QPen(QtGui.QColor(0,0,0))
+        self.brush = QtGui.QBrush(QtGui.QColor(200, 200, 200))
         self.node = node
         self.setFlags(
             self.ItemIsMovable |
@@ -236,6 +245,11 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
     def setPen(self, pen):
         self.pen = pen
         self.update()
+        
+    def setBrush(self, brush):
+        self.brush = brush
+        self.update()
+        
         
     def updateTerminals(self):
         bounds = self.boundingRect()
@@ -268,11 +282,10 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         
     def paint(self, p, *args):
         bounds = self.boundingRect()
+        p.setPen(self.pen)
         if self.isSelected():
-            p.setPen(self.pen)
             p.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 255)))
         else:
-            p.setPen(self.pen)
             p.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 200)))
         p.drawRect(bounds)
         
@@ -281,7 +294,18 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         for k, t in self.terminals.iteritems():
             t[1].nodeMoved()
 
+    def mousePressEvent(self, ev):
+        sel = self.isSelected()
+        ret = QtGui.QGraphicsItem.mousePressEvent(self, ev)
+        if not sel and self.isSelected():
+            #self.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 255)))
+            #self.emit(QtCore.SIGNAL('selected'))
+            self.update()
+        return ret
 
+    #def mouseReleaseEvent(self, ev):
+        #ret = QtGui.QGraphicsItem.mouseReleaseEvent(self, ev)
+        #return ret
 
 
 

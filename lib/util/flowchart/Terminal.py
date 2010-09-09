@@ -177,9 +177,9 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
         self.box = QtGui.QGraphicsRectItem(0, 0, 10, 10, self)
         self.label = QtGui.QGraphicsTextItem(self.term.name(), self)
         self.label.scale(0.7, 0.7)
-        self.setAcceptHoverEvents(True)
+        #self.setAcceptHoverEvents(True)
         self.newConnection = None
-        self.setAcceptHoverEvents(True)
+        self.setFiltersChildEvents(True)  ## to pick up mouse events on the rectitem
 
     def setBrush(self, brush):
         self.box.setBrush(brush)
@@ -255,10 +255,6 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
     def nodeMoved(self):
         for t, item in self.term.connections().iteritems():
             item.updateLine()
-
-    def hoverEnterEvent(self, ev):
-        print "Hover", self.term
-        print "  value:", self.term.value()
 
 
 class ConnectionItem(QtGui.QGraphicsItem):

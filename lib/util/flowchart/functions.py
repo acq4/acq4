@@ -12,7 +12,7 @@ class SubtreeNode(Node):
         self.root = None
         self.files = set()
         self.lastInput = None
-        self.fileList = DirTreeWidget(defaultFlags=QtCore.Qt.ItemIsUserCheckable|QtCore.Qt.ItemIsEnabled, defaultCheckState=False)
+        self.fileList = DirTreeWidget(checkState=False, allowMove=False, allowRename=False)
         QtCore.QObject.connect(self.fileList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
         
     def process(self, In, display=True):
@@ -21,7 +21,7 @@ class SubtreeNode(Node):
         if display:
             if In is not self.root:
                 self.removeAll()
-                self.fileList.setRoot(In)
+                self.fileList.setBaseDirHandle(In)
                 self.root = In
                 
         out = {}
@@ -42,7 +42,7 @@ class SubtreeNode(Node):
         self.files = set()
 
     def itemChanged(self, item):
-        fname = item.handle().name(relativeTo=self.root)
+        fname = item.handle.name(relativeTo=self.root)
         if item.checkState(0) == QtCore.Qt.Checked:
             if fname not in self.files:
                 self.files.add(fname)
@@ -119,6 +119,26 @@ class MetaArrayColumnNode(Node):
                 self.removeTerminal(col)
         self.update()
     
+class PlotWidgetNode(Node):
+    nodeName = 'PlotWidget'
+    desc = 'Connection to PlotWidget. Will plot arrays, metaarrays, and display event lists.'
+    
+    def __init__(self, name):
+        Node.__init__(self, name, terminals={'In': ('io',)})
+        self.plot = None
+        
+    def setPlot(self, plot):
+        self.plot = plot
+        
+    def process(self, data, display=False):
+        if display:
+            self.plot.plot(data)
+            
+    def setInput(self, **args):
+        for k in args:
+            self.plot.plot(args[k])
+    
+            
 
 class UniOpNode(Node):
     """Generic node for performing any operation like Out = In.fn()"""

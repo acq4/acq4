@@ -54,3 +54,5 @@ s = fc.saveState()
 fc.clear()
 
 fc.restoreState(s)
+
+fc.setInput(dataIn=3)

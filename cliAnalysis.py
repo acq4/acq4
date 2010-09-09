@@ -69,7 +69,9 @@ dm = Manager(config, sys.argv[1:])
 
 #w = UncagingWindow()
 from lib.analysis.analyzer import *
-w = AnalyzerWindow()
+d = os.path.dirname(os.path.abspath(__file__))
+dh = dm.dirHandle(os.path.join(d, 'lib', 'analysis', 'protocols'))
+w = Analyzer(dh)
 
 
 ## Start Qt event loop unless running in interactive mode.
