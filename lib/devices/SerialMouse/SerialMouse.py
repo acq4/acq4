@@ -16,7 +16,7 @@ class SerialMouse(Device):
         self.buttons = [0, 0]
         
         ## Reload the last known state of the mouse if it was last modified recently enough 
-        self.stateFile = self.name + "_last_state.cfg"
+        self.stateFile = os.path.join('devices', self.name + "_last_state.cfg")
         state = dm.readConfigFile(self.stateFile)
         if state != {} and time.time() - state.get('time', 0) < 36000:
             self.pos = state['pos']
