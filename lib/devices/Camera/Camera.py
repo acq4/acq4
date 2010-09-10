@@ -831,7 +831,6 @@ class AcquireThread(QtCore.QThread):
                     
                     ## Process all waiting frames. If there is more than one frame waiting, guess the frame times.
                     dt = (now - lastFrameTime) / diff
-                    print dt
                     if dt > 0:
                         info['fps'] = 1.0/dt
                     else:
