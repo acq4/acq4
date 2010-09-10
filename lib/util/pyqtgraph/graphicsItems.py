@@ -377,8 +377,12 @@ class PlotCurveItem(GraphicsObject):
             return (None, None)
         if self.xDisp is None:
             nanMask = isnan(self.xData) | isnan(self.yData)
-            x = self.xData[~nanMask]
-            y = self.yData[~nanMask]
+            if any(nanMask):
+                x = self.xData[~nanMask]
+                y = self.yData[~nanMask]
+            else:
+                x = self.xData
+                y = self.yData
             ds = self.opts['downsample']
             if ds > 1:
                 x = x[::ds]
@@ -542,9 +546,9 @@ class PlotCurveItem(GraphicsObject):
         ## Create all vertices in path. The method used below creates a binary format so that all 
         ## vertices can be read in at once. This binary format may change in future versions of Qt, 
         ## so the original (slower) method is left here for emergencies:
-        #self.path.moveTo(x[0], y[0])
+        #path.moveTo(x[0], y[0])
         #for i in range(1, y.shape[0]):
-            #self.path.lineTo(x[i], y[i])
+        #    path.lineTo(x[i], y[i])
             
         ## Speed this up using >> operator
         ## Format is:
