@@ -1,21 +1,20 @@
 protocol:
-    windowState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%02%00%00%05%1F%00%00%01T%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01%3C%00%00%00%E5%00%FF%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%01%40%00%00%01k%00%00%01%17%00%FF%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%02%AF%00%00%01w%00%00%015%00%FF%FF%FF%FC%00%00%04%2A%00%00%00%F5%00%00%00%C8%00%FF%FF%FF%FA%00%00%00%00%02%00%00%00%02%FB%00%00%00%06%00D%00A%00Q%01%00%00%00%00%FF%FF%FF%FF%00%00%01%3E%00%FF%FF%FF%FB%00%00%00%14%00d%00o%00c%00k%00W%00i%00d%00g%00e%00t%01%00%00%00%00%00%00%00%D5%00%00%00%3E%00%FF%FF%FF%00%00%00%03%00%00%05%1F%00%00%01%98%FC%01%00%00%00%01%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%01%00%00%00%00%00%00%05%1F%00%00%01n%00%FF%FF%FF%00%00%05%1F%00%00%00%00%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
-    params: [('Clamp1', 'Amplitude', True, [])]
+    windowState: '%00%00%00%FF%00%00%00%00%FD%00%00%00%03%00%00%00%00%00%00%04%FC%00%00%02%C4%FC%02%00%00%00%01%FB%00%00%00%0C%00C%00l%00a%00m%00p%001%00%00%00%00%D9%00%00%01%BB%00%00%00%00%00%00%00%00%00%00%00%02%00%00%05p%00%00%00%D5%FC%01%00%00%00%04%FB%00%00%00%14%00L%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01n%00%00%00%E4%00%FF%FF%FF%FB%00%00%00%18%00P%00r%00o%00t%00o%00c%00o%00l%00D%00o%00c%00k%01%00%00%01r%00%00%01%92%00%00%01%15%00%FF%FF%FF%FB%00%00%00%18%00S%00e%00q%00u%00e%00n%00c%00e%00D%00o%00c%00k%01%00%00%03%08%00%00%01%B4%00%00%01Y%00%FF%FF%FF%FC%00%00%04%C0%00%00%00%B0%00%00%00%B0%00%FF%FF%FF%FA%00%00%00%00%02%00%00%00%02%FB%00%00%00%06%00D%00A%00Q%01%00%00%00%00%FF%FF%FF%FF%00%00%00%9E%00%FF%FF%FF%FB%00%00%00%14%00d%00o%00c%00k%00W%00i%00d%00g%00e%00t%01%00%00%00%00%00%00%00%D5%00%00%00%3E%00%FF%FF%FF%00%00%00%03%00%00%05p%00%00%02%C0%FC%01%00%00%00%01%FB%00%00%00%0C%00C%00l%00a%00m%00p%002%01%00%00%00%00%00%00%05p%00%00%01n%00%FF%FF%FF%00%00%05p%00%00%00%00%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+    params: [('Clamp2', 'Amplitude', True, [])]
     conf:
         continuous: False
-        cycleTime: 1.5
+        cycleTime: 0.5
         loop: False
-        duration: 0.69999999999999996
+        duration: 0.20000000000000001
         repetitions: 0
         leadTime: 0.050000000000000003
         loopCycleTime: 1.0
     analysis:
 devices:
-    Clamp1:
+    Clamp2:
         bottomPlotWidget:
             xAutoRadio: True
             maxTracesCheck: False
-            downsampleSpin: 1
             xLinkCombo: ''
             xMinText: '0'
             groupBox_2: False
@@ -37,6 +36,7 @@ devices:
             yLogCheck: False
             yMouseCheck: True
             groupBox: False
+            decimateSpin: 0
             gridGroup: True
             pointsGroup: True
             yMinText: '0'
@@ -48,11 +48,9 @@ devices:
             powerSpectrumGroup: False
             forgetTracesCheck: False
             xLogCheck: False
-        primarySignalCheck: False
         topPlotWidget:
             xAutoRadio: True
             maxTracesCheck: False
-            downsampleSpin: 1
             xLinkCombo: ''
             xMinText: '0'
             groupBox_2: False
@@ -74,6 +72,7 @@ devices:
             yLogCheck: False
             yMouseCheck: True
             groupBox: False
+            decimateSpin: 0
             gridGroup: True
             pointsGroup: True
             yMinText: '0'
@@ -86,37 +85,28 @@ devices:
             forgetTracesCheck: False
             xLogCheck: False
         vcModeRadio: False
-        splitter: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%01%E8%00%00%00%BD%01%00%00%00%05%01%00%00%00%02'
+        splitter: [477, 200]
         holdingCheck: False
+        scaledGainSpin: 0.0
         holdingSpin: 0.0
-        primarySignal: 'Membrane Potential'
-        primaryGainSpin: 2
-        secondaryGainSpin: 1
-        splitter_2: '%00%00%00%FF%00%00%00%00%00%00%00%02%00%00%010%00%00%04%3B%01%00%00%00%05%01%00%00%00%01'
+        setScaledGainCheck: False
+        splitter_2: [304, 1083]
+        scaledSignalCombo: 'MembranePotential'
+        setRawGainCheck: False
         i0ModeRadio: False
         waveGeneratorWidget:
-            function: 'pulse(10, 500, Amplitude)'
+            function: 'pulse(10, 100, Amplitude)'
             autoUpdate: False
-            params: 'Amplitude = 300; -200:200/21'
+            params: 'Amplitude = 200; -200:200/11'
         icModeRadio: True
-        primarySignalCombo: 'Membrane Potential'
-        secondaryGainCheck: False
-        primaryGainCheck: False
-        secondarySignalCheck: False
+        rawGainSpin: 0.0
+        rawSignal: 'MembranePotential'
+        rawSignalCheck: False
         mode: 'IC'
-        secondarySignalCombo: 'Command Current'
-        secondarySignal: 'Command Current'
+        rawSignalCombo: 'MembranePotential'
+        scaledSignalCheck: False
+        scaledSignal: 'MembranePotential'
     DAQ:
-        butterworthStopband: 2.0
-        denoiseThreshold: 4.0
-        denoiseMethod: 'None'
-        downsample: 30
-        filterMethod: 'None'
-        butterworthPassband: 1.0
-        butterworthPassDB: 2.0
-        denoiseWidth: 1
-        butterworthStopDB: 10.0
-        rate: 300000.0
-        besselOrder: 4
-        triggerDevice: 'No Trigger'
-        besselCutoff: 2.0
+        downsample: 1
+        numPts: 8000
+        rate: 40000.0
