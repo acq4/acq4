@@ -61,7 +61,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui = Ui_Form()
         self.ui.setupUi(self.cw)
 
-        self.stateFile = self.clampName + '_ui.cfg'
+        self.stateFile = os.path.join('modules', self.clampName + '_ui.cfg')
         uiState = getManager().readConfigFile(self.stateFile)
         if 'geometry' in uiState:
             geom = QtCore.QRect(*uiState['geometry'])

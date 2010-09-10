@@ -739,6 +739,7 @@ class AcquireThread(QtCore.QThread):
         size = self.cam.getParam('sensorSize')
         lastFrame = None
         lastFrameTime = None
+        fps = None
         
         camState = dict(self.cam.getParams(['binning', 'exposure', 'region', 'triggerMode']))
         binning = camState['binning']
@@ -830,6 +831,12 @@ class AcquireThread(QtCore.QThread):
                     
                     ## Process all waiting frames. If there is more than one frame waiting, guess the frame times.
                     dt = (now - lastFrameTime) / diff
+                    print dt
+                    if dt > 0:
+                        info['fps'] = 1.0/dt
+                    else:
+                        info['fps'] = None
+                    
                     for i in range(diff):
                         fInd = (i+lastFrame+1) % self.ringSize
                         
