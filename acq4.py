@@ -9,6 +9,7 @@ manager with a configuration file and let it go from there.
 """
 
 print "Loading ACQ4..."
+#import lib.util.PySideImporter  ## Use PySide instead of PyQt
 from lib.Manager import *
 import os, sys
 from numpy import *

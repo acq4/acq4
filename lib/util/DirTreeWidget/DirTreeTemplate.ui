@@ -37,22 +37,6 @@
      </property>
     </widget>
    </item>
-   <item row="1" column="1" rowspan="7">
-    <widget class="QTreeView" name="fileTree">
-     <property name="acceptDrops">
-      <bool>true</bool>
-     </property>
-     <property name="editTriggers">
-      <set>QAbstractItemView::SelectedClicked</set>
-     </property>
-     <property name="dragEnabled">
-      <bool>true</bool>
-     </property>
-     <property name="dragDropMode">
-      <enum>QAbstractItemView::InternalMove</enum>
-     </property>
-    </widget>
-   </item>
    <item row="1" column="2">
     <widget class="QPushButton" name="loadBtn">
      <property name="text">
@@ -109,7 +93,7 @@
    <item row="7" column="2">
     <widget class="QPushButton" name="deleteBtn">
      <property name="enabled">
-      <bool>false</bool>
+      <bool>true</bool>
      </property>
      <property name="text">
       <string>Delete</string>
@@ -159,8 +143,30 @@
      </property>
     </widget>
    </item>
+   <item row="1" column="1" rowspan="7">
+    <widget class="DirTreeWidget" name="fileTree">
+     <property name="acceptDrops">
+      <bool>true</bool>
+     </property>
+     <property name="headerHidden">
+      <bool>true</bool>
+     </property>
+     <column>
+      <property name="text">
+       <string notr="true">1</string>
+      </property>
+     </column>
+    </widget>
+   </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>DirTreeWidget</class>
+   <extends>QTreeWidget</extends>
+   <header>DirTreeWidget</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

@@ -26,6 +26,7 @@ sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
 import time, atexit, weakref
 from PyQt4 import QtCore, QtGui
 from DataManager import *
+from Interfaces import *
 import lib.util.ptime as ptime
 from lib.util import configfile
 from lib.util.Mutex import Mutex
@@ -47,7 +48,7 @@ class Manager(QtCore.QObject):
       - Loading/configuring device modules and storing their handles
       - Managing the device rack GUI
       - Creating protocol task handles
-      - Loading interface modules and storing their handles
+      - Loading gui modules and storing their handles
       - Creating and managing DirectoryHandle objects
       - Providing unified timestamps
       - Making sure all devices/modules are properly shut down at the end of the program"""
@@ -84,9 +85,11 @@ Valid options are:
         self.dataManager = DataManager()
         self.currentDir = None
         self.baseDir = None
-        self.interface = None
+        self.gui = None
         self.shortcuts = []
         self.disableDevs = []
+        
+        self.interfaceDir = InterfaceDirectory()        
         
         ## Handle command line options
         loadModules = []
@@ -126,14 +129,16 @@ Valid options are:
             if setStorageDir is not None:
                 self.setCurrentDir(setStorageDir)
             if loadManager:
-                mm = self.loadModule(module='Manager', name='Manager', config={})
-                self.createWindowShortcut('F1', mm.win)
+                #mm = self.loadModule(module='Manager', name='Manager', config={})
+                self.showGUI()
+                self.createWindowShortcut('F1', self.gui.win)
             for m in loadModules:
                 try:
                     self.loadDefinedModule(m)
                 except:
                     if not loadManager:
-                        self.loadModule(module='Manager', name='Manager', config={})
+                        self.showGUI()
+                        #self.loadModule(module='Manager', name='Manager', config={})
                     raise
                     
         except:
@@ -157,18 +162,10 @@ Valid options are:
         """Read configuration file, create device objects, add devices to list"""
         print "============= Starting Manager configuration from %s =================" % configFile
         cfg = configfile.readConfigFile(configFile)
-        #self.config = cfg
-        
-        #if not cfg.has_key('devices'):
-            #raise Exception('configuration file %s has no "devices" section.' % configFile)
             
         ## read modules, devices, and stylesheet out of config
         self.configure(cfg)
         
-        #if 'configurations' in cfg:
-            #self.setCurrentDir('')
-        #else:
-            #raise Exception("No configuration found for data management!")
         print "\n============= Manager configuration complete =================\n"
         
     def configure(self, cfg):
@@ -410,10 +407,11 @@ Valid options are:
     def createTask(self, cmd):
         return Task(self, cmd)
 
-    def showInterface(self):
-        if self.interface is None:
-            self.interface = self.loadModule('Manager', 'Manager', {})
-        self.interface.show()
+    def showGUI(self):
+        """Show the Manager GUI"""
+        if self.gui is None:
+            self.gui = self.loadModule('Manager', 'Manager', {})
+        self.gui.show()
     
     
     def getCurrentDir(self):
@@ -485,6 +483,24 @@ Valid options are:
         cd = self.getCurrentDir()
         cd.logMsg(msg, tags)
 
+        
+        
+    ## These functions just wrap the functionality of an InterfaceDirectory
+    def declareInterface(self, *args, **kargs):
+        return self.interfaceDir.declareInterface(*args, **kargs)
+        
+    def removeInterface(self, *args, **kargs):
+        return self.interfaceDir.removeInterface(*args, **kargs)
+        
+    def listInterfaces(self, *args, **kargs):
+        return self.interfaceDir.listInterfaces(*args, **kargs)
+        
+    def getInterface(self, *args, **kargs):
+        return self.interfaceDir.getInterface(*args, **kargs)
+        
+    
+        
+        
     def quit(self):
         """Nicely request that all devices and modules shut down"""
         #app = QtGui.QApplication.instance()
@@ -768,3 +784,8 @@ class Task:
         """Stop all tasks, to not attempt to get data."""
         self.stop(abort=True)
         
+        
+
+    
+    
+    

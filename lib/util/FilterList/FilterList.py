@@ -4,58 +4,52 @@ from PyQt4 import QtGui, QtCore
 from metaarray import *
 from debug import *
 import ptime
+from TreeWidget import *
 
-class Tree(QtGui.QTreeWidget):
-    """This class demonstrates the absurd lengths one must go to to make drag/drop work."""
-    def __init__(self):
-        QtGui.QTreeWidget.__init__(self)
-        self.setAcceptDrops(True)
-        self.setDragEnabled(True)
-        self.setEditTriggers(QtGui.QAbstractItemView.EditKeyPressed|QtGui.QAbstractItemView.SelectedClicked)
+#class TreeWidget(QtGui.QTreeWidget):
+    #"""Extends QTreeWidget to allow internal drag/drop with widgets in the tree.
+    #Also maintains the expanded state of subtrees as they are moved.
+    #This class demonstrates the absurd lengths one must go to to make drag/drop work."""
+    #def __init__(self, parent=None):
+        #QtGui.QTreeWidget.__init__(self, parent)
+        #self.setAcceptDrops(True)
+        #self.setDragEnabled(True)
+        #self.setEditTriggers(QtGui.QAbstractItemView.EditKeyPressed|QtGui.QAbstractItemView.SelectedClicked)
 
-    def setItemWidget(self, item, col, wid):
-        #print "setItem", wid
-        
-        w = QtGui.QWidget()
-        wid.pw = w
-        #print wid.parent()
-        exp = item.isExpanded()
-        QtGui.QTreeWidget.setItemWidget(self, item, col, w)
-        #print wid.parent()
-        l = QtGui.QVBoxLayout()
-        l.setContentsMargins(0,0,0,0)
-        w.setLayout(l)
-        l.addWidget(wid)
-        #print wid.parent()
-        w.realChild = wid
-        #print wid.parent()
-        item.setExpanded(False)
-        #print wid.parent()
-        QtGui.QApplication.instance().processEvents()
-        #print wid.parent()
-        item.setExpanded(exp)
-        #print wid.parent()
+    #def setItemWidget(self, item, col, wid):
+        #w = QtGui.QWidget()  ## foster parent / surrogate child widget
+        #wid.__pw = w  ## keep an extra reference to the parent
+        #exp = item.isExpanded()
+        #QtGui.QTreeWidget.setItemWidget(self, item, col, w)
+        #l = QtGui.QVBoxLayout()
+        #l.setContentsMargins(0,0,0,0)
+        #w.setLayout(l)
+        #l.addWidget(wid)
+        #w.realChild = wid
+        #item.setExpanded(False)
+        #QtGui.QApplication.instance().processEvents()
+        #item.setExpanded(exp)
 
-    def dropMimeData(self, parent, index, data, action):
-        item = self.currentItem()
-        db = item.delBtn
-        exp = item.isExpanded()
-        sub = item.child(0)
-        if sub is not None:
-            widget = self.itemWidget(sub, 0).realChild
-        if index > self.invisibleRootItem().indexOfChild(item):
-            index -= 1
-        self.invisibleRootItem().removeChild(item)
-        self.insertTopLevelItem(index, item)
-        if sub is not None:
-            item.addChild(sub)
-            self.setItemWidget(sub, 0, widget)
-        self.setItemWidget(item, 1, db)
-        item.setExpanded(False)
-        QtGui.QApplication.instance().processEvents()
-        item.setExpanded(exp)
-        self.emit(QtCore.SIGNAL('itemMoved'), item, index)
-        return True
+    #def dropMimeData(self, parent, index, data, action):
+        #item = self.currentItem()
+        ##db = item.delBtn
+        #exp = item.isExpanded()
+        #sub = item.child(0)
+        #if sub is not None:
+            #widget = self.itemWidget(sub, 0).realChild
+        #if index > self.invisibleRootItem().indexOfChild(item):
+            #index -= 1
+        #self.invisibleRootItem().removeChild(item)
+        #self.insertTopLevelItem(index, item)
+        #if sub is not None:
+            #item.addChild(sub)
+            #self.setItemWidget(sub, 0, widget)
+        #self.setItemWidget(item, 1, db)
+        #item.setExpanded(False)
+        #QtGui.QApplication.instance().processEvents()
+        #item.setExpanded(exp)
+        #self.emit(QtCore.SIGNAL('itemMoved'), item, index)
+        #return True
 
 class FilterList(QtGui.QWidget):
     """This widget presents a customizable filter chain. The user (or program) can add and remove
@@ -72,7 +66,7 @@ class FilterList(QtGui.QWidget):
         self.vl.setContentsMargins(0,0,0,0)
         self.setLayout(self.vl)
         self.filterCombo = QtGui.QComboBox()
-        self.filterList = Tree()
+        self.filterList = TreeWidget()
         self.filterList.setColumnCount(3)
         self.filterList.setHeaderLabels(['Filter', 'X', 'time'])
         self.filterList.setColumnWidth(0, 200)
