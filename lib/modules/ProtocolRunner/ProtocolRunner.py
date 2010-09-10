@@ -22,7 +22,7 @@ class Window(QtGui.QMainWindow):
         QtGui.QMainWindow.__init__(self)
         self.pr = pr
 
-        self.stateFile = self.pr.name + '_ui.cfg'
+        self.stateFile = os.path.join('modules', self.pr.name + '_ui.cfg')
         uiState = getManager().readConfigFile(self.stateFile)
         if 'geometry' in uiState:
             geom = QtCore.QRect(*uiState['geometry'])
