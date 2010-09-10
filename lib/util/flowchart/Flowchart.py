@@ -271,6 +271,8 @@ class Flowchart(Node):
         self.clear()
         Node.restoreState(self, state)
         for n in state['nodes']:
+            if n['name'] in self.nodes:
+                continue
             node = self.createNode(n['class'], name=n['name'])
             node.restoreState(n['state'])
             node.graphicsItem().moveBy(*n['pos'])
@@ -286,6 +288,7 @@ class Flowchart(Node):
             n.close()
             del self.nodes[n.name()]
         self.clearTerminals()
+        self.widget().clear()
         
     def clearTerminals(self):
         Node.clearTerminals(self)
@@ -454,7 +457,14 @@ class FlowchartWidget(QtGui.QWidget):
                     val = val[:400] + "..."
             self.ui.hoverLabel.setText("%s.%s = %s" % (term.node().name(), term.name(), val))
 
-
+    def clear(self):
+        self.ui.outputTree.setData(None)
+        self.ui.selectedTree.setData(None)
+        self.ui.hoverLabel.setText('')
+        self.ui.selNameLabel.setText('')
+        self.ui.selDescLabel.setText('')
+        
+        
 class FlowchartNode(Node):
     pass
 

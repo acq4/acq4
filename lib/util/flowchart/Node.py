@@ -8,11 +8,12 @@ import numpy as np
 from pyqtgraph.ObjectWorkaround import QObjectWorkaround
 
 def eq(a, b):
-    """The great missing equivalence function."""
-    if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
-        return (a == b).all()
-    else:
-        return bool(a == b)
+    """The great missing equivalence function: Guaranteed evaluation to a single bool value."""
+    e = a==b
+    if type(e) is bool:
+        return e
+    elif isinstance(e, ndarray):
+        return e.all()
 
 
 
@@ -213,7 +214,7 @@ class Node(QtCore.QObject):
             w.setParent(None)
             
     def disconnectAll(self):
-        for t in self.terminals.itervalues():
+        for t in self.terminals.values():
             t.disconnectAll()
     
 

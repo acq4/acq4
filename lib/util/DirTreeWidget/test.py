@@ -36,4 +36,4 @@ class Loader(DirTreeLoader):
 w = Loader(dh)
 w.show()
 
-app.exec_()
+#app.exec_()

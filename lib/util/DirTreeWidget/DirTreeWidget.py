@@ -384,4 +384,8 @@ class FileTreeItem(QtGui.QTreeWidgetItem):
         for i in range(self.childCount()):
             self.child(i).recallExpand()
         
-        
+    def setChecked(self, c):
+        if c:
+            self.setCheckState(0, QtCore.Qt.Checked)
+        else:
+            self.setCheckState(0, QtCore.Qt.Unchecked)

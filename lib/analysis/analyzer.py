@@ -6,6 +6,7 @@ from flowchart import *
 from PyQt4 import QtGui, QtCore
 from DirTreeWidget import DirTreeLoader
 from pyqtgraph.PlotWidget import *
+import configfile
 
 class Analyzer(QtGui.QMainWindow):
     def __init__(self, protoDir, parent=None):
@@ -19,6 +20,9 @@ class Analyzer(QtGui.QMainWindow):
         self.flowchart.addInput("dataIn")
         
         self.loader = DirTreeLoader(protoDir)
+        self.loader.save = self.saveProtocol
+        self.loader.new = self.newProtocol
+        self.loader.load = self.loadProtocol
         self.ui.loaderDock.setWidget(self.loader)
         
         self.dockItems = {}
@@ -32,6 +36,45 @@ class Analyzer(QtGui.QMainWindow):
         self.resize(1200,800)
         self.show()
 
+    def saveProtocol(self, handle):
+        state = {'docks': {}}
+        for name, d in self.dockItems.iteritems():
+            state['docks'][name] = {'type': d['type']}
+        state['window'] = str(self.saveState().toPercentEncoding())
+        state['flowchart'] = self.flowchart.saveState()
+        configfile.writeConfigFile(state, handle.name())
+        return True
+        
+    def newProtocol(self):
+        for name, d in self.dockItems.iteritems():
+            self.removeDockWidget(d['dock'])
+            d['dock'].setObjectName('')
+        self.ui.dockList.clear()
+        self.flowchart.clear()
+        self.flowchart.addInput('dataIn')
+        self.dockItems = {}
+        
+        return True
+    
+    def loadProtocol(self, handle):
+        self.newProtocol()
+        state = configfile.readConfigFile(handle.name())
+        
+        ## recreate docks
+        for name, d in state['docks'].iteritems():
+            fn = getattr(self, 'add'+d['type'])
+            fn(name)
+        
+        ## restore dock positions
+        self.restoreState(QtCore.QByteArray.fromPercentEncoding(state['window']))
+        
+        ## restore flowchart
+        self.flowchart.restoreState(state['flowchart'])
+        
+        return True
+        
+
+
     def addOutput(self):
         self.flowchart.addOutput()
         
@@ -39,21 +82,25 @@ class Analyzer(QtGui.QMainWindow):
         data = getManager().currentFile
         self.flowchart.setInput(dataIn=data)
         
-    def addPlot(self):
-        name = 'Plot'
-        i = 0
-        while True:
-            name2 = '%s_%03d' % (name, i)
-            if name2 not in self.dockItems:
-                break
-            i += 1
+    def addPlot(self, name=None):
+        if name is None:
+            name = 'Plot'
+            i = 0
+            while True:
+                name2 = '%s_%03d' % (name, i)
+                if name2 not in self.dockItems:
+                    break
+                i += 1
+            name = name2
+        
         p = PlotWidget()
-        d = QtGui.QDockWidget(name2)
+        d = QtGui.QDockWidget(name)
+        d.setObjectName(name)
         d.setWidget(p)
         
         self.addDockWidget(QtCore.Qt.RightDockWidgetArea, d)
-        item = ListItem(name2, d)
-        self.dockItems[name2] = item
+        item = ListItem(name, d)
+        self.dockItems[name] = {'type': 'Plot', 'listItem': item, 'dock': d, 'widget': p}
         self.ui.dockList.addItem(item)
         
         node = self.flowchart.createNode('PlotWidget')
@@ -69,4 +116,4 @@ class Analyzer(QtGui.QMainWindow):
 class ListItem(QtGui.QListWidgetItem):
     def __init__(self, name, obj):
         QtGui.QListWidgetItem.__init__(self, name)
-        self.obj = obj
+        #self.obj = weakref.ref(obj)

@@ -98,3 +98,8 @@ class TreeWidget(QtGui.QTreeWidget):
         for i in range(item.childCount()):
             self.collapseTree(item.child(i))
             
+    def removeTopLevelItem(self, item):
+        for i in range(self.topLevelItemCount()):
+            if self.topLevelItem(i) is item:
+                self.takeTopLevelItem(i)
+                return

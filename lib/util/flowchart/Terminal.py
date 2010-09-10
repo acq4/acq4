@@ -4,10 +4,28 @@ import weakref
 #from PySide import QtCore, QtGui
 
 class Terminal:
-    def __init__(self, node, name, opts):
+    def __init__(self, node, name, io, optional=False, multi=None, pos=None):
+        """Construct a new terminal. Optiona are:
+        node     - the node to which this terminal belongs
+        name     - string, the name of the terminal
+        io       - 'in', 'out', or 'io' 
+        optional - bool, whether the node may process without connection to this terminal
+        multi    - bool, whether this terminal may make multiple connections
+        pos      - [x, y], the position of the terminal within its node's boundaries
+        """
+        self._io = io
+        #self._isOutput = opts[0] in ['out', 'io']
+        #self._isInput = opts[0]] in ['in', 'io']
+        #self._isIO = opts[0]=='io'
+        self._optional = optional
+        if multi is None:
+            if io == 'in':
+                multi = False
+            else:
+                multi = True
+        self._multi = multi
         self._node = weakref.ref(node)
         self._name = name
-        self._isOutput = opts[0]=='out'
         self._connections = {}
         self._graphicsItem = TerminalGraphicsItem(self)
         self._value = None
@@ -36,10 +54,10 @@ class Terminal:
         return self._node()
         
     def isInput(self):
-        return not self._isOutput
+        return self._io in ['in', 'io']
 
     def isOutput(self):
-        return self._isOutput
+        return self._io in ['out', 'io']
         
     def name(self):
         return self._name
@@ -48,43 +66,49 @@ class Terminal:
         return self._graphicsItem
         
     def isConnected(self):
-        return len(self._connections) > 0
+        return len(self.connections()) > 0
         
     def connectedTo(self, term):
-        return term in self._connections
+        return term in self.connections()
         
     def hasInput(self):
-        conn = self.extendedConnections()
-        for t in conn:
+        #conn = self.extendedConnections()
+        for t in self.connections():
             if t.isOutput():
                 return True
         return False        
         
-    def inputTerminal(self):
-        """Return the terminal that gives input to this one."""
-        terms = self.extendedConnections()
-        for t in terms:
-            if t.isOutput():
-                return t
+    def inputTerminals(self):
+        """Return the terminal(s) that give input to this one."""
+        #terms = self.extendedConnections()
+        #for t in terms:
+            #if t.isOutput():
+                #return t
+        return [t for t in self.connection() is t.isOutput()]
+                
         
     def dependentNodes(self):
         """Return the list of nodes which receive input from this terminal."""
-        conn = self.extendedConnections()
-        del conn[self]
-        return set([t.node() for t in conn])
-        
+        #conn = self.extendedConnections()
+        #del conn[self]
+        return set([t.node() for t in self.connections() if t.isInput()])
         
     def connectTo(self, term, connectionItem=None):
         if self.connectedTo(term):
             raise Exception('Already connected')
         if term is self:
             raise Exception('Not connecting terminal to self')
-        if self.hasInput() and term.hasInput():
-            raise Exception('Target terminal already has input')
+        if term.node() is self.node():
+            raise Exception("Can't connect to terminal on same node.")
+        for t in [self, term]:
+            if not t._multi and len(t.connections()) > 0:
+                raise Exception("Terminal is already connected (and does not allow multiple connections)")
+        #if self.hasInput() and term.hasInput():
+            #raise Exception('Target terminal already has input')
             
-        if term in self.node().terminals.values():
-            if self.isOutput() or term.isOutput():
-                raise Exception('Can not connect an output back to the same node.')
+        #if term in self.node().terminals.values():
+            #if self.isOutput() or term.isOutput():
+                #raise Exception('Can not connect an output back to the same node.')
         
         if connectionItem is None:
             connectionItem = ConnectionItem(self.graphicsItem(), term.graphicsItem())
@@ -94,10 +118,10 @@ class Terminal:
         
         self.recolor()
         
-        if self.isOutput():
-            term.setValue(self.value())
-        if term.isOutput():
-            self.setValue(term.value())
+        if self.isOutput() and term.isInput():
+            term.inputChanged(self)
+        if term.isInput() and term.isOutput():
+            self.inputChanged(term)
             
         return connectionItem
         
@@ -111,32 +135,34 @@ class Terminal:
         self.recolor()
         term.recolor()
         
-        if self.isOutput():
-            term.setValue(None)
-        if term.isOutput():
-            self.setValue(None)
+        if self.isOutput() and term.isInput():
+            term.inputChanged(self)
+        if term.isInput() and term.isOutput():
+            self.inputChanged(term)
         
     def disconnectAll(self):
         for t in self._connections.keys():
             self.disconnectFrom(t)
         
-    def recolor(self, color=None, recurse=True):
+    def recolor(self, color=None):
         if color is None:
-            if not self.isConnected() or not self.hasInput():
+            if not self.isConnected():       ## disconnected terminals are black
                 color = QtGui.QColor(0,0,0)
-            elif self.value() is None:
+            elif self.isInput() and not self.hasInput():   ## input terminal with no connected output terminals 
+                color = QtGui.QColor(200,200,0)
+            elif self.value() is None:         ## terminal is connected but has no data (possibly due to processing error) 
                 color = QtGui.QColor(255,255,255)
-            elif self.valueIsAcceptable() is None:
+            elif self.valueIsAcceptable() is None:   ## terminal has data, but it is unknown if the data is ok
                 color = QtGui.QColor(200, 200, 0)
-            elif self.valueIsAcceptable() is True:
+            elif self.valueIsAcceptable() is True:   ## terminal has good input, all ok
                 color = QtGui.QColor(0, 200, 0)
-            else:
+            else:                                    ## terminal has bad input
                 color = QtGui.QColor(200, 0, 0)
         self.graphicsItem().setBrush(QtGui.QBrush(color))
         
-        if recurse:
-            for t in self.extendedConnections():
-                t.recolor(color, recurse=False)
+        #if recurse:
+            #for t in self.extendedConnections():
+                #t.recolor(color, recurse=False)
 
         
     def __repr__(self):
@@ -166,8 +192,7 @@ class Terminal:
             item.scene().removeItem(item)
         
     def saveState(self):
-        io = ['in', 'out'][self.isOutput()]
-        return (io,)
+        return {'io': self._io, 'multi': self._multi, 'optional': self._optional}
 
 
 class TerminalGraphicsItem(QtGui.QGraphicsItem):

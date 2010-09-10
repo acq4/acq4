@@ -20,10 +20,19 @@ class SubtreeNode(Node):
         self.lastInput = In
         if display:
             if In is not self.root:
-                self.removeAll()
+                #self.removeAll()
+                self.fileList.blockSignals(True)
                 self.fileList.setBaseDirHandle(In)
                 self.root = In
+                for f in self.files:
+                    if In.exists(f):
+                        fh = In[f]
+                        item = self.fileList.item(fh)
+                        item.setChecked(True)
+                    else:
+                        self.files.remove(f)
                 
+                self.fileList.blockSignals(False)
         out = {}
         for f in self.files:
             f2 = In[f]
@@ -52,7 +61,15 @@ class SubtreeNode(Node):
                 self.files.remove(fname)
                 self.removeTerminal(fname)
         self.update()
-            
+
+    def saveState(self):
+        return {'selected': list(self.files)}
+        
+    def restoreState(self, state):
+        self.files = set(state.get('selected', []))
+        for f in self.files:
+            self.addOutput(f)
+
 class MetaArrayColumnNode(Node):
     nodeName = "MetaArrayColumn"
     desc = "Select named columns from a MetaArray."
@@ -118,6 +135,15 @@ class MetaArrayColumnNode(Node):
                 self.columns.remove(col)
                 self.removeTerminal(col)
         self.update()
+        
+    def saveState(self):
+        return {'columns': list(self.columns)}
+    
+    def restoreState(self, state):
+        self.columns = set(state.get('columns', []))
+        for c in self.columns:
+            self.addOutput(c)
+        
     
 class PlotWidgetNode(Node):
     nodeName = 'PlotWidget'

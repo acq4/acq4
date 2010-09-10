@@ -9,7 +9,7 @@ class DataTreeWidget(QtGui.QTreeWidget):
         self.setVerticalScrollMode(self.ScrollPerPixel)
         self.setData(data)
         self.setColumnCount(3)
-        self.setHeaderLabels(['key', 'type', 'value'])
+        self.setHeaderLabels(['name', 'type', 'value'])
         
     def setData(self, data, hideRoot=False):
         """data should be a dictionary."""

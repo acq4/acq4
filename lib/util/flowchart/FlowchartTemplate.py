@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'FlowchartTemplate.ui'
 #
-# Created: Thu Sep  9 01:28:54 2010
+# Created: Thu Sep  9 11:48:58 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -44,7 +44,6 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.label, 0, 0, 1, 2)
         self.outputTree = DataTreeWidget(self.layoutWidget1)
         self.outputTree.setObjectName("outputTree")
-        self.outputTree.headerItem().setText(0, "1")
         self.gridLayout.addWidget(self.outputTree, 1, 0, 1, 2)
         self.selDescLabel = QtGui.QLabel(self.layoutWidget1)
         self.selDescLabel.setText("")
@@ -54,7 +53,6 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.selDescLabel, 4, 0, 1, 2)
         self.selectedTree = DataTreeWidget(self.layoutWidget1)
         self.selectedTree.setObjectName("selectedTree")
-        self.selectedTree.headerItem().setText(0, "1")
         self.gridLayout.addWidget(self.selectedTree, 5, 0, 1, 2)
         self.selNameLabel = QtGui.QLabel(self.layoutWidget1)
         font = QtGui.QFont()
