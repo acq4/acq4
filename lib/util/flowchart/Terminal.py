@@ -8,7 +8,7 @@ class Terminal:
         """Construct a new terminal. Optiona are:
         node     - the node to which this terminal belongs
         name     - string, the name of the terminal
-        io       - 'in', 'out', or 'io' 
+        io       - 'in' or 'out'
         optional - bool, whether the node may process without connection to this terminal
         multi    - bool, whether this terminal may make multiple connections
         pos      - [x, y], the position of the terminal within its node's boundaries
@@ -28,19 +28,50 @@ class Terminal:
         self._name = name
         self._connections = {}
         self._graphicsItem = TerminalGraphicsItem(self)
-        self._value = None
+        self._value = {None: None}  ## dictionary of terminal:value pairs. For single-value terminals, we use {None: val}
         self.valueOk = None
         self.recolor()
         
     def value(self):
-        return self._value
+        if self.isMultiInput():
+            return self._value
+        else:
+            return self._value[None]
         
     def setValue(self, val, process=True):
-        self._value = val
-        self.setValueAcceptable(None)
-        self.recolor()
+        """If this is a single-input or output terminal, val should be a single value.
+        If this is a multi-input terminal, val should be a dict of terminal:value pairs"""
+        if not self.isMultiInput():
+            if val == self._value[None]:
+                return
+            val = {None: val}
+        if val is self._value:
+            return
+        self._value.update(val)
+        self.setValueAcceptable(None)  ## by default, input values are 'unchecked' until Node.update(). 
         if self.isInput() and process:
             self.node().update()
+        if self.isOutput():
+            for c in self.connections():
+                if c.isInput():
+                    c.inputChanged(self)
+        self.recolor()
+            
+    def inputChanged(self, term):
+        """Called whenever there is a change to the inputs to this terminal (including disconnections).
+        It will often be useful to override this function."""
+        if self.isMultiInput():
+            if term in self.connections():
+                self.setValue({term: term.value()})
+            else:  ## disconnected
+                del self._value[term]
+                self.node().update()
+                self.recolor()
+        else:
+            if term in self.connections():
+                self.setValue(term.value())
+            else:  ## disconnected
+                self.setValue(None)
             
     def valueIsAcceptable(self):
         """Returns True->acceptable  None->unknown  False->Unacceptable"""
@@ -50,14 +81,20 @@ class Terminal:
         self.valueOk = v
         self.recolor()
         
+    def connections(self):
+        return self._connections
+        
     def node(self):
         return self._node()
         
     def isInput(self):
-        return self._io in ['in', 'io']
+        return self._io == 'in'
+    
+    def isMultiInput(self):
+        return self.isInput() and self._multi
 
     def isOutput(self):
-        return self._io in ['out', 'io']
+        return self._io == 'out'
         
     def name(self):
         return self._name
@@ -84,7 +121,7 @@ class Terminal:
         #for t in terms:
             #if t.isOutput():
                 #return t
-        return [t for t in self.connection() is t.isOutput()]
+        return [t for t in self.connections() if t.isOutput()]
                 
         
     def dependentNodes(self):
@@ -102,7 +139,7 @@ class Terminal:
             raise Exception("Can't connect to terminal on same node.")
         for t in [self, term]:
             if not t._multi and len(t.connections()) > 0:
-                raise Exception("Terminal is already connected (and does not allow multiple connections)")
+                raise Exception("Cannot connect %s <-> %s: Terminal %s is already connected to %s (and does not allow multiple connections)" % (self, term, t, t.connections().keys()))
         #if self.hasInput() and term.hasInput():
             #raise Exception('Target terminal already has input')
             
@@ -168,19 +205,16 @@ class Terminal:
     def __repr__(self):
         return "<Terminal %s.%s>" % (str(self.node().name()), str(self.name()))
         
-    def connections(self):
-        return self._connections
-        
-    def extendedConnections(self, terms=None):
-        """Return list of terminals (including this one) that are directly or indirectly wired to this."""        
-        if terms is None:
-            terms = {}
-        terms[self] = None
-        for t in self._connections:
-            if t in terms:
-                continue
-            terms.update(t.extendedConnections(terms))
-        return terms
+    #def extendedConnections(self, terms=None):
+        #"""Return list of terminals (including this one) that are directly or indirectly wired to this."""        
+        #if terms is None:
+            #terms = {}
+        #terms[self] = None
+        #for t in self._connections:
+            #if t in terms:
+                #continue
+            #terms.update(t.extendedConnections(terms))
+        #return terms
         
     def __hash__(self):
         return id(self)

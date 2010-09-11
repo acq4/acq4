@@ -8,7 +8,7 @@ class SubtreeNode(Node):
     nodeName = "Subtree"
     desc = "Select files from within a directory. Input must be a DirHandle."
     def __init__(self, name):
-        Node.__init__(self, name, terminals={'In': ('in',)})
+        Node.__init__(self, name, terminals={'In': {'io': 'in'}})
         self.root = None
         self.files = set()
         self.lastInput = None
@@ -74,7 +74,7 @@ class MetaArrayColumnNode(Node):
     nodeName = "MetaArrayColumn"
     desc = "Select named columns from a MetaArray."
     def __init__(self, name):
-        Node.__init__(self, name, terminals={'In': ('in',)})
+        Node.__init__(self, name, terminals={'In': {'io': 'in'}})
         self.columns = set()
         #self.lastInput = None
         #self.fileList = DirTreeWidget(defaultFlags=QtCore.Qt.ItemIsUserCheckable|QtCore.Qt.ItemIsEnabled, defaultCheckState=False)
@@ -150,7 +150,7 @@ class PlotWidgetNode(Node):
     desc = 'Connection to PlotWidget. Will plot arrays, metaarrays, and display event lists.'
     
     def __init__(self, name):
-        Node.__init__(self, name, terminals={'In': ('io',)})
+        Node.__init__(self, name, terminals={'In': {'io': 'in', 'multi': True}})
         self.plot = None
         
     def setPlot(self, plot):
@@ -171,8 +171,8 @@ class UniOpNode(Node):
     def __init__(self, name, fn):
         self.fn = fn
         Node.__init__(self, name, terminals={
-            'In': ('in',),
-            'Out': ('out',)
+            'In': {'io': 'in'},
+            'Out': {'io': 'out'}
         })
         
     def process(self, **args):
@@ -183,9 +183,9 @@ class BinOpNode(Node):
     def __init__(self, name, fn):
         self.fn = fn
         Node.__init__(self, name, terminals={
-            'A': ('in',),
-            'B': ('in',),
-            'Out': ('out',)
+            'A': {'io': 'in'},
+            'B': {'io': 'in'},
+            'Out': {'io': 'out'}
         })
         
     def process(self, **args):

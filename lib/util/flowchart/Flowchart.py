@@ -43,7 +43,7 @@ class Flowchart(Node):
             name = "Flowchart"
         if terminals is None:
             terminals = {}
-        Node.__init__(self, name)
+        Node.__init__(self, name)  ## create node without terminals; we'll add these later
             
         self.nodes = {}
         #self.connects = []
@@ -59,18 +59,20 @@ class Flowchart(Node):
         QtCore.QObject.connect(self.outputNode, QtCore.SIGNAL('outputChanged'), self.outputChanged)
             
         for name, opts in terminals.iteritems():
-            self.addTerminal(name, opts)
+            self.addTerminal(name, **opts)
       
         
         
-    def addTerminal(self, name, opts):
-        name, term = Node.addTerminal(self, name, opts)
-        if opts[0] == 'in':
-            opts = ('out',) + opts[1:]
-            self.inputNode.addTerminal(name, opts)
+    def addTerminal(self, name, **opts):
+        name, term = Node.addTerminal(self, name, **opts)
+        if opts['io'] == 'in':  ## inputs to the flowchart become outputs on the input node
+            opts['io'] = 'out'
+            opts['multi'] = True
+            self.inputNode.addTerminal(name, **opts)
         else:
-            opts = ('in',) + opts[1:]
-            self.outputNode.addTerminal(name, opts)
+            opts['io'] = 'in'
+            opts['multi'] = False
+            self.outputNode.addTerminal(name, **opts)
 
     def createNode(self, nodeType, name=None):
         if name is None:
@@ -105,7 +107,6 @@ class Flowchart(Node):
                 return self.inputNode[term.name()]
             else:
                 return self.outputNode[term.name()]
-                
         else:
             return term
         
@@ -125,27 +126,31 @@ class Flowchart(Node):
         order = self.processOrder()
         
         ## Record inputs given to process()
-        for n, t in self.inputNode.listOutputs().iteritems():
+        for n, t in self.inputNode.outputs().iteritems():
             data[t] = args[n]
         
+        ret = {}
+            
         ## process all in order
         for c, arg in order:
             
             if c == 'p':     ## Process a single node
                 #print "process:", arg
                 node = arg
-                outs = node.listOutputs().values()
-                ins = node.listInputs().values()
+                outs = node.outputs().values()
+                ins = node.inputs().values()
                 #print "  ", outs, ins
                 args = {}
                 for inp in ins:
-                    inpt = inp.inputTerminal()
-                    
-                    if inpt is None:
+                    inputs = inp.inputTerminals()
+                    if len(inputs) == 0:
                         continue
-                    args[inp.name()] = data[inpt]
+                    if inp.isMultiInput():  ## multi-input terminals require a dict of all inputs
+                        args[inp.name()] = dict([(i, data[i]) for i in inputs])
+                    else:                   ## single-inputs terminals only need the single input value available
+                        args[inp.name()] = data[inputs[0]]  
                 if node is self.outputNode:
-                    return args
+                    ret = args  ## we now have the return value, but must keep processing in case there are other endpoint nodes in the chart
                 else:
                     result = node.process(**args)
                     for out in outs:
@@ -159,16 +164,7 @@ class Flowchart(Node):
             elif c == 'd':   ## delete a terminal result (no longer needed; may be holding a lot of memory)
                 del data[arg]
 
-        ## If we got to this point, processing never finished.
-        return {}
-
-        ## Copy to return dict
-        #result = {}
-        #for n, t in self.outputNode.listInputs().iteritems():
-            ##inpt = t.inputTerminal()
-            #result[n] = data[t]
-            
-        #return result
+        return ret
         
     def setInput(self, **args):
         Node.setInput(self, **args)
@@ -188,7 +184,7 @@ class Flowchart(Node):
         tdeps = {}
         for name, node in self.nodes.iteritems():
             deps[node] = node.dependentNodes()
-            for t in node.listOutputs().itervalues():
+            for t in node.outputs().itervalues():
                 tdeps[t] = t.dependentNodes()
             
         #print "DEPS:", deps
@@ -241,7 +237,7 @@ class Flowchart(Node):
     def listConnections(self):
         conn = set()
         for n in self.nodes.itervalues():
-            terms = n.listOutputs()
+            terms = n.outputs()
             for n, t in terms.iteritems():
                 for c in t.connections():
                     conn.add((t, c))
@@ -304,7 +300,7 @@ class FlowchartGraphicsItem(QtGui.QGraphicsItem):
     def updateTerminals(self):
         self.terminals = {}
         bounds = self.boundingRect()
-        inp = self.chart.listInputs()
+        inp = self.chart.inputs()
         dy = bounds.height() / (len(inp)+1)
         y = dy
         for n, t in inp.iteritems():
@@ -313,7 +309,7 @@ class FlowchartGraphicsItem(QtGui.QGraphicsItem):
             item.setParentItem(self)
             item.setAnchor(bounds.width(), y)
             y += dy
-        out = self.chart.listOutputs()
+        out = self.chart.outputs()
         dy = bounds.height() / (len(out)+1)
         y = dy
         for n, t in out.iteritems():

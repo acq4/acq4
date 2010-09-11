@@ -14,8 +14,8 @@ from PyQt4.QtCore import *
 app = QApplication([])
 
 fc = Flowchart(terminals={
-    'dataIn': ('in',),
-    'dataOut': ('out',)    
+    'dataIn': {'io': 'in'},
+    'dataOut': {'io': 'out'}    
 })
 w = fc.widget()
 w.resize(800,600)
