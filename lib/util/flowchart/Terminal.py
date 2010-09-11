@@ -2,6 +2,7 @@
 from PyQt4 import QtCore, QtGui
 import weakref
 #from PySide import QtCore, QtGui
+from eq import *
 
 class Terminal:
     def __init__(self, node, name, io, optional=False, multi=None, pos=None):
@@ -42,7 +43,7 @@ class Terminal:
         """If this is a single-input or output terminal, val should be a single value.
         If this is a multi-input terminal, val should be a dict of terminal:value pairs"""
         if not self.isMultiInput():
-            if val == self._value[None]:
+            if eq(val, self._value[None]):
                 return
             val = {None: val}
         if val is self._value:
@@ -181,7 +182,7 @@ class Terminal:
         for t in self._connections.keys():
             self.disconnectFrom(t)
         
-    def recolor(self, color=None):
+    def recolor(self, color=None, recurse=True):
         if color is None:
             if not self.isConnected():       ## disconnected terminals are black
                 color = QtGui.QColor(0,0,0)
@@ -197,9 +198,9 @@ class Terminal:
                 color = QtGui.QColor(200, 0, 0)
         self.graphicsItem().setBrush(QtGui.QBrush(color))
         
-        #if recurse:
-            #for t in self.extendedConnections():
-                #t.recolor(color, recurse=False)
+        if recurse:
+            for t in self.connections():
+                t.recolor(color, recurse=False)
 
         
     def __repr__(self):

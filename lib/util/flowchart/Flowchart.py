@@ -2,13 +2,14 @@
 from PyQt4 import QtCore, QtGui
 #from PySide import QtCore, QtGui
 from Node import *
-import functions
+#import functions
 from advancedTypes import OrderedDict
 from TreeWidget import *
 from DataTreeWidget import *
 from FlowchartTemplate import *
 from Terminal import Terminal
 from numpy import ndarray
+import library
 
 def toposort(deps, nodes=None, seen=None, stack=None):
     """Topological sort. Arguments are:
@@ -45,7 +46,7 @@ class Flowchart(Node):
             terminals = {}
         Node.__init__(self, name)  ## create node without terminals; we'll add these later
             
-        self.nodes = {}
+        self._nodes = {}
         #self.connects = []
         self._chartGraphicsItem = FlowchartGraphicsItem(self)
         self._widget = None
@@ -61,7 +62,8 @@ class Flowchart(Node):
         for name, opts in terminals.iteritems():
             self.addTerminal(name, **opts)
       
-        
+    def nodes(self):
+        return self._nodes
         
     def addTerminal(self, name, **opts):
         name, term = Node.addTerminal(self, name, **opts)
@@ -79,11 +81,11 @@ class Flowchart(Node):
             n = 0
             while True:
                 name = "%s.%d" % (nodeType, n)
-                if name not in self.nodes:
+                if name not in self._nodes:
                     break
                 n += 1
                 
-        node = functions.NODE_LIST[nodeType](name)
+        node = library.NODE_LIST[nodeType](name)
         self.addNode(node, name)
         return node
         
@@ -93,11 +95,16 @@ class Flowchart(Node):
         item = node.graphicsItem()
         item.setParentItem(self.chartGraphicsItem())
         item.moveBy(*pos)
-        self.nodes[name] = node
+        self._nodes[name] = node
         self.widget().addNode(node)
+        QtCore.QObject.connect(node, QtCore.SIGNAL('closed'), self.nodeClosed)
+        
+    def nodeClosed(self, node):
+        del self._nodes[node.name()]
+        self.widget().removeNode(node)
+        QtCore.QObject.disconnect(node, QtCore.SIGNAL('closed'), self.nodeClosed)
         
     def arrangeNodes(self):
-        
         pass
         
     def internalTerminal(self, term):
@@ -127,6 +134,8 @@ class Flowchart(Node):
         
         ## Record inputs given to process()
         for n, t in self.inputNode.outputs().iteritems():
+            if n not in args:
+                raise Exception("Parameter %s required to process this chart." % n)
             data[t] = args[n]
         
         ret = {}
@@ -182,7 +191,7 @@ class Flowchart(Node):
         ## first collect list of nodes/terminals and their dependencies
         deps = {}
         tdeps = {}
-        for name, node in self.nodes.iteritems():
+        for name, node in self._nodes.iteritems():
             deps[node] = node.dependentNodes()
             for t in node.outputs().itervalues():
                 tdeps[t] = t.dependentNodes()
@@ -236,7 +245,7 @@ class Flowchart(Node):
 
     def listConnections(self):
         conn = set()
-        for n in self.nodes.itervalues():
+        for n in self._nodes.itervalues():
             terms = n.outputs()
             for n, t in terms.iteritems():
                 for c in t.connections():
@@ -249,7 +258,7 @@ class Flowchart(Node):
         state['connects'] = []
         state['terminals'] = self.saveTerminals()
         
-        for name, node in self.nodes.iteritems():
+        for name, node in self._nodes.iteritems():
             cls = type(node)
             if hasattr(cls, 'nodeName'):
                 clsName = cls.nodeName
@@ -260,29 +269,39 @@ class Flowchart(Node):
         conn = self.listConnections()
         for a, b in conn:
             state['connects'].append((a.node().name(), a.name(), b.node().name(), b.name()))
+            
+        state['inputNode'] = self.inputNode.saveState()
+        state['outputNode'] = self.outputNode.saveState()
         
         return state
         
-    def restoreState(self, state):
-        self.clear()
+    def restoreState(self, state, clear=False):
+        if clear:
+            self.clear()
         Node.restoreState(self, state)
         for n in state['nodes']:
-            if n['name'] in self.nodes:
+            if n['name'] in self._nodes:
+                self._nodes[name].moveBy(*n['pos'])
                 continue
             node = self.createNode(n['class'], name=n['name'])
             node.restoreState(n['state'])
-            node.graphicsItem().moveBy(*n['pos'])
+            #node.graphicsItem().moveBy(*n['pos'])
+            
+        self.inputNode.restoreState(state.get('inputNode', {}))
+        self.outputNode.restoreState(state.get('outputNode', {}))
+            
         self.restoreTerminals(state['terminals'])
         for n1, t1, n2, t2 in state['connects']:
-            self.connect(self.nodes[n1][t1], self.nodes[n2][t2])
+            self.connect(self._nodes[n1][t1], self._nodes[n2][t2])
+            
+            
+        
 
     def clear(self):
-        for n in self.nodes.values():
+        for n in self._nodes.values():
             if n is self.inputNode or n is self.outputNode:
                 continue
-            self.widget().removeNode(n)
-            n.close()
-            del self.nodes[n.name()]
+            n.close()  ## calls self.nodeClosed(n) by signal
         self.clearTerminals()
         self.widget().clear()
         
@@ -358,12 +377,22 @@ class FlowchartWidget(QtGui.QWidget):
         #self.addWidget(self.view)
         self._scene = QtGui.QGraphicsScene()
         self.ui.view.setScene(self._scene)
+        self.ui.view.setRenderHints(QtGui.QPainter.Antialiasing)
         #self.setSizes([200, 1000])
         
-        self.ui.nodeCombo.addItem("Add Node..")
+        self.nodeMenu = QtGui.QMenu("Add Node")
+        self.subMenus = []
+        for section, nodes in library.NODE_TREE.iteritems():
+            menu = QtGui.QMenu(section)
+            self.nodeMenu.addMenu(menu)
+            for name in nodes:
+                act = menu.addAction(name)
+                act.nodeType = name
+            self.subMenus.append(menu)
+        #self.ui.nodeCombo.addItem("Add Node..")
        
-        for f in functions.NODE_LIST:
-            self.ui.nodeCombo.addItem(f)
+        #for f in functions.NODE_LIST:
+            #self.ui.nodeCombo.addItem(f)
             
         #self.dataSplitter = QtGui.QSplitter()
         #self.dataSplitter.setOrientation(QtCore.Qt.Vertical)
@@ -374,20 +403,24 @@ class FlowchartWidget(QtGui.QWidget):
         #self.dataSplitter.addWidget(self.outputTree)
         #self.dataSplitter.addWidget(self.selectTree)
             
-        QtCore.QObject.connect(self.ui.nodeCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.nodeComboChanged)
+        self.ui.addNodeBtn.mouseReleaseEvent = self.addNodeBtnReleased
+            
+        #QtCore.QObject.connect(self.ui.nodeCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.nodeComboChanged)
+        QtCore.QObject.connect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
         QtCore.QObject.connect(self.ui.ctrlList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.itemChanged)
         QtCore.QObject.connect(self._scene, QtCore.SIGNAL('selectionChanged()'), self.selectionChanged)
         QtCore.QObject.connect(self.ui.view, QtCore.SIGNAL('hoverOver'), self.hoverOver)
     
+    
+    def addNodeBtnReleased(self, ev):
+        QtGui.QPushButton.mouseReleaseEvent(self.ui.addNodeBtn, ev)
+        self.nodeMenu.popup(ev.globalPos())
 
     def scene(self):
         return self._scene
 
-    def nodeComboChanged(self, ind):
-        if ind == 0:
-            return
-        nodeType = str(self.ui.nodeCombo.currentText())
-        self.ui.nodeCombo.setCurrentIndex(0)
+    def nodeMenuTriggered(self, action):
+        nodeType = action.nodeType
         self.chart.createNode(nodeType)
 
     def itemChanged(self, *args):
@@ -423,7 +456,7 @@ class FlowchartWidget(QtGui.QWidget):
                 data = {'outputs': n.outputValues(), 'inputs': n.inputValues()}
                 self.ui.selNameLabel.setText(n.name())
                 if hasattr(n, 'nodeName'):
-                    self.ui.selDescLabel.setText("<b>%s</b>: %s" % (n.nodeName, n.desc))
+                    self.ui.selDescLabel.setText("<b>%s</b>: %s" % (n.nodeName, n.__class__.__doc__))
                 else:
                     self.ui.selDescLabel.setText("")
                 if n.exception is not None:
@@ -444,14 +477,17 @@ class FlowchartWidget(QtGui.QWidget):
         if term is None:
             self.ui.hoverLabel.setText("")
         else:
-            if isinstance(term, ndarray):
-                val = term.value()
-                val = "%s %s %s" % (type(val).__name__, str(term.shape), str(term.dtype))
+            val = term.value()
+            if isinstance(val, ndarray):
+                val = "%s %s %s" % (type(val).__name__, str(val.shape), str(val.dtype))
             else:
-                val = str(term.value())
+                val = str(val)
                 if len(val) > 400:
                     val = val[:400] + "..."
             self.ui.hoverLabel.setText("%s.%s = %s" % (term.node().name(), term.name(), val))
+            self.ui.hoverLabel.setCursorPosition(0)
+
+    
 
     def clear(self):
         self.ui.outputTree.setData(None)

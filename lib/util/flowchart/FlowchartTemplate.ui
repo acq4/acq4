@@ -31,7 +31,11 @@
         <number>0</number>
        </property>
        <item>
-        <widget class="QComboBox" name="nodeCombo"/>
+        <widget class="QPushButton" name="addNodeBtn">
+         <property name="text">
+          <string>Add Node..</string>
+         </property>
+        </widget>
        </item>
        <item>
         <widget class="TreeWidget" name="ctrlList">

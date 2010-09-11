@@ -6,17 +6,7 @@ from advancedTypes import OrderedDict
 from debug import *
 import numpy as np
 from pyqtgraph.ObjectWorkaround import QObjectWorkaround
-
-def eq(a, b):
-    """The great missing equivalence function: Guaranteed evaluation to a single bool value."""
-    e = a==b
-    if type(e) is bool:
-        return e
-    elif isinstance(e, ndarray):
-        return e.all()
-
-
-
+from eq import *
 
 class Node(QtCore.QObject):
     def __init__(self, name, terminals=None):
@@ -147,7 +137,8 @@ class Node(QtCore.QObject):
         try:
             out = self.process(**vals)
             #print "  output:", out
-            self.setOutput(**out)
+            if out is not None:
+                self.setOutput(**out)
             for n,t in self.inputs().iteritems():
                 t.setValueAcceptable(True)
             self.clearException()
@@ -183,10 +174,12 @@ class Node(QtCore.QObject):
             self.graphicsItem().setPen(QtGui.QPen(QtGui.QColor(150, 0, 0), 3))
 
     def saveState(self):
-        return {}
+        pos = self.graphicsItem().pos()
+        return {'pos': (pos.x(), pos.y())}
         
     def restoreState(self, state):
-        pass
+        pos = state.get('pos', (0,0))
+        self.graphicsItem().setPos(*pos)
         
     def saveTerminals(self):
         terms = OrderedDict()
@@ -218,6 +211,7 @@ class Node(QtCore.QObject):
         w = self.ctrlWidget()
         if w is not None:
             w.setParent(None)
+        self.emit(QtCore.SIGNAL('closed'), self)
             
     def disconnectAll(self):
         for t in self.terminals.values():
@@ -314,6 +308,12 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         #ret = QtGui.QGraphicsItem.mouseReleaseEvent(self, ev)
         #return ret
 
+    def keyPressEvent(self, ev):
+        if ev.key() == QtCore.Qt.Key_Delete:
+            self.node.close()
+            ev.accept()
+        else:
+            ev.ignore()
 
 
 

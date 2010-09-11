@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'FlowchartTemplate.ui'
 #
-# Created: Thu Sep  9 11:48:58 2010
+# Created: Sat Sep 11 17:39:29 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -25,9 +25,9 @@ class Ui_Form(object):
         self.verticalLayout = QtGui.QVBoxLayout(self.layoutWidget)
         self.verticalLayout.setSpacing(0)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.nodeCombo = QtGui.QComboBox(self.layoutWidget)
-        self.nodeCombo.setObjectName("nodeCombo")
-        self.verticalLayout.addWidget(self.nodeCombo)
+        self.addNodeBtn = QtGui.QPushButton(self.layoutWidget)
+        self.addNodeBtn.setObjectName("addNodeBtn")
+        self.verticalLayout.addWidget(self.addNodeBtn)
         self.ctrlList = TreeWidget(self.layoutWidget)
         self.ctrlList.setObjectName("ctrlList")
         self.ctrlList.headerItem().setText(0, "1")
@@ -73,6 +73,7 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
+        self.addNodeBtn.setText(QtGui.QApplication.translate("Form", "Add Node..", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("Form", "Output:", None, QtGui.QApplication.UnicodeUTF8))
 
 from DataTreeWidget import DataTreeWidget

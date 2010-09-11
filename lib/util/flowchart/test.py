@@ -56,3 +56,5 @@ fc.clear()
 fc.restoreState(s)
 
 fc.setInput(dataIn=3)
+
+#app.exec_()

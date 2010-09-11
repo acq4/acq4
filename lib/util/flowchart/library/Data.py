@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 from Node import *
-from advancedTypes import OrderedDict
+from PyQt4 import QtGui, QtCore
 from DirTreeWidget import *
 
 class SubtreeNode(Node):
-    """Selects files from a DirHandle"""
+    """Select files from within a directory. Input must be a DirHandle."""
     nodeName = "Subtree"
-    desc = "Select files from within a directory. Input must be a DirHandle."
     def __init__(self, name):
         Node.__init__(self, name, terminals={'In': {'io': 'in'}})
         self.root = None
@@ -63,16 +62,19 @@ class SubtreeNode(Node):
         self.update()
 
     def saveState(self):
-        return {'selected': list(self.files)}
+        state = Node.saveState(self)
+        state['selected'] = list(self.files)
+        return state
         
     def restoreState(self, state):
+        Node.restoreState(self, state)
         self.files = set(state.get('selected', []))
         for f in self.files:
             self.addOutput(f)
 
 class MetaArrayColumnNode(Node):
+    """Select named columns from a MetaArray."""
     nodeName = "MetaArrayColumn"
-    desc = "Select named columns from a MetaArray."
     def __init__(self, name):
         Node.__init__(self, name, terminals={'In': {'io': 'in'}})
         self.columns = set()
@@ -137,107 +139,12 @@ class MetaArrayColumnNode(Node):
         self.update()
         
     def saveState(self):
-        return {'columns': list(self.columns)}
+        state = Node.saveState(self)
+        state['columns'] = list(self.columns)
+        return state
     
     def restoreState(self, state):
+        Node.restoreState(self, state)
         self.columns = set(state.get('columns', []))
         for c in self.columns:
             self.addOutput(c)
-        
-    
-class PlotWidgetNode(Node):
-    nodeName = 'PlotWidget'
-    desc = 'Connection to PlotWidget. Will plot arrays, metaarrays, and display event lists.'
-    
-    def __init__(self, name):
-        Node.__init__(self, name, terminals={'In': {'io': 'in', 'multi': True}})
-        self.plot = None
-        
-    def setPlot(self, plot):
-        self.plot = plot
-        
-    def process(self, data, display=False):
-        if display:
-            self.plot.plot(data)
-            
-    def setInput(self, **args):
-        for k in args:
-            self.plot.plot(args[k])
-    
-            
-
-class UniOpNode(Node):
-    """Generic node for performing any operation like Out = In.fn()"""
-    def __init__(self, name, fn):
-        self.fn = fn
-        Node.__init__(self, name, terminals={
-            'In': {'io': 'in'},
-            'Out': {'io': 'out'}
-        })
-        
-    def process(self, **args):
-        return {'Out': getattr(args['In'], self.fn)()}
-
-class BinOpNode(Node):
-    """Generic node for performing any operation like A.fn(B)"""
-    def __init__(self, name, fn):
-        self.fn = fn
-        Node.__init__(self, name, terminals={
-            'A': {'io': 'in'},
-            'B': {'io': 'in'},
-            'Out': {'io': 'out'}
-        })
-        
-    def process(self, **args):
-        fn = getattr(args['A'], self.fn)
-        out = fn(args['B'])
-        if out is NotImplemented:
-            raise Exception("Operation %s not implemented between %s and %s" % (fn, str(type(args['A'])), str(type(args['B']))))
-        #print "     ", fn, out
-        return {'Out': out}
-
-class AbsNode(UniOpNode):
-    nodeName = 'Abs'
-    desc = 'Returns abs(Inp). Does not check input types.'
-    def __init__(self, name):
-        UniOpNode.__init__(self, name, '__abs__')
-
-class AddNode(BinOpNode):
-    nodeName = 'Add'
-    desc = 'Returns A + B. Does not check input types.'
-    def __init__(self, name):
-        BinOpNode.__init__(self, name, '__add__')
-
-class SubtractNode(BinOpNode):
-    nodeName = 'Subtract'
-    desc = 'Returns A - B. Does not check input types.'
-    def __init__(self, name):
-        BinOpNode.__init__(self, name, '__sub__')
-
-class MultiplyNode(BinOpNode):
-    nodeName = 'Multiply'
-    desc = 'Returns A * B. Does not check input types.'
-    def __init__(self, name):
-        BinOpNode.__init__(self, name, '__mul__')
-
-class DivideNode(BinOpNode):
-    nodeName = 'Divide'
-    desc = 'Returns A / B. Does not check input types.'
-    def __init__(self, name):
-        BinOpNode.__init__(self, name, '__div__')
-
-
-
-
-
-
-
-
-
-
-NODE_LIST = []
-for o in locals().values():
-    if type(o) is type(AddNode) and issubclass(o, Node) and o is not Node and hasattr(o, 'nodeName'):
-            NODE_LIST.append((o.nodeName, o))
-NODE_LIST.sort(lambda a,b: cmp(a[0], b[0]))
-NODE_LIST = OrderedDict(NODE_LIST)

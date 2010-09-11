@@ -60,6 +60,9 @@ class Analyzer(QtGui.QMainWindow):
         self.newProtocol()
         state = configfile.readConfigFile(handle.name())
         
+        ## restore flowchart
+        self.flowchart.restoreState(state['flowchart'])
+        
         ## recreate docks
         for name, d in state['docks'].iteritems():
             fn = getattr(self, 'add'+d['type'])
@@ -68,8 +71,6 @@ class Analyzer(QtGui.QMainWindow):
         ## restore dock positions
         self.restoreState(QtCore.QByteArray.fromPercentEncoding(state['window']))
         
-        ## restore flowchart
-        self.flowchart.restoreState(state['flowchart'])
         
         return True
         
@@ -103,7 +104,12 @@ class Analyzer(QtGui.QMainWindow):
         self.dockItems[name] = {'type': 'Plot', 'listItem': item, 'dock': d, 'widget': p}
         self.ui.dockList.addItem(item)
         
-        node = self.flowchart.createNode('PlotWidget')
+        nodes = self.flowchart.nodes()
+        #print name, nodes
+        if name in nodes:
+            node = nodes[name]
+        else:
+            node = self.flowchart.createNode('PlotWidget', name=name)
         node.setPlot(p)
 
     def addCanvas(self):
