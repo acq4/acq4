@@ -147,22 +147,23 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         return h
     
     def getLocalHandlePositions(self, index=None):
+        """Returns the position of a handle in ROI coordinates"""
         if index == None:
             positions = []
             for h in self.handles:
-                positions.append((h['name'], h['item'].pos()))
+                positions.append((h['name'], h['pos']))
             return positions
         else:
-            return (self.handles[index]['name'], self.handles[index]['item'].pos())
+            return (self.handles[index]['name'], self.handles[index]['pos'])
             
     def getSceneHandlePositions(self, index = None):
         if index == None:
             positions = []
             for h in self.handles:
-                positions.append((h['name'], self.mapToScene(h['item'].pos())))
+                positions.append((h['name'], h['item'].scenePos()))
             return positions
         else:
-            return (self.handles[index]['name'], self.mapToScene(self.handles[index]['item'].pos()))
+            return (self.handles[index]['name'], self.handles[index]['item'].scenePos())
         
         
     def mapSceneToParent(self, pt):

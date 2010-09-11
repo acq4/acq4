@@ -21,6 +21,10 @@ from numpy import log
 from WidgetGroup import *
 from advancedTypes import OrderedDict
 import time
+import pickle
+from pyqtgraph.Point import *
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 
 
 class UncagingSpot(QtGui.QGraphicsEllipseItem):
@@ -38,20 +42,24 @@ class tShapeROI(ROI):
     def __init__(self, pos, size, **args): 
         ROI.__init__(self, pos, size, **args)
         self.translatable = False
-        self.addScaleRotateHandle([0.5,0.5], [1.0,0.5], name='L6mark')
-        self.addScaleRotateHandle([1.0, 0.0], [1.0,0.5], name='piaMark1')
-        self.addScaleRotateHandle([1.0, 0.5], [0.5,0.5], name='piaMark2')
-        self.addScaleRotateHandle([1.0, 1.0], [1.0,0.5], name='piaMark3')
+        self.aspectLocked = True
+        self.addScaleHandle([0.0, 1.0], [0.0, 0.0], name = 'L6Mark')
+        self.addScaleHandle([-0.5, 0.0], [0.0,0.0], name='piaMark1')
+        self.addRotateHandle([0.0, 0.0], [0.0,1.0], name='piaMark2')
+        self.addScaleHandle([0.5, 0.0], [0.0,0.0], name='piaMark3')
+        self.addRotateHandle([-0.4,0.0], [0.0,0.0])
+        self.addRotateHandle([0.0, 0.9], [0.0, 0.0])
+        
         #self.addFreeHandle([0.1,0.1])
-        self.addTranslateHandle([0.9,0.5])
+        self.addTranslateHandle([0.0,0.1])
         
     def paint(self, p, opt, widget):
         r = self.boundingRect()
         #p.setRenderHint(QtGui.QPainter.Antialiasing)
         p.setPen(self.pen)
         #p.drawRect(r)
-        p.drawLine(QtCore.QPointF(r.width(), 0), QtCore.QPointF(r.width(), r.height()))
-        p.drawLine(QtCore.QPointF(0, r.height()/2.0), QtCore.QPointF(r.width(), r.height()/2.0))
+        p.drawLine(QtCore.QPointF(-r.width()/2.0, 0.0), QtCore.QPointF(r.width()/2.0, 0.0))
+        p.drawLine(QtCore.QPointF(0.0, 0.0), QtCore.QPointF(0.0, r.height()))
         #p.scale(r.width(), r.height())## workaround for GL bug
         #r = QtCore.QRectF(r.x()/r.width(), r.y()/r.height(), 1,1)
         #
@@ -68,9 +76,16 @@ class cellROI(ROI):
         p.drawLine(QtCore.QPointF(r.width()/2.0, r.height()*0.25), QtCore.QPointF(r.width()/2.0, r.height()*0.75))
         p.drawLine(QtCore.QPointF(r.width()*0.25, r.height()*0.5), QtCore.QPointF(r.width()*0.75, r.height()*0.5))
     
-    def getPosition(self):
-        return self.mapToScene(self.pos())
-
+    def getPosition(self, coord='scene'):
+        """Return the position of the center of the ROI in specified coordinates."""
+        r = self.boundingRect()
+        x = r.width()/2
+        y = r.height()/2
+        
+        if coord == 'scene':
+            return self.mapToScene(x, y)
+        elif coord == 'item':
+            return QtCore.QPointF(x, y)
 
 
         
@@ -197,7 +212,7 @@ class EventMatchWidget(QtGui.QSplitter):
         
     def findEvents(self, data):
         """Locate events in the data based on GUI settings selected. Generally only for internal use."""
-        #dt = data.xvals('Time')[1] - data.xvals('Time')[0]
+        dt = data.xvals('Time')[1] - data.xvals('Time')[0]
         if self.ctrl.detectMethodCombo.currentText() == 'Stdev. Threshold':
             stdev = data.std()
             mask = abs(data) > stdev * self.ctrl.stThresholdSpin.value()
@@ -237,11 +252,11 @@ class EventMatchWidget(QtGui.QSplitter):
             for i in range(len(events)):
                 e = data[events[i]['start']:events[i]['start']+events[i]['len']]
                 event = self.ctrl.preFilterList.filterList.topLevelItem(2).filter.reconvolve(e) ### lots of hard-coding happening, don't worry I feel sufficiently guilty about it
-                events[i]['sum'] = event.sum()
                 if events[i]['sum'] > 0:
                     events[i]['peak'] = event.max()
                 else:
                     events[i]['peak'] = event.min()
+                events[i]['sum'] = event.sum()*dt
                 
                 
         elif self.ctrl.detectMethodCombo.currentText() == 'Clements-Bekkers':
@@ -315,6 +330,11 @@ class EventMatchWidget(QtGui.QSplitter):
                 #print "set tick locations:", timeVals[eventList['start']]
                 self.tickGroups.append(tg)
                 self.analysisPlot.addItem(tg)
+                
+                for j in range(len(eventList)):
+                    e = ppd[eventList[j]['start']:eventList[j]['start']+eventList[j]['len']]
+                    event = self.ctrl.preFilterList.filterList.topLevelItem(2).filter.reconvolve(e)
+                    self.dataPlot.plot(data=event, x=(arange((eventList[j]['start']-100), (eventList[j]['start']-100+len(event)))*10e-5), pen=pen)
                 
                 ## generate triggered stacks for plotting
                 #stack = triggerStack(d, eventList['start'], window=[-100, 200])
@@ -394,7 +414,7 @@ class UncagingWindow(QtGui.QMainWindow):
         QtCore.QObject.connect(self.clearImgBtn, QtCore.SIGNAL('clicked()'), self.clearImage)
         QtCore.QObject.connect(self.clearScanBtn, QtCore.SIGNAL('clicked()'), self.clearScan)
         QtCore.QObject.connect(self.addDrugScanBtn, QtCore.SIGNAL('clicked()'), self.addDrugScan)
-        QtCore.QObject.connect(self.generateTableBtn, QtCore.SIGNAL('clicked()'), self.generateDataTable)
+        QtCore.QObject.connect(self.generateTableBtn, QtCore.SIGNAL('clicked()'), self.generatePspDataTable)
         #self.layout = QtGui.QVBoxLayout()
         #self.cw.setLayout(self.layout)
         bwtop = QtGui.QSplitter()
@@ -800,14 +820,27 @@ class UncagingWindow(QtGui.QMainWindow):
                 self.currentTraces.append(d)
         if self.ctrl.colorTracesCheck.isChecked():
             pens, max, min = self.assignPens(self.currentTraces)
-            data = [i[0]['Channel':'primary'] for i in self.currentTraces]
+            try:
+                data = [i[0]['Channel':'primary'][0:argwhere(i[0]['Channel':'Command'] != i[0]['Channel':'Command'][0])[0][0]] for i in self.currentTraces]
+            except:
+                data = [i[0]['Channel':'primary'] for i in self.currentTraces]
             self.plot.setData(data, pens=pens, analyze=analyze)
             #gradient = QtGui.QLinearGradient(QtCore.QPointF(0,0), QtCore.QPointF(1,0))
             #self.traceColorScale.show()
             #self.traceColorScale.setGradient
             #self.colorScaleBar.setLabels({str(max):1, str(min):0}
+            
+            cmd = self.loadTrace(item)[0]['Channel':'Command']
+            pulse = argwhere(cmd != cmd[0])[0]
+            trace = self.loadTrace(item)[0]['Channel':'primary'][0:pulse[0]]
+            
+        
         else:
-            self.plot.setData([i[0]['Channel':'primary'] for i in self.currentTraces], analyze=analyze)
+            try:
+                self.plot.setData([i[0]['Channel':'primary'][0:argwhere(i[0]['Channel':'Command'] != i[0]['Channel':'Command'][0])[0][0]] for i in self.currentTraces], analyze=analyze)
+            except:
+                self.plot.setData([i[0]['Channel':'primary'] for i in self.currentTraces], analyze=analyze)
+                
         return spots
         
     def assignPens(self, data):
@@ -855,7 +888,7 @@ class UncagingWindow(QtGui.QMainWindow):
         slope = stats.linregress(pspRgn.xvals('Time'), pspRgn)[0]
         return slope, pspTime*dt
     
-    def generateDataTable(self, data='All'):
+    def generatePspDataTable(self, data='All'):
         table = zeros((len(self.scanAvgItems), len(self.scanItems)/len(self.scanAvgItems)), dtype=[
             ('traceID', '|S100'), ## 0 specify a space for a string 100 bytes long
             ('drug', bool), ## 1
@@ -918,64 +951,150 @@ class UncagingWindow(QtGui.QMainWindow):
         self.table = table
         #print self.table
         
-    def generateEventTable(self, data='All'):
+    def generateEventTable(self, rostral=None):
+        if rostral not in ['right', 'left']:
+            print "Rostral orientation must be specified. Options: 'right', 'left'. Enter orientation as if the pia were horizontal at the top of the image."
+            return
+        
         table = zeros((len(self.scanItems)*10), dtype=[ ## create a buffer space of 20 events per trace (maybe need more?)
             ('traceID', '|S100'), ## 0 specify a space for a string 100 bytes long
             #('laserPower', float), ## 2 units = seconds
-            ('x', float64), ## 3
-            ('y', float64), 
+            ('xslice', float64), ## position of center of spot in sliceMarker coordinates - units: meters - Positive x is anterior
+            ('yslice', float64),
+            ('xcell', float64),
+            ('ycell', float64),
             ('latency', float64), ##  in seconds
             ('duration', float64),
             ('peak', float64), ## 
-            ('charge', float64)
-            
+            ('charge', float64) 
         ])
-        
-        metaInfo = {} #slice position, cell position, analysis parameters
         
         n=0
         for item in self.scanItems:
-            trace = self.loadTrace(item)[0]['Channel':'primary']
+            try:
+                cmd = self.loadTrace(item)[0]['Channel':'Command']
+                pulse = argwhere(cmd != cmd[0])[0]
+                trace = self.loadTrace(item)[0]['Channel':'primary'][0:pulse[0]]
+            except:
+                trace = self.loadTrace(item)[0]['Channel':'primary']
             
             rate = trace.infoCopy()[-1]['rate']
             laserIndex = self.getLaserTime(item.source)*rate ## in seconds
             
             traceID = item.source.name()
-            #laserPower = self.getLaserPower(item.source)
-            x = item.position[0]
-            y = item.position[1]
+            
+            ### return the coordinates of stim. site relative to sliceMarker
+            xs, ys = Point(item.mapToItem(self.sliceMarker, QtCore.QPointF(item.position[0], item.position[1])))
+            cell = Point(self.sliceMarker.mapFromScene(self.cellMarker.getPosition()))
+            xc = xs - cell[0]
+            yc = ys - cell[1]
+            
+            if rostral == 'left':
+                xs = -xs
+                xc = -xc
+            #x = self.sliceMarker.mapFromScene(item.position[0])
+            #y = self.sliceMarker.mapFromScene(item.position[1])
             
             events = self.plot.processData([trace], display=False)
+            events = events[0][(events[0]['start'] > laserIndex)*(events[0]['start'] < laserIndex+self.ctrl.poststimTimeSpin.value()*10)]
             
-            for e in events[0]:
-                if laserIndex < e['start'] and e['start'] < laserIndex+self.ctrl.poststimTimeSpin.value()*10:
+            spikeIndex = None
+            if trace.min() < -2e-9:
+                spikeIndex = argwhere(trace == trace.min())[0][0]-laserIndex
+                table[n]['traceID'] = traceID
+                table[n]['xslice'] = float(xs)
+                table[n]['yslice'] = float(ys)
+                table[n]['xcell'] = float(xc)
+                table[n]['ycell'] = float(yc)
+                table[n]['latency'] = spikeIndex/rate
+                table[n]['peak'] = 5e-9
+                n += 1
+                buffer = (150, 300) ### buffer to exclude events around an action potential (in 10e-4 seconds)
+                events = events[(events['start'] < spikeIndex - buffer[0])*(events['start'] > spikeIndex + buffer[1])]
+            
+            #foundEvent = False
+            if len(events) > 0:
+                for e in events:
+                    #foundEvent = False
+                    #if laserIndex < e['start'] and e['start'] < laserIndex+self.ctrl.poststimTimeSpin.value()*10:
+                    #    foundEvent = True
                     table[n]['traceID'] = traceID
-                    table[n]['x'] = x
-                    table[n]['y'] = y
-                    table[n]['latency']= (e['start']-laserIndex)*rate
-                    table[n]['duration'] = e['len'] * rate
+                    table[n]['xslice'] = float(xs)
+                    table[n]['yslice'] = float(ys)
+                    table[n]['xcell'] = float(xc)
+                    table[n]['ycell'] = float(yc)
+                    table[n]['latency']= (e['start']-laserIndex)/rate
+                    table[n]['duration'] = e['len'] / rate
                     table[n]['peak'] = e['peak']
                     table[n]['charge'] = e['sum']
                     n += 1
+                        
+            elif len(events) == 0 and spikeIndex == None:
+                table[n]['traceID'] = traceID
+                table[n]['xcell'] = float(xc)
+                table[n]['ycell'] = float(yc)
+                table[n]['xslice'] = float(xs)
+                table[n]['yslice'] = float(ys)
+                n += 1
+        
+        ## get rid of extra buffer
+        a = argwhere(table['traceID'] == '')[0][0]
+        table = table[:a]
+        
+        metaInfo = self.getMetaInfo()
                     
+        self.eventTable = (table, metaInfo)
+        
+    def writeCsvFromRecordArray(self, fileName, data):
+        f = open('%s-UncagingAnalysis.csv' %fileName, 'w')
+        for x in data.dtype.names:
+            f.write('%s,' %x)
+        f.write(' \n')
+        for i in range(len(data)):
+            for name in data.dtype.names:
+                if data.dtype.fields[name][0] in [dtype('|S100'), dtype('bool')]:
+                    f.write('%r,' %data[name][i])
+                elif data.dtype.fields[name][0] in [dtype('float64'), dtype('float32')]:
+                    f.write('%g,' %data[name][i])
+            f.write(' \n')
+        f.close()
+                
+    def storeData(self, fileName, data):
+        f = open('/Volumes/iorek/%s-UncagingAnalysis.pk' %fileName, 'w')
+        pickle.dump(data, f)
+        f.close()
+        
+    def loadData(self, fileName):
+        f = open('/Volumes/iorek/%s' %fileName, 'r')
+        a = pickle.load(f)
+        f.close()
+        return a
+        
+                
+    def getMetaInfo(self):
+        metaInfo = {}
         ## slice/cell positions
-        slice = self.sliceMarker.getSceneHandlePositions()
-        metaInfo['cellPosition'] = self.cellMarker.getPosition()
+        sliceS = self.sliceMarker.getSceneHandlePositions()
+        sliceL = self.sliceMarker.getLocalHandlePositions()
+        metaInfo['cellPosition'] = self.sliceMarker.mapFromScene(self.cellMarker.getPosition()) ## cell position measured relative to sliceMarker
         
-        for x in slice:
+        for x in sliceS:
+            i = 0
             if x[0] is not None:
-                metaInfo[x[0]] = x[1]
-        
-        
-        
+                metaInfo[x[0]] = {'local': sliceL[i][1] , 'scene':x[1]}
+                i += 1
+                
         ## get analysis info
         metaInfo['postStimTime'] = self.ctrl.poststimTimeSpin.value()/1000
         metaInfo['Filters'] = {}
         for i in range(self.plot.ctrl.preFilterList.filterList.topLevelItemCount()):
+            j = 0
             item = self.plot.ctrl.preFilterList.filterList.topLevelItem(i)
             if item.checkState(0) == QtCore.Qt.Checked:
                 filter = item.filter
                 x={}
+                x['index'] = j
+                j += 1
                 for k in filter.ctrls.keys():
                     try:
                         try:
@@ -1002,13 +1121,268 @@ class UncagingWindow(QtGui.QMainWindow):
         metaInfo['eventDetection'] = (self.plot.ctrl.detectMethodCombo.currentText(), x)
         metaInfo['analysisTime'] = time.ctime()
         
-        ## get rid of extra buffer
-        a = argwhere(table['charge'] == 0)[0][0]
-        table = table[:a+1] 
-                    
-        self.eventTable = (table, metaInfo)
+        return metaInfo
+    
+
+
+class CellMixer(QtCore.QObject):
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+        self.arrayList = []
+        self.metaInfo = []
+        self.dataTable = None
+        self.cellEventMaps = []
+        self.cellMaps = []
+        self.binWidth = 100e-6
+        self.figures = [0]
+        self.chargeCutOff = None
+        self.cellNames = []
+        
+    def dataThrough(self, index):
+        self.loadData('2010.08.04_s0c0-UncagingAnalysis.pk')
+        self.singleCellCentric(self.arrayList[index])
+        self.squash(self.cellEventMaps[index])
+        #self.displayMap(self.cellMaps[0])
+        self.displayCellData(index)
+    
+    def loadData(self, fileName=None):
+        if fileName is not None:
+            fileName = '/Volumes/iorek/%s' %fileName
+        else:
+            fileName = getManager().currentFile.name()
+            
+        f = open(fileName, 'r')
+        a = pickle.load(f)
+        f.close()
+        self.cellNames.append(fileName)
+        self.arrayList.append(a[0])
+        self.metaInfo.append(a[1])
+        self.updateChargeCutOff()
+        
+        return a
+    
+    def updateChargeCutOff(self, percentile=4):
+        self.compileTable()
+        mask = self.dataTable['traceID'] != ''
+        charges = self.dataTable[mask]['charge']
+        self.chargeCutOff = stats.scoreatpercentile(charges, percentile)
+    
+    def compileTable(self):
+        lengths = [len(self.arrayList[i]) for i in range(len(self.arrayList))]
+        arrayDtype = self.arrayList[0].dtype
+        self.dataTable = zeros((len(lengths), max(lengths)), dtype = arrayDtype)
+        
+        
+        for i in range(len(self.arrayList)):
+            a = self.arrayList[i]
+            self.dataTable[i][:len(a)] = a
+            
+    def singleCellCentric(self, table):
+        map = zeros((40, 20, 200), dtype = self.arrayList[0].dtype) ##shape = x, y, events
+        storage = zeros(len(table), dtype = [
+            ('x', int),
+            ('y', int),
+            ('event', self.arrayList[0].dtype)
+            ])
+        
+        for i in range(len(table)):
+            event = table[i]
+            x = floor(event['xcell']/self.binWidth)
+            y = floor(event['ycell']/self.binWidth)
+            storage[i]['x'] = x
+            storage[i]['y'] = y
+            storage[i]['event'] = event
+        
+        lengths = []
+        unx = linspace(-20, 20, 41)[:-1]
+        uny = linspace(-4, 16, 21)[:-1]
+
+        for i in range(40):         ## x dimension of map array
+            for j in range(20):     ## y dimension of map array
+                events = storage[(storage['x'] == unx[i]) * (storage['y'] == uny[j])]
+                map[i][j][:len(events)] = events['event']
+                lengths.append(len(events))
+        
+        map = map[:,:,:max(lengths)]
+        
+        self.cellEventMaps.append(map)
+        return map
+        
+    def squash(self, eventMap):
+        """Takes a 3d record array of events sorted into location bins, and squashes it into a 2d record array of location bins."""
+        map = zeros((40, 20), dtype = [
+            ('charge', float), ### sum of events/#traces
+            ('latency', float), ### sum of first latencies/#responses
+            ('#APs', int),
+            ('#traces', int),
+            ('#responses', int)
+        ])
+        mask = eventMap['traceID'] != ''
+        for i in range(40):
+            for j in range(20):
+                charges = eventMap[i][j][mask[i][j]]['charge'].sum()
+                traces = unique(eventMap[i][j][mask[i][j]]['traceID'])
+                latencies = 0
+                APs = 0 
+                responses = 0 
+                for t in traces:
+                    #print 'i', i, 'j',j, 'trace', t
+                    latency = eventMap[i][j][mask[i][j]]['traceID' == t]['latency'].min()
+                    if 5e-9 == eventMap[i][j][mask[i][j]]['traceID' == t]['peak'].min():
+                        APs += 1
+                    if latency != 0:
+                        latencies += latency
+                        responses += 1
+                if len(traces) != 0:
+                    map[i][j]['charge'] = charges/len(traces)
+                if responses != 0:
+                    map[i][j]['latency'] = latencies/responses
+                map[i][j]['#APs'] = APs
+                map[i][j]['#traces'] = len(traces)
+                map[i][j]['#responses'] = responses
                 
+        self.cellMaps.append(map)
+        return map
+    
+    def displayMap(self, data, field='charge', max=None):
+        if data.ndim != 2:
+            print """Not sure how to display data in %i dimensions. Please enter 2-dimensional data set.""" %data.ndim
+            return
+        if max == None:
+            d = data[field]/data[field].min()
+        else:
+            d = (data[field]/max).clip(0,1)  ##large events are 1, small events are small, 0 is 0
+        d = d.astype(float32)
+        d = d.transpose()
+        fig = plt.figure(1)
+        #s1 = fig.add_subplot(1,1,1)
+        #c = s1.contour(data.transpose())
+        mask = data['#traces'] != 0
+        mask = mask.transpose()
+        dirMask = data['latency'] < 0.007
+        dirMask = dirMask.transpose()
+        colors = zeros((d.shape[0], d.shape[1], 4), dtype=float)
+        #hsv = zeros((data.shape[0], data.shape[1]), dtype=object)
+        for i in range(d.shape[0]):
+            for j in range(d.shape[1]):
+                c = hsvColor(0.7 - d[i][j]*0.7)
+                colors[i][j][0] = float(c.red()/255.0)
+                colors[i][j][1] = float(c.green()/255.0)
+                colors[i][j][2] = float(c.blue()/255.0)
+                colors[:,:,3][mask] = 1.0
+                colors[:,:,3][(data.transpose()['#responses'] == 0) * (mask)] = 0.6
                 
+        plt.imshow(colors)
+        #plt.figure(2)
+        #plt.imshow(colors, interpolation = None)
+        #plt.figure(3)
+        #plt.imshow(colors, interpolation = 'gaussian')
+        #fig.show()
+        #self.figures.append(fig)
+        return colors
+        
+    def displayCellData(self, dataIndex):
+        #plt.figure(1)
+        fig = plt.figure(dataIndex+1)
+        fig.suptitle(self.cellNames[dataIndex])
+        pos = Point(self.metaInfo[dataIndex]['cellPosition'])
+        plt.figtext(0.1,0.9, "cell position: x=%f um, y=%f um" %(pos[0]*1e6,pos[1]*1e6))
+        s1 = fig.add_subplot(2,2,1)
+        s2 = fig.add_subplot(2,2,2)
+        #s3 = fig.add_subplot(2,3,4)
+        s4 = fig.add_subplot(2,2,3)
+        s5 = fig.add_subplot(2,2,4)
+        
+        data = self.cellMaps[dataIndex].transpose()
+        traceMask = data['#traces'] == 0
+        responseMask = (data['#responses'] == 0)*~traceMask
+        dirMask = (data['latency'] < 0.007)*~responseMask*~traceMask
+        
+        s1.set_title('charge map')
+        charge = data['charge']
+        charge = (charge/self.chargeCutOff).clip(0.05,0.95)
+        charge = charge.astype(float32)
+        charge[dirMask] = 0.0
+        charge[traceMask] = 1.0
+        charge[responseMask] = 0.99
+        
+        img1 = s1.imshow(charge, cmap='spectral')
+        #cb1 = plt.colorbar(img1, ax=s1)
+        #cb1.set_ticks([0.05,0.95])
+        #cb1.set_ticklabels(['0.0', '%.3g pC' % (self.chargeCutOff*1e12)])
+        s1.set_ylabel('y position (mm)')
+        s1.set_xlim(left=3, right=36)
+        s1.set_xticklabels(['2.0','1.5', '1.0', '0.5', '0', '0.5', '1.0', '1.5'])
+        s1.set_ylim(bottom=16, top=1)
+        s1.set_yticklabels(['0.4','0.2','0','0.2','0.4','0.6','0.8','1.0','1.2','1.4','1.6'])
+        s1.set_xlabel('x position (mm)')
+        
+        a = argwhere(data['#APs']!=0)
+        print "APs at: ", a
+        self.a=a
+        if len(a) != 0:
+            for x in a:
+                s1.plot(x[1],x[0], '*r')
+        s1.plot(20,4,'ow')        
+        
+        s2.set_title('latency')
+        lat = data['latency']
+        #lat[lat==0] = 0.3
+        lat = ((0.3-lat)/0.3).clip(0.05, 0.95)
+        lat = lat.astype(float32)
+        lat[dirMask] = 0.0
+        lat[traceMask] = 1.0
+        lat[responseMask] = 0.99
+        img2 = s2.imshow(lat, cmap='spectral')
+        cb2 = plt.colorbar(img2, ax=s2)
+        cb2.set_ticks([0.05,0.95])
+        cb2.set_ticklabels(['300 ms', '7 ms'])
+        s2.set_ylabel('y position')
+        s2.set_xlabel('x position (mm)')
+        s2.set_xlim(left=3, right=36)
+        s2.set_xticklabels(['2.0','1.5', '1.0', '0.5', '0', '0.5', '1.0', '1.5'])
+        s2.set_ylim(bottom=16, top=1)
+        s2.set_yticklabels(['0.4','0.2','0','0.2','0.4','0.6','0.8','1.0','1.2','1.4','1.6'])
+        s2.plot(20,4,'ow')
+        if len(a) != 0:
+            for x in a:
+                s2.plot(x[1],x[0], '*r')
+        
+        mask = self.cellEventMaps[dataIndex]['latency'] != 0
+        
+        #s3.set_title('charge distribution')
+        #data = self.cellEventMaps[dataIndex][mask]['charge']
+        #s3.text(0.2, 0.9,'# of events: %s' %len(data), fontsize=10, transform = s3.transAxes)
+        ##maxCharge = -data.min()
+        ##maxCharge = stats.scoreatpercentile(data, 3)
+        ##data[data > maxCharge] = maxCharge
+        ##bins = logspace(0,maxCharge,50)
+        #s3.hist(data, bins=100)
+        #s3.set_xlabel('charge')
+        #s3.set_ylabel('number')
+        
+        s4.set_title('latency distribution')
+        data = self.cellEventMaps[dataIndex][mask]['latency']
+        s4.hist(data, bins=100)
+        s4.set_xlabel('latency')
+        s4.set_ylabel('number')
+        s4.set_xlim(left = 0, right = 0.3)
+        s4.set_xticks([0, 0.1, 0.2, 0.3])
+        s4.set_xticklabels(['0', '100', '200','300'])
+        
+        s5.set_title('charge v. latency')
+        charge = self.cellEventMaps[dataIndex][mask]['charge']
+        latency = self.cellEventMaps[dataIndex][mask]['latency']
+        s5.plot(latency, charge, 'bo', markerfacecolor = 'blue')
+        s5.set_xlabel('latency')
+        s5.set_ylabel('charge')
+        s5.set_xlim(left = 0, right = 0.3)
+        s5.set_xticks([0, 0.1, 0.2, 0.3])
+        s5.set_xticklabels(['0', '100', '200','300'])
+        
+        self.figures.append(fig)
+        
+        
     
     
 class STDPWindow(UncagingWindow):

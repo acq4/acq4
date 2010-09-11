@@ -1070,7 +1070,7 @@ def findEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshold=None):
         #p.mark('measureNoise')
         hist = histogram(events['sum'], bins=100)
         #p.mark('histogram')
-        histx = 0.5*(hist[1][1:] + hist[1][:-1])
+        histx = 0.5*(hist[1][1:] + hist[1][:-1]) ## get x values from middle of histogram bins
         #p.mark('histx')
         fit = fitGaussian(histx, hist[0], [hist[0].max(), 0, stdev*3, 0])
         #p.mark('fit')

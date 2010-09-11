@@ -321,7 +321,7 @@ class ExpDeconvolve(Filter):
             return d
         
     def reconvolve(self, data):
-        d = zeros(len(data)+200, dtype=float)
+        d = zeros(len(data)+600, dtype=float)
         d[100:len(data)+100] = data
         tau = self.ctrls['tau'].value()
         r = zeros(len(d), dtype=float)

@@ -67,9 +67,9 @@ config = os.path.join(pyDir, 'config', 'default.cfg')
 dm = Manager(config, sys.argv[1:])
 
 
-win = UncagingWindow() #### IMPORTANT: the name of the UncagingWindow needs to be win in order for an AnalysisPlotWindow to get data from it - need to fix this, obviously
+#win = UncagingWindow() #### IMPORTANT: the name of the UncagingWindow needs to be win in order for an AnalysisPlotWindow to get data from it - need to fix this, obviously
 #w = AnalysisPlotWindow()
-
+cm = CellMixer()
 
 
 ## Start Qt event loop unless running in interactive mode.
