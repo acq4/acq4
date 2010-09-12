@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'FlowchartTemplate.ui'
 #
-# Created: Sat Sep 11 17:39:29 2010
+# Created: Sat Sep 11 22:11:13 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -32,6 +32,9 @@ class Ui_Form(object):
         self.ctrlList.setObjectName("ctrlList")
         self.ctrlList.headerItem().setText(0, "1")
         self.verticalLayout.addWidget(self.ctrlList)
+        self.reloadLibBtn = QtGui.QPushButton(self.layoutWidget)
+        self.reloadLibBtn.setObjectName("reloadLibBtn")
+        self.verticalLayout.addWidget(self.reloadLibBtn)
         self.view = FlowchartGraphicsView(self.splitter)
         self.view.setObjectName("view")
         self.layoutWidget1 = QtGui.QWidget(self.splitter)
@@ -74,6 +77,7 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
         self.addNodeBtn.setText(QtGui.QApplication.translate("Form", "Add Node..", None, QtGui.QApplication.UnicodeUTF8))
+        self.reloadLibBtn.setText(QtGui.QApplication.translate("Form", "Reload Library", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("Form", "Output:", None, QtGui.QApplication.UnicodeUTF8))
 
 from DataTreeWidget import DataTreeWidget

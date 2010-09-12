@@ -6,13 +6,17 @@ class FlowchartGraphicsView(QtGui.QGraphicsView):
         QtGui.QGraphicsView.__init__(self, *args)
         self.setMouseTracking(True)
         self.lastPos = None
-        self.setTransformationAnchor(self.AnchorUnderMouse)
+        self.setTransformationAnchor(self.AnchorViewCenter)
+        self.setRenderHints(QtGui.QPainter.Antialiasing)
+        self.setDragMode(QtGui.QGraphicsView.RubberBandDrag)
+        self.setRubberBandSelectionMode(QtCore.Qt.ContainsItemBoundingRect)
         
     def mousePressEvent(self, ev):
         self.lastPos = ev.pos()
         return QtGui.QGraphicsView.mousePressEvent(self, ev)
 
     def mouseMoveEvent(self, ev):
+        callSuper = False
         if ev.buttons() &  QtCore.Qt.RightButton:
             if self.lastPos is not None:
                 dif = ev.pos() - self.lastPos
@@ -23,5 +27,8 @@ class FlowchartGraphicsView(QtGui.QGraphicsView):
                 self.translate(dif.x(), -dif.y())
         else:
             self.emit(QtCore.SIGNAL('hoverOver'), self.items(ev.pos()))
+            callSuper = True
         self.lastPos = ev.pos()
-        return QtGui.QGraphicsView.mouseMoveEvent(self, ev)
+        
+        if callSuper:
+            QtGui.QGraphicsView.mouseMoveEvent(self, ev)

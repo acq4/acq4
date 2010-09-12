@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from Node import *
+from ..Node import Node
     
 class PlotWidgetNode(Node):
     """Connection to PlotWidget. Will plot arrays, metaarrays, and display event lists."""

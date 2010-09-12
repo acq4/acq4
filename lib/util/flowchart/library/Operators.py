@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from Node import *
+from ..Node import Node
 
 class UniOpNode(Node):
     """Generic node for performing any operation like Out = In.fn()"""

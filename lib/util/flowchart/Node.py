@@ -234,7 +234,8 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         self.setFlags(
             self.ItemIsMovable |
             self.ItemIsSelectable | 
-            self.ItemIsFocusable
+            self.ItemIsFocusable |
+            self.ItemSendsGeometryChanges
         )
         bounds = self.boundingRect()
         self.nameItem = QtGui.QGraphicsTextItem(self.node.name(), self)
@@ -290,10 +291,8 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
             p.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 200)))
         p.drawRect(bounds)
         
-    def mouseMoveEvent(self, ev):
-        QtGui.QGraphicsItem.mouseMoveEvent(self, ev)
-        for k, t in self.terminals.iteritems():
-            t[1].nodeMoved()
+    #def mouseMoveEvent(self, ev):
+        #QtGui.QGraphicsItem.mouseMoveEvent(self, ev)
 
     def mousePressEvent(self, ev):
         sel = self.isSelected()
@@ -315,7 +314,12 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         else:
             ev.ignore()
 
-
+    def itemChange(self, change, val):
+        if change == self.ItemPositionHasChanged:
+            for k, t in self.terminals.iteritems():
+                t[1].nodeMoved()
+        return QtGui.QGraphicsItem.itemChange(self, change, val)
+            
 
 
 

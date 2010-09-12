@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
-from Node import *
-from functions import *
+from PyQt4 import QtCore, QtGui
+from ..Node import Node
 from scipy.signal import detrend
 from scipy.ndimage import median_filter, gaussian_filter
-from common import *
+from SignalProxy import *
+from metaarray import *
+import functions
+import common
 
 
 class Filter(Node):
@@ -58,21 +61,21 @@ class Downsample(Filter):
     nodeName = 'Downsample'
     def __init__(self, name, **opts):
         Filter.__init__(self, name)
-        self.ui, self.stateGroup, self.ctrls = generateUi([
+        self.ui, self.stateGroup, self.ctrls = common.generateUi([
             ('n', 'intSpin', {'min': 1, 'max': 1000000})
         ])
         self.stateGroup.setState(opts)
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
     def processData(self, data):
-        return downsample(data, self.ctrls['n'].value(), axis=0)
+        return functions.downsample(data, self.ctrls['n'].value(), axis=0)
 
 class Subsample(Filter):
     """Downsample by selecting every Nth sample."""
     nodeName = 'Subsample'
     def __init__(self, name, **opts):
         Filter.__init__(self, name)
-        self.ui, self.stateGroup, self.ctrls = generateUi([
+        self.ui, self.stateGroup, self.ctrls = common.generateUi([
             ('n', 'intSpin', {'min': 1, 'max': 1000000})
         ])
         self.stateGroup.setState(opts)
@@ -86,7 +89,7 @@ class Bessel(Filter):
     nodeName = 'BesselFilter'
     def __init__(self, name, **opts):
         Filter.__init__(self, name)
-        self.ui, self.stateGroup, self.ctrls = generateUi([
+        self.ui, self.stateGroup, self.ctrls = common.generateUi([
             ('band', 'combo', {'values': ['lowpass', 'highpass'], 'index': 0}),
             ('cutoff', 'spin', {'value': 1000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
             ('order', 'intSpin', {'value': 4, 'min': 1, 'max': 16}),
@@ -101,14 +104,14 @@ class Bessel(Filter):
             mode = 'low'
         else:
             mode = 'high'
-        return besselFilter(data, bidir=s['bidir'], btype=mode, cutoff=s['cutoff'], order=s['order'])
+        return functions.besselFilter(data, bidir=s['bidir'], btype=mode, cutoff=s['cutoff'], order=s['order'])
 
 class Butterworth(Filter):
     """Butterworth filter"""
     nodeName = 'ButterworthFilter'
     def __init__(self, name, **opts):
         Filter.__init__(self, name)
-        self.ui, self.stateGroup, self.ctrls = generateUi([
+        self.ui, self.stateGroup, self.ctrls = common.generateUi([
             ('band', 'combo', {'values': ['lowpass', 'highpass'], 'index': 0}),
             ('wPass', 'spin', {'value': 1000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
             ('wStop', 'spin', {'value': 2000., 'step': 1, 'dec': True, 'range': [0.0, None], 'suffix': 'Hz', 'siPrefix': True}),
@@ -125,7 +128,7 @@ class Butterworth(Filter):
             mode = 'low'
         else:
             mode = 'high'
-        ret = butterworthFilter(data, bidir=s['bidir'], btype=mode, wPass=s['wPass'], wStop=s['wStop'], gPass=s['gPass'], gStop=s['gStop'])
+        ret = functions.butterworthFilter(data, bidir=s['bidir'], btype=mode, wPass=s['wPass'], wStop=s['wStop'], gPass=s['gPass'], gStop=s['gStop'])
         return ret
 
 class Mean(Filter):
@@ -133,7 +136,7 @@ class Mean(Filter):
     nodeName = 'MeanFilter'
     def __init__(self, name, **opts):
         Filter.__init__(self, name)
-        self.ui, self.stateGroup, self.ctrls = generateUi([
+        self.ui, self.stateGroup, self.ctrls = common.generateUi([
             ('n', 'intSpin', {'min': 1, 'max': 1000000})
         ])
         self.stateGroup.setState(opts)
@@ -142,14 +145,14 @@ class Mean(Filter):
     @metaArrayWrapper
     def processData(self, data):
         n = self.ctrls['n'].value()
-        return rollingSum(data, n) / n
+        return functions.rollingSum(data, n) / n
 
 class Median(Filter):
     """Filters data by taking the median of a sliding window"""
     nodeName = 'MedianFilter'
     def __init__(self, name, **opts):
         Filter.__init__(self, name)
-        self.ui, self.stateGroup, self.ctrls = generateUi([
+        self.ui, self.stateGroup, self.ctrls = common.generateUi([
             ('n', 'intSpin', {'min': 1, 'max': 1000000})
         ])
         self.stateGroup.setState(opts)
@@ -164,7 +167,7 @@ class Denoise(Filter):
     nodeName = 'DenoiseFilter'
     def __init__(self, name, **opts):
         Filter.__init__(self, name)
-        self.ui, self.stateGroup, self.ctrls = generateUi([
+        self.ui, self.stateGroup, self.ctrls = common.generateUi([
             ('radius', 'intSpin', {'value': 2, 'min': 0, 'max': 1000000}),
             ('threshold', 'doubleSpin', {'value': 4.0, 'min': 0, 'max': 1000})
         ])
@@ -173,14 +176,14 @@ class Denoise(Filter):
         
     def processData(self, data):
         s = self.stateGroup.state()
-        return denoise(data, **s)
+        return functions.denoise(data, **s)
 
 class Gaussian(Filter):
     """Gaussian smoothing filter."""
     nodeName = 'GaussianFilter'
     def __init__(self, name, **opts):
         Filter.__init__(self, name)
-        self.ui, self.stateGroup, self.ctrls = generateUi([
+        self.ui, self.stateGroup, self.ctrls = common.generateUi([
             ('sigma', 'doubleSpin', {'min': 0, 'max': 1000000})
         ])
         self.stateGroup.setState(opts)
@@ -234,21 +237,21 @@ class AdaptiveDetrend(Filter):
     nodeName = 'AdaptiveDetrend'
     def __init__(self, name, **opts):
         Filter.__init__(self, name)
-        self.ui, self.stateGroup, self.ctrls = generateUi([
+        self.ui, self.stateGroup, self.ctrls = common.generateUi([
             ('threshold', 'doubleSpin', {'value': 3.0, 'min': 0, 'max': 1000000})
         ])
         self.stateGroup.setState(opts)
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
     def processData(self, data):
-        return adaptiveDetrend(data, threshold=self.ctrls['threshold'].value())
+        return functions.adaptiveDetrend(data, threshold=self.ctrls['threshold'].value())
 
 #class SubtractMedian(Filter):
     #""""""
     #nodeName = 'DerivativeFilter'
     #def __init__(self, **opts):
         #Filter.__init__(self)
-        #self.ui, self.stateGroup, self.ctrls = generateUi([
+        #self.ui, self.stateGroup, self.ctrls = common.generateUi([
             #('width', 'spin', {'value': 0.1, 'step': 1, 'minStep': 100e-6, 'dec': True, 'range': [0.0, None], 'suffix': 's', 'siPrefix': True})
         #])
         #self.stateGroup.setState(opts)
@@ -264,7 +267,7 @@ class ExpDeconvolve(Filter):
     nodeName = 'ExpDeconvolve'
     def __init__(self, name, **opts):
         Filter.__init__(self, name)
-        self.ui, self.stateGroup, self.ctrls = generateUi([
+        self.ui, self.stateGroup, self.ctrls = common.generateUi([
             ('tau', 'spin', {'value': 10e-3, 'step': 1, 'minStep': 100e-6, 'dec': True, 'range': [0.0, None], 'suffix': 's', 'siPrefix': True})
         ])
         self.stateGroup.setState(opts)

@@ -46,6 +46,13 @@
          </column>
         </widget>
        </item>
+       <item>
+        <widget class="QPushButton" name="reloadLibBtn">
+         <property name="text">
+          <string>Reload Library</string>
+         </property>
+        </widget>
+       </item>
       </layout>
      </widget>
      <widget class="FlowchartGraphicsView" name="view"/>

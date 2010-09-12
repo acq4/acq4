@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from Node import *
+from ..Node import Node
 from PyQt4 import QtGui, QtCore
 from DirTreeWidget import *
 

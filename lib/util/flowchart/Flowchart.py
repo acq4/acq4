@@ -358,50 +358,15 @@ class FlowchartWidget(QtGui.QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         
-        #self.leftWidget = QtGui.QWidget()
-        #self.vl = QtGui.QVBoxLayout()
-        #self.vl.setSpacing(0)
-        #self.vl.setContentsMargins(0,0,0,0)
-        #self.leftWidget.setLayout(self.vl)
-        #self.nodeCombo = QtGui.QComboBox()
-        #self.ctrlList = TreeWidget()
         self.ui.ctrlList.setColumnCount(1)
         self.ui.ctrlList.setColumnWidth(0, 200)
         self.ui.ctrlList.setVerticalScrollMode(self.ui.ctrlList.ScrollPerPixel)
         self.ui.ctrlList.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        #self.vl.addWidget(self.nodeCombo)
-        #self.vl.addWidget(self.ctrlList)
-        
-        #self.addWidget(self.leftWidget)
-        #self.view = QtGui.QGraphicsView()
-        #self.addWidget(self.view)
+
         self._scene = QtGui.QGraphicsScene()
         self.ui.view.setScene(self._scene)
-        self.ui.view.setRenderHints(QtGui.QPainter.Antialiasing)
-        #self.setSizes([200, 1000])
         
-        self.nodeMenu = QtGui.QMenu("Add Node")
-        self.subMenus = []
-        for section, nodes in library.NODE_TREE.iteritems():
-            menu = QtGui.QMenu(section)
-            self.nodeMenu.addMenu(menu)
-            for name in nodes:
-                act = menu.addAction(name)
-                act.nodeType = name
-            self.subMenus.append(menu)
-        #self.ui.nodeCombo.addItem("Add Node..")
-       
-        #for f in functions.NODE_LIST:
-            #self.ui.nodeCombo.addItem(f)
-            
-        #self.dataSplitter = QtGui.QSplitter()
-        #self.dataSplitter.setOrientation(QtCore.Qt.Vertical)
-        #self.addWidget(self.dataSplitter)
-        
-        #self.outputTree = DataTreeWidget()
-        #self.selectTree = DataTreeWidget()
-        #self.dataSplitter.addWidget(self.outputTree)
-        #self.dataSplitter.addWidget(self.selectTree)
+        self.buildMenu()
             
         self.ui.addNodeBtn.mouseReleaseEvent = self.addNodeBtnReleased
             
@@ -410,7 +375,25 @@ class FlowchartWidget(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.ctrlList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.itemChanged)
         QtCore.QObject.connect(self._scene, QtCore.SIGNAL('selectionChanged()'), self.selectionChanged)
         QtCore.QObject.connect(self.ui.view, QtCore.SIGNAL('hoverOver'), self.hoverOver)
+        QtCore.QObject.connect(self.ui.reloadLibBtn, QtCore.SIGNAL('clicked()'), self.reloadLibrary)
+        
     
+    def reloadLibrary(self):
+        self.nodeMenu = None
+        self.subMenus = []
+        library.loadLibrary(reloadLibs=True)
+        self.buildMenu()
+        
+    def buildMenu(self):
+        self.nodeMenu = QtGui.QMenu()
+        self.subMenus = []
+        for section, nodes in library.NODE_TREE.iteritems():
+            menu = QtGui.QMenu(section)
+            self.nodeMenu.addMenu(menu)
+            for name in nodes:
+                act = menu.addAction(name)
+                act.nodeType = name
+            self.subMenus.append(menu)
     
     def addNodeBtnReleased(self, ev):
         QtGui.QPushButton.mouseReleaseEvent(self.ui.addNodeBtn, ev)

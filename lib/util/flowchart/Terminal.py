@@ -355,6 +355,9 @@ class ConnectionItem(QtGui.QGraphicsItem):
     def boundingRect(self):
         return self.line.boundingRect()
         
+    def shape(self):
+        return self.line.shape()
+        
     def paint(self, p, *args):
         if self.isSelected():
             pen = QtGui.QPen(QtGui.QColor(200, 200, 0), 3)
