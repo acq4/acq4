@@ -578,8 +578,10 @@ class ScannerProtoGui(ProtocolGui):
     
     def taskStarted(self, params):
         """Task has started; color the current and previous targets"""
-        t = params['targets']
-        self.currentTargetMarker.setRect
+        if 'targets' not in params:
+            return
+        #t = params['targets']
+        #self.currentTargetMarker.setRect
     
     def quit(self):
         print "scanner dock quit"

@@ -625,13 +625,13 @@ class CameraTask(DAQGenericTask):
             expLen = (offTimes[1:len(onTimes)] - onTimes[1:len(offTimes)]).mean()
             
             
-            if self.camCmd['params']['triggerMode'] == 'Normal' and (('triggerProtocol' not in self.camCmd) or (not self.camCmd['triggerProtocol'])):
+            if self.camCmd['params']['triggerMode'] == 'Normal' and not self.camCmd.get('triggerProtocol', False):
                 ## Can we make a good guess about frame times even without having triggered the first frame?
                 ## frames are marked with their arrival time. We will assume that a frame most likely 
                 ## corresponds to the last complete exposure signal. 
                 pass
                 
-            else:
+            elif len(onTimes) > 0:
                 ## If we triggered the camera (or if the camera triggered the DAQ), 
                 ## then we know frame 0 occurred at the same time as the first expose signal.
                 ## New times list is onTimes, any extra frames just increment by tx+exp time
@@ -739,6 +739,7 @@ class AcquireThread(QtCore.QThread):
         size = self.cam.getParam('sensorSize')
         lastFrame = None
         lastFrameTime = None
+        fps = None
         
         camState = dict(self.cam.getParams(['binning', 'exposure', 'region', 'triggerMode']))
         binning = camState['binning']
@@ -830,6 +831,11 @@ class AcquireThread(QtCore.QThread):
                     
                     ## Process all waiting frames. If there is more than one frame waiting, guess the frame times.
                     dt = (now - lastFrameTime) / diff
+                    if dt > 0:
+                        info['fps'] = 1.0/dt
+                    else:
+                        info['fps'] = None
+                    
                     for i in range(diff):
                         fInd = (i+lastFrame+1) % self.ringSize
                         

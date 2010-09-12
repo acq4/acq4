@@ -16,9 +16,11 @@ class Scanner(Device):
         self.lastRunTime = None
         self.calibrationIndex = None
         self.targetList = [1.0, {}]  ## stores the grids and points used by ProtocolGui so that they persist
-        if not os.path.isdir(config['calibrationDir']):
-            print "Calibration directory '%s' does not exist, creating.." % config['calibrationDir']
-            os.mkdir(config['calibrationDir'])
+        self._configDir = os.path.join('devices', self.name + '_config')
+        
+        #if not os.path.isdir(config['calibrationDir']):
+            #print "Calibration directory '%s' does not exist, creating.." % config['calibrationDir']
+            #os.mkdir(config['calibrationDir'])
         #self.targetFileName = os.path.join(self.config['calibrationDir'], 'targetList.pickle')
         #if os.path.isfile(self.targetFileName):
             #fd = open(self.targetFileName)
@@ -146,7 +148,7 @@ class Scanner(Device):
         
     def configDir(self):
         """Return the name of the directory where configuration/calibration data should be stored"""
-        return self.name+"Config"
+        return self._configDir
         
     
     def createTask(self, cmd):

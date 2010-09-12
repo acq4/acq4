@@ -23,6 +23,7 @@ from metaarray import *
 import sip
 from SignalProxy import proxyConnect
 from lib.Manager import getManager
+import numpy as np
 
 traceDepth = 0
 def trace(func):
@@ -82,7 +83,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         
-        self.stateFile = self.module.name + '_ui.cfg'
+        self.stateFile = os.path.join('modules', self.module.name + '_ui.cfg')
         uiState = getManager().readConfigFile(self.stateFile)
         if 'geometry' in uiState:
             geom = QtCore.QRect(*uiState['geometry'])
@@ -131,7 +132,7 @@ class CameraWindow(QtGui.QMainWindow):
         ## Set up camera graphicsView
         l = QtGui.QVBoxLayout(self.ui.graphicsWidget)
         l.setMargin(0)
-        self.gv = GraphicsView(self.ui.graphicsWidget)
+        self.gv = GraphicsView(self.ui.graphicsWidget, useOpenGL=False)
         l.addWidget(self.gv)
         self.gv.enableMouse()
 
@@ -740,13 +741,13 @@ class CameraWindow(QtGui.QMainWindow):
             lf = self.currentFrame
             
         if lf is not None:
-            dt = frame[1]['time'] - lf[1]['time']
-            #print self.fps, 1.0/dt
-            if dt > 0:
+            fps = frame[1]['fps']
+            if fps is not None:
+                #print self.fps, 1.0/dt
                 if self.fps is None:
-                    self.fps = 1.0/dt
+                    self.fps = fps
                 else:
-                    self.fps = self.fps * 0.9 + 0.1 / dt
+                    self.fps = 1.0 / (0.9/self.fps + 0.1/fps)  ## inversion is necessary because dt varies linearly, but fps varies hyperbolically
                 self.fpsLabel.setText('%02.2ffps' % self.fps)
         
         ## Update ROI plots, if any
