@@ -39,7 +39,7 @@ class Analyzer(QtGui.QMainWindow):
     def saveProtocol(self, handle):
         state = {'docks': {}}
         for name, d in self.dockItems.iteritems():
-            state['docks'][name] = {'type': d['type']}
+            state['docks'][name] = {'type': d['type'], 'state': d['widget'].saveState()}
         state['window'] = str(self.saveState().toPercentEncoding())
         state['flowchart'] = self.flowchart.saveState()
         configfile.writeConfigFile(state, handle.name())
@@ -66,7 +66,7 @@ class Analyzer(QtGui.QMainWindow):
         ## recreate docks
         for name, d in state['docks'].iteritems():
             fn = getattr(self, 'add'+d['type'])
-            fn(name)
+            fn(name, d.get('state', None))
         
         ## restore dock positions
         self.restoreState(QtCore.QByteArray.fromPercentEncoding(state['window']))
@@ -83,7 +83,7 @@ class Analyzer(QtGui.QMainWindow):
         data = getManager().currentFile
         self.flowchart.setInput(dataIn=data)
         
-    def addPlot(self, name=None):
+    def addPlot(self, name=None, state=None):
         if name is None:
             name = 'Plot'
             i = 0
@@ -94,10 +94,13 @@ class Analyzer(QtGui.QMainWindow):
                 i += 1
             name = name2
         
-        p = PlotWidget()
+        p = PlotWidget(name=name)
         d = QtGui.QDockWidget(name)
         d.setObjectName(name)
         d.setWidget(p)
+        
+        if state is not None:
+            p.restoreState(state)
         
         self.addDockWidget(QtCore.Qt.RightDockWidgetArea, d)
         item = ListItem(name, d)

@@ -371,7 +371,6 @@ class FlowchartWidget(QtGui.QWidget):
         self.ui.addNodeBtn.mouseReleaseEvent = self.addNodeBtnReleased
             
         #QtCore.QObject.connect(self.ui.nodeCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.nodeComboChanged)
-        QtCore.QObject.connect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
         QtCore.QObject.connect(self.ui.ctrlList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.itemChanged)
         QtCore.QObject.connect(self._scene, QtCore.SIGNAL('selectionChanged()'), self.selectionChanged)
         QtCore.QObject.connect(self.ui.view, QtCore.SIGNAL('hoverOver'), self.hoverOver)
@@ -379,6 +378,7 @@ class FlowchartWidget(QtGui.QWidget):
         
     
     def reloadLibrary(self):
+        QtCore.QObject.disconnect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
         self.nodeMenu = None
         self.subMenus = []
         library.loadLibrary(reloadLibs=True)
@@ -394,6 +394,7 @@ class FlowchartWidget(QtGui.QWidget):
                 act = menu.addAction(name)
                 act.nodeType = name
             self.subMenus.append(menu)
+        QtCore.QObject.connect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
     
     def addNodeBtnReleased(self, ev):
         QtGui.QPushButton.mouseReleaseEvent(self.ui.addNodeBtn, ev)

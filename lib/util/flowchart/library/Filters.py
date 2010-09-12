@@ -175,6 +175,7 @@ class Denoise(Filter):
         QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         
     def processData(self, data):
+        #print "DENOISE"
         s = self.stateGroup.state()
         return functions.denoise(data, **s)
 

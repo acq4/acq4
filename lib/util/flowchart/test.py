@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 import sys, os
-print __file__
 
 p = os.path.dirname(os.path.abspath(__file__))
 p = os.path.split(p)[0]
 sys.path.append(p)
 #import PySideImporter
 
-from Flowchart import *
+from flowchart.Flowchart import *
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
 
@@ -57,4 +56,4 @@ fc.restoreState(s)
 
 fc.setInput(dataIn=3)
 
-#app.exec_()
+app.exec_()
