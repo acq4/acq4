@@ -3,6 +3,9 @@ from PyQt4 import QtCore, QtGui
 from SpinBox import *
 from SignalProxy import *
 from WidgetGroup import *
+from ..Node import Node
+import metaarray
+import numpy as np
 
 def generateUi(opts):
     """Convenience function for generating common UI types"""
@@ -49,4 +52,88 @@ def generateUi(opts):
         ctrls[k] = w
     group = WidgetGroup(widget)
     return widget, group, ctrls
+
+
+
+class CtrlNode(Node):
+    """Abstract class for nodes with auto-generated control UI"""
+    def __init__(self, name, ui=None, terminals=None):
+        if ui is None:
+            if hasattr(self, 'uiTemplate'):
+                ui = self.uiTemplate
+            else:
+                ui = []
+        if terminals is None:
+            terminals = {'In': {'io': 'in'}, 'Out': {'io': 'out'}}
+        Node.__init__(self, name=name, terminals=terminals)
+        
+        self.ui, self.stateGroup, self.ctrls = generateUi(ui)
+        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+       
+    def ctrlWidget(self):
+        return self.ui
+       
+    def changed(self):
+        self.update()
+
+    def process(self, In):
+        return {'Out': self.processData(In)}
+    
+    def saveState(self):
+        state = Node.saveState(self)
+        state['ctrl'] = self.stateGroup.state()
+        return state
+    
+    def restoreState(self, state):
+        Node.restoreState(self, state)
+        if self.stateGroup is not None:
+            self.stateGroup.setState(state.get('ctrl', {}))
+            
+            
+
+#class Filter(Node):
+    #"""Abstract node for waveform filters having a single input and output"""
+    #def __init__(self, name):
+        #Node.__init__(self, name=name, terminals={'In': {'io': 'in'}, 'Out': {'io': 'out'}})
+        #self.ui = None           ## override these two parameters if you want to use the default implementations
+        #self.stateGroup = None   ## of ctrlWidget, saveState, and restoreState.
+        #self.proxy = proxyConnect(self, QtCore.SIGNAL('changed'), self.delayedChange)  ## automatically generate delayedChange signal
+    
+    #def ctrlWidget(self):
+        #return self.ui
+    
+    #def process(self, In):
+        #return {'Out': self.processData(In)}
+    
+    #def saveState(self):
+        #state = Node.saveState(self)
+        #state['ctrl'] = self.stateGroup.state()
+        #return state
+    
+    #def restoreState(self, state):
+        #Node.restoreState(self, state)
+        #if self.stateGroup is not None:
+            #self.stateGroup.setState(state.get('ctrl', {}))
+        
+    #def changed(self):
+        #self.emit(QtCore.SIGNAL('changed'), self)
+        #self.update()
+        
+    #def delayedChange(self):
+        #self.emit(QtCore.SIGNAL('delayedChange'), self)
+        
+
+def metaArrayWrapper(fn):
+    def newFn(self, data, *args, **kargs):
+        if isinstance(data, metaarray.MetaArray):
+            d1 = fn(self, data.view(np.ndarray), *args, **kargs)
+            info = data.infoCopy()
+            if d1.shape != data.shape:
+                for i in range(data.ndim):
+                    if 'values' in info[i]:
+                        info[i]['values'] = info[i]['values'][:d1.shape[i]]
+            return metaarray.MetaArray(d1, info=info)
+        else:
+            return fn(self, data, *args, **kargs)
+    return newFn
 

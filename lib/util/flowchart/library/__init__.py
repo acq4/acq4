@@ -40,6 +40,9 @@ def loadLibrary(reloadLibs=False):
             NODE_LIST.extend(nodes)
     NODE_LIST = OrderedDict(NODE_LIST)
     
+def reloadLibrary():
+    loadLibrary(reloadLibs=True)
+    
 loadLibrary()
 #NODE_LIST = []
 #for o in locals().values():

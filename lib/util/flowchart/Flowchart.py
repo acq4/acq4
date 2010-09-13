@@ -10,6 +10,7 @@ from FlowchartTemplate import *
 from Terminal import Terminal
 from numpy import ndarray
 import library
+from debug import printExc
 
 def toposort(deps, nodes=None, seen=None, stack=None):
     """Topological sort. Arguments are:
@@ -283,8 +284,11 @@ class Flowchart(Node):
             if n['name'] in self._nodes:
                 self._nodes[name].moveBy(*n['pos'])
                 continue
-            node = self.createNode(n['class'], name=n['name'])
-            node.restoreState(n['state'])
+            try:
+                node = self.createNode(n['class'], name=n['name'])
+                node.restoreState(n['state'])
+            except:
+                printExc("Error creating node %s: (continuing anyway)" % n['name'])
             #node.graphicsItem().moveBy(*n['pos'])
             
         self.inputNode.restoreState(state.get('inputNode', {}))
@@ -292,8 +296,10 @@ class Flowchart(Node):
             
         self.restoreTerminals(state['terminals'])
         for n1, t1, n2, t2 in state['connects']:
-            self.connect(self._nodes[n1][t1], self._nodes[n2][t2])
-            
+            try:
+                self.connect(self._nodes[n1][t1], self._nodes[n2][t2])
+            except:
+                printExc("Error connecting terminals %s.%s - %s.%s:" % (n1, t1, n2, t2))
             
         
 

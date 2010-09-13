@@ -2,6 +2,8 @@
 from ..Node import Node
 from PyQt4 import QtGui, QtCore
 from DirTreeWidget import *
+import numpy as np
+import metaarray
 
 class SubtreeNode(Node):
     """Select files from within a directory. Input must be a DirHandle."""
@@ -72,9 +74,9 @@ class SubtreeNode(Node):
         for f in self.files:
             self.addOutput(f)
 
-class MetaArrayColumnNode(Node):
-    """Select named columns from a MetaArray."""
-    nodeName = "MetaArrayColumn"
+class ColumnSelectNode(Node):
+    """Select named columns from a record array or MetaArray."""
+    nodeName = "ColumnSelect"
     def __init__(self, name):
         Node.__init__(self, name, terminals={'In': {'io': 'in'}})
         self.columns = set()
@@ -91,20 +93,31 @@ class MetaArrayColumnNode(Node):
             self.updateList(In)
                 
         out = {}
-        for c in self.columns:
-            out[c] = In[self.axis:c]
+        if isinstance(In, metaarray.MetaArray):
+            for c in self.columns:
+                out[c] = In[self.axis:c]
+        elif isinstance(In, np.ndarray) and In.dtype.fields is not None:
+            for c in self.columns:
+                out[c] = In[c]
+        else:
+            self.In.setValueAcceptable(False)
+            raise Exception("Input must be MetaArray or ndarray with named fields")
+            
         return out
         
     def ctrlWidget(self):
         return self.columnList
 
     def updateList(self, data):
-        cols = data.listColumns()
-        for ax in cols:  ## find first axis with columns
-            if len(cols[ax]) > 0:
-                self.axis = ax
-                cols = set(cols[ax])
-                break
+        if isinstance(data, metaarray.MetaArray):
+            cols = data.listColumns()
+            for ax in cols:  ## find first axis with columns
+                if len(cols[ax]) > 0:
+                    self.axis = ax
+                    cols = set(cols[ax])
+                    break
+        else:
+            cols = data.dtype.fields.keys()
                 
         rem = set()
         for c in self.columns:
@@ -148,3 +161,33 @@ class MetaArrayColumnNode(Node):
         self.columns = set(state.get('columns', []))
         for c in self.columns:
             self.addOutput(c)
+
+
+
+class SliceNode(CtrlNode):
+    """Returns a slice from a 1-D array. Connect the 'widget' output to a plot to display a region-selection widget."""
+    nodeName = "ArraySlice"
+    uiTemplate = [
+        ('start', 'spin', {'value': 0, 'step': 0.1}),
+        ('stop', 'spin', {'value': 0.1, 'step': 0.1})
+    ]
+    
+    def __init__(self, name):
+        CtrlNode.__init__(self, name, terminals={
+            'data': {'io': 'in'},
+            'selected': {'io': 'out'},
+            'widget': {'io': 'out'}
+        })
+        
+    def process(self, data, display=True):
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        

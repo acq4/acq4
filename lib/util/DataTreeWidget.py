@@ -2,6 +2,8 @@
 from PyQt4 import QtGui, QtCore
 from advancedTypes import OrderedDict
 import types, traceback
+import metaarray
+import numpy as np
 
 class DataTreeWidget(QtGui.QTreeWidget):
     def __init__(self, parent=None, data=None):
@@ -33,8 +35,13 @@ class DataTreeWidget(QtGui.QTreeWidget):
             node = QtGui.QTreeWidgetItem([name, typeStr, ""])
             parent.addChild(node)
         
-        if isinstance(data, types.TracebackType):
+        if isinstance(data, types.TracebackType):  ## convert traceback to a list of strings
             data = map(str.strip, traceback.format_list(traceback.extract_tb(data)))
+        elif isinstance(data, metaarray.MetaArray):
+            data = {
+                'data': data.view(np.ndarray),
+                'meta': data.infoCopy()
+            }
             
         if isinstance(data, dict):
             for k in data:

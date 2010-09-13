@@ -105,118 +105,6 @@ def logSpace(start, stop, num):
 def linSpace(start, stop, num):
     return linspace(start, stop, num)
 
-def alpha(t, tau):
-    """Return the value of an alpha function at time t with width tau."""
-    t = max(t, 0)
-    return (t / tau) * math.exp(1.0 - (t / tau));
-
-def alphas(t, tau, starts):
-    tot = 0.0
-    for s in starts:
-        tot += alpha(t-s, tau)
-    return tot
-
-### TODO: replace with faster scipy filters
-def smooth(data, it=1):
-    data = data.view(ndarray)
-    d = empty((len(data)), dtype=data.dtype)
-    for i in range(0, len(data)):
-        start = max(0, i-1)
-        stop = min(i+1, len(data)-1)
-        d[i] = mean(data[start:stop+1])
-    if it > 1:
-        return smooth(d, it-1)
-    else:
-        return d
-
-def maxDenoise(data, it):
-    return smooth(data, it).max()
-
-def absMax(data):
-    mv = 0.0
-    for v in data:
-        if abs(v) > abs(mv):
-            mv = v
-    return mv
-
-# takes data in form of [[t1, y1], [t2, y2], ...]
-def triggers(data, trig):
-    """Return a list of places where data crosses trig
-    Requires 2-column array:  array([[time...], [voltage...]])"""
-    
-    tVals = []
-    for i in range(0, data.shape[1]-1):
-        v1 = data[1, i]
-        v2 = data[1, i+1]
-        if v1 <= trig and v2 > trig:
-            g1 = data[0,i]
-            g2 = data[0,i+1]
-            tVals.append(g1 + (g2-g1)*((0.5-v1)/(v2-v1)))
-    return tVals
-
-
-
-
-
-## generates a command data structure from func with n points
-def cmd(func, n, time):
-    return [[i*(time/float(n-1)), func(i*(time/float(n-1)))] for i in range(0,n)]
-
-
-def inpRes(data, v1Range, v2Range):
-    r1 = filter(lambda r: r['Time'] > v1Range[0] and r['Time'] < v1Range[1], data)
-    r2 = filter(lambda r: r['Time'] > v2Range[0] and r['Time'] < v2Range[1], data)
-    v1 = mean([r['voltage'] for r in r1])
-    v2 = min(smooth([r['voltage'] for r in r2], 10))
-    c1 = mean([r['current'] for r in r1])
-    c2 = mean([r['current'] for r in r2])
-    return (v2-v1)/(c2-c1)
-
-
-def findActionPots(data, lowLim=-20e-3, hiLim=0, maxDt=2e-3):
-    """Returns a list of indexes of action potentials from a voltage trace
-    Requires 2-column array:  array([[time...], [voltage...]])
-    Defaults specify that an action potential is when the voltage trace crosses 
-    from -20mV to 0mV in 2ms or less"""
-    data = data.view(ndarray)
-    lastLow = None
-    ap = []
-    for i in range(0, data.shape[1]):
-        if data[1,i] < lowLim:
-            lastLow = data[0,i]
-        if data[1,i] > hiLim:
-            if lastLow != None and data[0,i]-lastLow < maxDt:
-                ap.append(i)
-                lastLow = None
-    return ap
-
-def getSpikeTemplate(ivc, traces):
-    """Returns the trace of the first spike in an IV protocol"""
-    
-    ## remove all negative currents
-    posCurr = argwhere(ivc['current'] > 0.)[:, 0]
-    ivc = ivc[:, posCurr]
-    
-    ## find threshold index
-    ivd = ivc['max voltage'] - ivc['mean voltage']
-    ivdd = ivd[1:] - ivd[:-1]
-    thrIndex = argmax(ivdd) + 1 + posCurr[0]
-    
-    ## subtract spike trace from previous trace
-    minlen = min(traces[thrIndex].shape[1], traces[thrIndex-1].shape[1])
-    di = traces[thrIndex]['Inp0', :minlen] - traces[thrIndex-1]['Inp0', :minlen]
-    
-    ## locate tallest spike
-    ind = argmax(di)
-    maxval = di[ind]
-    start = ind
-    stop = ind
-    while di[start] > maxval*0.5:
-        start -= 1
-    while di[stop] > maxval*0.5:
-        stop += 1
-    
-    return traces[thrIndex][['Time', 'Inp0'], start:stop]
 
 def sigmoid(v, x):
     """Sigmoid function value at x. the parameter v is [slope, x-offset, amplitude, y-offset]"""
@@ -722,6 +610,9 @@ def findTriggers(data, spacing=None, highpass=True, devs=1.5):
     return (argwhere(ptrigs)[:, 0], argwhere(ntrigs)[:, 0])
 
 def triggerStack(data, triggers, axis=0, window=None):
+    """Stacks windows from a waveform from trigger locations.
+    Useful for making spike-triggered measurements"""
+    
     if window is None:
         dt = (triggers[1:] - triggers[:-1]).mean()
         window = [int(-0.5 * dt), int(0.5 * dt)]
@@ -986,6 +877,14 @@ def matchDistortImg(im1, im2, scale=4, maxDist=40, mapBlur=30, showProgress=Fals
     return im2d
 
 
+def threshold(data, threshold, direction=1):
+    """Return all indices where data crosses threshold."""
+    mask = data >= threshold
+    mask = mask[1:].astype(byte) - mask[:-1].astype(byte)
+    return argwhere(mask == direction)[:, 0]
+    
+
+
 def measureBaseline(data, threshold=2.0, iterations=2):
     """Find the baseline value of a signal by iteratively measuring the median value, then excluding outliers."""
     data = data.view(ndarray)
@@ -1016,7 +915,43 @@ def measureNoise(data, threshold=2.0, iterations=2):
     #return median(data2.std(axis=0))
     
 
-def findEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshold=None):
+def stdevThresholdEvents(data, threshold=3.0):
+    """Finds regions in data greater than threshold*stdev.
+    Returns a record array with columns: index, length, sum, peak.
+    This function is only useful for data with its baseline removed."""
+    stdev = data.std()
+    mask = (abs(data) > stdev * threshold).astype(byte)
+    starts = argwhere((mask[1:] - mask[:-1]) == 1)[:,0]
+    ends = argwhere((mask[1:] - mask[:-1]) == -1)[:,0]
+    if len(ends) > 0 and len(starts) > 0:
+        if ends[0] < starts[0]:
+            ends = ends[1:]
+        if starts[-1] > ends[-1]:
+            starts = starts[:-1]
+        
+        
+    lengths = ends-starts
+    events = empty(starts.shape, dtype=[('start',int), ('len',int), ('sum',float), ('peak',float)])
+    events['start'] = starts
+    events['len'] = lengths
+    
+    if len(starts) == 0 or len(ends) == 0:
+        return events
+    
+    for i in range(len(starts)):
+        d = data[starts[i]:ends[i]]
+        events['sum'][i] = d.sum()
+        if events['sum'][i] > 0:
+            peak = d.max()
+        else:
+            peak = d.min()
+        events['peak'][i] = peak
+    return events
+
+def findEvents(*args, **kargs):
+    return zeroCrossingEvents(*args, **kargs)
+
+def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshold=None):
     """Locate events of any shape in a signal. Works by finding regions of the signal
     that deviate from noise, using the area beneath the deviation as the detection criteria.
     
@@ -1031,6 +966,13 @@ def findEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshold=None):
     #p = Profiler('findEvents')
     data1 = data.view(ndarray)
     #p.mark('view')
+    xvals = None
+    if isinstance(data, MetaArray):
+        try:
+            xvals = data.xvals(0)
+        except:
+            pass
+    
     
     ## find all 0 crossings
     mask = data1 > 0
@@ -1047,22 +989,28 @@ def findEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshold=None):
     nEvents = len(longEvents)
     
     ## Measure sum of values within each region between crossings, combine into single array
-    events = empty(nEvents, dtype=[('start',int),('len', int),('sum', float),('peak', float)])  ### rows are [start, length, sum]
+    if xvals is None:
+        events = empty(nEvents, dtype=[('index',int),('len', int),('sum', float),('peak', float)])  ### rows are [start, length, sum]
+    else:
+        events = empty(nEvents, dtype=[('index',int),('time',float),('len', int),('sum', float),('peak', float)])  ### rows are [start, length, sum]
     #p.mark('empty %d -> %d'% (len(times), nEvents))
     #n = 0
     for i in range(nEvents):
         t1 = times[longEvents[i]]+1
         t2 = times[longEvents[i]+1]+1
-        events[i][0] = t1
-        events[i][1] = t2-t1
+        events[i]['index'] = t1
+        events[i]['len'] = t2-t1
         evData = data1[t1:t2]
-        events[i][2] = evData.sum()
-        if events[i][2] > 0:
+        events[i]['sum'] = evData.sum()
+        if events[i]['sum'] > 0:
             peak = evData.max()
         else:
             peak = evData.min()
-        events[i][3] = peak
+        events[i]['peak'] = peak
     #p.mark('generate event array')
+    
+    if xvals is not None:
+        events['time'] = xvals[events['index']]
     
     if noiseThreshold  > 0:
         ## Fit gaussian to peak in size histogram, use fit sigma as criteria for noise rejection
@@ -1284,3 +1232,127 @@ def tauiness(data, w):
     return result
         
         
+
+
+
+
+
+
+
+#------------------------------------------
+#       Useless function graveyard:
+#------------------------------------------
+
+
+def alpha(t, tau):
+    """Return the value of an alpha function at time t with width tau."""
+    t = max(t, 0)
+    return (t / tau) * math.exp(1.0 - (t / tau));
+
+def alphas(t, tau, starts):
+    tot = 0.0
+    for s in starts:
+        tot += alpha(t-s, tau)
+    return tot
+
+### TODO: replace with faster scipy filters
+def smooth(data, it=1):
+    data = data.view(ndarray)
+    d = empty((len(data)), dtype=data.dtype)
+    for i in range(0, len(data)):
+        start = max(0, i-1)
+        stop = min(i+1, len(data)-1)
+        d[i] = mean(data[start:stop+1])
+    if it > 1:
+        return smooth(d, it-1)
+    else:
+        return d
+
+def maxDenoise(data, it):
+    return smooth(data, it).max()
+
+def absMax(data):
+    mv = 0.0
+    for v in data:
+        if abs(v) > abs(mv):
+            mv = v
+    return mv
+
+# takes data in form of [[t1, y1], [t2, y2], ...]
+def triggers(data, trig):
+    """Return a list of places where data crosses trig
+    Requires 2-column array:  array([[time...], [voltage...]])"""
+    
+    tVals = []
+    for i in range(0, data.shape[1]-1):
+        v1 = data[1, i]
+        v2 = data[1, i+1]
+        if v1 <= trig and v2 > trig:
+            g1 = data[0,i]
+            g2 = data[0,i+1]
+            tVals.append(g1 + (g2-g1)*((0.5-v1)/(v2-v1)))
+    return tVals
+
+
+
+
+
+## generates a command data structure from func with n points
+def cmd(func, n, time):
+    return [[i*(time/float(n-1)), func(i*(time/float(n-1)))] for i in range(0,n)]
+
+
+def inpRes(data, v1Range, v2Range):
+    r1 = filter(lambda r: r['Time'] > v1Range[0] and r['Time'] < v1Range[1], data)
+    r2 = filter(lambda r: r['Time'] > v2Range[0] and r['Time'] < v2Range[1], data)
+    v1 = mean([r['voltage'] for r in r1])
+    v2 = min(smooth([r['voltage'] for r in r2], 10))
+    c1 = mean([r['current'] for r in r1])
+    c2 = mean([r['current'] for r in r2])
+    return (v2-v1)/(c2-c1)
+
+
+def findActionPots(data, lowLim=-20e-3, hiLim=0, maxDt=2e-3):
+    """Returns a list of indexes of action potentials from a voltage trace
+    Requires 2-column array:  array([[time...], [voltage...]])
+    Defaults specify that an action potential is when the voltage trace crosses 
+    from -20mV to 0mV in 2ms or less"""
+    data = data.view(ndarray)
+    lastLow = None
+    ap = []
+    for i in range(0, data.shape[1]):
+        if data[1,i] < lowLim:
+            lastLow = data[0,i]
+        if data[1,i] > hiLim:
+            if lastLow != None and data[0,i]-lastLow < maxDt:
+                ap.append(i)
+                lastLow = None
+    return ap
+
+def getSpikeTemplate(ivc, traces):
+    """Returns the trace of the first spike in an IV protocol"""
+    
+    ## remove all negative currents
+    posCurr = argwhere(ivc['current'] > 0.)[:, 0]
+    ivc = ivc[:, posCurr]
+    
+    ## find threshold index
+    ivd = ivc['max voltage'] - ivc['mean voltage']
+    ivdd = ivd[1:] - ivd[:-1]
+    thrIndex = argmax(ivdd) + 1 + posCurr[0]
+    
+    ## subtract spike trace from previous trace
+    minlen = min(traces[thrIndex].shape[1], traces[thrIndex-1].shape[1])
+    di = traces[thrIndex]['Inp0', :minlen] - traces[thrIndex-1]['Inp0', :minlen]
+    
+    ## locate tallest spike
+    ind = argmax(di)
+    maxval = di[ind]
+    start = ind
+    stop = ind
+    while di[start] > maxval*0.5:
+        start -= 1
+    while di[stop] > maxval*0.5:
+        stop += 1
+    
+    return traces[thrIndex][['Time', 'Inp0'], start:stop]

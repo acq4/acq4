@@ -191,7 +191,10 @@ class Node(QtCore.QObject):
         for name, opts in state.iteritems():
             if name in self.terminals:
                 continue
-            self.addTerminal(name, **opts)
+            try:
+                self.addTerminal(name, **opts)
+            except:
+                printExc("Error restoring terminal:")
         
     def clearTerminals(self):
         for t in self.terminals.itervalues():
