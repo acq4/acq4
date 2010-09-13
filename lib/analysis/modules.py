@@ -452,7 +452,7 @@ class UncagingWindow(QtGui.QMainWindow):
         self.ctrl.highClipSpin.setRange(1,15000)
         self.ctrl.lowClipSpin.setValue(4000)
         self.ctrl.highClipSpin.setValue(10000)
-        self.ctrl.downsampleSpin.setValue(1)
+        self.ctrl.downsampleSpin.setValue(10)
         
         #self.canvas.setMouseTracking(True)
         self.sliceMarker = tShapeROI([0,0], 0.001)
@@ -835,7 +835,7 @@ class UncagingWindow(QtGui.QMainWindow):
                 
             if self.ctrl.svgCheck.isChecked():
                 data = [data[i][self.ctrl.lowClipSpin.value():self.ctrl.highClipSpin.value()] for i in range(len(data))]
-                data = [downsample(data[i], 2) for i in range(len(data))]
+                data = [downsample(data[i], self.ctrl.downsampleSpin.value()) for i in range(len(data))]
             self.plot.setData(data, pens=pens, analyze=False)
             #gradient = QtGui.QLinearGradient(QtCore.QPointF(0,0), QtCore.QPointF(1,0))
             #self.traceColorScale.show()
