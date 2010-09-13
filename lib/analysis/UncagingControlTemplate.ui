@@ -6,20 +6,14 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>424</width>
-    <height>256</height>
+    <width>442</width>
+    <height>354</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout_4">
-   <property name="margin">
-    <number>0</number>
-   </property>
-   <property name="spacing">
-    <number>0</number>
-   </property>
    <item row="0" column="0">
     <layout class="QGridLayout" name="gridLayout">
      <property name="spacing">
@@ -114,35 +108,60 @@
            </item>
           </layout>
          </item>
-         <item row="3" column="0" colspan="2">
+         <item row="3" column="0" rowspan="2" colspan="2">
           <widget class="GradientWidget" name="gradientWidget" native="true"/>
          </item>
-         <item row="5" column="0">
+         <item row="5" column="0" colspan="2">
           <widget class="QRadioButton" name="rgbRadio">
            <property name="text">
             <string>RGB</string>
            </property>
           </widget>
          </item>
-         <item row="4" column="0">
-          <spacer name="verticalSpacer_2">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item row="6" column="0">
+         <item row="7" column="0" colspan="2">
           <widget class="QCheckBox" name="colorTracesCheck">
            <property name="text">
             <string>Color Traces by Laser Power</string>
            </property>
           </widget>
+         </item>
+         <item row="8" column="0" colspan="2">
+          <widget class="QCheckBox" name="svgCheck">
+           <property name="text">
+            <string>Prepare for SVG</string>
+           </property>
+          </widget>
+         </item>
+         <item row="9" column="0" colspan="2">
+          <layout class="QHBoxLayout" name="horizontalLayout_4">
+           <item>
+            <widget class="QLabel" name="label_6">
+             <property name="text">
+              <string>Clip:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QSpinBox" name="lowClipSpin"/>
+           </item>
+           <item>
+            <widget class="QSpinBox" name="highClipSpin"/>
+           </item>
+          </layout>
+         </item>
+         <item row="10" column="0" colspan="2">
+          <layout class="QHBoxLayout" name="horizontalLayout_5">
+           <item>
+            <widget class="QLabel" name="label_7">
+             <property name="text">
+              <string>Downsample:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QSpinBox" name="downsampleSpin"/>
+           </item>
+          </layout>
          </item>
         </layout>
        </widget>

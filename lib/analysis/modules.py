@@ -23,6 +23,7 @@ from advancedTypes import OrderedDict
 import time
 import pickle
 from pyqtgraph.Point import *
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
@@ -248,7 +249,7 @@ class EventMatchWidget(QtGui.QSplitter):
             minSum = self.ctrl.zcSumAbsThresholdSpin.value()
             noiseThresh = self.ctrl.zcSumRelThresholdSpin.value()
             events = findEvents(data, minLength=minLen, minPeak=minPeak, minSum=minSum, noiseThreshold=noiseThresh)
-            ### if 'ExpDeconvolve' in self.ctrl.preFilterList.topLevelItems ### Need to only reconvolve if trace was deconvolved, but this is hard - for now we'll just assume that deconvolution is being used
+            ## if 'ExpDeconvolve' in self.ctrl.preFilterList.topLevelItems ### Need to only reconvolve if trace was deconvolved, but this is hard - for now we'll just assume that deconvolution is being used
             for i in range(len(events)):
                 e = data[events[i]['start']:events[i]['start']+events[i]['len']]
                 event = self.ctrl.preFilterList.filterList.topLevelItem(2).filter.reconvolve(e) ### lots of hard-coding happening, don't worry I feel sufficiently guilty about it
@@ -256,6 +257,7 @@ class EventMatchWidget(QtGui.QSplitter):
                     events[i]['peak'] = event.max()
                 else:
                     events[i]['peak'] = event.min()
+                #events[i]['sum'] = event.sum()
                 events[i]['sum'] = event.sum()*dt
                 
                 
@@ -446,6 +448,11 @@ class UncagingWindow(QtGui.QMainWindow):
         self.ctrl.useSpontActCheck.setChecked(False)
         self.ctrl.gradientRadio.setChecked(True)
         self.ctrl.medianCheck.setChecked(True)
+        self.ctrl.lowClipSpin.setRange(0,15000)
+        self.ctrl.highClipSpin.setRange(1,15000)
+        self.ctrl.lowClipSpin.setValue(4000)
+        self.ctrl.highClipSpin.setValue(10000)
+        self.ctrl.downsampleSpin.setValue(1)
         
         #self.canvas.setMouseTracking(True)
         self.sliceMarker = tShapeROI([0,0], 0.001)
@@ -570,8 +577,8 @@ class UncagingWindow(QtGui.QMainWindow):
     def clearScan(self):
         for item in self.scanItems:
             self.canvas.removeItem(item)
-        for item in self.scanAvgItems:
-            self.canvas.removeItem(item)
+        #for item in self.scanAvgItems:
+         #   self.canvas.removeItem(item)
         self.scanItems = []
         self.scanAvgItems = []
         self.currentTraces = []
@@ -718,7 +725,7 @@ class UncagingWindow(QtGui.QMainWindow):
         if self.ctrl.gradientRadio.isChecked():
             maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = self.ctrl.colorSpin1.value())
             spont = self.analysisCache['preChargeNeg'].mean()
-            #print "spont activity:", spont
+            print "spont activity:", spont
             for item in self.scanAvgItems:
                 if item.source is not None:  ## this is a single item
                     negCharge = self.analysisCache[item.index]['postChargeNeg']
@@ -818,21 +825,26 @@ class UncagingWindow(QtGui.QMainWindow):
             d = self.loadTrace(s)
             if d is not None:
                 self.currentTraces.append(d)
+                
         if self.ctrl.colorTracesCheck.isChecked():
             pens, max, min = self.assignPens(self.currentTraces)
             try:
                 data = [i[0]['Channel':'primary'][0:argwhere(i[0]['Channel':'Command'] != i[0]['Channel':'Command'][0])[0][0]] for i in self.currentTraces]
             except:
                 data = [i[0]['Channel':'primary'] for i in self.currentTraces]
-            self.plot.setData(data, pens=pens, analyze=analyze)
+                
+            if self.ctrl.svgCheck.isChecked():
+                data = [data[i][self.ctrl.lowClipSpin.value():self.ctrl.highClipSpin.value()] for i in range(len(data))]
+                data = [downsample(data[i], 2) for i in range(len(data))]
+            self.plot.setData(data, pens=pens, analyze=False)
             #gradient = QtGui.QLinearGradient(QtCore.QPointF(0,0), QtCore.QPointF(1,0))
             #self.traceColorScale.show()
             #self.traceColorScale.setGradient
             #self.colorScaleBar.setLabels({str(max):1, str(min):0}
             
-            cmd = self.loadTrace(item)[0]['Channel':'Command']
-            pulse = argwhere(cmd != cmd[0])[0]
-            trace = self.loadTrace(item)[0]['Channel':'primary'][0:pulse[0]]
+            #cmd = self.loadTrace(item)[0]['Channel':'Command']
+            #pulse = argwhere(cmd != cmd[0])[0]
+            #trace = self.loadTrace(item)[0]['Channel':'primary'][0:pulse[0]]
             
         
         else:
@@ -968,7 +980,8 @@ class UncagingWindow(QtGui.QMainWindow):
             ('peak', float64), ## 
             ('charge', float64) 
         ])
-        
+        #spontLatencies = []
+        #spontCharges = []
         n=0
         for item in self.scanItems:
             try:
@@ -996,6 +1009,9 @@ class UncagingWindow(QtGui.QMainWindow):
             #y = self.sliceMarker.mapFromScene(item.position[1])
             
             events = self.plot.processData([trace], display=False)
+            #preEvents = events[0][(events[0]['start'] < laserIndex)*(events[0]['start']> laserIndex - self.ctrl.poststimTimeSpin.value()*10)]
+            #spontLatencies.append((preEvents['start']-laserIndex)/rate)
+            #spontCharges.append((preEvents['sum']))
             events = events[0][(events[0]['start'] > laserIndex)*(events[0]['start'] < laserIndex+self.ctrl.poststimTimeSpin.value()*10)]
             
             spikeIndex = None
@@ -1042,6 +1058,8 @@ class UncagingWindow(QtGui.QMainWindow):
         table = table[:a]
         
         metaInfo = self.getMetaInfo()
+        #spontLatencies = hstack(spontLatencies)
+        #metaInfo['spontCharge'] = hstack(spontCharges).mean()
                     
         self.eventTable = (table, metaInfo)
         
@@ -1138,12 +1156,16 @@ class CellMixer(QtCore.QObject):
         self.chargeCutOff = None
         self.cellNames = []
         
-    def dataThrough(self, index):
+    def dataThrough(self):
         self.loadData('2010.08.04_s0c0-UncagingAnalysis.pk')
-        self.singleCellCentric(self.arrayList[index])
-        self.squash(self.cellEventMaps[index])
+        self.loadData('2010.08.06_s0c0-UncagingAnalysis.pk')
+        self.loadData('2010.08.30_s0c0-UncagingAnalysis.pk')
+        self.loadData('2010.08.05_s1c0-UncagingAnalysis.pk')
+        for index in range(len(self.arrayList)):
+            self.singleCellCentric(self.arrayList[index])
+            self.squash(self.cellEventMaps[index])
         #self.displayMap(self.cellMaps[0])
-        self.displayCellData(index)
+            #self.displayCellData(index)
     
     def loadData(self, fileName=None):
         if fileName is not None:
@@ -1283,62 +1305,91 @@ class CellMixer(QtCore.QObject):
         
     def displayCellData(self, dataIndex):
         #plt.figure(1)
-        fig = plt.figure(dataIndex+1)
+        fig = plt.figure(dataIndex+1, dpi=300)
         fig.suptitle(self.cellNames[dataIndex])
         pos = Point(self.metaInfo[dataIndex]['cellPosition'])
         plt.figtext(0.1,0.9, "cell position: x=%f um, y=%f um" %(pos[0]*1e6,pos[1]*1e6))
         s1 = fig.add_subplot(2,2,1)
         s2 = fig.add_subplot(2,2,2)
         #s3 = fig.add_subplot(2,3,4)
-        s4 = fig.add_subplot(2,2,3)
+        #s4 = fig.add_subplot(2,2,3)
         s5 = fig.add_subplot(2,2,4)
         
         data = self.cellMaps[dataIndex].transpose()
-        traceMask = data['#traces'] == 0
-        responseMask = (data['#responses'] == 0)*~traceMask
-        dirMask = (data['latency'] < 0.007)*~responseMask*~traceMask
-        
-        s1.set_title('charge map')
+        traceMask = data['#traces'] == 0 ## True where there are no traces
+        responseMask = (data['#responses'] == 0)*~traceMask ### True where there were no responses
+        dirMask = (data['latency'] < 0.007)*~responseMask*~traceMask ###True where responses are direct
+
+        s1.set_title('Charge Map')
         charge = data['charge']
-        charge = (charge/self.chargeCutOff).clip(0.05,0.95)
-        charge = charge.astype(float32)
-        charge[dirMask] = 0.0
-        charge[traceMask] = 1.0
-        charge[responseMask] = 0.99
+        charge = (charge/self.chargeCutOff).clip(0.0,1.0)
+        #charge = charge.astype(float32)
+        #charge[dirMask] = 0.0
+        #charge[traceMask] = 1.0
+        #charge[responseMask] = 0.99
         
-        img1 = s1.imshow(charge, cmap='spectral')
-        #cb1 = plt.colorbar(img1, ax=s1)
-        #cb1.set_ticks([0.05,0.95])
-        #cb1.set_ticklabels(['0.0', '%.3g pC' % (self.chargeCutOff*1e12)])
-        s1.set_ylabel('y position (mm)')
+        d = charge
+        colors = zeros((d.shape[0], d.shape[1], 4), dtype=float)
+        #hsv = zeros((data.shape[0], data.shape[1]), dtype=object)
+        for i in range(d.shape[0]):
+            for j in range(d.shape[1]):
+                c = hsvColor(0.7 - d[i][j]*0.7)
+                colors[i][j][0] = float(c.red()/255.0)
+                colors[i][j][1] = float(c.green()/255.0)
+                colors[i][j][2] = float(c.blue()/255.0)
+                colors[i][j][3] = 1.0
+        colors[traceMask] = array([0.0, 0.0,0.0,0.0])
+        colors[responseMask] = array([0.8,0.8,0.8,0.4])
+        colors[dirMask] = array([0.0,0.0,0.0,1.0])
+        #img1 = s1.imshow(colors)
+        img1 = s1.imshow(colors, cmap = 'hsv')
+        cb1 = plt.colorbar(img1, ax=s1)
+        cb1.set_label('Charge (pC)')
+        cb1.set_ticks([0.7, 0.0])
+        cb1.set_ticklabels(['0.0', '%.3g pC' % (-self.chargeCutOff*1e12)])
+        s1.set_ylabel('y Position (mm)')
         s1.set_xlim(left=3, right=36)
         s1.set_xticklabels(['2.0','1.5', '1.0', '0.5', '0', '0.5', '1.0', '1.5'])
         s1.set_ylim(bottom=16, top=1)
         s1.set_yticklabels(['0.4','0.2','0','0.2','0.4','0.6','0.8','1.0','1.2','1.4','1.6'])
-        s1.set_xlabel('x position (mm)')
+        s1.set_xlabel('x Position (mm)')
         
         a = argwhere(data['#APs']!=0)
-        print "APs at: ", a
+        #print "APs at: ", a
         self.a=a
         if len(a) != 0:
             for x in a:
-                s1.plot(x[1],x[0], '*r')
+                s1.plot(x[1],x[0], '*w', ms = 5)
         s1.plot(20,4,'ow')        
         
-        s2.set_title('latency')
+        s2.set_title('Latency Map')
         lat = data['latency']
         #lat[lat==0] = 0.3
-        lat = ((0.3-lat)/0.3).clip(0.05, 0.95)
-        lat = lat.astype(float32)
-        lat[dirMask] = 0.0
-        lat[traceMask] = 1.0
-        lat[responseMask] = 0.99
-        img2 = s2.imshow(lat, cmap='spectral')
-        cb2 = plt.colorbar(img2, ax=s2)
-        cb2.set_ticks([0.05,0.95])
+        lat = ((0.3-lat)/0.3).clip(0, 1)
+        d = lat
+        #lat = lat.astype(float32)
+        #lat[dirMask] = 0.0
+        #lat[traceMask] = 1.0
+        #lat[responseMask] = 0.99
+        colors2 = zeros((d.shape[0], d.shape[1], 4), dtype=float)
+        for i in range(d.shape[0]):
+            for j in range(d.shape[1]):
+                c = hsvColor(0.7 - d[i][j]*0.7)
+                colors2[i][j][0] = float(c.red()/255.0)
+                colors2[i][j][1] = float(c.green()/255.0)
+                colors2[i][j][2] = float(c.blue()/255.0)
+                colors2[i][j][3] = 1.0
+        colors2[traceMask] = array([0.0, 0.0,0.0,0.0])
+        colors2[responseMask] = array([0.8,0.8,0.8,0.4])
+        colors2[dirMask] = array([0.0,0.0,0.0,1.0])
+        
+        img2 = s2.imshow(colors2, cmap = 'hsv')
+        cb2 = plt.colorbar(img2, ax=s2, drawedges=False)
+        cb2.set_label('Latency (ms)')
+        cb2.set_ticks([0.7, 0.0])
         cb2.set_ticklabels(['300 ms', '7 ms'])
-        s2.set_ylabel('y position')
-        s2.set_xlabel('x position (mm)')
+        s2.set_ylabel('y Position (mm)')
+        s2.set_xlabel('x Position (mm)')
         s2.set_xlim(left=3, right=36)
         s2.set_xticklabels(['2.0','1.5', '1.0', '0.5', '0', '0.5', '1.0', '1.5'])
         s2.set_ylim(bottom=16, top=1)
@@ -1346,7 +1397,7 @@ class CellMixer(QtCore.QObject):
         s2.plot(20,4,'ow')
         if len(a) != 0:
             for x in a:
-                s2.plot(x[1],x[0], '*r')
+                s2.plot(x[1],x[0], '*w')
         
         mask = self.cellEventMaps[dataIndex]['latency'] != 0
         
@@ -1361,26 +1412,96 @@ class CellMixer(QtCore.QObject):
         #s3.set_xlabel('charge')
         #s3.set_ylabel('number')
         
-        s4.set_title('latency distribution')
-        data = self.cellEventMaps[dataIndex][mask]['latency']
-        s4.hist(data, bins=100)
-        s4.set_xlabel('latency')
-        s4.set_ylabel('number')
-        s4.set_xlim(left = 0, right = 0.3)
-        s4.set_xticks([0, 0.1, 0.2, 0.3])
-        s4.set_xticklabels(['0', '100', '200','300'])
+        #s4.set_title('latency distribution')
+        #data = self.cellEventMaps[dataIndex][mask]['latency']
+        #s4.hist(data, bins=100)
+        #s4.set_xlabel('latency')
+        #s4.set_ylabel('number')
+        #s4.set_xlim(left = 0, right = 0.3)
+        #s4.set_xticks([0, 0.1, 0.2, 0.3])
+        #s4.set_xticklabels(['0', '100', '200','300'])
         
-        s5.set_title('charge v. latency')
-        charge = self.cellEventMaps[dataIndex][mask]['charge']
+        s5.set_title('Charge v. Latency')
+        charge = -self.cellEventMaps[dataIndex][mask]['charge']*1e12
         latency = self.cellEventMaps[dataIndex][mask]['latency']
-        s5.plot(latency, charge, 'bo', markerfacecolor = 'blue')
-        s5.set_xlabel('latency')
-        s5.set_ylabel('charge')
-        s5.set_xlim(left = 0, right = 0.3)
+        s5.semilogy(latency, charge, 'bo', markerfacecolor = 'blue', markersize=5)
+        s5.set_xlabel('Latency (ms)')
+        s5.set_ylabel('Charge (pC)')
+        s5.axhspan(0.5e-11*1e12, charge.max(), xmin=0.06/0.32, xmax=0.31/0.32, edgecolor='none',facecolor='gray', alpha=0.3 )
+        s5.set_xlim(left = -0.01, right = 0.31)
         s5.set_xticks([0, 0.1, 0.2, 0.3])
         s5.set_xticklabels(['0', '100', '200','300'])
         
         self.figures.append(fig)
+        
+    def mapBigInputs(self, dataIndices, minLatency=0.05, minCharge=-0.5e-11):
+        
+        d0 = self.arrayList[dataIndices[0]]
+        d0 = d0[(d0['latency']>minLatency)*d0['charge']<minCharge]
+        x0 = d0['xcell']
+        y0 = -d0['ycell']
+        s=10
+        plt.figure(1)
+        s1 = plt.subplot(1,1,1)
+        s1.plot(x0,y0,'bo',ms=s)
+        
+        if len(dataIndices) > 1:
+            d1 = self.arrayList[dataIndices[1]]
+            d1 = d1[(d1['latency']>minLatency)*d1['charge']<minCharge]
+            x1 = d1['xcell']
+            y1 = -d1['ycell']
+            
+            d2 = self.arrayList[dataIndices[2]]
+            d2 = d2[(d2['latency']>minLatency)*d2['charge']<minCharge]
+            x2 = d2['xcell']
+            y2 = -d2['ycell']
+            
+            d3 = self.arrayList[dataIndices[3]]
+            d3 = d3[(d3['latency']>minLatency)*d3['charge']<minCharge]
+            x3 = d3['xcell']
+            y3 = -d3['ycell']
+            
+            s1.plot(x1,y1,'ro',ms=s)
+            s1.plot(x2,y2,'go',ms=s)
+            s1.plot(x3,y3,'wo',ms=s)
+            s1.plot(0,0,'ok',ms=8)
+            
+        s1.set_xbound(lower = -0.002, upper = 0.002)
+        s1.set_ybound(lower = -0.0015, upper = 0.0005)
+        
+        #print "Making figure 2"
+        plt.figure(2)
+        s2 = plt.subplot(1,1,1)
+        
+        data = self.dataTable
+        #print "1"
+        map = zeros((40, 20), dtype=float) ### map that hold number of traces
+        #print "2"
+        for i in dataIndices:
+            data = self.cellEventMaps[i]
+            #print "i: ", i
+            #number = data[:,:]
+            for j in range(map.shape[0]):
+                for k in range(map.shape[1]):
+                    #print 'j:', j, 'k:', k
+                    number = len(unique(data[j][k]['traceID']))
+                    #print 'number:', number
+                    map[j][k] += number
+                    #print 'added number...'
+                    
+        #print 'making gray array'
+        grays = zeros((map.shape[1], map.shape[0],4), dtype=float)
+        grays[:,:,0] = 0.5
+        grays[:,:,1] = 0.5
+        grays[:,:,2] = 0.5
+        grays[:,:,3] = 0.05*map.transpose()
+        #print 'gray array made'
+        print 'grays.max:', grays[:,:,3].max()
+        
+        img = plt.imshow(grays, cmap='grey')
+        cb = plt.colorbar(img, ax=s2)
+        plt.plot(20,4,'ok',ms=8)
+        
         
         
     

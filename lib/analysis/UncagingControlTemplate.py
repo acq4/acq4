@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'UncagingControlTemplate.ui'
 #
-# Created: Wed Aug 11 10:33:33 2010
+# Created: Sun Sep 12 18:45:50 2010
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,10 +12,8 @@ from PyQt4 import QtCore, QtGui
 class Ui_UncagingControlWidget(object):
     def setupUi(self, UncagingControlWidget):
         UncagingControlWidget.setObjectName("UncagingControlWidget")
-        UncagingControlWidget.resize(424, 256)
+        UncagingControlWidget.resize(442, 354)
         self.gridLayout_4 = QtGui.QGridLayout(UncagingControlWidget)
-        self.gridLayout_4.setMargin(0)
-        self.gridLayout_4.setSpacing(0)
         self.gridLayout_4.setObjectName("gridLayout_4")
         self.gridLayout = QtGui.QGridLayout()
         self.gridLayout.setSpacing(0)
@@ -73,15 +71,37 @@ class Ui_UncagingControlWidget(object):
         self.gridLayout_3.addLayout(self.horizontalLayout_3, 2, 0, 1, 2)
         self.gradientWidget = GradientWidget(self.groupBox_2)
         self.gradientWidget.setObjectName("gradientWidget")
-        self.gridLayout_3.addWidget(self.gradientWidget, 3, 0, 1, 2)
+        self.gridLayout_3.addWidget(self.gradientWidget, 3, 0, 2, 2)
         self.rgbRadio = QtGui.QRadioButton(self.groupBox_2)
         self.rgbRadio.setObjectName("rgbRadio")
-        self.gridLayout_3.addWidget(self.rgbRadio, 5, 0, 1, 1)
-        spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.gridLayout_3.addItem(spacerItem, 4, 0, 1, 1)
+        self.gridLayout_3.addWidget(self.rgbRadio, 5, 0, 1, 2)
         self.colorTracesCheck = QtGui.QCheckBox(self.groupBox_2)
         self.colorTracesCheck.setObjectName("colorTracesCheck")
-        self.gridLayout_3.addWidget(self.colorTracesCheck, 6, 0, 1, 1)
+        self.gridLayout_3.addWidget(self.colorTracesCheck, 7, 0, 1, 2)
+        self.svgCheck = QtGui.QCheckBox(self.groupBox_2)
+        self.svgCheck.setObjectName("svgCheck")
+        self.gridLayout_3.addWidget(self.svgCheck, 8, 0, 1, 2)
+        self.horizontalLayout_4 = QtGui.QHBoxLayout()
+        self.horizontalLayout_4.setObjectName("horizontalLayout_4")
+        self.label_6 = QtGui.QLabel(self.groupBox_2)
+        self.label_6.setObjectName("label_6")
+        self.horizontalLayout_4.addWidget(self.label_6)
+        self.lowClipSpin = QtGui.QSpinBox(self.groupBox_2)
+        self.lowClipSpin.setObjectName("lowClipSpin")
+        self.horizontalLayout_4.addWidget(self.lowClipSpin)
+        self.highClipSpin = QtGui.QSpinBox(self.groupBox_2)
+        self.highClipSpin.setObjectName("highClipSpin")
+        self.horizontalLayout_4.addWidget(self.highClipSpin)
+        self.gridLayout_3.addLayout(self.horizontalLayout_4, 9, 0, 1, 2)
+        self.horizontalLayout_5 = QtGui.QHBoxLayout()
+        self.horizontalLayout_5.setObjectName("horizontalLayout_5")
+        self.label_7 = QtGui.QLabel(self.groupBox_2)
+        self.label_7.setObjectName("label_7")
+        self.horizontalLayout_5.addWidget(self.label_7)
+        self.downsampleSpin = QtGui.QSpinBox(self.groupBox_2)
+        self.downsampleSpin.setObjectName("downsampleSpin")
+        self.horizontalLayout_5.addWidget(self.downsampleSpin)
+        self.gridLayout_3.addLayout(self.horizontalLayout_5, 10, 0, 1, 2)
         self.horizontalLayout.addWidget(self.groupBox_2)
         self.gridLayout_4.addWidget(self.groupBox_4, 0, 1, 2, 1)
         self.groupBox = QtGui.QGroupBox(UncagingControlWidget)
@@ -121,6 +141,9 @@ class Ui_UncagingControlWidget(object):
         self.label_5.setText(QtGui.QApplication.translate("UncagingControlWidget", "High % Cutoff", None, QtGui.QApplication.UnicodeUTF8))
         self.rgbRadio.setText(QtGui.QApplication.translate("UncagingControlWidget", "RGB", None, QtGui.QApplication.UnicodeUTF8))
         self.colorTracesCheck.setText(QtGui.QApplication.translate("UncagingControlWidget", "Color Traces by Laser Power", None, QtGui.QApplication.UnicodeUTF8))
+        self.svgCheck.setText(QtGui.QApplication.translate("UncagingControlWidget", "Prepare for SVG", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_6.setText(QtGui.QApplication.translate("UncagingControlWidget", "Clip:", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_7.setText(QtGui.QApplication.translate("UncagingControlWidget", "Downsample:", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox.setTitle(QtGui.QApplication.translate("UncagingControlWidget", "Analysis Method:", None, QtGui.QApplication.UnicodeUTF8))
         self.eventFindRadio.setText(QtGui.QApplication.translate("UncagingControlWidget", "Event Finding", None, QtGui.QApplication.UnicodeUTF8))
         self.chargeTransferRadio.setText(QtGui.QApplication.translate("UncagingControlWidget", "Total Charge Transfer", None, QtGui.QApplication.UnicodeUTF8))

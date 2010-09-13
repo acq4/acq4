@@ -324,7 +324,7 @@ class ExpDeconvolve(Filter):
         d = zeros(len(data)+600, dtype=float)
         d[100:len(data)+100] = data
         tau = self.ctrls['tau'].value()
-        r = zeros(len(d), dtype=float)
+        r = zeros(len(d), dtype=float64)
         for i in range(len(r)-1):
             r[i+1] = r[i] + self.dt*((d[i]-r[i])/tau)
         return r
