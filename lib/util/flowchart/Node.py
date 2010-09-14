@@ -129,6 +129,14 @@ class Node(QtCore.QObject):
             vals[n] = t.value()
         return vals
             
+    def connected(self, localTerm, remoteTerm):
+        """Called whenever one of this node's terminals is connected elsewhere."""
+        pass
+    
+    def disconnected(self, localTerm, remoteTerm):
+        """Called whenever one of this node's terminals is connected elsewhere."""
+        pass 
+    
     def update(self):
         """Collect all input values, attempt to process new output values, and propagate downstream."""
         #print "processing", self

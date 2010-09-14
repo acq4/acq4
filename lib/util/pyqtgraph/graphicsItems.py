@@ -1659,7 +1659,7 @@ class InfiniteLine(GraphicsObject):
 
 class LinearRegionItem(GraphicsObject):
     """Used for marking a horizontal or vertical region in plots."""
-    def __init__(self, view, orientation="horizontal", vals=[0,1], brush=None, movable=True, bounds=None):
+    def __init__(self, view, orientation="vertical", vals=[0,1], brush=None, movable=True, bounds=None):
         GraphicsObject.__init__(self)
         self.orientation = orientation
         if hasattr(self, "ItemHasNoContents"):  

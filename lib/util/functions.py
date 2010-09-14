@@ -22,6 +22,7 @@ from scipy import stats
 import scipy.signal
 import numpy.ma
 from debug import *
+import numpy as np
 
 ## Number <==> string conversion functions
 
@@ -118,6 +119,16 @@ def expDecay(v, x):
     """Exponential decay function valued at x. Parameter vector is [amplitude, tau, yOffset]"""
     return v[0] * exp(-x / v[1]) + v[2]
 
+def pspFunc(v, x, risePower=1.0):
+    """Function approximating a PSP shape. 
+    v = [amplitude, x offset, rise tau, fall tau"""
+    out = empty(x.shape, x.dtype)
+    mask = x > v[1]
+    out[~mask] = 0
+    xvals = x[mask]-v[1]
+    out[mask] = v[0]/0.05450016 * (1.0 - exp(-xvals/v[2]))**risePower  *  exp(-xvals/v[3])
+    return out
+
 def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateResult=False, resultXVals=None):
     """fit xVals, yVals to the specified function. 
     If generateResult is True, then the fit is used to generate an array of points from function
@@ -127,14 +138,17 @@ def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateR
         errFn = lambda v, x, y: function(v, x)-y
     fit = leastsq(errFn, guess, args=(xVals, yVals))
     error = None
-    if measureError:
-        error = errFn(fit[0], xVals, yVals)
+    #if measureError:
+        #error = errFn(fit[0], xVals, yVals)
     result = None
-    if generateResult:
+    if generateResult or measureError:
         if resultXVals is not None:
             xVals = resultXVals
-        fn = lambda i: function(fit[0], xVals[i.astype(int)])
-        result = fromfunction(fn, xVals.shape)
+        result = function(fit[0], xVals)
+        #fn = lambda i: function(fit[0], xVals[i.astype(int)])
+        #result = fromfunction(fn, xVals.shape)
+        if measureError:
+            error = abs(yVals - result).mean()
     return fit + (result, error)
         
 def fitSigmoid(xVals, yVals, guess=[1.0, 0.0, 1.0, 0.0], **kargs):
@@ -148,7 +162,8 @@ def fitGaussian(xVals, yVals, guess=[1.0, 0.0, 1.0, 0.0], **kargs):
 def fitExpDecay(xVals, yVals, guess=[1.0, 1.0, 0.0], **kargs):
     return fit(expDecay, xVals, yVals, guess, **kargs)
 
-
+def fitPsp(xVals, yVals, guess=[1e-3, 0, 10e-3, 10e-3], **kargs):
+    return fit(pspFunc, xVals, yVals, guess, **kargs)
 
 STRNCMP_REGEX = re.compile(r'(-?\d+(\.\d*)?((e|E)-?\d+)?)')
 def strncmp(a, b):
@@ -1064,6 +1079,31 @@ def adaptiveDetrend(data, x=None, threshold=3.0):
         return MetaArray(d4, info=data.infoCopy())
     return d4
     
+    
+def histogramDetrend(data, window=500, bins=50, threshold=3.0):
+    """Linear detrend. Works by finding the most common value at the beginning and end of a trace."""
+    
+    d1 = data.view(np.ndarray)
+    d2 = [d1[:window], d1[-window:]]
+    v = [0, 0]
+    for i in [0, 1]:
+        d3 = d2[i]
+        stdev = d3.std()
+        mask = abs(d3-np.median(d3)) < stdev*threshold
+        d4 = d3[mask]
+        y, x = np.histogram(d4, bins=bins)
+        ind = np.argmax(y)
+        v[i] = 0.5 * (x[ind] + x[ind+1])
+        
+    base = np.linspace(v[0], v[1], len(data))
+    d3 = data.view(np.ndarray) - base
+    
+    if isinstance(data, MetaArray):
+        return MetaArray(d3, info=data.infoCopy())
+    return d3
+    
+    
+
 def subtractMedian(data, time=None, width=100, dt=None):
     """Subtract rolling median from signal. 
     Arguments:
@@ -1222,18 +1262,66 @@ def expTemplate(dt, rise, decay, delay=None, length=None, risePow=2.0):
     return temp
 
 
-def tauiness(data, w):
-    ivals = range(0, len(data)-w-1, int(w/10))
-    result = empty(len(ivals), dtype=[('amp', float), ('tau', float), ('offset', float), ('error', float)])
+def tauiness(data, win, step=10):
+    ivals = range(0, len(data)-win-1, int(win/step))
+    xvals = data.xvals(0)
+    result = empty((len(ivals), 4), dtype=float)
     for i in range(len(ivals)):
         j = ivals[i]
-        v = fitExpDecay(arange(w), data[j:j+w], measureError=True)
+        v = fitExpDecay(arange(win), data[j:j+win], measureError=True)
         result[i] = array(list(v[0]) + [sum(abs(v[3]))])
+        #result[i][0] = xvals[j]
+        #result[i][1] = j
+    result = MetaArray(result, info=[
+        {'name': 'Time', 'values': xvals[ivals]}, 
+        {'name': 'Parameter', 'cols': [{'name': 'Amplitude'}, {'name': 'Tau'}, {'name': 'Offset'}, {'name': 'Error'}]}
+    ])
     return result
         
         
 
+def expDeconvolve(data, tau):
+    dt = 1
+    if isinstance(data, MetaArray):
+        dt = data.xvals(0)[1] - data.xvals(0)[0]
+    d = data[:-1] + (tau / dt) * (data[1:] - data[:-1])
+    if isinstance(data, MetaArray):
+        info = data.infoCopy()
+        if 'values' in info[0]:
+            info[0]['values'] = info[0]['values'][:-1]
+        info[-1]['expDeconvolveTau'] = tau
+        return MetaArray(d, info=info)
+    else:
+        return d
 
+    
+def expReconvolve(data, tau=None):
+    dt = 1
+    if isinstance(data, MetaArray):
+        dt = data.xvals(0)[1] - data.xvals(0)[0]
+        if tau is None:
+            tau = data._info[-1].get('expDeconvolveTau', None)
+    if tau is None:
+        raise Exception("Must specify tau.")
+    # x(k+1) = x(k) + dt * (f(k) - x(k)) / tau
+    # OR: x[k+1] = (1-dt/tau) * x[k] + dt/tau * x[k]
+    #print tau, dt
+    d = zeros(data.shape, data.dtype)
+    dtt = dt / tau
+    dtti = 1. - dtt
+    for i in range(1, len(d)):
+        d[i] = dtti * d[i-1] + dtt * data[i-1]
+    
+    if isinstance(data, MetaArray):
+        info = data.infoCopy()
+        #if 'values' in info[0]:
+            #info[0]['values'] = info[0]['values'][:-1]
+        #info[-1]['expDeconvolveTau'] = tau
+        return MetaArray(d, info=info)
+    else:
+        return d
+
+    
 
 
 

@@ -4,6 +4,8 @@ from PyQt4 import QtGui, QtCore
 from DirTreeWidget import *
 import numpy as np
 import metaarray
+from common import *
+from pyqtgraph import graphicsItems
 
 class SubtreeNode(Node):
     """Select files from within a directory. Input must be a DirHandle."""
@@ -164,28 +166,55 @@ class ColumnSelectNode(Node):
 
 
 
-class SliceNode(CtrlNode):
+class RegionSelectNode(CtrlNode):
     """Returns a slice from a 1-D array. Connect the 'widget' output to a plot to display a region-selection widget."""
-    nodeName = "ArraySlice"
+    nodeName = "RegionSelect"
     uiTemplate = [
         ('start', 'spin', {'value': 0, 'step': 0.1}),
         ('stop', 'spin', {'value': 0.1, 'step': 0.1})
     ]
     
     def __init__(self, name):
+        self.items = {}
         CtrlNode.__init__(self, name, terminals={
             'data': {'io': 'in'},
             'selected': {'io': 'out'},
-            'widget': {'io': 'out'}
+            'widget': {'io': 'out', 'multi': True}
         })
         
     def process(self, data, display=True):
+        #print "process.."
+        s = self.stateGroup.state()
+        region = [s['start'], s['stop']]
+        conn = self['widget'].connections()
+        for c in conn:
+            plot = c.node().getPlot()
+            if plot is None:
+                continue
+            if c in self.items:
+                item = self.items[c]
+                item.setRegion(region)
+                #print "  set rgn:", c, region
+                #item.setXVals(events)
+            else:
+                item = graphicsItems.LinearRegionItem(plot, vals=region)
+                self.items[c] = item
+                item.connect(item, QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+                #print "  new rgn:", c, region
+                #self.items[c].setYRange([0., 0.2], relative=True)
+                
+        if isinstance(data, MetaArray):
+            sliced = data[0:s['start']:s['stop']]
+        else:
+            mask = (data['time'] >= s['start']) * (data['time'] < s['stop'])
+            sliced = data[mask]
+        return {'selected': sliced, 'widget': self.items}
         
         
-        
-        
-        
-        
+    def rgnChanged(self, item):
+        region = item.getRegion()
+        self.stateGroup.setState({'start': region[0], 'stop': region[1]})
+        self.update()
         
         
         

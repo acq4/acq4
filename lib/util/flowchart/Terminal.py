@@ -5,13 +5,14 @@ import weakref
 from eq import *
 
 class Terminal:
-    def __init__(self, node, name, io, optional=False, multi=None, pos=None):
+    def __init__(self, node, name, io, optional=False, multi=False, pos=None):
         """Construct a new terminal. Optiona are:
         node     - the node to which this terminal belongs
         name     - string, the name of the terminal
         io       - 'in' or 'out'
         optional - bool, whether the node may process without connection to this terminal
-        multi    - bool, whether this terminal may make multiple connections
+        multi    - bool, for inputs: whether this terminal may make multiple connections
+                   for outputs: whether this terminal creates a different value for each connection
         pos      - [x, y], the position of the terminal within its node's boundaries
         """
         self._io = io
@@ -19,36 +20,40 @@ class Terminal:
         #self._isInput = opts[0]] in ['in', 'io']
         #self._isIO = opts[0]=='io'
         self._optional = optional
-        if multi is None:
-            if io == 'in':
-                multi = False
-            else:
-                multi = True
         self._multi = multi
         self._node = weakref.ref(node)
         self._name = name
         self._connections = {}
         self._graphicsItem = TerminalGraphicsItem(self)
-        self._value = {None: None}  ## dictionary of terminal:value pairs. For single-value terminals, we use {None: val}
+        if multi:
+            self._value = {}  ## dictionary of terminal:value pairs.
+        else:
+            self._value = None  
+            
         self.valueOk = None
         self.recolor()
         
-    def value(self):
-        if self.isMultiInput():
+    def value(self, term=None):
+        """Return the value this terminal provides for the connected terminal"""
+        if term is None:
             return self._value
+            
+        if self.isMultiValue():
+            return self._value.get(term, None)
         else:
-            return self._value[None]
+            return self._value
         
     def setValue(self, val, process=True):
-        """If this is a single-input or output terminal, val should be a single value.
-        If this is a multi-input terminal, val should be a dict of terminal:value pairs"""
-        if not self.isMultiInput():
-            if eq(val, self._value[None]):
+        """If this is a single-value terminal, val should be a single value.
+        If this is a multi-value terminal, val should be a dict of terminal:value pairs"""
+        if not self.isMultiValue():
+            if eq(val, self._value):
                 return
-            val = {None: val}
-        if val is self._value:
-            return
-        self._value.update(val)
+            self._value = val
+        else:
+            if val is not None:
+                self._value.update(val)
+            
         self.setValueAcceptable(None)  ## by default, input values are 'unchecked' until Node.update(). 
         if self.isInput() and process:
             self.node().update()
@@ -57,22 +62,35 @@ class Terminal:
                 if c.isInput():
                     c.inputChanged(self)
         self.recolor()
-            
-    def inputChanged(self, term):
-        """Called whenever there is a change to the inputs to this terminal (including disconnections).
-        It will often be useful to override this function."""
-        if self.isMultiInput():
-            if term in self.connections():
-                self.setValue({term: term.value()})
-            else:  ## disconnected
-                del self._value[term]
-                self.node().update()
-                self.recolor()
+
+    def connected(self, term):
+        """Called whenever this terminal has been connected to another. (note--this function is called on both terminals)"""
+        if self.isInput() and term.isOutput():
+            self.inputChanged(term)
+        if self.isOutput() and self.isMultiValue():
+            self.node().update()
+        self.node().connected(self, term)
+        
+    def disconnected(self, term):
+        """Called whenever this terminal has been disconnected from another. (note--this function is called on both terminals)"""
+        if self.isMultiValue() and term in self._value:
+            del self._value[term]
+            self.node().update()
+            #self.recolor()
         else:
-            if term in self.connections():
-                self.setValue(term.value())
-            else:  ## disconnected
+            if self.isInput():
                 self.setValue(None)
+        self.node().disconnected(self, term)
+        #self.node().update()
+
+
+    def inputChanged(self, term):
+        """Called whenever there is a change to the input value to this terminal.
+        It may often be useful to override this function."""
+        if self.isMultiValue():
+            self.setValue({term: term.value(self)})
+        else:
+            self.setValue(term.value(self))
             
     def valueIsAcceptable(self):
         """Returns True->acceptable  None->unknown  False->Unacceptable"""
@@ -91,8 +109,8 @@ class Terminal:
     def isInput(self):
         return self._io == 'in'
     
-    def isMultiInput(self):
-        return self.isInput() and self._multi
+    def isMultiValue(self):
+        return self._multi
 
     def isOutput(self):
         return self._io == 'out'
@@ -139,7 +157,7 @@ class Terminal:
         if term.node() is self.node():
             raise Exception("Can't connect to terminal on same node.")
         for t in [self, term]:
-            if not t._multi and len(t.connections()) > 0:
+            if t.isInput() and not t._multi and len(t.connections()) > 0:
                 raise Exception("Cannot connect %s <-> %s: Terminal %s is already connected to %s (and does not allow multiple connections)" % (self, term, t, t.connections().keys()))
         #if self.hasInput() and term.hasInput():
             #raise Exception('Target terminal already has input')
@@ -156,11 +174,13 @@ class Terminal:
         
         self.recolor()
         
-        if self.isOutput() and term.isInput():
-            term.inputChanged(self)
-        if term.isInput() and term.isOutput():
-            self.inputChanged(term)
-            
+        #if self.isOutput() and term.isInput():
+            #term.inputChanged(self)
+        #if term.isInput() and term.isOutput():
+            #self.inputChanged(term)
+        self.connected(term)
+        term.connected(self)
+        
         return connectionItem
         
     def disconnectFrom(self, term):
@@ -173,10 +193,12 @@ class Terminal:
         self.recolor()
         term.recolor()
         
-        if self.isOutput() and term.isInput():
-            term.inputChanged(self)
-        if term.isInput() and term.isOutput():
-            self.inputChanged(term)
+        self.disconnected(term)
+        term.disconnected(self)
+        #if self.isOutput() and term.isInput():
+            #term.inputChanged(self)
+        #if term.isInput() and term.isOutput():
+            #self.inputChanged(term)
         
     def disconnectAll(self):
         for t in self._connections.keys():
@@ -188,7 +210,7 @@ class Terminal:
                 color = QtGui.QColor(0,0,0)
             elif self.isInput() and not self.hasInput():   ## input terminal with no connected output terminals 
                 color = QtGui.QColor(200,200,0)
-            elif self.value() is None:         ## terminal is connected but has no data (possibly due to processing error) 
+            elif self._value is None or eq(self._value, {}):         ## terminal is connected but has no data (possibly due to processing error) 
                 color = QtGui.QColor(255,255,255)
             elif self.valueIsAcceptable() is None:   ## terminal has data, but it is unknown if the data is ok
                 color = QtGui.QColor(200, 200, 0)

@@ -70,7 +70,7 @@ class Flowchart(Node):
         name, term = Node.addTerminal(self, name, **opts)
         if opts['io'] == 'in':  ## inputs to the flowchart become outputs on the input node
             opts['io'] = 'out'
-            opts['multi'] = True
+            opts['multi'] = False
             self.inputNode.addTerminal(name, **opts)
         else:
             opts['io'] = 'in'
@@ -155,7 +155,7 @@ class Flowchart(Node):
                     inputs = inp.inputTerminals()
                     if len(inputs) == 0:
                         continue
-                    if inp.isMultiInput():  ## multi-input terminals require a dict of all inputs
+                    if inp.isMultiValue():  ## multi-input terminals require a dict of all inputs
                         args[inp.name()] = dict([(i, data[i]) for i in inputs])
                     else:                   ## single-inputs terminals only need the single input value available
                         args[inp.name()] = data[inputs[0]]  
