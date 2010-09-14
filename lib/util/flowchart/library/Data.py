@@ -217,6 +217,64 @@ class RegionSelectNode(CtrlNode):
         self.update()
         
         
+class EvalNode(Node):
+    """Return the output of a string evaluated by the python interpreter."""
+    nodeName = 'PythonEval'
+    
+    def __init__(self, name):
+        Node.__init__(self, name, terminals = {
+            'input': {'io': 'in', 'renamable': True},
+            'output': {'io': 'out', 'renamable': True},
+        })
+        
+        self.ui = QtGui.QWidget()
+        self.layout = QtGui.QGridLayout()
+        self.addInBtn = QtGui.QPushButton('+Input')
+        self.addOutBtn = QtGui.QPushButton('+Output')
+        self.text = QtGui.QTextEdit()
+        self.layout.addWidget(self.addInBtn, 0, 0)
+        self.layout.addWidget(self.addOutBtn, 0, 1)
+        self.layout.addWidget(self.text, 1, 0, 1, 2)
+        self.ui.setLayout(self.layout)
+        
+        QtCore.QObject.connect(self.addInBtn, QtCore.SIGNAL('clicked()'), self.addInput)
+        QtCore.QObject.connect(self.addOutBtn, QtCore.SIGNAL('clicked()'), self.addOutput)
+        self.ui.focusOutEvent = lambda ev: self.focusOutEvent(ev)
+        self.lastText = None
+        
+    def ctrlWidget(self):
+        return self.ui
         
         
+    def addInput(self):
+        Node.addInput(self, 'input', renamable=True)
+        
+    def addOutput(self):
+        Node.addOutput(self, 'output', renamable=True)
+        
+    def focusOutEvent(self, ev):
+        text = str(self.text.toPlainText())
+        if text != self.lastText:
+            self.lastText = text
+            self.update()
+        
+    def process(self, display=False, **args):
+        l = locals()
+        l.update(args)
+        text = str(self.text.toPlainText()).replace('\n', ' ')
+        out = eval(text, globals(), l)
+        return {'output': out}
+        
+    def saveState(self):
+        state = Node.saveState(self)
+        state['text'] = str(self.text.toPlainText())
+        state['terminals'] = self.saveTerminals()
+        return state
+        
+    def restoreState(self, state):
+        Node.restoreState(self, state)
+        self.text.clear()
+        self.text.insertPlainText(state['text'])
+        self.restoreTerminals(state['terminals'])
+        self.update()
         

@@ -67,15 +67,32 @@ class Flowchart(Node):
         return self._nodes
         
     def addTerminal(self, name, **opts):
-        name, term = Node.addTerminal(self, name, **opts)
+        term = Node.addTerminal(self, name, **opts)
+        name = term.name()
         if opts['io'] == 'in':  ## inputs to the flowchart become outputs on the input node
             opts['io'] = 'out'
             opts['multi'] = False
-            self.inputNode.addTerminal(name, **opts)
+            term2 = self.inputNode.addTerminal(name, **opts)
         else:
             opts['io'] = 'in'
             opts['multi'] = False
-            self.outputNode.addTerminal(name, **opts)
+            term2 = self.outputNode.addTerminal(name, **opts)
+        return term
+
+    def removeTerminal(self, name):
+        print "remove:", name
+        term = self[name]
+        inTerm = self.internalTerminal(term)
+        Node.removeTerminal(self, name)
+        inTerm.node().removeTerminal(inTerm.name())
+        
+    def terminalRenamed(self, term, oldName, newName):
+        print "flowchart term renamed"
+        Node.terminalRenamed(self, term, oldName, newName)
+        print "renaming internal nodes.."
+        for n in [self.intputNode, self.outputNode]:
+            if oldName in n.terminals:
+                n[oldName].rename(newName)
 
     def createNode(self, nodeType, name=None):
         if name is None:

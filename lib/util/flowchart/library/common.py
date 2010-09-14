@@ -53,6 +53,14 @@ def generateUi(opts):
     group = WidgetGroup(widget)
     return widget, group, ctrls
 
+#class TerminalEditor(QtGui.QWidget):
+    #def __init__(self, node):
+        #QtGui.QWidget.__init__(self)
+        
+        #self.node = node
+        
+    
+        
 
 
 class CtrlNode(Node):

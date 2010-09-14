@@ -32,7 +32,10 @@ class Analyzer(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.addPlotBtn, QtCore.SIGNAL("clicked()"), self.addPlot)
         QtCore.QObject.connect(self.ui.addCanvasBtn, QtCore.SIGNAL("clicked()"), self.addCanvas)
         QtCore.QObject.connect(self.ui.addTableBtn, QtCore.SIGNAL("clicked()"), self.addTable)
-        
+        QtCore.QObject.connect(self.ui.removeDockBtn, QtCore.SIGNAL("clicked()"), self.removeSelected)
+
+        QtCore.QObject.connect(self.flowchart.outputNode, QtCore.SIGNAL("terminalRenamed"), self.outputRenamed)
+
         self.resize(1200,800)
         self.show()
 
@@ -75,9 +78,42 @@ class Analyzer(QtGui.QMainWindow):
         return True
         
 
+    def removeSelected(self):
+        sel = self.ui.dockList.currentItem()
+        if sel is None:
+            return
+        name = str(sel.text())
+        self.ui.dockList.takeItem(self.ui.dockList.currentRow())
+        
+        d = self.dockItems[name]
+        if d['type'] == 'Output':
+            self.flowchart.removeTerminal(name)
+        elif d['type'] == 'Plot':
+            d['widget'].quit()
+            
+
+        if 'dock' in d:
+            self.removeDockWidget(d['dock'])
+            
+        del self.dockItems[name]
+        
+    def outputRenamed(self, term, oldName):
+        name = term.name()
+        d = self.dockItems[oldName]
+        del self.dockItems[oldName]
+        self.dockItems[name] = d
+        
+        item = d['listItem']
+        item.setText(name)
+        
+        
 
     def addOutput(self):
-        self.flowchart.addOutput()
+        term = self.flowchart.addOutput(renamable=True)
+        name = term.name()
+        item = ListItem(name, None)
+        self.dockItems[name] = {'type': 'Output', 'listItem': item, 'term': self.flowchart.internalTerminal(term)}
+        self.ui.dockList.addItem(item)
         
     def loadData(self):
         data = getManager().currentFile

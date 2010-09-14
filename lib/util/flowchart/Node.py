@@ -33,10 +33,10 @@ class Node(QtCore.QObject):
         return name2
         
     def addInput(self, name="Input", **args):
-        self.addTerminal(name, io='in', **args)
+        return self.addTerminal(name, io='in', **args)
         
     def addOutput(self, name="Output", **args):
-        self.addTerminal(name, io='out', **args)
+        return self.addTerminal(name, io='out', **args)
         
     def removeTerminal(self, name):
         #print "remove", name
@@ -50,6 +50,19 @@ class Node(QtCore.QObject):
         self.graphicsItem().updateTerminals()
         
         
+    def terminalRenamed(self, term, oldName, newName):
+        """Called after a terminal has been renamed"""
+        print "node", self, "handling rename.."
+        for d in [self.terminals, self._inputs, self._outputs]:
+            if oldName not in d:
+                continue
+            print "  got one"
+            d[newName] = d[oldName]
+            del d[oldName]
+            
+        self.graphicsItem().updateTerminals()
+        self.emit(QtCore.SIGNAL('terminalRenamed'), term, oldName)
+        
     def addTerminal(self, name, **opts):
         name = self.nextTerminalName(name)
         term = Terminal(self, name, **opts)
@@ -59,7 +72,7 @@ class Node(QtCore.QObject):
         elif term.isOutput():
             self._outputs[name] = term
         self.graphicsItem().updateTerminals()
-        return name, term
+        return term
         
     def inputs(self):
         return self._inputs
@@ -196,6 +209,9 @@ class Node(QtCore.QObject):
         return terms
         
     def restoreTerminals(self, state):
+        for name in self.terminals:
+            if name not in state:
+                self.removeTerminal(name)
         for name, opts in state.iteritems():
             if name in self.terminals:
                 continue
@@ -203,6 +219,7 @@ class Node(QtCore.QObject):
                 self.addTerminal(name, **opts)
             except:
                 printExc("Error restoring terminal:")
+                
         
     def clearTerminals(self):
         for t in self.terminals.itervalues():

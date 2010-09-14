@@ -5,7 +5,7 @@ import weakref
 from eq import *
 
 class Terminal:
-    def __init__(self, node, name, io, optional=False, multi=False, pos=None):
+    def __init__(self, node, name, io, optional=False, multi=False, pos=None, renamable=False):
         """Construct a new terminal. Optiona are:
         node     - the node to which this terminal belongs
         name     - string, the name of the terminal
@@ -23,8 +23,10 @@ class Terminal:
         self._multi = multi
         self._node = weakref.ref(node)
         self._name = name
+        self._renamable = renamable
         self._connections = {}
         self._graphicsItem = TerminalGraphicsItem(self)
+        
         if multi:
             self._value = {}  ## dictionary of terminal:value pairs.
         else:
@@ -83,7 +85,6 @@ class Terminal:
         self.node().disconnected(self, term)
         #self.node().update()
 
-
     def inputChanged(self, term):
         """Called whenever there is a change to the input value to this terminal.
         It may often be useful to override this function."""
@@ -115,6 +116,9 @@ class Terminal:
     def isOutput(self):
         return self._io == 'out'
         
+    def isRenamable(self):
+        return self._renamable
+
     def name(self):
         return self._name
         
@@ -225,6 +229,12 @@ class Terminal:
                 t.recolor(color, recurse=False)
 
         
+    def rename(self, name):
+        oldName = self._name
+        self._name = name
+        self.node().terminalRenamed(self, oldName, name)
+        self.graphicsItem().termRenamed(name)
+        
     def __repr__(self):
         return "<Terminal %s.%s>" % (str(self.node().name()), str(self.name()))
         
@@ -262,6 +272,28 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
         #self.setAcceptHoverEvents(True)
         self.newConnection = None
         self.setFiltersChildEvents(True)  ## to pick up mouse events on the rectitem
+        if self.term.isRenamable():
+            self.label.setTextInteractionFlags(QtCore.Qt.TextEditorInteraction)
+            self.label.focusOutEvent = self.labelFocusOut
+            self.label.keyPressEvent = self.labelKeyPress
+
+    def labelFocusOut(self, ev):
+        QtGui.QGraphicsTextItem.focusOutEvent(self.label, ev)
+        self.labelChanged()
+        
+    def labelKeyPress(self, ev):
+        if ev.key() == QtCore.Qt.Key_Enter or ev.key() == QtCore.Qt.Key_Return:
+            self.labelChanged()
+        else:
+            QtGui.QGraphicsTextItem.keyPressEvent(self.label, ev)
+        
+    def labelChanged(self):
+        newName = str(self.label.toPlainText())
+        if newName != self.term.name():
+            self.term.rename(newName)
+
+    def termRenamed(self, name):
+        self.label.setPlainText(name)
 
     def setBrush(self, brush):
         self.box.setBrush(brush)
