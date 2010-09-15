@@ -119,14 +119,26 @@ def expDecay(v, x):
     """Exponential decay function valued at x. Parameter vector is [amplitude, tau, yOffset]"""
     return v[0] * exp(-x / v[1]) + v[2]
 
+
+def pspInnerFunc(v, x):
+    return v[0] * (1.0 - exp(-x / v[2])) * exp(-x / v[3])
+    
 def pspFunc(v, x, risePower=1.0):
     """Function approximating a PSP shape. 
     v = [amplitude, x offset, rise tau, fall tau"""
+    ## determine scaling factor needed to achieve correct amplitude
+    v = [v[0], v[1], abs(v[2]), abs(v[3])]
+    maxX = v[2] * log(1 + (v[3]/v[2]))
+    maxVal = pspInnerFunc([1.0, 0, v[2], v[3]], maxX)
     out = empty(x.shape, x.dtype)
     mask = x > v[1]
     out[~mask] = 0
     xvals = x[mask]-v[1]
-    out[mask] = v[0]/0.05450016 * (1.0 - exp(-xvals/v[2]))**risePower  *  exp(-xvals/v[3])
+    try:
+        out[mask] = 1.0 / maxVal * pspInnerFunc(v, xvals)
+    except:
+        print v[2], v[3], maxVal, xvals.shape, xvals.dtype
+        raise
     return out
 
 def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateResult=False, resultXVals=None):

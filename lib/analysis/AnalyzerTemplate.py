@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'AnalyzerTemplate.ui'
 #
-# Created: Wed Sep 15 00:34:53 2010
+# Created: Wed Sep 15 03:08:15 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -15,6 +15,11 @@ class Ui_MainWindow(object):
         MainWindow.resize(721, 559)
         MainWindow.setDockNestingEnabled(True)
         self.centralwidget = QtGui.QWidget(MainWindow)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.centralwidget.sizePolicy().hasHeightForWidth())
+        self.centralwidget.setSizePolicy(sizePolicy)
         self.centralwidget.setObjectName("centralwidget")
         MainWindow.setCentralWidget(self.centralwidget)
         self.loaderDock = QtGui.QDockWidget(MainWindow)
@@ -63,6 +68,7 @@ class Ui_MainWindow(object):
         self.dataTree = QtGui.QTreeWidget(self.dockWidgetContents_2)
         self.dataTree.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
         self.dataTree.setObjectName("dataTree")
+        self.dataTree.headerItem().setText(0, "1")
         self.horizontalLayout.addWidget(self.dataTree)
         self.dataDock.setWidget(self.dockWidgetContents_2)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.dataDock)
@@ -100,6 +106,20 @@ class Ui_MainWindow(object):
         self.gridLayout.addWidget(self.removeDockBtn, 6, 1, 1, 1)
         self.dockWidget_3.setWidget(self.dockWidgetContents_3)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.dockWidget_3)
+        self.chartDock1 = QtGui.QDockWidget(MainWindow)
+        self.chartDock1.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable)
+        self.chartDock1.setObjectName("chartDock1")
+        self.dockWidgetContents_4 = QtGui.QWidget()
+        self.dockWidgetContents_4.setObjectName("dockWidgetContents_4")
+        self.chartDock1.setWidget(self.dockWidgetContents_4)
+        MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(8), self.chartDock1)
+        self.chartDock2 = QtGui.QDockWidget(MainWindow)
+        self.chartDock2.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable)
+        self.chartDock2.setObjectName("chartDock2")
+        self.dockWidgetContents_5 = QtGui.QWidget()
+        self.dockWidgetContents_5.setObjectName("dockWidgetContents_5")
+        self.chartDock2.setWidget(self.dockWidgetContents_5)
+        MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(8), self.chartDock2)
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)

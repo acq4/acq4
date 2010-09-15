@@ -18,8 +18,12 @@ class Analyzer(QtGui.QMainWindow):
         self.ui.setupUi(self)
         
         self.flowchart = Flowchart()
-        self.setCentralWidget(self.flowchart.widget())
+        self.ui.chartDock1.setWidget(self.flowchart.widget())
         self.flowchart.addInput("dataIn")
+        
+        self.flowchart2 = Flowchart()
+        self.ui.chartDock2.setWidget(self.flowchart2.widget())
+        self.flowchart2.addInput("dataIn")
         
         self.loader = DirTreeLoader(protoDir)
         self.loader.save = self.saveProtocol
@@ -162,16 +166,18 @@ class Analyzer(QtGui.QMainWindow):
         #print "set data", current.data
         
     def recomputeAll(self):
-        self.recompute(self.data)
-        
-    def recompute(self, data):
         inputs = []
         for d in data:
             if d in self.data:
                 inputs.extend([d[sd] for sd in d.subDirs() if sd[0] in '0123456789'])
             else:
                 inputs.append(d)
-                
+        self.recompute(inputs)
+        
+    def recomputeSelected(self):
+        self.recompute()
+        
+    def recompute(self, inputs):
         progressDlg = QtGui.QProgressDialog("Processing:", "Cancel", 0, len(inputs))
         progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         for i in range(len(inputs)):
@@ -184,6 +190,8 @@ class Analyzer(QtGui.QMainWindow):
                 break
             out = self.flowchart.process(dataIn=inp)
             self.results[inp] = out
+            
+        self.flowchart2.dataIn.setValue(self.results)
                     
     def saveAll(self):
         saveDir = self.data[0].name()

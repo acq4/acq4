@@ -15,7 +15,8 @@ class EventFitter(CtrlNode):
     nodeName = "EventFitter"
     uiTemplate = [
         ('plotFits', 'check', {'value': True}),
-        ('plotEvents', 'check', {'value': True}),
+        ('plotGuess', 'check', {'value': False}),
+        ('plotEvents', 'check', {'value': False}),
     ]
     
     def __init__(self, name):
@@ -33,7 +34,7 @@ class EventFitter(CtrlNode):
         nFields = len(events.dtype.fields)
         
         dtype = [(n, events[n].dtype) for n in events.dtype.names]
-        
+        dt = waveform.xvals(0)[1] - waveform.xvals(0)[0]
         output = np.empty(len(events), dtype=dtype + [('fitAmplitude', float), ('fitXOffset', float), ('fitRiseTau', float), ('fitDecayTau', float), ('fitError', float)])
         #output[:][:nFields] = events
         
@@ -48,9 +49,21 @@ class EventFitter(CtrlNode):
                 nextStart = events[i+1]['time']
                 if nextStart-start < sliceLen:
                     sliceLen = nextStart-start
+                    
+            guessLen = events[i]['len']*dt*3
+            
+            if tau is None:
+                tau = waveform._info[-1].get('expDeconvolveTau', None)
+            if tau is not None:
+                guessLen += tau*3
+            
+            sliceLen = min(guessLen, sliceLen)
             
             eventData = waveform['Time':start:start+sliceLen]
             times = eventData.xvals(0)
+            
+            
+            
             if tau is not None:
                 eventData = functions.expReconvolve(eventData, tau=tau)
 
@@ -62,8 +75,10 @@ class EventFitter(CtrlNode):
                 amp = mx
             else:
                 amp = mn
-            guess = [amp, times[0], 0.01, 0.01]
+            guess = [amp, times[0], sliceLen/5., sliceLen/3.]
+            print guess
             fit, junk, comp, err = functions.fitPsp(times, eventData.view(np.ndarray), guess, measureError=True)
+            print guess
             #print fit
             #self.events.append(eventData)
             output[i] = tuple(events[i]) + tuple(fit) + (err,)
@@ -72,6 +87,9 @@ class EventFitter(CtrlNode):
                 if self.ctrls['plotFits'].isChecked():
                     item = graphicsItems.PlotCurveItem(comp, times, pen=QtGui.QPen(QtGui.QColor(0, 0, 255)))
                     self.plotItems.append(item)
+                if self.ctrls['plotGuess'].isChecked():
+                    item2 = graphicsItems.PlotCurveItem(functions.pspFunc(guess, times), times, pen=QtGui.QPen(QtGui.QColor(255, 0, 0)))
+                    self.plotItems.append(item2)
                 if self.ctrls['plotEvents'].isChecked():
                     item2 = graphicsItems.PlotCurveItem(eventData, times, pen=QtGui.QPen(QtGui.QColor(0, 255, 0)))
                     self.plotItems.append(item2)
