@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'EventDetectionCtrlTemplate.ui'
 #
-# Created: Tue Sep 14 20:47:01 2010
+# Created: Wed Sep 15 00:34:53 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!

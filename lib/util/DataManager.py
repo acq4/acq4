@@ -177,7 +177,7 @@ class FileHandle(QtCore.QObject):
         return "<%s '%s' (0x%x)>" % (self.__class__.__name__, self.name(), self.__hash__())
 
     def __reduce__(self):
-        return (getHandle, self.name())
+        return (getHandle, (self.name(),))
 
     def name(self, relativeTo=None):
         #self.checkDeleted()

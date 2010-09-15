@@ -2,7 +2,7 @@
 from DataManagerTemplate import *
 from DataManagerModel import *
 from lib.modules.Module import *
-from DataManager import *
+from lib.util.DataManager import *
 import os, re, sys, time, sip
 from lib.util.debug import *
 

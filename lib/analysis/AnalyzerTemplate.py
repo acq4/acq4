@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'AnalyzerTemplate.ui'
 #
-# Created: Tue Sep 14 20:47:00 2010
+# Created: Wed Sep 15 00:34:53 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -40,6 +40,9 @@ class Ui_MainWindow(object):
         self.loadSequenceBtn = QtGui.QPushButton(self.dockWidgetContents_2)
         self.loadSequenceBtn.setObjectName("loadSequenceBtn")
         self.verticalLayout.addWidget(self.loadSequenceBtn)
+        self.loadSessionBtn = QtGui.QPushButton(self.dockWidgetContents_2)
+        self.loadSessionBtn.setObjectName("loadSessionBtn")
+        self.verticalLayout.addWidget(self.loadSessionBtn)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem)
         self.recompSelectedBtn = QtGui.QPushButton(self.dockWidgetContents_2)
@@ -107,10 +110,11 @@ class Ui_MainWindow(object):
         self.dataDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Data", None, QtGui.QApplication.UnicodeUTF8))
         self.loadDataBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Data", None, QtGui.QApplication.UnicodeUTF8))
         self.loadSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Sequence", None, QtGui.QApplication.UnicodeUTF8))
+        self.loadSessionBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Session", None, QtGui.QApplication.UnicodeUTF8))
         self.recompSelectedBtn.setText(QtGui.QApplication.translate("MainWindow", "Recompute Selected", None, QtGui.QApplication.UnicodeUTF8))
         self.recompAllBtn.setText(QtGui.QApplication.translate("MainWindow", "Recompute All", None, QtGui.QApplication.UnicodeUTF8))
         self.saveSelectedBtn.setText(QtGui.QApplication.translate("MainWindow", "Save Selected", None, QtGui.QApplication.UnicodeUTF8))
-        self.saveAllBtn.setText(QtGui.QApplication.translate("MainWindow", "Save All", None, QtGui.QApplication.UnicodeUTF8))
+        self.saveAllBtn.setText(QtGui.QApplication.translate("MainWindow", "Save Session", None, QtGui.QApplication.UnicodeUTF8))
         self.dockWidget_3.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Components", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("MainWindow", "Add:", None, QtGui.QApplication.UnicodeUTF8))
         self.addOutputBtn.setText(QtGui.QApplication.translate("MainWindow", "Output", None, QtGui.QApplication.UnicodeUTF8))

@@ -33,7 +33,9 @@ class Analyzer(QtGui.QMainWindow):
         
         QtCore.QObject.connect(self.ui.loadDataBtn, QtCore.SIGNAL("clicked()"), self.loadData)
         QtCore.QObject.connect(self.ui.loadSequenceBtn, QtCore.SIGNAL("clicked()"), self.loadSequence)
+        QtCore.QObject.connect(self.ui.loadSessionBtn, QtCore.SIGNAL("clicked()"), self.loadSession)
         QtCore.QObject.connect(self.ui.recompAllBtn, QtCore.SIGNAL("clicked()"), self.recomputeAll)
+        QtCore.QObject.connect(self.ui.saveAllBtn, QtCore.SIGNAL("clicked()"), self.saveAll)
         QtCore.QObject.connect(self.ui.addOutputBtn, QtCore.SIGNAL("clicked()"), self.addOutput)
         QtCore.QObject.connect(self.ui.addPlotBtn, QtCore.SIGNAL("clicked()"), self.addPlot)
         QtCore.QObject.connect(self.ui.addCanvasBtn, QtCore.SIGNAL("clicked()"), self.addCanvas)
@@ -73,7 +75,9 @@ class Analyzer(QtGui.QMainWindow):
     def loadProtocol(self, handle):
         self.newProtocol()
         state = configfile.readConfigFile(handle.name())
+        return self.restoreProtocol(state)
         
+    def restoreProtocol(self, state):
         ## restore flowchart
         self.flowchart.restoreState(state['flowchart'])
         
@@ -129,18 +133,28 @@ class Analyzer(QtGui.QMainWindow):
         data = getManager().currentFile
         self.flowchart.setInput(dataIn=data)
         
-    def loadSequence(self):
-        data = getManager().currentFile
+    def loadSequence(self, data=None):
+        if data is None:
+            data = getManager().currentFile
         item = QtGui.QTreeWidgetItem([data.shortName()])
         item.data = data
         self.ui.dataTree.addTopLevelItem(item)
         self.data.append(data)
-        for sub in data.ls():
+        for sub in data.subDirs():
+            try:
+                int(sub)
+            except:
+                continue
             subd = data[sub]
             i2 = QtGui.QTreeWidgetItem([sub])
             i2.data = subd
             item.addChild(i2)
+
+    def clearData(self):
+        self.ui.dataTree.clear()
+        self.data = []
         
+
     def dataSelected(self, current, old):
         if current.data in self.data:
             return
@@ -154,7 +168,7 @@ class Analyzer(QtGui.QMainWindow):
         inputs = []
         for d in data:
             if d in self.data:
-                inputs.extend([d[sd] for sd in d.ls()])
+                inputs.extend([d[sd] for sd in d.subDirs() if sd[0] in '0123456789'])
             else:
                 inputs.append(d)
                 
@@ -185,6 +199,18 @@ class Analyzer(QtGui.QMainWindow):
         state['data'] = self.data
         state['results'] = self.results
         pickle.dump(state, open(saveFile, 'w'))
+        
+    def loadSession(self):
+        fh = open(getManager().currentFile.name())
+        state = pickle.load(fh)
+        fh.close()
+        
+        self.restoreProtocol(state['program'])
+        self.clearData()
+        for d in state['data']:
+            self.loadSequence(d)
+        
+        self.results = state['results']
         
         
     def addPlot(self, name=None, state=None):
