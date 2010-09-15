@@ -7,6 +7,8 @@ from PyQt4 import QtGui, QtCore
 from DirTreeWidget import DirTreeLoader
 from pyqtgraph.PlotWidget import *
 import configfile
+import pickle
+from DataManager import getHandle
 
 class Analyzer(QtGui.QMainWindow):
     def __init__(self, protoDir, parent=None):
@@ -26,10 +28,12 @@ class Analyzer(QtGui.QMainWindow):
         self.ui.loaderDock.setWidget(self.loader)
         
         self.dockItems = {}
-        self.data = []
+        self.data = []   ## Raw data loaded
+        self.results = {}  ## Processed output
         
         QtCore.QObject.connect(self.ui.loadDataBtn, QtCore.SIGNAL("clicked()"), self.loadData)
         QtCore.QObject.connect(self.ui.loadSequenceBtn, QtCore.SIGNAL("clicked()"), self.loadSequence)
+        QtCore.QObject.connect(self.ui.recompAllBtn, QtCore.SIGNAL("clicked()"), self.recomputeAll)
         QtCore.QObject.connect(self.ui.addOutputBtn, QtCore.SIGNAL("clicked()"), self.addOutput)
         QtCore.QObject.connect(self.ui.addPlotBtn, QtCore.SIGNAL("clicked()"), self.addPlot)
         QtCore.QObject.connect(self.ui.addCanvasBtn, QtCore.SIGNAL("clicked()"), self.addCanvas)
@@ -42,12 +46,16 @@ class Analyzer(QtGui.QMainWindow):
         self.resize(1200,800)
         self.show()
 
-    def saveProtocol(self, handle):
+    def dumpProtocol(self):
         state = {'docks': {}}
         for name, d in self.dockItems.iteritems():
             state['docks'][name] = {'type': d['type'], 'state': d['widget'].saveState()}
         state['window'] = str(self.saveState().toPercentEncoding())
         state['flowchart'] = self.flowchart.saveState()
+        return state
+
+    def saveProtocol(self, handle):
+        state = self.dumpProtocol()
         configfile.writeConfigFile(state, handle.name())
         return True
         
@@ -76,7 +84,6 @@ class Analyzer(QtGui.QMainWindow):
         
         ## restore dock positions
         self.restoreState(QtCore.QByteArray.fromPercentEncoding(state['window']))
-        
         
         return True
         
@@ -139,6 +146,45 @@ class Analyzer(QtGui.QMainWindow):
             return
         self.flowchart.setInput(dataIn=current.data)
         #print "set data", current.data
+        
+    def recomputeAll(self):
+        self.recompute(self.data)
+        
+    def recompute(self, data):
+        inputs = []
+        for d in data:
+            if d in self.data:
+                inputs.extend([d[sd] for sd in d.ls()])
+            else:
+                inputs.append(d)
+                
+        progressDlg = QtGui.QProgressDialog("Processing:", "Cancel", 0, len(inputs))
+        progressDlg.setWindowModality(QtCore.Qt.WindowModal)
+        for i in range(len(inputs)):
+            inp = inputs[i]
+            progressDlg.setLabelText("Processing: " + inp.name())
+            progressDlg.setValue(i)
+            QtGui.QApplication.instance().processEvents()
+            if progressDlg.wasCanceled():
+                progressDlg.setValue(len(inputs))
+                break
+            out = self.flowchart.process(dataIn=inp)
+            self.results[inp] = out
+                    
+    def saveAll(self):
+        saveDir = self.data[0].name()
+        proto = self.loader.currentFile
+        if proto is None:
+            protoName = "Analysis.pk"
+        else:
+            protoName = proto.shortName() + '.pk'
+        
+        saveFile = QtGui.QFileDialog.getSaveFileName(None, "Save session", os.path.join(saveDir, protoName))
+        state = {}
+        state['program'] = self.dumpProtocol()
+        state['data'] = self.data
+        state['results'] = self.results
+        pickle.dump(state, open(saveFile, 'w'))
         
         
     def addPlot(self, name=None, state=None):

@@ -258,7 +258,7 @@ class EvalNode(Node):
             self.lastText = text
             self.update()
         
-    def process(self, display=False, **args):
+    def process(self, display=True, **args):
         l = locals()
         l.update(args)
         text = str(self.text.toPlainText()).replace('\n', ' ')

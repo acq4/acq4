@@ -26,8 +26,13 @@ from debug import *
 def abspath(fileName):
     """Return an absolute path string which is guaranteed to uniquely identify a file."""
     return os.path.normcase(os.path.abspath(fileName))
-    
 
+
+def getHandle(fileName):
+    inst = DataManager.INSTANCE
+    if inst is None:
+        raise Exception('No DataManger created yet!')
+    return inst.getHandle(fileName)
 
 
 class DataManager(QtCore.QObject):
@@ -35,13 +40,13 @@ class DataManager(QtCore.QObject):
     This class is (supposedly) thread-safe.
     """
     
-    CREATED = False
+    INSTANCE = None
     
     def __init__(self):
         QtCore.QObject.__init__(self)
-        if DataManager.CREATED:
+        if DataManager.INSTANCE is not None:
             raise Exception("Attempted to create more than one DataManager!")
-        DataManager.CREATED = True
+        DataManager.INSTANCE = self
         self.cache = {}
         #self.lock = threading.RLock()
         self.lock = Mutex(QtCore.QMutex.Recursive)
@@ -170,7 +175,10 @@ class FileHandle(QtCore.QObject):
         
     def __repr__(self):
         return "<%s '%s' (0x%x)>" % (self.__class__.__name__, self.name(), self.__hash__())
-        
+
+    def __reduce__(self):
+        return (getHandle, self.name())
+
     def name(self, relativeTo=None):
         #self.checkDeleted()
         with self.lock:

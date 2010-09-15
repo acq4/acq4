@@ -190,17 +190,18 @@ class Flowchart(Node):
                 if node is self.outputNode:
                     ret = args  ## we now have the return value, but must keep processing in case there are other endpoint nodes in the chart
                 else:
-                    result = node.process(**args)
+                    result = node.process(display=False, **args)
                     for out in outs:
                         #print "    Output:", out, out.name()
                         #print out.name()
                         try:
                             data[out] = result[out.name()]
                         except:
-                            #print out, out.name()
+                            print out, out.name()
                             raise
             elif c == 'd':   ## delete a terminal result (no longer needed; may be holding a lot of memory)
-                del data[arg]
+                if arg in data:
+                    del data[arg]
 
         return ret
         

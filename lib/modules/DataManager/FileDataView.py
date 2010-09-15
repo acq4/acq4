@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from PyQt4 import QtCore, QtGui
-from lib.DataManager import *
+from DataManager import *
 import lib.Manager as Manager
 import sip
 from lib.util.pyqtgraph.MultiPlotWidget import MultiPlotWidget

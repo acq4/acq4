@@ -72,6 +72,8 @@ class EventListPlotter(Node):
         self.items = {}
         
     def process(self, events, display=True):
+        if not display:
+            return {'plot': None}
         conn = self['plot'].connections()
         if len(events) > 200:
             events = events[:200]

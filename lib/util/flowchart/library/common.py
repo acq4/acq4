@@ -84,7 +84,7 @@ class CtrlNode(Node):
     def changed(self):
         self.update()
 
-    def process(self, In):
+    def process(self, In, display=True):
         return {'Out': self.processData(In)}
     
     def saveState(self):
