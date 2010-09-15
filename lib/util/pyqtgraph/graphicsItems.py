@@ -338,7 +338,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem):
     def getPixmap(self):
         return self.pixmap.copy()
 
-        
+
 
 class PlotCurveItem(GraphicsObject):
     """Class representing a single plot curve."""
@@ -647,7 +647,78 @@ class PlotCurveItem(GraphicsObject):
         self.path = None
         #del self.xData, self.yData, self.xDisp, self.yDisp, self.path
         
+
+class ScatterPlotItem(QtGui.QGraphicsItem):
+    def __init__(self, spots=None, pxMode=True, pen=None, brush=None, size=5):
+        QtGui.QGraphicsItem.__init__(self)
+        self.spots = []
         
+        if brush is None:
+            brush = QtGui.QBrush(QtGui.QColor(100, 100, 150))
+        self.brush = brush
+        
+        if pen is None:
+            pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
+        self.pen = pen
+        
+        self.size = size
+        
+        self.pxMode = pxMode
+        if spots is not None:
+            self.setSpots(spots)
+
+    def clear(self):
+        self.spots = []
+        
+    def setSpots(self, spots):
+        self.clear()
+        self.addSpots(spots)
+
+    def addSpots(self, spots):
+        for s in spots:
+            pos = Point(s['pos'])
+            size = s.get('size', self.size)
+            brush = s.get('brush', self.brush)
+            pen = s.get('pen', self.pen)
+            item = self.mkSpot(pos, size, self.pxMode, brush, pen)
+
+    def mkSpot(self, pos, size, pxMode, brush, pen):
+        item = SpotItem(size, pxMode, brush, pen)
+        item.setParentItem(self)
+        item.setPos(pos)
+        return item
+        
+        
+
+
+
+class SpotItem(QtGui.QGraphicsItem):
+    def __init__(self, size, pxMode, brush, pen):
+        QtGui.QGraphicsItem.__init__(self)
+        if pxMode:
+            self.setFlags(self.flags() | self.ItemIgnoresTransformations)
+            #self.setCacheMode(self.DeviceCoordinateCache)  ## causes crash on linux
+        self.pen = pen
+        self.brush = brush
+        self.path = QtGui.QPainterPath()
+        s2 = size/2.
+        self.path.addEllipse(QtCore.QRectF(-s2, -s2, size, size))
+        
+    def boundingRect(self):
+        return self.path.boundingRect()
+        
+    def shape(self):
+        return self.path
+        
+    def paint(self, p, *opts):
+        p.setPen(self.pen)
+        p.setBrush(self.brush)
+        p.drawPath(self.path)
+        
+        
+        
+        
+
 class ROIPlotItem(PlotCurveItem):
     def __init__(self, roi, data, img, axes=(0,1), xVals=None, color=None):
         self.roi = roi

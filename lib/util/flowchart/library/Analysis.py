@@ -76,9 +76,7 @@ class EventFitter(CtrlNode):
             else:
                 amp = mn
             guess = [amp, times[0], sliceLen/5., sliceLen/3.]
-            print guess
             fit, junk, comp, err = functions.fitPsp(times, eventData.view(np.ndarray), guess, measureError=True)
-            print guess
             #print fit
             #self.events.append(eventData)
             output[i] = tuple(events[i]) + tuple(fit) + (err,)

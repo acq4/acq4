@@ -175,6 +175,9 @@ class Flowchart(Node):
             if c == 'p':     ## Process a single node
                 #print "process:", arg
                 node = arg
+                if node is self.inputNode:
+                    continue  ## input node has already been processed.
+                
                 outs = node.outputs().values()
                 ins = node.inputs().values()
                 #print "  ", outs, ins
@@ -190,7 +193,11 @@ class Flowchart(Node):
                 if node is self.outputNode:
                     ret = args  ## we now have the return value, but must keep processing in case there are other endpoint nodes in the chart
                 else:
-                    result = node.process(display=False, **args)
+                    try:
+                        result = node.process(display=False, **args)
+                    except:
+                        print "Error processing node %s. Args are: %s" % (str(node), str(args))
+                        raise
                     for out in outs:
                         #print "    Output:", out, out.name()
                         #print out.name()

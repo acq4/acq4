@@ -18,12 +18,15 @@ class Analyzer(QtGui.QMainWindow):
         self.ui.setupUi(self)
         
         self.flowchart = Flowchart()
-        self.ui.chartDock1.setWidget(self.flowchart.widget())
+        self.setCentralWidget(self.flowchart.widget())
+        #self.ui.chartDock1.setWidget(self.flowchart.widget())
         self.flowchart.addInput("dataIn")
-        
-        self.flowchart2 = Flowchart()
-        self.ui.chartDock2.setWidget(self.flowchart2.widget())
-        self.flowchart2.addInput("dataIn")
+
+        self.ui.dataSourceCombo.setTypes(['dataSource'])
+
+        #self.flowchart2 = Flowchart()
+        #self.ui.chartDock2.setWidget(self.flowchart2.widget())
+        #self.flowchart2.addInput("dataIn")
         
         self.loader = DirTreeLoader(protoDir)
         self.loader.save = self.saveProtocol
@@ -35,9 +38,13 @@ class Analyzer(QtGui.QMainWindow):
         self.data = []   ## Raw data loaded
         self.results = {}  ## Processed output
         
+        self.dataSource = None
+        
+        QtCore.QObject.connect(self.ui.dataSourceCombo, QtCore.SIGNAL("currentIndexChanged(int)"), self.setDataSource)
         QtCore.QObject.connect(self.ui.loadDataBtn, QtCore.SIGNAL("clicked()"), self.loadData)
         QtCore.QObject.connect(self.ui.loadSequenceBtn, QtCore.SIGNAL("clicked()"), self.loadSequence)
         QtCore.QObject.connect(self.ui.loadSessionBtn, QtCore.SIGNAL("clicked()"), self.loadSession)
+        QtCore.QObject.connect(self.ui.recompSelectedBtn, QtCore.SIGNAL("clicked()"), self.recomputeSelected)
         QtCore.QObject.connect(self.ui.recompAllBtn, QtCore.SIGNAL("clicked()"), self.recomputeAll)
         QtCore.QObject.connect(self.ui.saveAllBtn, QtCore.SIGNAL("clicked()"), self.saveAll)
         QtCore.QObject.connect(self.ui.addOutputBtn, QtCore.SIGNAL("clicked()"), self.addOutput)
@@ -48,10 +55,26 @@ class Analyzer(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.dataTree, QtCore.SIGNAL("currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)"), self.dataSelected)
 
         QtCore.QObject.connect(self.flowchart.outputNode, QtCore.SIGNAL("terminalRenamed"), self.outputRenamed)
-
+        i = 0
+        while True:
+            name = "Analyzer-%d"%i
+            if getManager().declareInterface(name, ['dataSource'], self):
+                break
+            i += 1
+        self.setWindowTitle(name)
+        
+        
         self.resize(1200,800)
         self.show()
-
+        
+    def setDataSource(self):
+        if self.dataSource is not None:
+            QtCore.QObject.disconnect(source, QtCore.SIGNAL("resultsChanged"), self.dataSourceChanged)
+        source = self.ui.dataSourceCombo.getSelectedObj()
+        self.dataSource = source
+        QtCore.QObject.connect(source, QtCore.SIGNAL("resultsChanged"), self.dataSourceChanged)
+        print "connected to", source
+    
     def dumpProtocol(self):
         state = {'docks': {}}
         for name, d in self.dockItems.iteritems():
@@ -154,6 +177,11 @@ class Analyzer(QtGui.QMainWindow):
             i2.data = subd
             item.addChild(i2)
 
+    def dataSourceChanged(self):
+        print "data source changed!"
+        result = self.dataSource.results
+        self.flowchart.setInput(dataIn=result)
+
     def clearData(self):
         self.ui.dataTree.clear()
         self.data = []
@@ -175,7 +203,8 @@ class Analyzer(QtGui.QMainWindow):
         self.recompute(inputs)
         
     def recomputeSelected(self):
-        self.recompute()
+        items = self.ui.dataTree.selectedItems()
+        self.recompute([i.data for i in items])
         
     def recompute(self, inputs):
         progressDlg = QtGui.QProgressDialog("Processing:", "Cancel", 0, len(inputs))
@@ -191,7 +220,8 @@ class Analyzer(QtGui.QMainWindow):
             out = self.flowchart.process(dataIn=inp)
             self.results[inp] = out
             
-        self.flowchart2.dataIn.setValue(self.results)
+        self.emit(QtCore.SIGNAL('resultsChanged'))
+        #self.flowchart2.dataIn.setValue(self.results)
                     
     def saveAll(self):
         saveDir = self.data[0].name()

@@ -71,7 +71,8 @@ dm = Manager(config, sys.argv[1:])
 from lib.analysis.analyzer import *
 d = os.path.dirname(os.path.abspath(__file__))
 dh = dm.dirHandle(os.path.join(d, 'lib', 'analysis', 'protocols'))
-w = Analyzer(dh)
+w1 = Analyzer(dh)
+w2 = Analyzer(dh)
 
 
 ## Start Qt event loop unless running in interactive mode.

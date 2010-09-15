@@ -75,6 +75,15 @@
         </widget>
        </item>
        <item>
+        <widget class="InterfaceCombo" name="dataSourceCombo">
+         <item>
+          <property name="text">
+           <string>Select source..</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item>
         <spacer name="verticalSpacer_3">
          <property name="orientation">
           <enum>Qt::Vertical</enum>
@@ -224,25 +233,14 @@
     </layout>
    </widget>
   </widget>
-  <widget class="QDockWidget" name="chartDock1">
-   <property name="features">
-    <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable</set>
-   </property>
-   <attribute name="dockWidgetArea">
-    <number>8</number>
-   </attribute>
-   <widget class="QWidget" name="dockWidgetContents_4"/>
-  </widget>
-  <widget class="QDockWidget" name="chartDock2">
-   <property name="features">
-    <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable</set>
-   </property>
-   <attribute name="dockWidgetArea">
-    <number>8</number>
-   </attribute>
-   <widget class="QWidget" name="dockWidgetContents_5"/>
-  </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>InterfaceCombo</class>
+   <extends>QComboBox</extends>
+   <header>InterfaceCombo</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'AnalyzerTemplate.ui'
 #
-# Created: Wed Sep 15 03:08:15 2010
+# Created: Wed Sep 15 11:28:38 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -48,6 +48,10 @@ class Ui_MainWindow(object):
         self.loadSessionBtn = QtGui.QPushButton(self.dockWidgetContents_2)
         self.loadSessionBtn.setObjectName("loadSessionBtn")
         self.verticalLayout.addWidget(self.loadSessionBtn)
+        self.dataSourceCombo = InterfaceCombo(self.dockWidgetContents_2)
+        self.dataSourceCombo.setObjectName("dataSourceCombo")
+        self.dataSourceCombo.addItem("")
+        self.verticalLayout.addWidget(self.dataSourceCombo)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem)
         self.recompSelectedBtn = QtGui.QPushButton(self.dockWidgetContents_2)
@@ -106,20 +110,6 @@ class Ui_MainWindow(object):
         self.gridLayout.addWidget(self.removeDockBtn, 6, 1, 1, 1)
         self.dockWidget_3.setWidget(self.dockWidgetContents_3)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.dockWidget_3)
-        self.chartDock1 = QtGui.QDockWidget(MainWindow)
-        self.chartDock1.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable)
-        self.chartDock1.setObjectName("chartDock1")
-        self.dockWidgetContents_4 = QtGui.QWidget()
-        self.dockWidgetContents_4.setObjectName("dockWidgetContents_4")
-        self.chartDock1.setWidget(self.dockWidgetContents_4)
-        MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(8), self.chartDock1)
-        self.chartDock2 = QtGui.QDockWidget(MainWindow)
-        self.chartDock2.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable)
-        self.chartDock2.setObjectName("chartDock2")
-        self.dockWidgetContents_5 = QtGui.QWidget()
-        self.dockWidgetContents_5.setObjectName("dockWidgetContents_5")
-        self.chartDock2.setWidget(self.dockWidgetContents_5)
-        MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(8), self.chartDock2)
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
@@ -131,6 +121,7 @@ class Ui_MainWindow(object):
         self.loadDataBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Data", None, QtGui.QApplication.UnicodeUTF8))
         self.loadSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Sequence", None, QtGui.QApplication.UnicodeUTF8))
         self.loadSessionBtn.setText(QtGui.QApplication.translate("MainWindow", "Load Session", None, QtGui.QApplication.UnicodeUTF8))
+        self.dataSourceCombo.setItemText(0, QtGui.QApplication.translate("MainWindow", "Select source..", None, QtGui.QApplication.UnicodeUTF8))
         self.recompSelectedBtn.setText(QtGui.QApplication.translate("MainWindow", "Recompute Selected", None, QtGui.QApplication.UnicodeUTF8))
         self.recompAllBtn.setText(QtGui.QApplication.translate("MainWindow", "Recompute All", None, QtGui.QApplication.UnicodeUTF8))
         self.saveSelectedBtn.setText(QtGui.QApplication.translate("MainWindow", "Save Selected", None, QtGui.QApplication.UnicodeUTF8))
@@ -143,3 +134,4 @@ class Ui_MainWindow(object):
         self.addTableBtn.setText(QtGui.QApplication.translate("MainWindow", "Table", None, QtGui.QApplication.UnicodeUTF8))
         self.removeDockBtn.setText(QtGui.QApplication.translate("MainWindow", "Remove", None, QtGui.QApplication.UnicodeUTF8))
 
+from InterfaceCombo import InterfaceCombo
