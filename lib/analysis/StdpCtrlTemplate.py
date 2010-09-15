@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'StdpCtrlTemplate.ui'
 #
-# Created: Sat Sep 11 17:34:53 2010
+# Created: Tue Sep 14 20:47:01 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!

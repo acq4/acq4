@@ -26,13 +26,16 @@ class Analyzer(QtGui.QMainWindow):
         self.ui.loaderDock.setWidget(self.loader)
         
         self.dockItems = {}
+        self.data = []
         
         QtCore.QObject.connect(self.ui.loadDataBtn, QtCore.SIGNAL("clicked()"), self.loadData)
+        QtCore.QObject.connect(self.ui.loadSequenceBtn, QtCore.SIGNAL("clicked()"), self.loadSequence)
         QtCore.QObject.connect(self.ui.addOutputBtn, QtCore.SIGNAL("clicked()"), self.addOutput)
         QtCore.QObject.connect(self.ui.addPlotBtn, QtCore.SIGNAL("clicked()"), self.addPlot)
         QtCore.QObject.connect(self.ui.addCanvasBtn, QtCore.SIGNAL("clicked()"), self.addCanvas)
         QtCore.QObject.connect(self.ui.addTableBtn, QtCore.SIGNAL("clicked()"), self.addTable)
         QtCore.QObject.connect(self.ui.removeDockBtn, QtCore.SIGNAL("clicked()"), self.removeSelected)
+        QtCore.QObject.connect(self.ui.dataTree, QtCore.SIGNAL("currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)"), self.dataSelected)
 
         QtCore.QObject.connect(self.flowchart.outputNode, QtCore.SIGNAL("terminalRenamed"), self.outputRenamed)
 
@@ -90,7 +93,7 @@ class Analyzer(QtGui.QMainWindow):
             self.flowchart.removeTerminal(name)
         elif d['type'] == 'Plot':
             d['widget'].quit()
-            
+            self.flowchart.removeNode(d['node'])
 
         if 'dock' in d:
             self.removeDockWidget(d['dock'])
@@ -119,6 +122,25 @@ class Analyzer(QtGui.QMainWindow):
         data = getManager().currentFile
         self.flowchart.setInput(dataIn=data)
         
+    def loadSequence(self):
+        data = getManager().currentFile
+        item = QtGui.QTreeWidgetItem([data.shortName()])
+        item.data = data
+        self.ui.dataTree.addTopLevelItem(item)
+        self.data.append(data)
+        for sub in data.ls():
+            subd = data[sub]
+            i2 = QtGui.QTreeWidgetItem([sub])
+            i2.data = subd
+            item.addChild(i2)
+        
+    def dataSelected(self, current, old):
+        if current.data in self.data:
+            return
+        self.flowchart.setInput(dataIn=current.data)
+        #print "set data", current.data
+        
+        
     def addPlot(self, name=None, state=None):
         if name is None:
             name = 'Plot'
@@ -137,12 +159,7 @@ class Analyzer(QtGui.QMainWindow):
         
         if state is not None:
             p.restoreState(state)
-        
-        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, d)
-        item = ListItem(name, d)
-        self.dockItems[name] = {'type': 'Plot', 'listItem': item, 'dock': d, 'widget': p}
-        self.ui.dockList.addItem(item)
-        
+
         nodes = self.flowchart.nodes()
         #print name, nodes
         if name in nodes:
@@ -150,6 +167,12 @@ class Analyzer(QtGui.QMainWindow):
         else:
             node = self.flowchart.createNode('PlotWidget', name=name)
         node.setPlot(p)
+
+        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, d)
+        item = ListItem(name, d)
+        self.dockItems[name] = {'type': 'Plot', 'listItem': item, 'dock': d, 'widget': p, 'node': node}
+        self.ui.dockList.addItem(item)
+        
 
     def addCanvas(self):
         pass

@@ -49,14 +49,14 @@ class Node(QtCore.QObject):
             del self._outputs[name]
         self.graphicsItem().updateTerminals()
         
-        
-    def terminalRenamed(self, term, oldName, newName):
+    def terminalRenamed(self, term, oldName):
         """Called after a terminal has been renamed"""
-        print "node", self, "handling rename.."
+        newName = term.name()
+        #print "node", self, "handling rename..", newName, oldName
         for d in [self.terminals, self._inputs, self._outputs]:
             if oldName not in d:
                 continue
-            print "  got one"
+            #print "  got one"
             d[newName] = d[oldName]
             del d[oldName]
             

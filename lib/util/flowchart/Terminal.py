@@ -232,7 +232,7 @@ class Terminal:
     def rename(self, name):
         oldName = self._name
         self._name = name
-        self.node().terminalRenamed(self, oldName, name)
+        self.node().terminalRenamed(self, oldName)
         self.graphicsItem().termRenamed(name)
         
     def __repr__(self):

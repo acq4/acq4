@@ -59,6 +59,9 @@ class Flowchart(Node):
         self.addNode(self.outputNode, 'Output', [300, 0])
             
         QtCore.QObject.connect(self.outputNode, QtCore.SIGNAL('outputChanged'), self.outputChanged)
+        QtCore.QObject.connect(self.outputNode, QtCore.SIGNAL('terminalRenamed'), self.internalTerminalRenamed)
+        QtCore.QObject.connect(self.inputNode, QtCore.SIGNAL('terminalRenamed'), self.internalTerminalRenamed)
+        
             
         for name, opts in terminals.iteritems():
             self.addTerminal(name, **opts)
@@ -80,17 +83,22 @@ class Flowchart(Node):
         return term
 
     def removeTerminal(self, name):
-        print "remove:", name
+        #print "remove:", name
         term = self[name]
         inTerm = self.internalTerminal(term)
         Node.removeTerminal(self, name)
         inTerm.node().removeTerminal(inTerm.name())
         
-    def terminalRenamed(self, term, oldName, newName):
-        print "flowchart term renamed"
-        Node.terminalRenamed(self, term, oldName, newName)
-        print "renaming internal nodes.."
-        for n in [self.intputNode, self.outputNode]:
+    def internalTerminalRenamed(self, term, oldName):
+        self[oldName].rename(term.name())
+        
+    def terminalRenamed(self, term, oldName):
+        newName = term.name()
+        #print "flowchart rename", newName, oldName
+        #print self.terminals
+        Node.terminalRenamed(self, self[oldName], oldName)
+        #print self.terminals
+        for n in [self.inputNode, self.outputNode]:
             if oldName in n.terminals:
                 n[oldName].rename(newName)
 
@@ -116,6 +124,9 @@ class Flowchart(Node):
         self._nodes[name] = node
         self.widget().addNode(node)
         QtCore.QObject.connect(node, QtCore.SIGNAL('closed'), self.nodeClosed)
+        
+    def removeNode(self, node):
+        node.close()
         
     def nodeClosed(self, node):
         del self._nodes[node.name()]
@@ -186,7 +197,7 @@ class Flowchart(Node):
                         try:
                             data[out] = result[out.name()]
                         except:
-                            print out, out.name()
+                            #print out, out.name()
                             raise
             elif c == 'd':   ## delete a terminal result (no longer needed; may be holding a lot of memory)
                 del data[arg]

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'AnalyzerTemplate.ui'
 #
-# Created: Sat Sep 11 17:34:52 2010
+# Created: Tue Sep 14 20:47:00 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -58,7 +58,7 @@ class Ui_MainWindow(object):
         self.verticalLayout.addWidget(self.saveAllBtn)
         self.horizontalLayout.addLayout(self.verticalLayout)
         self.dataTree = QtGui.QTreeWidget(self.dockWidgetContents_2)
-        self.dataTree.setSelectionMode(QtGui.QAbstractItemView.MultiSelection)
+        self.dataTree.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
         self.dataTree.setObjectName("dataTree")
         self.horizontalLayout.addWidget(self.dataTree)
         self.dataDock.setWidget(self.dockWidgetContents_2)
