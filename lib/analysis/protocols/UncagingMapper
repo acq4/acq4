@@ -1,0 +1,53 @@
+docks:
+    Plot_000:
+        state:
+            xAutoRadio: True
+            maxTracesCheck: False
+            downsampleSpin: 1
+            xLinkCombo: ''
+            xMinText: '0'
+            groupBox_2: False
+            xMouseCheck: True
+            yAutoPercentSpin: 100
+            manualDecimateRadio: True
+            xManualRadio: False
+            maxTracesSpin: 0
+            autoDecimateRadio: False
+            xAutoPercentSpin: 100
+            alphaSlider: 1000
+            yMaxText: '0'
+            paramList:
+            yLinkCombo: ''
+            yManualRadio: False
+            autoPointsCheck: True
+            decimateGroup: True
+            yAutoRadio: True
+            yLogCheck: False
+            yMouseCheck: True
+            groupBox: False
+            gridGroup: False
+            pointsGroup: True
+            yMinText: '0'
+            gridAlphaSlider: 70
+            averageGroup: False
+            autoAlphaCheck: False
+            alphaGroup: True
+            xMaxText: '0'
+            powerSpectrumGroup: False
+            forgetTracesCheck: False
+            xLogCheck: False
+        type: 'Plot'
+window: '%00%00%00%FF%00%00%00%00%FD%00%00%00%01%00%00%00%03%00%00%05%00%00%00%01%C0%FC%01%00%00%00%02%FC%00%00%00%00%00%00%01%23%00%00%00%F6%00%FF%FF%FF%FC%02%00%00%00%02%FC%00%00%02%2C%00%00%00%D8%00%00%00%D8%01%00%00%1C%FA%00%00%00%01%01%00%00%00%02%FB%00%00%00%18%00d%00o%00c%00k%00W%00i%00d%00g%00e%00t%00_%003%01%00%00%00%00%FF%FF%FF%FF%00%00%00%A4%01%00%00%05%FB%00%00%00%14%00l%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01%16%00%00%00%EA%01%00%00%05%FB%00%00%00%10%00d%00a%00t%00a%00D%00o%00c%00k%01%00%00%03%07%00%00%00%E5%00%00%00%E5%01%00%00%05%FB%00%00%00%10%00P%00l%00o%00t%00_%000%000%000%01%00%00%01%26%00%00%03%DA%00%00%00M%01%00%00%05%00%00%05%00%00%00%02%29%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+flowchart:
+    pos: (0.0, 0.0)
+    connects: [('Input', 'dataIn', 'PythonEval.0', 'input')]
+    terminals:
+        dataIn:
+            multi: False
+            optional: False
+            io: 'in'
+    inputNode:
+        pos: (-150.0, 0.0)
+    nodes: [{'state': {'pos': (184.0, 1.0)}, 'pos': (184.0, 1.0), 'class': 'PlotWidget', 'name': 'Plot_000'}, {'state': {'text': "[dict(v['meta'].items() + v['stats'].items()) for v in input.values()]", 'terminals': {'input': {'multi': False, 'optional': False, 'io': 'in'}, 'output': {'multi': False, 'optional': False, 'io': 'out'}}, 'pos': (-33.0, -1.0)}, 'pos': (-33.0, -1.0), 'class': 'PythonEval', 'name': 'PythonEval.0'}]
+    outputNode:
+        pos: (300.0, 0.0)
