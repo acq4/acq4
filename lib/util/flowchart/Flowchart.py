@@ -12,6 +12,10 @@ from numpy import ndarray
 import library
 from debug import printExc
 
+def strDict(d):
+    return dict([(str(k), v) for k, v in d.iteritems()])
+
+
 def toposort(deps, nodes=None, seen=None, stack=None):
     """Topological sort. Arguments are:
       deps    dictionary describing dependencies where a:[b,c] means "a depends on b and c"

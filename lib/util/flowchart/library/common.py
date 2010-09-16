@@ -3,6 +3,7 @@ from PyQt4 import QtCore, QtGui
 from SpinBox import *
 from SignalProxy import *
 from WidgetGroup import *
+from ColorMapper import ColorMapper
 from ..Node import Node
 import metaarray
 import numpy as np
@@ -43,6 +44,8 @@ def generateUi(opts):
             w = QtGui.QComboBox()
             for i in o['values']:
                 w.addItem(i)
+        elif t == 'colormap':
+            w = ColorMapper()
         else:
             raise Exception("Unknown widget type '%s'" % str(t))
         if 'tip' in o:

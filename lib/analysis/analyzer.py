@@ -6,6 +6,7 @@ from flowchart import *
 from PyQt4 import QtGui, QtCore
 from DirTreeWidget import DirTreeLoader
 from pyqtgraph.PlotWidget import *
+from Canvas import *
 import configfile
 import pickle
 from DataManager import getHandle
@@ -69,17 +70,24 @@ class Analyzer(QtGui.QMainWindow):
         
     def setDataSource(self):
         if self.dataSource is not None:
-            QtCore.QObject.disconnect(source, QtCore.SIGNAL("resultsChanged"), self.dataSourceChanged)
+            QtCore.QObject.disconnect(self.dataSource, QtCore.SIGNAL("resultsChanged"), self.dataSourceChanged)
         source = self.ui.dataSourceCombo.getSelectedObj()
         self.dataSource = source
+        if source is None:
+            return
         QtCore.QObject.connect(source, QtCore.SIGNAL("resultsChanged"), self.dataSourceChanged)
-        print "connected to", source
+        #print "connected to", source
         self.dataSourceChanged()
     
     def dumpProtocol(self):
         state = {'docks': {}}
         for name, d in self.dockItems.iteritems():
-            state['docks'][name] = {'type': d['type'], 'state': d['widget'].saveState()}
+            s = {'type': d['type']}
+            if 'widget' in d and hasattr(d['widget'], 'saveState'):
+                s['state'] = d['widget'].saveState()
+            else:
+                s['state'] = {}
+            state['docks'][name] = s
         state['window'] = str(self.saveState().toPercentEncoding())
         state['flowchart'] = self.flowchart.saveState()
         return state
@@ -132,8 +140,10 @@ class Analyzer(QtGui.QMainWindow):
             self.flowchart.removeTerminal(name)
         elif d['type'] == 'Plot':
             d['widget'].quit()
+            
+        if 'node' in d:
             self.flowchart.removeNode(d['node'])
-
+            
         if 'dock' in d:
             self.removeDockWidget(d['dock'])
             
@@ -196,11 +206,8 @@ class Analyzer(QtGui.QMainWindow):
         
     def recomputeAll(self):
         inputs = []
-        for d in data:
-            if d in self.data:
-                inputs.extend([d[sd] for sd in d.subDirs() if sd[0] in '0123456789'])
-            else:
-                inputs.append(d)
+        for d in self.data:
+            inputs.extend([d[sd] for sd in d.subDirs() if sd[0] in '0123456789'])
         self.recompute(inputs)
         
     def recomputeSelected(self):
@@ -285,8 +292,37 @@ class Analyzer(QtGui.QMainWindow):
         self.ui.dockList.addItem(item)
         
 
-    def addCanvas(self):
-        pass
+    def addCanvas(self, name=None, state=None):
+        if name is None:
+            name = 'Canvas'
+            i = 0
+            while True:
+                name2 = '%s_%03d' % (name, i)
+                if name2 not in self.dockItems:
+                    break
+                i += 1
+            name = name2
+        
+        p = Canvas()
+        d = QtGui.QDockWidget(name)
+        d.setObjectName(name)
+        d.setWidget(p)
+        
+        #if state is not None:
+            #p.restoreState(state)
+
+        nodes = self.flowchart.nodes()
+        #print name, nodes
+        if name in nodes:
+            node = nodes[name]
+        else:
+            node = self.flowchart.createNode('CanvasWidget', name=name)
+        node.setCanvas(p)
+
+        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, d)
+        item = ListItem(name, d)
+        self.dockItems[name] = {'type': 'Canvas', 'listItem': item, 'dock': d, 'widget': p, 'node': node}
+        self.ui.dockList.addItem(item)
     
     def addTable(self):
         pass

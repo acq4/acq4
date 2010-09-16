@@ -652,6 +652,7 @@ class ScatterPlotItem(QtGui.QGraphicsItem):
     def __init__(self, spots=None, pxMode=True, pen=None, brush=None, size=5):
         QtGui.QGraphicsItem.__init__(self)
         self.spots = []
+        self.range = [[0,0], [0,0]]
         
         if brush is None:
             brush = QtGui.QBrush(QtGui.QColor(100, 100, 150))
@@ -666,21 +667,47 @@ class ScatterPlotItem(QtGui.QGraphicsItem):
         self.pxMode = pxMode
         if spots is not None:
             self.setPoints(spots)
-
+            
+    def setPxMode(self, mode):
+        self.pxMode = mode
+            
     def clear(self):
+        for i in self.spots:
+            i.setParentItem(None)
+            s = i.scene()
+            if s is not None:
+                s.removeItem(i)
         self.spots = []
+        
+
+    def getRange(self, ax, percent):
+        return self.range[ax]
         
     def setPoints(self, spots):
         self.clear()
+        self.range = [[0,0],[0,0]]
         self.addPoints(spots)
 
     def addPoints(self, spots):
+        xmn = ymn = xmx = ymx = None
         for s in spots:
             pos = Point(s['pos'])
             size = s.get('size', self.size)
             brush = s.get('brush', self.brush)
             pen = s.get('pen', self.pen)
+            pen.setCosmetic(True)
             item = self.mkSpot(pos, size, self.pxMode, brush, pen)
+            self.spots.append(item)
+            if xmn is None:
+                xmn = xmx = pos[0]
+                ymn = ymx = pos[1]
+            else:
+                xmn = min(xmn, pos[0])
+                xmx = max(xmx, pos[0])
+                ymn = min(ymn, pos[1])
+                ymx = max(ymx, pos[1])
+        self.range = [[xmn, xmx], [ymn, ymx]]
+                
 
     def mkSpot(self, pos, size, pxMode, brush, pen):
         item = SpotItem(size, pxMode, brush, pen)

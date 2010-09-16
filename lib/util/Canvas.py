@@ -20,10 +20,12 @@ class Canvas(QtGui.QWidget):
         self.view.enableMouse()
         self.view.setAspectLocked(True)
         
-    def addItem(self, item, pos, z=0, scale=None, name=None):
+    def addItem(self, item, pos=None, z=0, scale=None, name=None):
         """Add a new item to the scene at pos. """
         if scale is None:
             scale = [1, 1]
+        if pos is None:
+            pos = [0,0]
         
         self.view.scene().addItem(item)
         item.resetTransform()

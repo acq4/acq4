@@ -19,12 +19,23 @@ class ColorMapper(QtGui.QWidget):
         
         self.tree.setColumnCount(5)
         self.tree.setHeaderLabels(['  ', 'arg', 'op', 'min', 'max', 'colors'])
+        self.tree.setColumnWidth(0, 5)
+        self.tree.setColumnWidth(2, 35)
+        self.tree.setColumnWidth(3, 45)
+        self.tree.setColumnWidth(4, 45)
+        
         self.argList = []
         self.items = []
         
         self.connect(self.addBtn, QtCore.SIGNAL('clicked()'), self.addClicked)
         self.connect(self.remBtn, QtCore.SIGNAL('clicked()'), self.remClicked)
         
+    def widgetGroupInterface(self):
+        return (None, ColorMapper.saveState, ColorMapper.restoreState)
+        
+    def emitChanged(self):
+        self.emit(QtCore.SIGNAL('changed'))
+    
     def setArgList(self, args):
         """Sets the list of variable names available for computing colors"""
         self.argList = args
@@ -48,6 +59,7 @@ class ColorMapper(QtGui.QWidget):
 
     def addClicked(self):
         self.addItem()
+        self.emitChanged()
         
     def addItem(self, state=None):
         item = ColorMapperItem(self)
@@ -57,11 +69,13 @@ class ColorMapper(QtGui.QWidget):
         if state is not None:
             item.restoreState(state)
         
+        
     def remClicked(self):
         item = self.tree.currentItem()
         if item is None:
             return
         self.remItem(item)
+        self.emitChanged()
 
     def remItem(self, item):
         index = self.tree.indexOfTopLevelItem(item)

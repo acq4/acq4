@@ -27,6 +27,6 @@ pos = np.random.normal(size=(2,3000))
 spots = [{'pos': pos[:,i]} for i in range(3000)]
 s1.addPoints(spots)
 
-cw.addItem(s1)
+cw.addDataItem(s1)
 
 

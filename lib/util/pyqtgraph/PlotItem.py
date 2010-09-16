@@ -130,6 +130,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             
         self.items = []
         self.curves = []
+        self.dataItems = []
         self.paramList = {}
         self.avgCurves = {}
         
@@ -543,6 +544,9 @@ class PlotItem(QtGui.QGraphicsWidget):
         if not item in self.items:
             return
         self.items.remove(item)
+        if item in self.dataItems:
+            self.dataItems.remove(item)
+            
         if item.scene() is not None:
             self.vb.removeItem(item)
         if item in self.curves:
@@ -587,6 +591,10 @@ class PlotItem(QtGui.QGraphicsWidget):
         
         return curve
 
+    def addDataItem(self, item):
+        self.addItem(item)
+        self.dataItems.append(item)
+    
     def addCurve(self, c, params=None):
         if params is None:
             params = {}
@@ -620,7 +628,7 @@ class PlotItem(QtGui.QGraphicsWidget):
                 percentScale = [self.ctrl.xAutoPercentSpin.value(), self.ctrl.yAutoPercentSpin.value()][ax] * 0.01
                 mn = None
                 mx = None
-                for c in self.curves + [c[1] for c in self.avgCurves.values()]:
+                for c in self.curves + [c[1] for c in self.avgCurves.values()] + self.dataItems:
                     if not c.isVisible():
                         continue
                     cmn, cmx = c.getRange(ax, percentScale)

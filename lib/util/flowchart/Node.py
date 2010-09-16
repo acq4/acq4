@@ -8,6 +8,9 @@ import numpy as np
 from pyqtgraph.ObjectWorkaround import QObjectWorkaround
 from eq import *
 
+def strDict(d):
+    return dict([(str(k), v) for k, v in d.iteritems()])
+
 class Node(QtCore.QObject):
     def __init__(self, name, terminals=None):
         QtCore.QObject.__init__(self)
@@ -167,7 +170,7 @@ class Node(QtCore.QObject):
             if self.isBypassed():
                 out = self.processBypassed(vals)
             else:
-                out = self.process(**vals)
+                out = self.process(**strDict(vals))
             #print "  output:", out
             if out is not None:
                 self.setOutput(**out)
@@ -237,9 +240,10 @@ class Node(QtCore.QObject):
             if name in self.terminals:
                 continue
             try:
+                opts = strDict(opts)
                 self.addTerminal(name, **opts)
             except:
-                printExc("Error restoring terminal:")
+                printExc("Error restoring terminal %s (%s):" % (str(name), str(opts)))
                 
         
     def clearTerminals(self):
