@@ -25,7 +25,7 @@ import numpy as np
 s1 = ScatterPlotItem(size=10, pen=QtGui.QPen(QtCore.Qt.NoPen), brush=QtGui.QBrush(QtGui.QColor(255, 255, 255, 20)))
 pos = np.random.normal(size=(2,3000))
 spots = [{'pos': pos[:,i]} for i in range(3000)]
-s1.addSpots(spots)
+s1.addPoints(spots)
 
 cw.addItem(s1)
 

@@ -72,7 +72,7 @@ class CtrlNode(Node):
             else:
                 ui = []
         if terminals is None:
-            terminals = {'In': {'io': 'in'}, 'Out': {'io': 'out'}}
+            terminals = {'In': {'io': 'in'}, 'Out': {'io': 'out', 'bypass': 'In'}}
         Node.__init__(self, name=name, terminals=terminals)
         
         self.ui, self.stateGroup, self.ctrls = generateUi(ui)

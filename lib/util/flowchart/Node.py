@@ -12,6 +12,7 @@ class Node(QtCore.QObject):
     def __init__(self, name, terminals=None):
         QtCore.QObject.__init__(self)
         self._name = name
+        self._bypass = False
         self._graphicsItem = None
         self.terminals = OrderedDict()
         self._inputs = {}
@@ -117,6 +118,13 @@ class Node(QtCore.QObject):
     def ctrlWidget(self):
         return None
 
+    def bypass(self, byp):
+        self._bypass = byp
+        self.update()
+        
+    def isBypassed(self):
+        return self._bypass
+
     def setInput(self, **args):
         """Set the values on input terminals. For most nodes, this will happen automatically through Terminal.inputChanged.
         This is normally only used for nodes with no connected inputs."""
@@ -156,7 +164,10 @@ class Node(QtCore.QObject):
         vals = self.inputValues()
         #print "  inputs:", vals
         try:
-            out = self.process(**vals)
+            if self.isBypassed():
+                out = self.processBypassed(vals)
+            else:
+                out = self.process(**vals)
             #print "  output:", out
             if out is not None:
                 self.setOutput(**out)
@@ -169,7 +180,17 @@ class Node(QtCore.QObject):
                 t.setValue(None)
             self.setException(sys.exc_info())
         self.emit(QtCore.SIGNAL('outputChanged'))
-            
+
+    def processBypassed(self, args):
+        result = {}
+        for t in self.outputs().values():
+            byp = t.bypassValue()
+            if byp is None:
+                result[t.name()] = None
+            else:
+                result[t.name()] = args.get(byp, None)
+        return result
+
     def setOutput(self, **vals):
         for k, v in vals.iteritems():
             term = self.outputs()[k]

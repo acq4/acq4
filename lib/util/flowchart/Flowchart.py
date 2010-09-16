@@ -178,6 +178,8 @@ class Flowchart(Node):
                 if node is self.inputNode:
                     continue  ## input node has already been processed.
                 
+                            
+                
                 outs = node.outputs().values()
                 ins = node.inputs().values()
                 #print "  ", outs, ins
@@ -194,7 +196,10 @@ class Flowchart(Node):
                     ret = args  ## we now have the return value, but must keep processing in case there are other endpoint nodes in the chart
                 else:
                     try:
-                        result = node.process(display=False, **args)
+                        if node.isBypassed():
+                            result = node.processBypassed(args)
+                        else:
+                            result = node.process(display=False, **args)
                     except:
                         print "Error processing node %s. Args are: %s" % (str(node), str(args))
                         raise
@@ -400,8 +405,9 @@ class FlowchartWidget(QtGui.QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         
-        self.ui.ctrlList.setColumnCount(1)
+        self.ui.ctrlList.setColumnCount(2)
         self.ui.ctrlList.setColumnWidth(0, 200)
+        self.ui.ctrlList.setColumnWidth(1, 10)
         self.ui.ctrlList.setVerticalScrollMode(self.ui.ctrlList.ScrollPerPixel)
         self.ui.ctrlList.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 
@@ -454,19 +460,32 @@ class FlowchartWidget(QtGui.QWidget):
     
     def addNode(self, node):
         ctrl = node.ctrlWidget()
-        if ctrl is None:
-            return
+        #if ctrl is None:
+            #return
         item = QtGui.QTreeWidgetItem([node.name(), '', ''])
         self.ui.ctrlList.addTopLevelItem(item)
-        item2 = QtGui.QTreeWidgetItem()
-        item.addChild(item2)
-        self.ui.ctrlList.setItemWidget(item2, 0, ctrl)
+        byp = QtGui.QPushButton('X')
+        byp.setCheckable(True)
+        item.bypassBtn = byp
+        self.ui.ctrlList.setItemWidget(item, 1, byp)
+        byp.node = node
+        self.connect(byp, QtCore.SIGNAL('clicked()'), self.bypassClicked)
+        
+        if ctrl is not None:
+            item2 = QtGui.QTreeWidgetItem()
+            item.addChild(item2)
+            self.ui.ctrlList.setItemWidget(item2, 0, ctrl)
         self.items[node] = item
         
     def removeNode(self, node):
         if node in self.items:
             item = self.items[node]
+            self.disconnect(item.bypassBtn, QtCore.SIGNAL('clicked()'), self.bypassClicked)
             self.ui.ctrlList.removeTopLevelItem(item)
+            
+    def bypassClicked(self):
+        btn = QtCore.QObject.sender(self)
+        btn.node.bypass(btn.isChecked())
             
     def outputChanged(self, data):
         self.ui.outputTree.setData(data, hideRoot=True)

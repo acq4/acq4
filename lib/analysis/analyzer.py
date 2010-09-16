@@ -74,6 +74,7 @@ class Analyzer(QtGui.QMainWindow):
         self.dataSource = source
         QtCore.QObject.connect(source, QtCore.SIGNAL("resultsChanged"), self.dataSourceChanged)
         print "connected to", source
+        self.dataSourceChanged()
     
     def dumpProtocol(self):
         state = {'docks': {}}

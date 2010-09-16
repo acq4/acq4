@@ -3,6 +3,7 @@ from ..Node import Node
 import weakref
 from pyqtgraph import graphicsItems
 from PyQt4 import QtCore, QtGui
+from common import *
 
 class PlotWidgetNode(Node):
     """Connection to PlotWidget. Will plot arrays, metaarrays, and display event lists."""
@@ -89,3 +90,69 @@ class EventListPlotter(Node):
                 self.items[c].setYRange([0., 0.2], relative=True)
         return {'plot': self.items}
         
+
+class ScatterPlot(CtrlNode):
+    """Generates a scatter plot from a record array or nested dicts"""
+    nodeName = 'ScatterPlot'
+    uiTemplate = [
+        ('x', 'combo', {'values': [], 'index': 0}),
+        ('y', 'combo', {'values': [], 'index': 0})
+    ]
+    
+    def __init__(self, name):
+        CtrlNode.__init__(self, name, terminals={
+            'input': {'io': 'in'},
+            'plot': {'io': 'out'}
+        })
+        self.item = graphicsItems.ScatterPlotItem()
+        self.keys = []
+        
+        #self.ui = QtGui.QWidget()
+        #self.layout = QtGui.QGridLayout()
+        #self.ui.setLayout(self.layout)
+        
+        #self.xCombo = QtGui.QComboBox()
+        #self.yCombo = QtGui.QComboBox()
+        
+        
+    
+    def process(self, input, display=True):
+        if not display:
+            return {'plot': None}
+            
+        self.updateKeys(input[0])
+        
+        x = str(self.ctrls['x'].currentText())
+        y = str(self.ctrls['y'].currentText())
+        points = [{'pos': (i[x], i[y])} for i in input]
+        self.item.setPoints(points)
+        
+        return {'plot': self.item}
+        
+        
+
+    def updateKeys(self, data):
+        self.ctrls['x'].blockSignals(True)
+        self.ctrls['y'].blockSignals(True)
+        for c in [self.ctrls['x'], self.ctrls['y']]:
+            cur = str(c.currentText())
+            c.clear()
+            for k in data:
+                c.addItem(k)
+                if k == cur:
+                    c.setCurrentIndex(c.count()-1)
+        self.ctrls['x'].blockSignals(False)
+        self.ctrls['y'].blockSignals(False)
+                
+        self.keys = [x for x in data]  ## data might be a list of strings or a dict
+        
+
+    def saveState(self):
+        state = CtrlNode.saveState(self)
+        return {'keys': self.keys, 'ctrls': state}
+        
+    def restoreState(self, state):
+        self.updateKeys(state['keys'])
+        CtrlNode.restoreState(state['ctrls'])
+        
+    

@@ -5,7 +5,7 @@ import weakref
 from eq import *
 
 class Terminal:
-    def __init__(self, node, name, io, optional=False, multi=False, pos=None, renamable=False):
+    def __init__(self, node, name, io, optional=False, multi=False, pos=None, renamable=False, bypass=None):
         """Construct a new terminal. Optiona are:
         node     - the node to which this terminal belongs
         name     - string, the name of the terminal
@@ -26,6 +26,7 @@ class Terminal:
         self._renamable = renamable
         self._connections = {}
         self._graphicsItem = TerminalGraphicsItem(self)
+        self._bypass = bypass
         
         if multi:
             self._value = {}  ## dictionary of terminal:value pairs.
@@ -44,7 +45,10 @@ class Terminal:
             return self._value.get(term, None)
         else:
             return self._value
-        
+
+    def bypassValue(self):
+        return self._bypass
+
     def setValue(self, val, process=True):
         """If this is a single-value terminal, val should be a single value.
         If this is a multi-value terminal, val should be a dict of terminal:value pairs"""

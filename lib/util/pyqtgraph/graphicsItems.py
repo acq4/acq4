@@ -665,16 +665,16 @@ class ScatterPlotItem(QtGui.QGraphicsItem):
         
         self.pxMode = pxMode
         if spots is not None:
-            self.setSpots(spots)
+            self.setPoints(spots)
 
     def clear(self):
         self.spots = []
         
-    def setSpots(self, spots):
+    def setPoints(self, spots):
         self.clear()
-        self.addSpots(spots)
+        self.addPoints(spots)
 
-    def addSpots(self, spots):
+    def addPoints(self, spots):
         for s in spots:
             pos = Point(s['pos'])
             size = s.get('size', self.size)
