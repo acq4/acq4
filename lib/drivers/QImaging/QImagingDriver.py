@@ -146,7 +146,7 @@ class QCameraClass:
         self.i = 0
         self.stopSignal = True
         self.mutex = Mutex(Mutex.Recursive)
-        self.lastImage = (0,0)
+        self.lastImage = (None,0)
         self.fnp1 = lib.AsyncCallback(self.callBack1)
         self.fnpNull = lib.AsyncCallback(self.doNothing)
         
@@ -677,6 +677,7 @@ class QCameraClass:
     def start(self):
         self.frames = []
         self.arrays = []
+        self.lastImage = (None, None)
         #global i, stopsignal
         #self.mutex.lock()
         #self.stopSignal = False
@@ -713,14 +714,17 @@ class QCameraClass:
         #self.mutex.lock()
         with self.mutex:
             #print "Mutex locked from qcam.callBack1()"
+            #print "set last index", args[1]
             self.lastImage = (args[1], self.arrays[args[1]]) 
-            if self.i != self.ringSize-1:
-                self.i += 1
-            else:
-                self.i = 0
+            
             if self.stopSignal == False:
                 #self.mutex.unlock()
                 self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone, 0, self.i)
+                self.i = ( self.i+1) % self.ringSize
+                #if self.i != self.ringSize-1:
+                    #self.i += 1
+                #else:
+                    #self.i = 0
             #else:
             #    self.mutex.unlock()
         #print "Mutex released from qcam.callBack1()"
