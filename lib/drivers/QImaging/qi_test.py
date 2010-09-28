@@ -20,7 +20,7 @@ lib = CLibrary(dll, p, prefix = 'QCam_')        #makes it so that functions in t
 
 
 ###Load driver and camera
-qcd = _QCamDriverClass()
+qcd = QCamDriverClass()
 cam = qcd.getCamera(qcd.listCameras()[0])
 
 ###Configure settings

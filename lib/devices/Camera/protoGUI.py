@@ -40,8 +40,8 @@ class CameraProtoGui(DAQGenericProtoGui):
         conf = self.dev.camConfig
         #if 'exposeChannel' not in conf:
             #self.ui.exposureGroupBox.hide()
-        if 'triggerInChannel' not in conf:
-            self.ui.triggerGroupBox.hide()
+        #if 'triggerInChannel' not in conf:
+            #self.ui.triggerGroupBox.hide()
         #if 'triggerOutChannel' not in conf:
             #self.ui.triggerCheck.hide()
             
@@ -54,12 +54,14 @@ class CameraProtoGui(DAQGenericProtoGui):
             item = self.ui.triggerModeCombo.addItem(m)
         
         self.vLines = []
-        l = InfiniteLine(self.plots['trigger'])
-        self.vLines.append(l)
-        l = InfiniteLine(self.plots['exposure'])
-        self.vLines.append(l)
-        self.plots['trigger'].addItem(self.vLines[0])
-        self.plots['exposure'].addItem(self.vLines[1])
+        if 'trigger' in self.plots:
+            l = InfiniteLine(self.plots['trigger'])
+            self.vLines.append(l)
+            self.plots['trigger'].addItem(self.vLines[0])
+        if 'exposure' in self.plots:
+            l = InfiniteLine(self.plots['exposure'])
+            self.vLines.append(l)
+            self.plots['exposure'].addItem(self.vLines[1])
         
         #self.roiRect = QtGui.QGraphicsRectItem()
         #self.cameraModule = None

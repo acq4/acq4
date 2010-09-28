@@ -121,7 +121,7 @@ class Camera(DAQGeneric):
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
         """Set camera parameters. Options are:
-           params: a list of (param, value) pairs to be set. Parameters are set in the order specified.
+           params: a list or dict of (param, value) pairs to be set. Parameters are set in the order specified.
            autoRestart: If true, restart the camera if required to enact the parameter changes
            autoCorrect: If true, correct values that are out of range to their nearest acceptable value
         
@@ -738,6 +738,7 @@ class AcquireThread(QtCore.QThread):
         size = self.cam.getParam('sensorSize')
         lastFrame = None
         lastFrameTime = None
+        fps = None
         
         camState = dict(self.cam.getParams(['binning', 'exposure', 'region', 'triggerMode']))
         binning = camState['binning']
@@ -829,6 +830,11 @@ class AcquireThread(QtCore.QThread):
                     
                     ## Process all waiting frames. If there is more than one frame waiting, guess the frame times.
                     dt = (now - lastFrameTime) / diff
+                    if dt > 0:
+                        info['fps'] = 1.0/dt
+                    else:
+                        info['fps'] = None
+                    
                     for i in range(diff):
                         fInd = (i+lastFrame+1) % self.ringSize
                         

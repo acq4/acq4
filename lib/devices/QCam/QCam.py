@@ -63,6 +63,7 @@ class QCam(Camera):
             return self.cam.listParams(params)
             
     def setParams(self, params, autoRestart=True, autoCorrect=True):
+        #params: a list of (param, value) pairs to be set
         #print "PVCam: setParams", params
         with self.camLock:
             newVals, restart = self.cam.setParams(params, autoCorrect=autoCorrect)
@@ -80,10 +81,10 @@ class QCam(Camera):
             return self.cam.getParams(params)
 
 
-    def setParam(self, param, value, autoRestart=True, autoCorrect=True):
-        return self.setParams({param: value}, autoRestart=autoRestart, autoCorrect=autoCorrect)
+    #def setParam(self, param, value, autoRestart=True, autoCorrect=True):
+        #return self.setParams({param: value}, autoRestart=autoRestart, autoCorrect=autoCorrect)
         
-    def getParam(self, param):
-        with self.camLock:
-            return self.cam.getParam(param)
+    #def getParam(self, param):
+        #with self.camLock:
+            #return self.cam.getParam(param)
         

@@ -12,7 +12,8 @@ class Manager(Module):
         self.win = QtGui.QMainWindow()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
-        self.stateFile = os.path.join(self.name + '_ui.cfg')
+        self.stateFile = os.path.join('modules', self.name + '_ui.cfg')
+
         self.devRackDocks = {}
         for d in self.manager.listDevices():
             try:

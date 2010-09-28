@@ -201,14 +201,14 @@ class QCameraClass:
             'qinfBitDepth':'bitDepth'
         }
         self.unitConversionDict = {
-            'gain': 10e-6,     #QCam expects microunits
-            'exposure': 10e-9  #QCam expresses exposure in nanoseconds
+            'gain': 1e-6,     #QCam expects microunits
+            'exposure': 1e-9  #QCam expresses exposure in nanoseconds
             }
         
         self.listParams()
         self.getCameraInfo()
         for x in cameraDefaults['ALL'].keys():
-            self.setParam(x, cameraDefaults['ALL'][x])
+            self.setParams([(x, cameraDefaults['ALL'][x])]) #### FIX this so that you aren't sending settings to cam the entire time!
             
        
         
@@ -258,15 +258,23 @@ class QCameraClass:
         
     def convertUnitsToAcq4(self, param, value):
         if param in self.unitConversionDict:
-            if type(value) in ['int', 'float']:
+            #print "        0 convertUnits: param:", param, "value:", value
+            if type(value) in [type(1),type(1.0),type(1L)]:
+                #print "        1 convertUnits: param:", param, "value:", value*self.unitConversionDict[param]
                 return value*self.unitConversionDict[param]
             elif type(value) == list:
                 for i in range(len(value)):
                     value[i] = value[i]*self.unitConversionDict[param]
+                #print "        2 convertUnits: param:", param, "value:", value
                 return value
             elif type(value) == tuple:
-                return (value[0]*self.unitConversionDict[param], value[1]*self.unitConversionDict[param])        
-        else: return value
+                #print "        3 convertUnits: param:", param, "value:", (value[0]*self.unitConversionDict[param], value[1]*self.unitConversionDict[param])
+                return (value[0]*self.unitConversionDict[param], value[1]*self.unitConversionDict[param])  
+            else:
+                print "cam.convertUnitsToAcq4 does not know how to convert value of type ", type(value)
+        else: 
+            #print "%s not in unitConversionDict." %param, "Value = ", value
+            return value
     
         
     def readSettings(self):
@@ -447,7 +455,9 @@ class QCameraClass:
             return self.getParams(self.groupParams[param], asList=True)
         s = self.readSettings()
         #s.size = sizeof(s)
+        #print "   0 getParam.param:", param
         param = self.translateToCamera(param)
+        #print "   1 getParam.param:", param
         if param in lib('enums', 'QCam_Param'):
             value = self.call(lib.GetParam, byref(s), getattr(lib, param))[2]
         elif param in lib('enums', 'QCam_ParamS32'):
@@ -458,37 +468,44 @@ class QCameraClass:
             value = self.cameraInfo[param]
         else:
             raise Exception("%s is not recognized as a parameter." %param)
+        #print "   2 getParam.param:", param, "value:", value
         if param in ['qprmRoiX', 'qprmRoiY', 'qprmRoiWidth', 'qprmRoiHeight']:
+            #print param, value, '===>', value*self.getParam('binning')[0] 
             value = value*self.getParam('binning')[0]
-        v = self.getNameFromEnum(param, value)
+        #print "   3 getParam.param:", param, "value:", value
+        value = self.getNameFromEnum(param, value)
+        #print "   4 getParam.param:", param, "value:", value
+        value = self.convertUnitsToAcq4(self.translateToUser(param), value)
+        #print "   5 getParam.param:", param, "value:", value
         if param != 'qprmBinning':
-            return v
+            return value
         elif param == 'qprmBinning':
-            return (v,v)
+            return (value,value)
 
-    def setParam(self, param, value, autoRestart=True, autoCorrect=True):
-        if param == 'ringSize':
-            self.ringSize = value
-        if param in self.groupParams:
-            return self.setParams(zip(self.groupParams[param], value))
-        s = self.readSettings()
-        param = self.translateToCamera(param)
-        value = self.translateToCamera(value)
-        if param in self.paramEnums:
-            value = self.getEnumFromName(param, value)
-        if param in lib('enums', 'QCam_Param'):
-            self.call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(value))
-        elif param in lib('enums', 'QCam_ParamS32'):
-            self.call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(value))
-        elif param in lib('enums', 'QCam_Param64'):
-            self.call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(value))
-        with self.mutex:
-            if self.stopSignal == True:
-                #self.mutex.unlock()
-                self.call(lib.SendSettingsToCam, self.handle, byref(s))
-            if self.stopSignal == False:
-                #self.mutex.unlock()
-                self.call(lib.QueueSettings, self.handle, byref(s), null, lib.qcCallbackDone)
+    #def setParam(self, param, value, autoRestart=True, autoCorrect=True):
+        #if param == 'ringSize':
+            #self.ringSize = value
+        #if param in self.groupParams:
+            #return self.setParams(zip(self.groupParams[param], value))
+        #s = self.readSettings()
+        #param = self.translateToCamera(param)
+        #value = self.translateToCamera(value)
+        #if param in self.paramEnums:
+            #value = self.getEnumFromName(param, value)
+        #if param in lib('enums', 'QCam_Param'):
+            #self.call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(value))
+        #elif param in lib('enums', 'QCam_ParamS32'):
+            #self.call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(value))
+        #elif param in lib('enums', 'QCam_Param64'):
+            #self.call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(value))
+        #with self.mutex:
+            #if self.stopSignal == True:
+                ##self.mutex.unlock()
+                #self.call(lib.SendSettingsToCam, self.handle, byref(s))
+            #if self.stopSignal == False:
+                ##self.mutex.unlock()
+                #self.call(lib.QueueSettings, self.handle, byref(s), null, lib.qcCallbackDone)
+        #print "Set param:", param, value
         
 
 
@@ -501,51 +518,124 @@ class QCameraClass:
             return OrderedDict([(p, self.getParam(p)) for p in params])
 
     def setParams(self, params, autoRestart=True, autoCorrect=True): 
+        """Set camera parameters. Options are:
+           params: a list of (param, value) pairs to be set. Parameters are set in the order specified.
+           autoRestart: If true, restart the camera if required to enact the parameter changes
+           autoCorrect: If true, correct values that are out of range to their nearest acceptable value
+        
+        Return a tuple with: 
+           0: dictionary of parameters and the values that were set.
+              (note this may differ from requested values if autoCorrect is True)
+           1: Boolean value indicating whether a restart is required to enact changes.
+              If autoRestart is True, this value indicates whether the camera was restarted."""
+        
+        
+        ## Convert params to a dictionary:
+        if not isinstance(params, type({})):
+            params = OrderedDict(params)
+            #dict = {}
+            #for t in params:
+                #dict[t[0]] = t[1]
+            #params = dict
+        #print "Params to set:", params
+        
         s = self.readSettings()
-        changeTuple = {}
-        for x in params:
+        
+        ### Unpack grouped params
+        for x in params.keys():
             if x in self.groupParams:
                 tuples = zip(self.groupParams[x], params[x])
-                newDict = {}
+                #newDict = {}
                 for y in tuples:
-                    newDict[y[0]]= y[1]
-                return self.setParams(newDict)
+                    params[y[0]]= y[1]
+                del params[x]
+                #return self.setParams(newDict)
+            
+        #changeTuple = {}
         for x in params:
-            changeTuple[x] = False
+            #print "0 x:", x
+            #changeTuple[x] = False
             if x == 'ringSize':
                 self.ringSize = params[x]
+                value = params[x]
+                continue
             param = self.translateToCamera(x)
-            value = self.convertUnitsToCamera(x, params[x])
-            value = self.translateToCamera(value)
+            #print "     1 param:", param
+            value = params[x]
+            #print "     2 value:", value
             
-            #### sometimes camera code sends in tuples
+            
+            #### sometimes camera code sends in tuples (ie. for binning)
             if type(value) == tuple and value[0]==value[1]:
-                changeTuple[x] = True
+                #changeTuple[x] = True
                 value = value[0]
-                
-            #params[param] = params[x]
+            #print "     3 value:", value
+            
+            ### Check that value is allowable:
+            if autoCorrect:
+                if x in self.paramAttrs.keys():
+                    allowableValues = self.paramAttrs[x][0]
+                    if type(allowableValues) == tuple:
+                        if value < min(allowableValues):
+                            value = min(allowableValues)
+                        elif value > max(allowableValues):
+                            value = max(allowableValues)
+                    elif type(allowableValues) == list:
+                        if value not in allowableValues:
+                            print "%s not an allowable value for QImaging camera. Allowable values are %s" %(value, allowableValues)
+            #print "     4 value:", value
+            
+            
+            value = self.convertUnitsToCamera(x, value)
+            #print "     5 value:", value
+            value = self.translateToCamera(value)
+            #print "     6 value:", value
+            
             if param in self.paramEnums:
                 value = self.getEnumFromName(param, value)
+            #print "     7 value:", value
+            
+            #### Reset region if binning is changed
+            if param == 'qprmBinning':
+                x = self.getParam('qprmRoiX')
+                y = self.getParam('qprmRoiY')
+                w = self.getParam('qprmRoiWidth')
+                h = self.getParam('qprmRoiHeight')
+                #oldBinning = self.getParam('binning')[0]
+                self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiX'), c_ulong(int(x/value)))
+                self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiY'), c_ulong(int(y/value)))
+                self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiWidth'), c_ulong(int(w/value)))
+                self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiHeight'), c_ulong(int(h/value)))
+                
+                
+            if param in ['qprmRoiX', 'qprmRoiY', 'qprmRoiWidth', 'qprmRoiHeight']:
+                value = value/self.getParam('binning')[0]
+                
             if param in lib('enums', 'QCam_Param'):
                 self.call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(int(value)))
             elif param in lib('enums', 'QCam_ParamS32'):
                 self.call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(int(value)))
             elif param in lib('enums', 'QCam_Param64'):
-                #if param == 'qprm64Exposure':
-                    #value = value * 10e9 ### convert seconds(acq4 units) to nanoseconds(qcam units)
                 self.call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(int(value)))
+        #self.queueSettingsDict = {}
+        #for x in params:
+            #self.queueSettingsDict[x] = value
+        
         with self.mutex:
+            print "Mutex locked from qcam.setParams()"
             if self.stopSignal == True:
                 #self.mutex.unlock()
                 self.call(lib.SendSettingsToCam, self.handle, byref(s))
-            if self.stopSignal == False:
+            elif self.stopSignal == False: ##### QUEUEING SETTINGS DOES NOT WORK!!!
                 print "about to Queue settings. params:", params
                 #self.mutex.unlock()
                 var = c_void_p(0)
                 self.call(lib.QueueSettings, self.handle, byref(s), self.fnpNull, lib.qcCallbackDone, var, 0)
+        print "Mutex released from qcam.setParams()"
+        dict = {}
         for x in params:
-            dict = {}
             dict[x] = self.getParam(x)
+        #print "Set params to:", dict
         return dict, autoRestart
     
     def mkFrame(self):
@@ -563,7 +653,7 @@ class QCameraClass:
             frame.bufferSize = s*2
 
         #print "frameshape:", frame.shape
-        #print 's:', s, "h:", self.getParam('regionH'), 'w:', self.getParam('regionW')
+        #print 'size:', s, "height:", self.getParam('regionH'), 'width:', self.getParam('regionW'), 'binning:', self.getParam('binning')[0]
         #array.shape=(self.getParam('regionH'), self.getParam('regionW') )
         array.shape = (self.getParam('regionH')/self.getParam('binning')[0], -1)
         array = array.transpose()
@@ -592,16 +682,20 @@ class QCameraClass:
         #self.stopSignal = False
         #self.i = 0
         #self.mutex.unlock()
-        self.setParams({'region':[0,0,self.cameraInfo['qinfCcdWidth'], self.cameraInfo['qinfCcdHeight']]})
+        #self.setParams({'region':[0,0,self.cameraInfo['qinfCcdWidth'], self.cameraInfo['qinfCcdHeight']]})
         with self.mutex:
+            #print "Mutex locked from qcam.start()"
             self.stopSignal = False
             self.i=0
+        #print "Mutex released from qcam.start()"
         self.call(lib.SetStreaming, self.handle, 1)
         for x in range(self.ringSize):
             f, a = self.mkFrame()
             self.frames.append(f)
             #print "start: a.shape", a.shape
             self.arrays.append(a)
+        #print "Camera started. Frame shape:", self.arrays[0].shape
+        #print "Camera region:", self.getParam('region')
         for x in range(2):
             self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone, 0, self.i)
             self.mutex.lock()
@@ -611,13 +705,14 @@ class QCameraClass:
     
     def callBack1(self, *args):
         #global i, lastImage
-        print "Callback1: args:", args
+        #print "Callback1: args:", args
         if args[2] != 0:
             for x in lib('enums', 'QCam_Err'):
                 if lib('enums', 'QCam_Err')[x] == args[2]:
                     raise QCamFunctionError(args[2], "There was an error during QueueFrame/Callback. Error code = %s" %(x))
         #self.mutex.lock()
         with self.mutex:
+            #print "Mutex locked from qcam.callBack1()"
             self.lastImage = (args[1], self.arrays[args[1]]) 
             if self.i != self.ringSize-1:
                 self.i += 1
@@ -628,32 +723,34 @@ class QCameraClass:
                 self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone, 0, self.i)
             #else:
             #    self.mutex.unlock()
+        #print "Mutex released from qcam.callBack1()"
             
     def doNothing(self, *args):
-        v = 0
-        for i in range(5):
-            v += 1
-        return
+        print "Queued settings have been changed. (Message from queueSettings callback). Settings:", args
 
     def stop(self):
-        print "QIm stop() called."
+        #print "QIm stop() called."
         #global stopsignal
         #self.mutex.lock()
         with self.mutex:
+            print "Mutex locked from qcam.stop()"
             print "stop() 1"
             self.stopSignal = True
             print "stop() 2, self.stopSignal:", self.stopSignal
             a = self.call(lib.Abort, self.handle)
             print "stop() 3", a()
-            
+        print "Mutex released from qcam.stop()"
         #self.mutex.unlock()
 
     def lastFrame(self):
         #global lastImage
         with self.mutex:
+            #print "Mutex locked from qcam.lastFrame()"
             a = self.lastImage
             #self.mutex.unlock()
-            return a[0] 
+        #print "Mutex released from qcam.lastFrame()"
+        return a[0] 
+        
     
     
 #loadDriver()
