@@ -30,6 +30,7 @@ class EventFitter(CtrlNode):
         
     def process(self, waveform, events, display=True):
         #self.events = []
+        self.plotItems = []
         tau = waveform.infoCopy(-1).get('expDeconvolveTau', None)
         nFields = len(events.dtype.fields)
         
@@ -40,7 +41,6 @@ class EventFitter(CtrlNode):
         
         #for item, plot in self.plotItems:
             #plot.removeItem(item)
-        self.plotItems = []
         
         for i in range(len(events)):
             start = events[i]['time']
@@ -146,18 +146,29 @@ class StatsCalculator(Node):
         state = self.ui.saveState()
         stats = OrderedDict()
         cols = state['cols']
-        for row in state['rows']:
+        if regions is None:
+            regions = {}
+        
+        dataRegions = {'all': data}
+        #print "regions:"
+        for term, r in regions.iteritems():
+            #print "  ", term, r
+            mask = (data['time'] > r[0]) * (data['time'] < r[1])
+            dataRegions[term.node().name()] = data[mask]
+        
+        for row in state['rows']:  ## iterate over variables in data
             name = row[0]
             flags = row[1:]
-            v = data[name]
-            for i in range(len(flags)):
+            for i in range(len(flags)):  ## iterate over stats operations
                 if flags[i]:
-                    fn = self.funcs[cols[i]]
-                    if len(v) > 0:
-                        result = fn(v)
-                    else:
-                        result = 0
-                    stats[name+'.'+cols[i]] = result
+                    for rgnName, rgnData in dataRegions.iteritems():  ## iterate over regions
+                        v = rgnData[name]
+                        fn = self.funcs[cols[i]]
+                        if len(v) > 0:
+                            result = fn(v)
+                        else:
+                            result = 0
+                        stats[name+'.'+rgnName+'.'+cols[i]] = result
         return {'stats': stats}
         
     def saveState(self):
@@ -168,3 +179,70 @@ class StatsCalculator(Node):
     def restoreState(self, state):
         Node.restoreState(self, state)
         self.ui.restoreState(state['ui'])
+        
+        
+
+class PointCombiner(Node):
+    """Takes a list of spot properties and combines all of the overlapping spots."""
+    nodeName = "CombinePoints"
+    
+    def __init__(self, name):
+        Node.__init__(self, name, terminals={
+            'input': {'io': 'in'},
+            'output': {'io': 'out'}
+        })
+        
+    def process(self, input, display=True):
+        points = []
+        for rec in input:
+            x = rec['posX']
+            y = rec['posY']
+            size = rec['spotSize']
+            threshold = size*0.2
+            matched = False
+            for p in points:
+                if abs(p['posX']-x) < threshold and abs(p['posY']-y) < threshold:
+                    #print "matched point"
+                    p['recs'][rec['file']] = rec
+                    matched = True
+                    break
+            if not matched:
+                #print "point did not match:", x, y, rec['file']
+                points.append({'posX': x, 'posY': y, 'recs': {rec['file']: rec}})
+        
+        output = []
+        i = 0
+        for pt in points:
+            rec = {}
+            keys = pt['recs'].keys()
+            names = pt['recs'][keys[0]].keys()
+            for name in names:
+                vals = [pt['recs'][k][name] for k in keys] 
+                try:
+                    if len(vals) > 2:
+                        val = np.median(vals)
+                    else:
+                        val = np.mean(vals)
+                    rec[name] = val
+                except:
+                    pass
+                    #print "Error processing vals: ", vals
+                    #raise
+            rec['sources'] = keys
+            rec['posX'] = pt['posX']
+            rec['posY'] = pt['posY']
+            output.append(rec)
+        return {'output': output}
+        
+        
+        
+        
+    
+
+
+
+
+
+
+
+

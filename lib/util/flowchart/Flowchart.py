@@ -128,6 +128,7 @@ class Flowchart(Node):
         self._nodes[name] = node
         self.widget().addNode(node)
         QtCore.QObject.connect(node, QtCore.SIGNAL('closed'), self.nodeClosed)
+        QtCore.QObject.connect(node, QtCore.SIGNAL('renamed'), self.nodeRenamed)
         
     def removeNode(self, node):
         node.close()
@@ -136,6 +137,12 @@ class Flowchart(Node):
         del self._nodes[node.name()]
         self.widget().removeNode(node)
         QtCore.QObject.disconnect(node, QtCore.SIGNAL('closed'), self.nodeClosed)
+        QtCore.QObject.disconnect(node, QtCore.SIGNAL('renamed'), self.nodeRenamed)
+        
+    def nodeRenamed(self, node, oldName):
+        del self._nodes[oldName]
+        self._nodes[node.name()] = node
+        self.widget().nodeRenamed(node, oldName)
         
     def arrangeNodes(self):
         pass
@@ -435,6 +442,9 @@ class FlowchartWidget(QtGui.QWidget):
         self.subMenus = []
         library.loadLibrary(reloadLibs=True)
         self.buildMenu()
+        
+    def nodeRenamed(self, node, oldName):
+        self.items[node].setText(0, node.name())
         
     def buildMenu(self):
         self.nodeMenu = QtGui.QMenu()

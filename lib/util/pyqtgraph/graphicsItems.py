@@ -715,7 +715,11 @@ class ScatterPlotItem(QtGui.QGraphicsItem):
         item.setPos(pos)
         return item
         
+    def boundingRect(self):
+        return QtCore.QRectF()
         
+    def paint(self, p, *args):
+        pass
 
 
 
@@ -1960,8 +1964,10 @@ class GridItem(UIGraphicsItem):
         self.picture = None
         
         
-    def viewChangedEvent(self, newRect, oldRect):
+    def viewChangedEvent(self):
         self.picture = None
+        UIGraphicsItem.viewChangedEvent(self)
+        #self.update()
         
     def paint(self, p, opt, widget):
         #p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))

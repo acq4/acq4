@@ -199,6 +199,8 @@ class Analyzer(QtGui.QMainWindow):
         
 
     def dataSelected(self, current, old):
+        if current is None:
+            return
         if current.data in self.data:
             return
         self.flowchart.setInput(dataIn=current.data)
@@ -228,6 +230,7 @@ class Analyzer(QtGui.QMainWindow):
             out = self.flowchart.process(dataIn=inp)
             self.results[inp] = out
             
+        progressDlg.setValue(len(inputs))
         self.emit(QtCore.SIGNAL('resultsChanged'))
         #self.flowchart2.dataIn.setValue(self.results)
                     
@@ -303,7 +306,8 @@ class Analyzer(QtGui.QMainWindow):
                 i += 1
             name = name2
         
-        p = Canvas()
+        p = CanvasWidget()
+        
         d = QtGui.QDockWidget(name)
         d.setObjectName(name)
         d.setWidget(p)
@@ -317,7 +321,7 @@ class Analyzer(QtGui.QMainWindow):
             node = nodes[name]
         else:
             node = self.flowchart.createNode('CanvasWidget', name=name)
-        node.setCanvas(p)
+        node.setCanvas(p.canvas)
 
         self.addDockWidget(QtCore.Qt.RightDockWidgetArea, d)
         item = ListItem(name, d)
@@ -326,6 +330,62 @@ class Analyzer(QtGui.QMainWindow):
     
     def addTable(self):
         pass
+    
+    
+class CanvasWidget(QtGui.QWidget):
+    def __init__(self):
+        QtGui.QWidget.__init__(self)
+        self.lay = QtGui.QGridLayout()
+        self.lay.setSpacing(0)
+        self.setLayout(self.lay)
+        self.addBtn = QtGui.QPushButton('Add Image')
+        self.clearBtn = QtGui.QPushButton('Clear Images')
+        self.autoBtn = QtGui.QPushButton('Auto Range')
+        self.canvas = Canvas()
+        self.lay.addWidget(self.addBtn, 0, 0)
+        self.lay.addWidget(self.clearBtn, 0, 1)
+        self.lay.addWidget(self.autoBtn, 0, 2)
+        self.lay.addWidget(self.canvas, 1, 0, 1, 3)
+        self.imageItems = []
+        self.z = -1000
+        self.canvas.view.setRange(QtCore.QRectF(-0.01, -0.01, 0.02, 0.02))
+
+        self.connect(self.addBtn, QtCore.SIGNAL('clicked()'), self.addImage)
+        self.connect(self.clearBtn, QtCore.SIGNAL('clicked()'), self.clearImages)
+        self.connect(self.autoBtn, QtCore.SIGNAL('clicked()'), self.autoRange)
+        
+    def autoRange(self):
+        bounds = self.imageItems[0].sceneBoundingRect()
+        self.canvas.view.setRange(bounds)
+        
+    def addItem(self, *args, **kargs):
+        return self.canvas.addItem(*args, **kargs)
+        
+    def addImage(self):
+        fd = getManager().currentFile
+        img = fd.read()
+        if 'imagePosition' in fd.info():
+            ps = fd.info()['pixelSize']
+            pos = fd.info()['imagePosition']
+        else:
+            info = img.infoCopy()[-1]
+            ps = info['pixelSize']
+            pos = info['imagePosition']
+            
+        img = img.view(ndarray)
+        if img.ndim == 3:
+            img = img.max(axis=0)
+        #print pos, ps, img.shape, img.dtype, img.max(), img.min()
+        item = ImageItem(img)
+        self.canvas.addItem(item, pos, scale=ps, z=self.z, name=fd.shortName())
+        self.z += 1
+        self.imageItems.append(item)
+        
+        
+    def clearImages(self):
+        for item in self.imageItems:
+            self.canvas.removeItem(item)
+        self.imageItems = []
     
     
 class ListItem(QtGui.QListWidgetItem):

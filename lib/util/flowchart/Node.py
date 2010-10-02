@@ -107,6 +107,11 @@ class Node(QtCore.QObject):
     def name(self):
         return self._name
 
+    def rename(self, name):
+        oldName = self._name
+        self._name = name
+        self.emit(QtCore.SIGNAL('renamed'), self, oldName)
+
     def dependentNodes(self):
         """Return the list of nodes which provide direct input to this node"""
         nodes = set()
@@ -296,7 +301,25 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         self.nameItem.setTextInteractionFlags(QtCore.Qt.TextEditorInteraction)
         self.updateTerminals()
         self.pen = QtGui.QPen(QtGui.QColor(0,0,0))
+
+        self.nameItem.focusOutEvent = self.labelFocusOut
+        self.nameItem.keyPressEvent = self.labelKeyPress
+
+    def labelFocusOut(self, ev):
+        QtGui.QGraphicsTextItem.focusOutEvent(self.nameItem, ev)
+        self.labelChanged()
         
+    def labelKeyPress(self, ev):
+        if ev.key() == QtCore.Qt.Key_Enter or ev.key() == QtCore.Qt.Key_Return:
+            self.labelChanged()
+        else:
+            QtGui.QGraphicsTextItem.keyPressEvent(self.nameItem, ev)
+        
+    def labelChanged(self):
+        newName = str(self.nameItem.toPlainText())
+        if newName != self.node.name():
+            self.node.rename(newName)
+
     def setPen(self, pen):
         self.pen = pen
         self.update()
