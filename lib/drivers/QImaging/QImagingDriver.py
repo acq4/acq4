@@ -116,8 +116,11 @@ class QCamDriverClass:
         return cams
     
     def getCamera(self, cam):
+        print "QIdriver: getting camera...."
         if not self.cams.has_key(cam):
+            print "    creating camera class..."
             self.cams[cam] = QCameraClass(cam, self)
+            print "    camera class created for cam: %s" %cam
         return self.cams[cam]
         
     def __del__(self):
@@ -127,13 +130,17 @@ class QCamDriverClass:
             self.call(lib.ReleaseDriver)
 
     def quit(self):
+        print "quit() called from QCamDriverClass."
         for c in self.cams:
             self.cams[c].quit()
-        self.call(lib.ReleaseDriver, self.cams[0].handle) ###what if we don't open the camera?
-
+        print "Returned from quit() in QCamCameraClass. About to release driver...."
+        a = self.call(lib.ReleaseDriver, self.cams[0].handle) ###what if we don't open the camera?
+        #a = self.call(lib.ReleaseDriver, lib.Handle())
+        print "ReleaseDriver called. Result:", a()
         
 class QCameraClass:
     def __init__(self, name, driver):
+        print "QCamera Class: setting self variables..."
         self.name = name
         self.driver = driver
         self.isOpen = False
@@ -149,6 +156,7 @@ class QCameraClass:
         self.lastImage = (None,0)
         self.fnp1 = lib.AsyncCallback(self.callBack1)
         self.fnpNull = lib.AsyncCallback(self.doNothing)
+        
         
         ## Some parameters can be accessed as groups
         self.groupParams = {
@@ -204,11 +212,15 @@ class QCameraClass:
             'gain': 1e-6,     #QCam expects microunits
             'exposure': 1e-9  #QCam expresses exposure in nanoseconds
             }
+        print "      variables set. About to run listParams()"
         
         self.listParams()
+        print "      listParams returned."
         self.getCameraInfo()
+        print "      getCameraInfo returned. About to set defaults settings..."
         for x in cameraDefaults['ALL'].keys():
             self.setParams([(x, cameraDefaults['ALL'][x])]) #### FIX this so that you aren't sending settings to cam the entire time!
+        print "      returned from setting default params."
             
        
         
@@ -233,9 +245,13 @@ class QCameraClass:
         self.quit()
     
     def quit(self):
-        self.call(lib.Abort, self.handle)
-        self.call(lib.SetStreaming, self.handle, 0)
-        self.call(lib.CloseCamera, self.handle)
+        print "   quit() called from QCamCameraClass."
+        a = self.call(lib.Abort, self.handle)
+        print "   abort called. Result:", a()
+        a = self.call(lib.SetStreaming, self.handle, 0)
+        print "   setStreaming called. Result:", a()
+        a = self.call(lib.CloseCamera, self.handle)
+        print "   CloseCamera called. Result:", a()
         self.isOpen = False
         
     def translateToCamera(self, arg):
@@ -295,7 +311,9 @@ class QCameraClass:
     def fillParamDict(self, allParams=False):
         """Fills in the 'paramAttrs' dictionary with the state parameters available on the camera.
         The key is the name of the parameter, while the value is a list: [acceptablevalues, isWritable, isReadable, [dependencies]]."""
+        print "QID: fillParamDict() called."
         s = self.readSettings()
+        print "      settings structure read."
         if allParams:
             p = []
             for x in lib('enums', 'QCam_Param').keys():
@@ -362,6 +380,7 @@ class QCameraClass:
                 except QCamFunctionError, err:
                     if err.value == 1:  pass
                     else: raise
+        print "      parameters are retrieved."
         #self.paramAttrs.pop('qprmExposure')
         #self.paramAttrs.pop('qprmOffset')
         ### Replace qcam enum numbers with qcam strings
