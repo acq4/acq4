@@ -693,18 +693,18 @@ class Task:
         
         
     def isDone(self):
-        print "Manager.Task.isDone"
-        if not self.abort:
+        #print "Manager.Task.isDone"
+        if not self.abortRequested:
             t = ptime.time()
             if t - self.startTime < self.cfg['duration']:
-                print "  not done yet"
+                #print "  not done yet"
                 return False
-            else:
-                print "  duration elapsed; start:", self.startTime, "now:", t, "diff:", t-self.startTime, 'duration:', self.cfg['duration']
-        else:
-            print "  aborted, checking tasks.."
+            #else:
+                #print "  duration elapsed; start:", self.startTime, "now:", t, "diff:", t-self.startTime, 'duration:', self.cfg['duration']
+        #else:
+            #print "  aborted, checking tasks.."
         d = self.tasksDone()
-        print "  tasks say:", d
+        #print "  tasks say:", d
         return d
         
     def tasksDone(self):

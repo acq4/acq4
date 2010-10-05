@@ -87,16 +87,21 @@ class Camera(DAQGeneric):
             self.scopeDev = None
             
             
-        self.setupCamera()  
+        self.setupCamera() 
+        print "Camera: setupCamera returned, about to create acqThread"
             
         self.acqThread = AcquireThread(self)
+        print "Camera: acqThread created, about to connect signals."
         QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('finished()'), self.acqThreadFinished)
         QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('started()'), self.acqThreadStarted)
         QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('showMessage'), self.showMessage)
         QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('newFrame'), self.newFrame)
+        print "Camera: signals connected:"
         
         if config != None and 'params' in config:
+            print "Camera: setting configuration params."
             self.setParams(config['params'])
+        print "Camera: no config params to set."
             
     def setupCamera(self):
         """Prepare the camera at least so that get/setParams will function correctly"""

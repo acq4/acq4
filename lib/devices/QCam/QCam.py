@@ -35,8 +35,9 @@ class QCam(Camera):
         #        raise Exception('Can not find pvcam camera "%s"' % str(self.camConfig['serial']))
         #print "Selected camera:", cams[ind]
         #self.cam = self.pvc.getCamera(cams[ind])
-        
+        print "QCam: Opening camera ...."
         self.cam = self.qcd.getCamera(cams[0]) #open first camera
+        print "QCam: Camera opened."
         
     #def start(self, block=True):
         #if not self.isRunning():
@@ -87,4 +88,8 @@ class QCam(Camera):
     #def getParam(self, param):
         #with self.camLock:
             #return self.cam.getParam(param)
+            
+    #def quit(self):
+        #Camera.quit(self)
+        #self.qcd.quit()
         
