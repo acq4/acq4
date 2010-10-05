@@ -5,7 +5,7 @@ from lib.devices.DAQGeneric.protoGUI import DAQGenericProtoGui
 from lib.devices.Device import ProtocolGui
 from lib.util.WidgetGroup import *
 from numpy import ndarray
-from pyqtgraph.graphicsItems import InfiniteLine, VTickGroup
+from pyqtgraph.graphicsItems import InfiniteLine
 #from PyQt4 import Qwt5 as Qwt
 
 class CameraProtoGui(DAQGenericProtoGui):
@@ -62,9 +62,6 @@ class CameraProtoGui(DAQGenericProtoGui):
             l = InfiniteLine(self.plots['exposure'])
             self.vLines.append(l)
             self.plots['exposure'].addItem(self.vLines[1])
-            
-        self.frameTicks = VTickGroup(view=self.ui.imageView.ui.roiPlot)
-        self.frameTicks.setYRange([0.8, 1.0], relative=True)
         
         #self.roiRect = QtGui.QGraphicsRectItem()
         #self.cameraModule = None
@@ -148,8 +145,6 @@ class CameraProtoGui(DAQGenericProtoGui):
                 print "No images returned from camera protocol."
             else:
                 self.ui.imageView.setImage(result['frames'])
-                #print "  frame times:", list(result['frames'].xvals('Time'))
-                self.frameTicks.setXVals(result['frames'].xvals('Time'))
                 
         DAQGenericProtoGui.handleResult(self, result['channels'], params)
         #if state['displayExposureCheck'] and 'expose' in result and result['expose'] is not None:
