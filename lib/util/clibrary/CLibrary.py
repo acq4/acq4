@@ -404,6 +404,9 @@ class CallResult:
         self.sig = sig
         
     def __call__(self):
+        #print "Clibrary:", type(self.rval), self.mkVal(self.rval)
+        if self.sig[0] == ['void']:
+            return None
         return self.mkVal(self.rval)
         
     def __getitem__(self, n):

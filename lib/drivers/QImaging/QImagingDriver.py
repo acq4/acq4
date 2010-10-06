@@ -13,7 +13,15 @@ from Mutex import Mutex, MutexLocker
 from advancedTypes import OrderedDict
 import atexit
 modDir = os.path.dirname(__file__)
-p = CParser(os.path.join(modDir, "QCamApi.h"), cache=os.path.join(modDir, 'QCamApi.h.cache'), macros={'_WIN32': '', '__int64': ('long long')})
+sdkDir = r"C:\Program Files\QImaging\SDK\Headers"
+
+## check for installed SDK, fall back to local header copies
+if os.path.isdir(sdkDir):
+    headerDir = sdkDir
+else:
+    headerDir = modDir
+print headerDir
+p = CParser(os.path.join(headerDir, "QCamApi.h"), cache=os.path.join(modDir, 'QCamApi.h.cache'), macros={'_WIN32': '', '__int64': ('long long')})
 if sys.platform == 'darwin':
     dll = cdll.LoadLibrary('/Library/Frameworks/QCam.framework/QCam')
 else:
@@ -39,6 +47,7 @@ lib = CLibrary(dll, p, prefix = 'QCam_')        #makes it so that functions in t
 # listParams(self, params=None)
 # setParams(self, params, autoRestart=True, autoCorrect=True)
 # getParams(self, params=None)
+# quit(self)
 
 externalParams = ['triggerMode',
                   #'triggerType', ## Add this in when we figure out TriggerModes
@@ -92,10 +101,13 @@ class QCamDriverClass:
     
     def call(self, function, *args):
         a = function(*args)
-        if a() != 0:
+        #print "Call Result for %s: a()=%i" %(function.name, a())
+        if a() == None:
+            return a
+        elif a() != 0:
             for x in lib('enums', 'QCam_Err'):
                 if lib('enums', 'QCam_Err')[x] == a():
-                    raise QCamFunctionError(a(), "There was an error running a QCam function. Error code = %s" %(x))
+                    raise QCamFunctionError(a(), "There was an error running a QCam function, %s. Error code = %s" %(function.name,x))
         else:
             return a
 
@@ -133,10 +145,7 @@ class QCamDriverClass:
         print "quit() called from QCamDriverClass."
         for c in self.cams:
             self.cams[c].quit()
-        print "Returned from quit() in QCamCameraClass. About to release driver...."
-        a = self.call(lib.ReleaseDriver, self.cams[0].handle) ###what if we don't open the camera?
-        #a = self.call(lib.ReleaseDriver, lib.Handle())
-        print "ReleaseDriver called. Result:", a()
+        self.call(lib.ReleaseDriver) ###what if we don't open the camera?
         
 class QCameraClass:
     def __init__(self, name, driver):
@@ -245,14 +254,11 @@ class QCameraClass:
         self.quit()
     
     def quit(self):
-        print "   quit() called from QCamCameraClass."
-        a = self.call(lib.Abort, self.handle)
-        print "   abort called. Result:", a()
-        a = self.call(lib.SetStreaming, self.handle, 0)
-        print "   setStreaming called. Result:", a()
-        a = self.call(lib.CloseCamera, self.handle)
-        print "   CloseCamera called. Result:", a()
-        self.isOpen = False
+        if not self.isOpen:
+            return
+        self.call(lib.Abort, self.handle)
+        self.call(lib.SetStreaming, self.handle, 0)
+        self.call(lib.CloseCamera, self.handle)
         
     def translateToCamera(self, arg):
         return self.userToCameraDict.get(arg, arg)
@@ -738,6 +744,7 @@ class QCameraClass:
             
             if self.stopSignal == False:
                 #self.mutex.unlock()
+                #### Need to check that frame is the right size given settings, and if not, make a new frame.
                 self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone, 0, self.i)
                 self.i = ( self.i+1) % self.ringSize
                 #if self.i != self.ringSize-1:
@@ -760,9 +767,8 @@ class QCameraClass:
             print "stop() 1"
             self.stopSignal = True
             print "stop() 2, self.stopSignal:", self.stopSignal
-            a = self.call(lib.Abort, self.handle)
-            print "stop() 3", a()
-        print "Mutex released from qcam.stop()"
+        a = self.call(lib.Abort, self.handle)
+        print "stop() 3", a()
         #self.mutex.unlock()
 
     def lastFrame(self):

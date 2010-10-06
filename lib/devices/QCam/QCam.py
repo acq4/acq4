@@ -85,11 +85,12 @@ class QCam(Camera):
     #def setParam(self, param, value, autoRestart=True, autoCorrect=True):
         #return self.setParams({param: value}, autoRestart=autoRestart, autoCorrect=autoCorrect)
         
-    #def getParam(self, param):
-        #with self.camLock:
-            #return self.cam.getParam(param)
-            
-    #def quit(self):
-        #Camera.quit(self)
-        #self.qcd.quit()
+    def getParam(self, param):
+        with self.camLock:
+            return self.cam.getParam(param)
+        
+    def quit(self):
+        print "quit() called from QCamDevice."
+        Camera.quit(self)
+        self.qcd.quit()
         
