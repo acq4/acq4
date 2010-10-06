@@ -327,6 +327,27 @@ class GradientWidget(TickSlider):
             self.addTick(t[0], c)
         self.updateGradient()
 
+
+
+class BlackWhiteSlider(GradientWidget):
+    def __init__(self, parent):
+        GradientWidget.__init__(self, parent)
+        self.getTick(0).colorChangeAllowed = False
+        self.getTick(1).colorChangeAllowed = False
+        self.allowAdd = False
+        self.setTickColor(self.getTick(1), QtGui.QColor(255,255,255))
+        self.setOrientation('right')
+
+    def getLevels(self):
+        return (self.tickValue(0), self.tickValue(1))
+
+    def setLevels(self, black, white):
+        self.setTickValue(0, black)
+        self.setTickValue(1, white)
+
+
+
+
 class GammaWidget(TickSlider):
     pass
     

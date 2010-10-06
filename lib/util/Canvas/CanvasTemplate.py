@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'CanvasTemplate.ui'
 #
-# Created: Fri Oct  1 22:08:41 2010
+# Created: Wed Oct  6 12:02:05 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -24,15 +24,26 @@ class Ui_Form(object):
         self.view.setObjectName("view")
         self.widget = QtGui.QWidget(self.splitter)
         self.widget.setObjectName("widget")
-        self.verticalLayout = QtGui.QVBoxLayout(self.widget)
-        self.verticalLayout.setSpacing(0)
-        self.verticalLayout.setObjectName("verticalLayout")
-        self.gridCheck = QtGui.QCheckBox(self.widget)
-        self.gridCheck.setObjectName("gridCheck")
-        self.verticalLayout.addWidget(self.gridCheck)
+        self.ctrlLayout = QtGui.QVBoxLayout(self.widget)
+        self.ctrlLayout.setSpacing(0)
+        self.ctrlLayout.setObjectName("ctrlLayout")
+        self.pushButton = QtGui.QPushButton(self.widget)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(1)
+        sizePolicy.setHeightForWidth(self.pushButton.sizePolicy().hasHeightForWidth())
+        self.pushButton.setSizePolicy(sizePolicy)
+        self.pushButton.setObjectName("pushButton")
+        self.ctrlLayout.addWidget(self.pushButton)
         self.itemList = TreeWidget(self.widget)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(100)
+        sizePolicy.setHeightForWidth(self.itemList.sizePolicy().hasHeightForWidth())
+        self.itemList.setSizePolicy(sizePolicy)
+        self.itemList.setHeaderHidden(True)
         self.itemList.setObjectName("itemList")
-        self.verticalLayout.addWidget(self.itemList)
+        self.ctrlLayout.addWidget(self.itemList)
         self.gridLayout.addWidget(self.splitter, 0, 0, 1, 1)
 
         self.retranslateUi(Form)
@@ -40,7 +51,7 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.gridCheck.setText(QtGui.QApplication.translate("Form", "Show Grid", None, QtGui.QApplication.UnicodeUTF8))
+        self.pushButton.setText(QtGui.QApplication.translate("Form", "Auto Range", None, QtGui.QApplication.UnicodeUTF8))
 
 from TreeWidget import TreeWidget
 from pyqtgraph.GraphicsView import GraphicsView

@@ -27,6 +27,8 @@ class GraphicsView(QtGui.QGraphicsView):
         enabled via enableMouse()."""
         
         QtGui.QGraphicsView.__init__(self, parent)
+        if 'linux' in sys.platform:  ## linux has bugs in opengl implementation
+            useOpenGL = False
         self.useOpenGL(useOpenGL)
         
         palette = QtGui.QPalette()

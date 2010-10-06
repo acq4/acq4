@@ -27,19 +27,35 @@
      </property>
      <widget class="GraphicsView" name="view"/>
      <widget class="QWidget" name="">
-      <layout class="QVBoxLayout" name="verticalLayout">
+      <layout class="QVBoxLayout" name="ctrlLayout">
        <property name="spacing">
         <number>0</number>
        </property>
        <item>
-        <widget class="QCheckBox" name="gridCheck">
+        <widget class="QPushButton" name="pushButton">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
          <property name="text">
-          <string>Show Grid</string>
+          <string>Auto Range</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="TreeWidget" name="itemList"/>
+        <widget class="TreeWidget" name="itemList">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>100</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="headerHidden">
+          <bool>true</bool>
+         </property>
+        </widget>
        </item>
       </layout>
      </widget>

@@ -23,6 +23,7 @@ from PyQt4 import QtGui, QtCore, QtSvg
 #from ObjectWorkaround import *
 #tryWorkaround(QtCore, QtGui)
 import weakref
+import numpy as np
 
 try:
     from WidgetGroup import *
@@ -435,7 +436,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.vb.setMouseEnabled(*state)
         
     def xRangeChanged(self, _, range):
-        if any(isnan(range)) or any(isinf(range)):
+        if any(np.isnan(range)) or any(np.isinf(range)):
             raise Exception("yRange invalid: %s. Signal came from %s" % (str(range), str(self.sender())))
         self.ctrl.xMinText.setText('%0.5g' % range[0])
         self.ctrl.xMaxText.setText('%0.5g' % range[1])
@@ -454,7 +455,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.emit(QtCore.SIGNAL('xRangeChanged'), self, range)
 
     def yRangeChanged(self, _, range):
-        if any(isnan(range)) or any(isinf(range)):
+        if any(np.isnan(range)) or any(np.isinf(range)):
             raise Exception("yRange invalid: %s. Signal came from %s" % (str(range), str(self.sender())))
         self.ctrl.yMinText.setText('%0.5g' % range[0])
         self.ctrl.yMaxText.setText('%0.5g' % range[1])
@@ -573,12 +574,12 @@ class PlotItem(QtGui.QGraphicsWidget):
             params = {}
         if HAVE_METAARRAY and isinstance(data, MetaArray):
             curve = self._plotMetaArray(data, x=x)
-        elif isinstance(data, ndarray):
+        elif isinstance(data, np.ndarray):
             curve = self._plotArray(data, x=x)
         elif isinstance(data, list):
             if x is not None:
-                x = array(x)
-            curve = self._plotArray(array(data), x=x)
+                x = np.array(x)
+            curve = self._plotArray(np.array(data), x=x)
         elif data is None:
             curve = PlotCurveItem()
         else:
@@ -636,7 +637,7 @@ class PlotItem(QtGui.QGraphicsWidget):
                         mn = cmn
                     if mx is None or cmx > mx:
                         mx = cmx
-                if mn is None or mx is None or any(isnan([mn, mx])) or any(isinf([mn, mx])):
+                if mn is None or mx is None or any(np.isnan([mn, mx])) or any(np.isinf([mn, mx])):
                     continue
                 if mn == mx:
                     mn -= 1
@@ -1019,7 +1020,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             else:
                 xv = x
         c = PlotCurveItem()
-        c.setData(x=xv, y=arr.view(ndarray))
+        c.setData(x=xv, y=arr.view(np.ndarray))
         
         if autoLabel:
             name = arr._info[0].get('name', None)

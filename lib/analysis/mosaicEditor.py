@@ -19,7 +19,7 @@ class MosaicEditor(QtGui.QMainWindow):
         if f is None:
             return
             
-        
+        self.ui.canvas.addFile(f)
         
     def setRootClicked(self):
         m = getManager()
