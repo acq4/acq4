@@ -200,6 +200,7 @@ class Camera(DAQGeneric):
             self.start()
     
     def quit(self):
+        print "quit() called from Camera"
         if hasattr(self, 'acqThread') and self.isRunning():
             self.stop()
             if not self.wait(10000):

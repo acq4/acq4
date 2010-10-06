@@ -87,3 +87,8 @@ class QCam(Camera):
         with self.camLock:
             return self.cam.getParam(param)
         
+    def quit(self):
+        print "quit() called from QCamDevice."
+        Camera.quit(self)
+        self.qcd.quit()
+        

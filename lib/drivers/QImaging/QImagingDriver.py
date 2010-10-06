@@ -39,6 +39,7 @@ lib = CLibrary(dll, p, prefix = 'QCam_')        #makes it so that functions in t
 # listParams(self, params=None)
 # setParams(self, params, autoRestart=True, autoCorrect=True)
 # getParams(self, params=None)
+# quit(self)
 
 externalParams = ['triggerMode',
                   #'triggerType', ## Add this in when we figure out TriggerModes
@@ -92,10 +93,13 @@ class QCamDriverClass:
     
     def call(self, function, *args):
         a = function(*args)
-        if a() != 0:
+        #print "Call Result for %s: a()=%i" %(function.name, a())
+        if a() == None:
+            return a
+        elif a() != 0:
             for x in lib('enums', 'QCam_Err'):
                 if lib('enums', 'QCam_Err')[x] == a():
-                    raise QCamFunctionError(a(), "There was an error running a QCam function. Error code = %s" %(x))
+                    raise QCamFunctionError(a(), "There was an error running a QCam function, %s. Error code = %s" %(function.name,x))
         else:
             return a
 
@@ -127,9 +131,11 @@ class QCamDriverClass:
             self.call(lib.ReleaseDriver)
 
     def quit(self):
+        print "quit() called from QCamDriverClass."
+        print lib.ReleaseDriver.name, lib.ReleaseDriver.sig
         for c in self.cams:
             self.cams[c].quit()
-        self.call(lib.ReleaseDriver, self.cams[0].handle) ###what if we don't open the camera?
+        self.call(lib.ReleaseDriver) ###what if we don't open the camera?
 
         
 class QCameraClass:
@@ -233,6 +239,9 @@ class QCameraClass:
         self.quit()
     
     def quit(self):
+        print "quit() called from QCamCameraClass. self.isOpen: ", self.isOpen
+        if not self.isOpen:
+            return
         self.call(lib.Abort, self.handle)
         self.call(lib.SetStreaming, self.handle, 0)
         self.call(lib.CloseCamera, self.handle)
@@ -625,6 +634,7 @@ class QCameraClass:
                 self.i = 0
             if self.stopSignal == False:
                 #self.mutex.unlock()
+                #### Need to check that frame is the right size given settings, and if not, make a new frame.
                 self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone, 0, self.i)
             #else:
             #    self.mutex.unlock()
@@ -643,8 +653,8 @@ class QCameraClass:
             print "stop() 1"
             self.stopSignal = True
             print "stop() 2, self.stopSignal:", self.stopSignal
-            a = self.call(lib.Abort, self.handle)
-            print "stop() 3", a()
+        a = self.call(lib.Abort, self.handle)
+        print "stop() 3", a()
             
         #self.mutex.unlock()
 
