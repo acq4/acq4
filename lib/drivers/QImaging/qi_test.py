@@ -1,22 +1,15 @@
 import time
-from ctypes import *
+
 import sys, os
 d = os.path.dirname(__file__)
 sys.path.append(os.path.join(d, '../../util'))
-from clibrary import *
+
 from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
 from pyqtgraph import graphicsWindows as gw
 from PyQt4 import QtGui
 from QImagingDriver import *
 import atexit
-p = CParser('QCamApi.h', cache='QCamApi.h.cache', macros={'_WIN32': '', '__int64': ('long long')})
-if sys.platform == 'darwin':
-    dll = cdll.LoadLibrary('/Library/Frameworks/QCam.framework/QCam')
-else:
-    dll = windll.QCamDriver
-lib = CLibrary(dll, p, prefix = 'QCam_')        #makes it so that functions in the header file can be accessed using lib.nameoffunction, ie: QCam_LoadDriver is lib.LoadDriver
-                                                #also interprets all the typedefs for you....very handy
-                                                #anything from the header needs to be accessed through lib.yourFunctionOrParamete
+
 
 
 ###Load driver and camera
@@ -24,7 +17,7 @@ qcd = QCamDriverClass()
 cam = qcd.getCamera(qcd.listCameras()[0])
 
 ###Configure settings
-cam.setParams(qprmReadoutSpeed='qcReadout20M', qprm64Exposure=100000000, qprmTriggerType='qcTriggerFreerun', qprmImageFormat='qtgtMono16')
+#cam.setParams(qprmReadoutSpeed='qcReadout20M', qprm64Exposure=100000000, qprmTriggerType='qcTriggerFreerun', qprmImageFormat='qtgtMono16')
 
     
 #def quit():
@@ -84,3 +77,14 @@ cam.setParams(qprmReadoutSpeed='qcReadout20M', qprm64Exposure=100000000, qprmTri
 #
 #
 #print "Done!"
+#time.sleep(1.0)
+#s = cam.listParams()
+#print s
+
+struct = lib('structs', 'QCam_Settings')
+s = struct()
+dll.QCam_ReadSettingsFromCam(cam.handle, byref(s))
+#time.sleep(1.0)
+v = c_ulong()
+dll.QCam_GetParam(byref(s), lib.qprmBinning, byref(v))
+print v.value
