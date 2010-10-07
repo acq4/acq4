@@ -212,8 +212,9 @@ class Task(DeviceTask):
             self.st.setTrigger(tDev.getTriggerChannel(self.dev.name))
             
             ## If there is a trigger device, it needs to start after the DAQ does.
-            startOrder.remove(tDevName)
-            startOrder.append(tDevName)
+            if tDevName in startOrder:
+                startOrder.remove(tDevName)
+                startOrder.append(tDevName)
             
         #print "daq configure complete"
         

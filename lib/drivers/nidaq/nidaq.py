@@ -498,8 +498,8 @@ class SuperTask:
         
         ## Make sure we're only using 1 DAQ device (not sure how to tie 2 together yet)
         ndevs = len(set([k[0] for k in keys]))
-        if ndevs > 1:
-            raise Exception("Multiple DAQ devices not yet supported.")
+        #if ndevs > 1:
+            #raise Exception("Multiple DAQ devices not yet supported.")
         dev = keys[0][0]
         
         if (dev, 'ai') in keys:

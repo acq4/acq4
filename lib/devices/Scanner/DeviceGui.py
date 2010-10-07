@@ -7,6 +7,7 @@ from lib.util.pyqtgraph.graphicsItems import ImageItem
 import lib.Manager
 from lib.util.imageAnalysis import *
 from lib.util.debug import *
+import numpy as np
 
 class ScannerDeviceGui(QtGui.QWidget):
     def __init__(self, dev, win):
@@ -331,9 +332,9 @@ class ScannerDeviceGui(QtGui.QWidget):
 
         (cmdMin, cmdMax) = self.dev.config['commandLimits']
         cmdRange = cmdMax - cmdMin
-        xCommand = fromfunction(lambda i: cmdMin + ((cmdRange * i * float(sweeps) / nPts) % cmdRange), (nPts,), dtype=float)
+        xCommand = np.fromfunction(lambda i: cmdMin + ((cmdRange * i * float(sweeps) / nPts) % cmdRange), (nPts,), dtype=float)
         xCommand[-1] = 0.0
-        yCommand = empty((nPts,), dtype=float)
+        yCommand = np.empty((nPts,), dtype=float)
         start = 0
         for i in range(sweeps):
             stop = start + (nPts / sweeps)
@@ -352,7 +353,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         task.execute()
         result = task.getResult()
         ## pull result, convert to ndarray float, take average over all frames
-        background = result[camera]['frames'].view(ndarray).astype(float).mean(axis=0)
+        background = result[camera]['frames'].view(np.ndarray).astype(float).mean(axis=0)
         
         ## Record full scan.
         cmd = {

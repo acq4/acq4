@@ -1,6 +1,6 @@
 print __file__
 
-import time
+import ptime
 from ctypes import *
 import sys, os
 d = os.path.dirname(__file__)
@@ -12,6 +12,7 @@ from PyQt4 import QtGui
 from Mutex import Mutex, MutexLocker
 from advancedTypes import OrderedDict
 import atexit
+import traceback
 modDir = os.path.dirname(__file__)
 sdkDir = r"C:\Program Files\QImaging\SDK\Headers"
 
@@ -84,6 +85,8 @@ class QCamFunctionError(Exception):
     def __init__(self, value, message):
         self.value = value
         self.message = message
+    #def _message(self, message)
+    
     def __str__(self):
         return repr(self.message)
 
@@ -107,7 +110,7 @@ class QCamDriverClass:
         elif a() != 0:
             for x in lib('enums', 'QCam_Err'):
                 if lib('enums', 'QCam_Err')[x] == a():
-                    raise QCamFunctionError(a(), "There was an error running a QCam function, %s. Error code = %s" %(function.name,x))
+                    raise QCamFunctionError(a(), "There was an error running %s. Error code = %s" %(function.name,x))
         else:
             return a
 
@@ -128,11 +131,11 @@ class QCamDriverClass:
         return cams
     
     def getCamera(self, cam):
-        print "QIdriver: getting camera...."
+        #print "QIdriver: getting camera...."
         if not self.cams.has_key(cam):
-            print "    creating camera class..."
+            #print "    creating camera class..."
             self.cams[cam] = QCameraClass(cam, self)
-            print "    camera class created for cam: %s" %cam
+            #print "    camera class created for cam: %s" %cam
         return self.cams[cam]
         
     def __del__(self):
@@ -142,14 +145,14 @@ class QCamDriverClass:
             self.call(lib.ReleaseDriver)
 
     def quit(self):
-        print "quit() called from QCamDriverClass."
+        #print "quit() called from QCamDriverClass."
         for c in self.cams:
             self.cams[c].quit()
         self.call(lib.ReleaseDriver) ###what if we don't open the camera?
         
 class QCameraClass:
     def __init__(self, name, driver):
-        print "QCamera Class: setting self variables..."
+        #print "QCamera Class: setting self variables..."
         self.name = name
         self.driver = driver
         self.isOpen = False
@@ -159,12 +162,14 @@ class QCameraClass:
         self.cameraInfo = {}
         self.frames = []
         self.arrays = []
+        self.frameTimes = []
         self.i = 0
         self.stopSignal = True
         self.mutex = Mutex(Mutex.Recursive)
         self.lastImage = (None,0)
         self.fnp1 = lib.AsyncCallback(self.callBack1)
         self.fnpNull = lib.AsyncCallback(self.doNothing)
+        self.counter = 0
         
         
         ## Some parameters can be accessed as groups
@@ -221,15 +226,15 @@ class QCameraClass:
             'gain': 1e-6,     #QCam expects microunits
             'exposure': 1e-9  #QCam expresses exposure in nanoseconds
             }
-        print "      variables set. About to run listParams()"
+        #print "      variables set. About to run listParams()"
         
         self.listParams()
-        print "      listParams returned."
+        #print "      listParams returned."
         self.getCameraInfo()
-        print "      getCameraInfo returned. About to set defaults settings..."
+        #print "      getCameraInfo returned. About to set defaults settings..."
         for x in cameraDefaults['ALL'].keys():
             self.setParams([(x, cameraDefaults['ALL'][x])]) #### FIX this so that you aren't sending settings to cam the entire time!
-        print "      returned from setting default params."
+        #print "      returned from setting default params."
             
        
         
@@ -238,7 +243,7 @@ class QCameraClass:
         if a() != 0:
             for x in lib('enums', 'QCam_Err'):
                 if lib('enums', 'QCam_Err')[x] == a():
-                    raise QCamFunctionError(a(), "There was an error running a QCam function. Error code = %s" %(x))
+                    raise QCamFunctionError(a(), "There was an error running %s. Error code = %s" %(function.name, x))
         else:
             return a
 
@@ -293,7 +298,7 @@ class QCameraClass:
                 #print "        3 convertUnits: param:", param, "value:", (value[0]*self.unitConversionDict[param], value[1]*self.unitConversionDict[param])
                 return (value[0]*self.unitConversionDict[param], value[1]*self.unitConversionDict[param])  
             else:
-                print "cam.convertUnitsToAcq4 does not know how to convert value of type ", type(value)
+                print "qcam.convertUnitsToAcq4 does not know how to convert value of type ", type(value)
         else: 
             #print "%s not in unitConversionDict." %param, "Value = ", value
             return value
@@ -317,9 +322,9 @@ class QCameraClass:
     def fillParamDict(self, allParams=False):
         """Fills in the 'paramAttrs' dictionary with the state parameters available on the camera.
         The key is the name of the parameter, while the value is a list: [acceptablevalues, isWritable, isReadable, [dependencies]]."""
-        print "QID: fillParamDict() called."
+        #print "QID: fillParamDict() called."
         s = self.readSettings()
-        print "      settings structure read."
+        #print "      settings structure read."
         if allParams:
             p = []
             for x in lib('enums', 'QCam_Param').keys():
@@ -386,7 +391,7 @@ class QCameraClass:
                 except QCamFunctionError, err:
                     if err.value == 1:  pass
                     else: raise
-        print "      parameters are retrieved."
+        #print "      parameters are retrieved."
         #self.paramAttrs.pop('qprmExposure')
         #self.paramAttrs.pop('qprmOffset')
         ### Replace qcam enum numbers with qcam strings
@@ -472,6 +477,12 @@ class QCameraClass:
                     #print "No info for: ", x
                     pass
                 else: raise
+    
+    def getImageSize(self):
+        size = self.call(lib.GetInfo, self.handle, lib.qinfImageSize)[2]
+        self.cameraInfo['qinfImageSize'] = size
+        #print "Image Size: ", size
+        return size
 
     def getParam(self, param):
         if param == 'ringSize':
@@ -554,7 +565,7 @@ class QCameraClass:
            1: Boolean value indicating whether a restart is required to enact changes.
               If autoRestart is True, this value indicates whether the camera was restarted."""
         
-        
+        #traceback.print_stack()
         ## Convert params to a dictionary:
         if not isinstance(params, type({})):
             params = OrderedDict(params)
@@ -647,32 +658,55 @@ class QCameraClass:
             #self.queueSettingsDict[x] = value
         
         with self.mutex:
-            print "Mutex locked from qcam.setParams()"
+            #print "Mutex locked from qcam.setParams()"
             if self.stopSignal == True:
                 #self.mutex.unlock()
                 self.call(lib.SendSettingsToCam, self.handle, byref(s))
-            elif self.stopSignal == False: ##### QUEUEING SETTINGS DOES NOT WORK!!!
-                print "about to Queue settings. params:", params
-                #self.mutex.unlock()
-                var = c_void_p(0)
-                self.call(lib.QueueSettings, self.handle, byref(s), self.fnpNull, lib.qcCallbackDone, var, 0)
-        print "Mutex released from qcam.setParams()"
+
+                restart = False
+            elif self.stopSignal == False: ##### Can't figure out how to get QueueSettings to work....so we'll just stop and start the camera.
+                #try:
+                    #print "QCam about to Queue settings. params:", params
+                    #s.size = sizeof(s)
+                    ##self.mutex.unlock()
+                    #var = c_void_p(0)
+                    #self.call(lib.QueueSettings, self.handle, byref(s), self.fnpNull, lib.qcCallbackDone, var, 0)
+                    #restart = False
+                    #print "QCamSettings are queued. Look for message from callback..."
+                #except QCamFunctionError:
+                #self.stop()
+                self.call(lib.SendSettingsToCam, self.handle, byref(s))
+                #self.start()
+                restart = True
+                    
+
+        #print "Mutex released from qcam.setParams()"
         dict = {}
         for x in params:
             dict[x] = self.getParam(x)
+        self.getImageSize() ## Run this function to update image size in cameraInfo dictionary
         #print "Set params to:", dict
-        return dict, autoRestart
+        #if not autoRestart:
+            #autoRestart = restart
+            
+        return dict, restart
     
     def mkFrame(self):
         #s = self.call(lib.GetInfo, self.handle, lib.qinfImageWidth)[2] * self.call(lib.GetInfo, self.handle, lib.qinfImageHeight)[2]
-        s = self.call(lib.GetInfo, self.handle, lib.qinfImageSize)[2] ## ImageSize returns the size in bytes
         imForm = self.getParam('qprmImageFormat')
         #print 'mkFrame: s', s
-        frame = lib.Frame()
-        if imForm in ['qfmtMono8']:
-            array = ascontiguousarray(empty(s, dtype=ubyte))
-            frame.bufferSize = s
-        elif imForm in ['qfmtMono16']:
+        
+
+        if imForm in ['qfmtMono16']:
+            s = self.getImageSize() ## ImageSize returns the size in bytes
+            frame = lib.Frame()
+            array = ascontiguousarray(empty(s/2, dtype=uint16))
+            #array = ascontiguousarray(empty(s, dtype=uint16))
+            frame.bufferSize = s*2
+        elif imForm not in ['qfmtMono16']:
+            self.setParams([('qprmImageFormat','qfmtMono16')])
+            s = self.getImageSize() ## ImageSize returns the size in bytes
+            frame = lib.Frame()
             array = ascontiguousarray(empty(s/2, dtype=uint16))
             #array = ascontiguousarray(empty(s, dtype=uint16))
             frame.bufferSize = s*2
@@ -700,9 +734,13 @@ class QCameraClass:
         return frame
 
     def start(self):
+
+        #print "QCam.start() called."
+
         self.frames = []
         self.arrays = []
-        self.lastImage = (None, None)
+        self.lastImages = []
+        self.frameTimes = [None]*self.ringSize
         #global i, stopsignal
         #self.mutex.lock()
         #self.stopSignal = False
@@ -726,12 +764,17 @@ class QCameraClass:
             self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone, 0, self.i)
             self.mutex.lock()
             self.i += 1
+            #self.counter +=1
             self.mutex.unlock()
         return self.arrays
     
     def callBack1(self, *args):
-        #global i, lastImage
         #print "Callback1: args:", args
+        if args[3] == lib.qcCallbackExposeDone:
+            now = ptime.time()
+            self.frameTimes[args[1]] = now
+            #print "Exposure done. Time: %f, Duration: %f" %
+            return
         if args[2] != 0:
             for x in lib('enums', 'QCam_Err'):
                 if lib('enums', 'QCam_Err')[x] == args[2]:
@@ -740,13 +783,18 @@ class QCameraClass:
         with self.mutex:
             #print "Mutex locked from qcam.callBack1()"
             #print "set last index", args[1]
-            self.lastImage = (args[1], self.arrays[args[1]]) 
+            self.lastImages.append({'id':self.counter, 'data':self.arrays[args[1]].copy(), 'time': self.frameTimes[args[1]], 'exposeDoneTime':self.frameTimes[args[1]]})
+            self.counter += 1
             
             if self.stopSignal == False:
                 #self.mutex.unlock()
+                #size = self.getImageSize()
+                #if len(self.arrays[self.i]) != size/2:
+                    #self.frames[self.i],self.arrays[self.i] = self.mkFrame()
                 #### Need to check that frame is the right size given settings, and if not, make a new frame.
-                self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone, 0, self.i)
+                self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone|lib.qcCallbackExposeDone, 0, self.i)
                 self.i = ( self.i+1) % self.ringSize
+                #self.counter +=1
                 #if self.i != self.ringSize-1:
                     #self.i += 1
                 #else:
@@ -756,29 +804,35 @@ class QCameraClass:
         #print "Mutex released from qcam.callBack1()"
             
     def doNothing(self, *args):
+        #dict = {}
+        #for x in args[0]:
+            #dict[x] = self.getParam(x)
+        #print "Set params to:", dict
         print "Queued settings have been changed. (Message from queueSettings callback). Settings:", args
 
     def stop(self):
-        #print "QIm stop() called."
-        #global stopsignal
+
+        #print "QCam.stop() called."
+
         #self.mutex.lock()
         with self.mutex:
-            print "Mutex locked from qcam.stop()"
-            print "stop() 1"
+            #print "Mutex locked from qcam.stop()"
+            #print "stop() 1"
             self.stopSignal = True
-            print "stop() 2, self.stopSignal:", self.stopSignal
+            #print "stop() 2, self.stopSignal:", self.stopSignal
         a = self.call(lib.Abort, self.handle)
-        print "stop() 3", a()
+        #print "stop() 3", a()
+        self.call(lib.SetStreaming, self.handle, 0)
         #self.mutex.unlock()
 
-    def lastFrame(self):
-        #global lastImage
+    def newFrames(self):
         with self.mutex:
             #print "Mutex locked from qcam.lastFrame()"
-            a = self.lastImage
+            a = self.lastImages
+            self.lastImages = []
             #self.mutex.unlock()
         #print "Mutex released from qcam.lastFrame()"
-        return a[0] 
+        return a 
         
     
     
