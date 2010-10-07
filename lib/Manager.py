@@ -529,6 +529,7 @@ Valid options are:
             for d in self.devices:
                 print "    %s" % d
                 try:
+                    #print "self.devices[d]: ", self.devices[d]
                     self.devices[d].quit()
                 except:
                     printExc("Error while requesting device '%s' quit." % d)
