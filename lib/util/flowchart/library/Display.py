@@ -185,6 +185,7 @@ class ScatterPlot(CtrlNode):
         x = str(self.ctrls['x'].currentText())
         y = str(self.ctrls['y'].currentText())
         size = str(self.ctrls['size'].currentText())
+        pen = QtGui.QPen(QtGui.QColor(0,0,0,0))
         points = []
         for i in input:
             pt = {'pos': (i[x], i[y])}
@@ -192,6 +193,8 @@ class ScatterPlot(CtrlNode):
                 pt['size'] = i[size]
             if self.ctrls['borderEnabled'].isChecked():
                 pt['pen'] = QtGui.QPen(self.ctrls['border'].getColor(i))
+            else:
+                pt['pen'] = pen
             if self.ctrls['colorEnabled'].isChecked():
                 pt['brush'] = QtGui.QBrush(self.ctrls['color'].getColor(i))
             points.append(pt)
@@ -239,4 +242,28 @@ class ScatterPlot(CtrlNode):
         self.updateKeys(state['keys'])
         CtrlNode.restoreState(self, state['ctrls'])
         
+#class ImageItem(Node):
+    #"""Creates an ImageItem for display in a canvas from a file handle."""
+    #nodeName = 'Image'
     
+    #def __init__(self, name):
+        #Node.__init__(self, name, terminals={
+            #'file': {'io': 'in'},
+            #'image': {'io': 'out'}
+        #})
+        #self.imageItem = graphicsItems.ImageItem()
+        #self.handle = None
+        
+    #def process(self, file, display=True):
+        #if not display:
+            #return {'image': None}
+            
+        #if file != self.handle:
+            #self.handle = file
+            #data = file.read()
+            #self.imageItem.updateImage(data)
+            
+        #pos = file.
+        
+        
+        

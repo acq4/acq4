@@ -33,7 +33,7 @@ class Manager(Module):
 
         self.updateModList()
         self.updateConfList()
-        
+
         QtCore.QObject.connect(self.ui.loadConfigBtn, QtCore.SIGNAL('clicked()'), self.loadConfig)
         QtCore.QObject.connect(self.ui.loadModuleBtn, QtCore.SIGNAL('clicked()'), self.loadModule)
         QtCore.QObject.connect(self.ui.reloadModuleBtn, QtCore.SIGNAL('clicked()'), self.reloadModule)
@@ -48,7 +48,9 @@ class Manager(Module):
         if 'window' in state:
             ws = QtCore.QByteArray.fromPercentEncoding(state['window'])
             self.win.restoreState(ws)
+
         self.win.show()
+
         
     def showMessage(self, *args):
         self.ui.statusBar.showMessage(*args)

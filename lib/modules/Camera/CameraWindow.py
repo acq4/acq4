@@ -753,7 +753,8 @@ class CameraWindow(QtGui.QMainWindow):
         ## Update ROI plots, if any
         if self.ui.checkEnableROIs.isChecked():
             self.addPlotFrame(frame)
-
+            
+        ## self.nextFrame gets picked up by drawFrame() at some point
         self.nextFrame = frame
 
 
@@ -788,7 +789,7 @@ class CameraWindow(QtGui.QMainWindow):
                 self.currentFrame = self.nextFrame
                 self.nextFrame = None
                 (data, info) = self.currentFrame
-                self.currentClipMask = (data >= (2**self.bitDepth * 0.99)) 
+                self.currentClipMask = (data >= (2**self.bitDepth * 0.99)) ##mask of pixels that are saturated
                 
                 #self.ui.levelThermo.setValue(int(data.mean()))
                 
@@ -802,10 +803,7 @@ class CameraWindow(QtGui.QMainWindow):
                         self.backgroundFrame += data * (1.0-s)
 
             (data, info) = self.currentFrame
-            
-            ### Update ROI plots, if any
-            #if self.ui.checkEnableROIs.isChecked():
-                #self.addPlotFrame(self.currentFrame)
+
             
             ## divide the background out of the current frame if needed
             if self.ui.btnDivideBackground.isChecked() and self.backgroundFrame is not None:

@@ -31,6 +31,9 @@ class Point(QtCore.QPointF):
             return
         QtCore.QPointF.__init__(self, *args)
         
+    def __reduce__(self):
+        return (Point, (self.x(), self.y()))
+        
     def __getitem__(self, i):
         if i == 0:
             return self.x()

@@ -68,11 +68,18 @@ dm = Manager(config, sys.argv[1:])
 
 
 #w = UncagingWindow()
-from lib.analysis.analyzer import *
-d = os.path.dirname(os.path.abspath(__file__))
-dh = dm.dirHandle(os.path.join(d, 'lib', 'analysis', 'protocols'))
-w1 = Analyzer(dh)
-w2 = Analyzer(dh)
+
+#from lib.analysis.analyzer import *
+#d = os.path.dirname(os.path.abspath(__file__))
+#dh = dm.dirHandle(os.path.join(d, 'lib', 'analysis', 'protocols'))
+#w1 = Analyzer(dh)
+#w2 = Analyzer(dh)
+
+#from lib.analysis.mosaicEditor import *
+#w = MosaicEditor()
+#win = UncagingWindow() #### IMPORTANT: the name of the UncagingWindow needs to be win in order for an AnalysisPlotWindow to get data from it - need to fix this, obviously
+#w = AnalysisPlotWindow()
+#cm = CellMixer()
 
 
 ## Start Qt event loop unless running in interactive mode.

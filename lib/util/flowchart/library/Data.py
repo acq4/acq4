@@ -179,10 +179,11 @@ class RegionSelectNode(CtrlNode):
         CtrlNode.__init__(self, name, terminals={
             'data': {'io': 'in'},
             'selected': {'io': 'out'},
+            'region': {'io': 'out'},
             'widget': {'io': 'out', 'multi': True}
         })
         
-    def process(self, data, display=True):
+    def process(self, data=None, display=True):
         #print "process.."
         s = self.stateGroup.state()
         region = [s['start'], s['stop']]
@@ -203,12 +204,14 @@ class RegionSelectNode(CtrlNode):
                 #print "  new rgn:", c, region
                 #self.items[c].setYRange([0., 0.2], relative=True)
                 
-        if isinstance(data, MetaArray):
+        if data is None:
+            sliced = None
+        elif isinstance(data, MetaArray):
             sliced = data[0:s['start']:s['stop']]
         else:
             mask = (data['time'] >= s['start']) * (data['time'] < s['stop'])
             sliced = data[mask]
-        return {'selected': sliced, 'widget': self.items}
+        return {'selected': sliced, 'widget': self.items, 'region': region}
         
         
     def rgnChanged(self, item):

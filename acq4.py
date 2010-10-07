@@ -32,8 +32,10 @@ app = QtGui.QApplication(sys.argv)
 ## Configuration file to load
 config = 'config/default.cfg'
 
+
 ## Create Manager. This configures devices and creates the main manager window.
 dm = Manager(config, sys.argv[1:])
+
 
 ## for debugging with pdb
 #QtCore.pyqtRemoveInputHook()

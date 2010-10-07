@@ -122,7 +122,11 @@ class DirTreeWidget(QtGui.QTreeWidget):
         self.clear()
         self.rebuildChildren(self.invisibleRootItem())
         #self.rebuildTree()
-        
+
+    def setRoot(self, d):
+        """Synonym for setBaseDirHandle"""
+        return self.setBaseDirHandle(d)
+
     def setCurrentDir(self, d):
         #print "set current %s -> %s" % (self.currentDir, d)
         ## uncolor previous current item
