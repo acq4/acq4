@@ -169,6 +169,7 @@ class QCameraClass:
         self.lastImage = (None,0)
         self.fnp1 = lib.AsyncCallback(self.callBack1)
         self.fnpNull = lib.AsyncCallback(self.doNothing)
+        self.counter = 0
         
         
         ## Some parameters can be accessed as groups
@@ -661,6 +662,7 @@ class QCameraClass:
             if self.stopSignal == True:
                 #self.mutex.unlock()
                 self.call(lib.SendSettingsToCam, self.handle, byref(s))
+
                 restart = False
             elif self.stopSignal == False: ##### Can't figure out how to get QueueSettings to work....so we'll just stop and start the camera.
                 #try:
@@ -677,6 +679,7 @@ class QCameraClass:
                 #self.start()
                 restart = True
                     
+
         #print "Mutex released from qcam.setParams()"
         dict = {}
         for x in params:
@@ -731,10 +734,12 @@ class QCameraClass:
         return frame
 
     def start(self):
+
         #print "QCam.start() called."
+
         self.frames = []
         self.arrays = []
-        self.lastImage = (None, None)
+        self.lastImages = []
         self.frameTimes = [None]*self.ringSize
         #global i, stopsignal
         #self.mutex.lock()
@@ -759,11 +764,11 @@ class QCameraClass:
             self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone, 0, self.i)
             self.mutex.lock()
             self.i += 1
+            #self.counter +=1
             self.mutex.unlock()
         return self.arrays
     
     def callBack1(self, *args):
-        #global i, lastImage
         #print "Callback1: args:", args
         if args[3] == lib.qcCallbackExposeDone:
             now = ptime.time()
@@ -778,7 +783,8 @@ class QCameraClass:
         with self.mutex:
             #print "Mutex locked from qcam.callBack1()"
             #print "set last index", args[1]
-            self.lastImage = {'index':args[1], 'data':self.arrays[args[1]], 'exposeDoneTime':self.frameTimes[args[1]]}
+            self.lastImages.append({'id':self.counter, 'data':copy(self.arrays[args[1]]), 'time': self.frameTimes[args[1]], 'exposeDoneTime':self.frameTimes[args[1]]})
+            self.counter += 1
             
             if self.stopSignal == False:
                 #self.mutex.unlock()
@@ -788,6 +794,7 @@ class QCameraClass:
                 #### Need to check that frame is the right size given settings, and if not, make a new frame.
                 self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone|lib.qcCallbackExposeDone, 0, self.i)
                 self.i = ( self.i+1) % self.ringSize
+                #self.counter +=1
                 #if self.i != self.ringSize-1:
                     #self.i += 1
                 #else:
@@ -804,7 +811,9 @@ class QCameraClass:
         print "Queued settings have been changed. (Message from queueSettings callback). Settings:", args
 
     def stop(self):
+
         #print "QCam.stop() called."
+
         #self.mutex.lock()
         with self.mutex:
             #print "Mutex locked from qcam.stop()"
@@ -813,12 +822,14 @@ class QCameraClass:
             #print "stop() 2, self.stopSignal:", self.stopSignal
         a = self.call(lib.Abort, self.handle)
         #print "stop() 3", a()
+        self.call(lib.SetStreaming, self.handle, 0)
         #self.mutex.unlock()
 
-    def lastFrame(self):
+    def newFrames(self):
         with self.mutex:
             #print "Mutex locked from qcam.lastFrame()"
-            a = self.lastImage
+            a = self.lastImages
+            self.lastImages = []
             #self.mutex.unlock()
         #print "Mutex released from qcam.lastFrame()"
         return a 
