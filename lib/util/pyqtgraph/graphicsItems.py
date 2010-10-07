@@ -272,7 +272,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
                 raise Exception('Skipping weave compile')
             sim = np.ascontiguousarray(self.image)
             sim.shape = sim.size
-            im = np.zeros(sim.shape, dtype=np.ubyte)
+            im = np.empty(sim.shape, dtype=np.ubyte)
             n = im.size
             
             code = """
@@ -312,7 +312,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
             im1[..., 1] = im2
             im1[..., 2] = im2
             im1[..., 3] = alpha
-        elif im.ndim == 3:
+        elif im.ndim == 3: #color image
             im2 = im.transpose(axh['y'], axh['x'], axh['c'])
             
             for i in range(0, im.shape[axh['c']]):

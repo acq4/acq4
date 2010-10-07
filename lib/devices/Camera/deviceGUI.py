@@ -36,7 +36,11 @@ class CameraDeviceGui(QtGui.QWidget):
 
             else:  ## parameter is writable
                 if type(p[0]) is tuple:
-                    (mn, mx, step) = p[0]
+                    if len(p[0]) == 3:
+                        (mn, mx, step) = p[0]
+                    elif len(p[0]) == 2:
+                        (mn, mx) = p[0]
+                        step = 1
                     if step == 1:
                         w = QtGui.QSpinBox()
                         intmax = (2**16)-1
@@ -47,6 +51,7 @@ class CameraDeviceGui(QtGui.QWidget):
                         step = int(step)
                         w.setRange(mn, mx)
                         w.setSingleStep(step)
+                        #print k, "val:", val, type(val)
                         w.setValue(val)
                     else:
                         w = SpinBox()
