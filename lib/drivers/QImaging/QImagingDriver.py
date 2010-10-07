@@ -647,16 +647,17 @@ class QCameraClass:
             #self.queueSettingsDict[x] = value
         
         with self.mutex:
-            print "Mutex locked from qcam.setParams()"
+            #print "Mutex locked from qcam.setParams()"
             if self.stopSignal == True:
                 #self.mutex.unlock()
                 self.call(lib.SendSettingsToCam, self.handle, byref(s))
             elif self.stopSignal == False: ##### QUEUEING SETTINGS DOES NOT WORK!!!
-                print "about to Queue settings. params:", params
+                print "QCam about to Queue settings. params:", params
                 #self.mutex.unlock()
                 var = c_void_p(0)
                 self.call(lib.QueueSettings, self.handle, byref(s), self.fnpNull, lib.qcCallbackDone, var, 0)
-        print "Mutex released from qcam.setParams()"
+                print "QCamSettings are queued. Look for message from callback..."
+        #print "Mutex released from qcam.setParams()"
         dict = {}
         for x in params:
             dict[x] = self.getParam(x)
@@ -700,6 +701,7 @@ class QCameraClass:
         return frame
 
     def start(self):
+        print "QCam.start() called."
         self.frames = []
         self.arrays = []
         self.lastImage = (None, None)
@@ -759,20 +761,19 @@ class QCameraClass:
         print "Queued settings have been changed. (Message from queueSettings callback). Settings:", args
 
     def stop(self):
-        #print "QIm stop() called."
-        #global stopsignal
+        print "QCam.stop() called."
         #self.mutex.lock()
         with self.mutex:
-            print "Mutex locked from qcam.stop()"
-            print "stop() 1"
+            #print "Mutex locked from qcam.stop()"
+            #print "stop() 1"
             self.stopSignal = True
-            print "stop() 2, self.stopSignal:", self.stopSignal
+            #print "stop() 2, self.stopSignal:", self.stopSignal
         a = self.call(lib.Abort, self.handle)
-        print "stop() 3", a()
+        #print "stop() 3", a()
+        self.call(lib.SetStreaming, self.handle, 0)
         #self.mutex.unlock()
 
     def lastFrame(self):
-        #global lastImage
         with self.mutex:
             #print "Mutex locked from qcam.lastFrame()"
             a = self.lastImage

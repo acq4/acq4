@@ -18,8 +18,9 @@ from graphicsItems import *
 from widgets import ROI
 from PyQt4 import QtCore, QtGui
 import sys
-from numpy import ndarray
+#from numpy import ndarray
 import ptime
+import numpy as np
 
 from SignalProxy import proxyConnect
 
@@ -301,7 +302,7 @@ class ImageView(QtGui.QWidget):
             axes = (1, 2)
         else:
             return
-        data = self.roi.getArrayRegion(image.view(ndarray), self.imageItem, axes)
+        data = self.roi.getArrayRegion(image.view(np.ndarray), self.imageItem, axes)
         if data is not None:
             while data.ndim > 1:
                 data = data.mean(axis=1)
@@ -319,7 +320,7 @@ class ImageView(QtGui.QWidget):
                        This is only needed to override the default guess.
         """
         
-        if not isinstance(img, ndarray):
+        if not isinstance(img, np.ndarray):
             raise Exception("Image must be specified as ndarray.")
         self.image = img
         
@@ -329,9 +330,9 @@ class ImageView(QtGui.QWidget):
             try:
                 self.tVals = img.xvals(0)
             except:
-                self.tVals = arange(img.shape[0])
+                self.tVals = np.arange(img.shape[0])
         else:
-            self.tVals = arange(img.shape[0])
+            self.tVals = np.arange(img.shape[0])
         #self.ui.timeSlider.setValue(0)
         #self.ui.normStartSlider.setValue(0)
         #self.ui.timeSlider.setMaximum(img.shape[0]-1)
@@ -418,7 +419,7 @@ class ImageView(QtGui.QWidget):
             return image
             
         div = self.ui.normDivideRadio.isChecked()
-        norm = image.view(ndarray).copy()
+        norm = image.view(np.ndarray).copy()
         #if div:
             #norm = ones(image.shape)
         #else:
@@ -508,7 +509,7 @@ class ImageView(QtGui.QWidget):
                 return (0,0)
             totTime = xv[-1] + (xv[-1]-xv[-2])
             #t = f * totTime
-            inds = argwhere(xv < t)
+            inds = np.argwhere(xv < t)
             if len(inds) < 1:
                 return (0,t)
             ind = inds[-1,0]
