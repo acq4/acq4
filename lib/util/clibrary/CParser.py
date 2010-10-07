@@ -218,6 +218,9 @@ class CParser():
                         print cache['opts']
                         print self.initOpts
                     return False
+                elif self.verbose:
+                    print "Cache init opts are OK:"
+                    print cache['opts']
                 if cache['version'] < self.cacheVersion:
                     if self.verbose:
                         print "Cache file is not valid--cache format has changed."

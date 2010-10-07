@@ -7,6 +7,7 @@ from pyqtgraph.graphicsItems import *
 from pyqtgraph.graphicsWindows import *
 from pyqtgraph.PlotWidget import *
 from pyqtgraph.functions import *
+from pyqtgraph.widgets import *
 from Canvas import Canvas
 from UncagingControlTemplate import *
 from StdpCtrlTemplate import *
@@ -19,6 +20,13 @@ from scipy import stats, signal, ndimage
 from numpy import log
 from WidgetGroup import *
 from advancedTypes import OrderedDict
+import time
+import pickle
+from pyqtgraph.Point import *
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+
 
 class UncagingSpot(QtGui.QGraphicsEllipseItem):
     def __init__(self, source=None): #source is directory handle for single-stimulus spots
@@ -28,8 +36,58 @@ class UncagingSpot(QtGui.QGraphicsEllipseItem):
         self.position = None
         self.size = None
         self.laserTime = None
+        self.drug = None
         self.sourceItems = []   ## points to source spots if this is an average
         
+class tShapeROI(ROI):
+    def __init__(self, pos, size, **args): 
+        ROI.__init__(self, pos, size, **args)
+        self.translatable = False
+        self.aspectLocked = True
+        self.addScaleHandle([0.0, 1.0], [0.0, 0.0], name = 'L6Mark')
+        self.addScaleHandle([-0.5, 0.0], [0.0,0.0], name='piaMark1')
+        self.addRotateHandle([0.0, 0.0], [0.0,1.0], name='piaMark2')
+        self.addScaleHandle([0.5, 0.0], [0.0,0.0], name='piaMark3')
+        self.addRotateHandle([-0.4,0.0], [0.0,0.0])
+        self.addRotateHandle([0.0, 0.9], [0.0, 0.0])
+        
+        #self.addFreeHandle([0.1,0.1])
+        self.addTranslateHandle([0.0,0.1])
+        
+    def paint(self, p, opt, widget):
+        r = self.boundingRect()
+        #p.setRenderHint(QtGui.QPainter.Antialiasing)
+        p.setPen(self.pen)
+        #p.drawRect(r)
+        p.drawLine(QtCore.QPointF(-r.width()/2.0, 0.0), QtCore.QPointF(r.width()/2.0, 0.0))
+        p.drawLine(QtCore.QPointF(0.0, 0.0), QtCore.QPointF(0.0, r.height()))
+        #p.scale(r.width(), r.height())## workaround for GL bug
+        #r = QtCore.QRectF(r.x()/r.width(), r.y()/r.height(), 1,1)
+        #
+        #p.drawEllipse(r)
+        
+class cellROI(ROI):
+    def __init__(self, **args):
+        ROI.__init__(self, [0,0], [100e-6,100e-6], **args)
+        
+    def paint(self, p, opt, widget):
+        r = self.boundingRect()
+        p.setPen(QtGui.QPen(QtGui.QColor(255,255,255)))
+        p.drawEllipse(r)
+        p.drawLine(QtCore.QPointF(r.width()/2.0, r.height()*0.25), QtCore.QPointF(r.width()/2.0, r.height()*0.75))
+        p.drawLine(QtCore.QPointF(r.width()*0.25, r.height()*0.5), QtCore.QPointF(r.width()*0.75, r.height()*0.5))
+    
+    def getPosition(self, coord='scene'):
+        """Return the position of the center of the ROI in specified coordinates."""
+        r = self.boundingRect()
+        x = r.width()/2
+        y = r.height()/2
+        
+        if coord == 'scene':
+            return self.mapToScene(x, y)
+        elif coord == 'item':
+            return QtCore.QPointF(x, y)
+
 
         
 
@@ -77,7 +135,7 @@ class EventMatchWidget(QtGui.QSplitter):
         
         self.stateGroup = WidgetGroup(self)
         
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.recalculate)        
+        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)        
 
 
     def widgetGroupInterface(self):
@@ -102,15 +160,18 @@ class EventMatchWidget(QtGui.QSplitter):
             self.analysisPlot.hide()
             self.ctrlWidget.hide()
         
-    def setData(self, data, analyze=True):
+    def setData(self, data, pens=None, analyze=True):
         self.data = data
         if (type(data) is list and isinstance(data[0], ndarray)) or (isinstance(data, ndarray) and data.ndim >= 2):
-            self.recalculate(analyze=analyze)
+            self.recalculate(pens=pens, analyze=analyze)
         else:
             raise Exception("Data for event match widget must be a list of arrays or an array with ndim >= 2.")
         
-    def recalculate(self, analyze=True):
-        self.events = self.processData(self.data, display=True, analyze=analyze)
+    def stateChanged(self, *args):
+        self.recalculate()
+        
+    def recalculate(self, pens=None, analyze=True):
+        self.events = self.processData(self.data, pens=pens, display=True, analyze=analyze)
         self.emit(QtCore.SIGNAL('outputChanged'), self)
         #print "Events:", self.events
         ##display events
@@ -152,7 +213,7 @@ class EventMatchWidget(QtGui.QSplitter):
         
     def findEvents(self, data):
         """Locate events in the data based on GUI settings selected. Generally only for internal use."""
-        #dt = data.xvals('Time')[1] - data.xvals('Time')[0]
+        dt = data.xvals('Time')[1] - data.xvals('Time')[0]
         if self.ctrl.detectMethodCombo.currentText() == 'Stdev. Threshold':
             events = stdevThresholdEvents(data, self.ctrl.stThresholdSpin.value())
             #stdev = data.std()
@@ -189,6 +250,18 @@ class EventMatchWidget(QtGui.QSplitter):
             minSum = self.ctrl.zcSumAbsThresholdSpin.value()
             noiseThresh = self.ctrl.zcSumRelThresholdSpin.value()
             events = findEvents(data, minLength=minLen, minPeak=minPeak, minSum=minSum, noiseThreshold=noiseThresh)
+            ## if 'ExpDeconvolve' in self.ctrl.preFilterList.topLevelItems ### Need to only reconvolve if trace was deconvolved, but this is hard - for now we'll just assume that deconvolution is being used
+            for i in range(len(events)):
+                e = data[events[i]['start']:events[i]['start']+events[i]['len']]
+                event = self.ctrl.preFilterList.filterList.topLevelItem(2).filter.reconvolve(e) ### lots of hard-coding happening, don't worry I feel sufficiently guilty about it
+                if events[i]['sum'] > 0:
+                    events[i]['peak'] = event.max()
+                else:
+                    events[i]['peak'] = event.min()
+                #events[i]['sum'] = event.sum()
+                events[i]['sum'] = event.sum()*dt
+                
+                
         elif self.ctrl.detectMethodCombo.currentText() == 'Clements-Bekkers':
             rise = self.ctrl.cbRiseTauSpin.value()
             decay = self.ctrl.cbFallTauSpin.value()
@@ -198,10 +271,11 @@ class EventMatchWidget(QtGui.QSplitter):
             raise Exception("Event detection method not implemented yet.")
         return events
         
-    def processData(self, data, display=False, analyze=True):
+    def processData(self, data, pens=None, display=False, analyze=True):
         """Returns a list of record arrays - each record array contains the events detected in one trace.
                 Arguments:
-                    data - a list of traces"""
+                    data - a list of traces
+                    pens - a list of pens to write traces with, if left blank traces will all be different colors"""
                     
         ## Clear plots
         if display:
@@ -212,11 +286,16 @@ class EventMatchWidget(QtGui.QSplitter):
         events = []
 
         ## Plot raw data
-        for i in range(len(data)):
-            if display:
-                color = float(i)/(len(data))*0.7
-                pen = mkPen(hsv=[color, 0.8, 0.7])
-                self.dataPlot.plot(data[i], pen=pen)
+        if display:
+            if pens == None:
+                for i in range(len(data)):
+                    color = float(i)/(len(data))*0.7
+                    pen = mkPen(hsv=[color, 0.8, 0.7])
+                    self.dataPlot.plot(data[i], pen=pen)
+            else:
+                for i in range(len(data)):
+                    self.dataPlot.plot(data[i], pen=pens[i])
+                    
         
         if not (analyze and self.analysisEnabled):
             return []
@@ -241,8 +320,10 @@ class EventMatchWidget(QtGui.QSplitter):
             
             ## Plot filtered data, stacked events
             if display:
-                color = float(i)/(len(data))*0.7
-                pen = mkPen(hsv=[color, 0.8, 0.7])
+                if pens == None:
+                    color = float(i)/(len(data))*0.7
+                    pen = mkPen(hsv=[color, 0.8, 0.7])
+                else: pen = pens[i]
                 
                 self.analysisPlot.plot(ppd, x=timeVals, pen=pen)
                 tg = VTickGroup(view=self.analysisPlot)
@@ -252,6 +333,11 @@ class EventMatchWidget(QtGui.QSplitter):
                 #print "set tick locations:", timeVals[eventList['start']]
                 self.tickGroups.append(tg)
                 self.analysisPlot.addItem(tg)
+                
+                for j in range(len(eventList)):
+                    e = ppd[eventList[j]['start']:eventList[j]['start']+eventList[j]['len']]
+                    event = self.ctrl.preFilterList.filterList.topLevelItem(2).filter.reconvolve(e)
+                    self.dataPlot.plot(data=event, x=(arange((eventList[j]['start']-100), (eventList[j]['start']-100+len(event)))*10e-5), pen=pen)
                 
                 ## generate triggered stacks for plotting
                 #stack = triggerStack(d, eventList['start'], window=[-100, 200])
@@ -315,17 +401,23 @@ class UncagingWindow(QtGui.QMainWindow):
         self.cw.addWidget(bw)
         self.addImgBtn = QtGui.QPushButton('Add Image')
         self.addScanBtn = QtGui.QPushButton('Add Scan')
+        self.addDrugScanBtn = QtGui.QPushButton('Add Drug Scan')
         self.clearImgBtn = QtGui.QPushButton('Clear Images')
         self.clearScanBtn = QtGui.QPushButton('Clear Scans')
+        self.generateTableBtn = QtGui.QPushButton('GenerateTable')
         self.defaultSize = 150e-6
         bwl.addWidget(self.addImgBtn)
         bwl.addWidget(self.clearImgBtn)
         bwl.addWidget(self.addScanBtn)
+        bwl.addWidget(self.addDrugScanBtn)
         bwl.addWidget(self.clearScanBtn)
+        bwl.addWidget(self.generateTableBtn)
         QtCore.QObject.connect(self.addImgBtn, QtCore.SIGNAL('clicked()'), self.addImage)
         QtCore.QObject.connect(self.addScanBtn, QtCore.SIGNAL('clicked()'), self.addScan)
         QtCore.QObject.connect(self.clearImgBtn, QtCore.SIGNAL('clicked()'), self.clearImage)
         QtCore.QObject.connect(self.clearScanBtn, QtCore.SIGNAL('clicked()'), self.clearScan)
+        QtCore.QObject.connect(self.addDrugScanBtn, QtCore.SIGNAL('clicked()'), self.addDrugScan)
+        QtCore.QObject.connect(self.generateTableBtn, QtCore.SIGNAL('clicked()'), self.generatePspDataTable)
         #self.layout = QtGui.QVBoxLayout()
         #self.cw.setLayout(self.layout)
         bwtop = QtGui.QSplitter()
@@ -344,6 +436,9 @@ class UncagingWindow(QtGui.QMainWindow):
         self.colorScaleBar = ColorScaleBar(self.canvas.view, [10,150], [-10,-10])
         self.colorScaleBar.setZValue(1000000)
         self.canvas.view.scene().addItem(self.colorScaleBar)
+        #self.traceColorScale = ColorScaleBar(self.plot.dataPlot, [10,150], [-10,-10])
+        #self.traceColorScale.setZValue(1000000)
+        #self.plot.dataPlot.layout.addItem(self.traceColorScale, 2,2)
         QtCore.QObject.connect(self.ctrl.recolorBtn, QtCore.SIGNAL('clicked()'), self.recolor)
         self.ctrl.directTimeSpin.setValue(4.0)
         self.ctrl.poststimTimeSpin.setRange(1.0, 1000.0)
@@ -354,7 +449,17 @@ class UncagingWindow(QtGui.QMainWindow):
         self.ctrl.useSpontActCheck.setChecked(False)
         self.ctrl.gradientRadio.setChecked(True)
         self.ctrl.medianCheck.setChecked(True)
+        self.ctrl.lowClipSpin.setRange(0,15000)
+        self.ctrl.highClipSpin.setRange(1,15000)
+        self.ctrl.lowClipSpin.setValue(4000)
+        self.ctrl.highClipSpin.setValue(10000)
+        self.ctrl.downsampleSpin.setValue(10)
         
+        #self.canvas.setMouseTracking(True)
+        self.sliceMarker = tShapeROI([0,0], 0.001)
+        self.canvas.addItem(self.sliceMarker, [0,0], z=100000)
+        self.cellMarker = cellROI()
+        self.canvas.addItem(self.cellMarker, [0,0], z=100000)
         
         
         #self.plot = PlotWidget()
@@ -376,9 +481,12 @@ class UncagingWindow(QtGui.QMainWindow):
         self.currentTraces = []
         self.noiseThreshold = 2.0
         self.eventTimes = []
+        self.table = None
         self.analysisCache = empty(len(self.scanItems),
             {'names': ('eventsValid', 'eventList', 'preEvents', 'dirEvents', 'postEvents', 'stdev', 'preChargePos', 'preChargeNeg', 'dirCharge', 'postChargePos', 'postChargeNeg'),
              'formats':(object, object, object, object, object, float, float, float, float, float, float)})
+        #self.p = PlotWindow()
+        #self.p.show()
         
         
     def addImage(self, img=None, fd=None):
@@ -401,8 +509,12 @@ class UncagingWindow(QtGui.QMainWindow):
         self.canvas.addItem(item, pos, scale=ps, z=self.z, name=fd.shortName())
         self.z += 1
         self.imageItems.append(item)
+        
+        
+    def addDrugScan(self):
+        self.addScan(drug=True)
 
-    def addScan(self):
+    def addScan(self, drug=False):
         dh = getManager().currentFile
         if len(dh.info()['protocol']['params']) > 0:
             dirs = [dh[d] for d in dh.subDirs()]
@@ -428,6 +540,10 @@ class UncagingWindow(QtGui.QMainWindow):
                 item.size = size
                 item.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200,0)))                 
                 self.canvas.addItem(item, [pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z, name=[dh.shortName(), d.shortName()])
+                if drug:
+                    item.drug = True
+                else:
+                    item.drug = False
                 self.scanItems.append(item)
                 
                 ## Find out if this spot is the "same" as any existing average spots
@@ -462,8 +578,8 @@ class UncagingWindow(QtGui.QMainWindow):
     def clearScan(self):
         for item in self.scanItems:
             self.canvas.removeItem(item)
-        for item in self.scanAvgItems:
-            self.canvas.removeItem(item)
+        #for item in self.scanAvgItems:
+         #   self.canvas.removeItem(item)
         self.scanItems = []
         self.scanAvgItems = []
         self.currentTraces = []
@@ -530,12 +646,16 @@ class UncagingWindow(QtGui.QMainWindow):
         
     #def findEvents(self, data):
         #return findEvents(data, noiseThreshold=self.noiseThreshold)
-    def getLaserTime(self, d):
+    def getLaserTime(self, dh):
         """Returns the time of laser stimulation in seconds.
                 Arguments:
-                    d - a directory handle"""
-        q = d.getFile('Laser-UV.ma').read()['QSwitch']
+                    dh - a directory handle"""
+        q = dh.getFile('Laser-UV.ma').read()['QSwitch']
         return argmax(q)/q.infoCopy()[-1]['rate']
+        
+    def getLaserPower(self, dh):
+        q = dh.getFile('Laser-UV.ma').read()['QSwitch']
+        return (len(argwhere(q > 0))-1)/q.infoCopy()[-1]['rate']
         
     def getEventLists(self, i):
         #if not self.plot.analysisEnabled:
@@ -606,7 +726,7 @@ class UncagingWindow(QtGui.QMainWindow):
         if self.ctrl.gradientRadio.isChecked():
             maxcharge = stats.scoreatpercentile(self.analysisCache['postChargeNeg'], per = self.ctrl.colorSpin1.value())
             spont = self.analysisCache['preChargeNeg'].mean()
-            #print "spont activity:", spont
+            print "spont activity:", spont
             for item in self.scanAvgItems:
                 if item.source is not None:  ## this is a single item
                     negCharge = self.analysisCache[item.index]['postChargeNeg']
@@ -706,13 +826,49 @@ class UncagingWindow(QtGui.QMainWindow):
             d = self.loadTrace(s)
             if d is not None:
                 self.currentTraces.append(d)
-            #if hasattr(i, 'source') and i.source is not None:
-                #print 'postEvents:', self.analysisCache[i.index]['postEvents']
-                #print 'postChargeNeg:', self.analysisCache[i.index]['postChargeNeg']
-        self.plot.setData([i[0]['Channel':'primary'] for i in self.currentTraces], analyze=analyze)
+                
+        if self.ctrl.colorTracesCheck.isChecked():
+            pens, max, min = self.assignPens(self.currentTraces)
+            try:
+                data = [i[0]['Channel':'primary'][0:argwhere(i[0]['Channel':'Command'] != i[0]['Channel':'Command'][0])[0][0]] for i in self.currentTraces]
+            except:
+                data = [i[0]['Channel':'primary'] for i in self.currentTraces]
+                
+            if self.ctrl.svgCheck.isChecked():
+                data = [data[i][self.ctrl.lowClipSpin.value():self.ctrl.highClipSpin.value()] for i in range(len(data))]
+                data = [downsample(data[i], self.ctrl.downsampleSpin.value()) for i in range(len(data))]
+            self.plot.setData(data, pens=pens, analyze=False)
+            #gradient = QtGui.QLinearGradient(QtCore.QPointF(0,0), QtCore.QPointF(1,0))
+            #self.traceColorScale.show()
+            #self.traceColorScale.setGradient
+            #self.colorScaleBar.setLabels({str(max):1, str(min):0}
+            
+            #cmd = self.loadTrace(item)[0]['Channel':'Command']
+            #pulse = argwhere(cmd != cmd[0])[0]
+            #trace = self.loadTrace(item)[0]['Channel':'primary'][0:pulse[0]]
+            
+        
+        else:
+            try:
+                self.plot.setData([i[0]['Channel':'primary'][0:argwhere(i[0]['Channel':'Command'] != i[0]['Channel':'Command'][0])[0][0]] for i in self.currentTraces], analyze=analyze)
+            except:
+                self.plot.setData([i[0]['Channel':'primary'] for i in self.currentTraces], analyze=analyze)
+                
         return spots
         
-
+    def assignPens(self, data):
+        laserStrength = []
+        for i in range(len(data)):
+            laserStrength.append(self.getLaserPower(data[i][1]))
+        m = max(laserStrength)
+        n = min(laserStrength)
+        pens = []
+        for x in laserStrength:
+            color = (1-x/m)*0.7
+            pens.append(mkPen(hsv=[color, 0.8, 0.7]))
+        return pens, m, n
+            
+        
         
     def loadTrace(self, item):
         """Returns a tuple where the first element is a clamp.ma, and the second is its directory handle."""
@@ -721,7 +877,636 @@ class UncagingWindow(QtGui.QMainWindow):
         dh = item.source
         data = self.getClampData(dh)
         return data, dh
+    def getPspSlope(self, data, pspStart, base=None, width=0.002):
+        """Return the slope of the first PSP after pspStart"""
+        #data = data[0]['Channel': 'primary']
+        dt = data.xvals('Time')[1] - data.xvals('Time')[0]
+        #if pspStart == None:
+            #pspStart = self.getEpspSearchStart()
+            #if pspStart == None:
+                #return None, None
+        e = self.plot.processData(data=[data], display=False, analyze=True)[0]
+        e = e[e['peak'] > 0]  ## select only positive events
+        starts = e['start']
+        pspTimes = starts[starts > pspStart]
+        if len(pspTimes) < 1:
+            return None, None
+        pspTime = pspTimes[0]
+        width = width / dt
+        slopeRgn = gaussian_filter(data[pspTime : pspTime + 2*width].view(ndarray), 2)  ## slide forward to point of max slope
+        peak = argmax(slopeRgn[1:]-slopeRgn[:-1])
+        pspTime += peak
         
+        pspRgn = data[pspTime-(width/2) : pspTime+(width/2)]
+        slope = stats.linregress(pspRgn.xvals('Time'), pspRgn)[0]
+        return slope, pspTime*dt
+    
+    def generatePspDataTable(self, data='All'):
+        table = zeros((len(self.scanAvgItems), len(self.scanItems)/len(self.scanAvgItems)), dtype=[
+            ('traceID', '|S100'), ## 0 specify a space for a string 100 bytes long
+            ('drug', bool), ## 1
+            ('laserPower', float), ## 2 units = seconds
+            ('position', 'f8', (2,)), ## 3
+            ('epsp', bool), ## 4 
+            ('epspSlope', float), ## 5 in V/sec (=mV/msec)
+            ('epspLatency', float), ## 6 in seconds
+            ('epspPeak', float), ## 7
+            ('epspTimeToPeak', float), ## 8
+            ('ap', bool), ## 9
+            ('apNumber', int), ## 10
+            #('apThreshold', float), ## I don't know how to measure this
+            #('apStartLatency', float), #same as epspLatency
+            ('apPeakLatency', float), ## 11
+            ('apTimeToPeak', float) ## 12
+        ])
+        
+        
+        for i in range(len(self.scanAvgItems)):
+            spot = self.scanAvgItems[i]
+            for j in range(len(spot.sourceItems)):
+                item = spot.sourceItems[j]
+                trace = self.loadTrace(item)[0]['Channel':'primary']
+                #self.p.plot(trace, clear=True)
+                
+                ### get basic trace info
+                table[i][j]['traceID'] = item.source.name()
+                table[i][j]['drug'] = item.drug
+                table[i][j]['laserPower'] = self.getLaserPower(item.source)
+                table[i][j]['position'][0] = item.position[0]
+                table[i][j]['position'][1] = item.position[1]
+                
+                
+                rate = trace.infoCopy()[-1]['rate']
+                laserTime = self.getLaserTime(item.source) ## in seconds
+                laserIndex = laserTime * rate
+                
+                ### get epsp/ap info
+                slope, epspTime = self.getPspSlope(trace, laserIndex) ## slope in V/sec, epspTime in seconds
+                if slope != None:
+                    table[i][j]['epsp'] = True
+                    table[i][j]['epspSlope'] = slope
+                    table[i][j]['epspLatency'] = epspTime - laserTime
+                    if trace[laserIndex:].max() < 0:
+                        table[i][j]['ap'] = False
+                        table[i][j]['epspPeak'] = trace[laserIndex:].max() - trace[:laserIndex].mean()
+                        table[i][j]['epspTimeToPeak'] = argwhere(trace == trace[laserIndex:].max())/rate - epspTime
+                    else:
+                        table[i][j]['ap'] = True
+                        table[i][j]['apPeakLatency'] = argwhere(trace == trace[laserIndex:].max())/rate - laserTime
+                        table[i][j]['apTimeToPeak'] = argwhere(trace == trace[laserIndex:].max())/rate - epspTime
+                        a = argwhere(trace > 0.01) # < 10 mV
+                        spikes = argwhere(a[1:]-a[:-1] > 5)
+                        #if len(spikes) == 0:
+                        #    table[i][j]['apNumber'] = 1
+                        #else:
+                        table[i][j]['apNumber'] = len(spikes) + 1
+                        
+        self.table = table
+        #print self.table
+        
+    def generateEventTable(self, rostral=None):
+        if rostral not in ['right', 'left']:
+            print "Rostral orientation must be specified. Options: 'right', 'left'. Enter orientation as if the pia were horizontal at the top of the image."
+            return
+        
+        table = zeros((len(self.scanItems)*10), dtype=[ ## create a buffer space of 20 events per trace (maybe need more?)
+            ('traceID', '|S100'), ## 0 specify a space for a string 100 bytes long
+            #('laserPower', float), ## 2 units = seconds
+            ('xslice', float64), ## position of center of spot in sliceMarker coordinates - units: meters - Positive x is anterior
+            ('yslice', float64),
+            ('xcell', float64),
+            ('ycell', float64),
+            ('latency', float64), ##  in seconds
+            ('duration', float64),
+            ('peak', float64), ## 
+            ('charge', float64) 
+        ])
+        #spontLatencies = []
+        #spontCharges = []
+        n=0
+        for item in self.scanItems:
+            try:
+                cmd = self.loadTrace(item)[0]['Channel':'Command']
+                pulse = argwhere(cmd != cmd[0])[0]
+                trace = self.loadTrace(item)[0]['Channel':'primary'][0:pulse[0]]
+            except:
+                trace = self.loadTrace(item)[0]['Channel':'primary']
+            
+            rate = trace.infoCopy()[-1]['rate']
+            laserIndex = self.getLaserTime(item.source)*rate ## in seconds
+            
+            traceID = item.source.name()
+            
+            ### return the coordinates of stim. site relative to sliceMarker
+            xs, ys = Point(item.mapToItem(self.sliceMarker, QtCore.QPointF(item.position[0], item.position[1])))
+            cell = Point(self.sliceMarker.mapFromScene(self.cellMarker.getPosition()))
+            xc = xs - cell[0]
+            yc = ys - cell[1]
+            
+            if rostral == 'left':
+                xs = -xs
+                xc = -xc
+            #x = self.sliceMarker.mapFromScene(item.position[0])
+            #y = self.sliceMarker.mapFromScene(item.position[1])
+            
+            events = self.plot.processData([trace], display=False)
+            #preEvents = events[0][(events[0]['start'] < laserIndex)*(events[0]['start']> laserIndex - self.ctrl.poststimTimeSpin.value()*10)]
+            #spontLatencies.append((preEvents['start']-laserIndex)/rate)
+            #spontCharges.append((preEvents['sum']))
+            events = events[0][(events[0]['start'] > laserIndex)*(events[0]['start'] < laserIndex+self.ctrl.poststimTimeSpin.value()*10)]
+            
+            spikeIndex = None
+            if trace.min() < -2e-9:
+                spikeIndex = argwhere(trace == trace.min())[0][0]-laserIndex
+                table[n]['traceID'] = traceID
+                table[n]['xslice'] = float(xs)
+                table[n]['yslice'] = float(ys)
+                table[n]['xcell'] = float(xc)
+                table[n]['ycell'] = float(yc)
+                table[n]['latency'] = spikeIndex/rate
+                table[n]['peak'] = 5e-9
+                n += 1
+                buffer = (150, 300) ### buffer to exclude events around an action potential (in 10e-4 seconds)
+                events = events[(events['start'] < spikeIndex - buffer[0])*(events['start'] > spikeIndex + buffer[1])]
+            
+            #foundEvent = False
+            if len(events) > 0:
+                for e in events:
+                    #foundEvent = False
+                    #if laserIndex < e['start'] and e['start'] < laserIndex+self.ctrl.poststimTimeSpin.value()*10:
+                    #    foundEvent = True
+                    table[n]['traceID'] = traceID
+                    table[n]['xslice'] = float(xs)
+                    table[n]['yslice'] = float(ys)
+                    table[n]['xcell'] = float(xc)
+                    table[n]['ycell'] = float(yc)
+                    table[n]['latency']= (e['start']-laserIndex)/rate
+                    table[n]['duration'] = e['len'] / rate
+                    table[n]['peak'] = e['peak']
+                    table[n]['charge'] = e['sum']
+                    n += 1
+                        
+            elif len(events) == 0 and spikeIndex == None:
+                table[n]['traceID'] = traceID
+                table[n]['xcell'] = float(xc)
+                table[n]['ycell'] = float(yc)
+                table[n]['xslice'] = float(xs)
+                table[n]['yslice'] = float(ys)
+                n += 1
+        
+        ## get rid of extra buffer
+        a = argwhere(table['traceID'] == '')[0][0]
+        table = table[:a]
+        
+        metaInfo = self.getMetaInfo()
+        #spontLatencies = hstack(spontLatencies)
+        #metaInfo['spontCharge'] = hstack(spontCharges).mean()
+                    
+        self.eventTable = (table, metaInfo)
+        
+    def writeCsvFromRecordArray(self, fileName, data):
+        f = open('%s-UncagingAnalysis.csv' %fileName, 'w')
+        for x in data.dtype.names:
+            f.write('%s,' %x)
+        f.write(' \n')
+        for i in range(len(data)):
+            for name in data.dtype.names:
+                if data.dtype.fields[name][0] in [dtype('|S100'), dtype('bool')]:
+                    f.write('%r,' %data[name][i])
+                elif data.dtype.fields[name][0] in [dtype('float64'), dtype('float32')]:
+                    f.write('%g,' %data[name][i])
+            f.write(' \n')
+        f.close()
+                
+    def storeData(self, fileName, data):
+        f = open('/Volumes/iorek/%s-UncagingAnalysis.pk' %fileName, 'w')
+        pickle.dump(data, f)
+        f.close()
+        
+    def loadData(self, fileName):
+        f = open('/Volumes/iorek/%s' %fileName, 'r')
+        a = pickle.load(f)
+        f.close()
+        return a
+        
+                
+    def getMetaInfo(self):
+        metaInfo = {}
+        ## slice/cell positions
+        sliceS = self.sliceMarker.getSceneHandlePositions()
+        sliceL = self.sliceMarker.getLocalHandlePositions()
+        metaInfo['cellPosition'] = self.sliceMarker.mapFromScene(self.cellMarker.getPosition()) ## cell position measured relative to sliceMarker
+        
+        for x in sliceS:
+            i = 0
+            if x[0] is not None:
+                metaInfo[x[0]] = {'local': sliceL[i][1] , 'scene':x[1]}
+                i += 1
+                
+        ## get analysis info
+        metaInfo['postStimTime'] = self.ctrl.poststimTimeSpin.value()/1000
+        metaInfo['Filters'] = {}
+        for i in range(self.plot.ctrl.preFilterList.filterList.topLevelItemCount()):
+            j = 0
+            item = self.plot.ctrl.preFilterList.filterList.topLevelItem(i)
+            if item.checkState(0) == QtCore.Qt.Checked:
+                filter = item.filter
+                x={}
+                x['index'] = j
+                j += 1
+                for k in filter.ctrls.keys():
+                    try:
+                        try:
+                            x[k] = filter.ctrls[k].value()
+                        except AttributeError:
+                            x[k] = filter.ctrls[k].currentText()
+                    except AttributeError:
+                        x[k] = filter.ctrls[k].isChecked()
+                metaInfo['Filters'][filter.objectName()] = x
+        if self.plot.ctrl.detectMethodCombo.currentText() == "Zero-crossing":
+            x = {}
+            x['absLengthTreshold'] = self.plot.ctrl.zcLenAbsThresholdSpin.value()
+            x['absAmpThreshold'] = self.plot.ctrl.zcAmpAbsThresholdSpin.value()
+            x['absSumThreshold'] = self.plot.ctrl.zcSumAbsThresholdSpin.value()
+            x['relSumThreshold'] = self.plot.ctrl.zcSumRelThresholdSpin.value()
+        elif self.ctrl.detectMethodCombo.currentText() == 'Clements-Bekkers':
+            x={}
+            x['riseTau'] = self.plot.ctrl.cbRiseTauSpin.value()
+            x['decayTau'] = self.plot.ctrl.cbFallTauSpin.value()
+            x['threshold'] = self.plot.ctrl.cbThresholdSpin.value()
+        elif self.ctrl.detectMethodCombo.currentText() == 'Stdev. Threshold':
+            x = {}
+            x['threshold'] = self.plot.ctrl.stThresholdSpin.value()
+        metaInfo['eventDetection'] = (self.plot.ctrl.detectMethodCombo.currentText(), x)
+        metaInfo['analysisTime'] = time.ctime()
+        
+        return metaInfo
+    
+
+
+class CellMixer(QtCore.QObject):
+    def __init__(self):
+        QtCore.QObject.__init__(self)
+        self.arrayList = []
+        self.metaInfo = []
+        self.dataTable = None
+        self.cellEventMaps = []
+        self.cellMaps = []
+        self.binWidth = 100e-6
+        self.figures = [0]
+        self.chargeCutOff = None
+        self.cellNames = []
+        
+    def dataThrough(self):
+        self.loadData('2010.08.04_s0c0-UncagingAnalysis.pk')
+        self.loadData('2010.08.06_s0c0-UncagingAnalysis.pk')
+        self.loadData('2010.08.30_s0c0-UncagingAnalysis.pk')
+        self.loadData('2010.08.05_s1c0-UncagingAnalysis.pk')
+        for index in range(len(self.arrayList)):
+            self.singleCellCentric(self.arrayList[index])
+            self.squash(self.cellEventMaps[index])
+        #self.displayMap(self.cellMaps[0])
+            #self.displayCellData(index)
+    
+    def loadData(self, fileName=None):
+        if fileName is not None:
+            fileName = '/Volumes/iorek/%s' %fileName
+        else:
+            fileName = getManager().currentFile.name()
+            
+        f = open(fileName, 'r')
+        a = pickle.load(f)
+        f.close()
+        self.cellNames.append(fileName)
+        self.arrayList.append(a[0])
+        self.metaInfo.append(a[1])
+        self.updateChargeCutOff()
+        
+        return a
+    
+    def updateChargeCutOff(self, percentile=4):
+        self.compileTable()
+        mask = self.dataTable['traceID'] != ''
+        charges = self.dataTable[mask]['charge']
+        self.chargeCutOff = stats.scoreatpercentile(charges, percentile)
+    
+    def compileTable(self):
+        lengths = [len(self.arrayList[i]) for i in range(len(self.arrayList))]
+        arrayDtype = self.arrayList[0].dtype
+        self.dataTable = zeros((len(lengths), max(lengths)), dtype = arrayDtype)
+        
+        
+        for i in range(len(self.arrayList)):
+            a = self.arrayList[i]
+            self.dataTable[i][:len(a)] = a
+            
+    def singleCellCentric(self, table):
+        map = zeros((40, 20, 200), dtype = self.arrayList[0].dtype) ##shape = x, y, events
+        storage = zeros(len(table), dtype = [
+            ('x', int),
+            ('y', int),
+            ('event', self.arrayList[0].dtype)
+            ])
+        
+        for i in range(len(table)):
+            event = table[i]
+            x = floor(event['xcell']/self.binWidth)
+            y = floor(event['ycell']/self.binWidth)
+            storage[i]['x'] = x
+            storage[i]['y'] = y
+            storage[i]['event'] = event
+        
+        lengths = []
+        unx = linspace(-20, 20, 41)[:-1]
+        uny = linspace(-4, 16, 21)[:-1]
+
+        for i in range(40):         ## x dimension of map array
+            for j in range(20):     ## y dimension of map array
+                events = storage[(storage['x'] == unx[i]) * (storage['y'] == uny[j])]
+                map[i][j][:len(events)] = events['event']
+                lengths.append(len(events))
+        
+        map = map[:,:,:max(lengths)]
+        
+        self.cellEventMaps.append(map)
+        return map
+        
+    def squash(self, eventMap):
+        """Takes a 3d record array of events sorted into location bins, and squashes it into a 2d record array of location bins."""
+        map = zeros((40, 20), dtype = [
+            ('charge', float), ### sum of events/#traces
+            ('latency', float), ### sum of first latencies/#responses
+            ('#APs', int),
+            ('#traces', int),
+            ('#responses', int)
+        ])
+        mask = eventMap['traceID'] != ''
+        for i in range(40):
+            for j in range(20):
+                charges = eventMap[i][j][mask[i][j]]['charge'].sum()
+                traces = unique(eventMap[i][j][mask[i][j]]['traceID'])
+                latencies = 0
+                APs = 0 
+                responses = 0 
+                for t in traces:
+                    #print 'i', i, 'j',j, 'trace', t
+                    latency = eventMap[i][j][mask[i][j]]['traceID' == t]['latency'].min()
+                    if 5e-9 == eventMap[i][j][mask[i][j]]['traceID' == t]['peak'].min():
+                        APs += 1
+                    if latency != 0:
+                        latencies += latency
+                        responses += 1
+                if len(traces) != 0:
+                    map[i][j]['charge'] = charges/len(traces)
+                if responses != 0:
+                    map[i][j]['latency'] = latencies/responses
+                map[i][j]['#APs'] = APs
+                map[i][j]['#traces'] = len(traces)
+                map[i][j]['#responses'] = responses
+                
+        self.cellMaps.append(map)
+        return map
+    
+    def displayMap(self, data, field='charge', max=None):
+        if data.ndim != 2:
+            print """Not sure how to display data in %i dimensions. Please enter 2-dimensional data set.""" %data.ndim
+            return
+        if max == None:
+            d = data[field]/data[field].min()
+        else:
+            d = (data[field]/max).clip(0,1)  ##large events are 1, small events are small, 0 is 0
+        d = d.astype(float32)
+        d = d.transpose()
+        fig = plt.figure(1)
+        #s1 = fig.add_subplot(1,1,1)
+        #c = s1.contour(data.transpose())
+        mask = data['#traces'] != 0
+        mask = mask.transpose()
+        dirMask = data['latency'] < 0.007
+        dirMask = dirMask.transpose()
+        colors = zeros((d.shape[0], d.shape[1], 4), dtype=float)
+        #hsv = zeros((data.shape[0], data.shape[1]), dtype=object)
+        for i in range(d.shape[0]):
+            for j in range(d.shape[1]):
+                c = hsvColor(0.7 - d[i][j]*0.7)
+                colors[i][j][0] = float(c.red()/255.0)
+                colors[i][j][1] = float(c.green()/255.0)
+                colors[i][j][2] = float(c.blue()/255.0)
+                colors[:,:,3][mask] = 1.0
+                colors[:,:,3][(data.transpose()['#responses'] == 0) * (mask)] = 0.6
+                
+        plt.imshow(colors)
+        #plt.figure(2)
+        #plt.imshow(colors, interpolation = None)
+        #plt.figure(3)
+        #plt.imshow(colors, interpolation = 'gaussian')
+        #fig.show()
+        #self.figures.append(fig)
+        return colors
+        
+    def displayCellData(self, dataIndex):
+        #plt.figure(1)
+        fig = plt.figure(dataIndex+1, dpi=300)
+        fig.suptitle(self.cellNames[dataIndex])
+        pos = Point(self.metaInfo[dataIndex]['cellPosition'])
+        plt.figtext(0.1,0.9, "cell position: x=%f um, y=%f um" %(pos[0]*1e6,pos[1]*1e6))
+        s1 = fig.add_subplot(2,2,1)
+        s2 = fig.add_subplot(2,2,2)
+        #s3 = fig.add_subplot(2,3,4)
+        #s4 = fig.add_subplot(2,2,3)
+        s5 = fig.add_subplot(2,2,4)
+        
+        data = self.cellMaps[dataIndex].transpose()
+        traceMask = data['#traces'] == 0 ## True where there are no traces
+        responseMask = (data['#responses'] == 0)*~traceMask ### True where there were no responses
+        dirMask = (data['latency'] < 0.007)*~responseMask*~traceMask ###True where responses are direct
+
+        s1.set_title('Charge Map')
+        charge = data['charge']
+        charge = (charge/self.chargeCutOff).clip(0.0,1.0)
+        #charge = charge.astype(float32)
+        #charge[dirMask] = 0.0
+        #charge[traceMask] = 1.0
+        #charge[responseMask] = 0.99
+        
+        d = charge
+        colors = zeros((d.shape[0], d.shape[1], 4), dtype=float)
+        #hsv = zeros((data.shape[0], data.shape[1]), dtype=object)
+        for i in range(d.shape[0]):
+            for j in range(d.shape[1]):
+                c = hsvColor(0.7 - d[i][j]*0.7)
+                colors[i][j][0] = float(c.red()/255.0)
+                colors[i][j][1] = float(c.green()/255.0)
+                colors[i][j][2] = float(c.blue()/255.0)
+                colors[i][j][3] = 1.0
+        colors[traceMask] = array([0.0, 0.0,0.0,0.0])
+        colors[responseMask] = array([0.8,0.8,0.8,0.4])
+        colors[dirMask] = array([0.0,0.0,0.0,1.0])
+        #img1 = s1.imshow(colors)
+        img1 = s1.imshow(colors, cmap = 'hsv')
+        cb1 = plt.colorbar(img1, ax=s1)
+        cb1.set_label('Charge (pC)')
+        cb1.set_ticks([0.7, 0.0])
+        cb1.set_ticklabels(['0.0', '%.3g pC' % (-self.chargeCutOff*1e12)])
+        s1.set_ylabel('y Position (mm)')
+        s1.set_xlim(left=3, right=36)
+        s1.set_xticklabels(['2.0','1.5', '1.0', '0.5', '0', '0.5', '1.0', '1.5'])
+        s1.set_ylim(bottom=16, top=1)
+        s1.set_yticklabels(['0.4','0.2','0','0.2','0.4','0.6','0.8','1.0','1.2','1.4','1.6'])
+        s1.set_xlabel('x Position (mm)')
+        
+        a = argwhere(data['#APs']!=0)
+        #print "APs at: ", a
+        self.a=a
+        if len(a) != 0:
+            for x in a:
+                s1.plot(x[1],x[0], '*w', ms = 5)
+        s1.plot(20,4,'ow')        
+        
+        s2.set_title('Latency Map')
+        lat = data['latency']
+        #lat[lat==0] = 0.3
+        lat = ((0.3-lat)/0.3).clip(0, 1)
+        d = lat
+        #lat = lat.astype(float32)
+        #lat[dirMask] = 0.0
+        #lat[traceMask] = 1.0
+        #lat[responseMask] = 0.99
+        colors2 = zeros((d.shape[0], d.shape[1], 4), dtype=float)
+        for i in range(d.shape[0]):
+            for j in range(d.shape[1]):
+                c = hsvColor(0.7 - d[i][j]*0.7)
+                colors2[i][j][0] = float(c.red()/255.0)
+                colors2[i][j][1] = float(c.green()/255.0)
+                colors2[i][j][2] = float(c.blue()/255.0)
+                colors2[i][j][3] = 1.0
+        colors2[traceMask] = array([0.0, 0.0,0.0,0.0])
+        colors2[responseMask] = array([0.8,0.8,0.8,0.4])
+        colors2[dirMask] = array([0.0,0.0,0.0,1.0])
+        
+        img2 = s2.imshow(colors2, cmap = 'hsv')
+        cb2 = plt.colorbar(img2, ax=s2, drawedges=False)
+        cb2.set_label('Latency (ms)')
+        cb2.set_ticks([0.7, 0.0])
+        cb2.set_ticklabels(['300 ms', '7 ms'])
+        s2.set_ylabel('y Position (mm)')
+        s2.set_xlabel('x Position (mm)')
+        s2.set_xlim(left=3, right=36)
+        s2.set_xticklabels(['2.0','1.5', '1.0', '0.5', '0', '0.5', '1.0', '1.5'])
+        s2.set_ylim(bottom=16, top=1)
+        s2.set_yticklabels(['0.4','0.2','0','0.2','0.4','0.6','0.8','1.0','1.2','1.4','1.6'])
+        s2.plot(20,4,'ow')
+        if len(a) != 0:
+            for x in a:
+                s2.plot(x[1],x[0], '*w')
+        
+        mask = self.cellEventMaps[dataIndex]['latency'] != 0
+        
+        #s3.set_title('charge distribution')
+        #data = self.cellEventMaps[dataIndex][mask]['charge']
+        #s3.text(0.2, 0.9,'# of events: %s' %len(data), fontsize=10, transform = s3.transAxes)
+        ##maxCharge = -data.min()
+        ##maxCharge = stats.scoreatpercentile(data, 3)
+        ##data[data > maxCharge] = maxCharge
+        ##bins = logspace(0,maxCharge,50)
+        #s3.hist(data, bins=100)
+        #s3.set_xlabel('charge')
+        #s3.set_ylabel('number')
+        
+        #s4.set_title('latency distribution')
+        #data = self.cellEventMaps[dataIndex][mask]['latency']
+        #s4.hist(data, bins=100)
+        #s4.set_xlabel('latency')
+        #s4.set_ylabel('number')
+        #s4.set_xlim(left = 0, right = 0.3)
+        #s4.set_xticks([0, 0.1, 0.2, 0.3])
+        #s4.set_xticklabels(['0', '100', '200','300'])
+        
+        s5.set_title('Charge v. Latency')
+        charge = -self.cellEventMaps[dataIndex][mask]['charge']*1e12
+        latency = self.cellEventMaps[dataIndex][mask]['latency']
+        s5.semilogy(latency, charge, 'bo', markerfacecolor = 'blue', markersize=5)
+        s5.set_xlabel('Latency (ms)')
+        s5.set_ylabel('Charge (pC)')
+        s5.axhspan(0.5e-11*1e12, charge.max(), xmin=0.06/0.32, xmax=0.31/0.32, edgecolor='none',facecolor='gray', alpha=0.3 )
+        s5.set_xlim(left = -0.01, right = 0.31)
+        s5.set_xticks([0, 0.1, 0.2, 0.3])
+        s5.set_xticklabels(['0', '100', '200','300'])
+        
+        self.figures.append(fig)
+        
+    def mapBigInputs(self, dataIndices, minLatency=0.05, minCharge=-0.5e-11):
+        
+        d0 = self.arrayList[dataIndices[0]]
+        d0 = d0[(d0['latency']>minLatency)*d0['charge']<minCharge]
+        x0 = d0['xcell']
+        y0 = -d0['ycell']
+        s=10
+        plt.figure(1)
+        s1 = plt.subplot(1,1,1)
+        s1.plot(x0,y0,'bo',ms=s)
+        
+        if len(dataIndices) > 1:
+            d1 = self.arrayList[dataIndices[1]]
+            d1 = d1[(d1['latency']>minLatency)*d1['charge']<minCharge]
+            x1 = d1['xcell']
+            y1 = -d1['ycell']
+            
+            d2 = self.arrayList[dataIndices[2]]
+            d2 = d2[(d2['latency']>minLatency)*d2['charge']<minCharge]
+            x2 = d2['xcell']
+            y2 = -d2['ycell']
+            
+            d3 = self.arrayList[dataIndices[3]]
+            d3 = d3[(d3['latency']>minLatency)*d3['charge']<minCharge]
+            x3 = d3['xcell']
+            y3 = -d3['ycell']
+            
+            s1.plot(x1,y1,'ro',ms=s)
+            s1.plot(x2,y2,'go',ms=s)
+            s1.plot(x3,y3,'wo',ms=s)
+            s1.plot(0,0,'ok',ms=8)
+            
+        s1.set_xbound(lower = -0.002, upper = 0.002)
+        s1.set_ybound(lower = -0.0015, upper = 0.0005)
+        
+        #print "Making figure 2"
+        plt.figure(2)
+        s2 = plt.subplot(1,1,1)
+        
+        data = self.dataTable
+        #print "1"
+        map = zeros((40, 20), dtype=float) ### map that hold number of traces
+        #print "2"
+        for i in dataIndices:
+            data = self.cellEventMaps[i]
+            #print "i: ", i
+            #number = data[:,:]
+            for j in range(map.shape[0]):
+                for k in range(map.shape[1]):
+                    #print 'j:', j, 'k:', k
+                    number = len(unique(data[j][k]['traceID']))
+                    #print 'number:', number
+                    map[j][k] += number
+                    #print 'added number...'
+                    
+        #print 'making gray array'
+        grays = zeros((map.shape[1], map.shape[0],4), dtype=float)
+        grays[:,:,0] = 0.5
+        grays[:,:,1] = 0.5
+        grays[:,:,2] = 0.5
+        grays[:,:,3] = 0.05*map.transpose()
+        #print 'gray array made'
+        print 'grays.max:', grays[:,:,3].max()
+        
+        img = plt.imshow(grays, cmap='grey')
+        cb = plt.colorbar(img, ax=s2)
+        plt.plot(20,4,'ok',ms=8)
+        
+        
+        
+    
+    
 class STDPWindow(UncagingWindow):
     ###NEED:  add labels to LTP plot?, figure out how to get/display avg epsp time and avg spike time, 
     def __init__(self):
@@ -829,16 +1614,19 @@ class STDPWindow(UncagingWindow):
             self.epspStats[i]['conditioningMask']   = False
             self.epspStats[i]['unixtime']           = self.getUnixTime(self.currentTraces[i])
             
-            if self.currentTraces[i][0]['Channel':'Command'].max() >= 0.1e-09:
-                self.epspStats[i]['conditioningMask'] = True
-                cmdChannel = self.currentTraces[i][0]['Channel':'Command']
-                priChannel = self.currentTraces[i][0]['Channel':'primary']
-                stimtime = argwhere(cmdChannel == cmdChannel.max())
-                first    = argwhere(priChannel == priChannel[stimtime[0]:stimtime[0]+90].max())
-                if len(first) > 0:
-                    firstspikeindex = first[0]
-                    firstspike = priChannel.xvals('Time')[firstspikeindex]
-                    self.epspStats[i]['spikeTime'] = firstspike
+            try:
+                if self.currentTraces[i][0]['Channel':'Command'].max() >= 0.1e-09:
+                    self.epspStats[i]['conditioningMask'] = True
+                    cmdChannel = self.currentTraces[i][0]['Channel':'Command']
+                    priChannel = self.currentTraces[i][0]['Channel':'primary']
+                    stimtime = argwhere(cmdChannel == cmdChannel.max())
+                    first    = argwhere(priChannel == priChannel[stimtime[0]:stimtime[0]+90].max())
+                    if len(first) > 0:
+                        firstspikeindex = first[0]
+                        firstspike = priChannel.xvals('Time')[firstspikeindex]
+                        self.epspStats[i]['spikeTime'] = firstspike
+            except:
+                pass
         
         ## Sort all trace analysis records. 
         ##   Note that indexes in epspStats and currentTraces will no longer match.
@@ -1125,44 +1913,7 @@ class STDPWindow(UncagingWindow):
         slope = stats.linregress(pspRgn.xvals('Time'), pspRgn)[0]
         return slope, pspTime*dt
     
-    #def getDerSlope(self, data):
-        #d = data[0]['Channel':'primary']
-        ##pspRgn = self.getPspRgn(data, self.stdpCtrl.durationSpin.value()/1000.0+0.1)
-        #q = self.getLaserTime(data[1])*d.infoCopy()[-1]['rate']
-        ##base = self.getBaselineRgn(data)
-        #lp = lowPass(d, 200)
-        #der = diff(lp)
-        #pspRgn = der[q:q+self.stdpCtrl.durationSpin.value()*d.infoCopy()[-1]['rate']/1000]
-        #base = der[:q]
-        #slope = pspRgn.max()
-        #a = argwhere(der == pspRgn.max())[0,0]
-        #slopetime = d.xvals('Time')[a]
-        ##rgnPsp = pspRgn[0:a][::-1]
-        ##b = argwhere(rgnPsp < base.mean()+base.std())
-        ##if len(b>0):
-        ##    epsptime= pspRgn.xvals('Time')[a-b[0,0]]
-        ##else:
-        ##    epsptime = pspRgn.xvals('Time')[0]
-        #n=0
-        #a = []
-        #while len(a) == 0 and n<2*self.stdpCtrl.thresholdSpin.value()-1:
-            #a = argwhere(pspRgn > base.mean()+(self.stdpCtrl.thresholdSpin.value()*2-n)*base.std())
-            #n+=1
-        #if len(a)>0:
-            #rgnPsp = pspRgn[0:a[0,0]][::-1]
-            #n=0
-            #b=[]
-            #while len(b)==0 and n<self.stdpCtrl.thresholdSpin.value():
-                #b = argwhere(rgnPsp < base.mean()+n*base.std())
-                #n+=1
-            #if len(b) > 0:
-                #index= a[0,0]-b[0,0]
-            #else:
-                #index = 0
-        #else:
-            #index = 0
-        #epsptime = self.getPspRgn(data,self.stdpCtrl.durationSpin.value()/1000.0).xvals('Time')[index]
-        #return slope, slopetime, epsptime
+    
         
     def getPspIndex(self, data, pspRgn=None, base=None):
         if pspRgn == None:
@@ -1318,6 +2069,99 @@ class STDPWindow(UncagingWindow):
     #    pspRgn = data[0]['Time': q:(q+self.stdpCtrl.durationSpin.value()/1000.0)]
     #    amp = pspRgn.max() - base.mean()
     #    return time, amp
+from AnalysisPlotWindowTemplate import *
+    
+class AnalysisPlotWindow(QtGui.QMainWindow):
+    def __init__(self):
+        QtGui.QMainWindow.__init__(self)
+        self.cw = QtGui.QWidget()
+        self.setCentralWidget(self.cw)
+        self.ui = Ui_AnalysisPlotWindowTemplate()
+        self.ui.setupUi(self.cw)
+        self.data = [] #storage for (clampData, directory handle)
+        self.traces = None # storage for data as a metaArray
+        self.dataCache = None
+        self.ui.analysisPlot1.setDataSource(self.data)
+        self.ui.analysisPlot1.setHost(self)
+        self.ui.analysisPlot2.setDataSource(self.data)
+        self.ui.analysisPlot2.setHost(self)
+        self.ui.dataSourceCombo.insertItems(0, ['data manager', 'uncaging window', 'stdp window'])
+        
+        QtCore.QObject.connect(self.ui.loadDataBtn, QtCore.SIGNAL('clicked()'), self.loadData)
+        QtCore.QObject.connect(self.ui.addPlotBtn, QtCore.SIGNAL('clicked()'), self.addPlot)
+        
+        self.show()
+        
+    def loadData(self):
+        print "loadData() called."
+        self.ui.tracePlot.clearPlots()
+        
+        if self.ui.dataSourceCombo.currentText() == 'data manager':
+            dh = getManager().currentFile
+            dirs = dh.subDirs()
+            c = 0.0
+            traces = []
+            values = []
+            for d in dirs:
+                d = dh[d] #d is the individual protocol run directory handle
+                try:
+                    data = d['Clamp1.ma'].read()
+                except:
+                    data = d['Clamp2.ma'].read()
+                cmd = data['Channel': 'Command']
+                if data.hasColumn('Channel', 'primary'):
+                    data = data['Channel': 'primary']
+                else:
+                    data = data['Channel': 'scaled']
+                self.data.append((data, d))
+                traces.append(data)
+                self.ui.tracePlot.plot(data, pen=mkPen(hsv=[c, 0.7]))
+                values.append(cmd[len(cmd)/2])
+                c += 1.0 / len(dirs)
+                
+            if len(dirs) > 0:
+                #end = cmd.xvals('Time')[-1]
+                #self.lr.setRegion([end *0.5, end * 0.6])
+                #self.updateAnalysis()
+                info = [
+                    {'name': 'Command', 'units': cmd.axisUnits(-1), 'values': array(values)},
+                    data.infoCopy('Time'), 
+                    data.infoCopy(-1),
+                    ]
+                self.traces = MetaArray(vstack(traces), info=info)
+                
+        elif self.ui.dataSourceCombo.currentText() == 'uncaging window':
+            global win
+            #uw = self.getUncagingWindow() ##need to implement some sort of way for it to find uncaging windows without prior knowledge, but for now will just hard code a name
+            self.data = win.currentTraces
+            traces = []
+            c = 0.0
+            for i in range(len(self.data)):
+                d = self.data[i][0]['Channel':'primary']
+                traces.append(d)
+                self.ui.tracePlot.plot(d, pen = mkPen(hsv=[c, 0.7]))
+                c += 1.0/len(self.data)
+            info = [
+                {'name': 'Command', 'units': cmd.axisUnits(-1), 'values': array(values)},
+                self.data[0].infoCopy('Time'), 
+                self.data[0].infoCopy(-1),
+                ]
+            self.traces = MetaArray(vstack(traces))
+                
+            
+        self.dataCache = zeros(len(self.data)+1, dtype = [
+            ('dataIndex', int),
+            ('amp', float),
+            ('slope', float),
+            ('stimAmp', float),
+            ('latency', float)
+        ])
+        
+    def addPlot(self):
+        ## figure out how to auto name these - ask luke
+        self.ui.autoName = AnalysisPlotWidget(self.ui.splitter)
+        self.ui.autoName.setDataSource(self.data)
+        self.ui.autoName.setHost(self)
         
 class IVWindow(QtGui.QMainWindow):
     def __init__(self):
@@ -1337,11 +2181,11 @@ class IVWindow(QtGui.QMainWindow):
         self.cw.addWidget(self.plot1)
         self.plot2 = PlotWidget()
         self.cw.addWidget(self.plot2)
-        self.resize(800, 800)
+        self.resize(800, 600)
         self.show()
         self.lr = LinearRegionItem(self.plot1, 'vertical', [0, 1])
         self.plot1.addItem(self.lr)
-        QtCore.QObject.connect(self.lr, QtCore.SIGNAL('regionChanged'), self.updateAnalysis)
+        self.lr.connect(self.lr, QtCore.SIGNAL('regionChanged'), self.updateAnalysis)
         
 
     def loadIV(self):

@@ -22,7 +22,6 @@ class Camera(DAQGeneric):
 
     The list/get/setParams functions should implement a few standard items:
     (Note: these number values are just examples, but the data types and strings must be the same.)
-        acquire:         bool
         triggerMode:     str, ['Normal', 'TriggerStart', 'Strobe', 'Bulb']
         triggerType:     str, ['Software', 'Hardware']
         exposure:        float, (0.0, 10.0)
@@ -88,16 +87,24 @@ class Camera(DAQGeneric):
             self.scopeDev = None
             
             
-        self.setupCamera()  
+        self.setupCamera() 
+        #print "Camera: setupCamera returned, about to create acqThread"
             
         self.acqThread = AcquireThread(self)
+        #print "Camera: acqThread created, about to connect signals."
         QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('finished()'), self.acqThreadFinished)
         QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('started()'), self.acqThreadStarted)
         QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('showMessage'), self.showMessage)
         QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('newFrame'), self.newFrame)
+        #print "Camera: signals connected:"
         
-        if 'params' in config:
-            self.setParams(config['params'])
+        if config != None and 'params' in config:
+            #print "Camera: setting configuration params."
+            try:
+                self.setParams(config['params'])
+            except:
+                printExc("Error default setting camera parameters:")
+        #print "Camera: no config params to set."
             
     def setupCamera(self):
         """Prepare the camera at least so that get/setParams will function correctly"""
@@ -105,7 +112,7 @@ class Camera(DAQGeneric):
 
     def listParams(self, params=None):
         """Return a dictionary of parameter descriptions. By default, all parameters are listed.
-        Each description is a tuple: (values, isWritable, isReadable, dependencies)
+        Each description is a tuple or list: (values, isWritable, isReadable, dependencies)
         
         values may be any of:
           - Tuple of ints or floats indicating minimum and maximum values
@@ -122,7 +129,7 @@ class Camera(DAQGeneric):
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
         """Set camera parameters. Options are:
-           params: a list of (param, value) pairs to be set. Parameters are set in the order specified.
+           params: a list or dict of (param, value) pairs to be set. Parameters are set in the order specified.
            autoRestart: If true, restart the camera if required to enact the parameter changes
            autoCorrect: If true, correct values that are out of range to their nearest acceptable value
         
@@ -201,6 +208,7 @@ class Camera(DAQGeneric):
             self.start()
     
     def quit(self):
+        #print "quit() called from Camera"
         if hasattr(self, 'acqThread') and self.isRunning():
             self.stop()
             if not self.wait(10000):
