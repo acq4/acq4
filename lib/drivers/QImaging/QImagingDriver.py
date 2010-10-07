@@ -107,7 +107,7 @@ class QCamDriverClass:
         elif a() != 0:
             for x in lib('enums', 'QCam_Err'):
                 if lib('enums', 'QCam_Err')[x] == a():
-                    raise QCamFunctionError(a(), "There was an error running a QCam function, %s. Error code = %s" %(function.name,x))
+                    raise QCamFunctionError(a(), "There was an error running %s. Error code = %s" %(function.name,x))
         else:
             return a
 
