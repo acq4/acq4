@@ -163,6 +163,9 @@ class Prot:
         
     def addFrame(self, frame):
         camDev = self.ui().cameraDevice()
+        if camDev is None:
+            print "Warning: No camera module selected in uncaging analysis dock."
+            return  
         clampDev = self.ui().clampDevice()
         scannerDev = self.ui().scannerDevice()
         

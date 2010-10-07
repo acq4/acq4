@@ -16,7 +16,7 @@ class InterfaceDirectory(QtCore.QObject):
     
     def __init__(self):
         QtCore.QObject.__init__(self)
-        self.lock = Mutex()
+        self.lock = Mutex(Mutex.Recursive)
         self.objList = weakref.WeakValueDictionary()
         self.nameList = {}
         self.typeList = {}
@@ -70,7 +70,7 @@ class InterfaceDirectory(QtCore.QObject):
                 types = [types]
             ints = []
             for t in types:
-                for n in self.typeList[t]:
+                for n in self.typeList.get(t, []):
                     ints.append(n)
             return ints
             

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
-from lib.DataManager import *
+from lib.util.DataManager import *
 from lib.util.debug import *
 import os
 

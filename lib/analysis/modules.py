@@ -215,33 +215,34 @@ class EventMatchWidget(QtGui.QSplitter):
         """Locate events in the data based on GUI settings selected. Generally only for internal use."""
         dt = data.xvals('Time')[1] - data.xvals('Time')[0]
         if self.ctrl.detectMethodCombo.currentText() == 'Stdev. Threshold':
-            stdev = data.std()
-            mask = abs(data) > stdev * self.ctrl.stThresholdSpin.value()
-            starts = argwhere(mask[1:] * (1-mask[:-1]))[:,0]
-            ends = argwhere((1-mask[1:]) * mask[:-1])[:,0]
-            if len(ends) > 0 and len(starts) > 0:
-                if ends[0] < starts[0]:
-                    ends = ends[1:]
-                if starts[-1] > ends[-1]:
-                    starts = starts[:-1]
+            events = stdevThresholdEvents(data, self.ctrl.stThresholdSpin.value())
+            #stdev = data.std()
+            #mask = abs(data) > stdev * self.ctrl.stThresholdSpin.value()
+            #starts = argwhere(mask[1:] * (1-mask[:-1]))[:,0]
+            #ends = argwhere((1-mask[1:]) * mask[:-1])[:,0]
+            #if len(ends) > 0 and len(starts) > 0:
+                #if ends[0] < starts[0]:
+                    #ends = ends[1:]
+                #if starts[-1] > ends[-1]:
+                    #starts = starts[:-1]
                 
                 
-            lengths = ends-starts
-            events = empty(starts.shape, dtype=[('start',int), ('len',float), ('sum',float), ('peak',float)])
-            events['start'] = starts
-            events['len'] = lengths
+            #lengths = ends-starts
+            #events = empty(starts.shape, dtype=[('start',int), ('len',float), ('sum',float), ('peak',float)])
+            #events['start'] = starts
+            #events['len'] = lengths
             
-            if len(starts) == 0 or len(ends) == 0:
-                return events
+            #if len(starts) == 0 or len(ends) == 0:
+                #return events
             
-            for i in range(len(starts)):
-                d = data[starts[i]:ends[i]]
-                events['sum'][i] = d.sum()
-                if events['sum'][i] > 0:
-                    peak = d.max()
-                else:
-                    peak = d.min()
-                events['peak'][i] = peak
+            #for i in range(len(starts)):
+                #d = data[starts[i]:ends[i]]
+                #events['sum'][i] = d.sum()
+                #if events['sum'][i] > 0:
+                    #peak = d.max()
+                #else:
+                    #peak = d.min()
+                #events['peak'][i] = peak
             
         elif self.ctrl.detectMethodCombo.currentText() == 'Zero-crossing':
             minLen = self.ctrl.zcLenAbsThresholdSpin.value()

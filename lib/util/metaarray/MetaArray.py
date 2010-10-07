@@ -291,6 +291,23 @@ class MetaArray(ndarray):
                     return True
         return False
         
+    def listColumns(self, axis=None):
+        """Return a list of column names for axis. If axis is not specified, then return a dict of {axisName: (column names), ...}."""
+        if axis is None:
+            ret = {}
+            for i in range(self.ndim):
+                if 'cols' in self._info[i]:
+                    cols = [c['name'] for c in self._info[i]['cols']]
+                else:
+                    cols = []
+                ret[self.axisName(i)] = cols
+            return ret
+        else:
+            axis = self._interpretAxis(axis)
+            return [c['name'] for c in self._info[axis]['cols']]
+        
+    def axisName(self, n):
+        return self._info[n].get('name', n)
         
     def columnUnits(self, axis, column):
         """Return the units for column in axis"""
