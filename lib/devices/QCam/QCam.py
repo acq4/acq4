@@ -22,7 +22,7 @@ class QCam(Camera):
     def setupCamera(self):
         self.qcd = QCamDriverClass()
         cams = self.qcd.listCameras()
-        print "Cameras:", cams
+        #print "Cameras:", cams
         if len(cams) < 1:
             raise Exception('No cameras found by QCam driver')
         
@@ -35,9 +35,9 @@ class QCam(Camera):
         #        raise Exception('Can not find pvcam camera "%s"' % str(self.camConfig['serial']))
         #print "Selected camera:", cams[ind]
         #self.cam = self.pvc.getCamera(cams[ind])
-        print "QCam: Opening camera ...."
+        #print "QCam: Opening camera ...."
         self.cam = self.qcd.getCamera(cams[0]) #open first camera
-        print "QCam: Camera opened."
+       # print "QCam: Camera opened."
         
     #def start(self, block=True):
         #if not self.isRunning():
@@ -64,6 +64,16 @@ class QCam(Camera):
             return self.cam.listParams(params)
             
     def setParams(self, params, autoRestart=True, autoCorrect=True):
+        """Set camera parameters. Options are:
+           params: a list or dict of (param, value) pairs to be set. Parameters are set in the order specified.
+           autoRestart: If true, restart the camera if required to enact the parameter changes
+           autoCorrect: If true, correct values that are out of range to their nearest acceptable value
+        
+        Return a tuple with: 
+           0: dictionary of parameters and the values that were set.
+              (note this may differ from requested values if autoCorrect is True)
+           1: Boolean value indicating whether a restart is required to enact changes.
+              If autoRestart is True, this value indicates whether the camera was restarted."""
         #params: a list of (param, value) pairs to be set
         #print "PVCam: setParams", params
         with self.camLock:
@@ -90,7 +100,18 @@ class QCam(Camera):
             return self.cam.getParam(param)
         
     def quit(self):
-        print "quit() called from QCamDevice."
+        #print "quit() called from QCamDevice."
         Camera.quit(self)
         self.qcd.quit()
+        
+    def newFrames(self):
+        pass
+    
+    def startCamera(self):
+        with camLock:
+            self.cam.start()
+            
+    def stopCamera(self):
+        with camLock:
+            self.cam.stop()
         

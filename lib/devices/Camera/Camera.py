@@ -149,6 +149,28 @@ class Camera(DAQGeneric):
     def getParam(self, param):
         return self.getParams([param])[param]
         
+    def newFrames(self):
+        """Returns a list of all new frames that have arrived since the last call. The list looks like:
+            [{'id': 0, 'data': array, 'time': 1234678.3213}, ...]
+        id is a unique integer representing the frame number since the start of the program.
+        data should be a permanent copy of the image (ie, not directly from a circular buffer)
+        time is the time of arrival of the frame. Optionally, 'exposeStartTime' and 'exposeDoneTime' 
+            may be specified if they are available.
+        """
+        raise Exception("Function must be reimplemented in subclass.")
+        
+    def startCamera(self):
+        """Calls the camera driver to start the camera's acquisition."""
+        raise Exception("Function must be reimplemented in subclass.")
+        
+    def stopCamera(self):
+        """Calls the camera driver to stop the camera's acquisition.
+        Note that the acquisition may be _required_ to stop, since other processes
+        may be preparing to synchronize with the camera's exposure signal."""
+        raise Exception("Function must be reimplemented in subclass.")
+
+    
+    
     def pushState(self, name=None):
         #print "Camera: pushState", name
         params = self.listParams()
@@ -195,10 +217,12 @@ class Camera(DAQGeneric):
         
 
     def start(self, block=True):
+        """Start camera and acquisition thread"""
         #print "Camera: start"
         self.acqThread.start()
         
     def stop(self, block=True):
+        """Stop camera and acquisition thread"""
         #print "Camera: stop"
         self.acqThread.stop(block=block)
         
@@ -798,15 +822,16 @@ class AcquireThread(QtCore.QThread):
                     frame = self.cam.lastFrame()
                 #times[ti] = ptime.time(); ti += 1  ## +40us
                 ## If a new frame is available, process it and inform other threads
-                if frame is not None and frame != lastFrame:
+                if frame is not None and frame['index'] != lastFrame:
+                    index = frame['index']
                     #print 'frame', frame
                     if lastFrame is not None:
-                        diff = (frame - lastFrame) % self.ringSize
+                        diff = (index - lastFrame) % self.ringSize
                         if diff > (self.ringSize / 2):
                             print "Image acquisition buffer is at least half full (possible dropped frames)"
                             #self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped %d frame(s) after frame %d. (%02g since last frame arrived)" % (diff-1, self.frameId, now-lastFrameTime))
                     else:
-                        lastFrame = frame-1
+                        lastFrame = index-1
                         diff = 1
                         
                     #print type(diff), type(frame), type(lastFrame), type(self.ringSize)
