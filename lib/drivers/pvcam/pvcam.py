@@ -257,10 +257,13 @@ class _CameraClass:
         self.paramAttrs.update(self._buildParamList())  ## list of acceptable values for each parameter
         
         ## correct the stupid
+        #if 'GAIN_INDEX' in self.paramAttrs:
         self.paramAttrs['GAIN_INDEX'][0] = self.paramAttrs['GAIN_INDEX'][0][:2] + (1,)    ## why did they set the step value to 0? Who knows?
         
         ## define standard dependencies
+        #if 'READOUT_PORT' in self.paramAttrs:
         self.paramAttrs['READOUT_PORT'][3] = ['SPDTAB_INDEX', 'GAIN_INDEX']
+        #if 'SPDTAB_INDEX' in self.paramAttrs:
         self.paramAttrs['SPDTAB_INDEX'][3] = ['GAIN_INDEX']
         
         

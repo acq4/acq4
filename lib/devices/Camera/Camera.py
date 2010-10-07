@@ -338,8 +338,8 @@ class Camera(DAQGeneric):
             self.scopeState['id'] += 1
         #print self.scopeState
         
-    def getCamera(self):
-        return self.cam
+    #def getCamera(self):
+        #return self.cam
         
         
     ### Proxy signals and functions for acqThread:
@@ -673,7 +673,7 @@ class AcquireThread(QtCore.QThread):
     def __init__(self, dev):
         QtCore.QThread.__init__(self)
         self.dev = dev
-        self.cam = self.dev.getCamera()
+        #self.cam = self.dev.getCamera()
         self.camLock = self.dev.camLock
         #size = self.cam.getSize()
         #self.state = {'binning': 1, 'exposure': .001, 'region': [0, 0, size[0]-1, size[1]-1], 'mode': 'No Trigger'}
@@ -681,7 +681,7 @@ class AcquireThread(QtCore.QThread):
         self.stopThread = False
         self.lock = Mutex()
         self.acqBuffer = None
-        self.frameId = 0
+        #self.frameId = 0
         self.bufferTime = 5.0
         self.ringSize = 30
         self.tasks = []
@@ -693,7 +693,8 @@ class AcquireThread(QtCore.QThread):
     
     def __del__(self):
         if hasattr(self, 'cam'):
-            self.cam.stop()
+            #self.cam.stop()
+            self.dev.stopCamera()
     
     def start(self, *args):
         self.lock.lock()
@@ -726,90 +727,39 @@ class AcquireThread(QtCore.QThread):
     #    
     
     def run(self):
-        #print "Starting up camera acquisition thread."
-        #binning = self.state['binning']
-        
-        ## Make sure binning value is acceptable (stupid driver problem)
-        #if 'allowedBinning' in self.dev.camConfig and binning not in self.dev.camConfig['allowedBinning']:
-        #    ab = self.dev.camConfig['allowedBinning'][:]
-        #    ab.sort()
-        #    if binning < ab[0]:
-        #        binning = ab[0]
-        #    while binning not in ab:
-        #        binning -= 1
-        #    msg = "Requested binning %d not allowed, using %d instead" % (self.state['binning'], binning)
-        #    print msg
-        #    self.emit(QtCore.SIGNAL("showMessage"), msg)
-        #print "Will use binning", binning
-        #exposure = self.state['exposure']
-        #region = self.state['region']
-        #mode = self.state['mode']
-        size = self.cam.getParam('sensorSize')
+        size = self.dev.getParam('sensorSize')
         lastFrame = None
         lastFrameTime = None
+        lastFrameId = None
         fps = None
         
-        camState = dict(self.cam.getParams(['binning', 'exposure', 'region', 'triggerMode']))
+        camState = dict(self.dev.getParams(['binning', 'exposure', 'region', 'triggerMode']))
         binning = camState['binning']
         exposure = camState['exposure']
         region = camState['region']
         mode = camState['triggerMode']
         
-        #print "AcquireThread.run: Lock for startup.."
-        #print "AcquireThread.run: ..unlocked from startup"
-        #self.fps = None
-        
         try:
-            #print self.ringSize, binning, exposure, region
-            #print "  AcquireThread.run: start camera.."
+            self.dev.setParam('ringSize', self.ringSize, autoRestart=False)
+            self.dev.startCamera()
             
-            ## Attempt camera start. If the driver complains that it can not allocate memory, reduce the ring size until it works. (Ridiculous driver bug)
-            printRingSize = False
-            while True:
-                try:
-                    #print "Starting camera: ", self.ringSize, binning, exposure, region, mode
-                    #self.acqBuffer = self.cam.start(frames=self.ringSize, binning=binning, exposure=exposure, region=region, mode=mode)
-                    self.dev.setParam('ringSize', self.ringSize, autoRestart=False)
-                    with self.camLock:
-                        self.acqBuffer = self.cam.start()
-                    #print "Camera started."
-                    break
-                except Exception, e:
-                    if len(e.args) == 2 and e.args[1] == 15:
-                        printRingSize = True
-                        self.ringSize = int(self.ringSize * 0.9)
-                        if self.ringSize < 2:
-                            raise Exception("Will not reduce camera ring size < 2")
-                    else:
-                        raise
-            if printRingSize:
-                print "Reduced camera ring size to %d" % self.ringSize
-            
-            #print "  AcquireThread.run: camera started."
-            lastFrameTime = lastStopCheck = ptime.time() #time.clock()  # Use time.time() on Linux
-            #times = [0] * 15
+            lastFrameTime = lastStopCheck = ptime.time()
             frameInfo = {}
             scopeState = None
             while True:
                 ti = 0
-                #times[ti] = ptime.time(); ti += 1
                 now = ptime.time()
-                with self.camLock:
-                    frame = self.cam.lastFrame()
-                #times[ti] = ptime.time(); ti += 1  ## +40us
+                frames = self.dev.newFrames()
+                
+                #with self.camLock:
+                    #frame = self.cam.lastFrame()
                 ## If a new frame is available, process it and inform other threads
-                if frame is not None and frame != lastFrame:
-                    #print 'frame', frame
-                    if lastFrame is not None:
-                        diff = (frame - lastFrame) % self.ringSize
-                        if diff > (self.ringSize / 2):
-                            print "Image acquisition buffer is at least half full (possible dropped frames)"
-                            #self.emit(QtCore.SIGNAL("showMessage"), "Acquisition thread dropped %d frame(s) after frame %d. (%02g since last frame arrived)" % (diff-1, self.frameId, now-lastFrameTime))
-                    else:
-                        lastFrame = frame-1
-                        diff = 1
+                if len(frames) > 0:
+                    if lastFrameId is not None:
+                        drop = frames[0]['id'] - lastFrameId - 1
+                        if drop > 0:
+                            print "WARNING: Camera dropped %d frames" % drop
                         
-                    #print type(diff), type(frame), type(lastFrame), type(self.ringSize)
                     ## Build meta-info for this frame(s)
                     info = camState.copy()
                     
@@ -831,96 +781,67 @@ class AcquireThread(QtCore.QThread):
                             'objective': ss['objective'],
                             'imagePosition': pos2
                         }
+                        
                     ## Copy frame info to info array
-                    for k in frameInfo:
-                        info[k] = frameInfo[k]
-                    
-                    
+                    info.update(frameInfo)
+                    #for k in frameInfo:
+                        #info[k] = frameInfo[k]
                     
                     ## Process all waiting frames. If there is more than one frame waiting, guess the frame times.
-                    dt = (now - lastFrameTime) / diff
+                    dt = (now - lastFrameTime) / len(frames)
                     if dt > 0:
                         info['fps'] = 1.0/dt
                     else:
                         info['fps'] = None
                     
-                    for i in range(diff):
-                        fInd = (i+lastFrame+1) % self.ringSize
-                        
+                    for frame in frames:
                         frameInfo = info.copy()
-                        frameInfo['time'] = lastFrameTime + (dt * (i+1))
-                        frameInfo['id'] = self.frameId
-                        
-                        ## Inform that new frame is ready
-                        outFrame = (self.acqBuffer[fInd].copy(), frameInfo)
-                        
+                        frameInfo['id'] = frame['id']
+                        out = (frame['data'], frameInfo)
                         with MutexLocker(self.connectMutex):
                             conn = self.connections[:]
                         for c in conn:
-                            c(outFrame)
-                        #print "new frame", frameInfo['time']
-                        self.emit(QtCore.SIGNAL("newFrame"), outFrame)
-                        #print "emit frame", self.frameId
+                            c(out)
+                        self.emit(QtCore.SIGNAL("newFrame"), out)
                         
-                        self.frameId += 1
-                            
-                    lastFrame = frame
                     lastFrameTime = now
-                    
-                    
-                    ### mandatory sleep until 1ms before next expected frame
-                    ### Otherwise the CPU is constantly tied up waiting for new frames.
-                    #sleepTime = (now + exposure - 1e-3) - ptime.time()
-                    #if sleepTime > 0:
-                        ##print "Sleep %f sec"% sleepTime
-                        #time.sleep(sleepTime)
-                        
+                    lastFrameId = frames[-1]['id']
                     loopCount = 0
-                    #times[ti] = ptime.time(); ti += 1
-                #times[ti] = ptime.time(); ti += 1
                         
                 time.sleep(100e-6)
                 
-                
-                #now = ptime.time()
                 ## check for stop request every 10ms
                 if now - lastStopCheck > 10e-3: 
                     lastStopCheck = now
-                    #print "stop check"
+                    
                     ## If no frame has arrived yet, do NOT allow the camera to stop (this can hang the driver)   << bug should be fixed in pvcam driver, not here.
-                    diff = ptime.time()-lastFrameTime
-                    if frame is not None or diff > 1:
-                        #print "    AcquireThread.run: Locking thread to check for stop request"
-                        self.lock.lock()
-                        if self.stopThread:
-                            #print "    AcquireThread.run: Unlocking thread for exit"
-                            self.stopThread = False
-                            self.lock.unlock()
-                            #print "    AcquireThread.run: Camera acquisition thread stopping."
-                            break
+                    self.lock.lock()
+                    if self.stopThread:
+                        self.stopThread = False
                         self.lock.unlock()
-                        #print "    AcquireThread.run: Done with thread stop check"
-                        
-                        if diff > (10 + exposure):
-                            if mode == 'Normal':
-                                print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
-                                break
-                            else:
-                                pass  ## do not exit loop if there is a possibility we are waiting for a trigger
+                        break
+                    self.lock.unlock()
+                    
+                    diff = ptime.time()-lastFrameTime
+                    if diff > (10 + exposure):
+                        if mode == 'Normal':
+                            print "Camera acquisition thread has been waiting %02f sec but no new frames have arrived; shutting down." % diff
+                            break
+                        else:
+                            pass  ## do not exit loop if there is a possibility we are waiting for a trigger
                                 
-                #times[ti] = ptime.time(); ti += 1 ## + 285us
-                #print ",   ".join(['%03.2f' % ((times[i]-times[i-1]) * 1e6) for i in range(len(times)-1)])
-                #times[-1] = ptime.time()
                 
             #from debug import Profiler
             #prof = Profiler()
             with self.camLock:
-                self.cam.stop()
+                #self.cam.stop()
+                self.dev.stopCamera()
             #prof.mark('      camera stop:')
         except:
             try:
                 with self.camLock:
-                    self.cam.stop()
+                    #self.cam.stop()
+                    self.dev.stopCamera()
             except:
                 pass
             printExc("Error starting camera acquisition:")
