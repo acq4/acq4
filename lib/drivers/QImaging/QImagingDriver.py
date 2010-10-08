@@ -23,6 +23,7 @@ else:
     headerDir = modDir
 print headerDir
 p = CParser(os.path.join(headerDir, "QCamApi.h"), cache=os.path.join(modDir, 'QCamApi.h.cache'), macros={'_WIN32': '', '__int64': ('long long')})
+
 if sys.platform == 'darwin':
     dll = cdll.LoadLibrary('/Library/Frameworks/QCam.framework/QCam')
 else:
@@ -149,6 +150,7 @@ class QCamDriverClass:
         for c in self.cams:
             self.cams[c].quit()
         self.call(lib.ReleaseDriver) ###what if we don't open the camera?
+
         
 class QCameraClass:
     def __init__(self, name, driver):
@@ -200,8 +202,7 @@ class QCameraClass:
             'regionH':'qprmRoiHeight',
             'gain':'qprmNormalizedGain',
             'Normal':'qcTriggerFreerun',
-            'TriggerStart':'qcTriggerEdgeHi',
-            'Strobe':'qcTriggerStrobeHi',
+            'Strobe':'qcTriggerEdgeHi',
             'Bulb':'qcTriggerPulseHi',
             'bitDepth':'qinfBitDepth'
         }
@@ -216,9 +217,8 @@ class QCameraClass:
             'qprmRoiHeight':'regionH',
             'qprmNormalizedGain':'gain',
             'qcTriggerFreerun':'Normal',
-            'qcTriggerNone':'Normal',
-            'qcTriggerEdgeHi':'TriggerStart',
-            'qcTriggerStrobeHi':'Strobe',
+            #'qcTriggerNone':'Normal',
+            'qcTriggerEdgeHi':'Strobe',
             'qcTriggerPulseHi':'Bulb',
             'qinfBitDepth':'bitDepth'
         }
@@ -259,6 +259,7 @@ class QCameraClass:
         self.quit()
     
     def quit(self):
+        #print "quit() called from QCamCameraClass. self.isOpen: ", self.isOpen
         if not self.isOpen:
             return
         self.call(lib.Abort, self.handle)
@@ -407,8 +408,16 @@ class QCameraClass:
         for x in self.paramAttrs:
             if type(self.paramAttrs[x][0]) != tuple:
                 self.paramAttrs[x][0] = self.getNameFromEnum(x, self.paramAttrs[x][0])
-        for x in self.paramAttrs:
-            self.paramAttrs[x][0] = self.convertUnitsToAcq4(x, self.paramAttrs[x][0]) 
+            else:
+                self.paramAttrs[x][0] = self.convertUnitsToAcq4(x, self.paramAttrs[x][0])
+                
+        ## rearrange trigger names
+        trigNames = ['Normal', 'Strobe', 'Bulb']
+        for n in self.paramAttrs['triggerMode'][0]:
+            if n not in trigNames:
+                trigNames.append(n)
+        self.paramAttrs['triggerMode'][0] = trigNames
+                
         
         
         return self.paramAttrs
@@ -595,6 +604,11 @@ class QCameraClass:
                 self.ringSize = params[x]
                 value = params[x]
                 continue
+            if x == 'qprmImageFormat':
+                if params[x] != 'qfmtMono16':
+                    print "QCam driver currently only supports the 'qfmtMono16' image format."
+                    continue
+                
             param = self.translateToCamera(x)
             #print "     1 param:", param
             value = params[x]
@@ -726,12 +740,13 @@ class QCameraClass:
         return (frame, array)
     
     def grabFrame(self):
-        s = lib.GetInfo(handle, lib.qinfImageSize)[2]
-        (f, frame) = mkFrame()
+        s = self.call(lib.GetInfo, self.handle, lib.qinfImageSize)[2]
+        #s = lib.GetInfo(handle, lib.qinfImageSize)[2]
+        (f, a) = mkFrame()
         self.call(lib.GrabFrame, self.handle, byref(f))
-        w = self.call(lib.GetInfo, self.handle, lib.qinfCcdWidth)[2]
-        frame.shape = (s/w, w)
-        return frame
+        #w = self.call(lib.GetInfo, self.handle, lib.qinfCcdWidth)[2]
+        #frame.shape = (s/w, w)
+        return a
 
     def start(self):
 
@@ -760,12 +775,19 @@ class QCameraClass:
             self.arrays.append(a)
         #print "Camera started. Frame shape:", self.arrays[0].shape
         #print "Camera region:", self.getParam('region')
-        for x in range(2):
-            self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone, 0, self.i)
+        for x in range(2):  ## need 2 frames queued to allow simultaneous exposure and frame transfer
+            self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone|lib.qcCallbackExposeDone, 0, self.i)
             self.mutex.lock()
             self.i += 1
             #self.counter +=1
             self.mutex.unlock()
+        #for x in range(1):
+        #self.call(lib.QueueFrame, self.handle, self.frames[self.i], self.fnp1, lib.qcCallbackDone, 0, self.i)
+        ##self.mutex.lock()
+        #with self.mutex:
+            #self.i += 1
+        #self.counter +=1
+        #self.mutex.unlock()
         return self.arrays
     
     def callBack1(self, *args):

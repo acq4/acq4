@@ -23,9 +23,9 @@ from advancedTypes import OrderedDict
 import time
 import pickle
 from pyqtgraph.Point import *
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
+#import matplotlib as mpl
+#import matplotlib.pyplot as plt
+#import matplotlib.image as mpimg
 
 
 class UncagingSpot(QtGui.QGraphicsEllipseItem):
@@ -1009,11 +1009,11 @@ class UncagingWindow(QtGui.QMainWindow):
             #x = self.sliceMarker.mapFromScene(item.position[0])
             #y = self.sliceMarker.mapFromScene(item.position[1])
             
-            events = self.plot.processData([trace], display=False)
+            events = self.plot.processData([trace], display=False)[0]
             #preEvents = events[0][(events[0]['start'] < laserIndex)*(events[0]['start']> laserIndex - self.ctrl.poststimTimeSpin.value()*10)]
             #spontLatencies.append((preEvents['start']-laserIndex)/rate)
             #spontCharges.append((preEvents['sum']))
-            events = events[0][(events[0]['start'] > laserIndex)*(events[0]['start'] < laserIndex+self.ctrl.poststimTimeSpin.value()*10)]
+            #events = events[(events['start'] > laserIndex)*(events['start'] < laserIndex+self.ctrl.poststimTimeSpin.value()*10)]
             
             spikeIndex = None
             if trace.min() < -2e-9:
@@ -1144,369 +1144,369 @@ class UncagingWindow(QtGui.QMainWindow):
     
 
 
-class CellMixer(QtCore.QObject):
-    def __init__(self):
-        QtCore.QObject.__init__(self)
-        self.arrayList = []
-        self.metaInfo = []
-        self.dataTable = None
-        self.cellEventMaps = []
-        self.cellMaps = []
-        self.binWidth = 100e-6
-        self.figures = [0]
-        self.chargeCutOff = None
-        self.cellNames = []
-        
-    def dataThrough(self):
-        self.loadData('2010.08.04_s0c0-UncagingAnalysis.pk')
-        self.loadData('2010.08.06_s0c0-UncagingAnalysis.pk')
-        self.loadData('2010.08.30_s0c0-UncagingAnalysis.pk')
-        self.loadData('2010.08.05_s1c0-UncagingAnalysis.pk')
-        for index in range(len(self.arrayList)):
-            self.singleCellCentric(self.arrayList[index])
-            self.squash(self.cellEventMaps[index])
-        #self.displayMap(self.cellMaps[0])
-            #self.displayCellData(index)
-    
-    def loadData(self, fileName=None):
-        if fileName is not None:
-            fileName = '/Volumes/iorek/%s' %fileName
-        else:
-            fileName = getManager().currentFile.name()
-            
-        f = open(fileName, 'r')
-        a = pickle.load(f)
-        f.close()
-        self.cellNames.append(fileName)
-        self.arrayList.append(a[0])
-        self.metaInfo.append(a[1])
-        self.updateChargeCutOff()
-        
-        return a
-    
-    def updateChargeCutOff(self, percentile=4):
-        self.compileTable()
-        mask = self.dataTable['traceID'] != ''
-        charges = self.dataTable[mask]['charge']
-        self.chargeCutOff = stats.scoreatpercentile(charges, percentile)
-    
-    def compileTable(self):
-        lengths = [len(self.arrayList[i]) for i in range(len(self.arrayList))]
-        arrayDtype = self.arrayList[0].dtype
-        self.dataTable = zeros((len(lengths), max(lengths)), dtype = arrayDtype)
-        
-        
-        for i in range(len(self.arrayList)):
-            a = self.arrayList[i]
-            self.dataTable[i][:len(a)] = a
-            
-    def singleCellCentric(self, table):
-        map = zeros((40, 20, 200), dtype = self.arrayList[0].dtype) ##shape = x, y, events
-        storage = zeros(len(table), dtype = [
-            ('x', int),
-            ('y', int),
-            ('event', self.arrayList[0].dtype)
-            ])
-        
-        for i in range(len(table)):
-            event = table[i]
-            x = floor(event['xcell']/self.binWidth)
-            y = floor(event['ycell']/self.binWidth)
-            storage[i]['x'] = x
-            storage[i]['y'] = y
-            storage[i]['event'] = event
-        
-        lengths = []
-        unx = linspace(-20, 20, 41)[:-1]
-        uny = linspace(-4, 16, 21)[:-1]
-
-        for i in range(40):         ## x dimension of map array
-            for j in range(20):     ## y dimension of map array
-                events = storage[(storage['x'] == unx[i]) * (storage['y'] == uny[j])]
-                map[i][j][:len(events)] = events['event']
-                lengths.append(len(events))
-        
-        map = map[:,:,:max(lengths)]
-        
-        self.cellEventMaps.append(map)
-        return map
-        
-    def squash(self, eventMap):
-        """Takes a 3d record array of events sorted into location bins, and squashes it into a 2d record array of location bins."""
-        map = zeros((40, 20), dtype = [
-            ('charge', float), ### sum of events/#traces
-            ('latency', float), ### sum of first latencies/#responses
-            ('#APs', int),
-            ('#traces', int),
-            ('#responses', int)
-        ])
-        mask = eventMap['traceID'] != ''
-        for i in range(40):
-            for j in range(20):
-                charges = eventMap[i][j][mask[i][j]]['charge'].sum()
-                traces = unique(eventMap[i][j][mask[i][j]]['traceID'])
-                latencies = 0
-                APs = 0 
-                responses = 0 
-                for t in traces:
-                    #print 'i', i, 'j',j, 'trace', t
-                    latency = eventMap[i][j][mask[i][j]]['traceID' == t]['latency'].min()
-                    if 5e-9 == eventMap[i][j][mask[i][j]]['traceID' == t]['peak'].min():
-                        APs += 1
-                    if latency != 0:
-                        latencies += latency
-                        responses += 1
-                if len(traces) != 0:
-                    map[i][j]['charge'] = charges/len(traces)
-                if responses != 0:
-                    map[i][j]['latency'] = latencies/responses
-                map[i][j]['#APs'] = APs
-                map[i][j]['#traces'] = len(traces)
-                map[i][j]['#responses'] = responses
-                
-        self.cellMaps.append(map)
-        return map
-    
-    def displayMap(self, data, field='charge', max=None):
-        if data.ndim != 2:
-            print """Not sure how to display data in %i dimensions. Please enter 2-dimensional data set.""" %data.ndim
-            return
-        if max == None:
-            d = data[field]/data[field].min()
-        else:
-            d = (data[field]/max).clip(0,1)  ##large events are 1, small events are small, 0 is 0
-        d = d.astype(float32)
-        d = d.transpose()
-        fig = plt.figure(1)
-        #s1 = fig.add_subplot(1,1,1)
-        #c = s1.contour(data.transpose())
-        mask = data['#traces'] != 0
-        mask = mask.transpose()
-        dirMask = data['latency'] < 0.007
-        dirMask = dirMask.transpose()
-        colors = zeros((d.shape[0], d.shape[1], 4), dtype=float)
-        #hsv = zeros((data.shape[0], data.shape[1]), dtype=object)
-        for i in range(d.shape[0]):
-            for j in range(d.shape[1]):
-                c = hsvColor(0.7 - d[i][j]*0.7)
-                colors[i][j][0] = float(c.red()/255.0)
-                colors[i][j][1] = float(c.green()/255.0)
-                colors[i][j][2] = float(c.blue()/255.0)
-                colors[:,:,3][mask] = 1.0
-                colors[:,:,3][(data.transpose()['#responses'] == 0) * (mask)] = 0.6
-                
-        plt.imshow(colors)
-        #plt.figure(2)
-        #plt.imshow(colors, interpolation = None)
-        #plt.figure(3)
-        #plt.imshow(colors, interpolation = 'gaussian')
-        #fig.show()
-        #self.figures.append(fig)
-        return colors
-        
-    def displayCellData(self, dataIndex):
-        #plt.figure(1)
-        fig = plt.figure(dataIndex+1, dpi=300)
-        fig.suptitle(self.cellNames[dataIndex])
-        pos = Point(self.metaInfo[dataIndex]['cellPosition'])
-        plt.figtext(0.1,0.9, "cell position: x=%f um, y=%f um" %(pos[0]*1e6,pos[1]*1e6))
-        s1 = fig.add_subplot(2,2,1)
-        s2 = fig.add_subplot(2,2,2)
-        #s3 = fig.add_subplot(2,3,4)
-        #s4 = fig.add_subplot(2,2,3)
-        s5 = fig.add_subplot(2,2,4)
-        
-        data = self.cellMaps[dataIndex].transpose()
-        traceMask = data['#traces'] == 0 ## True where there are no traces
-        responseMask = (data['#responses'] == 0)*~traceMask ### True where there were no responses
-        dirMask = (data['latency'] < 0.007)*~responseMask*~traceMask ###True where responses are direct
-
-        s1.set_title('Charge Map')
-        charge = data['charge']
-        charge = (charge/self.chargeCutOff).clip(0.0,1.0)
-        #charge = charge.astype(float32)
-        #charge[dirMask] = 0.0
-        #charge[traceMask] = 1.0
-        #charge[responseMask] = 0.99
-        
-        d = charge
-        colors = zeros((d.shape[0], d.shape[1], 4), dtype=float)
-        #hsv = zeros((data.shape[0], data.shape[1]), dtype=object)
-        for i in range(d.shape[0]):
-            for j in range(d.shape[1]):
-                c = hsvColor(0.7 - d[i][j]*0.7)
-                colors[i][j][0] = float(c.red()/255.0)
-                colors[i][j][1] = float(c.green()/255.0)
-                colors[i][j][2] = float(c.blue()/255.0)
-                colors[i][j][3] = 1.0
-        colors[traceMask] = array([0.0, 0.0,0.0,0.0])
-        colors[responseMask] = array([0.8,0.8,0.8,0.4])
-        colors[dirMask] = array([0.0,0.0,0.0,1.0])
-        #img1 = s1.imshow(colors)
-        img1 = s1.imshow(colors, cmap = 'hsv')
-        cb1 = plt.colorbar(img1, ax=s1)
-        cb1.set_label('Charge (pC)')
-        cb1.set_ticks([0.7, 0.0])
-        cb1.set_ticklabels(['0.0', '%.3g pC' % (-self.chargeCutOff*1e12)])
-        s1.set_ylabel('y Position (mm)')
-        s1.set_xlim(left=3, right=36)
-        s1.set_xticklabels(['2.0','1.5', '1.0', '0.5', '0', '0.5', '1.0', '1.5'])
-        s1.set_ylim(bottom=16, top=1)
-        s1.set_yticklabels(['0.4','0.2','0','0.2','0.4','0.6','0.8','1.0','1.2','1.4','1.6'])
-        s1.set_xlabel('x Position (mm)')
-        
-        a = argwhere(data['#APs']!=0)
-        #print "APs at: ", a
-        self.a=a
-        if len(a) != 0:
-            for x in a:
-                s1.plot(x[1],x[0], '*w', ms = 5)
-        s1.plot(20,4,'ow')        
-        
-        s2.set_title('Latency Map')
-        lat = data['latency']
-        #lat[lat==0] = 0.3
-        lat = ((0.3-lat)/0.3).clip(0, 1)
-        d = lat
-        #lat = lat.astype(float32)
-        #lat[dirMask] = 0.0
-        #lat[traceMask] = 1.0
-        #lat[responseMask] = 0.99
-        colors2 = zeros((d.shape[0], d.shape[1], 4), dtype=float)
-        for i in range(d.shape[0]):
-            for j in range(d.shape[1]):
-                c = hsvColor(0.7 - d[i][j]*0.7)
-                colors2[i][j][0] = float(c.red()/255.0)
-                colors2[i][j][1] = float(c.green()/255.0)
-                colors2[i][j][2] = float(c.blue()/255.0)
-                colors2[i][j][3] = 1.0
-        colors2[traceMask] = array([0.0, 0.0,0.0,0.0])
-        colors2[responseMask] = array([0.8,0.8,0.8,0.4])
-        colors2[dirMask] = array([0.0,0.0,0.0,1.0])
-        
-        img2 = s2.imshow(colors2, cmap = 'hsv')
-        cb2 = plt.colorbar(img2, ax=s2, drawedges=False)
-        cb2.set_label('Latency (ms)')
-        cb2.set_ticks([0.7, 0.0])
-        cb2.set_ticklabels(['300 ms', '7 ms'])
-        s2.set_ylabel('y Position (mm)')
-        s2.set_xlabel('x Position (mm)')
-        s2.set_xlim(left=3, right=36)
-        s2.set_xticklabels(['2.0','1.5', '1.0', '0.5', '0', '0.5', '1.0', '1.5'])
-        s2.set_ylim(bottom=16, top=1)
-        s2.set_yticklabels(['0.4','0.2','0','0.2','0.4','0.6','0.8','1.0','1.2','1.4','1.6'])
-        s2.plot(20,4,'ow')
-        if len(a) != 0:
-            for x in a:
-                s2.plot(x[1],x[0], '*w')
-        
-        mask = self.cellEventMaps[dataIndex]['latency'] != 0
-        
-        #s3.set_title('charge distribution')
-        #data = self.cellEventMaps[dataIndex][mask]['charge']
-        #s3.text(0.2, 0.9,'# of events: %s' %len(data), fontsize=10, transform = s3.transAxes)
-        ##maxCharge = -data.min()
-        ##maxCharge = stats.scoreatpercentile(data, 3)
-        ##data[data > maxCharge] = maxCharge
-        ##bins = logspace(0,maxCharge,50)
-        #s3.hist(data, bins=100)
-        #s3.set_xlabel('charge')
-        #s3.set_ylabel('number')
-        
-        #s4.set_title('latency distribution')
-        #data = self.cellEventMaps[dataIndex][mask]['latency']
-        #s4.hist(data, bins=100)
-        #s4.set_xlabel('latency')
-        #s4.set_ylabel('number')
-        #s4.set_xlim(left = 0, right = 0.3)
-        #s4.set_xticks([0, 0.1, 0.2, 0.3])
-        #s4.set_xticklabels(['0', '100', '200','300'])
-        
-        s5.set_title('Charge v. Latency')
-        charge = -self.cellEventMaps[dataIndex][mask]['charge']*1e12
-        latency = self.cellEventMaps[dataIndex][mask]['latency']
-        s5.semilogy(latency, charge, 'bo', markerfacecolor = 'blue', markersize=5)
-        s5.set_xlabel('Latency (ms)')
-        s5.set_ylabel('Charge (pC)')
-        s5.axhspan(0.5e-11*1e12, charge.max(), xmin=0.06/0.32, xmax=0.31/0.32, edgecolor='none',facecolor='gray', alpha=0.3 )
-        s5.set_xlim(left = -0.01, right = 0.31)
-        s5.set_xticks([0, 0.1, 0.2, 0.3])
-        s5.set_xticklabels(['0', '100', '200','300'])
-        
-        self.figures.append(fig)
-        
-    def mapBigInputs(self, dataIndices, minLatency=0.05, minCharge=-0.5e-11):
-        
-        d0 = self.arrayList[dataIndices[0]]
-        d0 = d0[(d0['latency']>minLatency)*d0['charge']<minCharge]
-        x0 = d0['xcell']
-        y0 = -d0['ycell']
-        s=10
-        plt.figure(1)
-        s1 = plt.subplot(1,1,1)
-        s1.plot(x0,y0,'bo',ms=s)
-        
-        if len(dataIndices) > 1:
-            d1 = self.arrayList[dataIndices[1]]
-            d1 = d1[(d1['latency']>minLatency)*d1['charge']<minCharge]
-            x1 = d1['xcell']
-            y1 = -d1['ycell']
-            
-            d2 = self.arrayList[dataIndices[2]]
-            d2 = d2[(d2['latency']>minLatency)*d2['charge']<minCharge]
-            x2 = d2['xcell']
-            y2 = -d2['ycell']
-            
-            d3 = self.arrayList[dataIndices[3]]
-            d3 = d3[(d3['latency']>minLatency)*d3['charge']<minCharge]
-            x3 = d3['xcell']
-            y3 = -d3['ycell']
-            
-            s1.plot(x1,y1,'ro',ms=s)
-            s1.plot(x2,y2,'go',ms=s)
-            s1.plot(x3,y3,'wo',ms=s)
-            s1.plot(0,0,'ok',ms=8)
-            
-        s1.set_xbound(lower = -0.002, upper = 0.002)
-        s1.set_ybound(lower = -0.0015, upper = 0.0005)
-        
-        #print "Making figure 2"
-        plt.figure(2)
-        s2 = plt.subplot(1,1,1)
-        
-        data = self.dataTable
-        #print "1"
-        map = zeros((40, 20), dtype=float) ### map that hold number of traces
-        #print "2"
-        for i in dataIndices:
-            data = self.cellEventMaps[i]
-            #print "i: ", i
-            #number = data[:,:]
-            for j in range(map.shape[0]):
-                for k in range(map.shape[1]):
-                    #print 'j:', j, 'k:', k
-                    number = len(unique(data[j][k]['traceID']))
-                    #print 'number:', number
-                    map[j][k] += number
-                    #print 'added number...'
-                    
-        #print 'making gray array'
-        grays = zeros((map.shape[1], map.shape[0],4), dtype=float)
-        grays[:,:,0] = 0.5
-        grays[:,:,1] = 0.5
-        grays[:,:,2] = 0.5
-        grays[:,:,3] = 0.05*map.transpose()
-        #print 'gray array made'
-        print 'grays.max:', grays[:,:,3].max()
-        
-        img = plt.imshow(grays, cmap='grey')
-        cb = plt.colorbar(img, ax=s2)
-        plt.plot(20,4,'ok',ms=8)
-        
-        
-        
-    
-    
+#class CellMixer(QtCore.QObject):
+#    def __init__(self):
+#        QtCore.QObject.__init__(self)
+#        self.arrayList = []
+#        self.metaInfo = []
+#        self.dataTable = None
+#        self.cellEventMaps = []
+#        self.cellMaps = []
+#        self.binWidth = 100e-6
+#        self.figures = [0]
+#        self.chargeCutOff = None
+#        self.cellNames = []
+#        
+#    def dataThrough(self):
+#        self.loadData('2010.08.04_s0c0-UncagingAnalysis.pk')
+#        self.loadData('2010.08.06_s0c0-UncagingAnalysis.pk')
+#        self.loadData('2010.08.30_s0c0-UncagingAnalysis.pk')
+#        self.loadData('2010.08.05_s1c0-UncagingAnalysis.pk')
+#        for index in range(len(self.arrayList)):
+#            self.singleCellCentric(self.arrayList[index])
+#            self.squash(self.cellEventMaps[index])
+#        #self.displayMap(self.cellMaps[0])
+#            #self.displayCellData(index)
+#    
+#    def loadData(self, fileName=None):
+#        if fileName is not None:
+#            fileName = '/Volumes/iorek/%s' %fileName
+#        else:
+#            fileName = getManager().currentFile.name()
+#            
+#        f = open(fileName, 'r')
+#        a = pickle.load(f)
+#        f.close()
+#        self.cellNames.append(fileName)
+#        self.arrayList.append(a[0])
+#        self.metaInfo.append(a[1])
+#        self.updateChargeCutOff()
+#        
+#        return a
+#    
+#    def updateChargeCutOff(self, percentile=4):
+#        self.compileTable()
+#        mask = self.dataTable['traceID'] != ''
+#        charges = self.dataTable[mask]['charge']
+#        self.chargeCutOff = stats.scoreatpercentile(charges, percentile)
+#    
+#    def compileTable(self):
+#        lengths = [len(self.arrayList[i]) for i in range(len(self.arrayList))]
+#        arrayDtype = self.arrayList[0].dtype
+#        self.dataTable = zeros((len(lengths), max(lengths)), dtype = arrayDtype)
+#        
+#        
+#        for i in range(len(self.arrayList)):
+#            a = self.arrayList[i]
+#            self.dataTable[i][:len(a)] = a
+#            
+#    def singleCellCentric(self, table):
+#        map = zeros((40, 20, 200), dtype = self.arrayList[0].dtype) ##shape = x, y, events
+#        storage = zeros(len(table), dtype = [
+#            ('x', int),
+#            ('y', int),
+#            ('event', self.arrayList[0].dtype)
+#            ])
+#        
+#        for i in range(len(table)):
+#            event = table[i]
+#            x = floor(event['xcell']/self.binWidth)
+#            y = floor(event['ycell']/self.binWidth)
+#            storage[i]['x'] = x
+#            storage[i]['y'] = y
+#            storage[i]['event'] = event
+#        
+#        lengths = []
+#        unx = linspace(-20, 20, 41)[:-1]
+#        uny = linspace(-4, 16, 21)[:-1]
+#
+#        for i in range(40):         ## x dimension of map array
+#            for j in range(20):     ## y dimension of map array
+#                events = storage[(storage['x'] == unx[i]) * (storage['y'] == uny[j])]
+#                map[i][j][:len(events)] = events['event']
+#                lengths.append(len(events))
+#        
+#        map = map[:,:,:max(lengths)]
+#        
+#        self.cellEventMaps.append(map)
+#        return map
+#        
+#    def squash(self, eventMap):
+#        """Takes a 3d record array of events sorted into location bins, and squashes it into a 2d record array of location bins."""
+#        map = zeros((40, 20), dtype = [
+#            ('charge', float), ### sum of events/#traces
+#            ('latency', float), ### sum of first latencies/#responses
+#            ('#APs', int),
+#            ('#traces', int),
+#            ('#responses', int)
+#        ])
+#        mask = eventMap['traceID'] != ''
+#        for i in range(40):
+#            for j in range(20):
+#                charges = eventMap[i][j][mask[i][j]]['charge'].sum()
+#                traces = unique(eventMap[i][j][mask[i][j]]['traceID'])
+#                latencies = 0
+#                APs = 0 
+#                responses = 0 
+#                for t in traces:
+#                    #print 'i', i, 'j',j, 'trace', t
+#                    latency = eventMap[i][j][mask[i][j]]['traceID' == t]['latency'].min()
+#                    if 5e-9 == eventMap[i][j][mask[i][j]]['traceID' == t]['peak'].min():
+#                        APs += 1
+#                    if latency != 0:
+#                        latencies += latency
+#                        responses += 1
+#                if len(traces) != 0:
+#                    map[i][j]['charge'] = charges/len(traces)
+#                if responses != 0:
+#                    map[i][j]['latency'] = latencies/responses
+#                map[i][j]['#APs'] = APs
+#                map[i][j]['#traces'] = len(traces)
+#                map[i][j]['#responses'] = responses
+#                
+#        self.cellMaps.append(map)
+#        return map
+#    
+#    def displayMap(self, data, field='charge', max=None):
+#        if data.ndim != 2:
+#            print """Not sure how to display data in %i dimensions. Please enter 2-dimensional data set.""" %data.ndim
+#            return
+#        if max == None:
+#            d = data[field]/data[field].min()
+#        else:
+#            d = (data[field]/max).clip(0,1)  ##large events are 1, small events are small, 0 is 0
+#        d = d.astype(float32)
+#        d = d.transpose()
+#        fig = plt.figure(1)
+#        #s1 = fig.add_subplot(1,1,1)
+#        #c = s1.contour(data.transpose())
+#        mask = data['#traces'] != 0
+#        mask = mask.transpose()
+#        dirMask = data['latency'] < 0.007
+#        dirMask = dirMask.transpose()
+#        colors = zeros((d.shape[0], d.shape[1], 4), dtype=float)
+#        #hsv = zeros((data.shape[0], data.shape[1]), dtype=object)
+#        for i in range(d.shape[0]):
+#            for j in range(d.shape[1]):
+#                c = hsvColor(0.7 - d[i][j]*0.7)
+#                colors[i][j][0] = float(c.red()/255.0)
+#                colors[i][j][1] = float(c.green()/255.0)
+#                colors[i][j][2] = float(c.blue()/255.0)
+#                colors[:,:,3][mask] = 1.0
+#                colors[:,:,3][(data.transpose()['#responses'] == 0) * (mask)] = 0.6
+#                
+#        plt.imshow(colors)
+#        #plt.figure(2)
+#        #plt.imshow(colors, interpolation = None)
+#        #plt.figure(3)
+#        #plt.imshow(colors, interpolation = 'gaussian')
+#        #fig.show()
+#        #self.figures.append(fig)
+#        return colors
+#        
+#    def displayCellData(self, dataIndex):
+#        #plt.figure(1)
+#        fig = plt.figure(dataIndex+1, dpi=300)
+#        fig.suptitle(self.cellNames[dataIndex])
+#        pos = Point(self.metaInfo[dataIndex]['cellPosition'])
+#        plt.figtext(0.1,0.9, "cell position: x=%f um, y=%f um" %(pos[0]*1e6,pos[1]*1e6))
+#        s1 = fig.add_subplot(2,2,1)
+#        s2 = fig.add_subplot(2,2,2)
+#        #s3 = fig.add_subplot(2,3,4)
+#        #s4 = fig.add_subplot(2,2,3)
+#        s5 = fig.add_subplot(2,2,4)
+#        
+#        data = self.cellMaps[dataIndex].transpose()
+#        traceMask = data['#traces'] == 0 ## True where there are no traces
+#        responseMask = (data['#responses'] == 0)*~traceMask ### True where there were no responses
+#        dirMask = (data['latency'] < 0.007)*~responseMask*~traceMask ###True where responses are direct
+#
+#        s1.set_title('Charge Map')
+#        charge = data['charge']
+#        charge = (charge/self.chargeCutOff).clip(0.0,1.0)
+#        #charge = charge.astype(float32)
+#        #charge[dirMask] = 0.0
+#        #charge[traceMask] = 1.0
+#        #charge[responseMask] = 0.99
+#        
+#        d = charge
+#        colors = zeros((d.shape[0], d.shape[1], 4), dtype=float)
+#        #hsv = zeros((data.shape[0], data.shape[1]), dtype=object)
+#        for i in range(d.shape[0]):
+#            for j in range(d.shape[1]):
+#                c = hsvColor(0.7 - d[i][j]*0.7)
+#                colors[i][j][0] = float(c.red()/255.0)
+#                colors[i][j][1] = float(c.green()/255.0)
+#                colors[i][j][2] = float(c.blue()/255.0)
+#                colors[i][j][3] = 1.0
+#        colors[traceMask] = array([0.0, 0.0,0.0,0.0])
+#        colors[responseMask] = array([0.8,0.8,0.8,0.4])
+#        colors[dirMask] = array([0.0,0.0,0.0,1.0])
+#        #img1 = s1.imshow(colors)
+#        img1 = s1.imshow(colors, cmap = 'hsv')
+#        cb1 = plt.colorbar(img1, ax=s1)
+#        cb1.set_label('Charge (pC)')
+#        cb1.set_ticks([0.7, 0.0])
+#        cb1.set_ticklabels(['0.0', '%.3g pC' % (-self.chargeCutOff*1e12)])
+#        s1.set_ylabel('y Position (mm)')
+#        s1.set_xlim(left=3, right=36)
+#        s1.set_xticklabels(['2.0','1.5', '1.0', '0.5', '0', '0.5', '1.0', '1.5'])
+#        s1.set_ylim(bottom=16, top=1)
+#        s1.set_yticklabels(['0.4','0.2','0','0.2','0.4','0.6','0.8','1.0','1.2','1.4','1.6'])
+#        s1.set_xlabel('x Position (mm)')
+#        
+#        a = argwhere(data['#APs']!=0)
+#        #print "APs at: ", a
+#        self.a=a
+#        if len(a) != 0:
+#            for x in a:
+#                s1.plot(x[1],x[0], '*w', ms = 5)
+#        s1.plot(20,4,'ow')        
+#        
+#        s2.set_title('Latency Map')
+#        lat = data['latency']
+#        #lat[lat==0] = 0.3
+#        lat = ((0.3-lat)/0.3).clip(0, 1)
+#        d = lat
+#        #lat = lat.astype(float32)
+#        #lat[dirMask] = 0.0
+#        #lat[traceMask] = 1.0
+#        #lat[responseMask] = 0.99
+#        colors2 = zeros((d.shape[0], d.shape[1], 4), dtype=float)
+#        for i in range(d.shape[0]):
+#            for j in range(d.shape[1]):
+#                c = hsvColor(0.7 - d[i][j]*0.7)
+#                colors2[i][j][0] = float(c.red()/255.0)
+#                colors2[i][j][1] = float(c.green()/255.0)
+#                colors2[i][j][2] = float(c.blue()/255.0)
+#                colors2[i][j][3] = 1.0
+#        colors2[traceMask] = array([0.0, 0.0,0.0,0.0])
+#        colors2[responseMask] = array([0.8,0.8,0.8,0.4])
+#        colors2[dirMask] = array([0.0,0.0,0.0,1.0])
+#        
+#        img2 = s2.imshow(colors2, cmap = 'hsv')
+#        cb2 = plt.colorbar(img2, ax=s2, drawedges=False)
+#        cb2.set_label('Latency (ms)')
+#        cb2.set_ticks([0.7, 0.0])
+#        cb2.set_ticklabels(['300 ms', '7 ms'])
+#        s2.set_ylabel('y Position (mm)')
+#        s2.set_xlabel('x Position (mm)')
+#        s2.set_xlim(left=3, right=36)
+#        s2.set_xticklabels(['2.0','1.5', '1.0', '0.5', '0', '0.5', '1.0', '1.5'])
+#        s2.set_ylim(bottom=16, top=1)
+#        s2.set_yticklabels(['0.4','0.2','0','0.2','0.4','0.6','0.8','1.0','1.2','1.4','1.6'])
+#        s2.plot(20,4,'ow')
+#        if len(a) != 0:
+#            for x in a:
+#                s2.plot(x[1],x[0], '*w')
+#        
+#        mask = self.cellEventMaps[dataIndex]['latency'] != 0
+#        
+#        #s3.set_title('charge distribution')
+#        #data = self.cellEventMaps[dataIndex][mask]['charge']
+#        #s3.text(0.2, 0.9,'# of events: %s' %len(data), fontsize=10, transform = s3.transAxes)
+#        ##maxCharge = -data.min()
+#        ##maxCharge = stats.scoreatpercentile(data, 3)
+#        ##data[data > maxCharge] = maxCharge
+#        ##bins = logspace(0,maxCharge,50)
+#        #s3.hist(data, bins=100)
+#        #s3.set_xlabel('charge')
+#        #s3.set_ylabel('number')
+#        
+#        #s4.set_title('latency distribution')
+#        #data = self.cellEventMaps[dataIndex][mask]['latency']
+#        #s4.hist(data, bins=100)
+#        #s4.set_xlabel('latency')
+#        #s4.set_ylabel('number')
+#        #s4.set_xlim(left = 0, right = 0.3)
+#        #s4.set_xticks([0, 0.1, 0.2, 0.3])
+#        #s4.set_xticklabels(['0', '100', '200','300'])
+#        
+#        s5.set_title('Charge v. Latency')
+#        charge = -self.cellEventMaps[dataIndex][mask]['charge']*1e12
+#        latency = self.cellEventMaps[dataIndex][mask]['latency']
+#        s5.semilogy(latency, charge, 'bo', markerfacecolor = 'blue', markersize=5)
+#        s5.set_xlabel('Latency (ms)')
+#        s5.set_ylabel('Charge (pC)')
+#        s5.axhspan(0.5e-11*1e12, charge.max(), xmin=0.06/0.32, xmax=0.31/0.32, edgecolor='none',facecolor='gray', alpha=0.3 )
+#        s5.set_xlim(left = -0.01, right = 0.31)
+#        s5.set_xticks([0, 0.1, 0.2, 0.3])
+#        s5.set_xticklabels(['0', '100', '200','300'])
+#        
+#        self.figures.append(fig)
+#        
+#    def mapBigInputs(self, dataIndices, minLatency=0.05, minCharge=-0.5e-11):
+#        
+#        d0 = self.arrayList[dataIndices[0]]
+#        d0 = d0[(d0['latency']>minLatency)*d0['charge']<minCharge]
+#        x0 = d0['xcell']
+#        y0 = -d0['ycell']
+#        s=10
+#        plt.figure(1)
+#        s1 = plt.subplot(1,1,1)
+#        s1.plot(x0,y0,'bo',ms=s)
+#        
+#        if len(dataIndices) > 1:
+#            d1 = self.arrayList[dataIndices[1]]
+#            d1 = d1[(d1['latency']>minLatency)*d1['charge']<minCharge]
+#            x1 = d1['xcell']
+#            y1 = -d1['ycell']
+#            
+#            d2 = self.arrayList[dataIndices[2]]
+#            d2 = d2[(d2['latency']>minLatency)*d2['charge']<minCharge]
+#            x2 = d2['xcell']
+#            y2 = -d2['ycell']
+#            
+#            d3 = self.arrayList[dataIndices[3]]
+#            d3 = d3[(d3['latency']>minLatency)*d3['charge']<minCharge]
+#            x3 = d3['xcell']
+#            y3 = -d3['ycell']
+#            
+#            s1.plot(x1,y1,'ro',ms=s)
+#            s1.plot(x2,y2,'go',ms=s)
+#            s1.plot(x3,y3,'wo',ms=s)
+#            s1.plot(0,0,'ok',ms=8)
+#            
+#        s1.set_xbound(lower = -0.002, upper = 0.002)
+#        s1.set_ybound(lower = -0.0015, upper = 0.0005)
+#        
+#        #print "Making figure 2"
+#        plt.figure(2)
+#        s2 = plt.subplot(1,1,1)
+#        
+#        data = self.dataTable
+#        #print "1"
+#        map = zeros((40, 20), dtype=float) ### map that hold number of traces
+#        #print "2"
+#        for i in dataIndices:
+#            data = self.cellEventMaps[i]
+#            #print "i: ", i
+#            #number = data[:,:]
+#            for j in range(map.shape[0]):
+#                for k in range(map.shape[1]):
+#                    #print 'j:', j, 'k:', k
+#                    number = len(unique(data[j][k]['traceID']))
+#                    #print 'number:', number
+#                    map[j][k] += number
+#                    #print 'added number...'
+#                    
+#        #print 'making gray array'
+#        grays = zeros((map.shape[1], map.shape[0],4), dtype=float)
+#        grays[:,:,0] = 0.5
+#        grays[:,:,1] = 0.5
+#        grays[:,:,2] = 0.5
+#        grays[:,:,3] = 0.05*map.transpose()
+#        #print 'gray array made'
+#        print 'grays.max:', grays[:,:,3].max()
+#        
+#        img = plt.imshow(grays, cmap='grey')
+#        cb = plt.colorbar(img, ax=s2)
+#        plt.plot(20,4,'ok',ms=8)
+#        
+#        
+#        
+#    
+#    
 class STDPWindow(UncagingWindow):
     ###NEED:  add labels to LTP plot?, figure out how to get/display avg epsp time and avg spike time, 
     def __init__(self):

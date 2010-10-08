@@ -98,6 +98,7 @@ class QCam(Camera):
     def getParam(self, param):
         with self.camLock:
             return self.cam.getParam(param)
+
         
     def quit(self):
         #print "quit() called from QCamDevice."
@@ -117,4 +118,5 @@ class QCam(Camera):
     def stopCamera(self):
         with self.camLock:
             self.cam.stop()
+
         
