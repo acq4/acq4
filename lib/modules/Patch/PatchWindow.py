@@ -391,7 +391,7 @@ class PatchThread(QtCore.QThread):
             with MutexLocker(self.lock) as l:
                 self.stopThread = False
                 clamp = self.manager.getDevice(self.clampName)
-                daqName = clamp.listChannels().values()[0][0]  ## Just guess the DAQ by checking one of the clamp's channels
+                daqName = clamp.listChannels().values()[0]['channel'][0]  ## Just guess the DAQ by checking one of the clamp's channels
                 clampName = self.clampName
                 self.paramsUpdated = True
                 l.unlock()

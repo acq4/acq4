@@ -27,10 +27,14 @@ import time, atexit, weakref
 from PyQt4 import QtCore, QtGui
 from DataManager import *
 from Interfaces import *
-import lib.util.ptime as ptime
-from lib.util import configfile
-from lib.util.Mutex import Mutex
-from lib.util.debug import *
+#import lib.util.ptime as ptime
+#from lib.util import configfile
+#from lib.util.Mutex import Mutex
+#from lib.util.debug import *
+import ptime
+import configfile
+from Mutex import Mutex
+from debug import *
 import getopt, glob
 import ptime
 #import pdb
