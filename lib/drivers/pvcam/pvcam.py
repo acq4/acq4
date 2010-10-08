@@ -176,6 +176,7 @@ class _PVCamClass:
         self.quit()
 
     def quit(self):
+        print "quit() called from pvcam driver."
         for c in self.cams:
             try:
                 self.cams[c].close()

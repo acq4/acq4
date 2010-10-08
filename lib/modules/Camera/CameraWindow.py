@@ -986,7 +986,7 @@ class RecordThread(QtCore.QThread):
             #import random
             #if random.random() < 0.01:
                 #raise Exception("TEST")
-            data = MetaArray(data[newaxis], info=arrayInfo)
+            data = MetaArray(data[np.newaxis], info=arrayInfo)
             if frame['newRec']:
                 self.currentRecord = self.m.getCurrentDir().writeFile(data, 'video', autoIncrement=True, info=info, appendAxis='Time')
                 self.currentFrameNum = 0

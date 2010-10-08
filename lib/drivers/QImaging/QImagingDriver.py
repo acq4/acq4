@@ -23,6 +23,7 @@ else:
     headerDir = modDir
 print headerDir
 p = CParser(os.path.join(headerDir, "QCamApi.h"), cache=os.path.join(modDir, 'QCamApi.h.cache'), macros={'_WIN32': '', '__int64': ('long long')})
+
 if sys.platform == 'darwin':
     dll = cdll.LoadLibrary('/Library/Frameworks/QCam.framework/QCam')
 else:
@@ -149,6 +150,7 @@ class QCamDriverClass:
         for c in self.cams:
             self.cams[c].quit()
         self.call(lib.ReleaseDriver) ###what if we don't open the camera?
+
         
 class QCameraClass:
     def __init__(self, name, driver):
@@ -257,6 +259,7 @@ class QCameraClass:
         self.quit()
     
     def quit(self):
+        #print "quit() called from QCamCameraClass. self.isOpen: ", self.isOpen
         if not self.isOpen:
             return
         self.call(lib.Abort, self.handle)
