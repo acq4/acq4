@@ -105,16 +105,16 @@ class QCam(Camera):
         self.qcd.quit()
         
     def newFrames(self):
-        with camLock:
+        with self.camLock:
             a = self.cam.newFrames()
         return a
       
     
     def startCamera(self):
-        with camLock:
+        with self.camLock:
             self.cam.start()
             
     def stopCamera(self):
-        with camLock:
+        with self.camLock:
             self.cam.stop()
         

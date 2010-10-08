@@ -783,7 +783,7 @@ class QCameraClass:
         with self.mutex:
             #print "Mutex locked from qcam.callBack1()"
             #print "set last index", args[1]
-            self.lastImages.append({'id':self.counter, 'data':copy(self.arrays[args[1]]), 'time': self.frameTimes[args[1]], 'exposeDoneTime':self.frameTimes[args[1]]})
+            self.lastImages.append({'id':self.counter, 'data':self.arrays[args[1]].copy(), 'time': self.frameTimes[args[1]], 'exposeDoneTime':self.frameTimes[args[1]]})
             self.counter += 1
             
             if self.stopSignal == False:
