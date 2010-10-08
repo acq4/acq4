@@ -71,7 +71,7 @@ class MultiClamp(Device):
     def listChannels(self):
         chans = {}
         for ch in ['commandChannel', 'primaryChannel', 'secondaryChannel']:
-            chans[ch] = self.config[ch]
+            chans[ch] = {'channel': self.config[ch]}
         return chans
 
     def quit(self):

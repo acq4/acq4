@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from FileInfoViewTemplate import *
 from PyQt4 import QtCore, QtGui
-from lib.util.DataManager import *
+from DataManager import DirHandle
 import lib.Manager as Manager
 import sip
 import time
