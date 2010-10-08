@@ -41,7 +41,7 @@ class CameraDeviceGui(QtGui.QWidget):
                     elif len(p[0]) == 2:
                         (mn, mx) = p[0]
                         step = 1
-                    if step == 1:
+                    if type(mx) in [int, long] and type(mn) in [int, long]:
                         w = QtGui.QSpinBox()
                         intmax = (2**16)-1
                         if mx is None or mx > intmax:
