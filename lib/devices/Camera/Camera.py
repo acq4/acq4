@@ -616,7 +616,11 @@ class CameraTask(DAQGenericTask):
             data = self.frames
             if len(data) > 0:
                 arr = concatenate([f[0][newaxis,...] for f in data])
-                times = array([f[1]['time'] for f in data])
+                try:
+                    times = array([f[1]['time'] for f in data])
+                except:
+                    print f
+                    raise
                 times -= times[0]
                 info = [axis(name='Time', units='s', values=times), axis(name='x'), axis(name='y'), data[0][1]]
                 #print info
@@ -820,8 +824,10 @@ class AcquireThread(QtCore.QThread):
                     
                     for frame in frames:
                         frameInfo = info.copy()
-                        frameInfo['id'] = frame['id']
-                        out = (frame['data'], frameInfo)
+                        data = frame['data']
+                        del frame['data']
+                        frameInfo.update(frame)
+                        out = (data, frameInfo)
                         with MutexLocker(self.connectMutex):
                             conn = self.connections[:]
                         for c in conn:
