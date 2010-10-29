@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'DataManagerTemplate.ui'
 #
-# Created: Mon Jun 07 12:50:36 2010
-#      by: PyQt4 UI code generator 4.5.4
+# Created: Wed Oct 27 11:39:48 2010
+#      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -80,6 +80,7 @@ class Ui_MainWindow(object):
         font.setWeight(75)
         font.setBold(True)
         self.fileNameLabel.setFont(font)
+        self.fileNameLabel.setText("")
         self.fileNameLabel.setObjectName("fileNameLabel")
         self.verticalLayout_4.addWidget(self.fileNameLabel)
         self.fileDisplayTabs = QtGui.QTabWidget(self.layoutWidget1)
@@ -118,9 +119,13 @@ class Ui_MainWindow(object):
         self.dataViewWidget.setObjectName("dataViewWidget")
         self.verticalLayout_7.addWidget(self.dataViewWidget)
         self.fileDisplayTabs.addTab(self.tab_3, "")
-        self.tab_2 = QtGui.QWidget()
-        self.tab_2.setObjectName("tab_2")
-        self.fileDisplayTabs.addTab(self.tab_2, "")
+        self.analysisTab = QtGui.QWidget()
+        self.analysisTab.setObjectName("analysisTab")
+        self.gridLayout_2 = QtGui.QGridLayout(self.analysisTab)
+        self.gridLayout_2.setMargin(0)
+        self.gridLayout_2.setSpacing(0)
+        self.gridLayout_2.setObjectName("gridLayout_2")
+        self.fileDisplayTabs.addTab(self.analysisTab, "")
         self.verticalLayout_4.addWidget(self.fileDisplayTabs)
         self.verticalLayout_5.addWidget(self.splitter)
         MainWindow.setCentralWidget(self.centralwidget)
@@ -144,7 +149,7 @@ class Ui_MainWindow(object):
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(8), self.logDock)
 
         self.retranslateUi(MainWindow)
-        self.fileDisplayTabs.setCurrentIndex(0)
+        self.fileDisplayTabs.setCurrentIndex(3)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -156,7 +161,7 @@ class Ui_MainWindow(object):
         self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab), QtGui.QApplication.translate("MainWindow", "Info", None, QtGui.QApplication.UnicodeUTF8))
         self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab_4), QtGui.QApplication.translate("MainWindow", "Log", None, QtGui.QApplication.UnicodeUTF8))
         self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab_3), QtGui.QApplication.translate("MainWindow", "Data", None, QtGui.QApplication.UnicodeUTF8))
-        self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab_2), QtGui.QApplication.translate("MainWindow", "Analysis", None, QtGui.QApplication.UnicodeUTF8))
+        self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.analysisTab), QtGui.QApplication.translate("MainWindow", "Analysis", None, QtGui.QApplication.UnicodeUTF8))
         self.logDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Current Log", None, QtGui.QApplication.UnicodeUTF8))
 
 from FileInfoView import FileInfoView
