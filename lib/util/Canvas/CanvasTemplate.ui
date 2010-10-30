@@ -26,13 +26,13 @@
       <enum>Qt::Horizontal</enum>
      </property>
      <widget class="GraphicsView" name="view"/>
-     <widget class="QWidget" name="">
+     <widget class="QWidget" name="layoutWidget">
       <layout class="QVBoxLayout" name="ctrlLayout">
        <property name="spacing">
         <number>0</number>
        </property>
        <item>
-        <widget class="QPushButton" name="pushButton">
+        <widget class="QPushButton" name="autoRangeBtn">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
            <horstretch>0</horstretch>
@@ -55,6 +55,11 @@
          <property name="headerHidden">
           <bool>true</bool>
          </property>
+         <column>
+          <property name="text">
+           <string notr="true">1</string>
+          </property>
+         </column>
         </widget>
        </item>
       </layout>

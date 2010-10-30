@@ -10,7 +10,8 @@ of array data from ImageItems.
 """
 
 from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
-from numpy import array, arccos, dot, pi, zeros, vstack, ubyte, fromfunction, ceil, floor, arctan2
+#from numpy import array, arccos, dot, pi, zeros, vstack, ubyte, fromfunction, ceil, floor, arctan2
+import numpy as np
 from numpy.linalg import norm
 import scipy.ndimage as ndimage
 from Point import *
@@ -50,7 +51,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.state = {'pos': pos, 'size': size, 'angle': angle}
         self.lastState = None
         self.setPos(pos)
-        self.rotate(-angle * 180. / pi)
+        self.rotate(-angle * 180. / np.pi)
         self.setZValue(10)
         
         self.handleSize = 5
@@ -65,6 +66,11 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
     
     def getState(self):
         return self.state.copy()
+    
+    def setState(self, state):
+        self.setPos(state['pos'], update=False)
+        self.setSize(state['size'], update=False)
+        self.setAngle(state['angle'])
     
     def setZValue(self, z):
         QtGui.QGraphicsItem.setZValue(self, z)
@@ -87,6 +93,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.state['pos'] = pos
         QtGui.QGraphicsItem.setPos(self, pos)
         if update:
+            self.updateHandles()
             self.handleChange()
         
     def setSize(self, size, update=True):
@@ -96,6 +103,16 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         if update:
             self.updateHandles()
             self.handleChange()
+        
+    def setAngle(self, angle, update=True):
+        self.state['angle'] = angle
+        tr = QtGui.QTransform()
+        tr.rotate(-angle * 180 / np.pi)
+        self.setTransform(tr)
+        if update:
+            self.updateHandles()
+            self.handleChange()
+        
         
     def addTranslateHandle(self, pos, axes=None, item=None, name=None):
         pos = Point(pos)
@@ -337,11 +354,11 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
             if ang is None:
                 return
             if self.rotateSnap or (modifiers & QtCore.Qt.ControlModifier):
-                ang = round(ang / (pi/12.)) * (pi/12.)
+                ang = round(ang / (np.pi/12.)) * (np.pi/12.)
             
             
             tr = QtGui.QTransform()
-            tr.rotate(-ang * 180. / pi)
+            tr.rotate(-ang * 180. / np.pi)
             
             cc = self.mapToParent(cs) - (tr.map(cs) + self.state['pos'])
             newState['angle'] = ang
@@ -372,7 +389,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
             if ang is None:
                 return
             if self.rotateSnap or (modifiers & QtCore.Qt.ControlModifier):
-                ang = round(ang / (pi/12.)) * (pi/12.)
+                ang = round(ang / (np.pi/12.)) * (np.pi/12.)
             
             hs = abs(h['pos'][scaleAxis] - c[scaleAxis])
             newState['size'][scaleAxis] = lp1.length() / hs
@@ -383,7 +400,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
                 
             c1 = c * newState['size']
             tr = QtGui.QTransform()
-            tr.rotate(-ang * 180. / pi)
+            tr.rotate(-ang * 180. / np.pi)
             
             cc = self.mapToParent(cs) - (tr.map(c1) + self.state['pos'])
             newState['angle'] = ang
@@ -472,7 +489,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
     def stateRect(self, state):
         r = QtCore.QRectF(0, 0, state['size'][0], state['size'][1])
         tr = QtGui.QTransform()
-        tr.rotate(-state['angle'] * 180 / pi)
+        tr.rotate(-state['angle'] * 180 / np.pi)
         r = tr.mapRect(r)
         return r.adjusted(state['pos'][0], state['pos'][1], state['pos'][0], state['pos'][1])
     
@@ -563,10 +580,10 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         
         ## Rotate array
         if abs(self.state['angle']) > 1e-5:
-            arr2 = ndimage.rotate(arr1, self.state['angle'] * 180 / pi, order=1)
+            arr2 = ndimage.rotate(arr1, self.state['angle'] * 180 / np.pi, order=1)
             
             ## update data transforms to reflect this rotation
-            rot = QtGui.QTransform().rotate(self.state['angle'] * 180 / pi)
+            rot = QtGui.QTransform().rotate(self.state['angle'] * 180 / np.pi)
             roiDataTransform *= rot
             
             ## The rotation also causes a shift which must be accounted for:
@@ -587,7 +604,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         shift = (int(roiBounds.left()) - roiBounds.left(), int(roiBounds.bottom()) - roiBounds.bottom())
         if abs(shift[0]) > 1e-6 or abs(shift[1]) > 1e-6:
             # 3. pad array with 0s before shifting
-            arr2a = zeros((arr2.shape[0]+2, arr2.shape[1]+2) + arr2.shape[2:], dtype=arr2.dtype)
+            arr2a = np.zeros((arr2.shape[0]+2, arr2.shape[1]+2) + arr2.shape[2:], dtype=arr2.dtype)
             arr2a[1:-1, 1:-1] = arr2
             
             # 4. shift array and udpate transforms
@@ -618,7 +635,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         arr4 = arr3[bounds[0][0]:bounds[0][1], bounds[1][0]:bounds[1][1]]
 
         ### Create zero array in size of ROI
-        arr5 = zeros((roiBounds.width(), roiBounds.height()) + arr4.shape[2:], dtype=arr4.dtype)
+        arr5 = np.zeros((roiBounds.width(), roiBounds.height()) + arr4.shape[2:], dtype=arr4.dtype)
         
         ## Fill array with ROI data
         orig = Point(dataBounds.topLeft() - roiBounds.topLeft())
@@ -627,7 +644,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         
         
         ## figure out the reverse transpose order
-        tr2 = array(tr1)
+        tr2 = np.array(tr1)
         for i in range(0, len(tr2)):
             tr2[tr1[i]] = i
         tr2 = tuple(tr2)
@@ -657,10 +674,10 @@ class Handle(QtGui.QGraphicsItem):
         self.pen.setCosmetic(True)
         if typ == 't':
             self.sides = 4
-            self.startAng = pi/4
+            self.startAng = np.pi/4
         elif typ == 'f':
             self.sides = 4
-            self.startAng = pi/4
+            self.startAng = np.pi/4
         elif typ == 's':
             self.sides = 4
             self.startAng = 0
@@ -672,7 +689,7 @@ class Handle(QtGui.QGraphicsItem):
             self.startAng = 0
         else:
             self.sides = 4
-            self.startAng = pi/4
+            self.startAng = np.pi/4
             
     def connectROI(self, roi, i):
         self.roi.append((roi, i))
@@ -714,7 +731,7 @@ class Handle(QtGui.QGraphicsItem):
         m = self.sceneTransform()
         #mi = m.inverted()[0]
         v = m.map(QtCore.QPointF(1, 0)) - m.map(QtCore.QPointF(0, 0))
-        va = arctan2(v.y(), v.x())
+        va = np.arctan2(v.y(), v.x())
         
         ## Determine length of unit vector in painter's coords
         #size = mi.map(Point(self.radius, self.radius)) - mi.map(Point(0, 0))
@@ -728,7 +745,7 @@ class Handle(QtGui.QGraphicsItem):
         p.setRenderHints(p.Antialiasing, True)
         p.setPen(self.pen)
         ang = self.startAng + va
-        dt = 2*pi / self.sides
+        dt = 2*np.pi / self.sides
         for i in range(0, self.sides):
             x1 = size * cos(ang)
             y1 = size * sin(ang)
@@ -781,7 +798,7 @@ class LineROI(ROI):
         c = Point(-width/2. * sin(ang), -width/2. * cos(ang))
         pos1 = pos1 + c
         
-        ROI.__init__(self, pos1, size=Point(l, width), angle=ang*180/pi, **args)
+        ROI.__init__(self, pos1, size=Point(l, width), angle=ang*180/np.pi, **args)
         self.addScaleRotateHandle([0, 0.5], [1, 0.5])
         self.addScaleRotateHandle([1, 0.5], [0, 0.5])
         self.addScaleHandle([0.5, 1], [0.5, 0.5])
@@ -846,7 +863,7 @@ class MultiLineROI(QtGui.QGraphicsItem, QObjectWorkaround):
             rgns.append(rgn)
             #print l.state['size']
         #print [(r.shape) for r in rgns]
-        return vstack(rgns)
+        return np.vstack(rgns)
         
         
 class EllipseROI(ROI):
@@ -873,7 +890,7 @@ class EllipseROI(ROI):
         w = arr.shape[0]
         h = arr.shape[1]
         ## generate an ellipsoidal mask
-        mask = fromfunction(lambda x,y: (((x+0.5)/(w/2.)-1)**2+ ((y+0.5)/(h/2.)-1)**2)**0.5 < 1, (w, h))
+        mask = np.fromfunction(lambda x,y: (((x+0.5)/(w/2.)-1)**2+ ((y+0.5)/(h/2.)-1)**2)**0.5 < 1, (w, h))
     
         return arr * mask
     

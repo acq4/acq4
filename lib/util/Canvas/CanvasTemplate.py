@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'CanvasTemplate.ui'
 #
-# Created: Wed Oct  6 12:02:05 2010
+# Created: Fri Oct 29 08:16:30 2010
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -22,20 +22,20 @@ class Ui_Form(object):
         self.splitter.setObjectName("splitter")
         self.view = GraphicsView(self.splitter)
         self.view.setObjectName("view")
-        self.widget = QtGui.QWidget(self.splitter)
-        self.widget.setObjectName("widget")
-        self.ctrlLayout = QtGui.QVBoxLayout(self.widget)
+        self.layoutWidget = QtGui.QWidget(self.splitter)
+        self.layoutWidget.setObjectName("layoutWidget")
+        self.ctrlLayout = QtGui.QVBoxLayout(self.layoutWidget)
         self.ctrlLayout.setSpacing(0)
         self.ctrlLayout.setObjectName("ctrlLayout")
-        self.pushButton = QtGui.QPushButton(self.widget)
+        self.autoRangeBtn = QtGui.QPushButton(self.layoutWidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.pushButton.sizePolicy().hasHeightForWidth())
-        self.pushButton.setSizePolicy(sizePolicy)
-        self.pushButton.setObjectName("pushButton")
-        self.ctrlLayout.addWidget(self.pushButton)
-        self.itemList = TreeWidget(self.widget)
+        sizePolicy.setHeightForWidth(self.autoRangeBtn.sizePolicy().hasHeightForWidth())
+        self.autoRangeBtn.setSizePolicy(sizePolicy)
+        self.autoRangeBtn.setObjectName("autoRangeBtn")
+        self.ctrlLayout.addWidget(self.autoRangeBtn)
+        self.itemList = TreeWidget(self.layoutWidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(100)
@@ -43,6 +43,7 @@ class Ui_Form(object):
         self.itemList.setSizePolicy(sizePolicy)
         self.itemList.setHeaderHidden(True)
         self.itemList.setObjectName("itemList")
+        self.itemList.headerItem().setText(0, "1")
         self.ctrlLayout.addWidget(self.itemList)
         self.gridLayout.addWidget(self.splitter, 0, 0, 1, 1)
 
@@ -51,7 +52,7 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.pushButton.setText(QtGui.QApplication.translate("Form", "Auto Range", None, QtGui.QApplication.UnicodeUTF8))
+        self.autoRangeBtn.setText(QtGui.QApplication.translate("Form", "Auto Range", None, QtGui.QApplication.UnicodeUTF8))
 
 from TreeWidget import TreeWidget
 from pyqtgraph.GraphicsView import GraphicsView

@@ -208,8 +208,10 @@ class FileHandle(QtCore.QObject):
         self.checkDeleted()
         return self.parent()._fileInfo(self.shortName())
         
-    def setInfo(self, info):
+    def setInfo(self, info=None, **args):
         """Set meta-information for this file. Updates all keys specified in info, leaving others unchanged."""
+        if info is None:
+            info = args
         self.checkDeleted()
         self.emitChanged('meta')
         return self.parent()._setFileInfo(self.shortName(), info)
@@ -809,8 +811,8 @@ class DirHandle(FileHandle):
                 return (fileName in ind)
 
     
-    def setInfo(self, *args):
-        self._setFileInfo('.', *args)
+    def setInfo(self, *args, **kargs):
+        self._setFileInfo('.', *args, **kargs)
         
         
         
@@ -831,8 +833,10 @@ class DirHandle(FileHandle):
                 raise
             return os.path.exists(fn)
 
-    def _setFileInfo(self, fileName, info):
+    def _setFileInfo(self, fileName, info=None, **args):
         """Set or update meta-information array for fileName. If merge is false, the info dict is completely overwritten."""
+        if info is None:
+            info = args
         #prof = Profiler('setFileInfo')
         with self.lock:
             #prof.mark('1')

@@ -719,13 +719,15 @@ class ScatterPlotItem(QtGui.QGraphicsItem):
             item = self.mkSpot(pos, size, self.pxMode, brush, pen)
             self.spots.append(item)
             if xmn is None:
-                xmn = xmx = pos[0]
-                ymn = ymx = pos[1]
+                xmn = pos[0]-size
+                xmx = pos[0]+size
+                ymn = pos[1]-size
+                ymx = pos[1]+size
             else:
-                xmn = min(xmn, pos[0])
-                xmx = max(xmx, pos[0])
-                ymn = min(ymn, pos[1])
-                ymx = max(ymx, pos[1])
+                xmn = min(xmn, pos[0]-size)
+                xmx = max(xmx, pos[0]+size)
+                ymn = min(ymn, pos[1]-size)
+                ymx = max(ymx, pos[1]+size)
         self.range = [[xmn, xmx], [ymn, ymx]]
                 
 
@@ -736,7 +738,9 @@ class ScatterPlotItem(QtGui.QGraphicsItem):
         return item
         
     def boundingRect(self):
-        return QtCore.QRectF()
+        ((xmn, xmx), (ymn, ymx)) = self.range
+        
+        return QtCore.QRectF(xmn, ymn, xmx-xmn, ymx-ymn)
         
     def paint(self, p, *args):
         pass
