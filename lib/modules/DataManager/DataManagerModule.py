@@ -5,7 +5,7 @@ from lib.modules.Module import *
 from DataManager import *
 import os, re, sys, time, sip
 from lib.util.debug import *
-
+import FileAnalysisView
 
 class Window(QtGui.QMainWindow):
     def closeEvent(self, ev):
@@ -17,8 +17,11 @@ class DataManager(Module):
         Module.__init__(self, manager, name, config)
         self.dm = self.manager.dataManager
         self.win = Window()
+        self.win.dm = self  ## so embedded widgets can find the module easily
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
+        self.ui.analysisWidget = FileAnalysisView.FileAnalysisView(self.ui.analysisTab, self)
+        self.ui.analysisTab.layout().addWidget(self.ui.analysisWidget)
         w = self.ui.splitter.width()
         self.ui.splitter.setSizes([int(w*0.2), int(w*0.8)])
         self.dialog = QtGui.QFileDialog()

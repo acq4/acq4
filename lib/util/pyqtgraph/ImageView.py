@@ -399,6 +399,7 @@ class ImageView(QtGui.QWidget):
         self.ui.gradientWidget.setTickValue(self.ticks[1], 1.0)
         self.imageItem.setLevels(white=self.whiteLevel(), black=self.blackLevel())
             
+
     def autoRange(self):
         image = self.getProcessedImage()
         

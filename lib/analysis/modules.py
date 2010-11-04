@@ -252,7 +252,7 @@ class EventMatchWidget(QtGui.QSplitter):
             events = findEvents(data, minLength=minLen, minPeak=minPeak, minSum=minSum, noiseThreshold=noiseThresh)
             ## if 'ExpDeconvolve' in self.ctrl.preFilterList.topLevelItems ### Need to only reconvolve if trace was deconvolved, but this is hard - for now we'll just assume that deconvolution is being used
             for i in range(len(events)):
-                e = data[events[i]['start']:events[i]['start']+events[i]['len']]
+                e = data[events[i]['index']:events[i]['index']+events[i]['len']]
                 event = self.ctrl.preFilterList.filterList.topLevelItem(2).filter.reconvolve(e) ### lots of hard-coding happening, don't worry I feel sufficiently guilty about it
                 if events[i]['sum'] > 0:
                     events[i]['peak'] = event.max()
@@ -329,18 +329,18 @@ class EventMatchWidget(QtGui.QSplitter):
                 tg = VTickGroup(view=self.analysisPlot)
                 tg.setPen(pen)
                 tg.setYRange([0.8, 1.0], relative=True)
-                tg.setXVals(d.xvals('Time')[eventList['start']])
-                #print "set tick locations:", timeVals[eventList['start']]
+                tg.setXVals(d.xvals('Time')[eventList['index']])
+                #print "set tick locations:", timeVals[eventList['index']]
                 self.tickGroups.append(tg)
                 self.analysisPlot.addItem(tg)
                 
                 for j in range(len(eventList)):
-                    e = ppd[eventList[j]['start']:eventList[j]['start']+eventList[j]['len']]
+                    e = ppd[eventList[j]['index']:eventList[j]['index']+eventList[j]['len']]
                     event = self.ctrl.preFilterList.filterList.topLevelItem(2).filter.reconvolve(e)
-                    self.dataPlot.plot(data=event, x=(arange((eventList[j]['start']-100), (eventList[j]['start']-100+len(event)))*10e-5), pen=pen)
+                    self.dataPlot.plot(data=event, x=(arange((eventList[j]['index']-100), (eventList[j]['index']-100+len(event)))*10e-5), pen=pen)
                 
                 ## generate triggered stacks for plotting
-                #stack = triggerStack(d, eventList['start'], window=[-100, 200])
+                #stack = triggerStack(d, eventList['index'], window=[-100, 200])
                 #negPen = mkPen([0, 0, 200])
                 #posPen = mkPen([200, 0, 0])
                 #print stack.shape
@@ -456,10 +456,10 @@ class UncagingWindow(QtGui.QMainWindow):
         self.ctrl.downsampleSpin.setValue(10)
         
         #self.canvas.setMouseTracking(True)
-        self.sliceMarker = tShapeROI([0,0], 0.001)
-        self.canvas.addItem(self.sliceMarker, [0,0], z=100000)
-        self.cellMarker = cellROI()
-        self.canvas.addItem(self.cellMarker, [0,0], z=100000)
+        #self.sliceMarker = tShapeROI([0,0], 0.001)
+        #self.canvas.addItem(self.sliceMarker, pos=[0,0], z=100000)
+        #self.cellMarker = cellROI()
+        #self.canvas.addItem(self.cellMarker, pos=[0,0], z=100000)
         
         
         #self.plot = PlotWidget()
@@ -506,7 +506,7 @@ class UncagingWindow(QtGui.QMainWindow):
             img = img.max(axis=0)
         #print pos, ps, img.shape, img.dtype, img.max(), img.min()
         item = ImageItem(img)
-        self.canvas.addItem(item, pos, scale=ps, z=self.z, name=fd.shortName())
+        self.canvas.addItem(item, pos=pos, scale=ps, z=self.z, name=fd.shortName())
         self.z += 1
         self.imageItems.append(item)
         
@@ -539,7 +539,7 @@ class UncagingWindow(QtGui.QMainWindow):
                 item.position = pos
                 item.size = size
                 item.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200,0)))                 
-                self.canvas.addItem(item, [pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z, name=[dh.shortName(), d.shortName()])
+                self.canvas.addItem(item, pos=[pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z, name=dh.shortName()+'.'+ d.shortName())
                 if drug:
                     item.drug = True
                 else:
@@ -559,7 +559,7 @@ class UncagingWindow(QtGui.QMainWindow):
                     avgSpot.position = pos
                     avgSpot.size = size
                     avgSpot.setBrush(QtGui.QBrush(QtGui.QColor(100,100,200, 100)))                 
-                    self.canvas.addItem(avgSpot, [pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z+10000, name=["Averages", "spot%03d"%len(self.scanAvgItems)])
+                    self.canvas.addItem(avgSpot, pos=[pos[0] - size*0.5, pos[1] - size*0.5], scale=[size,size], z = self.z+10000, name="Averages"+"spot%03d"%len(self.scanAvgItems))
                     self.scanAvgItems.append(avgSpot)
                 
                 avgSpot.sourceItems.append(item)
@@ -672,7 +672,7 @@ class UncagingWindow(QtGui.QMainWindow):
         #        events= delete(events, events[i])
         #
         times = data.xvals('Time')
-        self.eventTimes.extend(times[events['start']])
+        self.eventTimes.extend(times[events['index']])
         q = self.getLaserTime(i.source)
         stimTime = q - 0.001
         dirTime = q + self.ctrl.directTimeSpin.value()/1000
@@ -682,7 +682,7 @@ class UncagingWindow(QtGui.QMainWindow):
         endInd = argwhere((times[:-1] <= endTime) * (times[1:] > endTime))[0,0]
         dt = times[1]-times[0]
         
-        times = events['start']
+        times = events['index']
         pre = events[times < stimInd]
         direct = events[(times > stimInd) * (times < dirInd)]
         post = events[(times > dirInd) * (times < endInd)]
@@ -887,7 +887,7 @@ class UncagingWindow(QtGui.QMainWindow):
                 #return None, None
         e = self.plot.processData(data=[data], display=False, analyze=True)[0]
         e = e[e['peak'] > 0]  ## select only positive events
-        starts = e['start']
+        starts = e['index']
         pspTimes = starts[starts > pspStart]
         if len(pspTimes) < 1:
             return None, None
@@ -1010,10 +1010,10 @@ class UncagingWindow(QtGui.QMainWindow):
             #y = self.sliceMarker.mapFromScene(item.position[1])
             
             events = self.plot.processData([trace], display=False)[0]
-            #preEvents = events[0][(events[0]['start'] < laserIndex)*(events[0]['start']> laserIndex - self.ctrl.poststimTimeSpin.value()*10)]
-            #spontLatencies.append((preEvents['start']-laserIndex)/rate)
+            #preEvents = events[0][(events[0]['index'] < laserIndex)*(events[0]['index']> laserIndex - self.ctrl.poststimTimeSpin.value()*10)]
+            #spontLatencies.append((preEvents['index']-laserIndex)/rate)
             #spontCharges.append((preEvents['sum']))
-            #events = events[(events['start'] > laserIndex)*(events['start'] < laserIndex+self.ctrl.poststimTimeSpin.value()*10)]
+            #events = events[(events['index'] > laserIndex)*(events['index'] < laserIndex+self.ctrl.poststimTimeSpin.value()*10)]
             
             spikeIndex = None
             if trace.min() < -2e-9:
@@ -1027,20 +1027,20 @@ class UncagingWindow(QtGui.QMainWindow):
                 table[n]['peak'] = 5e-9
                 n += 1
                 buffer = (150, 300) ### buffer to exclude events around an action potential (in 10e-4 seconds)
-                events = events[(events['start'] < spikeIndex - buffer[0])*(events['start'] > spikeIndex + buffer[1])]
+                events = events[(events['index'] < spikeIndex - buffer[0])*(events['index'] > spikeIndex + buffer[1])]
             
             #foundEvent = False
             if len(events) > 0:
                 for e in events:
                     #foundEvent = False
-                    #if laserIndex < e['start'] and e['start'] < laserIndex+self.ctrl.poststimTimeSpin.value()*10:
+                    #if laserIndex < e['index'] and e['index'] < laserIndex+self.ctrl.poststimTimeSpin.value()*10:
                     #    foundEvent = True
                     table[n]['traceID'] = traceID
                     table[n]['xslice'] = float(xs)
                     table[n]['yslice'] = float(ys)
                     table[n]['xcell'] = float(xc)
                     table[n]['ycell'] = float(yc)
-                    table[n]['latency']= (e['start']-laserIndex)/rate
+                    table[n]['latency']= (e['index']-laserIndex)/rate
                     table[n]['duration'] = e['len'] / rate
                     table[n]['peak'] = e['peak']
                     table[n]['charge'] = e['sum']

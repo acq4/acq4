@@ -62,7 +62,10 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.rotateSnap = rotateSnap
         self.scaleSnap = scaleSnap
         self.setFlag(self.ItemIsSelectable, True)
-        
+    
+    def getState(self):
+        return self.state.copy()
+    
     def setZValue(self, z):
         QtGui.QGraphicsItem.setZValue(self, z)
         for h in self.handles:
@@ -632,7 +635,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         ## Untranspose array before returning
         return arr5.transpose(tr2)
 
-
+    
 
 
 

@@ -411,7 +411,7 @@ class PlotCurveItem(GraphicsObject):
                 f = fft(y) / len(y)
                 y = abs(f[1:len(f)/2])
                 dt = x[-1] - x[0]
-                x = linspace(0, 0.5*len(x)/dt, len(y))
+                x = np.linspace(0, 0.5*len(x)/dt, len(y))
             if self.opts['logMode'][0]:
                 x = np.log10(x)
             if self.opts['logMode'][1]:
@@ -1600,6 +1600,7 @@ class InfiniteLine(GraphicsObject):
         if movable:
             self.setAcceptHoverEvents(True)
             
+        self.hasMoved = False
 
         
         if pen is None:
@@ -1776,7 +1777,13 @@ class InfiniteLine(GraphicsObject):
     def mouseMoveEvent(self, ev):
         self.setPos(self.mapToParent(ev.pos()) - self.pressDelta)
         self.emit(QtCore.SIGNAL('dragged'), self)
- 
+        self.hasMoved = True
+
+    def mouseReleaseEvent(self, ev):
+        if self.hasMoved and ev.button() == QtCore.Qt.LeftButton:
+            self.hasMoved = False
+            self.emit(QtCore.SIGNAL('positionChangeFinished'), self)
+            
 
 
 class LinearRegionItem(GraphicsObject):
@@ -1806,6 +1813,7 @@ class LinearRegionItem(GraphicsObject):
         
         for l in self.lines:
             l.setParentItem(self)
+            l.connect(QtCore.SIGNAL('positionChangeFinished'), self.lineMoveFinished)
             l.connect(QtCore.SIGNAL('positionChanged'), self.lineMoved)
             
         if brush is None:
@@ -1824,6 +1832,10 @@ class LinearRegionItem(GraphicsObject):
         self.updateBounds()
         self.emit(QtCore.SIGNAL('regionChanged'), self)
             
+    def lineMoveFinished(self):
+        self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+        
+            
     def updateBounds(self):
         vb = self.view().viewRect()
         vals = [self.lines[0].value(), self.lines[1].value()]
@@ -1839,12 +1851,16 @@ class LinearRegionItem(GraphicsObject):
         
     def mousePressEvent(self, ev):
         for l in self.lines:
-            l.mousePressEvent(ev)
+            l.mousePressEvent(ev)  ## pass event to both lines so they move together
         #if self.movable and ev.button() == QtCore.Qt.LeftButton:
             #ev.accept()
             #self.pressDelta = self.mapToParent(ev.pos()) - QtCore.QPointF(*self.p)
         #else:
             #ev.ignore()
+            
+    def mouseReleaseEvent(self, ev):
+        for l in self.lines:
+            l.mouseReleaseEvent(ev)
             
     def mouseMoveEvent(self, ev):
         self.lines[0].blockSignals(True)  # only want to update once
