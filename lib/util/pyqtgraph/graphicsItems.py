@@ -411,7 +411,7 @@ class PlotCurveItem(GraphicsObject):
                 f = fft(y) / len(y)
                 y = abs(f[1:len(f)/2])
                 dt = x[-1] - x[0]
-                x = linspace(0, 0.5*len(x)/dt, len(y))
+                x = np.linspace(0, 0.5*len(x)/dt, len(y))
             if self.opts['logMode'][0]:
                 x = np.log10(x)
             if self.opts['logMode'][1]:
