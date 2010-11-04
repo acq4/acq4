@@ -69,10 +69,10 @@ dm = Manager(config, sys.argv[1:])
 
 #w = UncagingWindow()
 
-#from lib.analysis.analyzer import *
-#d = os.path.dirname(os.path.abspath(__file__))
-#dh = dm.dirHandle(os.path.join(d, 'lib', 'analysis', 'protocols'))
-#w1 = Analyzer(dh)
+from lib.analysis.analyzer import *
+d = os.path.dirname(os.path.abspath(__file__))
+dh = dm.dirHandle(os.path.join(d, 'lib', 'analysis', 'protocols'))
+w1 = Analyzer(dh)
 #w2 = Analyzer(dh)
 
 #from lib.analysis.mosaicEditor import *
