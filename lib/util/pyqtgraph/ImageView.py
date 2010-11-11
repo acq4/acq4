@@ -355,6 +355,8 @@ class ImageView(QtGui.QWidget):
         if levels is not None:
             self.levelMax = levels[1]
             self.levelMin = levels[0]
+            
+        self.currentIndex = 0
         self.updateImage()
         if self.ui.roiBtn.isChecked():
             self.roiChanged()
@@ -363,6 +365,7 @@ class ImageView(QtGui.QWidget):
         if self.axes['t'] is not None:
             #self.ui.roiPlot.show()
             self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
+            self.timeLine.setValue(0)
             #self.ui.roiPlot.setMouseEnabled(False, False)
             if len(self.tVals) > 1:
                 start = self.tVals.min()
