@@ -235,6 +235,7 @@ class DAQGenericTask(DeviceTask):
             #print "get data", ch, self.getChanScale(ch), result[ch]['data'].max()
             result[ch]['data'] = result[ch]['data'] / self.getChanScale(ch)
             result[ch]['units'] = self.getChanUnits(ch)
+            #print "channel", ch, "returned:\n  ", result[ch]
             #prof.mark("scale data for channel "+str(ch))
             #del _DAQCmd[ch]['task']
         #print "RESULT:", result    
