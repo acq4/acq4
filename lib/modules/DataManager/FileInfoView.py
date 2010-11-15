@@ -108,7 +108,7 @@ class FileInfoView(QtGui.QWidget):
             else:
                 s = str(info[f])
                 if f == '__timestamp__':
-                    s = time.strftime("%Y.%m.%d   %H:%m:%S", time.localtime(float(s)))
+                    s = time.strftime("%Y.%m.%d   %H:%M:%S", time.localtime(float(s)))
                 w = QtGui.QLabel(s)
             if type(f) is tuple:
                 f = '.'.join(f)

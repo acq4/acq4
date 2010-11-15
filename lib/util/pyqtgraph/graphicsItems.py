@@ -188,6 +188,8 @@ class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
         self.alpha = 1.0
         self.image = None
         self.clipLevel = None
+        self.drawKernel = None
+        
         QtGui.QGraphicsPixmapItem.__init__(self, parent, *args)
         #self.pixmapItem = QtGui.QGraphicsPixmapItem(self)
         if image is not None:
@@ -357,7 +359,27 @@ class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
         hist = np.histogram(stepData, bins=bins)
         return hist[1][:-1], hist[0]
         
+    def mousePressEvent(self, ev):
+        if self.drawKernel is not None and ev.button() == QtCore.Qt.LeftButton:
+            ev.accept()
+        else:
+            ev.ignore()
         
+    def mouseMoveEvent(self, ev):
+        #print "mouse move", ev.pos()
+        if self.translatable:
+            snap = None
+            if self.translateSnap or (ev.modifiers() & QtCore.Qt.ControlModifier):
+                snap = Point(self.snapSize, self.snapSize)
+            newPos = ev.scenePos() + self.cursorOffset
+            newPos = self.mapSceneToParent(newPos)
+            self.translate(newPos - self.pos(), snap=snap)
+    
+    def mouseReleaseEvent(self, ev):
+        if self.translatable:
+            self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+    
+    
 
 
 class PlotCurveItem(GraphicsObject):
