@@ -61,7 +61,7 @@ def mkColor(*args):
                 (r, g, b, a) = args[0]
             else:
                 raise Exception(err)
-        if type(args[0]) == int:
+        elif type(args[0]) == int:
             return intColor(args[0])
         else:
             raise Exception(err)

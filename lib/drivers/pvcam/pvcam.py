@@ -553,7 +553,7 @@ class _CameraClass:
                 raise Exception('Parameter %s is not writable.' % param)
             if type(rules[0]) is list:
                 if value not in rules[0]:
-                    raise Exception('Value %s not allowed for parameter %s. Options are: %s' % (str(value), param, rules[0]))
+                    raise Exception('Value %s (type %s) not allowed for parameter %s. Options are: %s (type %s)' % (str(value), str(type(value)), param, rules[0], str(type(rules[0][0]))))
             elif type(rules[0]) is tuple:
                 minval, maxval, stepval = rules[0]
                 if minval is not None and value < minval:

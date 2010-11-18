@@ -17,12 +17,14 @@ from lib.util.debug import *
 class PVCam(Camera):
     def __init__(self, *args, **kargs):
         self.camLock = Mutex(Mutex.Recursive)  ## Lock to protect access to camera
+        self.ringSize = 100
         Camera.__init__(self, *args, **kargs)  ## superclass will call setupCamera when it is ready.
         self.acqBuffer = None
         self.frameId = 0
         self.lastIndex = None
         self.lastFrameTime = None
         self.stopOk = False
+        
     
     def setupCamera(self):
         self.pvc = PVCDriver
@@ -45,6 +47,7 @@ class PVCam(Camera):
     def start(self, block=True):
         #print "PVCam: start"
         if not self.isRunning():
+            self.lastIndex = None
             #print "  not running already; start camera"
             Camera.start(self, block)  ## Start the acquisition thread
             self.startTime = ptime.time()
@@ -123,6 +126,7 @@ class PVCam(Camera):
             frame['time'] = self.lastFrameTime + (dt * (i+1))
             frame['id'] = self.frameId
             frame['data'] = self.acqBuffer[fInd].copy()
+            #print frame['data']
             frames.append(frame)
             self.frameId += 1
                 

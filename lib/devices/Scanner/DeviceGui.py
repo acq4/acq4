@@ -184,7 +184,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         positions = positions[2:]
         
         ## Do background subtraction
-        frames = origFrames - background
+        frames = origFrames.astype(np.int32) - background.astype(np.int32)
 
         ## Find a frame with a spot close to the center (within center 1/3)
         cx = frames.shape[1] / 3
@@ -257,6 +257,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         if len(spotFrames) == 0:
             #self.image.updateImage(frames.max(axis=0))
             self.ui.view.setImage(frames)
+            print "frames shape:", frames.shape
             raise Exception('Calibration never detected laser spot!\n  Looking for spots that are %f pixels wide.\n  (Check: 1. shutter is closed, 2. mirrors on, 3. objective is clean, 4. spot visible (and bright enough) when shutter is open)' % fit[3])
 
         spotFrameMax = concatenate(spotFrames).max(axis=0)
@@ -299,7 +300,9 @@ class ScannerDeviceGui(QtGui.QWidget):
             return fn(v, loc) - cmd
             
         ### sanity checks here on loc and cmd
-            
+        if loc.shape[0] < 6:
+            raise Exception("Calibration only detected %d spots; this is not enough." % loc.shape[0])
+
         xFit = leastsq(erf, [0, 1, 1, 0, 0], (loc, cmd[:,0]))[0]
         yFit = leastsq(erf, [0, 1, 1, 0, 0], (loc, cmd[:,1]))[0]
         return (list(xFit), list(yFit))
@@ -354,7 +357,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         result = task.getResult()
         ## pull result, convert to ndarray float, take average over all frames
         background = result[camera]['frames'].view(np.ndarray).astype(float).mean(axis=0)
-        
+
         ## Record full scan.
         cmd = {
             'protocol': {'duration': duration},
