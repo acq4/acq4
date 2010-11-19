@@ -73,6 +73,7 @@ class PVCam(Camera):
         while True:
             try:
                 with self.camLock:
+                    self.cam.setParam('ringSize', self.ringSize)
                     self.acqBuffer = self.cam.start()
                 break
             except Exception, e:
