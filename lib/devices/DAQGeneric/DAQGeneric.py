@@ -214,7 +214,10 @@ class DAQGenericTask(DeviceTask):
             #print "STOP"
             for ch in self.daqTasks:
                 #print "Stop task", ch
-                self.daqTasks[ch].stop(abort=abort)
+                try:
+                    self.daqTasks[ch].stop(abort=abort)
+                except:
+                    printExc("Error while stopping DAQ task:")
             for ch in self._DAQCmd:
                 if 'holding' in self._DAQCmd[ch]:
                     self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
