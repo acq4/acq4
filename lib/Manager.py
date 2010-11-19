@@ -683,7 +683,11 @@ class Task:
             
             ## Wait until all tasks are done
             #print "Waiting for all tasks to finish.."
+            timeout = self.cfg.get('timeout', None)
+            
             while not self.isDone():
+                if timeout is not None and ptime.time() - self.startTime > timeout:
+                    raise Exception("Protocol timed out; aborting.")
                 time.sleep(1e-3)
             #print "all tasks finshed."
             

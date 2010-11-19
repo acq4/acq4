@@ -348,7 +348,7 @@ class ScannerDeviceGui(QtGui.QWidget):
 
         ## Record 10 camera frames with the shutter closed 
         cmd = {
-            'protocol': {'duration': 0.0},
+            'protocol': {'duration': 0.0, 'timeout': 5.0},
             camera: {'record': True, 'minFrames': 10, 'params': camParams, 'pushState': 'scanProt', 'popState': 'scanProt'},  ## binning/params are specific for QuantEM512
             laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
@@ -360,7 +360,7 @@ class ScannerDeviceGui(QtGui.QWidget):
 
         ## Record full scan.
         cmd = {
-            'protocol': {'duration': duration},
+            'protocol': {'duration': duration, 'timeout': 5.0},
             camera: {'record': True, 'triggerProtocol': True, 'params': camParams, 'channels': {
                 'exposure': {'record': True}, 
                 #'trigger': {'preset': 0, 'command': cameraTrigger}
