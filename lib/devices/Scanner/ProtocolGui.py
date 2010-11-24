@@ -67,7 +67,7 @@ class ScannerProtoGui(ProtocolGui):
         
         #self.currentTargetMarker.hide()
         
-        self.testTarget = TargetPoint([0,0], self.pointSize())
+        self.testTarget = TargetPoint([0,0], self.pointSize()[0])
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
         #camMod = self.cameraModule()
         
@@ -151,20 +151,23 @@ class ScannerProtoGui(ProtocolGui):
                 else:
                     li.setCheckState(QtCore.Qt.Unchecked)
                 self.itemToggled(li)
-            self.testTarget.setPointSize(self.pointSize())
+            self.testTarget.setPointSize(self.pointSize()[0])
             #self.cameraModule().ui.centerItem(self.testTarget)
         camMod = self.cameraModule()
         camMod.ui.removeItem(self.testTarget)
         camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
 
     def packingSpinChanged(self):
-        self.updateSpotSizes()
+        print "packingSpinChanged."
+        #self.updateSpotSizes()
         self.dev.updateTargetPacking(self.ui.packingSpin.value())
-
+        self.updateSpotSizes()
+        
     def updateSpotSizes(self):
-        size = self.pointSize()
+        size, packing = self.pointSize()
+        #pd = self.pointSize()[1]
         for i in self.items.values():
-            i.setPointSize(size)
+            i.setPointSize(size, packing)
         self.testTarget.setPointSize(size)
 
     def showInterface(self, b):
@@ -181,10 +184,14 @@ class ScannerProtoGui(ProtocolGui):
             cam = self.cameraModule().config['camDev']
             laser = str(self.ui.laserCombo.currentText())
             cal = self.dev.getCalibration(cam, laser)
-            ss = cal['spot'][1] * self.ui.packingSpin.value()
+            #ss = cal['spot'][1] * self.ui.packingSpin.value()
+            packing = self.ui.packingSpin.value()
+            ss = cal['spot'][1]
         except:
             ss = 1
-        return ss
+            packing = self.ui.packingSpin.value()
+        #return (ss, packing)
+        return (0.0001, packing)
         
     def cameraModule(self):
         modName = str(self.ui.cameraCombo.currentText())
@@ -257,9 +264,9 @@ class ScannerProtoGui(ProtocolGui):
             pos = [0,0]
             autoPos = True
         else:
-            s = self.pointSize()
+            s = self.pointSize()[0]
             pos = [pos[i] - s/2.0 for i in [0, 1]]
-        pt = TargetPoint(pos, self.pointSize())
+        pt = TargetPoint(pos, self.pointSize()[0])
         self.addItem(pt, name,  autoPos,  autoName)
         return pt
         
@@ -269,14 +276,14 @@ class ScannerProtoGui(ProtocolGui):
         if name is None:
             name = 'Grid'
             autoName = True
-        s = self.pointSize()
+        s, packing = self.pointSize()
         autoPos = False
         if pos is None:
             pos = [0,0]
             autoPos = True
         if size is None:
             size = [s*4, s*4]
-        pt = TargetGrid(pos, size, s, angle)
+        pt = TargetGrid(pos, size, s, packing, angle)
         self.addItem(pt, name,  autoPos,  autoName)
         return pt
     
@@ -286,7 +293,7 @@ class ScannerProtoGui(ProtocolGui):
             name = 'Occlusion'
             auto = True
         if points is None:
-            s = self.pointSize()
+            s = self.pointSize()[0]
             points = ([0,0], [0,s*3], [s*3,0])
         if pos is None:
             pos = [0,0]
@@ -630,7 +637,7 @@ class TargetPoint(EllipseROI):
         
 
 class TargetGrid(ROI):
-    def __init__(self, pos, size, ptSize, angle):
+    def __init__(self, pos, size, ptSize, pd, angle):
         ROI.__init__(self, pos=pos, size=size, angle=angle)
         self.addScaleHandle([0, 0], [1, 1])
         self.addScaleHandle([1, 1], [0, 0])
@@ -641,11 +648,14 @@ class TargetGrid(ROI):
         self.points = []
         self.pens = []
         self.pointSize = ptSize
+        self.gridPacking = pd
         self.regeneratePoints()
         
-    def setPointSize(self, size):
+    def setPointSize(self, size, packing):
         self.pointSize = size
+        self.gridPacking = packing
         self.regeneratePoints()
+        
         
     def rgnChanged(self):
         if self.state['size'] != self.lastSize:
@@ -656,10 +666,10 @@ class TargetGrid(ROI):
         self.points = []
         self.pens = []
         sq3 = 3. ** 0.5
-        sepx = self.pointSize
-        sepy = sq3 * self.pointSize
-        self.generateGrid([self.pointSize*0.5, self.pointSize*0.5], [sepx, sepy])
-        self.generateGrid([self.pointSize, .5 * self.pointSize * (1. + sq3)], [sepx, sepy])
+        sepx = self.pointSize * self.gridPacking
+        sepy = sq3 * sepx
+        self.generateGrid([self.pointSize*0.5, self.pointSize*0.5], [sepx, sepy])  ## make every other row of the grid starting from top
+        self.generateGrid([self.pointSize*0.5+0.5*sepx, 0.5*self.pointSize + sepy/2.0 ], [sepx, sepy]) ### make every other row of the grid starting with 2nd row
         self.update()
         self.emit(QtCore.SIGNAL('pointsChanged'), self)
         
@@ -691,6 +701,7 @@ class TargetGrid(ROI):
     def paint(self, p, opt, widget):
         ROI.paint(self, p, opt, widget)
         ps2 = self.pointSize * 0.5
+        #ps2 = self.pointSize * 0.5 * self.gridPacking
         #p.setPen(self.pen)
         p.scale(self.pointSize, self.pointSize) ## do scaling here because otherwise we end up with squares instead of circles (GL bug)
         for i in range(len(self.points)):
@@ -707,5 +718,5 @@ class TargetOcclusion(PolygonROI):
         
         
     
-    def setPointSize(self, size):
+    def setPointSize(self, size, packing):
         pass
