@@ -190,8 +190,8 @@ class ScannerProtoGui(ProtocolGui):
         except:
             ss = 1
             packing = self.ui.packingSpin.value()
-        #return (ss, packing)
-        return (0.0001, packing)
+        return (ss, packing)
+        #return (0.0001, packing)
         
     def cameraModule(self):
         modName = str(self.ui.cameraCombo.currentText())
