@@ -29,9 +29,11 @@ class Canvas(QtGui.QWidget):
         #self.layout = QtGui.QHBoxLayout()
         #self.setLayout(self.layout)
         #self.view = GraphicsView()
-        import sys
-        if 'linux' in sys.platform.lower():
-            self.view.useOpenGL(False)
+        
+        #import sys
+        #if 'linux' in sys.platform.lower():
+            #self.view.useOpenGL(False)
+            
         #self.layout.addWidget(self.view)
         #self.layout.addWidget(self.itemList)
         

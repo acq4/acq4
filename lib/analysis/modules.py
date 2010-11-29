@@ -578,8 +578,8 @@ class UncagingWindow(QtGui.QMainWindow):
     def clearScan(self):
         for item in self.scanItems:
             self.canvas.removeItem(item)
-        #for item in self.scanAvgItems:
-         #   self.canvas.removeItem(item)
+        for item in self.scanAvgItems:
+            self.canvas.removeItem(item)
         self.scanItems = []
         self.scanAvgItems = []
         self.currentTraces = []

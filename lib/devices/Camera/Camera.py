@@ -711,7 +711,7 @@ class AcquireThread(QtCore.QThread):
         self.acqBuffer = None
         #self.frameId = 0
         self.bufferTime = 5.0
-        self.ringSize = 30
+        #self.ringSize = 30
         self.tasks = []
         
         ## This thread does not run an event loop,
@@ -768,7 +768,7 @@ class AcquireThread(QtCore.QThread):
         mode = camState['triggerMode']
         
         try:
-            self.dev.setParam('ringSize', self.ringSize, autoRestart=False)
+            #self.dev.setParam('ringSize', self.ringSize, autoRestart=False)
             self.dev.startCamera()
             
             lastFrameTime = lastStopCheck = ptime.time()
@@ -825,6 +825,7 @@ class AcquireThread(QtCore.QThread):
                     for frame in frames:
                         frameInfo = info.copy()
                         data = frame['data']
+                        #print data
                         del frame['data']
                         frameInfo.update(frame)
                         out = (data, frameInfo)

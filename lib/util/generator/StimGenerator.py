@@ -13,7 +13,7 @@ for evaluation are provided in waveforms.py.
 import sys, types, re
 from numpy import *
 import numpy
-from PyQt4 import Qt, QtCore, QtGui
+from PyQt4 import QtCore, QtGui
 from lib.util.advancedTypes import OrderedDict
 from lib.util.functions import logSpace
 from GeneratorTemplate import *

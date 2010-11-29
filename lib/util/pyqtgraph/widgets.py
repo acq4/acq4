@@ -446,7 +446,8 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.state['pos'] = self.state['pos'] + c - c1
         self.setPos(self.state['pos'])
         self.updateHandles()
-    
+        
+   
     def translate(self, *args, **kargs):
         """accepts either (x, y, snap) or ([x,y], snap) as arguments"""
         if 'snap' not in kargs:
@@ -915,6 +916,7 @@ class PolygonROI(ROI):
         #ROI.__init__(self, positions[0])
         for p in positions:
             self.addFreeHandle(p)
+        self.setZValue(1000)
             
     def listPoints(self):
         return [p['item'].pos() for p in self.handles]
@@ -922,6 +924,8 @@ class PolygonROI(ROI):
     def movePoint(self, *args, **kargs):
         ROI.movePoint(self, *args, **kargs)
         self.prepareGeometryChange()
+        for h in self.handles:
+            h['pos'] = h['item'].pos()
             
     def paint(self, p, *args):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
@@ -943,4 +947,13 @@ class PolygonROI(ROI):
         for i in range(len(self.handles)):
             p.lineTo(self.handles[i]['item'].pos())
         return p
+    
+    def stateCopy(self):
+        sc = {}
+        sc['pos'] = Point(self.state['pos'])
+        sc['size'] = Point(self.state['size'])
+        sc['angle'] = self.state['angle']
+        #sc['handles'] = self.handles
+        return sc
+
                 
