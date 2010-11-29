@@ -14,7 +14,7 @@ app = QtGui.QApplication([])
 ## Create window with GraphicsView widget
 win = QtGui.QMainWindow()
 view = GraphicsView()
-view.useOpenGL(True)
+#view.useOpenGL(True)
 win.setCentralWidget(view)
 win.show()
 

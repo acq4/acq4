@@ -361,23 +361,25 @@ class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
         
     def mousePressEvent(self, ev):
         if self.drawKernel is not None and ev.button() == QtCore.Qt.LeftButton:
+            self.drawAt(ev.pos())
             ev.accept()
         else:
             ev.ignore()
         
     def mouseMoveEvent(self, ev):
         #print "mouse move", ev.pos()
-        if self.translatable:
-            snap = None
-            if self.translateSnap or (ev.modifiers() & QtCore.Qt.ControlModifier):
-                snap = Point(self.snapSize, self.snapSize)
-            newPos = ev.scenePos() + self.cursorOffset
-            newPos = self.mapSceneToParent(newPos)
-            self.translate(newPos - self.pos(), snap=snap)
+        if self.drawKernel is not None:
+            self.drawAt(ev.pos())
     
     def mouseReleaseEvent(self, ev):
-        if self.translatable:
-            self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+        pass
+    
+    def drawAt(self, pos):
+        self.image[int(pos.x()), int(pos.y())] += 1
+        self.updateImage()
+        
+    def setDrawKernel(self, kernel=None):
+        self.drawKernel = kernel
     
     
 
@@ -1866,8 +1868,8 @@ class LinearRegionItem(GraphicsObject):
         vb = self.view().viewRect()
         vals = [self.lines[0].value(), self.lines[1].value()]
         if self.orientation[0] == 'h':
-            vb.setTop(max(vals))
-            vb.setBottom(min(vals))
+            vb.setTop(min(vals))
+            vb.setBottom(max(vals))
         else:
             vb.setLeft(min(vals))
             vb.setRight(max(vals))
@@ -1889,6 +1891,7 @@ class LinearRegionItem(GraphicsObject):
             l.mouseReleaseEvent(ev)
             
     def mouseMoveEvent(self, ev):
+        #print "move", ev.pos()
         self.lines[0].blockSignals(True)  # only want to update once
         for l in self.lines:
             l.mouseMoveEvent(ev)
