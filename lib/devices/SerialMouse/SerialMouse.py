@@ -82,7 +82,7 @@ class SerialMouse(Device):
     
 class SMInterface(QtGui.QLabel):
     def __init__(self, dev, win):
-        QtGui.QWidget.__init__(self)
+        QtGui.QLabel.__init__(self)
         self.win = win
         self.dev = dev
         QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.update)
