@@ -67,8 +67,8 @@ class Camera(DAQGeneric):
         self.scopeState = {
             'id': 0,
             'scale': self.camConfig['scaleFactor'],
-            'scopePosition': [0, 0],
-            'centerPosition': [0, 0],
+            'scopePosition': [0, 0],   ## position of scope in global coords
+            'centerPosition': [0, 0],  ## position of objective in global coords (objective may be offset from center of scope)
             'offset': [0, 0],
             'objScale': 1,
             'pixelSize': filter(abs, self.camConfig['scaleFactor']),
@@ -89,7 +89,8 @@ class Camera(DAQGeneric):
             
         self.setupCamera() 
         #print "Camera: setupCamera returned, about to create acqThread"
-            
+        self.sensorSize = self.getParam('sensorSize')
+        
         self.acqThread = AcquireThread(self)
         #print "Camera: acqThread created, about to connect signals."
         QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('finished()'), self.acqThreadFinished)
@@ -325,6 +326,17 @@ class Camera(DAQGeneric):
         """Return a list of camera boundaries for all objectives"""
         objs = self.scopeDev.listObjectives(allObjs=False)
         return [self.getBoundary(objs[o]) for o in objs]
+    
+    def mapToSensor(self, pos):
+        """Return the sub-pixel location on the sensor that corresponds to global position pos"""
+        ss = self.getScopeState()
+        boundary = self.getBoundary()
+        boundary.translate(*ss['scopePosition'])
+        size = self.sensorSize
+        x = (pos[0] - boundary.left()) * (float(size[0]) / boundary.width())
+        y = (pos[1] - boundary.top()) * (float(size[1]) / boundary.height())
+        return (x, y)
+        
         
     def getScopeState(self):
         """Return meta information to be included with each frame. This function must be FAST."""
