@@ -609,6 +609,10 @@ class QCameraClass:
                 #return self.setParams(newDict)
             
         #changeTuple = {}
+        
+        ## need to track changes to the state as they are made since some parameters may interact
+        state = self.getParams(['binning', 'region'])
+        
         for x in params:
             #print "0 x:", x
             #changeTuple[x] = False
@@ -659,19 +663,25 @@ class QCameraClass:
             
             #### Reset region if binning is changed
             if param == 'qprmBinning':
-                x = self.getParam('qprmRoiX')
-                y = self.getParam('qprmRoiY')
-                w = self.getParam('qprmRoiWidth')
-                h = self.getParam('qprmRoiHeight')
+                (x, y, w, h) = state['region']
+                state['binning'] = (value,value)  ## update the state just in case we try to change the region next
+                #x = self.getParam('qprmRoiX')
+                #y = self.getParam('qprmRoiY')
+                #w = self.getParam('qprmRoiWidth')
+                #h = self.getParam('qprmRoiHeight')
                 #oldBinning = self.getParam('binning')[0]
+                
                 self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiX'), c_ulong(int(x/value)))
                 self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiY'), c_ulong(int(y/value)))
                 self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiWidth'), c_ulong(int(w/value)))
                 self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiHeight'), c_ulong(int(h/value)))
                 
-                
-            if param in ['qprmRoiX', 'qprmRoiY', 'qprmRoiWidth', 'qprmRoiHeight']:
-                value = value/self.getParam('binning')[0]
+            rgnParams = ['qprmRoiX', 'qprmRoiY', 'qprmRoiWidth', 'qprmRoiHeight']
+            if param in rgnParams:
+                binn = state['binning'][0]
+                ind = rgnParams.index(param)
+                state['region'][ind] = value  ## update state in case binning changes next
+                value = value/binn
                 
             if param in lib('enums', 'QCam_Param'):
                 self.call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(int(value)))
