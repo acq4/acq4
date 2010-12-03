@@ -300,6 +300,13 @@
               </widget>
              </item>
              <item>
+              <widget class="QToolButton" name="monitorModeBtn">
+               <property name="text">
+                <string>Monitor</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <spacer name="horizontalSpacer">
                <property name="orientation">
                 <enum>Qt::Horizontal</enum>
@@ -313,6 +320,26 @@
               </spacer>
              </item>
             </layout>
+           </item>
+           <item row="11" column="0">
+            <widget class="QLabel" name="label_2">
+             <property name="text">
+              <string>Average</string>
+             </property>
+            </widget>
+           </item>
+           <item row="11" column="2">
+            <widget class="QSpinBox" name="averageSpin">
+             <property name="minimum">
+              <number>1</number>
+             </property>
+             <property name="maximum">
+              <number>100</number>
+             </property>
+             <property name="value">
+              <number>1</number>
+             </property>
+            </widget>
            </item>
           </layout>
          </widget>
