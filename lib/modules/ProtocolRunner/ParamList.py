@@ -23,7 +23,7 @@ class ParamList(QtGui.QTreeWidget):
         for p in params:
             if p not in items:
                 #print dev, p, params[p]
-                item = QtGui.QTreeWidgetItem([dev, p, str(params[p])])
+                item = QtGui.QTreeWidgetItem([dev, p, str(len(params[p]))])
                 item.setFlags(
                     QtCore.Qt.ItemIsSelectable | 
                     QtCore.Qt.ItemIsDragEnabled |
@@ -37,7 +37,8 @@ class ParamList(QtGui.QTreeWidget):
                 else:
                     self.addTopLevelItem(item)
                 item.setExpanded(True)  ## Must happen AFTER adding to tree.
-            items[p].setData(2, QtCore.Qt.DisplayRole, QtCore.QVariant(str(params[p])))
+            items[p].setData(2, QtCore.Qt.DisplayRole, QtCore.QVariant(str(len(params[p]))))
+            items[p].params = list(params[p])
             
         ## remove non-existent sequence parameters (but not their children)
         for key in items:
@@ -150,7 +151,7 @@ class ParamList(QtGui.QTreeWidget):
                     (dev2, param2, en2) = self.itemData(i.child(j))
                     if en2:
                         childs.append((dev2, param2))
-                params.append((dev, param, num, childs))
+                params.append((dev, param, i.params, childs))
         return params
         
     def removeDevice(self, dev):

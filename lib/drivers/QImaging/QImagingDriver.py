@@ -1,10 +1,10 @@
-print __file__
-
+import sys, os
+if __name__ == '__main__':
+    d = os.path.dirname(__file__)
+    sys.path.append(os.path.join(d, '../../util'))
+    
 import ptime
 from ctypes import *
-import sys, os
-d = os.path.dirname(__file__)
-sys.path.append(os.path.join(d, '../../util'))
 from clibrary import *
 from numpy import empty, uint16, ascontiguousarray, concatenate, newaxis
 from pyqtgraph import graphicsWindows as gw
@@ -220,7 +220,9 @@ class QCameraClass:
             #'qcTriggerNone':'Normal',
             'qcTriggerEdgeHi':'Strobe',
             'qcTriggerPulseHi':'Bulb',
-            'qinfBitDepth':'bitDepth'
+            'qinfBitDepth':'bitDepth',
+            'qcSyncbOem2': 'qcSyncbExpose',
+            'qcSyncbOem1': 'qcSyncbTrigmask'
         }
         self.unitConversionDict = {
             'gain': 1e-6,     #QCam expects microunits
@@ -306,9 +308,19 @@ class QCameraClass:
     
         
     def readSettings(self):
-        s = self.call(lib.ReadSettingsFromCam, self.handle)[1]
-        s.size = sizeof(s)
-        return s
+        ## don't let CLib create settings struct for us--we need to initialize the 'size' field before it can be used.
+        ## ALSO! It looks like some versions of the QImaging driver have a bug, so we need to allocate 2 adjacent 
+        ## structures; the second one is a junk buffer for the driver to barf in.
+        s = (lib.QCam_Settings*2)()
+        s[0].size = sizeof(s[0])
+        #print "==========\ndata before:"
+        #for i in range(2):
+            #print list(s[i]._private_data)
+        self.call(lib.ReadSettingsFromCam, self.handle, s[0])
+        #print "data after:"
+        #for i in range(2):
+            #print list(s[i]._private_data)
+        return s[0]
 
 
     
@@ -354,7 +366,7 @@ class QCameraClass:
                                 min = self.call(lib.GetParamMin, byref(s), getattr(lib,x))[2]
                                 max = self.call(lib.GetParamMax, byref(s), getattr(lib,x))[2]
                                 self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
-                            else: raise      
+                            else: raise 
                 except QCamFunctionError, err:
                     if err.value == 1: pass    
                     else: raise
@@ -384,7 +396,7 @@ class QCameraClass:
                             r = self.call(lib.GetParamSparseTable64, byref(s), getattr(lib,x), table, c_long(32))
                             self.paramAttrs[self.translateToUser(x)] = [list(r[2])[:r[3]], True, True, []]
                         except QCamFunctionError, err:
-                            if err.value == 1:
+                            if err.value == 1:  ## qerrNotSupported
                                 min = self.call(lib.GetParam64Min, byref(s), getattr(lib,x))[2]
                                 max = self.call(lib.GetParam64Max, byref(s), getattr(lib,x))[2]
                                 self.paramAttrs[self.translateToUser(x)] = [(min, max), True, True, []]
@@ -576,7 +588,7 @@ class QCameraClass:
         
         #traceback.print_stack()
         ## Convert params to a dictionary:
-        if not isinstance(params, type({})):
+        if not isinstance(params, dict):
             params = OrderedDict(params)
             #dict = {}
             #for t in params:
@@ -597,6 +609,10 @@ class QCameraClass:
                 #return self.setParams(newDict)
             
         #changeTuple = {}
+        
+        ## need to track changes to the state as they are made since some parameters may interact
+        state = self.getParams(['binning', 'region'])
+        
         for x in params:
             #print "0 x:", x
             #changeTuple[x] = False
@@ -647,19 +663,25 @@ class QCameraClass:
             
             #### Reset region if binning is changed
             if param == 'qprmBinning':
-                x = self.getParam('qprmRoiX')
-                y = self.getParam('qprmRoiY')
-                w = self.getParam('qprmRoiWidth')
-                h = self.getParam('qprmRoiHeight')
+                (x, y, w, h) = state['region']
+                state['binning'] = (value,value)  ## update the state just in case we try to change the region next
+                #x = self.getParam('qprmRoiX')
+                #y = self.getParam('qprmRoiY')
+                #w = self.getParam('qprmRoiWidth')
+                #h = self.getParam('qprmRoiHeight')
                 #oldBinning = self.getParam('binning')[0]
+                
                 self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiX'), c_ulong(int(x/value)))
                 self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiY'), c_ulong(int(y/value)))
                 self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiWidth'), c_ulong(int(w/value)))
                 self.call(lib.SetParam, byref(s), getattr(lib, 'qprmRoiHeight'), c_ulong(int(h/value)))
                 
-                
-            if param in ['qprmRoiX', 'qprmRoiY', 'qprmRoiWidth', 'qprmRoiHeight']:
-                value = value/self.getParam('binning')[0]
+            rgnParams = ['qprmRoiX', 'qprmRoiY', 'qprmRoiWidth', 'qprmRoiHeight']
+            if param in rgnParams:
+                binn = state['binning'][0]
+                ind = rgnParams.index(param)
+                state['region'][ind] = value  ## update state in case binning changes next
+                value = value/binn
                 
             if param in lib('enums', 'QCam_Param'):
                 self.call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(int(value)))
@@ -695,15 +717,15 @@ class QCameraClass:
                     
 
         #print "Mutex released from qcam.setParams()"
-        dict = {}
+        ret = {}
         for x in params:
-            dict[x] = self.getParam(x)
+            ret[x] = self.getParam(x)
         self.getImageSize() ## Run this function to update image size in cameraInfo dictionary
         #print "Set params to:", dict
         #if not autoRestart:
             #autoRestart = restart
             
-        return dict, restart
+        return ret, restart
     
     def mkFrame(self):
         #s = self.call(lib.GetInfo, self.handle, lib.qinfImageWidth)[2] * self.call(lib.GetInfo, self.handle, lib.qinfImageHeight)[2]
@@ -856,7 +878,16 @@ class QCameraClass:
         #print "Mutex released from qcam.lastFrame()"
         return a 
         
-    
+if __name__ == '__main__':
+    print "Testing QCam driver..."
+    qcd = QCamDriverClass()
+    cams = qcd.listCameras()
+    print "Found cameras:", cams
+    cam = qcd.getCamera(cams[0])
+    print "Opened camera 0."
+    params = cam.listParams()
+    print "Parameters available:", params.keys()
+    qcd.quit()
     
 #loadDriver()
 #cameras = listCameras()

@@ -228,7 +228,7 @@ class OutputChannelGui(DaqChannelGui):
         params = {}
         ps = self.ui.waveGeneratorWidget.listSequences()
         for k in ps:
-            params[k] = range(ps[k])
+            params[k] = range(len(ps[k]))
         waves = []
         runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys(), passHash=True)
         for w in waves:

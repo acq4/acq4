@@ -223,7 +223,7 @@ class ScannerProtoGui(ProtocolGui):
         
     def listSequence(self):
         items = self.activeItems()
-        targets = len(self.getTargetList())
+        targets = self.getTargetList()
         if targets > 0:
             return {'targets': targets}
         else:
