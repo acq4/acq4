@@ -521,7 +521,7 @@ class PatchThread(QtCore.QThread):
         else:
             clamp = self.manager.getDevice(self.clampName)
             try:
-                bridge = float(clamp.getParam('BridgeBalResist'))
+                bridge = float(clamp.getParam('BridgeBalResist'))  ## pull this from the data instead.
                 bridgeOn = clamp.getParam('BridgeBalEnable')
                 if not bridgeOn:
                     bridge = 0.0

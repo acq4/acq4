@@ -461,6 +461,7 @@ class MultiClampTask(DeviceTask):
             if 'command' in protInfo:
                 del protInfo['command']
             info[-1]['Protocol'] = protInfo
+            info[-1]['startTime'] = result[result.keys()[0]]['info']['startTime']
             
             marr = MetaArray(arr, info=info)
                 
