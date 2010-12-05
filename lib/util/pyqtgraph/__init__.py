@@ -3,20 +3,30 @@
 
 from functions import *
 from graphicsItems import *
+from graphicsWindows import *
 import PlotWidget
 import ImageView
+from PyQt4 import QtGui
 
 plots = []
 images = []
+QAPP = None
 
 def plot(*args, **kargs):
+    mkQApp()
     w = PlotWindow(*args, **kargs)
     plots.append(w)
     w.show()
     return w
     
 def show(*args, **kargs):
+    mkQApp()
     w = ImageView(*args, **kargs)
     images.append(w)
     w.show()
     return w
+    
+def mkQApp():
+    if QtGui.QApplication.instance() is None:
+        global QAPP
+        QAPP = QtGui.QApplication([])

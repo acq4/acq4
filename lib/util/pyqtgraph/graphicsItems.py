@@ -690,6 +690,154 @@ class PlotCurveItem(GraphicsObject):
         self.yDisp = None
         self.path = None
         #del self.xData, self.yData, self.xDisp, self.yDisp, self.path
+       
+class CurvePoint(QtGui.QGraphicsItem, QObjectWorkaround):
+    """A GraphicsItem that sets its location to a point on a PlotCurveItem.
+    The position along the curve is a property, and thus can be easily animated."""
+    
+    def __init__(self, curve, index=0, pos=None):
+        """Position can be set either as an index referring to the sample number or
+        the position 0.0 - 1.0"""
+        
+        QtGui.QGraphicsItem.__init__(self)
+        QObjectWorkaround.__init__(self)
+        self.curve = None
+        self.setProperty('position', 0.0)
+        self.setProperty('index', 0)
+        
+        if hasattr(self, 'ItemHasNoContents'):
+            self.setFlags(self.flags() | self.ItemHasNoContents)
+        
+        self.curve = curve
+        self.setParentItem(curve)
+        if pos is not None:
+            self.setPos(pos)
+        else:
+            self.setIndex(index)
+            
+    def setPos(self, pos):
+        self.setProperty('position', pos)
+        
+    def setIndex(self, index):
+        self.setProperty('index', index)
+        
+    def event(self, ev):
+        if not isinstance(ev, QtCore.QDynamicPropertyChangeEvent) or self.curve is None:
+            return
+            
+        if ev.propertyName() == 'index':
+            index = self.property('index').toInt()[0]
+        elif ev.propertyName() == 'position':
+            index = None
+        else:
+            return
+            
+        (x, y) = self.curve.getData()
+        if index is None:
+            #print self.property('position').toDouble()[0], self.property('position').typeName()
+            index = (len(x)-1) * clip(self.property('position').toDouble()[0], 0.0, 1.0)
+            
+        if index != int(index):
+            i1 = int(index)
+            i2 = clip(i1+1, 0, len(x)-1)
+            s2 = index-i1
+            s1 = 1.0-s2
+            newPos = (x[i1]*s1+x[i2]*s2, y[i1]*s1+y[i2]*s2)
+        else:
+            index = int(index)
+            i1 = clip(index-1, 0, len(x)-1)
+            i2 = clip(index+1, 0, len(x)-1)
+            newPos = (x[index], y[index])
+            
+        p1 = self.parentItem().mapToScene(QtCore.QPointF(x[i1], y[i1]))
+        p2 = self.parentItem().mapToScene(QtCore.QPointF(x[i2], y[i2]))
+        ang = np.arctan2(p2.y()-p1.y(), p2.x()-p1.x())
+        self.resetTransform()
+        self.rotate(180+ ang * 180 / np.pi)
+        QtGui.QGraphicsItem.setPos(self, *newPos)
+        
+    def boundingRect(self):
+        return QtCore.QRectF()
+        
+    def paint(self, *args):
+        pass
+    
+    def makeAnimation(self, prop='position', start=0.0, end=1.0, duration=10000, loop=1):
+        anim = QtCore.QPropertyAnimation(self._qObj_, prop)
+        anim.setDuration(duration)
+        anim.setStartValue(start)
+        anim.setEndValue(end)
+        anim.setLoopCount(loop)
+        return anim
+        
+        
+
+class ArrowItem(QtGui.QGraphicsPolygonItem):
+    def __init__(self, **opts):
+        QtGui.QGraphicsPolygonItem.__init__(self)
+        defOpts = {
+            'style': 'tri',
+            'pxMode': True,
+            'size': 20,
+            'angle': -150,
+            'pos': (0,0),
+            'width': 8,
+            'tipAngle': 25,
+            'baseAngle': 90,
+            'pen': (200,200,200),
+            'brush': (50,50,200),
+        }
+        defOpts.update(opts)
+        
+        self.setStyle(**defOpts)
+        
+        self.setPen(mkPen(defOpts['pen']))
+        self.setBrush(mkBrush(defOpts['brush']))
+        
+        self.rotate(self.opts['angle'])
+        self.moveBy(*self.opts['pos'])
+    
+    def setStyle(self, **opts):
+        self.opts = opts
+        
+        if opts['style'] == 'tri':
+            points = [
+                QtCore.QPointF(0,0),
+                QtCore.QPointF(opts['size'],-opts['width']/2.),
+                QtCore.QPointF(opts['size'],opts['width']/2.),
+            ]
+            poly = QtGui.QPolygonF(points)
+            
+        else:
+            raise Exception("Unrecognized arrow style '%s'" % opts['style'])
+        
+        self.setPolygon(poly)
+        
+        if opts['pxMode']:
+            self.setFlags(self.flags() | self.ItemIgnoresTransformations)
+        else:
+            self.setFlags(self.flags() & ~self.ItemIgnoresTransformations)
+        
+    def paint(self, p, *args):
+        p.setRenderHint(QtGui.QPainter.Antialiasing)
+        QtGui.QGraphicsPolygonItem.paint(self, p, *args)
+        
+class CurveArrow(CurvePoint):
+    """Provides an arrow that points to any specific sample on a PlotCurveItem.
+    Provides properties that can be animated."""
+    
+    def __init__(self, curve, index=0, pos=None, **opts):
+        CurvePoint.__init__(self, curve, index=index, pos=pos)
+        if opts.get('pxMode', True):
+            opts['pxMode'] = False
+            self.setFlags(self.flags() | self.ItemIgnoresTransformations)
+        opts['angle'] = 0
+        self.arrow = ArrowItem(**opts)
+        self.arrow.setParentItem(self)
+        
+    def setStyle(**opts):
+        return self.arrow.setStyle(**opts)
+        
         
 
 class ScatterPlotItem(QtGui.QGraphicsItem):

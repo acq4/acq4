@@ -66,8 +66,14 @@ class GraphicsView(QtGui.QGraphicsView):
         self.updateMatrix()
         self.sceneObj = QtGui.QGraphicsScene()
         self.setScene(self.sceneObj)
+        
+        ## by default we set up a central widget with a grid layout.
+        ## this can be replaced if needed.
         self.centralWidget = None
         self.setCentralItem(QtGui.QGraphicsWidget())
+        self.centralLayout = QtGui.QGraphicsGridLayout()
+        self.centralWidget.setLayout(self.centralLayout)
+        
         self.mouseEnabled = False
         self.scaleCenter = False  ## should scaling center around view center (True) or mouse click (False)
         self.clickAccepted = False
@@ -85,6 +91,7 @@ class GraphicsView(QtGui.QGraphicsView):
         ev.ignore()
         
     def setCentralItem(self, item):
+        """Sets a QGraphicsWidget to automatically fill the entire view."""
         if self.centralWidget is not None:
             self.scene().removeItem(self.centralWidget)
         self.centralWidget = item

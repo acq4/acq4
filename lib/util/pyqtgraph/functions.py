@@ -38,7 +38,8 @@ def siScale(x, minVal=1e-25):
     p = .001**m
     return (p, pref)
 
-
+def mkBrush(color):
+    return QtGui.QBrush(mkColor(color))
 
 def mkPen(arg=None, color=None, width=1, style=None, cosmetic=True, hsv=None, ):
     """Convenience function for making pens. Examples:

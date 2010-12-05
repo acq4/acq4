@@ -20,6 +20,7 @@ This class is very heavily featured:
 from graphicsItems import *
 from plotConfigTemplate import *
 from PyQt4 import QtGui, QtCore, QtSvg
+from functions import *
 #from ObjectWorkaround import *
 #tryWorkaround(QtCore, QtGui)
 import weakref
@@ -567,7 +568,18 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.avgCurves = {}
         
     
-    def plot(self, data=None, x=None, clear=False, params=None, pen=None):
+    def plot(self, data=None, data2=None, x=None, y=None, clear=False, params=None, pen=None):
+        """Add a new plot curve. Data may be specified a few ways:
+        plot(yVals)   # x vals will be integers
+        plot(xVals, yVals)
+        plot(y=yVals, x=xVals)
+        """
+        if y is not None:
+            data = y
+        if data2 is not None:
+            x = data
+            data = data2
+        
         if clear:
             self.clear()
         if params is None:
@@ -588,7 +600,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         #print data, curve
         self.addCurve(curve, params)
         if pen is not None:
-            curve.setPen(pen)
+            curve.setPen(mkPen(pen))
         
         return curve
 
