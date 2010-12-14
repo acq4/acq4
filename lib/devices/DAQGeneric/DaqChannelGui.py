@@ -270,7 +270,7 @@ class OutputChannelGui(DaqChannelGui):
             #print params
         
     def plotCurve(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
-        plot = self.plot.plot(data, self.timeVals, pen=QtGui.QPen(color))
+        plot = self.plot.plot(y=data, x=self.timeVals, pen=QtGui.QPen(color))
         return plot
 
     def getSingleWave(self, params=None):
@@ -342,7 +342,7 @@ class InputChannelGui(DaqChannelGui):
                 self.clearPlots()
                 self.clearBeforeNextPlot = False
 
-            plot = self.plot.plot(result.view(numpy.ndarray), result.xvals('Time'), pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), params=params)
+            plot = self.plot.plot(y=result.view(numpy.ndarray), x=result.xvals('Time'), pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), params=params)
             #plot = PlotCurve('cell')
             #plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
             #plot.setData(result.xvals('Time'), result)

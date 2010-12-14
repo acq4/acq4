@@ -36,7 +36,7 @@ def run(ds):
         t = time.clock()
         d2 = NiDAQ.downsample(d1, ds, method=m)
         print "Method %d: %f" % (i, time.clock()-t)
-        p = pw.plot(d2, linspace(0, len(d2)*ds, len(d2)), pen=mkPen(c))
+        p = pw.plot(y=d2, x=linspace(0, len(d2)*ds, len(d2)), pen=mkPen(c))
         p.setZValue(10000)
         #pw.plot(d2, pen=mkPen(colors[i-1]))
     
@@ -44,8 +44,8 @@ def showDownsample(**kwargs):
     d1 = data.copy()
     d2 = NiDAQ.downsample(d1, **kwargs)
     xv2 = xVals[::kwargs['ds']][:len(d2)]
-    pw.plot(d1, xVals, clear=True)
-    pw.plot(d2[:len(xv2)], xv2, pen=mkPen((255, 0, 0)))
+    pw.plot(y=d1, x=xVals, clear=True)
+    pw.plot(y=d2[:len(xv2)], x=xv2, pen=mkPen((255, 0, 0)))
     
 
 
@@ -56,8 +56,8 @@ def showTransfer(**kwargs):
     
     data2 = NiDAQ.lowpass(data, **kwargs)
 
-    pw.plot(data, xVals, clear=True)
-    pw.plot(data2, xVals, pen=mkPen((255, 0, 0)))
+    pw.plot(y=data, x=xVals, clear=True)
+    pw.plot(y=data2, x=xVals, pen=mkPen((255, 0, 0)))
     
     
     

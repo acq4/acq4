@@ -133,11 +133,11 @@ def showPlot(data=None, x=None, file=None, title=None):
         #win.setCentralWidget(plot)
         #plot.plot(data)
         #plot.autoRange()
-        win.plot(data, x)
+        win.plot(y=data, x=x)
         win.autoRange()
     elif data.ndim == 2:
         win = MultiPlotWindow(title=title)
-        win.plot(data, x)
+        win.plot(y=data, x=x)
         win.autoRange()
         #gv = GraphicsView()
         #win.setCentralWidget(gv)
