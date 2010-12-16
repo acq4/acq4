@@ -51,6 +51,8 @@ def mkPen(arg=None, color=None, width=1, style=None, cosmetic=True, hsv=None, ):
     if isinstance(arg, dict):
         return mkPen(**arg)
     elif arg is not None:
+        if isinstance(arg, QtGui.QPen):
+            return arg
         color = arg
         
     if color is None:
@@ -153,13 +155,13 @@ def intColor(index, hues=9, values=3, maxValue=255, minValue=150, sat=255):
      
     Colors are chosen by cycling across hues while varying the value (brightness). By default, there
     are 9 hues and 3 values for a total of 27 different colors. """
-    colors = int(colors)
+    hues = int(hues)
     values = int(values)
-    ind = int(index) % (colors * values)
-    indh = ind % colors
-    indv = ind / colors
+    ind = int(index) % (hues * values)
+    indh = ind % hues
+    indv = ind / hues
     v = minValue + indv * ((maxValue-minValue) / (values-1))
-    h = (indh * 360) / colors
+    h = (indh * 360) / hues
     
     c = QtGui.QColor()
     c.setHsv(h, sat, v)
