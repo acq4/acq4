@@ -44,7 +44,7 @@ class PlotItem(QtGui.QGraphicsWidget):
     lastFileDir = None
     managers = {}
     
-    def __init__(self, parent=None, name=None):
+    def __init__(self, parent=None, name=None, labels=None, **kargs):
         QtGui.QGraphicsWidget.__init__(self, parent)
         
         ## Set up control buttons
@@ -226,6 +226,15 @@ class PlotItem(QtGui.QGraphicsWidget):
         
         if name is not None:
             self.registerPlot(name)
+        
+        if labels is not None:
+            for k in labels:
+                if isinstance(labels[k], basestring):
+                    labels[k] = (labels[k],)
+                self.setLabel(k, *labels[k])
+        
+        if len(kargs) > 0:
+            self.plot(**kargs)
         
             
     def __del__(self):
@@ -655,6 +664,7 @@ class PlotItem(QtGui.QGraphicsWidget):
                     mn -= 1
                     mx += 1
                 self.setRange(ax, mn, mx)
+                #print "Auto range:", ax, mn, mx
                 
     def replot(self):
         self.plotChanged()
@@ -888,25 +898,6 @@ class PlotItem(QtGui.QGraphicsWidget):
             mode = False
         return mode
         
-        
-
-    #def mousePressEvent(self, ev):
-        #self.mousePos = array([ev.pos().x(), ev.pos().y()])
-        #self.pressPos = self.mousePos.copy()
-        #QtGui.QGraphicsWidget.mousePressEvent(self, ev)
-        ## NOTE: we will only receive move/release events if we run ev.accept()
-        #print 'press'
-        
-    #def mouseReleaseEvent(self, ev):
-        #pos = array([ev.pos().x(), ev.pos().y()])
-        #print 'release'
-        #if sum(abs(self.pressPos - pos)) < 3:  ## Detect click
-            #if ev.button() == QtCore.Qt.RightButton:
-                #print 'popup'
-                #self.ctrlMenu.popup(self.mapToGlobal(ev.pos()))
-        #self.mousePos = pos
-        #QtGui.QGraphicsWidget.mouseReleaseEvent(self, ev)
-
     def resizeEvent(self, ev):
         self.ctrlBtn.move(0, self.size().height() - self.ctrlBtn.size().height())
         self.autoBtn.move(self.ctrlBtn.width(), self.size().height() - self.autoBtn.size().height())
@@ -918,14 +909,8 @@ class PlotItem(QtGui.QGraphicsWidget):
     def ctrlBtnClicked(self):
         self.ctrlMenu.popup(self.mouseScreenPos)
 
-    #def _checkLabelKey(self, key):
-        #if key not in self.labels:
-            #raise Exception("Label '%s' not found. Labels are: %s" % (key, str(self.labels.keys())))
-        
     def getLabel(self, key):
         pass
-        #self._checkLabelKey(key)
-        #return self.labels[key]['item']
         
     def _checkScaleKey(self, key):
         if key not in self.scales:
@@ -937,43 +922,9 @@ class PlotItem(QtGui.QGraphicsWidget):
         
     def setLabel(self, key, text=None, units=None, unitPrefix=None, **args):
         self.getScale(key).setLabel(text=text, units=units, unitPrefix=unitPrefix, **args)
-        #if text is not None:
-            #self.labels[key]['text'] = text
-        #if units != None:
-            #self.labels[key]['units'] = units
-        #if unitPrefix != None:
-            #self.labels[key]['unitPrefix'] = unitPrefix
-        
-        #text = self.labels[key]['text']
-        #units = self.labels[key]['units']
-        #unitPrefix = self.labels[key]['unitPrefix']
-        
-        #if text is not '' or units is not '':
-            #l = self.getLabel(key)
-            #l.setText("%s (%s%s)" % (text, unitPrefix, units), **args)
-            #self.showLabel(key)
-        
         
     def showLabel(self, key, show=True):
         self.getScale(key).showLabel(show)
-        #l = self.getLabel(key)
-        #p = self.labels[key]['pos']
-        #if show:
-            #l.show()
-            #if key in ['left', 'right']:
-                #self.layout.setColumnFixedWidth(p[1], l.size().width())
-                #l.setMaximumWidth(20)
-            #else:
-                #self.layout.setRowFixedHeight(p[0], l.size().height())
-                #l.setMaximumHeight(20)
-        #else:
-            #l.hide()
-            #if key in ['left', 'right']:
-                #self.layout.setColumnFixedWidth(p[1], 0)
-                #l.setMaximumWidth(0)
-            #else:
-                #self.layout.setRowFixedHeight(p[0], 0)
-                #l.setMaximumHeight(0)
 
     def setTitle(self, title=None, **args):
         if title is None:
@@ -991,20 +942,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         p = self.scales[key]['pos']
         if show:
             s.show()
-            #if key in ['left', 'right']:
-                #self.layout.setColumnFixedWidth(p[1], s.maximumWidth())
-                ##s.setMaximumWidth(40)
-            #else:
-                #self.layout.setRowFixedHeight(p[0], s.maximumHeight())
-                #s.setMaximumHeight(20)
         else:
             s.hide()
-            #if key in ['left', 'right']:
-                #self.layout.setColumnFixedWidth(p[1], 0)
-                ##s.setMaximumWidth(0)
-            #else:
-                #self.layout.setRowFixedHeight(p[0], 0)
-                #s.setMaximumHeight(0)
 
     def _plotArray(self, arr, x=None):
         if arr.ndim != 1:

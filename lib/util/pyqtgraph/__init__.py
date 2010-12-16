@@ -4,8 +4,8 @@
 from functions import *
 from graphicsItems import *
 from graphicsWindows import *
-import PlotWidget
-import ImageView
+#import PlotWidget
+#import ImageView
 from PyQt4 import QtGui
 
 plots = []
@@ -14,14 +14,15 @@ QAPP = None
 
 def plot(*args, **kargs):
     mkQApp()
-    w = PlotWindow(*args, **kargs)
+    w = PlotWindow()
+    w.plot(*args, **kargs)
     plots.append(w)
     w.show()
     return w
     
 def show(*args, **kargs):
     mkQApp()
-    w = ImageView(*args, **kargs)
+    w = ImageWindow(*args, **kargs)
     images.append(w)
     w.show()
     return w

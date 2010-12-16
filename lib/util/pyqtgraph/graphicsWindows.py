@@ -29,9 +29,9 @@ class GraphicsWindow(QtGui.QMainWindow):
         self.show()
         
 class GraphicsLayoutWidget(GraphicsView):
-    def __init__(self, title=None, size=(800,600)):
+    def __init__(self):
         GraphicsView.__init__(self)
-        self.items = []
+        self.items = {}
         self.currentRow = 0
         self.currentCol = 0
     
@@ -46,37 +46,79 @@ class GraphicsLayoutWidget(GraphicsView):
         self.currentCol += colspan
         return self.currentCol-colspan
         
-    def addPlot(self, row=None, col=None, rowspan=1, colspan=1):
-        plot = PlotItem()
-        self.items.append(plot)
+    def addPlot(self, row=None, col=None, rowspan=1, colspan=1, **kargs):
+        plot = PlotItem(**kargs)
+        if row not in self.items:
+            self.items[row] = {}
+        self.items[row][col] = plot
+        
         if row is None:
             row = self.currentRow
         if col is None:
             col = self.nextCol(colspan)
         self.centralLayout.addItem(plot, row, col, rowspan, colspan)
+        
         return plot
 
+    def getItem(self, row, col):
+        return self.items[row][col]
 
-class PlotWindow(QtGui.QMainWindow):
-    def __init__(self, title=None):
+class TabWindow(QtGui.QMainWindow):
+    def __init__(self, title=None, size=(800,600)):
         mkQApp()
         QtGui.QMainWindow.__init__(self)
-        self.cw = PlotWidget()
+        self.resize(*size)
+        self.cw = QtGui.QTabWidget()
         self.setCentralWidget(self.cw)
-        for m in ['plot', 'autoRange', 'addItem', 'removeItem', 'setLabel', 'clear']:
-            setattr(self, m, getattr(self.cw, m))
         if title is not None:
             self.setWindowTitle(title)
         self.show()
+        
+    def __getattr__(self, attr):
+        if hasattr(self.cw, attr):
+            return getattr(self.cw, attr)
+        else:
+            raise NameError(attr)
+    
 
-class ImageWindow(QtGui.QMainWindow):
-    def __init__(self, title=None):
+#class PlotWindow(QtGui.QMainWindow):
+    #def __init__(self, title=None, **kargs):
+        #mkQApp()
+        #QtGui.QMainWindow.__init__(self)
+        #self.cw = PlotWidget(**kargs)
+        #self.setCentralWidget(self.cw)
+        #for m in ['plot', 'autoRange', 'addItem', 'removeItem', 'setLabel', 'clear', 'viewRect']:
+            #setattr(self, m, getattr(self.cw, m))
+        #if title is not None:
+            #self.setWindowTitle(title)
+        #self.show()
+
+
+class PlotWindow(PlotWidget):
+    def __init__(self, title=None, **kargs):
         mkQApp()
-        QtGui.QMainWindow.__init__(self)
-        self.cw = ImageView()
-        self.setCentralWidget(self.cw)
-        for m in ['setImage', 'autoRange', 'addItem', 'removeItem', 'blackLevel', 'whiteLevel', 'imageItem']:
-            setattr(self, m, getattr(self.cw, m))
+        self.win = QtGui.QMainWindow()
+        PlotWidget.__init__(self, **kargs)
+        self.win.setCentralWidget(self)
+        for m in ['resize']:
+            setattr(self, m, getattr(self.win, m))
         if title is not None:
-            self.setWindowTitle(title)
-        self.show()
+            self.win.setWindowTitle(title)
+        self.win.show()
+
+
+class ImageWindow(ImageView):
+    def __init__(self, *args, **kargs):
+        mkQApp()
+        self.win = QtGui.QMainWindow()
+        if 'title' in kargs:
+            self.win.setWindowTitle(kargs['title'])
+            del kargs['title']
+        ImageView.__init__(self, self.win)
+        self.setImage(*args, **kargs)
+        self.win.setCentralWidget(self)
+        for m in ['resize']:
+            setattr(self, m, getattr(self.win, m))
+        #for m in ['setImage', 'autoRange', 'addItem', 'removeItem', 'blackLevel', 'whiteLevel', 'imageItem']:
+            #setattr(self, m, getattr(self.cw, m))
+        self.win.show()

@@ -1509,7 +1509,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         #self.picture = None
         self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding))
         
-        self.drawFrame = True
+        self.drawFrame = False
         
         self.mouseEnabled = [True, True]
     
@@ -2068,6 +2068,8 @@ class VTickGroup(QtGui.QGraphicsPathItem):
             xvals = []
         if pen is None:
             pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
+        else:
+            pen = mkPen(pen)
         self.ticks = []
         self.xvals = []
         if view is None:
@@ -2079,7 +2081,6 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         self.setYRange(yrange, relative)
         self.setXVals(xvals)
         self.valid = False
-        
         
     #def setPen(self, pen=None):
         #if pen is None:

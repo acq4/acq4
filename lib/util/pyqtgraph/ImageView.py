@@ -347,6 +347,8 @@ class ImageView(QtGui.QWidget):
                     self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': None}
             elif img.ndim == 4:
                 self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': 3}
+            else:
+                raise Exception("Can not interpret image with dimensions %s" % (str(img)))
 
             
         self.imageDisp = None
