@@ -14,7 +14,11 @@ QAPP = None
 
 def plot(*args, **kargs):
     mkQApp()
-    w = PlotWindow()
+    if 'title' in kargs:
+        w = PlotWindow(title=kargs['title'])
+        del kargs['title']
+    else:
+        w = PlotWindow()
     w.plot(*args, **kargs)
     plots.append(w)
     w.show()

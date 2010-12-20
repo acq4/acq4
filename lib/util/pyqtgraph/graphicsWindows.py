@@ -15,19 +15,6 @@ def mkQApp():
         global QAPP
         QAPP = QtGui.QApplication([])
 
-
-
-class GraphicsWindow(QtGui.QMainWindow):
-    def __init__(self, title=None, size=(800,600)):
-        mkQApp()
-        QtGui.QMainWindow.__init__(self)
-        self.view = GraphicsLayoutWidget()
-        self.setCentralWidget(self.view)
-        self.resize(*size)
-        if title is not None:
-            self.setWindowTitle(title)
-        self.show()
-        
 class GraphicsLayoutWidget(GraphicsView):
     def __init__(self):
         GraphicsView.__init__(self)
@@ -48,20 +35,35 @@ class GraphicsLayoutWidget(GraphicsView):
         
     def addPlot(self, row=None, col=None, rowspan=1, colspan=1, **kargs):
         plot = PlotItem(**kargs)
+        self.addItem(plot, row, col, rowspan, colspan)
+        return plot
+
+    def addItem(self, item, row=None, col=None, rowspan=1, colspan=1):
         if row not in self.items:
             self.items[row] = {}
-        self.items[row][col] = plot
+        self.items[row][col] = item
         
         if row is None:
             row = self.currentRow
         if col is None:
             col = self.nextCol(colspan)
-        self.centralLayout.addItem(plot, row, col, rowspan, colspan)
-        
-        return plot
+        self.centralLayout.addItem(item, row, col, rowspan, colspan)
 
     def getItem(self, row, col):
         return self.items[row][col]
+
+
+class GraphicsWindow(GraphicsLayoutWidget):
+    def __init__(self, title=None, size=(800,600)):
+        mkQApp()
+        self.win = QtGui.QMainWindow()
+        GraphicsLayoutWidget.__init__(self)
+        self.win.setCentralWidget(self)
+        self.win.resize(*size)
+        if title is not None:
+            self.win.setWindowTitle(title)
+        self.win.show()
+        
 
 class TabWindow(QtGui.QMainWindow):
     def __init__(self, title=None, size=(800,600)):

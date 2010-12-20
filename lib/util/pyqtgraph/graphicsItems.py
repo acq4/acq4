@@ -178,7 +178,7 @@ class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
     else:
         useWeave = False
     
-    def __init__(self, image=None, copy=True, parent=None, *args):
+    def __init__(self, image=None, copy=True, parent=None, border=None, *args):
         QObjectWorkaround.__init__(self)
         self.qimage = QtGui.QImage()
         self.pixmap = None
@@ -189,6 +189,9 @@ class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
         self.image = None
         self.clipLevel = None
         self.drawKernel = None
+        if border is not None:
+            border = mkPen(border)
+        self.border = border
         
         QtGui.QGraphicsPixmapItem.__init__(self, parent, *args)
         #self.pixmapItem = QtGui.QGraphicsPixmapItem(self)
@@ -381,7 +384,12 @@ class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
     def setDrawKernel(self, kernel=None):
         self.drawKernel = kernel
     
-    
+    def paint(self, p, *args):
+        #QtGui.QGraphicsPixmapItem.paint(self, p, *args)
+        p.drawPixmap(self.boundingRect(), self.pixmap, QtCore.QRectF(0, 0, self.pixmap.width(), self.pixmap.height()))
+        if self.border is not None:
+            p.setPen(self.border)
+            p.drawRect(self.boundingRect())
 
 
 class PlotCurveItem(GraphicsObject):
@@ -547,6 +555,10 @@ class PlotCurveItem(GraphicsObject):
             x = np.array(x)
         if not isinstance(data, np.ndarray) or data.ndim > 2:
             raise Exception("Plot data must be 1 or 2D ndarray (data shape is %s)" % str(data.shape))
+        
+        if 'complex' in str(data.dtype)+str(x.dtype):
+            raise Exception("Can not plot complex data types.")
+        
         if data.ndim == 2:  ### If data is 2D array, then assume x and y values are in first two columns or rows.
             if x is not None:
                 raise Exception("Plot data may be 2D only if no x argument is supplied.")

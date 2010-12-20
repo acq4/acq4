@@ -349,7 +349,17 @@ class ImageView(QtGui.QWidget):
                 self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': 3}
             else:
                 raise Exception("Can not interpret image with dimensions %s" % (str(img)))
-
+        elif isinstance(axes, dict):
+            self.axes = axes.copy()
+        elif isinstance(axes, list) or isinstance(axes, tuple):
+            self.axes = {}
+            for i in range(len(axes)):
+                self.axes[axes[i]] = i
+        else:
+            raise Exception("Can not interpret axis specification %s. Must be like {'t': 2, 'x': 0, 'y': 1} or ('t', 'x', 'y', 'c')" % (str(axes)))
+            
+        for x in ['t', 'x', 'y', 'c']:
+            self.axes[x] = self.axes.get(x, None)
             
         self.imageDisp = None
         if autoLevels:
@@ -431,7 +441,7 @@ class ImageView(QtGui.QWidget):
         #else:
             #norm = zeros(image.shape)
         if div:
-            norm = norm.astype(np.float32)
+            norm = norm.astype(float32)
             
         if self.ui.normTimeRangeCheck.isChecked() and image.ndim == 3:
             (sind, start) = self.timeIndex(self.normRgn.lines[0])
