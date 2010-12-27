@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from ctypes import *
 import sys, numpy, time, re, os
-#import lib.util.cheader as cheader
 from clibrary import *
 from advancedTypes import OrderedDict
 from debug import backtrace

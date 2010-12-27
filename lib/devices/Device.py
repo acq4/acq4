@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 import time, traceback, sys
-#import threading
 from PyQt4 import QtCore, QtGui
-from lib.util.Mutex import Mutex
-#from lib.util.Mutex import Mutex
-from lib.util.debug import *
+from Mutex import Mutex
+from debug import *
 
 class Device(QtCore.QObject):
     """Abstract class defining the standard interface for Device subclasses."""

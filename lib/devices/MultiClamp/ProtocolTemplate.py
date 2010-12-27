@@ -164,5 +164,5 @@ class Ui_Form(object):
         self.primaryGainCheck.setText(QtGui.QApplication.translate("Form", "Set Gain", None, QtGui.QApplication.UnicodeUTF8))
         self.waveGeneratorLabel.setText(QtGui.QApplication.translate("Form", "Function (values in pA)", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.generator.StimGenerator import StimGenerator
-from lib.util.pyqtgraph.PlotWidget import PlotWidget
+from generator.StimGenerator import StimGenerator
+from pyqtgraph.PlotWidget import PlotWidget

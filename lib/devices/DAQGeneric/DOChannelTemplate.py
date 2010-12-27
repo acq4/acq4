@@ -114,4 +114,4 @@ class Ui_Form(object):
         self.functionCheck.setText(QtGui.QApplication.translate("Form", "Enable Function", None, QtGui.QApplication.UnicodeUTF8))
         self.displayCheck.setText(QtGui.QApplication.translate("Form", "Display", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.generator.StimGenerator import StimGenerator
+from generator.StimGenerator import StimGenerator

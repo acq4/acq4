@@ -312,5 +312,5 @@ class Ui_Form(object):
         self.fitErrorLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
         self.drawFitCheck.setText(QtGui.QApplication.translate("Form", "Draw Fit", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.SpinBox import SpinBox
-from lib.util.pyqtgraph.PlotWidget import PlotWidget
+from SpinBox import SpinBox
+from pyqtgraph.PlotWidget import PlotWidget

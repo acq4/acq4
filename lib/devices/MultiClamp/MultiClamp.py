@@ -3,13 +3,13 @@ from __future__ import with_statement
 from lib.drivers.MultiClamp.MultiClamp import MultiClamp as MultiClampDriver
 from lib.devices.Device import *
 from metaarray import MetaArray, axis
-from lib.util.Mutex import Mutex, MutexLocker
+from Mutex import Mutex, MutexLocker
 from PyQt4 import QtCore
 from numpy import *
 import sys, traceback
 from DeviceGui import *
 from protoGUI import *
-from lib.util.debug import *
+from debug import *
 
 class MultiClamp(Device):
     def __init__(self, dm, config, name):

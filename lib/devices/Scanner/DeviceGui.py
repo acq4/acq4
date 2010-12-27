@@ -2,11 +2,10 @@
 from DeviceTemplate import Ui_Form
 import time, os, sys
 from PyQt4 import QtCore, QtGui
-#from lib.util.metaarray import MetaArray
-from lib.util.pyqtgraph.graphicsItems import ImageItem
+from pyqtgraph.graphicsItems import ImageItem
 import lib.Manager
-from lib.util.imageAnalysis import *
-from lib.util.debug import *
+from imageAnalysis import *
+from debug import *
 import numpy as np
 
 class ScannerDeviceGui(QtGui.QWidget):

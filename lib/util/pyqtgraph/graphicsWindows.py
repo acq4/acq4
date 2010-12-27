@@ -117,7 +117,8 @@ class ImageWindow(ImageView):
             self.win.setWindowTitle(kargs['title'])
             del kargs['title']
         ImageView.__init__(self, self.win)
-        self.setImage(*args, **kargs)
+        if len(args) > 0 or len(kargs) > 0:
+            self.setImage(*args, **kargs)
         self.win.setCentralWidget(self)
         for m in ['resize']:
             setattr(self, m, getattr(self.win, m))

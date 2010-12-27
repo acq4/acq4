@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'AnalysisTemplate.ui'
 #
-# Created: Wed Oct 27 11:39:48 2010
-#      by: PyQt4 UI code generator 4.7.2
+# Created: Sun Dec 26 18:22:05 2010
+#      by: PyQt4 UI code generator 4.7.4
 #
 # WARNING! All changes made in this file will be lost!
 

@@ -385,7 +385,11 @@ class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
         self.drawKernel = kernel
     
     def paint(self, p, *args):
+        
         #QtGui.QGraphicsPixmapItem.paint(self, p, *args)
+        if self.pixmap is None:
+            return
+            
         p.drawPixmap(self.boundingRect(), self.pixmap, QtCore.QRectF(0, 0, self.pixmap.width(), self.pixmap.height()))
         if self.border is not None:
             p.setPen(self.border)

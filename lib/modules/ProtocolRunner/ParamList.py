@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
-from lib.util.advancedTypes import OrderedDict
+from advancedTypes import OrderedDict
 
 class ParamList(QtGui.QTreeWidget):
     def __init__(self, *args):

@@ -3,9 +3,9 @@
 from PyQt4 import QtGui, QtCore
 #from PyQt4 import Qwt5 as Qwt
 import AOChannelTemplate, DOChannelTemplate, InputChannelTemplate
-from lib.util.SequenceRunner import *
-from lib.util.WidgetGroup import *
-#from lib.util.pyqtgraph.PlotWidget import PlotCurveItem
+from SequenceRunner import *
+from WidgetGroup import *
+#from pyqtgraph.PlotWidget import PlotCurveItem
 import numpy
 import sip
 from functions import siFormat

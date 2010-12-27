@@ -14,11 +14,11 @@ import sys, types, re
 from numpy import *
 import numpy
 from PyQt4 import QtCore, QtGui
-from lib.util.advancedTypes import OrderedDict
-from lib.util.functions import logSpace
+from advancedTypes import OrderedDict
+from functions import logSpace
 from GeneratorTemplate import *
 import waveforms
-from lib.util.debug import *
+from debug import *
 
 #import PyQt4.Qwt5 as Qwt
 #from PyQt4.Qwt5.anynumpy import *

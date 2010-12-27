@@ -402,7 +402,7 @@
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>lib.util.SpinBox</header>
+   <header>SpinBox</header>
   </customwidget>
  </customwidgets>
  <resources/>

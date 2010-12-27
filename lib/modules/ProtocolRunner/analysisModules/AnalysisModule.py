@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
-from lib.util.WidgetGroup import WidgetGroup
+from WidgetGroup import WidgetGroup
 
 class AnalysisModule(QtGui.QWidget):
     def __init__(self, protoRunner):

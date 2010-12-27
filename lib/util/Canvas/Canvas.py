@@ -602,7 +602,7 @@ class ImageCanvasItem(CanvasItem):
         
     def updateHistogram(self, autoRange=False):
         x, y = self.item.getHistogram()
-        self.histogram.plot(y, x)
+        self.histogram.plot(x, y)
         if autoRange:
             self.item.updateImage(autoRange=True)
             w, b = self.item.getLevels()

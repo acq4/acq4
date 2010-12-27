@@ -13,7 +13,7 @@ import numpy
 #from scipy.signal import resample, bessel, lfilter
 import scipy.signal, scipy.ndimage
 
-from lib.util.debug import *
+from debug import *
 
 class NiDAQ(Device):
     def __init__(self, dm, config, name):

@@ -3,7 +3,7 @@ from __future__ import with_statement
 from lib.devices.Device import *
 from SignalProxy import *
 import serial, os, time
-from lib.util.Mutex import Mutex, MutexLocker
+from Mutex import Mutex, MutexLocker
 #import pdb
 
 class SerialMouse(Device):

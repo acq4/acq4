@@ -10,7 +10,7 @@ from Mutex import Mutex, MutexLocker
 import traceback, sys, time
 from numpy import *
 import scipy.optimize
-from lib.util.debug import *
+from debug import *
 from functions import siFormat
 from lib.Manager import getManager
 

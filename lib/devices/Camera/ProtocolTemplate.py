@@ -109,4 +109,4 @@ class Ui_Form(object):
         self.releaseBetweenRadio.setText(QtGui.QApplication.translate("Form", "Release between protocols", None, QtGui.QApplication.UnicodeUTF8))
         self.releaseAfterRadio.setText(QtGui.QApplication.translate("Form", "Release after sequence", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.pyqtgraph.ImageView import ImageView
+from pyqtgraph.ImageView import ImageView

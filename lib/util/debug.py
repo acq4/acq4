@@ -5,7 +5,7 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-import sys, traceback, time, gc, re, types, weakref, inspect
+import sys, traceback, time, gc, re, types, weakref, inspect, os
 import ptime
 from numpy import ndarray
 #from PyQt4 import QtCore, QtGui
@@ -978,3 +978,17 @@ def findObj(regex):
             objs.append(obj)
     return objs
     
+
+
+def listRedundantModules():
+    mods = {}
+    for name, mod in sys.modules.iteritems():
+        if not hasattr(mod, '__file__'):
+            continue
+        mfile = os.path.abspath(mod.__file__)
+        if mfile[-1] == 'c':
+            mfile = mfile[:-1]
+        if mfile in mods:
+            print "module at %s has 2 names: %s, %s" % (mfile, name, mods[mfile])
+        else:
+            mods[mfile] = name

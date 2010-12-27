@@ -595,12 +595,12 @@
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>lib.util.SpinBox</header>
+   <header>SpinBox</header>
   </customwidget>
   <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
-   <header>lib.util.pyqtgraph.PlotWidget</header>
+   <header>pyqtgraph.PlotWidget</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

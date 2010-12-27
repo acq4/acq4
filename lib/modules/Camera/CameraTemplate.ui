@@ -624,7 +624,7 @@ background division.</string>
   <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
-   <header>lib.util.pyqtgraph.PlotWidget</header>
+   <header>pyqtgraph.PlotWidget</header>
    <container>1</container>
   </customwidget>
   <customwidget>

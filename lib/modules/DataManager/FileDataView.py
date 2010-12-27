@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
 from PyQt4 import QtCore, QtGui
-from lib.util.DataManager import *
+from DataManager import *
 import lib.Manager as Manager
 import sip
-from lib.util.pyqtgraph.MultiPlotWidget import MultiPlotWidget
-from lib.util.pyqtgraph.ImageView import ImageView
+from pyqtgraph.MultiPlotWidget import MultiPlotWidget
+from pyqtgraph.ImageView import ImageView
 from DictView import *
 import metaarray
 

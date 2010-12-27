@@ -1,18 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
-#from lib.devices.DAQGeneric.interface import DAQGeneric, DAQGenericTask
 from lib.devices.Camera import Camera
 from lib.drivers.pvcam import PVCam as PVCDriver
-#from lib.devices.Device import *
 from PyQt4 import QtCore
 import time, sys, traceback
 from numpy import *
 from metaarray import *
-#from protoGUI import *
-#from deviceGUI import *
-import lib.util.ptime as ptime
-from lib.util.Mutex import Mutex, MutexLocker
-from lib.util.debug import *
+import ptime as ptime
+from Mutex import Mutex, MutexLocker
+from debug import *
 
 class PVCam(Camera):
     def __init__(self, *args, **kargs):
@@ -96,7 +92,8 @@ class PVCam(Camera):
         
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
-                with self.camLock:
+        
+        with self.camLock:
             index = self.cam.lastFrame()
         now = ptime.time()
         if self.lastFrameTime is None:

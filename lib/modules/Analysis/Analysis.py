@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from lib.modules.Module import Module
-from lib.util.DirTreeModel import *
+from DirTreeModel import *
 from AnalysisTemplate import *
 
 

@@ -3,8 +3,9 @@ from lib.modules.Module import *
 from ManagerTemplate import Ui_MainWindow
 from PyQt4 import QtCore, QtGui
 import sys, os
-from lib.util import configfile
-from lib.util.debug import *
+import configfile
+from debug import *
+import reload
 
 class Manager(Module):
     def __init__(self, manager, name, config):
@@ -77,11 +78,17 @@ class Manager(Module):
         self.showMessage("Loaded module '%s'." % mod, 10000)
         
     def reloadModule(self):
-        mod = str(self.ui.moduleList.currentItem().text())
-        self.manager.loadDefinedModule(mod, forceReload=True)
-        self.showMessage("Loaded module '%s'." % mod, 10000)
+        path = os.path.split(os.path.abspath(__file__))[0]
+        path = os.path.abspath(os.path.join(path, '..', '..', '..'))
+        print "Reloading all libraries under %s" % path
+        reload.reloadAll(prefix=path, debug=True)
+        print "Done reloading."
+        #mod = str(self.ui.moduleList.currentItem().text())
+        #self.manager.loadDefinedModule(mod, forceReload=True)
+        #self.showMessage("Loaded module '%s'." % mod, 10000)
         
     def loadConfig(self):
+        #print "LOAD CONFIG"
         cfg = str(self.ui.configList.currentItem().text())
         self.manager.loadDefinedConfig(cfg)
         self.updateModList()

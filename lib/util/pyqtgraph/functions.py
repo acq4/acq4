@@ -148,7 +148,7 @@ def colorStr(c):
     """Generate a hex string code from a QColor"""
     return ('%02x'*4) % (c.red(), c.blue(), c.green(), c.alpha())
 
-def intColor(index, hues=9, values=3, maxValue=255, minValue=150, sat=255):
+def intColor(index, hues=9, values=3, maxValue=255, minValue=150, maxHue=360, minHue=0, sat=255):
     """Creates a QColor from a single index. Useful for stepping through a predefined list of colors.
      - The argument "index" determines which color from the set will be returned
      - All other arguments determine what the set of predefined colors will be
@@ -161,7 +161,7 @@ def intColor(index, hues=9, values=3, maxValue=255, minValue=150, sat=255):
     indh = ind % hues
     indv = ind / hues
     v = minValue + indv * ((maxValue-minValue) / (values-1))
-    h = (indh * 360) / hues
+    h = minHue + (indh * (maxHue-minHue)) / hues
     
     c = QtGui.QColor()
     c.setHsv(h, sat, v)

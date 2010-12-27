@@ -3,11 +3,7 @@ from ctypes import *
 import ctypes
 import struct, os, threading
 from clibrary import *
-#import weakref
 from MultiClampTelegraph import *
-#from Mutex import *
-#from lib.util.CLibrary import *
-#from PyQt4 import QtCore, QtGui
 from debug import *
 
 

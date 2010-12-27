@@ -2,7 +2,7 @@
 from __future__ import with_statement
 from lib.devices.Device import *
 from metaarray import MetaArray, axis
-from lib.util.Mutex import Mutex, MutexLocker
+from Mutex import Mutex, MutexLocker
 from numpy import *
 from protoGUI import *
 from debug import *

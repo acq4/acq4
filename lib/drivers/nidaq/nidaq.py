@@ -2,7 +2,7 @@
 from ctypes import *
 import sys, re, types, ctypes, os, time
 from numpy import *
-from lib.util import cheader
+import cheader
 import ptime  ## platform-independent precision timing
 dtypes = {
     float64: 'F64',

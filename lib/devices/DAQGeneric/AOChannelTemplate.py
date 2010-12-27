@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'AOChannelTemplate.ui'
 #
-# Created: Thu Jul 08 18:13:42 2010
-#      by: PyQt4 UI code generator 4.5.4
+# Created: Sat Dec 25 17:58:36 2010
+#      by: PyQt4 UI code generator 4.7.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -116,5 +116,5 @@ class Ui_Form(object):
         self.functionCheck.setText(QtGui.QApplication.translate("Form", "Enable Function", None, QtGui.QApplication.UnicodeUTF8))
         self.displayCheck.setText(QtGui.QApplication.translate("Form", "Display", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.generator.StimGenerator import StimGenerator
+from generator.StimGenerator import StimGenerator
 from SpinBox import SpinBox
