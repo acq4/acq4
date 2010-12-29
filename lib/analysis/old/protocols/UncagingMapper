@@ -1,0 +1,170 @@
+docks:
+    Plot_000:
+        state:
+            xAutoRadio: False
+            maxTracesCheck: False
+            downsampleSpin: 1
+            xLinkCombo: ''
+            xMinText: '0'
+            groupBox_2: False
+            xMouseCheck: True
+            yAutoPercentSpin: 100
+            manualDecimateRadio: True
+            xManualRadio: True
+            maxTracesSpin: 0
+            autoDecimateRadio: False
+            xAutoPercentSpin: 100
+            alphaSlider: 1000
+            yMaxText: '0'
+            paramList:
+            yLinkCombo: ''
+            yManualRadio: True
+            autoPointsCheck: True
+            decimateGroup: True
+            yAutoRadio: False
+            yLogCheck: False
+            yMouseCheck: True
+            groupBox: False
+            gridGroup: True
+            pointsGroup: True
+            yMinText: '0'
+            gridAlphaSlider: 70
+            averageGroup: False
+            autoAlphaCheck: False
+            alphaGroup: True
+            xMaxText: '0'
+            powerSpectrumGroup: False
+            forgetTracesCheck: False
+            xLogCheck: False
+        type: 'Plot'
+    Plot_001:
+        state:
+            xAutoRadio: False
+            maxTracesCheck: False
+            downsampleSpin: 1
+            xLinkCombo: ''
+            xMinText: '0'
+            groupBox_2: False
+            xMouseCheck: True
+            yAutoPercentSpin: 100
+            manualDecimateRadio: True
+            xManualRadio: True
+            maxTracesSpin: 0
+            autoDecimateRadio: False
+            xAutoPercentSpin: 100
+            alphaSlider: 1000
+            yMaxText: '0'
+            paramList:
+            yLinkCombo: ''
+            yManualRadio: True
+            autoPointsCheck: True
+            decimateGroup: True
+            yAutoRadio: False
+            yLogCheck: False
+            yMouseCheck: True
+            groupBox: False
+            gridGroup: True
+            pointsGroup: True
+            yMinText: '0'
+            gridAlphaSlider: 70
+            averageGroup: False
+            autoAlphaCheck: False
+            alphaGroup: True
+            xMaxText: '0'
+            powerSpectrumGroup: False
+            forgetTracesCheck: False
+            xLogCheck: False
+        type: 'Plot'
+    Plot_002:
+        state:
+            xAutoRadio: False
+            maxTracesCheck: False
+            downsampleSpin: 1
+            xLinkCombo: ''
+            xMinText: '0'
+            groupBox_2: False
+            xMouseCheck: True
+            yAutoPercentSpin: 100
+            manualDecimateRadio: True
+            xManualRadio: True
+            maxTracesSpin: 0
+            autoDecimateRadio: False
+            xAutoPercentSpin: 100
+            alphaSlider: 1000
+            yMaxText: '0'
+            paramList:
+            yLinkCombo: ''
+            yManualRadio: True
+            autoPointsCheck: True
+            decimateGroup: True
+            yAutoRadio: False
+            yLogCheck: False
+            yMouseCheck: True
+            groupBox: False
+            gridGroup: True
+            pointsGroup: True
+            yMinText: '0'
+            gridAlphaSlider: 70
+            averageGroup: False
+            autoAlphaCheck: False
+            alphaGroup: True
+            xMaxText: '0'
+            powerSpectrumGroup: False
+            forgetTracesCheck: False
+            xLogCheck: False
+        type: 'Plot'
+    Plot_003:
+        state:
+            xAutoRadio: True
+            maxTracesCheck: False
+            downsampleSpin: 1
+            xLinkCombo: ''
+            xMinText: '0'
+            groupBox_2: False
+            xMouseCheck: True
+            yAutoPercentSpin: 100
+            manualDecimateRadio: True
+            xManualRadio: False
+            maxTracesSpin: 0
+            autoDecimateRadio: False
+            xAutoPercentSpin: 100
+            alphaSlider: 1000
+            yMaxText: '0'
+            paramList:
+            yLinkCombo: ''
+            yManualRadio: False
+            autoPointsCheck: True
+            decimateGroup: True
+            yAutoRadio: True
+            yLogCheck: False
+            yMouseCheck: True
+            groupBox: False
+            gridGroup: False
+            pointsGroup: True
+            yMinText: '0'
+            gridAlphaSlider: 70
+            averageGroup: False
+            autoAlphaCheck: False
+            alphaGroup: True
+            xMaxText: '0'
+            powerSpectrumGroup: False
+            forgetTracesCheck: False
+            xLogCheck: False
+        type: 'Plot'
+    Canvas_000:
+        state:
+        type: 'Canvas'
+window: '%00%00%00%FF%00%00%00%00%FD%00%00%00%02%00%00%00%01%00%00%02%24%00%00%01%9E%FC%02%00%00%00%01%FB%00%00%00%14%00C%00a%00n%00v%00a%00s%00_%000%000%000%01%00%00%00%00%00%00%01%9E%00%00%00%87%01%00%00%05%00%00%00%03%00%00%05%00%00%00%02K%FC%01%00%00%00%02%FC%00%00%00%00%00%00%01%23%00%00%00%F6%00%FF%FF%FF%FC%02%00%00%00%02%FC%00%00%01%A1%00%00%01%1C%00%00%00%D8%01%00%00%1C%FA%00%00%00%01%01%00%00%00%02%FB%00%00%00%18%00d%00o%00c%00k%00W%00i%00d%00g%00e%00t%00_%003%01%00%00%00%00%FF%FF%FF%FF%00%00%00%A4%01%00%00%05%FB%00%00%00%14%00l%00o%00a%00d%00e%00r%00D%00o%00c%00k%01%00%00%00%00%00%00%01%16%00%00%00%EA%01%00%00%05%FB%00%00%00%10%00d%00a%00t%00a%00D%00o%00c%00k%01%00%00%02%C0%00%00%01%2C%00%00%00%E5%01%00%00%05%FC%00%00%01%26%00%00%03%DA%00%00%00%9D%00%FF%FF%FF%FC%02%00%00%00%03%FC%00%00%01%A1%00%00%01J%00%00%00Y%00%FF%FF%FF%FC%01%00%00%00%02%FB%00%00%00%10%00P%00l%00o%00t%00_%000%000%001%01%00%00%01%26%00%00%01%DD%00%00%00M%01%00%00%05%FB%00%00%00%10%00P%00l%00o%00t%00_%000%000%003%01%00%00%03%06%00%00%01%FA%00%00%00M%01%00%00%05%FB%00%00%00%10%00P%00l%00o%00t%00_%000%000%002%01%00%00%02%EE%00%00%00Y%00%00%00Y%01%00%00%05%FB%00%00%00%10%00P%00l%00o%00t%00_%000%000%000%01%00%00%03J%00%00%00%A2%00%00%00Y%01%00%00%05%00%00%02%D9%00%00%01%9E%00%00%00%04%00%00%00%04%00%00%00%08%00%00%00%08%FC%00%00%00%00'
+flowchart:
+    pos: (0.0, 0.0)
+    connects: [('CombinePoints.0', 'output', 'ScatterPlot.4', 'input'), ('PythonEval.1', 'output', 'ScatterPlot.1', 'input'), ('PythonEval.0', 'output', 'ScatterPlot.3', 'input'), ('Input', 'dataIn', 'PythonEval.0', 'input'), ('Input', 'dataIn', 'PythonEval.1', 'input'), ('PythonEval.0', 'output', 'CombinePoints.0', 'input'), ('ScatterPlot.0', 'plot', 'Plot_000', 'In'), ('ScatterPlot.1', 'plot', 'Plot_001', 'In'), ('PythonEval.1', 'output', 'ScatterPlot.2', 'input'), ('ScatterPlot.2', 'plot', 'Plot_002', 'In'), ('ScatterPlot.3', 'plot', 'Plot_003', 'In'), ('PythonEval.1', 'output', 'ScatterPlot.0', 'input'), ('ScatterPlot.4', 'plot', 'Canvas_000', 'In')]
+    terminals:
+        dataIn:
+            multi: False
+            optional: False
+            io: 'in'
+    inputNode:
+        pos: (-300.13964445179477, -3.4916196384138303)
+    nodes: [{'state': {'pos': (183.4863665549733, 152.60252267938375)}, 'pos': (183.4863665549733, 152.60252267938375), 'class': 'PlotWidget', 'name': 'Plot_003'}, {'state': {'keys': ['fitDecayTau.all.std', 'fitDecayTau.dirRgn.std', 'sum.baseRgn.sum', 'fitAmplitude.stimRgn.avg', 'file', 'fitAmplitude.all.avg', 'sum.stimRgn.sum', 'fitDecayTau.all.med', 'sum.dirRgn.sum', 'holding', 'fitXOffset.all.min', 'fitXOffset.dirRgn.min', 'fitDecayTau.all.avg', 'fitDecayTau.dirRgn.med', 'fitDecayTau.stimRgn.med', 'fitDecayTau.stimRgn.avg', 'fitDecayTau.stimRgn.std', 'spotSize', 'startTime', 'fitDecayTau.baseRgn.med', 'fitAmplitude.baseRgn.avg', 'fitAmplitude.dirRgn.avg', 'fitXOffset.baseRgn.min', 'fitDecayTau.baseRgn.avg', 'fitDecayTau.baseRgn.std', 'fitDecayTau.dirRgn.avg', 'fitXOffset.stimRgn.min', 'mode', 'posX', 'posY', 'relTime', 'sum.all.sum'], 'ctrls': {'pos': (74.484564641127776, 154.4192193779478), 'ctrl': {'sizeEnabled': False, 'colorEnabled': False, 'y': '', 'borderEnabled': False, 'absoluteSize': False, 'x': 'fitDecayTau.all.avg', 'border': {'items': [], 'args': ['fitDecayTau.all.std', 'fitDecayTau.dirRgn.std', 'sum.baseRgn.sum', 'fitAmplitude.stimRgn.avg', 'file', 'fitAmplitude.all.avg', 'sum.stimRgn.sum', 'fitDecayTau.all.med', 'sum.dirRgn.sum', 'holding', 'fitXOffset.all.min', 'fitXOffset.dirRgn.min', 'fitDecayTau.all.avg', 'fitDecayTau.dirRgn.med', 'fitDecayTau.stimRgn.med', 'fitDecayTau.stimRgn.avg', 'fitDecayTau.stimRgn.std', 'spotSize', 'startTime', 'fitDecayTau.baseRgn.med', 'fitAmplitude.baseRgn.avg', 'fitAmplitude.dirRgn.avg', 'fitXOffset.baseRgn.min', 'fitDecayTau.baseRgn.avg', 'fitDecayTau.baseRgn.std', 'fitDecayTau.dirRgn.avg', 'fitXOffset.stimRgn.min', 'mode', 'posX', 'posY', 'relTime', 'sum.all.sum']}, 'color': {'items': [], 'args': ['fitDecayTau.all.std', 'fitDecayTau.dirRgn.std', 'sum.baseRgn.sum', 'fitAmplitude.stimRgn.avg', 'file', 'fitAmplitude.all.avg', 'sum.stimRgn.sum', 'fitDecayTau.all.med', 'sum.dirRgn.sum', 'holding', 'fitXOffset.all.min', 'fitXOffset.dirRgn.min', 'fitDecayTau.all.avg', 'fitDecayTau.dirRgn.med', 'fitDecayTau.stimRgn.med', 'fitDecayTau.stimRgn.avg', 'fitDecayTau.stimRgn.std', 'spotSize', 'startTime', 'fitDecayTau.baseRgn.med', 'fitAmplitude.baseRgn.avg', 'fitAmplitude.dirRgn.avg', 'fitXOffset.baseRgn.min', 'fitDecayTau.baseRgn.avg', 'fitDecayTau.baseRgn.std', 'fitDecayTau.dirRgn.avg', 'fitXOffset.stimRgn.min', 'mode', 'posX', 'posY', 'relTime', 'sum.all.sum']}, 'size': ''}}}, 'pos': (74.484564641127776, 154.4192193779478), 'class': 'ScatterPlot', 'name': 'ScatterPlot.3'}, {'state': {'pos': (184.0, 1.0)}, 'pos': (184.0, 1.0), 'class': 'PlotWidget', 'name': 'Plot_000'}, {'state': {'pos': (186.0, -109.0)}, 'pos': (186.0, -109.0), 'class': 'PlotWidget', 'name': 'Plot_001'}, {'state': {'pos': (188.54746047434691, -219.9720372200714)}, 'pos': (188.54746047434691, -219.9720372200714), 'class': 'PlotWidget', 'name': 'Plot_002'}, {'state': {'pos': (70.307274816639605, 312.74615349470719)}, 'pos': (70.307274816639605, 312.74615349470719), 'class': 'CombinePoints', 'name': 'CombinePoints.0'}, {'state': {'text': "[dict(v['meta'].items() + v['stats'].items()) for v in input.values()]", 'terminals': {'input': {'multi': False, 'optional': False, 'io': 'in'}, 'output': {'multi': False, 'optional': False, 'io': 'out'}}, 'pos': (-81.961272719964782, 231.46926806959888)}, 'pos': (-81.961272719964782, 231.46926806959888), 'class': 'PythonEval', 'name': 'PythonEval.0'}, {'state': {'text': "np.concatenate([x['events'] for x in input.itervalues()])", 'terminals': {'input': {'multi': False, 'optional': False, 'io': 'in'}, 'output': {'multi': False, 'optional': False, 'io': 'out'}}, 'pos': (-114.10748114113886, -113.66241963841385)}, 'pos': (-114.10748114113886, -113.66241963841385), 'class': 'PythonEval', 'name': 'PythonEval.1'}, {'state': {'keys': ('index', 'time', 'len', 'sum', 'peak', 'fitAmplitude', 'fitXOffset', 'fitRiseTau', 'fitDecayTau', 'fitError'), 'ctrls': {'pos': (79.0, -109.0), 'ctrl': {'sizeEnabled': False, 'colorEnabled': False, 'y': 'fitAmplitude', 'borderEnabled': False, 'absoluteSize': False, 'x': 'fitDecayTau', 'border': {'items': [], 'args': ('index', 'time', 'len', 'sum', 'peak', 'fitAmplitude', 'fitXOffset', 'fitRiseTau', 'fitDecayTau', 'fitError')}, 'color': {'items': [{'gradient': {'ticks': [(1, (255, 0, 0, 255)), (0, (0, 0, 0, 255))], 'mode': 'rgb'}, 'max': 1.0, 'op': '+', 'min': 0.0, 'arg': 'index'}, {'gradient': {'ticks': [(1, (255, 0, 0, 255)), (0, (0, 0, 0, 255))], 'mode': 'rgb'}, 'max': 1.0, 'op': '+', 'min': 0.0, 'arg': 'index'}], 'args': ('index', 'time', 'len', 'sum', 'peak', 'fitAmplitude', 'fitXOffset', 'fitRiseTau', 'fitDecayTau', 'fitError')}, 'size': ''}}}, 'pos': (79.0, -109.0), 'class': 'ScatterPlot', 'name': 'ScatterPlot.1'}, {'state': {'keys': ('index', 'time', 'len', 'sum', 'peak', 'fitAmplitude', 'fitXOffset', 'fitRiseTau', 'fitDecayTau', 'fitError'), 'ctrls': {'pos': (75.0, -1.0), 'ctrl': {'sizeEnabled': False, 'colorEnabled': False, 'y': 'fitAmplitude', 'borderEnabled': False, 'absoluteSize': False, 'x': 'fitXOffset', 'border': {'items': [], 'args': ('index', 'time', 'len', 'sum', 'peak', 'fitAmplitude', 'fitXOffset', 'fitRiseTau', 'fitDecayTau', 'fitError')}, 'color': {'items': [], 'args': ('index', 'time', 'len', 'sum', 'peak', 'fitAmplitude', 'fitXOffset', 'fitRiseTau', 'fitDecayTau', 'fitError')}, 'size': ''}}}, 'pos': (75.0, -1.0), 'class': 'ScatterPlot', 'name': 'ScatterPlot.0'}, {'state': {'keys': ('index', 'time', 'len', 'sum', 'peak', 'fitAmplitude', 'fitXOffset', 'fitRiseTau', 'fitDecayTau', 'fitError'), 'ctrls': {'pos': (74.484564641127776, -221.6369972248192), 'ctrl': {'sizeEnabled': False, 'colorEnabled': False, 'y': 'fitDecayTau', 'borderEnabled': False, 'absoluteSize': False, 'x': 'fitXOffset', 'border': {'items': [], 'args': ('index', 'time', 'len', 'sum', 'peak', 'fitAmplitude', 'fitXOffset', 'fitRiseTau', 'fitDecayTau', 'fitError')}, 'color': {'items': [], 'args': ('index', 'time', 'len', 'sum', 'peak', 'fitAmplitude', 'fitXOffset', 'fitRiseTau', 'fitDecayTau', 'fitError')}, 'size': ''}}}, 'pos': (74.484564641127776, -221.6369972248192), 'class': 'ScatterPlot', 'name': 'ScatterPlot.2'}, {'state': {'pos': (317.33118185231513, 315.53908985049236)}, 'pos': (317.33118185231513, 315.53908985049236), 'class': 'CanvasWidget', 'name': 'Canvas_000'}, {'state': {'keys': ['fitDecayTau.all.std', 'fitDecayTau.dirRgn.std', 'fitDecayTau.baseRgn.std', 'sum.baseRgn.sum', 'fitAmplitude.stimRgn.avg', 'sources', 'fitAmplitude.all.avg', 'sum.stimRgn.sum', 'fitDecayTau.all.med', 'sum.dirRgn.sum', 'holding', 'fitXOffset.dirRgn.min', 'fitDecayTau.all.avg', 'fitDecayTau.stimRgn.med', 'fitDecayTau.stimRgn.avg', 'fitDecayTau.stimRgn.std', 'spotSize', 'startTime', 'fitDecayTau.baseRgn.med', 'fitAmplitude.baseRgn.avg', 'fitAmplitude.dirRgn.avg', 'fitXOffset.baseRgn.min', 'fitDecayTau.baseRgn.avg', 'fitXOffset.all.min', 'fitDecayTau.dirRgn.avg', 'fitXOffset.stimRgn.min', 'fitDecayTau.dirRgn.med', 'posX', 'posY', 'relTime', 'sum.all.sum'], 'ctrls': {'pos': (191.3366509224663, 315.18609846664032), 'ctrl': {'sizeEnabled': True, 'colorEnabled': True, 'y': 'posY', 'borderEnabled': False, 'absoluteSize': True, 'x': 'posX', 'border': {'items': [], 'args': ['fitDecayTau.all.std', 'fitDecayTau.dirRgn.std', 'fitDecayTau.baseRgn.std', 'sum.baseRgn.sum', 'fitAmplitude.stimRgn.avg', 'sources', 'fitAmplitude.all.avg', 'sum.stimRgn.sum', 'fitDecayTau.all.med', 'sum.dirRgn.sum', 'holding', 'fitXOffset.dirRgn.min', 'fitDecayTau.all.avg', 'fitDecayTau.stimRgn.med', 'fitDecayTau.stimRgn.avg', 'fitDecayTau.stimRgn.std', 'spotSize', 'startTime', 'fitDecayTau.baseRgn.med', 'fitAmplitude.baseRgn.avg', 'fitAmplitude.dirRgn.avg', 'fitXOffset.baseRgn.min', 'fitDecayTau.baseRgn.avg', 'fitXOffset.all.min', 'fitDecayTau.dirRgn.avg', 'fitXOffset.stimRgn.min', 'fitDecayTau.dirRgn.med', 'posX', 'posY', 'relTime', 'sum.all.sum']}, 'color': {'items': [{'gradient': {'ticks': [(0.0, (0, 0, 0, 255)), (0.80090497737556543, (117, 117, 117, 255)), (1.0, (255, 255, 255, 255))], 'mode': 'rgb'}, 'max': -9.9999999999999994e-12, 'op': '+', 'min': 0.0, 'arg': 'sum.dirRgn.sum'}, {'gradient': {'ticks': [(1.0, (255, 255, 0, 255)), (0.0, (0, 0, 0, 255)), (0.55203619909502266, (217, 0, 0, 255))], 'mode': 'rgb'}, 'max': 1e-10, 'op': '+', 'min': 0.0, 'arg': 'sum.stimRgn.sum'}, {'gradient': {'ticks': [(0.0, (255, 255, 255, 100)), (1.0, (255, 255, 255, 255))], 'mode': 'rgb'}, 'max': 1.0000000000000001e-09, 'op': '*', 'min': 0.0, 'arg': 'sum.stimRgn.sum'}], 'args': ['fitDecayTau.all.std', 'fitDecayTau.dirRgn.std', 'fitDecayTau.baseRgn.std', 'sum.baseRgn.sum', 'fitAmplitude.stimRgn.avg', 'sources', 'fitAmplitude.all.avg', 'sum.stimRgn.sum', 'fitDecayTau.all.med', 'sum.dirRgn.sum', 'holding', 'fitXOffset.dirRgn.min', 'fitDecayTau.all.avg', 'fitDecayTau.stimRgn.med', 'fitDecayTau.stimRgn.avg', 'fitDecayTau.stimRgn.std', 'spotSize', 'startTime', 'fitDecayTau.baseRgn.med', 'fitAmplitude.baseRgn.avg', 'fitAmplitude.dirRgn.avg', 'fitXOffset.baseRgn.min', 'fitDecayTau.baseRgn.avg', 'fitXOffset.all.min', 'fitDecayTau.dirRgn.avg', 'fitXOffset.stimRgn.min', 'fitDecayTau.dirRgn.med', 'posX', 'posY', 'relTime', 'sum.all.sum']}, 'size': 'spotSize'}}}, 'pos': (191.3366509224663, 315.18609846664032), 'class': 'ScatterPlot', 'name': 'ScatterPlot.4'}]
+    outputNode:
+        pos: (556.63404342341664, 3.4916196384138303)

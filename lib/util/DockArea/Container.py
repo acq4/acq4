@@ -9,6 +9,10 @@ class Container:
     def container(self):
         return self._container
         
+    def containerChanged(self, c):
+        self._container = c
+
+
     def type(self):
         return None
 
@@ -31,18 +35,29 @@ class Container:
             #print "insert", n, " -> ", self, index
             self._insertItem(n, index)
             index += 1
-            n._container = self
+            n.containerChanged(self)
             
-    def apoptose(self):
-        ##if there is only one item in this container, disappear.
-        if self.count() == 0:
-            self.setParent(None)
-            #print "Removing container", self
-        if self.count() == 1:
+    def apoptose(self, propagate=True):
+        ##if there is only one (or zero) item in this container, disappear.
+        cont = self._container
+        c = self.count()
+        if c > 1:
+            return
+        if self.count() == 1:  ## if there is one item, give it to the parent container (unless this is the top)
+            if self is self.area.topContainer:
+                return
             self.container().insert(self.widget(0), 'before', self)
-            self.setParent(None)
-            #print "Removing container", self
-
+        #print "apoptose:", self
+        self.close()
+        if propagate and cont is not None:
+            cont.apoptose()
+        
+    def close(self):
+        self.area = None
+        self._container = None
+        self.setParent(None)
+        
+        
 
 class SplitContainer(Container, QtGui.QSplitter):
     def __init__(self, area, orientation):
@@ -52,7 +67,6 @@ class SplitContainer(Container, QtGui.QSplitter):
         
     def _insertItem(self, item, index):
         self.insertWidget(index, item)
-        item.allowedAreas = ['center', 'right', 'left', 'top', 'bottom']
         
 
 class HContainer(SplitContainer):
@@ -69,15 +83,46 @@ class VContainer(SplitContainer):
     def type(self):
         return 'vertical'
 
-class TContainer(Container, QtGui.QTabWidget):
+class TContainer(Container, QtGui.QWidget):
     def __init__(self, area):
-        QtGui.QTabWidget.__init__(self)
+        QtGui.QWidget.__init__(self)
         Container.__init__(self, area)
+        self.layout = QtGui.QGridLayout()
+        self.layout.setSpacing(0)
+        self.layout.setContentsMargins(0,0,0,0)
+        self.setLayout(self.layout)
+        
+        self.hTabLayout = QtGui.QHBoxLayout()
+        self.hTabBox = QtGui.QWidget()
+        self.hTabBox.setLayout(self.hTabLayout)
+        self.hTabLayout.setSpacing(2)
+        self.hTabLayout.setContentsMargins(0,0,0,0)
+        self.layout.addWidget(self.hTabBox, 0, 1)
+
+        self.stack = QtGui.QStackedWidget()
+        self.layout.addWidget(self.stack, 1, 1)
+
+        self.setLayout(self.layout)
+        for n in ['count', 'widget', 'indexOf']:
+            setattr(self, n, getattr(self.stack, n))
+
 
     def _insertItem(self, item, index):
-        self.insertTab(index, item, item.name())
-        item.allowedAreas = ['center']
+        self.stack.insertWidget(index, item)
+        #print "take lebel"
+        self.hTabLayout.insertWidget(index, item.label)
+        QtCore.QObject.connect(item.label, QtCore.SIGNAL('clicked'), self.tabClicked)
+        self.tabClicked(item.label)
         
+    def tabClicked(self, tab, ev=None):
+        if ev is None or ev.button() == QtCore.Qt.LeftButton:
+            for i in range(self.count()):
+                w = self.widget(i)
+                if w is tab.dock:
+                    w.label.setDim(False)
+                    self.stack.setCurrentIndex(i)
+                else:
+                    w.label.setDim(True)
         
     def type(self):
         return 'tab'

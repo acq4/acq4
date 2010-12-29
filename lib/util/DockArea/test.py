@@ -23,10 +23,29 @@ area.addDock(d4, 'right')
 area.addDock(d5, 'left', d1)
 area.addDock(d6, 'top', d4)
 
-area.moveDock(d6, 'bottom', d4)
-d6.hideTitleBar()
+area.moveDock(d6, 'above', d4)
+d3.hideTitleBar()
 
-d2.label.setTabPos(40)
+for d in [d1, d2, d3, d4, d5, d6]:
+    w = QtGui.QWidget()
+    l = QtGui.QVBoxLayout()
+    w.setLayout(l)
+    btns = []
+    for i in range(4):
+        btns.append(QtGui.QPushButton("%s Button %d"%(d.name(), i)))
+        l.addWidget(btns[-1])
+    d.w = (w, l, btns)
+    d.addWidget(w)
+
+s = area.saveState()
+
+
+#print "\n\n-------restore----------\n\n"
+area.restoreState(s)
+
+
+#d6.container().setCurrentIndex(0)
+#d2.label.setTabPos(40)
 
 #win2 = QtGui.QMainWindow()
 #area2 = DockArea()

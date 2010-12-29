@@ -4,9 +4,8 @@ class DockDrop:
     """Provides dock-dropping methods"""
     def __init__(self, allowedAreas=None):
         if allowedAreas is None:
-            self.allowedAreas = ['center', 'right', 'left', 'top', 'bottom']
-        else:
-            self.allowedAreas = allowedAreas
+            allowedAreas = ['center', 'right', 'left', 'top', 'bottom']
+        self.allowedAreas = set(allowedAreas)
         self.setAcceptDrops(True)
         self.dropArea = None
         self.overlay = DropAreaOverlay(self)
@@ -19,10 +18,15 @@ class DockDrop:
         self.overlay.raise_()
     
     def dragEnterEvent(self, ev):
-        if ev.source() is not self and isinstance(ev.source(), Dock):
+        if isinstance(ev.source(), Dock):
+            #print "drag enter accept"
             ev.accept()
+        else:
+            #print "drag enter ignore"
+            ev.ignore()
         
     def dragMoveEvent(self, ev):
+        #print "drag move"
         ld = ev.pos().x()
         rd = self.width() - ld
         td = ev.pos().y()
@@ -45,9 +49,17 @@ class DockDrop:
         elif bd == mn:
             self.dropArea = "bottom"
             
-        if self.dropArea not in self.allowedAreas:
+        if ev.source() is self and self.dropArea == 'center':
+            #print "  no self-center"
             self.dropArea = None
             ev.ignore()
+        elif self.dropArea not in self.allowedAreas:
+            #print "  not allowed"
+            self.dropArea = None
+            ev.ignore()
+        else:
+            #print "  ok"
+            ev.accept()
         self.overlay.setDropArea(self.dropArea)
             
     def dragLeaveEvent(self, ev):
