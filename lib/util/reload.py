@@ -1,10 +1,32 @@
+"""
+Magic Reload Library
+Luke Campagnola   2010
+
+Python reload function that actually works (the way you expect it to)
+ - No re-importing necessary
+ - Modules can be reloaded in any order
+ - Replaces functions and methods with their updated code
+ - Changes instances to use updated classes
+ - Automatically decides which modules to update by comparing file modification times
+ 
+Does NOT:
+ - re-initialize exting instances, even if __init__ changes
+ - update references to any module-level objects
+   ie, this does not reload correctly:
+       from module import someObject
+       print someObject
+   ..but you can use this instead: (this works even for the builtin reload)
+       import module
+       print module.someObject
+"""
+
 
 import inspect, os, sys, __builtin__, gc, traceback
 
 def reloadAll(prefix=None, debug=False):
-    """
-    Automatically reload everything whose __file__ begins with prefix.
-    Skips reload if the file has not been updated
+    """Automatically reload everything whose __file__ begins with prefix.
+    - Skips reload if the file has not been updated
+    - if prefix is None, checks all loaded modules
     """
     
     for mod in sys.modules.itervalues():
@@ -30,6 +52,7 @@ def reloadAll(prefix=None, debug=False):
         except:
             print traceback.format_exc().strip()
             print "Error while reloading module %s, skipping\n" % mod
+
 
 
 def reload(module, debug=False):
@@ -58,13 +81,11 @@ def reload(module, debug=False):
             if debug:
                 print "  Updating class %s.%s (0x%x -> 0x%x)" % (module.__name__, k, id(old), id(new))
             updateClass(old, new, debug)
-            #new.__previous_reload_version__ = old
                     
         elif inspect.isfunction(old):
             if debug:
                 print "  Updating function %s.%s" % (module.__name__, k)
             updateFunction(old, new, debug)
-            #new.__previous_reload_version__ = old
 
 
 
@@ -81,26 +102,21 @@ def updateFunction(old, new, debug, depth=0):
     ## finally, update any previous versions still hanging around..
     if hasattr(old, '__previous_reload_version__'):
         updateFunction(old.__previous_reload_version__, new, debug, depth=depth+1)
-    #elif debug: 
-        #print "    old function", old, "has no previous version."
         
     ## We need to keep a pointer to the previous version so we remember to update BOTH
     ## when the next reload comes around.
     if depth == 0:
-        #if debug:
-            #print "    Setting previous version link", new, " -> ", old
         new.__previous_reload_version__ = old
-    
+
+
+
 ## For classes:
 ##  1) find all instances of the old class and set instance.__class__ to the new class
 ##  2) update all old class methods to use code from the new class methods
 def updateClass(old, new, debug):
-    ## Track town all instances of old and any subclasses of old
+
+    ## Track town all instances and subclasses of old
     refs = gc.get_referrers(old)
-    #if debug:
-        #print "\n    REFERRERS:"
-        #for r in refs:
-            #print '      ' + str(r)[:100]
     for ref in refs:
         try:
             if isinstance(ref, old) and ref.__class__ is old:
@@ -112,9 +128,9 @@ def updateClass(old, new, debug):
                 ref.__bases__ = ref.__bases__[:ind] + (new,) + ref.__bases__[ind+1:]
                 if debug:
                     print "    Changed superclass for", ref
-            else:
-                if debug:
-                    print "    Ignoring reference", type(ref)
+            #else:
+                #if debug:
+                    #print "    Ignoring reference", type(ref)
         except:
             print "Error updating reference (%s) for class change (%s -> %s)" % (str(ref), str(old), str(new))
             raise
@@ -135,9 +151,6 @@ def updateClass(old, new, debug):
                 
             if oa.im_func is not na.im_func:
                 updateFunction(oa.im_func, na.im_func, debug)
-            #oa.im_func.__code__ = na.im_func.__code__
-            #oa.im_func.__dict__ = na.im_func.__dict__
-            #oa.im_func.__defaults__ = na.im_func.__defaults__
             
     ## finally, update any previous versions still hanging around..
     if hasattr(old, '__previous_reload_version__'):
