@@ -37,11 +37,19 @@ for d in [d1, d2, d3, d4, d5, d6]:
     d.w = (w, l, btns)
     d.addWidget(w)
 
-s = area.saveState()
+#s = area.saveState()
 
 
 #print "\n\n-------restore----------\n\n"
-area.restoreState(s)
+#area.restoreState(s)
+s = None
+def save():
+    global s
+    s = area.saveState()
+    
+def load():
+    global s
+    area.restoreState(s)
 
 
 #d6.container().setCurrentIndex(0)

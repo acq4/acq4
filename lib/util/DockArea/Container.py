@@ -57,7 +57,8 @@ class Container:
         self._container = None
         self.setParent(None)
         
-        
+
+
 
 class SplitContainer(Container, QtGui.QSplitter):
     def __init__(self, area, orientation):
@@ -68,6 +69,27 @@ class SplitContainer(Container, QtGui.QSplitter):
     def _insertItem(self, item, index):
         self.insertWidget(index, item)
         
+    def saveState(self):
+        sizes = self.sizes()
+        if all([x == 0 for x in sizes]):
+            sizes = [10] * len(sizes)
+        return {'sizes': sizes}
+        #s = str(QtGui.QSplitter.saveState(self).toPercentEncoding())
+        #return {'state': s}
+        
+    def restoreState(self, state):
+        #self.setSizes(state['sizes'])
+        #QtGui.QSplitter.restoreState(self, QtCore.QByteArray.fromPercentEncoding(state['state']))
+        #if self.count() > 0:   ## make sure at least one item is not collapsed
+            #for i in self.sizes():
+                #if i > 0:
+                    #return
+            #w.setSizes([50] * self.count())
+        sizes = state['sizes']
+        #self.setSizes([10] * len(sizes))
+        self.setSizes(sizes)
+        for i in range(len(sizes)):
+            self.setStretchFactor(i, sizes[i])
 
 class HContainer(SplitContainer):
     def __init__(self, area):
@@ -126,3 +148,11 @@ class TContainer(Container, QtGui.QWidget):
         
     def type(self):
         return 'tab'
+
+    def saveState(self):
+        return {'index': self.stack.currentIndex()}
+        
+    def restoreState(self, state):
+        self.stack.setCurrentIndex(state['index'])
+        
+        

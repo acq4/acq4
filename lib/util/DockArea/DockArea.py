@@ -155,12 +155,12 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
         
     def childState(self, obj):
         if isinstance(obj, Dock):
-            return ('dock', obj.name())
+            return ('dock', obj.name(), {})
         else:
             childs = []
             for i in range(obj.count()):
                 childs.append(self.childState(obj.widget(i)))
-            return (obj.type(), childs)
+            return (obj.type(), childs, obj.saveState())
         
         
     def restoreState(self, state):
@@ -175,7 +175,6 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
         ## 3) create floating areas, populate
         for s in state['float']:
             a = self.addTempArea()
-            #a.restoreState(s, (containers, docks))
             a.buildFromState(s['main'], docks, a)
         
         ## 4) Add any remaining docks to the bottom
@@ -189,9 +188,11 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
         for a in oldTemps:
             a.apoptose()
 
+        ## 6) restore states of containers, in correct order
+        
 
     def buildFromState(self, state, docks, root, depth=0):
-        typ, contents = state
+        typ, contents, state = state
         pfx = "  " * depth
         if typ == 'dock':
             obj = docks[contents]
@@ -206,6 +207,7 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
             for o in contents:
                 self.buildFromState(o, docks, obj, depth+1)
             obj.apoptose(propagate=False)
+            obj.restoreState(state)  ## this has to be done later?
         
 
     def findAll(self, obj=None, c=None, d=None):
