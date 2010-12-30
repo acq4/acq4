@@ -150,7 +150,9 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
     def saveState(self):
         state = {'main': self.childState(self.topContainer), 'float': []}
         for a in self.tempAreas:
-            state['float'].append(a.saveState())
+            geo = a.win.geometry()
+            geo = (geo.x(), geo.y(), geo.width(), geo.height())
+            state['float'].append((a.saveState(), geo))
         return state
         
     def childState(self, obj):
@@ -175,7 +177,8 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
         ## 3) create floating areas, populate
         for s in state['float']:
             a = self.addTempArea()
-            a.buildFromState(s['main'], docks, a)
+            a.buildFromState(s[0]['main'], docks, a)
+            a.win.setGeometry(*s[1])
         
         ## 4) Add any remaining docks to the bottom
         for d in docks.itervalues():
@@ -188,8 +191,6 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
         for a in oldTemps:
             a.apoptose()
 
-        ## 6) restore states of containers, in correct order
-        
 
     def buildFromState(self, state, docks, root, depth=0):
         typ, contents, state = state
