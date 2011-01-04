@@ -10,6 +10,7 @@ class Dock(QtGui.QWidget, DockDrop):
         self.area = area
         self.label = DockLabel(name, self)
         self.labelHidden = False
+        self.moveLabel = True  ## If false, the dock is no longer allowed to move the label.
         self.autoOrient = True
         self.orientation = 'horizontal'
         #self.label.setAlignment(QtCore.Qt.AlignHCenter)
@@ -69,11 +70,11 @@ class Dock(QtGui.QWidget, DockDrop):
         self.allowedAreas.add('center')
         self.updateStyle()
         
-    def setOrientation(self, o='auto', moveLabel=True, force=False):
+    def setOrientation(self, o='auto', force=False):
+        #print self.name(), "setOrientation", o, force
         if o == 'auto':
             if self.container().type() == 'tab':
                 o = 'horizontal'
-                moveLabel = False
             elif self.width() > self.height()*1.5:
                 o = 'vertical'
             else:
@@ -81,22 +82,21 @@ class Dock(QtGui.QWidget, DockDrop):
         if force or self.orientation != o:
             self.orientation = o
             self.label.setOrientation(o)
-            self.updateStyle(moveLabel)
+            self.updateStyle()
         
-    def updateStyle(self, moveLabel=True):
-        #print self.name(), "update style:", self.orientation, moveLabel, self.label.isVisible()
-        
+    def updateStyle(self):
+        #print self.name(), "update style:", self.orientation, self.moveLabel, self.label.isVisible()
         if self.labelHidden:
             self.widgetArea.setStyleSheet(self.nStyle)
         elif self.orientation == 'vertical':
             self.label.setOrientation('vertical')
-            if moveLabel:
+            if self.moveLabel:
                 #print self.name(), "reclaim label"
                 self.topLayout.addWidget(self.label, 1, 0)
             self.widgetArea.setStyleSheet(self.vStyle)
         else:
             self.label.setOrientation('horizontal')
-            if moveLabel:
+            if self.moveLabel:
                 #print self.name(), "reclaim label"
                 self.topLayout.addWidget(self.label, 0, 1)
             self.widgetArea.setStyleSheet(self.hStyle)
@@ -128,7 +128,7 @@ class Dock(QtGui.QWidget, DockDrop):
         self.widgetArea.setStyleSheet(self.dragStyle)
         self.update()
         action = self.drag.exec_()
-        self.updateStyle(moveLabel=False)
+        self.updateStyle()
         
     def float(self):
         self.area.floatDock(self)
@@ -137,8 +137,11 @@ class Dock(QtGui.QWidget, DockDrop):
         #print self.name(), "container changed"
         self._container = c
         if c.type() != 'tab':
+            self.moveLabel = True
             self.label.setDim(False)
             self.show()
+        else:
+            self.moveLabel = False
         self.setOrientation(force=True)
 
 

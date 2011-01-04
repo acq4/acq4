@@ -12,7 +12,6 @@ class Container:
     def containerChanged(self, c):
         self._container = c
 
-
     def type(self):
         return None
 
@@ -32,10 +31,11 @@ class Container:
                 index += 1
                 
         for n in new:
+            #print "change container", n, " -> ", self
+            n.containerChanged(self)
             #print "insert", n, " -> ", self, index
             self._insertItem(n, index)
             index += 1
-            n.containerChanged(self)
             
     def apoptose(self, propagate=True):
         ##if there is only one (or zero) item in this container, disappear.
@@ -131,7 +131,7 @@ class TContainer(Container, QtGui.QWidget):
 
     def _insertItem(self, item, index):
         self.stack.insertWidget(index, item)
-        #print "take lebel"
+        #print "take label from", item.name()
         self.hTabLayout.insertWidget(index, item.label)
         QtCore.QObject.connect(item.label, QtCore.SIGNAL('clicked'), self.tabClicked)
         self.tabClicked(item.label)
