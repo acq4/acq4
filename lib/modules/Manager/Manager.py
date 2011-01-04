@@ -5,7 +5,6 @@ from PyQt4 import QtCore, QtGui
 import sys, os
 import configfile
 from debug import *
-import reload
 
 class Manager(Module):
     def __init__(self, manager, name, config):
@@ -37,7 +36,7 @@ class Manager(Module):
 
         QtCore.QObject.connect(self.ui.loadConfigBtn, QtCore.SIGNAL('clicked()'), self.loadConfig)
         QtCore.QObject.connect(self.ui.loadModuleBtn, QtCore.SIGNAL('clicked()'), self.loadModule)
-        QtCore.QObject.connect(self.ui.reloadModuleBtn, QtCore.SIGNAL('clicked()'), self.reloadModule)
+        QtCore.QObject.connect(self.ui.reloadModuleBtn, QtCore.SIGNAL('clicked()'), self.reloadAll)
         QtCore.QObject.connect(self.ui.configList, QtCore.SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.loadConfig)
         QtCore.QObject.connect(self.ui.moduleList, QtCore.SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.loadModule)
         QtCore.QObject.connect(self.ui.quitBtn, QtCore.SIGNAL('clicked()'), self.requestQuit)
@@ -77,12 +76,8 @@ class Manager(Module):
         self.manager.loadDefinedModule(mod)
         self.showMessage("Loaded module '%s'." % mod, 10000)
         
-    def reloadModule(self):
-        path = os.path.split(os.path.abspath(__file__))[0]
-        path = os.path.abspath(os.path.join(path, '..', '..', '..'))
-        print "Reloading all libraries under %s" % path
-        reload.reloadAll(prefix=path, debug=True)
-        print "Done reloading."
+    def reloadAll(self):
+        self.manager.reloadAll()
         #mod = str(self.ui.moduleList.currentItem().text())
         #self.manager.loadDefinedModule(mod, forceReload=True)
         #self.showMessage("Loaded module '%s'." % mod, 10000)

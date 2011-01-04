@@ -3,6 +3,14 @@ from Container import *
 from DockDrop import *
 import debug
 
+## TODO:
+# - containers should be drop areas, not docks. (but every slot within a container must have its own drop areas?)
+# - drop between tabs
+# - nest splitters inside tab boxes, etc.
+
+
+
+
 class DockArea(Container, QtGui.QWidget, DockDrop):
     def __init__(self, temporary=False, home=None):
         Container.__init__(self, self)

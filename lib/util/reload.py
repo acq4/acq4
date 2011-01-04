@@ -25,7 +25,7 @@ import inspect, os, sys, __builtin__, gc, traceback
 
 def reloadAll(prefix=None, debug=False):
     """Automatically reload everything whose __file__ begins with prefix.
-    - Skips reload if the file has not been updated
+    - Skips reload if the file has not been updated (if .pyc is newer than .py)
     - if prefix is None, checks all loaded modules
     """
     
@@ -55,22 +55,23 @@ def reloadAll(prefix=None, debug=False):
 
 
 
-def reload(module, debug=False):
+def reload(module, debug=False, lists=False, dicts=False):
     """Replacement for the builtin reload function:
     - Reloads the module as usual
     - Updates all old functions and class methods to use the new code
     - Updates all instances of each modified class to use the new class
-
+    - Can update lists and dicts, but this is disabled by default
     - Requires that class and function names have not changed
     """
     if debug:
-        print "Reloading module", module
+        print "Reloading", module
         
     ## make a copy of the old module dictionary, reload, then grab the new module dictionary for comparison
     oldDict = module.__dict__.copy()
     __builtin__.reload(module)
     newDict = module.__dict__
     
+    ## compare old and new elements from each dict; update where appropriate
     for k in oldDict:
         old = oldDict[k]
         new = newDict.get(k, None)
@@ -83,30 +84,45 @@ def reload(module, debug=False):
             updateClass(old, new, debug)
                     
         elif inspect.isfunction(old):
+            depth = updateFunction(old, new, debug)
             if debug:
-                print "  Updating function %s.%s" % (module.__name__, k)
-            updateFunction(old, new, debug)
-
+                extra = ""
+                if depth > 0:
+                    extra = " (and %d previous versions)" % depth
+                print "  Updating function %s.%s%s" % (module.__name__, k, extra)
+        elif lists and isinstance(old, list):
+            l = old.len()
+            old.extend(new)
+            for i in range(l):
+                old.pop(0)
+        elif dicts and isinstance(old, dict):
+            old.update(new)
+            for k in old:
+                if k not in new:
+                    del old[k]
+        
 
 
 ## For functions:
 ##  1) update the code and defaults to new versions.
 ##  2) keep a reference to the previous version so ALL versions get updated for every reload
 def updateFunction(old, new, debug, depth=0):
-    if debug and depth > 0:
-        print "    -> also updating previous version", old, " -> ", new
+    #if debug and depth > 0:
+        #print "    -> also updating previous version", old, " -> ", new
     old.__code__ = new.__code__
-    #old.__dict__ = new.__dict__  ## is this necessary?
     old.__defaults__ = new.__defaults__
     
     ## finally, update any previous versions still hanging around..
     if hasattr(old, '__previous_reload_version__'):
-        updateFunction(old.__previous_reload_version__, new, debug, depth=depth+1)
+        maxDepth = updateFunction(old.__previous_reload_version__, new, debug, depth=depth+1)
+    else:
+        maxDepth = depth
         
     ## We need to keep a pointer to the previous version so we remember to update BOTH
     ## when the next reload comes around.
     if depth == 0:
         new.__previous_reload_version__ = old
+    return maxDepth
 
 
 
@@ -125,7 +141,18 @@ def updateClass(old, new, debug):
                     print "    Changed class for", ref
             elif inspect.isclass(ref) and issubclass(ref, old) and old in ref.__bases__:
                 ind = ref.__bases__.index(old)
-                ref.__bases__ = ref.__bases__[:ind] + (new,) + ref.__bases__[ind+1:]
+                
+                ## Does not work:
+                #ref.__bases__ = ref.__bases__[:ind] + (new,) + ref.__bases__[ind+1:]
+                ## reason: Even though we change the code on methods, they remain bound
+                ## to their old classes (changing im_class is not allowed). Instead,
+                ## we have to update the __bases__ such that this class will be allowed
+                ## as an argument to older methods.
+                
+                ## This seems to work. Is there any reason not to?
+                ## Note that every time we reload, the class hierarchy becomes more complex.
+                ## (and I presume this may slow things down?)
+                ref.__bases__ = ref.__bases__[:ind] + (new,old) + ref.__bases__[ind+1:]
                 if debug:
                     print "    Changed superclass for", ref
             #else:
@@ -141,8 +168,6 @@ def updateClass(old, new, debug):
     for attr in dir(old):
         oa = getattr(old, attr)
         if inspect.ismethod(oa):
-            if debug:
-                print "    Updating method", attr
             try:
                 na = getattr(new, attr)
             except AttributeError:
@@ -150,7 +175,14 @@ def updateClass(old, new, debug):
                     print "    Skipping method update for %s; new class does not have this attribute" % attr
                 
             if oa.im_func is not na.im_func:
-                updateFunction(oa.im_func, na.im_func, debug)
+                depth = updateFunction(oa.im_func, na.im_func, debug)
+                #oa.im_class = new  ## bind old method to new class  ## not allowed
+                if debug:
+                    extra = ""
+                    if depth > 0:
+                        extra = " (and %d previous versions)" % depth
+                    print "    Updating method %s%s" % (attr, extra)
+                
             
     ## finally, update any previous versions still hanging around..
     if hasattr(old, '__previous_reload_version__'):
@@ -203,29 +235,38 @@ class B(A):
 
     modFile2 = "test2.py"
     modCode2 = """
-import test1.test1 as C
-a1 = C.A("ax1")
-b1 = C.B("bx1")
+from test1.test1 import A
+from test1.test1 import B
 
+a1 = A("ax1")
+b1 = B("bx1")
+class C(A):
+    def __init__(self, msg):
+        #print "| C init:"
+        #print "|   C.__bases__ = ", map(id, C.__bases__)
+        #print "|   A:", id(A)
+        #print "|   A.__init__ = ", id(A.__init__.im_func), id(A.__init__.im_func.__code__), id(A.__init__.im_class)
+        A.__init__(self, msg + "(init from C)")
+        
 def fn():
-  print "fn: %s"
+    print "fn: %s"
 """ 
 
     open(modFile1, 'w').write(modCode1%(1,1))
     open(modFile2, 'w').write(modCode2%"message 1")
-    import test1.test1 as C
+    import test1.test1 as test1
     import test2
     print "Test 1 originals:"
-    A1 = C.A
-    B1 = C.B
-    a1 = C.A("a1")
-    b1 = C.B("b1")
+    A1 = test1.A
+    B1 = test1.B
+    a1 = test1.A("a1")
+    b1 = test1.B("b1")
     a1.fn()
     b1.fn()
     #print "function IDs  a1 bound method: %d a1 func: %d  a1 class: %d  b1 func: %d  b1 class: %d" % (id(a1.fn), id(a1.fn.im_func), id(a1.fn.im_class), id(b1.fn.im_func), id(b1.fn.im_class))
 
 
-    from test2 import fn
+    from test2 import fn, C
     
     if doQtTest:
         print "Button test before:"
@@ -244,13 +285,23 @@ def fn():
     oldfn = fn
     test2.a1.fn()
     test2.b1.fn()
+    c1 = test2.C('c1')
+    c1.fn()
     
     os.remove(modFile1+'c')
-    os.remove(modFile2+'c')
     open(modFile1, 'w').write(modCode1%(2,2))
-    open(modFile2, 'w').write(modCode2%"message 2")
+    print "\n----RELOAD test1-----\n"
+    reloadAll(os.path.abspath(__file__)[:10], debug=True)
     
-    print "\n----RELOAD-----\n"
+    
+    print "Subclass test:"
+    c2 = test2.C('c2')
+    c2.fn()
+    
+    
+    os.remove(modFile2+'c')
+    open(modFile2, 'w').write(modCode2%"message 2")
+    print "\n----RELOAD test2-----\n"
     reloadAll(os.path.abspath(__file__)[:10], debug=True)
 
     if doQtTest:
@@ -268,13 +319,16 @@ def fn():
     print "\n==> Test 1 Old instances:"
     a1.fn()
     b1.fn()
+    c1.fn()
     #print "function IDs  a1 bound method: %d a1 func: %d  a1 class: %d  b1 func: %d  b1 class: %d" % (id(a1.fn), id(a1.fn.im_func), id(a1.fn.im_class), id(b1.fn.im_func), id(b1.fn.im_class))
 
     print "\n==> Test 1 New instances:"
-    a2 = C.A("a2")
-    b2 = C.B("b2")
+    a2 = test1.A("a2")
+    b2 = test1.B("b2")
     a2.fn()
     b2.fn()
+    c2 = test2.C('c2')
+    c2.fn()
     #print "function IDs  a1 bound method: %d a1 func: %d  a1 class: %d  b1 func: %d  b1 class: %d" % (id(a1.fn), id(a1.fn.im_func), id(a1.fn.im_class), id(b1.fn.im_func), id(b1.fn.im_class))
 
 
@@ -306,8 +360,8 @@ def fn():
     print "function IDs  a1 bound method: %d a1 func: %d  a1 class: %d  b1 func: %d  b1 class: %d" % (id(a1.fn), id(a1.fn.im_func), id(a1.fn.im_class), id(b1.fn.im_func), id(b1.fn.im_class))
 
     print "\n==> Test 1 New instances:"
-    a2 = C.A("a2")
-    b2 = C.B("b2")
+    a2 = test1.A("a2")
+    b2 = test1.B("b2")
     a2.fn()
     b2.fn()
     print "function IDs  a1 bound method: %d a1 func: %d  a1 class: %d  b1 func: %d  b1 class: %d" % (id(a1.fn), id(a1.fn.im_func), id(a1.fn.im_class), id(b1.fn.im_func), id(b1.fn.im_class))

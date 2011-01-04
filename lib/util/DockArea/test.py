@@ -26,7 +26,7 @@ area.addDock(d6, 'top', d4)
 area.moveDock(d6, 'above', d4)
 d3.hideTitleBar()
 
-for d in [d1, d2, d3, d4, d5, d6]:
+for d in [d1, d2, d3, d4, d5]:
     w = QtGui.QWidget()
     l = QtGui.QVBoxLayout()
     w.setLayout(l)
@@ -36,6 +36,10 @@ for d in [d1, d2, d3, d4, d5, d6]:
         l.addWidget(btns[-1])
     d.w = (w, l, btns)
     d.addWidget(w)
+
+import pyqtgraph as pg
+p = pg.PlotWidget()
+d6.addWidget(p)
 
 #s = area.saveState()
 

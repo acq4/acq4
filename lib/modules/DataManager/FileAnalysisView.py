@@ -3,6 +3,8 @@ from PyQt4 import QtCore, QtGui
 import database
 from AnalysisTemplate import *
 import lib.Manager
+import lib.analysis.modules as analysis
+import lib.analysis.AnalysisHost as AnalysisHost
 
 class FileAnalysisView(QtGui.QWidget):
     def __init__(self, parent, mod):
@@ -16,9 +18,12 @@ class FileAnalysisView(QtGui.QWidget):
         self.dbFile = None
         self.db = None
         
+        self.populateModuleList()
+        
         self.connect(self.ui.openDbBtn, QtCore.SIGNAL('clicked()'), self.openDbClicked)
         self.connect(self.ui.createDbBtn, QtCore.SIGNAL('clicked()'), self.createDbClicked)
         self.connect(self.ui.addFileBtn, QtCore.SIGNAL('clicked()'), self.addFileClicked)
+        self.connect(self.ui.analysisCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.loadModule)
         
         
     def openDbClicked(self):
@@ -41,9 +46,17 @@ class FileAnalysisView(QtGui.QWidget):
         cf = self.mod.selectedFile()
         self.db.addDir(cf)
         
-        
+    def populateModuleList(self):
+        for m in analysis.listModules():
+            self.ui.analysisCombo.addItem(m)
     
-
+    def loadModule(self):
+        if self.ui.analysisCombo.currentIndex() == 0:
+            return
+        modName = str(self.ui.analysisCombo.currentText())
+        self.ui.analysisCombo.setCurrentIndex(0)
+        mod = AnalysisHost.AnalysisHost(dataManager=self.mod, module=modName)
+        
 
 
 
