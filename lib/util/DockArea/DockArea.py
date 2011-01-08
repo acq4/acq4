@@ -2,6 +2,7 @@ from PyQt4 import QtCore, QtGui
 from Container import *
 from DockDrop import *
 import debug
+import weakref
 
 ## TODO:
 # - containers should be drop areas, not docks. (but every slot within a container must have its own drop areas?)
@@ -18,7 +19,7 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
         DockDrop.__init__(self, allowedAreas=['left', 'right', 'top', 'bottom'])
         self.layout = QtGui.QVBoxLayout()
         self.setLayout(self.layout)
-        self.docks = {}
+        self.docks = weakref.WeakValueDictionary()
         self.topContainer = None
         self.raiseOverlay()
         self.temporary = temporary
@@ -43,6 +44,8 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
                 container = self.topContainer
                 neighbor = None
         else:
+            if isinstance(relativeTo, basestring):
+                relativeTo = self.docks[relativeTo]
             container = self.getContainer(relativeTo)
             neighbor = relativeTo
         
@@ -75,6 +78,7 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
         #print "request insert", dock, insertPos, neighbor
         container.insert(dock, insertPos, neighbor)
         dock.area = self
+        self.docks[dock.name()] = dock
         
     def getContainer(self, obj):
         if obj is None:

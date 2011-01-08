@@ -139,9 +139,9 @@ class Dock(QtGui.QWidget, DockDrop):
         if c.type() != 'tab':
             self.moveLabel = True
             self.label.setDim(False)
-            self.show()
         else:
             self.moveLabel = False
+            
         self.setOrientation(force=True)
 
 

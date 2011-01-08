@@ -6,109 +6,98 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>779</width>
-    <height>454</height>
+    <width>792</width>
+    <height>517</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout_2">
-   <property name="margin">
-    <number>0</number>
-   </property>
-   <property name="spacing">
-    <number>0</number>
-   </property>
    <item row="0" column="0">
-    <widget class="QSplitter" name="splitter">
+    <widget class="QSplitter" name="splitter_2">
      <property name="orientation">
-      <enum>Qt::Horizontal</enum>
+      <enum>Qt::Vertical</enum>
      </property>
-     <widget class="QWidget" name="layoutWidget">
-      <layout class="QVBoxLayout" name="verticalLayout">
-       <property name="spacing">
-        <number>0</number>
-       </property>
-       <item>
-        <widget class="QPushButton" name="addNodeBtn">
-         <property name="text">
-          <string>Add Node..</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="TreeWidget" name="ctrlList">
-         <column>
+     <widget class="QSplitter" name="splitter">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+      <widget class="FlowchartGraphicsView" name="view"/>
+      <widget class="QWidget" name="layoutWidget">
+       <layout class="QGridLayout" name="gridLayout">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <item row="1" column="0" colspan="2">
+         <widget class="QLabel" name="label">
           <property name="text">
-           <string notr="true">1</string>
+           <string>Output:</string>
           </property>
-         </column>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="reloadLibBtn">
-         <property name="text">
-          <string>Reload Library</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
+         </widget>
+        </item>
+        <item row="2" column="0" colspan="2">
+         <widget class="DataTreeWidget" name="outputTree">
+          <column>
+           <property name="text">
+            <string notr="true">1</string>
+           </property>
+          </column>
+         </widget>
+        </item>
+        <item row="5" column="0" colspan="2">
+         <widget class="QLabel" name="selDescLabel">
+          <property name="text">
+           <string/>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="0" colspan="2">
+         <widget class="DataTreeWidget" name="selectedTree">
+          <column>
+           <property name="text">
+            <string notr="true">1</string>
+           </property>
+          </column>
+         </widget>
+        </item>
+        <item row="4" column="1">
+         <widget class="QLabel" name="selNameLabel">
+          <property name="font">
+           <font>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="0">
+         <widget class="QPushButton" name="addNodeBtn">
+          <property name="text">
+           <string>Add Node..</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
      </widget>
-     <widget class="FlowchartGraphicsView" name="view"/>
-     <widget class="QWidget" name="layoutWidget">
-      <layout class="QGridLayout" name="gridLayout">
-       <property name="spacing">
-        <number>0</number>
-       </property>
-       <item row="0" column="0" colspan="2">
-        <widget class="QLabel" name="label">
-         <property name="text">
-          <string>Output:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="0" colspan="2">
-        <widget class="DataTreeWidget" name="outputTree"/>
-       </item>
-       <item row="4" column="0" colspan="2">
-        <widget class="QLabel" name="selDescLabel">
-         <property name="text">
-          <string/>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
-         </property>
-         <property name="wordWrap">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item row="5" column="0" colspan="2">
-        <widget class="DataTreeWidget" name="selectedTree"/>
-       </item>
-       <item row="3" column="1">
-        <widget class="QLabel" name="selNameLabel">
-         <property name="font">
-          <font>
-           <weight>75</weight>
-           <bold>true</bold>
-          </font>
-         </property>
-         <property name="text">
-          <string/>
-         </property>
-        </widget>
-       </item>
-      </layout>
+     <widget class="QTextEdit" name="hoverText">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
      </widget>
-    </widget>
-   </item>
-   <item row="1" column="0">
-    <widget class="QLineEdit" name="hoverLabel">
-     <property name="readOnly">
-      <bool>true</bool>
-     </property>
     </widget>
    </item>
   </layout>
@@ -118,11 +107,6 @@
    <class>DataTreeWidget</class>
    <extends>QTreeWidget</extends>
    <header>DataTreeWidget</header>
-  </customwidget>
-  <customwidget>
-   <class>TreeWidget</class>
-   <extends>QTreeWidget</extends>
-   <header>TreeWidget</header>
   </customwidget>
   <customwidget>
    <class>FlowchartGraphicsView</class>

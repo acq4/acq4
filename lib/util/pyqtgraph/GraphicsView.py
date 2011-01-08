@@ -384,6 +384,10 @@ class GraphicsView(QtGui.QGraphicsView):
         self.render(painter)
         painter.end()
         
+    def dragEnterEvent(self, ev):
+        ev.ignore()  ## not sure why, but for some reason this class likes to consume drag events
+        
+        
         
     #def getFreehandLine(self):
         

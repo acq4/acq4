@@ -56,7 +56,7 @@ class AnalysisModule(QtCore.QObject):
                 self._elements_[name] = Element(**el)
             elif isinstance(el, basestring):
                 self._elements_[name] = Element(el)
-                
+            
         
     def processData(self, data):
         pass
@@ -98,13 +98,17 @@ class AnalysisModule(QtCore.QObject):
 
 class Element:
     """Simple class for holding options and attributes for elements"""
-    def __init__(self, type, optional=False, object=None):
+    def __init__(self, type, optional=False, object=None, pos=None):
         self._type = type          ## string such as 'plot', 'canvas', 'ctrl'
         self._optional = optional  ## bool
         self._object = object      ## any object; usually the widget associated with the element
+        self._position = pos
         
     def type(self):
         return self._type
+        
+    def pos(self):
+        return self._position 
         
     def setObject(self, obj):
         self._object = obj

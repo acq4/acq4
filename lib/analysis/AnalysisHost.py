@@ -21,16 +21,25 @@ class AnalysisHost(QtGui.QMainWindow):
             self.loadModule(module)
         self.show()
         
+    def dataManager(self):
+        return self.dm
+        
     def loadModule(self, modName):
         if self.mod is not None:
             raise Exception("No fair loading extra modules in one host.")
         self.mod = modules.load(modName, self)
         
-        el = self.mod.listElements()
-        for e in el:
-            w = self.mod.getElement(e)
-            d = DockArea.Dock(name=e)
-            d.addWidget(w)
-            self.dockArea.addDock(d)
+        elems = self.mod.listElements()
+        for name, el in elems.iteritems():
+            w = self.mod.getElement(name)
+            d = DockArea.Dock(name=name)
+            if w is not None:
+                d.addWidget(w)
+            pos = el.pos()
+            if pos is None:
+                pos = ()
+            #print d, pos
+            self.dockArea.addDock(d, *pos)
         
+        self.setWindowTitle(modName)
         

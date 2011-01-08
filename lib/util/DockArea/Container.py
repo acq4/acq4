@@ -68,6 +68,7 @@ class SplitContainer(Container, QtGui.QSplitter):
         
     def _insertItem(self, item, index):
         self.insertWidget(index, item)
+        item.show()  ## need to show since it may have been previously hidden by tab
         
     def saveState(self):
         sizes = self.sizes()

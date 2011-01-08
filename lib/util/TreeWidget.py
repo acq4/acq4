@@ -36,11 +36,13 @@ class TreeWidget(QtGui.QTreeWidget):
     def dropMimeData(self, parent, index, data, action):
         item = self.currentItem()
         p = parent
+        print "drop", item, "->", parent, index
         while True:
             if p is None:
                 break
             if p == item:
-                raise Exception("Can not move item into itself.")
+                return False
+                #raise Exception("Can not move item into itself.")
             p = p.parent()
         
         if not self.itemMoving(item, parent, index):
@@ -58,6 +60,7 @@ class TreeWidget(QtGui.QTreeWidget):
         self.prepareMove(item)
             
         currentParent.removeChild(item)
+        print "  insert child to index", index
         parent.insertChild(index, item)  ## index will not be correct
         self.setCurrentItem(item)
         
@@ -122,9 +125,15 @@ if __name__ == '__main__':
     i211  = QtGui.QTreeWidgetItem(["Item 2.1.1"])
     i212  = QtGui.QTreeWidgetItem(["Item 2.1.2"])
     i22  = QtGui.QTreeWidgetItem(["Item 2.2"])
+    i3  = QtGui.QTreeWidgetItem(["Item 3"])
+    i4  = QtGui.QTreeWidgetItem(["Item 4"])
+    i5  = QtGui.QTreeWidgetItem(["Item 5"])
     
     w.addTopLevelItem(i1)
     w.addTopLevelItem(i2)
+    w.addTopLevelItem(i3)
+    w.addTopLevelItem(i4)
+    w.addTopLevelItem(i5)
     i1.addChild(i11)
     i1.addChild(i12)
     i2.addChild(i21)
