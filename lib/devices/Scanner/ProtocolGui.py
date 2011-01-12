@@ -13,6 +13,7 @@ class ScannerProtoGui(ProtocolGui):
         ProtocolGui.__init__(self, dev, prot)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        self.ui.programControlsLayout.setEnabled(False)
         dm = getManager()
         self.targets = None
         self.items = {}
@@ -48,6 +49,8 @@ class ScannerProtoGui(ProtocolGui):
         QtCore.QObject.connect(self.ui.addPointBtn, QtCore.SIGNAL('clicked()'), self.addPoint)
         QtCore.QObject.connect(self.ui.addGridBtn, QtCore.SIGNAL('clicked()'), self.addGrid)
         QtCore.QObject.connect(self.ui.addOcclusionBtn, QtCore.SIGNAL('clicked()'), self.addOcclusion)
+        QtCore.QObject.connect(self.ui.addProgramBtn, QtCore.SIGNAL('clicked()'), self.addProgram)
+        QtCore.QObject.connect(self.ui.addSpiralScanBtn, QtCore.SIGNAL('clicked()'), self.addSpiral)
         QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.delete)
         QtCore.QObject.connect(self.ui.deleteAllBtn, QtCore.SIGNAL('clicked()'), self.deleteAll)
         QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemToggled)
@@ -253,6 +256,19 @@ class ScannerProtoGui(ProtocolGui):
         
     def handleResult(self, result, params):
         pass
+    
+    def addSpiral(self, pos=None, name=None):
+        autoName = False
+        if name is None:
+            name = 'Point'
+            autoName = True
+        autoPos = False
+        if pos is None:
+            pos = [0,0]
+            autoPos = True
+        pt = SpiralROI(pos)
+        self.addItem(pt, name,  autoPos,  autoName)
+        return pt
 
     def addPoint(self, pos=None,  name=None):
         autoName = False
@@ -300,6 +316,30 @@ class ScannerProtoGui(ProtocolGui):
         item = TargetOcclusion(points, pos=pos)
         self.addItem(item, name, autoName=auto, autoPosition=auto)
         return item
+        
+    def addProgram(self, name=None):
+        camMod = self.cameraModule()
+        if camMod is None:
+            return False
+        self.ui.programControlsLayout.setEnabled(True)
+        item = TargetProgram()
+        if name is None:
+            name = 'Program' + str(self.nextId)
+        self.nextId += 1 
+        item.name = name
+        item.objective = self.currentObjective
+        self.items[name] = item
+        listitem = QtGui.QListWidgetItem(name)
+        listitem.setCheckState(QtCore.Qt.Checked)
+        self.ui.itemList.addItem(listitem)
+        self.updateItemColor(listitem)
+        camMod.ui.addItem(item.origin, None, [1,1], 1000)
+        item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
+        item.connect(QtCore.SIGNAL('regionChanged'), self.getTargetList)
+        item.connect(QtCore.SIGNAL('pointsChanged'), self.itemChanged)
+        self.itemChanged(item)
+        self.updateDeviceTargetList(item)
+        
         
 
     def addItem(self, item, name,  autoPosition=True,  autoName=True):
@@ -423,7 +463,7 @@ class ScannerProtoGui(ProtocolGui):
                 occArea |= i.mapToScene(i.shape())
             
         for i in items:
-            if isinstance(i, TargetOcclusion):
+            if isinstance(i, TargetOcclusion) or isinstance(i, TargetProgram):
                 continue
             pts = i.listPoints()
             #for x in self.occlusions.keys():  ##can we just join the occlusion areas together?
@@ -715,8 +755,19 @@ class TargetGrid(ROI):
 class TargetOcclusion(PolygonROI):
     def __init__(self, points, pos=None):
         PolygonROI.__init__(self, points, pos)
-        
-        
+        self.setZValue(10000000)
     
     def setPointSize(self, size, packing):
         pass
+    
+class TargetProgram(QtCore.QObject):
+    def __init__(self):
+        self.origin = QtGui.QGraphicsEllipseItem(0,0,1,1)
+        self.paths = []
+        
+    def setPen(self, pen):
+        self.origin.setPen(pen)
+        
+    def listPoints(self):
+        pass
+        

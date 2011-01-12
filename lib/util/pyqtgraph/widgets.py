@@ -15,7 +15,7 @@ import numpy as np
 from numpy.linalg import norm
 import scipy.ndimage as ndimage
 from Point import *
-from math import cos, sin
+from math import cos, sin, pi
 from ObjectWorkaround import *
 
 def rectStr(r):
@@ -955,5 +955,33 @@ class PolygonROI(ROI):
         sc['angle'] = self.state['angle']
         #sc['handles'] = self.handles
         return sc
+    
+class SpiralROI(ROI):
+    def __init__(self, pos=None, size=None, **args):
+        if size == None:
+            size = [100e-6,100e-6]
+        if pos == None:
+            pos = [0,0]
+        ROI.__init__(self, pos, size, **args)
+        self.addFreeHandle([1,0], name='a')
+        self.addFreeHandle([3,0], name='r')
+        
+    def shape(self):
+        path = QtGui.QPainterPath()
+        h0 = self.handles[0]['item'].pos()
+        a = h0.x()/(2.0*pi)
+        theta = 30.0/(2.0*pi)
+        path.moveTo(QtCore.QPointF(a*theta*cos(theta), a*theta*sin(theta)))
+        x0 = a*theta*cos(theta)
+        radius = self.handles[1]['item'].pos().x()
+        theta += 10.0/(2.0*pi)
+        while x0 < radius:
+            x1 = a*theta*cos(theta)
+            y1 = a*theta*sin(theta)
+            path.lineTo(QtCore.QPointF(x1,y1))
+            theta += 10.0/(2.0*pi)
+        return path
+
+            
 
                 
