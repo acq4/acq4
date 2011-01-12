@@ -42,7 +42,7 @@
         <enum>QFormLayout::ExpandingFieldsGrow</enum>
        </property>
        <property name="horizontalSpacing">
-        <number>0</number>
+        <number>10</number>
        </property>
        <property name="verticalSpacing">
         <number>0</number>

@@ -12,12 +12,12 @@ probably only need to be created via functions in the Manager class.
 from __future__ import with_statement
 import threading, os, re, sys, shutil
 ##  import fcntl  ## linux only?
-from lib.util.functions import strncmp
-from lib.util.configfile import *
+from functions import strncmp
+from configfile import *
 from metaarray import MetaArray
 import time
-from lib.util.Mutex import Mutex, MutexLocker
-from lib.util.SignalProxy import proxyConnect
+from Mutex import Mutex, MutexLocker
+from SignalProxy import proxyConnect
 from PyQt4 import QtCore, QtGui
 #from lib.filetypes.FileType import *
 import lib.filetypes as filetypes
@@ -208,8 +208,10 @@ class FileHandle(QtCore.QObject):
         self.checkDeleted()
         return self.parent()._fileInfo(self.shortName())
         
-    def setInfo(self, info):
+    def setInfo(self, info=None, **args):
         """Set meta-information for this file. Updates all keys specified in info, leaving others unchanged."""
+        if info is None:
+            info = args
         self.checkDeleted()
         self.emitChanged('meta')
         return self.parent()._setFileInfo(self.shortName(), info)
@@ -454,9 +456,9 @@ class DirHandle(FileHandle):
                     fd = open(logf, 'r')
                     lines = fd.readlines()
                     fd.close()
-                    log = map(eval, lines)
+                    log = map(lambda l: eval(l.strip()), lines)
                 except:
-                    print "****************** Error reading log file! *********************"
+                    print "****************** Error reading log file %s! *********************" % logf
                     raise
             
             if recursive > 0:
@@ -809,8 +811,8 @@ class DirHandle(FileHandle):
                 return (fileName in ind)
 
     
-    def setInfo(self, *args):
-        self._setFileInfo('.', *args)
+    def setInfo(self, *args, **kargs):
+        self._setFileInfo('.', *args, **kargs)
         
         
         
@@ -831,8 +833,10 @@ class DirHandle(FileHandle):
                 raise
             return os.path.exists(fn)
 
-    def _setFileInfo(self, fileName, info):
+    def _setFileInfo(self, fileName, info=None, **args):
         """Set or update meta-information array for fileName. If merge is false, the info dict is completely overwritten."""
+        if info is None:
+            info = args
         #prof = Profiler('setFileInfo')
         with self.lock:
             #prof.mark('1')

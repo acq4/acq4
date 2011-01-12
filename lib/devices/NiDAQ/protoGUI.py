@@ -2,7 +2,7 @@
 from PyQt4 import QtCore, QtGui
 from ProtocolTemplate import *
 from lib.devices.Device import ProtocolGui
-from lib.util.debug import *
+from debug import *
 from WidgetGroup import *
 import sys
 

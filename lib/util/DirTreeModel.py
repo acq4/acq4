@@ -8,7 +8,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 
 from PyQt4 import QtCore, QtGui
 import traceback, os, sys
-from lib.util.debug import *
+from debug import *
 
     
 

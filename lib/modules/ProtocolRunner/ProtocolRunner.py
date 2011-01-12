@@ -307,7 +307,7 @@ class ProtocolRunner(Module):
             if rep == 0:
                 params = {}
             else:
-                params = {'repetitions': rep}
+                params = {'repetitions': range(rep)}
         elif dev not in self.currentProtocol.enabledDevices():
             return
         else:
@@ -327,7 +327,7 @@ class ProtocolRunner(Module):
             tot = 0
         else:
             #ps = [str(i.text(2)) for i in items]
-            psi = [i[2] for i in items]
+            psi = [len(i[2]) for i in items]
             ps = map(str, psi)
             tot = reduce(lambda x,y: x*y, psi)
             self.ui.paramSpaceLabel.setText(' x '.join(ps) + ' = %d' % tot)
@@ -701,12 +701,14 @@ class ProtocolRunner(Module):
                 #items.append(i)
             ## Generate parameter space
             params = OrderedDict()
+            paramInds = OrderedDict()
             linkedParams = {}
             pLen = 1
             for i in items:
                 key = i[:2]
-                params[key] = range(i[2])
-                pLen *= i[2]
+                params[key] = i[2]
+                paramInds[key] = range(len(i[2]))
+                pLen *= len(i[2])
                 linkedParams[key] = i[3]
             
             ## Set storage dir
@@ -724,13 +726,13 @@ class ProtocolRunner(Module):
             progressDlg = QtGui.QProgressDialog("Generating protocol commands..", "Cancel", 0, pLen)
             progressDlg.setMinimumDuration(500)  ## If this takes less than 500ms, progress dialog never appears.
             self.lastQtProcessTime = ptime.time()
-            prot = runSequence(lambda p: self.generateProtocol(dh, p, progressDlg), params, params.keys(), passHash=True, linkedParams=linkedParams)
+            prot = runSequence(lambda p: self.generateProtocol(dh, p, progressDlg), paramInds, paramInds.keys(), passHash=True, linkedParams=linkedParams)
             progressDlg.setValue(pLen)
             
             #print "==========Sequence Protocol=============="
             #print prot
             self.emit(QtCore.SIGNAL('protocolStarted'), {})
-            self.taskThread.startProtocol(prot, params)
+            self.taskThread.startProtocol(prot, paramInds)
         except:
             self.enableStartBtns(True)
 

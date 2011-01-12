@@ -2,7 +2,7 @@
 from ctypes import *
 import sys, re, types, ctypes, os, time
 from numpy import *
-from lib.util import cheader
+import cheader
 import ptime  ## platform-independent precision timing
 dtypes = {
     float64: 'F64',
@@ -596,22 +596,27 @@ class SuperTask:
         
     def stop(self, wait=False, abort=False):
         #print "ST stopping, wait=",wait
-        if wait:
-            while not self.isDone():
-                #print "Sleeping..", time.time()
-                time.sleep(10e-6)
-                
-        if not abort and self.isDone():
-            # data must be read before stopping the task,
-            # but should only be read if we know the task is complete.
-            self.getResult()
-        
-        for t in self.tasks:
-            #print "  ST Stopping task", t
-            self.tasks[t].stop()
-            #print "    ..done"
-            # unreserve hardware
-            self.tasks[t].TaskControl(Val_Task_Unreserve)
+        ## need to be very careful about stopping and unreserving all hardware, even if there is a failure at some point.
+        try:
+            if wait:
+                while not self.isDone():
+                    #print "Sleeping..", time.time()
+                    time.sleep(10e-6)
+                    
+            if not abort and self.isDone():
+                # data must be read before stopping the task,
+                # but should only be read if we know the task is complete.
+                self.getResult()
+            
+        finally:
+            for t in self.tasks:
+                try:
+                    #print "  ST Stopping task", t
+                    self.tasks[t].stop()
+                    #print "    ..done"
+                finally:
+                    # unreserve hardware
+                    self.tasks[t].TaskControl(Val_Task_Unreserve)
         #print "ST stop complete."
 
     def getResult(self, channel=None):

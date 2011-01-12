@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from DevTemplate import Ui_Form
 from PyQt4 import QtCore, QtGui
-from lib.util.WidgetGroup import WidgetGroup
+from WidgetGroup import WidgetGroup
 from SpinBox import *
 #import pdb
 

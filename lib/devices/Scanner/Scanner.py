@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 from lib.devices.Device import *
-from lib.util.Mutex import Mutex, MutexLocker
-#import lib.util.configfile as configfile
+from Mutex import Mutex, MutexLocker
 from DeviceGui import ScannerDeviceGui
 from ProtocolGui import ScannerProtoGui
 import os, pickle 
-from lib.util import ptime
-from lib.util.debug import *
+import ptime
+from debug import *
 
 class Scanner(Device):
     def __init__(self, dm, config, name):
@@ -46,9 +45,10 @@ class Scanner(Device):
         """Set the position of the xy mirrors to a point in the image"""
         with MutexLocker(self.lock):
             (x, y) = pos
-            cam = self.dm.getDevice(camera)
-            camPos = cam.getPosition()
-            vals = self.mapToScanner(x - camPos[0], y - camPos[1], camera, laser)
+            #cam = self.dm.getDevice(camera)
+            #camPos = cam.getPosition()
+            #vals = self.mapToScanner(x - camPos[0], y - camPos[1], camera, laser)
+            vals = self.mapToScanner(x, y, camera, laser)
             #print "Setting position", pos, " values are", vals
             
             self.setCommand(vals)
@@ -60,8 +60,14 @@ class Scanner(Device):
         return scope.getObjective()['name']
     
     def mapToScanner(self, x, y, camera, laser):
-        """Convert coordinate in camera space to voltages required to set scan mirrors"""
+        """Convert global coordinates to voltages required to set scan mirrors"""
         obj = self.getObjective(camera)
+        cam = self.dm.getDevice(camera)
+        camPos = cam.getPosition()
+        
+        ## first convert position to sensor coords
+        (x, y) = cam.mapToSensor((x, y))
+        
         cal = self.getCalibration(camera, laser, obj)['params']
         
         if cal is None:

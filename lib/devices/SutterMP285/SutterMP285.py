@@ -2,7 +2,7 @@
 from __future__ import with_statement
 from lib.devices.Device import *
 import serial, struct
-from lib.util.Mutex import Mutex, MutexLocker
+from Mutex import Mutex, MutexLocker
 from debug import *
 #import pdb
 

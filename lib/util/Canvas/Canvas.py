@@ -12,7 +12,7 @@ from pyqtgraph.PlotWidget import PlotWidget
 from pyqtgraph import widgets
 from PyQt4 import QtGui, QtCore
 import DataManager
-
+import numpy as np
 
 class Canvas(QtGui.QWidget):
     def __init__(self, parent=None):
@@ -29,9 +29,11 @@ class Canvas(QtGui.QWidget):
         #self.layout = QtGui.QHBoxLayout()
         #self.setLayout(self.layout)
         #self.view = GraphicsView()
-        import sys
-        if 'linux' in sys.platform.lower():
-            self.view.useOpenGL(False)
+        
+        #import sys
+        #if 'linux' in sys.platform.lower():
+            #self.view.useOpenGL(False)
+            
         #self.layout.addWidget(self.view)
         #self.layout.addWidget(self.itemList)
         
@@ -41,7 +43,7 @@ class Canvas(QtGui.QWidget):
         self.grid = graphicsItems.GridItem(self.view)
         #self.view.addItem(self.grid)
         #self.grid.hide()
-        self.addItem(self.grid, name='Grid')
+        self.addItem(self.grid, name='Grid', movable=False)
         
         
         self.hideBtn = QtGui.QPushButton('>', self)
@@ -55,7 +57,7 @@ class Canvas(QtGui.QWidget):
         self.connect(self.ui.itemList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.treeItemChanged)
         self.connect(self.ui.itemList, QtCore.SIGNAL('itemMoved'), self.treeItemMoved)
         self.connect(self.ui.itemList, QtCore.SIGNAL('itemSelectionChanged()'), self.treeItemSelected)
-        
+        self.connect(self.ui.autoRangeBtn, QtCore.SIGNAL('clicked()'), self.autoRangeClicked)
         self.resizeEvent()
 
     def splitterMoved(self):
@@ -75,6 +77,21 @@ class Canvas(QtGui.QWidget):
             self.ui.splitter.setSizes([100, 0])
             self.hideBtn.setText('<')
         self.resizeEvent()
+
+    def autoRangeClicked(self):
+        items = []
+        for i in range(self.itemList.topLevelItemCount()):
+            name = self.itemList.topLevelItem(i).name
+            item = self.items[name].item
+            if item.isVisible() and item is not self.grid:
+                items.append(item)
+        if len(items) < 1:
+            return
+        bounds = items[0].sceneBoundingRect()
+        if len(items) > 1:
+            for i in items[1:]:
+                bounds |= i.sceneBoundingRect()
+        self.view.setRange(bounds)
 
     def resizeEvent(self, ev=None):
         if ev is not None:
@@ -106,9 +123,9 @@ class Canvas(QtGui.QWidget):
         if gi is None:
             return
         if item.checkState(0) == QtCore.Qt.Checked:
-            gi.item.show()
+            gi.show()
         else:
-            gi.item.hide()
+            gi.hide()
 
     def treeItemMoved(self, item, parent, index):
         ##Item moved in tree; update its Z value
@@ -211,7 +228,7 @@ class Canvas(QtGui.QWidget):
                 pts.append({'pos': pos, 'size': size})
         
         item = graphicsItems.ScatterPlotItem(pts, pxMode=False)
-        citem = CanvasItem(self, item, **opts)
+        citem = CanvasItem(self, item, handle=dirHandle, **opts)
         self._addCanvasItem(citem)
         return citem
         
@@ -223,6 +240,8 @@ class Canvas(QtGui.QWidget):
 
 
     def _addCanvasItem(self, citem):
+        """Obligatory function call for any idems added to the canvas."""
+        
         item = citem.item
         name = citem.name
         
@@ -304,6 +323,8 @@ class Canvas(QtGui.QWidget):
                 insertLocation = i+1
                 #print zval, ">", z
                 
+        self.connect(citem, QtCore.SIGNAL('transformChanged'), self.itemTransformChanged)
+        self.connect(citem, QtCore.SIGNAL('transformChangeFinished'), self.itemTransformChangeFinished)
         #print name, insertLocation, z
         
         node = QtGui.QTreeWidgetItem([name])
@@ -327,6 +348,9 @@ class Canvas(QtGui.QWidget):
 
     def removeItem(self, item):
         self.view.scene().removeItem(item)
+        
+        ## disconnect signals, remove from list, etc..
+        
     
     def listItems(self):
         """Return a dictionary of name:item pairs"""
@@ -338,6 +362,13 @@ class Canvas(QtGui.QWidget):
     def scene(self):
         return self.view.scene()
         
+    def itemTransformChanged(self, item):
+        self.emit(QtCore.SIGNAL('itemTransformChanged'), self, item)
+    
+    def itemTransformChangeFinished(self, item):
+        self.emit(QtCore.SIGNAL('itemTransformChangeFinished'), self, item)
+        
+
 
 class SelectBox(widgets.ROI):
     def __init__(self):
@@ -345,8 +376,8 @@ class SelectBox(widgets.ROI):
         widgets.ROI.__init__(self, [0,0], [1,1])
         center = [0.5, 0.5]
             
-        self.addScaleHandle([1, 1], center)
-        self.addScaleHandle([0, 0], center)
+        #self.addScaleHandle([1, 1], center)
+        #self.addScaleHandle([0, 0], center)
         self.addRotateHandle([0, 1], center)
         self.addRotateHandle([1, 0], center)
 
@@ -355,7 +386,7 @@ class CanvasItem(QtCore.QObject):
     """CanvasItem takes care of managing an item's state--alpha, visibility, z-value, transformations, etc. and
     provides a control widget"""
     def __init__(self, canvas, item, **opts):
-        defOpts = {'name': None, 'pos': [0,0], 'scale': [1,1], 'z': None, 'movable': False}
+        defOpts = {'name': None, 'pos': [0,0], 'scale': [1,1], 'z': None, 'movable': True, 'handle': None, 'visible': True}
         defOpts.update(opts)
         self.opts = defOpts
         self.selected = False
@@ -364,11 +395,6 @@ class CanvasItem(QtCore.QObject):
         self.canvas = canvas
         self.item = item
         
-        self.transform = QtGui.QTransform()
-        
-        self.updateItem()
-
-
 
         z = self.opts['z']
         if z is not None:
@@ -392,18 +418,28 @@ class CanvasItem(QtCore.QObject):
         self.alphaSlider.setValue(1023)
         self.layout.addWidget(self.alphaLabel, 0, 0)
         self.layout.addWidget(self.alphaSlider, 0, 1)
+        self.resetTransformBtn = QtGui.QPushButton('Reset Transform')
+        self.layout.addWidget(self.resetTransformBtn, 1, 0, 1, 2)
         self.connect(self.alphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.alphaChanged)
         self.connect(self.alphaSlider, QtCore.SIGNAL('sliderPressed()'), self.alphaPressed)
         self.connect(self.alphaSlider, QtCore.SIGNAL('sliderReleased()'), self.alphaReleased)
         self.connect(self.canvas, QtCore.SIGNAL('itemSelected'), self.selectionChanged)
-
+        self.connect(self.resetTransformBtn, QtCore.SIGNAL('clicked()'), self.resetTransform)
+        
         self.selectBox = SelectBox()
         self.canvas.scene().addItem(self.selectBox)
         self.selectBox.hide()
         self.selectBox.setZValue(1e6)
         self.selectBox.connect(self.selectBox, QtCore.SIGNAL('regionChanged'), self.selectBoxChanged)
-        self.selectBox.setPos(self.item.pos())
-        self.selectBox.setSize(self.item.sceneBoundingRect().size())
+        self.selectBox.connect(self.selectBox, QtCore.SIGNAL('regionChangeFinished'), self.selectBoxChangeFinished)
+        self.selectBoxToItem()
+
+        self.resetTransform()
+        if self.opts['handle'] is not None:
+            trans = self.opts['handle'].info().get('userTransform', None)
+            if trans is not None:
+                self.restoreTransform(trans)
+
 
 
     def ctrlWidget(self):
@@ -420,22 +456,50 @@ class CanvasItem(QtCore.QObject):
         self.opts['movable'] = m
             
     def updateTransform(self, box):
+        """The selection box has moved; get its transformation information and pass to the graphics item"""
         self.transform = QtGui.QTransform()
         st = self.selectBox.getState()
-        self.transform.translate(st['pos'][0]-self.opts['pos'][0], st['pos'][1]-self.opts['pos'][1])
+        
+        scale = self.opts['scale']
+        self.transform.translate(st['pos'][0], st['pos'][1])
         self.transform.rotate(-st['angle']*180./3.1415926)
-        self.updateItem()
+        self.transform.translate(-self.itemRect.x(), -self.itemRect.y())
+        self.transform.scale(scale[0], scale[1])
+        
+        ## update the graphics item
+        self.item.setTransform(self.transform)
 
-    def updateItem(self):
+    def resetTransform(self):
+        self.transform = QtGui.QTransform()
         scale = self.opts['scale']
         pos = self.opts['pos']
-        self.item.resetTransform()
-        self.item.setPos(QtCore.QPointF(pos[0], pos[1]))
-        self.item.scale(scale[0], scale[1])
+        self.transform.translate(pos[0], pos[1])
+        self.transform.scale(scale[0], scale[1])
         
-        ## add in user transform
-        self.item.setTransform(self.item.transform() * self.transform)
+        ## update the graphics item
+        self.item.setTransform(self.transform)
         
+        self.selectBox.blockSignals(True)
+        self.selectBoxToItem()
+        self.selectBox.blockSignals(False)
+        self.emit(QtCore.SIGNAL('transformChangeFinished'), self)
+
+    def selectBoxToItem(self):
+        """Move/scale the selection box so it fits the item's bounding rect. (assumes item is not rotated)"""
+        rect = self.item.sceneBoundingRect()
+        self.itemRect = self.item.boundingRect()
+        self.selectBox.setPos([rect.x(), rect.y()])
+        self.selectBox.setSize(rect.size())
+        self.selectBox.setAngle(0)
+
+    def saveTransform(self):
+        state = self.selectBox.getState()
+        state['pos'] = list(state['pos'])
+        state['size'] = list(state['size'])
+        return state
+
+    def restoreTransform(self, trans):
+        self.selectBox.setState(trans)
 
     def zValue(self):
         return self.opts['z']
@@ -451,6 +515,10 @@ class CanvasItem(QtCore.QObject):
         
     def selectBoxChanged(self):
         self.updateTransform(self.selectBox)
+        self.emit(QtCore.SIGNAL('transformChanged'), self)
+        
+    def selectBoxChangeFinished(self):
+        self.emit(QtCore.SIGNAL('transformChangeFinished'), self)
 
     def alphaPressed(self):
         """Hide selection box while slider is moving"""
@@ -461,7 +529,7 @@ class CanvasItem(QtCore.QObject):
         
     def showSelectBox(self):
         """Display the selection box around this item if it is selected and movable"""
-        if self.selected and self.isMovable():
+        if self.selected and self.isMovable() and self.isVisible():
             self.selectBox.show()
         else:
             self.selectBox.hide()
@@ -469,22 +537,48 @@ class CanvasItem(QtCore.QObject):
     def hideSelectBox(self):
         self.selectBox.hide()
         
+    def show(self):
+        self.opts['visible'] = True
+        self.item.show()
+        self.showSelectBox()
+        
+    def hide(self):
+        self.opts['visible'] = False
+        self.item.hide()
+        self.hideSelectBox()
+        
+    def isVisible(self):
+        return self.opts['visible']
 
 class ImageCanvasItem(CanvasItem):
     def __init__(self, canvas, image, **opts):
+        item = None
         if isinstance(image, QtGui.QGraphicsItem):
             item = image
         elif isinstance(image, np.ndarray):
             self.data = image
-            if self.data.ndim == 3:
-                item = graphicsItems.ImageItem(image[0])
-            else:
-                item = graphicsItems.ImageItem(image)
         elif isinstance(image, DataManager.FileHandle):
+            opts['handle'] = image
             self.handle = image
             self.data = self.handle.read()
-            item = graphicsItems.ImageItem(image)
+            
+            #item = graphicsItems.ImageItem(self.data)
+            if 'name' not in opts:
+                opts['name'] = self.handle.shortName()
+
+            if 'imagePosition' in self.handle.info():
+                opts['scale'] = self.handle.info()['pixelSize']
+                opts['pos'] = self.handle.info()['imagePosition']
+            else:
+                info = self.data._info[-1]
+                opts['scale'] = info.get('pixelSize', None)
+                opts['pos'] = info.get('imagePosition', None)
         
+        if item is None:
+            if self.data.ndim == 3:
+                item = graphicsItems.ImageItem(self.data[0])
+            else:
+                item = graphicsItems.ImageItem(self.data)
         CanvasItem.__init__(self, canvas, item, **opts)
         
         self.histogram = PlotWidget()
@@ -494,7 +588,7 @@ class ImageCanvasItem(CanvasItem):
         
         self.updateHistogram(autoRange=True)
         
-        self.layout.addWidget(self.histogram, 1, 0, 1, 2)
+        self.layout.addWidget(self.histogram, self.layout.rowCount(), 0, 1, 2)
         #self.connect(self.ui.minLevelSpin, QtCore.SIGNAL('valueChanged'), self.updateLevels)
         #self.connect(self.ui.maxLevelSpin, QtCore.SIGNAL('valueChanged'), self.updateLevels)
         #self.connect(self.ui.levelsSlider, QtCore.SIGNAL('gradientChanged'), self.updateLevels)
@@ -502,9 +596,13 @@ class ImageCanvasItem(CanvasItem):
         self.levelRgn.connect(self.levelRgn, QtCore.SIGNAL('regionChanged'), self.levelsChanged)
         self.levelRgn.connect(self.levelRgn, QtCore.SIGNAL('regionChangeFinished'), self.levelsChangeFinished)
         
+        
+        #self.timeSlider
+        
+        
     def updateHistogram(self, autoRange=False):
         x, y = self.item.getHistogram()
-        self.histogram.plot(y, x)
+        self.histogram.plot(x, y)
         if autoRange:
             self.item.updateImage(autoRange=True)
             w, b = self.item.getLevels()

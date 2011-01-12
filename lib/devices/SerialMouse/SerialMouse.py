@@ -3,7 +3,7 @@ from __future__ import with_statement
 from lib.devices.Device import *
 from SignalProxy import *
 import serial, os, time
-from lib.util.Mutex import Mutex, MutexLocker
+from Mutex import Mutex, MutexLocker
 #import pdb
 
 class SerialMouse(Device):
@@ -82,7 +82,7 @@ class SerialMouse(Device):
     
 class SMInterface(QtGui.QLabel):
     def __init__(self, dev, win):
-        QtGui.QWidget.__init__(self)
+        QtGui.QLabel.__init__(self)
         self.win = win
         self.dev = dev
         QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.update)

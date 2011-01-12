@@ -107,8 +107,16 @@ class FileInfoView(QtGui.QWidget):
                 #s = configfile.genString(info[f])
             else:
                 s = str(info[f])
-                if f == '__timestamp__':
-                    s = time.strftime("%Y.%m.%d   %H:%m:%S", time.localtime(float(s)))
+                if isinstance(f, basestring) and 'time' in f.lower() and info[f] > 1e9 and info[f] < 2e9:  ## probably this is a timestamp
+                    try:
+                        t0 = file.parent().info()['__timestamp__']
+                        dt = " [elapsed = %0.3f s]" % (info[f] - t0)
+                    except:
+                        dt = ""
+                        #raise
+                    s = time.strftime("%Y.%m.%d   %H:%M:%S", time.localtime(float(s))) + dt
+                    
+                    
                 w = QtGui.QLabel(s)
             if type(f) is tuple:
                 f = '.'.join(f)

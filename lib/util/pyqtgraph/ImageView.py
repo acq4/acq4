@@ -347,7 +347,19 @@ class ImageView(QtGui.QWidget):
                     self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': None}
             elif img.ndim == 4:
                 self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': 3}
-
+            else:
+                raise Exception("Can not interpret image with dimensions %s" % (str(img)))
+        elif isinstance(axes, dict):
+            self.axes = axes.copy()
+        elif isinstance(axes, list) or isinstance(axes, tuple):
+            self.axes = {}
+            for i in range(len(axes)):
+                self.axes[axes[i]] = i
+        else:
+            raise Exception("Can not interpret axis specification %s. Must be like {'t': 2, 'x': 0, 'y': 1} or ('t', 'x', 'y', 'c')" % (str(axes)))
+            
+        for x in ['t', 'x', 'y', 'c']:
+            self.axes[x] = self.axes.get(x, None)
             
         self.imageDisp = None
         if autoLevels:
@@ -355,6 +367,8 @@ class ImageView(QtGui.QWidget):
         if levels is not None:
             self.levelMax = levels[1]
             self.levelMin = levels[0]
+            
+        self.currentIndex = 0
         self.updateImage()
         if self.ui.roiBtn.isChecked():
             self.roiChanged()
@@ -363,6 +377,7 @@ class ImageView(QtGui.QWidget):
         if self.axes['t'] is not None:
             #self.ui.roiPlot.show()
             self.ui.roiPlot.setXRange(self.tVals.min(), self.tVals.max())
+            self.timeLine.setValue(0)
             #self.ui.roiPlot.setMouseEnabled(False, False)
             if len(self.tVals) > 1:
                 start = self.tVals.min()

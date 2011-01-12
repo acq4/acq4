@@ -2,11 +2,11 @@
 from PyQt4 import QtCore, QtGui
 import sys
 from lib.devices.Device import ProtocolGui
-from lib.util.SequenceRunner import *
-from lib.util.WidgetGroup import *
+from SequenceRunner import *
+from WidgetGroup import *
 import numpy
 from ProtocolTemplate import *
-from lib.util.debug import *
+from debug import *
 import sip
 
 class MultiClampProtoGui(ProtocolGui):
@@ -138,7 +138,7 @@ class MultiClampProtoGui(ProtocolGui):
         params = {}
         ps = self.ui.waveGeneratorWidget.listSequences()
         for k in ps:
-            params[k] = range(ps[k])
+            params[k] = range(len(ps[k]))
         waves = []
         runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys(), passHash=True)
         for w in waves:

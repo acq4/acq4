@@ -351,5 +351,5 @@ class Ui_MainWindow(object):
 
 from SpinBox import SpinBox
 from pyqtgraph.GradientWidget import GradientWidget
-from lib.util.pyqtgraph.PlotWidget import PlotWidget
+from pyqtgraph.PlotWidget import PlotWidget
 from pyqtgraph.GraphicsView import GraphicsView

@@ -318,5 +318,5 @@ class Ui_MainWindow(object):
         self.pauseSequenceBtn.setText(QtGui.QApplication.translate("MainWindow", "Pause", None, QtGui.QApplication.UnicodeUTF8))
         self.dockWidget.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Analysis", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.SpinBox import SpinBox
+from SpinBox import SpinBox
 from ParamList import ParamList

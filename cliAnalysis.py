@@ -17,16 +17,17 @@ if pyfile[0] != '/':
 pyDir = os.path.split(pyfile)[0]
 sys.path.append(pyDir)
 from metaarray import *
-from pyqtgraph.ImageView import *
-from pyqtgraph.GraphicsView import *
-from pyqtgraph.graphicsItems import *
-from pyqtgraph.graphicsWindows import *
-from pyqtgraph.PlotWidget import *
-from pyqtgraph.functions import *
+#from pyqtgraph.ImageView import *
+#from pyqtgraph.GraphicsView import *
+#from pyqtgraph.graphicsItems import *
+#from pyqtgraph.graphicsWindows import *
+#from pyqtgraph.PlotWidget import *
+#from pyqtgraph.functions import *
+from pyqtgraph import *
 from Canvas import Canvas
 from PyQt4 import QtCore, QtGui
 from functions import *
-from lib.analysis import *
+#from lib.analysis import *
 
 
 ## Disable long-term storage of exception stack frames
@@ -69,10 +70,10 @@ dm = Manager(config, sys.argv[1:])
 
 #w = UncagingWindow()
 
-from lib.analysis.analyzer import *
-d = os.path.dirname(os.path.abspath(__file__))
-dh = dm.dirHandle(os.path.join(d, 'lib', 'analysis', 'protocols'))
-w1 = Analyzer(dh)
+#from lib.analysis.analyzer import *
+#d = os.path.dirname(os.path.abspath(__file__))
+#dh = dm.dirHandle(os.path.join(d, 'lib', 'analysis', 'protocols'))
+#w1 = Analyzer(dh)
 #w2 = Analyzer(dh)
 
 #from lib.analysis.mosaicEditor import *
@@ -133,11 +134,11 @@ def showPlot(data=None, x=None, file=None, title=None):
         #win.setCentralWidget(plot)
         #plot.plot(data)
         #plot.autoRange()
-        win.plot(data, x)
+        win.plot(y=data, x=x)
         win.autoRange()
     elif data.ndim == 2:
         win = MultiPlotWindow(title=title)
-        win.plot(data, x)
+        win.plot(y=data, x=x)
         win.autoRange()
         #gv = GraphicsView()
         #win.setCentralWidget(gv)

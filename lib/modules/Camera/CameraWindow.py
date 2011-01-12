@@ -132,7 +132,7 @@ class CameraWindow(QtGui.QMainWindow):
         ## Set up camera graphicsView
         l = QtGui.QVBoxLayout(self.ui.graphicsWidget)
         l.setMargin(0)
-        self.gv = GraphicsView(self.ui.graphicsWidget, useOpenGL=False)
+        self.gv = GraphicsView(self.ui.graphicsWidget)
         l.addWidget(self.gv)
         self.gv.enableMouse()
 

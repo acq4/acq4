@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 
 from PyQt4 import QtCore, QtGui
-from lib.util.DataManager import *
+from DataManager import *
 import lib.Manager as Manager
 import sip
-from lib.util.pyqtgraph.MultiPlotWidget import MultiPlotWidget
-from lib.util.pyqtgraph.ImageView import ImageView
+from pyqtgraph.MultiPlotWidget import MultiPlotWidget
+from pyqtgraph.ImageView import ImageView
 from DictView import *
+import metaarray
 
 class FileDataView(QtGui.QSplitter):
     def __init__(self, parent):
@@ -71,7 +72,7 @@ class FileDataView(QtGui.QSplitter):
             self.currentType = 'plot'
             self.widgets.append(w)
         
-        if isinstance(data, MetaArray):
+        if isinstance(data, metaarray.MetaArray):
             if self.dictWidget is None:
                 w = DictView(data._info)
                 self.dictWidget = w

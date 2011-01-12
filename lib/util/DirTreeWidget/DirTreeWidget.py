@@ -122,6 +122,9 @@ class DirTreeWidget(QtGui.QTreeWidget):
         self.clear()
         self.rebuildChildren(self.invisibleRootItem())
         #self.rebuildTree()
+        
+    def baseDirHandle(self):
+        return self.baseDir
 
     def setRoot(self, d):
         """Synonym for setBaseDirHandle"""

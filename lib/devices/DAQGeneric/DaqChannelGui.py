@@ -3,9 +3,9 @@
 from PyQt4 import QtGui, QtCore
 #from PyQt4 import Qwt5 as Qwt
 import AOChannelTemplate, DOChannelTemplate, InputChannelTemplate
-from lib.util.SequenceRunner import *
-from lib.util.WidgetGroup import *
-#from lib.util.pyqtgraph.PlotWidget import PlotCurveItem
+from SequenceRunner import *
+from WidgetGroup import *
+#from pyqtgraph.PlotWidget import PlotCurveItem
 import numpy
 import sip
 from functions import siFormat
@@ -228,7 +228,7 @@ class OutputChannelGui(DaqChannelGui):
         params = {}
         ps = self.ui.waveGeneratorWidget.listSequences()
         for k in ps:
-            params[k] = range(ps[k])
+            params[k] = range(len(ps[k]))
         waves = []
         runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys(), passHash=True)
         for w in waves:
@@ -270,7 +270,7 @@ class OutputChannelGui(DaqChannelGui):
             #print params
         
     def plotCurve(self, data, color=QtGui.QColor(100, 100, 100), replot=True):
-        plot = self.plot.plot(data, self.timeVals, pen=QtGui.QPen(color))
+        plot = self.plot.plot(y=data, x=self.timeVals, pen=QtGui.QPen(color))
         return plot
 
     def getSingleWave(self, params=None):
@@ -342,7 +342,7 @@ class InputChannelGui(DaqChannelGui):
                 self.clearPlots()
                 self.clearBeforeNextPlot = False
 
-            plot = self.plot.plot(result.view(numpy.ndarray), result.xvals('Time'), pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), params=params)
+            plot = self.plot.plot(y=result.view(numpy.ndarray), x=result.xvals('Time'), pen=QtGui.QPen(QtGui.QColor(200, 200, 200)), params=params)
             #plot = PlotCurve('cell')
             #plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
             #plot.setData(result.xvals('Time'), result)
