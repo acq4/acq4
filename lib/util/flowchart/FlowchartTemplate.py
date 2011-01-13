@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'FlowchartTemplate.ui'
 #
-# Created: Fri Jan  7 13:21:25 2011
+# Created: Sat Jan  8 16:48:26 2011
 #      by: PyQt4 UI code generator 4.7.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -14,6 +14,8 @@ class Ui_Form(object):
         Form.setObjectName("Form")
         Form.resize(792, 517)
         self.gridLayout_2 = QtGui.QGridLayout(Form)
+        self.gridLayout_2.setMargin(0)
+        self.gridLayout_2.setSpacing(0)
         self.gridLayout_2.setObjectName("gridLayout_2")
         self.splitter_2 = QtGui.QSplitter(Form)
         self.splitter_2.setOrientation(QtCore.Qt.Vertical)
@@ -56,13 +58,10 @@ class Ui_Form(object):
         self.addNodeBtn = QtGui.QPushButton(self.layoutWidget)
         self.addNodeBtn.setObjectName("addNodeBtn")
         self.gridLayout.addWidget(self.addNodeBtn, 0, 0, 1, 1)
-        self.hoverText = QtGui.QTextEdit(self.splitter_2)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Preferred)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.hoverText.sizePolicy().hasHeightForWidth())
-        self.hoverText.setSizePolicy(sizePolicy)
-        self.hoverText.setObjectName("hoverText")
+        self.hoverLabel = QtGui.QLabel(self.splitter_2)
+        self.hoverLabel.setText("")
+        self.hoverLabel.setWordWrap(True)
+        self.hoverLabel.setObjectName("hoverLabel")
         self.gridLayout_2.addWidget(self.splitter_2, 0, 0, 1, 1)
 
         self.retranslateUi(Form)

@@ -4,7 +4,7 @@ from DockDrop import *
 from VerticalLabel import *
 
 class Dock(QtGui.QWidget, DockDrop):
-    def __init__(self, name, area=None):
+    def __init__(self, name, area=None, size=(None,None)):
         QtGui.QWidget.__init__(self)
         DockDrop.__init__(self)
         self.area = area
@@ -56,6 +56,22 @@ class Dock(QtGui.QWidget, DockDrop):
         }"""
         self.setAutoFillBackground(False)
         self.widgetArea.setStyleSheet(self.hStyle)
+        
+        self.setStretch(*size)
+
+    def setStretch(self, x=None, y=None):
+        #self._stretch = (x, y)
+        if x is None:
+            x = 0
+        if y is None:
+            y = 0
+        policy = self.sizePolicy()
+        policy.setHorizontalStretch(x)
+        policy.setVerticalStretch(y)
+        self.setSizePolicy(policy)
+        
+    #def stretch(self):
+        #return self._stretch
 
     def hideTitleBar(self):
         self.label.hide()

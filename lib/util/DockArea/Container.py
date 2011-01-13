@@ -1,10 +1,11 @@
 from PyQt4 import QtCore, QtGui
-
+import weakref
 
 class Container:
     def __init__(self, area):
         self.area = area
         self._container = None
+        self.stretches = weakref.WeakKeyDictionary()
         
     def container(self):
         return self._container
@@ -57,10 +58,14 @@ class Container:
         self._container = None
         self.setParent(None)
         
-
-
+        
+        
 
 class SplitContainer(Container, QtGui.QSplitter):
+    """Horizontal or vertical splitter with some changes:
+     - save/restore works correctly
+    """
+    
     def __init__(self, area, orientation):
         QtGui.QSplitter.__init__(self)
         self.setOrientation(orientation)
@@ -92,6 +97,12 @@ class SplitContainer(Container, QtGui.QSplitter):
         for i in range(len(sizes)):
             self.setStretchFactor(i, sizes[i])
 
+    #def setStretchFactor(self, index, size):
+        #w = self.widget(index)
+        #self.stretches[w] = size
+        #QtGui.QSplitter.setStretchFactor(self, index, size)
+
+
 class HContainer(SplitContainer):
     def __init__(self, area):
         SplitContainer.__init__(self, area, QtCore.Qt.Horizontal)
@@ -99,12 +110,38 @@ class HContainer(SplitContainer):
     def type(self):
         return 'horizontal'
 
+    #def stretch(self):
+        #x = 0
+        #y = 0
+        #for i in range(self.count()):
+            #wx, wy = self.widget(i).stretch()
+            #x += wx
+            #y = max(y, wy)
+        #return (x, y)
+        
+    #def childEvent(self, ev):
+        
+    #def stretchFactors(self, index):
+        #w = self.widget(index)
+        #return 
+
+
 class VContainer(SplitContainer):
     def __init__(self, area):
         SplitContainer.__init__(self, area, QtCore.Qt.Vertical)
         
     def type(self):
         return 'vertical'
+
+    #def stretch(self):
+        #x = 0
+        #y = 0
+        #for i in range(self.count()):
+            #wx, wy = self.widget(i).stretch()
+            #y += wy
+            #x = max(x, wx)
+        #return (x, y)
+
 
 class TContainer(Container, QtGui.QWidget):
     def __init__(self, area):
@@ -156,4 +193,12 @@ class TContainer(Container, QtGui.QWidget):
     def restoreState(self, state):
         self.stack.setCurrentIndex(state['index'])
         
+    def stretch(self):
+        x = 0
+        y = 0
+        for i in range(self.count()):
+            wx, wy = self.widget(i).stretch()
+            x = max(x, wx)
+            y = max(y, wy)
+        return (x, y)
         

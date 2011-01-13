@@ -20,9 +20,9 @@ class FileLoader(QtGui.QWidget):
     def loadClicked(self):
         fh = self.ui.dirTree.selectedFile()
         self.loadFile(fh)
-        self.emit(QtCore.SIGNAL('fileLoaded'), fh)
         
     def loadFile(self, fh):
         name = fh.name(relativeTo=self.ui.dirTree.baseDirHandle())
         self.ui.fileTree.addTopLevelItem(QtGui.QTreeWidgetItem([name]))
+        self.emit(QtCore.SIGNAL('fileLoaded'), fh)
         

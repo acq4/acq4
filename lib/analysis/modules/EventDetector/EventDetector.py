@@ -17,11 +17,11 @@ class EventDetector(AnalysisModule):
         #self.ctrl = QtGui.QLabel('LABEL')
         self.ctrl = self.flowchart.widget()
         self._elements_ = OrderedDict([
-            ('fileLoader', {'type': 'fileInput', 'object': self.loader}),
-            ('dataPlot', {'type': 'plot', 'pos': ('right', 'fileLoader')}),
-            ('ctrl', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('bottom', 'fileLoader')}),
+            ('fileLoader', {'type': 'fileInput', 'object': self.loader, 'size': (200, 300)}),
+            ('dataPlot', {'type': 'plot', 'pos': ('right', 'fileLoader'), 'size': (800, 400)}),
+            ('ctrl', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('bottom', 'fileLoader'), 'size': (200, 500)}),
             #('database', {'type': 'database', 'pos': ('below', 'fileInput')}),
-            ('filterPlot', {'type': 'plot', 'pos': ('bottom', 'dataPlot')}),
+            ('filterPlot', {'type': 'plot', 'pos': ('bottom', 'dataPlot'), 'size': (800, 400)}),
         ])
         
         #print "EventDetector init:", id(EventDetector), id(AnalysisModule)
@@ -36,12 +36,19 @@ class EventDetector(AnalysisModule):
             ## assign plots to their correct spots in the chart
             p1 = self.getElement('dataPlot')
             p2 = self.getElement('filterPlot')
-            self.flowchart['Plot_0'].setPlot(p1)
-            self.flowchart['Plot_1'].setPlot(p2)
+            self.flowchart.nodes()['Plot_000'].setPlot(p1)
+            self.flowchart.nodes()['Plot_001'].setPlot(p2)
+            
+            ## link plot X axes
+            p1.setXLink(p2)
         except:
             debug.printExc('Error loading default flowchart:')
         
+        QtCore.QObject.connect(self.loader, QtCore.SIGNAL('fileLoaded'), self.fileLoaded)
         
+    def fileLoaded(self, fh):
+        print 'loaded'
+        self.flowchart.setInput(dataIn=fh)
         
         
         

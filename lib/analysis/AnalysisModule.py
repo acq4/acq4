@@ -47,6 +47,7 @@ class AnalysisModule(QtCore.QObject):
         """Subclasses should define self._elements_ to take advantage of default methods. 
         self._elements_ is a dict of (name: element) pairs, but can be initially defined
         as (name: (args..)) pairs, and the element objects will be created automatically."""
+        QtCore.QObject.__init__(self)
         self.host = host
         
         for name, el in self._elements_.iteritems():
@@ -80,7 +81,7 @@ class AnalysisModule(QtCore.QObject):
         spec = self.elementSpec(name)
         typ = spec.type()
         if typ == 'plot':
-            obj = pg.PlotWidget()
+            obj = pg.PlotWidget(name=name)
         elif typ == 'canvas':
             obj = Canvas.Canvas()
         else:
@@ -98,11 +99,12 @@ class AnalysisModule(QtCore.QObject):
 
 class Element:
     """Simple class for holding options and attributes for elements"""
-    def __init__(self, type, optional=False, object=None, pos=None):
+    def __init__(self, type, optional=False, object=None, pos=None, size=(None, None)):
         self._type = type          ## string such as 'plot', 'canvas', 'ctrl'
         self._optional = optional  ## bool
         self._object = object      ## any object; usually the widget associated with the element
         self._position = pos
+        self._size = size
         
     def type(self):
         return self._type
@@ -118,3 +120,6 @@ class Element:
         
     def object(self):
         return self._object
+        
+    def size(self):
+        return self._size

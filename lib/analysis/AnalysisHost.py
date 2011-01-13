@@ -32,7 +32,7 @@ class AnalysisHost(QtGui.QMainWindow):
         elems = self.mod.listElements()
         for name, el in elems.iteritems():
             w = self.mod.getElement(name)
-            d = DockArea.Dock(name=name)
+            d = DockArea.Dock(name=name, size=el.size())
             if w is not None:
                 d.addWidget(w)
             pos = el.pos()

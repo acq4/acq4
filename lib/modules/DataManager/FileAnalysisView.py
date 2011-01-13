@@ -17,6 +17,7 @@ class FileAnalysisView(QtGui.QWidget):
         self.mod = mod
         self.dbFile = None
         self.db = None
+        self.mods = []
         
         self.populateModuleList()
         
@@ -56,7 +57,7 @@ class FileAnalysisView(QtGui.QWidget):
         modName = str(self.ui.analysisCombo.currentText())
         self.ui.analysisCombo.setCurrentIndex(0)
         mod = AnalysisHost.AnalysisHost(dataManager=self.mod, module=modName)
-        
+        self.mods.append(mod)
 
 
 

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'FlowchartCtrlTemplate.ui'
 #
-# Created: Fri Jan  7 13:21:27 2011
+# Created: Sat Jan  8 16:48:26 2011
 #      by: PyQt4 UI code generator 4.7.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -36,9 +36,12 @@ class Ui_Form(object):
         self.ctrlList = TreeWidget(Form)
         self.ctrlList.setObjectName("ctrlList")
         self.ctrlList.headerItem().setText(0, "1")
+        self.ctrlList.header().setVisible(False)
+        self.ctrlList.header().setStretchLastSection(False)
         self.gridLayout.addWidget(self.ctrlList, 2, 0, 1, 4)
         self.fileNameLabel = QtGui.QLabel(Form)
         self.fileNameLabel.setText("")
+        self.fileNameLabel.setAlignment(QtCore.Qt.AlignCenter)
         self.fileNameLabel.setObjectName("fileNameLabel")
         self.gridLayout.addWidget(self.fileNameLabel, 1, 0, 1, 4)
 

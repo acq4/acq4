@@ -36,11 +36,19 @@ class EventFitter(CtrlNode):
         
         dtype = [(n, events[n].dtype) for n in events.dtype.names]
         dt = waveform.xvals(0)[1] - waveform.xvals(0)[0]
-        output = np.empty(len(events), dtype=dtype + [('fitAmplitude', float), ('fitXOffset', float), ('fitRiseTau', float), ('fitDecayTau', float), ('fitError', float)])
+        output = np.empty(len(events), dtype=dtype + [
+            ('fitAmplitude', float), 
+            ('fitXOffset', float), 
+            ('fitRiseTau', float), 
+            ('fitDecayTau', float), 
+            ('fitError', float)
+        ])
         #output[:][:nFields] = events
         
         #for item, plot in self.plotItems:
             #plot.removeItem(item)
+        
+        offset = 0 ## not all input events will produce output events; offset keeps track of the difference.
         
         for i in range(len(events)):
             start = events[i]['time']
@@ -61,7 +69,9 @@ class EventFitter(CtrlNode):
             
             eventData = waveform['Time':start:start+sliceLen]
             times = eventData.xvals(0)
-            
+            if len(times) < 4:  ## PSP fit requires at least 4 points; skip this one
+                offset += 1
+                continue
             
             
             if tau is not None:
@@ -77,9 +87,10 @@ class EventFitter(CtrlNode):
                 amp = mn
             guess = [amp, times[0], sliceLen/5., sliceLen/3.]
             fit, junk, comp, err = functions.fitPsp(times, eventData.view(np.ndarray), guess, measureError=True)
+            output[i-offset] = tuple(events[i]) + tuple(fit) + (err,)
+                
             #print fit
             #self.events.append(eventData)
-            output[i] = tuple(events[i]) + tuple(fit) + (err,)
             
             if display and self.plot.isConnected():
                 if self.ctrls['plotFits'].isChecked():
@@ -94,6 +105,8 @@ class EventFitter(CtrlNode):
                 #plot = self.plot.connections().keys()[0].node().getPlot()
                 #plot.addItem(item)
             
+        if offset > 0:
+            output = output[:-offset]
         return {'output': output, 'plot': self.plotItems}
             
             

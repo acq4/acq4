@@ -29,7 +29,7 @@ def reloadAll(prefix=None, debug=False):
     - if prefix is None, checks all loaded modules
     """
     
-    for mod in sys.modules.itervalues():
+    for mod in sys.modules.values():
         if not inspect.ismodule(mod):
             continue
         
@@ -106,15 +106,22 @@ def reload(module, debug=False, lists=False, dicts=False):
 ## For functions:
 ##  1) update the code and defaults to new versions.
 ##  2) keep a reference to the previous version so ALL versions get updated for every reload
-def updateFunction(old, new, debug, depth=0):
+def updateFunction(old, new, debug, depth=0, visited=None):
     #if debug and depth > 0:
         #print "    -> also updating previous version", old, " -> ", new
+        
     old.__code__ = new.__code__
     old.__defaults__ = new.__defaults__
     
+    if visited is None:
+        visited = []
+    if old in visited:
+        return
+    visited.append(old)
+    
     ## finally, update any previous versions still hanging around..
     if hasattr(old, '__previous_reload_version__'):
-        maxDepth = updateFunction(old.__previous_reload_version__, new, debug, depth=depth+1)
+        maxDepth = updateFunction(old.__previous_reload_version__, new, debug, depth=depth+1, visited=visited)
     else:
         maxDepth = depth
         

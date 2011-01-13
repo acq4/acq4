@@ -21,6 +21,12 @@ from PyQt4 import QtGui, QtCore
 ## may break some debuggers.
 import disableExceptionStorage
 
+## Needed to keep compatibility between pyside and pyqt
+## (this can go away once the transition to PySide is complete)
+QtCore.Signal = QtCore.pyqtSignal
+QtCore.Slot = QtCore.pyqtSlot
+
+
 ## Initialize Qt
 app = QtGui.QApplication(sys.argv)
 
