@@ -14,11 +14,11 @@ import sys, types, re
 from numpy import *
 import numpy
 from PyQt4 import QtCore, QtGui
-from lib.util.advancedTypes import OrderedDict
-from lib.util.functions import logSpace
+from advancedTypes import OrderedDict
+from functions import logSpace
 from GeneratorTemplate import *
 import waveforms
-from lib.util.debug import *
+from debug import *
 
 #import PyQt4.Qwt5 as Qwt
 #from PyQt4.Qwt5.anynumpy import *
@@ -154,13 +154,13 @@ class StimGenerator(QtGui.QWidget):
             self.ui.autoUpdateCheck.setChecked(state['autoUpdate'])
     
     def listSequences(self):
-        """ return an ordered dict of the sequence parameter names and lengths in the same order as that
+        """ return an ordered dict of the sequence parameter names and values in the same order as that
         of the axes returned by get Sequence"""
         ps = self.paramSpace()
-        l = [(k, len(ps[k][1])) for k in ps.keys() if ps[k][1] != None]
+        l = [(k, (ps[k][1]*self.scale)+self.offset) for k in ps.keys() if ps[k][1] != None]
         d = OrderedDict(l)
         
-        ## d should look like: { 'param1': length,  'param2': length, ...  }
+        ## d should look like: { 'param1': [val1, val2, ...],  ...  }
         return d
         
     def flatParamSpace(self):

@@ -278,13 +278,13 @@
   <customwidget>
    <class>StimGenerator</class>
    <extends>QWidget</extends>
-   <header>lib.util.generator.StimGenerator</header>
+   <header>generator.StimGenerator</header>
    <container>1</container>
   </customwidget>
   <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
-   <header>lib.util.pyqtgraph.PlotWidget</header>
+   <header>pyqtgraph.PlotWidget</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

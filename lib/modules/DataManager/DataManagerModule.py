@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 from DataManagerTemplate import *
-from DataManagerModel import *
 from lib.modules.Module import *
 from DataManager import *
 import os, re, sys, time, sip
-from lib.util.debug import *
+from debug import *
 import FileAnalysisView
 
 class Window(QtGui.QMainWindow):

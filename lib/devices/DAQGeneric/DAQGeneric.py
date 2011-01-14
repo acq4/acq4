@@ -2,7 +2,7 @@
 from __future__ import with_statement
 from lib.devices.Device import *
 from metaarray import MetaArray, axis
-from lib.util.Mutex import Mutex, MutexLocker
+from Mutex import Mutex, MutexLocker
 from numpy import *
 from protoGUI import *
 from debug import *
@@ -124,6 +124,7 @@ class DAQGenericTask(DeviceTask):
         with MutexLocker(self.dev._DGLock):
             #self.daqTasks = {}
             self.initialState = {}
+            self.holdingVals = {}
             for ch in self._DAQCmd:
                 dev = self.dev.dm.getDevice(self.dev._DGConfig[ch]['channel'][0])
                 if 'preset' in self._DAQCmd[ch]:
@@ -132,6 +133,7 @@ class DAQGenericTask(DeviceTask):
                     self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
                 if 'recordInit' in self._DAQCmd[ch] and self._DAQCmd[ch]['recordInit']:
                     self.initialState[ch] = self.dev.getChannelValue(ch)
+                self.holdingVals[ch] = self.dev.getChanHolding(ch)
                 
     def createChannels(self, daqTask):
         self.daqTasks = {}
@@ -263,7 +265,21 @@ class DAQGenericTask(DeviceTask):
                 print chanList
                 print [a.shape for a in chanList]
                 raise
-            info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'rate': rate, 'numPts': nPts, 'startTime': meta['startTime']}]
+            
+            daqState = {}
+            for ch in result:
+                daqState[ch] = result[ch]['info']
+                daqState[ch]['holding'] = self.holdingVals[ch]
+            
+            info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'DAQ': daqState}]
+            
+            
+            protInfo = self._DAQCmd.copy()  ## copy everything but the command arrays 
+            for ch in protInfo:
+                if 'command' in protInfo[ch]:
+                    del protInfo[ch]['command']
+            info[-1]['Protocol'] = protInfo
+                
             marr = MetaArray(arr, info=info)
             #print marr
             #prof.mark("post-process data")

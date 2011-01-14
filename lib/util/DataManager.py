@@ -12,12 +12,12 @@ probably only need to be created via functions in the Manager class.
 from __future__ import with_statement
 import threading, os, re, sys, shutil
 ##  import fcntl  ## linux only?
-from lib.util.functions import strncmp
-from lib.util.configfile import *
+from functions import strncmp
+from configfile import *
 from metaarray import MetaArray
 import time
-from lib.util.Mutex import Mutex, MutexLocker
-from lib.util.SignalProxy import proxyConnect
+from Mutex import Mutex, MutexLocker
+from SignalProxy import proxyConnect
 from PyQt4 import QtCore, QtGui
 #from lib.filetypes.FileType import *
 import lib.filetypes as filetypes
@@ -456,9 +456,9 @@ class DirHandle(FileHandle):
                     fd = open(logf, 'r')
                     lines = fd.readlines()
                     fd.close()
-                    log = map(eval, lines)
+                    log = map(lambda l: eval(l.strip()), lines)
                 except:
-                    print "****************** Error reading log file! *********************"
+                    print "****************** Error reading log file %s! *********************" % logf
                     raise
             
             if recursive > 0:

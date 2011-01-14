@@ -53,7 +53,7 @@ class OrderedDict(dict):
         #self.order.remove(key)
     
     def __iter__(self):
-        for k in self.keys():
+        for k in self.order:
             yield k
             
     def update(self, data):
@@ -67,6 +67,17 @@ class OrderedDict(dict):
 
     def copy(self):
         return OrderedDict(self.items())
+        
+    def itervalues(self):
+        for k in self.order:
+            yield self[k]
+            
+    def iteritems(self):
+        for k in self.order:
+            yield (k, self[k])
+            
+    
+        
 
 class ReverseDict(dict):
     """extends dict so that reverse lookups are possible by requesting the key as a list of length 1:

@@ -3,13 +3,13 @@ from __future__ import with_statement
 from lib.drivers.MultiClamp.MultiClamp import MultiClamp as MultiClampDriver
 from lib.devices.Device import *
 from metaarray import MetaArray, axis
-from lib.util.Mutex import Mutex, MutexLocker
+from Mutex import Mutex, MutexLocker
 from PyQt4 import QtCore
 from numpy import *
 import sys, traceback
 from DeviceGui import *
 from protoGUI import *
-from lib.util.debug import *
+from debug import *
 
 class MultiClamp(Device):
     def __init__(self, dm, config, name):
@@ -80,7 +80,7 @@ class MultiClamp(Device):
             mc.quit()
 
     def mcUpdate(self, state=None, mode=None):
-        """MC state has changed, handle the update."""
+        """MC state (or internal holding state) has changed, handle the update."""
         
         #print "lock for update..."
         with self.stateLock:
@@ -90,7 +90,6 @@ class MultiClamp(Device):
             mode = state['mode']
             #if mode == 'I=0':
                 #mode = 'IC'
-          
             state['holding'] = self.holding[mode]
             self.lastState[mode] = state.copy()
             self.lastMode = state['mode']
@@ -98,11 +97,13 @@ class MultiClamp(Device):
             
         QtCore.QObject.emit(self, QtCore.SIGNAL('stateChanged'), state)
         
-    def getLastState(self, mode):
+    def getLastState(self, mode=None):
         """Return the last known state for the given mode."""
         with self.stateLock:
             #if mode == 'I=0':
                 #mode = 'IC'
+            if mode is None:
+                mode = self.mc.getMode()
             if mode in self.lastState:
                 return self.lastState[mode]
         
@@ -154,7 +155,10 @@ class MultiClamp(Device):
             #return self.mc.getMode()
     
     def setHolding(self, mode=None, value=None):
-        """Define and/or set the holding values for this device"""
+        """Define and/or set the holding values for this device. 
+        Note--these are computer-controlled holding values, NOT the holding values used by the amplifier.
+        It is important to have this because the amplifier's holding values can not be changed
+        before switching modes."""
         
         with MutexLocker(self.lock):
             currentMode = self.mc.getMode()
@@ -291,6 +295,11 @@ class MultiClampTask(DeviceTask):
             #from debug import Profiler
             #prof = Profiler()
             ## Set state of clamp
+            
+            ## set holding level
+            if 'holding' in self.cmd and self.cmd['mode'] != 'I=0':
+                self.dev.setHolding(self.cmd['mode'], self.cmd['holding'])
+            
             self.dev.setMode(self.cmd['mode'])
             if self.cmd['primary'] is not None:
                 self.dev.mc.setPrimarySignal(self.cmd['primary'])
@@ -317,14 +326,17 @@ class MultiClampTask(DeviceTask):
             #prof.mark('    Multiclamp: set params')
 
 
-            self.state = self.dev.mc.getState()
+                
+            #self.state = self.dev.mc.getState()
+            self.state = self.dev.getLastState()
             
             #prof.mark('    Multiclamp: get state')
             
             if self.cmd.has_key('recordState') and self.cmd['recordState'] is True:
                 exState = self.dev.mc.getParams(MultiClampTask.recordParams)
+                self.state['ClampParams'] = {}
                 for k in exState:
-                    self.state[k] = exState[k]
+                    self.state['ClampParams'][k] = exState[k]
                     
             #prof.mark('    Multiclamp: recordState?')
                     
@@ -332,9 +344,6 @@ class MultiClampTask(DeviceTask):
             #self.state['primarySignal'] = self.dev.mc.getPrimarySignalInfo()
             #self.state['secondarySignal'] = self.dev.mc.getSecondarySignalInfo()
             
-            ## set holding level
-            if 'holding' in self.cmd and self.cmd['mode'] != 'I=0':
-                self.dev.setHolding(self.cmd['mode'], self.cmd['holding'])
             #print "mc configure complete"
             #prof.mark('    Multiclamp: set holding')
         
@@ -366,11 +375,11 @@ class MultiClampTask(DeviceTask):
                 if chConf[0] == daqTask.devName():
                     if ch == 'command':
                         daqTask.addChannel(chConf[1], 'ao')
+                        scale = self.state['extCmdScale']
                         #scale = self.dev.config['cmdScale'][self.cmd['mode']]
-                        if self.state['extCmdScale'] == 0.:
+                        if scale == 0.:
                             raise Exception('Can not execute command--external command sensitivity is disabled by MultiClamp commander!', 'ExtCmdSensOff')  ## The second string is a hint for modules that don't care when this happens.
-                        scale = 1.0 / self.state['extCmdScale']
-                        cmdData = self.cmd['command'] * scale
+                        cmdData = self.cmd['command'] / scale
                         daqTask.setWaveform(chConf[1], cmdData)
                     else:
                         if len(chConf) < 3:
@@ -424,9 +433,12 @@ class MultiClampTask(DeviceTask):
                 return None
                 
             ## Copy state from first channel (assume this is the same for all channels)
-            firstChInfo = result[channels[0]]['info']
-            for k in firstChInfo:
-                self.state[k] = firstChInfo[k]
+            #firstChInfo = result[channels[0]]['info']
+            #for k in firstChInfo:
+                #self.state[k] = firstChInfo[k]
+            daqState = {}
+            for ch in result:
+                daqState[ch] = result[ch]['info']
                 
             #timeVals = linspace(0, float(self.state['numPts']-1) / float(self.state['rate']), self.state['numPts'])
             timeVals = linspace(0, float(nPts-1) / float(rate), nPts)
@@ -442,7 +454,15 @@ class MultiClampTask(DeviceTask):
                 for a in chanList:
                     print a.shape
                 raise
-            info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [self.state]
+            
+            info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'ClampState': self.state, 'DAQ': daqState}]
+            
+            protInfo = self.cmd.copy()
+            if 'command' in protInfo:
+                del protInfo['command']
+            info[-1]['Protocol'] = protInfo
+            info[-1]['startTime'] = result[result.keys()[0]]['info']['startTime']
+            
             marr = MetaArray(arr, info=info)
                 
             return marr

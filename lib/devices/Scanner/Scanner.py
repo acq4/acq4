@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 from lib.devices.Device import *
-from lib.util.Mutex import Mutex, MutexLocker
-#import lib.util.configfile as configfile
+from Mutex import Mutex, MutexLocker
 from DeviceGui import ScannerDeviceGui
 from ProtocolGui import ScannerProtoGui
 import os, pickle 
-from lib.util import ptime
-from lib.util.debug import *
+import ptime
+from debug import *
 
 class Scanner(Device):
     def __init__(self, dm, config, name):

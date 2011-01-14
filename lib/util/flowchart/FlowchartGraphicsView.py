@@ -12,10 +12,12 @@ class FlowchartGraphicsView(QtGui.QGraphicsView):
         self.setRubberBandSelectionMode(QtCore.Qt.ContainsItemBoundingRect)
         
     def mousePressEvent(self, ev):
+        self.moved = False
         self.lastPos = ev.pos()
         return QtGui.QGraphicsView.mousePressEvent(self, ev)
 
     def mouseMoveEvent(self, ev):
+        self.moved = True
         callSuper = False
         if ev.buttons() &  QtCore.Qt.RightButton:
             if self.lastPos is not None:
@@ -32,3 +34,8 @@ class FlowchartGraphicsView(QtGui.QGraphicsView):
         
         if callSuper:
             QtGui.QGraphicsView.mouseMoveEvent(self, ev)
+            
+    def mouseReleaseEvent(self, ev):
+        if not self.moved:
+            self.emit(QtCore.SIGNAL('clicked'), ev)
+        return QtGui.QGraphicsView.mouseReleaseEvent(self, ev)

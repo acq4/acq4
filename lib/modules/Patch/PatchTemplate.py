@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'PatchTemplate.ui'
 #
-# Created: Thu Jul 22 12:55:25 2010
+# Created: Thu Dec 02 19:29:52 2010
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -129,9 +129,21 @@ class Ui_Form(object):
         self.cellModeBtn = QtGui.QToolButton(self.groupBox_2)
         self.cellModeBtn.setObjectName("cellModeBtn")
         self.horizontalLayout_2.addWidget(self.cellModeBtn)
+        self.monitorModeBtn = QtGui.QToolButton(self.groupBox_2)
+        self.monitorModeBtn.setObjectName("monitorModeBtn")
+        self.horizontalLayout_2.addWidget(self.monitorModeBtn)
         spacerItem1 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.horizontalLayout_2.addItem(spacerItem1)
         self.gridLayout_2.addLayout(self.horizontalLayout_2, 1, 0, 1, 3)
+        self.label_2 = QtGui.QLabel(self.groupBox_2)
+        self.label_2.setObjectName("label_2")
+        self.gridLayout_2.addWidget(self.label_2, 11, 0, 1, 1)
+        self.averageSpin = QtGui.QSpinBox(self.groupBox_2)
+        self.averageSpin.setMinimum(1)
+        self.averageSpin.setMaximum(100)
+        self.averageSpin.setProperty("value", QtCore.QVariant(1))
+        self.averageSpin.setObjectName("averageSpin")
+        self.gridLayout_2.addWidget(self.averageSpin, 11, 2, 1, 1)
         self.verticalLayout.addWidget(self.groupBox_2)
         self.groupBox = QtGui.QGroupBox(self.layoutWidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
@@ -283,6 +295,8 @@ class Ui_Form(object):
         self.bathModeBtn.setText(QtGui.QApplication.translate("Form", "Bath", None, QtGui.QApplication.UnicodeUTF8))
         self.patchModeBtn.setText(QtGui.QApplication.translate("Form", "Patch", None, QtGui.QApplication.UnicodeUTF8))
         self.cellModeBtn.setText(QtGui.QApplication.translate("Form", "Cell", None, QtGui.QApplication.UnicodeUTF8))
+        self.monitorModeBtn.setText(QtGui.QApplication.translate("Form", "Monitor", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtGui.QApplication.translate("Form", "Average", None, QtGui.QApplication.UnicodeUTF8))
         self.resetBtn.setText(QtGui.QApplication.translate("Form", "Reset History", None, QtGui.QApplication.UnicodeUTF8))
         self.inputResistanceCheck.setText(QtGui.QApplication.translate("Form", "Input Res.", None, QtGui.QApplication.UnicodeUTF8))
         self.inputResistanceLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
@@ -298,5 +312,5 @@ class Ui_Form(object):
         self.fitErrorLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
         self.drawFitCheck.setText(QtGui.QApplication.translate("Form", "Draw Fit", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.SpinBox import SpinBox
-from lib.util.pyqtgraph.PlotWidget import PlotWidget
+from SpinBox import SpinBox
+from pyqtgraph.PlotWidget import PlotWidget

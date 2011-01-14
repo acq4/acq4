@@ -10,7 +10,7 @@ from Mutex import Mutex, MutexLocker
 import traceback, sys, time
 from numpy import *
 import scipy.optimize
-from lib.util.debug import *
+from debug import *
 from functions import siFormat
 from lib.Manager import getManager
 
@@ -39,7 +39,7 @@ class PatchWindow(QtGui.QMainWindow):
             'recordTime': 0.1,
             'delayTime': 0.03,
             'pulseTime': 0.05,
-            'icPulse': -10e-12,
+            'icPulse': -30e-12,
             'vcPulse': -10e-3,
             'icHolding': 0,
             'vcHolding': -50e-3,
@@ -48,6 +48,7 @@ class PatchWindow(QtGui.QMainWindow):
             'vcHoldingEnabled': False,
             'vcPulseEnabled': True,
             'drawFit': True,
+            'average': 1,
         }
         
         
@@ -105,6 +106,7 @@ class PatchWindow(QtGui.QMainWindow):
             (self.ui.pulseTimeSpin, 'pulseTime'),
             (self.ui.delayTimeSpin, 'delayTime'),
             (self.ui.drawFitCheck, 'drawFit'),
+            (self.ui.averageSpin, 'average'),
         ])
         #self.stateGroup = WidgetGroup([
         #    (self.ui.icPulseSpin, 'icPulse', 1e12),
@@ -132,6 +134,7 @@ class PatchWindow(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.bathModeBtn, QtCore.SIGNAL('clicked()'), self.bathMode)
         QtCore.QObject.connect(self.ui.patchModeBtn, QtCore.SIGNAL('clicked()'), self.patchMode)
         QtCore.QObject.connect(self.ui.cellModeBtn, QtCore.SIGNAL('clicked()'), self.cellMode)
+        QtCore.QObject.connect(self.ui.monitorModeBtn, QtCore.SIGNAL('clicked()'), self.monitorMode)
         QtCore.QObject.connect(self.ui.resetBtn, QtCore.SIGNAL('clicked()'), self.resetClicked)
         QtCore.QObject.connect(self.thread, QtCore.SIGNAL('finished()'), self.threadStopped)
         QtCore.QObject.connect(self.thread, QtCore.SIGNAL('newFrame'), self.handleNewFrame)
@@ -176,21 +179,28 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.vcHoldCheck.setChecked(False)
         self.ui.vcModeRadio.setChecked(True)
         self.ui.cycleTimeSpin.setValue(0.2)
-        self.ui.pulseTimeSpin.setValue(50)
+        self.ui.pulseTimeSpin.setValue(50e-3)
+        self.ui.averageSpin.setValue(1)
     
     def patchMode(self):
         self.ui.vcPulseCheck.setChecked(True)
         self.ui.vcHoldCheck.setChecked(True)
         self.ui.vcModeRadio.setChecked(True)
         self.ui.cycleTimeSpin.setValue(0.2)
-        self.ui.pulseTimeSpin.setValue(50)
+        self.ui.pulseTimeSpin.setValue(50e-3)
+        self.ui.averageSpin.setValue(1)
     
     def cellMode(self):
         self.ui.icPulseCheck.setChecked(True)
         self.ui.icModeRadio.setChecked(True)
-        self.ui.cycleTimeSpin.setValue(0.2)
-        self.ui.pulseTimeSpin.setValue(150)
-    
+        self.ui.cycleTimeSpin.setValue(250e-3)
+        self.ui.pulseTimeSpin.setValue(150e-3)
+        self.ui.averageSpin.setValue(1)
+
+    def monitorMode(self):
+        self.ui.cycleTimeSpin.setValue(20)
+        self.ui.averageSpin.setValue(10)
+        
     def showPlots(self):
         """Show/hide analysis plot widgets"""
         for n in self.analysisItems:
@@ -441,32 +451,45 @@ class PatchThread(QtCore.QThread):
                     
                     ## Create and execute task.
                     ## the try/except block is just to catch errors that come up during multiclamp auto pipette offset procedure.
-                    exc = False
-                    count = 0
-                    while not exc:
-                        count += 1
-                        try:
-                            ## Create task
-                            task = self.manager.createTask(cmd)
-                            ## Execute task
-                            task.execute()
-                            exc = True
-                        except:
-                            err = sys.exc_info()[1].args
-                            #print err
-                            if count < 5 and len(err) > 1 and err[1] == 'ExtCmdSensOff':  ## external cmd sensitivity is off, wait to see if it comes back..
-                                time.sleep(1.0)
-                                continue
-                            else:
-                                raise
-                    #print cmd
-                    
-                    ## analyze trace 
-                    result = task.getResult()
+                    results = []
+                    for i in range(params['average']):
+                        exc = False
+                        count = 0
+                        while not exc:
+                            count += 1
+                            try:
+                                ## Create task
+                                task = self.manager.createTask(cmd)
+                                ## Execute task
+                                task.execute()
+                                exc = True
+                            except:
+                                err = sys.exc_info()[1].args
+                                #print err
+                                if count < 5 and len(err) > 1 and err[1] == 'ExtCmdSensOff':  ## external cmd sensitivity is off, wait to see if it comes back..
+                                    time.sleep(1.0)
+                                    continue
+                                else:
+                                    raise
+                        #print cmd
+                        
+                        ## analyze trace 
+                        result = task.getResult()
+                        results.append(result)
+                        
+                    ## average together results if we collected more than 1
+                    if len(results) == 1:
+                        result = results[0]
+                        avg = result[clampName]
+                    else:
+                        avg = concatenate([res[clampName].view(ndarray)[newaxis, ...] for res in results], axis=0).mean(axis=0)
+                        avg = MetaArray(avg, info=results[0][clampName].infoCopy())
+                        result = results[0]
+                        result[clampName] = avg
                     #print result[clampName]['primary'].max(), result[clampName]['primary'].min()
                     
                     #print result[clampName]
-                    analysis = self.analyze(result[clampName], params)
+                    analysis = self.analyze(avg, params)
                     frame = {'data': result, 'analysis': analysis}
                     
                     self.emit(QtCore.SIGNAL('newFrame'), frame)
@@ -519,10 +542,12 @@ class PatchThread(QtCore.QThread):
             pred1 = [ari, ari-iri, 1e-3]
             pred2 = [iri-ari, iri-ari, 1e-3]
         else:
-            clamp = self.manager.getDevice(self.clampName)
+            #clamp = self.manager.getDevice(self.clampName)
             try:
-                bridge = float(clamp.getParam('BridgeBalResist'))
-                bridgeOn = clamp.getParam('BridgeBalEnable')
+                bridge = data._info[-1]['ClampState']['ClampParams']['BridgeBalResist']
+                bridgeOn = data._info[-1]['ClampState']['ClampParams']['BridgeBalEnabled']
+                #bridge = float(clamp.getParam('BridgeBalResist'))  ## pull this from the data instead.
+                #bridgeOn = clamp.getParam('BridgeBalEnable')
                 if not bridgeOn:
                     bridge = 0.0
             except:

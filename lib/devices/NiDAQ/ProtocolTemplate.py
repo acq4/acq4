@@ -226,4 +226,4 @@ class Ui_Form(object):
         self.label_4.setText(QtGui.QApplication.translate("Form", "Period", None, QtGui.QApplication.UnicodeUTF8))
         self.periodSpin.setSuffix(QtGui.QApplication.translate("Form", " μs", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.SpinBox import SpinBox
+from SpinBox import SpinBox

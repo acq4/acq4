@@ -9,9 +9,9 @@ from numpy import *
 from metaarray import *
 from protoGUI import *
 from deviceGUI import *
-import lib.util.ptime as ptime
-from lib.util.Mutex import Mutex, MutexLocker
-from lib.util.debug import *
+import ptime as ptime
+from Mutex import Mutex, MutexLocker
+from debug import *
 
 class Camera(DAQGeneric):
     """Generic camera device class. All cameras should extend from this interface.

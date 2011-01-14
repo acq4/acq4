@@ -23,21 +23,16 @@ sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
 
 
 
-import time, atexit, weakref
+import time, atexit, weakref, reload
 from PyQt4 import QtCore, QtGui
 from DataManager import *
 from Interfaces import *
-#import lib.util.ptime as ptime
-#from lib.util import configfile
-#from lib.util.Mutex import Mutex
-#from lib.util.debug import *
 import ptime
 import configfile
 from Mutex import Mutex
 from debug import *
 import getopt, glob
 import ptime
-#import pdb
 
 ### All other modules can use this function to get the manager instance
 def getManager():
@@ -149,19 +144,24 @@ Valid options are:
             printExc("\nError while acting on command line options: (but continuing on anyway..)")
             
             
-        win = QtGui.QApplication.instance().activeWindow()
+        #win = QtGui.QApplication.instance().activeWindow()
+        if len(self.modules) == 0:
+            raise Exception("No modules loaded during startup, exiting now.")
+        win = self.modules[self.modules.keys()[0]].window()
         #if win is None:   ## Breaks on some systems..
             #raise Exception("No GUI windows created during startup, exiting now.")
         #print "active window:", win
         self.quitShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+q'), win)
         self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
+        self.reloadShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+r'), win)
+        self.reloadShortcut.setContext(QtCore.Qt.ApplicationShortcut)
         QtCore.QObject.connect(self.quitShortcut, QtCore.SIGNAL('activated()'), self.quit)
+        QtCore.QObject.connect(self.reloadShortcut, QtCore.SIGNAL('activated()'), self.reloadAll)
         
         #QtCore.QObject.connect(QtGui.QApplication.instance(), QtCore.SIGNAL('lastWindowClosed()'), self.lastWindowClosed)
             
             
             
-
     def readConfig(self, configFile):
         """Read configuration file, create device objects, add devices to list"""
         print "============= Starting Manager configuration from %s =================" % configFile
@@ -379,6 +379,7 @@ Valid options are:
             #print "Module", mod.name, "has quit"
 
 
+
     def unloadModule(self, name):
         try:
             print "    request quit.."
@@ -392,6 +393,15 @@ Valid options are:
             del self.modules[name]
             self.emit(QtCore.SIGNAL('modulesChanged'))
         #print "Unloaded module", name
+
+    def reloadAll(self):
+        """Reload all python code"""
+        path = os.path.split(os.path.abspath(__file__))[0]
+        path = os.path.abspath(os.path.join(path, '..'))
+        print "\n---- Reloading all libraries under %s ----" % path
+        reload.reloadAll(prefix=path, debug=True)
+        print "Done reloading.\n"
+        
 
     def createWindowShortcut(self, keys, win):
         try:

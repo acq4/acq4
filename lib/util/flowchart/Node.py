@@ -183,7 +183,7 @@ class Node(QtCore.QObject):
                 t.setValueAcceptable(True)
             self.clearException()
         except:
-            #printExc( "Exception while processing:")
+            #printExc( "Exception while processing %s:" % self.name())
             for n,t in self.outputs().iteritems():
                 t.setValue(None)
             self.setException(sys.exc_info())

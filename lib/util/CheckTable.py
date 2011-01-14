@@ -12,7 +12,7 @@ class CheckTable(QtGui.QWidget):
         self.columns = columns
         col = 1
         for c in columns:
-            label = VerticalLabel.VerticalLabel(c)
+            label = VerticalLabel.VerticalLabel(c, orientation='vertical')
             self.headers.append(label)
             self.layout.addWidget(label, 0, col)
             col += 1
@@ -78,19 +78,3 @@ class CheckTable(QtGui.QWidget):
             for i in range(1, len(r)):
                 self.rowWidgets[rowNum][i].setChecked(r[i])
             
-
-if __name__ == '__main__':
-    app = QtGui.QApplication([])
-    win = QtGui.QMainWindow()
-    cw = CheckTable(['col1', 'col2', 'col3', 'col4', 'col5'])
-    cw.updateRows(['row1', 'row2', 'row3'])
-    win.setCentralWidget(cw)
-    win.show()
-    
-    
-    def changed(row, col, state):
-        print "Changed:", row, col, state
-        print "state:"
-        print cw.saveState()
-        
-    QtCore.QObject.connect(cw, QtCore.SIGNAL('stateChanged'), changed)

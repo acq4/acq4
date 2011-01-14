@@ -7,32 +7,36 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 
 Run in interactive python. Useful for accessing data for manual analysis.
 """
+#import lib.util.PySideImporter
 
 from lib.Manager import *
 
 import sys, os
-pyfile = __file__
-if pyfile[0] != '/':
-    pyfile =  os.path.join(os.getcwd(), pyfile)
+pyfile = os.path.abspath(__file__)
+#if pyfile[0] != '/':
+    #pyfile =  os.path.join(os.getcwd(), pyfile)
 pyDir = os.path.split(pyfile)[0]
 sys.path.append(pyDir)
+
+
 from metaarray import *
-from pyqtgraph.ImageView import *
-from pyqtgraph.GraphicsView import *
-from pyqtgraph.graphicsItems import *
-from pyqtgraph.graphicsWindows import *
-from pyqtgraph.PlotWidget import *
-from pyqtgraph.functions import *
+from pyqtgraph import *
 from Canvas import Canvas
 from PyQt4 import QtCore, QtGui
 from functions import *
-from lib.analysis import *
 
 
 ## Disable long-term storage of exception stack frames
 ## This fixes a potentially major memory leak, but
 ## may break some debuggers.
 import disableExceptionStorage
+
+## Needed to keep compatibility between pyside and pyqt
+## (this can go away once the transition to PySide is complete)
+QtCore.Signal = QtCore.pyqtSignal
+QtCore.Slot = QtCore.pyqtSlot
+
+
 
 ### Use CLI history
 import atexit
@@ -75,11 +79,14 @@ dm = Manager(config, sys.argv[1:])
 #w1 = Analyzer(dh)
 #w2 = Analyzer(dh)
 
-from lib.analysis.mosaicEditor import *
-w = MosaicEditor()
+#from lib.analysis.mosaicEditor import *
+#w = MosaicEditor()
 #win = UncagingWindow() #### IMPORTANT: the name of the UncagingWindow needs to be win in order for an AnalysisPlotWindow to get data from it - need to fix this, obviously
 #w = AnalysisPlotWindow()
 #cm = CellMixer()
+
+#from lib.analysis.modules.EventDetector2.EventDetector import EventDetector2
+#t = EventDetector2(None)
 
 
 ## Start Qt event loop unless running in interactive mode.
@@ -133,11 +140,11 @@ def showPlot(data=None, x=None, file=None, title=None):
         #win.setCentralWidget(plot)
         #plot.plot(data)
         #plot.autoRange()
-        win.plot(data, x)
+        win.plot(y=data, x=x)
         win.autoRange()
     elif data.ndim == 2:
         win = MultiPlotWindow(title=title)
-        win.plot(data, x)
+        win.plot(y=data, x=x)
         win.autoRange()
         #gv = GraphicsView()
         #win.setCentralWidget(gv)
