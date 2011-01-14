@@ -71,6 +71,10 @@ def reload(module, debug=False, lists=False, dicts=False):
     __builtin__.reload(module)
     newDict = module.__dict__
     
+    ## Allow modules access to the old dictionary after they reload
+    if hasattr(module, '__reload__'):
+        module.__reload__(oldDict)
+    
     ## compare old and new elements from each dict; update where appropriate
     for k in oldDict:
         old = oldDict[k]

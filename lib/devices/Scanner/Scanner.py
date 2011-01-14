@@ -66,14 +66,17 @@ class Scanner(Device):
         camPos = cam.getPosition()
         
         ## first convert position to sensor coords
+        #print "global:", x, y
         (x, y) = cam.mapToSensor((x, y))
         
+        #print "camera:", x, y
         cal = self.getCalibration(camera, laser, obj)['params']
         
         if cal is None:
             raise Exception("No calibration found for this combination of laser, camera, and objective:\n  %s\n  %s\n  %s" % (laser, camera, obj))
         x1 = cal[0][0] + cal[0][1] * x + cal[0][2] * y + cal[0][3] * x**2 + cal[0][4] * y**2
         y1 = cal[1][0] + cal[1][1] * x + cal[1][2] * y + cal[1][3] * x**2 + cal[1][4] * y**2
+        #print "voltage:", x1, y1
         return [x1, y1]
         
     def getCalibrationIndex(self):

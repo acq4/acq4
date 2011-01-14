@@ -113,6 +113,7 @@ class QCam(Camera):
             
     def stopCamera(self):
         with self.camLock:
+            #print "really stop camera"
             self.cam.stop()
 
         

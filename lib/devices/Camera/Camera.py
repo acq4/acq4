@@ -476,6 +476,7 @@ class CameraTask(DAQGenericTask):
         ##   (daq must be started first so that it is armed to received the camera trigger)
         name = self.dev.devName()
         if self.camCmd.get('triggerProtocol', False):
+            #print "Camera triggering protocol; restart"
             restart = True
             daqName = self.dev.camConfig['triggerOutChannel'][0]
             startOrder.remove(name)
@@ -497,6 +498,7 @@ class CameraTask(DAQGenericTask):
         ## We want to avoid this if at all possible since it may be very expensive
         #print "CameraTask: configure: restart camera:", restart
         if restart:
+            #print "Stop camera now"
             self.dev.stop(block=False)  ## don't wait for the camera to stop; we'll check again later.
             self.stoppedCam = True
         prof.mark('stop')
@@ -559,7 +561,7 @@ class CameraTask(DAQGenericTask):
             self.dev.wait()
             
         if not self.dev.isRunning():
-            #print "  Starting camera again..", camState
+            #print "  Starting camera again.."
             #self.dev.setParams(camState)
             self.dev.start(block=True)  ## wait until camera is actually ready to acquire
         

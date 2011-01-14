@@ -340,14 +340,16 @@ class ScannerDeviceGui(QtGui.QWidget):
             raise Exception("Calibration only detected %d spots; this is not enough." % loc.shape[0])
 
         ## fit linear parameters first
-        xFit = leastsq(erf1, [0, 1, 1], (loc, cmd[:,0]))[0]
-        yFit = leastsq(erf1, [0, 1, 1], (loc, cmd[:,1]))[0]
-        print "fit stage 1:", xFit, yFit
+        xFit = leastsq(erf1, [0, 0, 0], (loc, cmd[:,0]))[0]
+        yFit = leastsq(erf1, [0, 0, 0], (loc, cmd[:,1]))[0]
+        #print "fit stage 1:", xFit, yFit
         
         ## then fit the parabolic equations, using the linear fit as the seed
         xFit = leastsq(erf2, list(xFit)+[0, 0], (loc, cmd[:,0]))[0]
         yFit = leastsq(erf2, list(yFit)+[0, 0], (loc, cmd[:,1]))[0]
-        print "fit stage 2:", xFit, yFit
+        #print "fit stage 2:", xFit, yFit
+        #xFit = list(xFit)+[0,0]
+        #yFit = list(yFit)+[0,0]
         
         return (list(xFit), list(yFit))
 
@@ -402,7 +404,7 @@ class ScannerDeviceGui(QtGui.QWidget):
             laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
         task = lib.Manager.getManager().createTask(cmd)
-        task.execute(processEvents=True)
+        task.execute()
         result = task.getResult()
         ## pull result, convert to ndarray float, take average over all frames
         background = result[camera]['frames'].view(np.ndarray).astype(float).mean(axis=0)
@@ -410,7 +412,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         ## Record full scan.
         cmd = {
-            'protocol': {'duration': duration, 'timeout': 5.0},
+            'protocol': {'duration': duration, 'timeout': duration+5.0},
             camera: {'record': True, 'triggerProtocol': True, 'params': camParams, 'channels': {
                 'exposure': {'record': True}, 
                 #'trigger': {'preset': 0, 'command': cameraTrigger}
@@ -424,7 +426,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         }
 
         task = lib.Manager.getManager().createTask(cmd)
-        task.execute(processEvents=True)
+        task.execute()
         result = task.getResult()
 
         frames = result[camera]['frames']

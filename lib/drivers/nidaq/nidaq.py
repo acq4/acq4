@@ -4,6 +4,8 @@ import sys, re, types, ctypes, os, time
 from numpy import *
 import cheader
 import ptime  ## platform-independent precision timing
+import debug
+
 dtypes = {
     float64: 'F64',
     int16: 'I16',
@@ -96,8 +98,9 @@ class _NIDAQ:
             raise NIDAQError(errCode)
             #raise NIDAQError(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         elif errCode > 0:
-            #print "NiDAQ Warning while running function '%s%s'" % (func, str(args))
+            print "NiDAQ Warning while running function '%s%s'" % (func, str(args))
             print self.error(errCode)
+            debug.printExc("Traceback:")
             #raise NIDAQWarning(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         
         if ret is None:

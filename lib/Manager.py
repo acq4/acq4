@@ -40,7 +40,9 @@ def getManager():
         raise Exception("No manager created yet")
     return Manager.single
 
-
+def __reload__(old):
+    Manager.CREATED = old['Manager'].CREATED
+    Manager.single = old['Manager'].single
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
@@ -702,7 +704,7 @@ class Task:
             while not self.isDone():
                 now = ptime.time()
                 if timeout is not None and now - self.startTime > timeout:
-                    raise Exception("Protocol timed out; aborting.")
+                    raise Exception("Protocol timed out (>%0.2fs); aborting." % timeout)
                 if processEvents and now-lastProcess > 100e-3:  ## only process Qt events every 100ms
                     QtGui.QApplication.processEvents()
                     lastProcess = ptime.time()
