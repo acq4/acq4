@@ -90,13 +90,13 @@ class _NIDAQ:
         #print "  FINAL CALL: ", cArgs
         errCode = self._call(func, *cArgs)
         if errCode < 0:
-            print "Error running function '%s%s'" % (func, str(args))
-            for s in self.error(errCode):
-                print s
+            #print "NiDAQ Error while running function '%s%s'" % (func, str(args))
+            #for s in self.error(errCode):
+                #print s
             raise NIDAQError(errCode)
             #raise NIDAQError(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         elif errCode > 0:
-            print "NIDAQ Warning:"
+            #print "NiDAQ Warning while running function '%s%s'" % (func, str(args))
             print self.error(errCode)
             #raise NIDAQWarning(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         

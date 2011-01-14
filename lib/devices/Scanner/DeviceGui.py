@@ -8,6 +8,7 @@ import lib.Manager
 from lib.util.imageAnalysis import *
 from lib.util.debug import *
 import numpy as np
+import WidgetGroup
 
 class ScannerDeviceGui(QtGui.QWidget):
     def __init__(self, dev, win):
@@ -16,7 +17,15 @@ class ScannerDeviceGui(QtGui.QWidget):
         self.win = win
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-
+        self.stateGroup = WidgetGroup.WidgetGroup({
+            'duration': self.ui.scanDurationSpin,
+            'xMin': self.ui.xMinSpin,
+            'xMax': self.ui.xMaxSpin,
+            'yMin': self.ui.yMinSpin,
+            'yMax': self.ui.yMaxSpin,
+            'splitter': self.ui.splitter,
+        })
+        
         ## Populate Device lists
         defCam = None
         if 'defaultCamera' in self.dev.config:
@@ -38,6 +47,11 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         ## Populate list of calibrations
         self.updateCalibrationList()
+        
+        ## load default config
+        state = self.dev.loadCalibrationDefaults()
+        if state is not None:
+            self.stateGroup.setState(state)
         
         ## create graphics scene
         #self.image = ImageItem()
@@ -91,6 +105,8 @@ class ScannerDeviceGui(QtGui.QWidget):
         index[cam][laser][obj] = {'spot': spot, 'date': date, 'params': cal}
 
         self.dev.writeCalibrationIndex(index)
+        
+        self.dev.writeCalibrationDefaults(self.stateGroup.state())
         #cal.write(os.path.join(self.dev.config['calibrationDir'], fileName))
         
         self.updateCalibrationList()
@@ -327,12 +343,12 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## fit linear parameters first
         xFit = leastsq(erf1, [0, 1, 1], (loc, cmd[:,0]))[0]
         yFit = leastsq(erf1, [0, 1, 1], (loc, cmd[:,1]))[0]
-        #print "fit stage 1:", xFit, yFit
+        print "fit stage 1:", xFit, yFit
         
         ## then fit the parabolic equations, using the linear fit as the seed
         xFit = leastsq(erf2, list(xFit)+[0, 0], (loc, cmd[:,0]))[0]
         yFit = leastsq(erf2, list(yFit)+[0, 0], (loc, cmd[:,1]))[0]
-        #print "fit stage 2:", xFit, yFit
+        print "fit stage 2:", xFit, yFit
         
         return (list(xFit), list(yFit))
 
@@ -355,22 +371,26 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         camParams = self.dev.getCameraConfig(camera)        
         
-        duration = 4.0
+        duration = self.ui.scanDurationSpin.value()
         rate = 10000
         nPts = int(rate * duration)
         sweeps = 20
 
         #cameraTrigger = ones(nPts, dtype=byte)
 
-        (cmdMin, cmdMax) = self.dev.config['commandLimits']
-        cmdRange = cmdMax - cmdMin
-        xCommand = np.fromfunction(lambda i: cmdMin + ((cmdRange * i * float(sweeps) / nPts) % cmdRange), (nPts,), dtype=float)
+        ##(cmdMin, cmdMax) = self.dev.config['commandLimits']
+        xRange = (self.ui.xMinSpin.value(), self.ui.xMaxSpin.value())
+        yRange = (self.ui.yMinSpin.value(), self.ui.yMaxSpin.value())
+        xDiff = xRange[1] - xRange[0]
+        yDiff = yRange[1] - yRange[0]
+        
+        xCommand = np.fromfunction(lambda i: xRange[0] + ((xDiff * i * float(sweeps) / nPts) % xDiff), (nPts,), dtype=float)
         xCommand[-1] = 0.0
         yCommand = np.empty((nPts,), dtype=float)
         start = 0
         for i in range(sweeps):
             stop = start + (nPts / sweeps)
-            yCommand[start:stop] = cmdMin + cmdRange * (float(i)/(sweeps-1))
+            yCommand[start:stop] = yRange[0] + yDiff * (float(i)/(sweeps-1))
             start = stop
         yCommand[-1] = 0.0
         daqName = self.dev.config['XAxis'][0]
@@ -383,7 +403,7 @@ class ScannerDeviceGui(QtGui.QWidget):
             laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
         task = lib.Manager.getManager().createTask(cmd)
-        task.execute()
+        task.execute(processEvents=True)
         result = task.getResult()
         ## pull result, convert to ndarray float, take average over all frames
         background = result[camera]['frames'].view(np.ndarray).astype(float).mean(axis=0)
@@ -405,7 +425,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         }
 
         task = lib.Manager.getManager().createTask(cmd)
-        task.execute()
+        task.execute(processEvents=True)
         result = task.getResult()
 
         frames = result[camera]['frames']

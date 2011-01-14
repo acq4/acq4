@@ -96,6 +96,19 @@ class Scanner(Device):
                 self.calibrationIndex = index
             return self.calibrationIndex
         
+    def writeCalibrationDefaults(self, state):
+        with MutexLocker(self.lock):
+            calDir = self.configDir()
+            fileName = os.path.join(calDir, 'defaults')
+            self.dm.writeConfigFile(state, fileName)
+        
+    def loadCalibrationDefaults(self):
+        with MutexLocker(self.lock):
+            calDir = self.configDir()
+            fileName = os.path.join(calDir, 'defaults')
+            state = self.dm.readConfigFile(fileName)
+            return state
+        
     def writeCalibrationIndex(self, index):
         with MutexLocker(self.lock):
             calDir = self.configDir()
