@@ -574,7 +574,7 @@ class FlowchartWidget(DockArea.DockArea):
 
         self.hoverText = QtGui.QTextEdit()
         self.hoverText.setReadOnly(True)
-        self.hoverDock = DockArea.Dock('Hover Info', size=(1000,50))
+        self.hoverDock = DockArea.Dock('Hover Info', size=(1000,20))
         self.hoverDock.addWidget(self.hoverText)
         self.addDock(self.hoverDock, 'bottom')
 
