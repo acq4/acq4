@@ -109,11 +109,17 @@ class QCam(Camera):
     
     def startCamera(self):
         with self.camLock:
+            #sys.stdout.flush()
+            #time.sleep(0.1)
+            #print "QCam: Start camera"
             self.cam.start()
             
     def stopCamera(self):
         with self.camLock:
-            #print "really stop camera"
+            #sys.stdout.flush()
+            #time.sleep(0.1)
+            #print "QCam: Stop camera"
             self.cam.stop()
+            time.sleep(0.06)
 
         

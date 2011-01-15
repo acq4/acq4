@@ -400,9 +400,10 @@ class ScannerDeviceGui(QtGui.QWidget):
         #print "parameters:", camParams
         cmd = {
             'protocol': {'duration': 0.0, 'timeout': 5.0},
-            camera: {'record': True, 'minFrames': 10, 'params': camParams, 'pushState': 'scanProt', 'popState': 'scanProt'},  ## binning/params are specific for QuantEM512
+            camera: {'record': True, 'minFrames': 10, 'params': camParams, 'pushState': 'scanProt'}, 
             laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
+        #print "\n\n====> Record background\n"
         task = lib.Manager.getManager().createTask(cmd)
         task.execute()
         result = task.getResult()
@@ -418,13 +419,13 @@ class ScannerDeviceGui(QtGui.QWidget):
                 #'trigger': {'preset': 0, 'command': cameraTrigger}
                 },
                 #'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3, 
-                'pushState': 'scanProt', 'popState': 'scanProt'},
-            laser: {'Shutter': {'preset': 1, 'holding': 0}},
+                'popState': 'scanProt'},
+            laser: {'Shutter': {'preset': 0, 'holding': 0, 'command': np.ones(len(xCommand), dtype=byte)}},
             #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
             self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},
             daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}
         }
-
+        #print "\n\n====> Scan\n"
         task = lib.Manager.getManager().createTask(cmd)
         task.execute()
         result = task.getResult()
