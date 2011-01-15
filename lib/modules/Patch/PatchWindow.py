@@ -300,11 +300,12 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.capacitanceLabel.setText('%sF' % siFormat(frame['analysis']['capacitance']))
         self.ui.fitErrorLabel.setText('%7.2g' % frame['analysis']['fitError'])
         
+        start = data._info[-1]['DAQ']['Command']['startTime']
         if self.startTime is None:
-            self.startTime = data._info[-1]['startTime']
+            self.startTime = start
             if self.ui.recordBtn.isChecked() and self.storageFile is not None:
                 self.storageFile.setInfo({'startTime': self.startTime})
-        self.analysisData['time'].append(data._info[-1]['startTime'] - self.startTime)
+        self.analysisData['time'].append(start - self.startTime)
         self.updateAnalysisPlots()
         
         ## Record to disk if requested.

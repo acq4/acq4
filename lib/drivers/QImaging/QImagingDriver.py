@@ -13,6 +13,7 @@ from Mutex import Mutex, MutexLocker
 from advancedTypes import OrderedDict
 import atexit
 import traceback
+import time
 modDir = os.path.dirname(__file__)
 sdkDir = r"C:\Program Files\QImaging\SDK\Headers"
 
@@ -867,6 +868,7 @@ class QCameraClass:
         a = self.call(lib.Abort, self.handle)
         #print "stop() 3", a()
         self.call(lib.SetStreaming, self.handle, 0)
+        #time.sleep(0.5)
         #self.mutex.unlock()
 
     def newFrames(self):
