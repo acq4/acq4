@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import pyqtgraph as pg
-import Canvas
+import Canvas, FileLoader, DatabaseGui, TableWidget
 
 class AnalysisModule(QtCore.QObject):
     """
@@ -52,11 +52,11 @@ class AnalysisModule(QtCore.QObject):
         
         for name, el in self._elements_.iteritems():
             if isinstance(el, tuple):
-                self._elements_[name] = Element(*el)
+                self._elements_[name] = Element(name, *el)
             elif isinstance(el, dict):
-                self._elements_[name] = Element(**el)
+                self._elements_[name] = Element(name, **el)
             elif isinstance(el, basestring):
-                self._elements_[name] = Element(el)
+                self._elements_[name] = Element(name, type=el)
             
         
     def processData(self, data):
@@ -79,17 +79,7 @@ class AnalysisModule(QtCore.QObject):
         The default implementation can create some of the more common elements used
           (plot, canvas, ...)"""
         spec = self.elementSpec(name)
-        typ = spec.type()
-        if typ == 'plot':
-            obj = pg.PlotWidget(name=name)
-        elif typ == 'canvas':
-            obj = Canvas.Canvas()
-        else:
-            raise Exception("Cannot automatically create element '%s' (type=%s)" % (name, typ))
-        
-        spec.setObject(obj)
-        return obj
-          
+        return spec.makeObject(self.host)
           
     def elementSpec(self, name):
         """Return the specification for the named element"""
@@ -99,12 +89,14 @@ class AnalysisModule(QtCore.QObject):
 
 class Element:
     """Simple class for holding options and attributes for elements"""
-    def __init__(self, type, optional=False, object=None, pos=None, size=(None, None)):
+    def __init__(self, name, type, optional=False, object=None, pos=None, size=(None, None), **args):
+        self.name = name
         self._type = type          ## string such as 'plot', 'canvas', 'ctrl'
         self._optional = optional  ## bool
         self._object = object      ## any object; usually the widget associated with the element
         self._position = pos
         self._size = size
+        self._args = args
         
     def type(self):
         return self._type
@@ -123,3 +115,24 @@ class Element:
         
     def size(self):
         return self._size
+        
+    def makeObject(self, host):
+        
+        typ = self.type()
+        args = self._args
+        if typ == 'plot':
+            obj = pg.PlotWidget(name=self.name, **args)
+        elif typ == 'canvas':
+            obj = Canvas.Canvas(name=self.name, **args)
+        elif typ == 'fileInput':
+            obj = FileLoader.FileLoader(host.dataManager(), **args)
+        elif typ == 'database':
+            obj = DatabaseGui.DatabaseGui(host.dataManager(), name=self.name, **args)
+        elif typ == 'table':
+            obj = TableWidget.TableWidget(**args)
+        else:
+            raise Exception("Cannot automatically create element '%s' (type=%s)" % (self.name, typ))
+        self.setObject(obj)
+        return obj
+        
+        

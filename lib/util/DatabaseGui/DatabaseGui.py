@@ -1,4 +1,6 @@
 from PyQt4 import QtGui, QtCore
+import DatabaseTemplate
+import os
 
 class DatabaseGui(QtGui.QWidget):
     """Presents a very simple interface for interacting with a database.
@@ -15,16 +17,19 @@ class DatabaseGui(QtGui.QWidget):
         self.name = name
         self.tables = tables
         
-        self.ui = template.Ui_Form()
+        self.ui = DatabaseTemplate.Ui_Form()
         self.ui.setupUi(self)
         self.tableWidgets = []
         self.dbChanged()
         
-        self.dm.sigAnalysisDatabaseChanged.connect(self.dbChanged)
+        self.dm.sigAnalysisDbChanged.connect(self.dbChanged)
         self.ui.queryBtn.clicked.connect(self.runQuery)
         
     def dbChanged(self):
         self.db = self.dm.currentDatabase()
+        if self.db is None:
+            return
+        self.ui.dbLabel.setText(os.path.split(self.db.file)[1])
         self.generateTableLists()
         
     def generateTableLists(self):
@@ -45,12 +50,15 @@ class DatabaseGui(QtGui.QWidget):
             row = len(self.tableWidgets)
             self.tableArea.layout().addWidget(label, row, 0)
             self.tableArea.layout().addWidget(combo, row, 1)
-            self.tableWidgets.append(label, combo)
+            self.tableWidgets.append((label, combo))
             combo.currentIndexChanged.connect(self.tableChanged)
             
     def tableChanged(self, ind):
         combo = QtCore.sender()
         self.sigTableChanged.emit(purpose, combo.currentText())
         
-        
+    def runQuery(self):
+        q = str(self.queryText.text())
+        res = self.db(q)
+        self.queryTable.setData(res)
         

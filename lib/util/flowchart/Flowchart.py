@@ -49,6 +49,9 @@ def toposort(deps, nodes=None, seen=None, stack=None):
         
 
 class Flowchart(Node):
+    
+    sigOutputChanged = QtCore.Signal()
+    
     def __init__(self, terminals=None, name=None, filePath=None):
         if name is None:
             name = "Flowchart"
@@ -76,6 +79,18 @@ class Flowchart(Node):
         for name, opts in terminals.iteritems():
             self.addTerminal(name, **opts)
       
+    def setInput(self, **args):
+        print "setInput", args
+        Node.setInput(self, **args)
+        self.inputNode.setOutput(**args)
+        
+    def outputChanged(self):
+        self.widget().outputChanged(self.outputNode.inputValues())
+        self.sigOutputChanged.emit()
+        
+    def output(self):
+        return self.outputNode.inputValues()
+        
     def nodes(self):
         return self._nodes
         
@@ -235,14 +250,6 @@ class Flowchart(Node):
                     del data[arg]
 
         return ret
-        
-    def setInput(self, **args):
-        print "setInput", args
-        Node.setInput(self, **args)
-        self.inputNode.setOutput(**args)
-        
-    def outputChanged(self):
-        self.widget().outputChanged(self.outputNode.inputValues())
         
     def processOrder(self):
         """Return the order of operations required to process this chart.
@@ -450,7 +457,7 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         self.chartWidget = FlowchartWidget(chart, self)
         self.cwWin = QtGui.QMainWindow()
         self.cwWin.setWindowTitle('Flowchart')
-        self.cwWin.resize(800,600)
+        self.cwWin.resize(1000,800)
         self.cwWin.setCentralWidget(self.chartWidget)
         
         QtCore.QObject.connect(self.ui.ctrlList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.itemChanged)
@@ -559,11 +566,18 @@ class FlowchartWidget(DockArea.DockArea):
         
         ## build user interface (it was easier to do it here than via developer)
         self.view = FlowchartGraphicsView.FlowchartGraphicsView()
-        self.viewDock = DockArea.Dock('view')
+        self.viewDock = DockArea.Dock('view', size=(1000,600))
         self.viewDock.addWidget(self.view)
         self.viewDock.hideTitleBar()
         self.addDock(self.viewDock)
     
+
+        self.hoverText = QtGui.QTextEdit()
+        self.hoverText.setReadOnly(True)
+        self.hoverDock = DockArea.Dock('Hover Info', size=(1000,50))
+        self.hoverDock.addWidget(self.hoverText)
+        self.addDock(self.hoverDock, 'bottom')
+
         self.selInfo = QtGui.QWidget()
         self.selInfoLayout = QtGui.QGridLayout()
         self.selInfo.setLayout(self.selInfoLayout)
@@ -574,15 +588,10 @@ class FlowchartWidget(DockArea.DockArea):
         #self.selInfoLayout.addWidget(self.selNameLabel)
         self.selInfoLayout.addWidget(self.selDescLabel)
         self.selInfoLayout.addWidget(self.selectedTree)
-        self.selDock = DockArea.Dock('Selected Node')
+        self.selDock = DockArea.Dock('Selected Node', size=(1000,200))
         self.selDock.addWidget(self.selInfo)
-        self.addDock(self.selDock, 'right')
+        self.addDock(self.selDock, 'bottom')
         
-        self.hoverText = QtGui.QTextEdit()
-        self.hoverText.setReadOnly(True)
-        self.hoverDock = DockArea.Dock('Hover Info')
-        self.hoverDock.addWidget(self.hoverText)
-        self.addDock(self.hoverDock, 'bottom')
 
         self._scene = QtGui.QGraphicsScene()
         self.view.setScene(self._scene)

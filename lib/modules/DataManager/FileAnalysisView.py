@@ -7,6 +7,9 @@ import lib.analysis.modules as analysis
 import lib.analysis.AnalysisHost as AnalysisHost
 
 class FileAnalysisView(QtGui.QWidget):
+    
+    sigDbChanged = QtCore.Signal()
+    
     def __init__(self, parent, mod):
         QtGui.QWidget.__init__(self, parent)
         self.ui = Ui_Form()
@@ -28,20 +31,22 @@ class FileAnalysisView(QtGui.QWidget):
         
         
     def openDbClicked(self):
-        fn = QtGui.QFileDialog.getOpenFileName(self, "Select Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)")
+        fn = str(QtGui.QFileDialog.getOpenFileName(self, "Select Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)"))
         if fn == '':
             return
         self.ui.databaseText.setText(fn)
         self.dbFile = fn
         self.db = database.AnalysisDatabase(self.dbFile)
+        self.sigDbChanged.emit()
         
     def createDbClicked(self):
-        fn = QtGui.QFileDialog.getSaveFileName(self, "Create Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)", None, QtGui.QFileDialog.DontConfirmOverwrite)
+        fn = str(QtGui.QFileDialog.getSaveFileName(self, "Create Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)", None, QtGui.QFileDialog.DontConfirmOverwrite))
         if fn is '':
             return
         self.ui.databaseText.setText(fn)
         self.dbFile = fn
         self.db = database.AnalysisDatabase(self.dbFile, self.man.getBaseDir())
+        self.sigDbChanged.emit()
         
     def addFileClicked(self):
         cf = self.mod.selectedFile()
@@ -59,6 +64,7 @@ class FileAnalysisView(QtGui.QWidget):
         mod = AnalysisHost.AnalysisHost(dataManager=self.mod, module=modName)
         self.mods.append(mod)
 
-
+    def currentDatabase(self):
+        return self.db
 
 

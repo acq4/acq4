@@ -10,18 +10,19 @@ class EventDetector(AnalysisModule):
     def __init__(self, host):
         path = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "flowcharts")
         self.flowchart = Flowchart(filePath=path)
-        self.loader = FileLoader.FileLoader(host.dataManager())
+        #self.loader = FileLoader.FileLoader(host.dataManager())
         #self.setCentralWidget(self.flowchart.widget())
         #self.ui.chartDock1.setWidget(self.flowchart.widget())
         self.flowchart.addInput("dataIn")
         #self.ctrl = QtGui.QLabel('LABEL')
         self.ctrl = self.flowchart.widget()
         self._elements_ = OrderedDict([
-            ('fileLoader', {'type': 'fileInput', 'object': self.loader, 'size': (200, 300)}),
-            ('dataPlot', {'type': 'plot', 'pos': ('right', 'fileLoader'), 'size': (800, 400)}),
-            ('ctrl', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('bottom', 'fileLoader'), 'size': (200, 500)}),
-            #('database', {'type': 'database', 'pos': ('below', 'fileInput')}),
-            ('filterPlot', {'type': 'plot', 'pos': ('bottom', 'dataPlot'), 'size': (800, 400)}),
+            ('File Loader', {'type': 'fileInput', 'size': (200, 300)}),
+            ('Data Plot', {'type': 'plot', 'pos': ('right', 'File Loader'), 'size': (800, 400)}),
+            ('Detection Opts', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('bottom', 'File Loader'), 'size': (200, 500)}),
+            ('Database', {'type': 'database', 'pos': ('below', 'File Loader'), 'tables': {'events': 'EventDetector_events'}}),
+            ('Filter Plot', {'type': 'plot', 'pos': ('bottom', 'Data Plot'), 'size': (800, 400)}),
+            ('Output Table', {'type': 'table', 'pos': ('bottom', 'Filter Plot'), 'optional': True}),
         ])
         
         #print "EventDetector init:", id(EventDetector), id(AnalysisModule)
@@ -34,8 +35,8 @@ class EventDetector(AnalysisModule):
             self.flowchart.loadFile(os.path.join(path, 'default.fc'))
             
             ## assign plots to their correct spots in the chart
-            p1 = self.getElement('dataPlot')
-            p2 = self.getElement('filterPlot')
+            p1 = self.getElement('Data Plot')
+            p2 = self.getElement('Filter Plot')
             self.flowchart.nodes()['Plot_000'].setPlot(p1)
             self.flowchart.nodes()['Plot_001'].setPlot(p2)
             
@@ -44,12 +45,15 @@ class EventDetector(AnalysisModule):
         except:
             debug.printExc('Error loading default flowchart:')
         
+        self.loader = self.getElement('File Loader')
+        self.table = self.getElement('Output Table')
+        self.flowchart.sigOutputChanged.connect(self.outputChanged)
         QtCore.QObject.connect(self.loader, QtCore.SIGNAL('fileLoaded'), self.fileLoaded)
         
     def fileLoaded(self, fh):
-        print 'loaded'
         self.flowchart.setInput(dataIn=fh)
         
-        
+    def outputChanged(self):
+        self.table.setData(self.flowchart.output()['events'])
         
         

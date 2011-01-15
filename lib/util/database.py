@@ -5,112 +5,6 @@ import pickle, re, os
 import DataManager
 
 
-class AnalysisDatabase:
-    """Defines the structure for DBs used for analysis. Essential features are:
-     - a table of control parameters "DbParameters" 
-     - a table defining relationships between tables "TableRelationships"
-     - Directories created by data manager can be added automatically to DB
-     - Automatic creation of views that join together directory hierarchies
-     """
-    
-    def __init__(self, dbFile, baseDir=None):
-        create = False
-        self._baseDir = None
-        if not os.path.exists(dbFile):
-            create = True
-            if baseDir is None:
-                raise Exception("Must specify a base directory when creating a database.")
-
-        self.db = SqliteDatabase(dbFile)
-        
-        if create:
-            self.initializeDb()
-            self.setBaseDir(baseDir)
-            
-    def initializeDb(self):
-        self.db.createTable("DbParameters", ["'Param' text unique", "'Value' text"])
-        
-        ## Table1.Column refers to Table2.ROWID
-        self.db.createTable("TableRelationships", ["'Table1' text", "'Column' text", "'Table2' text"])
-
-    def baseDir(self):
-        """Return a dirHandle for the base directory used for all file names in the database."""
-        if self._baseDir is None:
-            dirName = self.ctrlParam('BaseDirectory')
-            self._baseDir = DataManager.getHandle(dirName)
-        return self._baseDir
-        
-    def setBaseDir(self, baseDir):
-        """Sets the base dir which prefixes all file names in the database. Must be a DirHandle."""
-        self.setCtrlParam('BaseDirectory', baseDir.name())
-        self._baseDir = baseDir
-
-    def ctrlParam(self, param):
-        return self.db.select('DbParameters', ['Value'], "where Param='%s'"%param)[0]['Value']
-        
-    def setCtrlParam(self, param, value):
-        self.db.replace('DbParameters', {'Param': param, 'Value': value})
-        
-
-    def createDirTable(self, dirHandle, tableName=None, fields=None):
-        """Ctrates a new table for storing directories similar to dirHandle"""
-        parent = dirHandle.parent()
-        fields = ["'Dir' text"] + fields
-        
-        if tableName is None:
-            info = dirHandle.info()
-            tableName = info['dirType']
-        
-        if parent is not self.baseDir():
-            fields = ["'Source' int"] + fields
-            self.db.insert('TableRelationships', Table1=tableName, Column="Source", Table2=parent.info()['dirType'])
-        self.db.createTable(tableName, fields)
-        return tableName
-
-    def addDir(self, handle, table=None):
-        """Create a record based on a DirHandle and its meta-info.
-        If no table is specified, use the dirType attribute as table name"""
-        info = handle.info()
-        
-        ## determine parent directory, make sure parent is in DB.
-        parent = handle.parent()
-        parentRowId = None
-        if parent.isManaged() and parent is not self.baseDir():
-            parentRowId = self.addDir(parent)
-        
-        if table is None:
-            table = info['dirType']
-            
-        if not self.db.hasTable(table):
-            spec = ["'%s' text"%k for k in info]
-            #db.createTable(table, spec)
-            self.createDirTable(handle, table, spec)
-            
-        ## make sure dir is not already in DB. 
-        ## if it is, just return the row ID
-        rid = self.getDirRowID(handle, table)
-        if rid is not None:
-            return rid
-            
-        if parentRowId is not None:
-            info['Source'] = parentRowId
-        info['Dir'] = handle.name(relativeTo=self.baseDir())
-        self.db.insert(table, info)
-
-        return self.db.lastInsertRow()
-
-    def getDirRowID(self, dirHandle, table=None):
-        if table is None:
-            info = dirHandle.info()
-            if 'dirType' not in info:
-                raise Exception("Directory '%s' has no dirType attribute." % dirHandle.name())
-            table = info['dirType']
-        rec = self.db.select(table, ['rowid'], "where Dir='%s'" % dirHandle.name(relativeTo=self.baseDir()))
-        if len(rec) < 1:
-            return None
-        #print rec[0]
-        return rec[0]['rowid']
-
 
 class SqliteDatabase:
     """Encapsulates an SQLITE database through QtSql to make things a bit more pythonic.
@@ -279,6 +173,128 @@ class SqliteDatabase:
             tables[rec['name']] = fields
         self.tables = tables
         #print tables
+
+
+class AnalysisDatabase(SqliteDatabase):
+    """Defines the structure for DBs used for analysis. Essential features are:
+     - a table of control parameters "DbParameters" 
+     - a table defining relationships between tables "TableRelationships"
+     - a table assgning ownership of data tables to analysis modules
+     - Directories created by data manager can be added automatically to DB
+     - Automatic creation of views that join together directory hierarchies
+     """
+    
+    def __init__(self, dbFile, baseDir=None):
+        create = False
+        self._baseDir = None
+        if not os.path.exists(dbFile):
+            create = True
+            if baseDir is None:
+                raise Exception("Must specify a base directory when creating a database.")
+
+        #self.db = SqliteDatabase(dbFile)
+        SqliteDatabase.__init__(self, dbFile)
+        self.file = dbFile
+        
+        if create:
+            self.initializeDb()
+            self.setBaseDir(baseDir)
+            
+    def initializeDb(self):
+        self.createTable("DbParameters", ["'Param' text unique", "'Value' text"])
+        
+        ## Table1.Column refers to Table2.ROWID
+        self.createTable("TableRelationships", ["'Table1' text", "'Column' text", "'Table2' text"])
+        
+        self.createTable("DataTableOwners", ["'ModName' text", "'TableName' text", "'Purpose' text"])
+
+    def baseDir(self):
+        """Return a dirHandle for the base directory used for all file names in the database."""
+        if self._baseDir is None:
+            dirName = self.ctrlParam('BaseDirectory')
+            self._baseDir = DataManager.getHandle(dirName)
+        return self._baseDir
+        
+    def setBaseDir(self, baseDir):
+        """Sets the base dir which prefixes all file names in the database. Must be a DirHandle."""
+        self.setCtrlParam('BaseDirectory', baseDir.name())
+        self._baseDir = baseDir
+
+    def ctrlParam(self, param):
+        return self.select('DbParameters', ['Value'], "where Param='%s'"%param)[0]['Value']
+        
+    def setCtrlParam(self, param, value):
+        self.replace('DbParameters', {'Param': param, 'Value': value})
+        
+
+    def createDirTable(self, dirHandle, tableName=None, fields=None):
+        """Ctrates a new table for storing directories similar to dirHandle"""
+        parent = dirHandle.parent()
+        fields = ["'Dir' text"] + fields
+        
+        if tableName is None:
+            info = dirHandle.info()
+            tableName = info['dirType']
+        
+        if parent is not self.baseDir():
+            fields = ["'Source' int"] + fields
+            self.insert('TableRelationships', Table1=tableName, Column="Source", Table2=parent.info()['dirType'])
+        self.createTable(tableName, fields)
+        return tableName
+
+    def addDir(self, handle, table=None):
+        """Create a record based on a DirHandle and its meta-info.
+        If no table is specified, use the dirType attribute as table name"""
+        info = handle.info()
+        
+        ## determine parent directory, make sure parent is in DB.
+        parent = handle.parent()
+        parentRowId = None
+        if parent.isManaged() and parent is not self.baseDir():
+            parentRowId = self.addDir(parent)
+        
+        if table is None:
+            table = info['dirType']
+            
+        if not self.hasTable(table):
+            spec = ["'%s' text"%k for k in info]
+            #db.createTable(table, spec)
+            self.createDirTable(handle, table, spec)
+            
+        ## make sure dir is not already in DB. 
+        ## if it is, just return the row ID
+        rid = self.getDirRowID(handle, table)
+        if rid is not None:
+            return rid
+            
+        if parentRowId is not None:
+            info['Source'] = parentRowId
+        info['Dir'] = handle.name(relativeTo=self.baseDir())
+        self.insert(table, info)
+
+        return self.lastInsertRow()
+
+    def getDirRowID(self, dirHandle, table=None):
+        if table is None:
+            info = dirHandle.info()
+            if 'dirType' not in info:
+                raise Exception("Directory '%s' has no dirType attribute." % dirHandle.name())
+            table = info['dirType']
+        rec = self.select(table, ['rowid'], "where Dir='%s'" % dirHandle.name(relativeTo=self.baseDir()))
+        if len(rec) < 1:
+            return None
+        #print rec[0]
+        return rec[0]['rowid']
+        
+    def listTablesOwned(self, module, purpose=None):
+        if purpose is None:
+            res = self.select("DataTableOwners", ["TableName", "Purpose"], sql="where ModName='%s'" % module)
+        else:
+            res = self.select("DataTableOwners", ["TableName"], sql="where ModName='%s' and Purpose='%s'" % (module, purpose))
+        return res
+        
+    #def createOwnedTable
+
 
 
 
