@@ -16,7 +16,7 @@ class DatabaseGui(QtGui.QWidget):
         self.dm = dm
         self.name = name
         self.tables = tables
-        
+        self.db = None
         self.ui = DatabaseTemplate.Ui_Form()
         self.ui.setupUi(self)
         self.tableWidgets = []
@@ -33,24 +33,25 @@ class DatabaseGui(QtGui.QWidget):
         self.generateTableLists()
         
     def generateTableLists(self):
-        for l, c in self.tableWidgets:
+        for l, c in self.tableWidgets.itervalues():
             self.tableArea.layout().removeWidget(l)
             self.tableArea.layout().removeWidget(c)
-        self.tableWidgets = []
+        self.tableWidgets = {}
             
         for purpose, default in self.tables.iteritems():
             label = QtGui.QLabel(purpose)
             combo = QtGui.QComboBox()
-            tables = self.db.listTablesUsed(name, purpose)
+            combo.setEditable(True)
+            tables = self.db.listTablesOwned(self.name, purpose)
             if default not in tables:
                 tables.insert(0, default)
             for t in tables:
                 combo.addItem(t)
             combo.purpose = purpose
             row = len(self.tableWidgets)
-            self.tableArea.layout().addWidget(label, row, 0)
-            self.tableArea.layout().addWidget(combo, row, 1)
-            self.tableWidgets.append((label, combo))
+            self.ui.tableArea.layout().addWidget(label, row, 0)
+            self.ui.tableArea.layout().addWidget(combo, row, 1)
+            self.tableWidgets[purpose] = (label, combo)
             combo.currentIndexChanged.connect(self.tableChanged)
             
     def tableChanged(self, ind):
@@ -61,4 +62,9 @@ class DatabaseGui(QtGui.QWidget):
         q = str(self.queryText.text())
         res = self.db(q)
         self.queryTable.setData(res)
+
+    def getTableName(self, purpose):
+        return self.tableWidgets[purpose][1].currentText()
         
+    def getDb(self):
+        return self.db

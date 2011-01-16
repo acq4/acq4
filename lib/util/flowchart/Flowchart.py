@@ -80,7 +80,7 @@ class Flowchart(Node):
             self.addTerminal(name, **opts)
       
     def setInput(self, **args):
-        print "setInput", args
+        #print "setInput", args
         Node.setInput(self, **args)
         self.inputNode.setOutput(**args)
         

@@ -127,7 +127,7 @@ class Element:
         elif typ == 'fileInput':
             obj = FileLoader.FileLoader(host.dataManager(), **args)
         elif typ == 'database':
-            obj = DatabaseGui.DatabaseGui(host.dataManager(), name=self.name, **args)
+            obj = DatabaseGui.DatabaseGui(host.dataManager(), **args)
         elif typ == 'table':
             obj = TableWidget.TableWidget(**args)
         else:

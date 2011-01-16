@@ -71,13 +71,27 @@ class SqliteDatabase:
         return self.insert(*args, replaceOnConflict=True, **kargs)
 
     def createTable(self, table, fields):
-        """Create a table in the database."""
+        """Create a table in the database.
+          table: (str) the name of the table to create
+          fields: (list) a list of strings defining columns in the table. 
+                  These usually look like '"FieldName" type' 
+                  OR
+                  (dict) a dictionary of 'FieldName': 'type' pairs
+                  Types may be any string, but are typically int, real, text, or blob.
+                  """
         #print "create table", table, ', '.join(fields)
-        self('CREATE TABLE %s (%s)' % (table, ', '.join(fields)))
+        if isinstance(fields, list):
+            fieldStr = ', '.join(fields)
+        elif isinstance(fields, dict):
+            fieldStr = ', '.join(['"%s" %s' % (n, t) for n,t in fields.iteritems()])
+        self('CREATE TABLE %s (%s)' % (table, fieldStr))
         self._readTableList()
 
     def hasTable(self, table):
         return table in self.tables
+            
+    def tableSchema(self, table):
+        return self.tables[table]
             
     def _exe(self, query, cmd=None):
         """Execute an SQL query, raising an exception if there was an error. (internal use only)"""
@@ -147,6 +161,8 @@ class SqliteDatabase:
         return data
 
     def _readTableList(self):
+        """Reads the schema for each table, extracting the field names and types."""
+        
         res = self.select('sqlite_master', ['name', 'sql'], "where type = 'table'")
         ident = r"(\w+|'[^']+'|\"[^\"]+\")"
         #print "READ:"
@@ -206,7 +222,7 @@ class AnalysisDatabase(SqliteDatabase):
         ## Table1.Column refers to Table2.ROWID
         self.createTable("TableRelationships", ["'Table1' text", "'Column' text", "'Table2' text"])
         
-        self.createTable("DataTableOwners", ["'ModName' text", "'TableName' text", "'Purpose' text"])
+        self.createTable("DataTableOwners", ["'Owner' text", "'TableName' text", "'Purpose' text"])
 
     def baseDir(self):
         """Return a dirHandle for the base directory used for all file names in the database."""
@@ -228,7 +244,7 @@ class AnalysisDatabase(SqliteDatabase):
         
 
     def createDirTable(self, dirHandle, tableName=None, fields=None):
-        """Ctrates a new table for storing directories similar to dirHandle"""
+        """Creates a new table for storing directories similar to dirHandle"""
         parent = dirHandle.parent()
         fields = ["'Dir' text"] + fields
         
@@ -238,9 +254,13 @@ class AnalysisDatabase(SqliteDatabase):
         
         if parent is not self.baseDir():
             fields = ["'Source' int"] + fields
-            self.insert('TableRelationships', Table1=tableName, Column="Source", Table2=parent.info()['dirType'])
+            self.linkTables(tableName, "Source", parent.info()['dirType'])
         self.createTable(tableName, fields)
         return tableName
+
+    def linkTables(self, table1, col, table2):
+        """Declare a key relationship between two tables. Values in table1.column are ROWIDs from table 2"""
+        self.insert('TableRelationships', Table1=table1, Column=col, Table2=table2)
 
     def addDir(self, handle, table=None):
         """Create a record based on a DirHandle and its meta-info.
@@ -251,7 +271,7 @@ class AnalysisDatabase(SqliteDatabase):
         parent = handle.parent()
         parentRowId = None
         if parent.isManaged() and parent is not self.baseDir():
-            parentRowId = self.addDir(parent)
+            pTable, parentRowId = self.addDir(parent)
         
         if table is None:
             table = info['dirType']
@@ -265,14 +285,14 @@ class AnalysisDatabase(SqliteDatabase):
         ## if it is, just return the row ID
         rid = self.getDirRowID(handle, table)
         if rid is not None:
-            return rid
+            return table, rid
             
         if parentRowId is not None:
             info['Source'] = parentRowId
         info['Dir'] = handle.name(relativeTo=self.baseDir())
         self.insert(table, info)
 
-        return self.lastInsertRow()
+        return table, self.lastInsertRow()
 
     def getDirRowID(self, dirHandle, table=None):
         if table is None:
@@ -285,15 +305,18 @@ class AnalysisDatabase(SqliteDatabase):
             return None
         #print rec[0]
         return rec[0]['rowid']
-        
-    def listTablesOwned(self, module, purpose=None):
+
+    ### TODO: No more 'purpose', just use 'owner.purpose' instead
+    def listTablesOwned(self, owner):
         if purpose is None:
-            res = self.select("DataTableOwners", ["TableName", "Purpose"], sql="where ModName='%s'" % module)
+            res = self.select("DataTableOwners", ["TableName", "Purpose"], sql="where Owner='%s'" % module)
         else:
-            res = self.select("DataTableOwners", ["TableName"], sql="where ModName='%s' and Purpose='%s'" % (module, purpose))
+            res = self.select("DataTableOwners", ["TableName"], sql="where Owner='%s' and Purpose='%s'" % (module, purpose))
         return res
         
-    #def createOwnedTable
+    def takeOwnership(self, table, owner):
+        self.insert("DataTableOwners", {'TableName': table, }
+    
 
 
 
