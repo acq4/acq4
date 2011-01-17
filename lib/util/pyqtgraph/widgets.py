@@ -15,7 +15,7 @@ import numpy as np
 from numpy.linalg import norm
 import scipy.ndimage as ndimage
 from Point import *
-from math import cos, sin, pi
+from math import cos, sin
 from ObjectWorkaround import *
 
 def rectStr(r):
@@ -144,6 +144,11 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
             raise Exception("Scale/rotate handles must have either the same x or y coordinate as their center point.")
         return self.addHandle({'name': name, 'type': 'sr', 'center': center, 'pos': pos, 'item': item})
     
+    def addRotateFreeHandle(self, pos, center, axes=None, item=None, name=None):
+        pos = Point(pos)
+        center = Point(center)
+        return self.addHandle({'name': name, 'type': 'rf', 'center': center, 'pos': pos, 'item': item})
+    
     def addHandle(self, info):
         if not info.has_key('item') or info['item'] is None:
             #print "BEFORE ADD CHILD:", self.childItems()
@@ -262,14 +267,20 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         
     def movePoint(self, pt, pos, modifiers=QtCore.Qt.KeyboardModifier()):
         #print "movePoint() called."
+        ## pos is the new position of the handle in scene coords, as requested by the handle.
+        
         newState = self.stateCopy()
         h = self.handles[pt]
         #p0 = self.mapToScene(h['item'].pos())
+        ## p0 is current (before move) position of handle in scene coords
         p0 = self.mapToScene(h['pos'] * self.state['size'])
         p1 = Point(pos)
+        
+        ## transform p0 and p1 into parent's coordinates (same as scene coords if there is no parent). I forget why.
         p0 = self.mapSceneToParent(p0)
         p1 = self.mapSceneToParent(p1)
 
+        ## Handles with a 'center' need to know their local position relative to the center point (lp0, lp1)
         if h.has_key('center'):
             c = h['center']
             cs = c * self.state['size']
@@ -296,15 +307,18 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
             #cs = c * self.state['size']
             #p1 = (self.mapFromScene(ev.scenePos()) + self.pressHandlePos - self.pressPos) - cs
             
+            ## If a handle and its center have the same x or y value, we can't scale across that axis.
             if h['center'][0] == h['pos'][0]:
                 lp1[0] = 0
             if h['center'][1] == h['pos'][1]:
                 lp1[1] = 0
             
+            ## snap 
             if self.scaleSnap or (modifiers & QtCore.Qt.ControlModifier):
                 lp1[0] = round(lp1[0] / self.snapSize) * self.snapSize
                 lp1[1] = round(lp1[1] / self.snapSize) * self.snapSize
             
+            ## determine scale factors and new size of ROI
             hs = h['pos'] - c
             if hs[0] == 0:
                 hs[0] = 1
@@ -312,6 +326,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
                 hs[1] = 1
             newSize = lp1 / hs
             
+            ## Perform some corrections and limit checks
             if newSize[0] == 0:
                 newSize[0] = newState['size'][0]
             if newSize[1] == 0:
@@ -324,10 +339,12 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
             if self.aspectLocked:
                 newSize[0] = newSize[1]
             
+            ## Move ROI so the center point occupies the same scene location after the scale
             s0 = c * self.state['size']
             s1 = c * newSize
             cc = self.mapToParent(s0 - s1) - self.mapToParent(Point(0, 0))
             
+            ## update state, do more boundary checks
             newState['size'] = newSize
             newState['pos'] = newState['pos'] + cc
             if self.maxBounds is not None:
@@ -339,30 +356,31 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
             self.prepareGeometryChange()
             self.state = newState
             
+            ## move handles to their new locations
             self.updateHandles()
         
-        elif h['type'] == 'r':
-            #newState = self.stateCopy()
-            #c = h['center']
-            #cs = c * self.state['size']
-            #p0 = Point(h['item'].pos()) - cs
-            #p1 = (self.mapFromScene(ev.scenePos()) + self.pressHandlePos - self.pressPos) - cs
+        elif h['type'] in ['r', 'rf']:
+            ## If the handle is directly over its center point, we can't compute an angle.
             if lp1.length() == 0 or lp0.length() == 0:
                 return
             
+            ## determine new rotation angle, constrained if necessary
             ang = newState['angle'] + lp0.angle(lp1)
-            if ang is None:
+            if ang is None:  ## this should never happen..
                 return
             if self.rotateSnap or (modifiers & QtCore.Qt.ControlModifier):
                 ang = round(ang / (np.pi/12.)) * (np.pi/12.)
             
-            
+            ## create rotation transform
             tr = QtGui.QTransform()
             tr.rotate(-ang * 180. / np.pi)
             
+            ## mvoe ROI so that center point remains stationary after rotate
             cc = self.mapToParent(cs) - (tr.map(cs) + self.state['pos'])
             newState['angle'] = ang
             newState['pos'] = newState['pos'] + cc
+            
+            ## check boundaries, update
             if self.maxBounds is not None:
                 r = self.stateRect(newState)
                 if not self.maxBounds.contains(r):
@@ -370,6 +388,45 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
             self.setTransform(tr)
             self.setPos(newState['pos'], update=False)
             self.state = newState
+            
+            ## If this is a free-rotate handle, its distance from the center may change.
+            
+            if h['type'] == 'rf':
+                h['item'].setPos(self.mapFromScene(p1))  ## changes ROI coordinates of handle
+                
+            
+        #elif h['type'] == 'rf':
+            ### If the handle is directly over its center point, we can't compute an angle.
+            #if lp1.length() == 0 or lp0.length() == 0:
+                #return
+            
+            ### determine new rotation angle, constrained if necessary
+            #pos = Point(pos)
+            #ang = newState['angle'] + lp0.angle(lp1)
+            #if ang is None:
+                ##h['item'].setPos(self.mapFromScene(Point(pos[0], 0.0)))  ## changes ROI coordinates of handle
+                #h['item'].setPos(self.mapFromScene(pos))
+                #return
+            #if self.rotateSnap or (modifiers & QtCore.Qt.ControlModifier):
+                #ang = round(ang / (np.pi/12.)) * (np.pi/12.)
+            
+            
+            #tr = QtGui.QTransform()
+            #tr.rotate(-ang * 180. / np.pi)
+            
+            #cc = self.mapToParent(cs) - (tr.map(cs) + self.state['pos'])
+            #newState['angle'] = ang
+            #newState['pos'] = newState['pos'] + cc
+            #if self.maxBounds is not None:
+                #r = self.stateRect(newState)
+                #if not self.maxBounds.contains(r):
+                    #return
+            #self.setTransform(tr)
+            #self.setPos(newState['pos'], update=False)
+            #self.state = newState
+            
+            #h['item'].setPos(self.mapFromScene(pos))  ## changes ROI coordinates of handle
+            ##self.emit(QtCore.SIGNAL('regionChanged'), self)
         
         elif h['type'] == 'sr':
             #newState = self.stateCopy()
@@ -419,6 +476,7 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.handleChange()
     
     def handleChange(self):
+        """The state of the ROI has changed; redraw if needed."""
         #print "handleChange() called."
         changed = False
         #print "self.lastState:", self.lastState
@@ -688,6 +746,9 @@ class Handle(QtGui.QGraphicsItem):
         elif typ == 'sr':
             self.sides = 12
             self.startAng = 0
+        elif typ == 'rf':
+            self.sides = 12
+            self.startAng = 0
         else:
             self.sides = 4
             self.startAng = np.pi/4
@@ -724,6 +785,7 @@ class Handle(QtGui.QGraphicsItem):
             if not r[0].checkPointMove(r[1], pos, modifiers):
                 return
         #print "point moved; inform %d ROIs" % len(self.roi)
+        # A handle can be used by multiple ROIs; tell each to update its handle position
         for r in self.roi:
             r[0].movePoint(r[1], pos, modifiers)
         
@@ -963,41 +1025,70 @@ class SpiralROI(ROI):
         if pos == None:
             pos = [0,0]
         ROI.__init__(self, pos, size, **args)
-        self.addFreeHandle([1,0], name='a')
-        self.addFreeHandle([3,0], name='r')
-        self.getRadius()
+        self.translateSnap = False
+        self.addFreeHandle([0.25,0], name='a')
+        self.addRotateFreeHandle([1,0], [0,0], name='r')
+        #self.getRadius()
+        #QtCore.connect(self, QtCore.SIGNAL('regionChanged'), self.
+        
         
     def getRadius(self):
-        radius = self.handles[1]['item'].pos().x()
+        radius = Point(self.handles[1]['item'].pos()).length()
+        #r2 = radius[1]
+        #r3 = r2[0]
         return radius
     
     def boundingRect(self):
         r = self.getRadius()
-        return QtCore.QRectF(-r, -r, 2*r, 2*r)
+        return QtCore.QRectF(-r*1.1, -r*1.1, 2.2*r, 2.2*r)
+        #return self.bounds
+    
+    def movePoint(self, *args, **kargs):
+        ROI.movePoint(self, *args, **kargs)
+        self.prepareGeometryChange()
+        for h in self.handles:
+            h['pos'] = h['item'].pos()/self.state['size'][0]
+            
+    def handleChange(self):
+        ROI.handleChange(self)
+        if len(self.handles) > 1:
+            self.path = QtGui.QPainterPath()
+            h0 = Point(self.handles[0]['item'].pos()).length()
+            a = h0/(2.0*np.pi)
+            theta = 30.0*(2.0*np.pi)/360.0
+            self.path.moveTo(QtCore.QPointF(a*theta*cos(theta), a*theta*sin(theta)))
+            x0 = a*theta*cos(theta)
+            radius = self.getRadius()
+            theta += 10.0*(2.0*np.pi)/360.0
+            i = 0
+            while x0 < radius and i < 2000:
+                x1 = a*theta*cos(theta)
+                y1 = a*theta*sin(theta)
+                self.path.lineTo(QtCore.QPointF(x1,y1))
+                theta += 10.0*(2.0*np.pi)/360.0
+                x0 = x1
+                i += 1
+           
+                
+            return self.path
+    
         
     def shape(self):
-        path = QtGui.QPainterPath()
-        h0 = self.handles[0]['item'].pos()
-        a = h0.x()/(2.0*pi)
-        theta = 30.0*(2.0*pi)/360.0
-        path.moveTo(QtCore.QPointF(a*theta*cos(theta), a*theta*sin(theta)))
-        x0 = a*theta*cos(theta)
-        radius = self.getRadius()
-        theta += 10.0*(2.0*pi)/360.0
-        while x0 < radius:
-            x1 = a*theta*cos(theta)
-            y1 = a*theta*sin(theta)
-            path.lineTo(QtCore.QPointF(x1,y1))
-            theta += 10.0*(2.0*pi)/360.0
-            x0 = x1
-            
-        return path
+        p = QtGui.QPainterPath()
+        p.addEllipse(self.boundingRect())
+        return p
     
     def paint(self, p, *args):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        path = self.shape()
+        #path = self.shape()
         p.setPen(self.pen)
-        p.drawPath(path)
+        p.drawPath(self.path)
+        p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
+        p.drawPath(self.shape())
+        p.setPen(QtGui.QPen(QtGui.QColor(0,0,255)))
+        p.drawRect(self.boundingRect())
+        
+    
 
             
 
