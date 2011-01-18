@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
 from flowchart import *
@@ -93,7 +94,9 @@ class EventDetector(AnalysisModule):
             db.takeOwnership(table, self.dbIdentity)
         else:
             ## check table for ownership, columns
-        
+            if db.tableOwner(table) != self.dbIdentity:
+                raise Exception("Table %s is not owned by this module." % table)
+            
         
         ## delete all records from table for current input file
         

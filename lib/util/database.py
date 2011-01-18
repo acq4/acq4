@@ -70,7 +70,7 @@ class SqliteDatabase:
     def replace(self, *args, **kargs):
         return self.insert(*args, replaceOnConflict=True, **kargs)
 
-    def createTable(self, table, fields):
+    def createTable(self, table, fields, sql=""):
         """Create a table in the database.
           table: (str) the name of the table to create
           fields: (list) a list of strings defining columns in the table. 
@@ -84,7 +84,7 @@ class SqliteDatabase:
             fieldStr = ', '.join(fields)
         elif isinstance(fields, dict):
             fieldStr = ', '.join(['"%s" %s' % (n, t) for n,t in fields.iteritems()])
-        self('CREATE TABLE %s (%s)' % (table, fieldStr))
+        self('CREATE TABLE %s (%s) %s' % (table, fieldStr, sql))
         self._readTableList()
 
     def hasTable(self, table):
@@ -222,7 +222,7 @@ class AnalysisDatabase(SqliteDatabase):
         ## Table1.Column refers to Table2.ROWID
         self.createTable("TableRelationships", ["'Table1' text", "'Column' text", "'Table2' text"])
         
-        self.createTable("DataTableOwners", ["'Owner' text", "'TableName' text", "'Purpose' text"])
+        self.createTable("DataTableOwners", ["'Owner' text", "'Table' text unique on conflict abort"])
 
     def baseDir(self):
         """Return a dirHandle for the base directory used for all file names in the database."""
@@ -308,16 +308,17 @@ class AnalysisDatabase(SqliteDatabase):
 
     ### TODO: No more 'purpose', just use 'owner.purpose' instead
     def listTablesOwned(self, owner):
-        if purpose is None:
-            res = self.select("DataTableOwners", ["TableName", "Purpose"], sql="where Owner='%s'" % module)
-        else:
-            res = self.select("DataTableOwners", ["TableName"], sql="where Owner='%s' and Purpose='%s'" % (module, purpose))
-        return res
+        res = self.select("DataTableOwners", ["Table"], sql="where Owner='%s'" % owner)
+        return [x['Table'] for x in res]
         
     def takeOwnership(self, table, owner):
-        self.insert("DataTableOwners", {'TableName': table, }
+        self.insert("DataTableOwners", {'Table': table, "Owner": owner})
     
-
+    def tableOwner(self, table):
+        res = self.select("DataTableOwners", ["Owner"], sql="where Table='%s'" % table)
+        if len(res) == 0:
+            return None
+        return res[0]['Owner']
 
 
 
