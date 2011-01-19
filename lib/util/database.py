@@ -62,6 +62,10 @@ class SqliteDatabase:
         records = self._prepareData(table, records)
         self.exe(cmd, records)
 
+    def delete(self, table, where):
+        cmd = "DELETE FROM %s WHERE %s" % (table, where)
+        return self(cmd)
+
     def lastInsertRow(self):
         q = self("select last_insert_rowid()")
         q.first()
@@ -222,7 +226,7 @@ class AnalysisDatabase(SqliteDatabase):
         ## Table1.Column refers to Table2.ROWID
         self.createTable("TableRelationships", ["'Table1' text", "'Column' text", "'Table2' text"])
         
-        self.createTable("DataTableOwners", ["'Owner' text", "'Table' text unique on conflict abort"])
+        self.createTable("DataTableOwners", ["'Owner' text", "'TableName' text unique on conflict abort"])
 
     def baseDir(self):
         """Return a dirHandle for the base directory used for all file names in the database."""
@@ -308,14 +312,14 @@ class AnalysisDatabase(SqliteDatabase):
 
     ### TODO: No more 'purpose', just use 'owner.purpose' instead
     def listTablesOwned(self, owner):
-        res = self.select("DataTableOwners", ["Table"], sql="where Owner='%s'" % owner)
+        res = self.select("DataTableOwners", ["TableName"], sql="where Owner='%s'" % owner)
         return [x['Table'] for x in res]
         
     def takeOwnership(self, table, owner):
-        self.insert("DataTableOwners", {'Table': table, "Owner": owner})
+        self.insert("DataTableOwners", {'TableName': table, "Owner": owner})
     
     def tableOwner(self, table):
-        res = self.select("DataTableOwners", ["Owner"], sql="where Table='%s'" % table)
+        res = self.select("DataTableOwners", ["Owner"], sql="where TableName='%s'" % table)
         if len(res) == 0:
             return None
         return res[0]['Owner']

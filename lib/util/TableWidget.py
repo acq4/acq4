@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import numpy as np
 import metaarray
@@ -28,7 +29,10 @@ class TableWidget(QtGui.QTableWidget):
         """
         fn0, header0 = self.iteratorFn(data)
         it0 = fn0(data)
-        first = it0.next()
+        try:
+            first = it0.next()
+        except StopIteration:
+            return
         fn1, header1 = self.iteratorFn(first)
         
         #print fn0, header0
@@ -70,6 +74,8 @@ class TableWidget(QtGui.QTableWidget):
             return self.iterFirstAxis, None
         elif isinstance(data, np.void):
             return self.iterate, map(str, data.dtype.names)
+        else:
+            raise Exception("Don't know how to iterate over data type: %s" % str(type(data)))
         
     def iterFirstAxis(self, data):
         for i in xrange(data.shape[0]):

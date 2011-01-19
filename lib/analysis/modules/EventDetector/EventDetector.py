@@ -22,7 +22,7 @@ class EventDetector(AnalysisModule):
             ('File Loader', {'type': 'fileInput', 'size': (200, 300)}),
             ('Data Plot', {'type': 'plot', 'pos': ('right', 'File Loader'), 'size': (800, 400)}),
             ('Detection Opts', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('bottom', 'File Loader'), 'size': (200, 500)}),
-            ('Database', {'type': 'database', 'pos': ('below', 'File Loader'), 'tables': {'name': self.dbIdentity, 'events': 'EventDetector_events'}}),
+            ('Database', {'type': 'database', 'pos': ('below', 'File Loader'), 'tables': {'EventDetector': 'EventDetector_events'}}),
             ('Filter Plot', {'type': 'plot', 'pos': ('bottom', 'Data Plot'), 'size': (800, 400)}),
             ('Output Table', {'type': 'table', 'pos': ('bottom', 'Filter Plot'), 'optional': True}),
         ])
@@ -75,7 +75,7 @@ class EventDetector(AnalysisModule):
         fields = OrderedDict([
             ('SourceDir', 'int'),
             ('SourceFile', 'text'),
-        )]
+        ])
         for i in xrange(len(data.dtype)):
             name = data.dtype.names[i]
             typ = data.dtype[i].kind
@@ -97,10 +97,23 @@ class EventDetector(AnalysisModule):
             if db.tableOwner(table) != self.dbIdentity:
                 raise Exception("Table %s is not owned by this module." % table)
             
-        
+            ts = db.tableSchema(table)
+            for f in fields:
+                if f not in ts:
+                    raise Exception("Table has different data structure: Missing field %s" % f)
+                elif ts[f] != fields[f]:
+                    raise Exception("Table has different data structure: Field '%s' type is %s, should be %s" % (f, ts[f], fields[f]))
+
         ## delete all records from table for current input file
+        db.delete(table, "SourceDir=%d and SourceFile=%s" % (pRow, self.currentFile.shortName()))
         
         ## add new records
-        
+        rec = {'SourceDir': pRow, 'SourceFile': self.currentFile.shortName()}
+        for i in xrange(len(data)):
+            d2 = data[i]
+            rec2 = dict(zip(d2.dtype.names, d2))
+            rec2.update(rec)
+            db.insert(table, rec2)
+                
         
         

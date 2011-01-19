@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 import DatabaseTemplate
 import os
@@ -10,16 +11,17 @@ class DatabaseGui(QtGui.QWidget):
     
     sigTableChanged = QtCore.Signal(str, str)  ## table purpose, table name
     
-    def __init__(self, dm, name, tables):
-        """tables should be a dict like {'purpose': 'default', ...}"""
+    def __init__(self, dm, tables):
+        """tables should be a dict like {'owner': 'default', ...}"""
         QtGui.QWidget.__init__(self)
         self.dm = dm
-        self.name = name
+        #self.ident = identity
         self.tables = tables
         self.db = None
         self.ui = DatabaseTemplate.Ui_Form()
         self.ui.setupUi(self)
-        self.tableWidgets = []
+        self.ui.dbLabel.setText("[No DB Loaded]")
+        self.tableWidgets = {}
         self.dbChanged()
         
         self.dm.sigAnalysisDbChanged.connect(self.dbChanged)
@@ -38,33 +40,33 @@ class DatabaseGui(QtGui.QWidget):
             self.tableArea.layout().removeWidget(c)
         self.tableWidgets = {}
             
-        for purpose, default in self.tables.iteritems():
-            label = QtGui.QLabel(purpose)
+        for ident, default in self.tables.iteritems():
+            label = QtGui.QLabel(ident)
             combo = QtGui.QComboBox()
             combo.setEditable(True)
-            tables = self.db.listTablesOwned(self.name, purpose)
+            tables = self.db.listTablesOwned(ident)
             if default not in tables:
                 tables.insert(0, default)
             for t in tables:
                 combo.addItem(t)
-            combo.purpose = purpose
+            combo.ident = ident
             row = len(self.tableWidgets)
             self.ui.tableArea.layout().addWidget(label, row, 0)
             self.ui.tableArea.layout().addWidget(combo, row, 1)
-            self.tableWidgets[purpose] = (label, combo)
+            self.tableWidgets[ident] = (label, combo)
             combo.currentIndexChanged.connect(self.tableChanged)
             
     def tableChanged(self, ind):
         combo = QtCore.sender()
-        self.sigTableChanged.emit(purpose, combo.currentText())
+        self.sigTableChanged.emit(combo.ident, combo.currentText())
         
     def runQuery(self):
-        q = str(self.queryText.text())
-        res = self.db(q)
-        self.queryTable.setData(res)
+        q = str(self.ui.queryText.text())
+        res = self.db._queryToDict(self.db(q))
+        self.ui.queryTable.setData(res)
 
-    def getTableName(self, purpose):
-        return self.tableWidgets[purpose][1].currentText()
+    def getTableName(self, ident):
+        return self.tableWidgets[ident][1].currentText()
         
     def getDb(self):
         return self.db
