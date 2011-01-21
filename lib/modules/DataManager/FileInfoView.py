@@ -53,7 +53,7 @@ class FileInfoView(QtGui.QWidget):
         fields = OrderedDict()
         if isinstance(file, DirHandle):
             if 'dirType' in info:
-                infoKeys.remove('dirType')
+                #infoKeys.remove('dirType')
                 dt = info['dirType']
                 if dt in self.manager.config['folderTypes']:
                     fields = self.manager.config['folderTypes'][dt]['info']

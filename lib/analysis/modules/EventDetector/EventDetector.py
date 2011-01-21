@@ -22,7 +22,7 @@ class EventDetector(AnalysisModule):
             ('File Loader', {'type': 'fileInput', 'size': (200, 300)}),
             ('Data Plot', {'type': 'plot', 'pos': ('right', 'File Loader'), 'size': (800, 400)}),
             ('Detection Opts', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('bottom', 'File Loader'), 'size': (200, 500)}),
-            ('Database', {'type': 'database', 'pos': ('below', 'File Loader'), 'tables': {'EventDetector': 'EventDetector_events'}}),
+            ('Database', {'type': 'database', 'pos': ('below', 'File Loader'), 'tables': {self.dbIdentity: 'EventDetector_events'}}),
             ('Filter Plot', {'type': 'plot', 'pos': ('bottom', 'Data Plot'), 'size': (800, 400)}),
             ('Output Table', {'type': 'table', 'pos': ('bottom', 'Filter Plot'), 'optional': True}),
         ])
@@ -52,6 +52,7 @@ class EventDetector(AnalysisModule):
         self.dbui = self.getElement('Database')
         self.flowchart.sigOutputChanged.connect(self.outputChanged)
         QtCore.QObject.connect(self.loader, QtCore.SIGNAL('fileLoaded'), self.fileLoaded)
+        self.dbui.sigStoreToDB.connect(self.storeClicked)
         
     def fileLoaded(self, fh):
         self.flowchart.setInput(dataIn=fh)
@@ -60,12 +61,15 @@ class EventDetector(AnalysisModule):
     def outputChanged(self):
         self.table.setData(self.flowchart.output()['events'])
         
-    def writeToDb(self):
-        data = self.flowchart.output()
-        table = self.dbui.getTableName('events')
+    def storeToDB(self):
+        data = self.flowchart.output()['events']
+        table = self.dbui.getTableName(self.dbIdentity)
         db = self.dbui.getDb()
-        if db is None or len(data) == 0:
-            return
+        if db is None:
+            raise Exception("No DB selected")
+        if len(data) == 0:
+            raise Exception("No data to store.")
+            
             
         ## make sure parent dir is registered in DB, get its table name
         pDir = self.currentFile.parent()
@@ -105,7 +109,7 @@ class EventDetector(AnalysisModule):
                     raise Exception("Table has different data structure: Field '%s' type is %s, should be %s" % (f, ts[f], fields[f]))
 
         ## delete all records from table for current input file
-        db.delete(table, "SourceDir=%d and SourceFile=%s" % (pRow, self.currentFile.shortName()))
+        db.delete(table, "SourceDir=%d and SourceFile='%s'" % (pRow, self.currentFile.shortName()))
         
         ## add new records
         rec = {'SourceDir': pRow, 'SourceFile': self.currentFile.shortName()}
@@ -114,6 +118,13 @@ class EventDetector(AnalysisModule):
             rec2 = dict(zip(d2.dtype.names, d2))
             rec2.update(rec)
             db.insert(table, rec2)
+            
                 
-        
+    def storeClicked(self):
+        try:
+            self.storeToDB()
+            self.dbui.storeBtnFeedback(True, "Stored!")
+        except:
+            self.dbui.storeBtnFeedback(False, "Error!", "See console for error message..")
+            raise
         

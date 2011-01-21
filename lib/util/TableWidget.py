@@ -98,7 +98,12 @@ class TableWidget(QtGui.QTableWidget):
         if row > self.rowCount()-1:
             self.setRowCount(row+1)
         for col in xrange(self.columnCount()):
-            item = QtGui.QTableWidgetItem(str(vals[col]))
+            val = vals[col]
+            if isinstance(val, float) or isinstance(val, np.floating):
+                s = "%0.3g" % val
+            else:
+                s = str(val)
+            item = QtGui.QTableWidgetItem(s)
             item.value = vals[col]
             #print "add item to row %d:"%row, item, item.value
             self.items.append(item)

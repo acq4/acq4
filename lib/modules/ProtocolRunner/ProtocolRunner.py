@@ -664,7 +664,9 @@ class ProtocolRunner(Module):
                 name = self.currentProtocol.name()
                 if name is None:
                     name = 'protocol'
-                dh = self.currentDir.mkdir(name, autoIncrement=True, info=self.protocolInfo())
+                info = self.protocolInfo()
+                info['dirType'] = 'Protocol'
+                dh = self.currentDir.mkdir(name, autoIncrement=True, info=info)
             else:
                 dh = None
             
@@ -717,7 +719,9 @@ class ProtocolRunner(Module):
                 name = self.currentProtocol.name()
                 if name is None:
                     name = 'protocol'
-                dh = self.currentDir.mkdir(name, autoIncrement=True, info=self.protocolInfo(params))
+                info = self.protocolInfo(params)
+                info['dirType'] = 'ProtocolSequence'
+                dh = self.currentDir.mkdir(name, autoIncrement=True, info=info)
             else:
                 dh = None
             
@@ -761,7 +765,9 @@ class ProtocolRunner(Module):
             if params != {}:
                 name = '_'.join(map(lambda i: '%03d'%i, params.values()))
                 #print "mkdir", name
-                dh1 = dh.mkdir(name, info=params)
+                info = params.copy()
+                info['dirType'] = 'Protocol'
+                dh1 = dh.mkdir(name, info=info)
                 #prof.mark('create storage dir')
             else:
                 dh1 = dh

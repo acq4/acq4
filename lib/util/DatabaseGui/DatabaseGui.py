@@ -10,6 +10,7 @@ class DatabaseGui(QtGui.QWidget):
     - Select tables"""
     
     sigTableChanged = QtCore.Signal(str, str)  ## table purpose, table name
+    sigStoreToDB = QtCore.Signal()
     
     def __init__(self, dm, tables):
         """tables should be a dict like {'owner': 'default', ...}"""
@@ -26,6 +27,7 @@ class DatabaseGui(QtGui.QWidget):
         
         self.dm.sigAnalysisDbChanged.connect(self.dbChanged)
         self.ui.queryBtn.clicked.connect(self.runQuery)
+        self.ui.storeBtn.clicked.connect(self.storeClicked)
         
     def dbChanged(self):
         self.db = self.dm.currentDatabase()
@@ -62,11 +64,18 @@ class DatabaseGui(QtGui.QWidget):
         
     def runQuery(self):
         q = str(self.ui.queryText.text())
-        res = self.db._queryToDict(self.db(q))
+        res = self.db(q)
         self.ui.queryTable.setData(res)
 
     def getTableName(self, ident):
-        return self.tableWidgets[ident][1].currentText()
+        return str(self.tableWidgets[ident][1].currentText())
         
     def getDb(self):
         return self.db
+        
+    def storeClicked(self):
+        self.sigStoreToDB.emit()
+        
+    def storeBtnFeedback(self, *args):
+        #print "feedback", args
+        self.ui.storeBtn.feedback(*args)
