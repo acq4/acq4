@@ -5,7 +5,7 @@ import lib.analysis.modules.EventDetector as EventDetector
 #from flowchart import *
 import os
 from advancedTypes import OrderedDict
-#import debug
+import debug
 #import FileLoader
 
 class Photostim(AnalysisModule):
@@ -13,7 +13,8 @@ class Photostim(AnalysisModule):
         self.dbIdentity = "Photostim"  ## how we identify to the database; this determines which tables we own
 
         self.ctrl = QtGui.QLabel("CTRL")
-
+        self.scanItems = {}
+        
         ## create event detector
         fcDir = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "flowcharts")
         self.detector = EventDetector.EventDetector(host, flowchartDir=fcDir)
@@ -25,9 +26,9 @@ class Photostim(AnalysisModule):
         ## Create element list, importing some gui elements from event detector
         elems = self.detector.listElements()
         self._elements_ = OrderedDict([
-            ('File Loader', {'type': 'fileInput', 'size': (200, 300)}),
+            ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'host': self}),
             ('Detection Opts', elems['Detection Opts'].setParams(pos=('bottom', 'File Loader'), size= (200,500))),
-            ('Database', {'type': 'database', 'pos': ('below', 'File Loader'), 'tables': {self.dbIdentity: 'EventDetector_events'}}),
+            ('Database', {'type': 'database', 'pos': ('below', 'File Loader'), 'tables': {self.dbIdentity: 'EventDetector_events'}, 'host': self}),
             ('Canvas', {'type': 'canvas', 'pos': ('right',), 'size': (400,400)}),
             ('Data Plot', elems['Data Plot'].setParams(pos=('bottom', 'Canvas'), size=(800,200))),
             ('Filter Plot', elems['Filter Plot'].setParams(pos=('bottom', 'Data Plot'), size=(800,200))),
@@ -46,23 +47,36 @@ class Photostim(AnalysisModule):
     def setElement(self, name, obj):
         old = self.getElement(name, create=False)
         if name == 'File Loader':
-            if old is not None:
-                old.sigFileLoaded.disconnect(self.fileLoaded)
-            obj.sigFileLoaded.connect(self.fileLoaded)
+            pass
+            #if old is not None:
+                #old.sigFileLoaded.disconnect(self.fileLoaded)
+            #obj.sigFileLoaded.connect(self.fileLoaded)
         elif name == 'Database':
-            if old is not None:
-                old.sigStoreToDB.connect(self.storeClicked)
-            obj.sigStoreToDB.connect(self.storeClicked)
+            pass
+            #if old is not None:
+                #old.sigStoreToDB.connect(self.storeClicked)
+            #obj.sigStoreToDB.connect(self.storeClicked)
         
         AnalysisModule.setElement(self, name, obj)
 
         
-    def fileLoaded(self, fh):
-        if fh.isFile():
-            pass  ## hand file over to canvas
-        else:
-            pass  ## try loading sequence
+    def loadFileRequested(self, fh):
+        canvas = self.getElement('Canvas')
+        try:
+            if fh.isFile():
+                canvas.addFile(fh)
+            else:
+                scan = canvas.addFile(fh)
+                self.scanItems[fh] = scan
+                scan.item.sigPointClicked.connect(self.scanPointClicked)
+            return True
+        except:
+            debug.printExc("Error loading file %s" % fh.name())
+            return False
     
-    def storeClicked(self):
+    def storeToDB(self):
         pass
-        
+
+
+    def scanPointClicked(self, point):
+        print "click!", point

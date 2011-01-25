@@ -39,6 +39,8 @@ class ImageFile(FileType):
         """Read a file, return a data object"""
         img = Image.open(fileHandle.name())
         arr = array(img)
+        if arr.ndim == 0:
+            raise Exception("Image has no data. Either 1) this is not a valid image or 2) the PIL script is not correctly installed.")
         transp = range(arr.ndim)    ## switch axis order y,x to x,y
         if len(img.size) == 2:
             transp[0] = 1

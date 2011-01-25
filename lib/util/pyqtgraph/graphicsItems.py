@@ -251,9 +251,9 @@ class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
         else:
             gotNewData = True
             if copy:
-                self.image = image.copy()
+                self.image = image.view(np.ndarray).copy()
             else:
-                self.image = image
+                self.image = image.view(np.ndarray)
         #print "  image max:", self.image.max(), "min:", self.image.min()
         
         # Determine scale factors
@@ -856,9 +856,12 @@ class CurveArrow(CurvePoint):
         
         
 
-class ScatterPlotItem(QtGui.QGraphicsItem):
+class ScatterPlotItem(QtGui.QGraphicsWidget):
+    
+    sigPointClicked = QtCore.Signal(object)
+    
     def __init__(self, spots=None, pxMode=True, pen=None, brush=None, size=5):
-        QtGui.QGraphicsItem.__init__(self)
+        QtGui.QGraphicsWidget.__init__(self)
         self.spots = []
         self.range = [[0,0], [0,0]]
         
@@ -923,6 +926,7 @@ class ScatterPlotItem(QtGui.QGraphicsItem):
         item = SpotItem(size, pxMode, brush, pen)
         item.setParentItem(self)
         item.setPos(pos)
+        item.sigClicked.connect(self.pointClicked)
         return item
         
     def boundingRect(self):
@@ -933,11 +937,14 @@ class ScatterPlotItem(QtGui.QGraphicsItem):
     def paint(self, p, *args):
         pass
 
+    def pointClicked(self, point):
+        self.sigPointClicked.emit(point)
 
-
-class SpotItem(QtGui.QGraphicsItem):
+class SpotItem(QtGui.QGraphicsWidget):
+    sigClicked = QtCore.Signal(object)
+    
     def __init__(self, size, pxMode, brush, pen):
-        QtGui.QGraphicsItem.__init__(self)
+        QtGui.QGraphicsWidget.__init__(self)
         if pxMode:
             self.setFlags(self.flags() | self.ItemIgnoresTransformations)
             #self.setCacheMode(self.DeviceCoordinateCache)  ## causes crash on linux
@@ -958,7 +965,21 @@ class SpotItem(QtGui.QGraphicsItem):
         p.setBrush(self.brush)
         p.drawPath(self.path)
         
+    def mousePressEvent(self, ev):
+        QtGui.QGraphicsItem.mousePressEvent(self, ev)
+        self.mouseMoved = False
+        ev.accept()
         
+        
+    def mouseMoveEvent(self, ev):
+        QtGui.QGraphicsItem.mouseMoveEvent(self, ev)
+        self.mouseMoved = True
+        pass
+    
+    def mouseReleaseEvent(self, ev):
+        QtGui.QGraphicsItem.mouseReleaseEvent(self, ev)
+        if not self.mouseMoved:
+            self.sigClicked.emit(self)
         
         
 

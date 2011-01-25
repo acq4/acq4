@@ -9,6 +9,12 @@ Run in interactive python. Useful for accessing data for manual analysis.
 """
 #import lib.util.PySideImporter
 
+## Needed to keep compatibility between pyside and pyqt
+## (this can go away once the transition to PySide is complete)
+from PyQt4 import QtCore, QtGui
+QtCore.Signal = QtCore.pyqtSignal
+QtCore.Slot = QtCore.pyqtSlot
+
 from lib.Manager import *
 
 import sys, os
@@ -22,7 +28,6 @@ sys.path.append(pyDir)
 from metaarray import *
 from pyqtgraph import *
 from Canvas import Canvas
-from PyQt4 import QtCore, QtGui
 from functions import *
 
 
@@ -31,10 +36,6 @@ from functions import *
 ## may break some debuggers.
 import disableExceptionStorage
 
-## Needed to keep compatibility between pyside and pyqt
-## (this can go away once the transition to PySide is complete)
-QtCore.Signal = QtCore.pyqtSignal
-QtCore.Slot = QtCore.pyqtSlot
 
 
 
