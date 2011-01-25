@@ -8,9 +8,10 @@ import debug
 import FileLoader
 
 class EventDetector(AnalysisModule):
-    def __init__(self, host):
-        path = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "flowcharts")
-        self.flowchart = Flowchart(filePath=path)
+    def __init__(self, host, flowchartDir=None):
+        if flowchartDir is None:
+            flowchartDir = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "flowcharts")
+        self.flowchart = Flowchart(filePath=flowchartDir)
         self.dbIdentity = "EventDetector"  ## how we identify to the database; this determines which tables we own
         #self.loader = FileLoader.FileLoader(host.dataManager())
         #self.setCentralWidget(self.flowchart.widget())
@@ -19,12 +20,12 @@ class EventDetector(AnalysisModule):
         #self.ctrl = QtGui.QLabel('LABEL')
         self.ctrl = self.flowchart.widget()
         self._elements_ = OrderedDict([
-            ('File Loader', {'type': 'fileInput', 'size': (200, 300)}),
-            ('Data Plot', {'type': 'plot', 'pos': ('right', 'File Loader'), 'size': (800, 400)}),
+            ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'host': self}),
+            ('Data Plot', {'type': 'plot', 'pos': ('right', 'File Loader'), 'size': (800, 300)}),
             ('Detection Opts', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('bottom', 'File Loader'), 'size': (200, 500)}),
-            ('Database', {'type': 'database', 'pos': ('below', 'File Loader'), 'tables': {self.dbIdentity: 'EventDetector_events'}}),
-            ('Filter Plot', {'type': 'plot', 'pos': ('bottom', 'Data Plot'), 'size': (800, 400)}),
-            ('Output Table', {'type': 'table', 'pos': ('bottom', 'Filter Plot'), 'optional': True}),
+            ('Database', {'type': 'database', 'pos': ('below', 'File Loader'), 'tables': {self.dbIdentity: 'EventDetector_events'}, 'host': self}),
+            ('Filter Plot', {'type': 'plot', 'pos': ('bottom', 'Data Plot'), 'size': (800, 300)}),
+            ('Output Table', {'type': 'table', 'pos': ('bottom', 'Filter Plot'), 'optional': True, 'size': (800,200)}),
         ])
         
         #print "EventDetector init:", id(EventDetector), id(AnalysisModule)
@@ -34,37 +35,69 @@ class EventDetector(AnalysisModule):
         
         try:
             ## load default chart
-            self.flowchart.loadFile(os.path.join(path, 'default.fc'))
+            self.flowchart.loadFile(os.path.join(flowchartDir, 'default.fc'))
             
             ## assign plots to their correct spots in the chart
-            p1 = self.getElement('Data Plot')
-            p2 = self.getElement('Filter Plot')
-            self.flowchart.nodes()['Plot_000'].setPlot(p1)
-            self.flowchart.nodes()['Plot_001'].setPlot(p2)
+            #p1 = self.getElement('Data Plot')
+            #p2 = self.getElement('Filter Plot')
+            #self.flowchart.nodes()['Plot_000'].setPlot(p1)
+            #self.flowchart.nodes()['Plot_001'].setPlot(p2)
             
             ## link plot X axes
-            p1.setXLink(p2)
+            #p1.setXLink(p2)
         except:
             debug.printExc('Error loading default flowchart:')
         
-        self.loader = self.getElement('File Loader')
-        self.table = self.getElement('Output Table')
-        self.dbui = self.getElement('Database')
+        #self.loader = self.getElement('File Loader')
+        #self.table = self.getElement('Output Table')
+        #self.dbui = self.getElement('Database')
         self.flowchart.sigOutputChanged.connect(self.outputChanged)
-        QtCore.QObject.connect(self.loader, QtCore.SIGNAL('fileLoaded'), self.fileLoaded)
-        self.dbui.sigStoreToDB.connect(self.storeClicked)
+        #QtCore.QObject.connect(self.loader, QtCore.SIGNAL('fileLoaded'), self.fileLoaded)
+        #self.dbui.sigStoreToDB.connect(self.storeClicked)
         
-    def fileLoaded(self, fh):
+    def setElement(self, name, obj):
+        old = self.getElement(name)
+        if name == 'File Loader':
+            pass
+            #if old is not None:
+                #old.sigFileLoaded.disconnect(self.fileLoaded)
+            #obj.sigFileLoaded.connect(self.fileLoaded)
+        elif name == 'Database':
+            pass
+            #if old is not None:
+                #old.sigStoreToDB.connect(self.storeClicked)
+            #obj.sigStoreToDB.connect(self.storeClicked)
+        elif name == 'Data Plot':
+            self.flowchart.nodes()['Plot_000'].setPlot(obj)
+            p2 = self.getElement('Filter Plot')
+            if p2 is not None:
+                obj.setXLink(p2)
+        elif name == 'Filter Plot':
+            self.flowchart.nodes()['Plot_001'].setPlot(obj)
+            p2 = self.getElement('Filter Plot')
+            if p2 is not None:
+                p2.setXLink(obj)
+        else:
+            #print "set element", name, obj
+            if old is not None:
+                raise Exception("Can not replace element %s" % name)
+        AnalysisModule.setElement(self, name, obj)
+
+    def loadFileRequested(self, fh):
+        """Called by file loader when a file load is requested."""
         self.flowchart.setInput(dataIn=fh)
         self.currentFile = fh
-        
+        return True
+
     def outputChanged(self):
-        self.table.setData(self.flowchart.output()['events'])
+        table = self.getElement('Output Table')
+        table.setData(self.flowchart.output()['events'])
         
     def storeToDB(self):
         data = self.flowchart.output()['events']
-        table = self.dbui.getTableName(self.dbIdentity)
-        db = self.dbui.getDb()
+        dbui = self.getElement('Database')
+        table = dbui.getTableName(self.dbIdentity)
+        db = dbui.getDb()
         if db is None:
             raise Exception("No DB selected")
         if len(data) == 0:
@@ -120,11 +153,12 @@ class EventDetector(AnalysisModule):
             db.insert(table, rec2)
             
                 
-    def storeClicked(self):
-        try:
-            self.storeToDB()
-            self.dbui.storeBtnFeedback(True, "Stored!")
-        except:
-            self.dbui.storeBtnFeedback(False, "Error!", "See console for error message..")
-            raise
+    #def storeClicked(self):
+        #dbui = self.getElement('Database')
+        #try:
+            #self.storeToDB()
+            #dbui.storeBtnFeedback(True, "Stored!")
+        #except:
+            #dbui.storeBtnFeedback(False, "Error!", "See console for error message..")
+            #raise
         

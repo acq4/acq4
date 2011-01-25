@@ -104,12 +104,25 @@ class TableWidget(QtGui.QTableWidget):
             else:
                 s = str(val)
             item = QtGui.QTableWidgetItem(s)
-            item.value = vals[col]
+            item.value = val
             #print "add item to row %d:"%row, item, item.value
             self.items.append(item)
             self.setItem(row, col, item)
             
 
+    def copy(self):
+        """Copy selected data to clipboard."""
+        s = ''
+        for r in range(self.rowCount()):
+            row = []
+            for c in range(self.columnCount()):
+                item = t.item(r, c)
+                if item is not None:
+                    row.append(str(item.value))
+                else:
+                    row.append('')
+            s += ('\t'.join(row) + '\n')
+        QtGui.QApplication.clipboard().setText(s)
 
 
 

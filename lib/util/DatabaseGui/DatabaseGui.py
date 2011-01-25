@@ -10,11 +10,12 @@ class DatabaseGui(QtGui.QWidget):
     - Select tables"""
     
     sigTableChanged = QtCore.Signal(str, str)  ## table purpose, table name
-    sigStoreToDB = QtCore.Signal()
+    #sigStoreToDB = QtCore.Signal()
     
-    def __init__(self, dm, tables):
+    def __init__(self, dm, tables, host=None):
         """tables should be a dict like {'owner': 'default', ...}"""
         QtGui.QWidget.__init__(self)
+        self.host = host
         self.dm = dm
         #self.ident = identity
         self.tables = tables
@@ -74,8 +75,16 @@ class DatabaseGui(QtGui.QWidget):
         return self.db
         
     def storeClicked(self):
-        self.sigStoreToDB.emit()
-        
+        if self.host is None:
+            self.sigStoreToDB.emit()
+        else:
+            try:
+                self.host.storeToDB()
+                self.storeBtnFeedback(True, "Stored!")
+            except:
+                self.storeBtnFeedback(False, "Error!", "See console for error message..")
+                raise
+            
     def storeBtnFeedback(self, *args):
         #print "feedback", args
         self.ui.storeBtn.feedback(*args)

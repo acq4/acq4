@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Magic Reload Library
 Luke Campagnola   2010
@@ -149,7 +150,7 @@ def updateClass(old, new, debug):
             if isinstance(ref, old) and ref.__class__ is old:
                 ref.__class__ = new
                 if debug:
-                    print "    Changed class for", ref
+                    print "    Changed class for", safeStr(ref)
             elif inspect.isclass(ref) and issubclass(ref, old) and old in ref.__bases__:
                 ind = ref.__bases__.index(old)
                 
@@ -165,12 +166,12 @@ def updateClass(old, new, debug):
                 ## (and I presume this may slow things down?)
                 ref.__bases__ = ref.__bases__[:ind] + (new,old) + ref.__bases__[ind+1:]
                 if debug:
-                    print "    Changed superclass for", ref
+                    print "    Changed superclass for", safeStr(ref)
             #else:
                 #if debug:
                     #print "    Ignoring reference", type(ref)
         except:
-            print "Error updating reference (%s) for class change (%s -> %s)" % (str(ref), str(old), str(new))
+            print "Error updating reference (%s) for class change (%s -> %s)" % (safeStr(ref), safeStr(old), safeStr(new))
             raise
         
     ## update all class methods to use new code.
@@ -199,6 +200,18 @@ def updateClass(old, new, debug):
     if hasattr(old, '__previous_reload_version__'):
         updateClass(old.__previous_reload_version__, new, debug)
 
+
+## It is possible to build classes for which str(obj) just causes an exception.
+## Avoid thusly:
+def safeStr(obj):
+    try:
+        s = str(obj)
+    except:
+        try:
+            s = repr(obj)
+        except:
+            s = "<instance of %s at 0x%x>" % (safeStr(type(obj)), id(obj))
+    return s
 
 
 

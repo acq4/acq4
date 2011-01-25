@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import modules
 import DockArea
@@ -31,7 +32,7 @@ class AnalysisHost(QtGui.QMainWindow):
         
         elems = self.mod.listElements()
         for name, el in elems.iteritems():
-            w = self.mod.getElement(name)
+            w = self.mod.getElement(name, create=True)
             d = DockArea.Dock(name=name, size=el.size())
             if w is not None:
                 d.addWidget(w)
