@@ -1058,15 +1058,17 @@ class SpiralROI(ROI):
             theta = 30.0*(2.0*np.pi)/360.0
             self.path.moveTo(QtCore.QPointF(a*theta*cos(theta), a*theta*sin(theta)))
             x0 = a*theta*cos(theta)
+            y0 = a*theta*sin(theta)
             radius = self.getRadius()
-            theta += 10.0*(2.0*np.pi)/360.0
+            theta += 20.0*(2.0*np.pi)/360.0
             i = 0
-            while x0 < radius and i < 2000:
+            while Point(x0, y0).length() < radius and i < 1000:
                 x1 = a*theta*cos(theta)
                 y1 = a*theta*sin(theta)
                 self.path.lineTo(QtCore.QPointF(x1,y1))
-                theta += 10.0*(2.0*np.pi)/360.0
+                theta += 20.0*(2.0*np.pi)/360.0
                 x0 = x1
+                y0 = y1
                 i += 1
            
                 
