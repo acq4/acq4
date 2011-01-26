@@ -225,7 +225,7 @@ class Canvas(QtGui.QWidget):
                     size = d.info()['Scanner']['spotSize']
                 else:
                     size = self.defaultSize
-                pts.append({'pos': pos, 'size': size, 'source': d})
+                pts.append({'pos': pos, 'size': size, 'data': d})
         
         item = graphicsItems.ScatterPlotItem(pts, pxMode=False)
         citem = CanvasItem(self, item, handle=dirHandle, **opts)

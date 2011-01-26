@@ -602,15 +602,15 @@ class FlowchartWidget(DockArea.DockArea):
         QtCore.QObject.connect(self._scene, QtCore.SIGNAL('selectionChanged()'), self.selectionChanged)
         QtCore.QObject.connect(self.view, QtCore.SIGNAL('hoverOver'), self.hoverOver)
         QtCore.QObject.connect(self.view, QtCore.SIGNAL('clicked'), self.showViewMenu)
-        #QtCore.QObject.connect(self.ui.reloadLibBtn, QtCore.SIGNAL('clicked()'), self.reloadLibrary)
+        QtCore.QObject.connect(self.ui.reloadLibBtn, QtCore.SIGNAL('clicked()'), self.reloadLibrary)
         
     
-    #def reloadLibrary(self):
-        #QtCore.QObject.disconnect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
-        #self.nodeMenu = None
-        #self.subMenus = []
-        #library.loadLibrary(reloadLibs=True)
-        #self.buildMenu()
+    def reloadLibrary(self):
+        QtCore.QObject.disconnect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
+        self.nodeMenu = None
+        self.subMenus = []
+        library.loadLibrary(reloadLibs=True)
+        self.buildMenu()
         
         
     def buildMenu(self):

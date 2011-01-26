@@ -20,10 +20,10 @@ class EventDetector(AnalysisModule):
         #self.ctrl = QtGui.QLabel('LABEL')
         self.ctrl = self.flowchart.widget()
         self._elements_ = OrderedDict([
-            ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'host': self}),
-            ('Data Plot', {'type': 'plot', 'pos': ('right', 'File Loader'), 'size': (800, 300)}),
+            ('Database', {'type': 'database', 'tables': {self.dbIdentity: 'EventDetector_events'}, 'host': self}),
+            ('Data Plot', {'type': 'plot', 'pos': ('right', 'Database'), 'size': (800, 300)}),
+            ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'pos': ('above', 'Database'), 'host': self}),
             ('Detection Opts', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('bottom', 'File Loader'), 'size': (200, 500)}),
-            ('Database', {'type': 'database', 'pos': ('below', 'File Loader'), 'tables': {self.dbIdentity: 'EventDetector_events'}, 'host': self}),
             ('Filter Plot', {'type': 'plot', 'pos': ('bottom', 'Data Plot'), 'size': (800, 300)}),
             ('Output Table', {'type': 'table', 'pos': ('bottom', 'Filter Plot'), 'optional': True, 'size': (800,200)}),
         ])
@@ -55,33 +55,20 @@ class EventDetector(AnalysisModule):
         #QtCore.QObject.connect(self.loader, QtCore.SIGNAL('fileLoaded'), self.fileLoaded)
         #self.dbui.sigStoreToDB.connect(self.storeClicked)
         
-    def setElement(self, name, obj):
-        old = self.getElement(name)
-        if name == 'File Loader':
-            pass
-            #if old is not None:
-                #old.sigFileLoaded.disconnect(self.fileLoaded)
-            #obj.sigFileLoaded.connect(self.fileLoaded)
-        elif name == 'Database':
-            pass
-            #if old is not None:
-                #old.sigStoreToDB.connect(self.storeClicked)
-            #obj.sigStoreToDB.connect(self.storeClicked)
-        elif name == 'Data Plot':
-            self.flowchart.nodes()['Plot_000'].setPlot(obj)
+    def elementChanged(self, element, old, new):
+        name = element.name()
+        
+        ## connect plots to flowchart, link X axes
+        if name == 'Data Plot':
+            self.flowchart.nodes()['Plot_000'].setPlot(new)
             p2 = self.getElement('Filter Plot')
             if p2 is not None:
-                obj.setXLink(p2)
+                new.setXLink(p2)
         elif name == 'Filter Plot':
-            self.flowchart.nodes()['Plot_001'].setPlot(obj)
-            p2 = self.getElement('Filter Plot')
+            self.flowchart.nodes()['Plot_001'].setPlot(new)
+            p2 = self.getElement('Data Plot')
             if p2 is not None:
-                p2.setXLink(obj)
-        else:
-            #print "set element", name, obj
-            if old is not None:
-                raise Exception("Can not replace element %s" % name)
-        AnalysisModule.setElement(self, name, obj)
+                p2.setXLink(new)
 
     def loadFileRequested(self, fh):
         """Called by file loader when a file load is requested."""

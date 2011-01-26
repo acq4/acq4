@@ -249,13 +249,72 @@ class PointCombiner(Node):
         
         
         
-        
+class RegionLabeler(Node):
+    """Adds a column to an event list which labels each event with the region it appears in (if any)."""
+    nodeName = "LabelRegions"
     
+    def __init__(self, name):
+        Node.__init__(self, name, terminals={
+            'events': {'io': 'in'},
+            'regions': {'io': 'in', 'multi': True},
+            'output': {'io': 'out', 'bypass': 'events'}
+        })
+
+    def process(self, events, regions, display=True):
+        names = regions.keys()
+        maxLen = max(map(len, names))
+        dtype = [(n, events[n].dtype) for n in events.dtype.names]
+        output = np.empty(len(events), dtype=dtype + [('region', '|S%d'%maxLen)])
+        
+        starts = np.empty((len(regions), 1))
+        stops = np.empty((len(regions), 1))
+        for i in range(len(regions)):
+            rgn = regions[names[i]]
+            starts[i,0] = rgn[0]
+            stops[i,0] = rgn[1]
+            
+        times = events['time'][newaxis,:]
+        match = (times >= starts) * (times <= stops)
+        
+        for i in range(len(events)):
+            m = argmax(match[:,i])
+            if len(m) == 0:
+                rgn = ''
+            else:
+                rgn = names[m[0]]
+            output[i] = tuple(events[i]) + (rgn,)
+        
+        return {'output': out}
 
 
-
-
-
+class EventMasker(CtrlNode):
+    """Removes events from a list which occur within masking regions (used for removing noise)
+    Accepts a list of regions or a list of times (use padding to give width to each time point)"""
+    nodeName = "EventMasker"
+    uiTemplate = [
+        ('prePadding', 'spin', {'value': 0, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
+        ('postPadding', 'spin', {'value': 0.1, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
+    ]
+    
+    def __init__(self, name):
+        CtrlNode.__init__(self, name, terminals={
+            'events': {'io': 'in'},
+            'regions': {'io': 'in'},
+            'output': {'io': 'out', 'bypass': 'events'}
+        })
+    
+    def process(self, events, regions, display=True):
+        prep = self.ctrl['prePadding'].value()
+        postp = self.ctrl['postPadding'].value()
+        
+        starts = (regions-prep)[:,newaxis]
+        stops = (regions+prep)[:,newaxis]
+        
+        times = events['time'][newaxis, :]
+        mask = ((times >= starts) * (times <= stops)).sum(axis=0) > 0
+        
+        return {'output': events[mask]}
+        
 
 
 

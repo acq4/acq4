@@ -26,10 +26,10 @@ class Photostim(AnalysisModule):
         ## Create element list, importing some gui elements from event detector
         elems = self.detector.listElements()
         self._elements_ = OrderedDict([
-            ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'host': self}),
-            ('Detection Opts', elems['Detection Opts'].setParams(pos=('bottom', 'File Loader'), size= (200,500))),
-            ('Database', {'type': 'database', 'pos': ('below', 'File Loader'), 'tables': {self.dbIdentity: 'EventDetector_events'}, 'host': self}),
+            ('Database', {'type': 'database', 'tables': {self.dbIdentity: 'Photostim_events'}, 'host': self}),
             ('Canvas', {'type': 'canvas', 'pos': ('right',), 'size': (400,400)}),
+            ('Detection Opts', elems['Detection Opts'].setParams(pos=('bottom', 'Database'), size= (200,500))),
+            ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'pos': ('above', 'Database'), 'host': self}),
             ('Data Plot', elems['Data Plot'].setParams(pos=('bottom', 'Canvas'), size=(800,200))),
             ('Filter Plot', elems['Filter Plot'].setParams(pos=('bottom', 'Data Plot'), size=(800,200))),
             ('Output Table', elems['Output Table'].setParams(pos=('below', 'Filter Plot'), size=(800,200))),
@@ -44,20 +44,19 @@ class Photostim(AnalysisModule):
         #self.flowchart.sigOutputChanged.connect(self.outputChanged)
         #self.dbui.sigStoreToDB.connect(self.storeClicked)
 
-    def setElement(self, name, obj):
-        old = self.getElement(name, create=False)
-        if name == 'File Loader':
-            pass
-            #if old is not None:
-                #old.sigFileLoaded.disconnect(self.fileLoaded)
-            #obj.sigFileLoaded.connect(self.fileLoaded)
-        elif name == 'Database':
-            pass
-            #if old is not None:
-                #old.sigStoreToDB.connect(self.storeClicked)
-            #obj.sigStoreToDB.connect(self.storeClicked)
+    #def elementChanged(self, element, old, new):
+        #name = element.name()
+        #if name == 'File Loader':
+            #pass
+            ##if old is not None:
+                ##old.sigFileLoaded.disconnect(self.fileLoaded)
+            ##obj.sigFileLoaded.connect(self.fileLoaded)
+        #elif name == 'Database':
+            #pass
+            ##if old is not None:
+                ##old.sigStoreToDB.connect(self.storeClicked)
+            ##obj.sigStoreToDB.connect(self.storeClicked)
         
-        AnalysisModule.setElement(self, name, obj)
 
         
     def loadFileRequested(self, fh):
@@ -79,4 +78,5 @@ class Photostim(AnalysisModule):
 
 
     def scanPointClicked(self, point):
-        print "click!", point
+        #print "click!", point.data
+        self.detector.loadFileRequested(point.data)

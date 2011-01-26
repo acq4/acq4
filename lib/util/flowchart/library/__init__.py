@@ -3,6 +3,8 @@ from advancedTypes import OrderedDict
 import os, types
 from debug import printExc
 from ..Node import Node
+import reload
+
 dn = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -18,15 +20,18 @@ def loadLibrary(reloadLibs=False):
     global NODE_LIST, NODE_TREE
     NODE_LIST = []
     NODE_TREE = OrderedDict()
-        
+    
+    if reloadLibs:
+        reload.reloadAll(dn)
+    
     for f in os.listdir(dn):
         name, ext = os.path.splitext(f)
         if ext != '.py':
             continue
         try:
             mod = __import__(name, globals(), locals())
-            if reloadLibs:
-                reload(mod)
+            #if reloadLibs:
+                #reload(mod)
         except:
             printExc("Error loading flowchart library %s:" % name)
             continue

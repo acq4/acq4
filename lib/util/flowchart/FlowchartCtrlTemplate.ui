@@ -36,9 +36,9 @@
     </widget>
    </item>
    <item row="3" column="0" colspan="2">
-    <widget class="QPushButton" name="modeBtn">
+    <widget class="QPushButton" name="reloadBtn">
      <property name="text">
-      <string>Advanced..</string>
+      <string>Reload Libs</string>
      </property>
      <property name="checkable">
       <bool>true</bool>
@@ -60,6 +60,12 @@
    </item>
    <item row="2" column="0" colspan="4">
     <widget class="TreeWidget" name="ctrlList">
+     <attribute name="headerVisible">
+      <bool>false</bool>
+     </attribute>
+     <attribute name="headerStretchLastSection">
+      <bool>false</bool>
+     </attribute>
      <attribute name="headerVisible">
       <bool>false</bool>
      </attribute>

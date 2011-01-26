@@ -171,7 +171,9 @@ class RegionSelectNode(CtrlNode):
     nodeName = "RegionSelect"
     uiTemplate = [
         ('start', 'spin', {'value': 0, 'step': 0.1}),
-        ('stop', 'spin', {'value': 0.1, 'step': 0.1})
+        ('stop', 'spin', {'value': 0.1, 'step': 0.1}),
+        ('display', 'check', {'value': True}),
+        ('movable', 'check', {'value': True}),
     ]
     
     def __init__(self, name):
@@ -182,6 +184,17 @@ class RegionSelectNode(CtrlNode):
             'region': {'io': 'out'},
             'widget': {'io': 'out', 'multi': True}
         })
+        self.ctrls['display'].toggled.connect(self.displayToggled)
+        self.ctrls['movable'].toggled.connect(self.movableToggled)
+        
+    def displayToggled(self, b):
+        for item in self.items.itervalues():
+            item.setVisible(b)
+            
+    def movableToggled(self, b):
+        for item in self.items.itervalues():
+            item.setMovable(b)
+            
         
     def process(self, data=None, display=True):
         #print "process.."
@@ -201,6 +214,8 @@ class RegionSelectNode(CtrlNode):
                 item = graphicsItems.LinearRegionItem(plot, vals=region)
                 self.items[c] = item
                 item.connect(item, QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+                item.setVisible(s['display'])
+                item.setMovable(s['movable'])
                 #print "  new rgn:", c, region
                 #self.items[c].setYRange([0., 0.2], relative=True)
                 

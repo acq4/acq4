@@ -58,7 +58,7 @@ class AnalysisModule(QtCore.QObject):
                 self._elements_[name] = Element(name, **el)
             elif isinstance(el, basestring):
                 self._elements_[name] = Element(name, type=el)
-                
+            self._elements_[name].sigObjectChanged.connect(self.elementChanged)
             
         
     def processData(self, data):
@@ -79,7 +79,7 @@ class AnalysisModule(QtCore.QObject):
             return None
             #raise Exception("Element %s has no object yet." % name)
 
-    def getElements(self):
+    def getAllElements(self):
         """Return a dict of all objects referenced by elements."""
         el = OrderedDict()
         for name in self.listElements():
@@ -99,6 +99,10 @@ class AnalysisModule(QtCore.QObject):
     def setElement(self, name, obj):
         spec = self.elementSpec(name)
         spec.setObject(obj)
+        
+    def elementChanged(self, element, old, new):
+        """Override this function to handle changes to elements."""
+        pass
 
     def elementSpec(self, name):
         """Return the specification for the named element"""
@@ -106,9 +110,12 @@ class AnalysisModule(QtCore.QObject):
 
 
 
-class Element:
+class Element(QtCore.QObject):
     """Simple class for holding options and attributes for elements"""
+    sigObjectChanged = QtCore.Signal(object, object, object)  ## Element, old obj, new obj
+    
     def __init__(self, name, type, **args):
+        QtCore.QObject.__init__(self)
         self.params = {
             'type': type,         ## string such as 'plot', 'canvas', 'ctrl'
             'name': name,
@@ -136,7 +143,9 @@ class Element:
         return self
         
     def setObject(self, obj):
+        old = self.params['object']
         self.params['object'] = obj
+        self.sigObjectChanged.emit(self, old, obj)
         
     def hasObject(self):
         return self.params['object'] is not None

@@ -907,7 +907,8 @@ class ScatterPlotItem(QtGui.QGraphicsWidget):
             brush = s.get('brush', self.brush)
             pen = s.get('pen', self.pen)
             pen.setCosmetic(True)
-            item = self.mkSpot(pos, size, self.pxMode, brush, pen)
+            data = s.get('data', None)
+            item = self.mkSpot(pos, size, self.pxMode, brush, pen, data)
             self.spots.append(item)
             if xmn is None:
                 xmn = pos[0]-size
@@ -922,8 +923,8 @@ class ScatterPlotItem(QtGui.QGraphicsWidget):
         self.range = [[xmn, xmx], [ymn, ymx]]
                 
 
-    def mkSpot(self, pos, size, pxMode, brush, pen):
-        item = SpotItem(size, pxMode, brush, pen)
+    def mkSpot(self, pos, size, pxMode, brush, pen, data):
+        item = SpotItem(size, pxMode, brush, pen, data)
         item.setParentItem(self)
         item.setPos(pos)
         item.sigClicked.connect(self.pointClicked)
@@ -943,7 +944,7 @@ class ScatterPlotItem(QtGui.QGraphicsWidget):
 class SpotItem(QtGui.QGraphicsWidget):
     sigClicked = QtCore.Signal(object)
     
-    def __init__(self, size, pxMode, brush, pen):
+    def __init__(self, size, pxMode, brush, pen, data):
         QtGui.QGraphicsWidget.__init__(self)
         if pxMode:
             self.setFlags(self.flags() | self.ItemIgnoresTransformations)
@@ -953,6 +954,7 @@ class SpotItem(QtGui.QGraphicsWidget):
         self.path = QtGui.QPainterPath()
         s2 = size/2.
         self.path.addEllipse(QtCore.QRectF(-s2, -s2, size, size))
+        self.data = data
         
     def boundingRect(self):
         return self.path.boundingRect()

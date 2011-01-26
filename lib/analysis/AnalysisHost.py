@@ -41,6 +41,7 @@ class AnalysisHost(QtGui.QMainWindow):
                 pos = ()
             #print d, pos
             self.dockArea.addDock(d, *pos)
+        self.elements = elems
         
         self.setWindowTitle(modName)
         
