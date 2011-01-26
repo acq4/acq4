@@ -5,7 +5,10 @@ print "Starting up.."
 
 import sys, time, numpy
 from numpy import *
-sys.path.append("c:\\cygwin\\home\\Experimenters\\luke\\acq4")
+#import os
+#md = os.path.abspath(os.path.dirname(__file__))
+sys.path.append("c:\\Documents and Settings\experimenters\\luke\\acq4")
+sys.path.append("c:\\Documents and Settings\experimenters\\luke\\acq4\\lib\\util")
 
 from nidaq import NIDAQ as n
 from nidaq import SuperTask
@@ -31,6 +34,7 @@ print "  DO: ", n.listDOLines(dev)
 
 
 def finiteReadTest():
+    print "::::::::::::::::::  Analog Input Test  :::::::::::::::::::::"
     task = n.createTask()
     task.CreateAIVoltageChan("/Dev1/ai0", "", nidaq.Val_RSE, -1., 1., nidaq.Val_Volts, None)
     task.CreateAIVoltageChan("/Dev1/ai1", "", nidaq.Val_Cfg_Default, -10., 10., nidaq.Val_Volts, None)
@@ -45,6 +49,7 @@ def finiteReadTest():
 
 
 def contReadTest():
+    print "::::::::::::::::::  Continuous Read Test  :::::::::::::::::::::"
     task = n.createTask()
     task.CreateAIVoltageChan("/Dev1/ai0", "", nidaq.Val_RSE, -10., 10., nidaq.Val_Volts, None)
     task.CfgSampClkTiming(None, 10000.0, nidaq.Val_Rising, nidaq.Val_ContSamps, 4000)
@@ -60,6 +65,7 @@ def contReadTest():
 ## Output task
 
 def outputTest():
+    print "::::::::::::::::::  Analog Output Test  :::::::::::::::::::::"
     task = n.createTask()
     task.CreateAOVoltageChan("/Dev1/ao0", "", -10., 10., nidaq.Val_Volts, None)
     task.CfgSampClkTiming(None, 10000.0, nidaq.Val_Rising, nidaq.Val_FiniteSamps, 1000)
@@ -103,9 +109,38 @@ def syncADTest():
     print data2[0].shape, data2[0].dtype
     print data2
 
+def syncAIOTest():
+    print "::::::::::::::::::  Sync Analog I/O Test  :::::::::::::::::::::"
+    task1 = n.createTask()
+    task1.CreateAIVoltageChan("/Dev1/ai0", "", nidaq.Val_RSE, -10., 10., nidaq.Val_Volts, None)
+    task1.CfgSampClkTiming("/Dev1/ao/SampleClock", 10000.0, nidaq.Val_Rising, nidaq.Val_FiniteSamps, 100)
+
+    task2 = n.createTask()
+    task2.CreateAOVoltageChan("/Dev1/ao0", "", -10., 10., nidaq.Val_Volts, None)
+    #task2.CfgSampClkTiming(None, 10000.0, nidaq.Val_Rising, nidaq.Val_FiniteSamps, 1000)
+    task2.CfgSampClkTiming(None, 10000.0, nidaq.Val_Rising, nidaq.Val_FiniteSamps, 100)
+    #task2.CfgDigEdgeStartTrig("ai/StartTrigger", nidaq.Val_Rising)
+    
+
+
+    data1 = numpy.zeros((100,), dtype=numpy.float64)
+    data1[20:40] = 7.0
+    data1[60:80] = 5.0
+    print "  Wrote ao samples:", task2.write(data1)
+    task1.start()
+    task2.start()
+    
+    data2 = task1.read()
+    #time.sleep(1.0)
+    task1.stop()
+    task2.stop()
+    
+    print "  Data acquired:", data2[0].shape
+    return data2
+
 
 def syncIOTest():
-    print "::::::::::::::::::  IO  Test  :::::::::::::::::::::"
+    print "::::::::::::::::::  Sync I/O Test  :::::::::::::::::::::"
     task1 = n.createTask()
     task1.CreateAIVoltageChan("/Dev1/ai0", "", nidaq.Val_RSE, -10., 10., nidaq.Val_Volts, None)
     task1.CfgSampClkTiming(None, 10000.0, nidaq.Val_Rising, nidaq.Val_FiniteSamps, 100)
@@ -154,6 +189,8 @@ def syncIOTest():
     print data3[0].shape
     return data2
 
+
+
 def triggerTest():
     task = n.createTask()
     task.CreateAIVoltageChan("/Dev1/ai0", "", nidaq.Val_RSE, -1., 1., nidaq.Val_Volts, None)
@@ -175,14 +212,14 @@ st = SuperTask(n)
 def superTaskTest():
     print "::::::::::::::::::  SuperTask  Test  :::::::::::::::::::::"
 
-    st.addChannel('/Dev1/ai8', 'ai', info={'name': 'ch1in', 'units': 'V'})
-    st.addChannel('/Dev1/ai9', 'ai', info={'name': 'ch2in', 'units': 'A'})
-    st.addChannel('/Dev1/ao0', 'ao', info={'name': 'ch1out', 'units': 'V'})
-    st.addChannel('/Dev1/ao1', 'ao', info={'name': 'ch2out', 'units': 'A'})
-    st.addChannel('/Dev1/port0/line12', 'di', info={'name': 'obj'})
-    st.addChannel('/Dev1/port0/line13', 'di', info={'name': 'camTrig'})
-    st.addChannel('/Dev1/port0/line14', 'do', info={'name': 'LED-Blue'})
-    st.addChannel('/Dev1/port0/line15', 'do', info={'name': 'Laser-UV'})
+    st.addChannel('/Dev1/ai8', 'ai')
+    st.addChannel('/Dev1/ai9', 'ai')
+    st.addChannel('/Dev1/ao0', 'ao')
+    st.addChannel('/Dev1/ao1', 'ao')
+    st.addChannel('/Dev1/port0/line2', 'di')
+    st.addChannel('/Dev1/port0/line3', 'di')
+    st.addChannel('/Dev1/port0/line4', 'do')
+    st.addChannel('/Dev1/port0/line5', 'do')
 
     ao = zeros((2, 1000))
     ao[0, 200:300] = 1.0
@@ -193,8 +230,8 @@ def superTaskTest():
     do = zeros((2, 1000), dtype=uint32)
     do[0, 600:700] = 15
     do[1, 700:800] = 15
-    st.setWaveform('/Dev1/port0/line14', do[0])
-    st.setWaveform('/Dev1/port0/line15', do[1])
+    st.setWaveform('/Dev1/port0/line4', do[0])
+    st.setWaveform('/Dev1/port0/line5', do[1])
 
     st.configureClocks(rate=10000, nPts=1000)
     
@@ -216,13 +253,44 @@ def superTaskTest():
         #print data[k][0][:, ::20].round()
         print data[k]['data']
     return data
+
+def analogSuperTaskTest():
+    print "::::::::::::::::::  Analog SuperTask  Test  :::::::::::::::::::::"
+
+    st.addChannel('/Dev1/ai8', 'ai')
+    st.addChannel('/Dev1/ai9', 'ai')
+    st.addChannel('/Dev1/ao0', 'ao')
+    st.addChannel('/Dev1/ao1', 'ao')
+
+    ao = zeros((2, 1000))
+    ao[0, 200:300] = 1.0
+    ao[1, 400:500] = 2.0
+    st.setWaveform('/Dev1/ao0', ao[0])
+    st.setWaveform('/Dev1/ao1', ao[1])
+
+    st.configureClocks(rate=10000, nPts=1000)
+    
+    #st.setTrigger('/Dev1/PFI5')
+    
+    
+    data = st.run()
+    print "waiting for trigger.."
+    
+    for k in data:
+        print "=====Output", k
+        #print data
+        #print data[k][0][:, ::20].round()
+        print data[k]['data']
+    return data
     
 
-    
-
+data = finiteReadTest()
+outputTest()
+syncAIOTest()
 #syncIOTest()
 #syncADTest()
 #triggerTest()
-data = superTaskTest()
+#data = superTaskTest()
+analogSuperTaskTest()
 
 

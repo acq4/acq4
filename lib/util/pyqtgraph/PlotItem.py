@@ -334,6 +334,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             self.manager.linkY(self, plot)
         
     def linkXChanged(self, plot):
+        """Called when a linked plot has changed its X scale"""
         #print "update from", plot
         if self.linksBlocked:
             return
@@ -347,11 +348,13 @@ class PlotItem(QtGui.QGraphicsWidget):
         x1 = pr.left() + (sg.x()-pg.x()) * upp
         x2 = x1 + sg.width() * upp
         plot.blockLink(True)
+        self.setManualXScale()
         self.setXRange(x1, x2, padding=0)
         plot.blockLink(False)
         self.replot()
         
     def linkYChanged(self, plot):
+        """Called when a linked plot has changed its Y scale"""
         if self.linksBlocked:
             return
         pr = plot.vb.viewRect()
@@ -361,6 +364,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         y1 = pr.bottom() + (sg.y()-pg.y()) * upp
         y2 = y1 + sg.height() * upp
         plot.blockLink(True)
+        self.setManualYScale()
         self.setYRange(y1, y2, padding=0)
         plot.blockLink(False)
         self.replot()

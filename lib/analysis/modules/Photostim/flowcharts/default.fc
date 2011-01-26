@@ -1,0 +1,24 @@
+pos: (0.0, 0.0)
+connects: [('EventFitter.0', 'plot', u'Plot_000', 'In'), ('DenoiseFilter.0', 'Out', 'HistogramDetrend.0', 'In'), ('EventListPlotter.0', 'plot', 'Plot_001', 'In'), ('Subtree.0', 'Clamp1.ma', 'ColumnSelect.1', 'In'), ('EventFitter.0', 'output', 'ColumnSelect.0', 'In'), ('HistogramDetrend.0', 'Out', 'ExpDeconvolve.1', 'In'), ('HistogramDetrend.0', 'Out', 'BesselFilter.0', 'In'), ('BesselFilter.0', 'Out', 'ExpDeconvolve.0', 'In'), ('ColumnSelect.0', 'time', 'EventListPlotter.0', 'events'), ('ColumnSelect.1', 'primary', 'DenoiseFilter.0', 'In'), ('EventListPlotter.0', 'plot', u'Plot_000', 'In'), ('ZeroCrossing.0', 'Out', 'EventFitter.0', 'events'), ('Input', u'dataIn', 'Subtree.0', 'In'), ('ExpDeconvolve.0', 'Out', 'Plot_001', 'In'), ('EventFitter.0', 'output', 'Output', u'events'), ('HistogramDetrend.0', 'Out', u'Plot_000', 'In'), ('ExpDeconvolve.1', 'Out', 'EventFitter.0', 'waveform'), ('ExpDeconvolve.0', 'Out', 'ZeroCrossing.0', 'In')]
+terminals:
+    stats:
+        multi: False
+        optional: False
+        io: 'out'
+    dataIn:
+        multi: False
+        optional: False
+        io: 'in'
+    meta:
+        multi: False
+        optional: False
+        io: 'out'
+    events:
+        multi: False
+        optional: False
+        io: 'out'
+inputNode:
+    pos: (-45.230774498176629, -229.99999524470172)
+nodes: [{'state': {'pos': (99.122496661470308, -79.67203437382868), 'ctrl': {'threshold': 4.0, 'radius': 2}}, 'pos': (99.122496661470308, -79.67203437382868), 'class': 'DenoiseFilter', 'name': 'DenoiseFilter.0'}, {'state': {'pos': (233.28781281958263, -79.347056282954355), 'ctrl': {'windowSize': 2000, 'numBins': 50}}, 'pos': (233.28781281958263, -79.347056282954355), 'class': 'HistogramDetrend', 'name': 'HistogramDetrend.0'}, {'state': {'pos': (1163.3502287823544, 126.92999767184492)}, 'pos': (1163.3502287823544, 126.92999767184492), 'class': 'PlotWidget', 'name': 'Plot_001'}, {'state': {'pos': (891.80007682071221, 8.4725545318343336), 'columns': ['time']}, 'pos': (891.80007682071221, 8.4725545318343336), 'class': 'ColumnSelect', 'name': 'ColumnSelect.0'}, {'state': {'pos': (-42.0, 56.0), 'columns': ['primary']}, 'pos': (-42.0, 56.0), 'class': 'ColumnSelect', 'name': 'ColumnSelect.1'}, {'state': {'pos': (1007.4692252644683, 5.9052019397676503)}, 'pos': (1007.4692252644683, 5.9052019397676503), 'class': 'EventListPlotter', 'name': 'EventListPlotter.0'}, {'state': {'pos': (1136.3684178902072, -339.45729069425352)}, 'pos': (1136.3684178902072, -339.45729069425352), 'class': 'PlotWidget', 'name': u'Plot_000'}, {'state': {'pos': (757.72762370721557, -65.224635887525125), 'ctrl': {'plotEvents': False, 'plotFits': True, 'plotGuess': False}}, 'pos': (757.72762370721557, -65.224635887525125), 'class': 'EventFitter', 'name': 'EventFitter.0'}, {'state': {'pos': (392.0, 44.0), 'ctrl': {'band': 'lowpass', 'cutoff': 4000.0, 'order': 4, 'bidir': True}}, 'pos': (392.0, 44.0), 'class': 'BesselFilter', 'name': 'BesselFilter.0'}, {'state': {'selected': ['Clamp1.ma'], 'pos': (-33.663366336633665, -82.178217821782169)}, 'pos': (-33.663366336633665, -82.178217821782169), 'class': 'Subtree', 'name': 'Subtree.0'}, {'state': {'pos': (507.94692833040403, -79.922482926186802), 'ctrl': {'tau': 0.001}}, 'pos': (507.94692833040403, -79.922482926186802), 'class': 'ExpDeconvolve', 'name': 'ExpDeconvolve.1'}, {'state': {'pos': (510.66512502712555, 45.118704332965791), 'ctrl': {'tau': 0.001}}, 'pos': (510.66512502712555, 45.118704332965791), 'class': 'ExpDeconvolve', 'name': 'ExpDeconvolve.0'}, {'state': {'pos': (638.70182369244446, -17.546421792116647), 'ctrl': {'minLength': 2, 'minPeak': 1.9999999999999999e-11, 'minSum': 1.5e-10}}, 'pos': (638.70182369244446, -17.546421792116647), 'class': 'ZeroCrossing', 'name': 'ZeroCrossing.0'}]
+outputNode:
+    pos: (1233.6423665174714, -104.47067843184189)

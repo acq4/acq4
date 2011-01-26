@@ -12,6 +12,9 @@ class Window(QtGui.QMainWindow):
         self.emit(QtCore.SIGNAL('closed'))
 
 class DataManager(Module):
+    
+    sigAnalysisDbChanged = QtCore.Signal()
+    
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.dm = self.manager.dataManager
@@ -49,6 +52,7 @@ class DataManager(Module):
         QtCore.QObject.connect(self.ui.logEntryText, QtCore.SIGNAL('returnPressed()'), self.logEntry)
         QtCore.QObject.connect(self.ui.fileDisplayTabs, QtCore.SIGNAL('currentChanged(int)'), self.tabChanged)
         QtCore.QObject.connect(self.win, QtCore.SIGNAL('closed'), self.quit)
+        self.ui.analysisWidget.sigDbChanged.connect(self.analysisDbChanged)
         self.win.show()
         
     #def hasInterface(self, interface):
@@ -289,3 +293,8 @@ class DataManager(Module):
         #print "      module quit done"
         #print backtrace()
         
+    def currentDatabase(self):
+        return self.ui.analysisWidget.currentDatabase()
+        
+    def analysisDbChanged(self):
+        self.sigAnalysisDbChanged.emit()

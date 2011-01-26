@@ -4,6 +4,8 @@ import sys, re, types, ctypes, os, time
 from numpy import *
 import cheader
 import ptime  ## platform-independent precision timing
+import debug
+
 dtypes = {
     float64: 'F64',
     int16: 'I16',
@@ -90,14 +92,15 @@ class _NIDAQ:
         #print "  FINAL CALL: ", cArgs
         errCode = self._call(func, *cArgs)
         if errCode < 0:
-            print "Error running function '%s%s'" % (func, str(args))
+            print "NiDAQ Error while running function '%s%s'" % (func, str(args))
             for s in self.error(errCode):
                 print s
             raise NIDAQError(errCode)
             #raise NIDAQError(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         elif errCode > 0:
-            print "NIDAQ Warning:"
+            print "NiDAQ Warning while running function '%s%s'" % (func, str(args))
             print self.error(errCode)
+            debug.printExc("Traceback:")
             #raise NIDAQWarning(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         
         if ret is None:
@@ -224,7 +227,9 @@ class Task:
         return "<Task: %s>" % str(self.GetTaskChannels())
 
     def start(self):
+        #print "starting task.."
         self.nidaq.StartTask(self.handle)
+        #print "started."
 
     def stop(self):
         #print "stopTask", self.getTaskDevices()
@@ -502,10 +507,10 @@ class SuperTask:
             #raise Exception("Multiple DAQ devices not yet supported.")
         dev = keys[0][0]
         
-        if (dev, 'ai') in keys:
-            clkSource = 'ai' # '/Dev1/ai/SampleClock'
-        elif (dev, 'ao') in keys:
-            clkSource = 'ao'  # '/Dev1/ao/SampleClock'
+        if (dev, 'ao') in keys:  ## Try ao first since E-series devices don't seem to work the other way around..
+            clkSource = 'ao' # '/Dev1/ao/SampleClock'
+        elif (dev, 'ai') in keys:
+            clkSource = 'ai'  # '/Dev1/ai/SampleClock'
         else:
             ## Only digital tasks, configure a fake AI task so we can use the ai sample clock.
             ## Even better: Configure a counter to make a clock..

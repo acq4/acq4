@@ -148,6 +148,8 @@ def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateR
     The result x values can be explicitly set with resultXVals."""
     if errFn is None:
         errFn = lambda v, x, y: function(v, x)-y
+    if len(xVals) < len(guess):
+        raise Exception("Too few data points to fit this function. (%d variables, %d points)" % (len(guess), len(xVals)))
     fit = leastsq(errFn, guess, args=(xVals, yVals))
     error = None
     #if measureError:

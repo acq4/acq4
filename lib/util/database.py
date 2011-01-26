@@ -3,114 +3,14 @@ from PyQt4 import QtSql, QtCore
 import numpy as np
 import pickle, re, os
 import DataManager
+import advancedTypes
 
-
-class AnalysisDatabase:
-    """Defines the structure for DBs used for analysis. Essential features are:
-     - a table of control parameters "DbParameters" 
-     - a table defining relationships between tables "TableRelationships"
-     - Directories created by data manager can be added automatically to DB
-     - Automatic creation of views that join together directory hierarchies
-     """
-    
-    def __init__(self, dbFile, baseDir=None):
-        create = False
-        self._baseDir = None
-        if not os.path.exists(dbFile):
-            create = True
-            if baseDir is None:
-                raise Exception("Must specify a base directory when creating a database.")
-
-        self.db = SqliteDatabase(dbFile)
-        
-        if create:
-            self.initializeDb()
-            self.setBaseDir(baseDir)
-            
-    def initializeDb(self):
-        self.db.createTable("DbParameters", ["'Param' text unique", "'Value' text"])
-        
-        ## Table1.Column refers to Table2.ROWID
-        self.db.createTable("TableRelationships", ["'Table1' text", "'Column' text", "'Table2' text"])
-
-    def baseDir(self):
-        """Return a dirHandle for the base directory used for all file names in the database."""
-        if self._baseDir is None:
-            dirName = self.ctrlParam('BaseDirectory')
-            self._baseDir = DataManager.getHandle(dirName)
-        return self._baseDir
-        
-    def setBaseDir(self, baseDir):
-        """Sets the base dir which prefixes all file names in the database. Must be a DirHandle."""
-        self.setCtrlParam('BaseDirectory', baseDir.name())
-        self._baseDir = baseDir
-
-    def ctrlParam(self, param):
-        return self.db.select('DbParameters', ['Value'], "where Param='%s'"%param)[0]['Value']
-        
-    def setCtrlParam(self, param, value):
-        self.db.replace('DbParameters', {'Param': param, 'Value': value})
-        
-
-    def createDirTable(self, dirHandle, tableName=None, fields=None):
-        """Ctrates a new table for storing directories similar to dirHandle"""
-        parent = dirHandle.parent()
-        fields = ["'Dir' text"] + fields
-        
-        if tableName is None:
-            info = dirHandle.info()
-            tableName = info['dirType']
-        
-        if parent is not self.baseDir():
-            fields = ["'Source' int"] + fields
-            self.db.insert('TableRelationships', Table1=tableName, Column="Source", Table2=parent.info()['dirType'])
-        self.db.createTable(tableName, fields)
-        return tableName
-
-    def addDir(self, handle, table=None):
-        """Create a record based on a DirHandle and its meta-info.
-        If no table is specified, use the dirType attribute as table name"""
-        info = handle.info()
-        
-        ## determine parent directory, make sure parent is in DB.
-        parent = handle.parent()
-        parentRowId = None
-        if parent.isManaged() and parent is not self.baseDir():
-            parentRowId = self.addDir(parent)
-        
-        if table is None:
-            table = info['dirType']
-            
-        if not self.db.hasTable(table):
-            spec = ["'%s' text"%k for k in info]
-            #db.createTable(table, spec)
-            self.createDirTable(handle, table, spec)
-            
-        ## make sure dir is not already in DB. 
-        ## if it is, just return the row ID
-        rid = self.getDirRowID(handle, table)
-        if rid is not None:
-            return rid
-            
-        if parentRowId is not None:
-            info['Source'] = parentRowId
-        info['Dir'] = handle.name(relativeTo=self.baseDir())
-        self.db.insert(table, info)
-
-        return self.db.lastInsertRow()
-
-    def getDirRowID(self, dirHandle, table=None):
-        if table is None:
-            info = dirHandle.info()
-            if 'dirType' not in info:
-                raise Exception("Directory '%s' has no dirType attribute." % dirHandle.name())
-            table = info['dirType']
-        rec = self.db.select(table, ['rowid'], "where Dir='%s'" % dirHandle.name(relativeTo=self.baseDir()))
-        if len(rec) < 1:
-            return None
-        #print rec[0]
-        return rec[0]['rowid']
-
+def quoteList(strns):
+    """Given a list of strings, return a single string like '"string1", "string2",...'
+        Note: in SQLite, double quotes are for escaping table and column names; 
+              single quotes are for string literals.
+    """
+    return ','.join(['"'+s+'"' for s in strns])
 
 class SqliteDatabase:
     """Encapsulates an SQLITE database through QtSql to make things a bit more pythonic.
@@ -128,30 +28,51 @@ class SqliteDatabase:
         self.db.open()
         self._readTableList()
 
-    def exe(self, cmd, data=None):
+    def exe(self, cmd, data=None, toDict=True):
         """Execute an SQL query. If data is provided, it should be a list of dicts and each will be bound to the query and executed sequentially. Returns the query object."""
         q = QtSql.QSqlQuery(self.db)
         if data is None:
             self._exe(q, cmd)
         else:
             res = []
-            q.prepare(cmd)
+            if not q.prepare(cmd):
+                print "SQL Query:\n    %s" % cmd
+                raise Exception("Error preparing SQL query (query is printed above): %s" % str(q.lastError().text()))
             for d in data:
+                #print len(d)
                 for k, v in d.iteritems():
                     q.bindValue(':'+k, v)
+                    #print k, v, type(v)
+                #print "==execute with bound data=="
+                #print cmd
+                #print q.boundValues()
+                #for k, v in q.boundValues().iteritems():
+                    #print str(k), v.typeName()
                 self._exe(q)
-        return q
+                
+        if toDict:
+            return self._queryToDict(q)
+        else:
+            return q
             
     def __call__(self, *args, **kargs):
         return self.exe(*args, **kargs)
             
     def select(self, table, fields='*', sql=''):
-        q = self.exe("SELECT %s FROM %s %s" % (','.join(fields), table, sql))
-        return self._queryToDict(q)
+        if fields != '*':
+            fields = quoteList(fields)
+        cmd = "SELECT %s FROM %s %s" % (fields, table, sql)
+        #print cmd
+        q = self.exe(cmd)
+        #return self._queryToDict(q)
+        return q
         
     def insert(self, table, records=None, replaceOnConflict=False, **args):
         """Insert records (a dict or list of dicts) into table.
         if records is None, a simgle record may be specified via keyword arguments."""
+        
+        ## can we optimize this by using batch execution?
+        
         if records is None:
             records = [args]
         if type(records) is not list:
@@ -164,27 +85,45 @@ class SqliteDatabase:
         insert = "INSERT"
         if replaceOnConflict:
             insert += " OR REPLACE"
-        cmd = "%s INTO %s (%s) VALUES (%s)" % (insert, table, ','.join(fields), ','.join([":"+f for f in fields]))
+        cmd = "%s INTO %s (%s) VALUES (%s)" % (insert, table, quoteList(fields), ','.join([":"+f for f in fields]))
         records = self._prepareData(table, records)
+        #print len(fields), len(records[0]), len(self.tableSchema(table))
         self.exe(cmd, records)
+
+    def delete(self, table, where):
+        cmd = "DELETE FROM %s WHERE %s" % (table, where)
+        return self(cmd)
 
     def lastInsertRow(self):
         q = self("select last_insert_rowid()")
-        q.first()
-        return q.value(0)
+        return q[0].values()[0]
 
     def replace(self, *args, **kargs):
         return self.insert(*args, replaceOnConflict=True, **kargs)
 
-    def createTable(self, table, fields):
-        """Create a table in the database."""
+    def createTable(self, table, fields, sql=""):
+        """Create a table in the database.
+          table: (str) the name of the table to create
+          fields: (list) a list of strings defining columns in the table. 
+                  These usually look like '"FieldName" type' 
+                  OR
+                  (dict) a dictionary of 'FieldName': 'type' pairs
+                  Types may be any string, but are typically int, real, text, or blob.
+                  """
         #print "create table", table, ', '.join(fields)
-        self('CREATE TABLE %s (%s)' % (table, ', '.join(fields)))
+        if isinstance(fields, list):
+            fieldStr = ','.join(fields)
+        elif isinstance(fields, dict):
+            fieldStr = ', '.join(['"%s" %s' % (n, t) for n,t in fields.iteritems()])
+        self('CREATE TABLE %s (%s) %s' % (table, fieldStr, sql))
         self._readTableList()
 
     def hasTable(self, table):
         return table in self.tables
-            
+    
+    def tableSchema(self, table):
+        return self.tables[table]
+    
     def _exe(self, query, cmd=None):
         """Execute an SQL query, raising an exception if there was an error. (internal use only)"""
         if cmd is None:
@@ -192,31 +131,50 @@ class SqliteDatabase:
         else:
             ret = query.exec_(cmd)
         if not ret:
-            print "SQL Query:\n    %s" % cmd
-            raise Exception("Error executing SQL (query is printed above): %s" % str(query.lastError().text()))
+            if cmd is not None:
+                print "SQL Query:\n    %s" % cmd
+                raise Exception("Error executing SQL (query is printed above): %s" % str(query.lastError().text()))
+            else:
+                raise Exception("Error executing SQL: %s" % str(query.lastError().text()))
+                
         if str(query.executedQuery())[:6].lower() == 'create':
             self._readTableList()
-        
-        
+    
+    
     def _prepareData(self, table, data):
         """Massage data so it is ready for insert into the DB. (internal use only)
-        This currently just means that data destined for BLOB fields is pickled."""
-        rec = data[0]
-        blobs = []
-        #print data
-        for k in rec:
-            schema = self.tables[table]
-            if k not in schema:
-                raise Exception("Table %s has no field named '%s'. Schema is: %s" % (table, k, str(schema)))
-            if self.tables[table][k].lower() == 'blob':
-                blobs.append(k)
-        if len(blobs) == 0:
-            return data
+         - data destined for BLOB fields is pickled
+         - numerical fields convert to int or float
+         - text fields convert to unicode"""
+         
+         ## This can probably be optimized a bit..
+        #rec = data[0]
+        funcs = {}
+        ## determine the functions to use for each field.
+        schema = self.tables[table]
+        for k in schema:
+            #if k not in schema:
+                #raise Exception("Table %s has no field named '%s'. Schema is: %s" % (table, k, str(schema)))
+            typ = schema[k].lower()
+            if typ == 'blob':
+                funcs[k] = lambda obj: QtCore.QByteArray(pickle.dumps(obj))
+            elif typ == 'int':
+                funcs[k] = int
+            elif typ == 'real':
+                funcs[k] = float
+            elif typ == 'text':
+                funcs[k] = str
+            else:
+                funcs[k] = lambda obj: obj
         newData = []
         for rec in data:
-            newRec = rec.copy()
-            for b in blobs:
-                newRec[b] = QtCore.QByteArray(pickle.dumps(newRec[b]))
+            newRec = {}
+            for k in rec:
+                try:
+                    newRec[k] = funcs[k](rec[k])
+                except:
+                    newRec[k] = rec[k]
+                    print "Warning: Setting %s field %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
             newData.append(newRec)
         return newData
 
@@ -232,7 +190,7 @@ class SqliteDatabase:
 
 
     def _readRecord(self, rec):
-        data = {}
+        data = advancedTypes.OrderedDict()
         for i in range(rec.count()):
             f = rec.field(i)
             n = str(f.name())
@@ -253,11 +211,14 @@ class SqliteDatabase:
         return data
 
     def _readTableList(self):
+        """Reads the schema for each table, extracting the field names and types."""
+        
         res = self.select('sqlite_master', ['name', 'sql'], "where type = 'table'")
         ident = r"(\w+|'[^']+'|\"[^\"]+\")"
         #print "READ:"
         tables = {}
         for rec in res:
+            #print rec
             sql = rec['sql'].replace('\n', ' ')
             #print sql
             m = re.match(r"\s*create\s+table\s+%s\s*\(([^\)]+)\)" % ident, sql, re.I)
@@ -279,6 +240,155 @@ class SqliteDatabase:
             tables[rec['name']] = fields
         self.tables = tables
         #print tables
+
+
+class AnalysisDatabase(SqliteDatabase):
+    """Defines the structure for DBs used for analysis. Essential features are:
+     - a table of control parameters "DbParameters" 
+     - a table defining relationships between tables "TableRelationships"
+     - a table assgning ownership of data tables to analysis modules
+     - Directories created by data manager can be added automatically to DB
+     - Automatic creation of views that join together directory hierarchies
+     """
+    
+    def __init__(self, dbFile, baseDir=None):
+        create = False
+        self._baseDir = None
+        if not os.path.exists(dbFile):
+            create = True
+            if baseDir is None:
+                raise Exception("Must specify a base directory when creating a database.")
+
+        #self.db = SqliteDatabase(dbFile)
+        SqliteDatabase.__init__(self, dbFile)
+        self.file = dbFile
+        
+        if create:
+            self.initializeDb()
+            self.setBaseDir(baseDir)
+            
+    def initializeDb(self):
+        self.createTable("DbParameters", ['"Param" text unique', '"Value" text'])
+        
+        ## Table1.Column refers to Table2.ROWID
+        self.createTable("TableRelationships", ['"Table1" text', '"Column" text', '"Table2" text'])
+        
+        self.createTable("DataTableOwners", ['"Owner" text', '"Table" text unique on conflict abort'])
+
+    def baseDir(self):
+        """Return a dirHandle for the base directory used for all file names in the database."""
+        if self._baseDir is None:
+            dirName = self.ctrlParam('BaseDirectory')
+            self._baseDir = DataManager.getHandle(dirName)
+        return self._baseDir
+        
+    def setBaseDir(self, baseDir):
+        """Sets the base dir which prefixes all file names in the database. Must be a DirHandle."""
+        self.setCtrlParam('BaseDirectory', baseDir.name())
+        self._baseDir = baseDir
+
+    def ctrlParam(self, param):
+        return self.select('DbParameters', ['Value'], "where Param='%s'"%param)[0]['Value']
+        
+    def setCtrlParam(self, param, value):
+        self.replace('DbParameters', {'Param': param, 'Value': value})
+        
+
+    def createDirTable(self, dirHandle, tableName=None, fields=None):
+        """Creates a new table for storing directories similar to dirHandle"""
+        parent = dirHandle.parent()
+        fields = ['"Dir" text'] + fields
+        
+        if tableName is None:
+            #info = dirHandle.info()
+            #tableName = info['dirType']
+            tableName = self.dirTypeName(dirHandle)
+        
+        if parent is not self.baseDir():
+            fields = ['"Source" int'] + fields
+            self.linkTables(tableName, "Source", self.dirTypeName(parent))
+        self.createTable(tableName, fields)
+        return tableName
+
+    def linkTables(self, table1, col, table2):
+        """Declare a key relationship between two tables. Values in table1.column are ROWIDs from table 2"""
+        self.insert('TableRelationships', Table1=table1, Column=col, Table2=table2)
+
+    def addDir(self, handle, table=None):
+        """Create a record based on a DirHandle and its meta-info.
+        If no table is specified, use the dirType attribute as table name"""
+        info = handle.info().copy()
+        
+        ## determine parent directory, make sure parent is in DB.
+        parent = handle.parent()
+        parentRowId = None
+        if parent.isManaged() and parent is not self.baseDir():
+            pTable, parentRowId = self.addDir(parent)
+        
+        #if table is None:
+            #table = info.get('dirType', None)
+        #if table is None:
+            #raise Exception("Dir %s has no dirType; can not add to DB automatically." % handle.name())
+        if table is None:
+            table = self.dirTypeName(handle)
+            
+        if not self.hasTable(table):
+            spec = ["'%s' text"%k for k in info]
+            #db.createTable(table, spec)
+            self.createDirTable(handle, table, spec)
+            
+        ## make sure dir is not already in DB. 
+        ## if it is, just return the row ID
+        rid = self.getDirRowID(handle, table)
+        if rid is not None:
+            return table, rid
+            
+        if parentRowId is not None:
+            info['Source'] = parentRowId
+        info['Dir'] = handle.name(relativeTo=self.baseDir())
+        self.insert(table, info)
+
+        return table, self.lastInsertRow()
+
+    def getDirRowID(self, dirHandle, table=None):
+        if table is None:
+            #info = dirHandle.info()
+            #if 'dirType' not in info:
+                #raise Exception("Directory '%s' has no dirType attribute." % dirHandle.name())
+            #table = info['dirType']
+            table = self.dirTypeName(dirHandle)
+        rec = self.select(table, ['rowid'], "where Dir='%s'" % dirHandle.name(relativeTo=self.baseDir()))
+        if len(rec) < 1:
+            return None
+        #print rec[0]
+        return rec[0]['rowid']
+
+    def dirTypeName(self, dh):
+        info = dh.info()
+        type = info.get('dirType', None)
+        if type is None:
+            if 'protocol' in info:
+                if 'sequenceParams' in info:
+                    type = 'ProtocolSequence'
+                else:
+                    type = 'Protocol'
+            else:
+                raise Exception("Can't determine type for dir %s" % dh.name())
+        return type
+
+    ### TODO: No more 'purpose', just use 'owner.purpose' instead
+    def listTablesOwned(self, owner):
+        res = self.select("DataTableOwners", ["Table"], sql="where Owner='%s'" % owner)
+        return [x['Table'] for x in res]
+        
+    def takeOwnership(self, table, owner):
+        self.insert("DataTableOwners", {'Table': table, "Owner": owner})
+    
+    def tableOwner(self, table):
+        res = self.select("DataTableOwners", ["Owner"], sql='where "Table"=\'%s\'' % table)
+        if len(res) == 0:
+            return None
+        return res[0]['Owner']
 
 
 

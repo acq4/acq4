@@ -59,8 +59,8 @@ class OrderedDict(dict):
     def update(self, data):
         """Works like dict.update, but accepts list-of-tuples as well as dict."""
         if isinstance(data, dict):
-            for k in data.keys():
-                self[k] = data[k]
+            for k, v in data.iteritems():
+                self[k] = v
         else:
             for k,v in data:
                 self[k] = v

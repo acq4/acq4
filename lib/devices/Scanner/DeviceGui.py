@@ -7,6 +7,7 @@ import lib.Manager
 from imageAnalysis import *
 from debug import *
 import numpy as np
+import WidgetGroup
 
 class ScannerDeviceGui(QtGui.QWidget):
     def __init__(self, dev, win):
@@ -15,7 +16,15 @@ class ScannerDeviceGui(QtGui.QWidget):
         self.win = win
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-
+        self.stateGroup = WidgetGroup.WidgetGroup({
+            'duration': self.ui.scanDurationSpin,
+            'xMin': self.ui.xMinSpin,
+            'xMax': self.ui.xMaxSpin,
+            'yMin': self.ui.yMinSpin,
+            'yMax': self.ui.yMaxSpin,
+            'splitter': self.ui.splitter,
+        })
+        
         ## Populate Device lists
         defCam = None
         if 'defaultCamera' in self.dev.config:
@@ -37,6 +46,11 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         ## Populate list of calibrations
         self.updateCalibrationList()
+        
+        ## load default config
+        state = self.dev.loadCalibrationDefaults()
+        if state is not None:
+            self.stateGroup.setState(state)
         
         ## create graphics scene
         #self.image = ImageItem()
@@ -90,6 +104,8 @@ class ScannerDeviceGui(QtGui.QWidget):
         index[cam][laser][obj] = {'spot': spot, 'date': date, 'params': cal}
 
         self.dev.writeCalibrationIndex(index)
+        
+        self.dev.writeCalibrationDefaults(self.stateGroup.state())
         #cal.write(os.path.join(self.dev.config['calibrationDir'], fileName))
         
         self.updateCalibrationList()
@@ -324,14 +340,16 @@ class ScannerDeviceGui(QtGui.QWidget):
             raise Exception("Calibration only detected %d spots; this is not enough." % loc.shape[0])
 
         ## fit linear parameters first
-        xFit = leastsq(erf1, [0, 1, 1], (loc, cmd[:,0]))[0]
-        yFit = leastsq(erf1, [0, 1, 1], (loc, cmd[:,1]))[0]
+        xFit = leastsq(erf1, [0, 0, 0], (loc, cmd[:,0]))[0]
+        yFit = leastsq(erf1, [0, 0, 0], (loc, cmd[:,1]))[0]
         #print "fit stage 1:", xFit, yFit
         
         ## then fit the parabolic equations, using the linear fit as the seed
         xFit = leastsq(erf2, list(xFit)+[0, 0], (loc, cmd[:,0]))[0]
         yFit = leastsq(erf2, list(yFit)+[0, 0], (loc, cmd[:,1]))[0]
         #print "fit stage 2:", xFit, yFit
+        #xFit = list(xFit)+[0,0]
+        #yFit = list(yFit)+[0,0]
         
         return (list(xFit), list(yFit))
 
@@ -354,22 +372,26 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         camParams = self.dev.getCameraConfig(camera)        
         
-        duration = 4.0
+        duration = self.ui.scanDurationSpin.value()
         rate = 10000
         nPts = int(rate * duration)
         sweeps = 20
 
         #cameraTrigger = ones(nPts, dtype=byte)
 
-        (cmdMin, cmdMax) = self.dev.config['commandLimits']
-        cmdRange = cmdMax - cmdMin
-        xCommand = np.fromfunction(lambda i: cmdMin + ((cmdRange * i * float(sweeps) / nPts) % cmdRange), (nPts,), dtype=float)
+        ##(cmdMin, cmdMax) = self.dev.config['commandLimits']
+        xRange = (self.ui.xMinSpin.value(), self.ui.xMaxSpin.value())
+        yRange = (self.ui.yMinSpin.value(), self.ui.yMaxSpin.value())
+        xDiff = xRange[1] - xRange[0]
+        yDiff = yRange[1] - yRange[0]
+        
+        xCommand = np.fromfunction(lambda i: xRange[0] + ((xDiff * i * float(sweeps) / nPts) % xDiff), (nPts,), dtype=float)
         xCommand[-1] = 0.0
         yCommand = np.empty((nPts,), dtype=float)
         start = 0
         for i in range(sweeps):
             stop = start + (nPts / sweeps)
-            yCommand[start:stop] = cmdMin + cmdRange * (float(i)/(sweeps-1))
+            yCommand[start:stop] = yRange[0] + yDiff * (float(i)/(sweeps-1))
             start = stop
         yCommand[-1] = 0.0
         daqName = self.dev.config['XAxis'][0]
@@ -378,9 +400,10 @@ class ScannerDeviceGui(QtGui.QWidget):
         #print "parameters:", camParams
         cmd = {
             'protocol': {'duration': 0.0, 'timeout': 5.0},
-            camera: {'record': True, 'minFrames': 10, 'params': camParams, 'pushState': 'scanProt', 'popState': 'scanProt'},  ## binning/params are specific for QuantEM512
+            camera: {'record': True, 'minFrames': 10, 'params': camParams, 'pushState': 'scanProt'}, 
             laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
+        #print "\n\n====> Record background\n"
         task = lib.Manager.getManager().createTask(cmd)
         task.execute()
         result = task.getResult()
@@ -390,19 +413,19 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         ## Record full scan.
         cmd = {
-            'protocol': {'duration': duration, 'timeout': 5.0},
+            'protocol': {'duration': duration, 'timeout': duration+5.0},
             camera: {'record': True, 'triggerProtocol': True, 'params': camParams, 'channels': {
                 'exposure': {'record': True}, 
                 #'trigger': {'preset': 0, 'command': cameraTrigger}
                 },
                 #'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3, 
-                'pushState': 'scanProt', 'popState': 'scanProt'},
-            laser: {'Shutter': {'preset': 1, 'holding': 0}},
+                'popState': 'scanProt'},
+            laser: {'Shutter': {'preset': 0, 'holding': 0, 'command': np.ones(len(xCommand), dtype=byte)}},
             #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
             self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},
             daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}
         }
-
+        #print "\n\n====> Scan\n"
         task = lib.Manager.getManager().createTask(cmd)
         task.execute()
         result = task.getResult()

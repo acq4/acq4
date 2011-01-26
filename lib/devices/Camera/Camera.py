@@ -180,7 +180,7 @@ class Camera(DAQGeneric):
                 del params[k]
         params = self.getParams(params.keys())
         params['isRunning'] = self.isRunning()
-        
+        #print "Camera: pushState", name, params
         self.stateStack.append((name, params))
         
     def popState(self, name=None):
@@ -196,6 +196,7 @@ class Camera(DAQGeneric):
             
         run = state['isRunning']
         del state['isRunning']
+        #print "Camera: popState", name, state
         nv, restart = self.setParams(state, autoRestart=False)
         #print "    run:", run, "isRunning:", self.isRunning(), "restart:", restart
         
@@ -220,11 +221,15 @@ class Camera(DAQGeneric):
     def start(self, block=True):
         """Start camera and acquisition thread"""
         #print "Camera: start"
+        #sys.stdout.flush()
+        #time.sleep(0.1)
         self.acqThread.start()
         
     def stop(self, block=True):
         """Stop camera and acquisition thread"""
         #print "Camera: stop"
+        #sys.stdout.flush()
+        #time.sleep(0.1)
         self.acqThread.stop(block=block)
         
     def restart(self):
@@ -468,7 +473,8 @@ class CameraTask(DAQGenericTask):
             restart = True
             
         #print params
-        (newParams, restart) = self.dev.setParams(params, autoCorrect=True)
+        #print "Camera.configure: setParams"
+        (newParams, restart) = self.dev.setParams(params, autoCorrect=True, autoRestart=False)  ## we'll restart in a moment if needed..
         #print "restart:", restart
         
         prof.mark('set params')
@@ -476,6 +482,7 @@ class CameraTask(DAQGenericTask):
         ##   (daq must be started first so that it is armed to received the camera trigger)
         name = self.dev.devName()
         if self.camCmd.get('triggerProtocol', False):
+            #print "Camera triggering protocol; restart needed"
             restart = True
             daqName = self.dev.camConfig['triggerOutChannel'][0]
             startOrder.remove(name)
@@ -497,8 +504,8 @@ class CameraTask(DAQGenericTask):
         ## We want to avoid this if at all possible since it may be very expensive
         #print "CameraTask: configure: restart camera:", restart
         if restart:
-            self.dev.stop(block=False)  ## don't wait for the camera to stop; we'll check again later.
-            self.stoppedCam = True
+            self.dev.stop(block=True)
+            #self.stoppedCam = True
         prof.mark('stop')
             
         ## connect using acqThread's connect method because there may be no event loop
@@ -554,19 +561,14 @@ class CameraTask(DAQGenericTask):
             ##print "   set done"
                 
         
-        if self.stoppedCam:
-            #print "  waiting for camera to stop.."
-            self.dev.wait()
+        #if self.stoppedCam:
+            #print "  CameraTask start: waiting for camera to stop.."
+            #self.dev.wait()
             
         if not self.dev.isRunning():
-            #print "  Starting camera again..", camState
+            #print "  CameraTask start: Starting camera.."
             #self.dev.setParams(camState)
             self.dev.start(block=True)  ## wait until camera is actually ready to acquire
-        
-            ### If we requested a trigger mode, wait 300ms for the camera to get ready for the trigger
-            ###   (Is there a way to ask the camera when it is ready instead?)
-            #if self.camCmd['triggerMode'] != 'Normal':
-                #time.sleep(0.3)
                 
             
         ## Last I checked, this does nothing. It should be here anyway, though..
@@ -591,6 +593,7 @@ class CameraTask(DAQGenericTask):
         
     def stop(self, abort=False):
         ## Stop DAQ first
+        #print "Stop camera task"
         DAQGenericTask.stop(self)
         
         with MutexLocker(self.lock):
@@ -599,9 +602,8 @@ class CameraTask(DAQGenericTask):
             #self.dev.stopAcquire()
         
         if 'popState' in self.camCmd:
+            #print "  pop state"
             self.dev.popState(self.camCmd['popState'])  ## restores previous settings, stops/restarts camera if needed
-                
-            
         
         ## If this task made any changes to the camera state, return them now
         #for k in self.returnState:
@@ -728,7 +730,7 @@ class AcquireThread(QtCore.QThread):
         
         ## This thread does not run an event loop,
         ## so we may need to deliver frames manually to some places
-        self.connections = []
+        self.connections = set()
         self.connectMutex = Mutex()
     
     def __del__(self):
@@ -745,11 +747,12 @@ class AcquireThread(QtCore.QThread):
     
     def connect(self, method):
         with MutexLocker(self.connectMutex):
-            self.connections.append(method)
+            self.connections.add(method)
     
     def disconnect(self, method):
         with MutexLocker(self.connectMutex):
-            self.connections.remove(method)
+            if method in self.connections:
+                self.connections.remove(method)
     #
     #def setParam(self, param, value):
     #    #print "PVCam:setParam", param, value
@@ -842,7 +845,7 @@ class AcquireThread(QtCore.QThread):
                         frameInfo.update(frame)
                         out = (data, frameInfo)
                         with MutexLocker(self.connectMutex):
-                            conn = self.connections[:]
+                            conn = list(self.connections)
                         for c in conn:
                             c(out)
                         self.emit(QtCore.SIGNAL("newFrame"), out)

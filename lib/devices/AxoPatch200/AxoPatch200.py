@@ -48,8 +48,8 @@ class AxoPatch200(DAQGeneric):
         #    daqConfig['LPF'] = {'type': 'ai', 'channel': config['LPFChannel'], 'units': 'Hz'}
         if 'ScaledSignal' in config:
             daqConfig['primary'] = {'type': 'ai', 'channel': config['ScaledSignal']}
-        if 'Command' in config:
-            daqConfig['Command'] = {'type': 'ao', 'channel': config['Command']}
+        if 'command' in config:
+            daqConfig['command'] = {'type': 'ao', 'channel': config['command']}
         DAQGeneric.__init__(self, dm, daqConfig, name)
         
         self.holding = {
@@ -105,11 +105,11 @@ class AxoPatch200(DAQGeneric):
                 gain = self.getCmdGain(mode)
                 ## override the scale since getChanScale won't necessarily give the correct value
                 ## (we may be about to switch modes)
-                DAQGeneric.setChanHolding(self, 'Command', value, scale=gain)
+                DAQGeneric.setChanHolding(self, 'command', value, scale=gain)
             self.emit(QtCore.SIGNAL('holdingChanged'), self.holding.copy())
             
     def setChanHolding(self, chan, value=None):
-        if chan == 'Command':
+        if chan == 'command':
             self.setHolding(value=value)
         
     def getHolding(self, mode=None):
@@ -232,7 +232,7 @@ class AxoPatch200(DAQGeneric):
                 return 5e8 # in IC mode, sensitivity is 2nA/V; scale is 1/2e-9 = 5e8
         
     def getChanScale(self, chan):
-        if chan == 'Command':
+        if chan == 'command':
             return self.getCmdGain()
         elif chan == 'primary':
             return self.getGain()
@@ -247,7 +247,7 @@ class AxoPatch200(DAQGeneric):
         else:
             units = ['A', 'V']
             
-        if chan == 'Command':
+        if chan == 'command':
             return units[0]
         elif chan == 'primary':
             return units[1]
@@ -273,9 +273,9 @@ class AxoPatch200Task(DAQGenericTask):
             cmd['daqProtocol'] = {}
         if 'command' in cmd:
             if 'holding' in cmd:
-                cmd['daqProtocol']['Command'] = {'command': cmd['command'], 'holding': cmd['holding']}
+                cmd['daqProtocol']['command'] = {'command': cmd['command'], 'holding': cmd['holding']}
             else:
-                cmd['daqProtocol']['Command'] = {'command': cmd['command']}
+                cmd['daqProtocol']['command'] = {'command': cmd['command']}
             
         cmd['daqProtocol']['primary'] = {'record': True}
         DAQGenericTask.__init__(self, dev, cmd['daqProtocol'])
@@ -295,7 +295,7 @@ class AxoPatch200Task(DAQGenericTask):
     def getChanScale(self, chan):
         if chan == 'primary':
             return self.ampState['gain']
-        if chan == 'Command':
+        if chan == 'command':
             return self.dev.getCmdGain(self.ampState['mode'])
             
     def storeResult(self, dirHandle):
@@ -325,7 +325,7 @@ class AxoPatchProtoGui(DAQGenericProtoGui):
         self.splitter3.setOrientation(QtCore.Qt.Vertical)
         
         (w1, p1) = self.createChannelWidget('primary')
-        (w2, p2) = self.createChannelWidget('Command')
+        (w2, p2) = self.createChannelWidget('command')
         
         self.cmdWidget = w2
         self.inputWidget = w1
@@ -433,7 +433,7 @@ class AxoPatchProtoGui(DAQGenericProtoGui):
         return str(self.modeCombo.currentText())
 
     def getChanHolding(self, chan):
-        if chan == 'Command':
+        if chan == 'command':
             return self.dev.getHolding(self.getMode())
         else:
             raise Exception("Can't get holding value for channel %s" % chan)
