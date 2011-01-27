@@ -7,6 +7,7 @@ from ColorMapper import ColorMapper
 from ..Node import Node
 import metaarray
 import numpy as np
+from pyqtgraph.ColorButton import ColorButton
 
 def generateUi(opts):
     """Convenience function for generating common UI types"""
@@ -16,7 +17,13 @@ def generateUi(opts):
     widget.setLayout(l)
     ctrls = {}
     for opt in opts:
-        k, t, o = opt
+        if len(opt) == 2:
+            k, t = opt
+            o = {}
+        elif len(opt) == 3:
+            k, t, o = opt
+        else:
+            raise Exception("Widget specification must be (name, type) or (name, type, {opts})")
         if t == 'intSpin':
             w = QtGui.QSpinBox()
             if 'max' in o:
@@ -46,6 +53,8 @@ def generateUi(opts):
                 w.addItem(i)
         elif t == 'colormap':
             w = ColorMapper()
+        elif t == 'color':
+            w = ColorButton()
         else:
             raise Exception("Unknown widget type '%s'" % str(t))
         if 'tip' in o:

@@ -466,6 +466,9 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.saveAsBtn, QtCore.SIGNAL('clicked()'), self.saveAsClicked)
         QtCore.QObject.connect(self.ui.showChartBtn, QtCore.SIGNAL('toggled(bool)'), self.chartToggled)
         QtCore.QObject.connect(self.chart, QtCore.SIGNAL('fileLoaded'), self.setCurrentFile)
+        QtCore.QObject.connect(self.ui.reloadBtn, QtCore.SIGNAL('clicked()'), self.chartWidget.reloadLibrary)
+        
+    
         
     def resizeEvent(self, ev):
         QtGui.QWidget.resizeEvent(self, ev)
@@ -521,6 +524,8 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         item.bypassBtn = byp
         self.ui.ctrlList.setItemWidget(item, 1, byp)
         byp.node = node
+        node.bypassButton = byp
+        byp.setChecked(node.isBypassed())
         self.connect(byp, QtCore.SIGNAL('clicked()'), self.bypassClicked)
         
         if ctrl is not None:
@@ -602,16 +607,13 @@ class FlowchartWidget(DockArea.DockArea):
         QtCore.QObject.connect(self._scene, QtCore.SIGNAL('selectionChanged()'), self.selectionChanged)
         QtCore.QObject.connect(self.view, QtCore.SIGNAL('hoverOver'), self.hoverOver)
         QtCore.QObject.connect(self.view, QtCore.SIGNAL('clicked'), self.showViewMenu)
-        QtCore.QObject.connect(self.ui.reloadLibBtn, QtCore.SIGNAL('clicked()'), self.reloadLibrary)
         
-    
     def reloadLibrary(self):
         QtCore.QObject.disconnect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
         self.nodeMenu = None
         self.subMenus = []
         library.loadLibrary(reloadLibs=True)
         self.buildMenu()
-        
         
     def buildMenu(self):
         self.nodeMenu = QtGui.QMenu()

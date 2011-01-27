@@ -16,6 +16,7 @@ class Node(QtCore.QObject):
         QtCore.QObject.__init__(self)
         self._name = name
         self._bypass = False
+        self.bypassButton = None  ## this will be set by the flowchart ctrl widget..
         self._graphicsItem = None
         self.terminals = OrderedDict()
         self._inputs = {}
@@ -128,6 +129,8 @@ class Node(QtCore.QObject):
 
     def bypass(self, byp):
         self._bypass = byp
+        if self.bypassButton is not None:
+            self.bypassButton.setChecked(byp)
         self.update()
         
     def isBypassed(self):
@@ -225,12 +228,13 @@ class Node(QtCore.QObject):
 
     def saveState(self):
         pos = self.graphicsItem().pos()
-        return {'pos': (pos.x(), pos.y())}
+        return {'pos': (pos.x(), pos.y()), 'bypass': self.isBypassed()}
         
     def restoreState(self, state):
         pos = state.get('pos', (0,0))
         self.graphicsItem().setPos(*pos)
-        
+        self.bypass(state.get('bypass', False))
+
     def saveTerminals(self):
         terms = OrderedDict()
         for n, t in self.terminals.iteritems():

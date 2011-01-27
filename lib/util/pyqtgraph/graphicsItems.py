@@ -2121,13 +2121,9 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         self.setXVals(xvals)
         self.valid = False
         
-    #def setPen(self, pen=None):
-        #if pen is None:
-            #pen = self.pen
-        #self.pen = pen
-        #for t in self.ticks:
-            #t.setPen(pen)
-        ##self.update()
+    def setPen(self, pen):
+        pen = mkPen(pen)
+        QtGui.QGraphicsPathItem.setPen(self, pen)
 
     def setXVals(self, vals):
         self.xvals = vals

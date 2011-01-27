@@ -273,7 +273,7 @@ class RegionLabeler(Node):
             starts[i,0] = rgn[0]
             stops[i,0] = rgn[1]
             
-        times = events['time'][newaxis,:]
+        times = events['time'][np.newaxis,:]
         match = (times >= starts) * (times <= stops)
         
         for i in range(len(events)):
@@ -292,8 +292,10 @@ class EventMasker(CtrlNode):
     Accepts a list of regions or a list of times (use padding to give width to each time point)"""
     nodeName = "EventMasker"
     uiTemplate = [
-        ('prePadding', 'spin', {'value': 0, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
-        ('postPadding', 'spin', {'value': 0.1, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
+        #('prePadding', 'spin', {'value': 0, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
+        #('postPadding', 'spin', {'value': 0.1, 'step': 1e-3, 'minStep': 1e-6, 'dec': True, 'range': [None, None], 'siPrefix': True, 'suffix': 's'}),
+        ('prePadding', 'intSpin', {'min': 0, 'max': 1e9}),
+        ('postPadding', 'intSpin', {'min': 0, 'max': 1e9}),
     ]
     
     def __init__(self, name):
@@ -304,14 +306,14 @@ class EventMasker(CtrlNode):
         })
     
     def process(self, events, regions, display=True):
-        prep = self.ctrl['prePadding'].value()
-        postp = self.ctrl['postPadding'].value()
+        prep = self.ctrls['prePadding'].value()
+        postp = self.ctrls['postPadding'].value()
         
-        starts = (regions-prep)[:,newaxis]
-        stops = (regions+prep)[:,newaxis]
+        starts = (regions['index']-prep)[:,np.newaxis]
+        stops = (regions['index']+prep)[:,np.newaxis]
         
-        times = events['time'][newaxis, :]
-        mask = ((times >= starts) * (times <= stops)).sum(axis=0) > 0
+        times = events['index'][np.newaxis, :]
+        mask = ((times >= starts) * (times <= stops)).sum(axis=0) == 0
         
         return {'output': events[mask]}
         

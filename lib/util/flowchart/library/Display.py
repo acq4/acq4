@@ -113,16 +113,25 @@ class CanvasNode(Node):
             
                     
             
-class EventListPlotter(Node):
+class EventListPlotter(CtrlNode):
     """Prepares an event list for display in a PlotWidget."""
     nodeName = 'EventListPlotter'
+    uiTemplate = [
+        ('color', 'color'),
+    ]
     
     def __init__(self, name):
-        Node.__init__(self, name, terminals={
+        CtrlNode.__init__(self, name, terminals={
             'events': {'io': 'in'}, 
             'plot': {'io': 'out', 'multi': True}
-        })
+        }, ui=self.uiTemplate)
         self.items = {}
+        self.ctrls['color'].sigColorChanged.connect(self.colorChanged)
+        
+    def colorChanged(self):
+        c = self.ctrls['color'].color()
+        for i in self.items.itervalues():
+            i.setPen(c)
         
     def process(self, events, display=True):
         if not display:
@@ -130,6 +139,7 @@ class EventListPlotter(Node):
         conn = self['plot'].connections()
         if len(events) > 200:
             events = events[:200]
+        color = self.ctrls['color'].color()
         for c in conn:
             plot = c.node().getPlot()
             if plot is None:
@@ -138,7 +148,7 @@ class EventListPlotter(Node):
                 item = self.items[c]
                 item.setXVals(events)
             else:
-                self.items[c] = graphicsItems.VTickGroup(events, view=plot)
+                self.items[c] = graphicsItems.VTickGroup(events, view=plot, pen=color)
                 self.items[c].setYRange([0., 0.2], relative=True)
         return {'plot': self.items}
         

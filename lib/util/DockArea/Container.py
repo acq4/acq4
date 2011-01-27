@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import weakref
 
@@ -221,6 +222,8 @@ class TContainer(Container, QtGui.QWidget):
 
 
     def _insertItem(self, item, index):
+        if not isinstance(item, Dock.Dock):
+            raise Exception("Tab containers may hold only docks, not other containers.")
         self.stack.insertWidget(index, item)
         self.hTabLayout.insertWidget(index, item.label)
         QtCore.QObject.connect(item.label, QtCore.SIGNAL('clicked'), self.tabClicked)
@@ -259,3 +262,4 @@ class TContainer(Container, QtGui.QWidget):
         QtGui.QStackedWidget.childEvent(self.stack, ev)
         Container.childEvent(self, ev)
         
+import Dock

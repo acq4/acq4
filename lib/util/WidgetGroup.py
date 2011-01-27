@@ -146,7 +146,10 @@ class WidgetGroup(QtCore.QObject):
             signal = w.widgetGroupInterface()[0]
             
         if signal is not None:
-            QtCore.QObject.connect(w, QtCore.SIGNAL(signal), self.mkChangeCallback(w))
+            if isinstance(signal, basestring):
+                QtCore.QObject.connect(w, QtCore.SIGNAL(signal), self.mkChangeCallback(w))
+            else:
+                signal.connect(self.mkChangeCallback(w))
         else:
             self.uncachedWidgets[w] = None
        
