@@ -33,10 +33,12 @@ class Photostim(AnalysisModule):
             ('Data Plot', elems['Data Plot'].setParams(pos=('bottom', 'Canvas'), size=(800,200))),
             ('Filter Plot', elems['Filter Plot'].setParams(pos=('bottom', 'Data Plot'), size=(800,200))),
             ('Output Table', elems['Output Table'].setParams(pos=('below', 'Filter Plot'), size=(800,200))),
+            ('Stats', {'type': 'dataTree', 'size': (800,200), 'pos': ('below', 'Output Table')}),
             ('Map Opts', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('left', 'Canvas'), 'size': (200,400)}),
         ])
 
         AnalysisModule.__init__(self, host)
+        self.detector.flowchart.sigOutputChanged.connect(self.detectorOutputChanged)
 
         #self.loader = self.getElement('File Loader')
         #self.table = self.getElement('Output Table')
@@ -80,3 +82,10 @@ class Photostim(AnalysisModule):
     def scanPointClicked(self, point):
         #print "click!", point.data
         self.detector.loadFileRequested(point.data)
+        
+    def detectorOutputChanged(self):
+        table = self.getElement('Stats')
+        stats = self.detector.flowchart.output()['stats']
+        print stats
+        table.setData(stats)
+        

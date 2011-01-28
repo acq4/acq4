@@ -466,7 +466,7 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.saveAsBtn, QtCore.SIGNAL('clicked()'), self.saveAsClicked)
         QtCore.QObject.connect(self.ui.showChartBtn, QtCore.SIGNAL('toggled(bool)'), self.chartToggled)
         QtCore.QObject.connect(self.chart, QtCore.SIGNAL('fileLoaded'), self.setCurrentFile)
-        QtCore.QObject.connect(self.ui.reloadBtn, QtCore.SIGNAL('clicked()'), self.chartWidget.reloadLibrary)
+        QtCore.QObject.connect(self.ui.reloadBtn, QtCore.SIGNAL('clicked()'), self.reloadClicked)
         
     
         
@@ -479,7 +479,16 @@ class FlowchartCtrlWidget(QtGui.QWidget):
             self.cwWin.show()
         else:
             self.cwWin.hide()
-        
+
+    def reloadClicked(self):
+        try:
+            self.chartWidget.reloadLibrary()
+            self.ui.reloadBtn.success("Reloaded.")
+        except:
+            self.ui.reloadBtn.success("Error.")
+            raise
+            
+            
     def loadClicked(self):
         newFile = self.chart.loadFile()
         #self.setCurrentFile(newFile)
@@ -487,13 +496,25 @@ class FlowchartCtrlWidget(QtGui.QWidget):
     def saveClicked(self):
         if self.currentFileName is None:
             self.saveAsClicked()
-        self.chart.saveFile(self.currentFileName)
+        else:
+            try:
+                self.chart.saveFile(self.currentFileName)
+                self.ui.saveBtn.success("Saved.")
+            except:
+                self.ui.saveBtn.failure("Error")
+                raise
         
     def saveAsClicked(self):
-        if self.currentFileName is None:
-            newFile = self.chart.saveFile()
-        else:
-            newFile = self.chart.saveFile(suggestedFileName=self.currentFileName)
+        try:
+            if self.currentFileName is None:
+                newFile = self.chart.saveFile()
+            else:
+                newFile = self.chart.saveFile(suggestedFileName=self.currentFileName)
+            self.ui.saveAsBtn.success("Saved.")
+        except:
+            self.ui.saveBtn.failure("Error")
+            raise
+            
         self.setCurrentFile(newFile)
             
     def setCurrentFile(self, fileName):

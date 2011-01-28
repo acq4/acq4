@@ -49,6 +49,7 @@ class ZeroCrossingEvents(CtrlNode):
         ('minLength', 'intSpin', {'value': 0, 'min': 0, 'max': 100000}),
         ('minSum', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
         ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
+        ('eventLimit', 'intSpin', {'value': 400, 'min': 1, 'max': 1e9}),
     ]
     
     def __init__(self, name, **opts):
@@ -56,7 +57,8 @@ class ZeroCrossingEvents(CtrlNode):
         
     def processData(self, data):
         s = self.stateGroup.state()
-        return functions.zeroCrossingEvents(data, minLength=s['minLength'], minPeak=s['minPeak'], minSum=s['minSum'])
+        events = functions.zeroCrossingEvents(data, minLength=s['minLength'], minPeak=s['minPeak'], minSum=s['minSum'])
+        return events[:s['eventLimit']]
 
 class SpikeDetector(CtrlNode):
     """Very simple spike detector. Returns the indexes of sharp spikes by comparing each sample to its neighbors."""

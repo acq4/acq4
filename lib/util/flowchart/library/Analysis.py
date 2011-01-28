@@ -261,7 +261,8 @@ class RegionLabeler(Node):
         })
 
     def process(self, events, regions, display=True):
-        names = regions.keys()
+        terms = regions.keys()
+        names = [term.node().name() for term in terms]
         maxLen = max(map(len, names))
         dtype = [(n, events[n].dtype) for n in events.dtype.names]
         output = np.empty(len(events), dtype=dtype + [('region', '|S%d'%maxLen)])
@@ -269,7 +270,7 @@ class RegionLabeler(Node):
         starts = np.empty((len(regions), 1))
         stops = np.empty((len(regions), 1))
         for i in range(len(regions)):
-            rgn = regions[names[i]]
+            rgn = regions[terms[i]]
             starts[i,0] = rgn[0]
             stops[i,0] = rgn[1]
             
@@ -277,14 +278,14 @@ class RegionLabeler(Node):
         match = (times >= starts) * (times <= stops)
         
         for i in range(len(events)):
-            m = argmax(match[:,i])
+            m = np.argwhere(match[:,i])
             if len(m) == 0:
                 rgn = ''
             else:
                 rgn = names[m[0]]
             output[i] = tuple(events[i]) + (rgn,)
         
-        return {'output': out}
+        return {'output': output}
 
 
 class EventMasker(CtrlNode):

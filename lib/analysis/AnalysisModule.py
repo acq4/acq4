@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import pyqtgraph as pg
-import Canvas, FileLoader, DatabaseGui, TableWidget
+import Canvas, FileLoader, DatabaseGui, TableWidget, DataTreeWidget
 from advancedTypes import OrderedDict
 
 class AnalysisModule(QtCore.QObject):
@@ -164,6 +164,8 @@ class Element(QtCore.QObject):
             obj = DatabaseGui.DatabaseGui(host.dataManager(), **args)
         elif typ == 'table':
             obj = TableWidget.TableWidget(**args)
+        elif typ == 'dataTree':
+            obj = DataTreeWidget.DataTreeWidget(**args)
         else:
             raise Exception("Cannot automatically create element '%s' (type=%s)" % (self.name, typ))
         #self.setObject(obj)  ## handled indirectly..

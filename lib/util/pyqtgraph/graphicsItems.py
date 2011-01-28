@@ -1806,14 +1806,12 @@ class InfiniteLine(GraphicsObject):
             self.maxRange = [None, None]
         else:
             self.maxRange = bounds
-        self.movable = movable
+        self.setMovable(movable)
         self.view = weakref.ref(view)
         self.p = [0, 0]
         self.setAngle(angle)
         self.setPos(pos)
             
-        if movable:
-            self.setAcceptHoverEvents(True)
             
         self.hasMoved = False
 
@@ -1826,7 +1824,12 @@ class InfiniteLine(GraphicsObject):
         #for p in self.getBoundingParents():
             #QtCore.QObject.connect(p, QtCore.SIGNAL('viewChanged'), self.updateLine)
         QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.updateLine)
+      
+    def setMovable(self, m):
+        self.movable = m
+        self.setAcceptHoverEvents(m)
         
+      
     def setBounds(self, bounds):
         self.maxRange = bounds
         self.setValue(self.value())
@@ -2012,7 +2015,6 @@ class LinearRegionItem(GraphicsObject):
         self.rect.setParentItem(self)
         self.bounds = QtCore.QRectF()
         self.view = weakref.ref(view)
-        
         self.setBrush = self.rect.setBrush
         self.brush = self.rect.brush
         
@@ -2034,12 +2036,17 @@ class LinearRegionItem(GraphicsObject):
         if brush is None:
             brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 50))
         self.setBrush(brush)
+        self.setMovable(movable)
             
     def setBounds(self, bounds):
         for l in self.lines:
             l.setBounds(bounds)
         
-        
+    def setMovable(self, m):
+        for l in self.lines:
+            l.setMovable(m)
+        self.movable = m
+
     def boundingRect(self):
         return self.rect.boundingRect()
             
@@ -2065,6 +2072,9 @@ class LinearRegionItem(GraphicsObject):
             self.rect.setRect(vb)
         
     def mousePressEvent(self, ev):
+        if not self.movable:
+            ev.ignore()
+            return
         for l in self.lines:
             l.mousePressEvent(ev)  ## pass event to both lines so they move together
         #if self.movable and ev.button() == QtCore.Qt.LeftButton:
@@ -2079,6 +2089,8 @@ class LinearRegionItem(GraphicsObject):
             
     def mouseMoveEvent(self, ev):
         #print "move", ev.pos()
+        if not self.movable:
+            return
         self.lines[0].blockSignals(True)  # only want to update once
         for l in self.lines:
             l.mouseMoveEvent(ev)

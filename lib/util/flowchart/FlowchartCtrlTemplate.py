@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'FlowchartCtrlTemplate.ui'
 #
-# Created: Tue Jan 25 23:13:58 2011
+# Created: Thu Jan 27 11:25:40 2011
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -18,13 +18,13 @@ class Ui_Form(object):
         self.loadBtn = QtGui.QPushButton(Form)
         self.loadBtn.setObjectName("loadBtn")
         self.gridLayout.addWidget(self.loadBtn, 0, 0, 1, 1)
-        self.saveBtn = QtGui.QPushButton(Form)
+        self.saveBtn = FeedbackButton(Form)
         self.saveBtn.setObjectName("saveBtn")
         self.gridLayout.addWidget(self.saveBtn, 0, 1, 1, 2)
         self.saveAsBtn = QtGui.QPushButton(Form)
         self.saveAsBtn.setObjectName("saveAsBtn")
         self.gridLayout.addWidget(self.saveAsBtn, 0, 3, 1, 1)
-        self.reloadBtn = QtGui.QPushButton(Form)
+        self.reloadBtn = FeedbackButton(Form)
         self.reloadBtn.setCheckable(True)
         self.reloadBtn.setFlat(False)
         self.reloadBtn.setObjectName("reloadBtn")
@@ -40,6 +40,10 @@ class Ui_Form(object):
         self.ctrlList.header().setStretchLastSection(False)
         self.gridLayout.addWidget(self.ctrlList, 2, 0, 1, 4)
         self.fileNameLabel = QtGui.QLabel(Form)
+        font = QtGui.QFont()
+        font.setWeight(75)
+        font.setBold(True)
+        self.fileNameLabel.setFont(font)
         self.fileNameLabel.setText("")
         self.fileNameLabel.setAlignment(QtCore.Qt.AlignCenter)
         self.fileNameLabel.setObjectName("fileNameLabel")
@@ -56,4 +60,5 @@ class Ui_Form(object):
         self.reloadBtn.setText(QtGui.QApplication.translate("Form", "Reload Libs", None, QtGui.QApplication.UnicodeUTF8))
         self.showChartBtn.setText(QtGui.QApplication.translate("Form", "Flowchart", None, QtGui.QApplication.UnicodeUTF8))
 
+from FeedbackButton import FeedbackButton
 from TreeWidget import TreeWidget
