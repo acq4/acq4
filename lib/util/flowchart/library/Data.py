@@ -236,7 +236,10 @@ class RegionSelectNode(CtrlNode):
         
         
 class EvalNode(Node):
-    """Return the output of a string evaluated by the python interpreter."""
+    """Return the output of a string evaluated/executed by the python interpreter.
+    The string may be either an expression or a python script, and inputs are accessed as the name of the terminal. 
+    For expressions, a single value may be evaluated for a single output, or a dict for multiple outputs.
+    For a script, the text will be executed as the body of a function."""
     nodeName = 'PythonEval'
     
     def __init__(self, name):
@@ -263,7 +266,6 @@ class EvalNode(Node):
     def ctrlWidget(self):
         return self.ui
         
-        
     def addInput(self):
         Node.addInput(self, 'input', renamable=True)
         
@@ -280,8 +282,15 @@ class EvalNode(Node):
     def process(self, display=True, **args):
         l = locals()
         l.update(args)
-        text = str(self.text.toPlainText()).replace('\n', ' ')
-        out = eval(text, globals(), l)
+        ## try eval first, then exec
+        try:  
+            text = str(self.text.toPlainText()).replace('\n', ' ')
+            output = eval(text, globals(), l)
+        except SyntaxError:
+            fn = "def fn(**args):\n"
+            run = "\noutput=fn(%s)\n" % ",".join(l.keys())
+            text = fn + "\n".join(["    "+l for l in str(self.text.toPlainText()).split('\n')]) + run
+            exec(text)
         return {'output': out}
         
     def saveState(self):
@@ -297,3 +306,4 @@ class EvalNode(Node):
         self.restoreTerminals(state['terminals'])
         self.update()
         
+              

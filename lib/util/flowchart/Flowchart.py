@@ -348,7 +348,9 @@ class Flowchart(Node):
         if clear:
             self.clear()
         Node.restoreState(self, state)
-        for n in state['nodes']:
+        nodes = state['nodes']
+        nodes.sort(lambda a, b: cmp(a['pos'][0], b['pos'][0]))
+        for n in nodes:
             if n['name'] in self._nodes:
                 self._nodes[n['name']].moveBy(*n['pos'])
                 continue

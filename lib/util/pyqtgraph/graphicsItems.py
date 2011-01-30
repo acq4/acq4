@@ -398,7 +398,10 @@ class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
 
 class PlotCurveItem(GraphicsObject):
     """Class representing a single plot curve."""
-    def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None, color=None):
+    
+    sigClicked = QtCore.Signal(object)
+    
+    def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None, color=None, clickable=False):
         GraphicsObject.__init__(self, parent)
         self.free()
         #self.dispPath = None
@@ -426,7 +429,12 @@ class PlotCurveItem(GraphicsObject):
             'alphaMode': False
         }
             
+        self.setClickable(clickable)
         #self.fps = None
+        
+    def setClickable(self, s):
+        self.clickable = s
+        
         
     def getData(self):
         if self.xData is None:
@@ -706,6 +714,22 @@ class PlotCurveItem(GraphicsObject):
         self.yDisp = None
         self.path = None
         #del self.xData, self.yData, self.xDisp, self.yDisp, self.path
+        
+    def mousePressEvent(self, ev):
+        if not self.clickable:
+            ev.ignore()
+        if ev.button() != QtCore.Qt.LeftButton:
+            ev.ignore()
+        self.mousePressPos = ev.pos()
+        self.mouseMoved = False
+        
+    def mouseMoveEvent(self, ev):
+        self.mouseMoved = True
+        
+    def mouseReleaseEvent(self, ev):
+        if not self.mouseMoved:
+            self.sigClicked.emit(self)
+        
        
 class CurvePoint(QtGui.QGraphicsItem, QObjectWorkaround):
     """A GraphicsItem that sets its location to a point on a PlotCurveItem.

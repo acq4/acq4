@@ -9,6 +9,7 @@ import numpy as np
 class PlotWidgetNode(Node):
     """Connection to PlotWidget. Will plot arrays, metaarrays, and display event lists."""
     nodeName = 'PlotWidget'
+    sigPlotChanged = QtCore.Signal(object)
     
     def __init__(self, name):
         Node.__init__(self, name, terminals={'In': {'io': 'in', 'multi': True}})
@@ -23,6 +24,7 @@ class PlotWidgetNode(Node):
     def setPlot(self, plot):
         #print "======set plot"
         self.plot = plot
+        self.sigPlotChanged.emit(self)
         
     def getPlot(self):
         return self.plot

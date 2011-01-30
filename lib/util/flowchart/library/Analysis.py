@@ -27,10 +27,13 @@ class EventFitter(CtrlNode):
             'plot':  {'io': 'out'}
         })
         self.plotItems = []
+        self.selectedFit = None
         
     def process(self, waveform, events, display=True):
-        #self.events = []
+        for item in self.plotItems:
+            item.sigClicked.disconnect(self.fitClicked)
         self.plotItems = []
+        
         tau = waveform.infoCopy(-1).get('expDeconvolveTau', None)
         nFields = len(events.dtype.fields)
         
@@ -43,10 +46,6 @@ class EventFitter(CtrlNode):
             ('fitDecayTau', float), 
             ('fitError', float)
         ])
-        #output[:][:nFields] = events
-        
-        #for item, plot in self.plotItems:
-            #plot.removeItem(item)
         
         offset = 0 ## not all input events will produce output events; offset keeps track of the difference.
         
@@ -94,13 +93,15 @@ class EventFitter(CtrlNode):
             
             if display and self.plot.isConnected():
                 if self.ctrls['plotFits'].isChecked():
-                    item = graphicsItems.PlotCurveItem(comp, times, pen=QtGui.QPen(QtGui.QColor(0, 0, 255)))
+                    item = graphicsItems.PlotCurveItem(comp, times, pen=(0, 0, 255), clickable=True)
                     self.plotItems.append(item)
+                    item.eventIndex = i
+                    item.sigClicked.connect(self, fitClicked)
                 if self.ctrls['plotGuess'].isChecked():
-                    item2 = graphicsItems.PlotCurveItem(functions.pspFunc(guess, times), times, pen=QtGui.QPen(QtGui.QColor(255, 0, 0)))
+                    item2 = graphicsItems.PlotCurveItem(functions.pspFunc(guess, times), times, pen=(255, 0, 0))
                     self.plotItems.append(item2)
                 if self.ctrls['plotEvents'].isChecked():
-                    item2 = graphicsItems.PlotCurveItem(eventData, times, pen=QtGui.QPen(QtGui.QColor(0, 255, 0)))
+                    item2 = graphicsItems.PlotCurveItem(eventData, times, pen=(0, 255, 0))
                     self.plotItems.append(item2)
                 #plot = self.plot.connections().keys()[0].node().getPlot()
                 #plot.addItem(item)
@@ -109,8 +110,45 @@ class EventFitter(CtrlNode):
             output = output[:-offset]
         return {'output': output, 'plot': self.plotItems}
             
+    ## Intercept keypresses on any plot that is connected.
+    def connected(self, local, remote):
+        if local is self.plot:
+            self.filterPlot(remote.node())
+            remote.node().sigPlotChanged.connect(self.filterPlot)
+        CtrlNode.connected(self, local, remote)
+        
+    def disconnected(self, local, remote):
+        if local is self.plot:
+            self.filterPlot(remote.node(), install=False)
+            remote.node().sigPlotChanged.disconnect(self.filterPlot)
+        CtrlNode.disconnected(self, local, remote)
+
+    ## install event filter on remote plot
+    def filterPlot(self, node, install=True):
+        plot = node.getPlot()
+        if plot is None:
+            return
+        if install:
+            plot.installEventFilter(self)
+        else:
+            plot.removeEventFilter(self)
+
+    def fitClicked(self, curve):
+        if self.selectedFit is not None:
+            self.selectedFit.setPen((0,0,255))
             
-            
+        self.selectedFit = curve
+        curve.setPen((255,255,255))
+
+    def eventFilter(self, obj, ev):
+        if self.selectedFit is None:
+            return False
+        if event.type() == QtCore.QEvent.KeyPress and event.key() == QtCore.Qt.Key_Del:
+            self.deletedFits.append(self.selectedFit.eventIndex)
+            return True
+        return False
+
+
 class Histogram(CtrlNode):
     """Converts a list of values into a histogram."""
     nodeName = 'Histogram'
