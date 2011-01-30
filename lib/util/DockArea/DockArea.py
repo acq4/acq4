@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 from Container import *
 from DockDrop import *
@@ -49,8 +50,7 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
             container = self.getContainer(relativeTo)
             neighbor = relativeTo
         
-        ## Decide if the container we have is suitable.
-        ## If not, insert a new container inside.
+        ## what container type do we need?
         neededContainer = {
             'bottom': 'vertical',
             'top': 'vertical',
@@ -60,6 +60,13 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
             'below': 'tab'
         }[position]
         
+        ## Can't insert new containers into a tab container; insert outside instead.
+        if neededContainer != container.type() and container.type() == 'tab':
+            neighbor = container
+            container = container.container()
+            
+        ## Decide if the container we have is suitable.
+        ## If not, insert a new container inside.
         if neededContainer != container.type():
             if neighbor is None:
                 container = self.addContainer(neededContainer, self.topContainer)

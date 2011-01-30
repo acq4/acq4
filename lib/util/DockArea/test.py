@@ -1,6 +1,10 @@
 import sys
 sys.path.append('..')
 from PyQt4 import QtCore, QtGui
+if not hasattr(QtCore, 'Signal'):
+    QtCore.Signal = QtCore.pyqtSignal
+    QtCore.Slot = QtCore.pyqtSlot
+
 from DockArea import *
 from Dock import *
 
@@ -10,12 +14,12 @@ area = DockArea()
 win.setCentralWidget(area)
 win.resize(800,800)
 from Dock import Dock
-d1 = Dock("Dock1")
-d2 = Dock("Dock2")
-d3 = Dock("Dock3")
-d4 = Dock("Dock4")
-d5 = Dock("Dock5")
-d6 = Dock("Dock6")
+d1 = Dock("Dock1", size=(200,200))
+d2 = Dock("Dock2", size=(100,100))
+d3 = Dock("Dock3", size=(1,1))
+d4 = Dock("Dock4", size=(50,50))
+d5 = Dock("Dock5", size=(100,100))
+d6 = Dock("Dock6", size=(300,300))
 area.addDock(d1, 'left')
 area.addDock(d2, 'right')
 area.addDock(d3, 'bottom')
@@ -25,6 +29,8 @@ area.addDock(d6, 'top', d4)
 
 area.moveDock(d6, 'above', d4)
 d3.hideTitleBar()
+
+print "===build complete===="
 
 for d in [d1, d2, d3, d4, d5]:
     w = QtGui.QWidget()
@@ -37,9 +43,14 @@ for d in [d1, d2, d3, d4, d5]:
     d.w = (w, l, btns)
     d.addWidget(w)
 
+
+
 import pyqtgraph as pg
 p = pg.PlotWidget()
 d6.addWidget(p)
+
+print "===widgets added==="
+
 
 #s = area.saveState()
 

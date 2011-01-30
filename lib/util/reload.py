@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Magic Reload Library
 Luke Campagnola   2010
@@ -29,7 +30,7 @@ def reloadAll(prefix=None, debug=False):
     - if prefix is None, checks all loaded modules
     """
     
-    for mod in sys.modules.itervalues():
+    for mod in sys.modules.values():
         if not inspect.ismodule(mod):
             continue
         
@@ -71,6 +72,10 @@ def reload(module, debug=False, lists=False, dicts=False):
     __builtin__.reload(module)
     newDict = module.__dict__
     
+    ## Allow modules access to the old dictionary after they reload
+    if hasattr(module, '__reload__'):
+        module.__reload__(oldDict)
+    
     ## compare old and new elements from each dict; update where appropriate
     for k in oldDict:
         old = oldDict[k]
@@ -106,15 +111,22 @@ def reload(module, debug=False, lists=False, dicts=False):
 ## For functions:
 ##  1) update the code and defaults to new versions.
 ##  2) keep a reference to the previous version so ALL versions get updated for every reload
-def updateFunction(old, new, debug, depth=0):
+def updateFunction(old, new, debug, depth=0, visited=None):
     #if debug and depth > 0:
         #print "    -> also updating previous version", old, " -> ", new
+        
     old.__code__ = new.__code__
     old.__defaults__ = new.__defaults__
     
+    if visited is None:
+        visited = []
+    if old in visited:
+        return
+    visited.append(old)
+    
     ## finally, update any previous versions still hanging around..
     if hasattr(old, '__previous_reload_version__'):
-        maxDepth = updateFunction(old.__previous_reload_version__, new, debug, depth=depth+1)
+        maxDepth = updateFunction(old.__previous_reload_version__, new, debug, depth=depth+1, visited=visited)
     else:
         maxDepth = depth
         
@@ -138,7 +150,7 @@ def updateClass(old, new, debug):
             if isinstance(ref, old) and ref.__class__ is old:
                 ref.__class__ = new
                 if debug:
-                    print "    Changed class for", ref
+                    print "    Changed class for", safeStr(ref)
             elif inspect.isclass(ref) and issubclass(ref, old) and old in ref.__bases__:
                 ind = ref.__bases__.index(old)
                 
@@ -154,12 +166,12 @@ def updateClass(old, new, debug):
                 ## (and I presume this may slow things down?)
                 ref.__bases__ = ref.__bases__[:ind] + (new,old) + ref.__bases__[ind+1:]
                 if debug:
-                    print "    Changed superclass for", ref
+                    print "    Changed superclass for", safeStr(ref)
             #else:
                 #if debug:
                     #print "    Ignoring reference", type(ref)
         except:
-            print "Error updating reference (%s) for class change (%s -> %s)" % (str(ref), str(old), str(new))
+            print "Error updating reference (%s) for class change (%s -> %s)" % (safeStr(ref), safeStr(old), safeStr(new))
             raise
         
     ## update all class methods to use new code.
@@ -188,6 +200,18 @@ def updateClass(old, new, debug):
     if hasattr(old, '__previous_reload_version__'):
         updateClass(old.__previous_reload_version__, new, debug)
 
+
+## It is possible to build classes for which str(obj) just causes an exception.
+## Avoid thusly:
+def safeStr(obj):
+    try:
+        s = str(obj)
+    except:
+        try:
+            s = repr(obj)
+        except:
+            s = "<instance of %s at 0x%x>" % (safeStr(type(obj)), id(obj))
+    return s
 
 
 

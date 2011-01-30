@@ -16,6 +16,7 @@ class Node(QtCore.QObject):
         QtCore.QObject.__init__(self)
         self._name = name
         self._bypass = False
+        self.bypassButton = None  ## this will be set by the flowchart ctrl widget..
         self._graphicsItem = None
         self.terminals = OrderedDict()
         self._inputs = {}
@@ -97,7 +98,7 @@ class Node(QtCore.QObject):
     def __getattr__(self, attr):
         """Return the terminal with the given name"""
         if attr not in self.terminals:
-            raise NameError(attr)
+            raise AttributeError(attr)
         else:
             return self.terminals[attr]
             
@@ -128,6 +129,8 @@ class Node(QtCore.QObject):
 
     def bypass(self, byp):
         self._bypass = byp
+        if self.bypassButton is not None:
+            self.bypassButton.setChecked(byp)
         self.update()
         
     def isBypassed(self):
@@ -183,7 +186,7 @@ class Node(QtCore.QObject):
                 t.setValueAcceptable(True)
             self.clearException()
         except:
-            #printExc( "Exception while processing:")
+            #printExc( "Exception while processing %s:" % self.name())
             for n,t in self.outputs().iteritems():
                 t.setValue(None)
             self.setException(sys.exc_info())
@@ -225,12 +228,13 @@ class Node(QtCore.QObject):
 
     def saveState(self):
         pos = self.graphicsItem().pos()
-        return {'pos': (pos.x(), pos.y())}
+        return {'pos': (pos.x(), pos.y()), 'bypass': self.isBypassed()}
         
     def restoreState(self, state):
         pos = state.get('pos', (0,0))
         self.graphicsItem().setPos(*pos)
-        
+        self.bypass(state.get('bypass', False))
+
     def saveTerminals(self):
         terms = OrderedDict()
         for n, t in self.terminals.iteritems():

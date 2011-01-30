@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 
 class DockDrop:
@@ -18,7 +19,7 @@ class DockDrop:
         self.overlay.raise_()
     
     def dragEnterEvent(self, ev):
-        if isinstance(ev.source(), Dock):
+        if isinstance(ev.source(), Dock.Dock):
             #print "drag enter accept"
             ev.accept()
         else:
@@ -113,4 +114,4 @@ class DropAreaOverlay(QtGui.QWidget):
         p.setPen(QtGui.QPen(QtGui.QColor(50, 50, 150), 3))
         p.drawRect(rgn)
 
-from Dock import Dock
+import Dock

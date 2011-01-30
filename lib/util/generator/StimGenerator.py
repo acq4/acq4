@@ -274,7 +274,7 @@ def seqParse(seqStr):
     ## Match list format: "[val1,val2,...]"
     m = re.match(r'\[[\deE\-\.,]+\]$', seqStr)
     if m is not None:
-        seq = eval(seqStr)
+        seq = array(eval(seqStr))
         return (name, single, seq)
     
     ## Match like this: "start:stop/length:opts" or "start:stop:step:opts"

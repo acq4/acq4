@@ -40,7 +40,9 @@ def getManager():
         raise Exception("No manager created yet")
     return Manager.single
 
-
+def __reload__(old):
+    Manager.CREATED = old['Manager'].CREATED
+    Manager.single = old['Manager'].single
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
@@ -605,7 +607,10 @@ class Task:
             self.tasks[devName] = task
         
         
-    def execute(self, block=True):
+    def execute(self, block=True, processEvents=False):
+        """Start the protocol task.
+        If block is true, then the function blocks until the task is complete.
+        if processEvents is true, then Qt events are processed while waiting for the task to complete."""
         self.lockedDevs = []
         self.startedDevs = []
         self.stopped = False
@@ -695,9 +700,14 @@ class Task:
             #print "Waiting for all tasks to finish.."
             timeout = self.cfg.get('timeout', None)
             
+            lastProcess = ptime.time()
             while not self.isDone():
-                if timeout is not None and ptime.time() - self.startTime > timeout:
-                    raise Exception("Protocol timed out; aborting.")
+                now = ptime.time()
+                if timeout is not None and now - self.startTime > timeout:
+                    raise Exception("Protocol timed out (>%0.2fs); aborting." % timeout)
+                if processEvents and now-lastProcess > 100e-3:  ## only process Qt events every 100ms
+                    QtGui.QApplication.processEvents()
+                    lastProcess = ptime.time()
                 time.sleep(1e-3)
             #print "all tasks finshed."
             

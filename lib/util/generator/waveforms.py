@@ -113,7 +113,8 @@ def sineWave(params, period, amplitude=1.0, phase=0.0, start=0.0, stop=None, bas
     if cycleTime < 10:
         params['message'] += 'Warning: Period is less than 10 samples\n'
     
-    d[start:stop] = numpy.fromfunction(lambda i: amplitude * numpy.sin(phase * 2.0 * numpy.pi + i * 2.0 * numpy.pi / (period * rate)), (stop-start,))
+    #d[start:stop] = numpy.fromfunction(lambda i: amplitude * numpy.sin(phase * 2.0 * numpy.pi + i * 2.0 * numpy.pi / (period * rate)), (stop-start,))
+    d[start:stop] = amplitude * numpy.sin(phase * 2.0 * numpy.pi + numpy.arange(stop-start) * 2.0 * numpy.pi / (period * rate))
     return d
     
 def squareWave(params, period, amplitude=1.0, phase=0.0, duty=0.5, start=0.0, stop=None, base=0.0):
@@ -222,7 +223,8 @@ def sawWave(params, period, amplitude=1.0, phase=0.0, start=0.0, stop=None, base
     if cycleTime < 1:
         return numpy.zeros(nPts)
     
-    d[start:stop] = amplitude * numpy.fromfunction(lambda t: (phase + t/float(rate*period)) % 1.0, (stop-start,))
+    #d[start:stop] = amplitude * numpy.fromfunction(lambda t: (phase + t/float(rate*period)) % 1.0, (stop-start,))
+    d[start:stop] = amplitude * ((phase + numpy.arange(stop-start)/float(rate*period)) % 1.0)
     return d
 
     
@@ -272,7 +274,43 @@ def listWave(params, period, values=None, phase=0.0, start=0.0, stop=None, base=
     if cycleTime < 1:
         return numpy.zeros(nPts)
 
-    saw = numpy.fromfunction(lambda t: len(values) * ((phase + t/float(rate*period)) % 1.0), (stop-start,))
+    #saw = numpy.fromfunction(lambda t: len(values) * ((phase + t/float(rate*period)) % 1.0), (stop-start,))
+    saw = len(values) * ((phase + numpy.arange(stop-start)/float(rate*period)) % 1.0)
     d[start:stop] = values[saw.astype(int).clip(0, len(values)-1)]
     #d[start:stop] = saw
+    return d
+
+def noise(params, mean, sigma, start=0.0, stop=None):
+    rate = params['rate']
+    nPts = params['nPts']
+    params['message'] = ""
+    
+    if not isNum(mean):
+        raise Exception("Mean argument must be a number")
+    if not isNum(sigma):
+        raise Exception("Sigma argument must be a number")
+    if not isNumOrNone(start):
+        raise Exception("Start argument must be a number")
+    if not isNumOrNone(stop):
+        raise Exception("Stop argument must be a number")
+    
+    
+    ## initialize array
+    d = numpy.zeros(nPts)
+    
+    ## Define start and end points
+    if start is None:
+        start = 0
+    else:
+        start = int(start * rate)
+    if stop is None:
+        stop = nPts-1
+    else:
+        stop = int(stop * rate)
+        
+    if stop > nPts-1:
+        params['message'] += "WARNING: Function is longer than generated waveform\n"    
+        stop = nPts-1
+
+    d[start:stop] = numpy.random.normal(size=stop-start, loc=mean, scale=sigma)
     return d

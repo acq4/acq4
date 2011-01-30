@@ -107,8 +107,10 @@ class WidgetGroup(QtCore.QObject):
     
     def __init__(self, widgetList):
         """Initialize WidgetGroup, adding specified widgets into this group.
-        widgetList can be either a list of widget specifications (widget, [name], [scale])
-        or it can be any QObject, and all compatible child widgets will be added recursively.
+        widgetList can be: 
+         - a list of widget specifications (widget, [name], [scale])
+         - a dict of name: widget pairs
+         - any QObject, and all compatible child widgets will be added recursively.
         
         The 'scale' parameter for each widget allows QSpinBox to display a different value than the value recorded
         in the group state (for example, the program may set a spin box value to 100e-6 and have it displayed as 100 to the user)
@@ -123,6 +125,9 @@ class WidgetGroup(QtCore.QObject):
         elif isinstance(widgetList, list):
             for w in widgetList:
                 self.addWidget(*w)
+        elif isinstance(widgetList, dict):
+            for name, w in widgetList.iteritems():
+                self.addWidget(w, name)
         else:
             raise Exception("Wrong argument type %s" % type(widgetList))
         
@@ -141,7 +146,10 @@ class WidgetGroup(QtCore.QObject):
             signal = w.widgetGroupInterface()[0]
             
         if signal is not None:
-            QtCore.QObject.connect(w, QtCore.SIGNAL(signal), self.mkChangeCallback(w))
+            if isinstance(signal, basestring):
+                QtCore.QObject.connect(w, QtCore.SIGNAL(signal), self.mkChangeCallback(w))
+            else:
+                signal.connect(self.mkChangeCallback(w))
         else:
             self.uncachedWidgets[w] = None
        

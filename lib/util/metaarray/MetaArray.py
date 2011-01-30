@@ -276,6 +276,14 @@ class MetaArray(ndarray):
     def xvals(self, axis):
         """Synonym for axisValues()"""
         return self.axisValues(axis)
+        
+    def axisHasValues(self, axis):
+        ax = self._interpretAxis(axis)
+        return self._info[ax].has_key('values')
+        
+    def axisHasColumns(self, axis):
+        ax = self._interpretAxis(axis)
+        return self._info[ax].has_key('cols')
   
     def axisUnits(self, axis):
         """Return the units for axis"""
@@ -305,6 +313,10 @@ class MetaArray(ndarray):
         else:
             axis = self._interpretAxis(axis)
             return [c['name'] for c in self._info[axis]['cols']]
+        
+    def columnName(self, axis, col):
+        ax = self._info[self._interpretAxis(axis)]
+        return ax['cols'][col]['name']
         
     def axisName(self, n):
         return self._info[n].get('name', n)
@@ -582,6 +594,11 @@ class MetaArray(ndarray):
 
     def max(self, axis=None, *args, **kargs):
         return self.axisCollapsingFn('max', axis, *args, **kargs)
+
+    def transpose(self, order):
+        order = list(order) + range(len(order), len(self._info))
+        info = [self._info[i] for i in order]
+        return MetaArray(self.view(ndarray), info=info)
 
     #### File I/O Routines
 

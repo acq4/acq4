@@ -358,6 +358,7 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
                     break
             
             if not gotTarget:
+                #print "remove unused connection"
                 self.scene().removeItem(self.newConnection)
             self.newConnection = None
         
@@ -405,6 +406,7 @@ class ConnectionItem(QtGui.QGraphicsItem):
 
     def keyPressEvent(self, ev):
         if ev.key() == QtCore.Qt.Key_Delete:
+            #if isinstance(self.target, TerminalGraphicsItem):
             self.source.disconnect(self.target)
             ev.accept()
         else:
