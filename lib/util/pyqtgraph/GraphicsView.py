@@ -312,22 +312,24 @@ class GraphicsView(QtGui.QGraphicsView):
             #self.currentItem = None
 
     def mouseMoveEvent(self, ev):
-        print "move", ev.pos()
+        if self.lastMousePos is None:
+            self.lastMousePos = Point(ev.pos())
+        delta = Point(ev.pos()) - self.lastMousePos
+        #if abs(delta[0]) > 100 or abs(delta[1]) > 100:   ## Weird bug generating extra events..
+            #return
+        self.lastMousePos = Point(ev.pos())
+        #print "move", delta
         QtGui.QGraphicsView.mouseMoveEvent(self, ev)
         if not self.mouseEnabled:
             return
         self.emit(QtCore.SIGNAL("sceneMouseMoved(PyQt_PyObject)"), self.mapToScene(ev.pos()))
         #print "moved. Grabber:", self.scene().mouseGrabberItem()
         
-        if self.lastMousePos is None:
-            self.lastMousePos = Point(ev.pos())
             
         if self.clickAccepted:  ## Ignore event if an item in the scene has already claimed it.
             return
             
-        delta = Point(ev.pos()) - self.lastMousePos
         
-        self.lastMousePos = Point(ev.pos())
         
         if ev.buttons() == QtCore.Qt.RightButton:
             delta = Point(clip(delta[0], -50, 50), clip(-delta[1], -50, 50))

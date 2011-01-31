@@ -200,32 +200,38 @@ class RegionSelectNode(CtrlNode):
         #print "process.."
         s = self.stateGroup.state()
         region = [s['start'], s['stop']]
-        conn = self['widget'].connections()
-        for c in conn:
-            plot = c.node().getPlot()
-            if plot is None:
-                continue
-            if c in self.items:
-                item = self.items[c]
-                item.setRegion(region)
-                #print "  set rgn:", c, region
-                #item.setXVals(events)
+        
+        if display:
+            conn = self['widget'].connections()
+            for c in conn:
+                plot = c.node().getPlot()
+                if plot is None:
+                    continue
+                if c in self.items:
+                    item = self.items[c]
+                    item.setRegion(region)
+                    #print "  set rgn:", c, region
+                    #item.setXVals(events)
+                else:
+                    item = graphicsItems.LinearRegionItem(plot, vals=region)
+                    self.items[c] = item
+                    item.connect(item, QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+                    item.setVisible(s['display'])
+                    item.setMovable(s['movable'])
+                    #print "  new rgn:", c, region
+                    #self.items[c].setYRange([0., 0.2], relative=True)
+        
+        if self.selected.isConnected():
+            if data is None:
+                sliced = None
+            elif isinstance(data, MetaArray):
+                sliced = data[0:s['start']:s['stop']]
             else:
-                item = graphicsItems.LinearRegionItem(plot, vals=region)
-                self.items[c] = item
-                item.connect(item, QtCore.SIGNAL('regionChanged'), self.rgnChanged)
-                item.setVisible(s['display'])
-                item.setMovable(s['movable'])
-                #print "  new rgn:", c, region
-                #self.items[c].setYRange([0., 0.2], relative=True)
-                
-        if data is None:
-            sliced = None
-        elif isinstance(data, MetaArray):
-            sliced = data[0:s['start']:s['stop']]
-        else:
-            mask = (data['time'] >= s['start']) * (data['time'] < s['stop'])
+                mask = (data['time'] >= s['start']) * (data['time'] < s['stop'])
             sliced = data[mask]
+        else:
+            sliced = None
+            
         return {'selected': sliced, 'widget': self.items, 'region': region}
         
         
@@ -288,10 +294,10 @@ class EvalNode(Node):
             output = eval(text, globals(), l)
         except SyntaxError:
             fn = "def fn(**args):\n"
-            run = "\noutput=fn(%s)\n" % ",".join(l.keys())
+            run = "\noutput=fn(**args)\n"
             text = fn + "\n".join(["    "+l for l in str(self.text.toPlainText()).split('\n')]) + run
             exec(text)
-        return {'output': out}
+        return output
         
     def saveState(self):
         state = Node.saveState(self)

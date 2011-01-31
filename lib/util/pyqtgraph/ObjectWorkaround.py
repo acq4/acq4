@@ -35,7 +35,8 @@ class QObjectWorkaround:
         #QtGui.QGraphicsItem.__init__(self, *args)
         #QObjectWorkaround.__init__(self)
 
-class QGraphicsObject(QtGui.QGraphicsWidget):
-    def shape(self):
-        return QtGui.QGraphicsItem.shape(self)
+#class QGraphicsObject(QtGui.QGraphicsWidget):
+    #def shape(self):
+        #return QtGui.QGraphicsItem.shape(self)
     
+QGraphicsObject = QtGui.QGraphicsObject

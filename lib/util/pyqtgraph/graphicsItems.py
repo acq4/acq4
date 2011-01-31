@@ -723,6 +723,7 @@ class PlotCurveItem(GraphicsObject):
         #del self.xData, self.yData, self.xDisp, self.yDisp, self.path
         
     def mousePressEvent(self, ev):
+        #GraphicsObject.mousePressEvent(self, ev)
         if not self.clickable:
             ev.ignore()
         if ev.button() != QtCore.Qt.LeftButton:
@@ -731,9 +732,12 @@ class PlotCurveItem(GraphicsObject):
         self.mouseMoved = False
         
     def mouseMoveEvent(self, ev):
+        #GraphicsObject.mouseMoveEvent(self, ev)
         self.mouseMoved = True
+        print "move"
         
     def mouseReleaseEvent(self, ev):
+        #GraphicsObject.mouseReleaseEvent(self, ev)
         if not self.mouseMoved:
             self.sigClicked.emit(self)
         
@@ -972,6 +976,9 @@ class ScatterPlotItem(QtGui.QGraphicsWidget):
     def pointClicked(self, point):
         self.sigPointClicked.emit(point)
 
+    def points(self):
+        return self.spots[:]
+
 class SpotItem(QtGui.QGraphicsWidget):
     sigClicked = QtCore.Signal(object)
     
@@ -986,6 +993,14 @@ class SpotItem(QtGui.QGraphicsWidget):
         s2 = size/2.
         self.path.addEllipse(QtCore.QRectF(-s2, -s2, size, size))
         self.data = data
+        
+    def setBrush(self, brush):
+        self.brush = mkBrush(brush)
+        self.update()
+        
+    def setPen(self, pen):
+        self.pen = mkPen(pen)
+        self.update()
         
     def boundingRect(self):
         return self.path.boundingRect()
@@ -1027,7 +1042,7 @@ class ROIPlotItem(PlotCurveItem):
         self.axes = axes
         self.xVals = xVals
         PlotCurveItem.__init__(self, self.getRoiData(), x=self.xVals, color=color)
-        roi.connect(QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
+        roi.connect(roi, QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
         #self.roiChangedEvent()
         
     def getRoiData(self):
@@ -1714,6 +1729,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         
         
     def mouseMoveEvent(self, ev):
+        QtGui.QGraphicsWidget.mouseMoveEvent(self, ev)
         pos = np.array([ev.pos().x(), ev.pos().y()])
         dif = pos - self.mousePos
         dif *= -1
@@ -1727,7 +1743,6 @@ class ViewBox(QtGui.QGraphicsWidget):
             if not self.yInverted:
                 mask *= np.array([1, -1])
             tr = dif*mask
-            print dif, tr
             self.translateBy(tr, viewCoords=True)
             self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
             ev.accept()
@@ -1745,11 +1760,14 @@ class ViewBox(QtGui.QGraphicsWidget):
             ev.ignore()
         
     def mousePressEvent(self, ev):
+        QtGui.QGraphicsWidget.mousePressEvent(self, ev)
+        
         self.mousePos = np.array([ev.pos().x(), ev.pos().y()])
         self.pressPos = self.mousePos.copy()
         ev.accept()
         
     def mouseReleaseEvent(self, ev):
+        QtGui.QGraphicsWidget.mouseReleaseEvent(self, ev)
         pos = np.array([ev.pos().x(), ev.pos().y()])
         #if sum(abs(self.pressPos - pos)) < 3:  ## Detect click
             #if ev.button() == QtCore.Qt.RightButton:
@@ -2065,8 +2083,8 @@ class LinearRegionItem(GraphicsObject):
         
         for l in self.lines:
             l.setParentItem(self)
-            l.connect(QtCore.SIGNAL('positionChangeFinished'), self.lineMoveFinished)
-            l.connect(QtCore.SIGNAL('positionChanged'), self.lineMoved)
+            l.connect(l, QtCore.SIGNAL('positionChangeFinished'), self.lineMoveFinished)
+            l.connect(l, QtCore.SIGNAL('positionChanged'), self.lineMoved)
             
         if brush is None:
             brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 50))

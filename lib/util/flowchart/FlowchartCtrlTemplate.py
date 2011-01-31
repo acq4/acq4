@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'FlowchartCtrlTemplate.ui'
 #
-# Created: Sun Jan 30 17:01:11 2011
+# Created: Mon Jan 31 18:41:49 2011
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -14,31 +14,33 @@ class Ui_Form(object):
         Form.setObjectName("Form")
         Form.resize(217, 499)
         self.gridLayout = QtGui.QGridLayout(Form)
+        self.gridLayout.setMargin(0)
+        self.gridLayout.setVerticalSpacing(0)
         self.gridLayout.setObjectName("gridLayout")
         self.loadBtn = QtGui.QPushButton(Form)
         self.loadBtn.setObjectName("loadBtn")
-        self.gridLayout.addWidget(self.loadBtn, 0, 0, 1, 1)
+        self.gridLayout.addWidget(self.loadBtn, 1, 0, 1, 1)
         self.saveBtn = FeedbackButton(Form)
         self.saveBtn.setObjectName("saveBtn")
-        self.gridLayout.addWidget(self.saveBtn, 0, 1, 1, 2)
+        self.gridLayout.addWidget(self.saveBtn, 1, 1, 1, 2)
         self.saveAsBtn = FeedbackButton(Form)
         self.saveAsBtn.setObjectName("saveAsBtn")
-        self.gridLayout.addWidget(self.saveAsBtn, 0, 3, 1, 1)
+        self.gridLayout.addWidget(self.saveAsBtn, 1, 3, 1, 1)
         self.reloadBtn = FeedbackButton(Form)
         self.reloadBtn.setCheckable(False)
         self.reloadBtn.setFlat(False)
         self.reloadBtn.setObjectName("reloadBtn")
-        self.gridLayout.addWidget(self.reloadBtn, 3, 0, 1, 2)
+        self.gridLayout.addWidget(self.reloadBtn, 4, 0, 1, 2)
         self.showChartBtn = QtGui.QPushButton(Form)
         self.showChartBtn.setCheckable(True)
         self.showChartBtn.setObjectName("showChartBtn")
-        self.gridLayout.addWidget(self.showChartBtn, 3, 2, 1, 2)
+        self.gridLayout.addWidget(self.showChartBtn, 4, 2, 1, 2)
         self.ctrlList = TreeWidget(Form)
         self.ctrlList.setObjectName("ctrlList")
         self.ctrlList.headerItem().setText(0, "1")
         self.ctrlList.header().setVisible(False)
         self.ctrlList.header().setStretchLastSection(False)
-        self.gridLayout.addWidget(self.ctrlList, 2, 0, 1, 4)
+        self.gridLayout.addWidget(self.ctrlList, 3, 0, 1, 4)
         self.fileNameLabel = QtGui.QLabel(Form)
         font = QtGui.QFont()
         font.setWeight(75)
@@ -47,7 +49,7 @@ class Ui_Form(object):
         self.fileNameLabel.setText("")
         self.fileNameLabel.setAlignment(QtCore.Qt.AlignCenter)
         self.fileNameLabel.setObjectName("fileNameLabel")
-        self.gridLayout.addWidget(self.fileNameLabel, 1, 0, 1, 4)
+        self.gridLayout.addWidget(self.fileNameLabel, 0, 1, 1, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)

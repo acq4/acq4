@@ -40,15 +40,6 @@ class EventDetector(AnalysisModule):
         try:
             ## load default chart
             self.flowchart.loadFile(os.path.join(flowchartDir, 'default.fc'))
-            
-            ## assign plots to their correct spots in the chart
-            #p1 = self.getElement('Data Plot')
-            #p2 = self.getElement('Filter Plot')
-            #self.flowchart.nodes()['Plot_000'].setPlot(p1)
-            #self.flowchart.nodes()['Plot_001'].setPlot(p2)
-            
-            ## link plot X axes
-            #p1.setXLink(p2)
         except:
             debug.printExc('Error loading default flowchart:')
         
@@ -89,6 +80,9 @@ class EventDetector(AnalysisModule):
         self.flowchart.setInput(dataIn=fh)
         self.currentFile = fh
         return True
+
+    def process(self, fh):
+        return self.flowchart.process(dataIn=fh)
 
     def outputChanged(self):
         table = self.getElement('Output Table')

@@ -122,7 +122,7 @@ class Node(QtCore.QObject):
         #return set([t.inputTerminals().node() for t in self.listInputs().itervalues()])
         
     def __repr__(self):
-        return "<Node %s>" % self.name()
+        return "<Node %s @%x>" % (self.name(), id(self))
         
     def ctrlWidget(self):
         return None
