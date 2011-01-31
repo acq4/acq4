@@ -154,7 +154,7 @@ class EventFitter(CtrlNode):
     def eventFilter(self, obj, event):
         if self.selectedFit is None:
             return False
-        if event.type() == QtCore.QEvent.KeyPress and event.key() == QtCore.Qt.Key_Del:
+        if event.type() == QtCore.QEvent.KeyPress and event.key() == QtCore.Qt.Key_Delete:
             self.deletedFits.append(self.selectedFit.eventIndex)
             self.selectedFit.setPen((100, 0, 0))
             return True

@@ -291,7 +291,7 @@ class EvalNode(Node):
             run = "\noutput=fn(%s)\n" % ",".join(l.keys())
             text = fn + "\n".join(["    "+l for l in str(self.text.toPlainText()).split('\n')]) + run
             exec(text)
-        return {'output': out}
+        return {'output': output}
         
     def saveState(self):
         state = Node.saveState(self)

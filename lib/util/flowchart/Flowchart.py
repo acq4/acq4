@@ -431,7 +431,7 @@ class Flowchart(Node):
                 startDir = self.filePath
             if startDir is None:
                 startDir = '.'
-            fileName = QtGui.QFileDialog.getOpenFileName(self.widget(), "Load Flowchart..", startDir, "Flowchart (*.fc)")
+            fileName = QtGui.QFileDialog.getOpenFileName(None, "Load Flowchart..", startDir, "Flowchart (*.fc)")
         fileName = str(fileName)
         state = configfile.readConfigFile(fileName)
         self.restoreState(state, clear=True)

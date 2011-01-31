@@ -720,6 +720,7 @@ class PlotCurveItem(GraphicsObject):
         #del self.xData, self.yData, self.xDisp, self.yDisp, self.path
         
     def mousePressEvent(self, ev):
+        #GraphicsObject.mousePressEvent(self, ev)
         if not self.clickable:
             ev.ignore()
         if ev.button() != QtCore.Qt.LeftButton:
@@ -728,9 +729,12 @@ class PlotCurveItem(GraphicsObject):
         self.mouseMoved = False
         
     def mouseMoveEvent(self, ev):
+        #GraphicsObject.mouseMoveEvent(self, ev)
         self.mouseMoved = True
+        print "move"
         
     def mouseReleaseEvent(self, ev):
+        #GraphicsObject.mouseReleaseEvent(self, ev)
         if not self.mouseMoved:
             self.sigClicked.emit(self)
         
@@ -1711,6 +1715,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         
         
     def mouseMoveEvent(self, ev):
+        QtGui.QGraphicsWidget.mouseMoveEvent(self, ev)
         pos = np.array([ev.pos().x(), ev.pos().y()])
         dif = pos - self.mousePos
         dif *= -1
@@ -1724,7 +1729,6 @@ class ViewBox(QtGui.QGraphicsWidget):
             if not self.yInverted:
                 mask *= np.array([1, -1])
             tr = dif*mask
-            print dif, tr
             self.translateBy(tr, viewCoords=True)
             self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
             ev.accept()
@@ -1742,11 +1746,14 @@ class ViewBox(QtGui.QGraphicsWidget):
             ev.ignore()
         
     def mousePressEvent(self, ev):
+        QtGui.QGraphicsWidget.mousePressEvent(self, ev)
+        
         self.mousePos = np.array([ev.pos().x(), ev.pos().y()])
         self.pressPos = self.mousePos.copy()
         ev.accept()
         
     def mouseReleaseEvent(self, ev):
+        QtGui.QGraphicsWidget.mouseReleaseEvent(self, ev)
         pos = np.array([ev.pos().x(), ev.pos().y()])
         #if sum(abs(self.pressPos - pos)) < 3:  ## Detect click
             #if ev.button() == QtCore.Qt.RightButton:
