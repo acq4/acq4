@@ -973,6 +973,9 @@ class ScatterPlotItem(QtGui.QGraphicsWidget):
     def pointClicked(self, point):
         self.sigPointClicked.emit(point)
 
+    def points(self):
+        return self.spots[:]
+
 class SpotItem(QtGui.QGraphicsWidget):
     sigClicked = QtCore.Signal(object)
     
@@ -987,6 +990,14 @@ class SpotItem(QtGui.QGraphicsWidget):
         s2 = size/2.
         self.path.addEllipse(QtCore.QRectF(-s2, -s2, size, size))
         self.data = data
+        
+    def setBrush(self, brush):
+        self.brush = mkBrush(brush)
+        self.update()
+        
+    def setPen(self, pen):
+        self.pen = mkPen(pen)
+        self.update()
         
     def boundingRect(self):
         return self.path.boundingRect()
@@ -1028,7 +1039,7 @@ class ROIPlotItem(PlotCurveItem):
         self.axes = axes
         self.xVals = xVals
         PlotCurveItem.__init__(self, self.getRoiData(), x=self.xVals, color=color)
-        roi.connect(QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
+        roi.connect(roi, QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
         #self.roiChangedEvent()
         
     def getRoiData(self):
@@ -2069,8 +2080,8 @@ class LinearRegionItem(GraphicsObject):
         
         for l in self.lines:
             l.setParentItem(self)
-            l.connect(QtCore.SIGNAL('positionChangeFinished'), self.lineMoveFinished)
-            l.connect(QtCore.SIGNAL('positionChanged'), self.lineMoved)
+            l.connect(l, QtCore.SIGNAL('positionChangeFinished'), self.lineMoveFinished)
+            l.connect(l, QtCore.SIGNAL('positionChanged'), self.lineMoved)
             
         if brush is None:
             brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 50))

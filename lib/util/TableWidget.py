@@ -28,12 +28,18 @@ class TableWidget(QtGui.QTableWidget):
         list-of-lists, list-of-dicts or dict-of-lists
         """
         fn0, header0 = self.iteratorFn(data)
+        if fn0 is None:
+            self.clear()
+            return
         it0 = fn0(data)
         try:
             first = it0.next()
         except StopIteration:
             return
         fn1, header1 = self.iteratorFn(first)
+        if fn1 is None:
+            self.clear()
+            return
         
         #print fn0, header0
         #print fn1, header1
@@ -74,6 +80,8 @@ class TableWidget(QtGui.QTableWidget):
             return self.iterFirstAxis, None
         elif isinstance(data, np.void):
             return self.iterate, map(str, data.dtype.names)
+        elif data is None:
+            return (None,None)
         else:
             raise Exception("Don't know how to iterate over data type: %s" % str(type(data)))
         

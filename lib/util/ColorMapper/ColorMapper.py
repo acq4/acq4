@@ -1,35 +1,103 @@
 # -*- coding: utf-8 -*-
+if __name__ == '__main__':
+    import sys
+    sys.path.append('..')
+    
 from PyQt4 import QtCore, QtGui
 from SpinBox import SpinBox
 from pyqtgraph.GradientWidget import GradientWidget
 import numpy as np
+import CMTemplate
+import os
+import configfile
 
 class ColorMapper(QtGui.QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, filePath=None):
         QtGui.QWidget.__init__(self, parent)
-        self.layout = QtGui.QGridLayout()
-        self.addBtn = QtGui.QPushButton('+')
-        self.remBtn = QtGui.QPushButton('-')
-        self.tree = QtGui.QTreeWidget()
-        self.setLayout(self.layout)
-        self.layout.addWidget(self.tree, 0, 0, 1, 2)
-        self.layout.addWidget(self.addBtn, 1, 0)
-        self.layout.addWidget(self.remBtn, 1, 1)
-        self.layout.setSpacing(0)
+        #self.layout = QtGui.QGridLayout()
+        #self.addBtn = QtGui.QPushButton('+')
+        #self.remBtn = QtGui.QPushButton('-')
+        #self.tree = QtGui.QTreeWidget()
+        #self.setLayout(self.layout)
+        #self.layout.addWidget(self.tree, 0, 0, 1, 2)
+        #self.layout.addWidget(self.addBtn, 1, 0)
+        #self.layout.addWidget(self.remBtn, 1, 1)
+        #self.layout.setSpacing(0)
         
-        self.tree.setColumnCount(5)
-        self.tree.setHeaderLabels(['  ', 'arg', 'op', 'min', 'max', 'colors'])
-        self.tree.setColumnWidth(0, 5)
-        self.tree.setColumnWidth(2, 35)
-        self.tree.setColumnWidth(3, 45)
-        self.tree.setColumnWidth(4, 45)
+        #self.tree.setColumnCount(5)
+        #self.tree.setHeaderLabels(['  ', 'arg', 'op', 'min', 'max', 'colors'])
+        
+        self.ui = CMTemplate.Ui_Form()
+        self.ui.setupUi(self)
+        
+        self.ui.tree.setColumnWidth(0, 15)
+        self.ui.tree.setColumnWidth(2, 35)
+        self.ui.tree.setColumnWidth(3, 80)
+        self.ui.tree.setColumnWidth(4, 80)
         
         self.argList = []
         self.items = []
+        self.loadedFile = None
+        self.filePath = filePath
         
-        self.connect(self.addBtn, QtCore.SIGNAL('clicked()'), self.addClicked)
-        self.connect(self.remBtn, QtCore.SIGNAL('clicked()'), self.remClicked)
+        self.refreshFileList()
         
+        self.connect(self.ui.addBtn, QtCore.SIGNAL('clicked()'), self.addClicked)
+        self.connect(self.ui.remBtn, QtCore.SIGNAL('clicked()'), self.remClicked)
+        self.ui.fileCombo.currentIndexChanged[int].connect(self.load)
+        self.ui.fileCombo.lineEdit().editingFinished.connect(self.save)
+        self.ui.delBtn.clicked.connect(self.delete)
+        
+    def refreshFileList(self):
+        combo = self.ui.fileCombo
+        if self.filePath is None:
+            return
+        files = ["Load..."] + os.listdir(self.filePath)
+        combo.blockSignals(True)
+        combo.clear()
+        ind = 0
+        #print files
+        #print self.loadedFile
+        for i in range(len(files)):
+            f = files[i]
+            combo.addItem(f)
+            if f == self.loadedFile:
+                ind = i
+        combo.setCurrentIndex(ind)
+        combo.blockSignals(False)
+        
+    def load(self, ind):
+        #print "Index changed to:", ind
+        if ind == 0:
+            return
+        name = str(self.ui.fileCombo.currentText())
+        file = os.path.join(self.filePath, name)
+        if not os.path.isfile(file):
+            return
+        state = configfile.readConfigFile(file)
+        self.restoreState(state)
+        self.loadedFile = name
+
+    def save(self):
+        name = str(self.ui.fileCombo.currentText())
+        if name == 'Load...':
+            return
+        file = os.path.join(self.filePath, name)
+        #print "save:", file
+        state = self.saveState()
+        configfile.writeConfigFile(state, file)
+        self.loadedFile = str(name)
+        self.refreshFileList()
+
+    def delete(self):
+        if self.ui.fileCombo.currentIndex() == 0:
+            return
+        file = os.path.join(self.filePath, self.loadedFile)
+        #print "delete", file
+        os.remove(file)
+        self.loadedFile = None
+        self.refreshFileList()
+
     def widgetGroupInterface(self):
         return (None, ColorMapper.saveState, ColorMapper.restoreState)
         
@@ -63,7 +131,7 @@ class ColorMapper(QtGui.QWidget):
         
     def addItem(self, state=None):
         item = ColorMapperItem(self)
-        self.tree.addTopLevelItem(item)
+        self.ui.tree.addTopLevelItem(item)
         item.postAdd()
         self.items.append(item)
         if state is not None:
@@ -71,19 +139,20 @@ class ColorMapper(QtGui.QWidget):
         
         
     def remClicked(self):
-        item = self.tree.currentItem()
+        item = self.ui.tree.currentItem()
         if item is None:
             return
         self.remItem(item)
         self.emitChanged()
 
     def remItem(self, item):
-        index = self.tree.indexOfTopLevelItem(item)
-        self.tree.takeTopLevelItem(index)
+        index = self.ui.tree.indexOfTopLevelItem(item)
+        self.ui.tree.takeTopLevelItem(index)
         self.items.remove(item)
 
     def saveState(self):
-        state = {'args': self.argList, 'items': [i.saveState() for i in self.items]}
+        items = [self.ui.tree.topLevelItem(i) for i in range(self.ui.tree.topLevelItemCount())]
+        state = {'args': self.argList, 'items': [i.saveState() for i in items]}
         return state
         
     def restoreState(self, state):
@@ -109,6 +178,7 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
 
     def postAdd(self):
         t = self.treeWidget()
+        self.setText(0, "-")
         t.setItemWidget(self, 1, self.argCombo)
         t.setItemWidget(self, 2, self.opCombo)
         t.setItemWidget(self, 3, self.minSpin)
@@ -158,7 +228,7 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
 if __name__ == '__main__':
     app = QtGui.QApplication([])
     win = QtGui.QMainWindow()
-    w = ColorMapper()
+    w = ColorMapper(filePath='./test')
     win.setCentralWidget(w)
     win.show()
     win.resize(400,400)

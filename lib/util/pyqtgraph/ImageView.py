@@ -106,12 +106,12 @@ class ImageView(QtGui.QWidget):
             setattr(self, fn, getattr(self.ui.graphicsView, fn))
 
         #QtCore.QObject.connect(self.ui.timeSlider, QtCore.SIGNAL('valueChanged(int)'), self.timeChanged)
-        self.timeLine.connect(QtCore.SIGNAL('positionChanged'), self.timeLineChanged)
+        self.timeLine.connect(self.timeLine, QtCore.SIGNAL('positionChanged'), self.timeLineChanged)
         #QtCore.QObject.connect(self.ui.whiteSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
         #QtCore.QObject.connect(self.ui.blackSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
         QtCore.QObject.connect(self.ui.gradientWidget, QtCore.SIGNAL('gradientChanged'), self.updateImage)
         QtCore.QObject.connect(self.ui.roiBtn, QtCore.SIGNAL('clicked()'), self.roiClicked)
-        self.roi.connect(QtCore.SIGNAL('regionChanged'), self.roiChanged)
+        self.roi.connect(self.roi, QtCore.SIGNAL('regionChanged'), self.roiChanged)
         QtCore.QObject.connect(self.ui.normBtn, QtCore.SIGNAL('toggled(bool)'), self.normToggled)
         QtCore.QObject.connect(self.ui.normDivideRadio, QtCore.SIGNAL('clicked()'), self.updateNorm)
         QtCore.QObject.connect(self.ui.normSubtractRadio, QtCore.SIGNAL('clicked()'), self.updateNorm)
@@ -124,7 +124,7 @@ class ImageView(QtGui.QWidget):
         ##QtCore.QObject.connect(self.ui.normStartSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
         #QtCore.QObject.connect(self.ui.normStopSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
         self.normProxy = proxyConnect(self.normRgn, QtCore.SIGNAL('regionChanged'), self.updateNorm)
-        self.normRoi.connect(QtCore.SIGNAL('regionChangeFinished'), self.updateNorm)
+        self.normRoi.connect(self.normRoi, QtCore.SIGNAL('regionChangeFinished'), self.updateNorm)
         
         self.ui.roiPlot.registerPlot(self.name + '_ROI')
         

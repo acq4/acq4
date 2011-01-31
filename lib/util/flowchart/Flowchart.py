@@ -21,12 +21,13 @@ def strDict(d):
     return dict([(str(k), v) for k, v in d.iteritems()])
 
 
-def toposort(deps, nodes=None, seen=None, stack=None):
+def toposort(deps, nodes=None, seen=None, stack=None, depth=0):
     """Topological sort. Arguments are:
       deps    dictionary describing dependencies where a:[b,c] means "a depends on b and c"
       nodes   optional, specifies list of starting nodes (these should be the nodes 
               which are not depended on by any other nodes) 
     """
+    
     if nodes is None:
         ## run through deps to find nodes that are not depended upon
         rem = set()
@@ -37,14 +38,18 @@ def toposort(deps, nodes=None, seen=None, stack=None):
         seen = set()
         stack = []
     sorted = []
+    #print "  "*depth, "Starting from", nodes
     for n in nodes:
         if n in stack:
             raise Exception("Cyclic dependency detected", stack + [n])
         if n in seen:
             continue
         seen.add(n)
-        sorted.extend( toposort(deps, deps[n], seen, stack+[n]))
+        #print "  "*depth, "  descending into", n, deps[n]
+        sorted.extend( toposort(deps, deps[n], seen, stack+[n], depth=depth+1))
+        #print "  "*depth, "  Added", n
         sorted.append(n)
+        #print "  "*depth, "  ", sorted
     return sorted
         
 
@@ -66,6 +71,7 @@ class Flowchart(Node):
         self._chartGraphicsItem = FlowchartGraphicsItem(self)
         self._widget = None
         self._scene = None
+        self.processing = False ## flag that prevents recursive node updates
         
         self.inputNode = Node('Input')
         self.outputNode = Node('Output')
@@ -105,7 +111,7 @@ class Flowchart(Node):
             term2 = self.inputNode.addTerminal(name, **opts)
         else:
             opts['io'] = 'in'
-            opts['multi'] = False
+            #opts['multi'] = False
             term2 = self.outputNode.addTerminal(name, **opts)
         return term
 
@@ -198,6 +204,7 @@ class Flowchart(Node):
         ## order should look like [('p', node1), ('p', node2), ('d', terminal1), ...] 
         ## Each tuple specifies either (p)rocess this node or (d)elete the result from this terminal
         order = self.processOrder()
+        #print "ORDER:", order
         
         ## Record inputs given to process()
         for n, t in self.inputNode.outputs().iteritems():
@@ -211,7 +218,7 @@ class Flowchart(Node):
         for c, arg in order:
             
             if c == 'p':     ## Process a single node
-                #print "process:", arg
+                #print "===> process:", arg
                 node = arg
                 if node is self.inputNode:
                     continue  ## input node has already been processed.
@@ -252,6 +259,7 @@ class Flowchart(Node):
                             print out, out.name()
                             raise
             elif c == 'd':   ## delete a terminal result (no longer needed; may be holding a lot of memory)
+                #print "===> delete", arg
                 if arg in data:
                     del data[arg]
 
@@ -274,7 +282,7 @@ class Flowchart(Node):
         #print "DEPS:", deps
         ## determine correct node-processing order
         #deps[self] = []
-        order = toposort(deps)[1:]
+        order = toposort(deps)
         #print "ORDER1:", order
         
         ## construct list of operations
@@ -312,38 +320,43 @@ class Flowchart(Node):
         Propagates new data forward through network."""
         ## first collect list of nodes/terminals and their dependencies
         
-        deps = {}
-        for name, node in self._nodes.iteritems():
-            deps[node] = []
-            for t in node.outputs().itervalues():
-                deps[node].extend(t.dependentNodes())
-        
-        ## determine order of updates 
-        order = toposort(deps, nodes=[startNode])
-        order.reverse()
-        
-        ## keep track of terminals that have been updated
-        terms = set(startNode.outputs().values())
-        
-        #print "======= Updating", startNode
-        #print "Order:", order
-        for node in order[1:]:
-            #print "Processing node", node
-            for term in node.inputs().values():
-                #print "  checking terminal", term
-                deps = term.connections().keys()
-                update = False
-                for d in deps:
-                    if d in terms:
-                        #print "    ..input", d, "changed"
-                        update = True
-                        term.inputChanged(d, process=False)
-                if update:
-                    #print "  processing.."
-                    node.update(signal=False)
-                    terms |= set(node.outputs().values())
-                
-        
+        if self.processing:
+            return
+        self.processing = True
+        try:
+            deps = {}
+            for name, node in self._nodes.iteritems():
+                deps[node] = []
+                for t in node.outputs().itervalues():
+                    deps[node].extend(t.dependentNodes())
+            
+            ## determine order of updates 
+            order = toposort(deps, nodes=[startNode])
+            order.reverse()
+            
+            ## keep track of terminals that have been updated
+            terms = set(startNode.outputs().values())
+            
+            #print "======= Updating", startNode
+            #print "Order:", order
+            for node in order[1:]:
+                #print "Processing node", node
+                for term in node.inputs().values():
+                    #print "  checking terminal", term
+                    deps = term.connections().keys()
+                    update = False
+                    for d in deps:
+                        if d in terms:
+                            #print "    ..input", d, "changed"
+                            update = True
+                            term.inputChanged(d, process=False)
+                    if update:
+                        #print "  processing.."
+                        node.update()
+                        terms |= set(node.outputs().values())
+                    
+        finally:
+            self.processing = False
         
         
         
@@ -431,6 +444,7 @@ class Flowchart(Node):
                 startDir = self.filePath
             if startDir is None:
                 startDir = '.'
+            ## NOTE: was previously using a real widget for the file dialog's parent, but this caused weird mouse event bugs..
             fileName = QtGui.QFileDialog.getOpenFileName(None, "Load Flowchart..", startDir, "Flowchart (*.fc)")
         fileName = str(fileName)
         state = configfile.readConfigFile(fileName)
@@ -443,7 +457,7 @@ class Flowchart(Node):
                 startDir = self.filePath
             if startDir is None:
                 startDir = '.'
-            fileName = QtGui.QFileDialog.getSaveFileName(self.widget(), "Save Flowchart..", startDir, "Flowchart (*.fc)")
+            fileName = QtGui.QFileDialog.getSaveFileName(None, "Save Flowchart..", startDir, "Flowchart (*.fc)")
         configfile.writeConfigFile(self.saveState(), fileName)
 
     def clear(self):

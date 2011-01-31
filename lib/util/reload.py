@@ -149,6 +149,8 @@ def updateClass(old, new, debug):
         try:
             if isinstance(ref, old) and ref.__class__ is old:
                 ref.__class__ = new
+                #for n,v in new.__dict__.iteritems():  ## update attributes
+                    #setattr(ref, n, v)
                 if debug:
                     print "    Changed class for", safeStr(ref)
             elif inspect.isclass(ref) and issubclass(ref, old) and old in ref.__bases__:

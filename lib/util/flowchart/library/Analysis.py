@@ -46,7 +46,7 @@ class EventFitter(CtrlNode):
         dt = waveform.xvals(0)[1] - waveform.xvals(0)[0]
         output = np.empty(len(events), dtype=dtype + [
             ('fitAmplitude', float), 
-            ('fitXOffset', float), 
+            ('fitTime', float), 
             ('fitRiseTau', float), 
             ('fitDecayTau', float), 
             ('fitError', float)
@@ -92,6 +92,7 @@ class EventFitter(CtrlNode):
             guess = [amp, times[0], sliceLen/5., sliceLen/3.]
             fit, junk, comp, err = functions.fitPsp(times, eventData.view(np.ndarray), guess, measureError=True)
             output[i-offset] = tuple(events[i]) + tuple(fit) + (err,)
+            #output['fitTime'] += output['time']
                 
             #print fit
             #self.events.append(eventData)
@@ -214,9 +215,16 @@ class StatsCalculator(Node):
         
         dataRegions = {'all': data}
         #print "regions:"
-        for term, r in regions.iteritems():
+        items = regions.items()
+        for term, r in items:
             #print "  ", term, r
-            mask = (data['time'] > r[0]) * (data['time'] < r[1])
+            if isinstance(r, dict):
+                items.extend(r.items())
+                continue
+            try:
+                mask = (data['fitTime'] > r[0]) * (data['fitTime'] < r[1])
+            except:
+                mask = (data['time'] > r[0]) * (data['time'] < r[1])
             dataRegions[term.node().name()] = data[mask]
         
         for row in state['rows']:  ## iterate over variables in data
@@ -230,7 +238,7 @@ class StatsCalculator(Node):
                         if len(v) > 0:
                             result = fn(v)
                         else:
-                            result = 0
+                            result = 0.0
                         stats[name+'.'+rgnName+'.'+cols[i]] = result
         return {'stats': stats}
         
@@ -324,7 +332,11 @@ class RegionLabeler(Node):
             starts[i,0] = rgn[0]
             stops[i,0] = rgn[1]
             
-        times = events['time'][np.newaxis,:]
+        try:
+            times = events['fitTime'][np.newaxis,:]
+        except:
+            times = events['time'][np.newaxis,:]
+            
         match = (times >= starts) * (times <= stops)
         
         for i in range(len(events)):
