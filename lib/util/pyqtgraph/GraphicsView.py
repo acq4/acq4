@@ -312,6 +312,7 @@ class GraphicsView(QtGui.QGraphicsView):
             #self.currentItem = None
 
     def mouseMoveEvent(self, ev):
+        print "move", ev.pos()
         QtGui.QGraphicsView.mouseMoveEvent(self, ev)
         if not self.mouseEnabled:
             return

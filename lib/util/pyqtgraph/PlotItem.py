@@ -284,8 +284,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         v = self.scene().views()[0]
         b = self.vb.mapRectToScene(self.vb.boundingRect())
         wr = v.mapFromScene(b).boundingRect()
-        pos = v.pos()
-        wr.adjust(v.x(), v.y(), v.x(), v.y())
+        pos = v.mapToGlobal(v.pos())
+        wr.adjust(pos.x(), pos.y(), pos.x(), pos.y())
         return wr
 
 
@@ -568,7 +568,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             self.curves.remove(item)
             self.updateDecimation()
             self.updateParamList()
-            item.connect(QtCore.SIGNAL('plotChanged'), self.plotChanged)
+            item.connect(item, QtCore.SIGNAL('plotChanged'), self.plotChanged)
 
     def clear(self):
         for i in self.items[:]:
@@ -644,7 +644,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         if self.ctrl.averageGroup.isChecked():
             self.addAvgCurve(c)
             
-        c.connect(QtCore.SIGNAL('plotChanged'), self.plotChanged)
+        c.connect(c, QtCore.SIGNAL('plotChanged'), self.plotChanged)
         self.plotChanged()
 
     def plotChanged(self, curve=None):

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'FlowchartCtrlTemplate.ui'
 #
-# Created: Thu Jan 27 11:25:40 2011
+# Created: Sun Jan 30 17:01:11 2011
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -21,11 +21,11 @@ class Ui_Form(object):
         self.saveBtn = FeedbackButton(Form)
         self.saveBtn.setObjectName("saveBtn")
         self.gridLayout.addWidget(self.saveBtn, 0, 1, 1, 2)
-        self.saveAsBtn = QtGui.QPushButton(Form)
+        self.saveAsBtn = FeedbackButton(Form)
         self.saveAsBtn.setObjectName("saveAsBtn")
         self.gridLayout.addWidget(self.saveAsBtn, 0, 3, 1, 1)
         self.reloadBtn = FeedbackButton(Form)
-        self.reloadBtn.setCheckable(True)
+        self.reloadBtn.setCheckable(False)
         self.reloadBtn.setFlat(False)
         self.reloadBtn.setObjectName("reloadBtn")
         self.gridLayout.addWidget(self.reloadBtn, 3, 0, 1, 2)

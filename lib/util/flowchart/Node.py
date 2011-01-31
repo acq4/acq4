@@ -146,7 +146,7 @@ class Node(QtCore.QObject):
             if not eq(oldVal, v):
                 changed = True
             term.setValue(v, process=False)
-        if changed:
+        if changed and '_updatesHandled_' not in args:
             self.update()
         
     def inputValues(self):
@@ -169,9 +169,8 @@ class Node(QtCore.QObject):
         """Called whenever one of this node's terminals is connected elsewhere."""
         pass 
     
-    def update(self):
+    def update(self, signal=True):
         """Collect all input values, attempt to process new output values, and propagate downstream."""
-        #print "processing", self
         vals = self.inputValues()
         #print "  inputs:", vals
         try:
@@ -181,7 +180,10 @@ class Node(QtCore.QObject):
                 out = self.process(**strDict(vals))
             #print "  output:", out
             if out is not None:
-                self.setOutput(**out)
+                if signal:
+                    self.setOutput(**out)
+                else:
+                    self.setOutputNoSignal(**out)
             for n,t in self.inputs().iteritems():
                 t.setValueAcceptable(True)
             self.clearException()
@@ -190,29 +192,35 @@ class Node(QtCore.QObject):
             for n,t in self.outputs().iteritems():
                 t.setValue(None)
             self.setException(sys.exc_info())
-        self.emit(QtCore.SIGNAL('outputChanged'))
+            
+            if signal:
+                self.emit(QtCore.SIGNAL('outputChanged'), self)  ## triggers flowchart to propagate new data
 
     def processBypassed(self, args):
         result = {}
-        for t in self.outputs().values():
-            byp = t.bypassValue()
+        for term in self.outputs().values():
+            byp = term.bypassValue()
             if byp is None:
-                result[t.name()] = None
+                result[term.name()] = None
             else:
-                result[t.name()] = args.get(byp, None)
+                result[term.name()] = args.get(byp, None)
         return result
 
     def setOutput(self, **vals):
+        self.setOutputNoSignal(**vals)
+        self.emit(QtCore.SIGNAL('outputChanged'), self)  ## triggers flowchart to propagate new data
+
+    def setOutputNoSignal(self, **vals):
         for k, v in vals.iteritems():
             term = self.outputs()[k]
             term.setValue(v)
-            targets = term.connections()
-            for t in targets:  ## propagate downstream
-                if t is term:
-                    continue
-                t.inputChanged(term)
+            #targets = term.connections()
+            #for t in targets:  ## propagate downstream
+                #if t is term:
+                    #continue
+                #t.inputChanged(term)
             term.setValueAcceptable(True)
-            
+
     def setException(self, exc):
         self.exception = exc
         self.recolor()

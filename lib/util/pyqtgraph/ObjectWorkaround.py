@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
+"""For circumventing PyQt's lack of multiple inheritance (just until PySide becomes stable)"""
+
 
 class Obj(QtCore.QObject):
     def event(self, ev):
@@ -28,7 +30,12 @@ class QObjectWorkaround:
     def event(self, ev):
         pass
         
-class QGraphicsObject(QtGui.QGraphicsItem, QObjectWorkaround):
-    def __init__(self, *args):
-        QtGui.QGraphicsItem.__init__(self, *args)
-        QObjectWorkaround.__init__(self)
+#class QGraphicsObject(QtGui.QGraphicsItem, QObjectWorkaround):
+    #def __init__(self, *args):
+        #QtGui.QGraphicsItem.__init__(self, *args)
+        #QObjectWorkaround.__init__(self)
+
+class QGraphicsObject(QtGui.QGraphicsWidget):
+    def shape(self):
+        return QtGui.QGraphicsItem.shape(self)
+    

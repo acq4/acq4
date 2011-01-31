@@ -7,7 +7,7 @@ class UniOpNode(Node):
         self.fn = fn
         Node.__init__(self, name, terminals={
             'In': {'io': 'in'},
-            'Out': {'io': 'out'}
+            'Out': {'io': 'out', 'bypass': 'In'}
         })
         
     def process(self, **args):
@@ -20,7 +20,7 @@ class BinOpNode(Node):
         Node.__init__(self, name, terminals={
             'A': {'io': 'in'},
             'B': {'io': 'in'},
-            'Out': {'io': 'out'}
+            'Out': {'io': 'out', 'bypass': 'A'}
         })
         
     def process(self, **args):

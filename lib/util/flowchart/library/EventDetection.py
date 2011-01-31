@@ -58,7 +58,8 @@ class ZeroCrossingEvents(CtrlNode):
     def processData(self, data):
         s = self.stateGroup.state()
         events = functions.zeroCrossingEvents(data, minLength=s['minLength'], minPeak=s['minPeak'], minSum=s['minSum'])
-        return events[:s['eventLimit']]
+        events = events[:s['eventLimit']]
+        return events
 
 class SpikeDetector(CtrlNode):
     """Very simple spike detector. Returns the indexes of sharp spikes by comparing each sample to its neighbors."""
@@ -91,3 +92,6 @@ class SpikeDetector(CtrlNode):
         ret['index'] = sHits
         ret['time'] = data.xvals('Time')[sHits]
         return ret
+
+    def processBypassed(self, args):
+        return {'Out': np.empty(0, dtype=[('index', int), ('time', float)])}

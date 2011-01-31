@@ -51,6 +51,7 @@ def toposort(deps, nodes=None, seen=None, stack=None):
 class Flowchart(Node):
     
     sigOutputChanged = QtCore.Signal()
+    sigChartLoaded = QtCore.Signal()
     
     def __init__(self, terminals=None, name=None, filePath=None):
         if name is None:
@@ -81,7 +82,8 @@ class Flowchart(Node):
       
     def setInput(self, **args):
         #print "setInput", args
-        Node.setInput(self, **args)
+        #Node.setInput(self, **args)
+        #print "  ....."
         self.inputNode.setOutput(**args)
         
     def outputChanged(self):
@@ -152,6 +154,7 @@ class Flowchart(Node):
         self.widget().addNode(node)
         QtCore.QObject.connect(node, QtCore.SIGNAL('closed'), self.nodeClosed)
         QtCore.QObject.connect(node, QtCore.SIGNAL('renamed'), self.nodeRenamed)
+        QtCore.QObject.connect(node, QtCore.SIGNAL('outputChanged'), self.nodeOutputChanged)
         
     def removeNode(self, node):
         node.close()
@@ -161,6 +164,7 @@ class Flowchart(Node):
         self.widget().removeNode(node)
         QtCore.QObject.disconnect(node, QtCore.SIGNAL('closed'), self.nodeClosed)
         QtCore.QObject.disconnect(node, QtCore.SIGNAL('renamed'), self.nodeRenamed)
+        QtCore.QObject.disconnect(node, QtCore.SIGNAL('outputChanged'), self.nodeOutputChanged)
         
     def nodeRenamed(self, node, oldName):
         del self._nodes[oldName]
@@ -213,10 +217,11 @@ class Flowchart(Node):
                     continue  ## input node has already been processed.
                 
                             
-                
+                ## get input and output terminals for this node
                 outs = node.outputs().values()
                 ins = node.inputs().values()
-                #print "  ", outs, ins
+                
+                ## construct input value dictionary
                 args = {}
                 for inp in ins:
                     inputs = inp.inputTerminals()
@@ -226,6 +231,7 @@ class Flowchart(Node):
                         args[inp.name()] = dict([(i, data[i]) for i in inputs])
                     else:                   ## single-inputs terminals only need the single input value available
                         args[inp.name()] = data[inputs[0]]  
+                        
                 if node is self.outputNode:
                     ret = args  ## we now have the return value, but must keep processing in case there are other endpoint nodes in the chart
                 else:
@@ -259,7 +265,7 @@ class Flowchart(Node):
         
         ## first collect list of nodes/terminals and their dependencies
         deps = {}
-        tdeps = {}
+        tdeps = {}   ## {terminal: [nodes that depend on terminal]}
         for name, node in self._nodes.iteritems():
             deps[node] = node.dependentNodes()
             for t in node.outputs().itervalues():
@@ -279,12 +285,15 @@ class Flowchart(Node):
         for t, nodes in tdeps.iteritems():
             lastInd = 0
             lastNode = None
-            for n in nodes:
+            for n in nodes:  ## determine which node is the last to be processed according to order
                 if n is self:
                     lastInd = None
                     break
                 else:
-                    ind = order.index(n)
+                    try:
+                        ind = order.index(n)
+                    except ValueError:
+                        continue
                 if lastNode is None or ind > lastInd:
                     lastNode = n
                     lastInd = ind
@@ -296,6 +305,47 @@ class Flowchart(Node):
             ops.insert(i, ('d', t))
             
         return ops
+        
+        
+    def nodeOutputChanged(self, startNode):
+        """Triggered when a node's output values have changed. (NOT called during process())
+        Propagates new data forward through network."""
+        ## first collect list of nodes/terminals and their dependencies
+        
+        deps = {}
+        for name, node in self._nodes.iteritems():
+            deps[node] = []
+            for t in node.outputs().itervalues():
+                deps[node].extend(t.dependentNodes())
+        
+        ## determine order of updates 
+        order = toposort(deps, nodes=[startNode])
+        order.reverse()
+        
+        ## keep track of terminals that have been updated
+        terms = set(startNode.outputs().values())
+        
+        #print "======= Updating", startNode
+        #print "Order:", order
+        for node in order[1:]:
+            #print "Processing node", node
+            for term in node.inputs().values():
+                #print "  checking terminal", term
+                deps = term.connections().keys()
+                update = False
+                for d in deps:
+                    if d in terms:
+                        #print "    ..input", d, "changed"
+                        update = True
+                        term.inputChanged(d, process=False)
+                if update:
+                    #print "  processing.."
+                    node.update(signal=False)
+                    terms |= set(node.outputs().values())
+                
+        
+        
+        
         
 
     def chartGraphicsItem(self):
@@ -364,12 +414,16 @@ class Flowchart(Node):
         self.inputNode.restoreState(state.get('inputNode', {}))
         self.outputNode.restoreState(state.get('outputNode', {}))
             
-        self.restoreTerminals(state['terminals'])
+        #self.restoreTerminals(state['terminals'])
         for n1, t1, n2, t2 in state['connects']:
             try:
                 self.connect(self._nodes[n1][t1], self._nodes[n2][t2])
             except:
+                print self._nodes[n1].terminals
+                print self._nodes[n2].terminals
                 printExc("Error connecting terminals %s.%s - %s.%s:" % (n1, t1, n2, t2))
+                
+        self.sigChartLoaded.emit()
             
     def loadFile(self, fileName=None, startDir=None):
         if fileName is None:
@@ -397,7 +451,7 @@ class Flowchart(Node):
             if n is self.inputNode or n is self.outputNode:
                 continue
             n.close()  ## calls self.nodeClosed(n) by signal
-        self.clearTerminals()
+        #self.clearTerminals()
         self.widget().clear()
         
     def clearTerminals(self):
@@ -577,6 +631,10 @@ class FlowchartCtrlWidget(QtGui.QWidget):
 
     def clear(self):
         self.chartWidget.clear()
+        
+    def select(self, node):
+        item = self.items[node]
+        self.ui.ctrlList.setCurrentItem(item)
 
 class FlowchartWidget(DockArea.DockArea):
     """Includes the actual graphical flowchart and debugging interface"""
@@ -672,6 +730,7 @@ class FlowchartWidget(DockArea.DockArea):
             item = items[0]
             if hasattr(item, 'node') and isinstance(item.node, Node):
                 n = item.node
+                self.ctrl.select(n)
                 data = {'outputs': n.outputValues(), 'inputs': n.inputValues()}
                 self.selNameLabel.setText(n.name())
                 if hasattr(n, 'nodeName'):
