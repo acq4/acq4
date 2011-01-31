@@ -28,10 +28,15 @@ class EventFitter(CtrlNode):
         })
         self.plotItems = []
         self.selectedFit = None
+        self.deletedFits = []
         
     def process(self, waveform, events, display=True):
+        self.deletedFits = []
         for item in self.plotItems:
-            item.sigClicked.disconnect(self.fitClicked)
+            try:
+                item.sigClicked.disconnect(self.fitClicked)
+            except:
+                pass
         self.plotItems = []
         
         tau = waveform.infoCopy(-1).get('expDeconvolveTau', None)
@@ -94,14 +99,17 @@ class EventFitter(CtrlNode):
             if display and self.plot.isConnected():
                 if self.ctrls['plotFits'].isChecked():
                     item = graphicsItems.PlotCurveItem(comp, times, pen=(0, 0, 255), clickable=True)
+                    item.setZValue(100)
                     self.plotItems.append(item)
                     item.eventIndex = i
-                    item.sigClicked.connect(self, fitClicked)
+                    item.sigClicked.connect(self.fitClicked)
                 if self.ctrls['plotGuess'].isChecked():
                     item2 = graphicsItems.PlotCurveItem(functions.pspFunc(guess, times), times, pen=(255, 0, 0))
+                    item2.setZValue(100)
                     self.plotItems.append(item2)
                 if self.ctrls['plotEvents'].isChecked():
                     item2 = graphicsItems.PlotCurveItem(eventData, times, pen=(0, 255, 0))
+                    item2.setZValue(100)
                     self.plotItems.append(item2)
                 #plot = self.plot.connections().keys()[0].node().getPlot()
                 #plot.addItem(item)
@@ -120,10 +128,13 @@ class EventFitter(CtrlNode):
     def disconnected(self, local, remote):
         if local is self.plot:
             self.filterPlot(remote.node(), install=False)
-            remote.node().sigPlotChanged.disconnect(self.filterPlot)
+            try:
+                remote.node().sigPlotChanged.disconnect(self.filterPlot)
+            except:
+                pass
         CtrlNode.disconnected(self, local, remote)
 
-    ## install event filter on remote plot
+    ## install event filter on remote plot (for detecting del key press)
     def filterPlot(self, node, install=True):
         plot = node.getPlot()
         if plot is None:
@@ -140,11 +151,12 @@ class EventFitter(CtrlNode):
         self.selectedFit = curve
         curve.setPen((255,255,255))
 
-    def eventFilter(self, obj, ev):
+    def eventFilter(self, obj, event):
         if self.selectedFit is None:
             return False
         if event.type() == QtCore.QEvent.KeyPress and event.key() == QtCore.Qt.Key_Del:
             self.deletedFits.append(self.selectedFit.eventIndex)
+            self.selectedFit.setPen((100, 0, 0))
             return True
         return False
 
@@ -345,6 +357,8 @@ class EventMasker(CtrlNode):
         })
     
     def process(self, events, regions, display=True):
+        #print "From masker:", events
+        #events = events.copy()
         prep = self.ctrls['prePadding'].value()
         postp = self.ctrls['postPadding'].value()
         

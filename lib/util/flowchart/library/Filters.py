@@ -97,6 +97,17 @@ class Median(CtrlNode):
     def processData(self, data):
         return median_filter(data, self.ctrls['n'].value())
 
+class Mode(CtrlNode):
+    """Filters data by taking the mode (histogram-based) of a sliding window"""
+    nodeName = 'ModeFilter'
+    uiTemplate = [
+        ('window', 'intSpin', {'value': 500, 'min': 1, 'max': 1000000}),
+    ]
+    
+    @metaArrayWrapper
+    def processData(self, data):
+        return functions.modeFilter(data, self.ctrls['window'].value())
+
 
 class Denoise(CtrlNode):
     """Removes anomalous spikes from data, replacing with nearby values"""

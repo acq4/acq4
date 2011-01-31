@@ -63,10 +63,12 @@ class Terminal:
         self.setValueAcceptable(None)  ## by default, input values are 'unchecked' until Node.update(). 
         if self.isInput() and process:
             self.node().update()
-        if self.isOutput():
-            for c in self.connections():
-                if c.isInput():
-                    c.inputChanged(self)
+            
+        ## Let the flowchart handle this.
+        #if self.isOutput():
+            #for c in self.connections():
+                #if c.isInput():
+                    #c.inputChanged(self)
         self.recolor()
 
     def connected(self, term):
@@ -89,13 +91,13 @@ class Terminal:
         self.node().disconnected(self, term)
         #self.node().update()
 
-    def inputChanged(self, term):
+    def inputChanged(self, term, process=True):
         """Called whenever there is a change to the input value to this terminal.
         It may often be useful to override this function."""
         if self.isMultiValue():
-            self.setValue({term: term.value(self)})
+            self.setValue({term: term.value(self)}, process=process)
         else:
-            self.setValue(term.value(self))
+            self.setValue(term.value(self), process=process)
             
     def valueIsAcceptable(self):
         """Returns True->acceptable  None->unknown  False->Unacceptable"""

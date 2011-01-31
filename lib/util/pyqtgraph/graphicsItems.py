@@ -9,6 +9,8 @@ Provides ImageItem, PlotCurveItem, and ViewBox, amongst others.
 
 
 from PyQt4 import QtGui, QtCore
+if not hasattr(QtCore, 'Signal'):
+    QtCore.Signal = QtCore.pyqtSignal
 from ObjectWorkaround import *
 #tryWorkaround(QtCore, QtGui)
 #from numpy import *
@@ -403,15 +405,17 @@ class PlotCurveItem(GraphicsObject):
     
     def __init__(self, y=None, x=None, copy=False, pen=None, shadow=None, parent=None, color=None, clickable=False):
         GraphicsObject.__init__(self, parent)
+        #GraphicsWidget.__init__(self, parent)
         self.free()
         #self.dispPath = None
         
         if pen is None:
             if color is None:
-                pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
+                self.setPen((200,200,200))
             else:
-                pen = QtGui.QPen(color)
-        self.pen = pen
+                self.setPen(color)
+        else:
+            self.setPen(pen)
         
         self.shadow = shadow
         if y is not None:
@@ -517,7 +521,7 @@ class PlotCurveItem(GraphicsObject):
         return self.metaData
         
     def setPen(self, pen):
-        self.pen = pen
+        self.pen = mkPen(pen)
         self.update()
         
     def setColor(self, color):
@@ -996,8 +1000,11 @@ class SpotItem(QtGui.QGraphicsWidget):
         
     def mousePressEvent(self, ev):
         QtGui.QGraphicsItem.mousePressEvent(self, ev)
-        self.mouseMoved = False
-        ev.accept()
+        if ev.button() == QtCore.Qt.LeftButton:
+            self.mouseMoved = False
+            ev.accept()
+        else:
+            ev.ignore()
         
         
     def mouseMoveEvent(self, ev):
@@ -1720,6 +1727,7 @@ class ViewBox(QtGui.QGraphicsWidget):
             if not self.yInverted:
                 mask *= np.array([1, -1])
             tr = dif*mask
+            print dif, tr
             self.translateBy(tr, viewCoords=True)
             self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
             ev.accept()
@@ -2288,7 +2296,6 @@ class GridItem(UIGraphicsItem):
             x = ul[1]
             ul[1] = br[1]
             br[1] = x
-        
         for i in range(2, -1, -1):   ## Draw three different scales of grid
             
             dist = br-ul

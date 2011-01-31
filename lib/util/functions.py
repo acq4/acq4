@@ -1093,9 +1093,47 @@ def adaptiveDetrend(data, x=None, threshold=3.0):
         return MetaArray(d4, info=data.infoCopy())
     return d4
     
+
+def mode(data, bins=None):
+    """Returns location max value from histogram."""
+    if bins is None:
+        bins = int(len(data)/10.)
+        if bins < 2:
+            bins = 2
+    y, x = np.histogram(data, bins=bins)
+    ind = np.argmax(y)
+    mode = 0.5 * (x[ind] + x[ind+1])
+    return mode
     
+def modeFilter(data, window=500, step=None, bins=None):
+    """Filter based on histogram-based mode function"""
+    d1 = data.view(np.ndarray)
+    vals = []
+    l2 = int(window/2.)
+    if step is None:
+        step = l2
+    i = 0
+    while True:
+        if i > len(data)-step:
+            break
+        vals.append(mode(d1[i:i+window], bins))
+        i += step
+            
+    chunks = [linspace(vals[0], vals[0], l2)]
+    for i in range(len(vals)-1):
+        chunks.append(linspace(vals[i], vals[i+1], step))
+    remain = len(data) - step*(len(vals)-1) - l2
+    chunks.append(linspace(vals[-1], vals[-1], remain))
+    d2 = np.hstack(chunks)
+    
+    if isinstance(data, MetaArray):
+        return MetaArray(d2, info=data.infoCopy())
+    return d2
+    
+
+
 def histogramDetrend(data, window=500, bins=50, threshold=3.0):
-    """Linear detrend. Works by finding the most common value at the beginning and end of a trace."""
+    """Linear detrend. Works by finding the most common value at the beginning and end of a trace, excluding outliers."""
     
     d1 = data.view(np.ndarray)
     d2 = [d1[:window], d1[-window:]]

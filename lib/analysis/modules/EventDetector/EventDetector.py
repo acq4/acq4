@@ -17,6 +17,10 @@ class EventDetector(AnalysisModule):
         #self.setCentralWidget(self.flowchart.widget())
         #self.ui.chartDock1.setWidget(self.flowchart.widget())
         self.flowchart.addInput("dataIn")
+        self.flowchart.addOutput('events')
+        self.flowchart.addOutput('regions', multi=True)        
+        self.flowchart.sigChartLoaded.connect(self.connectPlots)
+        
         #self.ctrl = QtGui.QLabel('LABEL')
         self.ctrl = self.flowchart.widget()
         self._elements_ = OrderedDict([
@@ -69,6 +73,16 @@ class EventDetector(AnalysisModule):
             p2 = self.getElement('Data Plot')
             if p2 is not None:
                 p2.setXLink(new)
+
+    def connectPlots(self):
+        dp = self.getElement('Data Plot', create=False)
+        fp = self.getElement('Filter Plot', create=False)
+        if dp is not None:
+            self.flowchart.nodes()['Plot_000'].setPlot(dp)
+        if fp is not None:
+            self.flowchart.nodes()['Plot_001'].setPlot(fp)
+            
+
 
     def loadFileRequested(self, fh):
         """Called by file loader when a file load is requested."""
