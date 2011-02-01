@@ -1,0 +1,23 @@
+pos: (0.0, 0.0)
+connects: [('Input', 'dataIn', 'ReadData', 'input'), ('ReadData', 'output', 'ColumnSelect.1', 'In'), ('DenoiseFilter.0', 'Out', u'Plot_000', 'In'), ('ColumnSelect.1', 'primary', 'DenoiseFilter.0', 'In')]
+terminals:
+    dataIn:
+        multi: False
+        optional: False
+        io: 'in'
+    events:
+        multi: False
+        optional: False
+        io: 'out'
+    regions:
+        multi: True
+        optional: False
+        io: 'out'
+bypass: False
+inputNode:
+    pos: (-45.230774498176629, -229.99999524470172)
+    bypass: False
+nodes: [{'state': {'pos': (311.39224098279021, -204.89307026476234), 'bypass': False}, 'pos': (311.39224098279021, -204.89307026476234), 'class': 'PlotWidget', 'name': u'Plot_000'}, {'state': {'pos': (99.122496661470308, -79.67203437382868), 'bypass': True, 'ctrl': {'threshold': 4.0, 'radius': 2}}, 'pos': (99.122496661470308, -79.67203437382868), 'class': 'DenoiseFilter', 'name': 'DenoiseFilter.0'}, {'state': {'columns': ['primary'], 'pos': (-44.0, -8.0), 'bypass': False}, 'pos': (-44.0, -8.0), 'class': 'ColumnSelect', 'name': 'ColumnSelect.1'}, {'state': {'text': "{'output':input.read()}", 'terminals': {'input': {'multi': False, 'optional': False, 'io': 'in'}, 'output': {'multi': False, 'optional': False, 'io': 'out'}}, 'pos': (-44.882463557426291, -119.21904382441362), 'bypass': False}, 'pos': (-44.882463557426291, -119.21904382441362), 'class': 'PythonEval', 'name': 'ReadData'}, {'state': {'pos': (551.09841535943724, 44.492317093273563), 'bypass': False}, 'pos': (551.09841535943724, 44.492317093273563), 'class': 'PlotWidget', 'name': 'Plot_001'}]
+outputNode:
+    pos: (723.09270687232015, -113.76540481518084)
+    bypass: False
