@@ -4,6 +4,7 @@ import numpy as np
 import pickle, re, os
 import DataManager, lib.Manager
 import advancedTypes
+import functions
 
 def quoteList(strns):
     """Given a list of strings, return a single string like '"string1", "string2",...'
@@ -85,7 +86,8 @@ class SqliteDatabase:
         insert = "INSERT"
         if replaceOnConflict:
             insert += " OR REPLACE"
-        cmd = "%s INTO %s (%s) VALUES (%s)" % (insert, table, quoteList(fields), ','.join([":"+f for f in fields]))
+        #print "Insert:", fields
+        cmd = "%s INTO %s (%s) VALUES (%s)" % (insert, table, quoteList(fields), ','.join([':'+f for f in fields]))
         records = self._prepareData(table, records)
         #print len(fields), len(records[0]), len(self.tableSchema(table))
         self.exe(cmd, records)
@@ -375,11 +377,17 @@ class AnalysisDatabase(SqliteDatabase):
         if type is None:
             if 'protocol' in info:
                 if 'sequenceParams' in info:
-                    type = 'ProtocolSequence'
+                    type = 'ProtocolSequence'  
                 else:
-                    type = 'Protocol'
+                    type = 'Protocol'  ## an individual protocol run, NOT a single run from within a sequence
             else:
-                raise Exception("Can't determine type for dir %s" % dh.name())
+                try:
+                    if self.dirTypeName(dh.parent()) == 'ProtocolSequence':
+                        type = 'Protocol'
+                    else:
+                        raise Exception()
+                except:
+                    raise Exception("Can't determine type for dir %s" % dh.name())
         return type
 
     ### TODO: No more 'purpose', just use 'owner.purpose' instead
@@ -397,20 +405,34 @@ class AnalysisDatabase(SqliteDatabase):
         return res[0]['Owner']
 
     def describeData(self, data):
-        """Given a record array, return a table description suitable for creating / checking tables."""
+        """Given a dict or record array, return a table description suitable for creating / checking tables."""
         fields = advancedTypes.OrderedDict()
-        for i in xrange(len(data.dtype)):
-            name = data.dtype.names[i]
-            typ = data.dtype[i].kind
-            if typ == 'i':
-                typ = 'int'
-            elif typ == 'f':
-                typ = 'real'
-            elif typ == 'S':
-                typ = 'text'
-            else:
-                typ = 'blob'
-            fields[name] = typ
+        if isinstance(data, np.ndarray):
+            for i in xrange(len(data.dtype)):
+                name = data.dtype.names[i]
+                typ = data.dtype[i].kind
+                if typ == 'i':
+                    typ = 'int'
+                elif typ == 'f':
+                    typ = 'real'
+                elif typ == 'S':
+                    typ = 'text'
+                else:
+                    typ = 'blob'
+                fields[name] = typ
+        elif isinstance(data, dict):
+            for name, v in data.iteritems():
+                if functions.isFloat(v):
+                    typ = 'real'
+                elif functions.isInt(v):
+                    typ = 'int'
+                elif isinstance(v, basestring):
+                    typ = 'text'
+                else:
+                    typ = 'blob'
+                fields[name] = typ
+        else:
+            raise Exception("Can not describe data of type '%s'" % type(data))
         return fields
 
     def checkTable(self, table, owner, fields, links=[], create=False):
@@ -419,8 +441,8 @@ class AnalysisDatabase(SqliteDatabase):
             if create:
                 ## create table
                 self.createTable(table, fields)
-                for field, table in links:
-                    self.linkTables(table, field, table)
+                for field, ptable in links:
+                    self.linkTables(table, field, ptable)
                 self.takeOwnership(table, owner)
             else:
                 raise Exception("Table %s does not exist." % table)

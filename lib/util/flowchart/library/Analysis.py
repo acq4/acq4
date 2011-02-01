@@ -104,6 +104,7 @@ class EventFitter(CtrlNode):
                     self.plotItems.append(item)
                     item.eventIndex = i
                     item.sigClicked.connect(self.fitClicked)
+                    item.deleted = False
                 if self.ctrls['plotGuess'].isChecked():
                     item2 = graphicsItems.PlotCurveItem(functions.pspFunc(guess, times), times, pen=(255, 0, 0))
                     item2.setZValue(100)
@@ -117,8 +118,27 @@ class EventFitter(CtrlNode):
             
         if offset > 0:
             output = output[:-offset]
-        return {'output': output, 'plot': self.plotItems}
             
+        self.outputData = output
+        return {'output': output, 'plot': self.plotItems}
+
+    def deleteSelected(self):
+        item = self.selectedFit
+        d = not item.deleted
+        if d:
+            self.deletedFits.append(item.eventIndex)
+            self.selectedFit.setPen((100, 0, 0))
+        else:
+            self.deletedFits.remove(item.eventIndex)
+            self.selectedFit.setPen((0, 0, 255))
+        item.deleted = d
+            
+        inds = np.ones(len(self.outputData), dtype=bool)
+        inds[self.deletedFits] = False
+        self.setOutput(output=self.outputData[inds], plot=self.plotItems)
+        
+
+
     ## Intercept keypresses on any plot that is connected.
     def connected(self, local, remote):
         if local is self.plot:
@@ -156,8 +176,7 @@ class EventFitter(CtrlNode):
         if self.selectedFit is None:
             return False
         if event.type() == QtCore.QEvent.KeyPress and event.key() == QtCore.Qt.Key_Delete:
-            self.deletedFits.append(self.selectedFit.eventIndex)
-            self.selectedFit.setPen((100, 0, 0))
+            self.deleteSelected()
             return True
         return False
 
@@ -239,7 +258,7 @@ class StatsCalculator(Node):
                             result = fn(v)
                         else:
                             result = 0.0
-                        stats[name+'.'+rgnName+'.'+cols[i]] = result
+                        stats[name+'_'+rgnName+'_'+cols[i]] = result
         return {'stats': stats}
         
     def saveState(self):
