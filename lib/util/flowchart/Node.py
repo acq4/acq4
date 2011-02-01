@@ -43,9 +43,16 @@ class Node(QtCore.QObject):
     def addOutput(self, name="Output", **args):
         return self.addTerminal(name, io='out', **args)
         
-    def removeTerminal(self, name):
+    def removeTerminal(self, term):
+        ## term may be a terminal or its name
+        
+        if isinstance(term, Terminal):
+            name = term.name()
+        else:
+            name = term
+            term = self.terminals[name]
+        
         #print "remove", name
-        term = self.terminals[name]
         term.close()
         del self.terminals[name]
         if name in self._inputs:

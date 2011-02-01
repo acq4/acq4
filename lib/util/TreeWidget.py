@@ -6,6 +6,9 @@ class TreeWidget(QtGui.QTreeWidget):
     """Extends QTreeWidget to allow internal drag/drop with widgets in the tree.
     Also maintains the expanded state of subtrees as they are moved.
     This class demonstrates the absurd lengths one must go to to make drag/drop work."""
+    
+    sigItemMoved = QtCore.Signal(object, object, object)
+    
     def __init__(self, parent=None):
         QtGui.QTreeWidget.__init__(self, parent)
         #self.itemWidgets = WeakKeyDictionary()
@@ -66,6 +69,7 @@ class TreeWidget(QtGui.QTreeWidget):
         
         self.recoverMove(item)
         self.emit(QtCore.SIGNAL('itemMoved'), item, parent, index)
+        self.sigItemMoved.emit(item, parent, index)
         return True
 
     def itemMoving(self, item, parent, index):

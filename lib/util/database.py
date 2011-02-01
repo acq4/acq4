@@ -406,7 +406,29 @@ class AnalysisDatabase(SqliteDatabase):
                 typ = 'blob'
             fields[name] = typ
 
-
+    def checkTable(self, table, owner, fields, links=[], create=False):
+        ## Make sure target table exists and has correct columns, links to input file
+        if not db.hasTable(table):
+            if create:
+                ## create table
+                db.createTable(table, fields)
+                for field, table in links:
+                    db.linkTables(table, field, table)
+                db.takeOwnership(table, owner)
+            else:
+                raise Exception("Table %s does not exist." % table)
+        else:
+            ## check table for ownership, columns
+            if db.tableOwner(table) != owner:
+                raise Exception("Table %s is not owned by %s." % (table, owner))
+            
+            ts = db.tableSchema(table)
+            for f in fields:
+                if f not in ts:
+                    raise Exception("Table has different data structure: Missing field %s" % f)
+                elif ts[f] != fields[f]:
+                    raise Exception("Table has different data structure: Field '%s' type is %s, should be %s" % (f, ts[f], fields[f]))
+        return True
 
 if __name__ == '__main__':
     print "Avaliable DB drivers:", list(QtSql.QSqlDatabase.drivers())

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
-import DatabaseTemplate
+import DatabaseTemplate, QueryTemplate
 import os
 
 class DatabaseGui(QtGui.QWidget):
@@ -12,23 +12,26 @@ class DatabaseGui(QtGui.QWidget):
     sigTableChanged = QtCore.Signal(str, str)  ## table purpose, table name
     #sigStoreToDB = QtCore.Signal()
     
-    def __init__(self, dm, tables, host=None):
+    def __init__(self, dm, tables):  ## datamanager tells us which DB is currently loaded.
         """tables should be a dict like {'owner': 'default', ...}"""
         QtGui.QWidget.__init__(self)
-        self.host = host
         self.dm = dm
         #self.ident = identity
         self.tables = tables
         self.db = None
         self.ui = DatabaseTemplate.Ui_Form()
         self.ui.setupUi(self)
-        self.ui.dbLabel.setText("[No DB Loaded]")
+        #self.ui.dbLabel.setText("[No DB Loaded]")
         self.tableWidgets = {}
         self.dbChanged()
         
         self.dm.sigAnalysisDbChanged.connect(self.dbChanged)
-        self.ui.queryBtn.clicked.connect(self.runQuery)
-        self.ui.storeBtn.clicked.connect(self.storeClicked)
+        
+    def getTableName(self, ident):
+        return str(self.tableWidgets[ident][1].currentText())
+        
+    def getDb(self):
+        return self.db
         
     def dbChanged(self):
         self.db = self.dm.currentDatabase()
@@ -63,28 +66,28 @@ class DatabaseGui(QtGui.QWidget):
         combo = QtCore.sender()
         self.sigTableChanged.emit(combo.ident, combo.currentText())
         
-    def runQuery(self):
-        q = str(self.ui.queryText.text())
-        res = self.db(q)
-        self.ui.queryTable.setData(res)
-
-    def getTableName(self, ident):
-        return str(self.tableWidgets[ident][1].currentText())
         
-    def getDb(self):
-        return self.db
-        
-    def storeClicked(self):
-        if self.host is None:
-            self.sigStoreToDB.emit()
-        else:
-            try:
-                self.host.storeToDB()
-                self.storeBtnFeedback(True, "Stored!")
-            except:
-                self.storeBtnFeedback(False, "Error!", "See console for error message..")
-                raise
             
-    def storeBtnFeedback(self, *args):
-        #print "feedback", args
-        self.ui.storeBtn.feedback(*args)
+        
+        
+class QueryGui(QtGui.QWidget):
+    def __init__(self, dm):  ## datamanager tells us which DB is currently loaded.
+        QtGui.QWidget.__init__(self)
+        self.ui = QueryTemplate.Ui_Form()
+        self.ui.setupUi(self)
+        self.dbChanged()
+        self.ui.queryBtn.clicked.connect(self.runQuery)
+        self.dm.sigAnalysisDbChanged.connect(self.dbChanged)
+
+    def runQuery(self):
+        try:
+            q = str(self.ui.queryText.text())
+            res = self.db(q)
+            self.ui.queryTable.setData(res)
+            self.ui.queryBtn.success("OK (%d rows)" % len(res))
+        except:
+            self.ui.queryBtn.failure("Error.")
+            raise
+
+    def dbChanged(self):
+        self.db = self.dm.currentDatabase()

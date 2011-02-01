@@ -6,9 +6,13 @@ import os
 from advancedTypes import OrderedDict
 import debug
 import FileLoader
+import DatabaseGui
+import FeedbackButton
 
 class EventDetector(AnalysisModule):
     def __init__(self, host, flowchartDir=None):
+        AnalysisModule.__init__(self, host)
+        
         if flowchartDir is None:
             flowchartDir = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "flowcharts")
         self.flowchart = Flowchart(filePath=flowchartDir)
@@ -20,22 +24,22 @@ class EventDetector(AnalysisModule):
         self.flowchart.addOutput('events')
         self.flowchart.addOutput('regions', multi=True)        
         self.flowchart.sigChartLoaded.connect(self.connectPlots)
-        
+
+        self.dbCtrl = DBCtrl(self, identity=self.dbIdentity)
+        self.dbCtrl.storeBtn.clicked.connect(self.storeClicked)
+
         #self.ctrl = QtGui.QLabel('LABEL')
         self.ctrl = self.flowchart.widget()
         self._elements_ = OrderedDict([
-            ('Database', {'type': 'database', 'tables': {self.dbIdentity: 'EventDetector_events'}, 'host': self}),
-            ('Data Plot', {'type': 'plot', 'pos': ('right', 'Database'), 'size': (800, 300)}),
-            ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'pos': ('above', 'Database'), 'host': self}),
-            ('Detection Opts', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('bottom', 'File Loader'), 'size': (200, 500)}),
+            ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'host': self}),
+            ('Database', {'type': 'ctrl', 'object': self.dbCtrl, 'size': (200,300), 'pos': ('bottom', 'File Loader')}),
+            ('Data Plot', {'type': 'plot', 'pos': ('right',), 'size': (800, 300)}),
+            ('Detection Opts', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('bottom', 'Database'), 'size': (200, 500)}),
             ('Filter Plot', {'type': 'plot', 'pos': ('bottom', 'Data Plot'), 'size': (800, 300)}),
             ('Output Table', {'type': 'table', 'pos': ('bottom', 'Filter Plot'), 'optional': True, 'size': (800,200)}),
         ])
         
-        #print "EventDetector init:", id(EventDetector), id(AnalysisModule)
-        #print "  bases:", map(id, EventDetector.__bases__)
-        #print "  init fn:", AnalysisModule.__init__, id(AnalysisModule.__init__)
-        AnalysisModule.__init__(self, host)
+        self.initializeElements()
         
         try:
             ## load default chart
@@ -43,12 +47,7 @@ class EventDetector(AnalysisModule):
         except:
             debug.printExc('Error loading default flowchart:')
         
-        #self.loader = self.getElement('File Loader')
-        #self.table = self.getElement('Output Table')
-        #self.dbui = self.getElement('Database')
         self.flowchart.sigOutputChanged.connect(self.outputChanged)
-        #QtCore.QObject.connect(self.loader, QtCore.SIGNAL('fileLoaded'), self.fileLoaded)
-        #self.dbui.sigStoreToDB.connect(self.storeClicked)
         
     def elementChanged(self, element, old, new):
         name = element.name()
@@ -72,7 +71,6 @@ class EventDetector(AnalysisModule):
             self.flowchart.nodes()['Plot_000'].setPlot(dp)
         if fp is not None:
             self.flowchart.nodes()['Plot_001'].setPlot(fp)
-            
 
 
     def loadFileRequested(self, fh):
@@ -88,9 +86,16 @@ class EventDetector(AnalysisModule):
         table = self.getElement('Output Table')
         table.setData(self.flowchart.output()['events'])
         
-    def storeToDB(self, data=None):
-        if data is None:
+    def storeClicked(self):
+        try:
             data = self.flowchart.output()['events']
+            self.storeToDB(data)
+            self.dbCtrl.storeBtn.success("Stored.")
+        except:
+            self.dbCtrl.storeBtn.failure("Error.")
+            raise
+        
+    def storeToDB(self, data, parentDir):
         dbui = self.getElement('Database')
         table = dbui.getTableName(self.dbIdentity)
         db = dbui.getDb()
@@ -101,42 +106,19 @@ class EventDetector(AnalysisModule):
             
             
         ## make sure parent dir is registered in DB, get its table name
-        pDir = self.currentFile.parent()
-        pTable, pRow = db.addDir(pDir)
+        #pDir = self.currentFile.parent()
+        pTable, pRow = db.addDir(parentDir)
             
         ## determine the set of fields we expect to find in the table
         fields = OrderedDict([
             ('SourceDir', 'int'),
             ('SourceFile', 'text'),
         ])
-        for i in xrange(len(data.dtype)):
-            name = data.dtype.names[i]
-            typ = data.dtype[i].kind
-            if typ == 'i':
-                typ = 'int'
-            elif typ == 'f':
-                typ = 'real'
-            fields[name] = typ
-            
+        fields.update(db.describeData(data))
         
         ## Make sure target table exists and has correct columns, links to input file
-        if not db.hasTable(table):
-            ## create table
-            db.createTable(table, fields)
-            db.linkTables(table, 'SourceDir', pTable)
-            db.takeOwnership(table, self.dbIdentity)
-        else:
-            ## check table for ownership, columns
-            if db.tableOwner(table) != self.dbIdentity:
-                raise Exception("Table %s is not owned by this module." % table)
-            
-            ts = db.tableSchema(table)
-            for f in fields:
-                if f not in ts:
-                    raise Exception("Table has different data structure: Missing field %s" % f)
-                elif ts[f] != fields[f]:
-                    raise Exception("Table has different data structure: Field '%s' type is %s, should be %s" % (f, ts[f], fields[f]))
-
+        db.checkTable(table, owner=self.dbIdentity, fields=fields, links=[('SourceDir', pTable)], create=True)
+        
         ## delete all records from table for current input file
         db.delete(table, "SourceDir=%d and SourceFile='%s'" % (pRow, self.currentFile.shortName()))
         
@@ -147,7 +129,6 @@ class EventDetector(AnalysisModule):
             rec2 = dict(zip(d2.dtype.names, d2))
             rec2.update(rec)
             db.insert(table, rec2)
-            
                 
     #def storeClicked(self):
         #dbui = self.getElement('Database')
@@ -158,3 +139,26 @@ class EventDetector(AnalysisModule):
             #dbui.storeBtnFeedback(False, "Error!", "See console for error message..")
             #raise
         
+class DBCtrl(QtGui.QWidget):
+    def __init__(self, host, identity):
+        QtGui.QWidget.__init__(self)
+        self.host = host
+        
+        self.layout = QtGui.QVBoxLayout()
+        self.setLayout(self.layout)
+        self.dbgui = DatabaseGui.DatabaseGui(dm=host.dataManager(), tables={identity: 'EventDetector_events'})
+        self.storeBtn = FeedbackButton.FeedbackButton("Store to DB")
+        #self.storeBtn.clicked.connect(self.storeClicked)
+        self.layout.addWidget(self.dbgui)
+        self.layout.addWidget(self.storeBtn)
+
+    #def storeClicked(self):
+        #if self.host is None:
+            #self.sigStoreToDB.emit()
+        #else:
+            #try:
+                #self.host.storeToDB()
+            #except:
+                #self.storeBtn.feedback(False, "Error!", "See console for error message..")
+                #raise
+
