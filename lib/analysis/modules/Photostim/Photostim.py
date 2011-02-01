@@ -50,17 +50,17 @@ class Photostim(AnalysisModule):
         self.detector.setElement('Database', self)
         
         ## DB tables we will be using  {owner: defaultTableName}
-        tables = {
-            self.dbIdentity+'.maps': 'Photostim_maps',
-            self.dbIdentity+'.sites': 'Photostim_sites',
-            self.dbIdentity+'.events': 'Photostim_events'
-        }
+        tables = OrderedDict([
+            (self.dbIdentity+'.maps', 'Photostim_maps'),
+            (self.dbIdentity+'.sites', 'Photostim_sites'),
+            (self.dbIdentity+'.events', 'Photostim_events')
+        ])
             
         ## Create element list, importing some gui elements from event detector
         elems = self.detector.listElements()
         self._elements_ = OrderedDict([
             ('Database', {'type': 'database', 'tables': tables, 'host': self}),
-            ('Canvas', {'type': 'canvas', 'pos': ('right',), 'size': (400,400)}),
+            ('Canvas', {'type': 'canvas', 'pos': ('right',), 'size': (400,400), 'allowTransforms': False}),
             ('Maps', {'type': 'ctrl', 'pos': ('bottom', 'Database'), 'size': (200,200), 'object': self.mapDBCtrl}),
             ('Detection Opts', elems['Detection Opts'].setParams(pos=('bottom', 'Maps'), size= (200,500))),
             ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'pos': ('above', 'Database'), 'host': self}),
@@ -83,6 +83,8 @@ class Photostim(AnalysisModule):
         self.detector.flowchart.sigOutputChanged.connect(self.detectorOutputChanged)
         self.flowchart.sigOutputChanged.connect(self.analyzerOutputChanged)
         self.recolorBtn.clicked.connect(self.recolor)
+        
+        
 
             
     def loadFileRequested(self, fh):
@@ -230,6 +232,10 @@ class MapDBCtrl(QtGui.QWidget):
         self.ui.delMapBtn.clicked.connect(self.delMapClicked)
         self.ui.addScanBtn.clicked.connect(self.addScanClicked)
         self.ui.removeScanBtn.clicked.connect(self.removeScanClicked)
+        self.ui.clearDBSpotBtn.clicked.connect(self.clearDBSpot)
+        self.ui.storeDBSpotBtn.clicked.connect(self.storeDBSpot)
+        self.ui.clearDBScanBtn.clicked.connect(self.clearDBScan)
+        self.ui.storeDBScanBtn.clicked.connect(self.storeDBScan)
 
     def listMaps(self, cell):
         """List all maps associated with the file handle for cell"""
@@ -256,4 +262,34 @@ class MapDBCtrl(QtGui.QWidget):
         ## remove the selected scan from its map
         pass
         
+    def clearDBSpot(self):
+        ## remove all events referencing this spot
+        ## remove stats for this spot
+        pass
+    
+    def storeDBSpot(self):
+        ## get events and stats for selected spot
         
+        ## decide what tables need to look like
+        
+        ## check tables for ownership, structure
+        
+        ## write data
+        pass
+    
+    def clearDBScan(self):
+        pass
+    
+    def storeDBScan(self):
+        ## get events and stats for selected scan
+        
+        ## decide what tables need to look like
+        
+        ## check tables for ownership, structure
+        
+        ## write data
+        pass
+    
+
+
+
