@@ -50,18 +50,8 @@ class FileInfoView(QtGui.QWidget):
         ## Decide on the list of fields to display
         info = file.info()
         infoKeys = info.keys()
-        fields = OrderedDict()
-        if isinstance(file, DirHandle):
-            if 'dirType' in info:
-                #infoKeys.remove('dirType')
-                dt = info['dirType']
-                if dt in self.manager.config['folderTypes']:
-                    fields = self.manager.config['folderTypes'][dt]['info']
-        
-        if 'notes' not in fields:
-            fields['notes'] = 'text', 5
-        if 'important' not in fields:
-            fields['important'] = 'bool'
+        #fields = OrderedDict()
+        fields = self.manager.suggestedDirFields(file)
             
         
         ## Generate fields, populate if data exists

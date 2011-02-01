@@ -2,7 +2,7 @@
 from PyQt4 import QtSql, QtCore
 import numpy as np
 import pickle, re, os
-import DataManager
+import DataManager, lib.Manager
 import advancedTypes
 
 def quoteList(strns):
@@ -174,6 +174,8 @@ class SqliteDatabase:
                     newRec[k] = funcs[k](rec[k])
                 except:
                     newRec[k] = rec[k]
+                    if k not in schema:
+                        raise Exception("Field '%s' not present in table '%s'" % (k, table))
                     print "Warning: Setting %s field %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
             newData.append(newRec)
         return newData
@@ -333,7 +335,11 @@ class AnalysisDatabase(SqliteDatabase):
             table = self.dirTypeName(handle)
             
         if not self.hasTable(table):
-            spec = ["'%s' text"%k for k in info]
+            fields = lib.Manager.getManager().suggestedDirFields(handle).keys()
+            for k in info:
+                if k not in fields:
+                    fields.append(k)
+            spec = ["'%s' text"%k for k in fields]
             #db.createTable(table, spec)
             self.createDirTable(handle, table, spec)
             
@@ -392,7 +398,7 @@ class AnalysisDatabase(SqliteDatabase):
 
     def describeData(self, data):
         """Given a record array, return a table description suitable for creating / checking tables."""
-        fields = OrderedDict()
+        fields = advancedTypes.OrderedDict()
         for i in xrange(len(data.dtype)):
             name = data.dtype.names[i]
             typ = data.dtype[i].kind
@@ -405,24 +411,25 @@ class AnalysisDatabase(SqliteDatabase):
             else:
                 typ = 'blob'
             fields[name] = typ
+        return fields
 
     def checkTable(self, table, owner, fields, links=[], create=False):
         ## Make sure target table exists and has correct columns, links to input file
-        if not db.hasTable(table):
+        if not self.hasTable(table):
             if create:
                 ## create table
-                db.createTable(table, fields)
+                self.createTable(table, fields)
                 for field, table in links:
-                    db.linkTables(table, field, table)
-                db.takeOwnership(table, owner)
+                    self.linkTables(table, field, table)
+                self.takeOwnership(table, owner)
             else:
                 raise Exception("Table %s does not exist." % table)
         else:
             ## check table for ownership, columns
-            if db.tableOwner(table) != owner:
+            if self.tableOwner(table) != owner:
                 raise Exception("Table %s is not owned by %s." % (table, owner))
             
-            ts = db.tableSchema(table)
+            ts = self.tableSchema(table)
             for f in fields:
                 if f not in ts:
                     raise Exception("Table has different data structure: Missing field %s" % f)

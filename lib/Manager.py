@@ -33,6 +33,7 @@ from Mutex import Mutex
 from debug import *
 import getopt, glob
 import ptime
+from advancedTypes import OrderedDict
 
 ### All other modules can use this function to get the manager instance
 def getManager():
@@ -515,6 +516,23 @@ Valid options are:
         return self.interfaceDir.getInterface(*args, **kargs)
         
     
+    def suggestedDirFields(self, file):
+        """Given a DirHandle with a dirType, suggest a set of meta-info fields to use."""
+        fields = OrderedDict()
+        if isinstance(file, DirHandle):
+            info = file.info()
+            if 'dirType' in info:
+                #infoKeys.remove('dirType')
+                dt = info['dirType']
+                if dt in self.config['folderTypes']:
+                    fields = self.config['folderTypes'][dt]['info']
+        
+        if 'notes' not in fields:
+            fields['notes'] = 'text', 5
+        if 'important' not in fields:
+            fields['important'] = 'bool'
+        
+        return fields
         
         
     def quit(self):
