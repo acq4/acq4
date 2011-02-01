@@ -390,7 +390,21 @@ class AnalysisDatabase(SqliteDatabase):
             return None
         return res[0]['Owner']
 
-
+    def describeData(self, data):
+        """Given a record array, return a table description suitable for creating / checking tables."""
+        fields = OrderedDict()
+        for i in xrange(len(data.dtype)):
+            name = data.dtype.names[i]
+            typ = data.dtype[i].kind
+            if typ == 'i':
+                typ = 'int'
+            elif typ == 'f':
+                typ = 'real'
+            elif typ == 'S':
+                typ = 'text'
+            else:
+                typ = 'blob'
+            fields[name] = typ
 
 
 

@@ -88,8 +88,9 @@ class EventDetector(AnalysisModule):
         table = self.getElement('Output Table')
         table.setData(self.flowchart.output()['events'])
         
-    def storeToDB(self):
-        data = self.flowchart.output()['events']
+    def storeToDB(self, data=None):
+        if data is None:
+            data = self.flowchart.output()['events']
         dbui = self.getElement('Database')
         table = dbui.getTableName(self.dbIdentity)
         db = dbui.getDb()

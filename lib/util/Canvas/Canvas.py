@@ -15,13 +15,14 @@ import DataManager
 import numpy as np
 
 class Canvas(QtGui.QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, allowTransforms=True):
         QtGui.QWidget.__init__(self, parent)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.view = self.ui.view
         self.itemList = self.ui.itemList
         #self.ui.levelsSlider.setOrientation('bottom')
+        self.allowTransforms = allowTransforms
         
         self.items = {}
         self.scans = {}
@@ -241,6 +242,9 @@ class Canvas(QtGui.QWidget):
 
     def _addCanvasItem(self, citem):
         """Obligatory function call for any idems added to the canvas."""
+        
+        if not self.allowTransforms:
+            citem.setMovable(False)
         
         item = citem.item
         name = citem.name
