@@ -6,6 +6,8 @@ import numpy as np
 import metaarray
 from common import *
 from pyqtgraph import graphicsItems
+import TreeWidget
+import functions
 
 class SubtreeNode(Node):
     """Select files from within a directory. Input must be a DirHandle."""
@@ -312,4 +314,88 @@ class EvalNode(Node):
         self.restoreTerminals(state['terminals'])
         self.update()
         
-              
+class ColumnJoinNode(Node):
+    """Concatenates record arrays and/or adds new columns"""
+    nodeName = 'ColumnJoin'
+    
+    def __init__(self, name):
+        Node.__init__(self, name, terminals = {
+            'output': {'io': 'out'},
+        })
+        
+        #self.items = []
+        
+        self.ui = QtGui.QWidget()
+        self.layout = QtGui.QGridLayout()
+        self.ui.setLayout(self.layout)
+        
+        self.tree = TreeWidget.TreeWidget()
+        self.addInBtn = QtGui.QPushButton('+ Input')
+        self.remInBtn = QtGui.QPushButton('- Input')
+        
+        self.layout.addWidget(self.tree, 0, 0, 1, 2)
+        self.layout.addWidget(self.addInBtn, 1, 0)
+        self.layout.addWidget(self.remInBtn, 1, 1)
+
+        self.addInBtn.clicked.connect(self.addInput)
+        self.addInBtn.clicked.connect(self.remInput)
+        self.tree.sigItemMoved.connect(self.update)
+        
+    def ctrlWidget(self):
+        return self.ui
+        
+    def addInput(self):
+        term = Node.addInput(self, 'input', renamable=True)
+        item = QtGui.QTreeWidgetItem([term.name()])
+        item.term = term
+        term.joinItem = item
+        #self.items.append((term, item))
+        self.tree.addTopLevelItem(item)
+
+    def remInput(self):
+        sel = self.tree.currentItem()
+        term = sel.term
+        term.joinItem = None
+        sel.term = None
+        self.tree.removeTopLevelItem(sel)
+        self.removeTerminal(term)
+        self.update()
+
+    def process(self, display=True, **args):
+        order = self.order()
+        vals = []
+        for name in order:
+            if name not in args:
+                continue
+            val = args[name]
+            if isinstance(val, np.ndarray) and len(val.dtype) > 0:
+                vals.append(val)
+            else:
+                vals.append((name, None, val))
+        return {'output': functions.concatenateColumns(vals)}
+
+    def order(self):
+        return [str(self.tree.topLevelItem(i).text(0)) for i in range(self.tree.topLevelItemCount())]
+
+    def saveState(self):
+        state = Node.saveState(self)
+        state['order'] = self.order()
+        
+    def restoreState(self, state):
+        Node.restoreState(self, state)
+        self.tree.clear()
+        for name in state['order']:
+            term = self[term]
+            item = QtGui.QTreeWidgetItem([name])
+            item.term = term
+            term.joinItem = item
+            #self.items.append((term, item))
+            self.tree.addTopLevelItem(item)
+
+    def terminalRenamed(self, term, oldName):
+        Node.terminalRenamed(self, term, oldName)
+        item = term.joinItem
+        item.setText(0, term.name())
+        self.update()
+        
+        

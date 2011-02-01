@@ -12,6 +12,7 @@ import ColorMapper
 
 class Photostim(AnalysisModule):
     def __init__(self, host):
+        AnalysisModule.__init__(self, host)
         self.dbIdentity = "Photostim"  ## how we identify to the database; this determines which tables we own
 
         ## setup analysis flowchart
@@ -59,10 +60,10 @@ class Photostim(AnalysisModule):
         ## Create element list, importing some gui elements from event detector
         elems = self.detector.listElements()
         self._elements_ = OrderedDict([
-            ('Database', {'type': 'database', 'tables': tables, 'host': self}),
+            ('Database', {'type': 'ctrl', 'object': self.mapDBCtrl}),
             ('Canvas', {'type': 'canvas', 'pos': ('right',), 'size': (400,400), 'allowTransforms': False}),
-            ('Maps', {'type': 'ctrl', 'pos': ('bottom', 'Database'), 'size': (200,200), 'object': self.mapDBCtrl}),
-            ('Detection Opts', elems['Detection Opts'].setParams(pos=('bottom', 'Maps'), size= (200,500))),
+            #('Maps', {'type': 'ctrl', 'pos': ('bottom', 'Database'), 'size': (200,200), 'object': self.mapDBCtrl}),
+            ('Detection Opts', elems['Detection Opts'].setParams(pos=('bottom', 'Database'), size= (200,500))),
             ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'pos': ('above', 'Database'), 'host': self}),
             ('Data Plot', elems['Data Plot'].setParams(pos=('bottom', 'Canvas'), size=(800,200))),
             ('Filter Plot', elems['Filter Plot'].setParams(pos=('bottom', 'Data Plot'), size=(800,200))),
@@ -71,7 +72,7 @@ class Photostim(AnalysisModule):
             ('Map Opts', {'type': 'ctrl', 'object': self.mapCtrl, 'pos': ('left', 'Canvas'), 'size': (200,400)}),
         ])
 
-        AnalysisModule.__init__(self, host)
+        self.initializeElements()
         
         try:
             ## load default chart

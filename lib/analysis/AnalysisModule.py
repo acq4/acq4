@@ -49,8 +49,11 @@ class AnalysisModule(QtCore.QObject):
         self._elements_ is a dict of (name: element) pairs, but can be initially defined
         as (name: (args..)) pairs, and the element objects will be created automatically."""
         QtCore.QObject.__init__(self)
-        self.host = host
+        self._host_ = host
         
+
+    def initializeElements(self):
+        """Must be called sometime during the construction of the module."""
         for name, el in self._elements_.iteritems():
             if isinstance(el, tuple):
                 self._elements_[name] = Element(name, *el)
@@ -60,7 +63,7 @@ class AnalysisModule(QtCore.QObject):
                 self._elements_[name] = Element(name, type=el)
             self._elements_[name].sigObjectChanged.connect(self.elementChanged)
             
-        
+
     def processData(self, data):
         pass
     
@@ -92,7 +95,7 @@ class AnalysisModule(QtCore.QObject):
         The default implementation can create some of the more common elements used
           (plot, canvas, ...)"""
         spec = self.elementSpec(name)
-        obj = spec.makeObject(self.host)
+        obj = spec.makeObject(self._host_)
         self.setElement(name, obj)
         return obj
 
@@ -108,7 +111,8 @@ class AnalysisModule(QtCore.QObject):
         """Return the specification for the named element"""
         return self._elements_[name]
 
-
+    def dataManager(self):
+        return self._host_.dataManager()
 
 class Element(QtCore.QObject):
     """Simple class for holding options and attributes for elements"""
@@ -160,8 +164,8 @@ class Element(QtCore.QObject):
             obj = Canvas.Canvas(**args)
         elif typ == 'fileInput':
             obj = FileLoader.FileLoader(host.dataManager(), **args)
-        elif typ == 'database':
-            obj = DatabaseGui.DatabaseGui(host.dataManager(), **args)
+        #elif typ == 'database':
+            #obj = DatabaseGui.DatabaseGui(host.dataManager(), **args)
         elif typ == 'table':
             obj = TableWidget.TableWidget(**args)
         elif typ == 'dataTree':
