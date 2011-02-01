@@ -380,12 +380,21 @@ class ColumnJoinNode(Node):
     def saveState(self):
         state = Node.saveState(self)
         state['order'] = self.order()
+        return state
         
     def restoreState(self, state):
         Node.restoreState(self, state)
+        inputs = [inp.name() for inp in self.inputs()]
+        for name in inputs:
+            if name not in state['order']:
+                self.removeTerminal(name)
+        for name in state['order']:
+            if name not in inputs:
+                Node.addInput(self, name, renamable=True)
+        
         self.tree.clear()
         for name in state['order']:
-            term = self[term]
+            term = self[name]
             item = QtGui.QTreeWidgetItem([name])
             item.term = term
             term.joinItem = item

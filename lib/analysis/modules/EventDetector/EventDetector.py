@@ -89,8 +89,8 @@ class EventDetector(AnalysisModule):
     def storeClicked(self):
         try:
             data = self.flowchart.output()['events']
-            self.storeToDB(data)
-            self.dbCtrl.storeBtn.success("Stored.")
+            self.storeToDB(data, self.currentFile.parent())
+            self.dbCtrl.storeBtn.success("Stored (%s rec)" % len(data))
         except:
             self.dbCtrl.storeBtn.failure("Error.")
             raise
@@ -101,8 +101,8 @@ class EventDetector(AnalysisModule):
         db = dbui.getDb()
         if db is None:
             raise Exception("No DB selected")
-        if len(data) == 0:
-            raise Exception("No data to store.")
+        #if len(data) == 0:
+            #raise Exception("No data to store.")
             
             
         ## make sure parent dir is registered in DB, get its table name
@@ -115,16 +115,18 @@ class EventDetector(AnalysisModule):
             ('SourceFile', 'text'),
         ])
         fields.update(db.describeData(data))
+        fields['SourceFile'] = 'text' 
         
         ## Make sure target table exists and has correct columns, links to input file
         db.checkTable(table, owner=self.dbIdentity, fields=fields, links=[('SourceDir', pTable)], create=True)
         
-        ## delete all records from table for current input file
-        db.delete(table, "SourceDir=%d and SourceFile='%s'" % (pRow, self.currentFile.shortName()))
         
-        ## add new records
-        rec = {'SourceDir': pRow, 'SourceFile': self.currentFile.shortName()}
         for i in xrange(len(data)):
+            ## delete all records from table for current input file
+            db.delete(table, "SourceDir=%d and SourceFile='%s'" % (pRow, self.currentFile.shortName()))
+            
+            ## add new records
+            rec = {'SourceDir': pRow, 'SourceFile': data['SourceFile'].name(relativeTo=parentDir)}
             d2 = data[i]
             rec2 = dict(zip(d2.dtype.names, d2))
             rec2.update(rec)
@@ -151,7 +153,9 @@ class DBCtrl(QtGui.QWidget):
         #self.storeBtn.clicked.connect(self.storeClicked)
         self.layout.addWidget(self.dbgui)
         self.layout.addWidget(self.storeBtn)
-
+        for name in ['getTableName', 'getDb']:
+            setattr(self, name, getattr(self.dbgui, name))
+            
     #def storeClicked(self):
         #if self.host is None:
             #self.sigStoreToDB.emit()

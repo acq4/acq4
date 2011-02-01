@@ -298,3 +298,5 @@ class DataManager(Module):
         
     def analysisDbChanged(self):
         self.sigAnalysisDbChanged.emit()
+        
+        
