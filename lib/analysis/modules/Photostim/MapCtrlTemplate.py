@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'MapCtrlTemplate.ui'
 #
-# Created: Mon Jan 31 22:55:57 2011
+# Created: Wed Feb  2 01:38:02 2011
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -18,19 +18,19 @@ class Ui_Form(object):
         self.mapTable = QtGui.QTreeWidget(Form)
         self.mapTable.setObjectName("mapTable")
         self.gridLayout.addWidget(self.mapTable, 0, 0, 1, 3)
-        self.newMapBtn = QtGui.QPushButton(Form)
+        self.newMapBtn = FeedbackButton(Form)
         self.newMapBtn.setObjectName("newMapBtn")
         self.gridLayout.addWidget(self.newMapBtn, 1, 0, 1, 1)
-        self.loadMapBtn = QtGui.QPushButton(Form)
+        self.loadMapBtn = FeedbackButton(Form)
         self.loadMapBtn.setObjectName("loadMapBtn")
         self.gridLayout.addWidget(self.loadMapBtn, 1, 1, 1, 1)
-        self.delMapBtn = QtGui.QPushButton(Form)
+        self.delMapBtn = FeedbackButton(Form)
         self.delMapBtn.setObjectName("delMapBtn")
         self.gridLayout.addWidget(self.delMapBtn, 1, 2, 1, 1)
-        self.addScanBtn = QtGui.QPushButton(Form)
+        self.addScanBtn = FeedbackButton(Form)
         self.addScanBtn.setObjectName("addScanBtn")
         self.gridLayout.addWidget(self.addScanBtn, 2, 0, 1, 1)
-        self.removeScanBtn = QtGui.QPushButton(Form)
+        self.removeScanBtn = FeedbackButton(Form)
         self.removeScanBtn.setObjectName("removeScanBtn")
         self.gridLayout.addWidget(self.removeScanBtn, 2, 1, 1, 1)
         self.clearDBSpotBtn = FeedbackButton(Form)

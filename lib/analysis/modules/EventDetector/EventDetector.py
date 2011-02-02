@@ -10,13 +10,13 @@ import DatabaseGui
 import FeedbackButton
 
 class EventDetector(AnalysisModule):
-    def __init__(self, host, flowchartDir=None):
+    def __init__(self, host, flowchartDir=None, dbIdentity="EventDetector"):
         AnalysisModule.__init__(self, host)
         
         if flowchartDir is None:
             flowchartDir = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "flowcharts")
         self.flowchart = Flowchart(filePath=flowchartDir)
-        self.dbIdentity = "EventDetector"  ## how we identify to the database; this determines which tables we own
+        self.dbIdentity = dbIdentity  ## how we identify to the database; this determines which tables we own
         #self.loader = FileLoader.FileLoader(host.dataManager())
         #self.setCentralWidget(self.flowchart.widget())
         #self.ui.chartDock1.setWidget(self.flowchart.widget())
@@ -86,16 +86,23 @@ class EventDetector(AnalysisModule):
         table = self.getElement('Output Table')
         table.setData(self.flowchart.output()['events'])
         
+    def output(self):
+        return self.flowchart.output()
+        
     def storeClicked(self):
         try:
-            data = self.flowchart.output()['events']
-            self.storeToDB(data, self.currentFile.parent())
+            self.storeToDB()
             self.dbCtrl.storeBtn.success("Stored (%s rec)" % len(data))
         except:
             self.dbCtrl.storeBtn.failure("Error.")
             raise
         
-    def storeToDB(self, data, parentDir):
+    def storeToDB(self, data=None, parentDir=None):
+        if data is None:
+            data = self.flowchart.output()['events']
+        if parentDir is None:
+            parentDir = self.currentFile.parent()
+            
         dbui = self.getElement('Database')
         table = dbui.getTableName(self.dbIdentity)
         db = dbui.getDb()
@@ -120,14 +127,18 @@ class EventDetector(AnalysisModule):
         ## Make sure target table exists and has correct columns, links to input file
         db.checkTable(table, owner=self.dbIdentity, fields=fields, links=[('SourceDir', pTable)], create=True)
         
-        
+        names = []
         for i in xrange(len(data)):
             ## delete all records from table for current input file
-            db.delete(table, "SourceDir=%d and SourceFile='%s'" % (pRow, self.currentFile.shortName()))
-            
+            source = data[i]['SourceFile']
+            name = source.name(relativeTo=parentDir)
+            names.append(name)
+            db.delete(table, "SourceDir=%d and SourceFile='%s'" % (pRow, name))
+
+        for i in xrange(len(data)):
             ## add new records
-            rec = {'SourceDir': pRow, 'SourceFile': data['SourceFile'].name(relativeTo=parentDir)}
             d2 = data[i]
+            rec = {'SourceDir': pRow, 'SourceFile': names[i]}
             rec2 = dict(zip(d2.dtype.names, d2))
             rec2.update(rec)
             db.insert(table, rec2)

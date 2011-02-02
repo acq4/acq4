@@ -28,7 +28,7 @@ class FileAnalysisView(QtGui.QWidget):
         self.connect(self.ui.createDbBtn, QtCore.SIGNAL('clicked()'), self.createDbClicked)
         self.connect(self.ui.addFileBtn, QtCore.SIGNAL('clicked()'), self.addFileClicked)
         self.connect(self.ui.analysisCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.loadModule)
-        
+        self.ui.refreshDbBtn.clicked.connect(self.refreshDb)
         
     def openDbClicked(self):
         fn = str(QtGui.QFileDialog.getOpenFileName(self, "Select Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)"))
@@ -47,6 +47,11 @@ class FileAnalysisView(QtGui.QWidget):
         self.dbFile = fn
         self.db = database.AnalysisDatabase(self.dbFile, self.man.getBaseDir())
         self.sigDbChanged.emit()
+        
+    def refreshDb(self):
+        if self.db is None:
+            return
+        self.db._readTableList()
         
     def addFileClicked(self):
         cf = self.mod.selectedFile()

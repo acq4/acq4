@@ -24,35 +24,35 @@
     </widget>
    </item>
    <item row="1" column="0">
-    <widget class="QPushButton" name="newMapBtn">
+    <widget class="FeedbackButton" name="newMapBtn">
      <property name="text">
       <string>New Map</string>
      </property>
     </widget>
    </item>
    <item row="1" column="1">
-    <widget class="QPushButton" name="loadMapBtn">
+    <widget class="FeedbackButton" name="loadMapBtn">
      <property name="text">
       <string>Load Selected</string>
      </property>
     </widget>
    </item>
    <item row="1" column="2">
-    <widget class="QPushButton" name="delMapBtn">
+    <widget class="FeedbackButton" name="delMapBtn">
      <property name="text">
       <string>Delete</string>
      </property>
     </widget>
    </item>
    <item row="2" column="0">
-    <widget class="QPushButton" name="addScanBtn">
+    <widget class="FeedbackButton" name="addScanBtn">
      <property name="text">
       <string>Add Scan</string>
      </property>
     </widget>
    </item>
    <item row="2" column="1">
-    <widget class="QPushButton" name="removeScanBtn">
+    <widget class="FeedbackButton" name="removeScanBtn">
      <property name="text">
       <string>Remove Scan</string>
      </property>

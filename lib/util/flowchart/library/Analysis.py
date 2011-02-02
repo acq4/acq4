@@ -67,7 +67,7 @@ class EventFitter(CtrlNode):
             if tau is None:
                 tau = waveform._info[-1].get('expDeconvolveTau', None)
             if tau is not None:
-                guessLen += tau*3
+                guessLen += tau*2
             
             sliceLen = min(guessLen, sliceLen)
             
@@ -104,6 +104,7 @@ class EventFitter(CtrlNode):
                     self.plotItems.append(item)
                     item.eventIndex = i
                     item.sigClicked.connect(self.fitClicked)
+                    item.deleted = False
                 if self.ctrls['plotGuess'].isChecked():
                     item2 = graphicsItems.PlotCurveItem(functions.pspFunc(guess, times), times, pen=(255, 0, 0))
                     item2.setZValue(100)
@@ -117,8 +118,27 @@ class EventFitter(CtrlNode):
             
         if offset > 0:
             output = output[:-offset]
-        return {'output': output, 'plot': self.plotItems}
             
+        self.outputData = output
+        return {'output': output, 'plot': self.plotItems}
+
+    def deleteSelected(self):
+        item = self.selectedFit
+        d = not item.deleted
+        if d:
+            self.deletedFits.append(item.eventIndex)
+            self.selectedFit.setPen((100, 0, 0))
+        else:
+            self.deletedFits.remove(item.eventIndex)
+            self.selectedFit.setPen((0, 0, 255))
+        item.deleted = d
+            
+        inds = np.ones(len(self.outputData), dtype=bool)
+        inds[self.deletedFits] = False
+        self.setOutput(output=self.outputData[inds], plot=self.plotItems)
+        
+
+
     ## Intercept keypresses on any plot that is connected.
     def connected(self, local, remote):
         if local is self.plot:
@@ -147,7 +167,10 @@ class EventFitter(CtrlNode):
 
     def fitClicked(self, curve):
         if self.selectedFit is not None:
-            self.selectedFit.setPen((0,0,255))
+            if self.selectedFit.deleted:
+                self.selectedFit.setPen((100,0,0))
+            else:
+                self.selectedFit.setPen((0,0,255))
             
         self.selectedFit = curve
         curve.setPen((255,255,255))
@@ -156,8 +179,7 @@ class EventFitter(CtrlNode):
         if self.selectedFit is None:
             return False
         if event.type() == QtCore.QEvent.KeyPress and event.key() == QtCore.Qt.Key_Delete:
-            self.deletedFits.append(self.selectedFit.eventIndex)
-            self.selectedFit.setPen((100, 0, 0))
+            self.deleteSelected()
             return True
         return False
 
@@ -206,7 +228,10 @@ class StatsCalculator(Node):
         return self.ui
         
     def process(self, data, regions=None, display=True):
-        self.ui.updateRows(data.dtype.fields.keys())
+        keys = data.dtype.fields.keys()
+        if len(keys) == 0:
+            return {'stats': None}  ## Avoid trashing the UI and its state if possible..
+        self.ui.updateRows(keys)
         state = self.ui.saveState()
         stats = OrderedDict()
         cols = state['cols']
@@ -239,7 +264,7 @@ class StatsCalculator(Node):
                             result = fn(v)
                         else:
                             result = 0.0
-                        stats[name+'.'+rgnName+'.'+cols[i]] = result
+                        stats[name+'_'+rgnName+'_'+cols[i]] = result
         return {'stats': stats}
         
     def saveState(self):
@@ -249,6 +274,7 @@ class StatsCalculator(Node):
         
     def restoreState(self, state):
         Node.restoreState(self, state)
+        self.defaultState = state
         self.ui.restoreState(state['ui'])
         
         
