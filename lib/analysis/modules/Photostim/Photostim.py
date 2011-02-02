@@ -9,6 +9,7 @@ import os
 from advancedTypes import OrderedDict
 import debug
 import ColorMapper
+import pyqtgraph as pg
 #import FileLoader
 
 class Photostim(AnalysisModule):
@@ -117,19 +118,28 @@ class Photostim(AnalysisModule):
             return False
     
     def loadScan(self, fh):
-        canvas = self.getElement('Canvas')
-        scan = canvas.addFile(fh)
-        #self.scanItems[fh] = scan
-        self.scans[fh] = Scan(self, fh, scan)
-        scan.item.sigPointClicked.connect(self.scanPointClicked)
-        return scan
+        if fh not in self.scans:
+            canvas = self.getElement('Canvas')
+            scan = canvas.addFile(fh)
+            #self.scanItems[fh] = scan
+            self.scans[fh] = Scan(self, fh, scan.item)
+            scan.item.sigPointClicked.connect(self.scanPointClicked)
+        return self.scans[fh]
 
-    def registerMap(self, map, splot):
+    def registerMap(self, map):
+        #if map in self.maps:
+            #return
         canvas = self.getElement('Canvas')
-        canvas.addItem(splot)
+        canvas.addItem(map.sPlotItem, name=map.name())
         self.maps.append(map)
-        splot.sigPointClicked.connect(self.mapPointClicked)
+        map.sPlotItem.sigPointClicked.connect(self.mapPointClicked)
         
+    def unregisterMap(self, map):
+        canvas = self.getElement('Canvas')
+        canvas.removeItem(map.sPlotItem)
+        self.maps.remove(map)
+        map.sPlotItem.sigPointClicked.disconnect(self.mapPointClicked)
+    
 
     def storeToDB(self):
         pass
@@ -145,6 +155,34 @@ class Photostim(AnalysisModule):
         self.selectedSpot = point
             
         self.detector.loadFileRequested(self.getClampFile(point.data))
+        
+    def mapPointClicked(self, point):
+        plot = self.getElement("Data Plot")
+        plot.clear()
+        eTable = self.getElement("Output Table")
+        sTable = self.getElement("Stats")
+        self.mapTicks = []
+        
+        num = len(point.data)
+        for i in range(num):
+            color = pg.intColor(i, num)
+            scan, fh = point.data[i]
+            
+            ## plot all data, incl. events
+            data = fh.read()['primary']
+            plot.plot(data, pen=color, clear=False)
+            
+            ## show stats
+            stats = scan.getStats(fh)
+            sTable.setData(stats)
+            events = scan.getEvents(fh)['events']
+            eTable.setData(events)
+        
+            times = events['fitTime']
+            ticks = pg.VTickGroup(times, [0.0, 0.15], pen=color, relative=True, view=plot)
+            plot.addItem(ticks)
+            self.mapTicks.append(ticks)
+        
         
     def detectorStateChanged(self):
         #print "STATE CHANGE"
@@ -183,8 +221,10 @@ class Photostim(AnalysisModule):
     def recolor(self):
         
         for i in range(len(self.scans)):
-            m = self.scans[self.scans.keys()[i]]
-            m.recolor(i, len(self.scans))
+            s = self.scans[self.scans.keys()[i]]
+            s.recolor(i, len(self.scans))
+        for m in self.maps:
+            m.recolor(self)
 
     def getColor(self, stats):
         #print "STATS:", stats
@@ -328,14 +368,21 @@ class Photostim(AnalysisModule):
         if db.dirTypeName(p2) == 'ProtocolSequence':
             parentDir = p2
             
-        pRow = db.getDirRowID(parentDir)
         
+        pRow = db.getDirRowID(parentDir)
+        if pRow is None:
+            return None, None
+            
         identity = self.dbIdentity+'.sites'
         table = dbui.getTableName(identity)
+        if not db.hasTable(table):
+            return None, None
         stats = db.select(table, '*', "where SourceDir=%d and SourceFile='%s'" % (pRow, fh.name(relativeTo=parentDir)))
         
         identity = self.dbIdentity+'.events'
         table = dbui.getTableName(identity)
+        if not db.hasTable(table):
+            return None, None
         events = db.select(table, '*', "where SourceDir=%d and SourceFile='%s'" % (pRow, fh.name(relativeTo=parentDir)))
         
         return events, stats
@@ -353,13 +400,15 @@ class Scan:
         self.host = host
         self.locked = False  ## prevents flowchart changes from clearing the cache--only individual updates allowed
         self.loadFromDB()
+        self.spotDict = {}  ##  fh: spot
         
     def name(self):
         return self.source.shortName()
 
     def rowId(self):
         db = self.host.getDb()
-        return db.getDirRowID(self.source)
+        table, rid = db.addDir(self.source)
+        return rid
 
     def loadFromDB(self):
         self.events = {}
@@ -369,7 +418,7 @@ class Scan:
             dh = spot.data
             fh = self.host.getClampFile(dh)
             events, stats = self.host.loadSpotFromDB(dh)
-            if len(stats) == 0:
+            if events is None or len(stats) == 0:
                 continue
             self.statExample = stats
             self.events[fh] = {'events': events}
@@ -391,6 +440,8 @@ class Scan:
             self.stats = {}
         
     def recolor(self, n, nMax):
+        if not self.item.isVisible():
+            return
         spots = self.spots()
         progressDlg = QtGui.QProgressDialog("Computing spot colors (Map %d/%d)" % (n+1,nMax), "Cancel", 0, len(spots))
         #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
@@ -421,9 +472,14 @@ class Scan:
         
             
     def getStats(self, fh):
+        #print "getStats", fh
+        spot = self.getSpot(fh)
+        #print "  got spot:", spot
+        #except:
+            #raise Exception("File %s is not in this scan" % fh.name())
         if fh not in self.stats:
             events = self.getEvents(fh)
-            stats = self.host.processStats(events, self.spots[fh])
+            stats = self.host.processStats(events, spot)
             self.stats[fh] = stats
         return self.stats[fh]
 
@@ -434,14 +490,18 @@ class Scan:
         return self.events[fh]
         
     def spots(self):
-        gi = self.item.item
+        gi = self.item
         return gi.points()
 
     def updateSpot(self, fh, events, stats):
         self.events[fh] = events
         self.stats[fh] = stats
 
-        
+    def getSpot(self, fh):
+        if fh not in self.spotDict:
+            for s in self.spots():
+                self.spotDict[self.host.getClampFile(s.data)] = s
+        return self.spotDict[fh]
         
         
 class Map:
@@ -451,6 +511,7 @@ class Map:
         #('date', 'int'),
         #('name', 'text'),
         ('description', 'text'),
+        ('cellType', 'text'),
         ('mode', 'text'),
         ('holding', 'real'),
         ('internal', 'text'),
@@ -459,9 +520,15 @@ class Map:
         ('temp', 'real'),
     ])
         
-    def __init__(self, rec=None):
+    def __init__(self, host, rec=None):
+        self.host = host
         self.scans = []
-        self.scanItems = {}
+        self.scanItems = {}  # scan: tree item
+        self.points = []         ## Holds all data: [ (position, [(scan, dh), ...], spotData), ... ]
+        self.pointsByFile = {}   ## just a lookup dictionary
+        self.spots = []               ## used to construct scatterplotitem
+        self.sPlotItem = pg.ScatterPlotItem(pxMode=False)
+        
         self.header = self.mapFields.keys()[2:]
         
         self.item = QtGui.QTreeWidgetItem([""] * len(self.header))
@@ -482,10 +549,50 @@ class Map:
                 self.scans.append((fh, item))
                 self.item.addChild(item)
 
+    def name(self, cell=None):
+        rec = self.getRecord()
+        if cell is None:
+            cell = rec['cell']
+        if cell is None:
+            return ""
+        name = cell.shortName()
+        if rec['holding'] < -40:
+            name = name + "_excitatory"
+        elif rec['holding'] >= -10:
+            name = name + "_inhibitory"
+        return name
 
-    def buildPlot(self):
+    def rebuildPlot(self):
         ## decide on point locations, build scatterplot
+        self.points = []         ## Holds all data: [ (position, [(scan, dh), ...], spotData), ... ]
+        self.pointsByFile = {}   ## just a lookup dictionary
+        self.spots = []               ## used to construct scatterplotitem
+        for scan in self.scans:  ## iterate over all points in all scans
+            if isinstance(scan, tuple):
+                continue    ## need to load before building
+            self.addScanSpots(scan)
+        self.sPlotItem.setPoints(self.spots)
 
+    def addScanSpots(self, scan):
+        for pt in scan.spots():
+            pos = pt.scenePos()
+            size = pt.boundingRect().width()
+            added = False
+            fh = self.host.getClampFile(pt.data)
+            for pt2 in self.points:     ## check all previously added points for position match
+                pos2 = pt2[0]
+                dp = pos2-pos
+                dist = (dp.x()**2 + dp.y()**2)**0.5
+                if dist < size/3.:      ## if position matches, add scan/spot data into existing site
+                    pt2[1].append((scan, pt.data))
+                    pt2[2]['data'].append((scan, fh))
+                    added = True
+                    self.pointsByFile[pt.data] = pt2
+                    break
+            if not added:               ## ..otherwise, add a new site
+                self.spots.append({'pos': pos, 'size': size, 'data': [(scan, fh)]})
+                self.points.append((pos, [(scan, fh)], self.spots[-1]))
+                self.pointsByFile[pt.data] = self.points[-1]
 
     def addScan(self, scan):
         if scan in self.scans:
@@ -505,7 +612,6 @@ class Map:
         self.item.setExpanded(True)
         item.scan = scan
         self.scanItems[scan] = item
-
 
     def generateDefaults(self, scan):
         rec = {}
@@ -531,15 +637,19 @@ class Map:
         except:
             pass
         
-        day = source.parent().parent().parent()
+        cell = source.parent()
+        day = cell.parent().parent()
         dinfo = day.info()
         rec['acsf'] = dinfo.get('solution', '')
         rec['internal'] = dinfo.get('internal', '')
         rec['temp'] = dinfo.get('temperature', '')
         
+        rec['cellType'] = cell.info().get('type', '')
+        
         ninfo = next.info()
         if 'Temperature.BathTemp' in ninfo:
             rec['temp'] = ninfo['Temperature.BathTemp']
+        rec['description'] = self.name(source.parent())
         return rec
 
 
@@ -570,9 +680,30 @@ class Map:
         return rec
         
             
-        
-    def spots(self):
-        pass
+    def recolor(self, host):
+        spots = self.sPlotItem.points()
+        for s in spots:
+            data = []
+            sources = s.data
+            for scan, dh in sources:
+                data.append(scan.getStats(dh))
+            
+            if len(data) == 0:
+                continue
+            if len(data) == 1:
+                mergeData = data[0]
+            else:
+                mergeData = {}
+                for k in data[0]:
+                    vals = [d[k] for d in data]
+                    if len(data) == 2:
+                        mergeData[k] = np.mean(vals)
+                    else:
+                        mergeData[k] = np.median(vals)
+            #print mergeData
+            color = host.getColor(mergeData)
+            s.setBrush(color)
+            
 
 
 
@@ -620,7 +751,7 @@ class DBCtrl(QtGui.QWidget):
 
 
     def newMap(self, rec=None):
-        m = Map(rec)
+        m = Map(self.host, rec)
         self.maps.append(m)
         item = m.item
         self.ui.mapTable.addTopLevelItem(item)
@@ -641,9 +772,11 @@ class DBCtrl(QtGui.QWidget):
         rec = map.getRecord()
         cell = rec['cell']
         if cell is not None:
-            rec['cell'] = db.getDirRowID(cell)
-        else:
-            del rec['cell']
+            pt, rid = db.addDir(cell)
+            rec['cell'] = rid
+        if rec['cell'] is None:
+            return
+        
         #fields = db.describeData(rec)
         #fields['cell'] = 'int'
         db.checkTable(table, ident, Map.mapFields, [('cell', 'Cell')], create=True)
@@ -674,6 +807,8 @@ class DBCtrl(QtGui.QWidget):
         
         db.delete(table, 'rowid=%d'%rowID)
         
+        self.host.unregisterMap(map)
+        
 
     def listMaps(self, cell):
         """List all maps associated with the file handle for cell"""
@@ -684,6 +819,8 @@ class DBCtrl(QtGui.QWidget):
             
         ident = self.dbIdentity+'.maps'
         table = dbui.getTableName(ident)
+        if not db.hasTable(table):
+            return
         if db.tableOwner(table) != ident:
             raise Exception("Table %s not owned by %s" % (table, ident))
         
@@ -692,7 +829,7 @@ class DBCtrl(QtGui.QWidget):
             return
             
         maps = db.select(table, ['rowid','*'], 'where cell=%d'%row)
-        print maps
+        #print maps
         for rec in maps:
             scans = []
             for rowid in rec['scans']:
@@ -711,15 +848,17 @@ class DBCtrl(QtGui.QWidget):
                 rscans.append(scan)
                 continue
             newScan = self.host.loadScan(scan[0])
-            newScan.item = scan[1]
+            #newScan.item = scan[1]
+            item = scan[1]
+            item.scan = newScan
             rscans.append(newScan)
-            map.scanItems[newScan] = newScan.item
+            map.scanItems[newScan] = item
         map.scans = rscans
             
         ## decide on point set, generate scatter plot 
-        sp = map.buildPlot()
+        map.rebuildPlot()
         
-        self.host.registerMap(map, sp)
+        self.host.registerMap(map)
 
         
         
@@ -761,6 +900,7 @@ class DBCtrl(QtGui.QWidget):
             map = self.selectedMap()
             map.addScan(scan)
             self.writeMapRecord(map)
+            map.rebuildPlot()
             self.ui.addScanBtn.success("Stored.")
         except:
             self.ui.addScanBtn.failure("Error.")
@@ -773,6 +913,7 @@ class DBCtrl(QtGui.QWidget):
             map = item.parent().map
             map.removeScan(scan)
             self.writeMapRecord(map)
+            map.rebuildPlot()
             self.ui.removeScanBtn.success("Stored.")
         except:
             self.ui.removeScanBtn.failure("Error.")

@@ -376,6 +376,9 @@ class AnalysisDatabase(SqliteDatabase):
                 #raise Exception("Directory '%s' has no dirType attribute." % dirHandle.name())
             #table = info['dirType']
             table = self.dirTypeName(dirHandle)
+            
+        if not self.hasTable(table):
+            return None
         rec = self.select(table, ['rowid'], "where Dir='%s'" % dirHandle.name(relativeTo=self.baseDir()))
         if len(rec) < 1:
             return None
