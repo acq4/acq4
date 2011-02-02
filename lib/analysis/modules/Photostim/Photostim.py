@@ -100,7 +100,7 @@ class Photostim(AnalysisModule):
         elif typ == 'Cell':
             cells = [dh]
         else:
-            raise Exception("type %s no bueno" % typ)
+            return
         for cell in cells:
             self.dbCtrl.listMaps(cell)
 
