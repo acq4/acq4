@@ -1020,6 +1020,7 @@ class SpotItem(QtGui.QGraphicsWidget):
             ev.accept()
         else:
             ev.ignore()
+
         
         
     def mouseMoveEvent(self, ev):
