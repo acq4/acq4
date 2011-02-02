@@ -4,6 +4,7 @@
 
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
+from lib.util.pyqtgraph.functions import mkPen
 from flowchart import *
 import os
 from advancedTypes import OrderedDict
@@ -37,10 +38,10 @@ class IVCurve(AnalysisModule):
             ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'host': self}),
             #('Database', {'type': 'ctrl', 'object': self.dbCtrl, 'size': (200,300), 'pos': ('bottom', 'File Loader')}),
             ('Data Plot', {'type': 'plot', 'pos': ('right',), 'size': (800, 300)}),
-            ('Detection Opts', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('bottom', 'FileLoader'), 'size': (200, 500)}),
+            ('Detection Opts', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('bottom', 'File Loader'), 'size': (200, 500)}),
             ('IV Plot', {'type': 'plot', 'pos': ('bottom', 'Data Plot'), 'size': (400, 300)}),
-            ('FI Plot', {'type': 'plot', 'pos': ('right', 'IV Plot'), 'size': (400, 300)}),
             ('Output Table', {'type': 'table', 'pos': ('bottom', 'IV Plot'), 'optional': True, 'size': (800,200)}),
+            ('FI Plot', {'type': 'plot', 'pos': ('right', 'IV Plot'), 'size': (400, 300)}),
         ])
         
         self.initializeElements()
@@ -52,3 +53,30 @@ class IVCurve(AnalysisModule):
             debug.printExc('Error loading default flowchart:')
         
         #self.flowchart.sigOutputChanged.connect(self.outputChanged)
+        
+    def loadFileRequested(self, fh):
+        """Called by file loader when a file load is requested."""
+        ### This should load a whole directory of cciv, plot them, put traces into one array and send that array to the flowchart.
+        if fh.isDir():
+            dirs = [d for d in fh.subDirs()]
+        else:
+            dirs = [fh]
+            
+        dataPlot = self.getElement('Data Plot')
+        
+        ## Attempt to stick all the traces into one big away -- not sure I like this because you lose the metaInfo.
+        a = fh[dirs[0]]['Clamp1.ma'].read()
+        data = np.empty((a.shape[0], a.shape[1], len(dirs)), dtype=np.float)        
+        
+        n=0
+        for d in dirs:
+            trace = fh[d]['Clamp1.ma'].read()
+            data[:,:,n] = trace
+            color = float(n)/(len(dirs))*0.7
+            pen = mkPen(hsv=[color, 0.8, 0.7])
+            dataPlot.plot(trace['Channel':'primary'], pen=pen)
+            n += 1 
+    
+        self.flowchart.setInput(dataIn=data)
+        self.currentFile = fh
+        return True
