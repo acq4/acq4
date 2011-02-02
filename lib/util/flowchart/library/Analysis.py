@@ -67,7 +67,7 @@ class EventFitter(CtrlNode):
             if tau is None:
                 tau = waveform._info[-1].get('expDeconvolveTau', None)
             if tau is not None:
-                guessLen += tau*3
+                guessLen += tau*2
             
             sliceLen = min(guessLen, sliceLen)
             
@@ -167,7 +167,10 @@ class EventFitter(CtrlNode):
 
     def fitClicked(self, curve):
         if self.selectedFit is not None:
-            self.selectedFit.setPen((0,0,255))
+            if self.selectedFit.deleted:
+                self.selectedFit.setPen((100,0,0))
+            else:
+                self.selectedFit.setPen((0,0,255))
             
         self.selectedFit = curve
         curve.setPen((255,255,255))
@@ -225,7 +228,10 @@ class StatsCalculator(Node):
         return self.ui
         
     def process(self, data, regions=None, display=True):
-        self.ui.updateRows(data.dtype.fields.keys())
+        keys = data.dtype.fields.keys()
+        if len(keys) == 0:
+            return {'stats': None}  ## Avoid trashing the UI and its state if possible..
+        self.ui.updateRows(keys)
         state = self.ui.saveState()
         stats = OrderedDict()
         cols = state['cols']
@@ -268,6 +274,7 @@ class StatsCalculator(Node):
         
     def restoreState(self, state):
         Node.restoreState(self, state)
+        self.defaultState = state
         self.ui.restoreState(state['ui'])
         
         

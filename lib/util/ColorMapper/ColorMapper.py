@@ -45,9 +45,16 @@ class ColorMapper(QtGui.QWidget):
         self.connect(self.ui.addBtn, QtCore.SIGNAL('clicked()'), self.addClicked)
         self.connect(self.ui.remBtn, QtCore.SIGNAL('clicked()'), self.remClicked)
         self.ui.fileCombo.currentIndexChanged[int].connect(self.load)
-        self.ui.fileCombo.lineEdit().editingFinished.connect(self.save)
+        #self.ui.fileCombo.lineEdit().editingFinished.connect(self.save)
         self.ui.delBtn.clicked.connect(self.delete)
+
+    def event(self, event):
+        if event.type() == QtCore.QEvent.KeyPress and event.key() == QtCore.Qt.Key_Return:
+            self.save()
+            return True
+        return False
         
+
     def refreshFileList(self):
         combo = self.ui.fileCombo
         if self.filePath is None:
@@ -88,6 +95,13 @@ class ColorMapper(QtGui.QWidget):
         configfile.writeConfigFile(state, file)
         self.loadedFile = str(name)
         self.refreshFileList()
+        #self.origStyle = self.ui.fileCombo.styleSheet()
+        #self.ui.fileCombo.setStyleSheet("QComboBox {background-color: #0F0}")
+        #QtCore.QTimer.singleShot(200, self.unblink)
+        
+    #def unblink(self):
+        #self.ui.fileCombo.setStyleSheet(self.origStyle)
+        
 
     def delete(self):
         if self.ui.fileCombo.currentIndex() == 0:

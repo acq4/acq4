@@ -1069,7 +1069,112 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
     
         
     return events
+
+
+def thresholdEvents(data, threshold, adjustTimes=True):
+    """Finds regions in a trace that cross a threshold value. Returns the index, time, length, peak, and sum of each event.
+    Optionally adjusts times to an extrapolated zero-crossing."""
+    threshold = abs(threshold)
+    data1 = data.view(ndarray)
+    #if isinstance(data, MetaArray):
+    try:
+        xvals = data.xvals(0)
+        dt = xvals[1]-xvals[0]
+    except:
+        dt = 1
+        xvals = None
+        
+    ## find all threshold crossings
+    masks = [(data1 > threshold).astype(byte), (data1 < -threshold).astype(byte)]
+    hits = []
+    for mask in masks:
+        diff = mask[1:] - mask[:-1]
+        onTimes = argwhere(diff==1)[:,0]+1
+        offTimes = argwhere(diff==-1)[:,0]+1
+        #print mask
+        #print diff
+        #print onTimes, offTimes
+        if len(onTimes) == 0 or len(offTimes) == 0:
+            continue
+        if offTimes[0] < onTimes[0]:
+            offTimes = offTimes[1:]
+            if len(offTimes) == 0:
+                continue
+        if offTimes[-1] < onTimes[-1]:
+            onTimes = onTimes[:-1]
+        for i in xrange(len(onTimes)):
+            hits.append((onTimes[i], offTimes[i]))
     
+    ## sort hits  ## NOTE: this can be sped up since we already know how to interleave the events..
+    hits.sort(lambda a,b: cmp(a[0], b[0]))
+    
+    nEvents = len(hits)
+    if xvals is None:
+        events = empty(nEvents, dtype=[('index',int),('len', int),('sum', float),('peak', float)])  ### rows are [start, length, sum]
+    else:
+        events = empty(nEvents, dtype=[('index',int),('time',float),('len', int),('sum', float),('peak', float)])  ### rows are     
+
+    for i in range(nEvents):
+        t1, t2 = hits[i]
+        ln = t2-t1
+        evData = data1[t1:t2]
+        sum = evData.sum()
+        if sum > 0:
+            peak = evData.max()
+        else:
+            peak = evData.min()
+            
+        if adjustTimes:
+            mind = argmax(evData)
+            pdiff = abs(peak - evData[0])
+            if pdiff == 0:
+                adj = 0
+            else:
+                adj = int(threshold * mind / pdiff)
+                adj = min(ln, adj)
+            t1 -= adj
+            #print adj, pdiff, peak
+            ## check for collisions with previous events
+            if i > 0:
+                lt2 = events[i-1]['index'] + events[i-1]['len']
+                if t1 < lt2:
+                    diff = lt2-t1
+                    tot = adj + lastAdj
+                    d1 = diff * float(lastAdj) / tot
+                    d2 = diff * float(adj) / tot
+                    events[i-1]['len'] -= (d1+1)
+                    t1 += d2
+            
+            mind = ln - mind
+            pdiff = abs(peak - evData[-1])
+            if pdiff == 0:
+                adj = 0
+            else:
+                adj = int(threshold * mind / pdiff)
+                adj = min(ln, adj)
+            t2 += adj
+            lastAdj = adj
+            #print adj, pdiff, peak
+            ln = t2-t1
+            evData = data1[t1:t2]
+            sum = evData.sum()
+            if sum > 0:
+                peak = evData.max()
+            else:
+                peak = evData.min()
+                
+                    
+            
+        events[i]['peak'] = peak
+        events[i]['index'] = t1
+        events[i]['len'] = ln
+        events[i]['sum'] = sum
+    
+    if xvals is not None:
+        events['time'] = xvals[events['index']]
+
+    return events
+
     
 def adaptiveDetrend(data, x=None, threshold=3.0):
     """Return the signal with baseline removed. Discards outliers from baseline measurement."""

@@ -86,6 +86,9 @@ class EventDetector(AnalysisModule):
         table = self.getElement('Output Table')
         table.setData(self.flowchart.output()['events'])
         
+    def output(self):
+        return self.flowchart.output()
+        
     def storeClicked(self):
         try:
             self.storeToDB()

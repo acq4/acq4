@@ -9,6 +9,7 @@ class FileLoader(QtGui.QWidget):
     
     
     sigFileLoaded = QtCore.Signal(object)
+    sigBaseChanged = QtCore.Signal(object)
     
     def __init__(self, dataManager, host=None):
         self.dataManager = dataManager
@@ -27,6 +28,7 @@ class FileLoader(QtGui.QWidget):
         if dh is None:
             raise Exception("No directory selected in data manager")
         self.ui.dirTree.setBaseDirHandle(dh)
+        self.sigBaseChanged.emit(dh)
         
     def loadClicked(self):
         fh = self.ui.dirTree.selectedFile()
@@ -38,7 +40,15 @@ class FileLoader(QtGui.QWidget):
             return
         if self.host.loadFileRequested(fh):
             name = fh.name(relativeTo=self.ui.dirTree.baseDirHandle())
-            self.ui.fileTree.addTopLevelItem(QtGui.QTreeWidgetItem([name]))
+            item = QtGui.QTreeWidgetItem([name])
+            item.file = fh
+            self.ui.fileTree.addTopLevelItem(item)
             self.sigFileLoaded.emit(fh)
         #self.emit(QtCore.SIGNAL('fileLoaded'), fh)
+        
+    def selectedFile(self):
+        return self.ui.fileTree.currentItem().file
+        
+    #def setSelectedFile(self, fh):
+        
         

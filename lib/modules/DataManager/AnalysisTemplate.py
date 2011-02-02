@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'AnalysisTemplate.ui'
 #
-# Created: Mon Jan  3 11:32:48 2011
-#      by: PyQt4 UI code generator 4.7.4
+# Created: Tue Feb  1 17:46:54 2011
+#      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,7 @@ from PyQt4 import QtCore, QtGui
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(467, 501)
+        Form.resize(584, 501)
         self.verticalLayout = QtGui.QVBoxLayout(Form)
         self.verticalLayout.setObjectName("verticalLayout")
         self.groupBox = QtGui.QGroupBox(Form)
@@ -37,6 +37,9 @@ class Ui_Form(object):
         self.tableNameText = QtGui.QLineEdit(self.groupBox)
         self.tableNameText.setObjectName("tableNameText")
         self.gridLayout.addWidget(self.tableNameText, 1, 2, 1, 1)
+        self.refreshDbBtn = QtGui.QPushButton(self.groupBox)
+        self.refreshDbBtn.setObjectName("refreshDbBtn")
+        self.gridLayout.addWidget(self.refreshDbBtn, 0, 5, 1, 1)
         self.verticalLayout.addWidget(self.groupBox)
         spacerItem = QtGui.QSpacerItem(168, 432, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem)
@@ -60,6 +63,7 @@ class Ui_Form(object):
         self.openDbBtn.setText(QtGui.QApplication.translate("Form", "Open", None, QtGui.QApplication.UnicodeUTF8))
         self.createDbBtn.setText(QtGui.QApplication.translate("Form", "Create", None, QtGui.QApplication.UnicodeUTF8))
         self.addFileBtn.setText(QtGui.QApplication.translate("Form", "Add to table ->", None, QtGui.QApplication.UnicodeUTF8))
+        self.refreshDbBtn.setText(QtGui.QApplication.translate("Form", "Refresh", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Analysis Modules", None, QtGui.QApplication.UnicodeUTF8))
         self.analysisCombo.setItemText(0, QtGui.QApplication.translate("Form", "Load...", None, QtGui.QApplication.UnicodeUTF8))
 

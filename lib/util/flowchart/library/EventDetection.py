@@ -3,6 +3,7 @@
 from ..Node import Node
 import functions
 from common import *
+import pyqtgraph as pg
 
 class Threshold(CtrlNode):
     """Absolute threshold detection filter. Returns indexes where data crosses threshold."""
@@ -59,6 +60,63 @@ class ZeroCrossingEvents(CtrlNode):
         s = self.stateGroup.state()
         events = functions.zeroCrossingEvents(data, minLength=s['minLength'], minPeak=s['minPeak'], minSum=s['minSum'])
         events = events[:s['eventLimit']]
+        return events
+
+class ThresholdEvents(CtrlNode):
+    """Detects regions of a waveform that cross a threshold (positive or negative) and returns the time, length, sum, and peak of each event."""
+    nodeName = 'ThresholdEvents'
+    uiTemplate = [
+        ('threshold', 'spin', {'value': 1e-12, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
+        ('adjustTimes', 'check', {'value': True}),
+        ('minLength', 'intSpin', {'value': 0, 'min': 0, 'max': 100000}),
+        ('minSum', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
+        ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
+        ('eventLimit', 'intSpin', {'value': 100, 'min': 1, 'max': 1e9}),
+    ]
+
+    def __init__(self, name, **opts):
+        CtrlNode.__init__(self, name, self.uiTemplate)
+        #self.addOutput('plot')
+        #self.remotePlot = None
+        
+    #def connected(self, term, remote):
+        #CtrlNode.connected(self, term, remote)
+        #if term is not self.plot:
+            #return
+        #node = remote.node()
+        #node.sigPlotChanged.connect(self.connectToPlot)
+        #self.connectToPlot(node)
+
+    #def connectToPlot(self, node):
+        #if self.remotePlot is not None:
+            #self.remotePlot = None
+            
+        #if node.plot is None:
+            #return
+        #plot = self.plot.
+            
+    #def disconnected(self, term, remote):
+        #CtrlNode.disconnected(self, term, remote)
+        #if term is not self.plot:
+            #return
+        #remote.node().sigPlotChanged.disconnect(self.connectToPlot)
+        #self.disconnectFromPlot()
+
+    #def disconnectFromPlot(self):
+        #if self.remotePlot is None:
+            #return
+        #for l in self.lines:
+            #l.scene().removeItem(l)
+        #self.lines = []
+
+    def processData(self, data):
+        s = self.stateGroup.state()
+        events = functions.thresholdEvents(data, s['threshold'], s['adjustTimes'])
+        events = events[:s['eventLimit']]
+        mask = events['len'] >= s['minLength']
+        mask *= abs(events['sum']) >= s['minSum']
+        mask *= abs(events['peak']) >= s['minPeak']
+        events = events[mask]
         return events
 
 class SpikeDetector(CtrlNode):

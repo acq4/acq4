@@ -60,8 +60,18 @@ class SqliteDatabase:
         return self.exe(*args, **kargs)
             
     def select(self, table, fields='*', sql=''):
+        """fields should be a list of field names"""
         if fields != '*':
-            fields = quoteList(fields)
+            if isinstance(fields, basestring):
+                fields = fields.split(',')
+            qf = []
+            for f in fields:
+                if f == '*':
+                    qf.append(f)
+                else:
+                    qf.append('"'+f+'"')
+            fields = ','.join(qf)
+            #fields = quoteList(fields)
         cmd = "SELECT %s FROM %s %s" % (fields, table, sql)
         #print cmd
         q = self.exe(cmd)
@@ -176,9 +186,10 @@ class SqliteDatabase:
                     newRec[k] = funcs[k](rec[k])
                 except:
                     newRec[k] = rec[k]
-                    if k not in schema:
-                        raise Exception("Field '%s' not present in table '%s'" % (k, table))
-                    print "Warning: Setting %s field %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
+                    if k.lower() != 'rowid':
+                        if k not in schema:
+                            raise Exception("Field '%s' not present in table '%s'" % (k, table))
+                        print "Warning: Setting %s field %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
             newData.append(newRec)
         return newData
 
@@ -370,6 +381,13 @@ class AnalysisDatabase(SqliteDatabase):
             return None
         #print rec[0]
         return rec[0]['rowid']
+
+    def getDir(self, table, rowid):
+        res = self.select(table, ['Dir'], 'where rowid=%d'%rowid)
+        if len(res) < 1:
+            raise Exception('rowid %d does not exist in %s' % (rowid, table))
+        print res
+        return self.baseDir()[res[0]['Dir']]
 
     def dirTypeName(self, dh):
         info = dh.info()

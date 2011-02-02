@@ -57,6 +57,7 @@ class Flowchart(Node):
     
     sigOutputChanged = QtCore.Signal()
     sigChartLoaded = QtCore.Signal()
+    sigStateChanged = QtCore.Signal()
     
     def __init__(self, terminals=None, name=None, filePath=None):
         if name is None:
@@ -65,7 +66,8 @@ class Flowchart(Node):
             terminals = {}
         self.filePath = filePath
         Node.__init__(self, name)  ## create node without terminals; we'll add these later
-            
+        
+        self.inputWasSet = False  ## flag allows detection of changes in the absence of input change.
         self._nodes = {}
         #self.connects = []
         self._chartGraphicsItem = FlowchartGraphicsItem(self)
@@ -90,6 +92,7 @@ class Flowchart(Node):
         #print "setInput", args
         #Node.setInput(self, **args)
         #print "  ....."
+        self.inputWasSet = True
         self.inputNode.setOutput(**args)
         
     def outputChanged(self):
@@ -357,7 +360,10 @@ class Flowchart(Node):
                     
         finally:
             self.processing = False
-        
+            if self.inputWasSet:
+                self.inputWasSet = False
+            else:
+                self.sigStateChanged.emit()
         
         
 
