@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'MapCtrlTemplate.ui'
 #
-# Created: Wed Feb  2 01:38:02 2011
+# Created: Wed Feb  2 11:56:12 2011
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,8 +12,9 @@ from PyQt4 import QtCore, QtGui
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(308, 250)
+        Form.resize(329, 174)
         self.gridLayout = QtGui.QGridLayout(Form)
+        self.gridLayout.setVerticalSpacing(0)
         self.gridLayout.setObjectName("gridLayout")
         self.mapTable = QtGui.QTreeWidget(Form)
         self.mapTable.setObjectName("mapTable")

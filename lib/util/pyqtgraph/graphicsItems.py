@@ -2172,9 +2172,7 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         if xvals is None:
             xvals = []
         if pen is None:
-            pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
-        else:
-            pen = mkPen(pen)
+            pen = (200, 200, 200)
         self.ticks = []
         self.xvals = []
         if view is None:

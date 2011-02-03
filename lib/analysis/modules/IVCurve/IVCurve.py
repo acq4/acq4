@@ -1,82 +1,111 @@
-##Needs to:
-##    output set of parameters: Ih current, rectification, FI plots (and analysis based on)
-##    load IV directory, plot raw data, sends data to a function(flowchart) which returns a list of parameters. 
-
+# -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
-from lib.util.pyqtgraph.functions import mkPen
-from flowchart import *
-import os
+#from flowchart import *
+#import os
 from advancedTypes import OrderedDict
-import debug
-import FileLoader
-import DatabaseGui
-import FeedbackButton
+import pyqtgraph as pg
+#import debug
+#import FileLoader
+#import DatabaseGui
+#import FeedbackButton
+from metaarray import MetaArray
+import numpy as np
 
 class IVCurve(AnalysisModule):
-    def __init__(self, host, flowchartDir=None):
+    def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
-        self.dbIdentity = "IVCurveAnalyzer"  ## how we identify to the database; this determines which tables we own
-        
-        if flowchartDir is None:
-            flowchartDir = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "flowcharts")
-        self.flowchart = Flowchart(filePath=flowchartDir)
-        
-        self.flowchart.addInput("dataIn")
-        #self.flowchart.addOutput('events')
-        self.flowchart.addOutput('regions', multi=True)        
-        #self.flowchart.sigChartLoaded.connect(self.connectPlots)
-        
-        
-        ### DBCtrl class is from EventDetector -- need to make my own here
-        #self.dbCtrl = DBCtrl(self, identity=self.dbIdentity)
-        #self.dbCtrl.storeBtn.clicked.connect(self.storeClicked)
-        
-        self.ctrl = self.flowchart.widget()
         self._elements_ = OrderedDict([
             ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'host': self}),
-            #('Database', {'type': 'ctrl', 'object': self.dbCtrl, 'size': (200,300), 'pos': ('bottom', 'File Loader')}),
-            ('Data Plot', {'type': 'plot', 'pos': ('right',), 'size': (800, 300)}),
-            ('Detection Opts', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('bottom', 'File Loader'), 'size': (200, 500)}),
-            ('IV Plot', {'type': 'plot', 'pos': ('bottom', 'Data Plot'), 'size': (400, 300)}),
-            ('Output Table', {'type': 'table', 'pos': ('bottom', 'IV Plot'), 'optional': True, 'size': (800,200)}),
-            ('FI Plot', {'type': 'plot', 'pos': ('right', 'IV Plot'), 'size': (400, 300)}),
+            ('IV Plot', {'type': 'plot', 'pos': ('right', 'File Loader'), 'size': (800, 300)}),
+            ('Data Plot', {'type': 'plot', 'pos': ('bottom',), 'size': (800, 300)}),
         ])
         
         self.initializeElements()
+
+        self.traces = None
+        #self.cw = QtGui.QSplitter()
+        #self.cw.setOrientation(QtCore.Qt.Vertical)
+        #self.setCentralWidget(self.cw)
+        #bw = QtGui.QWidget()
+        #bwl = QtGui.QHBoxLayout()
+        #bw.setLayout(bwl)
+        #self.cw.addWidget(bw)
+        #self.loadIVBtn = QtGui.QPushButton('Load I/V')
+        #bwl.addWidget(self.loadIVBtn)
+        #QtCore.QObject.connect(self.loadIVBtn, QtCore.SIGNAL('clicked()'), self.loadIV)
+        #self.plot1 = PlotWidget()
+        self.plot1 = self.getElement('Data Plot', create=True)
+        #self.cw.addWidget(self.plot1)
+        #self.plot2 = PlotWidget()
+        self.plot2 = self.getElement('IV Plot', create=True)
+        #self.cw.addWidget(self.plot2)
+        #self.resize(800, 600)
+        #self.show()
+        self.lr = pg.LinearRegionItem(self.plot1, 'vertical', [0, 1])
+        self.plot1.addItem(self.lr)
+        self.lr.connect(self.lr, QtCore.SIGNAL('regionChanged'), self.updateAnalysis)
+
+
+    #def elementChanged(self, element, old, new):
+        #name = element.name()
         
-        try:
-            ## load default chart
-            self.flowchart.loadFile(os.path.join(flowchartDir, 'default.fc'))
-        except:
-            debug.printExc('Error loading default flowchart:')
-        
-        #self.flowchart.sigOutputChanged.connect(self.outputChanged)
-        
-    def loadFileRequested(self, fh):
+        ### connect plots to flowchart, link X axes
+        #if name == 'Data Plot':
+            #self.flowchart.nodes()['Plot_000'].setPlot(new)
+            #p2 = self.getElement('Filter Plot')
+            #if p2 is not None:
+                #new.setXLink(p2)
+        #elif name == 'Filter Plot':
+            #self.flowchart.nodes()['Plot_001'].setPlot(new)
+            #p2 = self.getElement('Data Plot')
+            #if p2 is not None:
+                #p2.setXLink(new)
+
+    def loadFileRequested(self, dh):
         """Called by file loader when a file load is requested."""
-        ### This should load a whole directory of cciv, plot them, put traces into one array and send that array to the flowchart.
-        if fh.isDir():
-            dirs = [d for d in fh.subDirs()]
-        else:
-            dirs = [fh]
-            
-        dataPlot = self.getElement('Data Plot')
-        
-        ## Attempt to stick all the traces into one big away -- not sure I like this because you lose the metaInfo.
-        a = fh[dirs[0]]['Clamp1.ma'].read()
-        data = np.empty((a.shape[0], a.shape[1], len(dirs)), dtype=np.float)        
-        
-        n=0
+        self.plot1.clearPlots()
+        dirs = dh.subDirs()
+        c = 0.0
+        traces = []
+        values = []
         for d in dirs:
-            trace = fh[d]['Clamp1.ma'].read()
-            data[:,:,n] = trace
-            color = float(n)/(len(dirs))*0.7
-            pen = mkPen(hsv=[color, 0.8, 0.7])
-            dataPlot.plot(trace['Channel':'primary'], pen=pen)
-            n += 1 
-    
-        self.flowchart.setInput(dataIn=data)
-        self.currentFile = fh
+            d = dh[d]
+            try:
+                data = d['Clamp1.ma'].read()
+            except:
+                try:
+                    data = d['Clamp2.ma'].read()
+                except:
+                    continue
+            cmd = data['Channel': 'Command']
+            if data.hasColumn('Channel', 'primary'):
+                data = data['Channel': 'primary']
+            else:
+                data = data['Channel': 'scaled']
+            traces.append(data)
+            self.plot1.plot(data, pen=pg.mkPen(hsv=[c, 0.7]))
+            values.append(cmd[len(cmd)/2])
+            c += 1.0 / len(dirs)
+            
+        if len(dirs) > 0:
+            end = cmd.xvals('Time')[-1]
+            self.lr.setRegion([end *0.5, end * 0.6])
+            self.updateAnalysis()
+            info = [
+                {'name': 'Command', 'units': cmd.axisUnits(-1), 'values': np.array(values)},
+                data.infoCopy('Time'), 
+                data.infoCopy(-1)]
+            self.traces = MetaArray(np.vstack(traces), info=info)
+            
         return True
+        
+    def updateAnalysis(self):
+        if self.traces is None:
+            return
+        rgn = self.lr.getRegion()
+        data = self.traces['Time': rgn[0]:rgn[1]]
+        self.plot2.plot(data.mean(axis=1), clear=True)
+        self.plot2.plot(data.max(axis=1))
+        self.plot2.plot(data.min(axis=1))
