@@ -14,6 +14,7 @@ from PyQt4 import QtGui, QtCore
 import DataManager
 import numpy as np
 import debug
+import pyqtgraph as pg
 
 class Canvas(QtGui.QWidget):
     def __init__(self, parent=None, allowTransforms=True):
@@ -240,6 +241,10 @@ class Canvas(QtGui.QWidget):
         else:
             return self.addScan(fh, **opts)
 
+    def addMarker(self, **opts):
+        citem = MarkerCanvasItem(self, **opts)
+        self._addCanvasItem(citem)
+        return citem
 
     def _addCanvasItem(self, citem):
         """Obligatory function call for any idems added to the canvas."""
@@ -682,6 +687,15 @@ class CanvasItem(QtCore.QObject):
         
     def isVisible(self):
         return self.opts['visible']
+
+class MarkerCanvasItem(CanvasItem):
+    def __init__(self, canvas, **opts):
+        item = QtGui.QGraphicsEllipseItem(-0.5, -0.5, 1., 1.)
+        item.setPen(pg.mkPen((255,255,255)))
+        item.setBrush(pg.mkBrush((0,100,255)))
+        CanvasItem.__init__(self, canvas, item, **opts)
+        
+
 
 class ImageCanvasItem(CanvasItem):
     def __init__(self, canvas, image, **opts):
