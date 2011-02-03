@@ -14,7 +14,7 @@ def listModules():
 def getModuleClass(modName):
     mod = __import__('lib.analysis.modules.'+modName, fromlist=['*'])
     cls = getattr(mod, modName)
-    print id(cls)
+    #print id(cls)
     return cls
 
 def load(modName, host):

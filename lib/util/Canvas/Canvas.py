@@ -13,6 +13,7 @@ from pyqtgraph import widgets
 from PyQt4 import QtGui, QtCore
 import DataManager
 import numpy as np
+import debug
 
 class Canvas(QtGui.QWidget):
     def __init__(self, parent=None, allowTransforms=True):
@@ -409,6 +410,7 @@ class CanvasItem(QtCore.QObject):
         #if pos is None:
             #pos = [0,0]
         
+
         self.name = self.opts['name']
         self.ctrl = QtGui.QWidget()
         self.layout = QtGui.QGridLayout()
@@ -428,23 +430,37 @@ class CanvasItem(QtCore.QObject):
         self.connect(self.alphaSlider, QtCore.SIGNAL('sliderPressed()'), self.alphaPressed)
         self.connect(self.alphaSlider, QtCore.SIGNAL('sliderReleased()'), self.alphaReleased)
         self.connect(self.canvas, QtCore.SIGNAL('itemSelected'), self.selectionChanged)
-        self.connect(self.resetTransformBtn, QtCore.SIGNAL('clicked()'), self.resetTransform)
+        self.connect(self.resetTransformBtn, QtCore.SIGNAL('clicked()'), self.resetTransformClicked)
         
         self.selectBox = SelectBox()
         self.canvas.scene().addItem(self.selectBox)
         self.selectBox.hide()
         self.selectBox.setZValue(1e6)
-        self.selectBox.connect(self.selectBox, QtCore.SIGNAL('regionChanged'), self.selectBoxChanged)
+        self.selectBox.connect(self.selectBox, QtCore.SIGNAL('regionChanged'), self.selectBoxChanged)  ## calls selectBoxMoved
         self.selectBox.connect(self.selectBox, QtCore.SIGNAL('regionChangeFinished'), self.selectBoxChangeFinished)
-        self.selectBoxToItem()
+        #self.selectBoxToItem()
 
+        #self.item.translate(*self.opts['pos'])
+        #self.item.scale(*self.opts['scale'])
+        
+        
+        self.basePos = self.opts['pos']
+        self.baseScale = self.opts['scale']
+        #self.baseTransform = self.transform()
         self.resetTransform()
+        self.selectBoxBase = self.selectBox.getState().copy()
+        
         if self.opts['handle'] is not None:
             trans = self.opts['handle'].info().get('userTransform', None)
             if trans is not None:
                 self.restoreTransform(trans)
 
-
+    def hasUserTransform(self):
+        #print self.userRotate, self.userTranslate
+        if self.userRotate == 0 and self.userTranslate == [0,0]:
+            return False
+        else:
+            return True
 
     def ctrlWidget(self):
         return self.ctrl
@@ -459,51 +475,163 @@ class CanvasItem(QtCore.QObject):
     def setMovable(self, m):
         self.opts['movable'] = m
             
-    def updateTransform(self, box):
+    def selectBoxMoved(self):
         """The selection box has moved; get its transformation information and pass to the graphics item"""
-        self.transform = QtGui.QTransform()
+        #self.transform = QtGui.QTransform()
         st = self.selectBox.getState()
         
-        scale = self.opts['scale']
-        self.transform.translate(st['pos'][0], st['pos'][1])
-        self.transform.rotate(-st['angle']*180./3.1415926)
-        self.transform.translate(-self.itemRect.x(), -self.itemRect.y())
-        self.transform.scale(scale[0], scale[1])
+        bpos = st['pos']
         
-        ## update the graphics item
-        self.item.setTransform(self.transform)
+        ## How far the box has moved from its starting position
+        trans = [bpos[0] - self.selectBoxBase['pos'][0], bpos[1] - self.selectBoxBase['pos'][1]]
+        
+        ## rotation
+        ang = -st['angle'] * 180. / 3.14159265358
+        rot = QtGui.QTransform()
+        rot.rotate(ang)
+        
+        ## base position, rotated
+        p1x, p1y = rot.map(*self.basePos)
+        
+        ## translation left over after rotation
+        t2x = trans[0]-(p1x-self.basePos[0])
+        t2y = trans[1]-(p1y-self.basePos[1])
+        
+        ## Need to reverse translate and rotate operations to make them relative to origin
+        #t = QtCore.QPointF(*trans)
+        #ang = -st['angle'] * 180. / 3.14159265358
+        #rot = QtGui.QTransform()
+        #rot.rotate(-ang)
+        #t1 = rot.map(t)
+        
+        self.userTranslate = [t2x, t2y]
+        self.userRotate = st['angle']
+        
+        self.updateTransform()
+        
+    def transform(self):
+        return self.item.transform()
+
+    def updateTransform(self):
+        """Regenerate the item position from the base and user transform"""
+        ## user transform portion
+        trans = QtGui.QTransform()
+        trans.translate(*self.userTranslate)
+        trans.rotate(-self.userRotate*180./3.14159265358)
+
+        ## add base transform
+        trans.translate(*self.basePos)
+        trans.scale(*self.baseScale)
+        self.item.setTransform(trans)
+        
 
     def resetTransform(self):
-        self.transform = QtGui.QTransform()
-        scale = self.opts['scale']
-        pos = self.opts['pos']
-        self.transform.translate(pos[0], pos[1])
-        self.transform.scale(scale[0], scale[1])
+        #self.transform = QtGui.QTransform()
+        #scale = self.opts['scale']
+        #pos = self.opts['pos']
+        #self.transform.translate(pos[0], pos[1])
+        #self.transform.scale(scale[0], scale[1])
         
-        ## update the graphics item
-        self.item.setTransform(self.transform)
+        ### update the graphics item
+        #self.item.setTransform(self.transform)
+        #self.hasUserTransform = False
+        #print "reset transform", self
+        self.userRotate = 0
+        self.userTranslate = [0,0]
+        self.updateTransform()
         
         self.selectBox.blockSignals(True)
         self.selectBoxToItem()
         self.selectBox.blockSignals(False)
+        self.emit(QtCore.SIGNAL('transformChanged'), self)
         self.emit(QtCore.SIGNAL('transformChangeFinished'), self)
+        
+    def resetTransformClicked(self):
+        self.resetTransform()
+        self.emit(QtCore.SIGNAL('resetUserTransform'), self)
+        
+        
+    #def applyTransform(self, t):
+        #return
+        #self.transform  = t * self.transform
+        ### update the graphics item
+        #self.hasUserTransform = True
+        #self.item.setTransform(self.transform)
+        #self.selectBox.blockSignals(True)
+        #self.selectBox.
+        ##self.selectBoxToItem()
+        #self.selectBox.blockSignals(False)
+        #self.emit(QtCore.SIGNAL('transformChangeFinished'), self)
+        
+    def restoreTransform(self, tr):
+        try:
+            self.userTranslate = tr['trans']
+            self.userRotate = tr['rot']
+            
+            self.selectBoxFromUser() ## move select box to match
+            self.updateTransform()
+            self.emit(QtCore.SIGNAL('transformChanged'), self)
+            self.emit(QtCore.SIGNAL('transformChangeFinished'), self)
+        except:
+            self.userTranslate = [0,0]
+            self.userRotate = 0
+            debug.printExc("Failed to load transform:")
+        #print "set transform", self, self.userTranslate
+        
+    def saveTransform(self):
+        #print "save transform", self, self.userTranslate
+        return {'trans': self.userTranslate[:], 'rot': self.userRotate}
+        
+    def selectBoxFromUser(self):
+        """Move the selection box to match the current userTransform"""
+        ## user transform
+        trans = QtGui.QTransform()
+        trans.translate(*self.userTranslate)
+        trans.rotate(-self.userRotate*180./3.14159265358)
+        
+        x2, y2 = trans.map(*self.selectBoxBase['pos'])
+        
+        self.selectBox.blockSignals(True)
+        self.selectBox.setAngle(self.userRotate)
+        self.selectBox.setPos([x2, y2])
+        self.selectBox.blockSignals(False)
+        
 
     def selectBoxToItem(self):
         """Move/scale the selection box so it fits the item's bounding rect. (assumes item is not rotated)"""
         rect = self.item.sceneBoundingRect()
         self.itemRect = self.item.boundingRect()
+        self.selectBox.blockSignals(True)
         self.selectBox.setPos([rect.x(), rect.y()])
         self.selectBox.setSize(rect.size())
         self.selectBox.setAngle(0)
+        self.selectBox.blockSignals(False)
 
-    def saveTransform(self):
-        state = self.selectBox.getState()
-        state['pos'] = list(state['pos'])
-        state['size'] = list(state['size'])
-        return state
+    #def saveTransform(self):
+        #state = {'translate': self.userTranslate, 'rotate': self.userRotate}
+        ##state = self.selectBox.getState()
+        ##state['pos'] = list(state['pos'])
+        ##state['size'] = list(state['size'])
+        ##print "save:", state
+        #return state
 
-    def restoreTransform(self, trans):
-        self.selectBox.setState(trans)
+    #def restoreTransform(self, trans):
+        #self.resetTransform()
+        #self.userTranslate = trans['translate']
+        #self.userRotate = trans['rotate']
+        #self.updateTransform()
+        
+        #self.selectBox.blockSignals(True)
+        ##pos = self.selectBoxBase['pos']
+        #state = self.selectBox.getState()
+        ##print "restore:", state, " -> ", trans
+        #pos = state['pos']
+        #t = trans['translate']
+        #state['pos'] = [pos[0]+t[0], pos[1]+t[1]]
+        #state['angle'] = trans['rotate']
+        ##state = {'pos': [pos[0]+t[0], pos[1]+t[1]], 'angle': trans['rotate']}
+        #self.selectBox.setState(state)
+        #self.selectBox.blockSignals(False)
 
     def zValue(self):
         return self.opts['z']
@@ -518,7 +646,8 @@ class CanvasItem(QtCore.QObject):
         self.showSelectBox()
         
     def selectBoxChanged(self):
-        self.updateTransform(self.selectBox)
+        self.selectBoxMoved()
+        #self.updateTransform(self.selectBox)
         self.emit(QtCore.SIGNAL('transformChanged'), self)
         
     def selectBoxChangeFinished(self):
@@ -570,17 +699,24 @@ class ImageCanvasItem(CanvasItem):
             if 'name' not in opts:
                 opts['name'] = self.handle.shortName()
 
-            if 'imagePosition' in self.handle.info():
-                opts['scale'] = self.handle.info()['pixelSize']
-                opts['pos'] = self.handle.info()['imagePosition']
-            else:
-                info = self.data._info[-1]
-                opts['scale'] = info.get('pixelSize', None)
-                opts['pos'] = info.get('imagePosition', None)
+            try:
+                if 'imagePosition' in self.handle.info():
+                    opts['scale'] = self.handle.info()['pixelSize']
+                    opts['pos'] = self.handle.info()['imagePosition']
+                else:
+                    info = self.data._info[-1]
+                    opts['scale'] = info.get('pixelSize', None)
+                    opts['pos'] = info.get('imagePosition', None)
+            except:
+                pass
         
         if item is None:
             if self.data.ndim == 3:
-                item = graphicsItems.ImageItem(self.data[0])
+                if self.data.shape[2] <= 4:
+                    self.data = self.data.mean(axis=2)
+                    item = graphicsItems.ImageItem(self.data)
+                else:
+                    item = graphicsItems.ImageItem(self.data[0])
             else:
                 item = graphicsItems.ImageItem(self.data)
         CanvasItem.__init__(self, canvas, item, **opts)
