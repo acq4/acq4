@@ -48,8 +48,8 @@ class AxoPatch200(DAQGeneric):
         #    daqConfig['LPF'] = {'type': 'ai', 'channel': config['LPFChannel'], 'units': 'Hz'}
         if 'ScaledSignal' in config:
             daqConfig['primary'] = {'type': 'ai', 'channel': config['ScaledSignal']}
-        if 'command' in config:
-            daqConfig['command'] = {'type': 'ao', 'channel': config['command']}
+        if 'Command' in config:
+            daqConfig['command'] = {'type': 'ao', 'channel': config['Command']}
         DAQGeneric.__init__(self, dm, daqConfig, name)
         
         self.holding = {
@@ -148,24 +148,32 @@ class AxoPatch200(DAQGeneric):
     def requestModeSwitch(self, mode):
         """Pop up a dialog asking the user to switch the amplifier mode, wait for change. This function is thread-safe."""
         global modeNames
+        with self.modeLock:
+            self.mdCanceled = False
         app = QtGui.QApplication.instance()
         msg = 'Please set AxoPatch mode switch to %s' % mode
         self.emit(QtCore.SIGNAL('showModeDialog'), msg)
-        
+        #print "Set mode:", mode
+        ## Wait for the mode to change to the one we're waiting for, or for a cancel
         while True:
             if QtCore.QThread.currentThread() == app.thread():
                 app.processEvents()
             else:
                 QtCore.QThread.yieldCurrentThread()
             if self.modeDialogCanceled():
+                #print "  Caught user cancel"
                 raise CancelException('User canceled mode switch request')
             currentMode = self.getMode()
             if currentMode == mode:
                 break
             if currentMode is None:
+                #print "  Can't determine mode"
                 raise Exception("Can not determine mode of AxoPatch!")
             time.sleep(0.01)
+            time.sleep(0.2)
+            #print "  ..current:", currentMode
             
+        #print "  got mode"
         self.emit(QtCore.SIGNAL('hideModeDialog'))
         self.emit(QtCore.SIGNAL('modeChanged'), mode)
         
@@ -184,6 +192,7 @@ class AxoPatch200(DAQGeneric):
             return self.mdCanceled
         
     def modeDialogClicked(self):
+        ## called when user clicks 'cancel' on the mode dialog
         self.mdCanceled = True
         self.modeDialog.hide()
         
