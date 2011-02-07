@@ -230,7 +230,7 @@ class RegionSelectNode(CtrlNode):
                 sliced = data[0:s['start']:s['stop']]
             else:
                 mask = (data['time'] >= s['start']) * (data['time'] < s['stop'])
-            sliced = data[mask]
+                sliced = data[mask]
         else:
             sliced = None
             
