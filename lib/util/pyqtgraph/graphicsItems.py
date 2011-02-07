@@ -571,9 +571,12 @@ class PlotCurveItem(GraphicsObject):
             x = np.array(x)
         if not isinstance(data, np.ndarray) or data.ndim > 2:
             raise Exception("Plot data must be 1 or 2D ndarray (data shape is %s)" % str(data.shape))
-        
-        if 'complex' in str(data.dtype)+str(x.dtype):
-            raise Exception("Can not plot complex data types.")
+        if x == None:
+            if 'complex' in str(data.dtype):
+                raise Exception("Can not plot complex data types.")
+        else:
+            if 'complex' in str(data.dtype)+str(x.dtype):
+                raise Exception("Can not plot complex data types.")
         
         if data.ndim == 2:  ### If data is 2D array, then assume x and y values are in first two columns or rows.
             if x is not None:
@@ -601,7 +604,7 @@ class PlotCurveItem(GraphicsObject):
             self.xData = x
         
         if x is None:
-            self.xData = arange(0, self.yData.shape[0])
+            self.xData = np.arange(0, self.yData.shape[0])
 
         if self.xData.shape != self.yData.shape:
             raise Exception("X and Y arrays must be the same shape--got %s and %s." % (str(x.shape), str(y.shape)))
@@ -1017,6 +1020,7 @@ class SpotItem(QtGui.QGraphicsWidget):
             ev.accept()
         else:
             ev.ignore()
+
         
         
     def mouseMoveEvent(self, ev):

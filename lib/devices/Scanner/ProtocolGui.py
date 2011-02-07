@@ -4,7 +4,8 @@ from lib.devices.Device import ProtocolGui
 from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager
 from WidgetGroup import WidgetGroup
-from pyqtgraph.widgets import *
+import pyqtgraph.widgets as widgets
+#from pyqtgraph.widgets import *
 import random
 import numpy
 
@@ -13,6 +14,7 @@ class ScannerProtoGui(ProtocolGui):
         ProtocolGui.__init__(self, dev, prot)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        self.ui.programControlsLayout.setEnabled(False)
         dm = getManager()
         self.targets = None
         self.items = {}
@@ -41,6 +43,7 @@ class ScannerProtoGui(ProtocolGui):
             (self.ui.laserCombo,),
             (self.ui.minTimeSpin, 'minTime'),
             (self.ui.minDistSpin, 'minDist', 1e6),
+            (self.ui.simulateShutterCheck, 'simulateShutter'),
 #            (self.ui.packingSpin, 'packingDensity')  ## packing density should be suggested by device rather than loaded with protocol (I think..)
         ])
         self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6})
@@ -48,6 +51,8 @@ class ScannerProtoGui(ProtocolGui):
         QtCore.QObject.connect(self.ui.addPointBtn, QtCore.SIGNAL('clicked()'), self.addPoint)
         QtCore.QObject.connect(self.ui.addGridBtn, QtCore.SIGNAL('clicked()'), self.addGrid)
         QtCore.QObject.connect(self.ui.addOcclusionBtn, QtCore.SIGNAL('clicked()'), self.addOcclusion)
+        QtCore.QObject.connect(self.ui.addProgramBtn, QtCore.SIGNAL('clicked()'), self.addProgram)
+        QtCore.QObject.connect(self.ui.addSpiralScanBtn, QtCore.SIGNAL('clicked()'), self.addSpiral)
         QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.delete)
         QtCore.QObject.connect(self.ui.deleteAllBtn, QtCore.SIGNAL('clicked()'), self.deleteAll)
         QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemToggled)
@@ -245,7 +250,9 @@ class ScannerProtoGui(ProtocolGui):
             'position': target, 
             'minWaitTime': delay,
             'camera': self.cameraModule().config['camDev'], 
-            'laser': str(self.ui.laserCombo.currentText())
+            'laser': str(self.ui.laserCombo.currentText()),
+            'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
+            'duration': self.prot.getParam('duration')
         }
         return prot
         
@@ -253,6 +260,19 @@ class ScannerProtoGui(ProtocolGui):
         
     def handleResult(self, result, params):
         pass
+    
+    def addSpiral(self, pos=None, name=None):
+        autoName = False
+        if name is None:
+            name = 'Point'
+            autoName = True
+        autoPos = False
+        if pos is None:
+            pos = [0,0]
+            autoPos = True
+        pt = widgets.SpiralROI(pos)
+        self.addItem(pt, name,  autoPos,  autoName)
+        return pt
 
     def addPoint(self, pos=None,  name=None):
         autoName = False
@@ -297,9 +317,34 @@ class ScannerProtoGui(ProtocolGui):
             points = ([0,0], [0,s*3], [s*3,0])
         if pos is None:
             pos = [0,0]
-        item = TargetOcclusion(points, pos=pos)
+        item =TargetOcclusion(points, pos=pos)
         self.addItem(item, name, autoName=auto, autoPosition=auto)
         return item
+        
+    def addProgram(self, name=None): 
+        pass
+        #camMod = self.cameraModule()
+        #if camMod is None:
+            #return False
+        #self.ui.programControlsLayout.setEnabled(True)
+        #item = TargetProgram()
+        #if name is None:
+            #name = 'Program' + str(self.nextId)
+        #self.nextId += 1 
+        #item.name = name
+        #item.objective = self.currentObjective
+        #self.items[name] = item
+        #listitem = QtGui.QListWidgetItem(name)
+        #listitem.setCheckState(QtCore.Qt.Checked)
+        #self.ui.itemList.addItem(listitem)
+        #self.updateItemColor(listitem)
+        #camMod.ui.addItem(item.origin, None, [1,1], 1000)
+        #item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
+        #item.connect(QtCore.SIGNAL('regionChanged'), self.getTargetList)
+        #item.connect(QtCore.SIGNAL('pointsChanged'), self.itemChanged)
+        #self.itemChanged(item)
+        #self.updateDeviceTargetList(item)
+        
         
 
     def addItem(self, item, name,  autoPosition=True,  autoName=True):
@@ -411,6 +456,8 @@ class ScannerProtoGui(ProtocolGui):
             info = ['grid', state['pos'], state['size'], state['angle']]
         elif isinstance(item, TargetOcclusion):
             info = ['occlusion', item.pos(), item.listPoints()]
+        elif isinstance(item, widgets.SpiralROI):
+            info = ['spiral', item.pos()]
         
         self.dev.updateTarget(name, info)
     
@@ -423,7 +470,7 @@ class ScannerProtoGui(ProtocolGui):
                 occArea |= i.mapToScene(i.shape())
             
         for i in items:
-            if isinstance(i, TargetOcclusion):
+            if isinstance(i, TargetOcclusion) or isinstance(i, TargetProgram) or isinstance(i, widgets.SpiralROI):
                 continue
             pts = i.listPoints()
             #for x in self.occlusions.keys():  ##can we just join the occlusion areas together?
@@ -610,9 +657,9 @@ class ScannerProtoGui(ProtocolGui):
                 pass
         print "  ..done."
     
-class TargetPoint(EllipseROI):
+class TargetPoint(widgets.EllipseROI):
     def __init__(self, pos, radius, **args):
-        ROI.__init__(self, pos, [radius] * 2, **args)
+        widgets.ROI.__init__(self, pos, [radius] * 2, **args)
         self.aspectLocked = True
         self.overPen = None
         self.underPen = self.pen
@@ -627,18 +674,18 @@ class TargetPoint(EllipseROI):
         
     def setPen(self, pen):
         self.underPen = pen
-        EllipseROI.setPen(self, pen)
+        widgets.EllipseROI.setPen(self, pen)
     
     def setTargetPen(self, index, pen):
         self.overPen = pen
         if pen is None:
             pen = self.underPen
-        EllipseROI.setPen(self, pen)
+        widgets.EllipseROI.setPen(self, pen)
         
 
-class TargetGrid(ROI):
+class TargetGrid(widgets.ROI):
     def __init__(self, pos, size, ptSize, pd, angle):
-        ROI.__init__(self, pos=pos, size=size, angle=angle)
+        widgets.ROI.__init__(self, pos=pos, size=size, angle=angle)
         self.addScaleHandle([0, 0], [1, 1])
         self.addScaleHandle([1, 1], [0, 0])
         self.addRotateHandle([0, 1], [0.5, 0.5])
@@ -699,7 +746,7 @@ class TargetGrid(ROI):
         
 
     def paint(self, p, opt, widget):
-        ROI.paint(self, p, opt, widget)
+        widgets.ROI.paint(self, p, opt, widget)
         ps2 = self.pointSize * 0.5
         #ps2 = self.pointSize * 0.5 * self.gridPacking
         #p.setPen(self.pen)
@@ -712,11 +759,22 @@ class TargetGrid(ROI):
                 p.setPen(self.pen)
             p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
         
-class TargetOcclusion(PolygonROI):
+class TargetOcclusion(widgets.PolygonROI):
     def __init__(self, points, pos=None):
-        PolygonROI.__init__(self, points, pos)
-        
-        
+        widgets.PolygonROI.__init__(self, points, pos)
+        self.setZValue(10000000)
     
     def setPointSize(self, size, packing):
         pass
+    
+class TargetProgram(QtCore.QObject):
+    def __init__(self):
+        self.origin = QtGui.QGraphicsEllipseItem(0,0,1,1)
+        self.paths = []
+        
+    def setPen(self, pen):
+        self.origin.setPen(pen)
+        
+    def listPoints(self):
+        pass
+        

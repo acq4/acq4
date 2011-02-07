@@ -4,7 +4,8 @@
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from scipy import zeros
+from numpy import random
+from scipy import zeros, ones
 from pyqtgraph.graphicsWindows import *
 from pyqtgraph.graphicsItems import *
 from pyqtgraph.widgets import *
@@ -78,12 +79,13 @@ def updateRoiPlot(roi, data=None):
 #def updatePlot(roi)
 
 rois = []
-rois.append(TestROI([0,  0], [20, 20], maxBounds=QtCore.QRectF(-10, -10, 230, 140), pen=mkPen(0)))
-rois.append(LineROI([0,  0], [20, 20], width=5, pen=mkPen(1)))
-rois.append(MultiLineROI([[0, 50], [50, 60], [60, 30]], width=5, pen=mkPen(2)))
-rois.append(EllipseROI([110, 10], [30, 20], pen=mkPen(3)))
+#rois.append(TestROI([0,  0], [20, 20], maxBounds=QtCore.QRectF(-10, -10, 230, 140), pen=mkPen(0)))
+#rois.append(LineROI([0,  0], [20, 20], width=5, pen=mkPen(1)))
+#rois.append(MultiLineROI([[0, 50], [50, 60], [60, 30]], width=5, pen=mkPen(2)))
+#rois.append(EllipseROI([110, 10], [30, 20], pen=mkPen(3)))
 rois.append(CircleROI([110, 50], [20, 20], pen=mkPen(4)))
 rois.append(PolygonROI([[2,0], [2.1,0], [2,.1]], pen=mkPen(5)))
+rois.append(SpiralROI([20,30], [1,1], pen=mkPen(0)))
 for r in rois:
     s.addItem(r)
     c = pi1.plot(pen=r.pen)
