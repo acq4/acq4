@@ -263,6 +263,7 @@ class Prot:
                 spot.setPen(QtGui.QPen(QtCore.Qt.NoPen))
                 p = f['scanner']['position']
                 s = f['scanner']['spot']
+                print f['scanner']
                 self.items.append([spot, p, [s, s]])
             
         self.hide()  ## Make sure only correct items are displayed

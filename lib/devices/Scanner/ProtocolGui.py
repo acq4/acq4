@@ -249,7 +249,9 @@ class ScannerProtoGui(ProtocolGui):
             'position': target, 
             'minWaitTime': delay,
             'camera': self.cameraModule().config['camDev'], 
-            'laser': str(self.ui.laserCombo.currentText())
+            'laser': str(self.ui.laserCombo.currentText()),
+            'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
+            'duration': self.prot.getParam('duration')
         }
         return prot
         
