@@ -74,7 +74,7 @@ class Scanner(Device):
 
     def getShutterVals(self):
         '''Return the voltage settings required to steer the beam to its 'off' position.'''
-        return self.config['offVoltage']
+        return self.config.get('offVoltage', None)
             
     def getCommand(self):
         """Return the last command value that was requested.

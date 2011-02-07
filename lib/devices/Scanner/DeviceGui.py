@@ -24,10 +24,14 @@ class ScannerDeviceGui(QtGui.QWidget):
             'yMax': self.ui.yMaxSpin,
             'splitter': self.ui.splitter,
         })
-        self.shutterChanged()
+        
         spos = dev.getShutterVals()
-        self.ui.shutterXSpin.setValue(spos[0])
-        self.ui.shutterYSpin.setValue(spos[1])
+        if spos is None:
+            self.ui.shutterGroup.hide()
+        else:
+            self.shutterChanged()
+            self.ui.shutterXSpin.setValue(spos[0])
+            self.ui.shutterYSpin.setValue(spos[1])
         
         
         ## Populate Device lists
