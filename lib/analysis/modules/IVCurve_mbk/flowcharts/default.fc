@@ -1,0 +1,19 @@
+pos: (0.0, 0.0)
+connects: [('DenoiseFilter.0', 'Out', u'Plot_000', 'In'), ('DenoiseFilter.0', 'Out', 'RegionSelect.0', 'data'), ('StatsCalculator.0', 'stats', 'Plot_001', 'In'), ('Input', 'dataIn', 'DenoiseFilter.0', 'In'), ('RegionSelect.0', 'selected', 'StatsCalculator.0', 'data'), ('RegionSelect.0', 'widget', u'Plot_000', 'In')]
+terminals:
+    dataIn:
+        multi: False
+        optional: False
+        io: 'in'
+    regions:
+        multi: True
+        optional: False
+        io: 'out'
+bypass: False
+inputNode:
+    pos: (-45.230774498176629, -229.99999524470172)
+    bypass: False
+nodes: [{'state': {'pos': (140.12249666147034, -259.67203437382869), 'bypass': True, 'ctrl': {'threshold': 4.0, 'radius': 2}}, 'pos': (140.12249666147034, -259.67203437382869), 'class': 'DenoiseFilter', 'name': 'DenoiseFilter.0'}, {'state': {'pos': (356.39224098279021, -255.89307026476234), 'bypass': False}, 'pos': (356.39224098279021, -255.89307026476234), 'class': 'PlotWidget', 'name': u'Plot_000'}, {'state': {'pos': (498.09841535943724, -69.507682906726444), 'bypass': False}, 'pos': (498.09841535943724, -69.507682906726444), 'class': 'PlotWidget', 'name': 'Plot_001'}, {'state': {'pos': (150.0, -70.0), 'bypass': False, 'ctrl': {'start': 0.0, 'stop': 0.10000000000000001, 'display': False, 'movable': False}}, 'pos': (150.0, -70.0), 'class': 'RegionSelect', 'name': 'RegionSelect.0'}, {'state': {'ui': {'rows': [], 'cols': ['sum', 'avg', 'med', 'min', 'max', 'std']}, 'pos': (334.0, -43.0), 'bypass': False}, 'pos': (334.0, -43.0), 'class': 'StatsCalculator', 'name': 'StatsCalculator.0'}]
+outputNode:
+    pos: (723.09270687232015, -113.76540481518084)
+    bypass: False
