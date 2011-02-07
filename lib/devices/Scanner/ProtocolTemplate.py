@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Sun Feb 06 20:53:08 2011
+# Created: Sun Feb 06 23:45:22 2011
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -161,7 +161,7 @@ class Ui_Form(object):
         self.minDistSpin.setSuffix(QtGui.QApplication.translate("Form", "µm", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("Form", "Minimum distance", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("Form", "Minimum time", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_7.setText(QtGui.QApplication.translate("Form", "Point Spacing", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_7.setText(QtGui.QApplication.translate("Form", "Grid Spacing", None, QtGui.QApplication.UnicodeUTF8))
         self.addPointBtn.setText(QtGui.QApplication.translate("Form", "Add Point", None, QtGui.QApplication.UnicodeUTF8))
         self.addOcclusionBtn.setText(QtGui.QApplication.translate("Form", "Add Occlusion", None, QtGui.QApplication.UnicodeUTF8))
         self.addGridBtn.setText(QtGui.QApplication.translate("Form", "Add Grid", None, QtGui.QApplication.UnicodeUTF8))

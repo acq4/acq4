@@ -43,6 +43,7 @@ class ScannerProtoGui(ProtocolGui):
             (self.ui.laserCombo,),
             (self.ui.minTimeSpin, 'minTime'),
             (self.ui.minDistSpin, 'minDist', 1e6),
+            (self.ui.simulateShutterCheck, 'simulateShutter'),
 #            (self.ui.packingSpin, 'packingDensity')  ## packing density should be suggested by device rather than loaded with protocol (I think..)
         ])
         self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6})
