@@ -85,13 +85,18 @@ class Photostim(AnalysisModule):
         self.flowchart.sigStateChanged.connect(self.analyzerStateChanged)
         self.recolorBtn.clicked.connect(self.recolor)
         
+        
     def elementChanged(self, element, old, new):
         name = element.name()
         
         ## connect plots to flowchart, link X axes
         if name == 'File Loader':
             new.sigBaseChanged.connect(self.baseDirChanged)
+            QtCore.QObject.connect(new.ui.dirTree, QtCore.SIGNAL('selectionChanged'), self.fileSelected)
 
+    def fileSelected(self):
+        fh = self.getElement('File Loader').ui.dirTree.selectedFile()
+        print Scan.describe(fh)
 
     def baseDirChanged(self, dh):
         typ = dh.info()['dirType']
@@ -151,7 +156,9 @@ class Photostim(AnalysisModule):
             return dh['Clamp1.ma']
 
     def scanPointClicked(self, point):
-        #print "click!", point.data
+        print "click!", point.data
+        plot = self.getElement("Data Plot")
+        plot.clear()
         self.selectedSpot = point
             
         self.detector.loadFileRequested(self.getClampFile(point.data))
@@ -164,6 +171,8 @@ class Photostim(AnalysisModule):
         self.mapTicks = []
         
         num = len(point.data)
+        statList = []
+        evList = []
         for i in range(num):
             color = pg.intColor(i, num)
             scan, fh = point.data[i]
@@ -174,18 +183,21 @@ class Photostim(AnalysisModule):
             
             ## show stats
             stats = scan.getStats(fh)
-            sTable.setData(stats)
+            statList.append(stats)
             events = scan.getEvents(fh)['events']
-            eTable.setData(events)
+            evList.append(events)
         
             times = events['fitTime']
             ticks = pg.VTickGroup(times, [0.0, 0.15], pen=color, relative=True, view=plot)
             plot.addItem(ticks)
             self.mapTicks.append(ticks)
         
+        sTable.setData(statList)
+        eTable.setData(np.concatenate(evList))
         
     def detectorStateChanged(self):
         #print "STATE CHANGE"
+        print "Detector state changed"
         for m in self.scans.itervalues():
             m.forgetEvents()
         
@@ -198,6 +210,7 @@ class Photostim(AnalysisModule):
         self.flowchart.setInput(**output)
 
     def analyzerStateChanged(self):
+        print "Analyzer state changed."
         for m in self.scans.itervalues():
             m.forgetEvents()
         
@@ -219,7 +232,6 @@ class Photostim(AnalysisModule):
         
         
     def recolor(self):
-        
         for i in range(len(self.scans)):
             s = self.scans[self.scans.keys()[i]]
             s.recolor(i, len(self.scans))
@@ -231,6 +243,7 @@ class Photostim(AnalysisModule):
         return self.mapper.getColor(stats)
 
     def processEvents(self, fh):
+        print "Process Events:", fh
         return self.detector.process(fh)
 
     def processStats(self, data=None, spot=None):
@@ -246,11 +259,13 @@ class Photostim(AnalysisModule):
         d = spot.data.parent()
         size = d.info().get('Scanner', {}).get('spotSize', 100e-6)
         stats['spotSize'] = size
+        print "Process Stats:", spot.data
         
         return stats
 
 
     def storeDBSpot(self):
+        """Stores data for selected spot immediately, using current flowchart outputs"""
         dbui = self.getElement('Database')
         #identity = self.dbIdentity+'.sites'
         #table = dbui.getTableName(identity)
@@ -261,6 +276,7 @@ class Photostim(AnalysisModule):
         if spot is None:
             raise Exception("No spot selected")
         fh = self.getClampFile(spot.data)
+        print "Store spot:", fh
         parentDir = fh.parent()
         p2 = parentDir.parent()
         if db.dirTypeName(p2) == 'ProtocolSequence':
@@ -289,9 +305,11 @@ class Photostim(AnalysisModule):
         return scan
 
     def storeDBScan(self):
+        """Store all data for a scan, using cached values if possible"""
         loader = self.getElement('File Loader')
         dh = loader.selectedFile()
         scan = self.scans[dh]
+        print "Store scan:", dh.name()
         for s in scan.spots():
             fh = self.getClampFile(s.data)
             try:
@@ -302,6 +320,7 @@ class Photostim(AnalysisModule):
             st = scan.getStats(fh)
             self.detector.storeToDB(ev, dh)
             self.storeStats(st, fh, dh)
+        print "   scan %s is now locked" % dh.name()
         scan.locked = True
 
     def clearDBScan(self):
@@ -324,6 +343,7 @@ class Photostim(AnalysisModule):
 
 
     def storeStats(self, data, fh, parentDir):
+        print "Store stats:", fh
         dbui = self.getElement('Database')
         identity = self.dbIdentity+'.sites'
         table = dbui.getTableName(identity)
@@ -432,11 +452,13 @@ class Scan:
 
     def forgetEvents(self):
         if not self.locked:
+            print "Scan forget events:", self.source
             self.events = {}
             self.forgetStats()
         
     def forgetStats(self):
         if not self.locked:
+            print "Scan forget stats:", self.source
             self.stats = {}
         
     def recolor(self, n, nMax):
@@ -478,6 +500,7 @@ class Scan:
         #except:
             #raise Exception("File %s is not in this scan" % fh.name())
         if fh not in self.stats:
+            print "No stats cache for", fh.name(), "compute.."
             events = self.getEvents(fh)
             stats = self.host.processStats(events, spot)
             self.stats[fh] = stats
@@ -485,6 +508,7 @@ class Scan:
 
     def getEvents(self, fh):
         if fh not in self.events:
+            print "No event cache for", fh.name(), "compute.."
             events = self.host.processEvents(fh)
             self.events[fh] = events
         return self.events[fh]
@@ -502,7 +526,46 @@ class Scan:
             for s in self.spots():
                 self.spotDict[self.host.getClampFile(s.data)] = s
         return self.spotDict[fh]
+
+    @staticmethod
+    def describe(source):
+        rec = {}
+        source = source
+        sinfo = source.info()
+        if 'sequenceParams' in sinfo:
+            next = source[source.ls()[0]]
+        else:
+            next = source
         
+        if next.exists('Clamp1.ma'):
+            cname = 'Clamp1'
+            file = next['Clamp1.ma']
+        elif next.exists('Clamp2.ma'):
+            cname = 'Clamp2'
+            file = next['Clamp2.ma']
+            
+        data = file.read()
+        info = data._info[-1]
+        rec['mode'] = info['mode']
+        try:
+            rec['holding'] = float(sinfo['devices'][cname]['holdingSpin'])*1000.
+        except:
+            pass
+        
+        cell = source.parent()
+        day = cell.parent().parent()
+        dinfo = day.info()
+        rec['acsf'] = dinfo.get('solution', '')
+        rec['internal'] = dinfo.get('internal', '')
+        rec['temp'] = dinfo.get('temperature', '')
+        
+        rec['cellType'] = cell.info().get('type', '')
+        
+        ninfo = next.info()
+        if 'Temperature.BathTemp' in ninfo:
+            rec['temp'] = ninfo['Temperature.BathTemp']
+        return rec
+
         
 class Map:
     mapFields = OrderedDict([
@@ -544,9 +607,9 @@ class Map:
             #del rec['cell']
             for i in range(len(self.header)):
                 self.item.setText(i, str(rec[self.header[i]]))
-            for fh in scans:
+            for fh,rowid in scans:
                 item = QtGui.QTreeWidgetItem([fh.shortName()])
-                self.scans.append((fh, item))
+                self.scans.append((fh, item, rowid))
                 self.item.addChild(item)
 
     def name(self, cell=None):
@@ -663,17 +726,28 @@ class Map:
         i = 0
         for k in self.mapFields:
             if k == 'scans':
-                rec[k] = [s.rowId() for s in self.scans]
+                rowids = []
+                for s in self.scans:
+                    if isinstance(s, tuple):
+                        rowids.append(s[2])
+                    else:
+                        rowids.append(s.rowId())
+                rec[k] = rowids
             elif k == 'cell':
                 if len(self.scans) == 0:
                     rec[k] = None
                 else:
-                    rec[k] = self.scans[0].source.parent()
+                    s = self.scans[0]
+                    if isinstance(s, tuple):
+                        rec[k] = s[0].parent()
+                    else:
+                        rec[k] = self.scans[0].source.parent()
             else:
                 rec[k] = str(self.item.text(i))
                 if self.mapFields[k] == 'real':
                     try:
-                        rec[k] = float(rec[k])
+                        num = rec[k].replace('C', '')
+                        rec[k] = float(num)
                     except:
                         pass
                 i += 1
@@ -681,6 +755,8 @@ class Map:
         
             
     def recolor(self, host):
+        if not self.sPlotItem.isVisible():
+            return
         spots = self.sPlotItem.points()
         for s in spots:
             data = []
@@ -696,10 +772,13 @@ class Map:
                 mergeData = {}
                 for k in data[0]:
                     vals = [d[k] for d in data]
-                    if len(data) == 2:
-                        mergeData[k] = np.mean(vals)
-                    else:
-                        mergeData[k] = np.median(vals)
+                    try:
+                        if len(data) == 2:
+                            mergeData[k] = np.mean(vals)
+                        else:
+                            mergeData[k] = np.median(vals)
+                    except:
+                        mergeData[k] = vals[0]
             #print mergeData
             color = host.getColor(mergeData)
             s.setBrush(color)
@@ -834,7 +913,7 @@ class DBCtrl(QtGui.QWidget):
             scans = []
             for rowid in rec['scans']:
                 fh = db.getDir('ProtocolSequence', rowid)    ## NOTE: single-spot maps use a different table!
-                scans.append(fh)
+                scans.append((fh, rowid))
             rec['scans'] = scans
             self.newMap(rec)
 
@@ -880,7 +959,7 @@ class DBCtrl(QtGui.QWidget):
         try:
             map = self.selectedMap()
             self.loadMap(map)
-            self.ui.loadMapBtn.success("Stored.")
+            self.ui.loadMapBtn.success("OK.")
         except:
             self.ui.loadMapBtn.failure("Error.")
             raise

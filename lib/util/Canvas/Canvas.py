@@ -23,31 +23,15 @@ class Canvas(QtGui.QWidget):
         self.ui.setupUi(self)
         self.view = self.ui.view
         self.itemList = self.ui.itemList
-        #self.ui.levelsSlider.setOrientation('bottom')
         self.allowTransforms = allowTransforms
         
         self.items = {}
-        self.scans = {}
-        #self.itemList = QtGui.QTreeWidget()
-        #self.layout = QtGui.QHBoxLayout()
-        #self.setLayout(self.layout)
-        #self.view = GraphicsView()
-        
-        #import sys
-        #if 'linux' in sys.platform.lower():
-            #self.view.useOpenGL(False)
-            
-        #self.layout.addWidget(self.view)
-        #self.layout.addWidget(self.itemList)
         
         self.view.enableMouse()
         self.view.setAspectLocked(True)
         
         self.grid = graphicsItems.GridItem(self.view)
-        #self.view.addItem(self.grid)
-        #self.grid.hide()
         self.addItem(self.grid, name='Grid', movable=False)
-        
         
         self.hideBtn = QtGui.QPushButton('>', self)
         self.hideBtn.setFixedWidth(20)
@@ -55,13 +39,21 @@ class Canvas(QtGui.QWidget):
         self.ctrlSize = 200
         self.connect(self.hideBtn, QtCore.SIGNAL('clicked()'), self.hideBtnClicked)
         self.connect(self.ui.splitter, QtCore.SIGNAL('splitterMoved(int, int)'), self.splitterMoved)
-        #self.connect(self.ui.gridCheck, QtCore.SIGNAL('stateChanged(int)'), self.gridCheckChanged)
         
         self.connect(self.ui.itemList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.treeItemChanged)
         self.connect(self.ui.itemList, QtCore.SIGNAL('itemMoved'), self.treeItemMoved)
         self.connect(self.ui.itemList, QtCore.SIGNAL('itemSelectionChanged()'), self.treeItemSelected)
         self.connect(self.ui.autoRangeBtn, QtCore.SIGNAL('clicked()'), self.autoRangeClicked)
+        self.ui.storeSvgBtn.clicked.connect(self.storeSvg)
+        self.ui.storePngBtn.clicked.connect(self.storePng)
+        
         self.resizeEvent()
+
+    def storeSvg(self):
+        self.ui.view.writeSvg()
+
+    def storePng(self):
+        self.ui.view.writePng()
 
     def splitterMoved(self):
         self.resizeEvent()
@@ -107,17 +99,17 @@ class Canvas(QtGui.QWidget):
         #else:
             #self.grid.hide()
 
-    def updateLevels(self):
-        gi = self.selectedItem()
-        if gi is None:
-            return
+    #def updateLevels(self):
+        #gi = self.selectedItem()
+        #if gi is None:
+            #return
             
-        mn = self.ui.minLevelSpin.value()
-        mx = self.ui.maxLevelSpin.value()
-        levels = self.ui.levelsSlider.getLevels()
-        bl = mn + levels[0] * (mx-mn)
-        wl = mn + levels[1] * (mx-mn)
-        gi.setLevels(wl, bl)
+        #mn = self.ui.minLevelSpin.value()
+        #mx = self.ui.maxLevelSpin.value()
+        #levels = self.ui.levelsSlider.getLevels()
+        #bl = mn + levels[0] * (mx-mn)
+        #wl = mn + levels[1] * (mx-mn)
+        #gi.setLevels(wl, bl)
 
 
 
@@ -177,6 +169,12 @@ class Canvas(QtGui.QWidget):
         if sel is None or len(sel) < 1:
             return
         return self.items.get(sel[0].name, None)
+
+    def selectItem(self, item):
+        li = item.listItem
+        #li = self.getListItem(item.name())
+        print "select", li
+        self.itemList.setCurrentItem(li)
 
 
     def addItem(self, item, **opts):
@@ -251,9 +249,12 @@ class Canvas(QtGui.QWidget):
         
         if not self.allowTransforms:
             citem.setMovable(False)
-        
+
+        self.connect(citem, QtCore.SIGNAL('transformChanged'), self.itemTransformChanged)
+        self.connect(citem, QtCore.SIGNAL('transformChangeFinished'), self.itemTransformChangeFinished)
+
         item = citem.item
-        name = citem.name
+        name = citem.opts['name']
         
         self.view.scene().addItem(item)
         
@@ -277,7 +278,7 @@ class Canvas(QtGui.QWidget):
         name = newname
             
         ## find parent and add item to tree
-        currentNode = self.itemList.invisibleRootItem()
+        #currentNode = self.itemList.invisibleRootItem()
         insertLocation = 0
         #print "Inserting node:", name
         
@@ -312,6 +313,7 @@ class Canvas(QtGui.QWidget):
                     #nextnode.setFlags(nextnode.flags() & ~QtCore.Qt.ItemIsDragEnabled)
                     
             #currentNode = nextnode
+            
         z = citem.zValue()
         if z is None:
             zvals = [i.zValue() for i in self.items.itervalues()]
@@ -333,10 +335,7 @@ class Canvas(QtGui.QWidget):
                 insertLocation = i+1
                 #print zval, ">", z
                 
-        self.connect(citem, QtCore.SIGNAL('transformChanged'), self.itemTransformChanged)
-        self.connect(citem, QtCore.SIGNAL('transformChangeFinished'), self.itemTransformChangeFinished)
         #print name, insertLocation, z
-        
         node = QtGui.QTreeWidgetItem([name])
         node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
         node.setCheckState(0, QtCore.Qt.Checked)
@@ -345,6 +344,7 @@ class Canvas(QtGui.QWidget):
         
         #citem = CanvasItem(self, name, item)
         citem.name = name
+        citem.listItem = node
         node.item = citem
         self.items[name] = citem
 
@@ -366,7 +366,7 @@ class Canvas(QtGui.QWidget):
         """Return a dictionary of name:item pairs"""
         return self.items
         
-    def getItem(self, name):
+    def getListItem(self, name):
         return self.items[name]
         
     def scene(self):
@@ -395,6 +395,9 @@ class SelectBox(widgets.ROI):
 class CanvasItem(QtCore.QObject):
     """CanvasItem takes care of managing an item's state--alpha, visibility, z-value, transformations, etc. and
     provides a control widget"""
+    
+    transformCopyBuffer = None
+    
     def __init__(self, canvas, item, **opts):
         defOpts = {'name': None, 'pos': [0,0], 'scale': [1,1], 'z': None, 'movable': True, 'handle': None, 'visible': True}
         defOpts.update(opts)
@@ -405,18 +408,10 @@ class CanvasItem(QtCore.QObject):
         self.canvas = canvas
         self.item = item
         
-
         z = self.opts['z']
         if z is not None:
             item.setZValue(z)
-        
-        #if scale is None:
-            #scale = [1, 1]
-        #if pos is None:
-            #pos = [0,0]
-        
 
-        self.name = self.opts['name']
         self.ctrl = QtGui.QWidget()
         self.layout = QtGui.QGridLayout()
         self.layout.setSpacing(0)
@@ -430,35 +425,52 @@ class CanvasItem(QtCore.QObject):
         self.layout.addWidget(self.alphaLabel, 0, 0)
         self.layout.addWidget(self.alphaSlider, 0, 1)
         self.resetTransformBtn = QtGui.QPushButton('Reset Transform')
+        self.copyBtn = QtGui.QPushButton('Copy')
+        self.pasteBtn = QtGui.QPushButton('Paste')
         self.layout.addWidget(self.resetTransformBtn, 1, 0, 1, 2)
+        self.layout.addWidget(self.copyBtn, 2, 0, 1, 1)
+        self.layout.addWidget(self.pasteBtn, 2, 1, 1, 1)
         self.connect(self.alphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.alphaChanged)
         self.connect(self.alphaSlider, QtCore.SIGNAL('sliderPressed()'), self.alphaPressed)
         self.connect(self.alphaSlider, QtCore.SIGNAL('sliderReleased()'), self.alphaReleased)
         self.connect(self.canvas, QtCore.SIGNAL('itemSelected'), self.selectionChanged)
         self.connect(self.resetTransformBtn, QtCore.SIGNAL('clicked()'), self.resetTransformClicked)
+        self.copyBtn.clicked.connect(self.copyClicked)
+        self.pasteBtn.clicked.connect(self.pasteClicked)
         
+        ## create selection box (only visible when selected)
         self.selectBox = SelectBox()
         self.canvas.scene().addItem(self.selectBox)
         self.selectBox.hide()
         self.selectBox.setZValue(1e6)
         self.selectBox.connect(self.selectBox, QtCore.SIGNAL('regionChanged'), self.selectBoxChanged)  ## calls selectBoxMoved
         self.selectBox.connect(self.selectBox, QtCore.SIGNAL('regionChangeFinished'), self.selectBoxChangeFinished)
-        #self.selectBoxToItem()
-
-        #self.item.translate(*self.opts['pos'])
-        #self.item.scale(*self.opts['scale'])
         
-        
+        ## Take note of the starting position of the item and selection box
         self.basePos = self.opts['pos']
         self.baseScale = self.opts['scale']
-        #self.baseTransform = self.transform()
         self.resetTransform()
         self.selectBoxBase = self.selectBox.getState().copy()
         
+        ## reload user transform from disk if possible
         if self.opts['handle'] is not None:
             trans = self.opts['handle'].info().get('userTransform', None)
             if trans is not None:
                 self.restoreTransform(trans)
+
+    #def name(self):
+        #return self.opts['name']
+
+    def copyClicked(self):
+        CanvasItem.transformCopyBuffer = self.saveTransform()
+        
+    def pasteClicked(self):
+        t = CanvasItem.transformCopyBuffer
+        if t is None:
+            return
+        else:
+            self.restoreTransform(t)
+    
 
     def hasUserTransform(self):
         #print self.userRotate, self.userTranslate
@@ -494,20 +506,18 @@ class CanvasItem(QtCore.QObject):
         ang = -st['angle'] * 180. / 3.14159265358
         rot = QtGui.QTransform()
         rot.rotate(ang)
-        
+
+        ## We need to come up with a universal transformation--one that can be applied to other objects 
+        ## such that all maintain alignment. 
+        ## More specifically, we need to turn the selection box's position and angle into
+        ## a rotation _around the origin_ and a translation.
+
         ## base position, rotated
         p1x, p1y = rot.map(*self.basePos)
         
         ## translation left over after rotation
         t2x = trans[0]-(p1x-self.basePos[0])
         t2y = trans[1]-(p1y-self.basePos[1])
-        
-        ## Need to reverse translate and rotate operations to make them relative to origin
-        #t = QtCore.QPointF(*trans)
-        #ang = -st['angle'] * 180. / 3.14159265358
-        #rot = QtGui.QTransform()
-        #rot.rotate(-ang)
-        #t1 = rot.map(t)
         
         self.userTranslate = [t2x, t2y]
         self.userRotate = st['angle']
@@ -531,16 +541,6 @@ class CanvasItem(QtCore.QObject):
         
 
     def resetTransform(self):
-        #self.transform = QtGui.QTransform()
-        #scale = self.opts['scale']
-        #pos = self.opts['pos']
-        #self.transform.translate(pos[0], pos[1])
-        #self.transform.scale(scale[0], scale[1])
-        
-        ### update the graphics item
-        #self.item.setTransform(self.transform)
-        #self.hasUserTransform = False
-        #print "reset transform", self
         self.userRotate = 0
         self.userTranslate = [0,0]
         self.updateTransform()
@@ -554,19 +554,6 @@ class CanvasItem(QtCore.QObject):
     def resetTransformClicked(self):
         self.resetTransform()
         self.emit(QtCore.SIGNAL('resetUserTransform'), self)
-        
-        
-    #def applyTransform(self, t):
-        #return
-        #self.transform  = t * self.transform
-        ### update the graphics item
-        #self.hasUserTransform = True
-        #self.item.setTransform(self.transform)
-        #self.selectBox.blockSignals(True)
-        #self.selectBox.
-        ##self.selectBoxToItem()
-        #self.selectBox.blockSignals(False)
-        #self.emit(QtCore.SIGNAL('transformChangeFinished'), self)
         
     def restoreTransform(self, tr):
         try:
@@ -611,32 +598,6 @@ class CanvasItem(QtCore.QObject):
         self.selectBox.setSize(rect.size())
         self.selectBox.setAngle(0)
         self.selectBox.blockSignals(False)
-
-    #def saveTransform(self):
-        #state = {'translate': self.userTranslate, 'rotate': self.userRotate}
-        ##state = self.selectBox.getState()
-        ##state['pos'] = list(state['pos'])
-        ##state['size'] = list(state['size'])
-        ##print "save:", state
-        #return state
-
-    #def restoreTransform(self, trans):
-        #self.resetTransform()
-        #self.userTranslate = trans['translate']
-        #self.userRotate = trans['rotate']
-        #self.updateTransform()
-        
-        #self.selectBox.blockSignals(True)
-        ##pos = self.selectBoxBase['pos']
-        #state = self.selectBox.getState()
-        ##print "restore:", state, " -> ", trans
-        #pos = state['pos']
-        #t = trans['translate']
-        #state['pos'] = [pos[0]+t[0], pos[1]+t[1]]
-        #state['angle'] = trans['rotate']
-        ##state = {'pos': [pos[0]+t[0], pos[1]+t[1]], 'angle': trans['rotate']}
-        #self.selectBox.setState(state)
-        #self.selectBox.blockSignals(False)
 
     def zValue(self):
         return self.opts['z']
@@ -688,6 +649,9 @@ class CanvasItem(QtCore.QObject):
     def isVisible(self):
         return self.opts['visible']
 
+
+
+
 class MarkerCanvasItem(CanvasItem):
     def __init__(self, canvas, **opts):
         item = QtGui.QGraphicsEllipseItem(-0.5, -0.5, 1., 1.)
@@ -724,6 +688,7 @@ class ImageCanvasItem(CanvasItem):
             except:
                 pass
         
+        showTime = False
         if item is None:
             if self.data.ndim == 3:
                 if self.data.shape[2] <= 4:
@@ -731,11 +696,13 @@ class ImageCanvasItem(CanvasItem):
                     item = graphicsItems.ImageItem(self.data)
                 else:
                     item = graphicsItems.ImageItem(self.data[0])
+                    showTime = True
             else:
                 item = graphicsItems.ImageItem(self.data)
         CanvasItem.__init__(self, canvas, item, **opts)
         
         self.histogram = PlotWidget()
+        self.blockHistogram = False
         self.histogram.setMaximumHeight(100)
         self.levelRgn = graphicsItems.LinearRegionItem(self.histogram)
         self.histogram.addItem(self.levelRgn)
@@ -743,9 +710,17 @@ class ImageCanvasItem(CanvasItem):
         self.updateHistogram(autoRange=True)
         
         self.layout.addWidget(self.histogram, self.layout.rowCount(), 0, 1, 2)
-        #self.connect(self.ui.minLevelSpin, QtCore.SIGNAL('valueChanged'), self.updateLevels)
-        #self.connect(self.ui.maxLevelSpin, QtCore.SIGNAL('valueChanged'), self.updateLevels)
-        #self.connect(self.ui.levelsSlider, QtCore.SIGNAL('gradientChanged'), self.updateLevels)
+        
+        if showTime:
+            self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)
+            self.timeSlider.setMinimum(0)
+            self.timeSlider.setMaximum(self.data.shape[0])
+            self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
+            self.timeSlider.valueChanged.connect(self.timeChanged)
+            self.timeSlider.sliderPressed.connect(self.timeSliderPressed)
+            self.timeSlider.sliderReleased.connect(self.timeSliderReleased)
+            
+        
         self.item.connect(self.item, QtCore.SIGNAL('imageChanged'), self.updateHistogram)
         self.levelRgn.connect(self.levelRgn, QtCore.SIGNAL('regionChanged'), self.levelsChanged)
         self.levelRgn.connect(self.levelRgn, QtCore.SIGNAL('regionChangeFinished'), self.levelsChangeFinished)
@@ -753,8 +728,20 @@ class ImageCanvasItem(CanvasItem):
         
         #self.timeSlider
         
+    def timeChanged(self, t):
+        self.item.updateImage(self.data[t])
+        
+    def timeSliderPressed(self):
+        self.blockHistogram = True
+        
+    def timeSliderReleased(self):
+        self.blockHistogram = False
+        self.updateHistogram()
+        
         
     def updateHistogram(self, autoRange=False):
+        if self.blockHistogram:
+            return
         x, y = self.item.getHistogram()
         self.histogram.plot(x, y)
         if autoRange:
