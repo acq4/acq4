@@ -1,0 +1,92 @@
+# -*- coding: utf-8 -*-
+
+# Form implementation generated from reading ui file 'MosaicEditorTemplate.ui'
+#
+# Created: Wed Feb  2 15:35:08 2011
+#      by: PyQt4 UI code generator 4.7.2
+#
+# WARNING! All changes made in this file will be lost!
+
+from PyQt4 import QtCore, QtGui
+
+class Ui_Form(object):
+    def setupUi(self, Form):
+        Form.setObjectName("Form")
+        Form.resize(784, 613)
+        self.gridLayout = QtGui.QGridLayout(Form)
+        self.gridLayout.setObjectName("gridLayout")
+        self.splitter_2 = QtGui.QSplitter(Form)
+        self.splitter_2.setOrientation(QtCore.Qt.Horizontal)
+        self.splitter_2.setObjectName("splitter_2")
+        self.splitter = QtGui.QSplitter(self.splitter_2)
+        self.splitter.setOrientation(QtCore.Qt.Vertical)
+        self.splitter.setObjectName("splitter")
+        self.layoutWidget = QtGui.QWidget(self.splitter)
+        self.layoutWidget.setObjectName("layoutWidget")
+        self.gridLayout_3 = QtGui.QGridLayout(self.layoutWidget)
+        self.gridLayout_3.setObjectName("gridLayout_3")
+        self.groupBox_3 = QtGui.QGroupBox(self.layoutWidget)
+        self.groupBox_3.setObjectName("groupBox_3")
+        self.gridLayout_2 = QtGui.QGridLayout(self.groupBox_3)
+        self.gridLayout_2.setMargin(0)
+        self.gridLayout_2.setSpacing(0)
+        self.gridLayout_2.setObjectName("gridLayout_2")
+        self.addMarkerBtn = QtGui.QPushButton(self.groupBox_3)
+        self.addMarkerBtn.setObjectName("addMarkerBtn")
+        self.gridLayout_2.addWidget(self.addMarkerBtn, 0, 0, 1, 1)
+        self.delMarkerPen = QtGui.QPushButton(self.groupBox_3)
+        self.delMarkerPen.setObjectName("delMarkerPen")
+        self.gridLayout_2.addWidget(self.delMarkerPen, 0, 1, 1, 1)
+        self.markerList = QtGui.QListView(self.groupBox_3)
+        self.markerList.setObjectName("markerList")
+        self.gridLayout_2.addWidget(self.markerList, 1, 0, 1, 2)
+        self.gridLayout_3.addWidget(self.groupBox_3, 0, 0, 1, 1)
+        self.groupBox_2 = QtGui.QGroupBox(self.layoutWidget)
+        self.groupBox_2.setObjectName("groupBox_2")
+        self.verticalLayout = QtGui.QVBoxLayout(self.groupBox_2)
+        self.verticalLayout.setSpacing(0)
+        self.verticalLayout.setMargin(0)
+        self.verticalLayout.setObjectName("verticalLayout")
+        self.normalizeBtn = QtGui.QPushButton(self.groupBox_2)
+        self.normalizeBtn.setObjectName("normalizeBtn")
+        self.verticalLayout.addWidget(self.normalizeBtn)
+        self.blendBtn = QtGui.QPushButton(self.groupBox_2)
+        self.blendBtn.setObjectName("blendBtn")
+        self.verticalLayout.addWidget(self.blendBtn)
+        self.autoRangeBtn = QtGui.QPushButton(self.groupBox_2)
+        self.autoRangeBtn.setObjectName("autoRangeBtn")
+        self.verticalLayout.addWidget(self.autoRangeBtn)
+        spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.verticalLayout.addItem(spacerItem)
+        self.gridLayout_3.addWidget(self.groupBox_2, 0, 1, 1, 1)
+        self.groupBox_4 = QtGui.QGroupBox(self.layoutWidget)
+        self.groupBox_4.setObjectName("groupBox_4")
+        self.verticalLayout_2 = QtGui.QVBoxLayout(self.groupBox_4)
+        self.verticalLayout_2.setObjectName("verticalLayout_2")
+        self.exportSvgBtn = QtGui.QPushButton(self.groupBox_4)
+        self.exportSvgBtn.setObjectName("exportSvgBtn")
+        self.verticalLayout_2.addWidget(self.exportSvgBtn)
+        self.exportPngBtn = QtGui.QPushButton(self.groupBox_4)
+        self.exportPngBtn.setObjectName("exportPngBtn")
+        self.verticalLayout_2.addWidget(self.exportPngBtn)
+        spacerItem1 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.verticalLayout_2.addItem(spacerItem1)
+        self.gridLayout_3.addWidget(self.groupBox_4, 0, 2, 1, 1)
+        self.gridLayout.addWidget(self.splitter_2, 0, 0, 1, 1)
+
+        self.retranslateUi(Form)
+        QtCore.QMetaObject.connectSlotsByName(Form)
+
+    def retranslateUi(self, Form):
+        Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
+        self.groupBox_3.setTitle(QtGui.QApplication.translate("Form", "Markers", None, QtGui.QApplication.UnicodeUTF8))
+        self.addMarkerBtn.setText(QtGui.QApplication.translate("Form", "Add...", None, QtGui.QApplication.UnicodeUTF8))
+        self.delMarkerPen.setText(QtGui.QApplication.translate("Form", "Del", None, QtGui.QApplication.UnicodeUTF8))
+        self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Image Correction", None, QtGui.QApplication.UnicodeUTF8))
+        self.normalizeBtn.setText(QtGui.QApplication.translate("Form", "Normalize", None, QtGui.QApplication.UnicodeUTF8))
+        self.blendBtn.setText(QtGui.QApplication.translate("Form", "Blend", None, QtGui.QApplication.UnicodeUTF8))
+        self.autoRangeBtn.setText(QtGui.QApplication.translate("Form", "Auto Range", None, QtGui.QApplication.UnicodeUTF8))
+        self.groupBox_4.setTitle(QtGui.QApplication.translate("Form", "Export", None, QtGui.QApplication.UnicodeUTF8))
+        self.exportSvgBtn.setText(QtGui.QApplication.translate("Form", "SVG", None, QtGui.QApplication.UnicodeUTF8))
+        self.exportPngBtn.setText(QtGui.QApplication.translate("Form", "PNG", None, QtGui.QApplication.UnicodeUTF8))
+
