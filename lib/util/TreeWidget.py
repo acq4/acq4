@@ -39,7 +39,7 @@ class TreeWidget(QtGui.QTreeWidget):
     def dropMimeData(self, parent, index, data, action):
         item = self.currentItem()
         p = parent
-        print "drop", item, "->", parent, index
+        #print "drop", item, "->", parent, index
         while True:
             if p is None:
                 break
@@ -63,7 +63,7 @@ class TreeWidget(QtGui.QTreeWidget):
         self.prepareMove(item)
             
         currentParent.removeChild(item)
-        print "  insert child to index", index
+        #print "  insert child to index", index
         parent.insertChild(index, item)  ## index will not be correct
         self.setCurrentItem(item)
         

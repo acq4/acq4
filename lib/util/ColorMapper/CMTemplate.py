@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'CMTemplate.ui'
 #
-# Created: Mon Jan 31 17:42:53 2011
+# Created: Wed Feb  2 22:49:42 2011
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -20,22 +20,22 @@ class Ui_Form(object):
         self.tree = TreeWidget(Form)
         self.tree.setRootIsDecorated(False)
         self.tree.setObjectName("tree")
-        self.gridLayout.addWidget(self.tree, 0, 0, 1, 5)
+        self.gridLayout.addWidget(self.tree, 0, 0, 1, 4)
         self.addBtn = QtGui.QPushButton(Form)
+        self.addBtn.setMaximumSize(QtCore.QSize(40, 16777215))
         self.addBtn.setObjectName("addBtn")
         self.gridLayout.addWidget(self.addBtn, 1, 0, 1, 1)
         self.remBtn = QtGui.QPushButton(Form)
+        self.remBtn.setMaximumSize(QtCore.QSize(40, 16777215))
         self.remBtn.setObjectName("remBtn")
         self.gridLayout.addWidget(self.remBtn, 1, 1, 1, 1)
-        spacerItem = QtGui.QSpacerItem(214, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.gridLayout.addItem(spacerItem, 1, 2, 1, 1)
         self.fileCombo = QtGui.QComboBox(Form)
         self.fileCombo.setEditable(True)
         self.fileCombo.setObjectName("fileCombo")
-        self.gridLayout.addWidget(self.fileCombo, 1, 3, 1, 1)
+        self.gridLayout.addWidget(self.fileCombo, 1, 2, 1, 1)
         self.delBtn = QtGui.QToolButton(Form)
         self.delBtn.setObjectName("delBtn")
-        self.gridLayout.addWidget(self.delBtn, 1, 4, 1, 1)
+        self.gridLayout.addWidget(self.delBtn, 1, 3, 1, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)

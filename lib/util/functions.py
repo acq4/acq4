@@ -1114,6 +1114,8 @@ def thresholdEvents(data, threshold, adjustTimes=True):
     else:
         events = empty(nEvents, dtype=[('index',int),('time',float),('len', int),('sum', float),('peak', float)])  ### rows are     
 
+    mask = ones(nEvents, dtype=bool)
+
     for i in range(nEvents):
         t1, t2 = hits[i]
         ln = t2-t1
@@ -1158,6 +1160,9 @@ def thresholdEvents(data, threshold, adjustTimes=True):
             ln = t2-t1
             evData = data1[t1:t2]
             sum = evData.sum()
+            if len(evData) == 0:
+                mask[i] = False
+                continue
             if sum > 0:
                 peak = evData.max()
             else:
@@ -1169,6 +1174,9 @@ def thresholdEvents(data, threshold, adjustTimes=True):
         events[i]['index'] = t1
         events[i]['len'] = ln
         events[i]['sum'] = sum
+    
+    ## remove masked events
+    events = events[mask]
     
     if xvals is not None:
         events['time'] = xvals[events['index']]
