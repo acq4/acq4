@@ -208,9 +208,12 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         if ev.button() == QtCore.Qt.LeftButton:
             self.setSelected(True)
             if self.translatable:
+                self.isMoving = True
                 self.cursorOffset = self.scenePos() - ev.scenePos()
                 self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
                 ev.accept()
+        elif ev.button() == QtCore.Qt.RightButton:
+            self.cancelMove()
         else:
             ev.ignore()
         

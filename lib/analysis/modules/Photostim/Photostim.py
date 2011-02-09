@@ -834,6 +834,7 @@ class DBCtrl(QtGui.QWidget):
         self.maps.append(m)
         item = m.item
         self.ui.mapTable.addTopLevelItem(item)
+        self.ui.mapTable.setCurrentItem(item)
 
     def mapItemChanged(self, item, col):
         self.writeMapRecord(item.map)
