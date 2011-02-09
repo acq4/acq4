@@ -112,11 +112,11 @@ class ThresholdEvents(CtrlNode):
     def processData(self, data):
         s = self.stateGroup.state()
         events = functions.thresholdEvents(data, s['threshold'], s['adjustTimes'])
-        events = events[:s['eventLimit']]
         mask = events['len'] >= s['minLength']
         mask *= abs(events['sum']) >= s['minSum']
         mask *= abs(events['peak']) >= s['minPeak']
         events = events[mask]
+        events = events[:s['eventLimit']]
         return events
 
 class SpikeDetector(CtrlNode):

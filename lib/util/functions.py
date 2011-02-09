@@ -1126,37 +1126,42 @@ def thresholdEvents(data, threshold, adjustTimes=True):
         else:
             peak = evData.min()
             
-        if adjustTimes:
+        if adjustTimes:  ## Move start and end times outward, estimating the zero-crossing point for the event
+        
+            ## adjust t1 first
             mind = argmax(evData)
             pdiff = abs(peak - evData[0])
             if pdiff == 0:
-                adj = 0
+                adj1 = 0
             else:
-                adj = int(threshold * mind / pdiff)
-                adj = min(ln, adj)
-            t1 -= adj
-            #print adj, pdiff, peak
+                adj1 = int(threshold * mind / pdiff)
+                adj1 = min(ln, adj1)
+            t1 -= adj1
+            
             ## check for collisions with previous events
             if i > 0:
                 lt2 = events[i-1]['index'] + events[i-1]['len']
                 if t1 < lt2:
-                    diff = lt2-t1
-                    tot = adj + lastAdj
-                    d1 = diff * float(lastAdj) / tot
-                    d2 = diff * float(adj) / tot
-                    events[i-1]['len'] -= (d1+1)
-                    t1 += d2
+                    diff = lt2-t1   ## if events have collided, force them to compromise
+                    tot = adj1 + lastAdj
+                    if tot != 0:
+                        d1 = diff * float(lastAdj) / tot
+                        d2 = diff * float(adj1) / tot
+                        events[i-1]['len'] -= (d1+1)
+                        t1 += d2
             
+            ## adjust t2
             mind = ln - mind
             pdiff = abs(peak - evData[-1])
             if pdiff == 0:
-                adj = 0
+                adj2 = 0
             else:
-                adj = int(threshold * mind / pdiff)
-                adj = min(ln, adj)
-            t2 += adj
-            lastAdj = adj
-            #print adj, pdiff, peak
+                adj2 = int(threshold * mind / pdiff)
+                adj2 = min(ln, adj2)
+            t2 += adj2
+            lastAdj = adj2
+            
+            ## recompute event parameters
             ln = t2-t1
             evData = data1[t1:t2]
             sum = evData.sum()
@@ -1167,8 +1172,6 @@ def thresholdEvents(data, threshold, adjustTimes=True):
                 peak = evData.max()
             else:
                 peak = evData.min()
-                
-                    
             
         events[i]['peak'] = peak
         events[i]['index'] = t1
