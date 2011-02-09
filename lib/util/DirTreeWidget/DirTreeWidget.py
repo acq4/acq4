@@ -54,6 +54,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
         
     def selectionChanged(self, item=None, _=None):
         """Selection has changed; check to see whether currentDir item needs to be recolored"""
+        self.emit(QtCore.SIGNAL('selectionChanged'), self)
         if item is None:
             item = self.currentItem()
         if not isinstance(item, FileTreeItem):

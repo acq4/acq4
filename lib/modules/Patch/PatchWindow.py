@@ -277,7 +277,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.patchCurve.setData(data.xvals('Time'), data['primary'])
         if self.redrawCommand > 0:
             self.redrawCommand -= 1
-            self.commandCurve.setData(data.xvals('Time'), data['Command'])
+            self.commandCurve.setData(data.xvals('Time'), data['command'])
         #self.ui.patchPlot.replot()
         #self.ui.commandPlot.replot()
         if frame['analysis']['fitTrace'] is not None:
@@ -476,6 +476,7 @@ class PatchThread(QtCore.QThread):
                         
                         ## analyze trace 
                         result = task.getResult()
+                        #print result
                         results.append(result)
                         
                     ## average together results if we collected more than 1
@@ -600,8 +601,8 @@ class PatchThread(QtCore.QThread):
             iBase = base['Channel': 'primary']
             iPulse = pulse['Channel': 'primary'] 
             iPulseEnd = pulseEnd['Channel': 'primary'] 
-            vBase = base['Channel': 'Command']
-            vPulse = pulse['Channel': 'Command'] 
+            vBase = base['Channel': 'command']
+            vPulse = pulse['Channel': 'command'] 
             vStep = vPulse.mean() - vBase.mean()
             sign = [-1, 1][vStep > 0]
 
@@ -628,8 +629,8 @@ class PatchThread(QtCore.QThread):
             cap = Cm
             
         if params['mode'] == 'ic':
-            iBase = base['Channel': 'Command']
-            iPulse = pulse['Channel': 'Command'] 
+            iBase = base['Channel': 'command']
+            iPulse = pulse['Channel': 'command'] 
             vBase = base['Channel': 'primary']
             vPulse = pulse['Channel': 'primary'] 
             vPulseEnd = pulseEnd['Channel': 'primary'] 

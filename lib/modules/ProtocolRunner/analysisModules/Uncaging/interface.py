@@ -180,7 +180,8 @@ class Prot:
             camInfo = camFrame1.infoCopy()
             camFrame = MetaArray(camFrame2.astype(float32) - camFrame1.astype(float32), info=camInfo)
         else:
-            camInfo = frame['result'][camDev]['frames'][self.state['frame1Spin']].infoCopy()
+            #camInfo = frame['result'][camDev]['frames'][self.state['frame1Spin']].infoCopy()
+            camInfo = None
             camFrame = None
             
         data = {
@@ -262,8 +263,7 @@ class Prot:
                 spot.setBrush(QtGui.QBrush(QtGui.QColor(r*255, g*255, b*255, alpha)))
                 spot.setPen(QtGui.QPen(QtCore.Qt.NoPen))
                 p = f['scanner']['position']
-                s = f['scanner']['spot']
-                print f['scanner']
+                s = f['scanner']['spotSize']
                 self.items.append([spot, p, [s, s]])
             
         self.hide()  ## Make sure only correct items are displayed
@@ -272,12 +272,12 @@ class Prot:
         if self.state['displayImageCheck']:
             self.updateImage()
 
-        # update location of image
-        info = frames[-1]['camInfo'][-1]
-        s = info['pixelSize']
-        p = info['imagePosition']
-        self.items[0][1] = p
-        self.items[0][2] = s
+            # update location of image
+            info = frames[-1]['camInfo'][-1]
+            s = info['pixelSize']
+            p = info['imagePosition']
+            self.items[0][1] = p
+            self.items[0][2] = s
         
         ## Set correct scene
         cModName = str(self.ui().ui.cameraModCombo.currentText())

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>668</width>
-    <height>414</height>
+    <width>487</width>
+    <height>422</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -26,11 +26,29 @@
       <enum>Qt::Horizontal</enum>
      </property>
      <widget class="GraphicsView" name="view"/>
-     <widget class="QWidget" name="layoutWidget">
-      <layout class="QVBoxLayout" name="ctrlLayout">
+     <widget class="QWidget" name="">
+      <layout class="QVBoxLayout" name="verticalLayout">
        <property name="spacing">
         <number>0</number>
        </property>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <item>
+          <widget class="QPushButton" name="storeSvgBtn">
+           <property name="text">
+            <string>Store SVG</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="storePngBtn">
+           <property name="text">
+            <string>Store PNG</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
        <item>
         <widget class="QPushButton" name="autoRangeBtn">
          <property name="sizePolicy">
@@ -61,6 +79,13 @@
           </property>
          </column>
         </widget>
+       </item>
+       <item>
+        <layout class="QGridLayout" name="ctrlLayout">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+        </layout>
        </item>
       </layout>
      </widget>

@@ -25,6 +25,15 @@ class ScannerDeviceGui(QtGui.QWidget):
             'splitter': self.ui.splitter,
         })
         
+        spos = dev.getShutterVals()
+        if spos is None:
+            self.ui.shutterGroup.hide()
+        else:
+            self.shutterChanged()
+            self.ui.shutterXSpin.setValue(spos[0])
+            self.ui.shutterYSpin.setValue(spos[1])
+        
+        
         ## Populate Device lists
         defCam = None
         if 'defaultCamera' in self.dev.config:
@@ -63,7 +72,23 @@ class ScannerDeviceGui(QtGui.QWidget):
         QtCore.QObject.connect(self.ui.calibrateBtn, QtCore.SIGNAL('clicked()'), self.calibrateClicked)
         QtCore.QObject.connect(self.ui.storeCamConfBtn, QtCore.SIGNAL('clicked()'), self.storeCamConf)
         QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteClicked)
+        self.ui.shutterBtn.clicked.connect(self.shutterClicked)
+        self.dev.sigShutterChanged.connect(self.shutterChanged)
 
+    def shutterClicked(self):
+        self.dev.setShutterOpen(not self.lastShutterState)
+        
+    def shutterChanged(self):
+        sh = self.dev.getShutterOpen()
+        self.lastShutterState = sh
+        if sh:
+            self.ui.shutterBtn.setText('Close Shutter')
+        else:
+            self.ui.shutterBtn.setText('Open Shutter')
+            
+
+            
+            
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
         

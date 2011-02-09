@@ -415,7 +415,7 @@ class MultiClampTask(DeviceTask):
                 if ch == 'command':
                     #result[ch]['data'] = result[ch]['data'] / self.dev.config['cmdScale'][self.cmd['mode']]
                     result[ch]['data'] = result[ch]['data'] * self.state['extCmdScale']
-                    result[ch]['name'] = 'Command'
+                    result[ch]['name'] = 'command'
                     if self.cmd['mode'] == 'VC':
                         result[ch]['units'] = 'V'
                     else:

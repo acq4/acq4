@@ -149,8 +149,6 @@ def updateClass(old, new, debug):
         try:
             if isinstance(ref, old) and ref.__class__ is old:
                 ref.__class__ = new
-                #for n,v in new.__dict__.iteritems():  ## update attributes
-                    #setattr(ref, n, v)
                 if debug:
                     print "    Changed class for", safeStr(ref)
             elif inspect.isclass(ref) and issubclass(ref, old) and old in ref.__bases__:
@@ -197,6 +195,12 @@ def updateClass(old, new, debug):
                         extra = " (and %d previous versions)" % depth
                     print "    Updating method %s%s" % (attr, extra)
                 
+    ## And copy in new functions that didn't exist previously
+    for attr in dir(new):
+        if not hasattr(old, attr):
+            if debug:
+                print "    Adding missing attribute", attr
+            setattr(old, attr, getattr(new, attr))
             
     ## finally, update any previous versions still hanging around..
     if hasattr(old, '__previous_reload_version__'):
