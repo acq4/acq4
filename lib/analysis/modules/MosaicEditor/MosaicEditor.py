@@ -34,15 +34,6 @@ class MosaicEditor(AnalysisModule):
         
         self.connect(self.ui.canvas, QtCore.SIGNAL('itemTransformChangeFinished'), self.itemMoved)
         self.ui.exportSvgBtn.clicked.connect(self.exportSvg)
-        
-        
-        atlasDir = os.path.join(os.path.split(os.path.abspath(__file__))[0], 'atlas')
-        fh = DataManager.getHandle(os.path.join(atlasDir, 'CN_coronal.png'))
-        scale = 3.78e-6
-        pos = (-676*scale/2., -577*scale/2.)
-        self.atlas = self.ui.canvas.addImage(fh, pos=pos, scale=(scale, scale))
-        self.atlas.setMovable(False)
-
 
     def loadFileRequested(self, f):
         canvas = self.getElement('Canvas')
