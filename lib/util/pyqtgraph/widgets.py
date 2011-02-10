@@ -215,7 +215,11 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
                 self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
                 ev.accept()
         elif ev.button() == QtCore.Qt.RightButton:
-            self.cancelMove()
+            if self.isMoving:
+                ev.accept()
+                self.cancelMove()
+            else:
+                ev.ignore()
         else:
             ev.ignore()
         
@@ -777,6 +781,8 @@ class Handle(QtGui.QGraphicsItem):
                 for r in self.roi:
                     r[0].cancelMove()
                 ev.accept()
+            else:
+                ev.ignore()
         else:
             ev.ignore()
             

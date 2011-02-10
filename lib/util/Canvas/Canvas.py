@@ -173,7 +173,7 @@ class Canvas(QtGui.QWidget):
     def selectItem(self, item):
         li = item.listItem
         #li = self.getListItem(item.name())
-        print "select", li
+        #print "select", li
         self.itemList.setCurrentItem(li)
 
 
@@ -447,8 +447,16 @@ class CanvasItem(QtCore.QObject):
         self.selectBox.connect(self.selectBox, QtCore.SIGNAL('regionChangeFinished'), self.selectBoxChangeFinished)
         
         ## Take note of the starting position of the item and selection box
+        #br = self.item.boundingRect()
+        #self.basePos = [self.opts['pos'][0] + br.left(), self.opts['pos'][1] + br.top()]
         self.basePos = self.opts['pos']
         self.baseScale = self.opts['scale']
+        
+        ## set up the transformations that will be applied to the item
+        ## (It is not safe to use item.setTransform, since the item might count on that not changing)
+        self.itemRotation = QtGui.QGraphicsRotation()
+        self.itemScale = QtGui.QGraphicsScale()
+        self.item.setTransformations([self.itemRotation, self.itemScale])
         self.resetTransform()
         self.selectBoxBase = self.selectBox.getState().copy()
         
@@ -497,10 +505,12 @@ class CanvasItem(QtCore.QObject):
         #self.transform = QtGui.QTransform()
         st = self.selectBox.getState()
         
-        bpos = st['pos']
+        bPos1 = pg.Point(self.selectBoxBase['pos'])
+        bPos2 = pg.Point(st['pos'])
         
         ## How far the box has moved from its starting position
-        trans = [bpos[0] - self.selectBoxBase['pos'][0], bpos[1] - self.selectBoxBase['pos'][1]]
+        #trans = [bpos[0] - self.selectBoxBase['pos'][0], bpos[1] - self.selectBoxBase['pos'][1]]
+        trans = bPos2 - bPos1
         
         ## rotation
         ang = -st['angle'] * 180. / 3.14159265358
@@ -511,15 +521,34 @@ class CanvasItem(QtCore.QObject):
         ## such that all maintain alignment. 
         ## More specifically, we need to turn the selection box's position and angle into
         ## a rotation _around the origin_ and a translation.
+        
+        ## Approach is:
+        ## 1. Call the center of the item's coord. system p0
+        ## 2. Rotate p0 by ang around the global origin; call this point p1
+        ## 3. The point where the item's origin will end up ultimately is p2
+        ## 4. The translation we are looking for is p2 - (p1-p0) - 
+
+        p0 = pg.Point(self.basePos)
 
         ## base position, rotated
-        p1x, p1y = rot.map(*self.basePos)
+        p1 = rot.map(p0)
         
-        ## translation left over after rotation
-        t2x = trans[0]-(p1x-self.basePos[0])
-        t2y = trans[1]-(p1y-self.basePos[1])
+        ## find final location of item:
+        ## item pos relative to box
+        relPos = p0 - bPos1
+        #print relPos, p0, bPos1
         
-        self.userTranslate = [t2x, t2y]
+        ## rotate
+        relPos2 = rot.map(relPos)
+        
+        ## final location of item
+        p2 = relPos2 + trans
+        
+        ## translation left over
+        t2 = p2 - (p1-p0) - relPos
+        #print trans, p2, p1, t2
+        
+        self.userTranslate = [t2.x(), t2.y()]
         self.userRotate = st['angle']
         
         self.updateTransform()
@@ -529,15 +558,41 @@ class CanvasItem(QtCore.QObject):
 
     def updateTransform(self):
         """Regenerate the item position from the base and user transform"""
-        ## user transform portion
+        ### user transform portion
+        #trans = QtGui.QGraphicsTransform()
+        #trans.translate(*self.userTranslate)
+        #trans.rotate(-self.userRotate*180./3.14159265358)
+
+        ### add base transform
+        #trans.translate(*self.basePos)
+        #trans.scale(*self.baseScale)
+        #self.item.setTransformations([trans])  ## applied before the item's own tranformation
+        
+        ## Ideally we want to apply transformations in this order: 
+        ##    scale * baseTranslate * userRotate * userTranslate
+        ## HOWEVER: transformations are applied like this:
+        ##    scale * rotate * translate
+        ## So we just need to do some rearranging:
+        ##    scale * userRotate * (userRotate^-1 * baseTranslate * userRotate) * userTranslate
+        
+        
+        #upos = pg.Point(self.userTranslate)
+        #bpos = pg.Point(self.basePos)
+        angle = -self.userRotate*180./3.14159265358
         trans = QtGui.QTransform()
         trans.translate(*self.userTranslate)
-        trans.rotate(-self.userRotate*180./3.14159265358)
-
-        ## add base transform
+        trans.rotate(angle)
         trans.translate(*self.basePos)
-        trans.scale(*self.baseScale)
-        self.item.setTransform(trans)
+        trans.rotate(-angle)
+        #rot.rotate(-angle)
+        #pos1 = rot.map(pos)
+        #pos2 = pos1 + pg.Point(self.basePos)
+        pos2 = trans.map(QtCore.QPointF(0., 0.))
+        
+        self.item.setPos(pos2)
+        self.itemRotation.setAngle(angle)
+        self.itemScale.setXScale(self.baseScale[0])
+        self.itemScale.setYScale(self.baseScale[1])
         
 
     def resetTransform(self):
