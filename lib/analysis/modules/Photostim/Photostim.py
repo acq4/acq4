@@ -802,6 +802,7 @@ class DBCtrl(QtGui.QWidget):
         ])
         self.maps = []
         self.layout = QtGui.QVBoxLayout()
+        self.layout.setContentsMargins(0,0,0,0)
         self.layout.setSpacing(0)
         self.setLayout(self.layout)
         self.dbgui = DatabaseGui.DatabaseGui(dm=host.dataManager(), tables=tables)

@@ -25,6 +25,8 @@ class Dock(QtGui.QWidget, DockDrop):
         self.widgetArea = QtGui.QWidget()
         self.topLayout.addWidget(self.widgetArea, 1, 1)
         self.layout = QtGui.QGridLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
         self.widgetArea.setLayout(self.layout)
         self.widgetArea.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         self.widgets = []

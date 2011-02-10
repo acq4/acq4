@@ -312,12 +312,12 @@ class GraphicsView(QtGui.QGraphicsView):
             #self.currentItem = None
 
     def mouseMoveEvent(self, ev):
-        #if self.lastMousePos is None:
-            #self.lastMousePos = Point(ev.pos())
-        #delta = Point(ev.pos()) - self.lastMousePos
+        if self.lastMousePos is None:
+            self.lastMousePos = Point(ev.pos())
+        delta = Point(ev.pos()) - self.lastMousePos
         #if abs(delta[0]) > 100 or abs(delta[1]) > 100:   ## Weird bug generating extra events..
             #return
-        #self.lastMousePos = Point(ev.pos())
+        self.lastMousePos = Point(ev.pos())
         #print "move", delta
         QtGui.QGraphicsView.mouseMoveEvent(self, ev)
         if not self.mouseEnabled:

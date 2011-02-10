@@ -19,6 +19,8 @@ class DockArea(Container, QtGui.QWidget, DockDrop):
         QtGui.QWidget.__init__(self)
         DockDrop.__init__(self, allowedAreas=['left', 'right', 'top', 'bottom'])
         self.layout = QtGui.QVBoxLayout()
+        self.layout.setContentsMargins(0,0,0,0)
+        self.layout.setSpacing(0)
         self.setLayout(self.layout)
         self.docks = weakref.WeakValueDictionary()
         self.topContainer = None
