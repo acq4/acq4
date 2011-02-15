@@ -213,25 +213,60 @@ class Canvas(QtGui.QWidget):
             dirs = [dirHandle[d] for d in dirHandle.subDirs()]
         else:
             dirs = [dirHandle]
+        
+        paramKeys = []
+        if len(dirHandle.info()['protocol']['params']) > 1:
+            for i in range(len(dirHandle.info()['protocol']['params'])):
+                k = (dirHandle.info()['protocol']['params'][i][0], dirHandle.info()['protocol']['params'][i][1])
+                if k != ('Scanner', 'targets'):
+                    paramKeys.append(k)
             
         if 'name' not in opts:
             opts['name'] = dirHandle.shortName()
             
-        pts = []
-        for d in dirs: #d is a directory handle
-            #d = dh[d]
-            if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
-                pos = d.info()['Scanner']['position']
-                if 'spotSize' in d.info()['Scanner']:
-                    size = d.info()['Scanner']['spotSize']
-                else:
-                    size = self.defaultSize
-                pts.append({'pos': pos, 'size': size, 'data': d})
-        
-        item = graphicsItems.ScatterPlotItem(pts, pxMode=False)
-        citem = CanvasItem(self, item, handle=dirHandle, **opts)
-        self._addCanvasItem(citem)
-        return citem
+        if len(paramKeys) < 1:    
+            pts = []
+            for d in dirs: #d is a directory handle
+                #d = dh[d]
+                if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
+                    pos = d.info()['Scanner']['position']
+                    if 'spotSize' in d.info()['Scanner']:
+                        size = d.info()['Scanner']['spotSize']
+                    else:
+                        size = self.defaultSize
+                    pts.append({'pos': pos, 'size': size, 'data': d})
+            
+            item = graphicsItems.ScatterPlotItem(pts, pxMode=False)
+            citem = CanvasItem(self, item, handle=dirHandle, **opts)
+            self._addCanvasItem(citem)
+            return citem
+        else:
+            pts = []
+            for d in dirs:
+                k = d.info()[paramKeys[0]]
+                if len(pts) < k+1:
+                    pts.append([])
+                if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
+                    pos = d.info()['Scanner']['position']
+                    if 'spotSize' in d.info()['Scanner']:
+                        size = d.info()['Scanner']['spotSize']
+                    else:
+                        size = self.defaultSize
+                    pts[k].append({'pos': pos, 'size': size, 'data': d})
+            spots = []
+            for x in pts:
+                spots.extend(x)
+            item = graphicsItems.ScatterPlotItem(spots=spots, pxMode=False)
+            parentCitem = CanvasItem(self, item, handle=dirHandle, **opts)
+            self._addCanvasItem(parentCitem)
+            for i in range(len(pts)):
+                opts['name'] = paramKeys[0][0] + '_%03d' %i
+                item = graphicsItems.ScatterPlotItem(spots=pts[i], pxMode=False)
+                citem = CanvasItem(self, item, handle = dirHandle, parent=parentCitem, **opts)
+                self._addCanvasItem(citem)
+            return parentCitem
+                
+                
         
     def addFile(self, fh, **opts):
         if fh.isFile():
@@ -245,7 +280,7 @@ class Canvas(QtGui.QWidget):
         return citem
 
     def _addCanvasItem(self, citem):
-        """Obligatory function call for any idems added to the canvas."""
+        """Obligatory function call for any items added to the canvas."""
         
         if not self.allowTransforms:
             citem.setMovable(False)
@@ -340,7 +375,10 @@ class Canvas(QtGui.QWidget):
         node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
         node.setCheckState(0, QtCore.Qt.Checked)
         node.name = name
-        root.insertChild(insertLocation, node)
+        if citem.opts['parent'] != None:
+            citem.opts['parent'].listItem.insertChild(insertLocation, node)
+        else:    
+            root.insertChild(insertLocation, node)
         
         #citem = CanvasItem(self, name, item)
         citem.name = name
@@ -399,7 +437,7 @@ class CanvasItem(QtCore.QObject):
     transformCopyBuffer = None
     
     def __init__(self, canvas, item, **opts):
-        defOpts = {'name': None, 'pos': [0,0], 'scale': [1,1], 'z': None, 'movable': True, 'handle': None, 'visible': True}
+        defOpts = {'name': None, 'pos': [0,0], 'scale': [1,1], 'z': None, 'movable': True, 'handle': None, 'visible': True, 'parent':None}
         defOpts.update(opts)
         self.opts = defOpts
         self.selected = False

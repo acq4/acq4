@@ -96,7 +96,7 @@ class Photostim(AnalysisModule):
 
     def fileSelected(self):
         fh = self.getElement('File Loader').ui.dirTree.selectedFile()
-        print Scan.describe(fh)
+        #print Scan.describe(fh)
 
     def baseDirChanged(self, dh):
         typ = dh.info()['dirType']
