@@ -142,16 +142,23 @@ class EventListPlotter(CtrlNode):
         if len(events) > 200:
             events = events[:200]
         color = self.ctrls['color'].color()
+        
+        ## don't keep items from last run; they may have been removed already.
+        self.items = {}
+        
         for c in conn:
             plot = c.node().getPlot()
             if plot is None:
                 continue
-            if c in self.items:
-                item = self.items[c]
-                item.setXVals(events)
-            else:
-                self.items[c] = graphicsItems.VTickGroup(events, view=plot, pen=color)
-                self.items[c].setYRange([0., 0.2], relative=True)
+            ## It's possible items were cleared out already; always rebuild.
+            #if c in self.items:
+                #item = self.items[c]
+                #item.setXVals(events)  
+            #else:
+                #self.items[c] = graphicsItems.VTickGroup(events, view=plot, pen=color)
+                #self.items[c].setYRange([0., 0.2], relative=True)
+            self.items[c] = graphicsItems.VTickGroup(events, view=plot, pen=color)
+            self.items[c].setYRange([0., 0.2], relative=True)
         return {'plot': self.items}
         
 

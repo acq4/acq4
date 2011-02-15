@@ -8,6 +8,7 @@ class TableWidget(QtGui.QTableWidget):
     
     def __init__(self, *args):
         QtGui.QTableWidget.__init__(self, *args)
+        self.setVerticalScrollMode(self.ScrollPerPixel)
         self.clear()
         
     def clear(self):

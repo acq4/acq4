@@ -694,11 +694,15 @@ class Map:
             
         data = file.read()
         info = data._info[-1]
-        rec['mode'] = info['mode']
-        try:
-            rec['holding'] = float(sinfo['devices'][cname]['holdingSpin'])*1000.
-        except:
-            pass
+        if 'ClampState' in info:
+            rec['mode'] = info['ClampState']['mode']
+            rec['holding'] = info['ClampState']['holding']
+        else:  ## older meta-info format for MultiClamp
+            rec['mode'] = info['mode']
+            try:
+                rec['holding'] = float(sinfo['devices'][cname]['holdingSpin'])*1000.
+            except:
+                pass
         
         cell = source.parent()
         day = cell.parent().parent()
@@ -834,6 +838,7 @@ class DBCtrl(QtGui.QWidget):
         self.maps.append(m)
         item = m.item
         self.ui.mapTable.addTopLevelItem(item)
+        self.ui.mapTable.setCurrentItem(item)
 
     def mapItemChanged(self, item, col):
         self.writeMapRecord(item.map)
