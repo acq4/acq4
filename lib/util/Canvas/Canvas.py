@@ -10,7 +10,7 @@ from pyqtgraph.GraphicsView import GraphicsView
 import pyqtgraph.graphicsItems as graphicsItems
 from pyqtgraph.PlotWidget import PlotWidget
 from pyqtgraph import widgets
-from PyQt4 import QtGui, QtCore
+from PyQt4 import QtGui, QtCore, QtSvg
 import DataManager
 import numpy as np
 import debug
@@ -235,7 +235,10 @@ class Canvas(QtGui.QWidget):
         
     def addFile(self, fh, **opts):
         if fh.isFile():
-            return self.addImage(fh, **opts)
+            if fh.shortName()[-4:] == '.svg':
+                return self.addSvg(fh, **opts)
+            else:
+                return self.addImage(fh, **opts)
         else:
             return self.addScan(fh, **opts)
 
@@ -243,6 +246,11 @@ class Canvas(QtGui.QWidget):
         citem = MarkerCanvasItem(self, **opts)
         self._addCanvasItem(citem)
         return citem
+
+    def addSvg(self, fh, **opts):
+        item = QtSvg.QGraphicsSvgItem(fh.name())
+        return self.addItem(item, handle=fh, **opts)
+
 
     def _addCanvasItem(self, citem):
         """Obligatory function call for any idems added to the canvas."""
@@ -357,7 +365,11 @@ class Canvas(QtGui.QWidget):
         
 
     def removeItem(self, item):
-        self.view.scene().removeItem(item)
+        if isinstance(item, CanvasItem):
+            self.view.scene().removeItem(item.item)
+            self.itemList.removeTopLevelItem(item.listItem)
+        else:
+            self.view.scene().removeItem(item)
         
         ## disconnect signals, remove from list, etc..
         
@@ -468,6 +480,8 @@ class CanvasItem(QtCore.QObject):
 
     #def name(self):
         #return self.opts['name']
+    def handle(self):
+        return self.opts['handle']
 
     def copyClicked(self):
         CanvasItem.transformCopyBuffer = self.saveTransform()

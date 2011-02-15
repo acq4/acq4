@@ -104,6 +104,8 @@ class WidgetGroup(QtCore.QObject):
             QtGui.QSlider.setValue),
     }
     
+    stateChanged = QtCore.Signal(str, object)
+    
     
     def __init__(self, widgetList):
         """Initialize WidgetGroup, adding specified widgets into this group.
@@ -209,6 +211,7 @@ class WidgetGroup(QtCore.QObject):
         if v1 != v2:
             #print "widget", n, " = ", v2
             self.emit(QtCore.SIGNAL('changed'), self.widgetList[w], v2)
+            self.stateChanged.emit(self.widgetList[w], v2)
         
     def state(self):
         for w in self.uncachedWidgets:

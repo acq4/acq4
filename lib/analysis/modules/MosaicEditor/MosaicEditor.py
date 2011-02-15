@@ -10,6 +10,7 @@ import debug
 #import FeedbackButton
 from MosaicEditorTemplate import *
 import DataManager
+import lib.analysis.atlas as atlas
 
 class MosaicEditor(AnalysisModule):
     def __init__(self, host):
@@ -18,7 +19,7 @@ class MosaicEditor(AnalysisModule):
         self.ctrl = QtGui.QWidget()
         self.ui = Ui_Form()
         self.ui.setupUi(self.ctrl)
-        
+        self.atlas = None
         
         self._elements_ = OrderedDict([
             ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'host': self}),
@@ -32,8 +33,31 @@ class MosaicEditor(AnalysisModule):
         self.items = {}
         self.cells = {}
         
+        for a in atlas.listAtlases():
+            self.ui.atlasCombo.addItem(a)
+        
         self.connect(self.ui.canvas, QtCore.SIGNAL('itemTransformChangeFinished'), self.itemMoved)
-        self.ui.exportSvgBtn.clicked.connect(self.exportSvg)
+        #self.ui.exportSvgBtn.clicked.connect(self.exportSvg)
+        self.ui.atlasCombo.currentIndexChanged.connect(self.atlasComboChanged)
+        #self.ui.normalizeBtn.clicked.connect(self.normalizeImages)
+
+    def atlasComboChanged(self, ind):
+        if ind == 0:
+            return
+        name = self.ui.atlasCombo.currentText()
+        self.loadAtlas(name)
+
+    def loadAtlas(self, name):
+        name = str(name)
+        if self.atlas is not None:
+            self.atlas.close()
+        
+        cls = atlas.getAtlasClass(name)
+        obj = cls(self.getElement('Canvas'))
+        ctrl = obj.ctrlWidget()
+        self.ui.atlasLayout.addWidget(ctrl, 0, 0)
+        self.atlas = obj
+        
 
     def loadFileRequested(self, f):
         canvas = self.getElement('Canvas')
@@ -79,5 +103,5 @@ class MosaicEditor(AnalysisModule):
         fh.setInfo(userTransform=trans)
         #print fh, "moved"
         
-    def exportSvg(self):
-        self.ui.canvas.view.writeSvg()
+    #def exportSvg(self):
+        #self.ui.canvas.view.writeSvg()
