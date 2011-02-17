@@ -967,7 +967,8 @@ class ScatterPlotItem(QtGui.QGraphicsWidget):
         
     def boundingRect(self):
         ((xmn, xmx), (ymn, ymx)) = self.range
-        
+        if xmn is None or xmx is None or ymn is None or ymx is None:
+            return QtCore.QRectF()
         return QtCore.QRectF(xmn, ymn, xmx-xmn, ymx-ymn)
         
     def paint(self, p, *args):

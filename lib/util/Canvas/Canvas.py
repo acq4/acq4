@@ -15,6 +15,7 @@ import DataManager
 import numpy as np
 import debug
 import pyqtgraph as pg
+import scipy.ndimage as ndimage
 
 class Canvas(QtGui.QWidget):
     def __init__(self, parent=None, allowTransforms=True):
@@ -209,7 +210,7 @@ class Canvas(QtGui.QWidget):
         return citem
     
     def addScan(self, dirHandle, **opts):
-        if len(dirHandle.info()['protocol']['params']) > 0:
+        if 'sequenceParams' in dirHandle.info():
             dirs = [dirHandle[d] for d in dirHandle.subDirs()]
         else:
             dirs = [dirHandle]
@@ -788,6 +789,9 @@ class ImageCanvasItem(CanvasItem):
             self.timeSlider.valueChanged.connect(self.timeChanged)
             self.timeSlider.sliderPressed.connect(self.timeSliderPressed)
             self.timeSlider.sliderReleased.connect(self.timeSliderReleased)
+            self.maxBtn = QtGui.QPushButton('Max')
+            self.maxBtn.clicked.connect(self.maxClicked)
+            self.layout.addWidget(self.maxBtn, self.layout.rowCount(), 0, 1, 2)
             
         
         self.item.connect(self.item, QtCore.SIGNAL('imageChanged'), self.updateHistogram)
@@ -803,6 +807,17 @@ class ImageCanvasItem(CanvasItem):
     def timeSliderPressed(self):
         self.blockHistogram = True
         
+        
+    def maxClicked(self):
+        fd = self.data.astype(float)
+        blur = ndimage.gaussian_filter(fd, (1, 1, 1))
+        blur2 = ndimage.gaussian_filter(fd, (2, 2, 2))
+        dif = blur - blur2
+        #dif[dif < 0.] = 0
+        self.item.updateImage(dif.max(axis=0))
+        self.updateHistogram(autoRange=True)
+            
+        
     def timeSliderReleased(self):
         self.blockHistogram = False
         self.updateHistogram()
@@ -812,6 +827,7 @@ class ImageCanvasItem(CanvasItem):
         if self.blockHistogram:
             return
         x, y = self.item.getHistogram()
+        self.histogram.clearPlots()
         self.histogram.plot(x, y)
         if autoRange:
             self.item.updateImage(autoRange=True)

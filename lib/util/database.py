@@ -29,7 +29,7 @@ class SqliteDatabase:
         self.db.open()
         self._readTableList()
 
-    def exe(self, cmd, data=None, toDict=True):
+    def exe(self, cmd, data=None, toDict=True, toArray=False):
         """Execute an SQL query. If data is provided, it should be a list of dicts and each will be bound to the query and executed sequentially. Returns the query object."""
         q = QtSql.QSqlQuery(self.db)
         if data is None:
@@ -51,7 +51,9 @@ class SqliteDatabase:
                     #print str(k), v.typeName()
                 self._exe(q)
                 
-        if toDict:
+        if toArray:
+            return self._queryToArray(q)
+        elif toDict:
             return self._queryToDict(q)
         else:
             return q
@@ -59,7 +61,7 @@ class SqliteDatabase:
     def __call__(self, *args, **kargs):
         return self.exe(*args, **kargs)
             
-    def select(self, table, fields='*', sql=''):
+    def select(self, table, fields='*', sql='', toDict=True, toArray=False):
         """fields should be a list of field names"""
         if fields != '*':
             if isinstance(fields, basestring):
@@ -74,7 +76,7 @@ class SqliteDatabase:
             #fields = quoteList(fields)
         cmd = "SELECT %s FROM %s %s" % (fields, table, sql)
         #print cmd
-        q = self.exe(cmd)
+        q = self.exe(cmd, toDict=toDict, toArray=toArray)
         #return self._queryToDict(q)
         return q
         
@@ -201,7 +203,17 @@ class SqliteDatabase:
 
 
     def _queryToArray(self, q):
-        pass
+        recs = self._queryToDict(q)
+        if len(recs) < 1:
+            return np.array([])
+        rec1 = recs[0]
+        dtype = functions.suggestRecordDType(rec1)
+        #print rec1, dtype
+        arr = np.empty(len(recs), dtype=dtype)
+        arr[0] = tuple(rec1.values())
+        for i in xrange(1, len(recs)):
+            arr[i] = tuple(recs[i].values())
+        return arr
 
 
     def _readRecord(self, rec):
@@ -428,6 +440,9 @@ class AnalysisDatabase(SqliteDatabase):
     def describeData(self, data):
         """Given a dict or record array, return a table description suitable for creating / checking tables."""
         fields = advancedTypes.OrderedDict()
+        if isinstance(data, list):  ## list of dicts is ok
+            data = data[0]
+            
         if isinstance(data, np.ndarray):
             for i in xrange(len(data.dtype)):
                 name = data.dtype.names[i]
@@ -495,3 +510,12 @@ if __name__ == '__main__':
         db.insert('t', int=val, real=val, text=val, blob=val)
         print "Insert %s (%s):" % (name, repr(val))
         print "  ", db.select('t')[0]
+        
+    print "Table extraction test:"
+    for name, val in vals:
+        #db('delete from t')
+        db.insert('t', int=val, real=val, text=val, blob=val)
+        #print "Insert %s (%s):" % (name, repr(val))
+        #print "  ", db.select('t')[0]
+    print db.select('t', toArray=True)
+    

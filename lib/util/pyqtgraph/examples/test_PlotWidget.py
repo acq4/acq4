@@ -68,6 +68,7 @@ def rand(n):
     data[int(n*0.18)] += 2
     data[int(n*0.1):int(n*0.13)] *= 5
     data[int(n*0.18)] *= 20
+    data *= 1e-12
     return data, arange(n, n+len(data)) / float(n)
     
 

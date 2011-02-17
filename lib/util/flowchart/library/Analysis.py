@@ -59,17 +59,16 @@ class EventFitter(CtrlNode):
             sliceLen = 50e-3
             if i+1 < len(events):
                 nextStart = events[i+1]['time']
-                if nextStart-start < sliceLen:
-                    sliceLen = nextStart-start
+                sliceLen = min(sliceLen, nextStart-start)
                     
-            guessLen = events[i]['len']*dt*3
+            guessLen = events[i]['len']*dt
             
             if tau is None:
                 tau = waveform._info[-1].get('expDeconvolveTau', None)
             if tau is not None:
-                guessLen += tau*2
+                guessLen += tau*2.
             
-            sliceLen = min(guessLen, sliceLen)
+            sliceLen = min(guessLen*3., sliceLen)
             
             eventData = waveform['Time':start:start+sliceLen]
             times = eventData.xvals(0)
@@ -77,19 +76,58 @@ class EventFitter(CtrlNode):
                 offset += 1
                 continue
             
-            
+            ## reconvolve this chunk of the signal if it was previously deconvolved
             if tau is not None:
                 eventData = functions.expReconvolve(eventData, tau=tau)
 
-            ## fitting to exponential rise * decay
-            ## parameters are [amplitude, x-offset, rise tau, fall tau]
+            ## Make guesses as to the shape of the event
             mx = eventData.max()
             mn = eventData.min()
             if mx > -mn:
-                amp = mx
+                guessAmp = mx
             else:
-                amp = mn
-            guess = [amp, times[0], sliceLen/5., sliceLen/3.]
+                guessAmp = mn
+                
+            guessRise = guessLen/4.
+            guessDecay = guessLen/2.
+            guessStart = times[0]
+                
+            ## guess how large the event is
+            ## we're trying to measure the size of the event at 1/3 peak value
+            
+            #print "Event", i, times[0]
+            #print "   amp:", guessAmp
+            
+            zc = functions.zeroCrossingEvents(eventData - (guessAmp/3.))
+            ## eliminate events going the wrong direction
+            if len(zc) > 0:
+                if guessAmp > 0:
+                    zc = zc[zc['peak']>0]
+                else:
+                    zc = zc[zc['peak']<0]
+            #print zc    
+            ## measure properties for the largest event
+            if len(zc) > 0:
+                if guessAmp > 0:
+                    zcInd = np.argmax(zc['sum']) ## the largest event in this clip
+                else:
+                    zcInd = np.argmin(zc['sum']) ## the largest event in this clip
+                zcEv = zc[zcInd]
+                #guessLen = dt*zc[zcInd]['len']
+                guessRise = dt*zcEv['len'] * 0.2
+                guessDecay = dt*zcEv['len'] * 0.8 
+                guessStart = times[0] + dt*zcEv['index']
+                
+                ## cull down the data set if possible
+                cullLen = zcEv['index'] + zcEv['len']*3
+                if len(eventData) > cullLen:
+                    eventData = eventData[:cullLen]
+                    times = times[:cullLen]
+                
+            ## fitting to exponential rise * decay
+            ## parameters are [amplitude, x-offset, rise tau, fall tau]
+            guess = [guessAmp, guessStart, guessRise, guessDecay]
+            #guess = [amp, times[0], guessLen/4., guessLen/2.]  ## careful! 
             fit, junk, comp, err = functions.fitPsp(times, eventData.view(np.ndarray), guess, measureError=True)
             output[i-offset] = tuple(events[i]) + tuple(fit) + (err,)
             #output['fitTime'] += output['time']
@@ -182,6 +220,10 @@ class EventFitter(CtrlNode):
             self.deleteSelected()
             return True
         return False
+
+
+        
+
 
 
 class Histogram(CtrlNode):

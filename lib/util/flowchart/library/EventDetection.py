@@ -68,10 +68,11 @@ class ThresholdEvents(CtrlNode):
     uiTemplate = [
         ('threshold', 'spin', {'value': 1e-12, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
         ('adjustTimes', 'check', {'value': True}),
-        ('minLength', 'intSpin', {'value': 0, 'min': 0, 'max': 100000}),
+        ('minLength', 'intSpin', {'value': 0, 'min': 0, 'max': 1e9}),
         ('minSum', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
         ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
         ('eventLimit', 'intSpin', {'value': 100, 'min': 1, 'max': 1e9}),
+        ('deadTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [0,None], 'siPrefix': True, 'suffix': 's'}),
     ]
 
     def __init__(self, name, **opts):
@@ -112,12 +113,99 @@ class ThresholdEvents(CtrlNode):
     def processData(self, data):
         s = self.stateGroup.state()
         events = functions.thresholdEvents(data, s['threshold'], s['adjustTimes'])
+        
+        ## apply first round of filters
         mask = events['len'] >= s['minLength']
         mask *= abs(events['sum']) >= s['minSum']
         mask *= abs(events['peak']) >= s['minPeak']
         events = events[mask]
+        
+        ## apply deadtime filter
+        mask = np.ones(len(events), dtype=bool)
+        last = 0
+        dt = s['deadTime']
+        for i in xrange(1, len(events)):
+            if events[i]['time'] - events[last]['time'] < dt:
+                mask[i] = False
+            else:
+                last = i
+        #mask[1:] *= (events[1:]['time']-events[:-1]['time']) >= s['deadTime']
+        events = events[mask]
+        
+        ## limit number of events
         events = events[:s['eventLimit']]
         return events
+
+        
+class EventFilter(CtrlNode):
+    """Selects events from a list based on various criteria"""
+    nodeName = "EventFilter"
+    uiTemplate = [
+        #('minLength', 'intSpin', {'value': 0, 'min': 0, 'max': 1e9}),
+        #('minSum', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
+        #('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
+        #('eventLimit', 'intSpin', {'value': 100, 'min': 1, 'max': 1e9}),
+        #('deadTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [0,None], 'siPrefix': True, 'suffix': 's'}),
+        ('fitAmplitude', 'check', {'value': False}),
+        ('minFitAmp', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'range': [None,None], 'siPrefix': True, 'hidden': True}),
+        ('maxFitAmp', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'range': [None,None], 'siPrefix': True, 'hidden': True}),
+        ('fitDecayTau', 'check', {'value': False}),
+        ('minFitDecayTau', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
+        ('maxFitDecayTau', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
+        ('fitRiseTau', 'check', {'value': False}),
+        ('minFitRiseTau', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
+        ('maxFitRiseTau', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
+        ('fitError', 'check', {'value': False}),
+        ('minFitError', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'range': [None,None], 'siPrefix': True, 'hidden': True}),
+        ('maxFitError', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-12, 'range': [None,None], 'siPrefix': True, 'hidden': True}),
+        ('fitTime', 'check', {'value': False}),
+        ('minFitTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
+        ('maxFitTime', 'spin', {'value': 0, 'step': 1, 'minStep': 1e-4, 'range': [None,None], 'siPrefix': True, 'suffix': 's', 'hidden': True}),
+        ('region', 'combo', {'values': ['all']}),
+    ]
+    
+    ranges = [
+        ('fitAmplitude', 'minFitAmp', 'maxFitAmp'),
+        ('fitDecayTau', 'minFitDecayTau', 'maxFitDecayTau'),
+        ('fitRiseTau', 'minFitRiseTau', 'maxFitRiseTau'),
+        ('fitError', 'minFitError', 'maxFitError'),
+        ('fitTime', 'minFitTime', 'maxFitTime'),
+    ]
+
+    def __init__(self, *args, **kargs):
+        CtrlNode.__init__(self, *args, **kargs)
+        
+        for check, spin1, spin2 in self.ranges:
+            self.ctrls[check].toggled.connect(self.checkToggled)
+
+    def checkToggled(self):
+        #s = self.stateGroup.state()
+        for name, a, b in self.ranges:
+            
+            if self.ctrls[name].isChecked():
+                self.showRow(a)
+                self.showRow(b)
+            else:
+                self.hideRow(a)
+                self.hideRow(b)
+        
+
+    def processData(self, data):
+        s = self.stateGroup.state()
+        mask = np.ones(len(data), dtype=bool)
+            
+        for b, mn, mx in self.ranges:
+            if s[b]:
+                mask *= data[b] < s[mx]
+                mask *= data[b] > s[mn]
+                
+        region = s['region']
+        if region != 'all':
+            mask *= data['region'] == region
+            
+        return data[mask]
+            
+            
 
 class SpikeDetector(CtrlNode):
     """Very simple spike detector. Returns the indexes of sharp spikes by comparing each sample to its neighbors."""
@@ -153,3 +241,9 @@ class SpikeDetector(CtrlNode):
 
     def processBypassed(self, args):
         return {'Out': np.empty(0, dtype=[('index', int), ('time', float)])}
+    
+    
+    
+    
+    
+    

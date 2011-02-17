@@ -1115,7 +1115,10 @@ def thresholdEvents(data, threshold, adjustTimes=True):
         events = empty(nEvents, dtype=[('index',int),('time',float),('len', int),('sum', float),('peak', float)])  ### rows are     
 
     mask = ones(nEvents, dtype=bool)
-
+    
+    ## Lots of work ahead:
+    ## 1) compute length, peak, sum for each event
+    ## 2) adjust event times if requested, then recompute parameters
     for i in range(nEvents):
         t1, t2 = hits[i]
         ln = t2-t1
@@ -1126,6 +1129,7 @@ def thresholdEvents(data, threshold, adjustTimes=True):
         else:
             peak = evData.min()
             
+        #print "event %f: %d" % (xvals[t1], t1) 
         if adjustTimes:  ## Move start and end times outward, estimating the zero-crossing point for the event
         
             ## adjust t1 first
@@ -1137,18 +1141,27 @@ def thresholdEvents(data, threshold, adjustTimes=True):
                 adj1 = int(threshold * mind / pdiff)
                 adj1 = min(ln, adj1)
             t1 -= adj1
+            #print "   adjust t1", adj1
             
             ## check for collisions with previous events
             if i > 0:
-                lt2 = events[i-1]['index'] + events[i-1]['len']
+                #lt2 = events[i-1]['index'] + events[i-1]['len']
+                lt2 = hits[i-1][1]
                 if t1 < lt2:
                     diff = lt2-t1   ## if events have collided, force them to compromise
                     tot = adj1 + lastAdj
                     if tot != 0:
                         d1 = diff * float(lastAdj) / tot
                         d2 = diff * float(adj1) / tot
-                        events[i-1]['len'] -= (d1+1)
+                        #events[i-1]['len'] -= (d1+1)
+                        hits[i-1] = (hits[i-1][0], hits[i-1][1]-(d1+1))
                         t1 += d2
+                        #recompute[i-1] = True
+                        #print "  correct t1", d2, "  correct prev.", d1+1
+            #try:
+                #print "   correct t1", d2, "  correct prev.", d1+1
+            #except:
+                #pass
             
             ## adjust t2
             mind = ln - mind
@@ -1160,8 +1173,22 @@ def thresholdEvents(data, threshold, adjustTimes=True):
                 adj2 = min(ln, adj2)
             t2 += adj2
             lastAdj = adj2
+            #print "  adjust t2", adj2
             
-            ## recompute event parameters
+            #recompute[i] = True
+            
+        #starts.append(t1)
+        #stops.append(t2)
+        hits[i] = (t1, t2)
+        events[i]['peak'] = peak
+        events[i]['index'] = t1
+        events[i]['len'] = ln
+        events[i]['sum'] = sum
+        
+    if adjustTimes:  ## go back and re-compute event parameters.
+        for i in range(nEvents):
+            t1, t2 = hits[i]
+            
             ln = t2-t1
             evData = data1[t1:t2]
             sum = evData.sum()
@@ -1172,17 +1199,20 @@ def thresholdEvents(data, threshold, adjustTimes=True):
                 peak = evData.max()
             else:
                 peak = evData.min()
-            
-        events[i]['peak'] = peak
-        events[i]['index'] = t1
-        events[i]['len'] = ln
-        events[i]['sum'] = sum
+                
+            events[i]['peak'] = peak
+            events[i]['index'] = t1
+            events[i]['len'] = ln
+            events[i]['sum'] = sum
     
     ## remove masked events
     events = events[mask]
     
     if xvals is not None:
         events['time'] = xvals[events['index']]
+        
+    for i in xrange(len(events)):
+        print events[i]['time'], events[i]['peak']
 
     return events
 
@@ -1679,6 +1709,13 @@ def suggestDType(x):
         return int
     else:
         return object
+    
+def suggestRecordDType(x):
+    """Given a dict of values, suggest a record array dtype to use"""
+    dt = []
+    for k, v in x.iteritems():
+        dt.append((k, suggestDType(v)))
+    return dt
     
     
 def isFloat(x):

@@ -16,6 +16,7 @@ def generateUi(opts):
     l.setSpacing(0)
     widget.setLayout(l)
     ctrls = {}
+    row = 0
     for opt in opts:
         if len(opt) == 2:
             k, t = opt
@@ -61,7 +62,14 @@ def generateUi(opts):
             w.setTooltip(o['tip'])
         w.setObjectName(k)
         l.addRow(k, w)
+        if o.get('hidden', False):
+            w.hide()
+            label = l.labelForField(w)
+            label.hide()
+            
         ctrls[k] = w
+        w.rowNum = row
+        row += 1
     group = WidgetGroup(widget)
     return widget, group, ctrls
 
@@ -77,6 +85,9 @@ def generateUi(opts):
 
 class CtrlNode(Node):
     """Abstract class for nodes with auto-generated control UI"""
+    
+    sigStateChanged = QtCore.Signal(object)
+    
     def __init__(self, name, ui=None, terminals=None):
         if ui is None:
             if hasattr(self, 'uiTemplate'):
@@ -95,6 +106,7 @@ class CtrlNode(Node):
        
     def changed(self):
         self.update()
+        self.sigStateChanged.emit(self)
 
     def process(self, In, display=True):
         out = self.processData(In)
@@ -110,7 +122,21 @@ class CtrlNode(Node):
         if self.stateGroup is not None:
             self.stateGroup.setState(state.get('ctrl', {}))
             
-            
+    def hideRow(self, name):
+        w = self.ctrls[name]
+        #row = w.rowNum
+        #l = self.ui.layout().itemAt(row, QtGui.QFormLayout.LabelRole)
+        l = self.ui.layout().labelForField(w)
+        w.hide()
+        l.hide()
+        
+    def showRow(self, name):
+        w = self.ctrls[name]
+        #row = w.rowNum
+        #l = self.ui.layout().itemAt(row, QtGui.QFormLayout.LabelRole)
+        l = self.ui.layout().labelForField(w)
+        w.show()
+        l.show()
 
 #class Filter(Node):
     #"""Abstract node for waveform filters having a single input and output"""
