@@ -788,7 +788,7 @@ class CurvePoint(QtGui.QGraphicsItem, QObjectWorkaround):
             #print self.property('position').toDouble()[0], self.property('position').typeName()
             index = (len(x)-1) * clip(self.property('position').toDouble()[0], 0.0, 1.0)
             
-        if index != int(index):
+        if index != int(index):  ## interpolate floating-point values
             i1 = int(index)
             i2 = clip(i1+1, 0, len(x)-1)
             s2 = index-i1

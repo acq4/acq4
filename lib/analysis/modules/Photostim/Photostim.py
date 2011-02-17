@@ -42,6 +42,7 @@ class Photostim(AnalysisModule):
         
         ## scatter plot
         self.scatterPlot = ScatterPlotter()
+        self.scatterPlot.sigPointClicked.connect(self.scatterPointClicked)
         
         ## setup map DB ctrl
         self.dbCtrl = DBCtrl(self, self.dbIdentity)
@@ -177,6 +178,14 @@ class Photostim(AnalysisModule):
             
         
     def mapPointClicked(self, point):
+        self.redisplayData(point.data)
+
+    def scatterPointClicked(self, point):
+        #scan, fh, time = point.data
+        self.redisplayData([point.data])
+        #self.scatterLine =
+
+    def redisplayData(self, points):  ## data must be [(scan, fh), ...]
         try:
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
             plot = self.getElement("Data Plot")
@@ -185,16 +194,28 @@ class Photostim(AnalysisModule):
             sTable = self.getElement("Stats")
             self.mapTicks = []
             
-            num = len(point.data)
+            #num = len(point.data)
+            num = len(points)
             statList = []
             evList = []
             for i in range(num):
                 color = pg.intColor(i, num)
-                scan, fh = point.data[i]
+                #scan, fh = point.data[i]
+                scan, fh = points[i][:2]
+                if isinstance(fh, basestring):
+                    fh = scan.source[fh]
                 
                 ## plot all data, incl. events
                 data = fh.read()['primary']
-                plot.plot(data, pen=color, clear=False)
+                pc = plot.plot(data, pen=color, clear=False)
+                
+                ## mark location of event
+                if len(points[i]) == 3:
+                    index = points[i][2]
+                    pos = float(index)/len(data)
+                    print index
+                    self.arrow = pg.CurveArrow(pc, pos=pos)
+                    plot.addItem(self.arrow)
                 
                 ## show stats
                 stats = scan.getStats(fh)
@@ -212,7 +233,8 @@ class Photostim(AnalysisModule):
             eTable.setData(np.concatenate(evList))
         finally:
             QtGui.QApplication.restoreOverrideCursor()
-        
+    
+    
     def detectorStateChanged(self):
         #print "STATE CHANGE"
         print "Detector state changed"
@@ -1124,6 +1146,9 @@ class DBCtrl(QtGui.QWidget):
 
 
 class ScatterPlotter(QtGui.QSplitter):
+    
+    sigPointClicked = QtCore.Signal(object)
+    
     def __init__(self):
         QtGui.QSplitter.__init__(self)
         self.setOrientation(QtCore.Qt.Horizontal)
@@ -1187,8 +1212,13 @@ class ScatterPlotter(QtGui.QSplitter):
             
         data = self.filter.processData(data)
         
-        pts = [{'pos': (data[i][x], data[i][y])} for i in xrange(len(data))]
+        pts = [{'pos': (data[i][x], data[i][y]), 'data': (scan, data[i]['SourceFile'], data[i]['index'])} for i in xrange(len(data))]
         plot.setPoints(pts)
+        
+        plot.sigPointClicked.connect(self.pointClicked)
+        
+    def pointClicked(self, point):
+        self.sigPointClicked.emit(point)
     
     def updateAll(self):
         for s in self.scans:
