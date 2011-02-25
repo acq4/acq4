@@ -230,7 +230,7 @@ class RegionSelectNode(CtrlNode):
                 sliced = data[0:s['start']:s['stop']]
             else:
                 mask = (data['time'] >= s['start']) * (data['time'] < s['stop'])
-                sliced = data[mask]
+            sliced = data[mask]
         else:
             sliced = None
             
@@ -338,7 +338,7 @@ class ColumnJoinNode(Node):
         self.layout.addWidget(self.remInBtn, 1, 1)
 
         self.addInBtn.clicked.connect(self.addInput)
-        self.addInBtn.clicked.connect(self.remInput)
+        self.remInBtn.clicked.connect(self.remInput)
         self.tree.sigItemMoved.connect(self.update)
         
     def ctrlWidget(self):

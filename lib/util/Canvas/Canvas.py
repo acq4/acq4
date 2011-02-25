@@ -118,8 +118,12 @@ class Canvas(QtGui.QWidget):
         if gi is None:
             return
         if item.checkState(0) == QtCore.Qt.Checked:
+            for i in range(item.childCount()):
+                item.child(i).setCheckState(0, QtCore.Qt.Checked)
             gi.show()
         else:
+            for i in range(item.childCount()):
+                item.child(i).setCheckState(0, QtCore.Qt.Unchecked)
             gi.hide()
 
     def treeItemMoved(self, item, parent, index):
@@ -213,9 +217,16 @@ class Canvas(QtGui.QWidget):
             dirs = [dirHandle[d] for d in dirHandle.subDirs()]
         else:
             dirs = [dirHandle]
+            
+        if 'separateParams' not in opts:
+            separateParams = True
+        else:
+            separateParams = opts['separateParams']
+            del(opts['separateParams'])
+            
         
         paramKeys = []
-        if len(dirHandle.info()['protocol']['params']) > 1:
+        if len(dirHandle.info()['protocol']['params']) > 1 and separateParams==True:
             for i in range(len(dirHandle.info()['protocol']['params'])):
                 k = (dirHandle.info()['protocol']['params'][i][0], dirHandle.info()['protocol']['params'][i][1])
                 if k != ('Scanner', 'targets'):
@@ -224,7 +235,9 @@ class Canvas(QtGui.QWidget):
         if 'name' not in opts:
             opts['name'] = dirHandle.shortName()
             
-        if len(paramKeys) < 1:    
+
+            
+        if len(paramKeys) < 1 or separateParams==False:    
             pts = []
             for d in dirs: #d is a directory handle
                 #d = dh[d]
@@ -241,11 +254,11 @@ class Canvas(QtGui.QWidget):
             self._addCanvasItem(citem)
             return citem
         else:
-            pts = []
+            pts = {}
             for d in dirs:
                 k = d.info()[paramKeys[0]]
                 if len(pts) < k+1:
-                    pts.append([])
+                    pts[k] = []
                 if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
                     pos = d.info()['Scanner']['position']
                     if 'spotSize' in d.info()['Scanner']:
@@ -254,17 +267,19 @@ class Canvas(QtGui.QWidget):
                         size = self.defaultSize
                     pts[k].append({'pos': pos, 'size': size, 'data': d})
             spots = []
-            for x in pts:
-                spots.extend(x)
+            for k in pts.keys():
+                spots.extend(pts[k])
             item = graphicsItems.ScatterPlotItem(spots=spots, pxMode=False)
             parentCitem = CanvasItem(self, item, handle=dirHandle, **opts)
             self._addCanvasItem(parentCitem)
-            for i in range(len(pts)):
-                opts['name'] = paramKeys[0][0] + '_%03d' %i
-                item = graphicsItems.ScatterPlotItem(spots=pts[i], pxMode=False)
+            scans = {}
+            for k in pts.keys():
+                opts['name'] = paramKeys[0][0] + '_%03d' %k
+                item = graphicsItems.ScatterPlotItem(spots=pts[k], pxMode=False)
                 citem = CanvasItem(self, item, handle = dirHandle, parent=parentCitem, **opts)
                 self._addCanvasItem(citem)
-            return parentCitem
+                scans[opts['name']] = citem
+            return scans
                 
                 
         

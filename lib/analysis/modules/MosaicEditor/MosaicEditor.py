@@ -44,7 +44,7 @@ class MosaicEditor(AnalysisModule):
             item = canvas.addMarker(handle=f, scale=[20e-6,20e-6])
             self.items[item] = f
         else:
-            item = canvas.addFile(f)
+            item = canvas.addFile(f, separateParams=False)
             self.items[item] = f
             
             item.timestamp = f.info()['__timestamp__']

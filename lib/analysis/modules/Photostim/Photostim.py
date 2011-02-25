@@ -44,6 +44,7 @@ class Photostim(AnalysisModule):
         ## storage for map data
         #self.scanItems = {}
         self.scans = {}
+        self.seriesScans = {}
         self.maps = []
         
         ## create event detector
@@ -123,13 +124,40 @@ class Photostim(AnalysisModule):
             return False
     
     def loadScan(self, fh):
-        if fh not in self.scans:
+        if fh not in self.scans and fh not in self.seriesScans:
             canvas = self.getElement('Canvas')
             scan = canvas.addFile(fh)
             #self.scanItems[fh] = scan
-            self.scans[fh] = Scan(self, fh, scan.item)
-            scan.item.sigPointClicked.connect(self.scanPointClicked)
-        return self.scans[fh]
+            if not isinstance(scan, dict):
+                self.scans[fh] = Scan(self, fh, scan.item)
+                node = QtGui.QTreeWidgetItem([self.scans[fh].name()])
+                node.scan = self.scans[fh]
+                self.dbCtrl.scanTree.addTopLevelItem(node)
+                scan.item.sigPointClicked.connect(self.scanPointClicked)
+                return self.scans[fh]
+            else:
+                self.seriesScans[fh] = {}
+                pNode = QtGui.QTreeWidgetItem(self.dbCtrl.scanTree, [fh.shortName()])
+                pNode.setFlags((pNode.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
+                pNode.setCheckState(0, QtCore.Qt.Checked)
+                #self.dbCtrl.scanTree.addTopLevelItem(QtGui.QTreeWidgetItem(fh.shortName()))
+                for k in scan.keys():
+                    self.seriesScans[fh][k] = Scan(self, fh, scan[k].item, name=k)
+                    scan[k].item.sigPointClicked.connect(self.scanPointClicked)
+                    node = QtGui.QTreeWidgetItem(pNode, [k])
+                    node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
+                    node.setCheckState(0, QtCore.Qt.Checked)
+                    node.scan = self.seriesScans[fh][k]
+                return self.seriesScans[fh]
+        
+        #node = QtGui.QTreeWidgetItem([name])
+        #node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
+        #node.setCheckState(0, QtCore.Qt.Checked)
+        #node.name = name
+        #if citem.opts['parent'] != None:
+            #citem.opts['parent'].listItem.insertChild(insertLocation, node)
+        #else:    
+            #root.insertChild(insertLocation, node)
 
     def registerMap(self, map):
         #if map in self.maps:
@@ -200,6 +228,9 @@ class Photostim(AnalysisModule):
         print "Detector state changed"
         for m in self.scans.itervalues():
             m.forgetEvents()
+        for k in self.seriesScans.keys():
+            for m in self.seriesScans[k].itervalues():
+                m.forgetEvents()
         
     def detectorOutputChanged(self):
         output = self.detector.flowchart.output()
@@ -213,6 +244,10 @@ class Photostim(AnalysisModule):
         print "Analyzer state changed."
         for m in self.scans.itervalues():
             m.forgetEvents()
+        for k in self.seriesScans.keys():
+            for m in self.seriesScans[k].itervalues():
+                m.forgetEvents()
+        
         
     def analyzerOutputChanged(self):
         table = self.getElement('Stats')
@@ -252,16 +287,19 @@ class Photostim(AnalysisModule):
             spot = self.selectedSpot
         else:
             stats = self.flowchart.process(**data)['dataOut']
-        pos = spot.scenePos()
-        stats['xPos'] = pos.x()
-        stats['yPos'] = pos.y()
-        
-        d = spot.data.parent()
-        size = d.info().get('Scanner', {}).get('spotSize', 100e-6)
-        stats['spotSize'] = size
-        print "Process Stats:", spot.data
-        
-        return stats
+        if spot is not None:
+            pos = spot.scenePos()
+            if stats == None:
+                stats = {}
+            stats['xPos'] = pos.x()
+            stats['yPos'] = pos.y()
+            
+            d = spot.data.parent()
+            size = d.info().get('Scanner', {}).get('spotSize', 100e-6)
+            stats['spotSize'] = size
+            print "Process Stats:", spot.data
+            
+            return stats
 
 
     def storeDBSpot(self):
@@ -298,12 +336,16 @@ class Photostim(AnalysisModule):
         scan = self.scans[parentDir]
         scan.updateSpot(fh, events, stats)
         
-    def selectedScan(self):
-        loader = self.getElement('File Loader')
-        dh = loader.selectedFile()
-        scan = self.scans[dh]
-        return scan
-
+    #def selectedScan(self):
+        #"""Needs to return a list of scans (possibly a list of one scan)."""
+        #loader = self.getElement('File Loader')
+        #dh = loader.selectedFile()
+        #try:
+            #scan = self.scans[dh]
+            #return scan
+        #except KeyError:
+            #scans = self.seriesScans[dh]
+            
     def storeDBScan(self):
         """Store all data for a scan, using cached values if possible"""
         loader = self.getElement('File Loader')
@@ -414,16 +456,20 @@ class Photostim(AnalysisModule):
 
 
 class Scan:
-    def __init__(self, host, source, item):
+    def __init__(self, host, source, item, name=None):
         self.source = source
         self.item = item
         self.host = host
+        self.givenName = name
         self.locked = False  ## prevents flowchart changes from clearing the cache--only individual updates allowed
         self.loadFromDB()
         self.spotDict = {}  ##  fh: spot
         
     def name(self):
-        return self.source.shortName()
+        if self.givenName == None:
+            return self.source.shortName()
+        else:
+            return self.source.shortName() + self.givenName
 
     def rowId(self):
         db = self.host.getDb()
@@ -657,24 +703,27 @@ class Map:
                 self.points.append((pos, [(scan, fh)], self.spots[-1]))
                 self.pointsByFile[pt.data] = self.points[-1]
 
-    def addScan(self, scan):
-        if scan in self.scans:
-            raise Exception("Scan already present in this map.")
-        if len(self.scans) == 0:
-            ## auto-populate fields
-            rec = self.generateDefaults(scan)
-            for i in range(2, len(self.mapFields)):
-                ind = i-2
-                key = self.mapFields.keys()[i]
-                if key in rec and str(self.item.text(ind)) == '':
-                    self.item.setText(ind, str(rec[key]))
+    def addScan(self, scanList):
+        for scan in scanList:
+            if scan in self.scans:
+                continue
+                #raise Exception("Scan already present in this map.")
+            
+            if len(self.scans) == 0:
+                ## auto-populate fields
+                rec = self.generateDefaults(scan)
+                for i in range(2, len(self.mapFields)):
+                    ind = i-2
+                    key = self.mapFields.keys()[i]
+                    if key in rec and str(self.item.text(ind)) == '':
+                        self.item.setText(ind, str(rec[key]))
 
-        self.scans.append(scan)
-        item = QtGui.QTreeWidgetItem([scan.name()])
-        self.item.addChild(item)
-        self.item.setExpanded(True)
-        item.scan = scan
-        self.scanItems[scan] = item
+            self.scans.append(scan)
+            item = QtGui.QTreeWidgetItem([scan.name()])
+            self.item.addChild(item)
+            self.item.setExpanded(True)
+            item.scan = scan
+            self.scanItems[scan] = item
 
     def generateDefaults(self, scan):
         rec = {}
@@ -809,15 +858,18 @@ class DBCtrl(QtGui.QWidget):
         self.layout.setContentsMargins(0,0,0,0)
         self.layout.setSpacing(0)
         self.setLayout(self.layout)
+        
         self.dbgui = DatabaseGui.DatabaseGui(dm=host.dataManager(), tables=tables)
         self.layout.addWidget(self.dbgui)
         for name in ['getTableName', 'getDb']:
             setattr(self, name, getattr(self.dbgui, name))
-        
+        self.scanTree = TreeWidget()
+        self.layout.addWidget(self.scanTree)
         self.ui = MapCtrlTemplate.Ui_Form()
         self.mapWidget = QtGui.QWidget()
         self.ui.setupUi(self.mapWidget)
         self.layout.addWidget(self.mapWidget)
+        
         
         labels = Map.mapFields.keys()[2:]
         self.ui.mapTable.setHeaderLabels(labels)
@@ -978,10 +1030,22 @@ class DBCtrl(QtGui.QWidget):
         except:
             self.ui.addScanBtn.failure("Error.")
             raise
-    
+        
+    def selectedScan(self):
+        """Needs to return a list of scans."""
+        if self.scanTree.currentItem().childCount() == 0:
+            scan = self.scanTree.currentItem().scan
+            return [scan]
+        else:
+            scans = []
+            for i in range(self.scanTree.currentItem().childCount()):
+                scan = self.scanTree.currentItem().child(i).scan
+                scans.append(scan)
+            return scans
+        
     def addScanClicked(self):
         try:
-            scan = self.host.selectedScan()
+            scan = self.selectedScan()
             map = self.selectedMap()
             map.addScan(scan)
             self.writeMapRecord(map)
