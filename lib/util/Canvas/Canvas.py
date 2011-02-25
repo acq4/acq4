@@ -10,11 +10,12 @@ from pyqtgraph.GraphicsView import GraphicsView
 import pyqtgraph.graphicsItems as graphicsItems
 from pyqtgraph.PlotWidget import PlotWidget
 from pyqtgraph import widgets
-from PyQt4 import QtGui, QtCore
+from PyQt4 import QtGui, QtCore, QtSvg
 import DataManager
 import numpy as np
 import debug
 import pyqtgraph as pg
+import scipy.ndimage as ndimage
 
 class Canvas(QtGui.QWidget):
     def __init__(self, parent=None, allowTransforms=True):
@@ -213,7 +214,7 @@ class Canvas(QtGui.QWidget):
         return citem
     
     def addScan(self, dirHandle, **opts):
-        if len(dirHandle.info()['protocol']['params']) > 0:
+        if 'sequenceParams' in dirHandle.info():
             dirs = [dirHandle[d] for d in dirHandle.subDirs()]
         else:
             dirs = [dirHandle]
@@ -285,7 +286,10 @@ class Canvas(QtGui.QWidget):
         
     def addFile(self, fh, **opts):
         if fh.isFile():
-            return self.addImage(fh, **opts)
+            if fh.shortName()[-4:] == '.svg':
+                return self.addSvg(fh, **opts)
+            else:
+                return self.addImage(fh, **opts)
         else:
             return self.addScan(fh, **opts)
 
@@ -293,6 +297,11 @@ class Canvas(QtGui.QWidget):
         citem = MarkerCanvasItem(self, **opts)
         self._addCanvasItem(citem)
         return citem
+
+    def addSvg(self, fh, **opts):
+        item = QtSvg.QGraphicsSvgItem(fh.name())
+        return self.addItem(item, handle=fh, **opts)
+
 
     def _addCanvasItem(self, citem):
         """Obligatory function call for any items added to the canvas."""
@@ -410,7 +419,11 @@ class Canvas(QtGui.QWidget):
         
 
     def removeItem(self, item):
-        self.view.scene().removeItem(item)
+        if isinstance(item, CanvasItem):
+            self.view.scene().removeItem(item.item)
+            self.itemList.removeTopLevelItem(item.listItem)
+        else:
+            self.view.scene().removeItem(item)
         
         ## disconnect signals, remove from list, etc..
         
@@ -521,6 +534,8 @@ class CanvasItem(QtCore.QObject):
 
     #def name(self):
         #return self.opts['name']
+    def handle(self):
+        return self.opts['handle']
 
     def copyClicked(self):
         CanvasItem.transformCopyBuffer = self.saveTransform()
@@ -827,6 +842,9 @@ class ImageCanvasItem(CanvasItem):
             self.timeSlider.valueChanged.connect(self.timeChanged)
             self.timeSlider.sliderPressed.connect(self.timeSliderPressed)
             self.timeSlider.sliderReleased.connect(self.timeSliderReleased)
+            self.maxBtn = QtGui.QPushButton('Max')
+            self.maxBtn.clicked.connect(self.maxClicked)
+            self.layout.addWidget(self.maxBtn, self.layout.rowCount(), 0, 1, 2)
             
         
         self.item.connect(self.item, QtCore.SIGNAL('imageChanged'), self.updateHistogram)
@@ -842,6 +860,17 @@ class ImageCanvasItem(CanvasItem):
     def timeSliderPressed(self):
         self.blockHistogram = True
         
+        
+    def maxClicked(self):
+        fd = self.data.astype(float)
+        blur = ndimage.gaussian_filter(fd, (1, 1, 1))
+        blur2 = ndimage.gaussian_filter(fd, (2, 2, 2))
+        dif = blur - blur2
+        #dif[dif < 0.] = 0
+        self.item.updateImage(dif.max(axis=0))
+        self.updateHistogram(autoRange=True)
+            
+        
     def timeSliderReleased(self):
         self.blockHistogram = False
         self.updateHistogram()
@@ -851,6 +880,7 @@ class ImageCanvasItem(CanvasItem):
         if self.blockHistogram:
             return
         x, y = self.item.getHistogram()
+        self.histogram.clearPlots()
         self.histogram.plot(x, y)
         if autoRange:
             self.item.updateImage(autoRange=True)

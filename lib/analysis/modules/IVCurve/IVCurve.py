@@ -79,7 +79,10 @@ class IVCurve(AnalysisModule):
                     data = d['Clamp2.ma'].read()
                 except:
                     continue
-            cmd = data['Channel': 'Command']
+            try:
+                cmd = data['Channel': 'Command']
+            except:
+                cmd = data['Channel': 'command']
             if data.hasColumn('Channel', 'primary'):
                 data = data['Channel': 'primary']
             else:

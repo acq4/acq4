@@ -5,11 +5,13 @@ import lib.analysis.modules.EventDetector as EventDetector
 import MapCtrlTemplate
 import DatabaseGui
 from flowchart import *
+import flowchart.library.EventDetection as FCEventDetection
 import os
 from advancedTypes import OrderedDict
 import debug
 import ColorMapper
 import pyqtgraph as pg
+import TreeWidget
 #import FileLoader
 
 class Photostim(AnalysisModule):
@@ -38,6 +40,9 @@ class Photostim(AnalysisModule):
         self.mapLayout.addWidget(self.mapper)
         self.mapLayout.addWidget(self.recolorBtn)
         
+        ## scatter plot
+        self.scatterPlot = ScatterPlotter()
+        
         ## setup map DB ctrl
         self.dbCtrl = DBCtrl(self, self.dbIdentity)
         
@@ -61,6 +66,7 @@ class Photostim(AnalysisModule):
         self._elements_ = OrderedDict([
             ('Database', {'type': 'ctrl', 'object': self.dbCtrl, 'size': (200, 200)}),
             ('Canvas', {'type': 'canvas', 'pos': ('right',), 'size': (400,400), 'allowTransforms': False}),
+            ('Scatter Plot', {'type': 'ctrl', 'object': self.scatterPlot, 'pos': ('below', 'Canvas'), 'size': (400,400)}),
             #('Maps', {'type': 'ctrl', 'pos': ('bottom', 'Database'), 'size': (200,200), 'object': self.mapDBCtrl}),
             ('Detection Opts', elems['Detection Opts'].setParams(pos=('bottom', 'Database'), size= (200,500))),
             ('File Loader', {'type': 'fileInput', 'size': (200, 200), 'pos': ('top', 'Database'), 'host': self}),
@@ -97,7 +103,9 @@ class Photostim(AnalysisModule):
 
     def fileSelected(self):
         fh = self.getElement('File Loader').ui.dirTree.selectedFile()
-        #print Scan.describe(fh)
+        if fh is not None and fh.isDir():
+            print Scan.describe(fh)
+
 
     def baseDirChanged(self, dh):
         typ = dh.info()['dirType']
@@ -134,6 +142,8 @@ class Photostim(AnalysisModule):
                 node.scan = self.scans[fh]
                 self.dbCtrl.scanTree.addTopLevelItem(node)
                 scan.item.sigPointClicked.connect(self.scanPointClicked)
+                #canvasItem.item.sigPointClicked.connect(self.scanPointClicked)
+                self.scatterPlot.addScan(self.scans[fh])
                 return self.scans[fh]
             else:
                 self.seriesScans[fh] = {}
@@ -148,16 +158,9 @@ class Photostim(AnalysisModule):
                     node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
                     node.setCheckState(0, QtCore.Qt.Checked)
                     node.scan = self.seriesScans[fh][k]
+                    self.scatterPlot.addScan(self.seriesScans[fh][k])
                 return self.seriesScans[fh]
         
-        #node = QtGui.QTreeWidgetItem([name])
-        #node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
-        #node.setCheckState(0, QtCore.Qt.Checked)
-        #node.name = name
-        #if citem.opts['parent'] != None:
-            #citem.opts['parent'].listItem.insertChild(insertLocation, node)
-        #else:    
-            #root.insertChild(insertLocation, node)
 
     def registerMap(self, map):
         #if map in self.maps:
@@ -184,44 +187,54 @@ class Photostim(AnalysisModule):
             return dh['Clamp1.ma']
 
     def scanPointClicked(self, point):
-        print "click!", point.data
-        plot = self.getElement("Data Plot")
-        plot.clear()
-        self.selectedSpot = point
+        try:
+            QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            print "click!", point.data
+            plot = self.getElement("Data Plot")
+            plot.clear()
+            self.selectedSpot = point
+                
+            self.detector.loadFileRequested(self.getClampFile(point.data))
+        finally:
+            QtGui.QApplication.restoreOverrideCursor()
             
-        self.detector.loadFileRequested(self.getClampFile(point.data))
         
     def mapPointClicked(self, point):
-        plot = self.getElement("Data Plot")
-        plot.clear()
-        eTable = self.getElement("Output Table")
-        sTable = self.getElement("Stats")
-        self.mapTicks = []
-        
-        num = len(point.data)
-        statList = []
-        evList = []
-        for i in range(num):
-            color = pg.intColor(i, num)
-            scan, fh = point.data[i]
+        try:
+            QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            plot = self.getElement("Data Plot")
+            plot.clear()
+            eTable = self.getElement("Output Table")
+            sTable = self.getElement("Stats")
+            self.mapTicks = []
             
-            ## plot all data, incl. events
-            data = fh.read()['primary']
-            plot.plot(data, pen=color, clear=False)
+            num = len(point.data)
+            statList = []
+            evList = []
+            for i in range(num):
+                color = pg.intColor(i, num)
+                scan, fh = point.data[i]
+                
+                ## plot all data, incl. events
+                data = fh.read()['primary']
+                plot.plot(data, pen=color, clear=False)
+                
+                ## show stats
+                stats = scan.getStats(fh)
+                statList.append(stats)
+                events = scan.getEvents(fh)['events']
+                evList.append(events)
+                
+                if len(events) > 0:
+                    times = events['fitTime']
+                    ticks = pg.VTickGroup(times, [0.0, 0.15], pen=color, relative=True, view=plot)
+                    plot.addItem(ticks)
+                    self.mapTicks.append(ticks)
             
-            ## show stats
-            stats = scan.getStats(fh)
-            statList.append(stats)
-            events = scan.getEvents(fh)['events']
-            evList.append(events)
-        
-            times = events['fitTime']
-            ticks = pg.VTickGroup(times, [0.0, 0.15], pen=color, relative=True, view=plot)
-            plot.addItem(ticks)
-            self.mapTicks.append(ticks)
-        
-        sTable.setData(statList)
-        eTable.setData(np.concatenate(evList))
+            sTable.setData(statList)
+            eTable.setData(np.concatenate(evList))
+        finally:
+            QtGui.QApplication.restoreOverrideCursor()
         
     def detectorStateChanged(self):
         #print "STATE CHANGE"
@@ -244,10 +257,11 @@ class Photostim(AnalysisModule):
         print "Analyzer state changed."
         for m in self.scans.itervalues():
             m.forgetEvents()
+            m.forgetStats()
         for k in self.seriesScans.keys():
             for m in self.seriesScans[k].itervalues():
                 m.forgetEvents()
-        
+                m.forgetStats()
         
     def analyzerOutputChanged(self):
         table = self.getElement('Stats')
@@ -286,20 +300,24 @@ class Photostim(AnalysisModule):
             stats = self.flowchart.output()['dataOut']
             spot = self.selectedSpot
         else:
+            if 'regions' not in data:
+                data['regions'] = self.detector.flowchart.output()['regions']
             stats = self.flowchart.process(**data)['dataOut']
-        if spot is not None:
-            pos = spot.scenePos()
-            if stats == None:
-                stats = {}
-            stats['xPos'] = pos.x()
-            stats['yPos'] = pos.y()
+
+        if stats is None:
+            raise Exception('No data returned from analysis (check flowchart for errors).')
             
-            d = spot.data.parent()
-            size = d.info().get('Scanner', {}).get('spotSize', 100e-6)
-            stats['spotSize'] = size
-            print "Process Stats:", spot.data
-            
-            return stats
+        pos = spot.scenePos()
+        stats['xPos'] = pos.x()
+        stats['yPos'] = pos.y()
+        
+        d = spot.data.parent()
+        size = d.info().get('Scanner', {}).get('spotSize', 100e-6)
+        stats['spotSize'] = size
+        print "Process Stats:", spot.data
+        
+        return stats
+
 
 
     def storeDBSpot(self):
@@ -336,21 +354,19 @@ class Photostim(AnalysisModule):
         scan = self.scans[parentDir]
         scan.updateSpot(fh, events, stats)
         
-    #def selectedScan(self):
-        #"""Needs to return a list of scans (possibly a list of one scan)."""
-        #loader = self.getElement('File Loader')
-        #dh = loader.selectedFile()
-        #try:
-            #scan = self.scans[dh]
-            #return scan
-        #except KeyError:
-            #scans = self.seriesScans[dh]
-            
-    def storeDBScan(self):
-        """Store all data for a scan, using cached values if possible"""
+
+    def selectedScan(self):
         loader = self.getElement('File Loader')
         dh = loader.selectedFile()
         scan = self.scans[dh]
+        return scan
+
+    def storeDBScan(self, scan):
+        """Store all data for a scan, using cached values if possible"""
+        #loader = self.getElement('File Loader')
+        #dh = loader.selectedFile()
+        #scan = self.scans[dh]
+        dh = scan.source
         print "Store scan:", dh.name()
         for s in scan.spots():
             fh = self.getClampFile(s.data)
@@ -365,12 +381,14 @@ class Photostim(AnalysisModule):
         print "   scan %s is now locked" % dh.name()
         scan.locked = True
 
-    def clearDBScan(self):
+    def clearDBScan(self, scan):
         dbui = self.getElement('Database')
         db = dbui.getDb()
-        loader = self.getElement('File Loader')
-        dh = loader.selectedFile()
-        scan = self.scans[dh]
+        #loader = self.getElement('File Loader')
+        #dh = loader.selectedFile()
+        #scan = self.scans[dh]
+        dh = scan.source
+        print "Clear scan", dh
         pRow = db.getDirRowID(dh)
         
         identity = self.dbIdentity+'.sites'
@@ -445,7 +463,7 @@ class Photostim(AnalysisModule):
         table = dbui.getTableName(identity)
         if not db.hasTable(table):
             return None, None
-        events = db.select(table, '*', "where SourceDir=%d and SourceFile='%s'" % (pRow, fh.name(relativeTo=parentDir)))
+        events = db.select(table, '*', "where SourceDir=%d and SourceFile='%s'" % (pRow, fh.name(relativeTo=parentDir)), toArray=True)
         
         return events, stats
         
@@ -455,8 +473,13 @@ class Photostim(AnalysisModule):
         return db
 
 
-class Scan:
+
+class Scan(QtCore.QObject):
+    
+    sigEventsChanged = QtCore.Signal(object)
+    
     def __init__(self, host, source, item, name=None):
+        QtCore.QObject.__init__(self)
         self.source = source
         self.item = item
         self.host = host
@@ -477,18 +500,25 @@ class Scan:
         return rid
 
     def loadFromDB(self):
+        print "Loading scan data for", self.source
         self.events = {}
         self.stats = {}
         self.statExample = None
+        haveAll = True
         for spot in self.spots():
             dh = spot.data
             fh = self.host.getClampFile(dh)
             events, stats = self.host.loadSpotFromDB(dh)
-            if events is None or len(stats) == 0:
+            if stats is None or len(stats) == 0:
+                print "  No data for spot", dh
+                haveAll = False
                 continue
             self.statExample = stats
             self.events[fh] = {'events': events}
             self.stats[fh] = stats[0]
+        if haveAll:
+            print "  have data for all spots; locking."
+            self.locked = True
 
     def getStatsKeys(self):
         if self.statExample is None:
@@ -503,9 +533,9 @@ class Scan:
             self.forgetStats()
         
     def forgetStats(self):
-        if not self.locked:
-            print "Scan forget stats:", self.source
-            self.stats = {}
+        #if not self.locked:
+        print "Scan forget stats:", self.source
+        self.stats = {}
         
     def recolor(self, n, nMax):
         if not self.item.isVisible():
@@ -519,7 +549,7 @@ class Scan:
             for i in range(len(spots)):
                 spot = spots[i]
                 fh = self.host.getClampFile(spot.data)
-                stats = self.getStats(fh)
+                stats = self.getStats(fh, signal=False)
                 #print "stats:", stats
                 color = self.host.getColor(stats)
                 ops.append((spot, color))
@@ -536,10 +566,12 @@ class Scan:
         ## delay until the very end for speed.
         for spot, color in ops:
             spot.setBrush(color)
+            
+        self.sigEventsChanged.emit(self)  ## it's possible events didn't actually change, but meh.
         
         
             
-    def getStats(self, fh):
+    def getStats(self, fh, signal=True):
         #print "getStats", fh
         spot = self.getSpot(fh)
         #print "  got spot:", spot
@@ -547,17 +579,39 @@ class Scan:
             #raise Exception("File %s is not in this scan" % fh.name())
         if fh not in self.stats:
             print "No stats cache for", fh.name(), "compute.."
-            events = self.getEvents(fh)
+            events = self.getEvents(fh, signal=signal)
             stats = self.host.processStats(events, spot)
             self.stats[fh] = stats
         return self.stats[fh]
 
-    def getEvents(self, fh):
+    def getEvents(self, fh, process=True, signal=True):
         if fh not in self.events:
-            print "No event cache for", fh.name(), "compute.."
-            events = self.host.processEvents(fh)
-            self.events[fh] = events
+            if process:
+                print "No event cache for", fh.name(), "compute.."
+                events = self.host.processEvents(fh)
+                self.events[fh] = events
+                if signal:
+                    self.sigEventsChanged.emit(self)
+            else:
+                return None
         return self.events[fh]
+        
+    def getAllEvents(self):
+        #print "getAllEvents", self.name()
+        events = []
+        for fh in self.events:
+            ev = self.getEvents(fh, process=False)
+            if ev is not None and len(ev['events']) > 0:
+                events.append(ev['events'])
+            else:
+                print "  ", fh, ev
+        #if len(self.events) == 0:
+            #print "self.events is empty"
+        if len(events) > 0:
+            return np.concatenate(events)
+        else:
+            #print "scan", self.name(), "has no pre-processed events"
+            return None
         
     def spots(self):
         gi = self.item
@@ -589,14 +643,20 @@ class Scan:
         elif next.exists('Clamp2.ma'):
             cname = 'Clamp2'
             file = next['Clamp2.ma']
+        else:
+            return {}
             
         data = file.read()
         info = data._info[-1]
-        rec['mode'] = info['mode']
-        try:
-            rec['holding'] = float(sinfo['devices'][cname]['holdingSpin'])*1000.
-        except:
-            pass
+        if 'ClampState' in info:
+            rec['mode'] = info['ClampState']['mode']
+            rec['holding'] = info['ClampState']['holding']
+        else:
+            try:
+                rec['mode'] = info['mode']
+                rec['holding'] = float(sinfo['devices'][cname]['holdingSpin'])*1000.
+            except:
+                pass
         
         cell = source.parent()
         day = cell.parent().parent()
@@ -631,7 +691,7 @@ class Map:
         
     def __init__(self, host, rec=None):
         self.host = host
-        self.scans = []
+        self.scans = []      ## list of Scan instances OR tuples (fh, item, rowid)
         self.scanItems = {}  # scan: tree item
         self.points = []         ## Holds all data: [ (position, [(scan, dh), ...], spotData), ... ]
         self.pointsByFile = {}   ## just a lookup dictionary
@@ -655,6 +715,7 @@ class Map:
                 self.item.setText(i, str(rec[self.header[i]]))
             for fh,rowid in scans:
                 item = QtGui.QTreeWidgetItem([fh.shortName()])
+                print "Create scan stub:", fh
                 self.scans.append((fh, item, rowid))
                 self.item.addChild(item)
 
@@ -863,7 +924,7 @@ class DBCtrl(QtGui.QWidget):
         self.layout.addWidget(self.dbgui)
         for name in ['getTableName', 'getDb']:
             setattr(self, name, getattr(self.dbgui, name))
-        self.scanTree = TreeWidget()
+        self.scanTree = TreeWidget.TreeWidget()
         self.layout.addWidget(self.scanTree)
         self.ui = MapCtrlTemplate.Ui_Form()
         self.mapWidget = QtGui.QWidget()
@@ -981,7 +1042,7 @@ class DBCtrl(QtGui.QWidget):
         rscans = []
         for i in range(len(map.scans)):
             scan = map.scans[i]
-            if not isinstance(scan, tuple):
+            if not isinstance(scan, tuple):  ## scan is already loaded, skip
                 rscans.append(scan)
                 continue
             newScan = self.host.loadScan(scan[0])
@@ -1086,10 +1147,20 @@ class DBCtrl(QtGui.QWidget):
         if not hasattr(item, 'map'):
             item = item.parent()
         return item.map
+        
+    def selectedScan(self):
+        item = self.ui.mapTable.currentItem()
+        if not hasattr(item, 'scan'):
+            return None
+        return item.scan
+        
     
     def clearDBScan(self):
         try:
-            self.host.clearDBScan()
+            scan = self.selectedScan()
+            if scan is None:
+                raise Exception("No scan selected.")
+            self.host.clearDBScan(scan)
             self.ui.clearDBScanBtn.success("Cleared.")
         except:
             self.ui.clearDBScanBtn.failure("Error.")
@@ -1097,7 +1168,10 @@ class DBCtrl(QtGui.QWidget):
     
     def storeDBScan(self):
         try:
-            self.host.storeDBScan()
+            scan = self.selectedScan()
+            if scan is None:
+                raise Exception("No scan selected.")
+            self.host.storeDBScan(scan)
             self.ui.storeDBScanBtn.success("Stored.")
         except:
             self.ui.storeDBScanBtn.failure("Error.")
@@ -1106,3 +1180,94 @@ class DBCtrl(QtGui.QWidget):
 
 
 
+class ScatterPlotter(QtGui.QSplitter):
+    def __init__(self):
+        QtGui.QSplitter.__init__(self)
+        self.setOrientation(QtCore.Qt.Horizontal)
+        self.plot = pg.PlotWidget()
+        self.addWidget(self.plot)
+        self.ctrl = QtGui.QWidget()
+        self.addWidget(self.ctrl)
+        self.layout = QtGui.QVBoxLayout()
+        self.layout.setSpacing(0)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.ctrl.setLayout(self.layout)
+        
+        self.scanList = TreeWidget.TreeWidget()
+        self.layout.addWidget(self.scanList)
+        
+        self.filter = FCEventDetection.EventFilter('eventFilter')
+        self.layout.addWidget(self.filter.ctrlWidget())
+        
+        self.xCombo = QtGui.QComboBox()
+        self.yCombo = QtGui.QComboBox()
+        self.layout.addWidget(self.xCombo)
+        self.layout.addWidget(self.yCombo)
+        
+        self.columns = []
+        self.scans = {}    ## maps scan: (scatterPlotItem, treeItem)
+        
+        self.xCombo.currentIndexChanged.connect(self.updateAll)
+        self.yCombo.currentIndexChanged.connect(self.updateAll)
+        self.filter.sigStateChanged.connect(self.updateAll)
+        self.scanList.itemChanged.connect(self.itemChanged)
+
+    def itemChanged(self, item, col):
+        gi = self.scans[item.scan][0]
+        if item.checkState(0) == QtCore.Qt.Checked:
+            gi.show()
+        else:
+            gi.hide()
+
+
+
+    def addScan(self, scan):
+        plot = pg.ScatterPlotItem(pen=QtGui.QPen(QtCore.Qt.NoPen), brush=pg.mkBrush((255, 255, 255, 100)))
+        self.plot.addDataItem(plot)
+        #print "Adding:", scan.name
+        item = QtGui.QTreeWidgetItem([scan.name()])
+        item.setCheckState(0, QtCore.Qt.Checked)
+        item.scan = scan
+        self.scanList.addTopLevelItem(item)
+        self.scans[scan] = (plot, item)
+        self.updateScan(scan)
+        scan.sigEventsChanged.connect(self.updateScan)
+    
+    def updateScan(self, scan):
+        self.updateColumns(scan)
+        x, y = self.getAxes()
+        plot = self.scans[scan][0]
+        data = scan.getAllEvents()
+        if data is None:
+            plot.setPoints([])
+            return
+            
+        data = self.filter.processData(data)
+        
+        pts = [{'pos': (data[i][x], data[i][y])} for i in xrange(len(data))]
+        plot.setPoints(pts)
+    
+    def updateAll(self):
+        for s in self.scans:
+            if self.scans[s][1].checkState(0) == QtCore.Qt.Checked:
+                self.updateScan(s)
+    
+    def updateColumns(self, scan):
+        ev = scan.getAllEvents()
+        if ev is None:
+            return
+        cols = ev.dtype.names
+        for c in cols:
+            if c not in self.columns:
+                self.xCombo.addItem(c)
+                self.yCombo.addItem(c)
+        for c in self.columns:
+            if c not in cols:
+                ind = self.xCombo.findText(c)
+                self.xCombo.removeItem(ind)
+                self.yCombo.removeItem(ind)
+        self.columns = cols
+    
+    def getAxes(self):
+        return str(self.xCombo.currentText()), str(self.yCombo.currentText())
+    

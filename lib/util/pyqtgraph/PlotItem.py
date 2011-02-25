@@ -704,55 +704,132 @@ class PlotItem(QtGui.QGraphicsWidget):
                 self.paramList[p] = (i.checkState() == QtCore.Qt.Checked)
         #print "paramList:", self.paramList
 
+
+    ## This is bullshit.
     def writeSvg(self, fileName=None):
         if fileName is None:
             fileName = QtGui.QFileDialog.getSaveFileName()
         fileName = str(fileName)
         PlotItem.lastFileDir = os.path.dirname(fileName)
         
-        self.svg = QtSvg.QSvgGenerator()
-        self.svg.setFileName(fileName)
-        res = 120.
-        #bounds = self.mapRectToScene(self.boundingRect())
-        view = self.scene().views()[0]
-        bounds = view.viewport().rect()
-        bounds = QtCore.QRectF(0, 0, bounds.width(), bounds.height())
+        rect = self.vb.viewRect()
+        xRange = rect.left(), rect.right() 
         
-        self.svg.setResolution(res)
-        #self.svg.setSize(QtCore.QSize(self.size().width(), self.size().height()))
-        self.svg.setViewBox(bounds)
+        svg = ""
+        fh = open(fileName, 'w')
+
+        dx = max(rect.right(),0) - min(rect.left(),0)
+        ymn = min(rect.top(), rect.bottom())
+        ymx = max(rect.top(), rect.bottom())
+        dy = max(ymx,0) - min(ymn,0)
+        sx = 1.
+        sy = 1.
+        while dx*sx < 10:
+            sx *= 1000
+        while dy*sy < 10:
+            sy *= 1000
+        sy *= -1
+
+        #fh.write('<svg viewBox="%f %f %f %f">\n' % (rect.left()*sx, rect.top()*sx, rect.width()*sy, rect.height()*sy))
+        fh.write('<svg>\n')
+        fh.write('<path fill="none" stroke="#000000" stroke-opacity="0.5" stroke-width="1" d="M%f,0 L%f,0"/>\n' % (rect.left()*sx, rect.right()*sx))
+        fh.write('<path fill="none" stroke="#000000" stroke-opacity="0.5" stroke-width="1" d="M0,%f L0,%f"/>\n' % (rect.top()*sy, rect.bottom()*sy))
+
+
+        for item in self.curves:
+            if isinstance(item, PlotCurveItem):
+                color = colorStr(item.pen.color())
+                opacity = item.pen.color().alpha() / 255.
+                color = color[:6]
+                x, y = item.getData()
+                mask = (x > xRange[0]) * (x < xRange[1])
+                mask[:-1] += mask[1:]
+                m2 = mask.copy()
+                mask[1:] += m2[:-1]
+                x = x[mask]
+                y = y[mask]
+                
+                x *= sx
+                y *= sy
+                
+                #fh.write('<g fill="none" stroke="#%s" stroke-opacity="1" stroke-width="1">\n' % color)
+                fh.write('<path fill="none" stroke="#%s" stroke-opacity="%f" stroke-width="1" d="M%f,%f ' % (color, opacity, x[0], y[0]))
+                for i in xrange(1, len(x)):
+                    fh.write('L%f,%f ' % (x[i], y[i]))
+                
+                fh.write('"/>')
+                #fh.write("</g>")
+        for item in self.dataItems:
+            if isinstance(item, ScatterPlotItem):
+                
+                pRect = item.boundingRect()
+                vRect = pRect.intersected(rect)
+                
+                for point in item.points():
+                    pos = point.pos()
+                    if not rect.contains(pos):
+                        continue
+                    color = colorStr(point.brush.color())
+                    opacity = point.brush.color().alpha() / 255.
+                    color = color[:6]
+                    x = pos.x() * sx
+                    y = pos.y() * sy
+                    
+                    fh.write('<circle cx="%f" cy="%f" r="1" fill="#%s" stroke="none" fill-opacity="%f"/>\n' % (x, y, color, opacity))
+                    #fh.write('<path fill="none" stroke="#%s" stroke-opacity="%f" stroke-width="1" d="M%f,%f ' % (color, opacity, x[0], y[0]))
+                    #for i in xrange(1, len(x)):
+                        #fh.write('L%f,%f ' % (x[i], y[i]))
+                    
+                    #fh.write('"/>')
+            
+        ## get list of curves, scatter plots
         
-        self.svg.setSize(QtCore.QSize(bounds.width(), bounds.height()))
         
-        painter = QtGui.QPainter(self.svg)
-        #self.scene().render(painter, QtCore.QRectF(), view.mapToScene(bounds).boundingRect())
+        fh.write("</svg>\n")
         
-        #items = self.scene().items()
-        #self.scene().views()[0].drawItems(painter, len(items), items)
         
-        #print view, type(view)
-        view.render(painter, bounds)
+    
+    #def writeSvg(self, fileName=None):
+        #if fileName is None:
+            #fileName = QtGui.QFileDialog.getSaveFileName()
+        #fileName = str(fileName)
+        #PlotItem.lastFileDir = os.path.dirname(fileName)
         
-        painter.end()
+        #self.svg = QtSvg.QSvgGenerator()
+        #self.svg.setFileName(fileName)
+        #res = 120.
+        #view = self.scene().views()[0]
+        #bounds = view.viewport().rect()
+        #bounds = QtCore.QRectF(0, 0, bounds.width(), bounds.height())
         
-        ## Workaround to set pen widths correctly
-        import re
-        data = open(fileName).readlines()
-        for i in range(len(data)):
-            line = data[i]
-            m = re.match(r'(<g .*)stroke-width="1"(.*transform="matrix\(([^\)]+)\)".*)', line)
-            if m is not None:
-                #print "Matched group:", line
-                g = m.groups()
-                matrix = map(float, g[2].split(','))
-                #print "matrix:", matrix
-                scale = max(abs(matrix[0]), abs(matrix[3]))
-                if scale == 0 or scale == 1.0:
-                    continue
-                data[i] = g[0] + ' stroke-width="%0.2g" ' % (1.0/scale) + g[1] + '\n'
-                #print "old line:", line
-                #print "new line:", data[i]
-        open(fileName, 'w').write(''.join(data))
+        #self.svg.setResolution(res)
+        #self.svg.setViewBox(bounds)
+        
+        #self.svg.setSize(QtCore.QSize(bounds.width(), bounds.height()))
+        
+        #painter = QtGui.QPainter(self.svg)
+        #view.render(painter, bounds)
+        
+        #painter.end()
+        
+        ### Workaround to set pen widths correctly
+        #import re
+        #data = open(fileName).readlines()
+        #for i in range(len(data)):
+            #line = data[i]
+            #m = re.match(r'(<g .*)stroke-width="1"(.*transform="matrix\(([^\)]+)\)".*)', line)
+            #if m is not None:
+                ##print "Matched group:", line
+                #g = m.groups()
+                #matrix = map(float, g[2].split(','))
+                ##print "matrix:", matrix
+                #scale = max(abs(matrix[0]), abs(matrix[3]))
+                #if scale == 0 or scale == 1.0:
+                    #continue
+                #data[i] = g[0] + ' stroke-width="%0.2g" ' % (1.0/scale) + g[1] + '\n'
+                ##print "old line:", line
+                ##print "new line:", data[i]
+        #open(fileName, 'w').write(''.join(data))
         
         
     def writeImage(self, fileName=None):

@@ -112,6 +112,7 @@ class TreeWidget(QtGui.QTreeWidget):
             if self.topLevelItem(i) is item:
                 self.takeTopLevelItem(i)
                 return
+        raise Exception("Item '%s' not in top-level items." % str(item))
             
             
 if __name__ == '__main__':

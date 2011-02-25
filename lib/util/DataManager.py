@@ -618,6 +618,16 @@ class DirHandle(FileHandle):
                 return t
             except KeyError:
                 pass
+            
+            ## try getting time directly from file
+            try:
+                t = self[fileName].info()['__timestamp__']
+            except:
+                #printExc("No time for file %s:" % fileName)
+                #print self[fileName].info().keys()
+                pass
+                    
+        ## if all else fails, just ask the file system
         return os.path.getctime(os.path.join(self.name(), fileName))
     
     #def _cmpFileTimes(self, a, b):
