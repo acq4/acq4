@@ -205,7 +205,8 @@ class SqliteDatabase:
     def _queryToArray(self, q):
         recs = self._queryToDict(q)
         if len(recs) < 1:
-            return np.array([])
+            #return np.array([])  ## need to return empty array *with correct fields*, but this is very difficult, so just return None
+            return None
         rec1 = recs[0]
         dtype = functions.suggestRecordDType(rec1)
         #print rec1, dtype

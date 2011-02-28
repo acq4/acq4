@@ -809,9 +809,10 @@ class ImageCanvasItem(CanvasItem):
         
         
     def maxClicked(self):
+        ## unsharp mask to enhance fine details
         fd = self.data.astype(float)
-        blur = ndimage.gaussian_filter(fd, (1, 1, 1))
-        blur2 = ndimage.gaussian_filter(fd, (2, 2, 2))
+        blur = ndimage.gaussian_filter(fd, (0, 1, 1))
+        blur2 = ndimage.gaussian_filter(fd, (0, 2, 2))
         dif = blur - blur2
         #dif[dif < 0.] = 0
         self.item.updateImage(dif.max(axis=0))

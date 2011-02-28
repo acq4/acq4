@@ -230,7 +230,11 @@ class Photostim(AnalysisModule):
                     self.mapTicks.append(ticks)
             
             sTable.setData(statList)
-            eTable.setData(np.concatenate(evList))
+            try:
+                eTable.setData(np.concatenate(evList))
+            except:
+                print evList
+                raise
         finally:
             QtGui.QApplication.restoreOverrideCursor()
     
@@ -454,6 +458,12 @@ class Photostim(AnalysisModule):
             return None, None
         events = db.select(table, '*', "where SourceDir=%d and SourceFile='%s'" % (pRow, fh.name(relativeTo=parentDir)), toArray=True)
         
+        if events is None:
+            ## need to make an empty array with the correct fields
+            schema = db.tableSchema(table)
+            events = np.empty(0, dtype=[(k, object) for k in schema])
+            
+        
         return events, stats
         
     def getDb(self):
@@ -564,7 +574,11 @@ class Scan(QtCore.QObject):
         if fh not in self.stats:
             print "No stats cache for", fh.name(), "compute.."
             events = self.getEvents(fh, signal=signal)
-            stats = self.host.processStats(events, spot)
+            try:
+                stats = self.host.processStats(events, spot)
+            except:
+                print events
+                raise
             self.stats[fh] = stats
         return self.stats[fh]
 
@@ -866,12 +880,16 @@ class Map:
             else:
                 mergeData = {}
                 for k in data[0]:
-                    vals = [d[k] for d in data]
+                    vals = [d[k] for d in data if k in d]
                     try:
                         if len(data) == 2:
                             mergeData[k] = np.mean(vals)
-                        else:
+                        elif len(data) > 2:
                             mergeData[k] = np.median(vals)
+                        elif len(data) == 1:
+                            mergeData[k] = vals[0]
+                        else:
+                            mergeData[k] = 0
                     except:
                         mergeData[k] = vals[0]
             #print mergeData
