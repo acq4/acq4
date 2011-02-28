@@ -196,8 +196,11 @@ class EventFilter(CtrlNode):
             
         for b, mn, mx in self.ranges:
             if s[b]:
-                mask *= data[b] < s[mx]
-                mask *= data[b] > s[mn]
+                try:
+                    mask *= data[b] < s[mx]
+                    mask *= data[b] > s[mn]
+                except ValueError:  ## If the data doesn't kave this key, don't fret; just ignore it.
+                    pass
                 
         region = s['region']
         if region != 'all':
