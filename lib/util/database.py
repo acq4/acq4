@@ -30,7 +30,8 @@ class SqliteDatabase:
         self._readTableList()
 
     def exe(self, cmd, data=None, toDict=True, toArray=False):
-        """Execute an SQL query. If data is provided, it should be a list of dicts and each will be bound to the query and executed sequentially. Returns the query object."""
+        """Execute an SQL query. If data is provided, it should be a list of dicts and each will 
+        be bound to the query and executed sequentially. Returns the query object."""
         q = QtSql.QSqlQuery(self.db)
         if data is None:
             self._exe(q, cmd)
