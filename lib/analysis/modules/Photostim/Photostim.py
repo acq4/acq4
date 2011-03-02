@@ -689,11 +689,12 @@ class Map:
         
     def __init__(self, host, rec=None):
         self.host = host
-        self.scans = []      ## list of Scan instances OR tuples (fh, item, rowid)
-        self.scanItems = {}  # scan: tree item
+        self.stubs = []      ## list of tuples (fh, treeItem, rowid) for scans that have not been loaded yet
+        self.scans = []      ## list of Scan instances
+        self.scanItems = {}  ## maps {scan: tree item}
         self.points = []         ## Holds all data: [ (position, [(scan, dh), ...], spotData), ... ]
         self.pointsByFile = {}   ## just a lookup dictionary
-        self.spots = []               ## used to construct scatterplotitem
+        self.spots = []          ## used to construct scatterplotitem
         self.sPlotItem = pg.ScatterPlotItem(pxMode=False)
         
         self.header = self.mapFields.keys()[2:]
@@ -713,8 +714,8 @@ class Map:
                 self.item.setText(i, str(rec[self.header[i]]))
             for fh,rowid in scans:
                 item = QtGui.QTreeWidgetItem([fh.shortName()])
-                print "Create scan stub:", fh
-                self.scans.append((fh, item, rowid))
+                #print "Create scan stub:", fh
+                self.stubs.append((fh, item, rowid))
                 self.item.addChild(item)
 
     def name(self, cell=None):
@@ -724,9 +725,9 @@ class Map:
         if cell is None:
             return ""
         name = cell.shortName()
-        if rec['holding'] < -40:
+        if rec['holding'] < -.04:
             name = name + "_excitatory"
-        elif rec['holding'] >= -10:
+        elif rec['holding'] >= -.01:
             name = name + "_inhibitory"
         return name
 
@@ -736,8 +737,8 @@ class Map:
         self.pointsByFile = {}   ## just a lookup dictionary
         self.spots = []               ## used to construct scatterplotitem
         for scan in self.scans:  ## iterate over all points in all scans
-            if isinstance(scan, tuple):
-                continue    ## need to load before building
+            #if isinstance(scan, tuple):
+                #continue    ## need to load before building
             self.addScanSpots(scan)
         self.sPlotItem.setPoints(self.spots)
 
@@ -831,31 +832,36 @@ class Map:
         self.item.removeChild(item)
         
     def getRecord(self):
+        ### Create a dictionary with all the record data for this map. 
+        
         rec = {}
         i = 0
         for k in self.mapFields:
-            if k == 'scans':
+            if k == 'scans':  ## list of row IDs of the scans included in this map
                 rowids = []
+                for s in self.stubs:
+                    rowids.append(s[2])
                 for s in self.scans:
-                    if isinstance(s, tuple):
-                        rowids.append(s[2])
-                    else:
-                        rowids.append(s.rowId())
+                    rowids.append(s.rowId())
                 rec[k] = rowids
-            elif k == 'cell':
-                if len(self.scans) == 0:
+            elif k == 'cell':   ## decide which cell this map belongs to. 
+                if len(self.scans) == 0 and len(self.stubs) == 0:
                     rec[k] = None
                 else:
-                    s = self.scans[0]
-                    if isinstance(s, tuple):
-                        rec[k] = s[0].parent()
-                    else:
+                    if len(self.scans) > 0:
                         rec[k] = self.scans[0].source.parent()
+                    else:
+                        rec[k] = self.stubs[0][0].parent()
+                        
+                    #if isinstance(s, tuple):
+                        #rec[k] = s[0].parent()
+                    #else:
+                        #rec[k] = self.scans[0].source.parent()
             else:
                 rec[k] = str(self.item.text(i))
                 if self.mapFields[k] == 'real':
                     try:
-                        num = rec[k].replace('C', '')
+                        num = rec[k].replace('C', '')  ## convert to numerical value (by stripping units)
                         rec[k] = float(num)
                     except:
                         pass
@@ -1035,18 +1041,19 @@ class DBCtrl(QtGui.QWidget):
     def loadMap(self, map):
         ## turn scan stubs into real scans
         rscans = []
-        for i in range(len(map.scans)):
-            scan = map.scans[i]
-            if not isinstance(scan, tuple):  ## scan is already loaded, skip
-                rscans.append(scan)
-                continue
-            newScan = self.host.loadScan(scan[0])
+        for i in range(len(map.stubs)):
+            stub = map.stubs[i]
+            #if not isinstance(scan, tuple):  ## scan is already loaded, skip
+                #rscans.append(scan)
+                #continue
+            newScan = self.host.loadScan(stub[0])
             #newScan.item = scan[1]
-            item = scan[1]
-            item.scan = newScan
+            treeItem = stub[1]
+            treeItem.scan = newScan
             rscans.append(newScan)
             map.scanItems[newScan] = item
         map.scans = rscans
+        map.stubs = []
             
         ## decide on point set, generate scatter plot 
         map.rebuildPlot()
@@ -1062,7 +1069,7 @@ class DBCtrl(QtGui.QWidget):
         ## Create a new map in the database
         try:
             self.newMap()
-            self.ui.newMapBtn.success("Added.")
+            self.ui.newMapBtn.success("OK.")
         except:
             self.ui.newMapBtn.failure("Error.")
             raise
@@ -1094,7 +1101,7 @@ class DBCtrl(QtGui.QWidget):
             map.addScan(scan)
             self.writeMapRecord(map)
             map.rebuildPlot()
-            self.ui.addScanBtn.success("Stored.")
+            self.ui.addScanBtn.success("OK.")
         except:
             self.ui.addScanBtn.failure("Error.")
             raise
@@ -1107,7 +1114,7 @@ class DBCtrl(QtGui.QWidget):
             map.removeScan(scan)
             self.writeMapRecord(map)
             map.rebuildPlot()
-            self.ui.removeScanBtn.success("Stored.")
+            self.ui.removeScanBtn.success("OK.")
         except:
             self.ui.removeScanBtn.failure("Error.")
             raise
