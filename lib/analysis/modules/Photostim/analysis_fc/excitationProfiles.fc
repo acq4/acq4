@@ -1,0 +1,27 @@
+pos: (0.0, 0.0)
+connects: [('Input', 'regions', 'EventFilter.0', 'regions'), ('Input', 'fileHandle', 'PositionFinder', 'fileHandle'), ('Input', 'fileHandle', 'GetLaserDur', 'fileHandle'), ('PositionFinder', 'angle', 'DictBuilder', 'angle'), ('Input', 'events', 'EventFilter.0', 'events'), ('DictBuilder', 'output', 'Output', 'dataOut'), ('EventFilter.0', 'output', 'SpikeCounter', 'events'), ('GetLaserDur', 'laserDur', 'DictBuilder', 'lasurDur'), ('SpikeCounter', 'output', 'DictBuilder', 'spikeCount'), ('PositionFinder', 'distance', 'DictBuilder', 'distance')]
+terminals:
+    events:
+        multi: False
+        optional: False
+        io: 'in'
+    regions:
+        multi: False
+        optional: False
+        io: 'in'
+    fileHandle:
+        multi: False
+        optional: False
+        io: 'in'
+    dataOut:
+        multi: False
+        optional: False
+        io: 'out'
+bypass: False
+inputNode:
+    pos: (-415.0, -54.0)
+    bypass: False
+nodes: [{'state': {'text': "q = args['fileHandle']['Laser-UV.ma'].read()['QSwitch']\ndur = len(np.argwhere(q>0))/(q.infoCopy()[-1]['DAQ']['QSwitch']['rate'])\n\nreturn {'laserDur':dur}\n", 'terminals': {'fileHandle': {'multi': False, 'optional': False, 'io': 'in'}, 'laserDur': {'multi': False, 'optional': False, 'io': 'out'}}, 'pos': (-242.0, -147.0), 'bypass': False}, 'pos': (-242.0, -147.0), 'class': 'PythonEval', 'name': 'GetLaserDur'}, {'state': {'pos': (-229.0, 62.0), 'bypass': False, 'ctrl': {'fitDecayTau': False, 'maxFitTime': 0.0, 'fitTime': False, 'minFitDecayTau': 0.0, 'maxFitAmp': 0.0, 'minFitRiseTau': 0.0, 'fitRiseTau': False, 'minFitError': 0.0, 'minFitTime': 0.0, 'maxFitDecayTau': 0.0, 'minFitAmp': 0.0, 'region': 'all', 'maxFitRiseTau': 0.0, 'maxFitError': 0.0, 'fitAmplitude': False, 'fitError': False}}, 'pos': (-229.0, 62.0), 'class': 'EventFilter', 'name': 'EventFilter.0'}, {'state': {'text': "spotDh = args['fileHandle']\nscanDh = spotDh.parentDir\ncellDh = scanDh.parentDir\n\nspotPos = spotDh.info()['Scanner']['position']\nscanTransform = scanDh.info()['userTransform']\ncellTransform = cellDh.info()['userTransform']\n\nangleS = -scanTransform['rot']*180/3.14159265358\nangleC = -cellTransform['rot']*180/3.14159265358\ntransS = QtGui.QTransform()\ntransC = QtGui.QTransform()\ntransS.translate(*scanTransform['trans'])\ntransC.translate(*cellTransform['trans'])\ntransS.rotate(angleS)\ntransC.rotate(angleC)\ntransS.translate(*spotPos)\ntransC.translate(*(0.,0.))\ntransS.rotate(-angleS)\ntransC.rotate(-angleC)\n\nspotPos2 = transS.map(QtCore.QPointF(0.,0.))\ncellPos2 = transC.map(QtCore.QPointF(0.,0.))\n\nx = spotPos2.x()-cellPos2.x()\ny = spotPos2.y()-cellPos2.y()\n\ndistance = (x**2 + y**2)**0.5\nfrom numpy import arctan\nangle = arctan(y/x)*180.0/3.14159265358\n\nreturn {'distance':distance, 'angle':angle, 'output':None}\n\n\n\n\n", 'terminals': {'output': {'multi': False, 'optional': False, 'io': 'out'}, 'fileHandle': {'multi': False, 'optional': False, 'io': 'in'}, 'angle': {'multi': False, 'optional': False, 'io': 'out'}, 'events': {'multi': False, 'optional': False, 'io': 'in'}, 'distance': {'multi': False, 'optional': False, 'io': 'out'}}, 'pos': (-37.0, -130.0), 'bypass': False}, 'pos': (-37.0, -130.0), 'class': 'PythonEval', 'name': 'PositionFinder'}, {'state': {'text': "return {'output':args}", 'terminals': {'output': {'multi': False, 'optional': False, 'io': 'out'}, 'lasurDur': {'multi': False, 'optional': False, 'io': 'in'}, 'angle': {'multi': False, 'optional': False, 'io': 'in'}, 'spikeCount': {'multi': False, 'optional': False, 'io': 'in'}, 'distance': {'multi': False, 'optional': False, 'io': 'in'}}, 'pos': (226.0, 1.0), 'bypass': False}, 'pos': (226.0, 1.0), 'class': 'PythonEval', 'name': 'DictBuilder'}, {'state': {'text': "{'output':len(events)}", 'terminals': {'output': {'multi': False, 'optional': False, 'io': 'out'}, 'events': {'multi': False, 'optional': False, 'io': 'in'}}, 'pos': (-36.0, 61.0), 'bypass': False}, 'pos': (-36.0, 61.0), 'class': 'PythonEval', 'name': 'SpikeCounter'}]
+outputNode:
+    pos: (422.0, 4.0)
+    bypass: False

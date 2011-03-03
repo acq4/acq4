@@ -441,7 +441,7 @@ class ImageView(QtGui.QWidget):
         #else:
             #norm = zeros(image.shape)
         if div:
-            norm = norm.astype(float32)
+            norm = norm.astype(np.float32)
             
         if self.ui.normTimeRangeCheck.isChecked() and image.ndim == 3:
             (sind, start) = self.timeIndex(self.normRgn.lines[0])

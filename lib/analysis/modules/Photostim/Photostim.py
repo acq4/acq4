@@ -27,6 +27,7 @@ class Photostim(AnalysisModule):
         self.flowchart = Flowchart(filePath=flowchartDir)
         self.flowchart.addInput('events')
         self.flowchart.addInput('regions')
+        self.flowchart.addInput('fileHandle')
         self.flowchart.addOutput('dataOut')
         self.analysisCtrl = self.flowchart.widget()
         
@@ -41,8 +42,8 @@ class Photostim(AnalysisModule):
         self.mapLayout.addWidget(self.recolorBtn)
         
         ## scatter plot
-        self.scatterPlot = ScatterPlotter()
-        self.scatterPlot.sigPointClicked.connect(self.scatterPointClicked)
+        #self.scatterPlot = ScatterPlotter()
+        #self.scatterPlot.sigPointClicked.connect(self.scatterPointClicked)
         
         ## setup map DB ctrl
         self.dbCtrl = DBCtrl(self, self.dbIdentity)
@@ -67,7 +68,7 @@ class Photostim(AnalysisModule):
         self._elements_ = OrderedDict([
             ('Database', {'type': 'ctrl', 'object': self.dbCtrl, 'size': (200, 200)}),
             ('Canvas', {'type': 'canvas', 'pos': ('right',), 'size': (400,400), 'allowTransforms': False}),
-            ('Scatter Plot', {'type': 'ctrl', 'object': self.scatterPlot, 'pos': ('below', 'Canvas'), 'size': (400,400)}),
+            #('Scatter Plot', {'type': 'ctrl', 'object': self.scatterPlot, 'pos': ('below', 'Canvas'), 'size': (400,400)}),
             #('Maps', {'type': 'ctrl', 'pos': ('bottom', 'Database'), 'size': (200,200), 'object': self.mapDBCtrl}),
             ('Detection Opts', elems['Detection Opts'].setParams(pos=('bottom', 'Database'), size= (200,500))),
             ('File Loader', {'type': 'fileInput', 'size': (200, 200), 'pos': ('top', 'Database'), 'host': self}),
@@ -144,7 +145,7 @@ class Photostim(AnalysisModule):
                 self.dbCtrl.scanTree.addTopLevelItem(node)
                 scan.item.sigPointClicked.connect(self.scanPointClicked)
                 #canvasItem.item.sigPointClicked.connect(self.scanPointClicked)
-                self.scatterPlot.addScan(self.scans[fh])
+                #self.scatterPlot.addScan(self.scans[fh])
                 return self.scans[fh]
             else:
                 self.seriesScans[fh] = {}
@@ -159,7 +160,7 @@ class Photostim(AnalysisModule):
                     node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
                     node.setCheckState(0, QtCore.Qt.Checked)
                     node.scan = self.seriesScans[fh][k]
-                    self.scatterPlot.addScan(self.seriesScans[fh][k])
+                    #self.scatterPlot.addScan(self.seriesScans[fh][k])
                 return self.seriesScans[fh]
         
 
@@ -273,6 +274,7 @@ class Photostim(AnalysisModule):
         
     def detectorOutputChanged(self):
         output = self.detector.flowchart.output()
+        output['fileHandle']=self.selectedSpot.data
         #table = self.getElement('Stats')
         #stats = self.detector.flowchart.output()['stats']
         #print stats
@@ -282,11 +284,11 @@ class Photostim(AnalysisModule):
     def analyzerStateChanged(self):
         print "Analyzer state changed."
         for m in self.scans.itervalues():
-            m.forgetEvents()
+            #m.forgetEvents()
             m.forgetStats()
         for k in self.seriesScans.keys():
             for m in self.seriesScans[k].itervalues():
-                m.forgetEvents()
+                #m.forgetEvents()
                 m.forgetStats()
         
     def analyzerOutputChanged(self):
@@ -321,14 +323,19 @@ class Photostim(AnalysisModule):
         print "Process Events:", fh
         return self.detector.process(fh)
 
-    def processStats(self, data=None, spot=None):
+    def processStats(self, data=None, spot=None, fh=None):
         if data is None:
             stats = self.flowchart.output()['dataOut']
             spot = self.selectedSpot
         else:
             if 'regions' not in data:
                 data['regions'] = self.detector.flowchart.output()['regions']
+            if 'fh' is None:
+                data['fileHandle'] = self.selectedSpot.data
+            else:
+                data['fileHandle'] = fh
             stats = self.flowchart.process(**data)['dataOut']
+            
 
         if stats is None:
             raise Exception('No data returned from analysis (check flowchart for errors).')
@@ -371,7 +378,7 @@ class Photostim(AnalysisModule):
 
         ## store stats
         #stats = self.flowchart.output()['dataOut']
-        stats = self.processStats()  ## gets current stats if no processing is requested
+        stats = self.processStats(fh=parentDir)  ## gets current stats if no processing is requested
         
         self.storeStats(stats, fh, parentDir)
         
@@ -613,7 +620,7 @@ class Scan(QtCore.QObject):
             print "No stats cache for", fh.name(), "compute.."
             events = self.getEvents(fh, signal=signal)
             try:
-                stats = self.host.processStats(events, spot)
+                stats = self.host.processStats(events, spot, fh=fh)
             except:
                 print events
                 raise
@@ -817,9 +824,10 @@ class Map:
 
             self.scans.append(scan)
             item = QtGui.QTreeWidgetItem([scan.name()])
+            item.scan = scan
             self.item.addChild(item)
             self.item.setExpanded(True)
-            item.scan = scan
+            
             self.scanItems[scan] = item
 
     def generateDefaults(self, scan):
@@ -1132,21 +1140,21 @@ class DBCtrl(QtGui.QWidget):
             self.ui.addScanBtn.failure("Error.")
             raise
         
-    #def selectedScan(self):
-        #"""Needs to return a list of scans."""
-        #if self.scanTree.currentItem().childCount() == 0:
-            #scan = self.scanTree.currentItem().scan
-            #return [scan]
-        #else:
-            #scans = []
-            #for i in range(self.scanTree.currentItem().childCount()):
-                #scan = self.scanTree.currentItem().child(i).scan
-                #scans.append(scan)
-            #return scans
+    def getSelectedScanFromScanTree(self):
+        """Needs to return a list of scans."""
+        if self.scanTree.currentItem().childCount() == 0:
+            scan = self.scanTree.currentItem().scan
+            return [scan]
+        else:
+            scans = []
+            for i in range(self.scanTree.currentItem().childCount()):
+                scan = self.scanTree.currentItem().child(i).scan
+                scans.append(scan)
+            return scans
         
     def addScanClicked(self):
         try:
-            scan = self.selectedScan()
+            scan = self.getSelectedScanFromScanTree()
             map = self.selectedMap()
             map.addScan(scan)
             self.writeMapRecord(map)
