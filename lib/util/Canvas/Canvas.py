@@ -261,6 +261,7 @@ class Canvas(QtGui.QWidget):
 
         self.connect(citem, QtCore.SIGNAL('transformChanged'), self.itemTransformChanged)
         self.connect(citem, QtCore.SIGNAL('transformChangeFinished'), self.itemTransformChangeFinished)
+        citem.sigVisibilityChanged.connect(self.itemVisibilityChanged)
 
         item = citem.item
         name = citem.opts['name']
@@ -364,6 +365,15 @@ class Canvas(QtGui.QWidget):
         #self.items[tuple(name)] = item
         return name
         
+    def itemVisibilityChanged(self, item):
+        listItem = item.listItem
+        checked = listItem.checkState(0) == QtCore.Qt.Checked
+        vis = item.isVisible()
+        if vis != checked:
+            if vis:
+                listItem.setCheckState(0, QtCore.Qt.Checked)
+            else:
+                listItem.setCheckState(0, QtCore.Qt.Unchecked)
 
     def removeItem(self, item):
         if isinstance(item, CanvasItem):
@@ -409,6 +419,7 @@ class CanvasItem(QtCore.QObject):
     """CanvasItem takes care of managing an item's state--alpha, visibility, z-value, transformations, etc. and
     provides a control widget"""
     
+    sigVisibilityChanged = QtCore.Signal(object)
     transformCopyBuffer = None
     
     def __init__(self, canvas, item, **opts):
@@ -479,9 +490,13 @@ class CanvasItem(QtCore.QObject):
             if trans is not None:
                 self.restoreTransform(trans)
 
+    def graphicsItem(self):
+        return self.item
+
     #def name(self):
         #return self.opts['name']
     def handle(self):
+        """Return the file handle for this item, if any exists."""
         return self.opts['handle']
 
     def copyClicked(self):
@@ -707,15 +722,27 @@ class CanvasItem(QtCore.QObject):
         self.selectBox.hide()
         
     def show(self):
+        if self.opts['visible']:
+            return
         self.opts['visible'] = True
         self.item.show()
         self.showSelectBox()
+        self.sigVisibilityChanged.emit(self)
         
     def hide(self):
+        if not self.opts['visible']:
+            return
         self.opts['visible'] = False
         self.item.hide()
         self.hideSelectBox()
-        
+        self.sigVisibilityChanged.emit(self)
+
+    def setVisible(self, vis):
+        if vis:
+            self.show()
+        else:
+            self.hide()
+
     def isVisible(self):
         return self.opts['visible']
 

@@ -69,7 +69,7 @@ class Photostim(AnalysisModule):
             ('Scatter Plot', {'type': 'ctrl', 'object': self.scatterPlot, 'pos': ('below', 'Canvas'), 'size': (400,400)}),
             #('Maps', {'type': 'ctrl', 'pos': ('bottom', 'Database'), 'size': (200,200), 'object': self.mapDBCtrl}),
             ('Detection Opts', elems['Detection Opts'].setParams(pos=('bottom', 'Database'), size= (200,500))),
-            ('File Loader', {'type': 'fileInput', 'size': (200, 200), 'pos': ('top', 'Database'), 'host': self}),
+            ('File Loader', {'type': 'fileInput', 'size': (200, 200), 'pos': ('top', 'Database'), 'host': self, 'showFileTree': False}),
             ('Data Plot', elems['Data Plot'].setParams(pos=('bottom', 'Canvas'), size=(800,200))),
             ('Filter Plot', elems['Filter Plot'].setParams(pos=('bottom', 'Data Plot'), size=(800,200))),
             ('Output Table', elems['Output Table'].setParams(pos=('below', 'Filter Plot'), size=(800,200))),
@@ -135,9 +135,12 @@ class Photostim(AnalysisModule):
             canvas = self.getElement('Canvas')
             canvasItem = canvas.addFile(fh)
             #self.scanItems[fh] = scan
-            self.scans[fh] = Scan(self, fh, canvasItem.item)
+            scan = Scan(self, fh, canvasItem)
+            self.scans[fh] = scan
             canvasItem.item.sigPointClicked.connect(self.scanPointClicked)
-            self.scatterPlot.addScan(self.scans[fh])
+            self.scatterPlot.addScan(scan)
+            self.dbCtrl.scanLoaded(scan)
+            
         return self.scans[fh]
 
     def registerMap(self, map):
@@ -372,7 +375,7 @@ class Photostim(AnalysisModule):
             self.detector.storeToDB(ev, dh)
             self.storeStats(st, fh, dh)
         print "   scan %s is now locked" % dh.name()
-        scan.locked = True
+        scan.lock()
 
     def clearDBScan(self, scan):
         dbui = self.getElement('Database')
@@ -392,7 +395,7 @@ class Photostim(AnalysisModule):
         table = dbui.getTableName(identity)
         db.delete(table, "SourceDir=%d" % pRow)
             
-        scan.locked = False
+        scan.unlock()
 
 
     def storeStats(self, data, fh, parentDir):
@@ -475,15 +478,34 @@ class Photostim(AnalysisModule):
 class Scan(QtCore.QObject):
     
     sigEventsChanged = QtCore.Signal(object)
+    sigLockChanged = QtCore.Signal(object)
+    sigItemVisibilityChanged = QtCore.Signal(object)
     
-    def __init__(self, host, source, item):
+    def __init__(self, host, source, canvasItem):
         QtCore.QObject.__init__(self)
         self.source = source
-        self.item = item
+        self.canvasItem = canvasItem
+        canvasItem.sigVisibilityChanged.connect(self.itemVisibilityChanged)
+        self.item = canvasItem.graphicsItem()     ## graphics item
         self.host = host
-        self.locked = False  ## prevents flowchart changes from clearing the cache--only individual updates allowed
+        self._locked = False  ## prevents flowchart changes from clearing the cache--only individual updates allowed
         self.loadFromDB()
         self.spotDict = {}  ##  fh: spot
+        
+    def itemVisibilityChanged(self):
+        self.sigItemVisibilityChanged.emit(self)
+        
+    def locked(self):
+        return self._locked
+        
+    def lock(self, lock=True):
+        if self.locked() == lock:
+            return
+        self._locked = lock
+        self.sigLockChanged.emit(self)
+    
+    def unlock(self):
+        self.lock(False)
         
     def name(self):
         return self.source.shortName()
@@ -512,7 +534,7 @@ class Scan(QtCore.QObject):
             self.stats[fh] = stats[0]
         if haveAll:
             print "  have data for all spots; locking."
-            self.locked = True
+            self.lock()
 
     def getStatsKeys(self):
         if self.statExample is None:
@@ -521,7 +543,7 @@ class Scan(QtCore.QObject):
             return self.statExample.keys()
 
     def forgetEvents(self):
-        if not self.locked:
+        if not self.locked():
             print "Scan forget events:", self.source
             self.events = {}
             self.forgetStats()
@@ -716,6 +738,7 @@ class Map:
                 item = QtGui.QTreeWidgetItem([fh.shortName()])
                 #print "Create scan stub:", fh
                 self.stubs.append((fh, item, rowid))
+                item.handle = fh
                 self.item.addChild(item)
 
     def name(self, cell=None):
@@ -906,7 +929,7 @@ class Map:
 
 
 class DBCtrl(QtGui.QWidget):
-    """Interface for reading and writing the maps table.
+    """Interface for reading and writing to the database.
     A map consists of one or more (probably overlapping) scans and associated meta-data."""
     def __init__(self, host, identity):
         QtGui.QWidget.__init__(self)
@@ -946,7 +969,46 @@ class DBCtrl(QtGui.QWidget):
         self.ui.storeDBSpotBtn.clicked.connect(self.storeDBSpot)
         self.ui.clearDBScanBtn.clicked.connect(self.clearDBScan)
         self.ui.storeDBScanBtn.clicked.connect(self.storeDBScan)
+        self.ui.scanTree.itemChanged.connect(self.scanTreeItemChanged)
 
+    def scanLoaded(self, scan):
+        ## Scan has been loaded, add a new item into the scanTree
+        item = QtGui.QTreeWidgetItem([scan.name(), '', ''])
+        self.ui.scanTree.addTopLevelItem(item)
+        scan.scanTreeItem = item
+        item.scan = scan
+        item.setCheckState(2, QtCore.Qt.Checked)
+        scan.sigLockChanged.connect(self.scanLockChanged)
+        self.scanLockChanged(scan)
+        scan.sigItemVisibilityChanged.connect(self.scanItemVisibilityChanged)
+        
+    def scanTreeItemChanged(self, item, col):
+        if col == 2:
+            vis = item.checkState(col) == QtCore.Qt.Checked
+            scan = item.scan
+            ci = scan.canvasItem
+            ci.setVisible(vis)
+        
+    def scanLockChanged(self, scan):
+        ## scan has been locked/unlocked (or newly loaded), update the indicator in the scanTree
+        item = scan.scanTreeItem
+        if scan.locked():
+            item.setText(1, 'Yes')
+        else:
+            item.setText(1, 'No')
+            
+    def scanItemVisibilityChanged(self, scan):
+        treeItem = scan.scanTreeItem
+        cItem = scan.canvasItem
+        checked = treeItem.checkState(2) == QtCore.Qt.Checked
+        vis = cItem.isVisible()
+        if vis == checked:
+            return
+        if vis:
+            treeItem.setCheckState(2, QtCore.Qt.Checked)
+        else:
+            treeItem.setCheckState(2, QtCore.Qt.Unchecked)
+            
 
     def newMap(self, rec=None):
         m = Map(self.host, rec)
@@ -1096,7 +1158,7 @@ class DBCtrl(QtGui.QWidget):
     
     def addScanClicked(self):
         try:
-            scan = self.host.selectedScan()
+            scan = self.selectedScan()
             map = self.selectedMap()
             map.addScan(scan)
             self.writeMapRecord(map)
@@ -1139,9 +1201,9 @@ class DBCtrl(QtGui.QWidget):
         return item.map
         
     def selectedScan(self):
-        item = self.ui.mapTable.currentItem()
-        if not hasattr(item, 'scan'):
-            return None
+        item = self.ui.scanTree.currentItem()
+        #if not hasattr(item, 'scan'):
+            #return None
         return item.scan
         
     
@@ -1227,20 +1289,23 @@ class ScatterPlotter(QtGui.QSplitter):
         scan.sigEventsChanged.connect(self.updateScan)
     
     def updateScan(self, scan):
-        self.updateColumns(scan)
-        x, y = self.getAxes()
-        plot = self.scans[scan][0]
-        data = scan.getAllEvents()
-        if data is None:
-            plot.setPoints([])
-            return
+        try:
+            self.updateColumns(scan)
+            x, y = self.getAxes()
+            plot = self.scans[scan][0]
+            data = scan.getAllEvents()
+            if data is None:
+                plot.setPoints([])
+                return
+                
+            data = self.filter.processData(data)
             
-        data = self.filter.processData(data)
-        
-        pts = [{'pos': (data[i][x], data[i][y]), 'data': (scan, data[i]['SourceFile'], data[i]['index'])} for i in xrange(len(data))]
-        plot.setPoints(pts)
-        
-        plot.sigPointClicked.connect(self.pointClicked)
+            pts = [{'pos': (data[i][x], data[i][y]), 'data': (scan, data[i]['SourceFile'], data[i]['index'])} for i in xrange(len(data))]
+            plot.setPoints(pts)
+            
+            plot.sigPointClicked.connect(self.pointClicked)
+        except:
+            debug.printExc("Error updating scatter plot:")
         
     def pointClicked(self, point):
         self.sigPointClicked.emit(point)
