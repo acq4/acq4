@@ -13,6 +13,7 @@ import ColorMapper
 import pyqtgraph as pg
 import TreeWidget
 #import FileLoader
+import ProgressDialog
 
 class Photostim(AnalysisModule):
     def __init__(self, host):
@@ -65,15 +66,15 @@ class Photostim(AnalysisModule):
         elems = self.detector.listElements()
         self._elements_ = OrderedDict([
             ('Database', {'type': 'ctrl', 'object': self.dbCtrl, 'size': (200, 200)}),
-            ('Canvas', {'type': 'canvas', 'pos': ('right',), 'size': (400,400), 'allowTransforms': False}),
-            ('Scatter Plot', {'type': 'ctrl', 'object': self.scatterPlot, 'pos': ('below', 'Canvas'), 'size': (400,400)}),
+            ('Scatter Plot', {'type': 'ctrl', 'object': self.scatterPlot, 'pos': ('right',), 'size': (400,400)}),
+            ('Canvas', {'type': 'canvas', 'pos': ('above', 'Scatter Plot'), 'size': (400,400), 'allowTransforms': False, 'hideCtrl': True}),
             #('Maps', {'type': 'ctrl', 'pos': ('bottom', 'Database'), 'size': (200,200), 'object': self.mapDBCtrl}),
             ('Detection Opts', elems['Detection Opts'].setParams(pos=('bottom', 'Database'), size= (200,500))),
             ('File Loader', {'type': 'fileInput', 'size': (200, 200), 'pos': ('top', 'Database'), 'host': self, 'showFileTree': False}),
             ('Data Plot', elems['Data Plot'].setParams(pos=('bottom', 'Canvas'), size=(800,200))),
             ('Filter Plot', elems['Filter Plot'].setParams(pos=('bottom', 'Data Plot'), size=(800,200))),
-            ('Output Table', elems['Output Table'].setParams(pos=('below', 'Filter Plot'), size=(800,200))),
-            ('Stats', {'type': 'dataTree', 'size': (800,200), 'pos': ('below', 'Output Table')}),
+            ('Event Table', elems['Output Table'].setParams(pos=('below', 'Filter Plot'), size=(800,200))),
+            ('Stats', {'type': 'dataTree', 'size': (800,200), 'pos': ('below', 'Event Table')}),
             ('Map Opts', {'type': 'ctrl', 'object': self.mapCtrl, 'pos': ('left', 'Canvas'), 'size': (200,400)}),
         ])
 
@@ -170,18 +171,20 @@ class Photostim(AnalysisModule):
     def scanPointClicked(self, point):
         try:
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
-            print "click!", point.data
+            #print "click!", point.data
             plot = self.getElement("Data Plot")
             plot.clear()
             self.selectedSpot = point
-                
-            self.detector.loadFileRequested(self.getClampFile(point.data))
+            fh = self.getClampFile(point.data)
+            self.detector.loadFileRequested(fh)
+            self.dbCtrl.scanSpotClicked(fh)
         finally:
             QtGui.QApplication.restoreOverrideCursor()
             
         
     def mapPointClicked(self, point):
         self.redisplayData(point.data)
+        self.dbCtrl.mapSpotClicked(point.data)
 
     def scatterPointClicked(self, point):
         #scan, fh, time = point.data
@@ -193,7 +196,7 @@ class Photostim(AnalysisModule):
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
             plot = self.getElement("Data Plot")
             plot.clear()
-            eTable = self.getElement("Output Table")
+            eTable = self.getElement("Event Table")
             sTable = self.getElement("Stats")
             self.mapTicks = []
             
@@ -216,7 +219,7 @@ class Photostim(AnalysisModule):
                 if len(points[i]) == 3:
                     index = points[i][2]
                     pos = float(index)/len(data)
-                    print index
+                    #print index
                     self.arrow = pg.CurveArrow(pc, pos=pos)
                     plot.addItem(self.arrow)
                 
@@ -282,8 +285,9 @@ class Photostim(AnalysisModule):
         for i in range(len(self.scans)):
             s = self.scans[self.scans.keys()[i]]
             s.recolor(i, len(self.scans))
-        for m in self.maps:
-            m.recolor(self)
+        for i in range(len(self.maps)):
+            m = self.maps[i]
+            m.recolor(self, i, len(self.maps))
 
     def getColor(self, stats):
         #print "STATS:", stats
@@ -363,19 +367,26 @@ class Photostim(AnalysisModule):
         #dh = loader.selectedFile()
         #scan = self.scans[dh]
         dh = scan.source
+        spots = scan.spots()
         print "Store scan:", dh.name()
-        for s in scan.spots():
-            fh = self.getClampFile(s.data)
-            try:
-                ev = scan.getEvents(fh)['events']
-            except:
-                print fh, scan.getEvents(fh)
-                raise
-            st = scan.getStats(fh)
-            self.detector.storeToDB(ev, dh)
-            self.storeStats(st, fh, dh)
-        print "   scan %s is now locked" % dh.name()
-        scan.lock()
+        with ProgressDialog.ProgressDialog("Storing scan %s" % scan.name(), "Cancel", 0, len(spots)) as dlg:
+            for i in xrange(len(spots)):
+                s = spots[i]
+                fh = self.getClampFile(s.data)
+                try:
+                    ev = scan.getEvents(fh)['events']
+                except:
+                    print fh, scan.getEvents(fh)
+                    raise
+                st = scan.getStats(fh)
+                self.detector.storeToDB(ev, dh)
+                self.storeStats(st, fh, dh)
+                dlg.setValue(i)
+                if dlg.wasCanceled():
+                    raise Exception("Scan store canceled by user.")
+                
+            print "   scan %s is now locked" % dh.name()
+            scan.lock()
 
     def clearDBScan(self, scan):
         dbui = self.getElement('Database')
@@ -557,11 +568,12 @@ class Scan(QtCore.QObject):
         if not self.item.isVisible():
             return
         spots = self.spots()
-        progressDlg = QtGui.QProgressDialog("Computing spot colors (Map %d/%d)" % (n+1,nMax), "Cancel", 0, len(spots))
+        with ProgressDialog.ProgressDialog("Computing spot colors (Scan %d/%d)" % (n+1,nMax), "Cancel", 0, len(spots)) as dlg:
+        #progressDlg = QtGui.QProgressDialog("Computing spot colors (Map %d/%d)" % (n+1,nMax), "Cancel", 0, len(spots))
         #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
-        progressDlg.setMinimumDuration(250)
-        ops = []
-        try:
+        #progressDlg.setMinimumDuration(250)
+        #try:
+            ops = []
             for i in range(len(spots)):
                 spot = spots[i]
                 fh = self.host.getClampFile(spot.data)
@@ -569,15 +581,15 @@ class Scan(QtCore.QObject):
                 #print "stats:", stats
                 color = self.host.getColor(stats)
                 ops.append((spot, color))
-                progressDlg.setValue(i+1)
-                QtGui.QApplication.processEvents()
-                if progressDlg.wasCanceled():
+                dlg.setValue(i+1)
+                #QtGui.QApplication.processEvents()
+                if dlg.wasCanceled():
                     raise Exception("Recolor canceled by user.")
-        except:
-            raise
-        finally:
-            ## close progress dialog no matter what happens
-            progressDlg.setValue(len(spots))
+        #except:
+            #raise
+        #finally:
+            ### close progress dialog no matter what happens
+            #progressDlg.setValue(len(spots))
         
         ## delay until the very end for speed.
         for spot, color in ops:
@@ -623,8 +635,8 @@ class Scan(QtCore.QObject):
             ev = self.getEvents(fh, process=False)
             if ev is not None and len(ev['events']) > 0:
                 events.append(ev['events'])
-            else:
-                print "  ", fh, ev
+            #else:
+                #print "  ", fh, ev
         #if len(self.events) == 0:
             #print "self.events is empty"
         if len(events) > 0:
@@ -892,40 +904,48 @@ class Map:
         return rec
         
             
-    def recolor(self, host):
+    def recolor(self, host, n, nMax):
         if not self.sPlotItem.isVisible():
             return
         spots = self.sPlotItem.points()
-        for s in spots:
-            data = []
-            sources = s.data
-            for scan, dh in sources:
-                data.append(scan.getStats(dh))
-            
-            if len(data) == 0:
-                continue
-            if len(data) == 1:
-                mergeData = data[0]
-            else:
-                mergeData = {}
-                for k in data[0]:
-                    vals = [d[k] for d in data if k in d]
-                    try:
-                        if len(data) == 2:
-                            mergeData[k] = np.mean(vals)
-                        elif len(data) > 2:
-                            mergeData[k] = np.median(vals)
-                        elif len(data) == 1:
+        colors = []
+        with ProgressDialog.ProgressDialog("Computing map %s (%d/%d)" % (self.name(), n, nMax), "Cancel", 0, len(spots)) as dlg:
+            for i in xrange(len(spots)):
+                s = spots[i]
+                data = []
+                sources = s.data
+                for scan, dh in sources:
+                    data.append(scan.getStats(dh))
+                
+                if len(data) == 0:
+                    continue
+                if len(data) == 1:
+                    mergeData = data[0]
+                else:
+                    mergeData = {}
+                    for k in data[0]:
+                        vals = [d[k] for d in data if k in d]
+                        try:
+                            if len(data) == 2:
+                                mergeData[k] = np.mean(vals)
+                            elif len(data) > 2:
+                                mergeData[k] = np.median(vals)
+                            elif len(data) == 1:
+                                mergeData[k] = vals[0]
+                            else:
+                                mergeData[k] = 0
+                        except:
                             mergeData[k] = vals[0]
-                        else:
-                            mergeData[k] = 0
-                    except:
-                        mergeData[k] = vals[0]
-            #print mergeData
-            color = host.getColor(mergeData)
-            s.setBrush(color)
-            
-
+                #print mergeData
+                color = host.getColor(mergeData)
+                #s.setBrush(color)  ## wait until after to set the colors
+                colors.append((s, color))
+                dlg.setValue(i)
+                if dlg.wasCanceled():
+                    raise Exception("Process canceled by user.")
+                
+        for s, c in colors:
+            s.setColor(c)
 
 
 class DBCtrl(QtGui.QWidget):
@@ -1113,7 +1133,7 @@ class DBCtrl(QtGui.QWidget):
             treeItem = stub[1]
             treeItem.scan = newScan
             rscans.append(newScan)
-            map.scanItems[newScan] = item
+            map.scanItems[newScan] = treeItem
         map.scans = rscans
         map.stubs = []
             
