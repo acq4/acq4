@@ -71,7 +71,7 @@ class Photostim(AnalysisModule):
             #('Scatter Plot', {'type': 'ctrl', 'object': self.scatterPlot, 'pos': ('below', 'Canvas'), 'size': (400,400)}),
             #('Maps', {'type': 'ctrl', 'pos': ('bottom', 'Database'), 'size': (200,200), 'object': self.mapDBCtrl}),
             ('Detection Opts', elems['Detection Opts'].setParams(pos=('bottom', 'Database'), size= (200,500))),
-            ('File Loader', {'type': 'fileInput', 'size': (200, 200), 'pos': ('top', 'Database'), 'host': self, 'showFileTree':False}),
+            ('File Loader', {'type': 'fileInput', 'size': (200, 200), 'pos': ('top', 'Database'), 'host': self, 'showFileTree': False}),
             ('Data Plot', elems['Data Plot'].setParams(pos=('bottom', 'Canvas'), size=(800,200))),
             ('Filter Plot', elems['Filter Plot'].setParams(pos=('bottom', 'Data Plot'), size=(800,200))),
             ('Output Table', elems['Output Table'].setParams(pos=('below', 'Filter Plot'), size=(800,200))),
@@ -136,33 +136,41 @@ class Photostim(AnalysisModule):
     def loadScan(self, fh):
         if fh not in self.scans and fh not in self.seriesScans:
             canvas = self.getElement('Canvas')
-            scan = canvas.addFile(fh)
+            canvasItem = canvas.addFile(fh)
+            #scan = Scan(self, fh, canvasItem)
             #self.scanItems[fh] = scan
-            if not isinstance(scan, dict):
-                self.scans[fh] = Scan(self, fh, scan.item)
-                node = QtGui.QTreeWidgetItem([self.scans[fh].name()])
-                node.scan = self.scans[fh]
-                self.dbCtrl.scanTree.addTopLevelItem(node)
-                scan.item.sigPointClicked.connect(self.scanPointClicked)
+            if not isinstance(canvasItem, dict):
+                scan = Scan(self, fh, canvasItem)
+                self.scans[fh] = scan
+                #node = QtGui.QTreeWidgetItem([scan.name()])
+                #node.scan = scan
+                #self.dbCtrl.scanTree.addTopLevelItem(node)
+                canvasItem.item.sigPointClicked.connect(self.scanPointClicked)
+                #scan.item.sigPointClicked.connect(self.scanPointClicked)
+                
                 #canvasItem.item.sigPointClicked.connect(self.scanPointClicked)
-                #self.scatterPlot.addScan(self.scans[fh])
+                #self.scatterPlot.addScan(scan)
+                self.dbCtrl.scanLoaded(scan)
                 return self.scans[fh]
             else:
                 self.seriesScans[fh] = {}
-                pNode = QtGui.QTreeWidgetItem(self.dbCtrl.scanTree, [fh.shortName()])
-                pNode.setFlags((pNode.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
-                pNode.setCheckState(0, QtCore.Qt.Checked)
+                #pNode = QtGui.QTreeWidgetItem(self.dbCtrl.scanTree, [fh.shortName()])
+                #pNode.setFlags((pNode.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
+                #pNode.setCheckState(0, QtCore.Qt.Checked)
                 #self.dbCtrl.scanTree.addTopLevelItem(QtGui.QTreeWidgetItem(fh.shortName()))
-                for k in scan.keys():
-                    self.seriesScans[fh][k] = Scan(self, fh, scan[k].item, name=k)
-                    scan[k].item.sigPointClicked.connect(self.scanPointClicked)
-                    node = QtGui.QTreeWidgetItem(pNode, [k])
-                    node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
-                    node.setCheckState(0, QtCore.Qt.Checked)
-                    node.scan = self.seriesScans[fh][k]
-                    #self.scatterPlot.addScan(self.seriesScans[fh][k])
+                for k in canvasItem.keys():
+                    scan = Scan(self, fh, canvasItem[k], name=k)
+                    self.seriesScans[fh][k] = scan
+                    #scan[k].item.sigPointClicked.connect(self.scanPointClicked)
+                    canvasItem[k].item.sigPointClicked.connect(self.scanPointClicked)
+                    #node = QtGui.QTreeWidgetItem(pNode, [k])
+                    #node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
+                    #node.setCheckState(0, QtCore.Qt.Checked)
+                    #node.scan = self.seriesScans[fh][k]
+                    #self.scatterPlot.addScan(scan[k])
+                    self.dbCtrl.scanLoaded(scan)
                 return self.seriesScans[fh]
-        
+
 
     def registerMap(self, map):
         #if map in self.maps:
@@ -412,7 +420,7 @@ class Photostim(AnalysisModule):
             self.detector.storeToDB(ev, dh)
             self.storeStats(st, fh, dh)
         print "   scan %s is now locked" % dh.name()
-        scan.locked = True
+        scan.lock()
 
     def clearDBScan(self, scan):
         dbui = self.getElement('Database')
@@ -432,7 +440,7 @@ class Photostim(AnalysisModule):
         table = dbui.getTableName(identity)
         db.delete(table, "SourceDir=%d" % pRow)
             
-        scan.locked = False
+        scan.unlock()
 
 
     def storeStats(self, data, fh, parentDir):
@@ -516,16 +524,35 @@ class Photostim(AnalysisModule):
 class Scan(QtCore.QObject):
     
     sigEventsChanged = QtCore.Signal(object)
+    sigLockChanged = QtCore.Signal(object)
+    sigItemVisibilityChanged = QtCore.Signal(object)
     
-    def __init__(self, host, source, item, name=None):
+    def __init__(self, host, source, canvasItem, name=None):
         QtCore.QObject.__init__(self)
         self.source = source
-        self.item = item
+        self.canvasItem = canvasItem
+        canvasItem.sigVisibilityChanged.connect(self.itemVisibilityChanged)
+        self.item = canvasItem.graphicsItem()     ## graphics item
         self.host = host
         self.givenName = name
-        self.locked = False  ## prevents flowchart changes from clearing the cache--only individual updates allowed
+        self._locked = False  ## prevents flowchart changes from clearing the cache--only individual updates allowed
         self.loadFromDB()
         self.spotDict = {}  ##  fh: spot
+        
+    def itemVisibilityChanged(self):
+        self.sigItemVisibilityChanged.emit(self)
+        
+    def locked(self):
+        return self._locked
+        
+    def lock(self, lock=True):
+        if self.locked() == lock:
+            return
+        self._locked = lock
+        self.sigLockChanged.emit(self)
+    
+    def unlock(self):
+        self.lock(False)
         
     def name(self):
         if self.givenName == None:
@@ -557,7 +584,7 @@ class Scan(QtCore.QObject):
             self.stats[fh] = stats[0]
         if haveAll:
             print "  have data for all spots; locking."
-            self.locked = True
+            self.lock()
 
     def getStatsKeys(self):
         if self.statExample is None:
@@ -566,7 +593,7 @@ class Scan(QtCore.QObject):
             return self.statExample.keys()
 
     def forgetEvents(self):
-        if not self.locked:
+        if not self.locked():
             print "Scan forget events:", self.source
             self.events = {}
             self.forgetStats()
@@ -734,11 +761,12 @@ class Map:
         
     def __init__(self, host, rec=None):
         self.host = host
-        self.scans = []      ## list of Scan instances OR tuples (fh, item, rowid)
-        self.scanItems = {}  # scan: tree item
+        self.stubs = []      ## list of tuples (fh, treeItem, rowid) for scans that have not been loaded yet
+        self.scans = []      ## list of Scan instances
+        self.scanItems = {}  ## maps {scan: tree item}
         self.points = []         ## Holds all data: [ (position, [(scan, dh), ...], spotData), ... ]
         self.pointsByFile = {}   ## just a lookup dictionary
-        self.spots = []               ## used to construct scatterplotitem
+        self.spots = []          ## used to construct scatterplotitem
         self.sPlotItem = pg.ScatterPlotItem(pxMode=False)
         
         self.header = self.mapFields.keys()[2:]
@@ -758,8 +786,9 @@ class Map:
                 self.item.setText(i, str(rec[self.header[i]]))
             for fh,rowid in scans:
                 item = QtGui.QTreeWidgetItem([fh.shortName()])
-                print "Create scan stub:", fh
-                self.scans.append((fh, item, rowid))
+                #print "Create scan stub:", fh
+                self.stubs.append((fh, item, rowid))
+                item.handle = fh
                 self.item.addChild(item)
 
     def name(self, cell=None):
@@ -769,9 +798,9 @@ class Map:
         if cell is None:
             return ""
         name = cell.shortName()
-        if rec['holding'] < -40:
+        if rec['holding'] < -.04:
             name = name + "_excitatory"
-        elif rec['holding'] >= -10:
+        elif rec['holding'] >= -.01:
             name = name + "_inhibitory"
         return name
 
@@ -781,8 +810,8 @@ class Map:
         self.pointsByFile = {}   ## just a lookup dictionary
         self.spots = []               ## used to construct scatterplotitem
         for scan in self.scans:  ## iterate over all points in all scans
-            if isinstance(scan, tuple):
-                continue    ## need to load before building
+            #if isinstance(scan, tuple):
+                #continue    ## need to load before building
             self.addScanSpots(scan)
         self.sPlotItem.setPoints(self.spots)
 
@@ -880,31 +909,36 @@ class Map:
         self.item.removeChild(item)
         
     def getRecord(self):
+        ### Create a dictionary with all the record data for this map. 
+        
         rec = {}
         i = 0
         for k in self.mapFields:
-            if k == 'scans':
+            if k == 'scans':  ## list of row IDs of the scans included in this map
                 rowids = []
+                for s in self.stubs:
+                    rowids.append(s[2])
                 for s in self.scans:
-                    if isinstance(s, tuple):
-                        rowids.append(s[2])
-                    else:
-                        rowids.append(s.rowId())
+                    rowids.append(s.rowId())
                 rec[k] = rowids
-            elif k == 'cell':
-                if len(self.scans) == 0:
+            elif k == 'cell':   ## decide which cell this map belongs to. 
+                if len(self.scans) == 0 and len(self.stubs) == 0:
                     rec[k] = None
                 else:
-                    s = self.scans[0]
-                    if isinstance(s, tuple):
-                        rec[k] = s[0].parent()
-                    else:
+                    if len(self.scans) > 0:
                         rec[k] = self.scans[0].source.parent()
+                    else:
+                        rec[k] = self.stubs[0][0].parent()
+                        
+                    #if isinstance(s, tuple):
+                        #rec[k] = s[0].parent()
+                    #else:
+                        #rec[k] = self.scans[0].source.parent()
             else:
                 rec[k] = str(self.item.text(i))
                 if self.mapFields[k] == 'real':
                     try:
-                        num = rec[k].replace('C', '')
+                        num = rec[k].replace('C', '')  ## convert to numerical value (by stripping units)
                         rec[k] = float(num)
                     except:
                         pass
@@ -949,7 +983,7 @@ class Map:
 
 
 class DBCtrl(QtGui.QWidget):
-    """Interface for reading and writing the maps table.
+    """Interface for reading and writing to the database.
     A map consists of one or more (probably overlapping) scans and associated meta-data."""
     def __init__(self, host, identity):
         QtGui.QWidget.__init__(self)
@@ -972,8 +1006,8 @@ class DBCtrl(QtGui.QWidget):
         self.layout.addWidget(self.dbgui)
         for name in ['getTableName', 'getDb']:
             setattr(self, name, getattr(self.dbgui, name))
-        self.scanTree = TreeWidget.TreeWidget()
-        self.layout.addWidget(self.scanTree)
+        #self.scanTree = TreeWidget.TreeWidget()
+        #self.layout.addWidget(self.scanTree)
         self.ui = MapCtrlTemplate.Ui_Form()
         self.mapWidget = QtGui.QWidget()
         self.ui.setupUi(self.mapWidget)
@@ -993,7 +1027,46 @@ class DBCtrl(QtGui.QWidget):
         self.ui.storeDBSpotBtn.clicked.connect(self.storeDBSpot)
         self.ui.clearDBScanBtn.clicked.connect(self.clearDBScan)
         self.ui.storeDBScanBtn.clicked.connect(self.storeDBScan)
+        self.ui.scanTree.itemChanged.connect(self.scanTreeItemChanged)
 
+    def scanLoaded(self, scan):
+        ## Scan has been loaded, add a new item into the scanTree
+        item = QtGui.QTreeWidgetItem([scan.name(), '', ''])
+        self.ui.scanTree.addTopLevelItem(item)
+        scan.scanTreeItem = item
+        item.scan = scan
+        item.setCheckState(2, QtCore.Qt.Checked)
+        scan.sigLockChanged.connect(self.scanLockChanged)
+        self.scanLockChanged(scan)
+        scan.sigItemVisibilityChanged.connect(self.scanItemVisibilityChanged)
+        
+    def scanTreeItemChanged(self, item, col):
+        if col == 2:
+            vis = item.checkState(col) == QtCore.Qt.Checked
+            scan = item.scan
+            ci = scan.canvasItem
+            ci.setVisible(vis)
+        
+    def scanLockChanged(self, scan):
+        ## scan has been locked/unlocked (or newly loaded), update the indicator in the scanTree
+        item = scan.scanTreeItem
+        if scan.locked():
+            item.setText(1, 'Yes')
+        else:
+            item.setText(1, 'No')
+            
+    def scanItemVisibilityChanged(self, scan):
+        treeItem = scan.scanTreeItem
+        cItem = scan.canvasItem
+        checked = treeItem.checkState(2) == QtCore.Qt.Checked
+        vis = cItem.isVisible()
+        if vis == checked:
+            return
+        if vis:
+            treeItem.setCheckState(2, QtCore.Qt.Checked)
+        else:
+            treeItem.setCheckState(2, QtCore.Qt.Unchecked)
+            
 
     def newMap(self, rec=None):
         m = Map(self.host, rec)
@@ -1088,18 +1161,19 @@ class DBCtrl(QtGui.QWidget):
     def loadMap(self, map):
         ## turn scan stubs into real scans
         rscans = []
-        for i in range(len(map.scans)):
-            scan = map.scans[i]
-            if not isinstance(scan, tuple):  ## scan is already loaded, skip
-                rscans.append(scan)
-                continue
-            newScan = self.host.loadScan(scan[0])
+        for i in range(len(map.stubs)):
+            stub = map.stubs[i]
+            #if not isinstance(scan, tuple):  ## scan is already loaded, skip
+                #rscans.append(scan)
+                #continue
+            newScan = self.host.loadScan(stub[0])
             #newScan.item = scan[1]
-            item = scan[1]
-            item.scan = newScan
+            treeItem = stub[1]
+            treeItem.scan = newScan
             rscans.append(newScan)
             map.scanItems[newScan] = item
         map.scans = rscans
+        map.stubs = []
             
         ## decide on point set, generate scatter plot 
         map.rebuildPlot()
@@ -1115,7 +1189,7 @@ class DBCtrl(QtGui.QWidget):
         ## Create a new map in the database
         try:
             self.newMap()
-            self.ui.newMapBtn.success("Added.")
+            self.ui.newMapBtn.success("OK.")
         except:
             self.ui.newMapBtn.failure("Error.")
             raise
@@ -1140,26 +1214,27 @@ class DBCtrl(QtGui.QWidget):
             self.ui.addScanBtn.failure("Error.")
             raise
         
-    def getSelectedScanFromScanTree(self):
-        """Needs to return a list of scans."""
-        if self.scanTree.currentItem().childCount() == 0:
-            scan = self.scanTree.currentItem().scan
-            return [scan]
-        else:
-            scans = []
-            for i in range(self.scanTree.currentItem().childCount()):
-                scan = self.scanTree.currentItem().child(i).scan
-                scans.append(scan)
-            return scans
+    #def getSelectedScanFromScanTree(self):
+        #"""Needs to return a list of scans."""
+        #if self.scanTree.currentItem().childCount() == 0:
+            #scan = self.scanTree.currentItem().scan
+            #return [scan]
+        #else:
+            #scans = []
+            #for i in range(self.scanTree.currentItem().childCount()):
+                #scan = self.scanTree.currentItem().child(i).scan
+                #scans.append(scan)
+            #return scans
         
     def addScanClicked(self):
         try:
-            scan = self.getSelectedScanFromScanTree()
+            #scan = self.getSelectedScanFromScanTree()
+            scan = self.selectedScan()
             map = self.selectedMap()
             map.addScan(scan)
             self.writeMapRecord(map)
             map.rebuildPlot()
-            self.ui.addScanBtn.success("Stored.")
+            self.ui.addScanBtn.success("OK.")
         except:
             self.ui.addScanBtn.failure("Error.")
             raise
@@ -1172,7 +1247,7 @@ class DBCtrl(QtGui.QWidget):
             map.removeScan(scan)
             self.writeMapRecord(map)
             map.rebuildPlot()
-            self.ui.removeScanBtn.success("Stored.")
+            self.ui.removeScanBtn.success("OK.")
         except:
             self.ui.removeScanBtn.failure("Error.")
             raise
@@ -1197,9 +1272,9 @@ class DBCtrl(QtGui.QWidget):
         return item.map
         
     def selectedScan(self):
-        item = self.ui.mapTable.currentItem()
-        if not hasattr(item, 'scan'):
-            return None
+        item = self.ui.scanTree.currentItem()
+        #if not hasattr(item, 'scan'):
+            #return None
         return item.scan
         
     
@@ -1285,20 +1360,23 @@ class ScatterPlotter(QtGui.QSplitter):
         scan.sigEventsChanged.connect(self.updateScan)
     
     def updateScan(self, scan):
-        self.updateColumns(scan)
-        x, y = self.getAxes()
-        plot = self.scans[scan][0]
-        data = scan.getAllEvents()
-        if data is None:
-            plot.setPoints([])
-            return
+        try:
+            self.updateColumns(scan)
+            x, y = self.getAxes()
+            plot = self.scans[scan][0]
+            data = scan.getAllEvents()
+            if data is None:
+                plot.setPoints([])
+                return
+                
+            data = self.filter.processData(data)
             
-        data = self.filter.processData(data)
-        
-        pts = [{'pos': (data[i][x], data[i][y]), 'data': (scan, data[i]['SourceFile'], data[i]['index'])} for i in xrange(len(data))]
-        plot.setPoints(pts)
-        
-        plot.sigPointClicked.connect(self.pointClicked)
+            pts = [{'pos': (data[i][x], data[i][y]), 'data': (scan, data[i]['SourceFile'], data[i]['index'])} for i in xrange(len(data))]
+            plot.setPoints(pts)
+            
+            plot.sigPointClicked.connect(self.pointClicked)
+        except:
+            debug.printExc("Error updating scatter plot:")
         
     def pointClicked(self, point):
         self.sigPointClicked.emit(point)

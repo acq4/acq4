@@ -11,7 +11,7 @@ class FileLoader(QtGui.QWidget):
     sigFileLoaded = QtCore.Signal(object)
     sigBaseChanged = QtCore.Signal(object)
     
-    def __init__(self, dataManager, host=None):
+    def __init__(self, dataManager, host=None, showFileTree=True):
         self.dataManager = dataManager
         QtGui.QWidget.__init__(self)
         self.ui = template.Ui_Form()
@@ -19,6 +19,7 @@ class FileLoader(QtGui.QWidget):
         self.setHost(host)
         self.ui.setDirBtn.clicked.connect(self.setBaseClicked)
         self.ui.loadBtn.clicked.connect(self.loadClicked)
+        self.ui.fileTree.setVisible(showFileTree)
         
     def setHost(self, host):
         self.host = host
