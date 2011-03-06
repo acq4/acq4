@@ -201,7 +201,11 @@ class EventFilter(CtrlNode):
             regCombo.clear()
             regCombo.addItems(regions)
             return
-        
+    
+    def updateUi(self):
+        pass
+    
+    
 
     def checkToggled(self):
         #s = self.stateGroup.state()
@@ -221,6 +225,7 @@ class EventFilter(CtrlNode):
         mask = np.ones(len(data), dtype=bool)
 
         newReg = ['all']
+        
         for r in regions.keys():
             newReg.append(r.node().name())
         self.updateRegions(newReg)

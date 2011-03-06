@@ -167,8 +167,9 @@ class Photostim(AnalysisModule):
                     #node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
                     #node.setCheckState(0, QtCore.Qt.Checked)
                     #node.scan = self.seriesScans[fh][k]
-                    #self.scatterPlot.addScan(scan[k])
+                    #self.scatterPlot.addScan(scan)
                     self.dbCtrl.scanLoaded(scan)
+                #self.scatterPlot.addScan(self.seriesScans[fh])
                 return self.seriesScans[fh]
 
 
@@ -1347,17 +1348,21 @@ class ScatterPlotter(QtGui.QSplitter):
 
 
 
-    def addScan(self, scan):
+    def addScan(self, scanDict):
         plot = pg.ScatterPlotItem(pen=QtGui.QPen(QtCore.Qt.NoPen), brush=pg.mkBrush((255, 255, 255, 100)))
         self.plot.addDataItem(plot)
+        
+        if not isinstance(scanDict, dict):
+            scanDict = {'key':scanDict}
         #print "Adding:", scan.name
-        item = QtGui.QTreeWidgetItem([scan.name()])
-        item.setCheckState(0, QtCore.Qt.Checked)
-        item.scan = scan
-        self.scanList.addTopLevelItem(item)
-        self.scans[scan] = (plot, item)
-        self.updateScan(scan)
-        scan.sigEventsChanged.connect(self.updateScan)
+        for scan in scanDict.values():
+            item = QtGui.QTreeWidgetItem([scan.name()])
+            item.setCheckState(0, QtCore.Qt.Checked)
+            item.scan = scan
+            self.scanList.addTopLevelItem(item)
+            self.scans[scan] = (plot, item)
+            self.updateScan(scan)
+            scan.sigEventsChanged.connect(self.updateScan)
     
     def updateScan(self, scan):
         try:
@@ -1369,9 +1374,9 @@ class ScatterPlotter(QtGui.QSplitter):
                 plot.setPoints([])
                 return
                 
-            data = self.filter.processData(data)
+            data = self.filter.process(data, {})
             
-            pts = [{'pos': (data[i][x], data[i][y]), 'data': (scan, data[i]['SourceFile'], data[i]['index'])} for i in xrange(len(data))]
+            pts = [{'pos': (data['output'][i][x], data['output'][i][y]), 'data': (scan, data['output'][i]['SourceFile'], data['output'][i]['index'])} for i in xrange(len(data))]
             plot.setPoints(pts)
             
             plot.sigPointClicked.connect(self.pointClicked)
