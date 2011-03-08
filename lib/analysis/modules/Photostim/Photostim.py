@@ -37,9 +37,14 @@ class Photostim(AnalysisModule):
         self.mapLayout = QtGui.QVBoxLayout()
         self.mapCtrl.setLayout(self.mapLayout)
         self.recolorBtn = QtGui.QPushButton("Recolor")
-        self.mapLayout.addWidget(self.analysisCtrl)
-        self.mapLayout.addWidget(self.mapper)
-        self.mapLayout.addWidget(self.recolorBtn)
+        self.mapLayout.splitter = QtGui.QSplitter()
+        self.mapLayout.splitter.setOrientation(0)
+        self.mapLayout.splitter.setContentsMargins(0,0,0,0)
+        self.mapLayout.addWidget(self.mapLayout.splitter)
+        self.mapLayout.splitter.addWidget(self.analysisCtrl)
+        #self.mapLayout.splitter.addWidget(QtGui.QSplitter())
+        self.mapLayout.splitter.addWidget(self.mapper)
+        self.mapLayout.splitter.addWidget(self.recolorBtn)
         
         ## scatter plot
         #self.scatterPlot = ScatterPlotter()
@@ -393,7 +398,10 @@ class Photostim(AnalysisModule):
         
         
         ## update data in Map
-        scan = self.scans[parentDir]
+        try:
+            scan = self.scans[parentDir]
+        except KeyError:
+            scan = self.seriesScans[parentDir][fh]
         scan.updateSpot(fh, events, stats)
         
 
