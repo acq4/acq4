@@ -31,13 +31,16 @@ view.scene().addItem(img)
 ## Set initial view bounds
 view.setRange(QtCore.QRectF(0, 0, 200, 200))
 
+## Create random image
+data = random.random((5, 1000, 1000))
+i = 0
+
 def updateData():
-    global img
-    ## Create random image
-    data = random.random((200, 200))
+    global img, data, i
 
     ## Display the data
-    img.updateImage(data)
+    img.updateImage(data[i])
+    i = (i+1) % data.shape[0]
     
 
 # update image data every 20ms (or so)
@@ -47,4 +50,4 @@ t.start(20)
 
 
 
-app.exec_()
+#app.exec_()

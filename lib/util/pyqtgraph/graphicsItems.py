@@ -397,6 +397,10 @@ class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
             p.setPen(self.border)
             p.drawRect(self.boundingRect())
 
+    def pixelSize(self):
+        """return size of a single pixel in the image"""
+        br = self.sceneBoundingRect()
+        return br.width()/self.pixmap.width(), br.height()/self.pixmap.height()
 
 class PlotCurveItem(GraphicsObject):
     """Class representing a single plot curve."""
