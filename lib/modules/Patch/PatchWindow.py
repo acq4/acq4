@@ -259,6 +259,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.startTime = None
         
     def handleNewFrame(self, frame):
+        prof = Profiler('PatchWindow.handleNewFrame', disabled=True)
         with self.paramLock:
             mode = self.params['mode']
         
@@ -266,18 +267,27 @@ class PatchWindow(QtGui.QMainWindow):
         
         if mode == 'vc':
             self.ui.patchPlot.setLabel('left', units='A')
-            self.ui.commandPlot.setLabel('left', units='V')
+            #self.ui.commandPlot.setLabel('left', units='V')
             #scale1 = 1e12
             #scale2 = 1e3
         else:
             self.ui.patchPlot.setLabel('left', units='V')
-            self.ui.commandPlot.setLabel('left', units='A')
+            #self.ui.commandPlot.setLabel('left', units='A')
             #scale1 = 1e3
             #scale2 = 1e12
+        prof.mark('1')
+            
         self.patchCurve.setData(data.xvals('Time'), data['primary'])
+        prof.mark('2')
         if self.redrawCommand > 0:
             self.redrawCommand -= 1
+            print "set command curve"
             self.commandCurve.setData(data.xvals('Time'), data['command'])
+            if mode == 'vc':
+                self.ui.commandPlot.setLabel('left', units='V')
+            else:
+                self.ui.commandPlot.setLabel('left', units='A')
+        prof.mark('3')
         #self.ui.patchPlot.replot()
         #self.ui.commandPlot.replot()
         if frame['analysis']['fitTrace'] is not None:
@@ -285,20 +295,24 @@ class PatchWindow(QtGui.QMainWindow):
             self.patchFitCurve.setData(data.xvals('Time'), frame['analysis']['fitTrace'])
         else:
             self.patchFitCurve.hide()
+        prof.mark('4')
         
         for k in self.analysisItems:
             if k in frame['analysis']:
                 self.analysisData[k].append(frame['analysis'][k])
+        prof.mark('5')
                 
         for r in ['input', 'access']:
             res = r+'Resistance'
             label = getattr(self.ui, res+'Label')
             resistance = frame['analysis'][res]
             label.setText(siFormat(resistance) + u'Ω')
+        prof.mark('6')
         self.ui.restingPotentialLabel.setText(siFormat(frame['analysis']['restingPotential'], error=frame['analysis']['restingPotentialStd'], suffix='V'))
         self.ui.restingCurrentLabel.setText(siFormat(frame['analysis']['restingCurrent'], error=frame['analysis']['restingCurrentStd'], suffix='A'))
         self.ui.capacitanceLabel.setText('%sF' % siFormat(frame['analysis']['capacitance']))
         self.ui.fitErrorLabel.setText('%7.2g' % frame['analysis']['fitError'])
+        prof.mark('7')
         
         start = data._info[-1]['DAQ']['command']['startTime']
         if self.startTime is None:
@@ -306,7 +320,9 @@ class PatchWindow(QtGui.QMainWindow):
             if self.ui.recordBtn.isChecked() and self.storageFile is not None:
                 self.storageFile.setInfo({'startTime': self.startTime})
         self.analysisData['time'].append(start - self.startTime)
+        prof.mark('8')
         self.updateAnalysisPlots()
+        prof.mark('9')
         
         ## Record to disk if requested.
         if self.ui.recordBtn.isChecked():
@@ -317,6 +333,8 @@ class PatchWindow(QtGui.QMainWindow):
                 self.newFile(arr)
             else:
                 arr.write(self.storageFile.name(), appendAxis='Time')
+        prof.mark('10')
+        prof.finish()
         
     def makeAnalysisArray(self, lastOnly=False):
         ## Determine how much of the data to include in this array
@@ -409,6 +427,7 @@ class PatchThread(QtCore.QThread):
                 
                 lastTime = None
                 while True:
+                    prof = Profiler('PatchThread.run', disabled=True)
                     lastTime = time.clock()
                     
                     updateCommand = False
@@ -448,7 +467,7 @@ class PatchThread(QtCore.QThread):
                         }
                         
                     }
-                    
+                    prof.mark('build command')
                     
                     ## Create and execute task.
                     ## the try/except block is just to catch errors that come up during multiclamp auto pipette offset procedure.
@@ -479,6 +498,8 @@ class PatchThread(QtCore.QThread):
                         #print result
                         results.append(result)
                         
+                    prof.mark('execute')
+                        
                     ## average together results if we collected more than 1
                     if len(results) == 1:
                         result = results[0]
@@ -493,6 +514,7 @@ class PatchThread(QtCore.QThread):
                     #print result[clampName]
                     analysis = self.analyze(avg, params)
                     frame = {'data': result, 'analysis': analysis}
+                    prof.mark('analyze')
                     
                     self.emit(QtCore.SIGNAL('newFrame'), frame)
                     
@@ -501,7 +523,7 @@ class PatchThread(QtCore.QThread):
                     stop = False
                     while True:
                         ## check for stop button every 100ms
-                        if c % 100 == 0:
+                        if c % 10 == 0:
                             l.relock()
                             if self.stopThread:
                                 l.unlock()
@@ -512,10 +534,11 @@ class PatchThread(QtCore.QThread):
                         if now >= (lastTime+params['cycleTime']):
                             break
                         
-                        time.sleep(1e-3) ## Wake up every 1ms
+                        time.sleep(10e-3) ## Wake up every 10ms
                         c += 1
                     if stop:
                         break
+                    prof.mark('wait')
         except:
             printExc("Error in patch acquisition thread, exiting.")
         #self.emit(QtCore.SIGNAL('threadStopped'))

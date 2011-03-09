@@ -11,7 +11,7 @@ from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
 from Point import *
 #from vector import *
 import sys
-            
+import debug    
         
 class GraphicsView(QtGui.QGraphicsView):
     def __init__(self, parent=None, useOpenGL=True):
@@ -77,6 +77,11 @@ class GraphicsView(QtGui.QGraphicsView):
         self.mouseEnabled = False
         self.scaleCenter = False  ## should scaling center around view center (True) or mouse click (False)
         self.clickAccepted = False
+        
+    #def paintEvent(self, *args):
+        #prof = debug.Profiler('GraphicsView.paintEvent '+str(id(self)), disabled=True)
+        #QtGui.QGraphicsView.paintEvent(self, *args)
+        #prof.finish()
         
     def useOpenGL(self, b=True):
         if b:

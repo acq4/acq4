@@ -263,6 +263,7 @@ class CameraWindow(QtGui.QMainWindow):
 
         QtCore.QObject.connect(self.ui.addFrameBtn, QtCore.SIGNAL('clicked()'), self.addPersistentFrame)
         QtCore.QObject.connect(self.ui.clearFramesBtn, QtCore.SIGNAL('clicked()'), self.clearPersistentFrames)
+        self.ui.scaleToImageBtn.clicked.connect(self.scaleToImage)
         
         self.ui.btnAutoGain.setChecked(True)
         
@@ -426,6 +427,8 @@ class CameraWindow(QtGui.QMainWindow):
         
     def regionWidgetChanged(self, *args):
         self.updateRegion()
+
+        
         
     #@trace
     def updateRegion(self, autoRestart=True):
@@ -436,7 +439,9 @@ class CameraWindow(QtGui.QMainWindow):
             self.region = newRegion
             self.cam.setParam('region', self.region, autoRestart=autoRestart)
         
-        
+    def scaleToImage(self):
+        self.gv.scaleToImage(self.imageItem)
+            
     #@trace
     def closeEvent(self, ev):
         self.quit()

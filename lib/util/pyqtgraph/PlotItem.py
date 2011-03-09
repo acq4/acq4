@@ -25,6 +25,7 @@ from functions import *
 #tryWorkaround(QtCore, QtGui)
 import weakref
 import numpy as np
+import debug
 
 try:
     from WidgetGroup import *
@@ -236,7 +237,12 @@ class PlotItem(QtGui.QGraphicsWidget):
         if len(kargs) > 0:
             self.plot(**kargs)
         
-            
+    #def paint(self, *args):
+        #prof = debug.Profiler('PlotItem.paint', disabled=True)
+        #QtGui.QGraphicsWidget.paint(self, *args)
+        #prof.finish()
+        
+        
     def __del__(self):
         if self.manager is not None:
             self.manager.removeWidget(self.name)
