@@ -989,6 +989,7 @@ class SpotItem(QtGui.QGraphicsWidget):
     
     def __init__(self, size, pxMode, brush, pen, data):
         QtGui.QGraphicsWidget.__init__(self)
+        self.setCacheMode(self.DeviceCoordinateCache)
         if pxMode:
             self.setFlags(self.flags() | self.ItemIgnoresTransformations)
             #self.setCacheMode(self.DeviceCoordinateCache)  ## causes crash on linux
