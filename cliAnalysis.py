@@ -105,7 +105,7 @@ except:
     timer = QtCore.QTimer()
     def donothing(*args):
         x = 1+1
-    timer.connect(timer, QtCore.SIGNAL("timeout()"), donothing)
+    timer.timeout.connect(donothing)
     timer.start(200)
     
     print "Starting Qt event loop.."

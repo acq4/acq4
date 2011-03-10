@@ -32,6 +32,7 @@ view.scene().addItem(img)
 view.setRange(QtCore.QRectF(0, 0, 200, 200))
 
 ## Create random image
+## this is a large image--use view.scaleToImage(img) to improve video framerate
 data = random.random((5, 1000, 1000))
 i = 0
 

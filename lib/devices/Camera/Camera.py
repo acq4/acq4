@@ -23,9 +23,7 @@ class Camera(DAQGeneric):
     The list/get/setParams functions should implement a few standard items:
     (Note: these number values are just examples, but the data types and strings must be the same.)
         triggerMode:     str, ['Normal', 'TriggerStart', 'Strobe', 'Bulb']
-        triggerType:     str, ['Software', 'Hardware']
         exposure:        float, (0.0, 10.0)
-        exposureMode:    str, ['Exact', 'Maximize']
         binning:         (int,int) , [[1,2,4,8,16], [1,2,4,8,16]]
         region:          (int, int, int, int), [(0, 511), (0, 511), (1, 512), (1, 512)] #[x, y, w, h]
         gain:            float, (0.1, 10.0)
@@ -37,8 +35,6 @@ class Camera(DAQGeneric):
         exposeChannel: 'DAQ', '/Dev1/port0/line14'  ## Channel for recording expose signal
         triggerOutChannel: 'DAQ', '/Dev1/PFI5'  ## Channel the DAQ should trigger off of to sync with camera
         triggerInChannel: 'DAQ', '/Dev1/port0/line13'  ## Channel the DAQ should raise to trigger the camera
-        paramLimits:
-            binning:  [1,2,4,6,8,16]  ## set the limits for binning manually since the driver can't
         params:
             GAIN_INDEX: 2
             CLEAR_MODE: 'CLEAR_PRE_SEQUENCE'  ## Overlap mode for QuantEM

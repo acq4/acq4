@@ -9,7 +9,7 @@ manager with a configuration file and let it go from there.
 """
 
 print "Loading ACQ4..."
-#import lib.util.PySideImporter  ## Use PySide instead of PyQt
+import lib.util.PySideImporter  ## Use PySide instead of PyQt
 from lib.Manager import *
 import os, sys
 from numpy import *
@@ -63,7 +63,7 @@ except:
         x = 0
         for i in range(0, 100):
             x += i
-    timer.connect(timer, QtCore.SIGNAL("timeout()"), donothing)
+    timer.timeout.connect(donothing)
     timer.start(200)
     
     print "Starting Qt event loop.."
