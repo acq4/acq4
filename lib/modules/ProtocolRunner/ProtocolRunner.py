@@ -110,6 +110,7 @@ class ProtocolRunner(Module):
         QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('newFrame'), self.handleFrame)
         QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('paused'), self.taskThreadPaused)
         QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('taskStarted'), self.taskStarted)
+        QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('exitFromError'), self.taskErrored)
         #QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.deviceItemChanged)
         QtCore.QObject.connect(self.protoStateGroup, QtCore.SIGNAL('changed'), self.protoGroupChanged)
         self.win.show()
@@ -813,9 +814,12 @@ class ProtocolRunner(Module):
             
     def taskThreadStopped(self):
         self.emit(QtCore.SIGNAL('protocolFinished'))
-        if not self.loopEnabled:
+        if not self.loopEnabled:   ## what if we quit due to error?
             self.enableStartBtns(True)
     
+    def taskErrored(self):
+        self.enableStartBtns(True)
+            
     def taskThreadPaused(self):
         self.emit(QtCore.SIGNAL('protocolPaused'))
             
@@ -1065,6 +1069,7 @@ class TaskThread(QtCore.QThread):
             self.protocol = None  ## free up this memory
             self.paramSpace = None
             printExc("Error in protocol thread, exiting.")
+            self.emit(QtCore.SIGNAL('exitFromError'))
         #finally:
             #self.emit(QtCore.SIGNAL("protocolFinished()"))
         #print "TaskThread:run() finished"

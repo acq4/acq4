@@ -28,6 +28,7 @@ from Point import *
 from functions import *
 import types, sys, struct
 import weakref
+import debug
 #from debug import *
 
 
@@ -569,6 +570,7 @@ class PlotCurveItem(GraphicsObject):
         self.updateData(y, x, copy)
         
     def updateData(self, data, x=None, copy=False):
+        prof = debug.Profiler('PlotCurveItem.updateData', disabled=True)
         if isinstance(data, list):
             data = np.array(data)
         if isinstance(x, list):
@@ -595,7 +597,7 @@ class PlotCurveItem(GraphicsObject):
             x = data[tuple(ind)]
         elif data.ndim == 1:
             y = data
-            
+        prof.mark("data checks")
         self.prepareGeometryChange()
         if copy:
             self.yData = y.copy()
@@ -606,6 +608,7 @@ class PlotCurveItem(GraphicsObject):
             self.xData = x.copy()
         else:
             self.xData = x
+        prof.mark('copy')
         
         if x is None:
             self.xData = np.arange(0, self.yData.shape[0])
@@ -614,10 +617,14 @@ class PlotCurveItem(GraphicsObject):
             raise Exception("X and Y arrays must be the same shape--got %s and %s." % (str(x.shape), str(y.shape)))
         
         self.path = None
-        #self.specPath = None
         self.xDisp = self.yDisp = None
+        
+        prof.mark('set')
         self.update()
+        prof.mark('update')
         self.emit(QtCore.SIGNAL('plotChanged'), self)
+        prof.mark('emit')
+        prof.finish()
         
     def generatePath(self, x, y):
         path = QtGui.QPainterPath()
@@ -638,25 +645,32 @@ class PlotCurveItem(GraphicsObject):
         ##    0(i4)
         ##
         ## All values are big endian--pack using struct.pack('>d') or struct.pack('>i')
-        #
+        
+        prof = debug.Profiler('PlotCurveItem.generatePath', disabled=True)
+        
         n = x.shape[0]
         # create empty array, pad with extra space on either end
         arr = np.empty(n+2, dtype=[('x', '>f8'), ('y', '>f8'), ('c', '>i4')])
+        prof.mark('create empty')
         # write first two integers
         arr.data[12:20] = struct.pack('>ii', n, 0)
         # Fill array with vertex values
         arr[1:-1]['x'] = x
         arr[1:-1]['y'] = y
         arr[1:-1]['c'] = 1
+        prof.mark('fill array')
         # write last 0
         lastInd = 20*(n+1) 
         arr.data[lastInd:lastInd+4] = struct.pack('>i', 0)
         
         # create datastream object and stream into path
         buf = QtCore.QByteArray(arr.data[12:lastInd+4])  # I think one unnecessary copy happens here
+        prof.mark('create buffer')
         ds = QtCore.QDataStream(buf)
+        prof.mark('create dataStream')
         ds >> path
-        
+        prof.mark('load path')
+        prof.finish()
         return path
         
     def boundingRect(self):
@@ -681,6 +695,7 @@ class PlotCurveItem(GraphicsObject):
         return QtCore.QRectF(xmin, ymin, xmax-xmin, ymax-ymin)
 
     def paint(self, p, opt, widget):
+        prof = debug.Profiler('PlotCurveItem.paint '+str(id(self)), disabled=True)
         if self.xData is None:
             return
         #if self.opts['spectrumMode']:
@@ -692,6 +707,7 @@ class PlotCurveItem(GraphicsObject):
         if self.path is None:
             self.path = self.generatePath(*self.getData())
         path = self.path
+        prof.mark('generate path')
             
         if self.shadow is not None:
             sp = QtGui.QPen(self.shadow)
@@ -713,7 +729,9 @@ class PlotCurveItem(GraphicsObject):
             p.drawPath(path)
         p.setPen(cp)
         p.drawPath(path)
+        prof.mark('drawPath')
         
+        prof.finish()
         #p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
         #p.drawRect(self.boundingRect())
         
@@ -996,8 +1014,9 @@ class SpotItem(QtGui.QGraphicsWidget):
         self.pen = pen
         self.brush = brush
         self.path = QtGui.QPainterPath()
-        s2 = size/2.
-        self.path.addEllipse(QtCore.QRectF(-s2, -s2, size, size))
+        #s2 = size/2.
+        self.path.addEllipse(QtCore.QRectF(-0.5, -0.5, 1, 1))
+        self.scale(size, size)
         self.data = data
         
     def setBrush(self, brush):

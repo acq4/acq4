@@ -178,6 +178,16 @@ p, li { white-space: pre-wrap; }
         </widget>
        </item>
        <item>
+        <widget class="QPushButton" name="scaleToImageBtn">
+         <property name="toolTip">
+          <string>Scales the view such that camera pixels match screen pixels exactly. This can increase the rate frames are displayed (does not affect the acquisition rate, though).</string>
+         </property>
+         <property name="text">
+          <string>Scale 1:1</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer>
          <property name="orientation">
           <enum>Qt::Horizontal</enum>
