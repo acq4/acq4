@@ -54,6 +54,13 @@ class Manager(QtCore.QObject):
       - Creating and managing DirectoryHandle objects
       - Providing unified timestamps
       - Making sure all devices/modules are properly shut down at the end of the program"""
+      
+    sigConfigChanged = QtCore.Signal()
+    sigModulesChanged = QtCore.Signal() 
+    sigModuleHasQuit = QtCore.Signal(object) ## (module name)
+    #sigCurrentDirChanged = QtCore.Signal()
+    sigBaseDirChanged = QtCore.Signal()
+    
     CREATED = False
     single = None
     
@@ -158,8 +165,8 @@ Valid options are:
         self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
         self.reloadShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+r'), win)
         self.reloadShortcut.setContext(QtCore.Qt.ApplicationShortcut)
-        QtCore.QObject.connect(self.quitShortcut, QtCore.SIGNAL('activated()'), self.quit)
-        QtCore.QObject.connect(self.reloadShortcut, QtCore.SIGNAL('activated()'), self.reloadAll)
+        self.quitShortcut.activated.connect(self.quit)
+        self.reloadShortcut.activated.connect(self.reloadAll)
         
         #QtCore.QObject.connect(QtGui.QApplication.instance(), QtCore.SIGNAL('lastWindowClosed()'), self.lastWindowClosed)
             
@@ -237,7 +244,7 @@ Valid options are:
         except:
             printExc("Error while configuring manager:")
         #print self.config
-        self.emit(QtCore.SIGNAL('configChanged'))
+        self.sigConfigChanged.emit()
 
     def listConfigurations(self):
         """Return a list of the named configurations available"""
@@ -325,7 +332,7 @@ Valid options are:
             
         modclass = getattr(mod, module)
         self.modules[name] = modclass(self, name, config)
-        self.emit(QtCore.SIGNAL('modulesChanged'))
+        self.sigModulesChanged.emit()
         return self.modules[name]
         
         
@@ -377,8 +384,8 @@ Valid options are:
     def moduleHasQuit(self, mod):
         if mod.name in self.modules:
             del self.modules[mod.name]
-            self.emit(QtCore.SIGNAL('modulesChanged'))
-            self.emit(QtCore.SIGNAL('moduleHasQuit'), mod.name)
+            self.sigModulesChanged.emit()
+            self.sigModuleHasQuit.emit(mod.name)
             #print "Module", mod.name, "has quit"
 
 
@@ -394,7 +401,7 @@ Valid options are:
         ## Module should have called moduleHasQuit already, but just in case:
         if name in self.modules:
             del self.modules[name]
-            self.emit(QtCore.SIGNAL('modulesChanged'))
+            self.sigModulesChanged.emit()
         #print "Unloaded module", name
 
     def reloadAll(self):
@@ -410,7 +417,7 @@ Valid options are:
         try:
             sh = QtGui.QShortcut(QtGui.QKeySequence(keys), win)
             sh.setContext(QtCore.Qt.ApplicationShortcut)
-            QtCore.QObject.connect(sh, QtCore.SIGNAL('activated()'), win.raise_)
+            sh.activated.connect(win.raise_)
         except:
             printExc("Error creating shortcut '%s':" % keys)
         
@@ -438,7 +445,7 @@ Valid options are:
 
     def setCurrentDir(self, d):
         if self.currentDir is not None:
-            QtCore.QObject.disconnect(self.currentDir, QtCore.SIGNAL('changed'), self.currentDirChanged)
+            self.currentDir.sigChanged.disconnect(self.currentDirChanged)
             
             
         if isinstance(d, basestring):
@@ -447,12 +454,15 @@ Valid options are:
             self.currentDir = d
         else:
             raise Exception("Invalid argument type: ", type(d), d)
-        QtCore.QObject.connect(self.currentDir, QtCore.SIGNAL('changed'), self.currentDirChanged)
+        
+        #self.currentDir.sigChanged.connect(self.currentDirChanged)
+        #self.sigCurrentDirChanged.emit()
+        self.connect(self.currentDir, QtCore.SIGNAL('changed'), self.currentDirChanged)
         self.emit(QtCore.SIGNAL('currentDirChanged'))
 
     def currentDirChanged(self, *args):
         """Handle situation where currentDir is moved or renamed"""
-        #print "Changed:", args
+        #self.sigCurrentDirChanged.emit(*args)
         self.emit(QtCore.SIGNAL('currentDirChanged'), *args)
             
             
@@ -471,7 +481,8 @@ Valid options are:
         if not self.baseDir.isManaged():
             self.baseDir.createIndex()
 
-        self.emit(QtCore.SIGNAL('baseDirChanged'))
+        #self.emit(QtCore.SIGNAL('baseDirChanged'))
+        self.sigBaseDirChanged.emit()
         self.setCurrentDir(self.baseDir)
 
     def dirHandle(self, d, create=False):

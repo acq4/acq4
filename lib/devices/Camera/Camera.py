@@ -40,6 +40,11 @@ class Camera(DAQGeneric):
             CLEAR_MODE: 'CLEAR_PRE_SEQUENCE'  ## Overlap mode for QuantEM
     """
 
+    sigCameraStopped = QtCore.Signal()
+    sigCameraStarted = QtCore.Signal()
+    sigShowMessage = QtCore.Signal(object)  # (string message)
+    sigNewFrame = QtCore.Signal(object)  # (frame data)
+    sigParamsChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
         self.lock = Mutex(Mutex.Recursive)
@@ -74,8 +79,10 @@ class Camera(DAQGeneric):
         
         if 'scopeDevice' in config:
             self.scopeDev = self.dm.getDevice(config['scopeDevice'])
-            QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
-            QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            #QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
+            #QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            self.scopeDev.sigPositionChanged.connect(self.positionChanged)
+            self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
             ## Cache microscope state for fast access later
             self.objectiveChanged()
             self.positionChanged()
@@ -89,10 +96,14 @@ class Camera(DAQGeneric):
         
         self.acqThread = AcquireThread(self)
         #print "Camera: acqThread created, about to connect signals."
-        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('finished()'), self.acqThreadFinished)
-        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('started()'), self.acqThreadStarted)
-        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('showMessage'), self.showMessage)
-        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('newFrame'), self.newFrame)
+        #QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('finished()'), self.acqThreadFinished)
+        #QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('started()'), self.acqThreadStarted)
+        #QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('showMessage'), self.showMessage)
+        #QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('newFrame'), self.newFrame)
+        self.acqThread.finished.connect(self.acqThreadFinished)
+        self.acqThread.started.connect(self.acqThreadStarted)
+        self.acqThread.showMessage.connect(self.showMessage)
+        self.acqThread.newFrame.connect(self.newFrame)
         #print "Camera: signals connected:"
         
         if config != None and 'params' in config:
@@ -383,16 +394,20 @@ class Camera(DAQGeneric):
     ###############################################
     
     def acqThreadFinished(self):
-        self.emit(QtCore.SIGNAL('cameraStopped'))
+        #self.emit(QtCore.SIGNAL('cameraStopped'))
+        self.sigCameraStopped.emit()
 
     def acqThreadStarted(self):
-        self.emit(QtCore.SIGNAL('cameraStarted'))
+        #self.emit(QtCore.SIGNAL('cameraStarted'))
+        self.sigCameraStarted.emit()
 
-    def showMessage(self, *args):
-        self.emit(QtCore.SIGNAL('showMessage'), *args)
+    def showMessage(self, msg):
+        #self.emit(QtCore.SIGNAL('showMessage'), msg)
+        self.sigShowMessage.emit(msg)
 
-    def newFrame(self, *args):
-        self.emit(QtCore.SIGNAL('newFrame'), *args)
+    def newFrame(self, data):
+        #self.emit(QtCore.SIGNAL('newFrame'), *args)
+        self.sigNewFrame.emit(data)
         
     def isRunning(self):
         return self.acqThread.isRunning()
@@ -708,6 +723,10 @@ class CameraTask(DAQGenericTask):
                 dh.writeFile(result[k], k)
         
 class AcquireThread(QtCore.QThread):
+    
+    sigNewFrame = QtCore.Signal(object)
+    sigShowMessage = QtCore.Signal(object)
+    
     def __init__(self, dev):
         QtCore.QThread.__init__(self)
         self.dev = dev
@@ -844,7 +863,8 @@ class AcquireThread(QtCore.QThread):
                             conn = list(self.connections)
                         for c in conn:
                             c(out)
-                        self.emit(QtCore.SIGNAL("newFrame"), out)
+                        #self.emit(QtCore.SIGNAL("newFrame"), out)
+                        self.sigNewFrame.emit(out)
                         
                     lastFrameTime = now
                     lastFrameId = frames[-1]['id']
@@ -887,7 +907,8 @@ class AcquireThread(QtCore.QThread):
             except:
                 pass
             printExc("Error starting camera acquisition:")
-            self.emit(QtCore.SIGNAL("showMessage"), "ERROR starting acquisition (see console output)")
+            #self.emit(QtCore.SIGNAL("showMessage"), "ERROR starting acquisition (see console output)")
+            self.sigShowMessage.emit("ERROR starting acquisition (see console output)")
         finally:
             pass
             #print "Camera ACQ thread exited."

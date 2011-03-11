@@ -7,6 +7,9 @@ from WidgetGroup import *
 import sys
 
 class NiDAQProto(ProtocolGui):
+    
+    sigChanged = QtCore.Signal(object)
+    
     def __init__(self, dev, prot):
         ProtocolGui.__init__(self, dev, prot)
         self.ui = Ui_Form()
@@ -38,11 +41,16 @@ class NiDAQProto(ProtocolGui):
             (self.ui.butterworthStopDBSpin, 'butterworthStopDB'),
         ])
         
-        QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('valueChanged(double)'), self.rateChanged)
-        QtCore.QObject.connect(self.ui.periodSpin, QtCore.SIGNAL('valueChanging'), self.updateRateSpin)
-        QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('valueChanging'), self.updatePeriodSpin)
-        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolChanged'), self.protocolChanged)
-        QtCore.QObject.connect(self.ui.filterCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.ui.filterStack.setCurrentIndex)
+        #QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('valueChanged(double)'), self.rateChanged)
+        self.ui.rateSpin.valueChanged.connect(self.rateChanged)
+        #QtCore.QObject.connect(self.ui.periodSpin, QtCore.SIGNAL('valueChanging'), self.updateRateSpin)
+        self.ui.periodSpin.sigValueChanging.connect(self.updateRateSpin)
+        #QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('valueChanging'), self.updatePeriodSpin)
+        self.ui.rateSpin.sigValueChanging.connect(self.updatePeriodSpin)
+        #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolChanged'), self.protocolChanged)
+        self.prot.sigProtocolChanged.connect(self.protocolChanged)
+        #QtCore.QObject.connect(self.ui.filterCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.ui.filterStack.setCurrentIndex)
+        self.ui.filterCombo.currentIndexChanged.connect(self.ui.filterStack.setCurrentIndex)
         self.ui.rateSpin.setValue(self.rate)
         
         
@@ -116,14 +124,16 @@ class NiDAQProto(ProtocolGui):
     def rateChanged(self):
         self.rate = self.ui.rateSpin.value()
         self.updateNPts()
-        self.emit(QtCore.SIGNAL('changed'), self.currentState())
+        #self.emit(QtCore.SIGNAL('changed'), self.currentState())
+        self.sigChanged.emit(self.currentState()
         
         
     def protocolChanged(self, n, v):
         #print "caught protocol change", n, v
         if n == 'duration':
             self.updateNPts()
-            self.emit(QtCore.SIGNAL('changed'), self.currentState())
+            #self.emit(QtCore.SIGNAL('changed'), self.currentState())
+            self.sigChanged.emit(self.currentState()
         
     def updateNPts(self):
         dur = self.prot.getParam('duration')
