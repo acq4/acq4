@@ -264,7 +264,8 @@ class StatsCalculator(Node):
         ])
         
         self.ui = CheckTable.CheckTable(self.funcs.keys())
-        QtCore.QObject.connect(self.ui, QtCore.SIGNAL('stateChanged'), self.update)
+        #QtCore.QObject.connect(self.ui, QtCore.SIGNAL('stateChanged'), self.update)
+        self.ui.sigStateChanged.connect(self.update)
         
     def ctrlWidget(self):
         return self.ui

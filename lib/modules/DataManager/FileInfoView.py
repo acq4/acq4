@@ -9,12 +9,16 @@ import configfile
 from DictView import *
 
 class FocusEventCatcher(QtCore.QObject):
+    
+    sigLostFocus = QtCore.Signal(object)
+    
     def __init__(self):
         QtCore.QObject.__init__(self)
         
     def eventFilter(self, obj, event):
         if event.type() == QtCore.QEvent.FocusOut:
-            self.emit(QtCore.SIGNAL("lostFocus"), obj)
+            #self.emit(QtCore.SIGNAL("lostFocus"), obj)
+            self.sigLostFocus.emit(obj)
         return False
 
 
@@ -28,7 +32,8 @@ class FileInfoView(QtGui.QWidget):
         self.widgets = {}
         self.ui.fileInfoLayout = self.ui.formLayout_2
         self.focusEventCatcher = FocusEventCatcher()
-        QtCore.QObject.connect(self.focusEventCatcher, QtCore.SIGNAL('lostFocus'), self.focusLost)
+        #QtCore.QObject.connect(self.focusEventCatcher, QtCore.SIGNAL('lostFocus'), self.focusLost)
+        self.focusEventCatcher.sigLostFocus.connect(self.focusLost)
         
     def setCurrentFile(self, file):
         #print "=============== set current file ============"

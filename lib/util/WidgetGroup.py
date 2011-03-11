@@ -49,19 +49,19 @@ class WidgetGroup(QtCore.QObject):
     """This class takes a list of widgets and keeps an internal record of their state which is always up to date. Allows reading and writing from groups of widgets simultaneously."""
     
     ## List of widget types which can be handled by WidgetGroup.
-    ## The value for each type is a tuple (change signal, get function, set function, [auto-add children])
-    ## The change signal should be a signal that is emitted any time the state of the widget changes, not just 
+    ## The value for each type is a tuple (change signal function, get function, set function, [auto-add children])
+    ## The change signal function that takes an object and returns a signal that is emitted any time the state of the widget changes, not just 
     ##   when it is changed by user interaction. (for example, 'clicked' is not a valid signal here)
     ## If the change signal is None, the value of the widget is not cached.
     ## Custom widgets not in this list can be made to work with WidgetGroup by giving them a 'widgetGroupInterface' method
     ##   which returns the tuple.
     classes = {
         QtGui.QSpinBox: 
-            ('valueChanged(int)', 
+            (lambda w: w.valueChanged, 
             QtGui.QSpinBox.value, 
             QtGui.QSpinBox.setValue),
         QtGui.QDoubleSpinBox: 
-            ('valueChanged(double)', 
+            (lambda w: w.valueChanged, 
             QtGui.QDoubleSpinBox.value, 
             QtGui.QDoubleSpinBox.setValue),
         QtGui.QSplitter: 
@@ -70,15 +70,15 @@ class WidgetGroup(QtCore.QObject):
             restoreSplitter,
             True),
         QtGui.QCheckBox: 
-            ('stateChanged(int)',
+            (lambda w: w.stateChanged,
             QtGui.QCheckBox.isChecked,
             QtGui.QCheckBox.setChecked),
         QtGui.QComboBox:
-            ('currentIndexChanged(int)',
+            (lambda w: w.currentIndexChanged,
             comboState,
             setComboState),
         QtGui.QGroupBox:
-            ('toggled(bool)',
+            (lambda w: w.toggled,
             QtGui.QGroupBox.isChecked,
             QtGui.QGroupBox.setChecked,
             True),
@@ -91,15 +91,15 @@ class WidgetGroup(QtCore.QObject):
             #PlotWidget.saveState,
             #PlotWidget.restoreState),
         QtGui.QLineEdit:
-            ('editingFinished()',
+            (lambda w: w.editingFinished,
             lambda w: str(w.text()),
             QtGui.QLineEdit.setText),
         QtGui.QRadioButton:
-            ('toggled(bool)',
+            (lambda w: w.toggled,
             QtGui.QRadioButton.isChecked,
             QtGui.QRadioButton.setChecked),
         QtGui.QSlider:
-            ('valueChanged(int)',
+            (lambda w: w.valueChanged,
             QtGui.QSlider.value,
             QtGui.QSlider.setValue),
     }
@@ -143,7 +143,7 @@ class WidgetGroup(QtCore.QObject):
         self.readWidget(w)
             
         if type(w) in WidgetGroup.classes:
-            signal = WidgetGroup.classes[type(w)][0]
+            signal = WidgetGroup.classes[type(w)][0](w)
         else:
             signal = w.widgetGroupInterface()[0]
             

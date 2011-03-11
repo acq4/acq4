@@ -34,6 +34,11 @@ def rectStr(r):
 
 
 class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
+    
+    sigRegionChangeFinished = QtCore.Signal(object)
+    sigRegionChangeStarted = QtCore.Signal(object)
+    sigRegionChanged = QtCore.Signal(object)
+    
     def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None):
         QObjectWorkaround.__init__(self)
         QtGui.QGraphicsItem.__init__(self, parent)
@@ -212,7 +217,8 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
                 self.isMoving = True
                 self.preMoveState = self.getState()
                 self.cursorOffset = self.scenePos() - ev.scenePos()
-                self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
+                #self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
+                self.sigRegionChangeStarted.emit(self)
                 ev.accept()
         elif ev.button() == QtCore.Qt.RightButton:
             if self.isMoving:
@@ -236,7 +242,8 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
     def mouseReleaseEvent(self, ev):
         if self.translatable:
             self.isMoving = False
-            self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+            #self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+            self.sigRegionChangeFinished.emit(self)
     
     def cancelMove(self):
         self.isMoving = False
@@ -247,14 +254,16 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         self.isMoving = True
         self.preMoveState = self.getState()
         
-        self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
+        #self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
+        self.sigRegionChangeStarted.emit(self)
         #self.pressPos = self.mapFromScene(ev.scenePos())
         #self.pressHandlePos = self.handles[pt]['item'].pos()
     
     def pointReleaseEvent(self, pt, ev):
         #print "release"
         self.isMoving = False
-        self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+        #self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+        self.sigRegionChangeFinished.emit(self)
     
     def stateCopy(self):
         sc = {}
@@ -316,7 +325,8 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         
         elif h['type'] == 'f':
             h['item'].setPos(self.mapFromScene(pos))
-            self.emit(QtCore.SIGNAL('regionChanged'), self)
+            #self.emit(QtCore.SIGNAL('regionChanged'), self)
+            self.sigRegionChanged.emit(self)
             
         elif h['type'] == 's':
             #c = h['center']
@@ -509,7 +519,8 @@ class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
         if changed:
             #print "handle changed."
             self.update()
-            self.emit(QtCore.SIGNAL('regionChanged'), self)
+            #self.emit(QtCore.SIGNAL('regionChanged'), self)
+            self.sigRegionChanged.emit(self)
             
     
     def scale(self, s, center=[0,0]):
@@ -888,6 +899,11 @@ class LineROI(ROI):
         
         
 class MultiLineROI(QtGui.QGraphicsItem, QObjectWorkaround):
+    
+    sigRegionChangeFinished = QtCore.Signal(object)
+    sigRegionChangeStarted = QtCore.Signal(object)
+    sigRegionChanged = QtCore.Signal(object)
+    
     def __init__(self, points, width, pen=None, **args):
         QObjectWorkaround.__init__(self)
         QtGui.QGraphicsItem.__init__(self)
@@ -912,9 +928,12 @@ class MultiLineROI(QtGui.QGraphicsItem, QObjectWorkaround):
         for l in self.lines:
             l.translatable = False
             #self.addToGroup(l)
-            l.connect(l, QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
-            l.connect(l, QtCore.SIGNAL('regionChangeStarted'), self.roiChangeStartedEvent)
-            l.connect(l, QtCore.SIGNAL('regionChangeFinished'), self.roiChangeFinishedEvent)
+            #l.connect(l, QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
+            l.sigRegionChanged.connect(self.roiChangedEvent)
+            #l.connect(l, QtCore.SIGNAL('regionChangeStarted'), self.roiChangeStartedEvent)
+            l.sigRegionChangeStarted.connect(self.roiChangeStartedEvent)
+            #l.connect(l, QtCore.SIGNAL('regionChangeFinished'), self.roiChangeFinishedEvent)
+            l.sigRegionChangeFinished.connect(self.roiChangeFinishedEvent)
         
     def paint(self, *args):
         pass
@@ -927,13 +946,16 @@ class MultiLineROI(QtGui.QGraphicsItem, QObjectWorkaround):
         for l in self.lines[1:]:
             w0 = l.state['size'][1]
             l.scale([1.0, w/w0], center=[0.5,0.5])
-        self.emit(QtCore.SIGNAL('regionChanged'), self)
+        #self.emit(QtCore.SIGNAL('regionChanged'), self)
+        self.sigRegionChanged.emit(self)
             
     def roiChangeStartedEvent(self):
-        self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
+        #self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
+        self.sigRegionChangeStarted.emit(self)
         
     def roiChangeFinishedEvent(self):
-        self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+        #self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+        self.sigRegionChangeFinished.emit(self)
         
             
     def getArrayRegion(self, arr, img=None):

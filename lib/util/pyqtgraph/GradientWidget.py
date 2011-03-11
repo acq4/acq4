@@ -161,6 +161,9 @@ class TickSlider(QtGui.QGraphicsView):
 
 
 class GradientWidget(TickSlider):
+    
+    sigGradientChanged = QtCore.Signal(object)
+    
     def __init__(self, *args, **kargs):
         TickSlider.__init__(self, *args, **kargs)
         self.currentTick = None
@@ -171,8 +174,10 @@ class GradientWidget(TickSlider):
         self.colorDialog = QtGui.QColorDialog()
         self.colorDialog.setOption(QtGui.QColorDialog.ShowAlphaChannel, True)
         self.colorDialog.setOption(QtGui.QColorDialog.DontUseNativeDialog, True)
-        QtCore.QObject.connect(self.colorDialog, QtCore.SIGNAL('currentColorChanged(const QColor&)'), self.currentColorChanged)
-        QtCore.QObject.connect(self.colorDialog, QtCore.SIGNAL('rejected()'), self.currentColorRejected)
+        #QtCore.QObject.connect(self.colorDialog, QtCore.SIGNAL('currentColorChanged(const QColor&)'), self.currentColorChanged)
+        self.colorDialog.currentColorChanged.connect(self.currentColorChanged)
+        #QtCore.QObject.connect(self.colorDialog, QtCore.SIGNAL('rejected()'), self.currentColorRejected)
+        self.colorDialog.rejected.connect(self.currentColorRejected)
         
         #self.gradient = QtGui.QLinearGradient(QtCore.QPointF(0,0), QtCore.QPointF(100,0))
         self.scene.addItem(self.gradRect)
@@ -199,7 +204,8 @@ class GradientWidget(TickSlider):
     def updateGradient(self):
         self.gradient = self.getGradient()
         self.gradRect.setBrush(QtGui.QBrush(self.gradient))
-        self.emit(QtCore.SIGNAL('gradientChanged'), self)
+        #self.emit(QtCore.SIGNAL('gradientChanged'), self)
+        self.sigGradientChanged.emit(self)
         
     def setLength(self, newLen):
         TickSlider.setLength(self, newLen)

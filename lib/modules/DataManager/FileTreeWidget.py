@@ -14,9 +14,12 @@ class FileTreeWidget(QtGui.QTreeWidget):
         self.currentDir = None
         #self.handles = {}
         self.items = {}
-        QtCore.QObject.connect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
-        QtCore.QObject.connect(self, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
-        QtCore.QObject.connect(self, QtCore.SIGNAL('currentItemChanged(QTreeWidgetItem*, QTreeWidgetItem*)'), self.selectionChanged)
+        #QtCore.QObject.connect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
+        self.itemExpanded.connect(self.itemExpanded)
+        #QtCore.QObject.connect(self, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
+        self.itemChanged.connect(self.itemChanged)
+        #QtCore.QObject.connect(self, QtCore.SIGNAL('currentItemChanged(QTreeWidgetItem*, QTreeWidgetItem*)'), self.selectionChanged)
+        self.currentItemChanged.connect(self.selectionChanged)
         
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
@@ -30,8 +33,10 @@ class FileTreeWidget(QtGui.QTreeWidget):
         
     def quit(self):
         ## not sure if any of this is necessary..
-        QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
-        QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
+        #QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
+        self.itemExpanded.disconnect(self.itemExpanded)
+        #QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
+        self.itemChanged.disconnect(self.itemChanged)
         for h in self.items:
             self.unwatch(h)
         #self.handles = {}
@@ -144,10 +149,12 @@ class FileTreeWidget(QtGui.QTreeWidget):
             node = node[dirs.pop(0)] 
         
     def watch(self, handle):
-        QtCore.QObject.connect(handle, QtCore.SIGNAL('delayedChange'), self.dirChanged)
+        #QtCore.QObject.connect(handle, QtCore.SIGNAL('delayedChange'), self.dirChanged)
+        handle.sigDelayedChange.connect(self.dirChanged)
         
     def unwatch(self, handle):
-        QtCore.QObject.disconnect(handle, QtCore.SIGNAL('delayedChange'), self.dirChanged)
+        #QtCore.QObject.disconnect(handle, QtCore.SIGNAL('delayedChange'), self.dirChanged)
+        handle.sigDelayedChange.disconnect(self.dirChanged)
         
     def dirChanged(self, handle, changes):
         #print "Change: %s %s"% (change, handle.name())
@@ -465,7 +472,8 @@ class FileTreeItem(QtGui.QTreeWidgetItem):
         else:
             self.setFlags(QtCore.Qt.ItemIsSelectable|QtCore.Qt.ItemIsEditable|QtCore.Qt.ItemIsDragEnabled|QtCore.Qt.ItemIsEnabled)
         self.expandState = False
-        QtCore.QObject.connect(self.handle, QtCore.SIGNAL('changed'), self.handleChanged)
+        #QtCore.QObject.connect(self.handle, QtCore.SIGNAL('changed'), self.handleChanged)
+        self.handle.sigChanged.connect(self.handleChanged)
         self.updateBoldState()
         
         

@@ -56,6 +56,7 @@ def replot():
     d2 = fl.processData(data.copy())
     p2.plot(d2, clear=True)
     
-QtCore.QObject.connect(fl, QtCore.SIGNAL('changed'), replot)
+#QtCore.QObject.connect(fl, QtCore.SIGNAL('changed'), replot)
+fl.sigChanged.connect(replot)
 
 #app.exec_()

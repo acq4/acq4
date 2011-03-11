@@ -27,6 +27,8 @@ class SpinBox(QtGui.QAbstractSpinBox):
     ## after the call to __del__
     dead_spins = []
     
+    sigValueChanged = QtCore.Signal(object)  # (self)
+    sigValueChanging = QtCore.Signal(object)  # (value)
     
     def __init__(self, parent=None, value=0.0, **kwargs):
         QtGui.QAbstractSpinBox.__init__(self, parent)
@@ -68,8 +70,11 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.setKeyboardTracking(False)
         self.setOpts(**kwargs)
         
-        QtCore.QObject.connect(self, QtCore.SIGNAL('editingFinished()'), self.editingFinished)
-        self.proxy = proxyConnect(self, QtCore.SIGNAL('valueChanging'), self.delayedChange)
+        #QtCore.QObject.connect(self, QtCore.SIGNAL('editingFinished()'), self.editingFinished)
+        self.editingFinished.connect(self.editingFinished)
+        #self.proxy = proxyConnect(self, QtCore.SIGNAL('valueChanging'), self.delayedChange)
+        self.proxy = proxyConnect(None, self.sigValueChanging, self.delayedChange)
+        
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('returnPressed()'), self.editingFinished)
         #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('textChanged()'), self.textChanged)
         
@@ -93,8 +98,10 @@ class SpinBox(QtGui.QAbstractSpinBox):
         
     def emitChanged(self):
         self.lastValEmitted = self.val
-        self.emit(QtCore.SIGNAL('valueChanged(double)'), float(self.val))
-        self.emit(QtCore.SIGNAL('valueChanged'), self)
+        #self.emit(QtCore.SIGNAL('valueChanged(double)'), float(self.val))
+        #self.emit(QtCore.SIGNAL('valueChanged'), self)
+        self.valueChanged.emit(float(self.val))
+        self.sigValueChanged.emit(self)
         
     def delayedChange(self):
         #print "delayedChange", self
@@ -107,7 +114,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
             pass  ## This can happen if we try to handle a delayed signal after someone else has already deleted the underlying C++ object.
         
     def widgetGroupInterface(self):
-        return ('valueChanged(double)', SpinBox.value, SpinBox.setValue)
+        return (self.valueChanged, SpinBox.value, SpinBox.setValue)
         
     def sizeHint(self):
         return QtCore.QSize(120, 0)
@@ -191,7 +198,8 @@ class SpinBox(QtGui.QAbstractSpinBox):
         if update:
             self.updateText()
             
-        self.emit(QtCore.SIGNAL('valueChanging'), float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
+        #self.emit(QtCore.SIGNAL('valueChanging'), float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
+        self.sigValueChanging.emit(float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
         if not delaySignal:
             self.emitChanged()
         self.lineEdit().setStyleSheet('border: 0px;')
@@ -310,8 +318,10 @@ if __name__ == '__main__':
     win.show()
     import sys
     for sb in [s1, s2, s3,s4]:
-        QtCore.QObject.connect(sb, QtCore.SIGNAL('valueChanged(double)'), lambda v: sys.stdout.write(str(sb) + " valueChanged\n"))
-        QtCore.QObject.connect(sb, QtCore.SIGNAL('editingFinished()'), lambda: sys.stdout.write(str(sb) + " editingFinished\n"))
+        #QtCore.QObject.connect(sb, QtCore.SIGNAL('valueChanged(double)'), lambda v: sys.stdout.write(str(sb) + " valueChanged\n"))
+        #QtCore.QObject.connect(sb, QtCore.SIGNAL('editingFinished()'), lambda: sys.stdout.write(str(sb) + " editingFinished\n"))
+        sb.valueChanged.connect(lambda v: sys.stdout.write(str(sb) + " valueChanged\n"))
+        sb.editingFinished.connect(lambda: sys.stdout.write(str(sb) + " editingFinished\n"))
 
     
         

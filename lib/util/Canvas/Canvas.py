@@ -18,6 +18,11 @@ import pyqtgraph as pg
 import scipy.ndimage as ndimage
 
 class Canvas(QtGui.QWidget):
+    
+    sigItemSelected = QtCore.Signal(object, object)
+    sigItemTransformChanged = QtCore.Signal(object, object)
+    sigItemTransformChangeFinished = QtCore.Signal(object, object)
+    
     def __init__(self, parent=None, allowTransforms=True, hideCtrl=False):
         QtGui.QWidget.__init__(self, parent)
         self.ui = Ui_Form()
@@ -38,13 +43,19 @@ class Canvas(QtGui.QWidget):
         self.hideBtn.setFixedWidth(20)
         self.hideBtn.setFixedHeight(20)
         self.ctrlSize = 200
-        self.connect(self.hideBtn, QtCore.SIGNAL('clicked()'), self.hideBtnClicked)
-        self.connect(self.ui.splitter, QtCore.SIGNAL('splitterMoved(int, int)'), self.splitterMoved)
+        #self.connect(self.hideBtn, QtCore.SIGNAL('clicked()'), self.hideBtnClicked)
+        self.hideBtn.clicked.connect(self.hideBtnClicked)
+        #self.connect(self.ui.splitter, QtCore.SIGNAL('splitterMoved(int, int)'), self.splitterMoved)
+        self.ui.splitter.splitterMoved.connect(self.splitterMoved)
         
-        self.connect(self.ui.itemList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.treeItemChanged)
-        self.connect(self.ui.itemList, QtCore.SIGNAL('itemMoved'), self.treeItemMoved)
-        self.connect(self.ui.itemList, QtCore.SIGNAL('itemSelectionChanged()'), self.treeItemSelected)
-        self.connect(self.ui.autoRangeBtn, QtCore.SIGNAL('clicked()'), self.autoRangeClicked)
+        #self.connect(self.ui.itemList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.treeItemChanged)
+        self.ui.itemList.itemChanged.connect(self.treeItemChanged)
+        #self.connect(self.ui.itemList, QtCore.SIGNAL('itemMoved'), self.treeItemMoved)
+        self.ui.itemList.sigItemMoved.connect(self.treeItemMoved)
+        #self.connect(self.ui.itemList, QtCore.SIGNAL('itemSelectionChanged()'), self.treeItemSelected)
+        self.ui.itemList.itemSelectionChanged.connect(self.treeItemSelected)
+        #self.connect(self.ui.autoRangeBtn, QtCore.SIGNAL('clicked()'), self.autoRangeClicked)
+        self.ui.autoRangeBtn.clicked.connect(self.autoRangeClicked)
         self.ui.storeSvgBtn.clicked.connect(self.storeSvg)
         self.ui.storePngBtn.clicked.connect(self.storePng)
         
@@ -165,7 +176,8 @@ class Canvas(QtGui.QWidget):
         #else:
             #self.selectBox.hide()
         
-        self.emit(QtCore.SIGNAL('itemSelected'), self, item)
+        #self.emit(QtCore.SIGNAL('itemSelected'), self, item)
+        self.sigItemSelected.emit(self, item)
 
     def selectedItem(self):
         sel = self.itemList.selectedItems()
@@ -261,8 +273,10 @@ class Canvas(QtGui.QWidget):
         if not self.allowTransforms:
             citem.setMovable(False)
 
-        self.connect(citem, QtCore.SIGNAL('transformChanged'), self.itemTransformChanged)
-        self.connect(citem, QtCore.SIGNAL('transformChangeFinished'), self.itemTransformChangeFinished)
+        #self.connect(citem, QtCore.SIGNAL('transformChanged'), self.itemTransformChanged)
+        citem.sigTransformChanged.connect(self.itemTransformChanged)
+        #self.connect(citem, QtCore.SIGNAL('transformChangeFinished'), self.itemTransformChangeFinished)
+        citem.sigTransformChangeFinished.connect(self.itemTransformChangeFinished)
         citem.sigVisibilityChanged.connect(self.itemVisibilityChanged)
 
         item = citem.item
@@ -398,10 +412,12 @@ class Canvas(QtGui.QWidget):
         return self.view.scene()
         
     def itemTransformChanged(self, item):
-        self.emit(QtCore.SIGNAL('itemTransformChanged'), self, item)
+        #self.emit(QtCore.SIGNAL('itemTransformChanged'), self, item)
+        self.sigItemTransformChanged.emit(self, item)
     
     def itemTransformChangeFinished(self, item):
-        self.emit(QtCore.SIGNAL('itemTransformChangeFinished'), self, item)
+        #self.emit(QtCore.SIGNAL('itemTransformChangeFinished'), self, item)
+        self.sigItemTransformChangeFinished.emit(self, item)
         
 
 
@@ -418,6 +434,11 @@ class SelectBox(widgets.ROI):
 
 
 class CanvasItem(QtCore.QObject):
+    
+    sigResetUserTransform = QtCore.Signal(object)
+    sigTransformChangeFinished = QtCore.Signal(object)
+    sigTransformChanged = QtCore.Signal(object)
+    
     """CanvasItem takes care of managing an item's state--alpha, visibility, z-value, transformations, etc. and
     provides a control widget"""
     
@@ -456,11 +477,16 @@ class CanvasItem(QtCore.QObject):
         self.layout.addWidget(self.resetTransformBtn, 1, 0, 1, 2)
         self.layout.addWidget(self.copyBtn, 2, 0, 1, 1)
         self.layout.addWidget(self.pasteBtn, 2, 1, 1, 1)
-        self.connect(self.alphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.alphaChanged)
-        self.connect(self.alphaSlider, QtCore.SIGNAL('sliderPressed()'), self.alphaPressed)
-        self.connect(self.alphaSlider, QtCore.SIGNAL('sliderReleased()'), self.alphaReleased)
-        self.connect(self.canvas, QtCore.SIGNAL('itemSelected'), self.selectionChanged)
-        self.connect(self.resetTransformBtn, QtCore.SIGNAL('clicked()'), self.resetTransformClicked)
+        #self.connect(self.alphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.alphaChanged)
+        self.alphaSlider.valueChanged.connect(self.alphaChanged)
+        #self.connect(self.alphaSlider, QtCore.SIGNAL('sliderPressed()'), self.alphaPressed)
+        self.alphaSlider.sliderPressed.connect(self.alphaPressed)
+        #self.connect(self.alphaSlider, QtCore.SIGNAL('sliderReleased()'), self.alphaReleased)
+        self.alphaSlider.sliderReleased.connect(self.alphaReleased)
+        #self.connect(self.canvas, QtCore.SIGNAL('itemSelected'), self.selectionChanged)
+        self.canvas.sigItemSelected.connect(self.selectionChanged)
+        #self.connect(self.resetTransformBtn, QtCore.SIGNAL('clicked()'), self.resetTransformClicked)
+        self.resetTransformBtn.clicked.connect(self.resetTransformClicked)
         self.copyBtn.clicked.connect(self.copyClicked)
         self.pasteBtn.clicked.connect(self.pasteClicked)
         
@@ -469,8 +495,10 @@ class CanvasItem(QtCore.QObject):
         self.canvas.scene().addItem(self.selectBox)
         self.selectBox.hide()
         self.selectBox.setZValue(1e6)
-        self.selectBox.connect(self.selectBox, QtCore.SIGNAL('regionChanged'), self.selectBoxChanged)  ## calls selectBoxMoved
-        self.selectBox.connect(self.selectBox, QtCore.SIGNAL('regionChangeFinished'), self.selectBoxChangeFinished)
+        #self.selectBox.connect(self.selectBox, QtCore.SIGNAL('regionChanged'), self.selectBoxChanged)  ## calls selectBoxMoved
+        self.selectBox.sigRegionChanged.connect(self.selectBoxChanged)  ## calls selectBoxMoved
+        #self.selectBox.connect(self.selectBox, QtCore.SIGNAL('regionChangeFinished'), self.selectBoxChangeFinished)
+        self.selectBox.sigRegionChangeFinished.connect(self.selectBoxChangeFinished)
         
         ## Take note of the starting position of the item and selection box
         #br = self.item.boundingRect()
@@ -635,12 +663,15 @@ class CanvasItem(QtCore.QObject):
         self.selectBox.blockSignals(True)
         self.selectBoxToItem()
         self.selectBox.blockSignals(False)
-        self.emit(QtCore.SIGNAL('transformChanged'), self)
-        self.emit(QtCore.SIGNAL('transformChangeFinished'), self)
+        #self.emit(QtCore.SIGNAL('transformChanged'), self)
+        self.sigTransformChanged.emit(self)
+        #self.emit(QtCore.SIGNAL('transformChangeFinished'), self)
+        self.sigTransformChangeFinished.emit(self)
         
     def resetTransformClicked(self):
         self.resetTransform()
-        self.emit(QtCore.SIGNAL('resetUserTransform'), self)
+        #self.emit(QtCore.SIGNAL('resetUserTransform'), self)
+        self.sigResetUserTransform.emit(self)
         
     def restoreTransform(self, tr):
         try:
@@ -649,8 +680,10 @@ class CanvasItem(QtCore.QObject):
             
             self.selectBoxFromUser() ## move select box to match
             self.updateTransform()
-            self.emit(QtCore.SIGNAL('transformChanged'), self)
-            self.emit(QtCore.SIGNAL('transformChangeFinished'), self)
+            #self.emit(QtCore.SIGNAL('transformChanged'), self)
+            self.sigTransformChanged.emit(self)
+            #self.emit(QtCore.SIGNAL('transformChangeFinished'), self)
+            self.sigTransformChangeFinished.emit(self)
         except:
             self.userTranslate = [0,0]
             self.userRotate = 0
@@ -701,10 +734,12 @@ class CanvasItem(QtCore.QObject):
     def selectBoxChanged(self):
         self.selectBoxMoved()
         #self.updateTransform(self.selectBox)
-        self.emit(QtCore.SIGNAL('transformChanged'), self)
+        #self.emit(QtCore.SIGNAL('transformChanged'), self)
+        self.sigTransformChanged.emit(self)
         
     def selectBoxChangeFinished(self):
-        self.emit(QtCore.SIGNAL('transformChangeFinished'), self)
+        #self.emit(QtCore.SIGNAL('transformChangeFinished'), self)
+        self.sigTransformChangeFinished.emit(self)
 
     def alphaPressed(self):
         """Hide selection box while slider is moving"""
@@ -823,9 +858,12 @@ class ImageCanvasItem(CanvasItem):
             self.layout.addWidget(self.maxBtn, self.layout.rowCount(), 0, 1, 2)
             
         
-        self.item.connect(self.item, QtCore.SIGNAL('imageChanged'), self.updateHistogram)
-        self.levelRgn.connect(self.levelRgn, QtCore.SIGNAL('regionChanged'), self.levelsChanged)
-        self.levelRgn.connect(self.levelRgn, QtCore.SIGNAL('regionChangeFinished'), self.levelsChangeFinished)
+        #self.item.connect(self.item, QtCore.SIGNAL('imageChanged'), self.updateHistogram)
+        self.item.sigImageChanged.connect(self.updateHistogram)
+        #self.levelRgn.connect(self.levelRgn, QtCore.SIGNAL('regionChanged'), self.levelsChanged)
+        self.levelRgn.sigRegionChanged.connect(self.levelsChanged)
+        #self.levelRgn.connect(self.levelRgn, QtCore.SIGNAL('regionChangeFinished'), self.levelsChangeFinished)
+        self.levelRgn.sigRegionChangeFinished.connect(self.levelsChangeFinished)
         
         
         #self.timeSlider

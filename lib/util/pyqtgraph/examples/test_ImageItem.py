@@ -46,7 +46,8 @@ def updateData():
 
 # update image data every 20ms (or so)
 t = QtCore.QTimer()
-QtCore.QObject.connect(t, QtCore.SIGNAL('timeout()'), updateData)
+#QtCore.QObject.connect(t, QtCore.SIGNAL('timeout()'), updateData)
+t.timeout.connect(updateData)
 t.start(20)
 
 

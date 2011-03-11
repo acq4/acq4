@@ -12,6 +12,9 @@ import os
 import configfile
 
 class ColorMapper(QtGui.QWidget):
+    
+    sigChanged = QtCore.Signal()
+    
     def __init__(self, parent=None, filePath=None):
         QtGui.QWidget.__init__(self, parent)
         #self.layout = QtGui.QGridLayout()
@@ -42,8 +45,10 @@ class ColorMapper(QtGui.QWidget):
         
         self.refreshFileList()
         
-        self.connect(self.ui.addBtn, QtCore.SIGNAL('clicked()'), self.addClicked)
-        self.connect(self.ui.remBtn, QtCore.SIGNAL('clicked()'), self.remClicked)
+        #self.connect(self.ui.addBtn, QtCore.SIGNAL('clicked()'), self.addClicked)
+        self.ui.addBtn.clicked.connect(self.addClicked)
+        #self.connect(self.ui.remBtn, QtCore.SIGNAL('clicked()'), self.remClicked)
+        self.ui.remBtn.clicked.connect(self.remClicked)
         self.ui.fileCombo.currentIndexChanged[int].connect(self.load)
         #self.ui.fileCombo.lineEdit().editingFinished.connect(self.save)
         self.ui.delBtn.clicked.connect(self.delete)
@@ -116,7 +121,8 @@ class ColorMapper(QtGui.QWidget):
         return (None, ColorMapper.saveState, ColorMapper.restoreState)
         
     def emitChanged(self):
-        self.emit(QtCore.SIGNAL('changed'))
+        #self.emit(QtCore.SIGNAL('changed'))
+        self.sigChanged.emit()
     
     def setArgList(self, args):
         """Sets the list of variable names available for computing colors"""

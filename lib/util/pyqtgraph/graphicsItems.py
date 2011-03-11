@@ -176,6 +176,9 @@ class GraphicsObject(QGraphicsObject):
         
 
 class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
+    
+    sigImageChanged = QtCore.Signal()
+    
     if 'linux' not in sys.platform:  ## disable weave optimization on linux--broken there.
         useWeave = True
     else:
@@ -353,7 +356,8 @@ class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
         self.update()
         
         if gotNewData:
-            self.emit(QtCore.SIGNAL('imageChanged'))
+            #self.emit(QtCore.SIGNAL('imageChanged'))
+            self.sigImageChanged.emit()
         
     def getPixmap(self):
         return self.pixmap.copy()
@@ -404,6 +408,9 @@ class ImageItem(QtGui.QGraphicsPixmapItem, QObjectWorkaround):
         return br.width()/self.pixmap.width(), br.height()/self.pixmap.height()
 
 class PlotCurveItem(GraphicsObject):
+    
+    sigPlotChanged = QtCore.Signal(object)
+    
     """Class representing a single plot curve."""
     
     sigClicked = QtCore.Signal(object)
@@ -622,7 +629,8 @@ class PlotCurveItem(GraphicsObject):
         prof.mark('set')
         self.update()
         prof.mark('update')
-        self.emit(QtCore.SIGNAL('plotChanged'), self)
+        #self.emit(QtCore.SIGNAL('plotChanged'), self)
+        self.sigPlotChanged.emit(self)
         prof.mark('emit')
         prof.finish()
         
@@ -1068,7 +1076,8 @@ class ROIPlotItem(PlotCurveItem):
         self.axes = axes
         self.xVals = xVals
         PlotCurveItem.__init__(self, self.getRoiData(), x=self.xVals, color=color)
-        roi.connect(roi, QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
+        #roi.connect(roi, QtCore.SIGNAL('regionChanged'), self.roiChangedEvent)
+        roi.sigRegionChanged.connect(self.roiChangedEvent)
         #self.roiChangedEvent()
         
     def getRoiData(self):
@@ -1098,7 +1107,8 @@ class UIGraphicsItem(GraphicsObject):
         self._viewRect = self._view().rect()
         self._viewTransform = self.viewTransform()
         self.setNewBounds()
-        QtCore.QObject.connect(view, QtCore.SIGNAL('viewChanged'), self.viewChangedEvent)
+        #QtCore.QObject.connect(view, QtCore.SIGNAL('viewChanged'), self.viewChangedEvent)
+        view.sigRangeChanged.connect(self.viewRangeChanged)
         
     def viewRect(self):
         """Return the viewport widget rect"""
@@ -1135,7 +1145,7 @@ class UIGraphicsItem(GraphicsObject):
         self.bounds = self.viewTransform().inverted()[0].mapRect(bounds)
         self.prepareGeometryChange()
 
-    def viewChangedEvent(self):
+    def viewRangeChanged(self):
         """Called when the view widget is resized"""
         self.boundingRect()
         self.update()
@@ -1403,16 +1413,24 @@ class ScaleItem(QtGui.QGraphicsWidget):
         
     def linkToView(self, view):
         if self.orientation in ['right', 'left']:
-            signal = QtCore.SIGNAL('yRangeChanged')
+            if self.linkedView is not None:
+                #view.sigYRangeChanged.disconnect(self.linkedViewChanged)
+                ## should be this instead?
+                self.linkedView.sigYRangeChanged.disconnect(self.linkedViewChanged)
+            self.linkedView = view
+            view.sigYRangeChanged.connect(self.linkedViewChanged)
+            #signal = QtCore.SIGNAL('yRangeChanged')
         else:
-            signal = QtCore.SIGNAL('xRangeChanged')
+            if self.linkedView is not None:
+                #view.sigYRangeChanged.disconnect(self.linkedViewChanged)
+                ## should be this instead?
+                self.linkedView.sigXRangeChanged.disconnect(self.linkedViewChanged)
+            self.linkedView = view
+            view.sigXRangeChanged.connect(self.linkedViewChanged)
+            #signal = QtCore.SIGNAL('xRangeChanged')
             
-        if self.linkedView is not None:
-            QtCore.QObject.disconnect(view, signal, self.linkedViewChanged)
-        self.linkedView = view
-        QtCore.QObject.connect(view, signal, self.linkedViewChanged)
         
-    def linkedViewChanged(self, _, newRange):
+    def linkedViewChanged(self, view, newRange):
         self.setRange(*newRange)
         
     def boundingRect(self):
@@ -1602,6 +1620,12 @@ class ScaleItem(QtGui.QGraphicsWidget):
 
 
 class ViewBox(QtGui.QGraphicsWidget):
+    
+    sigYRangeChanged = QtCore.Signal(object, object)
+    sigXRangeChanged = QtCore.Signal(object, object)
+    sigRangeChangedManually = QtCore.Signal(object)
+    sigRangeChanged = QtCore.Signal(object, object)
+    
     """Box that allows internal scaling/panning of children by mouse drag. Not compatible with GraphicsView having the same functionality."""
     def __init__(self, parent=None):
         QtGui.QGraphicsWidget.__init__(self, parent)
@@ -1770,7 +1794,8 @@ class ViewBox(QtGui.QGraphicsWidget):
                 mask *= np.array([1, -1])
             tr = dif*mask
             self.translateBy(tr, viewCoords=True)
-            self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
+            #self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
+            self.sigRangeChangedManually.emit(self.mouseEnabled)
             ev.accept()
         elif ev.buttons() & QtCore.Qt.RightButton:
             dif = ev.screenPos() - ev.lastScreenPos()
@@ -1780,7 +1805,8 @@ class ViewBox(QtGui.QGraphicsWidget):
             #print mask, dif, s
             center = Point(self.childGroup.transform().inverted()[0].map(ev.buttonDownPos(QtCore.Qt.RightButton)))
             self.scaleBy(s, center)
-            self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
+            #self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
+            self.sigRangeChangedManually.emit(self.mouseEnabled)
             ev.accept()
         else:
             ev.ignore()
@@ -1827,8 +1853,10 @@ class ViewBox(QtGui.QGraphicsWidget):
             self.range[1] = [min, max]
             #self.ctrl.yMinText.setText('%g' % min)
             #self.ctrl.yMaxText.setText('%g' % max)
-            self.emit(QtCore.SIGNAL('yRangeChanged'), self, (min, max))
-            self.emit(QtCore.SIGNAL('viewChanged'), self)
+            #self.emit(QtCore.SIGNAL('yRangeChanged'), self, (min, max))
+            self.sigYRangeChanged.emit(self, (min, max))
+            #self.emit(QtCore.SIGNAL('viewChanged'), self)
+            self.sigRangeChanged.emit(self, self.range)
         if update:
             self.updateMatrix()
         
@@ -1852,8 +1880,10 @@ class ViewBox(QtGui.QGraphicsWidget):
             self.range[0] = [min, max]
             #self.ctrl.xMinText.setText('%g' % min)
             #self.ctrl.xMaxText.setText('%g' % max)
-            self.emit(QtCore.SIGNAL('xRangeChanged'), self, (min, max))
-            self.emit(QtCore.SIGNAL('viewChanged'), self)
+            #self.emit(QtCore.SIGNAL('xRangeChanged'), self, (min, max))
+            self.sigXRangeChanged.emit(self, (min, max))
+            #self.emit(QtCore.SIGNAL('viewChanged'), self)
+            self.sigRangeChanged.emit(self, self.range)
         if update:
             self.updateMatrix()
 
@@ -1877,6 +1907,11 @@ class ViewBox(QtGui.QGraphicsWidget):
 
 
 class InfiniteLine(GraphicsObject):
+    
+    sigDragged = QtCore.Signal(object)
+    sigPositionChangeFinished = QtCore.Signal(object)
+    sigPositionChanged = QtCore.Signal(object)
+    
     def __init__(self, view, pos=0, angle=90, pen=None, movable=False, bounds=None):
         GraphicsObject.__init__(self)
         self.bounds = QtCore.QRectF()   ## graphicsitem boundary
@@ -1902,7 +1937,8 @@ class InfiniteLine(GraphicsObject):
         #self.setFlag(self.ItemSendsScenePositionChanges)
         #for p in self.getBoundingParents():
             #QtCore.QObject.connect(p, QtCore.SIGNAL('viewChanged'), self.updateLine)
-        QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.updateLine)
+        #QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.updateLine)
+        self.view().sigRangeChanged.connect(self.updateLine)
       
     def setMovable(self, m):
         self.movable = m
@@ -1960,7 +1996,8 @@ class InfiniteLine(GraphicsObject):
         if self.p != newPos:
             self.p = newPos
             self.updateLine()
-            self.emit(QtCore.SIGNAL('positionChanged'), self)
+            #self.emit(QtCore.SIGNAL('positionChanged'), self)
+            self.sigPositionChanged.emit(self)
 
     def getXPos(self):
         return self.p[0]
@@ -2073,17 +2110,23 @@ class InfiniteLine(GraphicsObject):
             
     def mouseMoveEvent(self, ev):
         self.setPos(self.mapToParent(ev.pos()) - self.pressDelta)
-        self.emit(QtCore.SIGNAL('dragged'), self)
+        #self.emit(QtCore.SIGNAL('dragged'), self)
+        self.sigDragged.emit(self)
         self.hasMoved = True
 
     def mouseReleaseEvent(self, ev):
         if self.hasMoved and ev.button() == QtCore.Qt.LeftButton:
             self.hasMoved = False
-            self.emit(QtCore.SIGNAL('positionChangeFinished'), self)
+            #self.emit(QtCore.SIGNAL('positionChangeFinished'), self)
+            self.sigPositionChangeFinished.emit(self)
             
 
 
 class LinearRegionItem(GraphicsObject):
+    
+    sigRegionChangeFinished = QtCore.Signal(object)
+    sigRegionChanged = QtCore.Signal(object)
+    
     """Used for marking a horizontal or vertical region in plots."""
     def __init__(self, view, orientation="vertical", vals=[0,1], brush=None, movable=True, bounds=None):
         GraphicsObject.__init__(self)
@@ -2105,12 +2148,15 @@ class LinearRegionItem(GraphicsObject):
             self.lines = [
                 InfiniteLine(view, QtCore.QPointF(vals[0], 0), 90, movable=movable, bounds=bounds), 
                 InfiniteLine(view, QtCore.QPointF(vals[1], 0), 90, movable=movable, bounds=bounds)]
-        QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.updateBounds)
+        #QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.updateBounds)
+        self.view().sigRangeChanged.connect(self.updateBounds)
         
         for l in self.lines:
             l.setParentItem(self)
-            l.connect(l, QtCore.SIGNAL('positionChangeFinished'), self.lineMoveFinished)
-            l.connect(l, QtCore.SIGNAL('positionChanged'), self.lineMoved)
+            #l.connect(l, QtCore.SIGNAL('positionChangeFinished'), self.lineMoveFinished)
+            l.sigPositionChangeFinished.connect(self.lineMoveFinished)
+            #l.connect(l, QtCore.SIGNAL('positionChanged'), self.lineMoved)
+            l.sigPositionChanged.connect(self.lineMoved)
             
         if brush is None:
             brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 50))
@@ -2131,10 +2177,12 @@ class LinearRegionItem(GraphicsObject):
             
     def lineMoved(self):
         self.updateBounds()
-        self.emit(QtCore.SIGNAL('regionChanged'), self)
+        #self.emit(QtCore.SIGNAL('regionChanged'), self)
+        self.sigRegionChanged.emit(self)
             
     def lineMoveFinished(self):
-        self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+        #self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+        self.sigRegionChangeFinished.emit(self)
         
             
     def updateBounds(self):
@@ -2225,11 +2273,13 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         if self.view is not None:
             if relative:
                 #QtCore.QObject.connect(self.view, QtCore.SIGNAL('viewChanged'), self.rebuildTicks)
-                QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.rescale)
+                #QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.rescale)
+                self.view().sigRangeChanged.connect(self.rescale)
             else:
                 try:
                     #QtCore.QObject.disconnect(self.view, QtCore.SIGNAL('viewChanged'), self.rebuildTicks)
-                    QtCore.QObject.disconnect(self.view(), QtCore.SIGNAL('viewChanged'), self.rescale)
+                    #QtCore.QObject.disconnect(self.view(), QtCore.SIGNAL('viewChanged'), self.rescale)
+                    self.view().sigRangeChanged.disconnect(self.rescale)
                 except:
                     pass
         self.rebuildTicks()
@@ -2302,9 +2352,9 @@ class GridItem(UIGraphicsItem):
         self.picture = None
         
         
-    def viewChangedEvent(self):
+    def viewRangeChanged(self):
         self.picture = None
-        UIGraphicsItem.viewChangedEvent(self)
+        UIGraphicsItem.viewRangeChanged(self)
         #self.update()
         
     def paint(self, p, opt, widget):

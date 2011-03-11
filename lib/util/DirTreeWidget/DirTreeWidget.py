@@ -7,6 +7,9 @@ import os
  
  
 class DirTreeWidget(QtGui.QTreeWidget):
+    
+    sigSelectionChanged = QtCore.Signal(object)
+    
     def __init__(self, parent=None, baseDirHandle=None, checkState=None, allowMove=True, allowRename=True):
         QtGui.QTreeWidget.__init__(self, parent)
         #QtCore.QAbstractItemModel.__init__(self, parent)
@@ -17,9 +20,12 @@ class DirTreeWidget(QtGui.QTreeWidget):
         self.currentDir = None
         #self.handles = {}
         self.items = {}
-        QtCore.QObject.connect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
-        QtCore.QObject.connect(self, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
-        QtCore.QObject.connect(self, QtCore.SIGNAL('currentItemChanged(QTreeWidgetItem*, QTreeWidgetItem*)'), self.selectionChanged)
+        #QtCore.QObject.connect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
+        self.itemExpanded.connect(self.itemExpanded)
+        #QtCore.QObject.connect(self, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
+        self.itemChanged.connect(self.itemChanged)
+        #QtCore.QObject.connect(self, QtCore.SIGNAL('currentItemChanged(QTreeWidgetItem*, QTreeWidgetItem*)'), self.selectionChanged)
+        self.currentItemChanged.connect(self.selectionChanged)
         
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
@@ -37,8 +43,10 @@ class DirTreeWidget(QtGui.QTreeWidget):
         
     def quit(self):
         ## not sure if any of this is necessary..
-        QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
-        QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
+        #QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
+        self.itemExpanded.disconnect(self.itemExpanded)
+        #QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
+        self.itemChanged.disconnect(self.itemChanged)
         for h in self.items:
             self.unwatch(h)
         #self.handles = {}
@@ -54,7 +62,8 @@ class DirTreeWidget(QtGui.QTreeWidget):
         
     def selectionChanged(self, item=None, _=None):
         """Selection has changed; check to see whether currentDir item needs to be recolored"""
-        self.emit(QtCore.SIGNAL('selectionChanged'), self)
+        #self.emit(QtCore.SIGNAL('selectionChanged'), self)
+        self.sigSelectionChanged.emit(self)
         if item is None:
             item = self.currentItem()
         if not isinstance(item, FileTreeItem):
@@ -169,10 +178,12 @@ class DirTreeWidget(QtGui.QTreeWidget):
             node = node[dirs.pop(0)] 
         
     def watch(self, handle):
-        QtCore.QObject.connect(handle, QtCore.SIGNAL('delayedChange'), self.dirChanged)
+        #QtCore.QObject.connect(handle, QtCore.SIGNAL('delayedChange'), self.dirChanged)
+        handle.sigDelayedChange.connect(self.dirChanged)
         
     def unwatch(self, handle):
-        QtCore.QObject.disconnect(handle, QtCore.SIGNAL('delayedChange'), self.dirChanged)
+        #QtCore.QObject.disconnect(handle, QtCore.SIGNAL('delayedChange'), self.dirChanged)
+        handle.sigDelayedChange.disconnect(self.dirChanged)
         
     def dirChanged(self, handle, changes):
         if handle is self.baseDir:
@@ -348,7 +359,8 @@ class FileTreeItem(QtGui.QTreeWidgetItem):
             else:
                 self.setCheckState(0, QtCore.Qt.Unchecked)
         self.expandState = False
-        QtCore.QObject.connect(self.handle, QtCore.SIGNAL('changed'), self.handleChanged)
+        #QtCore.QObject.connect(self.handle, QtCore.SIGNAL('changed'), self.handleChanged)
+        self.handle.sigChanged.connect(self.handleChanged)
         self.updateBoldState()
         
     def setFlag(self, flag, v=True):

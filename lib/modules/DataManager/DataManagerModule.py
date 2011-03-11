@@ -7,9 +7,13 @@ from debug import *
 import FileAnalysisView
 
 class Window(QtGui.QMainWindow):
+    
+    sigClosed = QtCore.Signal()
+    
     def closeEvent(self, ev):
         ev.accept()
-        self.emit(QtCore.SIGNAL('closed'))
+        #self.emit(QtCore.SIGNAL('closed'))
+        self.sigClosed.emit()
 
 class DataManager(Module):
     
@@ -39,19 +43,30 @@ class DataManager(Module):
         
         ## Make all connections needed
         #QtCore.QObject.connect(self.dm, QtCore.SIGNAL("baseDirChanged()"), self.baseDirChanged)
-        QtCore.QObject.connect(self.ui.selectDirBtn, QtCore.SIGNAL("clicked()"), self.showFileDialog)
-        QtCore.QObject.connect(self.ui.setCurrentDirBtn, QtCore.SIGNAL("clicked()"), self.setCurrentClicked)
+        #QtCore.QObject.connect(self.ui.selectDirBtn, QtCore.SIGNAL("clicked()"), self.showFileDialog)
+        self.ui.selectDirBtn.clicked.connect(self.showFileDialog)
+        #QtCore.QObject.connect(self.ui.setCurrentDirBtn, QtCore.SIGNAL("clicked()"), self.setCurrentClicked)
+        self.ui.setCurrentDirBtn.clicked.connect(self.setCurrentClicked)
         #QtCore.QObject.connect(self.ui.storageDirText, QtCore.SIGNAL('textEdited(const QString)'), self.selectDir)
-        QtCore.QObject.connect(self.dialog, QtCore.SIGNAL('filesSelected(const QStringList)'), self.setBaseDir)
-        QtCore.QObject.connect(self.manager, QtCore.SIGNAL('baseDirChanged'), self.baseDirChanged)
-        QtCore.QObject.connect(self.manager, QtCore.SIGNAL('currentDirChanged'), self.currentDirChanged)
-        QtCore.QObject.connect(self.manager, QtCore.SIGNAL('configChanged'), self.updateNewFolderList)
-        QtCore.QObject.connect(self.ui.newFolderList, QtCore.SIGNAL('currentIndexChanged(int)'), self.newFolder)
+        #QtCore.QObject.connect(self.dialog, QtCore.SIGNAL('filesSelected(const QStringList)'), self.setBaseDir)
+        self.dialog.filesSelected.connect(self.setBaseDir)
+        #QtCore.QObject.connect(self.manager, QtCore.SIGNAL('baseDirChanged'), self.baseDirChanged)
+        self.manager.sigBaseDirChanged.connect(self.baseDirChanged)
+        #QtCore.QObject.connect(self.manager, QtCore.SIGNAL('currentDirChanged'), self.currentDirChanged)
+        self.manager.sigCurrentDirChanged.connect(self.currentDirChanged)
+        #QtCore.QObject.connect(self.manager, QtCore.SIGNAL('configChanged'), self.updateNewFolderList)
+        self.manager.sigConfigChanged.connect(self.updateNewFolderList)
+        #QtCore.QObject.connect(self.ui.newFolderList, QtCore.SIGNAL('currentIndexChanged(int)'), self.newFolder)
+        self.ui.newFolderList.currentIndexChanged.connect(self.newFolder)
         #QtCore.QObject.connect(self.ui.fileTreeWidget.selectionModel(), QtCore.SIGNAL('selectionChanged(const QItemSelection&, const QItemSelection&)'), self.fileSelectionChanged)
-        QtCore.QObject.connect(self.ui.fileTreeWidget, QtCore.SIGNAL('itemSelectionChanged()'), self.fileSelectionChanged)
-        QtCore.QObject.connect(self.ui.logEntryText, QtCore.SIGNAL('returnPressed()'), self.logEntry)
-        QtCore.QObject.connect(self.ui.fileDisplayTabs, QtCore.SIGNAL('currentChanged(int)'), self.tabChanged)
-        QtCore.QObject.connect(self.win, QtCore.SIGNAL('closed'), self.quit)
+        #QtCore.QObject.connect(self.ui.fileTreeWidget, QtCore.SIGNAL('itemSelectionChanged()'), self.fileSelectionChanged)
+        self.ui.fileTreeWidget.itemSelectionChanged.connect(self.fileSelectionChanged)
+        #QtCore.QObject.connect(self.ui.logEntryText, QtCore.SIGNAL('returnPressed()'), self.logEntry)
+        self.ui.logEntryText.returnPressed.connect(self.logEntry)
+        #QtCore.QObject.connect(self.ui.fileDisplayTabs, QtCore.SIGNAL('currentChanged(int)'), self.tabChanged)
+        self.ui.fileDisplayTabs.currentChanged.connect(self.tabChanged)
+        #QtCore.QObject.connect(self.win, QtCore.SIGNAL('closed'), self.quit)
+        self.win.sigClosed.connect(self.quit)
         self.ui.analysisWidget.sigDbChanged.connect(self.analysisDbChanged)
         self.win.show()
         
@@ -197,14 +212,16 @@ class DataManager(Module):
     def fileSelectionChanged(self):
         #print "file selection changed"
         if self.selFile is not None:
-            QtCore.QObject.disconnect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
+            #QtCore.QObject.disconnect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
+            self.selFile.sigChanged.disconnect(self.selectedFileAltered)
         
         fh = self.selectedFile()
         self.manager.currentFile = fh  ## Make this really easy to pick up from an interactive prompt.
         self.loadFile(fh)
         self.selFile = fh
         if fh is not None:
-            QtCore.QObject.connect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
+            #QtCore.QObject.connect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
+            self.selFile.sigChanged.connect(self.selectedFileAltered)
         
     def loadFile(self, fh):
         self.ui.selectedLogView.clear()
