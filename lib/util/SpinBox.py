@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
+if not hasattr(QtCore, 'Signal'):
+    QtCore.Signal = QtCore.pyqtSignal
+
 from functions import siEval, siFormat
 from math import log
 from SignalProxy import proxyConnect
@@ -27,6 +30,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
     ## after the call to __del__
     dead_spins = []
     
+    valueChanged = QtCore.Signal(object)     # (value)  for compatibility with QSpinBox
     sigValueChanged = QtCore.Signal(object)  # (self)
     sigValueChanging = QtCore.Signal(object)  # (value)
     
@@ -71,7 +75,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.setOpts(**kwargs)
         
         #QtCore.QObject.connect(self, QtCore.SIGNAL('editingFinished()'), self.editingFinished)
-        self.editingFinished.connect(self.editingFinished)
+        self.editingFinished.connect(self.editingFinishedEvent)
         #self.proxy = proxyConnect(self, QtCore.SIGNAL('valueChanging'), self.delayedChange)
         self.proxy = proxyConnect(None, self.sigValueChanging, self.delayedChange)
         
@@ -279,7 +283,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         ##QtGui.QAbstractSpinBox.interpretText(self)
         
         
-    def editingFinished(self):
+    def editingFinishedEvent(self):
         """Edit has finished; set value."""
         #print "Edit finished."
         try:

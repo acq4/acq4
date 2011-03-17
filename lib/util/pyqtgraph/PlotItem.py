@@ -25,7 +25,7 @@ from functions import *
 #tryWorkaround(QtCore, QtGui)
 import weakref
 import numpy as np
-import debug
+#import debug
 
 try:
     from WidgetGroup import *

@@ -20,7 +20,7 @@ from FileType import *
 
 class ImageFile(FileType):
     
-    extensions = ['.png', '.tif']   ## list of extensions handled by this class
+    extensions = ['.png', '.tif', '.jpg']   ## list of extensions handled by this class
     dataTypes = [MA, ndarray]    ## list of python types handled by this class
     priority = 50      ## medium priority; MetaArray should be used for writing arrays if possible;
     

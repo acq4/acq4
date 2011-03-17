@@ -11,7 +11,7 @@ import metaarray
 
 class FileDataView(QtGui.QSplitter):
     def __init__(self, parent):
-        QtGui.QWidget.__init__(self, parent)
+        QtGui.QSplitter.__init__(self, parent)
         self.manager = Manager.getManager()
         self.setOrientation(QtCore.Qt.Vertical)
         self.current = None

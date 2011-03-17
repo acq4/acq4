@@ -6,7 +6,7 @@ from Mutex import *
 class InterfaceDirectory(QtCore.QObject):
     """Class for managing a phonebook of interfaces.
     Any object in the program may advertise its services via this directory"""
-    sigInterfaceListChanged = QtCore.QSignal(object)
+    sigInterfaceListChanged = QtCore.Signal(object)
     
     def __init__(self):
         QtCore.QObject.__init__(self)

@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
+if not hasattr(QtCore, 'Signal'):
+    QtCore.Signal = QtCore.pyqtSignal
 import VerticalLabel
 
 class CheckTable(QtGui.QWidget):

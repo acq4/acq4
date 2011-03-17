@@ -11,7 +11,7 @@ from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
 from Point import *
 #from vector import *
 import sys
-import debug    
+#import debug    
         
 class GraphicsView(QtGui.QGraphicsView):
     

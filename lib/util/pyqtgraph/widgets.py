@@ -16,7 +16,7 @@ from numpy.linalg import norm
 import scipy.ndimage as ndimage
 from Point import *
 from math import cos, sin
-from ObjectWorkaround import *
+#from ObjectWorkaround import *
 
 def rectStr(r):
     return "[%f, %f] + [%f, %f]" % (r.x(), r.y(), r.width(), r.height())
@@ -33,15 +33,15 @@ def rectStr(r):
         #return QtCore.QObject.connect(self._qObj_, *args)
 
 
-class ROI(QtGui.QGraphicsItem, QObjectWorkaround):
+class ROI(QtGui.QGraphicsObject):
     
     sigRegionChangeFinished = QtCore.Signal(object)
     sigRegionChangeStarted = QtCore.Signal(object)
     sigRegionChanged = QtCore.Signal(object)
     
     def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None):
-        QObjectWorkaround.__init__(self)
-        QtGui.QGraphicsItem.__init__(self, parent)
+        #QObjectWorkaround.__init__(self)
+        QtGui.QGraphicsObject.__init__(self, parent)
         pos = Point(pos)
         size = Point(size)
         self.aspectLocked = False
@@ -898,15 +898,14 @@ class LineROI(ROI):
         self.addScaleHandle([0.5, 1], [0.5, 0.5])
         
         
-class MultiLineROI(QtGui.QGraphicsItem, QObjectWorkaround):
+class MultiLineROI(QtGui.QGraphicsObject):
     
     sigRegionChangeFinished = QtCore.Signal(object)
     sigRegionChangeStarted = QtCore.Signal(object)
     sigRegionChanged = QtCore.Signal(object)
     
     def __init__(self, points, width, pen=None, **args):
-        QObjectWorkaround.__init__(self)
-        QtGui.QGraphicsItem.__init__(self)
+        QtGui.QGraphicsObject.__init__(self)
         self.pen = pen
         self.roiArgs = args
         if len(points) < 2:

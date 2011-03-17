@@ -58,7 +58,7 @@ class Manager(QtCore.QObject):
     sigConfigChanged = QtCore.Signal()
     sigModulesChanged = QtCore.Signal() 
     sigModuleHasQuit = QtCore.Signal(object) ## (module name)
-    #sigCurrentDirChanged = QtCore.Signal()
+    sigCurrentDirChanged = QtCore.Signal(object, object, object) # (file, change, args)
     sigBaseDirChanged = QtCore.Signal()
     
     CREATED = False
@@ -457,13 +457,13 @@ Valid options are:
         
         #self.currentDir.sigChanged.connect(self.currentDirChanged)
         #self.sigCurrentDirChanged.emit()
-        self.connect(self.currentDir, QtCore.SIGNAL('changed'), self.currentDirChanged)
+        self.currentDir.sigChanged.connect(self.currentDirChanged)
         self.emit(QtCore.SIGNAL('currentDirChanged'))
 
-    def currentDirChanged(self, *args):
+    def currentDirChanged(self, fh, change=None, args=()):
         """Handle situation where currentDir is moved or renamed"""
         #self.sigCurrentDirChanged.emit(*args)
-        self.emit(QtCore.SIGNAL('currentDirChanged'), *args)
+        self.emit(QtCore.SIGNAL('currentDirChanged'), fh, change, args)
             
             
     def getBaseDir(self):

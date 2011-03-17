@@ -335,7 +335,6 @@ class ImageView(QtGui.QWidget):
           axes:        {'t':0, 'x':1, 'y':2, 'c':3}; Dictionary indicating the interpretation for each axis.
                        This is only needed to override the default guess.
         """
-        
         if not isinstance(img, np.ndarray):
             raise Exception("Image must be specified as ndarray.")
         self.image = img
@@ -364,7 +363,7 @@ class ImageView(QtGui.QWidget):
             elif img.ndim == 4:
                 self.axes = {'t': 0, 'x': 1, 'y': 2, 'c': 3}
             else:
-                raise Exception("Can not interpret image with dimensions %s" % (str(img)))
+                raise Exception("Can not interpret image with dimensions %s" % (str(img.shape)))
         elif isinstance(axes, dict):
             self.axes = axes.copy()
         elif isinstance(axes, list) or isinstance(axes, tuple):
@@ -457,7 +456,7 @@ class ImageView(QtGui.QWidget):
         #else:
             #norm = zeros(image.shape)
         if div:
-            norm = norm.astype(float32)
+            norm = norm.astype(np.float32)
             
         if self.ui.normTimeRangeCheck.isChecked() and image.ndim == 3:
             (sind, start) = self.timeIndex(self.normRgn.lines[0])
@@ -480,7 +479,7 @@ class ImageView(QtGui.QWidget):
             
         if self.ui.normROICheck.isChecked() and image.ndim == 3:
             n = self.normRoi.getArrayRegion(norm, self.imageItem, (1, 2)).mean(axis=1).mean(axis=1)
-            n = n[:,newaxis,newaxis]
+            n = n[:,np.newaxis,np.newaxis]
             #print start, end, sind, eind
             if div:
                 norm /= n

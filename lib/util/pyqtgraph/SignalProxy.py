@@ -23,7 +23,6 @@ class SignalProxy(QtCore.QObject):
             self.signal = signal
         self.delay = delay
         self.args = None
-        self.signal = signal
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.flush)
         self.block = False

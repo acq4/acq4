@@ -96,7 +96,7 @@ class DataManager(Module):
         #dh = self.manager.dirHandle(newDir)
         self.manager.setCurrentDir(handle)
 
-    def currentDirChanged(self, name=None, change=None, *args):
+    def currentDirChanged(self, name=None, change=None, args=()):
         if change in [None, 'moved', 'renamed', 'parent']:
             newDir = self.manager.getCurrentDir()
             dirName = newDir.name(relativeTo=self.baseDir)
@@ -250,7 +250,7 @@ class DataManager(Module):
             self.ui.dataViewWidget.setCurrentFile(fh)
             
 
-    def selectedFileAltered(self, name, change, *args):
+    def selectedFileAltered(self, name, change, args):
         if change in ['parent', 'renamed', 'moved'] and self.selFile is not None:
             #index = self.model.handleIndex(self.selFile)
             #self.ui.fileTreeView.selectionModel().select(index, QtGui.QItemSelectionModel.Clear)

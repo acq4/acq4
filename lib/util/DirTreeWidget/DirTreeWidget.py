@@ -21,9 +21,9 @@ class DirTreeWidget(QtGui.QTreeWidget):
         #self.handles = {}
         self.items = {}
         #QtCore.QObject.connect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
-        self.itemExpanded.connect(self.itemExpanded)
+        self.itemExpanded.connect(self.itemExpandedEvent)
         #QtCore.QObject.connect(self, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
-        self.itemChanged.connect(self.itemChanged)
+        self.itemChanged.connect(self.itemChangedEvent)
         #QtCore.QObject.connect(self, QtCore.SIGNAL('currentItemChanged(QTreeWidgetItem*, QTreeWidgetItem*)'), self.selectionChanged)
         self.currentItemChanged.connect(self.selectionChanged)
         
@@ -44,9 +44,9 @@ class DirTreeWidget(QtGui.QTreeWidget):
     def quit(self):
         ## not sure if any of this is necessary..
         #QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
-        self.itemExpanded.disconnect(self.itemExpanded)
+        self.itemExpanded.disconnect(self.itemExpandedEvent)
         #QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
-        self.itemChanged.disconnect(self.itemChanged)
+        self.itemChanged.disconnect(self.itemChangedEvent)
         for h in self.items:
             self.unwatch(h)
         #self.handles = {}
@@ -103,7 +103,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
             raise Exception("Can't find tree item for file '%s'" % handle.name())
         
         
-    def itemChanged(self, item, col):
+    def itemChangedEvent(self, item, col):
         """Item text has changed; try renaming the file"""
         handle = self.handle(item)
         try:
@@ -286,7 +286,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
             root.removeChild(child)
             
             
-    def itemExpanded(self, item):
+    def itemExpandedEvent(self, item):
         """Called whenever an item in the tree is expanded; responsible for loading children if they have not been loaded yet."""
         if not item.childrenLoaded:
             ## Display loading message before starting load

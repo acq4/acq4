@@ -7,13 +7,15 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 
 Run in interactive python. Useful for accessing data for manual analysis.
 """
-#import lib.util.PySideImporter
 
+
+#import lib.util.PySideImporter  ## Use PySide instead of PyQt
+from PyQt4 import QtGui, QtCore
 ## Needed to keep compatibility between pyside and pyqt
 ## (this can go away once the transition to PySide is complete)
-from PyQt4 import QtCore, QtGui
-QtCore.Signal = QtCore.pyqtSignal
-QtCore.Slot = QtCore.pyqtSlot
+if not hasattr(QtCore, 'Signal'):
+    QtCore.Signal = QtCore.pyqtSignal
+    QtCore.Slot = QtCore.pyqtSlot
 
 from lib.Manager import *
 
