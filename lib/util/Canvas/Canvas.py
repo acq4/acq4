@@ -240,7 +240,7 @@ class Canvas(QtGui.QWidget):
             
 
             
-        if len(paramKeys) < 1 or separateParams==False:    
+        if len(paramKeys) < 1:    
             pts = []
             for d in dirs: #d is a directory handle
                 #d = dh[d]

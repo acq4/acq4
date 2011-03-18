@@ -50,6 +50,7 @@ class AnalysisModule(QtCore.QObject):
         as (name: (args..)) pairs, and the element objects will be created automatically."""
         QtCore.QObject.__init__(self)
         self._host_ = host
+        self.dataModel = host.dataModel
         
 
     def initializeElements(self):

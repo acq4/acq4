@@ -5,6 +5,7 @@ from AnalysisTemplate import *
 import lib.Manager
 import lib.analysis.modules as analysis
 import lib.analysis.AnalysisHost as AnalysisHost
+import lib.analysis.dataModels as models
 
 class FileAnalysisView(QtGui.QWidget):
     
@@ -21,15 +22,22 @@ class FileAnalysisView(QtGui.QWidget):
         self.dbFile = None
         self.db = None
         self.mods = []
+        self.currentModel = None
         
         self.populateModuleList()
+        self.populateModelList()
         
-        self.connect(self.ui.openDbBtn, QtCore.SIGNAL('clicked()'), self.openDbClicked)
-        self.connect(self.ui.createDbBtn, QtCore.SIGNAL('clicked()'), self.createDbClicked)
+        #self.connect(self.ui.openDbBtn, QtCore.SIGNAL('clicked()'), self.openDbClicked)
+        self.ui.openDbBtn.clicked.connect(self.openDbClicked)
+        #self.connect(self.ui.createDbBtn, QtCore.SIGNAL('clicked()'), self.createDbClicked)
+        self.ui.createDbBtn.clicked.connect(self.createDbClicked)
         #self.connect(self.ui.addFileBtn, QtCore.SIGNAL('clicked()'), self.addFileClicked)
-        self.connect(self.ui.analysisCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.loadModule)
+        #self.connect(self.ui.analysisCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.loadModule)
+        self.ui.analysisCombo.currentIndexChanged.connect(self.loadModule)
         self.ui.refreshDbBtn.clicked.connect(self.refreshDb)
+        self.ui.dataModelCombo.currentIndexChanged.connect(self.loadModel)
         
+
     def openDbClicked(self):
         fn = str(QtGui.QFileDialog.getOpenFileName(self, "Select Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)"))
         if fn == '':
@@ -66,9 +74,22 @@ class FileAnalysisView(QtGui.QWidget):
             return
         modName = str(self.ui.analysisCombo.currentText())
         self.ui.analysisCombo.setCurrentIndex(0)
-        mod = AnalysisHost.AnalysisHost(dataManager=self.mod, module=modName)
+        mod = AnalysisHost.AnalysisHost(dataManager=self.mod, dataModel=self.currentModel, module=modName)
         self.mods.append(mod)
 
+    def populateModelList(self):
+        self.ui.dataModelCombo.clear()
+        self.ui.dataModelCombo.addItem('Load...')
+        for m in models.listModels():
+            self.ui.dataModelCombo.addItem(m)
+    
+    def loadModel(self):
+        if self.ui.dataModelCombo.currentIndex() == 0:
+            return
+        modName = str(self.ui.dataModelCombo.currentText())
+        self.currentModel = models.loadModel(modName)
+    
+    
     def currentDatabase(self):
         return self.db
 
