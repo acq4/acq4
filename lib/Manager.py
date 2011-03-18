@@ -625,7 +625,7 @@ class Task:
             self.tasks[devName] = task
         
         
-    def execute(self, block=True, processEvents=False):
+    def execute(self, block=True, processEvents=True):
         """Start the protocol task.
         If block is true, then the function blocks until the task is complete.
         if processEvents is true, then Qt events are processed while waiting for the task to complete."""
@@ -719,14 +719,24 @@ class Task:
             timeout = self.cfg.get('timeout', None)
             
             lastProcess = ptime.time()
+            isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
+            #print "isGuiThread:", isGuiThread
             while not self.isDone():
                 now = ptime.time()
-                if timeout is not None and now - self.startTime > timeout:
+                elapsed = now - self.startTime
+                if timeout is not None and elapsed > timeout:
                     raise Exception("Protocol timed out (>%0.2fs); aborting." % timeout)
-                if processEvents and now-lastProcess > 100e-3:  ## only process Qt events every 100ms
-                    QtGui.QApplication.processEvents()
-                    lastProcess = ptime.time()
-                time.sleep(1e-3)
+                if isGuiThread:
+                    if processEvents and now-lastProcess > 20e-3:  ## only process Qt events every 20ms
+                        QtGui.QApplication.processEvents()
+                        lastProcess = ptime.time()
+                    
+                if elapsed < self.cfg['duration']-10e-3:  ## If the protocol duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
+                    sleep = min(10e-3, self.cfg['duration']-elapsed-5e-3)
+                else:
+                    sleep = 1.0e-3  ## afterward, wake up more quickly so we can respond as soon as the protocol finishes
+                #print "sleep for", sleep
+                time.sleep(sleep)
             #print "all tasks finshed."
             
             self.stop()

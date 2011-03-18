@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'CameraTemplate.ui'
 #
-# Created: Tue Aug 10 19:08:44 2010
+# Created: Wed Mar 09 12:53:19 2011
 #      by: PyQt4 UI code generator 4.5.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -84,6 +84,9 @@ class Ui_MainWindow(object):
         self.btnFullFrame = QtGui.QPushButton(self.dockWidgetContents)
         self.btnFullFrame.setObjectName("btnFullFrame")
         self.hboxlayout1.addWidget(self.btnFullFrame)
+        self.scaleToImageBtn = QtGui.QPushButton(self.dockWidgetContents)
+        self.scaleToImageBtn.setObjectName("scaleToImageBtn")
+        self.hboxlayout1.addWidget(self.scaleToImageBtn)
         spacerItem1 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.hboxlayout1.addItem(spacerItem1)
         self.vboxlayout.addLayout(self.hboxlayout1)
@@ -308,6 +311,8 @@ class Ui_MainWindow(object):
         self.spinExposure.setToolTip(QtGui.QApplication.translate("MainWindow", "Sets the exposure time for each frame.", None, QtGui.QApplication.UnicodeUTF8))
         self.btnFullFrame.setToolTip(QtGui.QApplication.translate("MainWindow", "Set the region of interest to the maximum possible area.", None, QtGui.QApplication.UnicodeUTF8))
         self.btnFullFrame.setText(QtGui.QApplication.translate("MainWindow", "Full Frame", None, QtGui.QApplication.UnicodeUTF8))
+        self.scaleToImageBtn.setToolTip(QtGui.QApplication.translate("MainWindow", "Scales the view such that camera pixels match screen pixels exactly. This can increase the rate frames are displayed (does not affect the acquisition rate, though).", None, QtGui.QApplication.UnicodeUTF8))
+        self.scaleToImageBtn.setText(QtGui.QApplication.translate("MainWindow", "Scale 1:1", None, QtGui.QApplication.UnicodeUTF8))
         self.dockWidget_2.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Display Gain", None, QtGui.QApplication.UnicodeUTF8))
         self.btnAutoGain.setToolTip(QtGui.QApplication.translate("MainWindow", "Determines the behavior of the white/black level sliders.\n"
 "When enabled, the sliders maximum and minimum values are set\n"
@@ -351,5 +356,5 @@ class Ui_MainWindow(object):
 
 from SpinBox import SpinBox
 from pyqtgraph.GradientWidget import GradientWidget
-from pyqtgraph.PlotWidget import PlotWidget
 from pyqtgraph.GraphicsView import GraphicsView
+from pyqtgraph.PlotWidget import PlotWidget

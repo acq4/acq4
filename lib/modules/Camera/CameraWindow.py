@@ -263,6 +263,7 @@ class CameraWindow(QtGui.QMainWindow):
 
         QtCore.QObject.connect(self.ui.addFrameBtn, QtCore.SIGNAL('clicked()'), self.addPersistentFrame)
         QtCore.QObject.connect(self.ui.clearFramesBtn, QtCore.SIGNAL('clicked()'), self.clearPersistentFrames)
+        self.ui.scaleToImageBtn.clicked.connect(self.scaleToImage)
         
         self.ui.btnAutoGain.setChecked(True)
         
@@ -426,6 +427,8 @@ class CameraWindow(QtGui.QMainWindow):
         
     def regionWidgetChanged(self, *args):
         self.updateRegion()
+
+        
         
     #@trace
     def updateRegion(self, autoRestart=True):
@@ -436,7 +439,9 @@ class CameraWindow(QtGui.QMainWindow):
             self.region = newRegion
             self.cam.setParam('region', self.region, autoRestart=autoRestart)
         
-        
+    def scaleToImage(self):
+        self.gv.scaleToImage(self.imageItem)
+            
     #@trace
     def closeEvent(self, ev):
         self.quit()
@@ -488,19 +493,23 @@ class CameraWindow(QtGui.QMainWindow):
             x = qpt.x()
             y = qpt.y()
         self.mouse = [x, y]
-        #img = self.imageItem.image
-        #if img is None:
-            #return
-        
-        #z = img[int(x), int(y)]
-    
-        #if hasattr(z, 'shape') and len(z.shape) > 0:
-            #z = "Z:(%s, %s, %s)" % (str(z[0]), str(z[1]), str(z[2]))
-        #else:
-            #z = "Z:%s" % str(z)
-    
         self.xyLabel.setText("X:%0.1fum Y:%0.1fum" % (x * 1e6, y * 1e6))
-        #self.vLabel.setText(z)
+        
+        img = self.imageItem.image
+        if img is None:
+            return
+        pos = self.imageItem.mapFromScene(QtCore.QPointF(x, y))
+        try:
+            z = img[int(pos.x()), int(pos.y())]
+        except IndexError:
+            return
+    
+        if hasattr(z, 'shape') and len(z.shape) > 0:
+            z = "Z:(%s, %s, %s)" % (str(z[0]), str(z[1]), str(z[2]))
+        else:
+            z = "Z:%s" % str(z)
+        
+        self.vLabel.setText(z)
             
 
     #@trace

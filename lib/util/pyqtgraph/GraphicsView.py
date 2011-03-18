@@ -11,7 +11,7 @@ from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
 from Point import *
 #from vector import *
 import sys
-            
+import debug    
         
 class GraphicsView(QtGui.QGraphicsView):
     def __init__(self, parent=None, useOpenGL=True):
@@ -77,6 +77,11 @@ class GraphicsView(QtGui.QGraphicsView):
         self.mouseEnabled = False
         self.scaleCenter = False  ## should scaling center around view center (True) or mouse click (False)
         self.clickAccepted = False
+        
+    #def paintEvent(self, *args):
+        #prof = debug.Profiler('GraphicsView.paintEvent '+str(id(self)), disabled=True)
+        #QtGui.QGraphicsView.paintEvent(self, *args)
+        #prof.finish()
         
     def useOpenGL(self, b=True):
         if b:
@@ -200,6 +205,16 @@ class GraphicsView(QtGui.QGraphicsView):
         #print "New Range:", self.range
         self.centralWidget.setGeometry(self.range)
         self.updateMatrix(propagate)
+
+    def scaleToImage(self, image):
+        """Scales such that pixels in image are the same size as screen pixels. This may result in a significant performance increase."""
+        pxSize = image.pixelSize()
+        tl = image.sceneBoundingRect().topLeft()
+        w = self.size().width() * pxSize[0]
+        h = self.size().height() * pxSize[1]
+        range = QtCore.QRectF(tl.x(), tl.y(), w, h)
+        self.setRange(range, padding=0)
+        
         
         
     def lockXRange(self, v1):

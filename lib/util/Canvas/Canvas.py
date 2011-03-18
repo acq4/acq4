@@ -18,7 +18,7 @@ import pyqtgraph as pg
 import scipy.ndimage as ndimage
 
 class Canvas(QtGui.QWidget):
-    def __init__(self, parent=None, allowTransforms=True):
+    def __init__(self, parent=None, allowTransforms=True, hideCtrl=False):
         QtGui.QWidget.__init__(self, parent)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
@@ -49,6 +49,8 @@ class Canvas(QtGui.QWidget):
         self.ui.storePngBtn.clicked.connect(self.storePng)
         
         self.resizeEvent()
+        if hideCtrl:
+            self.hideBtnClicked()
 
     def storeSvg(self):
         self.ui.view.writeSvg()
