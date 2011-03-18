@@ -696,6 +696,7 @@ class TargetGrid(widgets.ROI):
         self.pens = []
         self.pointSize = ptSize
         self.gridPacking = pd
+        self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         self.regeneratePoints()
         
     def setPointSize(self, size, packing):

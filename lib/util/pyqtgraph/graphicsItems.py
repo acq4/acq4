@@ -2293,6 +2293,8 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         
 
 class GridItem(UIGraphicsItem):
+    """Class used to make square grids in plots. NOT the grid used for running scanner sequences."""
+    
     def __init__(self, view, bounds=None, *args):
         UIGraphicsItem.__init__(self, view, bounds)
         #QtGui.QGraphicsItem.__init__(self, *args)
