@@ -398,11 +398,11 @@ class Photostim(AnalysisModule):
         
         
         ## update data in Map
-        try:
-            scan = self.scans[parentDir]
-        except KeyError:
-            scan = self.seriesScans[parentDir][fh]
-        scan.updateSpot(fh, events, stats)
+        #try:
+            #scan = self.scans[parentDir]
+        #except KeyError:
+            #scan = self.seriesScans[parentDir][fh]
+        #scan.updateSpot(fh, events, stats)
         
 
     def selectedScan(self):

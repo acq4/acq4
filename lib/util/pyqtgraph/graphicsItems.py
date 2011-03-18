@@ -997,7 +997,8 @@ class SpotItem(QtGui.QGraphicsWidget):
         self.brush = brush
         self.path = QtGui.QPainterPath()
         s2 = size/2.
-        self.path.addEllipse(QtCore.QRectF(-s2, -s2, size, size))
+        self.path.addEllipse(QtCore.QRectF(-0.5, -0.5, 1, 1))
+        self.scale(size,size)
         self.data = data
         
     def setBrush(self, brush):

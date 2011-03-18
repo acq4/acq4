@@ -251,7 +251,7 @@ class Canvas(QtGui.QWidget):
                     pts.append({'pos': pos, 'size': size, 'data': d})
             
             item = graphicsItems.ScatterPlotItem(pts, pxMode=False)
-            citem = CanvasItem(self, item, handle=dirHandle, **opts)
+            citem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
             self._addCanvasItem(citem)
             return citem
         else:
@@ -271,13 +271,13 @@ class Canvas(QtGui.QWidget):
             for k in pts.keys():
                 spots.extend(pts[k])
             item = graphicsItems.ScatterPlotItem(spots=spots, pxMode=False)
-            parentCitem = CanvasItem(self, item, handle=dirHandle, **opts)
+            parentCitem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
             self._addCanvasItem(parentCitem)
             scans = {}
             for k in pts.keys():
                 opts['name'] = paramKeys[0][0] + '_%03d' %k
                 item = graphicsItems.ScatterPlotItem(spots=pts[k], pxMode=False)
-                citem = CanvasItem(self, item, handle = dirHandle, parent=parentCitem, **opts)
+                citem = ScanCanvasItem(self, item, handle = dirHandle, parent=parentCitem, **opts)
                 self._addCanvasItem(citem)
                 scans[opts['name']] = citem
             return scans
@@ -808,6 +808,47 @@ class MarkerCanvasItem(CanvasItem):
         item.setPen(pg.mkPen((255,255,255)))
         item.setBrush(pg.mkBrush((0,100,255)))
         CanvasItem.__init__(self, canvas, item, **opts)
+        
+class ScanCanvasItem(CanvasItem):
+    def __init_(self, canvas, item, **opts):
+        
+        print "Creating ScanCanvasItem...."
+        CanvasItem.__init__(self, canvas, item, **opts)
+        
+        self.addScanImageBtn = QtGui.QPushButton()
+        self.addScanImageBtn.setText('Add Scan Image')
+        self.layout.addWidget(self.addScanImageButton)
+        
+        self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
+        
+    def loadScanImage(self):
+        print 'loadScanImage called.'
+        #dh = self.ui.fileLoader.ui.dirTree.selectedFile()
+        #scan = self.canvas.selectedItem()
+        dh = self.opts['handle']
+        dirs = [dh[d] for d in dh.subDirs()]
+        if 'Camera' not in dirs[0].subDirs():
+            print "No image data for this scan."
+            return
+        
+        images = []
+        for d in dirs:
+            frames = d['Camera']['frames.ma'].read()
+            image = frames[1]-frames[0]
+            image[image > frames[1].max()*2] = 0.
+            image = (image/float(image.max()) * 1000)
+            images.append(image)
+            
+        scanImages = np.zeros(images[0].shape)
+        for im in images:
+            scanImages += im
+        
+        info = dirs[0]['Camera']['frames.ma'].read()._info[-1]
+    
+        pos =  info['imagePosition']
+        scale = info['pixelSize']
+        item = self.getElement('Canvas').addImage(scanImages, pos=pos, scale=scale, name='scanImage')
+        self.items[item] = scanImages
         
 
 

@@ -1071,7 +1071,7 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
     return events
 
 
-def thresholdEvents(data, threshold, adjustTimes=True):
+def thresholdEvents(data, threshold, adjustTimes=True, index='start'):
     """Finds regions in a trace that cross a threshold value. Returns the index, time, length, peak, and sum of each event.
     Optionally adjusts times to an extrapolated zero-crossing."""
     threshold = abs(threshold)
@@ -1126,8 +1126,12 @@ def thresholdEvents(data, threshold, adjustTimes=True):
         sum = evData.sum()
         if sum > 0:
             peak = evData.max()
+            ind = argwhere(evData==peak)[0][0]+t1
         else:
             peak = evData.min()
+            ind = argwhere(evData==peak)[0][0]+t1
+        
+            
             
         #print "event %f: %d" % (xvals[t1], t1) 
         if adjustTimes:  ## Move start and end times outward, estimating the zero-crossing point for the event
@@ -1181,7 +1185,10 @@ def thresholdEvents(data, threshold, adjustTimes=True):
         #stops.append(t2)
         hits[i] = (t1, t2)
         events[i]['peak'] = peak
-        events[i]['index'] = t1
+        if index == 'peak':
+            events[i]['index']=ind
+        else:
+            events[i]['index'] = t1
         events[i]['len'] = ln
         events[i]['sum'] = sum
         
@@ -1197,11 +1204,16 @@ def thresholdEvents(data, threshold, adjustTimes=True):
                 continue
             if sum > 0:
                 peak = evData.max()
+                ind = argwhere(evData==peak)[0][0]+t1
             else:
                 peak = evData.min()
+                ind = argwhere(evData==peak)[0][0]+t1
                 
             events[i]['peak'] = peak
-            events[i]['index'] = t1
+            if index == 'peak':
+                events[i]['index']=ind
+            else:
+                events[i]['index'] = t1
             events[i]['len'] = ln
             events[i]['sum'] = sum
     

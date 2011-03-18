@@ -104,7 +104,7 @@ class MosaicEditor(AnalysisModule):
         canvas.selectItem(item)
         
     def loadScanImage(self):
-        print 'loadScanImage called.'
+        #print 'loadScanImage called.'
         dh = self.ui.fileLoader.ui.dirTree.selectedFile()
         dirs = [dh[d] for d in dh.subDirs()]
         if 'Camera' not in dirs[0].subDirs():
@@ -112,13 +112,20 @@ class MosaicEditor(AnalysisModule):
             return
         
         images = []
+        nulls = []
         for d in dirs:
+            if 'Camera' not in d.subDirs():
+                continue
             frames = d['Camera']['frames.ma'].read()
             image = frames[1]-frames[0]
             image[image > frames[1].max()*2] = 0.
+            if image.max() < 50:
+                nulls.append(d.shortName())
+                continue
             image = (image/float(image.max()) * 1000)
             images.append(image)
             
+        print "Null frames for %s:" %dh.shortName(), nulls
         scanImages = np.zeros(images[0].shape)
         for im in images:
             scanImages += im
