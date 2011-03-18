@@ -67,6 +67,8 @@ class DAQGeneric(Device):
                 scale = 1.0            
             return daqDev.getChannelValue(chan, mode=mode)/scale
 
+    def reconfigureChannel(self, chan, config):
+        self._DGConfig[chan].update(config)
         
     def deviceInterface(self, win):
         """Return a widget with a UI to put in the device rack"""
@@ -186,6 +188,7 @@ class DAQGenericTask(DeviceTask):
                     mode = None
                     if len(chConf['channel']) > 2:
                         mode = chConf['channel'][2]
+                    #print "Adding channel %s to DAQ task" % chConf['channel'][1]
                     daqTask.addChannel(chConf['channel'][1], chConf['type'], mode=mode)
                     self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                 #print "  done: ", self.daqTasks.keys()
@@ -238,7 +241,8 @@ class DAQGenericTask(DeviceTask):
             result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'][1])
             #prof.mark("get data for channel "+str(ch))
             #print "get data", ch, self.getChanScale(ch), result[ch]['data'].max()
-            result[ch]['data'] = result[ch]['data'] / self.getChanScale(ch)
+            scale = self.getChanScale(ch)
+            result[ch]['data'] = result[ch]['data'] / scale
             result[ch]['units'] = self.getChanUnits(ch)
             #print "channel", ch, "returned:\n  ", result[ch]
             #prof.mark("scale data for channel "+str(ch))
@@ -267,9 +271,15 @@ class DAQGenericTask(DeviceTask):
                 raise
             
             daqState = {}
-            for ch in result:
-                daqState[ch] = result[ch]['info']
-                daqState[ch]['holding'] = self.holdingVals[ch]
+            for ch in self.dev._DGConfig:
+                if ch in result:
+                    daqState[ch] = result[ch]['info']
+                else:
+                    daqState[ch] = {}
+                
+                ## record current holding value for all output channels (even those that were not buffered for this task)    
+                if self.dev._DGConfig[ch]['type'] in ['ao', 'do']:     
+                    daqState[ch]['holding'] = self.holdingVals[ch]
             
             info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'DAQ': daqState}]
             

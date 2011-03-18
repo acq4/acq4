@@ -308,12 +308,9 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         self.pen = QtGui.QPen(QtGui.QColor(0,0,0))
         self.brush = QtGui.QBrush(QtGui.QColor(200, 200, 200))
         self.node = node
-        self.setFlags(
-            self.ItemIsMovable |
-            self.ItemIsSelectable | 
-            self.ItemIsFocusable |
-            self.ItemSendsGeometryChanges
-        )
+        flags = self.ItemIsMovable | self.ItemIsSelectable | self.ItemIsFocusable |self.ItemSendsGeometryChanges
+        self.setFlags(flags)
+        
         bounds = self.boundingRect()
         self.nameItem = QtGui.QGraphicsTextItem(self.node.name(), self)
         self.nameItem.moveBy(bounds.width()/2. - self.nameItem.boundingRect().width()/2., 0)
