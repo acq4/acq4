@@ -18,6 +18,8 @@ import ProgressDialog
 class Photostim(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
+        if self.dataModel is None:
+            raise Exception("Photostim analysis module requires a data model, but none is loaded yet.")
         self.dbIdentity = "Photostim"  ## how we identify to the database; this determines which tables we own
         self.selectedSpot = None
 
@@ -162,11 +164,6 @@ class Photostim(AnalysisModule):
     def storeToDB(self):
         pass
 
-    def getClampFile(self, dh):
-        try:
-            return dh['Clamp2.ma']
-        except:
-            return dh['Clamp1.ma']
 
     def scanPointClicked(self, point):
         try:
@@ -175,7 +172,14 @@ class Photostim(AnalysisModule):
             plot = self.getElement("Data Plot")
             plot.clear()
             self.selectedSpot = point
-            fh = self.getClampFile(point.data)
+            
+            #fh = point.data.getClampFile()
+            fh = self.dataModel.getClampFile(point.data)
+            #fh = self.getClampFile(point.data)
+            #proto = self.getDataModelClass(point.data)
+            #proto.getClampFile()
+            
+            
             self.detector.loadFileRequested(fh)
             self.dbCtrl.scanSpotClicked(fh)
         finally:
@@ -332,7 +336,8 @@ class Photostim(AnalysisModule):
         spot = self.selectedSpot
         if spot is None:
             raise Exception("No spot selected")
-        fh = self.getClampFile(spot.data)
+        #fh = self.getClampFile(spot.data)
+        fh = self.dataModel.getClampFile(spot.data)
         print "Store spot:", fh
         parentDir = fh.parent()
         p2 = parentDir.parent()
@@ -372,7 +377,8 @@ class Photostim(AnalysisModule):
         with ProgressDialog.ProgressDialog("Storing scan %s" % scan.name(), "Cancel", 0, len(spots)) as dlg:
             for i in xrange(len(spots)):
                 s = spots[i]
-                fh = self.getClampFile(s.data)
+                #fh = self.getClampFile(s.data)
+                fh = self.dataModel.getClampFile(s.data)
                 try:
                     ev = scan.getEvents(fh)['events']
                 except:
@@ -449,7 +455,8 @@ class Photostim(AnalysisModule):
         if db is None:
             raise Exception("No DB selected")
         
-        fh = self.getClampFile(dh)
+        #fh = self.getClampFile(dh)
+        fh = self.dataModel.getClampFile(dh)
         parentDir = fh.parent()
         p2 = parentDir.parent()
         if db.dirTypeName(p2) == 'ProtocolSequence':
@@ -534,7 +541,8 @@ class Scan(QtCore.QObject):
         haveAll = True
         for spot in self.spots():
             dh = spot.data
-            fh = self.host.getClampFile(dh)
+            #fh = self.host.getClampFile(dh)
+            fh = self.dataModel.getClampFile(dh)
             events, stats = self.host.loadSpotFromDB(dh)
             if stats is None or len(stats) == 0:
                 print "  No data for spot", dh
@@ -576,7 +584,8 @@ class Scan(QtCore.QObject):
             ops = []
             for i in range(len(spots)):
                 spot = spots[i]
-                fh = self.host.getClampFile(spot.data)
+                #fh = self.host.getClampFile(spot.data)
+                fh = self.dataModel.getClampFile(spot.data)
                 stats = self.getStats(fh, signal=False)
                 #print "stats:", stats
                 color = self.host.getColor(stats)
@@ -656,7 +665,8 @@ class Scan(QtCore.QObject):
     def getSpot(self, fh):
         if fh not in self.spotDict:
             for s in self.spots():
-                self.spotDict[self.host.getClampFile(s.data)] = s
+                #self.spotDict[self.host.getClampFile(s.data)] = s
+                self.spotDict[self.host.dataModel.getClampFile(s.data)] = s
         return self.spotDict[fh]
 
     @staticmethod
@@ -782,7 +792,8 @@ class Map:
             pos = pt.scenePos()
             size = pt.boundingRect().width()
             added = False
-            fh = self.host.getClampFile(pt.data)
+            #fh = self.host.getClampFile(pt.data)
+            fh = self.host.dataModel.getClampFile(pt.data)
             for pt2 in self.points:     ## check all previously added points for position match
                 pos2 = pt2[0]
                 dp = pos2-pos

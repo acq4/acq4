@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
 import DataManager
 
-getDataModel(obj):
-    """Return a data model object constructed from the input."""
-    model = None
-    if isinstance(obj, DataManager.FileHandle):
-        
-        
-    if model is None:
-        raise Exception("Could not generate model for object %s" % str(obj))
 
-    return model
-
-
-
+protocolNames = {
+    'IV Curve': ('cciv.*', 'vciv.*'),
+    'Photostim Scan': (),
+    'Photostim Power Series': (),
+}
+    
+     
+deviceNames = {
+    'Clamp': ('Clamp1', 'Clamp2', 'AxoPatch200', 'AxoProbe'),
+    'Camera': ('Camera'),
+    'Laser': ('Laser-UV', 'Laser-Blue')
+}
 
 
 class DataModel:
@@ -29,36 +29,28 @@ class DataModel:
         tell me the holding potential for this clamp data
         possibly DB integration?
         
+        When did the laser stimulation occur, for how long, and at what power level?
+        
     Notes:
         Shpuld be able to easily switch to a different data model
         Objects may have multiple types (ie protocol seq and photostim scan)
         An instance of this class refers to any piece of data, but most commonly will refer to a directory or file.
         
     """
-    def __init__(self, dataTypes):
-        self.dataTypes = dataTypes
+    def __init__(self):
+        pass
     
     
-
-
-
-
-class Day(DataModel):
-    pass
-
-class Slice(DataModel):
-    pass
-
-class Cell(DataModel):
-    pass
-
-class Protocol(DataModel):
-    pass
-
-class ProtocolSequence(Protocol):
-    pass
-
-class ProtocolRun(DataModel):
-    pass
-
+    def getClampFile(self, protoDH):
+        """Given a protocol directory handle, return the clamp file handle within. 
+        If there are multiple clamps, only the first is returned.
+        Return None if no clamps are found."""
+        files = protoDH.listFiles()
+        names = deviceNames('Clamp')
+        for n in names:
+            if n in files or n+'.ma' in files:
+                return protoDH[n]
+        return None
+    
+    
 

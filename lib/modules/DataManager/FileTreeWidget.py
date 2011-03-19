@@ -34,9 +34,11 @@ class FileTreeWidget(QtGui.QTreeWidget):
     def quit(self):
         ## not sure if any of this is necessary..
         #QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
-        self.itemExpanded.disconnect(self.itemExpandedEvent)
         #QtCore.QObject.disconnect(self, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
-        self.itemChanged.disconnect(self.itemChangedEvent)
+        
+        #self.itemExpanded.disconnect(self.itemExpandedEvent)
+        #self.itemChanged.disconnect(self.itemChangedEvent)
+        
         for h in self.items:
             self.unwatch(h)
         #self.handles = {}

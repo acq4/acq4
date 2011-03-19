@@ -261,9 +261,11 @@ def getByteOrder(hLen):
             raise Exception('Header length must be 348 (got %d (LE) or %d (BE))' % (hLen1, hLen2))
     return order
     
-def shortToByte(data):
-    dMax = data.max()
-    dMin = data.min()
+def shortToByte(data, dMin=None, dMax=None):
+    if dMax is None:
+        dMax = data.max()
+    if dMin is None:
+        dMin = data.min()
     lut = np.empty(2**16, dtype=np.ubyte)
     diff = (dMax-dMin)/256.
     for i in range(256):

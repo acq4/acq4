@@ -58,7 +58,7 @@ class Flowchart(Node):
     sigFileLoaded = QtCore.Signal(object)
     
     
-    sigOutputChanged = QtCore.Signal()
+    #sigOutputChanged = QtCore.Signal() ## inherited from Node
     sigChartLoaded = QtCore.Signal()
     sigStateChanged = QtCore.Signal()
     
@@ -103,7 +103,7 @@ class Flowchart(Node):
         
     def outputChanged(self):
         self.widget().outputChanged(self.outputNode.inputValues())
-        self.sigOutputChanged.emit()
+        self.sigOutputChanged.emit(self)
         
     def output(self):
         return self.outputNode.inputValues()

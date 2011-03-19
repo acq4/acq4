@@ -12,9 +12,10 @@ class AnalysisHost(QtGui.QMainWindow):
     
     """
     
-    def __init__(self, dataManager=None, module=None):
+    def __init__(self, dataManager=None, dataModel=None, module=None):
         QtGui.QMainWindow.__init__(self)
         self.dm = dataManager
+        self.dataModel = dataModel
         self.mod = None
         self.dockArea = DockArea.DockArea()
         self.setCentralWidget(self.dockArea)

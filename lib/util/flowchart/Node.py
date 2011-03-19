@@ -5,7 +5,7 @@ from Terminal import *
 from advancedTypes import OrderedDict
 from debug import *
 import numpy as np
-from pyqtgraph.ObjectWorkaround import QObjectWorkaround
+#from pyqtgraph.ObjectWorkaround import QObjectWorkaround
 from eq import *
 
 def strDict(d):
@@ -13,10 +13,10 @@ def strDict(d):
 
 class Node(QtCore.QObject):
     
+    sigOutputChanged = QtCore.Signal(object)
     sigClosed = QtCore.Signal(object)
     sigRenamed = QtCore.Signal(object, object)
     sigTerminalRenamed = QtCore.Signal(object, object)
-    sigOutputChanged = QtCore.Signal(object)
     
     def __init__(self, name, terminals=None):
         QtCore.QObject.__init__(self)
