@@ -163,6 +163,10 @@ class DataManager(QtCore.QObject):
 
 
 class FileHandle(QtCore.QObject):
+    
+    sigChanged = QtCore.Signal(object, object, object)  # (self, change, (args))
+    sigDelayedChange = QtCore.Signal(object, object)  # (self, changes)
+    
     def __init__(self, path, manager):
         QtCore.QObject.__init__(self)
         self.manager = manager
@@ -171,7 +175,8 @@ class FileHandle(QtCore.QObject):
         self.parentDir = None
         #self.lock = threading.RLock()
         self.lock = Mutex(QtCore.QMutex.Recursive)
-        self.sigproxy = proxyConnect(self, QtCore.SIGNAL('changed'), self.delayedChange)
+        self.sigproxy = proxyConnect(None, self.sigChanged, self.delayedChange)
+        
         
     def __repr__(self):
         return "<%s '%s' (0x%x)>" % (self.__class__.__name__, self.name(), self.__hash__())
@@ -329,12 +334,13 @@ class FileHandle(QtCore.QObject):
 
     def emitChanged(self, change, *args):
         self.delayedChanges.append(change)
-        self.emit(QtCore.SIGNAL('changed'), self, change, *args)
+        self.sigChanged.emit(self, change, args)
 
     def delayedChange(self, *args):
         changes = list(set(self.delayedChanges))
         self.delayedChanges = []
-        self.emit(QtCore.SIGNAL('delayedChange'), self, changes)
+        #self.emit(QtCore.SIGNAL('delayedChange'), self, changes)
+        self.sigDelayedChange.emit(self, changes)
     
     def hasChildren(self):
         self.checkDeleted()

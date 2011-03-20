@@ -12,6 +12,9 @@ from protoGUI import *
 from debug import *
 
 class MultiClamp(Device):
+    
+    sigStateChanged = QtCore.Signal(object)
+    
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.lock = Mutex(Mutex.Recursive)
@@ -95,7 +98,8 @@ class MultiClamp(Device):
             self.lastMode = state['mode']
             ## Has mode changed? has extCmdScale changed?
             
-        QtCore.QObject.emit(self, QtCore.SIGNAL('stateChanged'), state)
+        #QtCore.QObject.emit(self, QtCore.SIGNAL('stateChanged'), state)
+        self.sigStateChanged.emit(state)
         
     def getLastState(self, mode=None):
         """Return the last known state for the given mode."""
@@ -255,6 +259,8 @@ class MultiClamp(Device):
 
 
 class MultiClampTask(DeviceTask):
+    
+    
     recordParams = ['Holding', 'HoldingEnable', 'PipetteOffset', 'FastCompCap', 'SlowCompCap', 'FastCompTau', 'SlowCompTau', 'NeutralizationEnable', 'NeutralizationCap', 'WholeCellCompEnable', 'WholeCellCompCap', 'WholeCellCompResist', 'RsCompEnable', 'RsCompBandwidth', 'RsCompCorrection', 'PrimarySignalLPF', 'PrimarySignalHPF', 'OutputZeroEnable', 'OutputZeroAmplitude', 'LeakSubEnable', 'LeakSubResist', 'BridgeBalEnable', 'BridgeBalResist']
     
     def __init__(self, dev, cmd):

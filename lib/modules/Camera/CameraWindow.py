@@ -53,6 +53,10 @@ class PlotROI(ROI):
         self.addScaleHandle([1, 1], [0, 0])
 
 class CameraWindow(QtGui.QMainWindow):
+    
+    sigCameraPosChanged = QtCore.Signal()
+    sigCameraScaleChanged = QtCore.Signal()
+    
     def __init__(self, module):
         
         self.module = module ## handle to the rest of the application
@@ -212,7 +216,8 @@ class CameraWindow(QtGui.QMainWindow):
         
         self.roi = CamROI(self.camSize, parent=self.cameraItemGroup)
         #QtCore.QObject.connect(self.roi, QtCore.SIGNAL('regionChangeFinished'), self.updateRegion)
-        self.roi.connect(QtCore.SIGNAL('regionChangeFinished'), self.regionWidgetChanged)
+        #self.roi.connect(QtCore.SIGNAL('regionChangeFinished'), self.regionWidgetChanged)
+        self.roi.sigRegionChangeFinished.connect(self.regionWidgetChanged)
         #self.cameraItemGroup.addToGroup(self.roi)
         self.roi.setZValue(10000)
         self.setRegion()
@@ -220,7 +225,8 @@ class CameraWindow(QtGui.QMainWindow):
         self.borders = []
         scope = self.module.cam.getScopeDevice()
         if scope is not None:
-            QtCore.QObject.connect(scope, QtCore.SIGNAL('objectiveListChanged'), self.updateBorders)
+            #QtCore.QObject.connect(scope, QtCore.SIGNAL('objectiveListChanged'), self.updateBorders)
+            scope.sigObjectiveListChanged.connect(self.updateBorders)
             #QtCore.QObject.connect(scope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
             self.cameraCenter = self.cam.getPosition()
             self.cameraScale = self.cam.getPixelSize()
@@ -230,39 +236,60 @@ class CameraWindow(QtGui.QMainWindow):
             self.centerView()
         self.updateBorders()
         
-        QtCore.QObject.connect(self.ui.btnAcquire, QtCore.SIGNAL('clicked()'), self.toggleAcquire)
-        QtCore.QObject.connect(self.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
-        QtCore.QObject.connect(self.ui.btnAutoGain, QtCore.SIGNAL('toggled(bool)'), self.toggleAutoGain)
-        QtCore.QObject.connect(self.ui.btnFullFrame, QtCore.SIGNAL('clicked()'), self.setRegion)
+        #QtCore.QObject.connect(self.ui.btnAcquire, QtCore.SIGNAL('clicked()'), self.toggleAcquire)
+        self.ui.btnAcquire.clicked.connect(self.toggleAcquire)
+        #QtCore.QObject.connect(self.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
+        self.ui.btnRecord.toggled.connect(self.toggleRecord)
+        #QtCore.QObject.connect(self.ui.btnAutoGain, QtCore.SIGNAL('toggled(bool)'), self.toggleAutoGain)
+        self.ui.btnAutoGain.toggled.connect(self.toggleAutoGain)
+        #QtCore.QObject.connect(self.ui.btnFullFrame, QtCore.SIGNAL('clicked()'), self.setRegion)
+        self.ui.btnFullFrame.clicked.connect(self.setRegion)
         
         #QtCore.QObject.connect(self.ui.spinBinning, QtCore.SIGNAL('valueChanged(int)'), self.setBinning)
         #QtCore.QObject.connect(self.ui.spinExposure, QtCore.SIGNAL('valueChanged(double)'), self.setExposure)
         
         ## Use delayed connection for these two widgets
         self.proxy1 = proxyConnect(self.ui.binningCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.setBinning)
-        QtCore.QObject.connect(self.ui.spinExposure, QtCore.SIGNAL('valueChanged(double)'), self.setExposure)  ## note that this signal (from lib.util.SpinBox) is delayed.
+        #QtCore.QObject.connect(self.ui.spinExposure, QtCore.SIGNAL('valueChanged(double)'), self.setExposure)  ## note that this signal (from lib.util.SpinBox) is delayed.
+        self.ui.spinExposure.valueChanged.connect(self.setExposure)  ## note that this signal (from lib.util.SpinBox) is delayed.
         
-        QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
-        QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
+        #QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
+        self.recordThread.sigShowMessage.connect(self.showMessage)
+        #QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
+        self.recordThread.finished.connect(self.recordThreadStopped)
         QtCore.QObject.connect(self.recordThread, QtCore.SIGNAL('recordingFailed'), self.recordingFailed, QtCore.Qt.QueuedConnection)
-        QtCore.QObject.connect(self.cam, QtCore.SIGNAL('newFrame'), self.newFrame)
-        QtCore.QObject.connect(self.cam, QtCore.SIGNAL('cameraStopped'), self.cameraStopped)
-        QtCore.QObject.connect(self.cam, QtCore.SIGNAL('cameraStarted'), self.cameraStarted)
-        QtCore.QObject.connect(self.cam, QtCore.SIGNAL('showMessage'), self.showMessage)
-        QtCore.QObject.connect(self.gv, QtCore.SIGNAL("sceneMouseMoved(PyQt_PyObject)"), self.setMouse)
-        QtCore.QObject.connect(self.ui.btnDivideBackground, QtCore.SIGNAL('clicked()'), self.divideClicked)
+        #QtCore.QObject.connect(self.cam, QtCore.SIGNAL('newFrame'), self.newFrame)
+        self.cam.sigNewFrame.connect(self.newFrame)
+        #QtCore.QObject.connect(self.cam, QtCore.SIGNAL('cameraStopped'), self.cameraStopped)
+        self.cam.sigCameraStopped.connect(self.cameraStopped)
+        #QtCore.QObject.connect(self.cam, QtCore.SIGNAL('cameraStarted'), self.cameraStarted)
+        self.cam.sigCameraStarted.connect(self.cameraStarted)
+        #QtCore.QObject.connect(self.cam, QtCore.SIGNAL('showMessage'), self.showMessage)
+        self.cam.sigShowMessage.connect(self.showMessage)
+        #QtCore.QObject.connect(self.gv, QtCore.SIGNAL("sceneMouseMoved(PyQt_PyObject)"), self.setMouse)
+        self.gv.sceneMouseMoved.connect(self.setMouse)
+        #QtCore.QObject.connect(self.ui.btnDivideBackground, QtCore.SIGNAL('clicked()'), self.divideClicked)
+        self.ui.btnDivideBackground.clicked.connect(self.divideClicked)
         
-        QtCore.QObject.connect(self.ui.btnAddROI, QtCore.SIGNAL('clicked()'), self.addROI)
-        QtCore.QObject.connect(self.ui.btnClearROIs, QtCore.SIGNAL('clicked()'), self.clearROIs)
-        QtCore.QObject.connect(self.ui.checkEnableROIs, QtCore.SIGNAL('valueChanged(bool)'), self.enableROIsChanged)
-        QtCore.QObject.connect(self.ui.spinROITime, QtCore.SIGNAL('valueChanged(double)'), self.setROITime)
+        #QtCore.QObject.connect(self.ui.btnAddROI, QtCore.SIGNAL('clicked()'), self.addROI)
+        self.ui.btnAddROI.clicked.connect(self.addROI)
+        #QtCore.QObject.connect(self.ui.btnClearROIs, QtCore.SIGNAL('clicked()'), self.clearROIs)
+        self.ui.btnClearROIs.clicked.connect(self.clearROIs)
+        #QtCore.QObject.connect(self.ui.checkEnableROIs, QtCore.SIGNAL('valueChanged(bool)'), self.enableROIsChanged)
+        self.ui.checkEnableROIs.valueChanged.connect(self.enableROIsChanged)
+        #QtCore.QObject.connect(self.ui.spinROITime, QtCore.SIGNAL('valueChanged(double)'), self.setROITime)
+        self.ui.spinROITime.valueChanged.connect(self.setROITime)
         #QtCore.QObject.connect(self.ui.sliderWhiteLevel, QtCore.SIGNAL('valueChanged(int)'), self.levelsChanged)
         #QtCore.QObject.connect(self.ui.sliderBlackLevel, QtCore.SIGNAL('valueChanged(int)'), self.levelsChanged)
-        QtCore.QObject.connect(self.ui.gradientWidget, QtCore.SIGNAL('gradientChanged'), self.levelsChanged)
-        QtCore.QObject.connect(self.ui.spinFlattenSize, QtCore.SIGNAL('valueChanged(int)'), self.requestFrameUpdate)
+        #QtCore.QObject.connect(self.ui.gradientWidget, QtCore.SIGNAL('gradientChanged'), self.levelsChanged)
+        self.ui.gradientWidget.sigGradientChanged.connect(self.levelsChanged)
+        #QtCore.QObject.connect(self.ui.spinFlattenSize, QtCore.SIGNAL('valueChanged(int)'), self.requestFrameUpdate)
+        self.ui.spinFlattenSize.valueChanged.connect(self.requestFrameUpdate)
 
-        QtCore.QObject.connect(self.ui.addFrameBtn, QtCore.SIGNAL('clicked()'), self.addPersistentFrame)
-        QtCore.QObject.connect(self.ui.clearFramesBtn, QtCore.SIGNAL('clicked()'), self.clearPersistentFrames)
+        #QtCore.QObject.connect(self.ui.addFrameBtn, QtCore.SIGNAL('clicked()'), self.addPersistentFrame)
+        self.ui.addFrameBtn.clicked.connect(self.addPersistentFrame)
+        #QtCore.QObject.connect(self.ui.clearFramesBtn, QtCore.SIGNAL('clicked()'), self.clearPersistentFrames)
+        self.ui.clearFramesBtn.clicked.connect(self.clearPersistentFrames)
         self.ui.scaleToImageBtn.clicked.connect(self.scaleToImage)
         
         self.ui.btnAutoGain.setChecked(True)
@@ -457,13 +484,20 @@ class CameraWindow(QtGui.QMainWindow):
         
         if self.hasQuit:
             return
-        QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
-        QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
-        QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('recordingFailed'), self.recordingFailed)
-        QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('newFrame'), self.newFrame)
-        QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('cameraStopped'), self.cameraStopped)
-        QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('cameraStarted'), self.cameraStarted)
-        QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('showMessage'), self.showMessage)
+        #QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
+        self.recordThread.sigShowMessage.disconnect(self.showMessage)
+        #QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
+        self.recordThread.finished.disconnect(self.recordThreadStopped)
+        #QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('recordingFailed'), self.recordingFailed)
+        self.recordThread.sigRecordingFailed.disconnect(self.recordingFailed)
+        #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('newFrame'), self.newFrame)
+        self.cam.sigNewFrame.disconnect(self.newFrame)
+        #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('cameraStopped'), self.cameraStopped)
+        self.cam.sigCameraStopped.disconnect(self.cameraStopped)
+        #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('cameraStarted'), self.cameraStarted)
+        self.cam.sigCameraStarted.disconnect(self.cameraStarted)
+        #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('showMessage'), self.showMessage)
+        self.cam.sigShowMessage.disconnect(self.showMessage)
         
         
         self.hasQuit = True
@@ -864,7 +898,8 @@ class CameraWindow(QtGui.QMainWindow):
             #print info
             newPos = info['centerPosition']
             if newPos != self.cameraCenter:
-                self.emit(QtCore.SIGNAL('cameraPosChanged'))
+                #self.emit(QtCore.SIGNAL('cameraPosChanged'))
+                self.sigCameraPosChanged.emit()
                 diff = [newPos[0] - self.cameraCenter[0], newPos[1] - self.cameraCenter[1]]
                 self.gv.translate(diff[0], diff[1])
                 #print "translate view:", diff
@@ -874,7 +909,8 @@ class CameraWindow(QtGui.QMainWindow):
             
             newScale = [info['pixelSize'][0] / info['binning'][0], info['pixelSize'][1] / info['binning'][1]]
             if newScale != self.cameraScale:  ## If scale has changed, re-center on new objective.
-                self.emit(QtCore.SIGNAL('cameraScaleChanged'))
+                #self.emit(QtCore.SIGNAL('cameraScaleChanged'))
+                self.sigCameraScaleChanged.emit()
                 self.centerView()
                 #diff = [self.cameraScale[0] / newScale[0], self.cameraScale[1] /newScale[1]]
                 #self.gv.scale(diff[0], diff[1])
@@ -909,14 +945,21 @@ class CameraWindow(QtGui.QMainWindow):
             self.lastHistogramUpdate = now
 
 class RecordThread(QtCore.QThread):
+    
+    sigShowMessage = QtCore.Signal(object)
+    sigRecordingFailed = QtCore.Signal()
+    
     def __init__(self, ui, manager):
         QtCore.QThread.__init__(self)
         self.ui = ui
         self.m = manager
-        QtCore.QObject.connect(self.ui.cam, QtCore.SIGNAL('newFrame'), self.newCamFrame)
+        #QtCore.QObject.connect(self.ui.cam, QtCore.SIGNAL('newFrame'), self.newCamFrame)
+        self.ui.cam.sigNewFrame.connect(self.newCamFrame)
         
-        QtCore.QObject.connect(ui.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
-        QtCore.QObject.connect(ui.ui.btnSnap, QtCore.SIGNAL('clicked()'), self.snapClicked)
+        #QtCore.QObject.connect(ui.ui.btnRecord, QtCore.SIGNAL('toggled(bool)'), self.toggleRecord)
+        ui.ui.btnRecord.toggled.connect(self.toggleRecord)
+        #QtCore.QObject.connect(ui.ui.btnSnap, QtCore.SIGNAL('clicked()'), self.snapClicked)
+        ui.ui.btnSnap.clicked.connect(self.snapClicked)
         self.recording = False
         self.recordStart = False
         self.recordStop = False
@@ -967,7 +1010,8 @@ class RecordThread(QtCore.QThread):
             except:
                 printExc('Error in camera recording thread:')
                 self.toggleRecord(False)
-                self.emit(QtCore.SIGNAL('recordingFailed'))
+                #self.emit(QtCore.SIGNAL('recordingFailed'))
+                self.sigRecordingFailed.emit()
                 
             time.sleep(10e-3)
             
@@ -1024,7 +1068,8 @@ class RecordThread(QtCore.QThread):
                 self.takeSnap = False
     
     def showMessage(self, msg):
-        self.emit(QtCore.SIGNAL('showMessage'), msg)
+        #self.emit(QtCore.SIGNAL('showMessage'), msg)
+        self.sigShowMessage.emit(msg)
     
     def snapClicked(self):
         with MutexLocker(self.lock):
@@ -1039,7 +1084,8 @@ class RecordThread(QtCore.QThread):
                     self.recordStop = True
 
     def stop(self):
-        QtCore.QObject.disconnect(self.ui.cam, QtCore.SIGNAL('newFrame'), self.newCamFrame)
+        #QtCore.QObject.disconnect(self.ui.cam, QtCore.SIGNAL('newFrame'), self.newCamFrame)
+        self.ui.cam.sigNewFrame.disconnect(self.newCamFrame)
         #print "RecordThread stop.."    
         with MutexLocker(self.lock):
         #print "  RecordThread stop: locked"

@@ -174,7 +174,9 @@ class PVCam(Camera):
         
         if autoRestart and restart:
             self.restart()
-        self.emit(QtCore.SIGNAL('paramsChanged'), newVals)
+        
+        #self.emit(QtCore.SIGNAL('paramsChanged'), newVals)
+        self.sigParamsChanged.emit(newVals)
         return (newVals, restart)
 
     def getParams(self, params=None):

@@ -178,6 +178,9 @@ class Dock(QtGui.QWidget, DockDrop):
         return "<Dock %s %s>" % (self.name(), self.stretch())
             
 class DockLabel(VerticalLabel):
+    
+    sigClicked = QtCore.Signal(object)
+    
     def __init__(self, text, dock):
         self.dim = False
         self.fixedWidth = False
@@ -254,7 +257,8 @@ class DockLabel(VerticalLabel):
             
     def mouseReleaseEvent(self, ev):
         if not self.startedDrag:
-            self.emit(QtCore.SIGNAL('clicked'), self, ev)
+            #self.emit(QtCore.SIGNAL('clicked'), self, ev)
+            self.sigClicked.emit(self, ev)
         ev.accept()
         
     def mouseDoubleClickEvent(self, ev):

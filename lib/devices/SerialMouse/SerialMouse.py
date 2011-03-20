@@ -7,6 +7,10 @@ from Mutex import Mutex, MutexLocker
 #import pdb
 
 class SerialMouse(Device):
+    
+    sigSwitchChanged = QtCore.Signal(object)
+    sigPositionChanged = QtCore.Signal(object)
+    
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.lock = Mutex(QtCore.QMutex.Recursive)
@@ -23,10 +27,12 @@ class SerialMouse(Device):
             self.buttons = state['buttons']
         
         self.mThread = MouseThread(self, {'pos': self.pos[:], 'btns': self.buttons[:]})
-        QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('positionChanged'), self.posChanged)
-        QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('buttonChanged'), self.btnChanged)
-        self.proxy1 = proxyConnect(self, QtCore.SIGNAL('positionChanged'), self.storeState, 3.0) ## wait 3 seconds before writing changes 
-        self.proxy2 = proxyConnect(self, QtCore.SIGNAL('switchChanged'), self.storeState, 3.0) 
+        #QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('positionChanged'), self.posChanged)
+        self.mThread.sigPositionChanged.connect(self.posChanged)
+        #QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('buttonChanged'), self.btnChanged)
+        self.mThread.sigButtonChanged.connect(self.btnChanged)
+        self.proxy1 = proxyConnect(None, self.sigPositionChanged, self.storeState, 3.0) ## wait 3 seconds before writing changes 
+        self.proxy2 = proxyConnect(None, self.sigSwitchChanged, self.storeState, 3.0) 
         self.mThread.start()
         
     def quit(self):
@@ -43,7 +49,8 @@ class SerialMouse(Device):
             rel = [data['rel'][0] * self.scale, data['rel'][1] * self.scale]
             ab = self.pos[:]
         #print "Mouse: posChanged emit.."
-        self.emit(QtCore.SIGNAL('positionChanged'), {'rel': rel, 'abs': ab})
+        #self.emit(QtCore.SIGNAL('positionChanged'), {'rel': rel, 'abs': ab})
+        self.sigPositionChanged.emit({'rel': rel, 'abs': ab})
         #print "Mouse: posChanged done"
 
     def storeState(self, *args):
@@ -57,7 +64,8 @@ class SerialMouse(Device):
                 if btns[i] != self.buttons[i]:
                     change[i] = btns[i]
                     self.buttons[i] = btns[i]
-        self.emit(QtCore.SIGNAL('switchChanged'), change)
+        #self.emit(QtCore.SIGNAL('switchChanged'), change)
+        self.sigSwitchChanged.emit(change)
         #print "Mouse: btnChanged done"
         
     def getPosition(self):
@@ -85,8 +93,10 @@ class SMInterface(QtGui.QLabel):
         QtGui.QLabel.__init__(self)
         self.win = win
         self.dev = dev
-        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.update)
-        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('switchChanged'), self.update)
+        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.update)
+        self.dev.sigPositionChanged.connect(self.update)
+        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('switchChanged'), self.update)
+        self.dev.sigSwitchChanged.connect(self.update)
         self.update()
         
     def update(self):
@@ -97,6 +107,10 @@ class SMInterface(QtGui.QLabel):
     
     
 class MouseThread(QtCore.QThread):
+    
+    sigButtonChanged = QtCore.Signal(object)
+    sigPositionChanged = QtCore.Signal(object)
+    
     def __init__(self, dev, startState=None):
         QtCore.QThread.__init__(self)
         self.lock = Mutex(QtCore.QMutex.Recursive)
@@ -134,10 +148,12 @@ class MouseThread(QtCore.QThread):
                         tdy += dy
                     self.pos = [self.pos[0] + tdx, self.pos[1] + tdy]
                     if tdx != 0 or tdy != 0:
-                        self.emit(QtCore.SIGNAL('positionChanged'), {'rel': (tdx, tdy), 'abs': self.pos})
+                        #self.emit(QtCore.SIGNAL('positionChanged'), {'rel': (tdx, tdy), 'abs': self.pos})
+                        self.sigPositionChanged.emit({'rel': (tdx, tdy), 'abs': self.pos})
                     if b0 != self.btns[0] or b1 != self.btns[1]:
                         self.btns = [b0, b1]
-                        self.emit(QtCore.SIGNAL('buttonChanged'), self.btns)
+                        #self.emit(QtCore.SIGNAL('buttonChanged'), self.btns)
+                        self.sigButtonChanged.emit(self.btns)
                         
             self.lock.lock()
             if self.stopThread:

@@ -10,6 +10,9 @@ from PlotItem import *
 import exceptions
 
 class PlotWidget(GraphicsView):
+    
+    sigRangeChanged = QtCore.Signal(object, object)
+    
     """Widget implementing a graphicsView with a single PlotItem inside."""
     def __init__(self, parent=None, **kargs):
         GraphicsView.__init__(self, parent)
@@ -20,7 +23,8 @@ class PlotWidget(GraphicsView):
         ## Explicitly wrap methods from plotItem
         for m in ['addItem', 'removeItem', 'autoRange', 'clear', 'setXRange', 'setYRange']:
             setattr(self, m, getattr(self.plotItem, m))
-        QtCore.QObject.connect(self.plotItem, QtCore.SIGNAL('viewChanged'), self.viewChanged)
+        #QtCore.QObject.connect(self.plotItem, QtCore.SIGNAL('viewChanged'), self.viewChanged)
+        self.plotItem.sigRangeChanged.connect(self.viewRangeChanged)
                 
     #def __dtor__(self):
         ##print "Called plotWidget sip destructor"
@@ -38,8 +42,9 @@ class PlotWidget(GraphicsView):
                 return m
         raise exceptions.NameError(attr)
             
-    def viewChanged(self, *args):
-        self.emit(QtCore.SIGNAL('viewChanged'), *args)
+    def viewRangeChanged(self, view, range):
+        #self.emit(QtCore.SIGNAL('viewChanged'), *args)
+        self.sigRangeChanged.emit(self, range)
 
     def widgetGroupInterface(self):
         return (None, PlotWidget.saveState, PlotWidget.restoreState)

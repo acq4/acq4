@@ -9,6 +9,10 @@ from scipy.ndimage import median_filter, gaussian_filter
 
 
 class Filter(QtCore.QObject):
+    
+    sigDelayedChange = QtCore.Signal(object)
+    sigChanged = QtCore.Signal(object)
+    
     """Abstract filter class. All filters should subclass from here.
     Filters emit the signal "changed" to indicate immediate changes to their settings, and
     "delayedChange" 300ms after the last change."""
@@ -36,10 +40,12 @@ class Filter(QtCore.QObject):
             self.stateGroup.setState(state)
         
     def changed(self):
-        self.emit(QtCore.SIGNAL('changed'), self)
+        #self.emit(QtCore.SIGNAL('changed'), self)
+        self.sigChanged.emit(self)
         
     def delayedChange(self):
-        self.emit(QtCore.SIGNAL('delayedChange'), self)
+        #self.emit(QtCore.SIGNAL('delayedChange'), self)
+        self.sigDelayedChange.emit(self)
     
     def generateUi(self, opts):
         """Convenience function for generating common UI types"""
@@ -111,7 +117,8 @@ class Downsample(Filter):
         ])
         self.stateGroup.setState(opts)
         self.setObjectName('Downsample')
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.stateGroup.sigChanged.connect(self.changed)
         
     def processData(self, data):
         return downsample(data, self.ctrls['n'].value(), axis=0)
@@ -125,7 +132,8 @@ class Subsample(Filter):
         ])
         self.stateGroup.setState(opts)
         self.setObjectName('Subsample')
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.stateGroup.sigChanged.connect(self.changed)
         
     def processData(self, data):
         return data[::self.ctrls['n'].value()]
@@ -141,7 +149,8 @@ class Bessel(Filter):
         ])
         self.stateGroup.setState(opts)
         self.setObjectName('Bessel')
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.stateGroup.sigChanged.connect(self.changed)
         
     def processData(self, data):
         s = self.stateGroup.state()
@@ -164,7 +173,8 @@ class Butterworth(Filter):
         ])
         self.stateGroup.setState(opts)
         self.setObjectName('Butterworth')
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.stateGroup.sigChanged.connect(self.changed)
         
     def processData(self, data):
         s = self.stateGroup.state()
@@ -182,7 +192,8 @@ class Mean(Filter):
         ])
         self.stateGroup.setState(opts)
         self.setObjectName('Mean')
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.stateGroup.sigChanged.connect(self.changed)
         
     @metaArrayWrapper
     def processData(self, data):
@@ -197,7 +208,8 @@ class Median(Filter):
         ])
         self.stateGroup.setState(opts)
         self.setObjectName('Median')
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.stateGroup.sigChanged.connect(self.changed)
         
     @metaArrayWrapper
     def processData(self, data):
@@ -212,7 +224,8 @@ class Denoise(Filter):
         ])
         self.stateGroup.setState(opts)
         self.setObjectName('Denoise')
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.stateGroup.sigChanged.connect(self.changed)
         
     def processData(self, data):
         s = self.stateGroup.state()
@@ -226,7 +239,8 @@ class Gaussian(Filter):
         ])
         self.stateGroup.setState(opts)
         self.setObjectName('Gaussian')
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.stateGroup.sigChanged.connect(self.changed)
 
     @metaArrayWrapper
     def processData(self, data):
@@ -276,7 +290,8 @@ class AdaptiveDetrend(Filter):
         ])
         self.stateGroup.setState(opts)
         self.setObjectName('AdaptiveDetrend')
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.stateGroup.sigChanged.connect(self.changed)
         
     def processData(self, data):
         return adaptiveDetrend(data, threshold=self.ctrls['threshold'].value())
@@ -289,7 +304,8 @@ class SubtractMedian(Filter):
         ])
         self.stateGroup.setState(opts)
         self.setObjectName('SubtractMedian')
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.stateGroup.sigChanged.connect(self.changed)
         
     def processData(self, data):
         return subtractMedian(data, time=self.ctrls['width'].value())
@@ -304,7 +320,8 @@ class ExpDeconvolve(Filter):
         ])
         self.stateGroup.setState(opts)
         self.setObjectName('ExpDeconvolve')
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.stateGroup.sigChanged.connect(self.changed)
         self.dt = None
 
     def processData(self, data):
@@ -337,7 +354,8 @@ class ExpReconvolve(Filter):
         ])
         self.stateGroup.setState(opts)
         self.setObjectName('ExpReconvolve')
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.stateGroup.sigChanged.connect(self.changed)
         self.dt = None
 
     def processData(self, data):

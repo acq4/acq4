@@ -18,7 +18,8 @@ class SubtreeNode(Node):
         self.files = set()
         self.lastInput = None
         self.fileList = DirTreeWidget(checkState=False, allowMove=False, allowRename=False)
-        QtCore.QObject.connect(self.fileList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
+        #QtCore.QObject.connect(self.fileList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
+        self.fileList.itemChanged.connect(self.itemChanged)
         
     def process(self, In, display=True):
         #print "subtree process", In
@@ -88,7 +89,8 @@ class ColumnSelectNode(Node):
         #self.fileList = DirTreeWidget(defaultFlags=QtCore.Qt.ItemIsUserCheckable|QtCore.Qt.ItemIsEnabled, defaultCheckState=False)
         self.columnList = QtGui.QListWidget()
         self.axis = 0
-        QtCore.QObject.connect(self.columnList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.itemChanged)
+        #QtCore.QObject.connect(self.columnList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.itemChanged)
+        self.columnList.itemChanged.connect(self.itemChanged)
         
     def process(self, In, display=True):
         #print "MetaArrayColumn process:"
@@ -217,7 +219,8 @@ class RegionSelectNode(CtrlNode):
                 else:
                     item = graphicsItems.LinearRegionItem(plot, vals=region)
                     self.items[c] = item
-                    item.connect(item, QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+                    #item.connect(item, QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+                    item.sigRegionChanged.connect(self.rgnChanged)
                     item.setVisible(s['display'])
                     item.setMovable(s['movable'])
                     #print "  new rgn:", c, region
@@ -266,8 +269,10 @@ class EvalNode(Node):
         self.layout.addWidget(self.text, 1, 0, 1, 2)
         self.ui.setLayout(self.layout)
         
-        QtCore.QObject.connect(self.addInBtn, QtCore.SIGNAL('clicked()'), self.addInput)
-        QtCore.QObject.connect(self.addOutBtn, QtCore.SIGNAL('clicked()'), self.addOutput)
+        #QtCore.QObject.connect(self.addInBtn, QtCore.SIGNAL('clicked()'), self.addInput)
+        self.addInBtn.clicked.connect(self.addInput)
+        #QtCore.QObject.connect(self.addOutBtn, QtCore.SIGNAL('clicked()'), self.addOutput)
+        self.addOutBtn.clicked.connect(self.addOutput)
         self.ui.focusOutEvent = lambda ev: self.focusOutEvent(ev)
         self.lastText = None
         

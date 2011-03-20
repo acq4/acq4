@@ -10,6 +10,9 @@ import random
 import numpy
 
 class ScannerProtoGui(ProtocolGui):
+    
+    sigSequenceChanged = QtCore.Signal(object)
+    
     def __init__(self, dev, prot):
         ProtocolGui.__init__(self, dev, prot)
         self.ui = Ui_Form()
@@ -48,22 +51,38 @@ class ScannerProtoGui(ProtocolGui):
         ])
         self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6})
 
-        QtCore.QObject.connect(self.ui.addPointBtn, QtCore.SIGNAL('clicked()'), self.addPoint)
-        QtCore.QObject.connect(self.ui.addGridBtn, QtCore.SIGNAL('clicked()'), self.addGrid)
-        QtCore.QObject.connect(self.ui.addOcclusionBtn, QtCore.SIGNAL('clicked()'), self.addOcclusion)
-        QtCore.QObject.connect(self.ui.addProgramBtn, QtCore.SIGNAL('clicked()'), self.addProgram)
-        QtCore.QObject.connect(self.ui.addSpiralScanBtn, QtCore.SIGNAL('clicked()'), self.addSpiral)
-        QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.delete)
-        QtCore.QObject.connect(self.ui.deleteAllBtn, QtCore.SIGNAL('clicked()'), self.deleteAll)
-        QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemToggled)
-        QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*,QListWidgetItem*)'), self.itemSelected)
-        QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('toggled(bool)'), self.showInterface)
-        QtCore.QObject.connect(self.ui.cameraCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.camModChanged)
-        QtCore.QObject.connect(self.ui.packingSpin, QtCore.SIGNAL('valueChanged(double)'), self.packingSpinChanged)
-        QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
-        QtCore.QObject.connect(self.ui.minDistSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
-        QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.generateTargets)
-        QtCore.QObject.connect(dm, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        #QtCore.QObject.connect(self.ui.addPointBtn, QtCore.SIGNAL('clicked()'), self.addPoint)
+        self.ui.addPointBtn.clicked.connect(self.addPoint)
+        #QtCore.QObject.connect(self.ui.addGridBtn, QtCore.SIGNAL('clicked()'), self.addGrid)
+        self.ui.addGridBtn.clicked.connect(self.addGrid)
+        #QtCore.QObject.connect(self.ui.addOcclusionBtn, QtCore.SIGNAL('clicked()'), self.addOcclusion)
+        self.ui.addOcclusionBtn.clicked.connect(self.addOcclusion)
+        #QtCore.QObject.connect(self.ui.addProgramBtn, QtCore.SIGNAL('clicked()'), self.addProgram)
+        self.ui.addProgramBtn.clicked.connect(self.addProgram)
+        #QtCore.QObject.connect(self.ui.addSpiralScanBtn, QtCore.SIGNAL('clicked()'), self.addSpiral)
+        self.ui.addSpiralScanBtn.clicked.connect(self.addSpiral)
+        #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.delete)
+        self.ui.deleteBtn.clicked.connect(self.delete)
+        #QtCore.QObject.connect(self.ui.deleteAllBtn, QtCore.SIGNAL('clicked()'), self.deleteAll)
+        self.ui.deleteAllBtn.clicked.connect(self.deleteAll)
+        #QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemToggled)
+        self.ui.itemList.itemClicked.connect(self.itemToggled)
+        #QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*,QListWidgetItem*)'), self.itemSelected)
+        self.ui.itemList.currentItemChanged.connect(self.itemSelected)
+        #QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('toggled(bool)'), self.showInterface)
+        self.ui.displayCheck.toggled.connect(self.showInterface)
+        #QtCore.QObject.connect(self.ui.cameraCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.camModChanged)
+        self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
+        #QtCore.QObject.connect(self.ui.packingSpin, QtCore.SIGNAL('valueChanged(double)'), self.packingSpinChanged)
+        self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
+        #QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
+        self.ui.minTimeSpin.valueChanged.connect(self.sequenceChanged)
+        #QtCore.QObject.connect(self.ui.minDistSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
+        self.ui.minDistSpin.valueChanged.connect(self.sequenceChanged)
+        #QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.generateTargets)
+        self.ui.recomputeBtn.clicked.connect(self.generateTargets)
+        #QtCore.QObject.connect(dm, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        dm.sigModulesChanged.connect(self.fillModuleList)
 
         #self.currentTargetMarker = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
         #pen = QtGui.QPen(QtGui.QBrush(QtGui.QColor(255, 255, 255)), 3.0)
@@ -120,10 +139,12 @@ class ScannerProtoGui(ProtocolGui):
         if self.currentCamMod is not None:
             self.currentCamMod.ui.removeItem(self.testTarget)
             #self.currentCamMod.ui.removeItem(self.currentTargetMarker)
-            QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+            #QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+            self.currentCamMod.ui.sigCameraScaleChanged.disconnect(self.objectiveChanged)
             
         if self.currentScope is not None:
-            QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            #QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            self.currentScope.sigObjectiveChanged.disconnect(self.objectiveChanged)
             
         self.currentCamMod = camMod
         if camDev is None or camMod is None:
@@ -131,10 +152,12 @@ class ScannerProtoGui(ProtocolGui):
             return
         self.currentScope = camDev.getScopeDevice()
         self.currentCamMod = camMod
-        QtCore.QObject.connect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+        #QtCore.QObject.connect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+        self.currentCamMod.ui.sigCameraScaleChanged.connect(self.objectiveChanged)
         
         if self.currentScope is not None:
-            QtCore.QObject.connect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            #QtCore.QObject.connect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            self.currentScope.sigObjectiveChanged.connect(self.objectiveChanged)
             
         camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
         #camMod.ui.addItem(self.currentTargetMarker, None, [1,1], 1010)
@@ -368,9 +391,12 @@ class ScannerProtoGui(ProtocolGui):
         else:
             pos = item.stateCopy()['pos'] 
         camMod.ui.addItem(item, pos, [1, 1], 1000)
-        item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
-        item.connect(QtCore.SIGNAL('regionChanged'), self.getTargetList)
-        item.connect(QtCore.SIGNAL('pointsChanged'), self.itemChanged)
+        #item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
+        item.sigRegionChangeFinished.connect(self.itemMoved)
+        #item.connect(QtCore.SIGNAL('regionChanged'), self.getTargetList)
+        item.sigRegionChanged.connect(self.getTargetList)
+        #item.connect(QtCore.SIGNAL('pointsChanged'), self.itemChanged)
+        item.sigPointsChanged.connect(self.itemChanged)
         #QtCore.QObject.connect(item, QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
         #QtCore.QObject.connect(item, QtCore.SIGNAL('pointsChanged'), self.itemChanged)
         self.itemChanged(item)
@@ -488,7 +514,8 @@ class ScannerProtoGui(ProtocolGui):
     
     def sequenceChanged(self):
         self.targets = None
-        self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        self.sigSequenceChanged.emit(self.dev.name)
 
     def generateTargets(self):
         #items = self.activeItems()
@@ -643,21 +670,30 @@ class ScannerProtoGui(ProtocolGui):
         s = self.testTarget.scene()
         if s is not None:
             self.testTarget.scene().removeItem(self.testTarget)
-        QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        #QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        getManager().sigModulesChanged.disconnect(self.fillModuleList)
             
         if self.currentCamMod is not None:
             try:
-                QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+                #QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+                self.currentCamMod.ui.sigCameraScaleChanged.disconnect(self.objectiveChanged)
             except:
                 pass
         if self.currentScope is not None:
             try:
-                QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+                #QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+                self.currentScope.sigObjectiveChanged.disconnect(self.objectiveChanged)
             except:
                 pass
         print "  ..done."
     
 class TargetPoint(widgets.EllipseROI):
+    
+    
+    
+    
+    
+    
     def __init__(self, pos, radius, **args):
         widgets.ROI.__init__(self, pos, [radius] * 2, **args)
         self.aspectLocked = True
@@ -684,6 +720,9 @@ class TargetPoint(widgets.EllipseROI):
         
 
 class TargetGrid(widgets.ROI):
+    
+    sigPointsChanged = QtCore.Signal(object)
+    
     def __init__(self, pos, size, ptSize, pd, angle):
         widgets.ROI.__init__(self, pos=pos, size=size, angle=angle)
         self.addScaleHandle([0, 0], [1, 1])
@@ -691,7 +730,8 @@ class TargetGrid(widgets.ROI):
         self.addRotateHandle([0, 1], [0.5, 0.5])
         self.addRotateHandle([1, 0], [0.5, 0.5])
         self.lastSize = self.state['size']
-        self.connect(QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+        #self.connect(QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+        self.sigRegionChanged.connect(self.rgnChanged)
         self.points = []
         self.pens = []
         self.pointSize = ptSize
@@ -719,7 +759,8 @@ class TargetGrid(widgets.ROI):
         self.generateGrid([self.pointSize*0.5, self.pointSize*0.5], [sepx, sepy])  ## make every other row of the grid starting from top
         self.generateGrid([self.pointSize*0.5+0.5*sepx, 0.5*self.pointSize + sepy/2.0 ], [sepx, sepy]) ### make every other row of the grid starting with 2nd row
         self.update()
-        self.emit(QtCore.SIGNAL('pointsChanged'), self)
+        #self.emit(QtCore.SIGNAL('pointsChanged'), self)
+        self.sigPointsChanged.emit(self)
         
     def listPoints(self):
         pts = []
@@ -761,6 +802,12 @@ class TargetGrid(widgets.ROI):
             p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
         
 class TargetOcclusion(widgets.PolygonROI):
+    
+    
+    
+    
+    
+    
     def __init__(self, points, pos=None):
         widgets.PolygonROI.__init__(self, points, pos)
         self.setZValue(10000000)
@@ -769,6 +816,12 @@ class TargetOcclusion(widgets.PolygonROI):
         pass
     
 class TargetProgram(QtCore.QObject):
+    
+    
+    
+    
+    
+    
     def __init__(self):
         self.origin = QtGui.QGraphicsEllipseItem(0,0,1,1)
         self.paths = []

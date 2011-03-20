@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
+if not hasattr(QtCore, 'Signal'):
+    QtCore.Signal = QtCore.pyqtSignal
 from weakref import *
 
 class TreeWidget(QtGui.QTreeWidget):
@@ -7,7 +9,7 @@ class TreeWidget(QtGui.QTreeWidget):
     Also maintains the expanded state of subtrees as they are moved.
     This class demonstrates the absurd lengths one must go to to make drag/drop work."""
     
-    sigItemMoved = QtCore.Signal(object, object, object)
+    sigItemMoved = QtCore.Signal(object, object, object) # (item, parent, index)
     
     def __init__(self, parent=None):
         QtGui.QTreeWidget.__init__(self, parent)
@@ -68,7 +70,7 @@ class TreeWidget(QtGui.QTreeWidget):
         self.setCurrentItem(item)
         
         self.recoverMove(item)
-        self.emit(QtCore.SIGNAL('itemMoved'), item, parent, index)
+        #self.emit(QtCore.SIGNAL('itemMoved'), item, parent, index)
         self.sigItemMoved.emit(item, parent, index)
         return True
 

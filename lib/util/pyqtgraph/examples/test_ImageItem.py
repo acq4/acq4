@@ -32,7 +32,8 @@ view.scene().addItem(img)
 view.setRange(QtCore.QRectF(0, 0, 200, 200))
 
 ## Create random image
-data = random.random((5, 1000, 1000))
+## this is a large image--use view.scaleToImage(img) to improve video framerate
+data = random.random((20, 200, 200))
 i = 0
 
 def updateData():
@@ -45,7 +46,8 @@ def updateData():
 
 # update image data every 20ms (or so)
 t = QtCore.QTimer()
-QtCore.QObject.connect(t, QtCore.SIGNAL('timeout()'), updateData)
+#QtCore.QObject.connect(t, QtCore.SIGNAL('timeout()'), updateData)
+t.timeout.connect(updateData)
 t.start(20)
 
 

@@ -73,9 +73,12 @@ class CameraDeviceGui(QtGui.QWidget):
             
                 self.stateGroup.addWidget(w, k)
             self.ui.formLayout_2.addRow(k, w)
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
-        QtCore.QObject.connect(self.ui.reconnectBtn, QtCore.SIGNAL('clicked()'), self.reconnect)
-        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('paramsChanged'), self.paramsChanged)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
+        self.stateGroup.sigChanged.connect(self.stateChanged)
+        #QtCore.QObject.connect(self.ui.reconnectBtn, QtCore.SIGNAL('clicked()'), self.reconnect)
+        self.ui.reconnectBtn.clicked.connect(self.reconnect)
+        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('paramsChanged'), self.paramsChanged)
+        self.dev.sigParamsChanged.connect(self.paramsChanged)
         #print "Done with UI"
             
     def stateChanged(self, p, val):

@@ -20,12 +20,18 @@ class DirTreeLoader(QtGui.QWidget):
 
         self.ui.deleteBtn.focusOutEvent = self.delBtnLostFocus
 
-        QtCore.QObject.connect(self.ui.newBtn, QtCore.SIGNAL('clicked()'), self.newClicked)
-        QtCore.QObject.connect(self.ui.newDirBtn, QtCore.SIGNAL('clicked()'), self.newDirClicked)
-        QtCore.QObject.connect(self.ui.saveBtn, QtCore.SIGNAL('clicked()'), self.saveClicked)
-        QtCore.QObject.connect(self.ui.loadBtn, QtCore.SIGNAL('clicked()'), self.loadClicked)
-        QtCore.QObject.connect(self.ui.saveAsBtn, QtCore.SIGNAL('clicked()'), self.saveAsClicked)
-        QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteClicked)
+        #QtCore.QObject.connect(self.ui.newBtn, QtCore.SIGNAL('clicked()'), self.newClicked)
+        self.ui.newBtn.clicked.connect(self.newClicked)
+        #QtCore.QObject.connect(self.ui.newDirBtn, QtCore.SIGNAL('clicked()'), self.newDirClicked)
+        self.ui.newDirBtn.clicked.connect(self.newDirClicked)
+        #QtCore.QObject.connect(self.ui.saveBtn, QtCore.SIGNAL('clicked()'), self.saveClicked)
+        self.ui.saveBtn.clicked.connect(self.saveClicked)
+        #QtCore.QObject.connect(self.ui.loadBtn, QtCore.SIGNAL('clicked()'), self.loadClicked)
+        self.ui.loadBtn.clicked.connect(self.loadClicked)
+        #QtCore.QObject.connect(self.ui.saveAsBtn, QtCore.SIGNAL('clicked()'), self.saveAsClicked)
+        self.ui.saveAsBtn.clicked.connect(self.saveAsClicked)
+        #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteClicked)
+        self.ui.deleteBtn.clicked.connect(self.deleteClicked)
 
 
     def selectedFile(self):
@@ -141,7 +147,8 @@ class DirTreeLoader(QtGui.QWidget):
         
     def setCurrentFile(self, handle):
         if self.currentFile is not None:
-            QtCore.QObject.disconnect(self.currentFile, QtCore.SIGNAL('changed'), self.currentFileChanged)
+            #QtCore.QObject.disconnect(self.currentFile, QtCore.SIGNAL('changed'), self.currentFileChanged)
+            self.currentFile.sigChanged.disconnect(self.currentFileChanged)
             
         if handle is None:
             self.ui.currentLabel.setText("")
@@ -149,7 +156,8 @@ class DirTreeLoader(QtGui.QWidget):
         else:
             self.ui.currentLabel.setText(handle.name(relativeTo=self.baseDir))
             self.ui.saveBtn.setEnabled(True)
-            QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self.currentFileChanged)
+            #QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self.currentFileChanged)
+            handle.sigChanged.connect(self.currentFileChanged)
             
         self.currentFile = handle
             

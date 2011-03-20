@@ -18,6 +18,8 @@ import ProgressDialog
 class Photostim(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
+        if self.dataModel is None:
+            raise Exception("Photostim analysis module requires a data model, but none is loaded yet.")
         self.dbIdentity = "Photostim"  ## how we identify to the database; this determines which tables we own
         self.selectedSpot = None
 
@@ -48,8 +50,8 @@ class Photostim(AnalysisModule):
         self.mapLayout.splitter.addWidget(self.recolorBtn)
         
         ## scatter plot
-        #self.scatterPlot = ScatterPlotter()
-        #self.scatterPlot.sigPointClicked.connect(self.scatterPointClicked)
+        self.scatterPlot = ScatterPlotter()
+        self.scatterPlot.sigPointClicked.connect(self.scatterPointClicked)
         
         ## setup map DB ctrl
         self.dbCtrl = DBCtrl(self, self.dbIdentity)
@@ -73,8 +75,8 @@ class Photostim(AnalysisModule):
         elems = self.detector.listElements()
         self._elements_ = OrderedDict([
             ('Database', {'type': 'ctrl', 'object': self.dbCtrl, 'size': (200, 200)}),
-            ('Canvas', {'type': 'canvas', 'pos': ('right',), 'size': (400,400), 'allowTransforms': False}),
-            #('Scatter Plot', {'type': 'ctrl', 'object': self.scatterPlot, 'pos': ('below', 'Canvas'), 'size': (400,400)}),
+            ('Scatter Plot', {'type': 'ctrl', 'object': self.scatterPlot, 'pos': ('right',), 'size': (400,400)}),
+            ('Canvas', {'type': 'canvas', 'pos': ('above', 'Scatter Plot'), 'size': (400,400), 'allowTransforms': False, 'hideCtrl': True}),
             #('Maps', {'type': 'ctrl', 'pos': ('bottom', 'Database'), 'size': (200,200), 'object': self.mapDBCtrl}),
             ('Detection Opts', elems['Detection Opts'].setParams(pos=('bottom', 'Database'), size= (200,500))),
             ('File Loader', {'type': 'fileInput', 'size': (200, 200), 'pos': ('top', 'Database'), 'host': self, 'showFileTree': False}),
@@ -142,7 +144,7 @@ class Photostim(AnalysisModule):
     def loadScan(self, fh):
         if fh not in self.scans and fh not in self.seriesScans:
             canvas = self.getElement('Canvas')
-            canvasItem = canvas.addFile(fh)
+            canvasItem = canvas.addFile(fh, separateParams=True)
             #scan = Scan(self, fh, canvasItem)
             #self.scanItems[fh] = scan
             if not isinstance(canvasItem, dict):
@@ -197,12 +199,6 @@ class Photostim(AnalysisModule):
     def storeToDB(self):
         pass
 
-    #def getClampFile(self, dh):
-        #try:
-            #return dh['Clamp2.ma']
-        #except:
-            #return dh['Clamp1.ma']
-
     def scanPointClicked(self, point):
         try:
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
@@ -210,7 +206,6 @@ class Photostim(AnalysisModule):
             plot = self.getElement("Data Plot")
             plot.clear()
             self.selectedSpot = point
-            #fh = self.getClampFile(point.data)
             fh = self.dataModel.getClampFile(point.data)
             self.detector.loadFileRequested(fh)
             #self.dbCtrl.scanSpotClicked(fh)
@@ -404,6 +399,8 @@ class Photostim(AnalysisModule):
         
         
         ## update data in Map
+        scan = self.scans[parentDir]
+        scan.updateSpot(fh, events, stats)
         #try:
             #scan = self.scans[parentDir]
         #except KeyError:
@@ -599,7 +596,7 @@ class Scan(QtCore.QObject):
         for spot in self.spots():
             dh = spot.data
             #fh = self.host.getClampFile(dh)
-            fh = self.host.dataModel.getClampFile(dh)
+            fh = self.dataModel.getClampFile(dh)
             events, stats = self.host.loadSpotFromDB(dh)
             if stats is None or len(stats) == 0:
                 print "  No data for spot", dh
@@ -641,7 +638,7 @@ class Scan(QtCore.QObject):
             ops = []
             for i in range(len(spots)):
                 spot = spots[i]
-                fh = self.host.dataModel.getClampFile(spot.data)
+                fh = self.dataModel.getClampFile(spot.data)
                 stats = self.getStats(fh, signal=False)
                 #print "stats:", stats
                 color = self.host.getColor(stats)

@@ -5,13 +5,19 @@ from Terminal import *
 from advancedTypes import OrderedDict
 from debug import *
 import numpy as np
-from pyqtgraph.ObjectWorkaround import QObjectWorkaround
+#from pyqtgraph.ObjectWorkaround import QObjectWorkaround
 from eq import *
 
 def strDict(d):
     return dict([(str(k), v) for k, v in d.iteritems()])
 
 class Node(QtCore.QObject):
+    
+    sigOutputChanged = QtCore.Signal(object)
+    sigClosed = QtCore.Signal(object)
+    sigRenamed = QtCore.Signal(object, object)
+    sigTerminalRenamed = QtCore.Signal(object, object)
+    
     def __init__(self, name, terminals=None):
         QtCore.QObject.__init__(self)
         self._name = name
@@ -73,7 +79,8 @@ class Node(QtCore.QObject):
             del d[oldName]
             
         self.graphicsItem().updateTerminals()
-        self.emit(QtCore.SIGNAL('terminalRenamed'), term, oldName)
+        #self.emit(QtCore.SIGNAL('terminalRenamed'), term, oldName)
+        self.sigTerminalRenamed.emit(term, oldName)
         
     def addTerminal(self, name, **opts):
         name = self.nextTerminalName(name)
@@ -118,7 +125,8 @@ class Node(QtCore.QObject):
     def rename(self, name):
         oldName = self._name
         self._name = name
-        self.emit(QtCore.SIGNAL('renamed'), self, oldName)
+        #self.emit(QtCore.SIGNAL('renamed'), self, oldName)
+        self.sigRenamed.emit(self, oldName)
 
     def dependentNodes(self):
         """Return the list of nodes which provide direct input to this node"""
@@ -201,7 +209,8 @@ class Node(QtCore.QObject):
             self.setException(sys.exc_info())
             
             if signal:
-                self.emit(QtCore.SIGNAL('outputChanged'), self)  ## triggers flowchart to propagate new data
+                #self.emit(QtCore.SIGNAL('outputChanged'), self)  ## triggers flowchart to propagate new data
+                self.sigOutputChanged.emit(self)  ## triggers flowchart to propagate new data
 
     def processBypassed(self, args):
         result = {}
@@ -215,7 +224,8 @@ class Node(QtCore.QObject):
 
     def setOutput(self, **vals):
         self.setOutputNoSignal(**vals)
-        self.emit(QtCore.SIGNAL('outputChanged'), self)  ## triggers flowchart to propagate new data
+        #self.emit(QtCore.SIGNAL('outputChanged'), self)  ## triggers flowchart to propagate new data
+        self.sigOutputChanged.emit(self)  ## triggers flowchart to propagate new data
 
     def setOutputNoSignal(self, **vals):
         for k, v in vals.iteritems():
@@ -288,7 +298,8 @@ class Node(QtCore.QObject):
         w = self.ctrlWidget()
         if w is not None:
             w.setParent(None)
-        self.emit(QtCore.SIGNAL('closed'), self)
+        #self.emit(QtCore.SIGNAL('closed'), self)
+        self.sigClosed.emit(self)
             
     def disconnectAll(self):
         for t in self.terminals.values():

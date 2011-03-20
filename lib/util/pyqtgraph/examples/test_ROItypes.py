@@ -90,7 +90,8 @@ for r in rois:
     s.addItem(r)
     c = pi1.plot(pen=r.pen)
     r.curve = c
-    r.connect(r, QtCore.SIGNAL('regionChanged'), updateRoi)
+    #r.connect(r, QtCore.SIGNAL('regionChanged'), updateRoi)
+    r.sigRegionChanged.connect(updateRoi)
 
 def updateImage():
     global im1, arr, lastRoi
@@ -102,7 +103,8 @@ def updateImage():
     
     
 t = QtCore.QTimer()
-t.connect(t, QtCore.SIGNAL('timeout()'), updateImage)
+#t.connect(t, QtCore.SIGNAL('timeout()'), updateImage)
+t.timeout.connect(updateImage)
 t.start(50)
 
 w.show()

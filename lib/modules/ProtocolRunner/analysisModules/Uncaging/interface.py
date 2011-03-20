@@ -24,12 +24,18 @@ class UncagingModule(AnalysisModule):
         self.fillModuleList()
         self.prots = {}
         self.currentProt = None
-        QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteSelected)
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
-        QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*, QListWidgetItem*)'), self.itemSelected)
-        QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemClicked)
-        QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.recompute)
-        QtCore.QObject.connect(self.man, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteSelected)
+        self.ui.deleteBtn.clicked.connect(self.deleteSelected)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
+        self.stateGroup.sigChanged.connect(self.stateChanged)
+        #QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*, QListWidgetItem*)'), self.itemSelected)
+        self.ui.protList.currentItemChanged.connect(self.itemSelected)
+        #QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemClicked)
+        self.ui.protList.itemClicked.connect(self.itemClicked)
+        #QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.recompute)
+        self.ui.recomputeBtn.clicked.connect(self.recompute)
+        #QtCore.QObject.connect(self.man, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        self.man.sigModulesChanged.connect(self.fillModuleList)
         
     def quit(self):
         AnalysisModule.quit(self)
@@ -122,7 +128,8 @@ class UncagingModule(AnalysisModule):
             sp.recalculate(allFrames=True)
 
     def quit(self):
-        QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        #QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        getManager().sigModulesChanged.disconnect(self.fillModuleList)
         AnalysisModule.quit(self)
         for p in self.prots.values():
             p.close()

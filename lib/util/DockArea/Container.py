@@ -226,7 +226,8 @@ class TContainer(Container, QtGui.QWidget):
             raise Exception("Tab containers may hold only docks, not other containers.")
         self.stack.insertWidget(index, item)
         self.hTabLayout.insertWidget(index, item.label)
-        QtCore.QObject.connect(item.label, QtCore.SIGNAL('clicked'), self.tabClicked)
+        #QtCore.QObject.connect(item.label, QtCore.SIGNAL('clicked'), self.tabClicked)
+        item.label.sigClicked.connect(self.tabClicked)
         self.tabClicked(item.label)
         
     def tabClicked(self, tab, ev=None):

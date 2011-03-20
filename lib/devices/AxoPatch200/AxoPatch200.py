@@ -35,6 +35,11 @@ lpf_freq = np.array([1.0, 2.0, 5.0, 10.0, 100.0])
         #ScaledSignal: 'DAQ', '/Dev1/ai5'
         
 class AxoPatch200(DAQGeneric):
+    
+    sigShowModeDialog = QtCore.Signal(object)
+    sigHideModeDialog = QtCore.Signal()
+    sigHoldingChanged = QtCore.Signal(object)
+    sigModeChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
 
@@ -78,10 +83,15 @@ class AxoPatch200(DAQGeneric):
         self.modeDialog.setModal(False)
         self.modeDialog.setWindowTitle("Mode Switch Request")
         self.modeDialog.addButton(self.modeDialog.Cancel)
-        QtCore.QObject.connect(self.modeDialog, QtCore.SIGNAL('buttonClicked(QAbstractButton*)'), self.modeDialogClicked)
+        #QtCore.QObject.connect(self.modeDialog, QtCore.SIGNAL('buttonClicked(QAbstractButton*)'), self.modeDialogClicked)
+        self.modeDialog.buttonClicked.connect(self.modeDialogClicked)
         
-        QtCore.QObject.connect(self, QtCore.SIGNAL('showModeDialog'), self.showModeDialog)
-        QtCore.QObject.connect(self, QtCore.SIGNAL('hideModeDialog'), self.hideModeDialog)
+        #QtCore.QObject.connect(self, QtCore.SIGNAL('showModeDialog'), self.showModeDialog)
+        #QtCore.QObject.connect(self, QtCore.SIGNAL('hideModeDialog'), self.hideModeDialog)
+        self.sigShowModeDialog.connect(self.showModeDialog)
+        self.sigHideModeDialog.connect(self.hideModeDialog)
+        
+        
         
         try:
             self.setHolding()
@@ -117,7 +127,8 @@ class AxoPatch200(DAQGeneric):
                 ## override the scale since getChanScale won't necessarily give the correct value
                 ## (we may be about to switch modes)
                 DAQGeneric.setChanHolding(self, 'command', value, scale=gain)
-            self.emit(QtCore.SIGNAL('holdingChanged'), self.holding.copy())
+            #self.emit(QtCore.SIGNAL('holdingChanged'), self.holding.copy())
+            self.sigHoldingChanged.emit(self.holding.copy())
             
     def setChanHolding(self, chan, value=None):
         if chan == 'command':
@@ -163,7 +174,9 @@ class AxoPatch200(DAQGeneric):
             self.mdCanceled = False
         app = QtGui.QApplication.instance()
         msg = 'Please set AxoPatch mode switch to %s' % mode
-        self.emit(QtCore.SIGNAL('showModeDialog'), msg)
+        #self.emit(QtCore.SIGNAL('showModeDialog'), msg)
+        self.sigShowModeDialog.emit(msg)
+        
         #print "Set mode:", mode
         ## Wait for the mode to change to the one we're waiting for, or for a cancel
         while True:
@@ -185,8 +198,11 @@ class AxoPatch200(DAQGeneric):
             #print "  ..current:", currentMode
             
         #print "  got mode"
-        self.emit(QtCore.SIGNAL('hideModeDialog'))
-        self.emit(QtCore.SIGNAL('modeChanged'), mode)
+        #self.emit(QtCore.SIGNAL('hideModeDialog'))
+        #self.emit(QtCore.SIGNAL('modeChanged'), mode)
+        self.sigHideModeDialog.emit()
+        self.sigModeChanged.emit(mode)
+        
         
     def showModeDialog(self, msg):
         with self.modeLock:
@@ -402,7 +418,8 @@ class AxoPatchProtoGui(DAQGenericProtoGui):
         
         #QtCore.QObject.connect(self.ctrl.holdingCheck, QtCore.SIGNAL('stateChanged(int)'), self.holdingCheckChanged)
         #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.holdingChanged)
-        QtCore.QObject.connect(self.modeCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.modeChanged)
+        #QtCore.QObject.connect(self.modeCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.modeChanged)
+        self.modeCombo.currentIndexChanged.connect(self.modeChanged)
         self.modeChanged()
         
         
@@ -499,11 +516,16 @@ class AxoPatchDevGui(QtGui.QWidget):
         self.ui.vcHoldingSpin.setOpts(step=1, minStep=1e-3, dec=True, suffix='V', siPrefix=True)
         self.ui.icHoldingSpin.setOpts(step=1, minStep=1e-12, dec=True, suffix='A', siPrefix=True)
         self.updateStatus()
-        QtCore.QObject.connect(self.ui.modeCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.modeComboChanged)
-        QtCore.QObject.connect(self.ui.vcHoldingSpin, QtCore.SIGNAL('valueChanged(double)'), self.vcHoldingChanged)
-        QtCore.QObject.connect(self.ui.icHoldingSpin, QtCore.SIGNAL('valueChanged(double)'), self.icHoldingChanged)
-        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.devHoldingChanged)
-        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('modeChanged'), self.devModeChanged)
+        #QtCore.QObject.connect(self.ui.modeCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.modeComboChanged)
+        self.ui.modeCombo.currentIndexChanged.connect(self.modeComboChanged)
+        #QtCore.QObject.connect(self.ui.vcHoldingSpin, QtCore.SIGNAL('valueChanged(double)'), self.vcHoldingChanged)
+        self.ui.vcHoldingSpin.valueChanged.connect(self.vcHoldingChanged)
+        #QtCore.QObject.connect(self.ui.icHoldingSpin, QtCore.SIGNAL('valueChanged(double)'), self.icHoldingChanged)
+        self.ui.icHoldingSpin.valueChanged.connect(self.icHoldingChanged)
+        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.devHoldingChanged)
+        self.dev.sigHoldingChanged.connect(self.devHoldingChanged)
+        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('modeChanged'), self.devModeChanged)
+        self.dev.sigModeChanged.connect(self.devModeChanged)
         
     def updateStatus(self):
         global modeNames

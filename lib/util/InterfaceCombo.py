@@ -6,7 +6,8 @@ class InterfaceCombo(QtGui.QComboBox):
     def __init__(self, parent=None):
         self.dir = getManager().interfaceDir
         QtGui.QComboBox.__init__(self, parent)
-        QtCore.QObject.connect(self.dir, QtCore.SIGNAL('interfaceListChanged'), self.updateList)
+        #QtCore.QObject.connect(self.dir, QtCore.SIGNAL('interfaceListChanged'), self.updateList)
+        self.dir.sigInterfaceListChanged.connect(self.updateList)
         if self.count() > 0:
             self.firstItem = str(self.itemText(0))
         else:

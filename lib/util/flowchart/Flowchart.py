@@ -55,7 +55,10 @@ def toposort(deps, nodes=None, seen=None, stack=None, depth=0):
 
 class Flowchart(Node):
     
-    sigOutputChanged = QtCore.Signal()
+    sigFileLoaded = QtCore.Signal(object)
+    
+    
+    #sigOutputChanged = QtCore.Signal() ## inherited from Node
     sigChartLoaded = QtCore.Signal()
     sigStateChanged = QtCore.Signal()
     
@@ -80,9 +83,12 @@ class Flowchart(Node):
         self.addNode(self.inputNode, 'Input', [-150, 0])
         self.addNode(self.outputNode, 'Output', [300, 0])
             
-        QtCore.QObject.connect(self.outputNode, QtCore.SIGNAL('outputChanged'), self.outputChanged)
-        QtCore.QObject.connect(self.outputNode, QtCore.SIGNAL('terminalRenamed'), self.internalTerminalRenamed)
-        QtCore.QObject.connect(self.inputNode, QtCore.SIGNAL('terminalRenamed'), self.internalTerminalRenamed)
+        #QtCore.QObject.connect(self.outputNode, QtCore.SIGNAL('outputChanged'), self.outputChanged)
+        self.outputNode.sigOutputChanged.connect(self.outputChanged)
+        #QtCore.QObject.connect(self.outputNode, QtCore.SIGNAL('terminalRenamed'), self.internalTerminalRenamed)
+        self.outputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
+        #QtCore.QObject.connect(self.inputNode, QtCore.SIGNAL('terminalRenamed'), self.internalTerminalRenamed)
+        self.inputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
         
             
         for name, opts in terminals.iteritems():
@@ -97,7 +103,7 @@ class Flowchart(Node):
         
     def outputChanged(self):
         self.widget().outputChanged(self.outputNode.inputValues())
-        self.sigOutputChanged.emit()
+        self.sigOutputChanged.emit(self)
         
     def output(self):
         return self.outputNode.inputValues()
@@ -161,9 +167,12 @@ class Flowchart(Node):
         item.moveBy(*pos)
         self._nodes[name] = node
         self.widget().addNode(node)
-        QtCore.QObject.connect(node, QtCore.SIGNAL('closed'), self.nodeClosed)
-        QtCore.QObject.connect(node, QtCore.SIGNAL('renamed'), self.nodeRenamed)
-        QtCore.QObject.connect(node, QtCore.SIGNAL('outputChanged'), self.nodeOutputChanged)
+        #QtCore.QObject.connect(node, QtCore.SIGNAL('closed'), self.nodeClosed)
+        node.sigClosed.connect(self.nodeClosed)
+        #QtCore.QObject.connect(node, QtCore.SIGNAL('renamed'), self.nodeRenamed)
+        node.sigRenamed.connect(self.nodeRenamed)
+        #QtCore.QObject.connect(node, QtCore.SIGNAL('outputChanged'), self.nodeOutputChanged)
+        node.sigOutputChanged.connect(self.nodeOutputChanged)
         
     def removeNode(self, node):
         node.close()
@@ -171,9 +180,12 @@ class Flowchart(Node):
     def nodeClosed(self, node):
         del self._nodes[node.name()]
         self.widget().removeNode(node)
-        QtCore.QObject.disconnect(node, QtCore.SIGNAL('closed'), self.nodeClosed)
-        QtCore.QObject.disconnect(node, QtCore.SIGNAL('renamed'), self.nodeRenamed)
-        QtCore.QObject.disconnect(node, QtCore.SIGNAL('outputChanged'), self.nodeOutputChanged)
+        #QtCore.QObject.disconnect(node, QtCore.SIGNAL('closed'), self.nodeClosed)
+        node.sigClosed.disconnect(self.nodeClosed)
+        #QtCore.QObject.disconnect(node, QtCore.SIGNAL('renamed'), self.nodeRenamed)
+        node.sigRenamed.disconnect(self.nodeRenamed)
+        #QtCore.QObject.disconnect(node, QtCore.SIGNAL('outputChanged'), self.nodeOutputChanged)
+        node.sigOutputChanged.disconnect(self.nodeOutputChanged)
         
     def nodeRenamed(self, node, oldName):
         del self._nodes[oldName]
@@ -455,7 +467,8 @@ class Flowchart(Node):
         fileName = str(fileName)
         state = configfile.readConfigFile(fileName)
         self.restoreState(state, clear=True)
-        self.emit(QtCore.SIGNAL('fileLoaded'), fileName)
+        #self.emit(QtCore.SIGNAL('fileLoaded'), fileName)
+        self.sigFileLoaded.emit(fileName)
         
     def saveFile(self, fileName=None, startDir=None, suggestedFileName='flowchart.fc'):
         if fileName is None:
@@ -536,13 +549,20 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         self.cwWin.resize(1000,800)
         self.cwWin.setCentralWidget(self.chartWidget)
         
-        QtCore.QObject.connect(self.ui.ctrlList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.itemChanged)
-        QtCore.QObject.connect(self.ui.loadBtn, QtCore.SIGNAL('clicked()'), self.loadClicked)
-        QtCore.QObject.connect(self.ui.saveBtn, QtCore.SIGNAL('clicked()'), self.saveClicked)
-        QtCore.QObject.connect(self.ui.saveAsBtn, QtCore.SIGNAL('clicked()'), self.saveAsClicked)
-        QtCore.QObject.connect(self.ui.showChartBtn, QtCore.SIGNAL('toggled(bool)'), self.chartToggled)
-        QtCore.QObject.connect(self.chart, QtCore.SIGNAL('fileLoaded'), self.setCurrentFile)
-        QtCore.QObject.connect(self.ui.reloadBtn, QtCore.SIGNAL('clicked()'), self.reloadClicked)
+        #QtCore.QObject.connect(self.ui.ctrlList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.itemChanged)
+        self.ui.ctrlList.itemChanged.connect(self.itemChanged)
+        #QtCore.QObject.connect(self.ui.loadBtn, QtCore.SIGNAL('clicked()'), self.loadClicked)
+        self.ui.loadBtn.clicked.connect(self.loadClicked)
+        #QtCore.QObject.connect(self.ui.saveBtn, QtCore.SIGNAL('clicked()'), self.saveClicked)
+        self.ui.saveBtn.clicked.connect(self.saveClicked)
+        #QtCore.QObject.connect(self.ui.saveAsBtn, QtCore.SIGNAL('clicked()'), self.saveAsClicked)
+        self.ui.saveAsBtn.clicked.connect(self.saveAsClicked)
+        #QtCore.QObject.connect(self.ui.showChartBtn, QtCore.SIGNAL('toggled(bool)'), self.chartToggled)
+        self.ui.showChartBtn.toggled.connect(self.chartToggled)
+        #QtCore.QObject.connect(self.chart, QtCore.SIGNAL('fileLoaded'), self.setCurrentFile)
+        self.chart.sigFileLoaded.connect(self.setCurrentFile)
+        #QtCore.QObject.connect(self.ui.reloadBtn, QtCore.SIGNAL('clicked()'), self.reloadClicked)
+        self.ui.reloadBtn.clicked.connect(self.reloadClicked)
         
     
         
@@ -623,7 +643,8 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         byp.node = node
         node.bypassButton = byp
         byp.setChecked(node.isBypassed())
-        self.connect(byp, QtCore.SIGNAL('clicked()'), self.bypassClicked)
+        #self.connect(byp, QtCore.SIGNAL('clicked()'), self.bypassClicked)
+        byp.clicked.connect(self.bypassClicked)
         
         if ctrl is not None:
             item2 = QtGui.QTreeWidgetItem()
@@ -635,7 +656,8 @@ class FlowchartCtrlWidget(QtGui.QWidget):
     def removeNode(self, node):
         if node in self.items:
             item = self.items[node]
-            self.disconnect(item.bypassBtn, QtCore.SIGNAL('clicked()'), self.bypassClicked)
+            #self.disconnect(item.bypassBtn, QtCore.SIGNAL('clicked()'), self.bypassClicked)
+            item.bypassBtn.clicked.disconnect(self.bypassClicked)
             self.ui.ctrlList.removeTopLevelItem(item)
             
     def bypassClicked(self):
@@ -691,7 +713,7 @@ class FlowchartWidget(DockArea.DockArea):
         self.selNameLabel = QtGui.QLabel()
         self.selDescLabel.setWordWrap(True)
         self.selectedTree = DataTreeWidget.DataTreeWidget()
-        self.selectedTree.setHorizontalScrollBarPolicy(0)
+        #self.selectedTree.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
         #self.selInfoLayout.addWidget(self.selNameLabel)
         self.selInfoLayout.addWidget(self.selDescLabel)
         self.selInfoLayout.addWidget(self.selectedTree)
@@ -706,12 +728,16 @@ class FlowchartWidget(DockArea.DockArea):
         self.buildMenu()
         #self.ui.addNodeBtn.mouseReleaseEvent = self.addNodeBtnReleased
             
-        QtCore.QObject.connect(self._scene, QtCore.SIGNAL('selectionChanged()'), self.selectionChanged)
-        QtCore.QObject.connect(self.view, QtCore.SIGNAL('hoverOver'), self.hoverOver)
-        QtCore.QObject.connect(self.view, QtCore.SIGNAL('clicked'), self.showViewMenu)
+        #QtCore.QObject.connect(self._scene, QtCore.SIGNAL('selectionChanged()'), self.selectionChanged)
+        self._scene.selectionChanged.connect(self.selectionChanged)
+        #QtCore.QObject.connect(self.view, QtCore.SIGNAL('hoverOver'), self.hoverOver)
+        self.view.sigHoverOver.connect(self.hoverOver)
+        #QtCore.QObject.connect(self.view, QtCore.SIGNAL('clicked'), self.showViewMenu)
+        self.view.sigClicked.connect(self.showViewMenu)
         
     def reloadLibrary(self):
-        QtCore.QObject.disconnect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
+        #QtCore.QObject.disconnect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
+        self.nodeMenu.triggered.disconnect(self.nodeMenuTriggered)
         self.nodeMenu = None
         self.subMenus = []
         library.loadLibrary(reloadLibs=True)
@@ -727,7 +753,8 @@ class FlowchartWidget(DockArea.DockArea):
                 act = menu.addAction(name)
                 act.nodeType = name
             self.subMenus.append(menu)
-        QtCore.QObject.connect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
+        #QtCore.QObject.connect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
+        self.nodeMenu.triggered.connect(self.nodeMenuTriggered)
     
     def showViewMenu(self, ev):
         #QtGui.QPushButton.mouseReleaseEvent(self.ui.addNodeBtn, ev)

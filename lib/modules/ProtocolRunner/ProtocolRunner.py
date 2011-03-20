@@ -40,6 +40,14 @@ class Window(QtGui.QMainWindow):
         #sip.delete(self)
 
 class ProtocolRunner(Module):
+    
+    sigProtocolPaused = QtCore.Signal()
+    sigProtocolFinished = QtCore.Signal()
+    sigNewFrame = QtCore.Signal(object)
+    sigProtocolStarted = QtCore.Signal(object)
+    sigTaskStarted = QtCore.Signal(object)
+    sigProtocolChanged = QtCore.Signal(object, object)
+    
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
         self.lastProtoTime = None
@@ -89,40 +97,65 @@ class ProtocolRunner(Module):
         self.newProtocol()
         
         
-        QtCore.QObject.connect(self.ui.newProtocolBtn, QtCore.SIGNAL('clicked()'), self.newProtocol)
-        QtCore.QObject.connect(self.ui.saveProtocolBtn, QtCore.SIGNAL('clicked()'), self.saveProtocol)
-        QtCore.QObject.connect(self.ui.loadProtocolBtn, QtCore.SIGNAL('clicked()'), self.loadProtocol)
-        QtCore.QObject.connect(self.ui.saveAsProtocolBtn, QtCore.SIGNAL('clicked()'), self.saveProtocolAs)
-        QtCore.QObject.connect(self.ui.deleteProtocolBtn, QtCore.SIGNAL('clicked()'), self.deleteProtocol)
-        QtCore.QObject.connect(self.ui.testSingleBtn, QtCore.SIGNAL('clicked()'), self.testSingleClicked)
-        QtCore.QObject.connect(self.ui.runProtocolBtn, QtCore.SIGNAL('clicked()'), self.runSingleClicked)
-        QtCore.QObject.connect(self.ui.testSequenceBtn, QtCore.SIGNAL('clicked()'), self.testSequence)
-        QtCore.QObject.connect(self.ui.runSequenceBtn, QtCore.SIGNAL('clicked()'), self.runSequence)
-        QtCore.QObject.connect(self.ui.stopSingleBtn, QtCore.SIGNAL('clicked()'), self.stopSingle)
-        QtCore.QObject.connect(self.ui.stopSequenceBtn, QtCore.SIGNAL('clicked()'), self.stopSequence)
-        QtCore.QObject.connect(self.ui.pauseSequenceBtn, QtCore.SIGNAL('toggled(bool)'), self.pauseSequence)
-        QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.deviceItemClicked)
+        #QtCore.QObject.connect(self.ui.newProtocolBtn, QtCore.SIGNAL('clicked()'), self.newProtocol)
+        self.ui.newProtocolBtn.clicked.connect(self.newProtocol)
+        #QtCore.QObject.connect(self.ui.saveProtocolBtn, QtCore.SIGNAL('clicked()'), self.saveProtocol)
+        self.ui.saveProtocolBtn.clicked.connect(self.saveProtocol)
+        #QtCore.QObject.connect(self.ui.loadProtocolBtn, QtCore.SIGNAL('clicked()'), self.loadProtocol)
+        self.ui.loadProtocolBtn.clicked.connect(self.loadProtocol)
+        #QtCore.QObject.connect(self.ui.saveAsProtocolBtn, QtCore.SIGNAL('clicked()'), self.saveProtocolAs)
+        self.ui.saveAsProtocolBtn.clicked.connect(self.saveProtocolAs)
+        #QtCore.QObject.connect(self.ui.deleteProtocolBtn, QtCore.SIGNAL('clicked()'), self.deleteProtocol)
+        self.ui.deleteProtocolBtn.clicked.connect(self.deleteProtocol)
+        #QtCore.QObject.connect(self.ui.testSingleBtn, QtCore.SIGNAL('clicked()'), self.testSingleClicked)
+        self.ui.testSingleBtn.clicked.connect(self.testSingleClicked)
+        #QtCore.QObject.connect(self.ui.runProtocolBtn, QtCore.SIGNAL('clicked()'), self.runSingleClicked)
+        self.ui.runProtocolBtn.clicked.connect(self.runSingleClicked)
+        #QtCore.QObject.connect(self.ui.testSequenceBtn, QtCore.SIGNAL('clicked()'), self.testSequence)
+        self.ui.testSequenceBtn.clicked.connect(self.testSequence)
+        #QtCore.QObject.connect(self.ui.runSequenceBtn, QtCore.SIGNAL('clicked()'), self.runSequence)
+        self.ui.runSequenceBtn.clicked.connect(self.runSequence)
+        #QtCore.QObject.connect(self.ui.stopSingleBtn, QtCore.SIGNAL('clicked()'), self.stopSingle)
+        self.ui.stopSingleBtn.clicked.connect(self.stopSingle)
+        #QtCore.QObject.connect(self.ui.stopSequenceBtn, QtCore.SIGNAL('clicked()'), self.stopSequence)
+        self.ui.stopSequenceBtn.clicked.connect(self.stopSequence)
+        #QtCore.QObject.connect(self.ui.pauseSequenceBtn, QtCore.SIGNAL('toggled(bool)'), self.pauseSequence)
+        self.ui.pauseSequenceBtn.toggled.connect(self.pauseSequence)
+        #QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.deviceItemClicked)
+        self.ui.deviceList.itemClicked.connect(self.deviceItemClicked)
         #QtCore.QObject.connect(self.ui.protoDurationSpin, QtCore.SIGNAL('editingFinished()'), self.protParamsChanged)
-        QtCore.QObject.connect(self.ui.protocolList, QtCore.SIGNAL('doubleClicked(const QModelIndex &)'), self.loadProtocol)
-        QtCore.QObject.connect(self.ui.protocolList, QtCore.SIGNAL('clicked(const QModelIndex &)'), self.protoListClicked)
-        QtCore.QObject.connect(self.protocolList, QtCore.SIGNAL('fileRenamed(PyQt_PyObject, PyQt_PyObject)'), self.fileRenamed)
-        QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('finished()'), self.taskThreadStopped)
-        QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('newFrame'), self.handleFrame)
-        QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('paused'), self.taskThreadPaused)
-        QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('taskStarted'), self.taskStarted)
-        QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('exitFromError'), self.taskErrored)
+        #QtCore.QObject.connect(self.ui.protocolList, QtCore.SIGNAL('doubleClicked(const QModelIndex &)'), self.loadProtocol)
+        self.ui.protocolList.doubleClicked.connect(self.loadProtocol)
+        #QtCore.QObject.connect(self.ui.protocolList, QtCore.SIGNAL('clicked(const QModelIndex &)'), self.protoListClicked)
+        self.ui.protocolList.clicked.connect(self.protoListClicked)
+        #QtCore.QObject.connect(self.protocolList, QtCore.SIGNAL('fileRenamed(PyQt_PyObject, PyQt_PyObject)'), self.fileRenamed)
+        self.protocolList.fileRenamed.connect(self.fileRenamed)
+        #QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('finished()'), self.taskThreadStopped)
+        self.taskThread.finished.connect(self.taskThreadStopped)
+        #QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('newFrame'), self.handleFrame)
+        self.taskThread.sigNewFrame.connect(self.handleFrame)
+        #QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('paused'), self.taskThreadPaused)
+        self.taskThread.sigPaused.connect(self.taskThreadPaused)
+        #QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('taskStarted'), self.taskStarted)
+        self.taskThread.sigTaskStarted.connect(self.taskStarted)
+        #QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('exitFromError'), self.taskErrored)
+        self.taskThread.sigExitFromError.connect(self.taskErrored)
         #QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.deviceItemChanged)
-        QtCore.QObject.connect(self.protoStateGroup, QtCore.SIGNAL('changed'), self.protoGroupChanged)
+        #QtCore.QObject.connect(self.protoStateGroup, QtCore.SIGNAL('changed'), self.protoGroupChanged)
+        self.protoStateGroup.sigChanged.connect(self.protoGroupChanged)
         self.win.show()
-        QtCore.QObject.connect(self.ui.sequenceParamList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.updateSeqReport)
-        QtCore.QObject.connect(self.ui.analysisList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.analysisItemClicked)
+        #QtCore.QObject.connect(self.ui.sequenceParamList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.updateSeqReport)
+        self.ui.sequenceParamList.itemChanged.connect(self.updateSeqReport)
+        #QtCore.QObject.connect(self.ui.analysisList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.analysisItemClicked)
+        self.ui.analysisList.itemClicked.connect(self.analysisItemClicked)
         
     #def hasInterface(self, interface):
         #return interface in ['DataSource']
 
         
     def protoGroupChanged(self, param, value):
-        self.emit(QtCore.SIGNAL('protocolChanged'), param, value)
+        #self.emit(QtCore.SIGNAL('protocolChanged'), param, value)
+        self.sigProtocolChanged.emit(param, value)
         if param == 'repetitions':
             self.updateSeqParams()
         if param in ['duration', 'cycleTime', 'leadTime']:
@@ -399,7 +432,8 @@ class ProtocolRunner(Module):
                     dw.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
                     self.docks[d] = dock
                     self.win.addDockWidget(QtCore.Qt.BottomDockWidgetArea, dock)
-                    QtCore.QObject.connect(dock.widget(), QtCore.SIGNAL('sequenceChanged'), self.updateSeqParams)
+                    #QtCore.QObject.connect(dock.widget(), QtCore.SIGNAL('sequenceChanged'), self.updateSeqParams)
+                    dock.widget().sigSequenceChanged.connect(self.updateSeqParams)
                     self.updateSeqParams(d)
                     #dock.setMinimumWidth(3000)
                     #dock.setMinimumWidth(0)
@@ -674,7 +708,8 @@ class ProtocolRunner(Module):
             ## Generate executable conf from protocol object
             prot = self.generateProtocol(dh)
             
-            self.emit(QtCore.SIGNAL('protocolStarted'), {})
+            #self.emit(QtCore.SIGNAL('protocolStarted'), {})
+            self.sigProtocolStarted.emit({})
             #print "runSingle: Starting taskThread.."
             self.taskThread.startProtocol(prot)
             #print "runSingle: taskThreadStarted"
@@ -736,7 +771,8 @@ class ProtocolRunner(Module):
             
             #print "==========Sequence Protocol=============="
             #print prot
-            self.emit(QtCore.SIGNAL('protocolStarted'), {})
+            #self.emit(QtCore.SIGNAL('protocolStarted'), {})
+            self.sigProtocolStarted.emit({})
             self.taskThread.startProtocol(prot, paramInds)
         except:
             self.enableStartBtns(True)
@@ -813,7 +849,8 @@ class ProtocolRunner(Module):
             b.setEnabled(v)
             
     def taskThreadStopped(self):
-        self.emit(QtCore.SIGNAL('protocolFinished'))
+        #self.emit(QtCore.SIGNAL('protocolFinished'))
+        self.sigProtocolFinished.emit()
         if not self.loopEnabled:   ## what if we quit due to error?
             self.enableStartBtns(True)
     
@@ -821,7 +858,8 @@ class ProtocolRunner(Module):
         self.enableStartBtns(True)
             
     def taskThreadPaused(self):
-        self.emit(QtCore.SIGNAL('protocolPaused'))
+        #self.emit(QtCore.SIGNAL('protocolPaused'))
+        self.sigProtocolPaused.emit()
             
     def stopSingle(self):
         self.loopEnabled = False
@@ -847,7 +885,8 @@ class ProtocolRunner(Module):
             nums = []
         cur += ',  '.join(nums)
         self.ui.seqCurrentLabel.setText(cur)
-        self.emit(QtCore.SIGNAL('taskStarted'), params)
+        #self.emit(QtCore.SIGNAL('taskStarted'), params)
+        self.sigTaskStarted.emit(params)
         
     
     def handleFrame(self, frame):
@@ -864,7 +903,8 @@ class ProtocolRunner(Module):
             except:
                 printExc("Error while handling result from device '%s'" % d)
                 
-        self.emit(QtCore.SIGNAL('newFrame'), frame)
+        #self.emit(QtCore.SIGNAL('newFrame'), frame)
+        self.sigNewFrame.emit(frame)
         prof.mark('emit newFrame')
                 
         ## If this is a single-mode protocol and looping is turned on, schedule the next run
@@ -1012,6 +1052,12 @@ class Protocol:
         
         
 class TaskThread(QtCore.QThread):
+    
+    sigPaused = QtCore.Signal()
+    sigNewFrame = QtCore.Signal(object)
+    sigExitFromError = QtCore.Signal()
+    sigTaskStarted = QtCore.Signal(object)
+    
     def __init__(self, ui):
         QtCore.QThread.__init__(self)
         self.ui = ui
@@ -1069,7 +1115,8 @@ class TaskThread(QtCore.QThread):
             self.protocol = None  ## free up this memory
             self.paramSpace = None
             printExc("Error in protocol thread, exiting.")
-            self.emit(QtCore.SIGNAL('exitFromError'))
+            #self.emit(QtCore.SIGNAL('exitFromError'))
+            self.sigExitFromError.emit()
         #finally:
             #self.emit(QtCore.SIGNAL("protocolFinished()"))
         #print "TaskThread:run() finished"
@@ -1119,7 +1166,8 @@ class TaskThread(QtCore.QThread):
                     break
                 if emitSig:
                     emitSig = False
-                    self.emit(QtCore.SIGNAL('paused'))
+                    #self.emit(QtCore.SIGNAL('paused'))
+                    self.sigPaused.emit()
                 time.sleep(10e-3)
             
             prof.mark('pause')
@@ -1138,7 +1186,8 @@ class TaskThread(QtCore.QThread):
             prof.mark('create task')
             
             self.lastRunTime = ptime.time()
-            self.emit(QtCore.SIGNAL('taskStarted'), params)
+            #self.emit(QtCore.SIGNAL('taskStarted'), params)
+            self.sigTaskStarted.emit(params)
             
             try:
                 task.execute(block=False)
@@ -1180,7 +1229,8 @@ class TaskThread(QtCore.QThread):
             prof.mark('getResult')
             
         frame = {'params': params, 'cmd': cmd, 'result': result}
-        self.emit(QtCore.SIGNAL('newFrame'), frame)
+        #self.emit(QtCore.SIGNAL('newFrame'), frame)
+        self.sigNewFrame.emit(frame)
         prof.mark('emit newFrame')
         if self.stopThread:
             raise Exception('stop', result)

@@ -9,11 +9,18 @@ manager with a configuration file and let it go from there.
 """
 
 print "Loading ACQ4..."
+
 #import lib.util.PySideImporter  ## Use PySide instead of PyQt
+from PyQt4 import QtGui, QtCore
+## Needed to keep compatibility between pyside and pyqt
+## (this can go away once the transition to PySide is complete)
+if not hasattr(QtCore, 'Signal'):
+    QtCore.Signal = QtCore.pyqtSignal
+    QtCore.Slot = QtCore.pyqtSlot
+    
 from lib.Manager import *
 import os, sys
 from numpy import *
-from PyQt4 import QtGui, QtCore
 
 
 ## Disable long-term storage of exception stack frames
@@ -21,10 +28,6 @@ from PyQt4 import QtGui, QtCore
 ## may break some debuggers.
 import disableExceptionStorage
 
-## Needed to keep compatibility between pyside and pyqt
-## (this can go away once the transition to PySide is complete)
-QtCore.Signal = QtCore.pyqtSignal
-QtCore.Slot = QtCore.pyqtSlot
 
 
 ## Initialize Qt
@@ -63,7 +66,7 @@ except:
         x = 0
         for i in range(0, 100):
             x += i
-    timer.connect(timer, QtCore.SIGNAL("timeout()"), donothing)
+    timer.timeout.connect(donothing)
     timer.start(200)
     
     print "Starting Qt event loop.."

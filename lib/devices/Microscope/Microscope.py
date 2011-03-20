@@ -14,6 +14,11 @@ def ftrace(func):
     return w
 
 class Microscope(Device):
+    
+    sigObjectiveChanged = QtCore.Signal(object)
+    sigObjectiveListChanged = QtCore.Signal()
+    sigPositionChanged = QtCore.Signal(object)
+    
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.lock = Mutex(QtCore.QMutex.Recursive)
@@ -39,7 +44,8 @@ class Microscope(Device):
             else:
                 self.positionScale = (1.0,) * nax
             self.positionChanged({'abs': pos, 'rel': pos})
-            QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
+            #QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
+            self.posDev.sigPositionChanged.connect(self.positionChanged)
         else:
             self.position = [0.0, 0.0]
         
@@ -63,7 +69,8 @@ class Microscope(Device):
             self.objDev = dm.getDevice(config['objectiveSwitch'][0])  ## Switch device
             self.objSwitchId = config['objectiveSwitch'][1]           ## Switch ID
             currentObj = str(self.objDev.getSwitch(self.objSwitchId))           ## Get current switch state
-            QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('switchChanged'), self.objectiveSwitched)
+            #QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('switchChanged'), self.objectiveSwitched)
+            self.posDev.sigSwitchChanged.connect(self.objectiveSwitched)
         
         self.setObjective(currentObj)
 
@@ -82,7 +89,8 @@ class Microscope(Device):
             p = self.position[:]
 
         ## Mutex must be released before emitting!
-        self.emit(QtCore.SIGNAL('positionChanged'), {'abs': p, 'rel': rel})
+        #self.emit(QtCore.SIGNAL('positionChanged'), {'abs': p, 'rel': rel})
+        self.sigPositionChanged.emit({'abs': p, 'rel': rel})
         
     def objectiveSwitched(self, change):
         """Called when the switch device has changed, NOT when the user has selected a different objective."""
@@ -100,7 +108,8 @@ class Microscope(Device):
             lastObj = self.getObjective()
             self.currentObjective = index
             obj = self.getObjective()
-            self.emit(QtCore.SIGNAL('objectiveChanged'), (obj, index, lastObj))
+            #self.emit(QtCore.SIGNAL('objectiveChanged'), (obj, index, lastObj))
+            self.sigObjectiveChanged.emit((obj, index, lastObj)
         
     #@ftrace
     def getPosition(self):
@@ -146,20 +155,26 @@ class Microscope(Device):
             for i in self.allObjectives:
                 if i in sel:
                     self.objectives[i] = sel[i]
-        self.emit(QtCore.SIGNAL('objectiveListChanged'))
+        #self.emit(QtCore.SIGNAL('objectiveListChanged'))
+        self.sigObjectiveListChanged.emit()
                 
     def updateObjectives(self, objs):
         with self.lock:
             self.allObjectives = objs.copy()
-        self.emit(QtCore.SIGNAL('objectiveListChanged'))
+        #self.emit(QtCore.SIGNAL('objectiveListChanged'))
+        self.sigObjectiveListChanged.emit()
     
 class ScopeGUI(QtGui.QWidget):
+    
+    
     def __init__(self, dev, win):
         QtGui.QWidget.__init__(self)
         self.win = win
         self.dev = dev
-        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
-        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
+        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+        self.dev.sigObjectiveChanged.connect(self.objectiveChanged)
+        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
+        self.dev.sigPositionChanged.connect(self.positionChanged)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.objList = self.dev.listObjectives()
@@ -186,11 +201,16 @@ class ScopeGUI(QtGui.QWidget):
             
             for o in self.objList[i]:
                 c.addItem(self.objList[i][o]['name'], QtCore.QVariant(QtCore.QString(o)))
-            QtCore.QObject.connect(r, QtCore.SIGNAL('clicked()'), self.objRadioClicked)
-            QtCore.QObject.connect(c, QtCore.SIGNAL('currentIndexChanged(int)'), self.objComboChanged)
-            QtCore.QObject.connect(xs, QtCore.SIGNAL('valueChanged'), self.xSpinChanged)
-            QtCore.QObject.connect(ys, QtCore.SIGNAL('valueChanged'), self.ySpinChanged)
-            QtCore.QObject.connect(ss, QtCore.SIGNAL('valueChanged'), self.sSpinChanged)
+            #QtCore.QObject.connect(r, QtCore.SIGNAL('clicked()'), self.objRadioClicked)
+            r.clicked.connect(self.objRadioClicked)
+            #QtCore.QObject.connect(c, QtCore.SIGNAL('currentIndexChanged(int)'), self.objComboChanged)
+            c.currentIndexChanged.connect(self.objComboChanged)
+            #QtCore.QObject.connect(xs, QtCore.SIGNAL('valueChanged'), self.xSpinChanged)
+            xs.sigValueChanged.connect(self.xSpinChanged)
+            #QtCore.QObject.connect(ys, QtCore.SIGNAL('valueChanged'), self.ySpinChanged)
+            ys.sigValueChanged.connect(self.ySpinChanged)
+            #QtCore.QObject.connect(ss, QtCore.SIGNAL('valueChanged'), self.sSpinChanged)
+            ss.sigValueChanged.connect(self.sSpinChanged)
             row += 1
         
     def objectiveChanged(self,obj):

@@ -68,7 +68,7 @@ class ThresholdEvents(CtrlNode):
     uiTemplate = [
         ('threshold', 'spin', {'value': 1e-12, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
         ('adjustTimes', 'check', {'value': True}),
-        ('index', 'combo', {'values':['start','peak'], 'index':0}), 
+        #('index', 'combo', {'values':['start','peak'], 'index':0}), 
         ('minLength', 'intSpin', {'value': 0, 'min': 0, 'max': 1e9}),
         ('minSum', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
         ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
@@ -113,7 +113,7 @@ class ThresholdEvents(CtrlNode):
 
     def processData(self, data):
         s = self.stateGroup.state()
-        events = functions.thresholdEvents(data, s['threshold'], s['adjustTimes'], s['index'])
+        events = functions.thresholdEvents(data, s['threshold'], s['adjustTimes'])
         
         ## apply first round of filters
         mask = events['len'] >= s['minLength']

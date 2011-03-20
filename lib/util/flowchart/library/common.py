@@ -99,7 +99,8 @@ class CtrlNode(Node):
         Node.__init__(self, name=name, terminals=terminals)
         
         self.ui, self.stateGroup, self.ctrls = generateUi(ui)
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.stateGroup.sigChanged.connect(self.changed)
        
     def ctrlWidget(self):
         return self.ui

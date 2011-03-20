@@ -129,25 +129,37 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.commandPlot.setLabel('left', text='Secondary', units='V')
         self.commandCurve = self.ui.commandPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
         
-        QtCore.QObject.connect(self.ui.startBtn, QtCore.SIGNAL('clicked()'), self.startClicked)
-        QtCore.QObject.connect(self.ui.recordBtn, QtCore.SIGNAL('clicked()'), self.recordClicked)
-        QtCore.QObject.connect(self.ui.bathModeBtn, QtCore.SIGNAL('clicked()'), self.bathMode)
-        QtCore.QObject.connect(self.ui.patchModeBtn, QtCore.SIGNAL('clicked()'), self.patchMode)
-        QtCore.QObject.connect(self.ui.cellModeBtn, QtCore.SIGNAL('clicked()'), self.cellMode)
-        QtCore.QObject.connect(self.ui.monitorModeBtn, QtCore.SIGNAL('clicked()'), self.monitorMode)
-        QtCore.QObject.connect(self.ui.resetBtn, QtCore.SIGNAL('clicked()'), self.resetClicked)
-        QtCore.QObject.connect(self.thread, QtCore.SIGNAL('finished()'), self.threadStopped)
-        QtCore.QObject.connect(self.thread, QtCore.SIGNAL('newFrame'), self.handleNewFrame)
+        #QtCore.QObject.connect(self.ui.startBtn, QtCore.SIGNAL('clicked()'), self.startClicked)
+        self.ui.startBtn.clicked.connect(self.startClicked)
+        #QtCore.QObject.connect(self.ui.recordBtn, QtCore.SIGNAL('clicked()'), self.recordClicked)
+        self.ui.recordBtn.clicked.connect(self.recordClicked)
+        #QtCore.QObject.connect(self.ui.bathModeBtn, QtCore.SIGNAL('clicked()'), self.bathMode)
+        self.ui.bathModeBtn.clicked.connect(self.bathMode)
+        #QtCore.QObject.connect(self.ui.patchModeBtn, QtCore.SIGNAL('clicked()'), self.patchMode)
+        self.ui.patchModeBtn.clicked.connect(self.patchMode)
+        #QtCore.QObject.connect(self.ui.cellModeBtn, QtCore.SIGNAL('clicked()'), self.cellMode)
+        self.ui.cellModeBtn.clicked.connect(self.cellMode)
+        #QtCore.QObject.connect(self.ui.monitorModeBtn, QtCore.SIGNAL('clicked()'), self.monitorMode)
+        self.ui.monitorModeBtn.clicked.connect(self.monitorMode)
+        #QtCore.QObject.connect(self.ui.resetBtn, QtCore.SIGNAL('clicked()'), self.resetClicked)
+        self.ui.resetBtn.clicked.connect(self.resetClicked)
+        #QtCore.QObject.connect(self.thread, QtCore.SIGNAL('finished()'), self.threadStopped)
+        self.thread.finished.connect(self.threadStopped)
+        #QtCore.QObject.connect(self.thread, QtCore.SIGNAL('newFrame'), self.handleNewFrame)
+        self.thread.sigNewFrame.connect(self.handleNewFrame)
         #QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('toggled(bool)'), self.updateParams)
-        QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('toggled(bool)'), self.updateParams)
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.updateParams)
+        #QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('toggled(bool)'), self.updateParams)
+        self.ui.vcModeRadio.toggled.connect(self.updateParams)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.updateParams)
+        self.stateGroup.sigChanged.connect(self.updateParams)
                 
         ## Configure analysis plots, curves, and data arrays
         self.analysisCurves = {}
         self.analysisData = {'time': []}
         for n in self.analysisItems:
             w = getattr(self.ui, n+'Check')
-            QtCore.QObject.connect(w, QtCore.SIGNAL('clicked()'), self.showPlots)
+            #QtCore.QObject.connect(w, QtCore.SIGNAL('clicked()'), self.showPlots)
+            w.clicked.connect(self.showPlots)
             p = self.plots[n]
             #p.setCanvasBackground(QtGui.QColor(0,0,0))
             #p.replot()
@@ -401,6 +413,9 @@ class PatchWindow(QtGui.QMainWindow):
         
         
 class PatchThread(QtCore.QThread):
+    
+    sigNewFrame = QtCore.Signal(object)
+    
     def __init__(self, ui):
         self.ui = ui
         self.manager = ui.manager
@@ -516,7 +531,8 @@ class PatchThread(QtCore.QThread):
                     frame = {'data': result, 'analysis': analysis}
                     prof.mark('analyze')
                     
-                    self.emit(QtCore.SIGNAL('newFrame'), frame)
+                    #self.emit(QtCore.SIGNAL('newFrame'), frame)
+                    self.sigNewFrame.emit(frame)
                     
                     ## sleep until it is time for the next run
                     c = 0
