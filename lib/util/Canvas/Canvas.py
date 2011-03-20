@@ -812,7 +812,7 @@ class MarkerCanvasItem(CanvasItem):
         CanvasItem.__init__(self, canvas, item, **opts)
         
 class ScanCanvasItem(CanvasItem):
-    def __init_(self, canvas, item, **opts):
+    def __init__(self, canvas, item, **opts):
         
         print "Creating ScanCanvasItem...."
         CanvasItem.__init__(self, canvas, item, **opts)
