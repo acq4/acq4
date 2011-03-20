@@ -527,19 +527,23 @@ class CameraWindow(QtGui.QMainWindow):
             x = qpt.x()
             y = qpt.y()
         self.mouse = [x, y]
-        #img = self.imageItem.image
-        #if img is None:
-            #return
-        
-        #z = img[int(x), int(y)]
-    
-        #if hasattr(z, 'shape') and len(z.shape) > 0:
-            #z = "Z:(%s, %s, %s)" % (str(z[0]), str(z[1]), str(z[2]))
-        #else:
-            #z = "Z:%s" % str(z)
-    
         self.xyLabel.setText("X:%0.1fum Y:%0.1fum" % (x * 1e6, y * 1e6))
-        #self.vLabel.setText(z)
+        
+        img = self.imageItem.image
+        if img is None:
+            return
+        pos = self.imageItem.mapFromScene(QtCore.QPointF(x, y))
+        try:
+            z = img[int(pos.x()), int(pos.y())]
+        except IndexError:
+            return
+    
+        if hasattr(z, 'shape') and len(z.shape) > 0:
+            z = "Z:(%s, %s, %s)" % (str(z[0]), str(z[1]), str(z[2]))
+        else:
+            z = "Z:%s" % str(z)
+        
+        self.vLabel.setText(z)
             
 
     #@trace

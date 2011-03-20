@@ -987,22 +987,27 @@ class ScatterPlotItem(QtGui.QGraphicsWidget):
         for s in spots:
             pos = Point(s['pos'])
             size = s.get('size', self.size)
+            if self.pxMode:
+                psize = 0
+            else:
+                psize = size
+            if xmn is None:
+                xmn = pos[0]-psize
+                xmx = pos[0]+psize
+                ymn = pos[1]-psize
+                ymx = pos[1]+psize
+            else:
+                xmn = min(xmn, pos[0]-psize)
+                xmx = max(xmx, pos[0]+psize)
+                ymn = min(ymn, pos[1]-psize)
+                ymx = max(ymx, pos[1]+psize)
+            #print pos, xmn, xmx, ymn, ymx
             brush = s.get('brush', self.brush)
             pen = s.get('pen', self.pen)
             pen.setCosmetic(True)
             data = s.get('data', None)
             item = self.mkSpot(pos, size, self.pxMode, brush, pen, data)
             self.spots.append(item)
-            if xmn is None:
-                xmn = pos[0]-size
-                xmx = pos[0]+size
-                ymn = pos[1]-size
-                ymx = pos[1]+size
-            else:
-                xmn = min(xmn, pos[0]-size)
-                xmx = max(xmx, pos[0]+size)
-                ymn = min(ymn, pos[1]-size)
-                ymx = max(ymx, pos[1]+size)
         self.range = [[xmn, xmx], [ymn, ymx]]
                 
 
@@ -2361,6 +2366,8 @@ class VTickGroup(QtGui.QGraphicsPathItem):
         
 
 class GridItem(UIGraphicsItem):
+    """Class used to make square grids in plots. NOT the grid used for running scanner sequences."""
+    
     def __init__(self, view, bounds=None, *args):
         UIGraphicsItem.__init__(self, view, bounds)
         #QtGui.QGraphicsItem.__init__(self, *args)
@@ -2509,6 +2516,18 @@ class ColorScaleBar(UIGraphicsItem):
     def setGradient(self, g):
         self.gradient = g
         self.update()
+        
+    def setIntColorScale(self, minVal, maxVal, *args, **kargs):
+        colors = [intColor(i, maxVal-minVal, *args, **kargs) for i in range(minVal, maxVal)]
+        g = QtGui.QLinearGradient()
+        for i in range(len(colors)):
+            x = float(i)/len(colors)
+            g.setColorAt(x, colors[i])
+        self.setGradient(g)
+        if 'labels' not in kargs:
+            self.setLabels({str(minVal/10.): 0, str(maxVal): 1})
+        else:
+            self.setLabels({kargs['labels'][0]:0, kargs['labels'][1]:1})
         
     def setLabels(self, l):
         self.labels = l

@@ -68,6 +68,7 @@ class ThresholdEvents(CtrlNode):
     uiTemplate = [
         ('threshold', 'spin', {'value': 1e-12, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
         ('adjustTimes', 'check', {'value': True}),
+        #('index', 'combo', {'values':['start','peak'], 'index':0}), 
         ('minLength', 'intSpin', {'value': 0, 'min': 0, 'max': 1e9}),
         ('minSum', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
         ('minPeak', 'spin', {'value': 0, 'step': 1, 'minStep': 0.1, 'dec': True, 'range': [None, None], 'siPrefix': True}),
@@ -172,11 +173,40 @@ class EventFilter(CtrlNode):
         ('fitTime', 'minFitTime', 'maxFitTime'),
     ]
 
-    def __init__(self, *args, **kargs):
-        CtrlNode.__init__(self, *args, **kargs)
+    def __init__(self, name):
+        CtrlNode.__init__(self, name, terminals={
+            'events': {'io': 'in'},
+            'regions': {'io': 'in'},
+            'output': {'io': 'out', 'bypass': 'events'}})
         
         for check, spin1, spin2 in self.ranges:
             self.ctrls[check].toggled.connect(self.checkToggled)
+        #self.updateRegions()
+        
+    def updateRegions(self, regions):
+        regCombo = self.ctrls['region']
+        
+        ### first check length of comboLists and update if they do not match -- avoids index errors in check of individual items below
+        if regCombo.count() != len(regions):
+            regCombo.clear()
+            regCombo.addItems(regions)
+            return
+        
+        ### check individual items in the list
+        test = []
+        for i in range(regCombo.count()):
+            test.append(regCombo.itemText(i) == regions[i])
+        if False not in test:
+            return
+        else:  
+            regCombo.clear()
+            regCombo.addItems(regions)
+            return
+    
+    def updateUi(self):
+        pass
+    
+    
 
     def checkToggled(self):
         #s = self.stateGroup.state()
@@ -188,11 +218,19 @@ class EventFilter(CtrlNode):
             else:
                 self.hideRow(a)
                 self.hideRow(b)
-        
+            
 
-    def processData(self, data):
+    def process(self, events, regions, display=True):
         s = self.stateGroup.state()
+        data=events
         mask = np.ones(len(data), dtype=bool)
+
+        newReg = ['all']
+        
+        for r in regions.keys():
+            newReg.append(r.node().name())
+        self.updateRegions(newReg)
+            
             
         for b, mn, mx in self.ranges:
             if s[b]:
@@ -206,7 +244,7 @@ class EventFilter(CtrlNode):
         if region != 'all':
             mask *= data['region'] == region
             
-        return data[mask]
+        return {'output':data[mask]}
             
             
 

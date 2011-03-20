@@ -132,8 +132,12 @@ class Canvas(QtGui.QWidget):
         if gi is None:
             return
         if item.checkState(0) == QtCore.Qt.Checked:
+            for i in range(item.childCount()):
+                item.child(i).setCheckState(0, QtCore.Qt.Checked)
             gi.show()
         else:
+            for i in range(item.childCount()):
+                item.child(i).setCheckState(0, QtCore.Qt.Unchecked)
             gi.hide()
 
     def treeItemMoved(self, item, parent, index):
@@ -223,30 +227,78 @@ class Canvas(QtGui.QWidget):
         self._addCanvasItem(citem)
         return citem
     
+    ### Make addScan and addImage go away entirely, plox.
     def addScan(self, dirHandle, **opts):
         if 'sequenceParams' in dirHandle.info():
             dirs = [dirHandle[d] for d in dirHandle.subDirs()]
         else:
             dirs = [dirHandle]
             
+        if 'separateParams' not in opts:
+            separateParams = False
+        else:
+            separateParams = opts['separateParams']
+            del(opts['separateParams'])
+            
+        
+        paramKeys = []
+        params = dirHandle.info()['protocol']['params']
+        if len(params) > 1 and separateParams==True:
+            for i in range(len(params)):
+                k = (params[i][0], params[i][1])
+                if k != ('Scanner', 'targets'):
+                    paramKeys.append(k)
+            
         if 'name' not in opts:
             opts['name'] = dirHandle.shortName()
             
-        pts = []
-        for d in dirs: #d is a directory handle
-            #d = dh[d]
-            if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
-                pos = d.info()['Scanner']['position']
-                if 'spotSize' in d.info()['Scanner']:
-                    size = d.info()['Scanner']['spotSize']
-                else:
-                    size = self.defaultSize
-                pts.append({'pos': pos, 'size': size, 'data': d})
-        
-        item = graphicsItems.ScatterPlotItem(pts, pxMode=False)
-        citem = CanvasItem(self, item, handle=dirHandle, **opts)
-        self._addCanvasItem(citem)
-        return citem
+
+            
+        if len(paramKeys) < 1:    
+            pts = []
+            for d in dirs: #d is a directory handle
+                #d = dh[d]
+                if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
+                    pos = d.info()['Scanner']['position']
+                    if 'spotSize' in d.info()['Scanner']:
+                        size = d.info()['Scanner']['spotSize']
+                    else:
+                        size = self.defaultSize
+                    pts.append({'pos': pos, 'size': size, 'data': d})
+            
+            item = graphicsItems.ScatterPlotItem(pts, pxMode=False)
+            citem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
+            self._addCanvasItem(citem)
+            return citem
+        else:
+            pts = {}
+            for d in dirs:
+                k = d.info()[paramKeys[0]]
+                if len(pts) < k+1:
+                    pts[k] = []
+                if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
+                    pos = d.info()['Scanner']['position']
+                    if 'spotSize' in d.info()['Scanner']:
+                        size = d.info()['Scanner']['spotSize']
+                    else:
+                        size = self.defaultSize
+                    pts[k].append({'pos': pos, 'size': size, 'data': d})
+            spots = []
+            for k in pts.keys():
+                spots.extend(pts[k])
+            item = graphicsItems.ScatterPlotItem(spots=spots, pxMode=False)
+            parentCitem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
+            self._addCanvasItem(parentCitem)
+            scans = {}
+            for k in pts.keys():
+                opts['name'] = paramKeys[0][0] + '_%03d' %k
+                item = graphicsItems.ScatterPlotItem(spots=pts[k], pxMode=False)
+                citem = ScanCanvasItem(self, item, handle = dirHandle, parent=parentCitem, **opts)
+                self._addCanvasItem(citem)
+                scans[opts['name']] = citem
+            return scans
+                
+                
         
     def addFile(self, fh, **opts):
         if fh.isFile():
@@ -268,7 +320,7 @@ class Canvas(QtGui.QWidget):
 
 
     def _addCanvasItem(self, citem):
-        """Obligatory function call for any idems added to the canvas."""
+        """Obligatory function call for any items added to the canvas."""
         
         if not self.allowTransforms:
             citem.setMovable(False)
@@ -366,7 +418,11 @@ class Canvas(QtGui.QWidget):
         node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
         node.setCheckState(0, QtCore.Qt.Checked)
         node.name = name
-        root.insertChild(insertLocation, node)
+        if citem.opts['parent'] != None:
+            ## insertLocation is incorrect in this case
+            citem.opts['parent'].listItem.insertChild(insertLocation, node)
+        else:    
+            root.insertChild(insertLocation, node)
         
         #citem = CanvasItem(self, name, item)
         citem.name = name
@@ -446,7 +502,7 @@ class CanvasItem(QtCore.QObject):
     transformCopyBuffer = None
     
     def __init__(self, canvas, item, **opts):
-        defOpts = {'name': None, 'pos': [0,0], 'scale': [1,1], 'z': None, 'movable': True, 'handle': None, 'visible': True}
+        defOpts = {'name': None, 'pos': [0,0], 'scale': [1,1], 'z': None, 'movable': True, 'handle': None, 'visible': True, 'parent':None}
         defOpts.update(opts)
         self.opts = defOpts
         self.selected = False
@@ -793,6 +849,47 @@ class MarkerCanvasItem(CanvasItem):
         item.setBrush(pg.mkBrush((0,100,255)))
         CanvasItem.__init__(self, canvas, item, **opts)
         
+class ScanCanvasItem(CanvasItem):
+    def __init_(self, canvas, item, **opts):
+        
+        print "Creating ScanCanvasItem...."
+        CanvasItem.__init__(self, canvas, item, **opts)
+        
+        self.addScanImageBtn = QtGui.QPushButton()
+        self.addScanImageBtn.setText('Add Scan Image')
+        self.layout.addWidget(self.addScanImageButton)
+        
+        self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
+        
+    def loadScanImage(self):
+        print 'loadScanImage called.'
+        #dh = self.ui.fileLoader.ui.dirTree.selectedFile()
+        #scan = self.canvas.selectedItem()
+        dh = self.opts['handle']
+        dirs = [dh[d] for d in dh.subDirs()]
+        if 'Camera' not in dirs[0].subDirs():
+            print "No image data for this scan."
+            return
+        
+        images = []
+        for d in dirs:
+            frames = d['Camera']['frames.ma'].read()
+            image = frames[1]-frames[0]
+            image[image > frames[1].max()*2] = 0.
+            image = (image/float(image.max()) * 1000)
+            images.append(image)
+            
+        scanImages = np.zeros(images[0].shape)
+        for im in images:
+            scanImages += im
+        
+        info = dirs[0]['Camera']['frames.ma'].read()._info[-1]
+    
+        pos =  info['imagePosition']
+        scale = info['pixelSize']
+        item = self.getElement('Canvas').addImage(scanImages, pos=pos, scale=scale, name='scanImage')
+        self.items[item] = scanImages
+        
 
 
 class ImageCanvasItem(CanvasItem):
@@ -848,7 +945,7 @@ class ImageCanvasItem(CanvasItem):
         if showTime:
             self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)
             self.timeSlider.setMinimum(0)
-            self.timeSlider.setMaximum(self.data.shape[0])
+            self.timeSlider.setMaximum(self.data.shape[0]-1)
             self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
             self.timeSlider.valueChanged.connect(self.timeChanged)
             self.timeSlider.sliderPressed.connect(self.timeSliderPressed)

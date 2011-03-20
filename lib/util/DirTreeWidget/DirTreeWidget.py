@@ -183,7 +183,10 @@ class DirTreeWidget(QtGui.QTreeWidget):
         
     def unwatch(self, handle):
         #QtCore.QObject.disconnect(handle, QtCore.SIGNAL('delayedChange'), self.dirChanged)
-        handle.sigDelayedChange.disconnect(self.dirChanged)
+        try:
+            handle.sigDelayedChange.disconnect(self.dirChanged)
+        except:
+            pass
         
     def dirChanged(self, handle, changes):
         if handle is self.baseDir:

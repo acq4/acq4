@@ -55,6 +55,17 @@ class AxoPatch200(DAQGeneric):
             daqConfig['primary'] = {'type': 'ai', 'channel': config['ScaledSignal']}
         if 'Command' in config:
             daqConfig['command'] = {'type': 'ao', 'channel': config['Command']}
+            
+        ## Note that both of these channels can be present, but we will only ever record from one at a time.
+        ## Usually, we'll record from "I OUTPUT" in current clamp and "10 Vm OUTPUT" in voltage clamp.
+        self.hasSecondaryChannel = True
+        if 'SecondaryVCSignal' in config: 
+            daqConfig['secondary'] = {'type': 'ai', 'channel': config['SecondaryVCSignal']}
+        elif 'SecondaryICSignal' in config:
+            daqConfig['secondary'] = {'type': 'ai', 'channel': config['SecondaryICSignal']}
+        else:
+            self.hasSecondaryChannel = False
+            
         DAQGeneric.__init__(self, dm, daqConfig, name)
         
         self.holding = {
@@ -262,7 +273,8 @@ class AxoPatch200(DAQGeneric):
         elif chan == 'primary':
             return self.getGain()
         else:
-            raise Exception("No scale for channel %s" % chan)
+            return DAQGeneric.getChanScale(self, chan)
+            #raise Exception("No scale for channel %s" % chan)
         
     def getChanUnits(self, chan):
         global ivModes
@@ -273,6 +285,8 @@ class AxoPatch200(DAQGeneric):
             units = ['A', 'V']
             
         if chan == 'command':
+            return units[0]
+        elif chan == 'secondary':
             return units[0]
         elif chan == 'primary':
             return units[1]
@@ -291,9 +305,18 @@ class AxoPatch200(DAQGeneric):
         else:
             return None
         
+    def reconfigureSecondaryChannel(self, mode):
+        ## Secondary channel changes depending on which mode we're in.
+        if ivModes[mode] == 'vc':
+            if 'SecondaryVCSignal' in self.config:
+                self.reconfigureChannel('secondary', self.config['SecondaryVCSignal'])
+        else:
+            if 'SecondaryICSignal' in self.config:
+                self.reconfigureChannel('secondary', self.config['SecondaryICSignal'])
+        
 class AxoPatch200Task(DAQGenericTask):
     def __init__(self, dev, cmd):
-        ## make a few changes for compatibility with multiclamp
+        ## make a few changes for compatibility with multiclamp        
         if 'daqProtocol' not in cmd:
             cmd['daqProtocol'] = {}
         if 'command' in cmd:
@@ -301,7 +324,17 @@ class AxoPatch200Task(DAQGenericTask):
                 cmd['daqProtocol']['command'] = {'command': cmd['command'], 'holding': cmd['holding']}
             else:
                 cmd['daqProtocol']['command'] = {'command': cmd['command']}
-            
+    
+        ## Make sure we're recording from the correct secondary channel
+        if dev.hasSecondaryChannel:
+            if 'mode' in cmd:
+                mode = cmd['mode']
+            else:
+                mode = dev.getMode()
+            dev.reconfigureSecondaryChannel(mode)
+            cmd['daqProtocol']['secondary'] = {'record': True}
+        
+        
         cmd['daqProtocol']['primary'] = {'record': True}
         DAQGenericTask.__init__(self, dev, cmd['daqProtocol'])
         self.cmd = cmd
@@ -320,12 +353,20 @@ class AxoPatch200Task(DAQGenericTask):
     def getChanScale(self, chan):
         if chan == 'primary':
             return self.ampState['gain']
-        if chan == 'command':
+        elif chan == 'command':
             return self.dev.getCmdGain(self.ampState['mode'])
+        elif chan == 'secondary':
+            return self.dev.getChanScale('secondary')
+        else:
+            raise Exception("No scale for channel %s" % chan)
             
     def storeResult(self, dirHandle):
-        DAQGenericTask.storeResult(self, dirHandle)
-        dirHandle.setInfo(self.ampState)
+        #DAQGenericTask.storeResult(self, dirHandle)
+        #dirHandle.setInfo(self.ampState)
+        result = self.getResult()
+        result._info[-1]['ClampState'] = self.ampState
+        dirHandle.writeFile(result, self.dev.name)
+        
 
     
 class AxoPatchProtoGui(DAQGenericProtoGui):

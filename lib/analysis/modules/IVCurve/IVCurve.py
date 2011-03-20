@@ -25,43 +25,11 @@ class IVCurve(AnalysisModule):
         self.initializeElements()
 
         self.traces = None
-        #self.cw = QtGui.QSplitter()
-        #self.cw.setOrientation(QtCore.Qt.Vertical)
-        #self.setCentralWidget(self.cw)
-        #bw = QtGui.QWidget()
-        #bwl = QtGui.QHBoxLayout()
-        #bw.setLayout(bwl)
-        #self.cw.addWidget(bw)
-        #self.loadIVBtn = QtGui.QPushButton('Load I/V')
-        #bwl.addWidget(self.loadIVBtn)
-        #QtCore.QObject.connect(self.loadIVBtn, QtCore.SIGNAL('clicked()'), self.loadIV)
-        #self.plot1 = PlotWidget()
         self.plot1 = self.getElement('Data Plot', create=True)
-        #self.cw.addWidget(self.plot1)
-        #self.plot2 = PlotWidget()
         self.plot2 = self.getElement('IV Plot', create=True)
-        #self.cw.addWidget(self.plot2)
-        #self.resize(800, 600)
-        #self.show()
         self.lr = pg.LinearRegionItem(self.plot1, 'vertical', [0, 1])
         self.plot1.addItem(self.lr)
-        self.lr.connect(self.lr, QtCore.SIGNAL('regionChanged'), self.updateAnalysis)
-
-
-    #def elementChanged(self, element, old, new):
-        #name = element.name()
-        
-        ### connect plots to flowchart, link X axes
-        #if name == 'Data Plot':
-            #self.flowchart.nodes()['Plot_000'].setPlot(new)
-            #p2 = self.getElement('Filter Plot')
-            #if p2 is not None:
-                #new.setXLink(p2)
-        #elif name == 'Filter Plot':
-            #self.flowchart.nodes()['Plot_001'].setPlot(new)
-            #p2 = self.getElement('Data Plot')
-            #if p2 is not None:
-                #p2.setXLink(new)
+        self.lr.sigRegionChanged.connect(self.updateAnalysis)
 
     def loadFileRequested(self, dh):
         """Called by file loader when a file load is requested."""

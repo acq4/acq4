@@ -145,13 +145,13 @@ def mkColor(*args):
     return QtGui.QColor(r, g, b, a)
     
 def colorTuple(c):
-    return (c.red(), c.blue(), c.green(), c.alpha())
+    return (c.red(), c.green(), c.blue(), c.alpha())
 
 def colorStr(c):
     """Generate a hex string code from a QColor"""
     return ('%02x'*4) % colorTuple(c)
 
-def intColor(index, hues=9, values=3, maxValue=255, minValue=150, maxHue=360, minHue=0, sat=255):
+def intColor(index, hues=9, values=3, maxValue=255, minValue=150, maxHue=360, minHue=0, sat=255, alpha=255, **kargs):
     """Creates a QColor from a single index. Useful for stepping through a predefined list of colors.
      - The argument "index" determines which color from the set will be returned
      - All other arguments determine what the set of predefined colors will be
@@ -163,9 +163,13 @@ def intColor(index, hues=9, values=3, maxValue=255, minValue=150, maxHue=360, mi
     ind = int(index) % (hues * values)
     indh = ind % hues
     indv = ind / hues
-    v = minValue + indv * ((maxValue-minValue) / (values-1))
+    if values > 1:
+        v = minValue + indv * ((maxValue-minValue) / (values-1))
+    else:
+        v = maxValue
     h = minHue + (indh * (maxHue-minHue)) / hues
     
     c = QtGui.QColor()
     c.setHsv(h, sat, v)
+    c.setAlpha(alpha)
     return c

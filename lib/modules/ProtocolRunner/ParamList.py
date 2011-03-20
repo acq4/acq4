@@ -6,6 +6,7 @@ class ParamList(QtGui.QTreeWidget):
     def __init__(self, *args):
         QtGui.QTreeWidget.__init__(self, *args)
         self.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
+        self.setAnimated(False)
 
 
     checkStateMap = {
@@ -36,7 +37,8 @@ class ParamList(QtGui.QTreeWidget):
                     self.insertTopLevelItem(0, item)
                 else:
                     self.addTopLevelItem(item)
-                item.setExpanded(True)  ## Must happen AFTER adding to tree.
+                self.expandAll()
+                #item.setExpanded(True)  ## Must happen AFTER adding to tree.  Also this causes warnings to appear (and possibly other problems?)
             items[p].setData(2, QtCore.Qt.DisplayRole, QtCore.QVariant(str(len(params[p]))))
             items[p].params = list(params[p])
             

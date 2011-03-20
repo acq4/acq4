@@ -30,7 +30,8 @@ class SqliteDatabase:
         self._readTableList()
 
     def exe(self, cmd, data=None, toDict=True, toArray=False):
-        """Execute an SQL query. If data is provided, it should be a list of dicts and each will be bound to the query and executed sequentially. Returns the query object."""
+        """Execute an SQL query. If data is provided, it should be a list of dicts and each will 
+        be bound to the query and executed sequentially. Returns the query object."""
         q = QtSql.QSqlQuery(self.db)
         if data is None:
             self._exe(q, cmd)
@@ -82,7 +83,7 @@ class SqliteDatabase:
         
     def insert(self, table, records=None, replaceOnConflict=False, **args):
         """Insert records (a dict or list of dicts) into table.
-        if records is None, a simgle record may be specified via keyword arguments."""
+        If records is None, a single record may be specified via keyword arguments."""
         
         ## can we optimize this by using batch execution?
         
@@ -428,6 +429,9 @@ class AnalysisDatabase(SqliteDatabase):
     def listTablesOwned(self, owner):
         res = self.select("DataTableOwners", ["Table"], sql="where Owner='%s'" % owner)
         return [x['Table'] for x in res]
+    
+    def listTables(self):
+        return self.tables.keys()
         
     def takeOwnership(self, table, owner):
         self.insert("DataTableOwners", {'Table': table, "Owner": owner})

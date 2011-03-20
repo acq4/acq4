@@ -1110,9 +1110,9 @@ def thresholdEvents(data, threshold, adjustTimes=True):
     
     nEvents = len(hits)
     if xvals is None:
-        events = empty(nEvents, dtype=[('index',int),('len', int),('sum', float),('peak', float)])  ### rows are [start, length, sum]
+        events = empty(nEvents, dtype=[('index',int),('len', int),('sum', float),('peak', float),('peakIndex', int)])  ### rows are [start, length, sum]
     else:
-        events = empty(nEvents, dtype=[('index',int),('time',float),('len', int),('sum', float),('peak', float)])  ### rows are     
+        events = empty(nEvents, dtype=[('index',int),('time',float),('len', int),('sum', float),('peak', float),('peakIndex', int)])  ### rows are     
 
     mask = ones(nEvents, dtype=bool)
     
@@ -1125,9 +1125,15 @@ def thresholdEvents(data, threshold, adjustTimes=True):
         evData = data1[t1:t2]
         sum = evData.sum()
         if sum > 0:
-            peak = evData.max()
+            #peak = evData.max()
+            #ind = argwhere(evData==peak)[0][0]+t1
+            peakInd = argmax(evData)
         else:
-            peak = evData.min()
+            #peak = evData.min()
+            #ind = argwhere(evData==peak)[0][0]+t1
+            peakInd = argmin(evData)
+        peak = evData[peakInd]
+        peakInd += t1
             
         #print "event %f: %d" % (xvals[t1], t1) 
         if adjustTimes:  ## Move start and end times outward, estimating the zero-crossing point for the event
@@ -1181,7 +1187,11 @@ def thresholdEvents(data, threshold, adjustTimes=True):
         #stops.append(t2)
         hits[i] = (t1, t2)
         events[i]['peak'] = peak
+        #if index == 'peak':
+            #events[i]['index']=ind
+        #else:
         events[i]['index'] = t1
+        events[i]['peakIndex'] = peakInd
         events[i]['len'] = ln
         events[i]['sum'] = sum
         
@@ -1196,12 +1206,22 @@ def thresholdEvents(data, threshold, adjustTimes=True):
                 mask[i] = False
                 continue
             if sum > 0:
-                peak = evData.max()
+                #peak = evData.max()
+                #ind = argwhere(evData==peak)[0][0]+t1
+                peakInd = argmax(evData)
             else:
-                peak = evData.min()
+                #peak = evData.min()
+                #ind = argwhere(evData==peak)[0][0]+t1
+                peakInd = argmin(evData)
+            peak = evData[peakInd]
+            peakInd += t1
                 
             events[i]['peak'] = peak
+            #if index == 'peak':
+                #events[i]['index']=ind
+            #else:
             events[i]['index'] = t1
+            events[i]['peakIndex'] = peakInd
             events[i]['len'] = ln
             events[i]['sum'] = sum
     
@@ -1211,8 +1231,8 @@ def thresholdEvents(data, threshold, adjustTimes=True):
     if xvals is not None:
         events['time'] = xvals[events['index']]
         
-    for i in xrange(len(events)):
-        print events[i]['time'], events[i]['peak']
+    #for i in xrange(len(events)):
+        #print events[i]['time'], events[i]['peak']
 
     return events
 
