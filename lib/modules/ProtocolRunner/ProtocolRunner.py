@@ -3,7 +3,8 @@ from __future__ import with_statement
 from lib.modules.Module import *
 from ProtocolRunnerTemplate import *
 from PyQt4 import QtGui, QtCore
-from DirTreeModel import *
+#from DirTreeModel import *
+import DirTreeWidget
 from configfile import *
 from advancedTypes import OrderedDict
 from SequenceRunner import *
@@ -39,6 +40,25 @@ class Window(QtGui.QMainWindow):
         #ev.ignore()
         #sip.delete(self)
 
+class Loader(DirTreeWidget.DirTreeLoader):
+    def __init__(self, host, baseDir):
+        DirTreeWidget.DirTreeLoader.__init__(self, baseDir)
+        self.host = host
+
+    def new(self):
+        self.host.newProtocol()
+        return True
+    
+    def load(self, handle):
+        self.host.loadProtocol(handle)
+        return True
+        
+    def save(self, handle):
+        self.host.saveProtocol(handle)
+        return True
+        
+        
+        
 class ProtocolRunner(Module):
     
     sigProtocolPaused = QtCore.Signal()
@@ -80,8 +100,12 @@ class ProtocolRunner(Module):
             (self.ui.seqCycleTimeSpin, 'cycleTime'),
             (self.ui.seqRepetitionSpin, 'repetitions', 1),
         ])
-        self.protocolList = DirTreeModel(self.manager.config['protocolDir'])
-        self.ui.protocolList.setModel(self.protocolList)
+        
+        self.protocolList = Loader(self, self.manager.config['protocolDir'])
+        self.ui.LoaderDock.setWidget(self.protocolList)
+        
+        #self.protocolList = DirTreeModel(self.manager.config['protocolDir'])
+        #self.ui.protocolList.setModel(self.protocolList)
         
         self.currentProtocol = None   ## pointer to current protocol object
         
@@ -98,15 +122,15 @@ class ProtocolRunner(Module):
         
         
         #QtCore.QObject.connect(self.ui.newProtocolBtn, QtCore.SIGNAL('clicked()'), self.newProtocol)
-        self.ui.newProtocolBtn.clicked.connect(self.newProtocol)
+        #self.ui.newProtocolBtn.clicked.connect(self.newProtocol)
         #QtCore.QObject.connect(self.ui.saveProtocolBtn, QtCore.SIGNAL('clicked()'), self.saveProtocol)
-        self.ui.saveProtocolBtn.clicked.connect(self.saveProtocol)
+        #self.ui.saveProtocolBtn.clicked.connect(self.saveProtocol)
         #QtCore.QObject.connect(self.ui.loadProtocolBtn, QtCore.SIGNAL('clicked()'), self.loadProtocol)
-        self.ui.loadProtocolBtn.clicked.connect(self.loadProtocol)
+        #self.ui.loadProtocolBtn.clicked.connect(self.loadProtocol)
         #QtCore.QObject.connect(self.ui.saveAsProtocolBtn, QtCore.SIGNAL('clicked()'), self.saveProtocolAs)
-        self.ui.saveAsProtocolBtn.clicked.connect(self.saveProtocolAs)
+        #self.ui.saveAsProtocolBtn.clicked.connect(self.saveProtocolAs)
         #QtCore.QObject.connect(self.ui.deleteProtocolBtn, QtCore.SIGNAL('clicked()'), self.deleteProtocol)
-        self.ui.deleteProtocolBtn.clicked.connect(self.deleteProtocol)
+        #self.ui.deleteProtocolBtn.clicked.connect(self.deleteProtocol)
         #QtCore.QObject.connect(self.ui.testSingleBtn, QtCore.SIGNAL('clicked()'), self.testSingleClicked)
         self.ui.testSingleBtn.clicked.connect(self.testSingleClicked)
         #QtCore.QObject.connect(self.ui.runProtocolBtn, QtCore.SIGNAL('clicked()'), self.runSingleClicked)
@@ -114,7 +138,7 @@ class ProtocolRunner(Module):
         #QtCore.QObject.connect(self.ui.testSequenceBtn, QtCore.SIGNAL('clicked()'), self.testSequence)
         self.ui.testSequenceBtn.clicked.connect(self.testSequence)
         #QtCore.QObject.connect(self.ui.runSequenceBtn, QtCore.SIGNAL('clicked()'), self.runSequence)
-        self.ui.runSequenceBtn.clicked.connect(self.runSequence)
+        self.ui.runSequenceBtn.clicked.connect(self.runSequenceClicked)
         #QtCore.QObject.connect(self.ui.stopSingleBtn, QtCore.SIGNAL('clicked()'), self.stopSingle)
         self.ui.stopSingleBtn.clicked.connect(self.stopSingle)
         #QtCore.QObject.connect(self.ui.stopSequenceBtn, QtCore.SIGNAL('clicked()'), self.stopSequence)
@@ -125,11 +149,12 @@ class ProtocolRunner(Module):
         self.ui.deviceList.itemClicked.connect(self.deviceItemClicked)
         #QtCore.QObject.connect(self.ui.protoDurationSpin, QtCore.SIGNAL('editingFinished()'), self.protParamsChanged)
         #QtCore.QObject.connect(self.ui.protocolList, QtCore.SIGNAL('doubleClicked(const QModelIndex &)'), self.loadProtocol)
-        self.ui.protocolList.doubleClicked.connect(self.loadProtocol)
+        #self.ui.protocolList.doubleClicked.connect(self.loadProtocol)
         #QtCore.QObject.connect(self.ui.protocolList, QtCore.SIGNAL('clicked(const QModelIndex &)'), self.protoListClicked)
-        self.ui.protocolList.clicked.connect(self.protoListClicked)
+        #self.ui.protocolList.clicked.connect(self.protoListClicked)
         #QtCore.QObject.connect(self.protocolList, QtCore.SIGNAL('fileRenamed(PyQt_PyObject, PyQt_PyObject)'), self.fileRenamed)
-        self.protocolList.fileRenamed.connect(self.fileRenamed)
+        #self.protocolList.sigFileRenamed.connect(self.fileRenamed)
+        self.protocolList.sigCurrentFileChanged.connect(self.fileChanged)  ## called if loaded protocol file is renamed or moved
         #QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('finished()'), self.taskThreadStopped)
         self.taskThread.finished.connect(self.taskThreadStopped)
         #QtCore.QObject.connect(self.taskThread, QtCore.SIGNAL('newFrame'), self.handleFrame)
@@ -313,26 +338,32 @@ class ProtocolRunner(Module):
         items[0].setCheckState(QtCore.Qt.Unchecked)
         
         
-    def protoListClicked(self, ind):
-        sel = list(self.ui.protocolList.selectedIndexes())
-        if len(sel) == 1:
-            self.ui.deleteProtocolBtn.setEnabled(True)
-        else:
-            self.ui.deleteProtocolBtn.setEnabled(False)
-        self.resetDeleteState()
+    #def protoListClicked(self, ind):
+        #sel = list(self.ui.protocolList.selectedIndexes())
+        #if len(sel) == 1:
+            #self.ui.deleteProtocolBtn.setEnabled(True)
+        #else:
+            #self.ui.deleteProtocolBtn.setEnabled(False)
+        #self.resetDeleteState()
             
-    def fileRenamed(self, fn1, fn2):
-        """Update the current protocol state to follow a file that has been moved or renamed"""
-        if fn1 == self.currentProtocol.fileName:
-            self.currentProtocol.fileName = fn2
-            pn = fn2.replace(self.protocolList.baseDir, '')
-            self.ui.currentProtocolLabel.setText(pn)
-            return
-        if os.path.isdir(fn2) and fn1 in self.currentProtocol.fileName:
-            self.currentProtocol.fileName = self.currentProtocol.fileName.replace(fn1, fn2)
-            pn = self.currentProtocol.fileName.replace(self.protocolList.baseDir, '')
-            self.ui.currentProtocolLabel.setText(pn)
-            return
+    def fileChanged(self, handle, change, args):
+        if change == 'renamed' or change == 'moved':
+            self.currentProtocol.fileName = handle.name()
+            
+        
+        
+    #def fileRenamed(self, fn1, fn2):
+        #"""Update the current protocol state to follow a file that has been moved or renamed"""
+        #if fn1 == self.currentProtocol.fileName:
+            #self.currentProtocol.fileName = fn2
+            #pn = fn2.replace(self.protocolList.baseDir, '')
+            #self.ui.currentProtocolLabel.setText(pn)
+            #return
+        #if os.path.isdir(fn2) and fn1 in self.currentProtocol.fileName:
+            #self.currentProtocol.fileName = self.currentProtocol.fileName.replace(fn1, fn2)
+            #pn = self.currentProtocol.fileName.replace(self.protocolList.baseDir, '')
+            #self.ui.currentProtocolLabel.setText(pn)
+            #return
             
     def updateSeqParams(self, dev='protocol'):
         """Update the list of available sequence parameters."""
@@ -511,9 +542,9 @@ class ProtocolRunner(Module):
         ## Clear sequence parameters, disable sequence dock
         self.updateSeqParams()
         
-        self.ui.currentProtocolLabel.setText('[ new ]')
+        #self.ui.currentProtocolLabel.setText('[ new ]')
         
-        self.ui.saveProtocolBtn.setEnabled(False)
+        #self.ui.saveProtocolBtn.setEnabled(False)
         #self.currentIsModified(False)
         
         
@@ -531,26 +562,29 @@ class ProtocolRunner(Module):
         ##else:
             ##self.ui.protoContinuousCheck.setCheckState(QtCore.Qt.Unchecked)
     
-    def getSelectedFileName(self):
-        """Return the file name of the selected protocol"""
-        sel = list(self.ui.protocolList.selectedIndexes())
-        if len(sel) == 1:
-            index = sel[0]
-        else:
-            raise Exception("Can not load--%d items selected" % len(sel))
-        return self.protocolList.getFileName(index)
+    #def getSelectedFileName(self):
+        #"""Return the file name of the selected protocol"""
+        #sel = list(self.ui.protocolList.selectedIndexes())
+        #if len(sel) == 1:
+            #index = sel[0]
+        #else:
+            #raise Exception("Can not load--%d items selected" % len(sel))
+        #return self.protocolList.getFileName(index)
     
-    def loadProtocol(self, index=None):
+    #def loadProtocol(self, index=None):
+    def loadProtocol(self, handle):
         self.stopSingle()
+        
         ## Determine selected item
-        if index is None:
-            sel = list(self.ui.protocolList.selectedIndexes())
-            if len(sel) == 1:
-                index = sel[0]
-            else:
-                raise Exception("Can not load--%d items selected" % len(sel))
+        #if index is None:
+            #sel = list(self.ui.protocolList.selectedIndexes())
+            #if len(sel) == 1:
+                #index = sel[0]
+            #else:
+                #raise Exception("Can not load--%d items selected" % len(sel))
             
-        fn = self.protocolList.getFileName(index)
+        #fn = self.protocolList.getFileName(index)
+        fn = handle.name()
         
         ## Remove all docks
         self.clearDocks()
@@ -607,9 +641,9 @@ class ProtocolRunner(Module):
         
             
             
-        pn = fn.replace(self.protocolList.baseDir, '')
-        self.ui.currentProtocolLabel.setText(pn)
-        self.ui.saveProtocolBtn.setEnabled(True)
+        #pn = fn.replace(self.protocolList.baseDir, '')
+        #self.ui.currentProtocolLabel.setText(pn)
+        #self.ui.saveProtocolBtn.setEnabled(True)
         #self.currentIsModified(False)
     
     def saveProtocol(self, fileName=None):
@@ -617,71 +651,71 @@ class ProtocolRunner(Module):
         self.currentProtocol.write(fileName)
         
         ## refresh protocol list
-        self.protocolList.clearCache()
+        #self.protocolList.clearCache()
     
-    def saveProtocolAs(self):
-        ## Decide on new file name
-        if self.currentProtocol.fileName is not None:
-            baseFile = self.currentProtocol.fileName
-        else:
-            baseFile = os.path.join(self.protocolList.baseDir, 'protocol')
+    #def saveProtocolAs(self):
+        ### Decide on new file name
+        #if self.currentProtocol.fileName is not None:
+            #baseFile = self.currentProtocol.fileName
+        #else:
+            #baseFile = os.path.join(self.protocolList.baseDir, 'protocol')
             
-        c = 2
-        newFile = None
-        while True:
-            newFile = baseFile + '_%02d' % c
-            if not os.path.exists(newFile):
-                break
-            c += 1
+        #c = 2
+        #newFile = None
+        #while True:
+            #newFile = baseFile + '_%02d' % c
+            #if not os.path.exists(newFile):
+                #break
+            #c += 1
             
-        ## write
-        self.saveProtocol(newFile)
+        ### write
+        #self.saveProtocol(newFile)
         
         
-        ## Start editing new file name
-        index = self.protocolList.findIndex(newFile)
-        #self.ui.protocolList.update(index)
-        self.ui.protocolList.scrollTo(index)
-        self.ui.protocolList.edit(index)
+        ### Start editing new file name
+        #index = self.protocolList.findIndex(newFile)
+        ##self.ui.protocolList.update(index)
+        #self.ui.protocolList.scrollTo(index)
+        #self.ui.protocolList.edit(index)
         
-        pn = newFile.replace(self.protocolList.baseDir, '')
-        self.ui.currentProtocolLabel.setText(pn)
-        self.ui.saveProtocolBtn.setEnabled(True)
-        #self.currentIsModified(False)
+        #pn = newFile.replace(self.protocolList.baseDir, '')
+        #self.ui.currentProtocolLabel.setText(pn)
+        #self.ui.saveProtocolBtn.setEnabled(True)
+        ##self.currentIsModified(False)
     
-    def deleteProtocol(self):
-        ## Delete button must be clicked twice.
-        if self.deleteState == 0:
-            self.ui.deleteProtocolBtn.setText('Really?')
-            self.deleteState = 1
-        elif self.deleteState == 1:
-            try:
-                fn = self.getSelectedFileName()
-                os.remove(fn)
-                self.protocolList.clearCache()
-            except:
-                printExc('Error while deleting protocol file:')
-                return
-            finally:
-                self.resetDeleteState()
+    #def deleteProtocol(self):
+        ### Delete button must be clicked twice.
+        #if self.deleteState == 0:
+            #self.ui.deleteProtocolBtn.setText('Really?')
+            #self.deleteState = 1
+        #elif self.deleteState == 1:
+            #try:
+                #fn = self.getSelectedFileName()
+                #os.remove(fn)
+                #self.protocolList.clearCache()
+            #except:
+                #printExc('Error while deleting protocol file:')
+                #return
+            #finally:
+                #self.resetDeleteState()
     
-    def resetDeleteState(self):
-        self.deleteState = 0
-        self.ui.deleteProtocolBtn.setText('Delete')
+    #def resetDeleteState(self):
+        #self.deleteState = 0
+        #self.ui.deleteProtocolBtn.setText('Delete')
 
     def testSingleClicked(self):
-        self.runSingleClicked(store=False)
+        self.testSingle()
 
-    def runSingleClicked(self, store=True):
-        if self.protoStateGroup.state()['loop']:
-            self.loopEnabled = True
-        self.runSingle(store)
+    def runSingleClicked(self):
+        self.runSingle(store=True)
         
-
     def testSingle(self):
         self.runSingle(store=False)
     
     def runSingle(self, store=True):
+        
+        if self.protoStateGroup.state()['loop']:
+            self.loopEnabled = True
         #print "RunSingle"
         #if self.taskThread.isRunning():
             #import traceback
@@ -720,6 +754,8 @@ class ProtocolRunner(Module):
             raise
         
    
+    def runSequenceClicked(self):
+        self.runSequence(store=True)
         
    
     def testSequence(self):

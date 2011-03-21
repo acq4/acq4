@@ -51,8 +51,8 @@ cameraDefaults = {
     'Quantix57': [
         ('READOUT_PORT', 0),  ## Only option for Q57
         ('SPDTAB_INDEX', 2),  ## Fastest option for Q57
-        ('binningX', 1, [1,2,3,4,8,12,16,24,32,48,64]),
-        ('binningY', 1, [1,2,3,4,8,12,16,24,32,48,64]),
+        ('binningX', 1, [1,2,3,4,8,12,16,24,32,48,64,128,256,512]),
+        ('binningY', 1, [1,2,3,4,8,12,16,24,32,48,64,128,256,512]),
     ],
 }
 cameraDefaults['Quantix EEV57  '] = cameraDefaults['Quantix57']  ## different names, same camera.

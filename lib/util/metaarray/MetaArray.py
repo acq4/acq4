@@ -536,11 +536,11 @@ class MetaArray(ndarray):
             ax = self._info[i]
             axs = ''
             if 'name' in ax:
-                axs += '"%s"' % ax['name']
+                axs += '"%s"' % str(ax['name'])
             else:
                 axs += "%d" % i
             if 'units' in ax:
-                axs += " (%s)" % ax['units']
+                axs += " (%s)" % str(ax['units'])
             titles.append(axs)
             if len(axs) > maxl:
                 maxl = len(axs)

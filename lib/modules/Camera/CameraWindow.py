@@ -158,6 +158,8 @@ class CameraWindow(QtGui.QMainWindow):
         self.scopeItemGroup.setZValue(10)
         self.cameraItemGroup.setZValue(0)
         self.imageItem = ImageItem(parent=self.cameraItemGroup)
+        self.scene.addItem(self.imageItem)
+        self.imageItem.setParentItem(self.cameraItemGroup)
         #self.cameraItemGroup.addToGroup(self.imageItem)
         
         #grid = Grid(self.gv)
@@ -267,7 +269,7 @@ class CameraWindow(QtGui.QMainWindow):
         #QtCore.QObject.connect(self.cam, QtCore.SIGNAL('showMessage'), self.showMessage)
         self.cam.sigShowMessage.connect(self.showMessage)
         #QtCore.QObject.connect(self.gv, QtCore.SIGNAL("sceneMouseMoved(PyQt_PyObject)"), self.setMouse)
-        self.gv.sceneMouseMoved.connect(self.setMouse)
+        self.gv.sigSceneMouseMoved.connect(self.setMouse)
         #QtCore.QObject.connect(self.ui.btnDivideBackground, QtCore.SIGNAL('clicked()'), self.divideClicked)
         self.ui.btnDivideBackground.clicked.connect(self.divideClicked)
         
@@ -276,7 +278,7 @@ class CameraWindow(QtGui.QMainWindow):
         #QtCore.QObject.connect(self.ui.btnClearROIs, QtCore.SIGNAL('clicked()'), self.clearROIs)
         self.ui.btnClearROIs.clicked.connect(self.clearROIs)
         #QtCore.QObject.connect(self.ui.checkEnableROIs, QtCore.SIGNAL('valueChanged(bool)'), self.enableROIsChanged)
-        self.ui.checkEnableROIs.valueChanged.connect(self.enableROIsChanged)
+        self.ui.checkEnableROIs.stateChanged.connect(self.enableROIsChanged)
         #QtCore.QObject.connect(self.ui.spinROITime, QtCore.SIGNAL('valueChanged(double)'), self.setROITime)
         self.ui.spinROITime.valueChanged.connect(self.setROITime)
         #QtCore.QObject.connect(self.ui.sliderWhiteLevel, QtCore.SIGNAL('valueChanged(int)'), self.levelsChanged)
@@ -432,7 +434,7 @@ class CameraWindow(QtGui.QMainWindow):
 
     #@trace
     def levelsChanged(self):
-        self.updateColorScale()
+        #self.updateColorScale()
         self.requestFrameUpdate()
 
     #@trace
@@ -484,21 +486,28 @@ class CameraWindow(QtGui.QMainWindow):
         
         if self.hasQuit:
             return
-        #QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
-        self.recordThread.sigShowMessage.disconnect(self.showMessage)
-        #QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
-        self.recordThread.finished.disconnect(self.recordThreadStopped)
-        #QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('recordingFailed'), self.recordingFailed)
-        self.recordThread.sigRecordingFailed.disconnect(self.recordingFailed)
-        #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('newFrame'), self.newFrame)
-        self.cam.sigNewFrame.disconnect(self.newFrame)
-        #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('cameraStopped'), self.cameraStopped)
-        self.cam.sigCameraStopped.disconnect(self.cameraStopped)
-        #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('cameraStarted'), self.cameraStarted)
-        self.cam.sigCameraStarted.disconnect(self.cameraStarted)
-        #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('showMessage'), self.showMessage)
-        self.cam.sigShowMessage.disconnect(self.showMessage)
+        try:
+            #QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('showMessage'), self.showMessage)
+            
+            self.recordThread.sigShowMessage.disconnect(self.showMessage)
+            #QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('finished()'), self.recordThreadStopped)
+            self.recordThread.finished.disconnect(self.recordThreadStopped)
+            #QtCore.QObject.disconnect(self.recordThread, QtCore.SIGNAL('recordingFailed'), self.recordingFailed)
+            self.recordThread.sigRecordingFailed.disconnect(self.recordingFailed)
+        except TypeError:
+            pass
         
+        try:
+            #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('newFrame'), self.newFrame)
+            self.cam.sigNewFrame.disconnect(self.newFrame)
+            #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('cameraStopped'), self.cameraStopped)
+            self.cam.sigCameraStopped.disconnect(self.cameraStopped)
+            #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('cameraStarted'), self.cameraStarted)
+            self.cam.sigCameraStarted.disconnect(self.cameraStarted)
+            #QtCore.QObject.disconnect(self.cam, QtCore.SIGNAL('showMessage'), self.showMessage)
+            self.cam.sigShowMessage.disconnect(self.showMessage)
+        except TypeError:
+            pass
         
         self.hasQuit = True
         if self.cam.isRunning():
@@ -639,7 +648,7 @@ class CameraWindow(QtGui.QMainWindow):
     #@trace
     def setRegion(self, rgn=None):
         self.backgroundFrame = None
-        if rgn is None:
+        if rgn is None or isinstance(rgn, bool):
             rgn = [0, 0, self.camSize[0]-1, self.camSize[1]-1]
         self.roi.setPos([rgn[0], rgn[1]])
         self.roi.setSize([self.camSize[0], self.camSize[1]])
@@ -668,35 +677,11 @@ class CameraWindow(QtGui.QMainWindow):
         self.levelMin = rmin
         self.levelMax = rmax
         
-        #self.ui.levelScale.setScaleDiv(self.scaleEngine.transformation(), self.scaleEngine.divideScale(self.levelMin, self.levelMax, 8, 5))
-        #self.updateColorScale()
-        
-        #self.ui.levelThermo.setMaxValue(2**self.bitDepth - 1)
-        #self.ui.levelThermo.setAlarmLevel(self.ui.levelThermo.maxValue() * 0.9)
-        
-    #@trace
-    def updateColorScale(self):
-        pass
-        #(b, w) = self.getLevels()
-        #if w > b:
-            #self.ui.levelScale.setColorMap(Qwt.QwtDoubleInterval(b, w), Qwt.QwtLinearColorMap(QtCore.Qt.black, QtCore.Qt.white))
-        #else:
-            #self.ui.levelScale.setColorMap(Qwt.QwtDoubleInterval(w, b), Qwt.QwtLinearColorMap(QtCore.Qt.white, QtCore.Qt.black))
-                
-        
-        #self.updateFrame = True
-        
     #@trace
     def getLevels(self):
-        #w = self.ui.sliderWhiteLevel
-        #b = self.ui.sliderBlackLevel
-        #wl = self.levelMin + (self.levelMax-self.levelMin) * (float(w.value())-float(w.minimum())) / (float(w.maximum())-float(w.minimum()))
-        #bl = self.levelMin + (self.levelMax-self.levelMin) * (float(b.value())-float(b.minimum())) / (float(b.maximum())-float(b.minimum()))
         wl = self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[1])
         bl = self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[0])
-        
         return (bl, wl)
-        
 
     #@trace
     def toggleAutoGain(self, b):

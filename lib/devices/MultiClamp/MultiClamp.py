@@ -158,6 +158,15 @@ class MultiClamp(Device):
         #with MutexLocker(self.lock):
             #return self.mc.getMode()
     
+    def getHolding(self, mode=None):
+        with MutexLocker(self.lock):
+            if mode is None:  ## If no mode is specified, use the current mode
+                mode = self.mc.getMode()
+            if mode == 'I=0':
+                return 0.0
+            else:
+                return self.holding[mode]
+            
     def setHolding(self, mode=None, value=None):
         """Define and/or set the holding values for this device. 
         Note--these are computer-controlled holding values, NOT the holding values used by the amplifier.
@@ -346,7 +355,7 @@ class MultiClampTask(DeviceTask):
                     
             #prof.mark('    Multiclamp: recordState?')
                     
-                
+            self.holdingVal = self.dev.getHolding(self.cmd['mode'])
             #self.state['primarySignal'] = self.dev.mc.getPrimarySignalInfo()
             #self.state['secondarySignal'] = self.dev.mc.getSecondarySignalInfo()
             
@@ -445,6 +454,11 @@ class MultiClampTask(DeviceTask):
             daqState = {}
             for ch in result:
                 daqState[ch] = result[ch]['info']
+                
+            ## record command holding value
+            if 'command' not in daqState:
+                daqState['command'] = {}
+            daqState['command']['holding'] = self.holdingVal
                 
             #timeVals = linspace(0, float(self.state['numPts']-1) / float(self.state['rate']), self.state['numPts'])
             timeVals = linspace(0, float(nPts-1) / float(rate), nPts)

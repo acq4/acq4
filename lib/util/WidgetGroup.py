@@ -9,7 +9,7 @@ of a large group of widgets.
 """
 
 from PyQt4 import QtCore, QtGui
-import weakref
+import weakref, inspect
 
 def splitterState(w):
     s = str(w.saveState().toPercentEncoding())
@@ -143,15 +143,14 @@ class WidgetGroup(QtCore.QObject):
         self.readWidget(w)
             
         if type(w) in WidgetGroup.classes:
-            signal = WidgetGroup.classes[type(w)][0](w)
+            signal = WidgetGroup.classes[type(w)][0]
         else:
             signal = w.widgetGroupInterface()[0]
             
         if signal is not None:
-            if isinstance(signal, basestring):
-                QtCore.QObject.connect(w, QtCore.SIGNAL(signal), self.mkChangeCallback(w))
-            else:
-                signal.connect(self.mkChangeCallback(w))
+            if inspect.isfunction(signal) or inspect.ismethod(signal):
+                signal = signal(w)
+            signal.connect(self.mkChangeCallback(w))
         else:
             self.uncachedWidgets[w] = None
        
