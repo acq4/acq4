@@ -149,7 +149,7 @@ class MultiClampProtoGui(ProtocolGui):
         for k in ps:
             params[k] = range(len(ps[k]))
         waves = []
-        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys(), passHash=True)
+        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys())
         for w in waves:
             if w is not None:
                 #self.plotCmdWave(w / self.cmdScale, color=QtGui.QColor(100, 100, 100), replot=False)

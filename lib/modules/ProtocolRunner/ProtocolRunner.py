@@ -766,7 +766,7 @@ class ProtocolRunner(Module):
             progressDlg = QtGui.QProgressDialog("Generating protocol commands..", "Cancel", 0, pLen)
             progressDlg.setMinimumDuration(500)  ## If this takes less than 500ms, progress dialog never appears.
             self.lastQtProcessTime = ptime.time()
-            prot = runSequence(lambda p: self.generateProtocol(dh, p, progressDlg), paramInds, paramInds.keys(), passHash=True, linkedParams=linkedParams)
+            prot = runSequence(lambda p: self.generateProtocol(dh, p, progressDlg), paramInds, paramInds.keys(), linkedParams=linkedParams)
             progressDlg.setValue(pLen)
             
             #print "==========Sequence Protocol=============="
@@ -1105,11 +1105,11 @@ class TaskThread(QtCore.QThread):
                     if e.args[0] != 'stop':
                         raise
             else:
-                #runner = SequenceRunner(self.paramSpace, self.paramSpace.keys(), passHash=True)
+                #runner = SequenceRunner(self.paramSpace, self.paramSpace.keys())
                 #runner.setEndFuncs([]*len(self.paramSpace) + [self.checkStop])
                 #result = runner.start(self.runOnce)
                     
-                runSequence(self.runOnce, self.paramSpace, self.paramSpace.keys(), passHash=True)
+                runSequence(self.runOnce, self.paramSpace, self.paramSpace.keys())
             
         except:
             self.protocol = None  ## free up this memory

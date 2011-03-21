@@ -80,14 +80,19 @@ class FileAnalysisView(QtGui.QWidget):
     def populateModelList(self):
         self.ui.dataModelCombo.clear()
         self.ui.dataModelCombo.addItem('Load...')
-        for m in models.listModels():
+        mods = models.listModels()
+        for m in mods:
             self.ui.dataModelCombo.addItem(m)
+        if len(mods) == 1:
+            self.ui.dataModelCombo.setCurrentIndex(1)
+            self.loadModel()
     
     def loadModel(self):
         if self.ui.dataModelCombo.currentIndex() == 0:
             return
         modName = str(self.ui.dataModelCombo.currentText())
         self.currentModel = models.loadModel(modName)
+        lib.Manager.getManager().currentModel = self.currentModel
     
     
     def currentDatabase(self):
