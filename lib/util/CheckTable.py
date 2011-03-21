@@ -58,7 +58,8 @@ class CheckTable(QtGui.QWidget):
         for w in self.rowWidgets[row]:
             w.setParent(None)
             #QtCore.QObject.disconnect(w, QtCore.SIGNAL('stateChanged(int)'), self.checkChanged)
-            w.stateChanged.disconnect(self.checkChanged)
+            if isinstance(w, QtGui.QCheckBox):
+                w.stateChanged.disconnect(self.checkChanged)
         self.rowWidgets.pop(row)
         for i in range(row, len(self.rowNames)):
             widgets = self.rowWidgets[i]

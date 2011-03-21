@@ -220,13 +220,14 @@ class EventFilter(CtrlNode):
                 self.hideRow(b)
             
 
-    def process(self, events, regions, display=True):
+    def process(self, events, regions=None, display=True):
         s = self.stateGroup.state()
         data=events
         mask = np.ones(len(data), dtype=bool)
 
         newReg = ['all']
-        
+        if regions is None:
+            regions = {}
         for r in regions.keys():
             newReg.append(r.node().name())
         self.updateRegions(newReg)

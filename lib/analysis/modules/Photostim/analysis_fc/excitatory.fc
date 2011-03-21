@@ -1,5 +1,5 @@
 pos: (0.0, 0.0)
-connects: [('Input', 'regions', 'DirectScore', 'regions'), ('EventFilter.0', 'Out', 'Scores', 'events'), ('Scores', 'output', 'DirectScore', 'stats'), ('StatsCalculator.0', 'stats', 'Scores', 'stats'), ('DirectScore', 'output', 'Output', 'dataOut'), ('Input', 'regions', 'StatsCalculator.0', 'regions'), ('Input', 'events', 'DirectScore', 'events'), ('Input', 'regions', 'Scores', 'regions'), ('Input', 'events', 'EventFilter.0', 'In'), ('EventFilter.0', 'Out', 'StatsCalculator.0', 'data')]
+connects: [('Input', 'regions', 'DirectScore', 'regions'), ('EventFilter.0', 'output', 'Scores', 'events'), ('Scores', 'output', 'DirectScore', 'stats'), ('StatsCalculator.0', 'stats', 'Scores', 'stats'), ('DirectScore', 'output', 'Output', 'dataOut'), ('Input', 'regions', 'StatsCalculator.0', 'regions'), ('Input', 'events', 'DirectScore', 'events'), ('Input', 'regions', 'Scores', 'regions'), ('Input', 'events', 'EventFilter.0', 'events'), ('EventFilter.0', 'output', 'StatsCalculator.0', 'data')]
 terminals:
     events:
         multi: False
