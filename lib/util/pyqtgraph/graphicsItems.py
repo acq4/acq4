@@ -2530,6 +2530,7 @@ class ColorScaleBar(UIGraphicsItem):
             self.setLabels({kargs['labels'][0]:0, kargs['labels'][1]:1})
         
     def setLabels(self, l):
+        """Defines labels to appear next to the color scale"""
         self.labels = l
         self.update()
         
@@ -2541,7 +2542,7 @@ class ColorScaleBar(UIGraphicsItem):
         labelWidth = 0
         labelHeight = 0
         for k in self.labels:
-            b = p.boundingRect(QtCore.QRectF(0, 0, 0, 0), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, k)
+            b = p.boundingRect(QtCore.QRectF(0, 0, 0, 0), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, str(k))
             labelWidth = max(labelWidth, b.width())
             labelHeight = max(labelHeight, b.height())
             
@@ -2596,6 +2597,6 @@ class ColorScaleBar(UIGraphicsItem):
         lh = labelHeight/unit.height()
         for k in self.labels:
             y = y1 + self.labels[k] * (y2-y1)
-            p.drawText(QtCore.QRectF(tx/unit.width(), y/unit.height() - lh/2.0, 1000, lh), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, k)
+            p.drawText(QtCore.QRectF(tx/unit.width(), y/unit.height() - lh/2.0, 1000, lh), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, str(k))
         
         
