@@ -98,6 +98,18 @@ class DataModel:
             fh = dh[name]
             return func(fh)
         data = SequenceRunner.runSequence(functools.partial(runFunc, dh, func), inds, inds.keys())
+        
+        ## Pick up more meta info if available
+        subd = dh.subDirs()
+        if len(subd) > 0:
+            d1 = func(dh[subd[0]])
+            data._info = data._info[:len(params)] + d1._info
+            
+        ## correct parameter values
+        for i in range(len(params)):
+            vals = params.values()[i]
+            data._info[i]['values'] = vals
+            
         return data
     
     
@@ -139,7 +151,9 @@ class DataModel:
                 return None
     
     def getClampHoldingLevel(self, fh):
-        """Given a clamp file handle, return the holding level (voltage for VC, current for IC)."""
+        """Given a clamp file handle, return the holding level (voltage for VC, current for IC).
+        TODO: This function should add in the amplifier's internal holding value, if available?
+        """
         
         if not self._isClampFile(fh):
             raise Exception('%s not a clamp file.' %fh.shortName())
@@ -148,8 +162,11 @@ class DataModel:
         info = data._info[-1]
         sinfo = fh.parentDir.info()
         
-        if 'ClampState' in info:
+        ## There are a few places we could find the holding value, depending on how old the data is
+        if 'ClampState' in info and 'holding' in info['ClampState']:
             return info['ClampState']['holding']
+        elif 'DAQ' in info and 'command' in info['DAQ'] and 'holding' in info['DAQ']['command']:
+            return info['DAQ']['command']['holding']
         else:
             try:
                 if fh.shortName()[-3:] == '.ma':

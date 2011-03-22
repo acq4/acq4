@@ -179,7 +179,7 @@ class SequenceRunner:
         
         shapeExtra = ()
         dtype = self._dtype
-        if ndarray in type(ret).__bases__ or type(ret) is ndarray:
+        if isinstance(ret, ndarray):
             if dtype is None:
                 dtype = ret.dtype
             shapeExtra = ret.shape
