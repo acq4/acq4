@@ -21,11 +21,13 @@ import os.path as osp
 d = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
 
-
-
 import time, atexit, weakref, reload
 from PyQt4 import QtCore, QtGui
-from DataManager import *
+if not hasattr(QtCore, 'Signal'):
+    QtCore.Signal = QtCore.pyqtSignal
+    QtCore.Slot = QtCore.pyqtSlot
+
+import DataManager
 from Interfaces import *
 import ptime
 import configfile
@@ -91,7 +93,7 @@ Valid options are:
         self.config = OrderedDict()
         self.definedModules = OrderedDict()
         #self.devRack = None
-        self.dataManager = DataManager()
+        #self.dataManager = DataManager()
         self.currentDir = None
         self.baseDir = None
         self.gui = None
@@ -487,11 +489,13 @@ Valid options are:
 
     def dirHandle(self, d, create=False):
         """Return a directory handle for d."""
-        return self.dataManager.getDirHandle(d, create)
+        #return self.dataManager.getDirHandle(d, create)
+        return DataManager.getDirHandle(d, create)
 
     def fileHandle(self, d):
         """Return a file or directory handle for d"""
-        return self.dataManager.getHandle(d)
+        #return self.dataManager.getHandle(d)
+        return DataManager.getFileHandle(d)
         
     def lockReserv(self):
         """Lock the reservation system so that only one task may reserve its set of devices at a time.
