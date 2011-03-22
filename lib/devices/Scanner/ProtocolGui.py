@@ -52,19 +52,22 @@ class ScannerProtoGui(ProtocolGui):
         self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6})
 
         #QtCore.QObject.connect(self.ui.addPointBtn, QtCore.SIGNAL('clicked()'), self.addPoint)
-        self.ui.addPointBtn.clicked.connect(self.addPoint)
+        self.ui.addPointBtn.clicked.connect(self.addPointClicked)
         #QtCore.QObject.connect(self.ui.addGridBtn, QtCore.SIGNAL('clicked()'), self.addGrid)
-        self.ui.addGridBtn.clicked.connect(self.addGrid)
+        
+        ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
+        
+        self.ui.addGridBtn.clicked.connect(lambda: self.addGridClicked())
         #QtCore.QObject.connect(self.ui.addOcclusionBtn, QtCore.SIGNAL('clicked()'), self.addOcclusion)
-        self.ui.addOcclusionBtn.clicked.connect(self.addOcclusion)
+        self.ui.addOcclusionBtn.clicked.connect(lambda: self.addOcclusion())
         #QtCore.QObject.connect(self.ui.addProgramBtn, QtCore.SIGNAL('clicked()'), self.addProgram)
-        self.ui.addProgramBtn.clicked.connect(self.addProgram)
+        self.ui.addProgramBtn.clicked.connect(lambda: self.addProgram())
         #QtCore.QObject.connect(self.ui.addSpiralScanBtn, QtCore.SIGNAL('clicked()'), self.addSpiral)
-        self.ui.addSpiralScanBtn.clicked.connect(self.addSpiral)
+        self.ui.addSpiralScanBtn.clicked.connect(lambda: self.addSpiral())
         #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.delete)
-        self.ui.deleteBtn.clicked.connect(self.delete)
+        self.ui.deleteBtn.clicked.connect(lambda: self.delete())
         #QtCore.QObject.connect(self.ui.deleteAllBtn, QtCore.SIGNAL('clicked()'), self.deleteAll)
-        self.ui.deleteAllBtn.clicked.connect(self.deleteAll)
+        self.ui.deleteAllBtn.clicked.connect(lambda: self.deleteAll())
         #QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemToggled)
         self.ui.itemList.itemClicked.connect(self.itemToggled)
         #QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*,QListWidgetItem*)'), self.itemSelected)
@@ -313,7 +316,6 @@ class ScannerProtoGui(ProtocolGui):
         self.addItem(pt, name,  autoPos,  autoName)
         return pt
         
-
     def addGrid(self, pos=None, size=None, angle=0,  name=None):
         autoName = False
         if name is None:

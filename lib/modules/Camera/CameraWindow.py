@@ -245,7 +245,7 @@ class CameraWindow(QtGui.QMainWindow):
         #QtCore.QObject.connect(self.ui.btnAutoGain, QtCore.SIGNAL('toggled(bool)'), self.toggleAutoGain)
         self.ui.btnAutoGain.toggled.connect(self.toggleAutoGain)
         #QtCore.QObject.connect(self.ui.btnFullFrame, QtCore.SIGNAL('clicked()'), self.setRegion)
-        self.ui.btnFullFrame.clicked.connect(self.setRegion)
+        self.ui.btnFullFrame.clicked.connect(lambda: self.setRegion())
         
         #QtCore.QObject.connect(self.ui.spinBinning, QtCore.SIGNAL('valueChanged(int)'), self.setBinning)
         #QtCore.QObject.connect(self.ui.spinExposure, QtCore.SIGNAL('valueChanged(double)'), self.setExposure)
@@ -648,7 +648,7 @@ class CameraWindow(QtGui.QMainWindow):
     #@trace
     def setRegion(self, rgn=None):
         self.backgroundFrame = None
-        if rgn is None or isinstance(rgn, bool):
+        if rgn is None:
             rgn = [0, 0, self.camSize[0]-1, self.camSize[1]-1]
         self.roi.setPos([rgn[0], rgn[1]])
         self.roi.setSize([self.camSize[0], self.camSize[1]])

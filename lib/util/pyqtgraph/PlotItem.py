@@ -183,9 +183,9 @@ class PlotItem(QtGui.QGraphicsWidget):
         c.yMaxText.editingFinished.connect(self.setManualYScale)
         
         #QtCore.QObject.connect(c.xManualRadio, QtCore.SIGNAL('clicked()'), self.updateXScale)
-        c.xManualRadio.clicked.connect(self.updateXScale)
+        c.xManualRadio.clicked.connect(lambda: self.updateXScale())
         #QtCore.QObject.connect(c.yManualRadio, QtCore.SIGNAL('clicked()'), self.updateYScale)
-        c.yManualRadio.clicked.connect(self.updateYScale)
+        c.yManualRadio.clicked.connect(lambda: self.updateYScale())
         
         #QtCore.QObject.connect(c.xAutoRadio, QtCore.SIGNAL('clicked()'), self.updateXScale)
         c.xAutoRadio.clicked.connect(self.updateXScale)

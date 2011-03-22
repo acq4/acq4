@@ -132,7 +132,7 @@ class FilterList(QtGui.QWidget):
         delBtn.item = item
         item.delBtn = delBtn
         #QtCore.QObject.connect(delBtn, QtCore.SIGNAL('clicked()'), self.removeFilter)
-        delBtn.clicked.connect(self.removeFilter)
+        delBtn.clicked.connect(lambda: self.removeFilter())
         self.filterList.setItemWidget(item, 1, delBtn)
         if ctrl is not None:
             item2 = QtGui.QTreeWidgetItem([])
