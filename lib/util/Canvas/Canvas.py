@@ -229,6 +229,8 @@ class Canvas(QtGui.QWidget):
     
     ### Make addScan and addImage go away entirely, plox.
     def addScan(self, dirHandle, **opts):
+        """Returns a list of ScanCanvasItems."""
+        
         if 'sequenceParams' in dirHandle.info():
             dirs = [dirHandle[d] for d in dirHandle.subDirs()]
         else:
@@ -241,6 +243,7 @@ class Canvas(QtGui.QWidget):
             del(opts['separateParams'])
             
         
+        ### check for sequence parameters (besides targets) so that we can separate them out into individual Scans
         paramKeys = []
         params = dirHandle.info()['protocol']['params']
         if len(params) > 1 and separateParams==True:
@@ -269,7 +272,7 @@ class Canvas(QtGui.QWidget):
             item = graphicsItems.ScatterPlotItem(pts, pxMode=False)
             citem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
             self._addCanvasItem(citem)
-            return citem
+            return [citem]
         else:
             pts = {}
             for d in dirs:
@@ -289,13 +292,14 @@ class Canvas(QtGui.QWidget):
             item = graphicsItems.ScatterPlotItem(spots=spots, pxMode=False)
             parentCitem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
             self._addCanvasItem(parentCitem)
-            scans = {}
+            scans = []
             for k in pts.keys():
                 opts['name'] = paramKeys[0][0] + '_%03d' %k
                 item = graphicsItems.ScatterPlotItem(spots=pts[k], pxMode=False)
                 citem = ScanCanvasItem(self, item, handle = dirHandle, parent=parentCitem, **opts)
                 self._addCanvasItem(citem)
-                scans[opts['name']] = citem
+                #scans[opts['name']] = citem
+                scans.append(citem)
             return scans
                 
                 
@@ -857,7 +861,7 @@ class ScanCanvasItem(CanvasItem):
         
         self.addScanImageBtn = QtGui.QPushButton()
         self.addScanImageBtn.setText('Add Scan Image')
-        self.layout.addWidget(self.addScanImageButton)
+        self.layout.addWidget(self.addScanImageBtn,3,0,1,2)
         
         self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
         
@@ -872,13 +876,20 @@ class ScanCanvasItem(CanvasItem):
             return
         
         images = []
+        nulls = []
         for d in dirs:
+            if 'Camera' not in d.subDirs():
+                continue
             frames = d['Camera']['frames.ma'].read()
             image = frames[1]-frames[0]
             image[image > frames[1].max()*2] = 0.
+            if image.max() < 50:
+                nulls.append(d.shortName())
+                continue
             image = (image/float(image.max()) * 1000)
             images.append(image)
             
+        print "Null frames for %s:" %dh.shortName(), nulls
         scanImages = np.zeros(images[0].shape)
         for im in images:
             scanImages += im
@@ -887,8 +898,12 @@ class ScanCanvasItem(CanvasItem):
     
         pos =  info['imagePosition']
         scale = info['pixelSize']
-        item = self.getElement('Canvas').addImage(scanImages, pos=pos, scale=scale, name='scanImage')
-        self.items[item] = scanImages
+        item = self.canvas.addImage(scanImages, pos=pos, scale=scale, z=self.opts['z']-1, name='scanImage')
+        self.scanImage = item
+        
+        self.scanImage.restoreTransform(self.saveTransform())
+        
+        #self.canvas.items[item] = scanImages
         
 
 

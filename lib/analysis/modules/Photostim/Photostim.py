@@ -58,8 +58,8 @@ class Photostim(AnalysisModule):
         
         ## storage for map data
         #self.scanItems = {}
-        self.scans = {}
-        self.seriesScans = {}
+        self.scans = []
+        #self.seriesScans = {}
         self.maps = []
         
         ## create event detector
@@ -142,43 +142,50 @@ class Photostim(AnalysisModule):
             return False
     
     def loadScan(self, fh):
-        if fh not in self.scans and fh not in self.seriesScans:
+        if fh not in self.scans:
+        #if fh not in self.scans and fh not in self.seriesScans:
             canvas = self.getElement('Canvas')
-            canvasItem = canvas.addFile(fh, separateParams=True)
+            canvasItems = canvas.addFile(fh, separateParams=True)
             #scan = Scan(self, fh, canvasItem)
             #self.scanItems[fh] = scan
-            if not isinstance(canvasItem, dict):
-                scan = Scan(self, fh, canvasItem)
-                self.scans[fh] = scan
-                #node = QtGui.QTreeWidgetItem([scan.name()])
-                #node.scan = scan
-                #self.dbCtrl.scanTree.addTopLevelItem(node)
-                canvasItem.item.sigPointClicked.connect(self.scanPointClicked)
-                #scan.item.sigPointClicked.connect(self.scanPointClicked)
-                
-                #canvasItem.item.sigPointClicked.connect(self.scanPointClicked)
-                #self.scatterPlot.addScan(scan)
+            for citem in canvasItems:
+                scan = Scan(self, fh, citem, name=citem.opts['name'])
+                self.scans.append(scan)
+                citem.item.sigPointClicked.connect(self.scanPointClicked)
                 self.dbCtrl.scanLoaded(scan)
-                return self.scans[fh]
-            else:
-                self.seriesScans[fh] = {}
-                #pNode = QtGui.QTreeWidgetItem(self.dbCtrl.scanTree, [fh.shortName()])
-                #pNode.setFlags((pNode.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
-                #pNode.setCheckState(0, QtCore.Qt.Checked)
-                #self.dbCtrl.scanTree.addTopLevelItem(QtGui.QTreeWidgetItem(fh.shortName()))
-                for k in canvasItem.keys():
-                    scan = Scan(self, fh, canvasItem[k], name=k)
-                    self.seriesScans[fh][k] = scan
-                    #scan[k].item.sigPointClicked.connect(self.scanPointClicked)
-                    canvasItem[k].item.sigPointClicked.connect(self.scanPointClicked)
-                    #node = QtGui.QTreeWidgetItem(pNode, [k])
-                    #node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
-                    #node.setCheckState(0, QtCore.Qt.Checked)
-                    #node.scan = self.seriesScans[fh][k]
-                    #self.scatterPlot.addScan(scan)
-                    self.dbCtrl.scanLoaded(scan)
-                #self.scatterPlot.addScan(self.seriesScans[fh])
-                return self.seriesScans[fh]
+                
+            #if not isinstance(canvasItem, dict):
+                #scan = Scan(self, fh, canvasItem)
+                #self.scans[fh] = scan
+                ##node = QtGui.QTreeWidgetItem([scan.name()])
+                ##node.scan = scan
+                ##self.dbCtrl.scanTree.addTopLevelItem(node)
+                #canvasItem.item.sigPointClicked.connect(self.scanPointClicked)
+                ##scan.item.sigPointClicked.connect(self.scanPointClicked)
+                
+                ##canvasItem.item.sigPointClicked.connect(self.scanPointClicked)
+                ##self.scatterPlot.addScan(scan)
+                #self.dbCtrl.scanLoaded(scan)
+                #return self.scans[fh]
+            #else:
+                #self.seriesScans[fh] = {}
+                ##pNode = QtGui.QTreeWidgetItem(self.dbCtrl.scanTree, [fh.shortName()])
+                ##pNode.setFlags((pNode.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
+                ##pNode.setCheckState(0, QtCore.Qt.Checked)
+                ##self.dbCtrl.scanTree.addTopLevelItem(QtGui.QTreeWidgetItem(fh.shortName()))
+                #for k in canvasItem.keys():
+                    #scan = Scan(self, fh, canvasItem[k], name=k)
+                    #self.seriesScans[fh][k] = scan
+                    ##scan[k].item.sigPointClicked.connect(self.scanPointClicked)
+                    #canvasItem[k].item.sigPointClicked.connect(self.scanPointClicked)
+                    ##node = QtGui.QTreeWidgetItem(pNode, [k])
+                    ##node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
+                    ##node.setCheckState(0, QtCore.Qt.Checked)
+                    ##node.scan = self.seriesScans[fh][k]
+                    ##self.scatterPlot.addScan(scan)
+                    #self.dbCtrl.scanLoaded(scan)
+                ##self.scatterPlot.addScan(self.seriesScans[fh])
+                #return self.seriesScans[fh]
 
 
     def registerMap(self, map):
@@ -199,13 +206,14 @@ class Photostim(AnalysisModule):
     def storeToDB(self):
         pass
 
-    def scanPointClicked(self, point):
+    def scanPointClicked(self, plotItem, point):
         try:
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
             #print "click!", point.data
             plot = self.getElement("Data Plot")
             plot.clear()
             self.selectedSpot = point
+            self.selectedScan = plotItem.scan
             fh = self.dataModel.getClampFile(point.data)
             self.detector.loadFileRequested(fh)
             #self.dbCtrl.scanSpotClicked(fh)
@@ -279,13 +287,17 @@ class Photostim(AnalysisModule):
     def detectorStateChanged(self):
         #print "STATE CHANGE"
         print "Detector state changed"
-        for m in self.scans.itervalues():
+        for m in self.scans:
             m.forgetEvents()
-        for k in self.seriesScans.keys():
-            for m in self.seriesScans[k].itervalues():
-                m.forgetEvents()
+        #for m in self.scans.itervalues():
+            #m.forgetEvents()
+        #for k in self.seriesScans.keys():
+            #for m in self.seriesScans[k].itervalues():
+                #m.forgetEvents()
         
     def detectorOutputChanged(self):
+        if self.selectedSpot==None:
+            return
         output = self.detector.flowchart.output()
         output['fileHandle']=self.selectedSpot.data
         #table = self.getElement('Stats')
@@ -296,13 +308,15 @@ class Photostim(AnalysisModule):
 
     def analyzerStateChanged(self):
         print "Analyzer state changed."
-        for m in self.scans.itervalues():
-            #m.forgetEvents()
+        for m in self.scans:
             m.forgetStats()
-        for k in self.seriesScans.keys():
-            for m in self.seriesScans[k].itervalues():
-                #m.forgetEvents()
-                m.forgetStats()
+        #for m in self.scans.itervalues():
+            ##m.forgetEvents()
+            #m.forgetStats()
+        #for k in self.seriesScans.keys():
+            #for m in self.seriesScans[k].itervalues():
+                ##m.forgetEvents()
+                #m.forgetStats()
         
     def analyzerOutputChanged(self):
         table = self.getElement('Stats')
@@ -323,7 +337,7 @@ class Photostim(AnalysisModule):
         
     def recolor(self):
         for i in range(len(self.scans)):
-            s = self.scans[self.scans.keys()[i]]
+            s = self.scans[self.scans[i]]
             s.recolor(i, len(self.scans))
         for i in range(len(self.maps)):
             m = self.maps[i]
@@ -341,6 +355,8 @@ class Photostim(AnalysisModule):
         if data is None:
             stats = self.flowchart.output()['dataOut']
             spot = self.selectedSpot
+            if spot is None:
+                return
         else:
             if 'regions' not in data:
                 data['regions'] = self.detector.flowchart.output()['regions']
@@ -399,8 +415,8 @@ class Photostim(AnalysisModule):
         
         
         ## update data in Map
-        scan = self.scans[parentDir]
-        scan.updateSpot(fh, events, stats)
+        #scan = self.scans[parentDir]
+        self.selectedScan.updateSpot(fh, events, stats)
         #try:
             #scan = self.scans[parentDir]
         #except KeyError:
@@ -408,11 +424,11 @@ class Photostim(AnalysisModule):
         #scan.updateSpot(fh, events, stats)
         
 
-    def selectedScan(self):
-        loader = self.getElement('File Loader')
-        dh = loader.selectedFile()
-        scan = self.scans[dh]
-        return scan
+    #def selectedScan(self):
+        #loader = self.getElement('File Loader')
+        #dh = loader.selectedFile()
+        #scan = self.scans[dh]
+        #return scan
 
     def storeDBScan(self, scan):
         """Store all data for a scan, using cached values if possible"""
@@ -551,6 +567,7 @@ class Scan(QtCore.QObject):
     def __init__(self, host, source, canvasItem, name=None):
         QtCore.QObject.__init__(self)
         self.source = source
+        canvasItem.item.scan = self
         self.canvasItem = canvasItem
         canvasItem.sigVisibilityChanged.connect(self.itemVisibilityChanged)
         self.item = canvasItem.graphicsItem()     ## graphics item

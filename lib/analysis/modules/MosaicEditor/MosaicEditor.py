@@ -34,11 +34,11 @@ class MosaicEditor(AnalysisModule):
         self.items = {}
         self.cells = {}
         
-        addScanImagesBtn = QtGui.QPushButton()
-        addScanImagesBtn.setText('Add Scan Image')
+        #addScanImagesBtn = QtGui.QPushButton()
+        #addScanImagesBtn.setText('Add Scan Image')
         self.ui.fileLoader = self.getElement('File Loader', create=True)
         self.ui.fileLoader.ui.fileTree.hide()
-        self.ui.fileLoader.ui.verticalLayout_2.addWidget(addScanImagesBtn)
+        #self.ui.fileLoader.ui.verticalLayout_2.addWidget(addScanImagesBtn)
         
         
         
@@ -47,7 +47,7 @@ class MosaicEditor(AnalysisModule):
             self.ui.atlasCombo.addItem(a)
         
         self.connect(self.ui.canvas, QtCore.SIGNAL('itemTransformChangeFinished'), self.itemMoved)
-        self.connect(addScanImagesBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
+        #self.connect(addScanImagesBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
         #self.ui.exportSvgBtn.clicked.connect(self.exportSvg)
         self.ui.atlasCombo.currentIndexChanged.connect(self.atlasComboChanged)
         #self.ui.normalizeBtn.clicked.connect(self.normalizeImages)
@@ -80,6 +80,9 @@ class MosaicEditor(AnalysisModule):
             self.items[item] = f
         else:
             item = canvas.addFile(f)
+            if isinstance(item, list):
+                item = item[0]
+        
             self.items[item] = f
             
             item.timestamp = f.info()['__timestamp__']
@@ -103,39 +106,39 @@ class MosaicEditor(AnalysisModule):
                 
         canvas.selectItem(item)
         
-    def loadScanImage(self):
-        #print 'loadScanImage called.'
-        dh = self.ui.fileLoader.ui.dirTree.selectedFile()
-        dirs = [dh[d] for d in dh.subDirs()]
-        if 'Camera' not in dirs[0].subDirs():
-            print "No image data for this scan."
-            return
+    #def loadScanImage(self):
+        ##print 'loadScanImage called.'
+        #dh = self.ui.fileLoader.ui.dirTree.selectedFile()
+        #dirs = [dh[d] for d in dh.subDirs()]
+        #if 'Camera' not in dirs[0].subDirs():
+            #print "No image data for this scan."
+            #return
         
-        images = []
-        nulls = []
-        for d in dirs:
-            if 'Camera' not in d.subDirs():
-                continue
-            frames = d['Camera']['frames.ma'].read()
-            image = frames[1]-frames[0]
-            image[image > frames[1].max()*2] = 0.
-            if image.max() < 50:
-                nulls.append(d.shortName())
-                continue
-            image = (image/float(image.max()) * 1000)
-            images.append(image)
+        #images = []
+        #nulls = []
+        #for d in dirs:
+            #if 'Camera' not in d.subDirs():
+                #continue
+            #frames = d['Camera']['frames.ma'].read()
+            #image = frames[1]-frames[0]
+            #image[image > frames[1].max()*2] = 0.
+            #if image.max() < 50:
+                #nulls.append(d.shortName())
+                #continue
+            #image = (image/float(image.max()) * 1000)
+            #images.append(image)
             
-        print "Null frames for %s:" %dh.shortName(), nulls
-        scanImages = np.zeros(images[0].shape)
-        for im in images:
-            scanImages += im
+        #print "Null frames for %s:" %dh.shortName(), nulls
+        #scanImages = np.zeros(images[0].shape)
+        #for im in images:
+            #scanImages += im
         
-        info = dirs[0]['Camera']['frames.ma'].read()._info[-1]
+        #info = dirs[0]['Camera']['frames.ma'].read()._info[-1]
     
-        pos =  info['imagePosition']
-        scale = info['pixelSize']
-        item = self.getElement('Canvas').addImage(scanImages, pos=pos, scale=scale, name='scanImage')
-        self.items[item] = scanImages
+        #pos =  info['imagePosition']
+        #scale = info['pixelSize']
+        #item = self.getElement('Canvas').addImage(scanImages, pos=pos, scale=scale, name='scanImage')
+        #self.items[item] = scanImages
             
 
     def itemMoved(self, canvas, item):
