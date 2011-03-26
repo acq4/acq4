@@ -40,7 +40,7 @@ def getDataManager():
 def getHandle(fileName):
     return getDataManager().getHandle(fileName)
 
-def getDirHandle(fileName):
+def getDirHandle(fileName, create=False):
     return getDataManager().getDirHandle(fileName)
 
 def getFileHandle(fileName):

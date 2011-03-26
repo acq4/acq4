@@ -51,13 +51,12 @@ class ScannerProtoGui(ProtocolGui):
         ])
         self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6})
 
-        #QtCore.QObject.connect(self.ui.addPointBtn, QtCore.SIGNAL('clicked()'), self.addPoint)
-        self.ui.addPointBtn.clicked.connect(self.addPointClicked)
-        #QtCore.QObject.connect(self.ui.addGridBtn, QtCore.SIGNAL('clicked()'), self.addGrid)
-        
         ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
         
-        self.ui.addGridBtn.clicked.connect(lambda: self.addGridClicked())
+        #QtCore.QObject.connect(self.ui.addPointBtn, QtCore.SIGNAL('clicked()'), self.addPoint)
+        self.ui.addPointBtn.clicked.connect(lambda: self.addPoint())
+        #QtCore.QObject.connect(self.ui.addGridBtn, QtCore.SIGNAL('clicked()'), self.addGrid)
+        self.ui.addGridBtn.clicked.connect(lambda: self.addGrid())
         #QtCore.QObject.connect(self.ui.addOcclusionBtn, QtCore.SIGNAL('clicked()'), self.addOcclusion)
         self.ui.addOcclusionBtn.clicked.connect(lambda: self.addOcclusion())
         #QtCore.QObject.connect(self.ui.addProgramBtn, QtCore.SIGNAL('clicked()'), self.addProgram)

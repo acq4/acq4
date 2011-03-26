@@ -452,7 +452,7 @@ Valid options are:
             
         if isinstance(d, basestring):
             self.currentDir = self.baseDir.getDir(d, create=True)
-        elif isinstance(d, DirHandle):
+        elif isinstance(d, DataManager.DirHandle):
             self.currentDir = d
         else:
             raise Exception("Invalid argument type: ", type(d), d)
@@ -476,7 +476,7 @@ Valid options are:
     def setBaseDir(self, d):
         if isinstance(d, basestring):
             self.baseDir = self.dirHandle(d, create=False)
-        elif isinstance(d, DirHandle):
+        elif isinstance(d, DataManager.DirHandle):
             self.baseDir = d
         else:
             raise Exception("Invalid argument type: ", type(d), d)
@@ -490,7 +490,7 @@ Valid options are:
     def dirHandle(self, d, create=False):
         """Return a directory handle for d."""
         #return self.dataManager.getDirHandle(d, create)
-        return DataManager.getDirHandle(d, create)
+        return DataManager.getDirHandle(d, create=create)
 
     def fileHandle(self, d):
         """Return a file or directory handle for d"""
@@ -534,7 +534,7 @@ Valid options are:
     def suggestedDirFields(self, file):
         """Given a DirHandle with a dirType, suggest a set of meta-info fields to use."""
         fields = OrderedDict()
-        if isinstance(file, DirHandle):
+        if isinstance(file, DataManager.DirHandle):
             info = file.info()
             if 'dirType' in info:
                 #infoKeys.remove('dirType')

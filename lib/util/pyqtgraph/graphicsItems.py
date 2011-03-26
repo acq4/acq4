@@ -365,7 +365,7 @@ class ImageItem(QtGui.QGraphicsObject):
                 im1[..., 2][mask] = 255
         #print "Final image:", im1.dtype, im1.min(), im1.max(), im1.shape
         self.ims = im1.tostring()  ## Must be held in memory here because qImage won't do it for us :(
-        qimage = QtGui.QImage(self.ims, im1.shape[1], im1.shape[0], QtGui.QImage.Format_ARGB32)
+        qimage = QtGui.QImage(buffer(self.ims), im1.shape[1], im1.shape[0], QtGui.QImage.Format_ARGB32)
         self.pixmap = QtGui.QPixmap.fromImage(qimage)
         ##del self.ims
         #self.pixmapItem.setPixmap(self.pixmap)

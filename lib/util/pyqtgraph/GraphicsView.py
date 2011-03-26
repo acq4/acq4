@@ -48,7 +48,7 @@ class GraphicsView(QtGui.QGraphicsView):
         brush.setStyle(QtCore.Qt.SolidPattern)
         palette.setBrush(QtGui.QPalette.Disabled,QtGui.QPalette.Base,brush)
         self.setPalette(palette)
-        self.setProperty("cursor",QtCore.QVariant(QtCore.Qt.ArrowCursor))
+        #self.setProperty("cursor",QtCore.QVariant(QtCore.Qt.ArrowCursor))
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setFrameShape(QtGui.QFrame.NoFrame)
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)

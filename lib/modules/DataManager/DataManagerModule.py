@@ -21,7 +21,8 @@ class DataManager(Module):
     
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
-        self.dm = self.manager.dataManager
+        #self.dm = self.manager.dataManager
+        self.dm = getDataManager()
         self.win = Window()
         self.win.dm = self  ## so embedded widgets can find the module easily
         self.ui = Ui_MainWindow()
