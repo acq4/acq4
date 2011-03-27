@@ -282,8 +282,10 @@ class PlotItem(QtGui.QGraphicsWidget):
         #prof.finish()
         
         
-    def __del__(self):
+    def close(self):
+        #print "delete", self
         if self.manager is not None:
+            self.manager.sigWidgetListChanged.disconnect(self.updatePlotList)
             self.manager.removeWidget(self.name)
 
     def registerPlot(self, name):
@@ -315,7 +317,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         except:
             import gc
             refs= gc.get_referrers(self)
-            print "  error during update. Referrers are:", refs
+            print "  error during update of", self
+            print "  Referrers are:", refs
             raise
         
     def updateGrid(self, *args):

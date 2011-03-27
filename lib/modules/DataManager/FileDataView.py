@@ -3,11 +3,11 @@
 from PyQt4 import QtCore, QtGui
 from DataManager import *
 import lib.Manager as Manager
-import sip
 from pyqtgraph.MultiPlotWidget import MultiPlotWidget
 from pyqtgraph.ImageView import ImageView
 from DictView import *
 import metaarray
+import weakref
 
 class FileDataView(QtGui.QSplitter):
     def __init__(self, parent):
@@ -18,6 +18,7 @@ class FileDataView(QtGui.QSplitter):
         self.currentType = None
         self.widgets = []
         self.dictWidget = None
+        #self.plots = []
 
     def setCurrentFile(self, file):
         #print "=============== set current file ============"
@@ -60,6 +61,8 @@ class FileDataView(QtGui.QSplitter):
             else:
                 self.clear()
                 w = ImageView(self)
+                #print "add image:", w.ui.roiPlot.plotItem
+                #self.plots = [weakref.ref(w.ui.roiPlot.plotItem)]
                 self.addWidget(w)
                 w.setImage(data)
                 self.widgets.append(w)
@@ -71,6 +74,9 @@ class FileDataView(QtGui.QSplitter):
             w.plot(data)
             self.currentType = 'plot'
             self.widgets.append(w)
+            #print "add mplot:", w.mPlotItem.plots
+            
+            #self.plots = [weakref.ref(p[0]) for p in w.mPlotItem.plots]
         
         if isinstance(data, metaarray.MetaArray):
             if self.dictWidget is None:
@@ -86,8 +92,28 @@ class FileDataView(QtGui.QSplitter):
             
         
     def clear(self):
+        #for w in self.widgets:
+            #sip.delete(w)       ## bad planning.
+        #print "\nClear widgets"
+        #import weakref, debug
+        #refs = []
         for w in self.widgets:
-            sip.delete(w)
+            w.close()
+            w.setParent(None)
+            #refs.append(weakref.ref(w))
         self.widgets = []
         self.dictWidget = None
-        
+        #import gc
+        #gc.collect()
+        #for r in refs:
+            #print "    ", r()
+            #if r() is not None:
+                #debug.describeObj(r())
+                #print "REFS:"
+                #print gc.get_referrers(r())
+                
+        #for p in self.plots:
+            #if p() is not None:
+                #print "Plot still alive:", p()
+                #debug.describeObj(p())
+                

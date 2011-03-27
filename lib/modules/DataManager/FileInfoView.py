@@ -3,7 +3,7 @@ from FileInfoViewTemplate import *
 from PyQt4 import QtCore, QtGui
 from DataManager import DirHandle
 import lib.Manager as Manager
-import sip
+#import sip
 import time
 import configfile
 from DictView import *
@@ -152,7 +152,10 @@ class FileInfoView(QtGui.QWidget):
         #count = 0
         while self.ui.fileInfoLayout.count() > 0:
             w = self.ui.fileInfoLayout.takeAt(0).widget()
-            sip.delete(w)
+            #sip.delete(w)
+            w.setParent(None)
+            
+            
             #w.setParent(None)
             #count += 1
         #print "removed %d widgets" % count

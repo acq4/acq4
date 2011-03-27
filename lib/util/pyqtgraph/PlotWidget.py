@@ -31,10 +31,14 @@ class PlotWidget(GraphicsView):
         #self.quit()
         
         
-    def quit(self):
-        self.plotItem.clear()
-        self.scene().clear()
-        
+    #def quit(self):
+
+    def close(self):
+        self.plotItem.close()
+        #self.scene().clear()
+        #self.mPlotItem.close()
+        self.setParent(None)
+
     def __getattr__(self, attr):  ## implicitly wrap methods from plotItem
         if hasattr(self.plotItem, attr):
             m = getattr(self.plotItem, attr)

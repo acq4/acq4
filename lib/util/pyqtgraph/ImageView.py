@@ -151,11 +151,16 @@ class ImageView(QtGui.QWidget):
         #self.quit()
         #QtGui.QWidget.__dtor__(self)
         
-    def quit(self):
+    def close(self):
+        self.ui.graphicsView.close()
+        self.ui.gradientWidget.sigGradientChanged.disconnect(self.updateImage)
         self.scene.clear()
         del self.image
         del self.imageDisp
-        
+        #self.image = None
+        #self.imageDisp = None
+        self.ui.roiPlot.close()
+        self.setParent(None)
         
     def keyPressEvent(self, ev):
         if ev.key() == QtCore.Qt.Key_Space:
