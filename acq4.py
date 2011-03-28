@@ -11,6 +11,10 @@ manager with a configuration file and let it go from there.
 print "Loading ACQ4..."
 
 #import lib.util.PySideImporter  ## Use PySide instead of PyQt
+#import sip
+#sip.setapi('QString', 2)
+#sip.setapi('QVariant', 2)
+
 from PyQt4 import QtGui, QtCore
 ## Needed to keep compatibility between pyside and pyqt
 ## (this can go away once the transition to PySide is complete)

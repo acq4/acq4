@@ -35,6 +35,7 @@ class PlotWidget(GraphicsView):
 
     def close(self):
         self.plotItem.close()
+        self.plotItem = None
         #self.scene().clear()
         #self.mPlotItem.close()
         self.setParent(None)

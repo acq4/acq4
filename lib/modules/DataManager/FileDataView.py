@@ -2,7 +2,7 @@
 
 from PyQt4 import QtCore, QtGui
 from DataManager import *
-import lib.Manager as Manager
+#import lib.Manager as Manager
 from pyqtgraph.MultiPlotWidget import MultiPlotWidget
 from pyqtgraph.ImageView import ImageView
 from DictView import *
@@ -12,7 +12,7 @@ import weakref
 class FileDataView(QtGui.QSplitter):
     def __init__(self, parent):
         QtGui.QSplitter.__init__(self, parent)
-        self.manager = Manager.getManager()
+        #self.manager = Manager.getManager()
         self.setOrientation(QtCore.Qt.Vertical)
         self.current = None
         self.currentType = None
