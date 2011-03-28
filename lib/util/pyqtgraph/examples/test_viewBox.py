@@ -5,6 +5,7 @@ import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from scipy import random
+import numpy as np
 from PyQt4 import QtGui, QtCore
 from pyqtgraph.GraphicsView import *
 from pyqtgraph.graphicsItems import *
@@ -75,7 +76,7 @@ def rand(n):
     data[int(n*0.18)] += 2
     data[int(n*0.1):int(n*0.13)] *= 5
     data[int(n*0.18)] *= 20
-    return data, arange(n, n+len(data)) / float(n)
+    return data, np.arange(n, n+len(data)) / float(n)
     
 
 def updateData():
