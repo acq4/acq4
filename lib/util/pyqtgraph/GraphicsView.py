@@ -20,7 +20,7 @@ class GraphicsView(QtGui.QGraphicsView):
     sigSceneMouseMoved = QtCore.Signal(object)
     #sigRegionChanged = QtCore.Signal(object)
     
-    def __init__(self, parent=None, useOpenGL=True):
+    def __init__(self, parent=None, useOpenGL=False):
         """Re-implementation of QGraphicsView that removes scrollbars and allows unambiguous control of the 
         viewed coordinate range. Also automatically creates a QGraphicsScene and a central QGraphicsWidget
         that is automatically scaled to the full view geometry.

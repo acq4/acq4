@@ -18,6 +18,7 @@ class Mutex(QtCore.QMutex):
         QtCore.QMutex.__init__(self, *args)
         self.l = QtCore.QMutex()  ## for serializing access to self.tb
         self.tb = []
+        self.debug = False ## True to enable debugging functions
 
     def tryLock(self, timeout=None, id=None):
         if timeout is None:
@@ -25,7 +26,7 @@ class Mutex(QtCore.QMutex):
         else:
             l = QtCore.QMutex.tryLock(self, timeout)
 
-        if l:
+        if self.debug and l:
             self.l.lock()
             try:
                 if id is None:
@@ -58,15 +59,16 @@ class Mutex(QtCore.QMutex):
 
     def unlock(self):
         QtCore.QMutex.unlock(self)
-        self.l.lock()
-        try:
-            #print 'unlock', self, len(self.tb)
-            if len(self.tb) > 0:
-                self.tb.pop()
-            else:
-                raise Exception("Attempt to unlock mutex before it has been locked")
-        finally:
-            self.l.unlock()
+        if self.debug:
+            self.l.lock()
+            try:
+                #print 'unlock', self, len(self.tb)
+                if len(self.tb) > 0:
+                    self.tb.pop()
+                else:
+                    raise Exception("Attempt to unlock mutex before it has been locked")
+            finally:
+                self.l.unlock()
 
     def depth(self):
         self.l.lock()

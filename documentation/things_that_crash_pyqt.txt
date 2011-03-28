@@ -6,4 +6,4 @@ Things that crash PyQt4:
     - joined widgets such as a scrollarea and its scroll bars. When the scrollarea is deleted, the scrollbars go as well, but any references to the scrollbars are NOT informed of this, so accessing those objects causes crash (Pyside does not have this problem)
     - parents auto-deleting children, tree items deleting child widgets when moved
   - As always, be careful with multi-threading. Never access GUI objects outside the main thread.
-
+  - If graphicsView seems to be involved, try disabling OpenGL
