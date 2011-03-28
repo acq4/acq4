@@ -91,7 +91,7 @@ class ParamList(QtGui.QTreeWidget):
                 if item is None:
                     continue
                 item.setCheckState(0, ParamList.checkStateMap[enabled])
-                o2.append([self.takeItem(item), []])
+                o2.append(self.takeItem(item))
         
         ## Re-add items from param list in correct order
         for i in ordered:
