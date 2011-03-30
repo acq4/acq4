@@ -135,7 +135,7 @@ class DaqChannelGui(QtGui.QWidget):
         pass
     
     def quit(self):
-        pass
+        self.plot.close()
         
 class OutputChannelGui(DaqChannelGui):
     
