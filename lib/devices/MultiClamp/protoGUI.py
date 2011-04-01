@@ -345,4 +345,5 @@ class MultiClampProtoGui(ProtocolGui):
         ProtocolGui.quit(self)
         if not sip.isdeleted(self.daqUI):
             QtCore.QObject.disconnect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
-        
+        self.ui.topPlotWidget.close()
+        self.ui.bottomPlotWidget.close()

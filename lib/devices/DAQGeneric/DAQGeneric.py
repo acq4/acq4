@@ -139,7 +139,10 @@ class DAQGenericTask(DeviceTask):
                     self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
                 if 'recordInit' in self._DAQCmd[ch] and self._DAQCmd[ch]['recordInit']:
                     self.initialState[ch] = self.dev.getChannelValue(ch)
-                self.holdingVals[ch] = self.dev.getChanHolding(ch)
+            for ch in self.dev._DGConfig:
+                ## record current holding value for all output channels (even those that were not buffered for this task)
+                if self.dev._DGConfig[ch]['type'] in ['ao', 'do']:
+                    self.holdingVals[ch] = self.dev.getChanHolding(ch)
                 
     def createChannels(self, daqTask):
         self.daqTasks = {}
@@ -282,7 +285,8 @@ class DAQGenericTask(DeviceTask):
                     daqState[ch] = {}
                 
                 ## record current holding value for all output channels (even those that were not buffered for this task)    
-                if self.dev._DGConfig[ch]['type'] in ['ao', 'do']:     
+                if self.dev._DGConfig[ch]['type'] in ['ao', 'do']:
+                    
                     daqState[ch]['holding'] = self.holdingVals[ch]
             
             info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'DAQ': daqState}]

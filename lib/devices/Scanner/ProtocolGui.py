@@ -690,10 +690,7 @@ class ScannerProtoGui(ProtocolGui):
     
 class TargetPoint(widgets.EllipseROI):
     
-    
-    
-    
-    
+    sigPointsChanged = QtCore.Signal(object)
     
     def __init__(self, pos, radius, **args):
         widgets.ROI.__init__(self, pos, [radius] * 2, **args)

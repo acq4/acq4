@@ -211,6 +211,12 @@ class ROI(QtGui.QGraphicsObject):
                 h['item'].hide()
 
     def mousePressEvent(self, ev):
+        ## Bug: sometimes we get events we shouldn't.
+        p = ev.pos()
+        if not self.isMoving and not self.shape().contains(p):
+            ev.ignore()
+            return
+        
         if ev.button() == QtCore.Qt.LeftButton:
             self.setSelected(True)
             if self.translatable:
@@ -770,6 +776,7 @@ class Handle(QtGui.QGraphicsItem):
         self.pen.setCosmetic(True)
         self.isMoving = False
         self.sides, self.startAng = self.types[typ]
+        self.buildPath()
             
     def connectROI(self, roi, i):
         self.roi.append((roi, i))
@@ -778,6 +785,12 @@ class Handle(QtGui.QGraphicsItem):
         return self.bounds
         
     def mousePressEvent(self, ev):
+        # Bug: sometimes we get events not meant for us!
+        p = ev.pos()
+        if not self.isMoving and not self.path.contains(p):
+            ev.ignore()
+            return
+        
         #print "handle press"
         if ev.button() == QtCore.Qt.LeftButton:
             self.isMoving = True
@@ -819,7 +832,21 @@ class Handle(QtGui.QGraphicsItem):
         # A handle can be used by multiple ROIs; tell each to update its handle position
         for r in self.roi:
             r[0].movePoint(r[1], pos, modifiers)
-        
+   
+    def buildPath(self):
+        size = self.radius
+        self.path = QtGui.QPainterPath()
+        ang = self.startAng
+        dt = 2*np.pi / self.sides
+        for i in range(0, self.sides+1):
+            x = size * cos(ang)
+            y = size * sin(ang)
+            ang += dt
+            if i == 0:
+                self.path.moveTo(x, y)
+            else:
+                self.path.lineTo(x, y)
+            
     def paint(self, p, opt, widget):
         ## determine rotation of transform
         m = self.sceneTransform()
@@ -838,15 +865,19 @@ class Handle(QtGui.QGraphicsItem):
             self.prepareGeometryChange()
         p.setRenderHints(p.Antialiasing, True)
         p.setPen(self.pen)
-        ang = self.startAng + va
-        dt = 2*np.pi / self.sides
-        for i in range(0, self.sides):
-            x1 = size * cos(ang)
-            y1 = size * sin(ang)
-            x2 = size * cos(ang+dt)
-            y2 = size * sin(ang+dt)
-            ang += dt
-            p.drawLine(Point(x1, y1), Point(x2, y2))
+        
+        p.rotate(va * 180. / 3.1415926)
+        p.drawPath(self.path)
+        
+        #ang = self.startAng + va
+        #dt = 2*np.pi / self.sides
+        #for i in range(0, self.sides):
+            #x1 = size * cos(ang)
+            #y1 = size * sin(ang)
+            #x2 = size * cos(ang+dt)
+            #y2 = size * sin(ang+dt)
+            #ang += dt
+            #p.drawLine(Point(x1, y1), Point(x2, y2))
         
 
 
