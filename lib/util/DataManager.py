@@ -19,6 +19,9 @@ import time
 from Mutex import Mutex, MutexLocker
 from SignalProxy import proxyConnect
 from PyQt4 import QtCore, QtGui
+if not hasattr(QtCore, 'Signal'):
+    QtCore.Signal = QtCore.pyqtSignal
+    QtCore.Slot = QtCore.pyqtSlot
 #from lib.filetypes.FileType import *
 import lib.filetypes as filetypes
 from debug import *
@@ -28,11 +31,22 @@ def abspath(fileName):
     return os.path.normcase(os.path.abspath(fileName))
 
 
-def getHandle(fileName):
+def getDataManager():
     inst = DataManager.INSTANCE
     if inst is None:
         raise Exception('No DataManger created yet!')
-    return inst.getHandle(fileName)
+    return inst
+
+def getHandle(fileName):
+    return getDataManager().getHandle(fileName)
+
+def getDirHandle(fileName, create=False):
+    return getDataManager().getDirHandle(fileName)
+
+def getFileHandle(fileName):
+    return getDataManager().getFileHandle(fileName)
+
+
 
 
 class DataManager(QtCore.QObject):
@@ -88,7 +102,9 @@ class DataManager(QtCore.QObject):
         #print "*******data manager caching new handle", handle
         self._setCache(fileName, handle)
         ## make sure all file handles belong to the main GUI thread
-        handle.moveToThread(QtGui.QApplication.instance().thread())
+        app = QtGui.QApplication.instance()
+        if app is not None:
+            handle.moveToThread(app.thread())
         ## No signals; handles should explicitly inform the manager of changes
         #QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self._handleChanged)
         
@@ -394,7 +410,7 @@ class DirHandle(FileHandle):
     def __init__(self, path, manager, create=False):
         FileHandle.__init__(self, path, manager)
         self._index = None
-        self.lsCache = None
+        self.lsCache = {}  # sortMode: [files...]
         self.cTimeCache = {}
         
         if not os.path.isdir(self.path):
@@ -578,16 +594,17 @@ class DirHandle(FileHandle):
     def dirExists(self, dirName):
         return os.path.isdir(os.path.join(self.path, dirName))
             
-    def ls(self, normcase=False):
+    def ls(self, normcase=False, sortMode='date'):
         """Return a list of all files in the directory.
-        If normcase is True, normalize the case of all names in the list."""
+        If normcase is True, normalize the case of all names in the list.
+        sortMode may be 'date', 'alpha', or None."""
         #p = Profiler('      DirHandle.ls:')
         with self.lock:
             #p.mark('lock')
             #self._readIndex()
             #ls = self.index.keys()
             #ls.remove('.')
-            if self.lsCache is None:
+            if sortMode not in self.lsCache:
                 #p.mark('(cache miss)')
                 try:
                     files = os.listdir(self.name())
@@ -600,19 +617,29 @@ class DirHandle(FileHandle):
                         files.remove(i)
                 #self.lsCache.sort(self._cmpFileTimes)  ## very expensive!
                 
-                ## Sort files by creation time
-                for f in files:
-                    if f not in self.cTimeCache:
-                        self.cTimeCache[f] = self._getFileCTime(f)
-                files.sort(lambda a,b: cmp(self.cTimeCache[a], self.cTimeCache[b]))
-                self.lsCache = files
+                if sortMode == 'date':
+                    ## Sort files by creation time
+                    for f in files:
+                        if f not in self.cTimeCache:
+                            self.cTimeCache[f] = self._getFileCTime(f)
+                    files.sort(lambda a,b: cmp(self.cTimeCache[a], self.cTimeCache[b]))
+                elif sortMode == 'alpha':
+                    files.sort()
+                elif sortMode == None:
+                    pass
+                else:
+                    raise Exception('Unrecognized sort mode "%s"' % str(sortMode))
+                    
+                self.lsCache[sortMode] = files
                 #p.mark('sort')
+            files = self.lsCache[sortMode]
+            
             if normcase:
-                ret = map(os.path.normcase, self.lsCache)
+                ret = map(os.path.normcase, files)
                 #p.mark('return norm')
                 return ret
             else:
-                ret = self.lsCache[:]
+                ret = files[:]
                 #p.mark('return copy')
                 return ret
     
@@ -933,6 +960,8 @@ class DirHandle(FileHandle):
             
         
     def _childChanged(self):
-        self.lsCache = None
+        self.lsCache = {}
         self.emitChanged('children')
 
+
+dm = DataManager()

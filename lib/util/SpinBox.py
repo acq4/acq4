@@ -272,7 +272,10 @@ class SpinBox(QtGui.QAbstractSpinBox):
                 return False
             #raise Exception("Units are invalid.")
             strn = strn[:-len(suf)]
-        val = siEval(strn)
+        try:
+            val = siEval(strn)
+        except:
+            return False
         return val
         
     #def interpretText(self, strn=None):

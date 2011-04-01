@@ -36,5 +36,7 @@ class DictView(QtGui.QTreeWidget):
             node = QtGui.QTreeWidgetItem([unicode(name), unicode(v)])
         return node
         
-        
+    def close(self):
+        self.clear()
+        self.setParent(None)
         

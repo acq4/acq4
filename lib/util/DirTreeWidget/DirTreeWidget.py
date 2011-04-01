@@ -10,7 +10,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
     
     sigSelectionChanged = QtCore.Signal(object)
     
-    def __init__(self, parent=None, baseDirHandle=None, checkState=None, allowMove=True, allowRename=True):
+    def __init__(self, parent=None, baseDirHandle=None, checkState=None, allowMove=True, allowRename=True, sortMode='date'):
         QtGui.QTreeWidget.__init__(self, parent)
         #QtCore.QAbstractItemModel.__init__(self, parent)
         self.baseDir = baseDirHandle
@@ -18,6 +18,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
         self.allowMove = allowMove
         self.allowRename = allowRename
         self.currentDir = None
+        self.sortMode = sortMode
         #self.handles = {}
         self.items = {}
         #QtCore.QObject.connect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
@@ -36,6 +37,11 @@ class DirTreeWidget(QtGui.QTreeWidget):
             self.quit()
         except:
             pass
+
+    def setSortMode(self, mode):
+        """Set the method used to sort. Must be 'date' or 'alpha'."""
+        self.sortMode = mode
+        self.rebuildTree()
         
     def flushSignals(self):
         for h in self.items.keys():
@@ -222,7 +228,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
     def rebuildChildren(self, root):
         """Make sure all children are present and in the correct order"""
         handle = self.handle(root)
-        files = handle.ls()
+        files = handle.ls(sortMode=self.sortMode)
         handles = [handle[f] for f in files]
         i = 0
         while True:

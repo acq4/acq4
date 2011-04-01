@@ -135,7 +135,7 @@ class DaqChannelGui(QtGui.QWidget):
         pass
     
     def quit(self):
-        pass
+        self.plot.close()
         
 class OutputChannelGui(DaqChannelGui):
     
@@ -252,7 +252,7 @@ class OutputChannelGui(DaqChannelGui):
         for k in ps:
             params[k] = range(len(ps[k]))
         waves = []
-        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys(), passHash=True)
+        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys())
         for w in waves:
             if w is not None:
                 self.ui.functionCheck.setChecked(True)

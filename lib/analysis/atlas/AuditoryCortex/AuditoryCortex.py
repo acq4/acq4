@@ -40,7 +40,9 @@ class AuditoryCortex(Atlas.Atlas):
             #self.ui.drawingCheck.stateChanged.connect(self.drawingCheckChanged)
             #self.ui.thicknessSpin.valueChanged.connect(self.thicknessSpinChanged)
             self.stateGroup.sigChanged.connect(self.uiChanged)
-            self.connect(canvas, QtCore.SIGNAL('itemTransformChangeFinished'), self.itemMoved)
+            #self.ui.reAlignAtlasBtn.clicked.connect(self.reAlignAtlas)
+            #self.connect(canvas, QtCore.SIGNAL('itemTransformChangeFinished'), self.itemMoved) ## old style
+            self.canvas.sigItemTransformChangeFinished.connect(self.itemMoved) ## new style
             
         Atlas.Atlas.__init__(self, canvas, state)
         
@@ -93,5 +95,15 @@ class AuditoryCortex(Atlas.Atlas):
         trans = item.saveTransform()
         fh.setInfo(userTransform=trans)
         #print "saved", fh.shortName()
+        
+    #def reAlignAtlas(self):
+        
+        #file, scale, pos = self.slicePlanes[self.stateGroup.state()['slicePlaneCombo']]:
+        
+        #trans = self.images[0].saveTransform()
+        
+        
+        
+        
     
     

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
-
+import weakref
 
 class TickSlider(QtGui.QGraphicsView):
     def __init__(self, parent=None, orientation='bottom', allowAdd=True, **kargs):
@@ -362,7 +362,7 @@ class Tick(QtGui.QGraphicsPolygonItem):
     def __init__(self, view, pos, color, movable=True, scale=10):
         #QObjectWorkaround.__init__(self)
         self.movable = movable
-        self.view = view
+        self.view = weakref.ref(view)
         self.scale = scale
         self.color = color
         #self.endTick = endTick
@@ -391,7 +391,7 @@ class Tick(QtGui.QGraphicsPolygonItem):
         newPos.setY(self.pos().y())
         #newPos.setX(min(max(newPos.x(), 0), 100))
         self.setPos(newPos)
-        self.view.tickMoved(self, newPos)
+        self.view().tickMoved(self, newPos)
         self.movedSincePress = True
         #self.emit(QtCore.SIGNAL('tickChanged'), self)
         ev.accept()
@@ -411,7 +411,7 @@ class Tick(QtGui.QGraphicsPolygonItem):
     def mouseReleaseEvent(self, ev):
         #print self, "release", ev.scenePos()
         if not self.movedSincePress:
-            self.view.tickClicked(self, ev)
+            self.view().tickClicked(self, ev)
         
         #if ev.button() == QtCore.Qt.LeftButton and ev.scenePos() == self.pressPos:
             #color = QtGui.QColorDialog.getColor(self.color, None, "Select Color", QtGui.QColorDialog.ShowAlphaChannel)

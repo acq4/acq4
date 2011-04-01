@@ -102,8 +102,8 @@ class Camera(DAQGeneric):
         #QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('newFrame'), self.newFrame)
         self.acqThread.finished.connect(self.acqThreadFinished)
         self.acqThread.started.connect(self.acqThreadStarted)
-        self.acqThread.showMessage.connect(self.showMessage)
-        self.acqThread.newFrame.connect(self.newFrame)
+        self.acqThread.sigShowMessage.connect(self.showMessage)
+        self.acqThread.sigNewFrame.connect(self.newFrame)
         #print "Camera: signals connected:"
         
         if config != None and 'params' in config:

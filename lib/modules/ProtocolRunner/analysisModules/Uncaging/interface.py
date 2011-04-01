@@ -377,8 +377,12 @@ class Prot:
             except:
                 printExc("Error while cleaning up uncaging analysis:")
                 
-        del self.imgItem
-        del self.frames
-        del self.img
-        del self.items
+        #del self.imgItem
+        #del self.frames
+        #del self.img
+        #del self.items
+        self.imgItem = None
+        self.frames = None
+        self.img = None
+        self.items = None
         

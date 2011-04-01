@@ -2,12 +2,18 @@
 from DirTreeTemplate import Ui_Form
 from PyQt4 import QtGui,QtCore
 from debug import *
+import DataManager
 
 class DirTreeLoader(QtGui.QWidget):
-    def __init__(self, baseDir, *args):
+    
+    sigCurrentFileChanged = QtCore.Signal(object, object, object)
+    
+    def __init__(self, baseDir, sortMode='alpha', *args):
         QtGui.QWidget.__init__(self, *args)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        if isinstance(baseDir, basestring):
+            baseDir = DataManager.getHandle(baseDir)
         self.baseDir = baseDir
         self.currentFile = None
         
@@ -162,8 +168,9 @@ class DirTreeLoader(QtGui.QWidget):
         self.currentFile = handle
             
         
-    def currentFileChanged(self, handle, change, *args):
+    def currentFileChanged(self, handle, change, args):
         if change == 'deleted':
             self.ui.currentLabel.setText("[deleted]")
         else:
             self.ui.currentLabel.setText(self.currentFile.name(relativeTo=self.baseDir))
+        self.sigCurrentFileChanged.emit(handle, change, args)

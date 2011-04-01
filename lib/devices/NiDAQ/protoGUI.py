@@ -125,7 +125,7 @@ class NiDAQProto(ProtocolGui):
         self.rate = self.ui.rateSpin.value()
         self.updateNPts()
         #self.emit(QtCore.SIGNAL('changed'), self.currentState())
-        self.sigChanged.emit(self.currentState()
+        self.sigChanged.emit(self.currentState())
         
         
     def protocolChanged(self, n, v):
@@ -133,7 +133,7 @@ class NiDAQProto(ProtocolGui):
         if n == 'duration':
             self.updateNPts()
             #self.emit(QtCore.SIGNAL('changed'), self.currentState())
-            self.sigChanged.emit(self.currentState()
+            self.sigChanged.emit(self.currentState())
         
     def updateNPts(self):
         dur = self.prot.getParam('duration')

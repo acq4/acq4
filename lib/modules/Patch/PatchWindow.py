@@ -293,7 +293,7 @@ class PatchWindow(QtGui.QMainWindow):
         prof.mark('2')
         if self.redrawCommand > 0:
             self.redrawCommand -= 1
-            print "set command curve"
+            #print "set command curve"
             self.commandCurve.setData(data.xvals('Time'), data['command'])
             if mode == 'vc':
                 self.ui.commandPlot.setLabel('left', units='V')

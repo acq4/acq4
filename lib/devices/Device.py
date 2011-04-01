@@ -109,6 +109,9 @@ class DeviceTask:
         self.stop(abort=True)
     
 class ProtocolGui(QtGui.QWidget):
+    
+    sigSequenceChanged = QtCore.Signal(object)
+    
     def __init__(self, dev, prot):
         QtGui.QWidget.__init__(self)
         self.dev = dev

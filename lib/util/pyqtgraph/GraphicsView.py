@@ -31,6 +31,7 @@ class GraphicsView(QtGui.QGraphicsView):
         
         The view can be panned using the middle mouse button and scaled using the right mouse button if
         enabled via enableMouse()."""
+        self.closed = False
         
         QtGui.QGraphicsView.__init__(self, parent)
         if 'linux' in sys.platform:  ## linux has bugs in opengl implementation
@@ -48,7 +49,7 @@ class GraphicsView(QtGui.QGraphicsView):
         brush.setStyle(QtCore.Qt.SolidPattern)
         palette.setBrush(QtGui.QPalette.Disabled,QtGui.QPalette.Base,brush)
         self.setPalette(palette)
-        self.setProperty("cursor",QtCore.QVariant(QtCore.Qt.ArrowCursor))
+        #self.setProperty("cursor",QtCore.QVariant(QtCore.Qt.ArrowCursor))
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setFrameShape(QtGui.QFrame.NoFrame)
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
@@ -89,6 +90,9 @@ class GraphicsView(QtGui.QGraphicsView):
         #QtGui.QGraphicsView.paintEvent(self, *args)
         #prof.finish()
         
+    def close(self):
+        self.closed = True
+        
     def useOpenGL(self, b=True):
         if b:
             v = QtOpenGL.QGLWidget()
@@ -123,6 +127,8 @@ class GraphicsView(QtGui.QGraphicsView):
         self.lastButtonReleased = None
     
     def resizeEvent(self, ev):
+        if self.closed:
+            return
         if self.autoPixelRange:
             self.range = QtCore.QRectF(0, 0, self.size().width(), self.size().height())
         self.setRange(self.range, padding=0, disableAutoPixel=False)

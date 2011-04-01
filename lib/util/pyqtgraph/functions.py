@@ -151,7 +151,7 @@ def colorStr(c):
     """Generate a hex string code from a QColor"""
     return ('%02x'*4) % colorTuple(c)
 
-def intColor(index, hues=9, values=3, maxValue=255, minValue=150, maxHue=360, minHue=0, sat=255, alpha=255, **kargs):
+def intColor(index, hues=9, values=1, maxValue=255, minValue=150, maxHue=360, minHue=0, sat=255, alpha=255, **kargs):
     """Creates a QColor from a single index. Useful for stepping through a predefined list of colors.
      - The argument "index" determines which color from the set will be returned
      - All other arguments determine what the set of predefined colors will be

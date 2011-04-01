@@ -365,7 +365,7 @@ class ImageItem(QtGui.QGraphicsObject):
                 im1[..., 2][mask] = 255
         #print "Final image:", im1.dtype, im1.min(), im1.max(), im1.shape
         self.ims = im1.tostring()  ## Must be held in memory here because qImage won't do it for us :(
-        qimage = QtGui.QImage(self.ims, im1.shape[1], im1.shape[0], QtGui.QImage.Format_ARGB32)
+        qimage = QtGui.QImage(buffer(self.ims), im1.shape[1], im1.shape[0], QtGui.QImage.Format_ARGB32)
         self.pixmap = QtGui.QPixmap.fromImage(qimage)
         ##del self.ims
         #self.pixmapItem.setPixmap(self.pixmap)
@@ -799,15 +799,14 @@ class CurvePoint(QtGui.QGraphicsObject):
         
         QtGui.QGraphicsObject.__init__(self)
         #QObjectWorkaround.__init__(self)
-        self.curve = None
+        self.curve = weakref.ref(curve)
+        self.setParentItem(curve)
         self.setProperty('position', 0.0)
         self.setProperty('index', 0)
         
         if hasattr(self, 'ItemHasNoContents'):
             self.setFlags(self.flags() | self.ItemHasNoContents)
         
-        self.curve = curve
-        self.setParentItem(curve)
         if pos is not None:
             self.setPos(pos)
         else:
@@ -820,7 +819,7 @@ class CurvePoint(QtGui.QGraphicsObject):
         self.setProperty('index', index)
         
     def event(self, ev):
-        if not isinstance(ev, QtCore.QDynamicPropertyChangeEvent) or self.curve is None:
+        if not isinstance(ev, QtCore.QDynamicPropertyChangeEvent) or self.curve() is None:
             return False
             
         if ev.propertyName() == 'index':
@@ -830,7 +829,7 @@ class CurvePoint(QtGui.QGraphicsObject):
         else:
             return False
             
-        (x, y) = self.curve.getData()
+        (x, y) = self.curve().getData()
         if index is None:
             #print self.property('position').toDouble()[0], self.property('position').typeName()
             index = (len(x)-1) * clip(self.property('position').toDouble()[0], 0.0, 1.0)
@@ -1092,6 +1091,7 @@ class SpotItem(QtGui.QGraphicsWidget):
         
 
 class ROIPlotItem(PlotCurveItem):
+    """Plot curve that monitors an ROI and image for changes to automatically replot."""
     def __init__(self, roi, data, img, axes=(0,1), xVals=None, color=None):
         self.roi = roi
         self.roiData = data
@@ -1436,19 +1436,19 @@ class ScaleItem(QtGui.QGraphicsWidget):
         
     def linkToView(self, view):
         if self.orientation in ['right', 'left']:
-            if self.linkedView is not None:
+            if self.linkedView is not None and self.linkedView() is not None:
                 #view.sigYRangeChanged.disconnect(self.linkedViewChanged)
                 ## should be this instead?
-                self.linkedView.sigYRangeChanged.disconnect(self.linkedViewChanged)
-            self.linkedView = view
+                self.linkedView().sigYRangeChanged.disconnect(self.linkedViewChanged)
+            self.linkedView = weakref.ref(view)
             view.sigYRangeChanged.connect(self.linkedViewChanged)
             #signal = QtCore.SIGNAL('yRangeChanged')
         else:
-            if self.linkedView is not None:
+            if self.linkedView is not None and self.linkedView() is not None:
                 #view.sigYRangeChanged.disconnect(self.linkedViewChanged)
                 ## should be this instead?
-                self.linkedView.sigXRangeChanged.disconnect(self.linkedViewChanged)
-            self.linkedView = view
+                self.linkedView().sigXRangeChanged.disconnect(self.linkedViewChanged)
+            self.linkedView = weakref.ref(view)
             view.sigXRangeChanged.connect(self.linkedViewChanged)
             #signal = QtCore.SIGNAL('xRangeChanged')
             
@@ -1457,10 +1457,10 @@ class ScaleItem(QtGui.QGraphicsWidget):
         self.setRange(*newRange)
         
     def boundingRect(self):
-        if self.linkedView is None or self.grid is False:
+        if self.linkedView is None or self.linkedView() is None or self.grid is False:
             return self.mapRectFromParent(self.geometry())
         else:
-            return self.mapRectFromParent(self.geometry()) | self.mapRectFromScene(self.linkedView.mapRectToScene(self.linkedView.boundingRect()))
+            return self.mapRectFromParent(self.geometry()) | self.mapRectFromScene(self.linkedView().mapRectToScene(self.linkedView().boundingRect()))
         
     def paint(self, p, opt, widget):
         p.setPen(self.pen)
@@ -1468,10 +1468,10 @@ class ScaleItem(QtGui.QGraphicsWidget):
         #bounds = self.boundingRect()
         bounds = self.mapRectFromParent(self.geometry())
         
-        if self.linkedView is None or self.grid is False:
+        if self.linkedView is None or self.linkedView() is None or self.grid is False:
             tbounds = bounds
         else:
-            tbounds = self.mapRectFromScene(self.linkedView.mapRectToScene(self.linkedView.boundingRect()))
+            tbounds = self.mapRectFromScene(self.linkedView().mapRectToScene(self.linkedView().boundingRect()))
         
         if self.orientation == 'left':
             p.drawLine(bounds.topRight(), bounds.bottomRight())
@@ -2530,6 +2530,7 @@ class ColorScaleBar(UIGraphicsItem):
             self.setLabels({kargs['labels'][0]:0, kargs['labels'][1]:1})
         
     def setLabels(self, l):
+        """Defines labels to appear next to the color scale"""
         self.labels = l
         self.update()
         
@@ -2541,7 +2542,7 @@ class ColorScaleBar(UIGraphicsItem):
         labelWidth = 0
         labelHeight = 0
         for k in self.labels:
-            b = p.boundingRect(QtCore.QRectF(0, 0, 0, 0), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, k)
+            b = p.boundingRect(QtCore.QRectF(0, 0, 0, 0), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, str(k))
             labelWidth = max(labelWidth, b.width())
             labelHeight = max(labelHeight, b.height())
             
@@ -2596,6 +2597,6 @@ class ColorScaleBar(UIGraphicsItem):
         lh = labelHeight/unit.height()
         for k in self.labels:
             y = y1 + self.labels[k] * (y2-y1)
-            p.drawText(QtCore.QRectF(tx/unit.width(), y/unit.height() - lh/2.0, 1000, lh), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, k)
+            p.drawText(QtCore.QRectF(tx/unit.width(), y/unit.height() - lh/2.0, 1000, lh), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, str(k))
         
         

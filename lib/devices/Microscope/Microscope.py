@@ -109,7 +109,7 @@ class Microscope(Device):
             self.currentObjective = index
             obj = self.getObjective()
             #self.emit(QtCore.SIGNAL('objectiveChanged'), (obj, index, lastObj))
-            self.sigObjectiveChanged.emit((obj, index, lastObj)
+            self.sigObjectiveChanged.emit((obj, index, lastObj))
         
     #@ftrace
     def getPosition(self):
