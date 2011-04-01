@@ -29,7 +29,13 @@ class Canvas(QtGui.QWidget):
         self.ui.setupUi(self)
         self.view = self.ui.view
         self.itemList = self.ui.itemList
+        self.itemList.setSelectionMode(self.itemList.ExtendedSelection)
         self.allowTransforms = allowTransforms
+        self.multiSelectBox = SelectBox()
+        self.scene().addItem(self.multiSelectBox)
+        self.multiSelectBox.hide()
+        self.multiSelectBox.setZValue(1e6)
+        
         
         self.items = {}
         
@@ -164,14 +170,19 @@ class Canvas(QtGui.QWidget):
         #gi.setZValue(z)
 
     def treeItemSelected(self):
-        sel = self.itemList.selectedItems()[0]
-        if sel is None:
+        sel = self.itemList.selectedItems()
+        if sel == []:
             #self.selectWidget.hide()
             return
         for i in self.items.itervalues():
             i.ctrlWidget().hide()
-        item = self.items[sel.name]
-        item.ctrlWidget().show()
+            
+        item = self.items[sel[0].name]
+        if len(sel)==1:
+            item.ctrlWidget().show()
+            self.multiSelectBox.hide()
+        elif len(sel) > 1:
+            self.showMultiSelectBox()
         
         #if item.isMovable():
             #self.selectBox.setPos(item.item.pos())
@@ -182,6 +193,22 @@ class Canvas(QtGui.QWidget):
         
         #self.emit(QtCore.SIGNAL('itemSelected'), self, item)
         self.sigItemSelected.emit(self, item)
+        
+    def showMultiSelectBox(self):
+        items = self.itemList.selectedItems()
+        rect = items[0].item.item.sceneBoundingRect()
+        for i in items[1:]:
+            br = i.item.item.sceneBoundingRect()
+            rect = rect|br
+            
+        self.multiSelectBox.blockSignals(True)
+        self.multiSelectBox.setPos([rect.x(), rect.y()])
+        self.multiSelectBox.setSize(rect.size())
+        self.multiSelectBox.setAngle(0)
+        self.multiSelectBox.blockSignals(False)
+        
+        self.multiSelectBox.show()
+        
 
     def selectedItem(self):
         sel = self.itemList.selectedItems()
@@ -810,7 +837,7 @@ class CanvasItem(QtCore.QObject):
         
     def showSelectBox(self):
         """Display the selection box around this item if it is selected and movable"""
-        if self.selected and self.isMovable() and self.isVisible():
+        if self.selected and self.isMovable() and self.isVisible() and len(self.canvas.itemList.selectedItems())==1:
             self.selectBox.show()
         else:
             self.selectBox.hide()
@@ -856,7 +883,7 @@ class MarkerCanvasItem(CanvasItem):
 class ScanCanvasItem(CanvasItem):
     def __init__(self, canvas, item, **opts):
         
-        print "Creating ScanCanvasItem...."
+        #print "Creating ScanCanvasItem...."
         CanvasItem.__init__(self, canvas, item, **opts)
         
         self.addScanImageBtn = QtGui.QPushButton()
@@ -866,7 +893,7 @@ class ScanCanvasItem(CanvasItem):
         self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
         
     def loadScanImage(self):
-        print 'loadScanImage called.'
+        #print 'loadScanImage called.'
         #dh = self.ui.fileLoader.ui.dirTree.selectedFile()
         #scan = self.canvas.selectedItem()
         dh = self.opts['handle']

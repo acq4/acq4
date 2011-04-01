@@ -71,39 +71,39 @@ class MosaicEditor(AnalysisModule):
         self.atlas = obj
         
 
-    def loadFileRequested(self, f):
+    def loadFileRequested(self, files):
         canvas = self.getElement('Canvas')
-        if f is None:
+        if files is None:
             return
+        for f in files:    
+            if f.info().get('dirType', None) == 'Cell':
+                item = canvas.addMarker(handle=f, scale=[20e-6,20e-6])
+                self.items[item] = f
+            else:
+                item = canvas.addFile(f)
+                if isinstance(item, list):
+                    item = item[0]
             
-        if f.info().get('dirType', None) == 'Cell':
-            item = canvas.addMarker(handle=f, scale=[20e-6,20e-6])
-            self.items[item] = f
-        else:
-            item = canvas.addFile(f)
-            if isinstance(item, list):
-                item = item[0]
-        
-            self.items[item] = f
-            
-            item.timestamp = f.info()['__timestamp__']
-            if not item.hasUserTransform():
-                ## Record the timestamp for this file, see what is the most recent transformation to copy
-                best = None
-                for i2 in self.items:
-                    if i2 is item:
-                        continue
-                    if not hasattr(i2, 'timestamp'):
-                        continue
-                    if i2.timestamp < item.timestamp:
-                        if best is None or i2.timestamp > best.timestamp:
-                            best = i2
-                            
-                if best is None:
-                    return
-                    
-                trans = best.saveTransform()
-                item.restoreTransform(trans)
+                self.items[item] = f
+                
+                item.timestamp = f.info()['__timestamp__']
+                if not item.hasUserTransform():
+                    ## Record the timestamp for this file, see what is the most recent transformation to copy
+                    best = None
+                    for i2 in self.items:
+                        if i2 is item:
+                            continue
+                        if not hasattr(i2, 'timestamp'):
+                            continue
+                        if i2.timestamp < item.timestamp:
+                            if best is None or i2.timestamp > best.timestamp:
+                                best = i2
+                                
+                    if best is None:
+                        return
+                        
+                    trans = best.saveTransform()
+                    item.restoreTransform(trans)
                 
         canvas.selectItem(item)
         

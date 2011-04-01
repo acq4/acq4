@@ -39,6 +39,9 @@
        </item>
        <item>
         <widget class="DirTreeWidget" name="dirTree">
+         <property name="selectionMode">
+          <enum>QAbstractItemView::ExtendedSelection</enum>
+         </property>
          <property name="headerHidden">
           <bool>true</bool>
          </property>

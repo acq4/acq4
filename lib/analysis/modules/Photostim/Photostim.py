@@ -131,6 +131,7 @@ class Photostim(AnalysisModule):
             
     def loadFileRequested(self, fh):
         canvas = self.getElement('Canvas')
+
         try:
             if fh.isFile():
                 canvas.addFile(fh)
