@@ -1058,7 +1058,58 @@ class PolygonROI(ROI):
         sc['angle'] = self.state['angle']
         #sc['handles'] = self.handles
         return sc
+
+
+class LineSegmentROI(ROI):
+    def __init__(self, positions, pos=None, **args):
+        if pos is None:
+            pos = [0,0]
+        ROI.__init__(self, pos, [1,1], **args)
+        #ROI.__init__(self, positions[0])
+        for p in positions:
+            self.addFreeHandle(p)
+        self.setZValue(1000)
+            
+    def listPoints(self):
+        return [p['item'].pos() for p in self.handles]
+            
+    def movePoint(self, *args, **kargs):
+        ROI.movePoint(self, *args, **kargs)
+        self.prepareGeometryChange()
+        for h in self.handles:
+            h['pos'] = h['item'].pos()
+            
+    def paint(self, p, *args):
+        p.setRenderHint(QtGui.QPainter.Antialiasing)
+        p.setPen(self.pen)
+        for i in range(len(self.handles)-1):
+            h1 = self.handles[i]['item'].pos()
+            h2 = self.handles[i-1]['item'].pos()
+            p.drawLine(h1, h2)
+        
+    def boundingRect(self):
+        r = QtCore.QRectF()
+        for h in self.handles:
+            r |= self.mapFromItem(h['item'], h['item'].boundingRect()).boundingRect()   ## |= gives the union of the two QRectFs
+        return r
     
+    def shape(self):
+        p = QtGui.QPainterPath()
+        p.moveTo(self.handles[0]['item'].pos())
+        for i in range(len(self.handles)):
+            p.lineTo(self.handles[i]['item'].pos())
+        return p
+    
+    def stateCopy(self):
+        sc = {}
+        sc['pos'] = Point(self.state['pos'])
+        sc['size'] = Point(self.state['size'])
+        sc['angle'] = self.state['angle']
+        #sc['handles'] = self.handles
+        return sc
+
+
+
 class SpiralROI(ROI):
     def __init__(self, pos=None, size=None, **args):
         if size == None:

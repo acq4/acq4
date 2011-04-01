@@ -406,6 +406,73 @@ def regPair(im1, im2, reg):
     return scipy.concatenate((r[...,newaxis], g[...,newaxis], b[...,newaxis]), axis=2)
 
 
+def vibratome(data, start, stop, axes=(0,1)):
+    """Take a diagonal slice through an array. If the input is N-dimensional, the result is N-1 dimensional.
+    start and stop are (x,y) tuples that indicate the beginning and end of the slice region.
+    The spacing of points along the slice is equivalent to the original pixel spacing.
+    (The data set returned is not guaranteed to hit the stopping point exactly)"""
+    
+    length = np.sqrt((stop[0]-start[0])**2 + (stop[1]-start[1])**2)
+    dx = (stop[0]-start[0]) / length
+    dy = (stop[1]-start[1]) / length
+    length = np.ceil(length)  ## Extend length to be integer (can't have fractional array dimensions)
+    nPts = int(length)+1
+    
+    ## Actual position of each point along the slice
+    x = np.linspace(start[0], start[0]+(length*dx), nPts)
+    y = np.linspace(start[1], start[1]+(length*dy), nPts)
+    
+    ## Location of original values that will contribute to each point
+    xi0 = np.floor(x).astype(uint)
+    yi0 = np.floor(y).astype(uint)
+    xi1 = xi0 + 1
+    yi1 = yi0 + 1
+    
+    ## slices needed to pull values from data set
+    s00 = [slice(None)] * data.ndim
+    s10 = [slice(None)] * data.ndim
+    s01 = [slice(None)] * data.ndim
+    s11 = [slice(None)] * data.ndim
+    s00[axes[0]] = xi0
+    s00[axes[1]] = yi0
+    s10[axes[0]] = xi1
+    s10[axes[1]] = yi0
+    s01[axes[0]] = xi0
+    s01[axes[1]] = yi1
+    s11[axes[0]] = xi1
+    s11[axes[1]] = yi1
+    
+    ## Actual values from data set
+    v00 = data[s00]
+    v10 = data[s10]
+    v01 = data[s01]
+    v11 = data[s11]
+    
+    ## Interpolation coefficients
+    dx0 = x - xi0
+    dy0 = y - yi0
+    dx1 = 1 - dx0
+    dy1 = 1 - dy0
+    c00 = dx1 * dy1
+    c10 = dx0 * dy1
+    c01 = dx1 * dy0
+    c11 = dx0 * dy0
+    
+    ## Add unused dimensions into coefficient arrays
+    shape = [1]*data.ndim
+    
+    shape[axes[0]] = c00.shape[0]
+    shape.pop(axes[1])
+    shape = tuple(shape)
+    for i in range(min(axes)):
+        c00.shape = shape
+        c01.shape = shape
+        c10.shape = shape
+        c11.shape = shape
+    
+    ## Interpolate!
+    return v00*c00 + v10*c10 + v01*c01 + v11*c11
+    
 
 def slidingOp(template, data, op):
     data = data.view(ndarray)
