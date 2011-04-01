@@ -9,21 +9,15 @@ from PyQt4 import QtCore, QtGui
 import DataManager
 
 class AuditoryCortex(Atlas.Atlas):
-    
-    
     def __init__(self, canvas=None, state=None):
-        
         ## define slice planes and the atlas images to use for each
-        scale = 3.78e-6
+        #scale = 3.78e-6
+        scale = 5.5e-6
         pos = (-676*scale/2., -577*scale/2.)
         self.slicePlanes = advancedTypes.OrderedDict([
             ('Thalamocortical', [('ThalamocorticalMarker.svg', scale, pos)]),
             ('Coronal', []),
-            #('Coronal PVCN-DCN', [('Coronal-AVCN-DCN.svg', scale, pos), ('Saggital.svg', scale, pos)]),
-            #('Horizontal VCN', []),
-            #('Horizontal DCN', []),
         ])
-        
         
         self.ctrl = None
         self.canvas = canvas
@@ -45,7 +39,7 @@ class AuditoryCortex(Atlas.Atlas):
             #self.ui.photoCheck.stateChanged.connect(self.photoCheckChanged)
             #self.ui.drawingCheck.stateChanged.connect(self.drawingCheckChanged)
             #self.ui.thicknessSpin.valueChanged.connect(self.thicknessSpinChanged)
-            self.stateGroup.stateChanged.connect(self.uiChanged)
+            self.stateGroup.sigChanged.connect(self.uiChanged)
             self.connect(canvas, QtCore.SIGNAL('itemTransformChangeFinished'), self.itemMoved)
             
         Atlas.Atlas.__init__(self, canvas, state)
@@ -80,7 +74,7 @@ class AuditoryCortex(Atlas.Atlas):
         
         for imgFile, scale, pos in imgs:
             fh = DataManager.getHandle(os.path.join(atlasDir, 'images', imgFile))
-            item = self.canvas.addFile(fh, scale=[scale,scale], index=0, movable=False)
+            item = self.canvas.addFile(fh, scale=[scale,scale], index=0, movable=True)
             self.images.append(item)
         
             
