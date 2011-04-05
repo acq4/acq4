@@ -51,7 +51,7 @@ class ROI(QtGui.QGraphicsObject):
         if pen is None:
             self.pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
         else:
-            self.pen = pen
+            self.pen = fn.mkPen(pen)
         self.handlePen = QtGui.QPen(QtGui.QColor(150, 255, 255))
         self.handles = []
         self.state = {'pos': pos, 'size': size, 'angle': angle}

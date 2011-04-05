@@ -3,21 +3,22 @@
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from pyqtgraph.ImageView import *
+
 import numpy as np
+import scipy
 from PyQt4 import QtCore, QtGui
-from scipy.ndimage import *
+import pyqtgraph as pg
 
 app = QtGui.QApplication([])
 
 ## Create window with ImageView widget
 win = QtGui.QMainWindow()
-imv = ImageView()
+imv = pg.ImageView()
 win.setCentralWidget(imv)
 win.show()
 
-## Create random 3D data set
-img = gaussian_filter(np.random.normal(size=(200, 200)), (5, 5)) * 20 + 100
+## Create random 3D data set with noisy signals
+img = scipy.ndimage.gaussian_filter(np.random.normal(size=(200, 200)), (5, 5)) * 20 + 100
 img = img[np.newaxis,:,:]
 decay = np.exp(-np.linspace(0,0.3,100))[:,np.newaxis,np.newaxis]
 data = np.random.normal(size=(100, 200, 200))
@@ -40,4 +41,6 @@ data[:,50:60,50:60] += sig
 ## Display the data
 imv.setImage(data, xvals=np.linspace(1., 3., data.shape[0]))
 
-app.exec_()
+## Start Qt event loop unless running in interactive mode.
+if sys.flags.interactive != 1:
+    app.exec_()
