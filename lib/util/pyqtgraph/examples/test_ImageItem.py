@@ -1,19 +1,18 @@
 # -*- coding: utf-8 -*-
 ## Add path to library (just for examples; you do not need this)
 import sys, os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from pyqtgraph.GraphicsView import *
-from pyqtgraph.graphicsItems import *
-from numpy import random
+
 from PyQt4 import QtCore, QtGui
-from scipy.ndimage import *
+import numpy as np
+import pyqtgraph as pg
 
 app = QtGui.QApplication([])
 
 ## Create window with GraphicsView widget
 win = QtGui.QMainWindow()
-view = GraphicsView()
+view = pg.GraphicsView()
 #view.useOpenGL(True)
 win.setCentralWidget(view)
 win.show()
@@ -25,15 +24,14 @@ view.enableMouse()
 view.setAspectLocked(True)
 
 ## Create image item
-img = ImageItem()
+img = pg.ImageItem()
 view.scene().addItem(img)
 
 ## Set initial view bounds
 view.setRange(QtCore.QRectF(0, 0, 200, 200))
 
 ## Create random image
-## this is a large image--use view.scaleToImage(img) to improve video framerate
-data = random.random((20, 200, 200))
+data = np.random.normal(size=(50, 200, 200))
 i = 0
 
 def updateData():
@@ -46,10 +44,9 @@ def updateData():
 
 # update image data every 20ms (or so)
 t = QtCore.QTimer()
-#QtCore.QObject.connect(t, QtCore.SIGNAL('timeout()'), updateData)
 t.timeout.connect(updateData)
 t.start(20)
 
-
-
-#app.exec_()
+## Start Qt event loop unless running in interactive mode.
+if sys.flags.interactive != 1:
+    app.exec_()
