@@ -646,9 +646,9 @@ class ProtocolRunner(Module):
         #self.ui.saveProtocolBtn.setEnabled(True)
         #self.currentIsModified(False)
     
-    def saveProtocol(self, fileName=None):
+    def saveProtocol(self, fileHandle=None):
         ## Write protocol config to file
-        self.currentProtocol.write(fileName)
+        self.currentProtocol.write(fileHandle.name())
         
         ## refresh protocol list
         #self.protocolList.clearCache()
