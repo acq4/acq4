@@ -289,14 +289,14 @@ if __name__ == '__main__':
     import sys
     import pyqtgraph as pg
     w = pg.ImageWindow()
-    header = sys.argv[1]
-    data = readA75(header)
-    while data.ndim > 3:
-        data = data[..., 0]
+    #header = sys.argv[1]
+    #data = readA75(header)
+    #while data.ndim > 3:
+        #data = data[..., 0]
     
     ## load labels, recolor data
     if len(sys.argv) > 2:
-        labels, num = sys.argv[2:]
+        #labels, num = sys.argv[2:]
         #dMax = data.max()
         #dMin = data.min()
         #scale = 255./(dMax-dMin)
@@ -311,14 +311,30 @@ if __name__ == '__main__':
         #data = data*scale
         #data -= data.min()
         #data = data.astype(np.byte)
-        data = shortToByte(data)
-        data = np.concatenate([data[..., np.newaxis]]*3, axis=3)
         
-        lData = readA75(labels)
-        while lData.ndim > 3:
-            lData = lData[..., 0]
-        mask = lData == int(num)
-        data[...,0][mask] = 0
+        
+        #data = shortToByte(data)
+        #data = np.concatenate([data[..., np.newaxis]]*3, axis=3)
+        
+        #lData = readA75(labels)
+        #while lData.ndim > 3:
+            #lData = lData[..., 0]
+        #mask = lData == int(num)
+        #data[...,0][mask] = 0
     
+        sys.path.append('../../')
+        import functions as fn
+        data = loadMulti(*sys.argv[1:])
+        w.setImage(data[::-1, :512, :256, 0].transpose(1,2,0,3))
+        r = pg.widgets.TestROI([0,0], [10,10])
+        w.addItem(r)
+        w2 = pg.ImageView()
+        w2.show()
+        def update():
+            #w2.setImage(r.getArrayRegion(w.image, w.imageItem, axes=(1,2)).transpose(1,0,2,3))
+            d = r.getArrayRegion(w.image, w.imageItem, axes=(1,2)).transpose(1,0,2,3)
+            alpha = np.clip(((d.astype(np.float32).sum(axis=3)[...,np.newaxis] / (256.*3)) - 0.07) * 10, 0, 1.0)
+            w2.setImage(fn.volumeSum(d, alpha, dtype=np.float32))
+        r.sigRegionChangeFinished.connect(update)
         
-    w.setImage(data, autoLevels=False, levels=[0, 255])
+    #w.setImage(data, autoLevels=False, levels=[0, 255])
