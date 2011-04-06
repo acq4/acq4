@@ -1722,7 +1722,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         m = QtGui.QTransform()
         
         ## First center the viewport at 0
-        self.childGroup.resetMatrix()
+        self.childGroup.resetTransform()
         center = self.transform().inverted()[0].map(bounds.center())
         #print "  transform to center:", center
         if self.yInverted:

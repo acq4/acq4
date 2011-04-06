@@ -31,7 +31,8 @@ def restoreSplitter(w, s):
 def comboState(w):
     ind = w.currentIndex()
     data = w.itemData(ind)
-    if not data.isValid():
+    #if not data.isValid():
+    if data is None:
         return w.itemText(ind)
     else:
         return data.toInt()[0]    

@@ -15,9 +15,12 @@ print "Loading ACQ4..."
 
 #sip.setapi('QVariant', 2)
 
-#import lib.util.PySideImporter  ## Use PySide instead of PyQt
+import lib.util.PySideImporter  ## Use PySide instead of PyQt
 from PyQt4 import QtGui, QtCore
-#QtCore.QString = str
+QtCore.QString = str
+def noop(x):
+    return x
+QtCore.QVariant = noop
 
 ## Needed to keep compatibility between pyside and pyqt
 ## (this can go away once the transition to PySide is complete)
@@ -34,7 +37,7 @@ from numpy import *
 ## Disable long-term storage of exception stack frames
 ## This fixes a potentially major memory leak, but
 ## may break some debuggers.
-import disableExceptionStorage
+#import disableExceptionStorage
 
 
 

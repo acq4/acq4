@@ -456,6 +456,14 @@ class ScannerTask(DeviceTask):
                 result[k] = self.cmd[k]
         if self.spotSize is not None:
             result['spotSize'] = self.spotSize
+            
+        ### These arrays stick around and cause memory errors if we don't get rid of them. 
+        ## For some reason, the top-level protocol command dict is not being collected (refcount=2, but gc.get_referrers=[])
+        ## So until that issue is solved, we need to make sure that extra data is cleaned out.
+        if 'xCommand' in self.cmd:
+            self.cmd['xCommand'] = "dedeted in ScannerTask.getResult()"
+        if 'yCommand' in self.cmd:
+            self.cmd['yCommand'] = "dedeted in ScannerTask.getResult()"
         return result
     
     def storeResult(self, dirHandle):

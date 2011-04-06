@@ -539,7 +539,7 @@ class AxoPatchDevGui(QtGui.QWidget):
         self.ui.icHoldingSpin.setValue(icHold)
 
     def devHoldingChanged(self, chan, hval):
-        if len(args) > 0 and isinstance(hval, dict):
+        if isinstance(hval, dict):
             self.ui.vcHoldingSpin.blockSignals(True)
             self.ui.icHoldingSpin.blockSignals(True)
             self.ui.vcHoldingSpin.setValue(hval['vc'])

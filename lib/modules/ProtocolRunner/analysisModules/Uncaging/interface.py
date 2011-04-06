@@ -369,6 +369,8 @@ class Prot:
         
     def close(self):
         ## Remove items from scene
+        if self.items is None:
+            return
         for (item, p, s) in self.items:
             try:
                 scene = item.scene()

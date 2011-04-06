@@ -8,6 +8,7 @@ import pyqtgraph.widgets as widgets
 #from pyqtgraph.widgets import *
 import random
 import numpy
+from debug import Profiler
 
 class ScannerProtoGui(ProtocolGui):
     
@@ -520,6 +521,7 @@ class ScannerProtoGui(ProtocolGui):
 
     def generateTargets(self):
         #items = self.activeItems()
+        #prof= Profiler('ScanerProtoGui.generateTargets()')
         self.targets = []
         locations = self.getTargetList()
         #locations = []
@@ -531,23 +533,31 @@ class ScannerProtoGui(ProtocolGui):
         
         minTime = None
         bestSolution = None
-        nTries = 10
+        if len(locations) > 200:
+            nTries = 1
+        else:
+            nTries = 10
         
         
         ## About to compute order/timing of targets; display a progress dialog
-        
+        #prof.mark('setup')
         progressDlg = QtGui.QProgressDialog("Computing pseudo-optimal target sequence...", "Cancel", 0, nTries)
         #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         progressDlg.setMinimumDuration(250)
-        
+        #prof.mark('progressDlg')
         try:
+            #times=[]
             for i in range(nTries):
+                #prof.mark('attempt: %i' %i)
                 solution = self.findSolution(locations)
+                #prof.mark('foundSolution')
                 time = sum([l[1] for l in solution])
+                #times.append(time)
                 if minTime is None or time < minTime:
                     #print "  new best time:", time
                     minTime = time
                     bestSolution = solution[:]
+                #prof.mark('check time')
                 progressDlg.setValue(i)
                 QtGui.QApplication.processEvents()
                 if progressDlg.wasCanceled():
@@ -556,6 +566,7 @@ class ScannerProtoGui(ProtocolGui):
             raise
         finally:
             ## close progress dialog no matter what happens
+            #print "Times: ", times
             progressDlg.setValue(nTries)
         
         
@@ -571,24 +582,69 @@ class ScannerProtoGui(ProtocolGui):
         #for t in self.targets:
             #print "  ", t
         self.ui.timeLabel.setText('Total time: %0.1f sec'% minTime)
+        #prof.mark('Done.')
+        #prof.finish()
         
     def findSolution(self, locations):
+        #prof2 = Profiler('     findSolution()')
+        targetNumber = len(locations)
         locations = locations[:]
         random.shuffle(locations)
-        solution = [(locations.pop(), 0.0)]
-        
-        while len(locations) > 0:
-            minTime = None
-            minIndex = None
-            for i in range(len(locations)):
-                time = self.computeTime(solution, locations[i])
-                if minTime is None or time < minTime:
-                    minTime = time
-                    minIndex = i
-                if time == 0.0:  ## can't get any better; stop searching
-                    break
-            solution.append((locations.pop(minIndex), minTime))
-        return solution
+        #prof2.mark('setup')
+        if True:
+            solution = [(locations.pop(), 0.0)]
+            while len(locations) > 0:
+                #prof2.mark('lenLocations: %i' %len(locations))
+                minTime = None
+                minIndex = None
+                n=len(locations)-1
+                for i in range(len(locations)):
+                    #if i > n:
+                        #break
+                    #prof2.mark(i)
+                    time, dist = self.computeTime(solution, locations[i])
+                    #prof2.mark('found time')
+                    if minTime is None or time < minTime:
+                        minTime = time
+                        minIndex = i
+                    if time == 0.0:  ## can't get any better; stop searching
+                        #solution.append((locations.pop(i), time))
+                        #n-=1
+                        break
+                solution.append((locations.pop(minIndex), minTime))
+            #prof2.finish()
+            return solution
+        #elif False:
+        ##elif targetNumber >= 200:
+            #minDist = self.stateGroup.state()['minDist']
+            #swap = True
+            #count = 0
+            #while swap == True:
+                #count += 1
+                ##prof2.mark('Trial: %i' %count)
+                #swap = False
+                #solution = [(locations.pop(), 0.0)]
+                #for i in range(len(locations)):
+                    ##prof3 = Profiler('         iterating')
+                    #minTime = None
+                    #minIndex = None
+                    #for j in range(3):
+                        #time, dist = self.computeTime(solution, locations[(i+j)%(len(locations)-1)])
+                        #if dist < minDist:
+                            #loc = locations[i]
+                            #n = int(random.random()*10)
+                            #locations[i]= locations[(i+n)%(len(locations)-1)]
+                            #locations[(i+n)%(len(locations)-1)] = loc
+                            #swap = True
+                            #break
+                    #solution.append((locations[i], time))
+                    ##prof3.mark('%i' %i)
+                #if swap:
+                    #locations, times = zip(*solution)
+                    #locations = list(locations)
+            #print "count: ", count
+            ##prof2.finish()
+            #return locations
         
     #def swapWorst(self, solution):
         #"""Find points very close together, swap elsewhere to improve time"""
@@ -647,7 +703,7 @@ class ScannerProtoGui(ProtocolGui):
             if cumWaitTime > minTime:
                 break
         #print "--> minimum:", minWaitTime
-        return minWaitTime
+        return minWaitTime, dist
             
             
             
@@ -666,13 +722,16 @@ class ScannerProtoGui(ProtocolGui):
         #self.currentTargetMarker.setRect
     
     def quit(self):
-        print "scanner dock quit"
+        #print "scanner dock quit"
         self.deleteAll(clearHistory = False)
         s = self.testTarget.scene()
         if s is not None:
             self.testTarget.scene().removeItem(self.testTarget)
         #QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
-        getManager().sigModulesChanged.disconnect(self.fillModuleList)
+        try:
+            getManager().sigModulesChanged.disconnect(self.fillModuleList)
+        except TypeError:
+            pass
             
         if self.currentCamMod is not None:
             try:
@@ -686,7 +745,7 @@ class ScannerProtoGui(ProtocolGui):
                 self.currentScope.sigObjectiveChanged.disconnect(self.objectiveChanged)
             except:
                 pass
-        print "  ..done."
+        #print "  ..done."
     
 class TargetPoint(widgets.EllipseROI):
     

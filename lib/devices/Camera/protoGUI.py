@@ -168,5 +168,7 @@ class CameraProtoGui(DAQGenericProtoGui):
         #daq = self.dev.config['exposeChannel'][0]
         #self.prot.getDevice(daq)
         
-        
+    def quit(self):
+        self.ui.imageView.close()
+        DAQGenericProtoGui.quit(self)
         
