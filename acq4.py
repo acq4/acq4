@@ -10,12 +10,11 @@ manager with a configuration file and let it go from there.
 
 print "Loading ACQ4..."
 
-#import sip
-#sip.setapi('QString', 2)
+import sip
+sip.setapi('QString', 2)
+sip.setapi('QVariant', 2)
 
-#sip.setapi('QVariant', 2)
-
-import lib.util.PySideImporter  ## Use PySide instead of PyQt
+#import lib.util.PySideImporter  ## Use PySide instead of PyQt
 from PyQt4 import QtGui, QtCore
 QtCore.QString = str
 def noop(x):

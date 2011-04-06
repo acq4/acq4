@@ -39,8 +39,9 @@ class ParamList(QtGui.QTreeWidget):
                     self.addTopLevelItem(item)
                 self.expandAll()
                 #item.setExpanded(True)  ## Must happen AFTER adding to tree.  Also this causes warnings to appear (and possibly other problems?)
-            #items[p].setData(2, QtCore.Qt.DisplayRole, str(len(params[p])))
-            items[p].data = [dev, p, len(params[p])]
+            #items[p].setData(2, QtCore.Qt.DisplayRole, QtCore.QVariant(str(len(params[p]))))
+            items[p].setText(2, str(len(params[p])))
+            items[p].paramData = [dev, p, str(len(params[p]))]
             items[p].params = list(params[p])
             
         ## remove non-existent sequence parameters (but not their children)
@@ -128,8 +129,8 @@ class ParamList(QtGui.QTreeWidget):
     def findItem(self, dev, param):
         items = self.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0)
         for i in items:
-            #p = i.data(1, QtCore.Qt.DisplayRole)
-            p = i.data[1]
+            #p = str(i.data(1, QtCore.Qt.DisplayRole).toString())
+            p = i.paramData[1]
             if p == param:
                 return i
         return None
@@ -149,7 +150,8 @@ class ParamList(QtGui.QTreeWidget):
         for i in self.topLevelItems():
             (dev, param, enabled) = self.itemData(i)
             if enabled:
-                num = int(i.text(2))
+                #num = i.text(2).toInt()[0]
+                num = i.paramData[2]
                 childs = []
                 for j in range(i.childCount()):
                     (dev2, param2, en2) = self.itemData(i.child(j))

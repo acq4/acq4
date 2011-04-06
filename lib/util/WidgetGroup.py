@@ -35,7 +35,8 @@ def comboState(w):
     if data is None:
         return w.itemText(ind)
     else:
-        return data.toInt()[0]    
+        #return data.toInt()[0]    
+        return int(data)
     
 def setComboState(w, v):
     if type(v) is int:
