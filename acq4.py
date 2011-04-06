@@ -36,7 +36,7 @@ from numpy import *
 ## Disable long-term storage of exception stack frames
 ## This fixes a potentially major memory leak, but
 ## may break some debuggers.
-import disableExceptionStorage
+#import disableExceptionStorage
 
 
 

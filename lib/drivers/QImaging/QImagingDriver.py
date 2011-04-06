@@ -507,73 +507,50 @@ class QCameraClass:
         return size
 
     def getParam(self, param):
-        if param == 'ringSize':
-            return self.ringSize
-        if param in self.groupParams:
-            return self.getParams(self.groupParams[param], asList=True)
-        s = self.readSettings()
-        #s.size = sizeof(s)
-        #print "   0 getParam.param:", param
-        param = self.translateToCamera(param)
-        #print "   1 getParam.param:", param
-        if param in lib('enums', 'QCam_Param'):
-            value = self.call(lib.GetParam, byref(s), getattr(lib, param))[2]
-        elif param in lib('enums', 'QCam_ParamS32'):
-            value = self.call(lib.GetParamS32, byref(s), getattr(lib, param))[2]
-        elif param in lib('enums', 'QCam_Param64'):
-            value = self.call(lib.GetParam64, byref(s), getattr(lib, param))[2]
-        elif param in self.cameraInfo:
-            value = self.cameraInfo[param]
-        else:
-            raise Exception("%s is not recognized as a parameter." %param)
-        #print "   2 getParam.param:", param, "value:", value
-        if param in ['qprmRoiX', 'qprmRoiY', 'qprmRoiWidth', 'qprmRoiHeight']:
-            #print param, value, '===>', value*self.getParam('binning')[0] 
-            value = value*self.getParam('binning')[0]
-        #print "   3 getParam.param:", param, "value:", value
-        value = self.getNameFromEnum(param, value)
-        #print "   4 getParam.param:", param, "value:", value
-        value = self.convertUnitsToAcq4(self.translateToUser(param), value)
-        #print "   5 getParam.param:", param, "value:", value
-        if param != 'qprmBinning':
-            return value
-        elif param == 'qprmBinning':
-            return (value,value)
-
-    #def setParam(self, param, value, autoRestart=True, autoCorrect=True):
-        #if param == 'ringSize':
-            #self.ringSize = value
-        #if param in self.groupParams:
-            #return self.setParams(zip(self.groupParams[param], value))
-        #s = self.readSettings()
-        #param = self.translateToCamera(param)
-        #value = self.translateToCamera(value)
-        #if param in self.paramEnums:
-            #value = self.getEnumFromName(param, value)
-        #if param in lib('enums', 'QCam_Param'):
-            #self.call(lib.SetParam, byref(s), getattr(lib, param), c_ulong(value))
-        #elif param in lib('enums', 'QCam_ParamS32'):
-            #self.call(lib.SetParamS32, byref(s), getattr(lib, param), c_long(value))
-        #elif param in lib('enums', 'QCam_Param64'):
-            #self.call(lib.SetParam64, byref(s), getattr(lib, param), c_ulonglong(value))
-        #with self.mutex:
-            #if self.stopSignal == True:
-                ##self.mutex.unlock()
-                #self.call(lib.SendSettingsToCam, self.handle, byref(s))
-            #if self.stopSignal == False:
-                ##self.mutex.unlock()
-                #self.call(lib.QueueSettings, self.handle, byref(s), null, lib.qcCallbackDone)
-        #print "Set param:", param, value
-        
-
+        return self.getParams([param], asList=True)[0]
 
     
-    def getParams(self, params, asList=False):
+    def getParams(self, params=None, asList=False):
         """Get a list of parameter values. Return a dictionary of name: value pairs"""
+        vals = OrderedDict()
+        if params is None:
+            params = self.paramAttrs.keys()
+        
+        s = self.readSettings()
+        for param in params:
+            if param == 'ringSize':
+                vals[param] = self.ringSize
+                continue
+            if param in self.groupParams:
+                vals[param] = self.getParams(self.groupParams[param], asList=True)
+                continue
+            param2 = self.translateToCamera(param)
+            if param2 in lib('enums', 'QCam_Param'):
+                value = self.call(lib.GetParam, byref(s), getattr(lib, param2))[2]
+            elif param2 in lib('enums', 'QCam_ParamS32'):
+                value = self.call(lib.GetParamS32, byref(s), getattr(lib, param2))[2]
+            elif param2 in lib('enums', 'QCam_Param64'):
+                value = self.call(lib.GetParam64, byref(s), getattr(lib, param2))[2]
+            elif param2 in self.cameraInfo:
+                value = self.cameraInfo[param2]
+            else:
+                raise Exception("%s is not recognized as a parameter." %param)
+            if param2 in ['qprmRoiX', 'qprmRoiY', 'qprmRoiWidth', 'qprmRoiHeight']:
+                value = value*self.getParam('binning')[0]
+            value = self.getNameFromEnum(param2, value)
+            value = self.convertUnitsToAcq4(self.translateToUser(param2), value)
+            if param2 != 'qprmBinning':
+                vals[param] = value
+                continue
+            elif param2 == 'qprmBinning':
+                vals[param] = (value,value)
+                continue
+        
+        
         if asList:
-            return [self.getParam(p) for p in params]
+            return vals.values()
         else:
-            return OrderedDict([(p, self.getParam(p)) for p in params])
+            return vals
 
     def setParams(self, params, autoRestart=True, autoCorrect=True): 
         """Set camera parameters. Options are:
@@ -614,9 +591,21 @@ class QCameraClass:
         ## need to track changes to the state as they are made since some parameters may interact
         state = self.getParams(['binning', 'region'])
         
+        ## will also see whether there are actually any changes to make
+        current = self.getParams(params.keys())
+        changed = False
+        
         for x in params:
             #print "0 x:", x
             #changeTuple[x] = False
+            try:
+                if params[x] == current[x]:
+                    continue
+            except:
+                print "PARAMS:", params
+                print "CURRENT:", current
+                raise
+            
             if x == 'ringSize':
                 self.ringSize = params[x]
                 value = params[x]
@@ -625,6 +614,8 @@ class QCameraClass:
                 if params[x] != 'qfmtMono16':
                     print "QCam driver currently only supports the 'qfmtMono16' image format."
                     continue
+            print "changed param", x, current[x], params[x]
+            changed = True
                 
             param = self.translateToCamera(x)
             #print "     1 param:", param
@@ -694,6 +685,9 @@ class QCameraClass:
         #for x in params:
             #self.queueSettingsDict[x] = value
         
+        if not changed:
+            return current, False
+        
         with self.mutex:
             #print "Mutex locked from qcam.setParams()"
             if self.stopSignal == True:
@@ -718,9 +712,10 @@ class QCameraClass:
                     
 
         #print "Mutex released from qcam.setParams()"
-        ret = {}
-        for x in params:
-            ret[x] = self.getParam(x)
+        #ret = {}
+        #for x in params:
+            #ret[x] = self.getParam(x)
+        ret = self.getParams(params.keys())
         self.getImageSize() ## Run this function to update image size in cameraInfo dictionary
         #print "Set params to:", dict
         #if not autoRestart:

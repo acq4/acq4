@@ -323,6 +323,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         if self.manager is not None:
             self.manager.sigWidgetListChanged.disconnect(self.updatePlotList)
             self.manager.removeWidget(self.name)
+        #else:
+            #print "no manager"
 
     def registerPlot(self, name):
         self.name = name
@@ -1228,6 +1230,8 @@ class PlotWidgetManager(QtCore.QObject):
             del self.widgets[name]
             #self.emit(QtCore.SIGNAL('widgetListChanged'), self.widgets.keys())
             self.sigWidgetListChanged.emit(self.widgets.keys())
+        else:
+            print "plot %s not managed" % name
         
         
     def listWidgets(self):

@@ -308,33 +308,37 @@ Valid options are:
         Ugh. Sorry about the "python module" vs "acq4 module" name collision which I
         should have anticipated."""
         
-        #print 'Loading module "%s" as "%s"...' % (module, name)
+        print 'Loading module "%s" as "%s"...' % (module, name)
         if name in self.modules:
             raise Exception('Module already exists with name "%s"' % name)
         if config is None:
             config = {}
-            
+        
+        #print "  import"
         mod = __import__('lib.modules.%s' % module, fromlist=['*'])
-        if forceReload:
-            ## Reload all .py files in module's directory
-            modDir = os.path.join('lib', 'modules', module)
-            files = glob.glob(os.path.join(modDir, '*.py'))
-            files = [os.path.basename(f[:-3]) for f in files]
-            for f in [module, '__init__']:
-                if f in files:  ## try to rearrange so we load in correct order
-                    files.remove('__init__')
-                    files.append('__init__')
-            modName = 'lib.modules.' + module
-            modNames = [modName + '.' + m for m in files] + [modName]
-            print "RELOAD", modNames
-            for m in modNames:
-                if m in sys.modules:
-                    reload(sys.modules[m])
-            mod = __import__('lib.modules.%s' % module, fromlist=['*'])
+        #if forceReload:
+            ### Reload all .py files in module's directory
+            #modDir = os.path.join('lib', 'modules', module)
+            #files = glob.glob(os.path.join(modDir, '*.py'))
+            #files = [os.path.basename(f[:-3]) for f in files]
+            #for f in [module, '__init__']:
+                #if f in files:  ## try to rearrange so we load in correct order
+                    #files.remove('__init__')
+                    #files.append('__init__')
+            #modName = 'lib.modules.' + module
+            #modNames = [modName + '.' + m for m in files] + [modName]
+            #print "RELOAD", modNames
+            #for m in modNames:
+                #if m in sys.modules:
+                    #reload(sys.modules[m])
+            #mod = __import__('lib.modules.%s' % module, fromlist=['*'])
             
         modclass = getattr(mod, module)
+        #print "  create"
         self.modules[name] = modclass(self, name, config)
+        #print "  emit"
         self.sigModulesChanged.emit()
+        #print "  return"
         return self.modules[name]
         
         
@@ -447,7 +451,10 @@ Valid options are:
 
     def setCurrentDir(self, d):
         if self.currentDir is not None:
-            self.currentDir.sigChanged.disconnect(self.currentDirChanged)
+            try:
+                self.currentDir.sigChanged.disconnect(self.currentDirChanged)
+            except TypeError:
+                pass
             
             
         if isinstance(d, basestring):
@@ -460,12 +467,14 @@ Valid options are:
         #self.currentDir.sigChanged.connect(self.currentDirChanged)
         #self.sigCurrentDirChanged.emit()
         self.currentDir.sigChanged.connect(self.currentDirChanged)
-        self.emit(QtCore.SIGNAL('currentDirChanged'))
+        #self.emit(QtCore.SIGNAL('currentDirChanged'))
+        self.sigCurrentDirChanged.emit(None, None, None)
 
     def currentDirChanged(self, fh, change=None, args=()):
         """Handle situation where currentDir is moved or renamed"""
         #self.sigCurrentDirChanged.emit(*args)
-        self.emit(QtCore.SIGNAL('currentDirChanged'), fh, change, args)
+        #self.emit(QtCore.SIGNAL('currentDirChanged'), fh, change, args)
+        self.sigCurrentDirChanged.emit(fh, change, args)
             
             
     def getBaseDir(self):
