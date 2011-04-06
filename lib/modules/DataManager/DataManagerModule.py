@@ -214,7 +214,10 @@ class DataManager(Module):
         #print "file selection changed"
         if self.selFile is not None:
             #QtCore.QObject.disconnect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
-            self.selFile.sigChanged.disconnect(self.selectedFileAltered)
+            try:
+                self.selFile.sigChanged.disconnect(self.selectedFileAltered)
+            except TypeError:
+                pass
         
         fh = self.selectedFile()
         self.manager.currentFile = fh  ## Make this really easy to pick up from an interactive prompt.

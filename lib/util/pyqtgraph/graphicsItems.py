@@ -1236,7 +1236,7 @@ class LabelItem(QtGui.QGraphicsWidget):
         
     def setAngle(self, angle):
         self.angle = angle
-        self.item.resetMatrix()
+        self.item.resetTransform()
         self.item.rotate(angle)
         self.updateMin()
         
@@ -1310,6 +1310,11 @@ class ScaleItem(QtGui.QGraphicsWidget):
         
         self.grid = False
             
+            
+    def close(self):
+        self.scene().removeItem(self.label)
+        self.label = None
+        self.scene().removeItem(self)
         
     def setGrid(self, grid):
         """Set the alpha value for the grid, or False to disable."""
@@ -1722,7 +1727,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         m = QtGui.QTransform()
         
         ## First center the viewport at 0
-        self.childGroup.resetMatrix()
+        self.childGroup.resetTransform()
         center = self.transform().inverted()[0].map(bounds.center())
         #print "  transform to center:", center
         if self.yInverted:
