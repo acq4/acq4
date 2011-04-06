@@ -54,7 +54,7 @@ class Loader(DirTreeWidget.DirTreeLoader):
         return True
         
     def save(self, handle):
-        self.host.saveProtocol(handle)
+        self.host.saveProtocol(handle.name())
         return True
         
         

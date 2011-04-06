@@ -154,7 +154,10 @@ class DirTreeLoader(QtGui.QWidget):
     def setCurrentFile(self, handle):
         if self.currentFile is not None:
             #QtCore.QObject.disconnect(self.currentFile, QtCore.SIGNAL('changed'), self.currentFileChanged)
-            self.currentFile.sigChanged.disconnect(self.currentFileChanged)
+            try:
+                self.currentFile.sigChanged.disconnect(self.currentFileChanged)
+            except TypeError:
+                pass
             
         if handle is None:
             self.ui.currentLabel.setText("")
