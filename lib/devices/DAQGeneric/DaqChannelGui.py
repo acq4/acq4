@@ -51,6 +51,7 @@ class DaqChannelGui(QtGui.QWidget):
         ## Automatically locate all read/writable widgets and group them together for easy 
         ## save/restore operations
         self.stateGroup = WidgetGroup(self)
+        self.stateGroup.addWidget(self.plot, name='plot')
         
         self.displayCheckChanged()
         #QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('stateChanged(int)'), self.displayCheckChanged)
