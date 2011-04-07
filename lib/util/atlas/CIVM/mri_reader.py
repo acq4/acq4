@@ -333,8 +333,9 @@ if __name__ == '__main__':
         def update():
             #w2.setImage(r.getArrayRegion(w.image, w.imageItem, axes=(1,2)).transpose(1,0,2,3))
             d = r.getArrayRegion(w.image, w.imageItem, axes=(1,2)).transpose(1,0,2,3)
-            alpha = np.clip(((d.astype(np.float32).sum(axis=3)[...,np.newaxis] / (256.*3)) - 0.07) * 10, 0, 1.0)
-            w2.setImage(fn.volumeSum(d, alpha, dtype=np.float32))
+            #alpha = np.clip(((d.astype(np.float32).sum(axis=3)[...,np.newaxis] / (256.*3)) - 0.07) * 10, 0, 1.0)
+            #w2.setImage(fn.volumeSum(d, alpha, dtype=np.float32))
+            w2.setImage(d)
         r.sigRegionChangeFinished.connect(update)
         
     #w.setImage(data, autoLevels=False, levels=[0, 255])

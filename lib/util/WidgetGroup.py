@@ -32,11 +32,18 @@ def comboState(w):
     ind = w.currentIndex()
     data = w.itemData(ind)
     #if not data.isValid():
+    if data is not None:
+        try:
+            if not data.isValid():
+                data = None
+            else:
+                data = data.toInt()[0]
+        except AttributeError:
+            pass
     if data is None:
         return w.itemText(ind)
     else:
-        #return data.toInt()[0]    
-        return int(data)
+        return data
     
 def setComboState(w, v):
     if type(v) is int:
