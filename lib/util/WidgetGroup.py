@@ -147,6 +147,8 @@ class WidgetGroup(QtCore.QObject):
             raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
         if name is None:
             name = str(w.objectName())
+        if name == '':
+            raise Exception("Cannot add widget '%s' without a name." % str(w))
         self.widgetList[w] = name
         self.scales[w] = scale
         self.readWidget(w)
