@@ -609,7 +609,7 @@ class CameraWindow(QtGui.QMainWindow):
             self.ui.statusbar.showMessage("Opened camera %s" % self.cam, 5000)
             self.scope = self.module.cam.getScopeDevice()
             
-            bins = self.cam.listParams('binningX')[0]
+            bins = self.cam.listParams('binning')[0][0]
             bins.sort()
             bins.reverse()
             for b in bins:

@@ -129,3 +129,6 @@ class Point(QtCore.QPointF):
     
     def max(self):
         return max(self[0], self[1])
+        
+    def copy(self):
+        return Point(self)

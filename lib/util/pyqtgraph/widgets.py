@@ -751,11 +751,40 @@ class ROI(QtGui.QGraphicsObject):
         ### Untranspose array before returning
         #return arr5.transpose(tr2)
 
-    
-
-
-
+    def getGlobalTransform(self, relativeTo):
+        """Return global transformation (rotation angle+translation) required to move from relative state to current state."""
         
+        st = self.getState()
+        
+        ## rotation
+        ang = (st['angle']-relativeTo['angle']) * 180. / 3.14159265358
+        rot = QtGui.QTransform()
+        rot.rotate(-ang)
+
+        ## We need to come up with a universal transformation--one that can be applied to other objects 
+        ## such that all maintain alignment. 
+        ## More specifically, we need to turn the ROI's position and angle into
+        ## a rotation _around the origin_ and a translation.
+        
+        p0 = Point(relativeTo['pos'])
+
+        ## base position, rotated
+        p1 = rot.map(p0)
+        
+        trans = Point(st['pos']) - p1
+        return trans, ang
+
+    def setGlobalTransform(self, translate, rotate):
+        st = self.getState()
+        trans = QtGui.QTransform()
+        trans.translate(*translate)
+        trans.rotate(-rotate)
+        
+        x2, y2 = trans.map(*st['pos'])
+        
+        self.setAngle(rotate*np.pi/180.)
+        self.setPos([x2, y2])
+
 
 class Handle(QtGui.QGraphicsItem):
     

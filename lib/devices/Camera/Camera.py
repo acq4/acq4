@@ -328,7 +328,7 @@ class Camera(DAQGeneric):
         
         with MutexLocker(self.lock):
             sf = self.camConfig['scaleFactor']
-            size = self.cam.getParam('sensorSize')
+            size = self.getParam('sensorSize')
             sx = size[0] * obj['scale'] * sf[0]
             sy = size[1] * obj['scale'] * sf[1]
             bounds = QtCore.QRectF(-sx * 0.5 + obj['offset'][0], -sy * 0.5 + obj['offset'][1], sx, sy)

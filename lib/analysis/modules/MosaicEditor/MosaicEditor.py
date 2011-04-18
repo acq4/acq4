@@ -83,7 +83,11 @@ class MosaicEditor(AnalysisModule):
             item = canvas.addFile(f)
             self.items[item] = f
             
-            item.timestamp = f.info()['__timestamp__']
+            try:
+                item.timestamp = f.info()['__timestamp__']
+            except:
+                pass
+                
             if not item.hasUserTransform():
                 ## Record the timestamp for this file, see what is the most recent transformation to copy
                 best = None

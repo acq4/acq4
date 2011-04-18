@@ -533,15 +533,10 @@ class CanvasItem(QtCore.QObject):
         self.layout.addWidget(self.resetTransformBtn, 1, 0, 1, 2)
         self.layout.addWidget(self.copyBtn, 2, 0, 1, 1)
         self.layout.addWidget(self.pasteBtn, 2, 1, 1, 1)
-        #self.connect(self.alphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.alphaChanged)
         self.alphaSlider.valueChanged.connect(self.alphaChanged)
-        #self.connect(self.alphaSlider, QtCore.SIGNAL('sliderPressed()'), self.alphaPressed)
         self.alphaSlider.sliderPressed.connect(self.alphaPressed)
-        #self.connect(self.alphaSlider, QtCore.SIGNAL('sliderReleased()'), self.alphaReleased)
         self.alphaSlider.sliderReleased.connect(self.alphaReleased)
-        #self.connect(self.canvas, QtCore.SIGNAL('itemSelected'), self.selectionChanged)
         self.canvas.sigItemSelected.connect(self.selectionChanged)
-        #self.connect(self.resetTransformBtn, QtCore.SIGNAL('clicked()'), self.resetTransformClicked)
         self.resetTransformBtn.clicked.connect(self.resetTransformClicked)
         self.copyBtn.clicked.connect(self.copyClicked)
         self.pasteBtn.clicked.connect(self.pasteClicked)
@@ -551,15 +546,11 @@ class CanvasItem(QtCore.QObject):
         self.canvas.scene().addItem(self.selectBox)
         self.selectBox.hide()
         self.selectBox.setZValue(1e6)
-        #self.selectBox.connect(self.selectBox, QtCore.SIGNAL('regionChanged'), self.selectBoxChanged)  ## calls selectBoxMoved
         self.selectBox.sigRegionChanged.connect(self.selectBoxChanged)  ## calls selectBoxMoved
-        #self.selectBox.connect(self.selectBox, QtCore.SIGNAL('regionChangeFinished'), self.selectBoxChangeFinished)
         self.selectBox.sigRegionChangeFinished.connect(self.selectBoxChangeFinished)
         
         ## Take note of the starting position of the item and selection box
-        #br = self.item.boundingRect()
-        #self.basePos = [self.opts['pos'][0] + br.left(), self.opts['pos'][1] + br.top()]
-        self.basePos = self.opts['pos']
+        self.basePos = pg.Point(self.opts['pos'])
         self.baseScale = self.opts['scale']
         
         ## set up the transformations that will be applied to the item
@@ -598,7 +589,7 @@ class CanvasItem(QtCore.QObject):
 
     def hasUserTransform(self):
         #print self.userRotate, self.userTranslate
-        if self.userRotate == 0 and self.userTranslate == [0,0]:
+        if self.userRotate == 0 and self.userTranslate == pg.Point(0,0):
             return False
         else:
             return True
@@ -618,150 +609,135 @@ class CanvasItem(QtCore.QObject):
             
     def selectBoxMoved(self):
         """The selection box has moved; get its transformation information and pass to the graphics item"""
-        #self.transform = QtGui.QTransform()
-        st = self.selectBox.getState()
+        translate, rotate = self.selectBox.getGlobalTransform(relativeTo=self.selectBoxBase)
         
-        bPos1 = pg.Point(self.selectBoxBase['pos'])
-        bPos2 = pg.Point(st['pos'])
-        
-        ## How far the box has moved from its starting position
-        #trans = [bpos[0] - self.selectBoxBase['pos'][0], bpos[1] - self.selectBoxBase['pos'][1]]
-        trans = bPos2 - bPos1
-        
-        ## rotation
-        ang = -st['angle'] * 180. / 3.14159265358
-        rot = QtGui.QTransform()
-        rot.rotate(ang)
-
-        ## We need to come up with a universal transformation--one that can be applied to other objects 
-        ## such that all maintain alignment. 
-        ## More specifically, we need to turn the selection box's position and angle into
-        ## a rotation _around the origin_ and a translation.
-        
-        ## Approach is:
-        ## 1. Call the center of the item's coord. system p0
-        ## 2. Rotate p0 by ang around the global origin; call this point p1
-        ## 3. The point where the item's origin will end up ultimately is p2
-        ## 4. The translation we are looking for is p2 - (p1-p0) - 
-
-        p0 = pg.Point(self.basePos)
-
-        ## base position, rotated
-        p1 = rot.map(p0)
-        
-        ## find final location of item:
-        ## item pos relative to box
-        relPos = p0 - bPos1
-        #print relPos, p0, bPos1
-        
-        ## rotate
-        relPos2 = rot.map(relPos)
-        
-        ## final location of item
-        p2 = relPos2 + trans
-        
-        ## translation left over
-        t2 = p2 - (p1-p0) - relPos
-        #print trans, p2, p1, t2
-        
-        self.userTranslate = [t2.x(), t2.y()]
-        self.userRotate = st['angle']
+        self.userTranslate = translate
+        self.userRotate = rotate
         
         self.updateTransform()
+        
+        
+        
+        #st = self.selectBox.getState()
+        
+        #bPos1 = pg.Point(self.selectBoxBase['pos'])
+        #bPos2 = pg.Point(st['pos'])
+        
+        ### How far the box has moved from its starting position
+        #trans = bPos2 - bPos1
+        
+        ### rotation
+        #ang = -st['angle'] * 180. / 3.14159265358
+        #rot = QtGui.QTransform()
+        #rot.rotate(ang)
+
+        ### We need to come up with a universal transformation--one that can be applied to other objects 
+        ### such that all maintain alignment. 
+        ### More specifically, we need to turn the selection box's position and angle into
+        ### a rotation _around the origin_ and a translation.
+        
+        ### Approach is:
+        ### 1. Call the center of the item's coord. system p0
+        ### 2. Rotate p0 by ang around the global origin; call this point p1
+        ### 3. The point where the item's origin will end up ultimately is p2
+        ### 4. The translation we are looking for is p2 - (p1-p0) - 
+
+        #p0 = pg.Point(self.basePos)
+
+        ### base position, rotated
+        #p1 = rot.map(p0)
+        
+        ### find final location of item:
+        ### item pos relative to box
+        #relPos = p0 - bPos1
+        ##print relPos, p0, bPos1
+        
+        ### rotate
+        #relPos2 = rot.map(relPos)
+        
+        ### final location of item
+        #p2 = relPos2 + trans
+        
+        ### translation left over
+        #t2 = p2 - (p1-p0) - relPos
+        ##print trans, p2, p1, t2
+        
+        #self.userTranslate = [t2.x(), t2.y()]
+        #self.userRotate = st['angle']
+        
+        #self.updateTransform()
         
     def transform(self):
         return self.item.transform()
 
     def updateTransform(self):
         """Regenerate the item position from the base and user transform"""
-        ### user transform portion
-        #trans = QtGui.QGraphicsTransform()
-        #trans.translate(*self.userTranslate)
-        #trans.rotate(-self.userRotate*180./3.14159265358)
-
-        ### add base transform
-        #trans.translate(*self.basePos)
-        #trans.scale(*self.baseScale)
-        #self.item.setTransformations([trans])  ## applied before the item's own tranformation
-        
         ## Ideally we want to apply transformations in this order: 
         ##    scale * baseTranslate * userRotate * userTranslate
-        ## HOWEVER: transformations are applied like this:
+        ## HOWEVER: transformations are actually applied like this:
         ##    scale * rotate * translate
         ## So we just need to do some rearranging:
         ##    scale * userRotate * (userRotate^-1 * baseTranslate * userRotate) * userTranslate
         
+        p1 = self.basePos
+        rot = QtGui.QTransform()
+        rot.rotate(-self.userRotate)
+        p2 = rot.map(p1)
+        p3 = p2 + self.userTranslate
         
-        #upos = pg.Point(self.userTranslate)
-        #bpos = pg.Point(self.basePos)
-        angle = -self.userRotate*180./3.14159265358
-        trans = QtGui.QTransform()
-        trans.translate(*self.userTranslate)
-        trans.rotate(angle)
-        trans.translate(*self.basePos)
-        trans.rotate(-angle)
-        #rot.rotate(-angle)
-        #pos1 = rot.map(pos)
-        #pos2 = pos1 + pg.Point(self.basePos)
-        pos2 = trans.map(QtCore.QPointF(0., 0.))
-        
-        self.item.setPos(pos2)
-        self.itemRotation.setAngle(angle)
+        self.item.setPos(p3)
+        self.itemRotation.setAngle(-self.userRotate)
         self.itemScale.setXScale(self.baseScale[0])
         self.itemScale.setYScale(self.baseScale[1])
         
 
     def resetTransform(self):
         self.userRotate = 0
-        self.userTranslate = [0,0]
+        self.userTranslate = pg.Point(0,0)
         self.updateTransform()
         
         self.selectBox.blockSignals(True)
         self.selectBoxToItem()
         self.selectBox.blockSignals(False)
-        #self.emit(QtCore.SIGNAL('transformChanged'), self)
         self.sigTransformChanged.emit(self)
-        #self.emit(QtCore.SIGNAL('transformChangeFinished'), self)
         self.sigTransformChangeFinished.emit(self)
         
     def resetTransformClicked(self):
         self.resetTransform()
-        #self.emit(QtCore.SIGNAL('resetUserTransform'), self)
         self.sigResetUserTransform.emit(self)
         
     def restoreTransform(self, tr):
         try:
-            self.userTranslate = tr['trans']
+            self.userTranslate = pg.Point(tr['trans'])
             self.userRotate = tr['rot']
             
             self.selectBoxFromUser() ## move select box to match
             self.updateTransform()
-            #self.emit(QtCore.SIGNAL('transformChanged'), self)
             self.sigTransformChanged.emit(self)
-            #self.emit(QtCore.SIGNAL('transformChangeFinished'), self)
             self.sigTransformChangeFinished.emit(self)
         except:
-            self.userTranslate = [0,0]
+            self.userTranslate = pg.Point([0,0])
             self.userRotate = 0
             debug.printExc("Failed to load transform:")
         #print "set transform", self, self.userTranslate
         
     def saveTransform(self):
         #print "save transform", self, self.userTranslate
-        return {'trans': self.userTranslate[:], 'rot': self.userRotate}
+        return {'trans': list(self.userTranslate), 'rot': self.userRotate}
         
     def selectBoxFromUser(self):
         """Move the selection box to match the current userTransform"""
         ## user transform
-        trans = QtGui.QTransform()
-        trans.translate(*self.userTranslate)
-        trans.rotate(-self.userRotate*180./3.14159265358)
+        #trans = QtGui.QTransform()
+        #trans.translate(*self.userTranslate)
+        #trans.rotate(-self.userRotate)
         
-        x2, y2 = trans.map(*self.selectBoxBase['pos'])
+        #x2, y2 = trans.map(*self.selectBoxBase['pos'])
         
         self.selectBox.blockSignals(True)
-        self.selectBox.setAngle(self.userRotate)
-        self.selectBox.setPos([x2, y2])
+        self.selectBox.setGlobalTransform(self.userTranslate, self.userRotate)
+        #self.selectBox.setAngle(self.userRotate)
+        #self.selectBox.setPos([x2, y2])
         self.selectBox.blockSignals(False)
         
 
