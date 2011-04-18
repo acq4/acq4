@@ -215,8 +215,9 @@ class Canvas(QtGui.QWidget):
     def multiSelectBoxChanged(self):
         self.multiSelectBoxMoved()
         
-    def multiSelectBoxMoved(self):
         
+    def multiSelectBoxMoved(self):
+        ##### Code is almost entirely copied out of CanvasItem's selectBoxMoved
         st = self.multiSelectBox.getState()
         
         bPos1 = pg.Point(self.multiSelectBoxBase['pos'])
@@ -258,9 +259,12 @@ class Canvas(QtGui.QWidget):
             ci.userRotate = st['angle']
             
             ci.updateTransform()
-            ci.selectBoxToItem()
             
-        self.showMultiSelectBox()
+            ci.sigTransformChanged.emit(ci)
+            ci.selectBoxToItem()
+            self.sigItemTransformChangeFinished.emit(self, ci)
+            
+        #self.showMultiSelectBox()
         
         
     def selectedItem(self):
@@ -700,7 +704,7 @@ class CanvasItem(QtCore.QObject):
     def setMovable(self, m):
         self.opts['movable'] = m
             
-    def selectBoxMoved(self):
+    def selectBoxMoved(self, ):
         """The selection box has moved; get its transformation information and pass to the graphics item"""
         #self.transform = QtGui.QTransform()
         st = self.selectBox.getState()
