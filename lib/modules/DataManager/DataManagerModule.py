@@ -90,8 +90,10 @@ class DataManager(Module):
         #self.currentDirChanged()
 
     def setCurrentClicked(self):
+        #print "click"
         handle = self.selectedFile()
         if handle is None:
+            #print "no selection"
             return
         if not handle.isDir():
             handle = handle.parent()

@@ -722,7 +722,7 @@ class ScannerProtoGui(ProtocolGui):
         #self.currentTargetMarker.setRect
     
     def quit(self):
-        print "scanner dock quit"
+        #print "scanner dock quit"
         self.deleteAll(clearHistory = False)
         s = self.testTarget.scene()
         if s is not None:
@@ -745,7 +745,7 @@ class ScannerProtoGui(ProtocolGui):
                 self.currentScope.sigObjectiveChanged.disconnect(self.objectiveChanged)
             except:
                 pass
-        print "  ..done."
+        #print "  ..done."
     
 class TargetPoint(widgets.EllipseROI):
     

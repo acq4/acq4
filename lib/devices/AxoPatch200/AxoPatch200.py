@@ -38,7 +38,7 @@ class AxoPatch200(DAQGeneric):
     
     sigShowModeDialog = QtCore.Signal(object)
     sigHideModeDialog = QtCore.Signal()
-    sigHoldingChanged = QtCore.Signal(object)
+    #sigHoldingChanged = QtCore.Signal(object)  ## provided by DAQGeneric
     sigModeChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
@@ -128,7 +128,7 @@ class AxoPatch200(DAQGeneric):
                 ## (we may be about to switch modes)
                 DAQGeneric.setChanHolding(self, 'command', value, scale=gain)
             #self.emit(QtCore.SIGNAL('holdingChanged'), self.holding.copy())
-            self.sigHoldingChanged.emit(self.holding.copy())
+            self.sigHoldingChanged.emit('primary', self.holding.copy())
             
     def setChanHolding(self, chan, value=None):
         if chan == 'command':
@@ -538,12 +538,12 @@ class AxoPatchDevGui(QtGui.QWidget):
         self.ui.vcHoldingSpin.setValue(vcHold)
         self.ui.icHoldingSpin.setValue(icHold)
 
-    def devHoldingChanged(self, *args):
-        if len(args) > 0 and isinstance(args[0], dict):
+    def devHoldingChanged(self, chan, hval):
+        if isinstance(hval, dict):
             self.ui.vcHoldingSpin.blockSignals(True)
             self.ui.icHoldingSpin.blockSignals(True)
-            self.ui.vcHoldingSpin.setValue(args[0]['vc'])
-            self.ui.icHoldingSpin.setValue(args[0]['ic'])
+            self.ui.vcHoldingSpin.setValue(hval['vc'])
+            self.ui.icHoldingSpin.setValue(hval['ic'])
             self.ui.vcHoldingSpin.blockSignals(False)
             self.ui.icHoldingSpin.blockSignals(False)
             
