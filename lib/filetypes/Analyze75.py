@@ -1,5 +1,26 @@
 # -*- coding: utf-8 -*-
 
+from FileType import *
+
+class Analyze75(FileType):
+    extensions = ['.nii', '.hdr']   ## list of extensions handled by this class
+    dataTypes = []    ## list of python types handled by this class
+    priority = 100      ## High priority; MetaArray is the preferred way to move data..
+    
+    @classmethod
+    def write(cls, data, dirHandle, fileName, **args):
+        """Write data to fileName.
+        Return the file name written (this allows the function to modify the requested file name)
+        """
+        raise Exception('Wrinting NiFTI not implemented.')
+        
+    @classmethod
+    def read(cls, fileHandle):
+        """Read a file, return a data object"""
+        return readA75(fileHandle.name())
+
+
+
 ## Function for reading NiFTI-1 and ANALYZE 7.5 image formats  (.nii and .hdr/.img files)
 import numpy as np
 import os
@@ -284,41 +305,3 @@ def loadMulti(*files):
     for i in range(1, len(files)):
         data[..., i] = shortToByte(readA75(files[i]))
     return data
-
-if __name__ == '__main__':
-    import sys
-    import pyqtgraph as pg
-    w = pg.ImageWindow()
-    header = sys.argv[1]
-    data = readA75(header)
-    while data.ndim > 3:
-        data = data[..., 0]
-    
-    ## load labels, recolor data
-    if len(sys.argv) > 2:
-        labels, num = sys.argv[2:]
-        #dMax = data.max()
-        #dMin = data.min()
-        #scale = 255./(dMax-dMin)
-        #print "Generating LUT"
-        #lut = np.empty(2**16, dtype=np.ubyte)
-        #diff = (dMax-dMin)/256.
-        #for i in range(256):
-            #lut[int(diff*i):int(diff*(i+1))] = i
-        #lut[diff*255:] = 255
-        #print "Processing data.."
-        #data = lut[data]
-        #data = data*scale
-        #data -= data.min()
-        #data = data.astype(np.byte)
-        data = shortToByte(data)
-        data = np.concatenate([data[..., np.newaxis]]*3, axis=3)
-        
-        lData = readA75(labels)
-        while lData.ndim > 3:
-            lData = lData[..., 0]
-        mask = lData == int(num)
-        data[...,0][mask] = 0
-    
-        
-    w.setImage(data, autoLevels=False, levels=[0, 255])

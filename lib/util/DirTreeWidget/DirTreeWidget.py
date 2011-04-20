@@ -256,10 +256,14 @@ class DirTreeWidget(QtGui.QTreeWidget):
         if item.parent() is None:
             root = self.invisibleRootItem()
             tlc = [root.child(i) for i in range(root.childCount())]
-            if item in tlc:
-                return root
-            else:
-                return None
+            #if item in tlc:
+                #return root
+            #else:
+                #return None
+            for tli in tlc:
+                if tli is item:
+                    return root
+            return None
         else:
             return item.parent()
             

@@ -328,7 +328,7 @@ class Camera(DAQGeneric):
         
         with MutexLocker(self.lock):
             sf = self.camConfig['scaleFactor']
-            size = self.cam.getParam('sensorSize')
+            size = self.getParam('sensorSize')
             sx = size[0] * obj['scale'] * sf[0]
             sy = size[1] * obj['scale'] * sf[1]
             bounds = QtCore.QRectF(-sx * 0.5 + obj['offset'][0], -sy * 0.5 + obj['offset'][1], sx, sy)
@@ -521,7 +521,7 @@ class CameraTask(DAQGenericTask):
             
         ## connect using acqThread's connect method because there may be no event loop
         ## to deliver signals here.
-        self.dev.acqThread.connect(self.newFrame)
+        self.dev.acqThread.connectCallback(self.newFrame)
         
         ## Call the DAQ configure
         DAQGenericTask.configure(self, tasks, startOrder)
@@ -540,7 +540,7 @@ class CameraTask(DAQGenericTask):
                 self.recording = False
                 disconnect = True
         if disconnect:   ## Must be done only after unlocking mutex
-            self.dev.acqThread.disconnect(self.newFrame)
+            self.dev.acqThread.disconnectCallback(self.newFrame)
 
         
     def start(self):
@@ -760,11 +760,11 @@ class AcquireThread(QtCore.QThread):
         QtCore.QThread.start(self, *args)
         
     
-    def connect(self, method):
+    def connectCallback(self, method):
         with MutexLocker(self.connectMutex):
             self.connections.add(method)
     
-    def disconnect(self, method):
+    def disconnectCallback(self, method):
         with MutexLocker(self.connectMutex):
             if method in self.connections:
                 self.connections.remove(method)

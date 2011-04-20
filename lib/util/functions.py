@@ -15,11 +15,11 @@ makeDispMap / matchDistortImg - for measuring and correcting motion/distortion b
 import sys
 import os, re, math, time, threading
 from metaarray import *
-from scipy import *
-from scipy.optimize import leastsq
-from scipy.ndimage import gaussian_filter, generic_filter, median_filter
+#from scipy import *
+#from scipy.optimize import leastsq
+#from scipy.ndimage import gaussian_filter, generic_filter, median_filter
 from scipy import stats
-import scipy.signal
+import scipy.signal, scipy.ndimage, scipy.optimize
 import numpy.ma
 from debug import *
 import numpy as np
@@ -34,7 +34,7 @@ def siScale(x, minVal=1e-25):
         m = 0
         x = 0
     else:
-        m = int(clip(floor(log(abs(x))/log(1000)), -9.0, 9.0))
+        m = int(np.clip(np.floor(np.log(abs(x))/np.log(1000)), -9.0, 9.0))
     
     if m == 0:
         pref = ''
@@ -130,7 +130,7 @@ def pspFunc(v, x, risePower=1.0):
     v = [v[0], v[1], abs(v[2]), abs(v[3])]
     maxX = v[2] * log(1 + (v[3]/v[2]))
     maxVal = pspInnerFunc([1.0, 0, v[2], v[3]], maxX)
-    out = empty(x.shape, x.dtype)
+    out = np.empty(x.shape, x.dtype)
     mask = x > v[1]
     out[~mask] = 0
     xvals = x[mask]-v[1]
@@ -150,7 +150,7 @@ def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateR
         errFn = lambda v, x, y: function(v, x)-y
     if len(xVals) < len(guess):
         raise Exception("Too few data points to fit this function. (%d variables, %d points)" % (len(guess), len(xVals)))
-    fit = leastsq(errFn, guess, args=(xVals, yVals))
+    fit = scipy.optimize.leastsq(errFn, guess, args=(xVals, yVals))
     error = None
     #if measureError:
         #error = errFn(fit[0], xVals, yVals)
@@ -237,7 +237,7 @@ def downsample(data, n, axis=0, xvals='subsample'):
 def downsamplend(data, div):
     """Downsample multiple axes at once. Probably slower than just using downsample multiple times."""
     shape = [float(data.shape[i]) / div[i] for i in range(0, data.ndim)]
-    res = empty(tuple(shape), dtype=float)
+    res = np.empty(tuple(shape), dtype=float)
     
     for ind, i in ndenumerate(res):
         sl = [slice(ind[j]*div[j], (ind[j]+1)*div[j]) for j in range(0, data.ndim)]
@@ -255,7 +255,7 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
     
     ## Decide how many iterations to perform, scale images
     if objSize != None:
-        nit = int(floor(log(objSize)/log(2)) + 1)
+        nit = int(np.floor(np.log(objSize)/np.log(2)) + 1)
     else:
         nit = 5
     print "Doing %d iterations" % nit
@@ -272,10 +272,10 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
     time3 = time.clock()
     lastSf = None
     if maxDist != None:
-        start = (array(hint) - ceil(maxDist / 2.)) * scales[0]
-        end = (array(hint) + ceil(maxDist / 2.)) * scales[0]
+        start = (np.array(hint) - np.ceil(maxDist / 2.)) * scales[0]
+        end = (np.array(hint) + np.ceil(maxDist / 2.)) * scales[0]
     else:
-        start = array([0,0])
+        start = np.array([0,0])
         end = None
         
     print "Checking range %s - %s" % (str(start), str(end))
@@ -285,8 +285,8 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
         im2s = imScale[i][1]
         
         if lastSf != None:
-            start = floor(floor(center-0.5) * sf / lastSf)
-            end = ceil(ceil(center+0.5) * sf / lastSf)
+            start = np.floor(np.floor(center-0.5) * sf / lastSf)
+            end = np.ceil(np.ceil(center+0.5) * sf / lastSf)
         ## get prediction
         #print "Scale %f: start: %s  end: %s" % (sf, str(start), str(end))
         if any(start != end):
@@ -300,8 +300,8 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
     return center
 
 def xcMax(xc):
-    mi = scipy.where(xc == xc.max())
-    mi = scipy.array([mi[0][0], mi[1][0]])
+    mi = np.where(xc == xc.max())
+    mi = np.array([mi[0][0], mi[1][0]])
     return mi
 
 def registerImages(im1, im2, searchRange):
@@ -344,12 +344,12 @@ def registerImages(im1, im2, searchRange):
     def err(img):
         img.shape = im2c.shape
         return abs(im2c - img).sum()
-    xc = generic_filter(im1c, err, footprint=im2c) 
+    xc = scipy.ndimage.generic_filter(im1c, err, footprint=im2c) 
     print xc.min(), xc.max()
     #xcb = ndimage.filters.gaussian_filter(xc, 20)
     #xc -= xcb
     
-    xcm = argmin(xc)
+    xcm = np.argmin(xc)
     #xcm = xcMax(xc)
     #xcc = concatenate((xc[...,newaxis], xc[...,newaxis], xc[...,newaxis]), axis=2)
     #xcc[xcm[0], xcm[1], 0:2] = xc.min()
@@ -358,7 +358,7 @@ def registerImages(im1, im2, searchRange):
     
     #print "Best match at " + str(xcm)
     if mode == 'full':
-        xcm -= array(im1c.shape)-1
+        xcm -= np.array(im1c.shape)-1
     else:
         xcm += start
     #print "  ..corrected to " + str(xcm)
@@ -375,9 +375,9 @@ def regPair(im1, im2, reg):
     mx = max(im1.max(), im2.max())
     w = (im1.shape[0]+im2.shape[0])/2 + abs(reg[0]) + 2
     h = (im1.shape[1]+im2.shape[1])/2 + abs(reg[1]) + 2
-    r = scipy.empty((w, h))
-    g = scipy.empty((w, h))
-    b = scipy.empty((w, h))
+    r = np.empty((w, h))
+    g = np.empty((w, h))
+    b = np.empty((w, h))
     r[...] = mn
     g[...] = mn
     b[...] = mn
@@ -403,8 +403,354 @@ def regPair(im1, im2, reg):
     r[i1sx:i1sx+im1.shape[0], i1sy:i1sy+im1.shape[1]] = im1
     g[i2sx:i2sx+im2.shape[0], i2sy:i2sy+im2.shape[1]] = im2
     
-    return scipy.concatenate((r[...,newaxis], g[...,newaxis], b[...,newaxis]), axis=2)
+    return scipy.concatenate((r[...,np.newaxis], g[...,np.newaxis], b[...,np.newaxis]), axis=2)
 
+
+def vibratome(data, start, stop, axes=(0,1)):
+    """Take a diagonal slice through an array. If the input is N-dimensional, the result is N-1 dimensional.
+    start and stop are (x,y) tuples that indicate the beginning and end of the slice region.
+    The spacing of points along the slice is equivalent to the original pixel spacing.
+    (The data set returned is not guaranteed to hit the stopping point exactly)"""
+
+    ## transpose data so x and y are the first 2 axes
+    trAx = range(data.ndim)
+    trAx.remove(axes[0])
+    trAx.remove(axes[1])
+    tr1 = tuple(axes) + tuple(trAx)
+    data = data.transpose(tr1)
+
+    ## determine proper length of output array and pointwise vectors
+    length = np.sqrt((stop[0]-start[0])**2 + (stop[1]-start[1])**2)
+    dx = (stop[0]-start[0]) / length
+    dy = (stop[1]-start[1]) / length
+    length = np.ceil(length)  ## Extend length to be integer (can't have fractional array dimensions)
+    nPts = int(length)+1
+    
+    ## Actual position of each point along the slice
+    x = np.linspace(start[0], start[0]+(length*dx), nPts)
+    y = np.linspace(start[1], start[1]+(length*dy), nPts)
+    
+    ## Location of original values that will contribute to each point
+    xi0 = np.floor(x).astype(np.uint)
+    yi0 = np.floor(y).astype(np.uint)
+    xi1 = xi0 + 1
+    yi1 = yi0 + 1
+    
+    ## Find out-of-bound values
+    ox0 = (xi0 < 0) + (xi0 >= data.shape[0])
+    oy0 = (yi0 < 0) + (yi0 >= data.shape[1])
+    ox1 = (xi1 < 0) + (xi1 >= data.shape[0])
+    oy1 = (yi1 < 0) + (yi1 >= data.shape[1])
+    
+    ## Make sure these locations are in-bounds (just read from 0,0 and then overwrite the values later)
+    xi0[ox0] = 0
+    xi1[ox1] = 0
+    yi0[oy0] = 0
+    yi1[oy1] = 0
+    
+    ## slices needed to pull values from data set
+    s00 = [xi0, yi0] + [slice(None)] * (data.ndim-2)
+    s10 = [xi1, yi0] + [slice(None)] * (data.ndim-2)
+    s01 = [xi0, yi1] + [slice(None)] * (data.ndim-2)
+    s11 = [xi1, yi1] + [slice(None)] * (data.ndim-2)
+    
+    ## Actual values from data set
+    v00 = data[s00]
+    v10 = data[s10]
+    v01 = data[s01]
+    v11 = data[s11]
+
+    ## Set 0 for all out-of-bound values
+    v00[ox0+oy0] = 0
+    v10[ox1+oy0] = 0
+    v01[ox0+oy1] = 0
+    v11[ox1+oy1] = 0
+
+    ## Interpolation coefficients
+    dx0 = x - xi0
+    dy0 = y - yi0
+    dx1 = 1 - dx0
+    dy1 = 1 - dy0
+    c00 = dx1 * dy1
+    c10 = dx0 * dy1
+    c01 = dx1 * dy0
+    c11 = dx0 * dy0
+    
+    ## Add un-indexed dimensions into coefficient arrays
+    c00.shape = c00.shape + (1,)*(data.ndim-2)
+    c10.shape = c10.shape + (1,)*(data.ndim-2)
+    c01.shape = c01.shape + (1,)*(data.ndim-2)
+    c11.shape = c11.shape + (1,)*(data.ndim-2)
+    
+    ## Interpolate!
+    interpolated = v00*c00 + v10*c10 + v01*c01 + v11*c11
+    
+    ## figure out the reverse transpose order
+    tr1 = list(tr1)
+    tr1.pop(1)
+    tr2 = [None] * len(tr1)
+    for i in range(len(tr1)):
+        if tr1[i] > 1:
+            tr1[i] -= 1
+        tr2[tr1[i]] = i
+    tr2 = tuple(tr2)
+    
+    ## Untranspose array before returning
+    return interpolated.transpose(tr2)
+
+def affineSlice(data, shape, origin, vectors, axes, **kargs):
+    """Take an arbitrary slice through an array.
+    Parameters:
+        data: the original dataset
+        shape: the shape of the slice to take (Note the return value may have more dimensions than len(shape))
+        origin: the location in the original dataset that will become the origin in the sliced data.
+        vectors: list of unit vectors which point in the direction of the slice axes
+                 each vector must be the same length as axes
+                 If the vectors are not unit length, the result will be scaled.
+                 If the vectors are not orthogonal, the result will be sheared.
+        axes: the axes in the original dataset which correspond to the slice vectors
+        interpolate: chice between linear interpolation and nearest-neighbor
+        
+        Example: start with a 4D data set, take a diagonal-planar slice out of the last 3 axes
+            - data = array with dims (time, x, y, z) = (100, 40, 40, 40)
+            - The plane to pull out is perpendicular to the vector (x,y,z) = (1,1,1) 
+            - The origin of the slice will be at (x,y,z) = (40, 0, 0)
+            - The we will slice a 20x20 plane from each timepoint, giving a final shape (100, 20, 20)
+            affineSlice(data, shape=(20,20), origin=(40,0,0), vectors=((-1, 1, 0), (-1, 0, 1)), axes=(1,2,3))
+            
+            Note the following: 
+                len(shape) == len(vectors) 
+                len(origin) == len(axes) == len(vectors[0])
+    """
+    
+    # sanity check
+    if len(shape) != len(vectors):
+        raise Exception("shape and vectors must have same length.")
+    if len(origin) != len(axes):
+        raise Exception("origin and axes must have same length.")
+    for v in vectors:
+        if len(v) != len(axes):
+            raise Exception("each vector must be same length as axes.")
+    shape = (np.ceil(shape[0]), np.ceil(shape[1]))
+    
+
+    ## transpose data so slice axes come first
+    trAx = range(data.ndim)
+    for x in axes:
+        trAx.remove(x)
+    tr1 = tuple(axes) + tuple(trAx)
+    data = data.transpose(tr1)
+    #print "tr1:", tr1
+    ## dims are now [(slice axes), (other axes)]
+    
+
+    ### determine proper length of output array and pointwise vectors
+    #length = np.sqrt((stop[0]-start[0])**2 + (stop[1]-start[1])**2)
+    #dx = (stop[0]-start[0]) / length
+    #dy = (stop[1]-start[1]) / length
+    #length = np.ceil(length)  ## Extend length to be integer (can't have fractional array dimensions)
+    #nPts = int(length)+1
+    
+    ## Actual position of each point along the slice
+    #x = np.linspace(start[0], start[0]+(length*dx), nPts)
+    #y = np.linspace(start[1], start[1]+(length*dy), nPts)
+    
+    ## make sure vectors are arrays
+    vectors = np.array(vectors)
+    origin = np.array(origin)
+    origin.shape = (len(axes),) + (1,)*len(shape)
+    
+    ## Build array of sample locations. 
+    grid = np.mgrid[tuple([slice(0,x) for x in shape])]  ## mesh grid of indexes
+    x = (grid[np.newaxis,...] * vectors.transpose()[(Ellipsis,) + (np.newaxis,)*len(shape)]).sum(axis=1)  ## magic
+    #print x.shape, origin.shape
+    x += origin
+    #print "X values:"
+    #print x
+    ## iterate manually over unused axes since map_coordinates won't do it for us
+    extraShape = data.shape[len(axes):]
+    output = np.empty(tuple(shape) + extraShape, dtype=data.dtype)
+    for inds in np.ndindex(*extraShape):
+        ind = (Ellipsis,) + inds
+        output[ind] = scipy.ndimage.map_coordinates(data[ind], x, **kargs)
+    
+    
+    tr = range(output.ndim)
+    trb = []
+    for i in range(min(axes)):
+        ind = tr1.index(i) + (len(shape)-len(axes))
+        tr.remove(ind)
+        trb.append(ind)
+    tr2 = tuple(trb+tr)
+    #print "tr2", tr2
+
+    ## Untranspose array before returning
+    return output.transpose(tr2)
+    
+    
+    ## old manual method. Might resurrect if performance is an issue..
+    
+    ### x[:, 1,2,3] is the vector indicating the position in data coords for the point [1,2,3] in slice coords
+    ### Note this is the floating-point position, and should not be used for indexing (that's what xi is for)
+    ### so axes are [pos, (slice axes)]
+    
+    
+    
+    ### Location of original values that will contribute to each point
+    ### If there is no interpolation, then we use nearest neighbor.
+    ### If there is interpolation, then each output voxel will be a combination of the nearest 2**ndim voxels
+    ##xi0 = np.floor(x).astype(uint)
+    ##yi0 = np.floor(y).astype(uint)
+    ##xi1 = xi0 + 1
+    ##yi1 = yi0 + 1
+    #if interpolate:
+        #xi = np.empty((2,) + x.shape, dtype=np.intp)
+        #xi[0] = np.floor(x)
+        #xi[1] = xi[0] + 1
+    #else:
+        #xi = np.round(x).astype(np.intp)[np.newaxis,...]
+    ###Now we have added a new axis to the beginning of the array for separating the values on either side of the sample location
+    ### so axes are [+/-, pos, (slice axes)]
+    
+    ### Find out-of-bound values
+    ##ox0 = (xi0 < 0) + (xi0 >= data.shape[0])
+    ##oy0 = (yi0 < 0) + (yi0 >= data.shape[1])
+    ##ox1 = (xi1 < 0) + (xi1 >= data.shape[0])
+    ##oy1 = (yi1 < 0) + (yi1 >= data.shape[1])
+    #sh = list(xi.shape)
+    
+    #sh[1] = 1  ## instead of a vector for each point, we just want a boolean marking bad spots 
+               ### (but leave the axis in anyway for broadcasting compatibility)
+    #ox = np.zeros(tuple(sh), dtype=bool)
+    #for i in range(len(xi.shape[1])):
+        #ox += xi[:,i] < 0
+        #ox += xi[:,i] > data.shape[i]
+    ### axes are [+/-, 1, (slice axes)]
+    
+    ### Make sure these locations are in-bounds so the indexing slice will not barf later
+    ### (just read from 0,0 and then overwrite the values later)
+    ##xi0[ox0] = 0
+    ##xi1[ox1] = 0
+    ##yi0[oy0] = 0
+    ##yi1[oy1] = 0
+    #xi[ox] = 0
+    
+    ### slices needed to pull values from data set
+    ##s00 = [xi0, yi0] + [slice(None)] * (data.ndim-2)
+    ##s10 = [xi1, yi0] + [slice(None)] * (data.ndim-2)
+    ##s01 = [xi0, yi1] + [slice(None)] * (data.ndim-2)
+    ##s11 = [xi1, yi1] + [slice(None)] * (data.ndim-2)
+    
+    ### Actual values from data set
+    ##v00 = data[s00]
+    ##v10 = data[s10]
+    ##v01 = data[s01]
+    ##v11 = data[s11]
+    #if interpolate:
+        ###Should look like this:
+        ##slices[0,1,1] = (xi[0,0], xi[1,1], xi[1,2])
+        ##slices = fromfunction(lambda *inds: tuple([xi[inds[i], i] for i in range(len(inds))]), (2,)*len(shape), dtype=object)
+        
+        ### for each point in the slice, we grab 2**ndim neighboring values from which to interpolate
+        ### v[0,1,1] = data[slices[0,1,1]]
+        
+        #intShape = (2,)*len(axes)  ## shape of interpolation space around each voxel
+        
+        #v = np.empty(intShape + data.shape, dtype=data.dtype)
+        ### axes are [(interp. space), (slice axes), (other axes)]
+        
+        ##c = empty(v.shape, dtype=float)
+        
+        #for inds in np.ndindex(*intShape):  ## iterate over interpolation space
+            #sl = tuple([xi[inds[i], i] for i in range(len(inds))])  ## generate the correct combination of slice values from xi
+            #v[inds] = data[sl]
+            #v[inds][ox] = 0  ## set out-of-bounds values to 0
+            
+            ### create interpolation coefficients 
+            ##dx = x - xi
+            #c = np.ones()
+            #for i in range(len(shape)):
+                #c *= x - xi
+                
+            ### apply interpolation coeff.
+            #v[inds] *= c
+            
+        ### interpolate!
+        #for i in range(len(shape)):
+            #v = v.sum(axis=0)
+    #else:
+        #sl = tuple([xi[0][i] for i in range(len(shape))])
+        #v = data[sl]
+        #v[ox] = 0
+        
+
+    ### Set 0 for all out-of-bound values
+    ##v00[ox0+oy0] = 0
+    ##v10[ox1+oy0] = 0
+    ##v01[ox0+oy1] = 0
+    ##v11[ox1+oy1] = 0
+
+    ### Interpolation coefficients
+    #dx0 = x - xi0
+    #dy0 = y - yi0
+    #dx1 = 1 - dx0
+    #dy1 = 1 - dy0
+    #c00 = dx1 * dy1
+    #c10 = dx0 * dy1
+    #c01 = dx1 * dy0
+    #c11 = dx0 * dy0
+    
+    ### Add un-indexed dimensions into coefficient arrays
+    #c00.shape = c00.shape + (1,)*(data.ndim-2)
+    #c10.shape = c10.shape + (1,)*(data.ndim-2)
+    #c01.shape = c01.shape + (1,)*(data.ndim-2)
+    #c11.shape = c11.shape + (1,)*(data.ndim-2)
+    
+    ### Interpolate!
+    #interpolated = v00*c00 + v10*c10 + v01*c01 + v11*c11
+    
+    ### figure out the reverse transpose order
+    ##tr1 = list(tr1)
+    ##tr1.pop(1)
+    ##tr2 = [None] * len(tr1)
+    ##for i in range(len(tr1)):
+        ##if tr1[i] > 1:
+            ##tr1[i] -= 1
+        ##tr2[tr1[i]] = i
+    ##tr2 = tuple(tr2)
+
+    #tr2 = np.array(tr1)
+    #for i in range(0, len(tr2)):
+        #tr2[tr1[i]] = i
+    #tr2 = tuple(tr2)
+
+
+    ### Untranspose array before returning
+    #return interpolated.transpose(tr2)
+
+
+def volumeSum(data, alpha, axis=0, dtype=None):
+    """Volumetric summing over one axis."""
+    #if data.ndim != alpha.ndim:
+        #raise Exception('data and alpha must have same ndim.')
+    if dtype is None:
+        dtype = data.dtype
+    sh = list(data.shape)
+    sh.pop(axis)
+    output = np.zeros(sh, dtype=dtype)
+    #mask = np.zeros(sh, dtype=dtype)
+    sl = [slice(None)] * data.ndim
+    for i in reversed(range(data.shape[axis])):
+        sl[axis] = i
+        #p = (1.0 - mask) * alpha[sl]
+        #output += p*data[sl]
+        #mask += p
+        a = alpha[sl]
+        #print a.min(), a.max()
+        output *= (1.0-a)
+        output += a * data[sl] 
+    
+    return output
 
 
 def slidingOp(template, data, op):
@@ -412,7 +758,7 @@ def slidingOp(template, data, op):
     template = template.view(ndarray)
     tlen = template.shape[0]
     length = data.shape[0] - tlen
-    result = empty((length), dtype=float)
+    result = np.empty((length), dtype=float)
     for i in range(0, length):
         result[i] = op(template, data[i:i+tlen])
     return result
@@ -420,7 +766,7 @@ def slidingOp(template, data, op):
 def ratio(a, b):
     r1 = a/b
     r2 = b/a
-    return where(r1>1.0, r1, r2)
+    return np.where(r1>1.0, r1, r2)
 
 def rmsMatch(template, data, thresh=0.75, scaleInvariant=False, noise=0.0):
     ## better to use scipy.ndimage.generic_filter ?
@@ -430,10 +776,10 @@ def rmsMatch(template, data, thresh=0.75, scaleInvariant=False, noise=0.0):
         devs = slidingOp(template, data, lambda t,d: (t-d).std())
     
     tstd = template.std()
-    blocks = argwhere(devs < thresh * tstd)[:, 0]
+    blocks = np.argwhere(devs < thresh * tstd)[:, 0]
     if len(blocks) == 0:
         return []
-    inds = list(argwhere(blocks[1:] - blocks[:-1] > 1)[:,0] + 1) #remove adjacent points
+    inds = list(np.argwhere(blocks[1:] - blocks[:-1] > 1)[:,0] + 1) #remove adjacent points
     inds.insert(0, 0)
     return blocks[inds]
 
@@ -466,7 +812,7 @@ def fastRmsMatch(template, data, thresholds=[0.85, 0.75], scales=[0.2, 1.0], min
         if inds is None:
             inds = rmsMatch(t1, data1, thresholds[i])
         else:
-            ix = ceil(scale/lastScale)
+            ix = np.ceil(scale/lastScale)
             inds = ((inds*scale) - ix).astype(int)
             span = 2*ix + t1len
             inds2 = []
@@ -596,47 +942,47 @@ def bandPass(data, low, high, lowOrder=1, highOrder=1, dt=None):
     return lowPass(highPass(data, low, lowOrder, dt), high, highOrder, dt)
 
 def gaussDivide(data, sigma):
-    return data.astype(float32) / gaussian_filter(data, sigma=sigma)
+    return data.astype(np.float32) / scipy.ndimage.gaussian_filter(data, sigma=sigma)
     
 def meanDivide(data, axis, inplace=False):
     if not inplace:
-        d = empty(data.shape, dtype=float32)
+        d = np.empty(data.shape, dtype=np.float32)
     ind = [slice(None)] * data.ndim
     for i in range(0, data.shape[axis]):
         ind[axis] = i
         if inplace:
             data[tuple(ind)] /= data[tuple(ind)].mean()
         else:
-            d[tuple(ind)] = data[tuple(ind)].astype(float32) / data[tuple(ind)].mean()
+            d[tuple(ind)] = data[tuple(ind)].astype(np.float32) / data[tuple(ind)].mean()
     if not inplace:
         return d
 
 def medianDivide(data, axis, inplace=False):
     if not inplace:
-        d = empty(data.shape, dtype=float32)
+        d = np.empty(data.shape, dtype=np.float32)
     ind = [slice(None)] * data.ndim
     for i in range(0, data.shape[axis]):
         ind[axis] = i
         if inplace:
             data[tuple(ind)] /= data[tuple(ind)].median()
         else:
-            d[tuple(ind)] = data[tuple(ind)].astype(float32) / data[tuple(ind)].mean()
+            d[tuple(ind)] = data[tuple(ind)].astype(np.float32) / data[tuple(ind)].mean()
     if not inplace:
         return d
 
 def blur(data, sigma):
-    return gaussian_filter(data, sigma=sigma)
+    return scipy.ndimage.gaussian_filter(data, sigma=sigma)
 
 
 def findTriggers(data, spacing=None, highpass=True, devs=1.5):
     if highpass:
-        d1 = data - median_filter(data, size=spacing)
+        d1 = data - scipy.ndimage.median_filter(data, size=spacing)
     else:
         d1 = data
     stdev = d1.std() * devs
     ptrigs = (d1[1:] > stdev*devs) * (d1[:-1] <= stdev)
     ntrigs = (d1[1:] < -stdev*devs) * (d1[:-1] >= -stdev)
-    return (argwhere(ptrigs)[:, 0], argwhere(ntrigs)[:, 0])
+    return (np.argwhere(ptrigs)[:, 0], np.argwhere(ntrigs)[:, 0])
 
 def triggerStack(data, triggers, axis=0, window=None):
     """Stacks windows from a waveform from trigger locations.
@@ -647,7 +993,7 @@ def triggerStack(data, triggers, axis=0, window=None):
         window = [int(-0.5 * dt), int(0.5 * dt)]
     shape = list(data.shape)
     shape[axis] = window[1] - window[0]
-    total = zeros((len(triggers),) + tuple(shape), dtype=data.dtype)
+    total = np.zeros((len(triggers),) + tuple(shape), dtype=data.dtype)
     readIndex = [slice(None)] * data.ndim
     writeIndex = [0] + ([slice(None)] * data.ndim)
     
@@ -674,7 +1020,7 @@ def triggerStack(data, triggers, axis=0, window=None):
 def generateSphere(radius):
     radius2 = radius**2
     w = int(radius*2 + 1)
-    d = empty((w, w), dtype=float32)
+    d = np.empty((w, w), dtype=np.float32)
     for x in range(0, w):
         for y in range(0, w):
             r2 = (x-radius)**2+(y-radius)**2
@@ -691,7 +1037,7 @@ def make3Color(r=None, g=None, b=None):
     if i is None:
         i = b
         
-    img = zeros(i.shape + (3,), dtype=i.dtype)
+    img = np.zeros(i.shape + (3,), dtype=i.dtype)
     if r is not None:
         img[..., 2] = r
     if g is not None:
@@ -703,7 +1049,7 @@ def make3Color(r=None, g=None, b=None):
 
 def imgDeconvolve(data, div):
     ## pad data past the end with the minimum value for each pixel
-    data1 = empty((data.shape[0]+len(div),) + data.shape[1:])
+    data1 = np.empty((data.shape[0]+len(div),) + data.shape[1:])
     data1[:data.shape[0]] = data
     dmin = data.min(axis=0)
     dmin.shape = (1,) + dmin.shape
@@ -713,8 +1059,8 @@ def imgDeconvolve(data, div):
     dec = deconvolve(data1[:, 0, 0], div)
     shape1 = (dec[0].shape[0], data.shape[1], data.shape[2])
     shape2 = (dec[1].shape[0], data.shape[1], data.shape[2])
-    dec1 = empty(shape1)
-    dec2 = empty(shape2)
+    dec1 = np.empty(shape1)
+    dec2 = np.empty(shape2)
     
     ## deconvolve
     for i in range(0, shape1[1]):
@@ -739,7 +1085,7 @@ def stdFilter(data, kernShape):
     shape = data.shape
     if len(kernShape) != data.ndim:
         raise Exception("Kernel shape must have length = data.ndim")
-    res = empty(tuple(shape), dtype=float)
+    res = np.empty(tuple(shape), dtype=float)
     for ind, i in ndenumerate(res):
         sl = [slice(max(0, ind[j]-kernShape[j]/2), min(shape[j], ind[j]+(kernShape[j]/2))) for j in range(0, data.ndim)]
         res[tuple(ind)] = std(data[tuple(sl)])
@@ -763,20 +1109,20 @@ def makeDispMap(im1, im2, maxDist=10, searchRange=None, normBlur=5.0, matchSize=
         
         (See also: matchDistortImg)
     """
-    im1 = im1.astype(float32)
-    im2 = im2.astype(float32)
+    im1 = im1.astype(np.float32)
+    im2 = im2.astype(np.float32)
     
     if searchRange is None:
         searchRange = [[-maxDist, maxDist+1], [-maxDist, maxDist+1]]
     
-    bestMatch = empty(im2.shape, dtype=float)
+    bestMatch = np.empty(im2.shape, dtype=float)
     bmSet = False
-    matchOffset = zeros(im2.shape + (2,), dtype=int)
+    matchOffset = np.zeros(im2.shape + (2,), dtype=int)
     
     if showProgress:
-        imw1 = showImg(zeros(im2.shape), title="errMap")
-        imw2 = showImg(zeros(im2.shape), title="matchOffset")
-        imw3 = showImg(zeros(im2.shape), title="goodness")
+        imw1 = showImg(np.zeros(im2.shape), title="errMap")
+        imw2 = showImg(np.zeros(im2.shape), title="matchOffset")
+        imw3 = showImg(np.zeros(im2.shape), title="goodness")
     
     for i in range(searchRange[0][0], searchRange[0][1]):
         for j in range(searchRange[1][0], searchRange[1][1]):
@@ -809,12 +1155,12 @@ def makeDispMap(im1, im2, maxDist=10, searchRange=None, normBlur=5.0, matchSize=
             stdCmp = errMap < bmRgn
             
             # Set new values in bestMatch
-            bestMatch[s2[0]:s2[1], s2[2]:s2[3]] = where(stdCmp, errMap, bmRgn)
+            bestMatch[s2[0]:s2[1], s2[2]:s2[3]] = np.where(stdCmp, errMap, bmRgn)
             
             # set matchOffset to i,j wherever std is lower than previously seen
-            stdCmpInds = argwhere(stdCmp) + array([[s2[0],s2[2]]])
+            stdCmpInds = np.argwhere(stdCmp) + np.array([[s2[0],s2[2]]])
             
-            matchOffset[stdCmpInds[:,0], stdCmpInds[:,1]] = array([i,j])
+            matchOffset[stdCmpInds[:,0], stdCmpInds[:,1]] = np.array([i,j])
             #v = array([i,j])
             #for ind in stdCmpInds:
                 #matchOffset[tuple(ind)] = v
@@ -890,7 +1236,7 @@ def matchDistortImg(im1, im2, scale=4, maxDist=40, mapBlur=30, showProgress=Fals
     
     
     ## blur the map to make continuous
-    dm2Blur = blur(dispMap2.astype(float32), (mapBlur, mapBlur, 0))
+    dm2Blur = blur(dispMap2.astype(np.float32), (mapBlur, mapBlur, 0))
     if showProgress:
         imws.append(showImg(dm2Blur, title="blurred full disp map"))
     
@@ -910,7 +1256,7 @@ def threshold(data, threshold, direction=1):
     """Return all indices where data crosses threshold."""
     mask = data >= threshold
     mask = mask[1:].astype(byte) - mask[:-1].astype(byte)
-    return argwhere(mask == direction)[:, 0]
+    return np.argwhere(mask == direction)[:, 0]
     
 
 
@@ -950,8 +1296,8 @@ def stdevThresholdEvents(data, threshold=3.0):
     This function is only useful for data with its baseline removed."""
     stdev = data.std()
     mask = (abs(data) > stdev * threshold).astype(byte)
-    starts = argwhere((mask[1:] - mask[:-1]) == 1)[:,0]
-    ends = argwhere((mask[1:] - mask[:-1]) == -1)[:,0]
+    starts = np.argwhere((mask[1:] - mask[:-1]) == 1)[:,0]
+    ends = np.argwhere((mask[1:] - mask[:-1]) == -1)[:,0]
     if len(ends) > 0 and len(starts) > 0:
         if ends[0] < starts[0]:
             ends = ends[1:]
@@ -960,7 +1306,7 @@ def stdevThresholdEvents(data, threshold=3.0):
         
         
     lengths = ends-starts
-    events = empty(starts.shape, dtype=[('start',int), ('len',int), ('sum',float), ('peak',float)])
+    events = np.empty(starts.shape, dtype=[('start',int), ('len',int), ('sum',float), ('peak',float)])
     events['start'] = starts
     events['len'] = lengths
     
@@ -1006,12 +1352,12 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
     ## find all 0 crossings
     mask = data1 > 0
     diff = mask[1:] - mask[:-1]  ## mask is True every time the trace crosses 0 between i and i+1
-    times = argwhere(diff)[:, 0]  ## index of each point immediately before crossing.
+    times = np.argwhere(diff)[:, 0]  ## index of each point immediately before crossing.
     #p.mark('find crossings')
     
     ## select only events longer than minLength.
     ## We do this check early for performance--it eliminates the vast majority of events
-    longEvents = argwhere(times[1:] - times[:-1] > minLength)
+    longEvents = np.argwhere(times[1:] - times[:-1] > minLength)
     if len(longEvents) < 1:
         return []
     longEvents = longEvents[:, 0]
@@ -1019,9 +1365,9 @@ def zeroCrossingEvents(data, minLength=3, minPeak=0.0, minSum=0.0, noiseThreshol
     
     ## Measure sum of values within each region between crossings, combine into single array
     if xvals is None:
-        events = empty(nEvents, dtype=[('index',int),('len', int),('sum', float),('peak', float)])  ### rows are [start, length, sum]
+        events = np.empty(nEvents, dtype=[('index',int),('len', int),('sum', float),('peak', float)])  ### rows are [start, length, sum]
     else:
-        events = empty(nEvents, dtype=[('index',int),('time',float),('len', int),('sum', float),('peak', float)])  ### rows are [start, length, sum]
+        events = np.empty(nEvents, dtype=[('index',int),('time',float),('len', int),('sum', float),('peak', float)])  ### rows are [start, length, sum]
     #p.mark('empty %d -> %d'% (len(times), nEvents))
     #n = 0
     for i in range(nEvents):
@@ -1089,8 +1435,8 @@ def thresholdEvents(data, threshold, adjustTimes=True):
     hits = []
     for mask in masks:
         diff = mask[1:] - mask[:-1]
-        onTimes = argwhere(diff==1)[:,0]+1
-        offTimes = argwhere(diff==-1)[:,0]+1
+        onTimes = np.argwhere(diff==1)[:,0]+1
+        offTimes = np.argwhere(diff==-1)[:,0]+1
         #print mask
         #print diff
         #print onTimes, offTimes
@@ -1110,11 +1456,11 @@ def thresholdEvents(data, threshold, adjustTimes=True):
     
     nEvents = len(hits)
     if xvals is None:
-        events = empty(nEvents, dtype=[('index',int),('len', int),('sum', float),('peak', float),('peakIndex', int)])  ### rows are [start, length, sum]
+        events = np.empty(nEvents, dtype=[('index',int),('len', int),('sum', float),('peak', float),('peakIndex', int)])  ### rows are [start, length, sum]
     else:
-        events = empty(nEvents, dtype=[('index',int),('time',float),('len', int),('sum', float),('peak', float),('peakIndex', int)])  ### rows are     
+        events = np.empty(nEvents, dtype=[('index',int),('time',float),('len', int),('sum', float),('peak', float),('peakIndex', int)])  ### rows are     
 
-    mask = ones(nEvents, dtype=bool)
+    mask = np.ones(nEvents, dtype=bool)
     
     ## Lots of work ahead:
     ## 1) compute length, peak, sum for each event
@@ -1127,11 +1473,11 @@ def thresholdEvents(data, threshold, adjustTimes=True):
         if sum > 0:
             #peak = evData.max()
             #ind = argwhere(evData==peak)[0][0]+t1
-            peakInd = argmax(evData)
+            peakInd = np.argmax(evData)
         else:
             #peak = evData.min()
             #ind = argwhere(evData==peak)[0][0]+t1
-            peakInd = argmin(evData)
+            peakInd = np.argmin(evData)
         peak = evData[peakInd]
         peakInd += t1
             
@@ -1139,7 +1485,7 @@ def thresholdEvents(data, threshold, adjustTimes=True):
         if adjustTimes:  ## Move start and end times outward, estimating the zero-crossing point for the event
         
             ## adjust t1 first
-            mind = argmax(evData)
+            mind = np.argmax(evData)
             pdiff = abs(peak - evData[0])
             if pdiff == 0:
                 adj1 = 0
@@ -1208,11 +1554,11 @@ def thresholdEvents(data, threshold, adjustTimes=True):
             if sum > 0:
                 #peak = evData.max()
                 #ind = argwhere(evData==peak)[0][0]+t1
-                peakInd = argmax(evData)
+                peakInd = np.argmax(evData)
             else:
                 #peak = evData.min()
                 #ind = argwhere(evData==peak)[0][0]+t1
-                peakInd = argmin(evData)
+                peakInd = np.argmin(evData)
             peak = evData[peakInd]
             peakInd += t1
                 
@@ -1339,7 +1685,7 @@ def subtractMedian(data, time=None, width=100, dt=None):
     
     d1 = data.view(ndarray)
     width = int(width)
-    med = median_filter(d1, size=width)
+    med = scipy.ndimage.median_filter(d1, size=width)
     d2 = d1 - med
     
     if isinstance(data, MetaArray):
@@ -1382,8 +1728,8 @@ def denoise(data, radius=2, threshold=4):
     maskpos = mask1[:-radius] * mask2[radius:] #both need to be true
     maskneg = mask1[radius:] * mask2[:-radius]
     mask = maskpos + maskneg
-    d5 = where(mask, d1[:-r2], d1[radius:-radius]) #where both are true replace the value with the value from 2 points before
-    d6 = empty(d1.shape, dtype=d1.dtype) #add points back to the ends
+    d5 = np.where(mask, d1[:-r2], d1[radius:-radius]) #where both are true replace the value with the value from 2 points before
+    d6 = np.empty(d1.shape, dtype=d1.dtype) #add points back to the ends
     d6[radius:-radius] = d5
     d6[:radius] = d1[:radius]
     d6[-radius:] = d1[-radius:]
@@ -1396,7 +1742,7 @@ def denoise(data, radius=2, threshold=4):
 def rollingSum(data, n):
     d1 = data.copy()
     d1[1:] += d1[:-1]  # integrate
-    d2 = empty(len(d1) - n + 1, dtype=data.dtype)
+    d2 = np.empty(len(d1) - n + 1, dtype=data.dtype)
     d2[0] = d1[n-1]  # copy first point
     d2[1:] = d1[n:] - d1[:-n]  # subtract
     return d2
@@ -1436,7 +1782,7 @@ def cbTemplateMatch(data, template, threshold=3.0):
     dc, scale, offset = clementsBekkers(data, template)
     mask = dc > threshold
     diff = mask[1:] - mask[:-1]
-    times = argwhere(diff==1)[:, 0]  ## every time we start OR stop a spike
+    times = np.argwhere(diff==1)[:, 0]  ## every time we start OR stop a spike
     
     ## in the unlikely event that the very first or last point is matched, remove it
     if abs(dc[0]) > threshold:
@@ -1446,7 +1792,7 @@ def cbTemplateMatch(data, template, threshold=3.0):
     
     nEvents = len(times) / 2
     
-    result = empty(nEvents, dtype=[('peak', int), ('dc', float), ('scale', float), ('offset', float)])
+    result = np.empty(nEvents, dtype=[('peak', int), ('dc', float), ('scale', float), ('offset', float)])
     for i in range(nEvents):
         i1 = times[i*2]
         i2 = times[(i*2)+1]
@@ -1472,8 +1818,8 @@ def expTemplate(dt, rise, decay, delay=None, length=None, risePow=2.0):
         
     nPts = int(length / dt)
     start = int(delay / dt)
-    temp = empty(nPts)
-    times = arange(0.0, dt*(nPts-start), dt)
+    temp = np.empty(nPts)
+    times = np.arange(0.0, dt*(nPts-start), dt)
     temp[:start] = 0.0
     temp[start:] = (1.0 - exp(-times/rise))**risePow  *  exp(-times/decay)
     temp /= temp.max()
@@ -1483,11 +1829,11 @@ def expTemplate(dt, rise, decay, delay=None, length=None, risePow=2.0):
 def tauiness(data, win, step=10):
     ivals = range(0, len(data)-win-1, int(win/step))
     xvals = data.xvals(0)
-    result = empty((len(ivals), 4), dtype=float)
+    result = np.empty((len(ivals), 4), dtype=float)
     for i in range(len(ivals)):
         j = ivals[i]
         v = fitExpDecay(arange(win), data[j:j+win], measureError=True)
-        result[i] = array(list(v[0]) + [sum(abs(v[3]))])
+        result[i] = np.array(list(v[0]) + [sum(abs(v[3]))])
         #result[i][0] = xvals[j]
         #result[i][1] = j
     result = MetaArray(result, info=[
@@ -1524,7 +1870,7 @@ def expReconvolve(data, tau=None):
     # x(k+1) = x(k) + dt * (f(k) - x(k)) / tau
     # OR: x[k+1] = (1-dt/tau) * x[k] + dt/tau * x[k]
     #print tau, dt
-    d = zeros(data.shape, data.dtype)
+    d = np.zeros(data.shape, data.dtype)
     dtt = dt / tau
     dtti = 1. - dtt
     for i in range(1, len(d)):
@@ -1564,7 +1910,7 @@ def alphas(t, tau, starts):
 ### TODO: replace with faster scipy filters
 def smooth(data, it=1):
     data = data.view(ndarray)
-    d = empty((len(data)), dtype=data.dtype)
+    d = np.empty((len(data)), dtype=data.dtype)
     for i in range(0, len(data)):
         start = max(0, i-1)
         stop = min(i+1, len(data)-1)
@@ -1639,7 +1985,7 @@ def getSpikeTemplate(ivc, traces):
     """Returns the trace of the first spike in an IV protocol"""
     
     ## remove all negative currents
-    posCurr = argwhere(ivc['current'] > 0.)[:, 0]
+    posCurr = np.argwhere(ivc['current'] > 0.)[:, 0]
     ivc = ivc[:, posCurr]
     
     ## find threshold index

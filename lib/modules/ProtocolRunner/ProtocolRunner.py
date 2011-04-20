@@ -69,26 +69,35 @@ class ProtocolRunner(Module):
     sigProtocolChanged = QtCore.Signal(object, object)
     
     def __init__(self, manager, name, config):
+        #print "ProtocolRunner __init__"
         Module.__init__(self, manager, name, config)
+        #print "  1"; sys.stdout.flush()
         self.lastProtoTime = None
         self.loopEnabled = False
         self.devListItems = {}
         
+        #print "  2"; sys.stdout.flush()
         #self.seqListItems = OrderedDict()  ## Looks like {(device, param): listItem, ...}
         self.docks = {}
         self.analysisDocks = {}
         self.deleteState = 0
         self.ui = Ui_MainWindow()
+        #print "  3"; sys.stdout.flush()
         self.win = Window(self)
         
+        #print "  4"; sys.stdout.flush()
         g = self.win.geometry()
+        #print "  4.5"; sys.stdout.flush()
         self.ui.setupUi(self.win)
+        #print "  5"; sys.stdout.flush()
         self.win.setGeometry(g)
+        #print "  6"; sys.stdout.flush()
         
         self.ui.protoDurationSpin.setOpts(dec=True, bounds=[1e-3,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
         self.ui.protoLeadTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=10e-3, suffix='s', siPrefix=True)
         self.ui.protoCycleTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
         self.ui.seqCycleTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
+        #print "  7"; sys.stdout.flush()
         #self.win.setCentralWidget(None)  ## get rid of central widget so docks fill the whole screen
         #self.win.centralWidget().setFixedSize(QtCore.QSize(2, 2))
         self.protoStateGroup = WidgetGroup([
@@ -100,9 +109,11 @@ class ProtocolRunner(Module):
             (self.ui.seqCycleTimeSpin, 'cycleTime'),
             (self.ui.seqRepetitionSpin, 'repetitions', 1),
         ])
+        #print "  8"; sys.stdout.flush()
         
         self.protocolList = Loader(self, self.manager.config['protocolDir'])
         self.ui.LoaderDock.setWidget(self.protocolList)
+        #print "  9"; sys.stdout.flush()
         
         #self.protocolList = DirTreeModel(self.manager.config['protocolDir'])
         #self.ui.protocolList.setModel(self.protocolList)
@@ -113,12 +124,15 @@ class ProtocolRunner(Module):
             item = QtGui.QListWidgetItem(m, self.ui.analysisList)
             item.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsUserCheckable )
             item.setCheckState(QtCore.Qt.Unchecked)
+        #print "  10"; sys.stdout.flush()
         
         #self.updateDeviceList()
         
         self.taskThread = TaskThread(self)
+        #print "  11"; sys.stdout.flush()
         
         self.newProtocol()
+        #print "  12"; sys.stdout.flush()
         
         
         #QtCore.QObject.connect(self.ui.newProtocolBtn, QtCore.SIGNAL('clicked()'), self.newProtocol)
@@ -168,11 +182,14 @@ class ProtocolRunner(Module):
         #QtCore.QObject.connect(self.ui.deviceList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.deviceItemChanged)
         #QtCore.QObject.connect(self.protoStateGroup, QtCore.SIGNAL('changed'), self.protoGroupChanged)
         self.protoStateGroup.sigChanged.connect(self.protoGroupChanged)
+        #print "  13"; sys.stdout.flush()
         self.win.show()
+        #print "  14"; sys.stdout.flush()
         #QtCore.QObject.connect(self.ui.sequenceParamList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.updateSeqReport)
         self.ui.sequenceParamList.itemChanged.connect(self.updateSeqReport)
         #QtCore.QObject.connect(self.ui.analysisList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.analysisItemClicked)
         self.ui.analysisList.itemClicked.connect(self.analysisItemClicked)
+        #print "  done"; sys.stdout.flush()
         
     #def hasInterface(self, interface):
         #return interface in ['DataSource']
@@ -646,9 +663,9 @@ class ProtocolRunner(Module):
         #self.ui.saveProtocolBtn.setEnabled(True)
         #self.currentIsModified(False)
     
-    def saveProtocol(self, fileName=None):
+    def saveProtocol(self, fileHandle=None):
         ## Write protocol config to file
-        self.currentProtocol.write(fileName)
+        self.currentProtocol.write(fileHandle.name())
         
         ## refresh protocol list
         #self.protocolList.clearCache()

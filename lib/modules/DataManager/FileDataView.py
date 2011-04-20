@@ -92,28 +92,9 @@ class FileDataView(QtGui.QSplitter):
             
         
     def clear(self):
-        #for w in self.widgets:
-            #sip.delete(w)       ## bad planning.
-        #print "\nClear widgets"
-        #import weakref, debug
-        #refs = []
         for w in self.widgets:
             w.close()
             w.setParent(None)
-            #refs.append(weakref.ref(w))
         self.widgets = []
         self.dictWidget = None
-        #import gc
-        #gc.collect()
-        #for r in refs:
-            #print "    ", r()
-            #if r() is not None:
-                #debug.describeObj(r())
-                #print "REFS:"
-                #print gc.get_referrers(r())
-                
-        #for p in self.plots:
-            #if p() is not None:
-                #print "Plot still alive:", p()
-                #debug.describeObj(p())
                 

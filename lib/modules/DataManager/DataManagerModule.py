@@ -30,7 +30,8 @@ class DataManager(Module):
         self.ui.analysisWidget = FileAnalysisView.FileAnalysisView(self.ui.analysisTab, self)
         self.ui.analysisTab.layout().addWidget(self.ui.analysisWidget)
         w = self.ui.splitter.width()
-        self.ui.splitter.setSizes([int(w*0.2), int(w*0.8)])
+        self.ui.splitter.setSizes([int(w*0.3), int(w*0.7)])
+        self.ui.logDock.hide()
         self.dialog = QtGui.QFileDialog()
         self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
         ## Load values into GUI
@@ -89,8 +90,10 @@ class DataManager(Module):
         #self.currentDirChanged()
 
     def setCurrentClicked(self):
+        #print "click"
         handle = self.selectedFile()
         if handle is None:
+            #print "no selection"
             return
         if not handle.isDir():
             handle = handle.parent()
@@ -214,7 +217,10 @@ class DataManager(Module):
         #print "file selection changed"
         if self.selFile is not None:
             #QtCore.QObject.disconnect(self.selFile, QtCore.SIGNAL('changed'), self.selectedFileAltered)
-            self.selFile.sigChanged.disconnect(self.selectedFileAltered)
+            try:
+                self.selFile.sigChanged.disconnect(self.selectedFileAltered)
+            except TypeError:
+                pass
         
         fh = self.selectedFile()
         self.manager.currentFile = fh  ## Make this really easy to pick up from an interactive prompt.

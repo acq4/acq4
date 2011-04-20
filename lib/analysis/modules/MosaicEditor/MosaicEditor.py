@@ -75,6 +75,7 @@ class MosaicEditor(AnalysisModule):
         canvas = self.getElement('Canvas')
         if files is None:
             return
+
         for f in files:    
             if f.info().get('dirType', None) == 'Cell':
                 item = canvas.addMarker(handle=f, scale=[20e-6,20e-6])
@@ -83,9 +84,12 @@ class MosaicEditor(AnalysisModule):
                 item = canvas.addFile(f)
                 if isinstance(item, list):
                     item = item[0]
-            
                 self.items[item] = f
-                
+                try:
+                    item.timestamp = f.info()['__timestamp__']
+                except:
+                    pass
+
                 item.timestamp = f.info()['__timestamp__']
                 if not item.hasUserTransform():
                     ## Record the timestamp for this file, see what is the most recent transformation to copy

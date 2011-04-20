@@ -21,8 +21,9 @@ class Scanner(Device):
         self.targetList = [1.0, {}]  ## stores the grids and points used by ProtocolGui so that they persist
         self._configDir = os.path.join('devices', self.name + '_config')
         self.currentCommand = [0,0] ## The last requested voltage values (but not necessarily the current voltage applied to the mirrors)
-        self.shutterOpen = True ## indicates whether the virtual shutter is closed (the beam is steered to its 'off' position). 
-        self.setShutterOpen(False)
+        self.shutterOpen = True ## indicates whether the virtual shutter is closed (the beam is steered to its 'off' position).
+        if 'offVoltage' in config:
+            self.setShutterOpen(False)
         #if not os.path.isdir(config['calibrationDir']):
             #print "Calibration directory '%s' does not exist, creating.." % config['calibrationDir']
             #os.mkdir(config['calibrationDir'])
@@ -455,6 +456,14 @@ class ScannerTask(DeviceTask):
                 result[k] = self.cmd[k]
         if self.spotSize is not None:
             result['spotSize'] = self.spotSize
+            
+        ### These arrays stick around and cause memory errors if we don't get rid of them. 
+        ## For some reason, the top-level protocol command dict is not being collected (refcount=2, but gc.get_referrers=[])
+        ## So until that issue is solved, we need to make sure that extra data is cleaned out.
+        if 'xCommand' in self.cmd:
+            self.cmd['xCommand'] = "dedeted in ScannerTask.getResult()"
+        if 'yCommand' in self.cmd:
+            self.cmd['yCommand'] = "dedeted in ScannerTask.getResult()"
         return result
     
     def storeResult(self, dirHandle):

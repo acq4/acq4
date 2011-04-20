@@ -18,8 +18,8 @@ class CameraDeviceGui(QtGui.QWidget):
         self.stateGroup = WidgetGroup([])
         self.labels = {}
         
-        for k in self.params:
-            p = self.params[k]
+        for k, p in self.params.iteritems():
+            #p = self.params[k]
             #print p
             #if not p[1]:
                 #continue
