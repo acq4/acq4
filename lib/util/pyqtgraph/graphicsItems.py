@@ -944,7 +944,7 @@ class CurveArrow(CurvePoint):
 
 class ScatterPlotItem(QtGui.QGraphicsWidget):
     
-    sigPointClicked = QtCore.Signal(object)
+    sigPointClicked = QtCore.Signal(object, object)
     
     def __init__(self, spots=None, pxMode=True, pen=None, brush=None, size=5):
         QtGui.QGraphicsWidget.__init__(self)
@@ -1031,7 +1031,7 @@ class ScatterPlotItem(QtGui.QGraphicsWidget):
         pass
 
     def pointClicked(self, point):
-        self.sigPointClicked.emit(point)
+        self.sigPointClicked.emit(self, point)
 
     def points(self):
         return self.spots[:]

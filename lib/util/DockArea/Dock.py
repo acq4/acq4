@@ -179,7 +179,7 @@ class Dock(QtGui.QWidget, DockDrop):
             
 class DockLabel(VerticalLabel):
     
-    sigClicked = QtCore.Signal(object)
+    sigClicked = QtCore.Signal(object, object)
     
     def __init__(self, text, dock):
         self.dim = False

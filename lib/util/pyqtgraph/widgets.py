@@ -756,8 +756,12 @@ class ROI(QtGui.QGraphicsObject):
         ### Untranspose array before returning
         #return arr5.transpose(tr2)
 
-    def getGlobalTransform(self, relativeTo):
-        """Return global transformation (rotation angle+translation) required to move from relative state to current state."""
+    def getGlobalTransform(self, relativeTo=None):
+        """Return global transformation (rotation angle+translation) required to move from relative state to current state. If relative state isn't specified,
+        then we use the state of the ROI when mouse is pressed."""
+        
+        if relativeTo == None:
+            relativeTo = self.preMoveState
         
         st = self.getState()
         
@@ -779,7 +783,7 @@ class ROI(QtGui.QGraphicsObject):
         trans = Point(st['pos']) - p1
         return trans, ang
 
-    def setGlobalTransform(self, translate, rotate):
+    def applyGlobalTransform(self, translate, rotate):
         st = self.getState()
         trans = QtGui.QTransform()
         trans.translate(*translate)
@@ -787,7 +791,7 @@ class ROI(QtGui.QGraphicsObject):
         
         x2, y2 = trans.map(*st['pos'])
         
-        self.setAngle(rotate*np.pi/180.)
+        self.setAngle(st['angle']+rotate*np.pi/180.)
         self.setPos([x2, y2])
 
 

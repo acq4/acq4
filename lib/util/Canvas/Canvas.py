@@ -29,7 +29,13 @@ class Canvas(QtGui.QWidget):
         self.ui.setupUi(self)
         self.view = self.ui.view
         self.itemList = self.ui.itemList
+        self.itemList.setSelectionMode(self.itemList.ExtendedSelection)
         self.allowTransforms = allowTransforms
+        self.multiSelectBox = SelectBox()
+        self.scene().addItem(self.multiSelectBox)
+        self.multiSelectBox.hide()
+        self.multiSelectBox.setZValue(1e6)
+        
         
         self.items = {}
         
@@ -58,6 +64,9 @@ class Canvas(QtGui.QWidget):
         self.ui.autoRangeBtn.clicked.connect(self.autoRangeClicked)
         self.ui.storeSvgBtn.clicked.connect(self.storeSvg)
         self.ui.storePngBtn.clicked.connect(self.storePng)
+        
+        self.multiSelectBox.sigRegionChanged.connect(self.multiSelectBoxChanged)
+        self.multiSelectBox.sigRegionChangeFinished.connect(self.multiSelectBoxChangeFinished)
         
         self.resizeEvent()
         if hideCtrl:
@@ -164,14 +173,19 @@ class Canvas(QtGui.QWidget):
         #gi.setZValue(z)
 
     def treeItemSelected(self):
-        sel = self.itemList.selectedItems()[0]
-        if sel is None:
+        sel = self.itemList.selectedItems()
+        if len(sel) == 0:
             #self.selectWidget.hide()
             return
         for i in self.items.itervalues():
             i.ctrlWidget().hide()
-        item = self.items[sel.name]
-        item.ctrlWidget().show()
+            
+        if len(sel)==1:
+            item = self.items[sel[0].name]
+            item.ctrlWidget().show()
+            self.multiSelectBox.hide()
+        elif len(sel) > 1:
+            self.showMultiSelectBox()
         
         #if item.isMovable():
             #self.selectBox.setPos(item.item.pos())
@@ -182,7 +196,90 @@ class Canvas(QtGui.QWidget):
         
         #self.emit(QtCore.SIGNAL('itemSelected'), self, item)
         self.sigItemSelected.emit(self, item)
+        
+    def showMultiSelectBox(self):
+        items = self.itemList.selectedItems()
+        rect = items[0].item.item.sceneBoundingRect()
+        for i in items[1:]:
+            br = i.item.item.sceneBoundingRect()
+            rect = rect|br
+            
+        self.multiSelectBox.blockSignals(True)
+        self.multiSelectBox.setPos([rect.x(), rect.y()])
+        self.multiSelectBox.setSize(rect.size())
+        self.multiSelectBox.setAngle(0)
+        self.multiSelectBox.blockSignals(False)
+        
+        self.multiSelectBox.show()
+        #self.multiSelectBoxBase = self.multiSelectBox.getState().copy()
+        
+    def multiSelectBoxChanged(self):
+        self.multiSelectBoxMoved()
+        
+    def multiSelectBoxChangeFinished(self):
+        for ti in self.itemList.selectedItems():
+            ci = ti.item
+            ci.applyTemporaryTransform()
+        
+    def multiSelectBoxMoved(self):
+        
+        translate, rotate = self.multiSelectBox.getGlobalTransform()
+        
+        for ti in self.itemList.selectedItems():
+            ci = ti.item
+            ci.setTemporaryTransform(translate, rotate)
+            #ci.updateTransform()
+            
+        ###### Code is almost entirely copied out of CanvasItem's selectBoxMoved
+        #st = self.multiSelectBox.getState()
+        
+        #bPos1 = pg.Point(self.multiSelectBoxBase['pos'])
+        #bPos2 = pg.Point(st['pos'])
+        
+        ### How far the box has moved from its starting position
+        ##trans = [bpos[0] - self.selectBoxBase['pos'][0], bpos[1] - self.selectBoxBase['pos'][1]]
+        #trans = bPos2 - bPos1
+        
+        ### rotation
+        #ang = -st['angle'] * 180. / 3.14159265358
+        #rot = QtGui.QTransform()
+        #rot.rotate(ang)
 
+        #for ti in self.itemList.selectedItems():
+            #ci = ti.item
+            
+            #p0 = pg.Point(ci.basePos)
+    
+            ### base position, rotated
+            #p1 = rot.map(p0)
+            
+            ### find final location of item:
+            ### item pos relative to box
+            #relPos = p0 - bPos1
+            ##print relPos, p0, bPos1
+            
+            ### rotate
+            #relPos2 = rot.map(relPos)
+            
+            ### final location of item
+            #p2 = relPos2 + trans
+            
+            ### translation left over
+            #t2 = p2 - (p1-p0) - relPos
+            ##print trans, p2, p1, t2
+            
+            #ci.userTranslate = [t2.x(), t2.y()]
+            #ci.userRotate = st['angle']
+            
+            #ci.updateTransform()
+            
+            #ci.sigTransformChanged.emit(ci)
+            #ci.selectBoxToItem()
+            #self.sigItemTransformChangeFinished.emit(self, ci)
+            
+        ##self.showMultiSelectBox()
+        
+        
     def selectedItem(self):
         sel = self.itemList.selectedItems()
         if sel is None or len(sel) < 1:
@@ -229,6 +326,8 @@ class Canvas(QtGui.QWidget):
     
     ### Make addScan and addImage go away entirely, plox.
     def addScan(self, dirHandle, **opts):
+        """Returns a list of ScanCanvasItems."""
+        
         if 'sequenceParams' in dirHandle.info():
             dirs = [dirHandle[d] for d in dirHandle.subDirs()]
         else:
@@ -241,6 +340,7 @@ class Canvas(QtGui.QWidget):
             del(opts['separateParams'])
             
         
+        ### check for sequence parameters (besides targets) so that we can separate them out into individual Scans
         paramKeys = []
         params = dirHandle.info()['protocol']['params']
         if len(params) > 1 and separateParams==True:
@@ -269,7 +369,7 @@ class Canvas(QtGui.QWidget):
             item = graphicsItems.ScatterPlotItem(pts, pxMode=False)
             citem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
             self._addCanvasItem(citem)
-            return citem
+            return [citem]
         else:
             pts = {}
             for d in dirs:
@@ -289,13 +389,14 @@ class Canvas(QtGui.QWidget):
             item = graphicsItems.ScatterPlotItem(spots=spots, pxMode=False)
             parentCitem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
             self._addCanvasItem(parentCitem)
-            scans = {}
+            scans = []
             for k in pts.keys():
                 opts['name'] = paramKeys[0][0] + '_%03d' %k
                 item = graphicsItems.ScatterPlotItem(spots=pts[k], pxMode=False)
                 citem = ScanCanvasItem(self, item, handle = dirHandle, parent=parentCitem, **opts)
                 self._addCanvasItem(citem)
-                scans[opts['name']] = citem
+                #scans[opts['name']] = citem
+                scans.append(citem)
             return scans
                 
                 
@@ -559,6 +660,9 @@ class CanvasItem(QtCore.QObject):
         self.itemRotation = QtGui.QGraphicsRotation()
         self.itemScale = QtGui.QGraphicsScale()
         self.item.setTransformations([self.itemRotation, self.itemScale])
+        
+        self.tempTranslate = pg.Point(0,0)
+        self.tempRotate = 0.0
         self.resetTransform()
         self.selectBoxBase = self.selectBox.getState().copy()
         
@@ -667,6 +771,32 @@ class CanvasItem(QtCore.QObject):
         #self.userRotate = st['angle']
         
         #self.updateTransform()
+    def setTemporaryTransform(self, translate, rotate):
+        self.tempTranslate = translate
+        self.tempRotate = rotate
+        self.updateTransform()
+    
+    def applyTemporaryTransform(self):
+        #### THIS IS WHAT I NEED TO FIX!
+        """Combines the temporary transform with the userTransform, and sets the userTransform"""
+        transform = QtGui.QTransform()
+        #transform.translate(*self.tempTranslate)
+        transform.rotate(-self.tempRotate)
+        transform.translate(*self.tempTranslate)
+        translate = transform.map(0.0, 0.0)
+        print "Old userTransform: ", self.userTranslate, self.userRotate
+        print "    tempTransform: ", translate, self.tempRotate
+        
+        self.userTranslate = self.userTranslate + self.tempTranslate
+        self.userRotate += self.tempRotate
+        print "New userTransform: ", self.userTranslate, self.userRotate
+        self.resetTemporaryTransform()
+        self.selectBoxFromUser()
+    
+    def resetTemporaryTransform(self):
+        self.tempTranslate = pg.Point(0,0)
+        self.tempRotate = 0.0
+        self.updateTransform()
         
     def transform(self):
         return self.item.transform()
@@ -681,13 +811,17 @@ class CanvasItem(QtCore.QObject):
         ##    scale * userRotate * (userRotate^-1 * baseTranslate * userRotate) * userTranslate
         
         p1 = self.basePos
-        rot = QtGui.QTransform()
-        rot.rotate(-self.userRotate)
-        p2 = rot.map(p1)
-        p3 = p2 + self.userTranslate
+        transform = QtGui.QTransform()
+        transform.translate(*self.tempTranslate)
+        transform.rotate(-self.tempRotate)
+        transform.translate(*self.userTranslate)
+        transform.rotate(-self.userRotate)
         
-        self.item.setPos(p3)
-        self.itemRotation.setAngle(-self.userRotate)
+        
+        p2 = transform.map(p1)
+        
+        self.item.setPos(p2)
+        self.itemRotation.setAngle(-self.userRotate + -self.tempRotate)
         self.itemScale.setXScale(self.baseScale[0])
         self.itemScale.setYScale(self.baseScale[1])
         
@@ -736,7 +870,8 @@ class CanvasItem(QtCore.QObject):
         #x2, y2 = trans.map(*self.selectBoxBase['pos'])
         
         self.selectBox.blockSignals(True)
-        self.selectBox.setGlobalTransform(self.userTranslate, self.userRotate)
+        self.selectBox.setState(self.selectBoxBase)
+        self.selectBox.applyGlobalTransform(self.userTranslate, self.userRotate)
         #self.selectBox.setAngle(self.userRotate)
         #self.selectBox.setPos([x2, y2])
         self.selectBox.blockSignals(False)
@@ -783,7 +918,7 @@ class CanvasItem(QtCore.QObject):
         
     def showSelectBox(self):
         """Display the selection box around this item if it is selected and movable"""
-        if self.selected and self.isMovable() and self.isVisible():
+        if self.selected and self.isMovable() and self.isVisible() and len(self.canvas.itemList.selectedItems())==1:
             self.selectBox.show()
         else:
             self.selectBox.hide()
@@ -827,19 +962,19 @@ class MarkerCanvasItem(CanvasItem):
         CanvasItem.__init__(self, canvas, item, **opts)
         
 class ScanCanvasItem(CanvasItem):
-    def __init_(self, canvas, item, **opts):
+    def __init__(self, canvas, item, **opts):
         
-        print "Creating ScanCanvasItem...."
+        #print "Creating ScanCanvasItem...."
         CanvasItem.__init__(self, canvas, item, **opts)
         
         self.addScanImageBtn = QtGui.QPushButton()
         self.addScanImageBtn.setText('Add Scan Image')
-        self.layout.addWidget(self.addScanImageButton)
+        self.layout.addWidget(self.addScanImageBtn,3,0,1,2)
         
         self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
         
     def loadScanImage(self):
-        print 'loadScanImage called.'
+        #print 'loadScanImage called.'
         #dh = self.ui.fileLoader.ui.dirTree.selectedFile()
         #scan = self.canvas.selectedItem()
         dh = self.opts['handle']
@@ -849,13 +984,20 @@ class ScanCanvasItem(CanvasItem):
             return
         
         images = []
+        nulls = []
         for d in dirs:
+            if 'Camera' not in d.subDirs():
+                continue
             frames = d['Camera']['frames.ma'].read()
             image = frames[1]-frames[0]
             image[image > frames[1].max()*2] = 0.
+            if image.max() < 50:
+                nulls.append(d.shortName())
+                continue
             image = (image/float(image.max()) * 1000)
             images.append(image)
             
+        print "Null frames for %s:" %dh.shortName(), nulls
         scanImages = np.zeros(images[0].shape)
         for im in images:
             scanImages += im
@@ -864,8 +1006,12 @@ class ScanCanvasItem(CanvasItem):
     
         pos =  info['imagePosition']
         scale = info['pixelSize']
-        item = self.getElement('Canvas').addImage(scanImages, pos=pos, scale=scale, name='scanImage')
-        self.items[item] = scanImages
+        item = self.canvas.addImage(scanImages, pos=pos, scale=scale, z=self.opts['z']-1, name='scanImage')
+        self.scanImage = item
+        
+        self.scanImage.restoreTransform(self.saveTransform())
+        
+        #self.canvas.items[item] = scanImages
         
 
 

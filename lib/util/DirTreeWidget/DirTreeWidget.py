@@ -81,14 +81,20 @@ class DirTreeWidget(QtGui.QTreeWidget):
             self.setStyleSheet('')
         
     def selectedFile(self):
-        """Return the handle for the currently selected file."""
+        """Return the handle for the currently selected file.
+        If no items are selected, return None.
+        If multiple items are selected, raise an exception."""
         items = self.selectedItems()
         if len(items) == 0:
             return None
-        if len(items) != 1:
-            raise Exception("%d files selected; expected 1" % len(items))
-        
-        return self.handle(items[0])
+	if len(items) > 1:
+            raise Exception('Multiple items selected. Use selectedFiles instead.')
+	return self.handle(items[0])
+
+    def selectedFiles(self):
+        """Return list of handles for the currently selected file(s)."""
+        items = self.selectedItems()
+        return [self.handle(items[i]) for i in range(len(items))]
         
     def handle(self, item):
         """Given a tree item, return the corresponding file handle"""
