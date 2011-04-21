@@ -402,7 +402,7 @@ class ROI(QtGui.QGraphicsObject):
                 return
             
             ## determine new rotation angle, constrained if necessary
-            ang = newState['angle'] + lp0.angle(lp1)
+            ang = newState['angle'] - lp0.angle(lp1)
             if ang is None:  ## this should never happen..
                 return
             if self.rotateSnap or (modifiers & QtCore.Qt.ControlModifier):
@@ -411,7 +411,7 @@ class ROI(QtGui.QGraphicsObject):
             ## create rotation transform
             tr = QtGui.QTransform()
             #tr.rotate(-ang * 180. / np.pi)
-            tr.rotate(-ang)
+            tr.rotate(ang)
             
             ## mvoe ROI so that center point remains stationary after rotate
             cc = self.mapToParent(cs) - (tr.map(cs) + self.state['pos'])
@@ -813,8 +813,9 @@ class ROI(QtGui.QGraphicsObject):
         
         #self.setAngle(st['angle']+rotate*np.pi/180.)
         #self.setPos([x2, y2])
-        
-        self.setState((tr * st).saveState())
+        st = (tr * st).saveState()
+        st['size'] = st['scale']
+        self.setState(st)
 
 
 class Handle(QtGui.QGraphicsItem):
