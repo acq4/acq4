@@ -158,10 +158,18 @@ if __name__ == '__main__':
     print "tr2 * tr1 = ", tr2*tr1
     
     w1 = widgets.TestROI((0,0), (50, 50))
+    w2 = widgets.TestROI((0,0), (150, 150))
     s.addItem(w1)
+    s.addItem(w2)
     w1Base = w1.getState()
+    w2Base = w2.getState()
     def update():
-        t1.setTransform(w1.getGlobalTransform(w1Base))
+        tr1 = w1.getGlobalTransform(w1Base)
+        tr2 = w2.getGlobalTransform(w2Base)
+        t1.setTransform(tr1 * tr2)
+        w1.setState(w1Base)
+        w1.applyGlobalTransform(tr2)
     w1.sigRegionChanged.connect(update)
+    w2.sigRegionChanged.connect(update)
     
     
