@@ -852,9 +852,9 @@ class CurvePoint(QtGui.QGraphicsObject):
             
         p1 = self.parentItem().mapToScene(QtCore.QPointF(x[i1], y[i1]))
         p2 = self.parentItem().mapToScene(QtCore.QPointF(x[i2], y[i2]))
-        ang = np.arctan2(p2.y()-p1.y(), p2.x()-p1.x())
+        ang = np.arctan2(p2.y()-p1.y(), p2.x()-p1.x()) ## returns radians
         self.resetTransform()
-        self.rotate(180+ ang * 180 / np.pi)
+        self.rotate(180+ ang * 180 / np.pi) ## takes degrees
         QtGui.QGraphicsItem.setPos(self, *newPos)
         return True
         
@@ -2018,6 +2018,7 @@ class InfiniteLine(GraphicsObject):
         self.currentPen = self.pen
         
     def setAngle(self, angle):
+        """Takes angle argument in degrees."""
         self.angle = ((angle+45) % 180) - 45   ##  -45 <= angle < 135
         self.updateLine()
         

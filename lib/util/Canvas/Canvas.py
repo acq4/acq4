@@ -604,7 +604,7 @@ class CanvasItem(QtCore.QObject):
     transformCopyBuffer = None
     
     def __init__(self, canvas, item, **opts):
-        defOpts = {'name': None, 'pos': [0,0], 'scale': [1,1], 'z': None, 'movable': True, 'scalable': False, 'handle': None, 'visible': True, 'parent':None}
+        defOpts = {'name': None, 'z': None, 'movable': True, 'scalable': False, 'handle': None, 'visible': True, 'parent':None} #'pos': [0,0], 'scale': [1,1], 'angle':0,
         defOpts.update(opts)
         self.opts = defOpts
         self.selected = False
@@ -651,9 +651,21 @@ class CanvasItem(QtCore.QObject):
         self.selectBox.sigRegionChanged.connect(self.selectBoxChanged)  ## calls selectBoxMoved
         self.selectBox.sigRegionChangeFinished.connect(self.selectBoxChangeFinished)
         
+        if 'transform' in self.opts:
+            self.baseTransform = self.opts['transform']
+        else:
+            self.baseTransform = pg.Transform()
+            if 'pos' in self.opts:
+                self.baseTransform.translate(self.opts['pos'])
+            if 'angle' in self.opts:
+                self.baseTransform.rotate(self.opts['angle'])
+            if 'scale' in self.opts:
+                self.baseTransform.scale(self.opts['scale'])
+                
         ## Take note of the starting position of the item and selection box
-        self.basePos = pg.Point(self.opts['pos'])
-        self.baseScale = self.opts['scale']
+        #self.basePos = pg.Point(self.opts['pos'])
+        #self.baseScale = self.opts['scale']
+        #self.baseTransform = self.transform
         
         ## set up the transformations that will be applied to the item
         ## (It is not safe to use item.setTransform, since the item might count on that not changing)
@@ -661,9 +673,10 @@ class CanvasItem(QtCore.QObject):
         self.itemScale = QtGui.QGraphicsScale()
         self.item.setTransformations([self.itemRotation, self.itemScale])
         
-        self.tempTranslate = pg.Point(0,0)
-        self.tempRotate = 0.0
-        self.resetTransform()
+        #self.tempTranslate = pg.Point(0,0)
+        #self.tempRotate = 0.0
+        self.tempTransform = pg.Transform()
+        self.resetUserTransform() ## sets self.userTransform
         self.selectBoxBase = self.selectBox.getState().copy()
         
         ## reload user transform from disk if possible
@@ -680,7 +693,7 @@ class CanvasItem(QtCore.QObject):
     def handle(self):
         """Return the file handle for this item, if any exists."""
         return self.opts['handle']
-
+                             
     def copyClicked(self):
         CanvasItem.transformCopyBuffer = self.saveTransform()
         
@@ -694,10 +707,11 @@ class CanvasItem(QtCore.QObject):
 
     def hasUserTransform(self):
         #print self.userRotate, self.userTranslate
-        if self.userRotate == 0 and self.userTranslate == pg.Point(0,0):
-            return False
-        else:
-            return True
+        #if self.userRotate == 0 and self.userTranslate == pg.Point(0,0):
+            #return False
+        #else:
+            #return True
+        return not self.userTransform.isIdentity()
 
     def ctrlWidget(self):
         return self.ctrl
@@ -714,13 +728,15 @@ class CanvasItem(QtCore.QObject):
         
     def selectBoxMoved(self):
         """The selection box has moved; get its transformation information and pass to the graphics item"""
-        translate, rotate = self.selectBox.getGlobalTransform(relativeTo=self.selectBoxBase)
+        #translate, rotate = self.selectBox.getGlobalTransform(relativeTo=self.selectBoxBase)
         
-        self.userTranslate = translate
-        self.userRotate = rotate
+        #self.userTranslate = translate
+        #self.userRotate = rotate
         
+        #self.updateTransform()
+        
+        self.userTransform = self.selectBox.getGlobalTransform(relativeTo=self.selectBoxBase)
         self.updateTransform()
-        
         
         
         #st = self.selectBox.getState()
@@ -771,34 +787,35 @@ class CanvasItem(QtCore.QObject):
         #self.userRotate = st['angle']
         
         #self.updateTransform()
-    def setTemporaryTransform(self, translate, rotate):
-        self.tempTranslate = translate
-        self.tempRotate = rotate
+    def setTemporaryTransform(self, transform):
+        self.tempTransform = transform
         self.updateTransform()
     
     def applyTemporaryTransform(self):
-        #### THIS IS WHAT I NEED TO FIX!
-        """Combines the temporary transform with the userTransform, and sets the userTransform"""
-        transform = QtGui.QTransform()
+        ##### THIS IS WHAT I NEED TO FIX!
+        #"""Combines the temporary transform with the userTransform, and sets the userTransform"""
+        #transform = QtGui.QTransform()
+        ##transform.translate(*self.tempTranslate)
+        #transform.rotate(-self.tempRotate)
         #transform.translate(*self.tempTranslate)
-        transform.rotate(-self.tempRotate)
-        transform.translate(*self.tempTranslate)
-        translate = transform.map(0.0, 0.0)
-        print "Old userTransform: ", self.userTranslate, self.userRotate
-        print "    tempTransform: ", translate, self.tempRotate
+        #translate = transform.map(0.0, 0.0)
+        #print "Old userTransform: ", self.userTranslate, self.userRotate
+        #print "    tempTransform: ", translate, self.tempRotate
         
-        self.userTranslate = self.userTranslate + self.tempTranslate
-        self.userRotate += self.tempRotate
-        print "New userTransform: ", self.userTranslate, self.userRotate
+        #self.userTranslate = self.userTranslate + self.tempTranslate
+        #self.userRotate += self.tempRotate
+        #print "New userTransform: ", self.userTranslate, self.userRotate
+        #self.resetTemporaryTransform()
+        #self.selectBoxFromUser()
+        self.userTransform = self.tempTransform * self.userTransform ## order is important!
         self.resetTemporaryTransform()
         self.selectBoxFromUser()
     
     def resetTemporaryTransform(self):
-        self.tempTranslate = pg.Point(0,0)
-        self.tempRotate = 0.0
+        self.tempTransform.reset()
         self.updateTransform()
         
-    def transform(self):
+    def transform(self): 
         return self.item.transform()
 
     def updateTransform(self):
@@ -811,12 +828,12 @@ class CanvasItem(QtCore.QObject):
         ##    scale * userRotate * (userRotate^-1 * baseTranslate * userRotate) * userTranslate
         
         p1 = self.basePos
-        transform = QtGui.QTransform()
-        transform.translate(*self.tempTranslate)
-        transform.rotate(-self.tempRotate)
-        transform.translate(*self.userTranslate)
-        transform.rotate(-self.userRotate)
-        
+        #transform = QtGui.QTransform()
+        #transform.translate(*self.tempTranslate)
+        #transform.rotate(-self.tempRotate)
+        #transform.translate(*self.userTranslate)
+        #transform.rotate(-self.userRotate)
+        transform = self.tempTransform * self.userTransform ## order is important
         
         p2 = transform.map(p1)
         
@@ -825,10 +842,13 @@ class CanvasItem(QtCore.QObject):
         self.itemScale.setXScale(self.baseScale[0])
         self.itemScale.setYScale(self.baseScale[1])
         
+        
+        
 
-    def resetTransform(self):
-        self.userRotate = 0
-        self.userTranslate = pg.Point(0,0)
+    def resetUserTransform(self):
+        #self.userRotate = 0
+        #self.userTranslate = pg.Point(0,0)
+        self.userTransform.reset()
         self.updateTransform()
         
         self.selectBox.blockSignals(True)
@@ -838,28 +858,31 @@ class CanvasItem(QtCore.QObject):
         self.sigTransformChangeFinished.emit(self)
         
     def resetTransformClicked(self):
-        self.resetTransform()
+        self.resetUserTransform()
         self.sigResetUserTransform.emit(self)
         
     def restoreTransform(self, tr):
         try:
-            self.userTranslate = pg.Point(tr['trans'])
-            self.userRotate = tr['rot']
+            #self.userTranslate = pg.Point(tr['trans'])
+            #self.userRotate = tr['rot']
+            self.userTransform = pg.Transform(tr)
             
             self.selectBoxFromUser() ## move select box to match
             self.updateTransform()
             self.sigTransformChanged.emit(self)
             self.sigTransformChangeFinished.emit(self)
         except:
-            self.userTranslate = pg.Point([0,0])
-            self.userRotate = 0
+            #self.userTranslate = pg.Point([0,0])
+            #self.userRotate = 0
+            self.userTransform = pg.Transform()
             debug.printExc("Failed to load transform:")
         #print "set transform", self, self.userTranslate
         
     def saveTransform(self):
         #print "save transform", self, self.userTranslate
-        return {'trans': list(self.userTranslate), 'rot': self.userRotate}
-        
+        #return {'trans': list(self.userTranslate), 'rot': self.userRotate}
+        return self.userTransform.saveState()
+    
     def selectBoxFromUser(self):
         """Move the selection box to match the current userTransform"""
         ## user transform
@@ -871,7 +894,7 @@ class CanvasItem(QtCore.QObject):
         
         self.selectBox.blockSignals(True)
         self.selectBox.setState(self.selectBoxBase)
-        self.selectBox.applyGlobalTransform(self.userTranslate, self.userRotate)
+        self.selectBox.applyGlobalTransform(self.userTransform)
         #self.selectBox.setAngle(self.userRotate)
         #self.selectBox.setPos([x2, y2])
         self.selectBox.blockSignals(False)
