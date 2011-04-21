@@ -51,7 +51,6 @@ class AnalysisModule(QtCore.QObject):
         QtCore.QObject.__init__(self)
         self._host_ = host
         self.dataModel = host.dataModel
-        
 
     def initializeElements(self):
         """Must be called sometime during the construction of the module."""

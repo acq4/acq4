@@ -174,14 +174,14 @@ class Canvas(QtGui.QWidget):
 
     def treeItemSelected(self):
         sel = self.itemList.selectedItems()
-        if sel == []:
+        if len(sel) == 0:
             #self.selectWidget.hide()
             return
         for i in self.items.itervalues():
             i.ctrlWidget().hide()
             
-        item = self.items[sel[0].name]
         if len(sel)==1:
+            item = self.items[sel[0].name]
             item.ctrlWidget().show()
             self.multiSelectBox.hide()
         elif len(sel) > 1:
@@ -211,7 +211,7 @@ class Canvas(QtGui.QWidget):
         self.multiSelectBox.blockSignals(False)
         
         self.multiSelectBox.show()
-        self.multiSelectBoxBase = self.multiSelectBox.getState().copy()
+        #self.multiSelectBoxBase = self.multiSelectBox.getState().copy()
         
     def multiSelectBoxChanged(self):
         self.multiSelectBoxMoved()
@@ -579,13 +579,14 @@ class Canvas(QtGui.QWidget):
 
 
 class SelectBox(widgets.ROI):
-    def __init__(self):
+    def __init__(self, scalable=False):
         #QtGui.QGraphicsRectItem.__init__(self, 0, 0, size[0], size[1])
         widgets.ROI.__init__(self, [0,0], [1,1])
         center = [0.5, 0.5]
             
-        #self.addScaleHandle([1, 1], center)
-        #self.addScaleHandle([0, 0], center)
+        if scalable:
+            self.addScaleHandle([1, 1], center)
+            self.addScaleHandle([0, 0], center)
         self.addRotateHandle([0, 1], center)
         self.addRotateHandle([1, 0], center)
 
@@ -603,7 +604,7 @@ class CanvasItem(QtCore.QObject):
     transformCopyBuffer = None
     
     def __init__(self, canvas, item, **opts):
-        defOpts = {'name': None, 'pos': [0,0], 'scale': [1,1], 'z': None, 'movable': True, 'handle': None, 'visible': True, 'parent':None}
+        defOpts = {'name': None, 'pos': [0,0], 'scale': [1,1], 'z': None, 'movable': True, 'scalable': False, 'handle': None, 'visible': True, 'parent':None}
         defOpts.update(opts)
         self.opts = defOpts
         self.selected = False
@@ -710,8 +711,8 @@ class CanvasItem(QtCore.QObject):
         
     def setMovable(self, m):
         self.opts['movable'] = m
-            
-    def selectBoxMoved(self, ):
+        
+    def selectBoxMoved(self):
         """The selection box has moved; get its transformation information and pass to the graphics item"""
         translate, rotate = self.selectBox.getGlobalTransform(relativeTo=self.selectBoxBase)
         

@@ -90,7 +90,7 @@ class MosaicEditor(AnalysisModule):
                 except:
                     pass
 
-                item.timestamp = f.info()['__timestamp__']
+                #item.timestamp = f.info()['__timestamp__']
                 if not item.hasUserTransform():
                     ## Record the timestamp for this file, see what is the most recent transformation to copy
                     best = None

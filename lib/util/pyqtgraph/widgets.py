@@ -9,12 +9,15 @@ for use as region-of-interest markers. ROI class automatically handles extractio
 of array data from ImageItems.
 """
 
-from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
+from PyQt4 import QtCore, QtGui
+if not hasattr(QtCore, 'Signal'):
+    QtCore.Signal = QtCore.pyqtSignal
 #from numpy import array, arccos, dot, pi, zeros, vstack, ubyte, fromfunction, ceil, floor, arctan2
 import numpy as np
 from numpy.linalg import norm
 import scipy.ndimage as ndimage
 from Point import *
+from Transform import Transform
 from math import cos, sin
 import functions as fn
 #from ObjectWorkaround import *
@@ -54,10 +57,11 @@ class ROI(QtGui.QGraphicsObject):
             self.pen = fn.mkPen(pen)
         self.handlePen = QtGui.QPen(QtGui.QColor(150, 255, 255))
         self.handles = []
-        self.state = {'pos': pos, 'size': size, 'angle': angle}
+        self.state = {'pos': pos, 'size': size, 'angle': angle}  ## angle is in degrees for ease of Qt integration
         self.lastState = None
         self.setPos(pos)
-        self.rotate(-angle * 180. / np.pi)
+        #self.rotate(-angle * 180. / np.pi)
+        self.rotate(-angle)
         self.setZValue(10)
         self.isMoving = False
         
@@ -114,7 +118,8 @@ class ROI(QtGui.QGraphicsObject):
     def setAngle(self, angle, update=True):
         self.state['angle'] = angle
         tr = QtGui.QTransform()
-        tr.rotate(-angle * 180 / np.pi)
+        #tr.rotate(-angle * 180 / np.pi)
+        tr.rotate(-angle)
         self.setTransform(tr)
         if update:
             self.updateHandles()
@@ -401,11 +406,12 @@ class ROI(QtGui.QGraphicsObject):
             if ang is None:  ## this should never happen..
                 return
             if self.rotateSnap or (modifiers & QtCore.Qt.ControlModifier):
-                ang = round(ang / (np.pi/12.)) * (np.pi/12.)
+                ang = round(ang / 15.) * 15.  ## 180/12 = 15
             
             ## create rotation transform
             tr = QtGui.QTransform()
-            tr.rotate(-ang * 180. / np.pi)
+            #tr.rotate(-ang * 180. / np.pi)
+            tr.rotate(-ang)
             
             ## mvoe ROI so that center point remains stationary after rotate
             cc = self.mapToParent(cs) - (tr.map(cs) + self.state['pos'])
@@ -478,7 +484,8 @@ class ROI(QtGui.QGraphicsObject):
             if ang is None:
                 return
             if self.rotateSnap or (modifiers & QtCore.Qt.ControlModifier):
-                ang = round(ang / (np.pi/12.)) * (np.pi/12.)
+                #ang = round(ang / (np.pi/12.)) * (np.pi/12.)
+                ang = round(ang / 15.) * 15.
             
             hs = abs(h['pos'][scaleAxis] - c[scaleAxis])
             newState['size'][scaleAxis] = lp1.length() / hs
@@ -489,7 +496,8 @@ class ROI(QtGui.QGraphicsObject):
                 
             c1 = c * newState['size']
             tr = QtGui.QTransform()
-            tr.rotate(-ang * 180. / np.pi)
+            #tr.rotate(-ang * 180. / np.pi)
+            tr.rotate(-ang)
             
             cc = self.mapToParent(cs) - (tr.map(c1) + self.state['pos'])
             newState['angle'] = ang
@@ -581,7 +589,8 @@ class ROI(QtGui.QGraphicsObject):
     def stateRect(self, state):
         r = QtCore.QRectF(0, 0, state['size'][0], state['size'][1])
         tr = QtGui.QTransform()
-        tr.rotate(-state['angle'] * 180 / np.pi)
+        #tr.rotate(-state['angle'] * 180 / np.pi)
+        tr.rotate(-state['angle'])
         r = tr.mapRect(r)
         return r.adjusted(state['pos'][0], state['pos'][1], state['pos'][0], state['pos'][1])
     
@@ -759,40 +768,53 @@ class ROI(QtGui.QGraphicsObject):
     def getGlobalTransform(self, relativeTo=None):
         """Return global transformation (rotation angle+translation) required to move from relative state to current state. If relative state isn't specified,
         then we use the state of the ROI when mouse is pressed."""
-        
         if relativeTo == None:
             relativeTo = self.preMoveState
-        
         st = self.getState()
         
-        ## rotation
-        ang = (st['angle']-relativeTo['angle']) * 180. / 3.14159265358
-        rot = QtGui.QTransform()
-        rot.rotate(-ang)
+        ## this is only allowed because we will be comparing the two 
+        relativeTo['scale'] = relativeTo['size']
+        st['scale'] = st['size']
+        
+        
+        
+        t1 = Transform(relativeTo)
+        t2 = Transform(st)
+        return t2/t1
+        
+        
+        #st = self.getState()
+        
+        ### rotation
+        #ang = (st['angle']-relativeTo['angle']) * 180. / 3.14159265358
+        #rot = QtGui.QTransform()
+        #rot.rotate(-ang)
 
-        ## We need to come up with a universal transformation--one that can be applied to other objects 
-        ## such that all maintain alignment. 
-        ## More specifically, we need to turn the ROI's position and angle into
-        ## a rotation _around the origin_ and a translation.
+        ### We need to come up with a universal transformation--one that can be applied to other objects 
+        ### such that all maintain alignment. 
+        ### More specifically, we need to turn the ROI's position and angle into
+        ### a rotation _around the origin_ and a translation.
         
-        p0 = Point(relativeTo['pos'])
+        #p0 = Point(relativeTo['pos'])
 
-        ## base position, rotated
-        p1 = rot.map(p0)
+        ### base position, rotated
+        #p1 = rot.map(p0)
         
-        trans = Point(st['pos']) - p1
-        return trans, ang
+        #trans = Point(st['pos']) - p1
+        #return trans, ang
 
-    def applyGlobalTransform(self, translate, rotate):
-        st = self.getState()
-        trans = QtGui.QTransform()
-        trans.translate(*translate)
-        trans.rotate(-rotate)
+    def applyGlobalTransform(self, tr):
+        st = Transform(self.getState())
+        #trans = QtGui.QTransform()
+        #trans.translate(*translate)
+        #trans.rotate(-rotate)
         
-        x2, y2 = trans.map(*st['pos'])
+        #x2, y2 = trans.map(*st['pos'])
         
-        self.setAngle(st['angle']+rotate*np.pi/180.)
-        self.setPos([x2, y2])
+        #self.setAngle(st['angle']+rotate*np.pi/180.)
+        #self.setPos([x2, y2])
+        
+        self.setState((tr * st).saveState())
 
 
 class Handle(QtGui.QGraphicsItem):
@@ -965,10 +987,11 @@ class LineROI(ROI):
         d = pos2-pos1
         l = d.length()
         ang = Point(1, 0).angle(d)
-        c = Point(-width/2. * sin(ang), -width/2. * cos(ang))
+        ra = ang * np.pi / 180.
+        c = Point(-width/2. * sin(ra), -width/2. * cos(ra))
         pos1 = pos1 + c
         
-        ROI.__init__(self, pos1, size=Point(l, width), angle=ang*180/np.pi, **args)
+        ROI.__init__(self, pos1, size=Point(l, width), angle=ang, **args)
         self.addScaleRotateHandle([0, 0.5], [1, 0.5])
         self.addScaleRotateHandle([1, 0.5], [0, 0.5])
         self.addScaleHandle([0.5, 1], [0.5, 0.5])

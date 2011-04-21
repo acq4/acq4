@@ -32,7 +32,7 @@ class FileLoader(QtGui.QWidget):
         self.sigBaseChanged.emit(dh)
         
     def loadClicked(self):
-        fh = self.ui.dirTree.selectedFile()
+        fh = self.ui.dirTree.selectedFiles()
         self.loadFile(fh)
         
     def loadFile(self, files):

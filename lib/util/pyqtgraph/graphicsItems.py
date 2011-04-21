@@ -280,8 +280,12 @@ class ImageItem(QtGui.QGraphicsObject):
         
         # Determine scale factors
         if autoRange or self.blackLevel is None:
-            self.blackLevel = self.image.min()
-            self.whiteLevel = self.image.max()
+            if self.image.dtype is np.ubyte:
+                self.blackLevel = 0
+                self.whiteLevel = 255
+            else:
+                self.blackLevel = self.image.min()
+                self.whiteLevel = self.image.max()
         #print "Image item using", self.blackLevel, self.whiteLevel
         
         if self.blackLevel != self.whiteLevel:

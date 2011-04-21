@@ -2,6 +2,7 @@
 from PyQt4 import QtCore, QtGui
 import modules
 import DockArea
+import lib.Manager
 
 class AnalysisHost(QtGui.QMainWindow):
     """Window for hosting analysis widgets.
@@ -45,4 +46,7 @@ class AnalysisHost(QtGui.QMainWindow):
         self.elements = elems
         
         self.setWindowTitle(modName)
+        
+        lib.Manager.getManager().declareInterface(modName, 'analysisMod', self.mod)
+        
         
