@@ -104,13 +104,13 @@ class MosaicEditor(AnalysisModule):
                                 best = i2
                                 
                     if best is None:
-                        return
+                        continue
                         
                     trans = best.saveTransform()
                     item.restoreTransform(trans)
                 
         canvas.selectItem(item)
-        
+        print "select", item
     #def loadScanImage(self):
         ##print 'loadScanImage called.'
         #dh = self.ui.fileLoader.ui.dirTree.selectedFile()

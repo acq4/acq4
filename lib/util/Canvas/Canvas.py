@@ -836,11 +836,11 @@ class CanvasItem(QtCore.QObject):
         #transform.rotate(-self.tempRotate)
         #transform.translate(*self.userTranslate)
         #transform.rotate(-self.userRotate)
-        print "Temp: ", self.tempTransform.matrix()
-        print "User: ", self.userTransform.matrix()
-        print "Base: ", self.baseTransform.matrix()
+        #print "Temp: ", self.tempTransform.matrix()
+        #print "User: ", self.userTransform.matrix()
+        #print "Base: ", self.baseTransform.matrix()
         transform = self.baseTransform * self.userTransform *self.tempTransform## order is important
-        print "Transform: ", transform.matrix()
+        #print "Transform: ", transform.matrix()
         
         #p2 = transform.map(p1)
         s = transform.saveState()

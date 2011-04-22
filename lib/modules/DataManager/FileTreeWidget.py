@@ -156,7 +156,10 @@ class FileTreeWidget(QtGui.QTreeWidget):
         
     def unwatch(self, handle):
         #QtCore.QObject.disconnect(handle, QtCore.SIGNAL('delayedChange'), self.dirChanged)
-        handle.sigDelayedChange.disconnect(self.dirChanged)
+        try:
+            handle.sigDelayedChange.disconnect(self.dirChanged)
+        except TypeError:
+            pass
         
     def dirChanged(self, handle, changes):
         #print "Change: %s %s"% (change, handle.name())
