@@ -1,5 +1,6 @@
 .:
 ThalamocorticalMarker.svg:
     userTransform:
-        trans: [0, 0]
-        rot: 0
+        scale: (1.0, 1.0000000000000002)
+        angle: -0.062443592313874724
+        pos: (-3.5079240222231356e-06, 3.0349540539975454e-06)
