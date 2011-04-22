@@ -587,8 +587,8 @@ class SelectBox(widgets.ROI):
         center = [0.5, 0.5]
             
         if scalable:
-            self.addScaleHandle([1, 1], center)
-            self.addScaleHandle([0, 0], center)
+            self.addScaleHandle([1, 1], center, lockAspect=True)
+            self.addScaleHandle([0, 0], center, lockAspect=True)
         self.addRotateHandle([0, 1], center)
         self.addRotateHandle([1, 0], center)
 
@@ -645,14 +645,6 @@ class CanvasItem(QtCore.QObject):
         self.copyBtn.clicked.connect(self.copyClicked)
         self.pasteBtn.clicked.connect(self.pasteClicked)
         
-        ## create selection box (only visible when selected)
-        self.selectBox = SelectBox()
-        self.canvas.scene().addItem(self.selectBox)
-        self.selectBox.hide()
-        self.selectBox.setZValue(1e6)
-        self.selectBox.sigRegionChanged.connect(self.selectBoxChanged)  ## calls selectBoxMoved
-        self.selectBox.sigRegionChangeFinished.connect(self.selectBoxChangeFinished)
-        
         if 'transform' in self.opts:
             self.baseTransform = self.opts['transform']
         else:
@@ -663,7 +655,19 @@ class CanvasItem(QtCore.QObject):
                 self.baseTransform.rotate(self.opts['angle'])
             if 'scale' in self.opts:
                 self.baseTransform.scale(self.opts['scale'])
-                
+
+        ## create selection box (only visible when selected)
+        tr = self.baseTransform.saveState()
+        if 'scalable' not in opts and tr['scale'] == (1,1):
+            self.opts['scalable'] = True
+        self.selectBox = SelectBox(scalable=self.opts['scalable'])
+        self.canvas.scene().addItem(self.selectBox)
+        self.selectBox.hide()
+        self.selectBox.setZValue(1e6)
+        self.selectBox.sigRegionChanged.connect(self.selectBoxChanged)  ## calls selectBoxMoved
+        self.selectBox.sigRegionChangeFinished.connect(self.selectBoxChangeFinished)
+
+
         ## Take note of the starting position of the item and selection box
         #self.basePos = pg.Point(self.opts['pos'])
         #self.baseScale = self.opts['scale']
@@ -836,11 +840,11 @@ class CanvasItem(QtCore.QObject):
         #transform.rotate(-self.tempRotate)
         #transform.translate(*self.userTranslate)
         #transform.rotate(-self.userRotate)
-        print "Temp: ", self.tempTransform.matrix()
-        print "User: ", self.userTransform.matrix()
-        print "Base: ", self.baseTransform.matrix()
+        #print "Temp: ", self.tempTransform.matrix()
+        #print "User: ", self.userTransform.matrix()
+        #print "Base: ", self.baseTransform.matrix()
         transform = self.baseTransform * self.userTransform *self.tempTransform## order is important
-        print "Transform: ", transform.matrix()
+        #print "Transform: ", transform.matrix()
         
         #p2 = transform.map(p1)
         s = transform.saveState()
