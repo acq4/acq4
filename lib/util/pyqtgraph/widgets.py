@@ -38,6 +38,8 @@ def rectStr(r):
 
 
 class ROI(QtGui.QGraphicsObject):
+    """Generic region-of-interest widget. 
+    Can be used for implementing many types of selection box with rotate/translate/scale handles."""
     
     sigRegionChangeFinished = QtCore.Signal(object)
     sigRegionChangeStarted = QtCore.Signal(object)
@@ -134,10 +136,10 @@ class ROI(QtGui.QGraphicsObject):
         pos = Point(pos)
         return self.addHandle({'name': name, 'type': 'f', 'pos': pos, 'item': item})
     
-    def addScaleHandle(self, pos, center, axes=None, item=None, name=None):
+    def addScaleHandle(self, pos, center, axes=None, item=None, name=None, lockAspect=False):
         pos = Point(pos)
         center = Point(center)
-        info = {'name': name, 'type': 's', 'center': center, 'pos': pos, 'item': item}
+        info = {'name': name, 'type': 's', 'center': center, 'pos': pos, 'item': item, 'lockAspect': lockAspect}
         if pos.x() == center.x():
             info['xoff'] = True
         if pos.y() == center.y():
@@ -354,6 +356,11 @@ class ROI(QtGui.QGraphicsObject):
             if self.scaleSnap or (modifiers & QtCore.Qt.ControlModifier):
                 lp1[0] = round(lp1[0] / self.snapSize) * self.snapSize
                 lp1[1] = round(lp1[1] / self.snapSize) * self.snapSize
+                
+            ## preserve aspect ratio (this can override snapping)
+            if h['lockAspect'] or (modifiers & QtCore.Qt.AltModifier):
+                #arv = Point(self.preMoveState['size']) - 
+                lp1 = lp1.proj(lp0)
             
             ## determine scale factors and new size of ROI
             hs = h['pos'] - c

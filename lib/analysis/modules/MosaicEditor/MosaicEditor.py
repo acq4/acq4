@@ -110,7 +110,6 @@ class MosaicEditor(AnalysisModule):
                     item.restoreTransform(trans)
                 
         canvas.selectItem(item)
-        print "select", item
     #def loadScanImage(self):
         ##print 'loadScanImage called.'
         #dh = self.ui.fileLoader.ui.dirTree.selectedFile()

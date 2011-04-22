@@ -119,6 +119,11 @@ class Point(QtCore.QPointF):
     def cross(self, a):
         a = Point(a)
         return self[0]*a[1] - self[1]*a[0]
+        
+    def proj(self, b):
+        """Return the projection of this vector onto the vector b"""
+        b1 = b / b.length()
+        return self.dot(b1) * b1
     
     def __repr__(self):
         return "Point(%f, %f)" % (self[0], self[1])
