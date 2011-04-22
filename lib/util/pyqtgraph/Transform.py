@@ -39,10 +39,18 @@ class Transform(QtGui.QTransform):
         dp2 = Point(p2-p1)
         dp3 = Point(p3-p1)
         
+        ## detect flipped axes
+        if dp2.angle(dp3) > 0:
+            da = 180
+            sy = -1.0
+        else:
+            da = 0
+            sy = 1.0
+            
         self._state = {
             'pos': Point(p1),
-            'scale': Point(dp2.length(), dp3.length()),
-            'angle': np.arctan2(dp2[1], dp2[0]) * 180. / np.pi
+            'scale': Point(dp2.length(), dp3.length() * sy),
+            'angle': (np.arctan2(dp2[1], dp2[0]) * 180. / np.pi) + da
         }
         self.update()
         
@@ -158,6 +166,11 @@ if __name__ == '__main__':
     print "tr2 / tr1 = ", dt
     
     print "tr2 * tr1 = ", tr2*tr1
+    
+    tr4 = Transform()
+    tr4.scale(-1, 1)
+    tr4.rotate(30)
+    print "tr1 * tr4 = ", tr1*tr4
     
     w1 = widgets.TestROI((0,0), (50, 50))
     w2 = widgets.TestROI((0,0), (150, 150))
