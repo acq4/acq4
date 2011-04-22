@@ -6,6 +6,7 @@ if __name__ == '__main__':
     #print md
     
 from CanvasTemplate import *
+from pyqtgraph import TransformGuiTemplate
 from pyqtgraph.GraphicsView import GraphicsView
 import pyqtgraph.graphicsItems as graphicsItems
 from pyqtgraph.PlotWidget import PlotWidget
@@ -637,6 +638,11 @@ class CanvasItem(QtCore.QObject):
         self.layout.addWidget(self.resetTransformBtn, 1, 0, 1, 2)
         self.layout.addWidget(self.copyBtn, 2, 0, 1, 1)
         self.layout.addWidget(self.pasteBtn, 2, 1, 1, 1)
+        self.transformWidget = QtGui.QWidget()
+        self.transformGui = TransformGuiTemplate.Ui_Form()
+        self.transformGui.setupUi(self.transformWidget)
+        self.layout.addWidget(self.transformWidget, 3, 0, 1, 2)
+        
         self.alphaSlider.valueChanged.connect(self.alphaChanged)
         self.alphaSlider.sliderPressed.connect(self.alphaPressed)
         self.alphaSlider.sliderReleased.connect(self.alphaReleased)
@@ -644,6 +650,7 @@ class CanvasItem(QtCore.QObject):
         self.resetTransformBtn.clicked.connect(self.resetTransformClicked)
         self.copyBtn.clicked.connect(self.copyClicked)
         self.pasteBtn.clicked.connect(self.pasteClicked)
+        self.transformGui.mirrorImageCheck.stateChanged.connect(self.mirrorImage)
         
         if 'transform' in self.opts:
             self.baseTransform = self.opts['transform']
@@ -710,6 +717,29 @@ class CanvasItem(QtCore.QObject):
             return
         else:
             self.restoreTransform(t)
+            
+    def mirrorImage(self):
+        
+        flip = self.transformGui.mirrorImageCheck.checkState()
+        tr = self.userTransform.saveState()
+        
+        if flip:
+            if tr['scale'][0] < 0:
+                return
+            else:
+                self.userTransform.setScale([-tr['scale'][0], tr['scale'][1]])
+                self.updateTransform()
+                self.selectBoxFromUser()
+                return
+        elif not flip:
+            if tr['scale'][0] > 0:
+                return
+            else:
+                self.userTransform.setScale([-tr['scale'][0], tr['scale'][1]])
+                self.updateTransform()
+                self.selectBoxFromUser()
+                return
+                
     
 
     def hasUserTransform(self):
@@ -854,7 +884,17 @@ class CanvasItem(QtCore.QObject):
         self.itemScale.setXScale(s['scale'][0])
         self.itemScale.setYScale(s['scale'][1])
         
+        self.displayTransform(transform)
         
+    def displayTransform(self, transform):
+        """Updates transform numbers in the ctrl widget."""
+        
+        tr = transform.saveState()
+        
+        self.transformGui.translateLabel.setText("Translate: (%f, %f)" %(tr['pos'][0], tr['pos'][1]))
+        self.transformGui.rotateLabel.setText("Rotate: %f degrees" %tr['angle'])
+        self.transformGui.scaleLabel.setText("Scale: (%f, %f)" %(tr['scale'][0], tr['scale'][1]))
+
         
 
     def resetUserTransform(self):
