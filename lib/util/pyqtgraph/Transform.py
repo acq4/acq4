@@ -98,11 +98,13 @@ class Transform(QtGui.QTransform):
     def saveState(self):
         p = self._state['pos']
         s = self._state['scale']
+        if s[0] == 0:
+            raise Exception('Invalid scale')
         return {'pos': (p[0], p[1]), 'scale': (s[0], s[1]), 'angle': self._state['angle']}
 
     def restoreState(self, state):
         self._state['pos'] = Point(state.get('pos', (0,0)))
-        self._state['scale'] = Point(state.get('scale', (0,0)))
+        self._state['scale'] = Point(state.get('scale', (1.,1.)))
         self._state['angle'] = state.get('angle', 0)
         self.update()
 

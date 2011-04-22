@@ -19,7 +19,7 @@ import scipy.ndimage as ndimage
 
 class Canvas(QtGui.QWidget):
     
-    sigItemSelected = QtCore.Signal(object, object)
+    sigSelectionChanged = QtCore.Signal(object, object)
     sigItemTransformChanged = QtCore.Signal(object, object)
     sigItemTransformChangeFinished = QtCore.Signal(object, object)
     
@@ -174,6 +174,7 @@ class Canvas(QtGui.QWidget):
 
     def treeItemSelected(self):
         sel = self.itemList.selectedItems()
+        sel = [self.items[item.name] for item in sel]
         if len(sel) == 0:
             #self.selectWidget.hide()
             return
@@ -181,9 +182,10 @@ class Canvas(QtGui.QWidget):
             i.ctrlWidget().hide()
             
         if len(sel)==1:
-            item = self.items[sel[0].name]
+            item = sel[0]
             item.ctrlWidget().show()
             self.multiSelectBox.hide()
+            
         elif len(sel) > 1:
             self.showMultiSelectBox()
         
@@ -195,7 +197,7 @@ class Canvas(QtGui.QWidget):
             #self.selectBox.hide()
         
         #self.emit(QtCore.SIGNAL('itemSelected'), self, item)
-        self.sigItemSelected.emit(self, item)
+        self.sigSelectionChanged.emit(self, sel)
         
     def showMultiSelectBox(self):
         items = self.itemList.selectedItems()
@@ -223,11 +225,11 @@ class Canvas(QtGui.QWidget):
         
     def multiSelectBoxMoved(self):
         
-        translate, rotate = self.multiSelectBox.getGlobalTransform()
+        transform = self.multiSelectBox.getGlobalTransform()
         
         for ti in self.itemList.selectedItems():
             ci = ti.item
-            ci.setTemporaryTransform(translate, rotate)
+            ci.setTemporaryTransform(transform)
             #ci.updateTransform()
             
         ###### Code is almost entirely copied out of CanvasItem's selectBoxMoved
@@ -638,7 +640,7 @@ class CanvasItem(QtCore.QObject):
         self.alphaSlider.valueChanged.connect(self.alphaChanged)
         self.alphaSlider.sliderPressed.connect(self.alphaPressed)
         self.alphaSlider.sliderReleased.connect(self.alphaReleased)
-        self.canvas.sigItemSelected.connect(self.selectionChanged)
+        self.canvas.sigSelectionChanged.connect(self.selectionChanged)
         self.resetTransformBtn.clicked.connect(self.resetTransformClicked)
         self.copyBtn.clicked.connect(self.copyClicked)
         self.pasteBtn.clicked.connect(self.pasteClicked)
@@ -675,8 +677,9 @@ class CanvasItem(QtCore.QObject):
         
         #self.tempTranslate = pg.Point(0,0)
         #self.tempRotate = 0.0
-        self.tempTransform = pg.Transform()
-        self.resetUserTransform() ## sets self.userTransform
+        self.tempTransform = pg.Transform() ## holds the additional transform that happens during a move - gets added to the userTransform when move is done.
+        self.userTransform = pg.Transform() ## stores the total transform of the object
+        self.resetUserTransform() 
         self.selectBoxBase = self.selectBox.getState().copy()
         
         ## reload user transform from disk if possible
@@ -807,12 +810,12 @@ class CanvasItem(QtCore.QObject):
         #print "New userTransform: ", self.userTranslate, self.userRotate
         #self.resetTemporaryTransform()
         #self.selectBoxFromUser()
-        self.userTransform = self.tempTransform * self.userTransform ## order is important!
+        self.userTransform = self.userTransform * self.tempTransform ## order is important!
         self.resetTemporaryTransform()
         self.selectBoxFromUser()
     
     def resetTemporaryTransform(self):
-        self.tempTransform.reset()
+        self.tempTransform = pg.Transform()
         self.updateTransform()
         
     def transform(self): 
@@ -827,20 +830,25 @@ class CanvasItem(QtCore.QObject):
         ## So we just need to do some rearranging:
         ##    scale * userRotate * (userRotate^-1 * baseTranslate * userRotate) * userTranslate
         
-        p1 = self.basePos
+        #p1 = self.baseTranform.
         #transform = QtGui.QTransform()
         #transform.translate(*self.tempTranslate)
         #transform.rotate(-self.tempRotate)
         #transform.translate(*self.userTranslate)
         #transform.rotate(-self.userRotate)
-        transform = self.tempTransform * self.userTransform ## order is important
+        print "Temp: ", self.tempTransform.matrix()
+        print "User: ", self.userTransform.matrix()
+        print "Base: ", self.baseTransform.matrix()
+        transform = self.baseTransform * self.userTransform *self.tempTransform## order is important
+        print "Transform: ", transform.matrix()
         
-        p2 = transform.map(p1)
+        #p2 = transform.map(p1)
+        s = transform.saveState()
+        self.item.setPos(*s['pos'])
         
-        self.item.setPos(p2)
-        self.itemRotation.setAngle(-self.userRotate + -self.tempRotate)
-        self.itemScale.setXScale(self.baseScale[0])
-        self.itemScale.setYScale(self.baseScale[1])
+        self.itemRotation.setAngle(s['angle'])
+        self.itemScale.setXScale(s['scale'][0])
+        self.itemScale.setYScale(s['scale'][1])
         
         
         
@@ -918,10 +926,11 @@ class CanvasItem(QtCore.QObject):
         if z is not None:
             self.item.setZValue(z)
         
-    def selectionChanged(self, canvas, item):
-        self.selected = (item is self)
+    def selectionChanged(self, canvas, items):
+        self.selected = len(items) == 1 and (items[0] is self) 
         self.showSelectBox()
-        
+            
+                
     def selectBoxChanged(self):
         self.selectBoxMoved()
         #self.updateTransform(self.selectBox)
