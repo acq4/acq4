@@ -846,7 +846,15 @@ class CanvasItem(QtCore.QObject):
         #print "New userTransform: ", self.userTranslate, self.userRotate
         #self.resetTemporaryTransform()
         #self.selectBoxFromUser()
+        st = self.userTransform.saveState()
+        
         self.userTransform = self.userTransform * self.tempTransform ## order is important!
+        
+        ### matrix multiplication affects the scale factors, need to reset
+        if st['scale'][0] < 0 or st['scale'][1] < 0:
+            nst = self.userTransform.saveState()
+            self.userTransform.setScale([-nst['scale'][0], -nst['scale'][1]])
+        
         self.resetTemporaryTransform()
         self.selectBoxFromUser()
     
