@@ -728,6 +728,7 @@ class CanvasItem(QtCore.QObject):
                 return
             else:
                 self.userTransform.setScale([-tr['scale'][0], tr['scale'][1]])
+                self.userTransform.setTranslate([-tr['pos'][0], tr['pos'][1]])
                 self.updateTransform()
                 self.selectBoxFromUser()
                 return
@@ -736,6 +737,7 @@ class CanvasItem(QtCore.QObject):
                 return
             else:
                 self.userTransform.setScale([-tr['scale'][0], tr['scale'][1]])
+                self.userTransform.setTranslate([-tr['pos'][0], tr['pos'][1]])
                 self.updateTransform()
                 self.selectBoxFromUser()
                 return

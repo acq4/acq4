@@ -812,7 +812,11 @@ class ROI(QtGui.QGraphicsObject):
 
     def applyGlobalTransform(self, tr):
         st = self.getState()
-        st['scale'] = st['size']
+        if tr.saveState()['scale'][0] < 0:
+            st['scale'] = -st['size']
+        else:
+            st['scale'] = st['size']
+        
         st = Transform(st)
         #trans = QtGui.QTransform()
         #trans.translate(*translate)
@@ -823,7 +827,10 @@ class ROI(QtGui.QGraphicsObject):
         #self.setAngle(st['angle']+rotate*np.pi/180.)
         #self.setPos([x2, y2])
         st = (st * tr).saveState()
-        st['size'] = st['scale']
+        if st['scale'][0] < 0:
+            st['size'] = -st['scale']
+        else:
+            st['size'] = st['scale']
         self.setState(st)
 
 
