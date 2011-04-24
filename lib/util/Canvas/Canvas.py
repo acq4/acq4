@@ -857,6 +857,8 @@ class CanvasItem(QtCore.QObject):
         
         self.resetTemporaryTransform()
         self.selectBoxFromUser()
+        self.selectBoxChangeFinished()
+        #self.updateTransform()
     
     def resetTemporaryTransform(self):
         self.tempTransform = pg.Transform()
@@ -928,9 +930,8 @@ class CanvasItem(QtCore.QObject):
             #self.userTranslate = pg.Point(tr['trans'])
             #self.userRotate = tr['rot']
             self.userTransform = pg.Transform(tr)
-            
-            self.selectBoxFromUser() ## move select box to match
             self.updateTransform()
+            self.selectBoxFromUser() ## move select box to match
             self.sigTransformChanged.emit(self)
             self.sigTransformChangeFinished.emit(self)
         except:

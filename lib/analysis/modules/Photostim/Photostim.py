@@ -129,14 +129,15 @@ class Photostim(AnalysisModule):
             self.dbCtrl.listMaps(cell)
 
             
-    def loadFileRequested(self, fh):
+    def loadFileRequested(self, fileHandles):
         canvas = self.getElement('Canvas')
-
+        
         try:
-            if fh.isFile():
-                canvas.addFile(fh)
-            else:
-                self.loadScan(fh)
+            for fh in fileHandles:
+                if fh.isFile():
+                    canvas.addFile(fh)
+                else:
+                    self.loadScan(fh)
             return True
         except:
             debug.printExc("Error loading file %s" % fh.name())
