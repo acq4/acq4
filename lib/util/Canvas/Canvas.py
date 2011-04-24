@@ -202,7 +202,9 @@ class Canvas(QtGui.QWidget):
     def showMultiSelectBox(self):
         items = self.itemList.selectedItems()
         rect = items[0].item.item.sceneBoundingRect()
-        for i in items[1:]:
+        for i in items:
+            if not i.item.isMovable():  ## all items in selection must be movable
+                return
             br = i.item.item.sceneBoundingRect()
             rect = rect|br
             
@@ -224,62 +226,11 @@ class Canvas(QtGui.QWidget):
             ci.applyTemporaryTransform()
         
     def multiSelectBoxMoved(self):
-        
         transform = self.multiSelectBox.getGlobalTransform()
         
         for ti in self.itemList.selectedItems():
             ci = ti.item
             ci.setTemporaryTransform(transform)
-            #ci.updateTransform()
-            
-        ###### Code is almost entirely copied out of CanvasItem's selectBoxMoved
-        #st = self.multiSelectBox.getState()
-        
-        #bPos1 = pg.Point(self.multiSelectBoxBase['pos'])
-        #bPos2 = pg.Point(st['pos'])
-        
-        ### How far the box has moved from its starting position
-        ##trans = [bpos[0] - self.selectBoxBase['pos'][0], bpos[1] - self.selectBoxBase['pos'][1]]
-        #trans = bPos2 - bPos1
-        
-        ### rotation
-        #ang = -st['angle'] * 180. / 3.14159265358
-        #rot = QtGui.QTransform()
-        #rot.rotate(ang)
-
-        #for ti in self.itemList.selectedItems():
-            #ci = ti.item
-            
-            #p0 = pg.Point(ci.basePos)
-    
-            ### base position, rotated
-            #p1 = rot.map(p0)
-            
-            ### find final location of item:
-            ### item pos relative to box
-            #relPos = p0 - bPos1
-            ##print relPos, p0, bPos1
-            
-            ### rotate
-            #relPos2 = rot.map(relPos)
-            
-            ### final location of item
-            #p2 = relPos2 + trans
-            
-            ### translation left over
-            #t2 = p2 - (p1-p0) - relPos
-            ##print trans, p2, p1, t2
-            
-            #ci.userTranslate = [t2.x(), t2.y()]
-            #ci.userRotate = st['angle']
-            
-            #ci.updateTransform()
-            
-            #ci.sigTransformChanged.emit(ci)
-            #ci.selectBoxToItem()
-            #self.sigItemTransformChangeFinished.emit(self, ci)
-            
-        ##self.showMultiSelectBox()
         
         
     def selectedItem(self):
@@ -667,20 +618,12 @@ class CanvasItem(QtCore.QObject):
         self.selectBox.sigRegionChanged.connect(self.selectBoxChanged)  ## calls selectBoxMoved
         self.selectBox.sigRegionChangeFinished.connect(self.selectBoxChangeFinished)
 
-
-        ## Take note of the starting position of the item and selection box
-        #self.basePos = pg.Point(self.opts['pos'])
-        #self.baseScale = self.opts['scale']
-        #self.baseTransform = self.transform
-        
         ## set up the transformations that will be applied to the item
         ## (It is not safe to use item.setTransform, since the item might count on that not changing)
         self.itemRotation = QtGui.QGraphicsRotation()
         self.itemScale = QtGui.QGraphicsScale()
         self.item.setTransformations([self.itemRotation, self.itemScale])
         
-        #self.tempTranslate = pg.Point(0,0)
-        #self.tempRotate = 0.0
         self.tempTransform = pg.Transform() ## holds the additional transform that happens during a move - gets added to the userTransform when move is done.
         self.userTransform = pg.Transform() ## stores the total transform of the object
         self.resetUserTransform() 
@@ -691,6 +634,12 @@ class CanvasItem(QtCore.QObject):
             trans = self.opts['handle'].info().get('userTransform', None)
             if trans is not None:
                 self.restoreTransform(trans)
+                
+        #print "Created canvas item", self
+        #print "  base:", self.baseTransform
+        #print "  user:", self.userTransform
+        #print "  temp:", self.tempTransform
+        #print "  bounds:", self.item.sceneBoundingRect()
 
     def graphicsItem(self):
         return self.item
@@ -710,14 +659,9 @@ class CanvasItem(QtCore.QObject):
             return
         else:
             self.restoreTransform(t)
-    
 
     def hasUserTransform(self):
         #print self.userRotate, self.userTranslate
-        #if self.userRotate == 0 and self.userTranslate == pg.Point(0,0):
-            #return False
-        #else:
-            #return True
         return not self.userTransform.isIdentity()
 
     def ctrlWidget(self):

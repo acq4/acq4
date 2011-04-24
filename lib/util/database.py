@@ -13,6 +13,7 @@ def quoteList(strns):
     """
     return ','.join(['"'+s+'"' for s in strns])
 
+
 class SqliteDatabase:
     """Encapsulates an SQLITE database through QtSql to make things a bit more pythonic.
     Arbitrary SQL may be executed by calling the db object directly, eg: db('select * from table')
@@ -134,10 +135,10 @@ class SqliteDatabase:
         self._readTableList()
 
     def hasTable(self, table):
-        return table in self.tables
+        return table in self.tables  ## this is a case-insensitive operation
     
     def tableSchema(self, table):
-        return self.tables[table]
+        return self.tables[table]  ## this is a case-insensitive operation
     
     def _exe(self, query, cmd=None):
         """Execute an SQL query, raising an exception if there was an error. (internal use only)"""
@@ -245,7 +246,7 @@ class SqliteDatabase:
         res = self.select('sqlite_master', ['name', 'sql'], "where type = 'table'")
         ident = r"(\w+|'[^']+'|\"[^\"]+\")"
         #print "READ:"
-        tables = {}
+        tables = advancedTypes.CaselessDict()
         for rec in res:
             #print rec
             sql = rec['sql'].replace('\n', ' ')
@@ -253,7 +254,7 @@ class SqliteDatabase:
             m = re.match(r"\s*create\s+table\s+%s\s*\(([^\)]+)\)" % ident, sql, re.I)
             #print m.groups()
             fieldstr = m.groups()[1].split(',')
-            fields = {}
+            fields = advancedTypes.CaselessDict()
             #print fieldstr
             #print fieldstr
             for f in fieldstr:
@@ -494,9 +495,9 @@ class AnalysisDatabase(SqliteDatabase):
             
             ts = self.tableSchema(table)
             for f in fields:
-                if f not in ts:
+                if f not in ts:  ## this is a case-insensitive operation
                     raise Exception("Table has different data structure: Missing field %s" % f)
-                elif ts[f] != fields[f]:
+                elif ts[f].lower() != fields[f].lower():  ## type names are case-insensitive too
                     raise Exception("Table has different data structure: Field '%s' type is %s, should be %s" % (f, ts[f], fields[f]))
         return True
 

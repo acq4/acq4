@@ -96,6 +96,13 @@
         </property>
        </widget>
       </item>
+      <item row="3" column="1" colspan="2">
+       <widget class="FeedbackButton" name="rewriteSpotPosBtn">
+        <property name="text">
+         <string>Re-write spot locations</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

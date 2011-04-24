@@ -130,7 +130,7 @@ class EventDetector(AnalysisModule):
         names = []
         for i in xrange(len(data)):
             ## delete all records from table for current input file
-            source = data[i]['sourceData']
+            source = data[i]['SourceFile']
             name = source.name(relativeTo=parentDir)
             names.append(name)
             db.delete(table, "SourceDir=%d and SourceFile='%s'" % (pRow, name))
