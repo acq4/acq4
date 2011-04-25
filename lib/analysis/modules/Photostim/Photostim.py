@@ -73,17 +73,17 @@ class Photostim(AnalysisModule):
         ## Create element list, importing some gui elements from event detector
         elems = self.detector.listElements()
         self._elements_ = OrderedDict([
-            ('Database', {'type': 'ctrl', 'object': self.dbCtrl, 'size': (200, 200)}),
-            ('Scatter Plot', {'type': 'ctrl', 'object': self.scatterPlot, 'pos': ('right',), 'size': (400,400)}),
-            ('Canvas', {'type': 'canvas', 'pos': ('above', 'Scatter Plot'), 'size': (400,400), 'allowTransforms': False, 'hideCtrl': True}),
+            ('Database', {'type': 'ctrl', 'object': self.dbCtrl, 'size': (300, 300)}),
+            ('Scatter Plot', {'type': 'ctrl', 'object': self.scatterPlot, 'pos': ('right',), 'size': (700,400)}),
+            ('Canvas', {'type': 'canvas', 'pos': ('above', 'Scatter Plot'), 'size': (700,400), 'allowTransforms': False, 'hideCtrl': True, 'args': {'name': 'Photostim'}}),
             #('Maps', {'type': 'ctrl', 'pos': ('bottom', 'Database'), 'size': (200,200), 'object': self.mapDBCtrl}),
-            ('Detection Opts', elems['Detection Opts'].setParams(pos=('bottom', 'Database'), size= (200,500))),
-            ('File Loader', {'type': 'fileInput', 'size': (200, 200), 'pos': ('top', 'Database'), 'host': self, 'showFileTree': False}),
-            ('Data Plot', elems['Data Plot'].setParams(pos=('bottom', 'Canvas'), size=(800,200))),
-            ('Filter Plot', elems['Filter Plot'].setParams(pos=('bottom', 'Data Plot'), size=(800,200))),
-            ('Event Table', elems['Output Table'].setParams(pos=('below', 'Filter Plot'), size=(800,200))),
-            ('Stats', {'type': 'dataTree', 'size': (800,200), 'pos': ('below', 'Event Table')}),
-            ('Map Opts', {'type': 'ctrl', 'object': self.mapCtrl, 'pos': ('left', 'Canvas'), 'size': (200,400)}),
+            ('Map Opts', {'type': 'ctrl', 'object': self.mapCtrl, 'pos': ('bottom', 'Database'), 'size': (300,500)}),
+            ('Detection Opts', elems['Detection Opts'].setParams(pos=('above', 'Map Opts'), size= (300,500))),
+            ('File Loader', {'type': 'fileInput', 'size': (300, 300), 'pos': ('above', 'Database'), 'host': self, 'showFileTree': False}),
+            ('Data Plot', elems['Data Plot'].setParams(pos=('bottom', 'Canvas'), size=(700,200))),
+            ('Filter Plot', elems['Filter Plot'].setParams(pos=('bottom', 'Data Plot'), size=(700,200))),
+            ('Event Table', elems['Output Table'].setParams(pos=('below', 'Filter Plot'), size=(700,200))),
+            ('Stats', {'type': 'dataTree', 'size': (700,200), 'pos': ('below', 'Event Table')}),
         ])
 
         self.initializeElements()
