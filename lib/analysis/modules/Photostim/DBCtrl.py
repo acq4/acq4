@@ -176,7 +176,10 @@ class DBCtrl(QtGui.QWidget):
         for rec in maps:
             scans = []
             for rowid in rec['scans']:
-                fh = db.getDir('ProtocolSequence', rowid)    ## NOTE: single-spot maps use a different table!
+                if isinstance(rowid, tuple):
+                    fh = db.getDir(rowid[0], rowid[1])  ## single-spot maps specify the Protocol table instead
+                else:
+                    fh = db.getDir('ProtocolSequence', rowid)    ## NOTE: single-spot maps use a different table!
                 scans.append((fh, rowid))
             rec['scans'] = scans
             self.newMap(rec)

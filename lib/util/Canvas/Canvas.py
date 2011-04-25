@@ -148,7 +148,11 @@ class Canvas(QtGui.QWidget):
             li = i.listItem
             parent = li.parent()
             if parent is None:
-                li.treeWidget().removeTopLevelItem(li)
+                tree = li.treeWidget()
+                if tree is None:
+                    print "Skipping item", i, i.name
+                    continue
+                tree.removeTopLevelItem(li)
             else:
                 parent.removeChild(li)
             canvas._addCanvasItem(i)
@@ -1058,8 +1062,8 @@ class ImageCanvasItem(CanvasItem):
         showTime = False
         if item is None:
             if self.data.ndim == 3:
-                if self.data.shape[2] <= 4:
-                    self.data = self.data.mean(axis=2)
+                if self.data.shape[2] <= 4: ## assume last axis is color
+                    #self.data = self.data.mean(axis=2)
                     item = graphicsItems.ImageItem(self.data)
                 else:
                     item = graphicsItems.ImageItem(self.data[0])

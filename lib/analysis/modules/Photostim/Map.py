@@ -53,7 +53,7 @@ class Map:
             for fh,rowid in scans:
                 item = QtGui.QTreeWidgetItem([fh.shortName()])
                 #print "Create scan stub:", fh
-                self.stubs.append(ScanStub(fh, item, rowid))
+                self.stubs.append(ScanStub(fh, item, rowid))  ## rowid can be either a (table, rowid) pair or an integer implying ('ProtocolSequence', rowid)
                 item.handle = fh
                 self.item.addChild(item)
 
@@ -103,6 +103,7 @@ class Map:
                 self.pointsByFile[pt.data] = self.points[-1]
 
     def addScans(self, scanList):
+        #print "Map.addScans:", scanList
         for scan in scanList:
             if scan in self.scans:
                 continue
@@ -178,7 +179,6 @@ class Map:
         
     def getRecord(self):
         ### Create a dictionary with all the record data for this map. 
-        
         rec = {}
         i = 0
         for k in self.mapFields:

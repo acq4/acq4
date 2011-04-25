@@ -176,7 +176,8 @@ class Photostim(AnalysisModule):
     def unregisterMap(self, map):
         canvas = self.getElement('Canvas')
         canvas.removeItem(map.sPlotItem)
-        self.maps.remove(map)
+        if map in self.maps:
+            self.maps.remove(map)
         map.sPlotItem.sigPointClicked.disconnect(self.mapPointClicked)
     
 
@@ -225,7 +226,7 @@ class Photostim(AnalysisModule):
                 #scan, fh = point.data[i]
                 scan, fh = points[i][:2]
                 if isinstance(fh, basestring):
-                    fh = scan.source[fh]
+                    fh = scan.source()[fh]
                 
                 ## plot all data, incl. events
                 data = fh.read()['primary']
@@ -434,7 +435,7 @@ class Photostim(AnalysisModule):
         #loader = self.getElement('File Loader')
         #dh = loader.selectedFile()
         #scan = self.scans[dh]
-        dh = scan.source
+        dh = scan.source()
         print "Clear scan", dh
         pRow = db.getDirRowID(dh)
         

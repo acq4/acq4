@@ -52,7 +52,7 @@ class Scan(QtCore.QObject):
     def rowId(self):
         db = self.host.getDb()
         table, rid = db.addDir(self.source())
-        return rid
+        return table, rid
 
     def loadFromDB(self):
         print "Loading scan data for", self.source()
