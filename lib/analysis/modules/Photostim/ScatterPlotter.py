@@ -75,15 +75,17 @@ class ScatterPlotter(QtGui.QSplitter):
                 return
                 
             data = self.filter.process(data, {})
+            #print "scatter plot:", len(data['output']), "pts"
             
-            pts = [{'pos': (data['output'][i][x], data['output'][i][y]), 'data': (scan, data['output'][i]['SourceFile'], data['output'][i]['index'])} for i in xrange(len(data))]
+            ### TODO: if 'fitTime' is not available, we should fall back to 'index'
+            pts = [{'pos': (data['output'][i][x], data['output'][i][y]), 'data': (scan, data['output'][i]['SourceFile'], data['output'][i]['fitTime'])} for i in xrange(len(data['output']))]
             plot.setPoints(pts)
-            
+            #print pts
             plot.sigPointClicked.connect(self.pointClicked)
         except:
             debug.printExc("Error updating scatter plot:")
         
-    def pointClicked(self, point):
+    def pointClicked(self, plot, point):
         self.sigPointClicked.emit(point)
     
     def updateAll(self):

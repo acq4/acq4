@@ -250,6 +250,7 @@ class Canvas(QtGui.QWidget):
         for ti in self.itemList.selectedItems():
             ci = ti.item
             ci.applyTemporaryTransform()
+            ci.sigTransformChangeFinished.emit(ci)
         
     def multiSelectBoxMoved(self):
         transform = self.multiSelectBox.getGlobalTransform()
@@ -257,6 +258,7 @@ class Canvas(QtGui.QWidget):
         for ti in self.itemList.selectedItems():
             ci = ti.item
             ci.setTemporaryTransform(transform)
+            ci.sigTransformChanged.emit(ci)
         
         
     def selectedItem(self):
@@ -1017,7 +1019,8 @@ class ScanCanvasItem(CanvasItem):
         print "Null frames for %s:" %dh.shortName(), nulls
         scanImages = np.zeros(images[0].shape)
         for im in images:
-            scanImages += im
+            mask = im > scanImages
+            scanImages[mask] = im[mask]
         
         info = dirs[0]['Camera']['frames.ma'].read()._info[-1]
     

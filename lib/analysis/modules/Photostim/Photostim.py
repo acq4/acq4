@@ -108,10 +108,13 @@ class Photostim(AnalysisModule):
         ## connect plots to flowchart, link X axes
         if name == 'File Loader':
             new.sigBaseChanged.connect(self.baseDirChanged)
-            QtCore.QObject.connect(new.ui.dirTree, QtCore.SIGNAL('selectionChanged'), self.fileSelected)
+            new.ui.dirTree.sigSelectionChanged.connect(self.fileSelected)
 
     def fileSelected(self):
-        fh = self.getElement('File Loader').ui.dirTree.selectedFile()
+        fhl = self.getElement('File Loader').ui.dirTree.selectedFiles()
+        if len(fhl) == 0:
+            return
+        fh = fhl[0]
         if fh is not None and fh.isDir():
             print Scan.describe(self.dataModel, fh)
 
@@ -162,6 +165,7 @@ class Photostim(AnalysisModule):
             citem.item.sigPointClicked.connect(self.scanPointClicked)
             self.dbCtrl.scanLoaded(scan)
             ret.append(scan)
+            self.scatterPlot.addScan(scan)
         return ret
                 
 
@@ -178,7 +182,11 @@ class Photostim(AnalysisModule):
         canvas.removeItem(map.sPlotItem)
         if map in self.maps:
             self.maps.remove(map)
-        map.sPlotItem.sigPointClicked.disconnect(self.mapPointClicked)
+            
+        try:
+            map.sPlotItem.sigPointClicked.disconnect(self.mapPointClicked)
+        except TypeError:
+            pass
     
 
     def storeToDB(self):
@@ -208,7 +216,8 @@ class Photostim(AnalysisModule):
         self.redisplayData([point.data])
         #self.scatterLine =
 
-    def redisplayData(self, points):  ## data must be [(scan, fh), ...]
+    def redisplayData(self, points):  ## data must be [(scan, fh, <event time>), ...]  
+        #raise Exception('blah')
         try:
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
             plot = self.getElement("Data Plot")
@@ -224,7 +233,11 @@ class Photostim(AnalysisModule):
             for i in range(num):
                 color = pg.intColor(i, num)
                 #scan, fh = point.data[i]
-                scan, fh = points[i][:2]
+                try:
+                    scan, fh = points[i][:2]
+                except:
+                    print points[i]
+                    raise
                 if isinstance(fh, basestring):
                     fh = scan.source()[fh]
                 
@@ -232,20 +245,24 @@ class Photostim(AnalysisModule):
                 data = fh.read()['primary']
                 pc = plot.plot(data, pen=color, clear=False)
                 
-                ## mark location of event
-                if len(points[i]) == 3:
-                    index = points[i][2]
-                    pos = float(index)/len(data)
-                    #print index
-                    self.arrow = pg.CurveArrow(pc, pos=pos)
-                    plot.addItem(self.arrow)
-                
                 ## show stats
                 stats = scan.getStats(fh)
                 statList.append(stats)
                 events = scan.getEvents(fh)['events']
                 evList.append(events)
+
+                ## mark location of event if an event index was given
+                if len(points[i]) == 3:
+                    evTime = points[i][2]
+                    #pos = float(index)/len(data)
+                    pos = evTime / data.xvals('Time')[-1]
+                    #print evTime, data.xvals('Time')[-1], pos
+                    #print index
+                    self.arrow = pg.CurveArrow(pc, pos=pos)
+                    plot.addItem(self.arrow)
                 
+
+                ## draw ticks over all detected events
                 if len(events) > 0:
                     times = events['fitTime']
                     ticks = pg.VTickGroup(times, [0.0, 0.15], pen=color, relative=True, view=plot)

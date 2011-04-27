@@ -822,10 +822,10 @@ class CurvePoint(QtGui.QGraphicsObject):
             self.setIndex(index)
             
     def setPos(self, pos):
-        self.setProperty('position', pos)
+        self.setProperty('position', float(pos))## cannot use numpy types here, MUST be python float.
         
     def setIndex(self, index):
-        self.setProperty('index', index)
+        self.setProperty('index', int(index))  ## cannot use numpy types here, MUST be python int.
         
     def event(self, ev):
         if not isinstance(ev, QtCore.QDynamicPropertyChangeEvent) or self.curve() is None:
@@ -840,7 +840,7 @@ class CurvePoint(QtGui.QGraphicsObject):
             
         (x, y) = self.curve().getData()
         if index is None:
-            #print self.property('position').toDouble()[0], self.property('position').typeName()
+            #print ev.propertyName(), self.property('position').toDouble()[0], self.property('position').typeName()
             index = (len(x)-1) * clip(self.property('position').toDouble()[0], 0.0, 1.0)
             
         if index != int(index):  ## interpolate floating-point values
