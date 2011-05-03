@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'MapCtrlTemplate.ui'
 #
-# Created: Wed Mar  2 19:23:19 2011
+# Created: Fri Apr 22 21:02:55 2011
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -45,6 +45,9 @@ class Ui_Form(object):
         self.storeDBSpotBtn = FeedbackButton(self.groupBox)
         self.storeDBSpotBtn.setObjectName("storeDBSpotBtn")
         self.gridLayout_2.addWidget(self.storeDBSpotBtn, 2, 2, 1, 1)
+        self.rewriteSpotPosBtn = FeedbackButton(self.groupBox)
+        self.rewriteSpotPosBtn.setObjectName("rewriteSpotPosBtn")
+        self.gridLayout_2.addWidget(self.rewriteSpotPosBtn, 3, 1, 1, 2)
         self.gridLayout.addWidget(self.groupBox, 2, 0, 1, 3)
         self.groupBox_2 = QtGui.QGroupBox(Form)
         self.groupBox_2.setObjectName("groupBox_2")
@@ -87,6 +90,7 @@ class Ui_Form(object):
         self.label.setText(QtGui.QApplication.translate("Form", "Selected Spot:", None, QtGui.QApplication.UnicodeUTF8))
         self.clearDBSpotBtn.setText(QtGui.QApplication.translate("Form", "Clear DB Entry", None, QtGui.QApplication.UnicodeUTF8))
         self.storeDBSpotBtn.setText(QtGui.QApplication.translate("Form", "Store to DB", None, QtGui.QApplication.UnicodeUTF8))
+        self.rewriteSpotPosBtn.setText(QtGui.QApplication.translate("Form", "Re-write spot locations", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Maps", None, QtGui.QApplication.UnicodeUTF8))
         self.mapTable.headerItem().setText(0, QtGui.QApplication.translate("Form", "Map/Scan", None, QtGui.QApplication.UnicodeUTF8))
         self.newMapBtn.setText(QtGui.QApplication.translate("Form", "New Map", None, QtGui.QApplication.UnicodeUTF8))

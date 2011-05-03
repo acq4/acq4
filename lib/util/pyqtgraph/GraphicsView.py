@@ -10,7 +10,7 @@ from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
 #import time
 from Point import *
 #from vector import *
-import sys
+import sys, os
 #import debug    
         
 class GraphicsView(QtGui.QGraphicsView):
@@ -19,6 +19,7 @@ class GraphicsView(QtGui.QGraphicsView):
     sigMouseReleased = QtCore.Signal(object)
     sigSceneMouseMoved = QtCore.Signal(object)
     #sigRegionChanged = QtCore.Signal(object)
+    lastFileDir = None
     
     def __init__(self, parent=None, useOpenGL=True):
         """Re-implementation of QGraphicsView that removes scrollbars and allows unambiguous control of the 
@@ -390,7 +391,16 @@ class GraphicsView(QtGui.QGraphicsView):
         
     def writeSvg(self, fileName=None):
         if fileName is None:
-            fileName = str(QtGui.QFileDialog.getSaveFileName())
+            self.fileDialog = QtGui.QFileDialog()
+            self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+            if GraphicsView.lastFileDir is not None:
+                self.fileDialog.setDirectory(GraphicsView.lastFileDir)
+            self.fileDialog.show()
+            self.fileDialog.fileSelected.connect(self.writeSvg)
+            return
+        fileName = str(fileName)
+        GraphicsView.lastFileDir = os.path.split(fileName)[0]
         self.svg = QtSvg.QSvgGenerator()
         self.svg.setFileName(fileName)
         self.svg.setSize(self.size())
@@ -400,7 +410,16 @@ class GraphicsView(QtGui.QGraphicsView):
         
     def writeImage(self, fileName=None):
         if fileName is None:
-            fileName = str(QtGui.QFileDialog.getSaveFileName())
+            self.fileDialog = QtGui.QFileDialog()
+            self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+            if GraphicsView.lastFileDir is not None:
+                self.fileDialog.setDirectory(GraphicsView.lastFileDir)
+            self.fileDialog.show()
+            self.fileDialog.fileSelected.connect(self.writePng)
+            return
+        fileName = str(fileName)
+        GraphicsView.lastFileDir = os.path.split(fileName)[0]
         self.png = QtGui.QImage(self.size(), QtGui.QImage.Format_ARGB32)
         painter = QtGui.QPainter(self.png)
         rh = self.renderHints()

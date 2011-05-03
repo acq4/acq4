@@ -240,11 +240,12 @@ class EventFilter(CtrlNode):
                     mask *= data[b] > s[mn]
                 except ValueError:  ## If the data doesn't kave this key, don't fret; just ignore it.
                     pass
-                
+        #print "  filter 1:", mask.sum()  
         region = s['region']
         if region != 'all':
             mask *= data['region'] == region
-            
+        #print "  filter 2:", mask.sum(), region
+        #print "  filter 3:", len(data[mask])
         return {'output':data[mask]}
             
             

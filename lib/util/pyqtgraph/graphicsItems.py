@@ -256,8 +256,11 @@ class ImageItem(QtGui.QGraphicsObject):
     def getLevels(self):
         return self.whiteLevel, self.blackLevel
 
-    def updateImage(self, image=None, copy=True, autoRange=False, clipMask=None, white=None, black=None):
-        axh = {'x': 0, 'y': 1, 'c': 2}
+    def updateImage(self, image=None, copy=True, autoRange=False, clipMask=None, white=None, black=None, axes=None):
+        if axes is None:
+            axh = {'x': 0, 'y': 1, 'c': 2}
+        else:
+            axh = axes
         #print "Update image", black, white
         if white is not None:
             self.whiteLevel = white
@@ -328,7 +331,6 @@ class ImageItem(QtGui.QGraphicsObject):
                 print "Weave compile failed, falling back to slower version."
             self.image.shape = shape
             im = ((self.image - black) * scale).clip(0.,255.).astype(np.ubyte)
-                
 
         try:
             im1 = np.empty((im.shape[axh['y']], im.shape[axh['x']], 4), dtype=np.ubyte)
@@ -345,10 +347,13 @@ class ImageItem(QtGui.QGraphicsObject):
             im1[..., 3] = alpha
         elif im.ndim == 3: #color image
             im2 = im.transpose(axh['y'], axh['x'], axh['c'])
+            ##      [B G R A]    Reorder colors
+            order = [2,1,0,3] ## for some reason, the colors line up as BGR in the final image.
             
             for i in range(0, im.shape[axh['c']]):
-                im1[..., 2-i] = im2[..., i]    ## for some reason, the colors line up as BGR in the final image.
+                im1[..., order[i]] = im2[..., i]    
             
+            ## fill in unused channels with 0 or alpha
             for i in range(im.shape[axh['c']], 3):
                 im1[..., i] = 0
             if im.shape[axh['c']] < 4:
@@ -785,7 +790,7 @@ class PlotCurveItem(GraphicsObject):
     def mouseMoveEvent(self, ev):
         #GraphicsObject.mouseMoveEvent(self, ev)
         self.mouseMoved = True
-        print "move"
+        #print "move"
         
     def mouseReleaseEvent(self, ev):
         #GraphicsObject.mouseReleaseEvent(self, ev)
@@ -817,10 +822,10 @@ class CurvePoint(QtGui.QGraphicsObject):
             self.setIndex(index)
             
     def setPos(self, pos):
-        self.setProperty('position', pos)
+        self.setProperty('position', float(pos))## cannot use numpy types here, MUST be python float.
         
     def setIndex(self, index):
-        self.setProperty('index', index)
+        self.setProperty('index', int(index))  ## cannot use numpy types here, MUST be python int.
         
     def event(self, ev):
         if not isinstance(ev, QtCore.QDynamicPropertyChangeEvent) or self.curve() is None:
@@ -835,7 +840,7 @@ class CurvePoint(QtGui.QGraphicsObject):
             
         (x, y) = self.curve().getData()
         if index is None:
-            #print self.property('position').toDouble()[0], self.property('position').typeName()
+            #print ev.propertyName(), self.property('position').toDouble()[0], self.property('position').typeName()
             index = (len(x)-1) * clip(self.property('position').toDouble()[0], 0.0, 1.0)
             
         if index != int(index):  ## interpolate floating-point values
@@ -1048,6 +1053,7 @@ class SpotItem(QtGui.QGraphicsWidget):
         self.pen = pen
         self.brush = brush
         self.path = QtGui.QPainterPath()
+        self.size = size
         #s2 = size/2.
         self.path.addEllipse(QtCore.QRectF(-0.5, -0.5, 1, 1))
         self.scale(size, size)

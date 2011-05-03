@@ -25,7 +25,7 @@ class MosaicEditor(AnalysisModule):
         self._elements_ = OrderedDict([
             ('File Loader', {'type': 'fileInput', 'size': (200, 300), 'host': self}),
             ('Mosaic', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('right',), 'size': (600, 200)}),
-            ('Canvas', {'type': 'canvas', 'pos': ('bottom', 'Mosaic'), 'size': (600, 600)}),
+            ('Canvas', {'type': 'canvas', 'pos': ('bottom', 'Mosaic'), 'size': (600, 600), 'args': {'name': 'MosaicEditor'}}),
         ])
         
         self.initializeElements()
@@ -88,16 +88,16 @@ class MosaicEditor(AnalysisModule):
                 try:
                     item.timestamp = f.info()['__timestamp__']
                 except:
-                    pass
+                    item.timestamp = None
 
                 #item.timestamp = f.info()['__timestamp__']
-                if not item.hasUserTransform():
+                if not item.hasUserTransform() and item.timestamp is not None:
                     ## Record the timestamp for this file, see what is the most recent transformation to copy
                     best = None
                     for i2 in self.items:
                         if i2 is item:
                             continue
-                        if not hasattr(i2, 'timestamp'):
+                        if i2.timestamp is None :
                             continue
                         if i2.timestamp < item.timestamp:
                             if best is None or i2.timestamp > best.timestamp:
