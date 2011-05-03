@@ -339,7 +339,8 @@ class Photostim(AnalysisModule):
         
     def recolor(self):
         for i in range(len(self.scans)):
-            s = self.scans[self.scans[i]]
+            #s = self.scans[self.scans[i]]
+            s = self.scans[i]
             s.recolor(i, len(self.scans))
         for i in range(len(self.maps)):
             m = self.maps[i]
@@ -1297,7 +1298,7 @@ class DBCtrl(QtGui.QWidget):
             #scan = self.getSelectedScanFromScanTree()
             scan = self.selectedScan()
             map = self.selectedMap()
-            map.addScan(scan)
+            map.addScan([scan])
             self.writeMapRecord(map)
             map.rebuildPlot()
             self.ui.addScanBtn.success("OK.")

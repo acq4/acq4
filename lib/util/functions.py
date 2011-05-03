@@ -121,14 +121,14 @@ def expDecay(v, x):
 
 
 def pspInnerFunc(v, x):
-    return v[0] * (1.0 - exp(-x / v[2])) * exp(-x / v[3])
+    return v[0] * (1.0 - np.exp(-x / v[2])) * np.exp(-x / v[3])
     
 def pspFunc(v, x, risePower=1.0):
     """Function approximating a PSP shape. 
     v = [amplitude, x offset, rise tau, fall tau"""
     ## determine scaling factor needed to achieve correct amplitude
     v = [v[0], v[1], abs(v[2]), abs(v[3])]
-    maxX = v[2] * log(1 + (v[3]/v[2]))
+    maxX = v[2] * np.log(1 + (v[3]/v[2]))
     maxVal = pspInnerFunc([1.0, 0, v[2], v[3]], maxX)
     out = np.empty(x.shape, x.dtype)
     mask = x > v[1]
@@ -1429,9 +1429,9 @@ def thresholdEvents(data, threshold, adjustTimes=True):
     except:
         dt = 1
         xvals = None
-        
+    
     ## find all threshold crossings
-    masks = [(data1 > threshold).astype(byte), (data1 < -threshold).astype(byte)]
+    masks = [(data1 > threshold).astype(np.byte), (data1 < -threshold).astype(np.byte)]
     hits = []
     for mask in masks:
         diff = mask[1:] - mask[:-1]
@@ -1631,11 +1631,11 @@ def modeFilter(data, window=500, step=None, bins=None):
         vals.append(mode(d1[i:i+window], bins))
         i += step
             
-    chunks = [linspace(vals[0], vals[0], l2)]
+    chunks = [np.linspace(vals[0], vals[0], l2)]
     for i in range(len(vals)-1):
-        chunks.append(linspace(vals[i], vals[i+1], step))
+        chunks.append(np.linspace(vals[i], vals[i+1], step))
     remain = len(data) - step*(len(vals)-1) - l2
-    chunks.append(linspace(vals[-1], vals[-1], remain))
+    chunks.append(np.linspace(vals[-1], vals[-1], remain))
     d2 = np.hstack(chunks)
     
     if isinstance(data, MetaArray):

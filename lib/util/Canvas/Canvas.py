@@ -719,6 +719,8 @@ class CanvasItem(QtCore.QObject):
             self.restoreTransform(t)
             
     def mirrorImage(self):
+        if not self.isMovable():
+            return
         
         flip = self.transformGui.mirrorImageCheck.checkState()
         tr = self.userTransform.saveState()
@@ -906,6 +908,9 @@ class CanvasItem(QtCore.QObject):
         self.transformGui.translateLabel.setText("Translate: (%f, %f)" %(tr['pos'][0], tr['pos'][1]))
         self.transformGui.rotateLabel.setText("Rotate: %f degrees" %tr['angle'])
         self.transformGui.scaleLabel.setText("Scale: (%f, %f)" %(tr['scale'][0], tr['scale'][1]))
+        self.transformGui.mirrorImageCheck.setChecked(False)
+        if tr['scale'][0] < 0:
+            self.transformGui.mirrorImageCheck.setChecked(True)
 
         
 
@@ -1056,7 +1061,7 @@ class ScanCanvasItem(CanvasItem):
         
         self.addScanImageBtn = QtGui.QPushButton()
         self.addScanImageBtn.setText('Add Scan Image')
-        self.layout.addWidget(self.addScanImageBtn,3,0,1,2)
+        self.layout.addWidget(self.addScanImageBtn,4,0,1,2)
         
         self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
         
