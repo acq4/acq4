@@ -65,7 +65,12 @@ units = {
 }
     
     
-    
+class Obj(object):
+    pass
+
+class Array(ndarray):  ## just allows us to add some dynamic attributes
+    def __new__(cls, arr):
+        return arr.view(cls)
     
 import struct
 def readA75(hdrFile):
@@ -116,9 +121,9 @@ def parseA75(headerFH, imgFile):
     #pixdim = img_dim[18:26]
     #vox_offset = img_dim[26]
     
-    print "dims:", dim
-    print "depth:", bitpix
-    print "type:", datatype
+    #print "dims:", dim
+    #print "depth:", bitpix
+    #print "type:", datatype
     
     ## read data
     fh = open(imgFile, 'rb')
@@ -131,6 +136,8 @@ def parseA75(headerFH, imgFile):
     
 
 def parseNii(headerFH, imgFile):
+    m = Obj()
+    
     ## see nifti1.h
     header = headerFH.read(348)
     if len(header) != 348:
@@ -150,33 +157,29 @@ def parseNii(headerFH, imgFile):
     ## pull variables from substructs
     dim_info = header_key[-1]  ## all others are unused in NiFTI
     
-    dim = image_dim[:8]
-    intent = image_dim[8:11]
-    intent_code, datatype, bitpix, slice_start = image_dim[11:15]
-    pixdim = image_dim[15:23]
-    vox_offset, scl_slope, scl_inter, slice_end, slice_code = image_dim[23:28]
-    xyzt_units, cal_max, cal_min, slice_duration, toffset, glmax, glmin = image_dim[28:35]
+    m.dim = image_dim[:8]
+    m.intent = image_dim[8:11]
+    m.intent_code, m.datatype, m.bitpix, m.slice_start = image_dim[11:15]
+    m.pixdim = image_dim[15:23]
+    m.vox_offset, m.scl_slope, m.scl_inter, m.slice_end, m.slice_code = image_dim[23:28]
+    m.xyzt_units, m.cal_max, m.cal_min, m.slice_duration, m.toffset, m.glmax, m.glmin = image_dim[28:35]
     
-    descrip, aux_file, qform_code, sform_code = data_history[:4]
-    quatern = data_history[4:7]
-    qoffset = data_history[7:10]
-    srow_x = data_history[10:14]
-    srow_y = data_history[14:18]
-    srow_z = data_history[18:22]
-    intent_name, magic = data_history[22:]
+    m.descrip, m.aux_file, m.qform_code, m.sform_code = data_history[:4]
+    m.quatern = data_history[4:7]
+    m.qoffset = data_history[7:10]
+    m.srow_x = data_history[10:14]
+    m.srow_y = data_history[14:18]
+    m.srow_z = data_history[18:22]
+    m.intent_name, m.magic = data_history[22:]
     
-    print "Description:", descrip[:descrip.index('\0')]
+    #print "Description:", descrip[:descrip.index('\0')]
 
     ## sanity checks
     if magic not in ['nii\0', 'n+1\0']:
         raise Exception('Unsupported NiFTI version: "%s"' % magic)
     if dim[0] > 7:
-        print header_key
-        print dim
-        ## If dim[0] > 7, then somehow this changes the byte ordering of the 
-        ## header/data, but I can't find any info on this.
         raise Exception('Dim > 7 not supported. (got %d)' % dim[0])
-    vox_offset = int(vox_offset)
+    m.vox_offset = int(vox_offset)
 
 
     ## read extended data (nothing done here yet, we just let the user know that the data is there.)
@@ -198,9 +201,9 @@ def parseNii(headerFH, imgFile):
     dtype = niiDataTypes[datatype]
     if isinstance(dtype, basestring):
         raise Exception("Data type not supported: %s"% dtype)
-    print "Dimensions:", dim[0]
-    print "Data shape:", shape
-    print "Data type: %s  (%dbpp)" % (str(dtype), bitpix)
+    #print "Dimensions:", dim[0]
+    #print "Data shape:", shape
+    #print "Data type: %s  (%dbpp)" % (str(dtype), bitpix)
     
     ## read image data. Anything more than 200MB, use memmap.
     if size < 200e6:
@@ -221,7 +224,7 @@ def parseNii(headerFH, imgFile):
         data = np.fromstring(data, dtype=dtype)
         data.shape = dim[1:dim[0]+1]
     else:
-        print "Large file; loading by memmap"
+        #print "Large file; loading by memmap"
         if magic == 'n+1\0':  ## data is in the same file as the header
             vox_offset = max(352, vox_offset)
             fh = headerFH
@@ -236,7 +239,7 @@ def parseNii(headerFH, imgFile):
         scl_slope = 1.0
     
     if (scl_slope != 1.0 or scl_inter != 0.0) and datatype != 128: ## scaling not allowed for RGB24
-        print "Applying scale and offset"
+        #print "Applying scale and offset"
         data = (data.astype(np.float32) * scl_slope) + scl_inter
 
     xUnits = units[xyzt_units & 0x07]
@@ -244,20 +247,21 @@ def parseNii(headerFH, imgFile):
 
     ## determine coordinate system
     if sform_code > 0:
-        print "affine transform:"
-        print srow_x
-        print srow_y
-        print srow_z
+        pass
+        #print "affine transform:"
+        #print srow_x
+        #print srow_y
+        #print srow_z
     else:
         pixdim = list(pixdim)
         pixdim[1] *= xUnits[1]
         pixdim[2] *= xUnits[1]
         pixdim[3] *= xUnits[1]
         pixdim[4] *= tUnits[1]
-        print "Voxel dimensions:", pixdim
+        #print "Voxel dimensions:", pixdim
         ## try just using pixdim
     
-    print "Voxel units:", xUnits[0]
+    #print "Voxel units:", xUnits[0]
     
     ## In NiFTI, dimensions MUST represent (x, y, z, t, v, ...)
     ## pixdim[1:] specifies voxel length along each axis
@@ -265,7 +269,8 @@ def parseNii(headerFH, imgFile):
     ## orientation
     ## bitpix
     ## cal_min, cal_max are calibrated display black and white levels
-    
+    data = Array(data)
+    data.meta = m.__dict__   ## store some header info aongside the array
     return data
 
 def getByteOrder(hLen):
