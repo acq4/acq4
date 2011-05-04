@@ -12,7 +12,7 @@ The easiest way to get started might be to look in the **config/backups** direct
     
 
 .cfg File Syntax
----------------
+----------------
 
 It is important to first understand that a 'configuration' is a single document, but for organization this document is often split up across multiple .cfg files. At its most basic level, a configuration is a list of name:value pairs:
     
@@ -46,8 +46,9 @@ This example would read the entire contents of 'folderTypes.cfg' and insert that
 Further notes about this syntax:
     
     * You can use "double" or 'single' quotes, but not "both'
+    * File or directory names should be quoted and use forward slashes (/) on Linux and OSX or double-back slashes (\\\\) on Windows (eg "/home/user/data" or "C:\\\\data\\\\user").
     * Some options will call for a list of values. This can be given just by separating the values with commas inline like ``value1, value2`` or with brackets like ``[value1, value2]``
-    * Finally, you may add comments to .cfg if they are preceded with a hash (#) symbol:
+    * Finally, you may add comments to .cfg if they are preceded with a hash (#) symbol
     
     
 
@@ -69,7 +70,7 @@ When ACQ4 first starts, it reads a single configuration from **config/default.cf
     configurations:
         ...
         
-In this format, the storageDir specifies the *default* location where data should be stored when no other location is specified. The protocolDir specifies the location where protocols designed in the Protocol Runner module are stored. All other section are discussed below:
+In this format, the storageDir specifies the *default* location where data should be stored when no other location is specified. The protocolDir specifies the location where protocols designed in the Protocol Runner module are stored. All other sections are discussed below:
     
 Modules Configuration
 '''''''''''''''''''''
@@ -129,10 +130,10 @@ The format for defining a device is:
         config:
             ...
             
-Here, *deviceType* refers to one of the devices defined in the directory **lib/devices** (examples: NiDAQ, MultiClamp, Microscope). The contents of *config* will depend on the device, and are described in the documentation for that device type. Refer to the example configurations in **config/backups**.
+Here, *deviceType* refers to one of the devices defined in the directory **lib/devices** (examples: NiDAQ, MultiClamp, Microscope). The contents of *config* will depend on the device, and are described in the documentation for that device type (see :ref:`userDevices`). Refer to the example configurations in **config/backups**.
 
 
-folderTypes Configuration
+FolderTypes Configuration
 '''''''''''''''''''''''''
 
 ACQ4 gives the user full control over deciding how best to organize their raw data as it is being collected. For example, a typical user might create a folder for every day they run experiments, and a sub-folder for every cell they record from. Each folder can be annotated by the experimenter, and often we want these annotations to be consistent from day to day. To facilitate this, we can define a set of folder types with a specific list of the data that should be annotated for each type. These types appear in the Data Manager module when adding new folders, and the annotations are automatically displayed as a form to be filled out by the experimenter. 
@@ -146,8 +147,34 @@ The basic syntax for a folder type is:
         info:
             ...
             
-Here, *UniqueName* is the name that will appear in the Data Manager module list of folder types. *storageName* specifies how each new folder will be named, including the possibility for date formatting ("%Y.%m.%d"). *info* is a list of name:value pairs that specify the set of meta-data fields to be included with each folder type.
+Here, *UniqueName* is the name that will appear in the Data Manager module list of folder types. *storageName* specifies how each new folder will be named as it is created, including the possibility for date formatting ("%Y.%m.%d"). *info* is a list of name:value pairs that specify the set of meta-data fields to be included with each folder type. There are two types of input that can be specified: 
+    
+::
+    
+    fieldName1: 'text', number_of_lines
+    fieldName2: 'list', ['option1', 'option2', 'option3']
+    
+For either field type, information will be stored as plain text. If the field type is *list*, then the user will see a drop-down menu of options to choose from (although it will still be possible to type in any arbitrary response). If the field type is *text*, then the user will simply see an empty text box to type in.
 
+
+Configurations Configuration
+''''''''''''''''''''''''''''
+
+Commonly, acquisition systems will be accessed by mutiple users requiring different configuration settings. One way to achieve this is to create a completely different set of configuration files for each user and specify which to use when starting the program. A simpler way is to define just the *differences* between these configurations and select them after the program has been started. 
+
+The *configurations* section allows us to define a set of named modifications to the default configuration. For example: all users on a system want to use the same device and module configuration, but define their own data storage directory:
+    
+::
+    
+    configurations:
+        Jeffrey:
+            storageDir: 'C:\\data\\jeffrey'
+        Walter:
+            storageDir: 'C:\\data\\walter'
+        Maude:
+            storageDir: 'C:\\data\\maude'
+        
+In the example above, the three names would appear in the Manager module as loadable configurations. This allows each user to quickly select their storage settings. The settings for each user can be anything that would appear at the top-level configuration. Thus, users can specify their own folder types, preconfigured modules, etc (however devices may not be defined here). 
 
 
 

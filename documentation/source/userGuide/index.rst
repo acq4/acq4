@@ -10,7 +10,7 @@ Contents:
     principles
     installation
     configuration
-    devices
-    modules
+    modules/index
+    devices/index
     dataManagement
-    analysis
+    analysis/index.rst
