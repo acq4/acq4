@@ -487,7 +487,7 @@ class ROI(QtGui.QGraphicsObject):
             if lp1.length() == 0 or lp0.length() == 0:
                 return
             
-            ang = newState['angle'] + lp0.angle(lp1)
+            ang = newState['angle'] - lp0.angle(lp1)
             if ang is None:
                 return
             if self.rotateSnap or (modifiers & QtCore.Qt.ControlModifier):
@@ -504,7 +504,7 @@ class ROI(QtGui.QGraphicsObject):
             c1 = c * newState['size']
             tr = QtGui.QTransform()
             #tr.rotate(-ang * 180. / np.pi)
-            tr.rotate(-ang)
+            tr.rotate(ang)
             
             cc = self.mapToParent(cs) - (tr.map(c1) + self.state['pos'])
             newState['angle'] = ang

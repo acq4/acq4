@@ -13,4 +13,5 @@ Contents:
     modules/index
     devices/index
     dataManagement
-    analysis/index.rst
+    analysis/index
+    tutorials/index
