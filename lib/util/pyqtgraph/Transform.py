@@ -41,7 +41,8 @@ class Transform(QtGui.QTransform):
         
         ## detect flipped axes
         if dp2.angle(dp3) > 0:
-            da = 180
+            #da = 180
+            da = 0
             sy = -1.0
         else:
             da = 0

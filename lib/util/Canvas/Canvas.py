@@ -705,28 +705,30 @@ class CanvasItem(QtCore.QObject):
         else:
             self.restoreTransform(t)
             
-    def mirrorImage(self):
+    def mirrorImage(self, state):
         if not self.isMovable():
             return
         
-        flip = self.transformGui.mirrorImageCheck.checkState()
+        flip = self.transformGui.mirrorImageCheck.isChecked()
         tr = self.userTransform.saveState()
         
         if flip:
-            if tr['scale'][0] < 0:
+            if tr['scale'][0] < 0 or tr['scale'][1] < 0:
                 return
             else:
                 self.userTransform.setScale([-tr['scale'][0], tr['scale'][1]])
                 self.userTransform.setTranslate([-tr['pos'][0], tr['pos'][1]])
+                self.userTransform.setRotate(-tr['angle'])
                 self.updateTransform()
                 self.selectBoxFromUser()
                 return
         elif not flip:
-            if tr['scale'][0] > 0:
+            if tr['scale'][0] > 0 and tr['scale'][1] > 0:
                 return
             else:
                 self.userTransform.setScale([-tr['scale'][0], tr['scale'][1]])
                 self.userTransform.setTranslate([-tr['pos'][0], tr['pos'][1]])
+                self.userTransform.setRotate(-tr['angle'])
                 self.updateTransform()
                 self.selectBoxFromUser()
                 return
@@ -889,9 +891,9 @@ class CanvasItem(QtCore.QObject):
         self.transformGui.translateLabel.setText("Translate: (%f, %f)" %(tr['pos'][0], tr['pos'][1]))
         self.transformGui.rotateLabel.setText("Rotate: %f degrees" %tr['angle'])
         self.transformGui.scaleLabel.setText("Scale: (%f, %f)" %(tr['scale'][0], tr['scale'][1]))
-        self.transformGui.mirrorImageCheck.setChecked(False)
-        if tr['scale'][0] < 0:
-            self.transformGui.mirrorImageCheck.setChecked(True)
+        #self.transformGui.mirrorImageCheck.setChecked(False)
+        #if tr['scale'][0] < 0:
+        #    self.transformGui.mirrorImageCheck.setChecked(True)
 
         
 
