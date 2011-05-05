@@ -3,6 +3,7 @@ from PyQt4 import QtGui, QtCore
 import pyqtgraph as pg
 import TreeWidget
 import flowchart.library.EventDetection as FCEventDetection
+import debug
 
 class ScatterPlotter(QtGui.QSplitter):
     ### Draws scatter plots, allows the user to pick which data is used for x and y axes.
@@ -83,7 +84,8 @@ class ScatterPlotter(QtGui.QSplitter):
             #print pts
             plot.sigPointClicked.connect(self.pointClicked)
         except:
-            debug.printExc("Error updating scatter plot:")
+            pass
+            #debug.printExc("Error updating scatter plot:")
         
     def pointClicked(self, plot, point):
         self.sigPointClicked.emit(point)
