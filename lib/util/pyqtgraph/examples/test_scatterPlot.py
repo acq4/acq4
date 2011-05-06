@@ -15,10 +15,15 @@ mw.show()
 
 s1 = pg.ScatterPlotItem(size=10, pen=QtGui.QPen(QtCore.Qt.NoPen), brush=QtGui.QBrush(QtGui.QColor(255, 255, 255, 20)))
 pos = np.random.normal(size=(2,3000))
-spots = [{'pos': pos[:,i]} for i in range(3000)]
+spots = [{'pos': pos[:,i], 'data': 1} for i in range(3000)]
 s1.addPoints(spots)
 
 cw.addDataItem(s1)
+
+def clicked(plot, point):
+    print "clicked point", point
+    
+s1.sigPointClicked.connect(clicked)
 
 ## Start Qt event loop unless running in interactive mode.
 if sys.flags.interactive != 1:

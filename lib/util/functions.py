@@ -104,31 +104,31 @@ def logSpace(start, stop, num):
     return start * (d ** arange(0, num+1))
 
 def linSpace(start, stop, num):
-    return linspace(start, stop, num)
+    return np.linspace(start, stop, num)
 
 
 def sigmoid(v, x):
     """Sigmoid function value at x. the parameter v is [slope, x-offset, amplitude, y-offset]"""
-    return v[2] / (1.0 + exp(-v[0] * (x-v[1]))) + v[3]
+    return v[2] / (1.0 + np.exp(-v[0] * (x-v[1]))) + v[3]
     
 def gaussian(v, x):
     """Gaussian function value at x. The parameter v is [amplitude, x-offset, sigma, y-offset]"""
-    return v[0] * exp(-((x-v[1])**2) / (2 * v[2]**2)) + v[3]
+    return v[0] * np.exp(-((x-v[1])**2) / (2 * v[2]**2)) + v[3]
 
 def expDecay(v, x):
     """Exponential decay function valued at x. Parameter vector is [amplitude, tau, yOffset]"""
-    return v[0] * exp(-x / v[1]) + v[2]
+    return v[0] * np.exp(-x / v[1]) + v[2]
 
 
 def pspInnerFunc(v, x):
-    return v[0] * (1.0 - exp(-x / v[2])) * exp(-x / v[3])
+    return v[0] * (1.0 - np.exp(-x / v[2])) * np.exp(-x / v[3])
     
 def pspFunc(v, x, risePower=1.0):
     """Function approximating a PSP shape. 
     v = [amplitude, x offset, rise tau, fall tau"""
     ## determine scaling factor needed to achieve correct amplitude
     v = [v[0], v[1], abs(v[2]), abs(v[3])]
-    maxX = v[2] * log(1 + (v[3]/v[2]))
+    maxX = v[2] * np.log(1 + (v[3]/v[2]))
     maxVal = pspInnerFunc([1.0, 0, v[2], v[3]], maxX)
     out = np.empty(x.shape, x.dtype)
     mask = x > v[1]
@@ -1255,7 +1255,7 @@ def matchDistortImg(im1, im2, scale=4, maxDist=40, mapBlur=30, showProgress=Fals
 def threshold(data, threshold, direction=1):
     """Return all indices where data crosses threshold."""
     mask = data >= threshold
-    mask = mask[1:].astype(byte) - mask[:-1].astype(byte)
+    mask = mask[1:].astype(np.byte) - mask[:-1].astype(np.byte)
     return np.argwhere(mask == direction)[:, 0]
     
 
@@ -1295,7 +1295,7 @@ def stdevThresholdEvents(data, threshold=3.0):
     Returns a record array with columns: index, length, sum, peak.
     This function is only useful for data with its baseline removed."""
     stdev = data.std()
-    mask = (abs(data) > stdev * threshold).astype(byte)
+    mask = (abs(data) > stdev * threshold).astype(np.byte)
     starts = np.argwhere((mask[1:] - mask[:-1]) == 1)[:,0]
     ends = np.argwhere((mask[1:] - mask[:-1]) == -1)[:,0]
     if len(ends) > 0 and len(starts) > 0:
@@ -1431,7 +1431,7 @@ def thresholdEvents(data, threshold, adjustTimes=True):
         xvals = None
         
     ## find all threshold crossings
-    masks = [(data1 > threshold).astype(byte), (data1 < -threshold).astype(byte)]
+    masks = [(data1 > threshold).astype(np.byte), (data1 < -threshold).astype(np.byte)]
     hits = []
     for mask in masks:
         diff = mask[1:] - mask[:-1]
@@ -1631,11 +1631,11 @@ def modeFilter(data, window=500, step=None, bins=None):
         vals.append(mode(d1[i:i+window], bins))
         i += step
             
-    chunks = [linspace(vals[0], vals[0], l2)]
+    chunks = [np.linspace(vals[0], vals[0], l2)]
     for i in range(len(vals)-1):
-        chunks.append(linspace(vals[i], vals[i+1], step))
+        chunks.append(np.linspace(vals[i], vals[i+1], step))
     remain = len(data) - step*(len(vals)-1) - l2
-    chunks.append(linspace(vals[-1], vals[-1], remain))
+    chunks.append(np.linspace(vals[-1], vals[-1], remain))
     d2 = np.hstack(chunks)
     
     if isinstance(data, MetaArray):
@@ -1821,7 +1821,7 @@ def expTemplate(dt, rise, decay, delay=None, length=None, risePow=2.0):
     temp = np.empty(nPts)
     times = np.arange(0.0, dt*(nPts-start), dt)
     temp[:start] = 0.0
-    temp[start:] = (1.0 - exp(-times/rise))**risePow  *  exp(-times/decay)
+    temp[start:] = (1.0 - np.exp(-times/rise))**risePow  *  np.exp(-times/decay)
     temp /= temp.max()
     return temp
 

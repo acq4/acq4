@@ -32,19 +32,20 @@ class FileLoader(QtGui.QWidget):
         self.sigBaseChanged.emit(dh)
         
     def loadClicked(self):
-        fh = self.ui.dirTree.selectedFile()
+        fh = self.ui.dirTree.selectedFiles()
         self.loadFile(fh)
         
-    def loadFile(self, fh):
-        if self.host is None:
-            self.sigFileLoaded.emit(fh)
-            return
-        if self.host.loadFileRequested(fh):
-            name = fh.name(relativeTo=self.ui.dirTree.baseDirHandle())
-            item = QtGui.QTreeWidgetItem([name])
-            item.file = fh
-            self.ui.fileTree.addTopLevelItem(item)
-            self.sigFileLoaded.emit(fh)
+    def loadFile(self, files):
+        for fh in files:
+            if self.host is None:
+                self.sigFileLoaded.emit(fh)
+
+            elif self.host.loadFileRequested([fh]):
+                name = fh.name(relativeTo=self.ui.dirTree.baseDirHandle())
+                item = QtGui.QTreeWidgetItem([name])
+                item.file = fh
+                self.ui.fileTree.addTopLevelItem(item)
+                self.sigFileLoaded.emit(fh)
         #self.emit(QtCore.SIGNAL('fileLoaded'), fh)
         
     def selectedFile(self):

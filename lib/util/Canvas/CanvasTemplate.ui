@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>487</width>
+    <width>466</width>
     <height>422</height>
    </rect>
   </property>
@@ -26,30 +26,9 @@
       <enum>Qt::Horizontal</enum>
      </property>
      <widget class="GraphicsView" name="view"/>
-     <widget class="QWidget" name="">
-      <layout class="QVBoxLayout" name="verticalLayout">
-       <property name="spacing">
-        <number>0</number>
-       </property>
-       <item>
-        <layout class="QHBoxLayout" name="horizontalLayout">
-         <item>
-          <widget class="QPushButton" name="storeSvgBtn">
-           <property name="text">
-            <string>Store SVG</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="storePngBtn">
-           <property name="text">
-            <string>Store PNG</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
+     <widget class="QWidget" name="layoutWidget">
+      <layout class="QGridLayout" name="gridLayout_2">
+       <item row="3" column="0" colspan="2">
         <widget class="QPushButton" name="autoRangeBtn">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
@@ -62,7 +41,7 @@
          </property>
         </widget>
        </item>
-       <item>
+       <item row="7" column="0" colspan="2">
         <widget class="TreeWidget" name="itemList">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -80,11 +59,45 @@
          </column>
         </widget>
        </item>
-       <item>
+       <item row="8" column="0" colspan="2">
         <layout class="QGridLayout" name="ctrlLayout">
          <property name="spacing">
           <number>0</number>
          </property>
+        </layout>
+       </item>
+       <item row="1" column="0">
+        <widget class="QPushButton" name="storeSvgBtn">
+         <property name="text">
+          <string>Store SVG</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QPushButton" name="storePngBtn">
+         <property name="text">
+          <string>Store PNG</string>
+         </property>
+        </widget>
+       </item>
+       <item row="6" column="0" colspan="2">
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QCheckBox" name="redirectCheck">
+           <property name="toolTip">
+            <string>Check to display all local items in a remote canvas.</string>
+           </property>
+           <property name="text">
+            <string>Redirect</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="CanvasCombo" name="redirectCombo"/>
+         </item>
         </layout>
        </item>
       </layout>
@@ -103,6 +116,11 @@
    <class>GraphicsView</class>
    <extends>QGraphicsView</extends>
    <header>pyqtgraph.GraphicsView</header>
+  </customwidget>
+  <customwidget>
+   <class>CanvasCombo</class>
+   <extends>QComboBox</extends>
+   <header>CanvasManager</header>
   </customwidget>
  </customwidgets>
  <resources/>

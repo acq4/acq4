@@ -76,6 +76,7 @@ class FileAnalysisView(QtGui.QWidget):
         self.ui.analysisCombo.setCurrentIndex(0)
         mod = AnalysisHost.AnalysisHost(dataManager=self.mod, dataModel=self.currentModel, module=modName)
         self.mods.append(mod)
+        self.man.modules[modName] = mod
 
     def populateModelList(self):
         self.ui.dataModelCombo.clear()

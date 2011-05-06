@@ -30,7 +30,8 @@ class DataManager(Module):
         self.ui.analysisWidget = FileAnalysisView.FileAnalysisView(self.ui.analysisTab, self)
         self.ui.analysisTab.layout().addWidget(self.ui.analysisWidget)
         w = self.ui.splitter.width()
-        self.ui.splitter.setSizes([int(w*0.2), int(w*0.8)])
+        self.ui.splitter.setSizes([int(w*0.3), int(w*0.7)])
+        self.ui.logDock.hide()
         self.dialog = QtGui.QFileDialog()
         self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
         ## Load values into GUI

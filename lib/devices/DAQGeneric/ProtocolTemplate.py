@@ -1,31 +1,36 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'ProtocolTemplate.ui'
+# Form implementation generated from reading ui file './lib/devices/DAQGeneric/ProtocolTemplate.ui'
 #
-# Created: Fri Dec 11 09:09:22 2009
-#      by: PyQt4 UI code generator 4.5.4
+# Created: Thu May 05 17:56:50 2011
+#      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
 
 from PyQt4 import QtCore, QtGui
 
+try:
+    _fromUtf8 = QtCore.QString.fromUtf8
+except AttributeError:
+    _fromUtf8 = lambda s: s
+
 class Ui_Form(object):
     def setupUi(self, Form):
-        Form.setObjectName("Form")
+        Form.setObjectName(_fromUtf8("Form"))
         Form.resize(770, 365)
         self.verticalLayout = QtGui.QVBoxLayout(Form)
         self.verticalLayout.setSpacing(0)
         self.verticalLayout.setMargin(0)
-        self.verticalLayout.setObjectName("verticalLayout")
+        self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
         self.topSplitter = QtGui.QSplitter(Form)
         self.topSplitter.setOrientation(QtCore.Qt.Horizontal)
-        self.topSplitter.setObjectName("topSplitter")
+        self.topSplitter.setObjectName(_fromUtf8("topSplitter"))
         self.controlSplitter = QtGui.QSplitter(self.topSplitter)
         self.controlSplitter.setOrientation(QtCore.Qt.Vertical)
-        self.controlSplitter.setObjectName("controlSplitter")
+        self.controlSplitter.setObjectName(_fromUtf8("controlSplitter"))
         self.plotSplitter = QtGui.QSplitter(self.topSplitter)
         self.plotSplitter.setOrientation(QtCore.Qt.Vertical)
-        self.plotSplitter.setObjectName("plotSplitter")
+        self.plotSplitter.setObjectName(_fromUtf8("plotSplitter"))
         self.verticalLayout.addWidget(self.topSplitter)
 
         self.retranslateUi(Form)

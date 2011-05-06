@@ -135,7 +135,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         ## Set up camera graphicsView
         l = QtGui.QVBoxLayout(self.ui.graphicsWidget)
-        l.setMargin(0)
+        l.setContentsMargins(0,0,0,0)
         self.gv = GraphicsView(self.ui.graphicsWidget)
         l.addWidget(self.gv)
         self.gv.enableMouse()
@@ -296,13 +296,14 @@ class CameraWindow(QtGui.QMainWindow):
         
         self.ui.btnAutoGain.setChecked(True)
         
-        ## Check for new frame updates every 1ms
+        ## Check for new frame updates every 10ms
         ## Some checks may be skipped even if there is a new frame waiting to avoid drawing more than 
         ## 60fps.
-        #self.frameTimer = QtCore.QTimer()
-        #QtCore.QObject.connect(self.frameTimer, QtCore.SIGNAL('timeout()'), self.drawFrame)
-        #self.frameTimer.start(1)
-        QtCore.QTimer.singleShot(1, self.drawFrame)
+        self.frameTimer = QtCore.QTimer()
+        self.frameTimer.timeout.connect(self.drawFrame)
+        self.frameTimer.start(10)
+        #QtCore.QTimer.singleShot(1, self.drawFrame)
+        ## avoiding possible singleShot-induced crashes
 
     #@trace
     def updateBorders(self):
@@ -609,7 +610,10 @@ class CameraWindow(QtGui.QMainWindow):
             self.ui.statusbar.showMessage("Opened camera %s" % self.cam, 5000)
             self.scope = self.module.cam.getScopeDevice()
             
-            bins = self.cam.listParams('binningX')[0]
+            try:
+                bins = self.cam.listParams('binning')[0][0]
+            except:
+                bins = self.cam.listParams('binningX')[0]
             bins.sort()
             bins.reverse()
             for b in bins:
@@ -916,7 +920,9 @@ class CameraWindow(QtGui.QMainWindow):
         except:
             printExc('Error while drawing new frames:')
         finally:
-            QtCore.QTimer.singleShot(1, self.drawFrame)
+            pass
+            #QtCore.QTimer.singleShot(1, self.drawFrame)
+            ## avoiding possible singleShot-induced crashes
 
         #sys.stdout.write('!')
 

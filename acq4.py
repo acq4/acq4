@@ -18,7 +18,7 @@ print "Loading ACQ4..."
 from PyQt4 import QtGui, QtCore
 #QtCore.QString = str
 #def noop(x):
-    #return x
+#    return x
 #QtCore.QVariant = noop
 
 ## Needed to keep compatibility between pyside and pyqt
@@ -61,14 +61,41 @@ dm = Manager(config, sys.argv[1:])
 
 ## Start Qt event loop unless running in interactive mode.
 try:
-    assert sys.flags.interactive == 1
+    if sys.flags.interactive != 1:
+        raise Exception('non-interactive; start event loop')
+    if 'lib.util.PySideImporter' in sys.modules:
+        raise Exception('using pyside; start event loop')
+    
     print "Interactive mode; not starting event loop."
     
     ## import some things useful on the command line
     from debug import *
-    from pyqtgraph.graphicsWindows import *
-    from functions import *
-    
+    import pyqtgraph as pg
+    import functions as fn
+
+    ### Use CLI history and tab completion
+    import atexit
+    import os
+    historyPath = os.path.expanduser("~/.pyhistory")
+    try:
+        import readline
+    except ImportError:
+        print "Module readline not available."
+    else:
+        import rlcompleter
+        readline.parse_and_bind("tab: complete")
+        if os.path.exists(historyPath):
+            readline.read_history_file(historyPath)
+    def save_history(historyPath=historyPath):
+        try:
+            import readline
+        except ImportError:
+            print "Module readline not available."
+        else:
+            readline.write_history_file(historyPath)
+    atexit.register(save_history)
+
+
 except:
     ## Run python code periodically to allow interactive debuggers to interrupt the qt event loop
     timer = QtCore.QTimer()

@@ -51,15 +51,14 @@ class AnalysisModule(QtCore.QObject):
         QtCore.QObject.__init__(self)
         self._host_ = host
         self.dataModel = host.dataModel
-        
 
     def initializeElements(self):
         """Must be called sometime during the construction of the module."""
         for name, el in self._elements_.iteritems():
             if isinstance(el, tuple):
-                self._elements_[name] = Element(name, *el)
+                self._elements_[name] = Element(name, args=el)
             elif isinstance(el, dict):
-                self._elements_[name] = Element(name, **el)
+                self._elements_[name] = Element(name, args=el)
             elif isinstance(el, basestring):
                 self._elements_[name] = Element(name, type=el)
             self._elements_[name].sigObjectChanged.connect(self.elementChanged)
@@ -119,7 +118,7 @@ class Element(QtCore.QObject):
     """Simple class for holding options and attributes for elements"""
     sigObjectChanged = QtCore.Signal(object, object, object)  ## Element, old obj, new obj
     
-    def __init__(self, name, type, **args):
+    def __init__(self, name, type=None, args=None):
         QtCore.QObject.__init__(self)
         self.params = {
             'type': type,         ## string such as 'plot', 'canvas', 'ctrl'
@@ -140,7 +139,7 @@ class Element(QtCore.QObject):
     def setParams(self, **args):
         for k in args:
             if k == 'args':
-                self.params['args'].update(args)
+                self.params['args'].update(args[k])
             elif k in self.params:
                 self.params[k] = args[k]
             else:

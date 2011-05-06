@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'CtrlTemplate.ui'
+# Form implementation generated from reading ui file './lib/analysis/atlas/AuditoryCortex/CtrlTemplate.ui'
 #
-# Created: Fri Feb 25 13:38:06 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Thu May 05 17:56:47 2011
+#      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -17,25 +17,19 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(276, 165)
+        Form.resize(280, 147)
         self.gridLayout = QtGui.QGridLayout(Form)
-        self.gridLayout.setSpacing(0)
-        self.gridLayout.setContentsMargins(0, 0, 0, -1)
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
-        self.horizontalLayout_4 = QtGui.QHBoxLayout()
-        self.horizontalLayout_4.setSpacing(0)
-        self.horizontalLayout_4.setObjectName(_fromUtf8("horizontalLayout_4"))
         self.label = QtGui.QLabel(Form)
         self.label.setObjectName(_fromUtf8("label"))
-        self.horizontalLayout_4.addWidget(self.label)
+        self.gridLayout.addWidget(self.label, 0, 0, 1, 1)
         self.slicePlaneCombo = QtGui.QComboBox(Form)
         self.slicePlaneCombo.setObjectName(_fromUtf8("slicePlaneCombo"))
         self.slicePlaneCombo.addItem(_fromUtf8(""))
         self.slicePlaneCombo.addItem(_fromUtf8(""))
         self.slicePlaneCombo.addItem(_fromUtf8(""))
         self.slicePlaneCombo.addItem(_fromUtf8(""))
-        self.horizontalLayout_4.addWidget(self.slicePlaneCombo)
-        self.gridLayout.addLayout(self.horizontalLayout_4, 0, 0, 1, 1)
+        self.gridLayout.addWidget(self.slicePlaneCombo, 0, 1, 1, 1)
         self.horizontalLayout_3 = QtGui.QHBoxLayout()
         self.horizontalLayout_3.setSpacing(0)
         self.horizontalLayout_3.setObjectName(_fromUtf8("horizontalLayout_3"))
@@ -47,7 +41,7 @@ class Ui_Form(object):
         self.hemisphereCombo.addItem(_fromUtf8(""))
         self.hemisphereCombo.addItem(_fromUtf8(""))
         self.horizontalLayout_3.addWidget(self.hemisphereCombo)
-        self.gridLayout.addLayout(self.horizontalLayout_3, 1, 0, 1, 1)
+        self.gridLayout.addLayout(self.horizontalLayout_3, 1, 0, 1, 2)
         self.horizontalLayout = QtGui.QHBoxLayout()
         self.horizontalLayout.setSpacing(0)
         self.horizontalLayout.setObjectName(_fromUtf8("horizontalLayout"))
@@ -61,7 +55,7 @@ class Ui_Form(object):
         self.flipCheck = QtGui.QCheckBox(Form)
         self.flipCheck.setObjectName(_fromUtf8("flipCheck"))
         self.horizontalLayout.addWidget(self.flipCheck)
-        self.gridLayout.addLayout(self.horizontalLayout, 2, 0, 1, 1)
+        self.gridLayout.addLayout(self.horizontalLayout, 2, 0, 1, 2)
         self.horizontalLayout_2 = QtGui.QHBoxLayout()
         self.horizontalLayout_2.setSpacing(0)
         self.horizontalLayout_2.setObjectName(_fromUtf8("horizontalLayout_2"))
@@ -71,7 +65,7 @@ class Ui_Form(object):
         self.thicknessSpin = SpinBox(Form)
         self.thicknessSpin.setObjectName(_fromUtf8("thicknessSpin"))
         self.horizontalLayout_2.addWidget(self.thicknessSpin)
-        self.gridLayout.addLayout(self.horizontalLayout_2, 3, 0, 1, 1)
+        self.gridLayout.addLayout(self.horizontalLayout_2, 3, 0, 1, 2)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)

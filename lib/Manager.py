@@ -158,6 +158,7 @@ Valid options are:
             
         #win = QtGui.QApplication.instance().activeWindow()
         if len(self.modules) == 0:
+            self.quit()
             raise Exception("No modules loaded during startup, exiting now.")
         win = self.modules[self.modules.keys()[0]].window()
         #if win is None:   ## Breaks on some systems..

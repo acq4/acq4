@@ -35,6 +35,9 @@ class IVCurve(AnalysisModule):
 
     def loadFileRequested(self, dh):
         """Called by file loader when a file load is requested."""
+        if len(dh) != 1:
+            raise Exception("Can only load one file at a time.")
+        dh = dh[0]
         self.plot1.clearPlots()
         dirs = dh.subDirs()
         c = 0

@@ -5,18 +5,9 @@ from numpy import array, ndarray
 from metaarray import MetaArray as MA
 from FileType import *
 
-#class ImageFile(FileType):
-    #def __init__(self, data):
-        #self.data = data
-        
-    #def write(self, dirHandle, fileName):
-        #img = Image.fromarray(self.data.transpose())
-        #img.save(os.path.join(dirHandle.name(), fileName))
-        
-#def fromFile(fileName, info=None):
-    #img = Image.open(fileName)
-    #return array(img).transpose()
-
+class Array(ndarray):  ## just allows us to add some dynamic attributes
+    def __new__(cls, arr):
+        return arr.view(cls)
 
 class ImageFile(FileType):
     
@@ -45,10 +36,18 @@ class ImageFile(FileType):
         if len(img.size) == 2:
             transp[0] = 1
             transp[1] = 0
+            axisHint = ['x', 'y']
         elif len(img.size) == 3:
             transp[1] = 2
             transp[2] = 1
+            axisHint = ['t', 'x', 'y']
+        else:
+            raise Exception("Bad image size: %s" % str(img.size))
         #print arr.shape
         arr = arr.transpose(tuple(transp))
+        axisHint.append(img.mode)
+        
+        arr = Array(arr) ## allow addition of new attributes
+        arr.axisHint = arr
         #print arr.shape
         return arr

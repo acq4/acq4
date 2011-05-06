@@ -6,7 +6,7 @@ class ProgressDialog(QtGui.QProgressDialog):
     Example:
         with ProgressDialog("Processing..", "Cancel", minVal, maxVal) as dlg:
             # do stuff
-            dlg.setValue(i)
+            dlg.setValue(i)   ## could also use dlg += 1
             if dlg.wasCanceled():
                 raise Exception("Processing canceled by user")
     """
@@ -14,12 +14,18 @@ class ProgressDialog(QtGui.QProgressDialog):
         QtGui.QProgressDialog.__init__(self, *args, **kargs)
         self.setMinimumDuration(250)
         self.setWindowModality(QtCore.Qt.WindowModal)
+        self.setValue(self.minimum())
 
     def __enter__(self):
         return self
 
     def __exit__(self, exType, exValue, exTrace):
         self.setValue(self.maximum())
+        
+    def __iadd__(self, val):
+        """Use inplace-addition operator for easy incrementing."""
+        self.setValue(self.value()+val)
+        return self
 
         #progressDlg = QtGui.QProgressDialog("Computing spot colors (Map %d/%d)" % (n+1,nMax), "Cancel", 0, len(spots))
         ##progressDlg.setWindowModality(QtCore.Qt.WindowModal)

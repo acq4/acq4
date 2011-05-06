@@ -243,3 +243,42 @@ class Locker:
         except:
             pass
 
+class CaselessDict(dict):
+    """Case-insensitive dict. Values can be set and retrieved using keys of any case.
+    Note that when iterating, the original case is returned for each key."""
+    def __init__(self, *args):
+        dict.__init__(self, *args)
+        self.keyMap = dict([(k.lower(), k) for k in self.keys()])
+    
+    def __setitem__(self, key, val):
+        kl = key.lower()
+        if kl in self.keyMap:
+            dict.__setitem__(self, kl, val)
+        else:
+            dict.__setitem__(self, key, val)
+            self.keyMap[kl] = key
+            
+    def __getitem__(self, key):
+        kl = key.lower()
+        if kl not in self.keyMap:
+            raise KeyError(key)
+        return dict.__getitem__(self, self.keyMap[kl])
+        
+    def __contains__(self, key):
+        return key.lower() in self.keyMap
+    
+    def update(self, d):
+        for k, v in d.iteritems():
+            self[k] = v
+            
+    def copy(self):
+        return CaselessDict(dict.copy(self))
+        
+    def __delitem__(self, key):
+        kl = key.lower()
+        if kl not in self.keyMap:
+            raise KeyError(key)
+        dict.__delitem__(self, self.keyMap[kl])
+        del self.keyMap[kl]
+            
+            
