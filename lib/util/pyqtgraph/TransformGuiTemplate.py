@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'TransformGuiTemplate.ui'
 #
-# Created: Fri Apr 22 17:01:47 2011
+# Created: Fri May  6 08:53:16 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,17 +17,13 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(289, 101)
+        Form.resize(166, 109)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(Form.sizePolicy().hasHeightForWidth())
         Form.setSizePolicy(sizePolicy)
-        self.gridLayout = QtGui.QGridLayout(Form)
-        self.gridLayout.setSizeConstraint(QtGui.QLayout.SetNoConstraint)
-        self.gridLayout.setMargin(0)
-        self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
-        self.verticalLayout = QtGui.QVBoxLayout()
+        self.verticalLayout = QtGui.QVBoxLayout(Form)
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
         self.translateLabel = QtGui.QLabel(Form)
         self.translateLabel.setObjectName(_fromUtf8("translateLabel"))
@@ -35,18 +31,12 @@ class Ui_Form(object):
         self.rotateLabel = QtGui.QLabel(Form)
         self.rotateLabel.setObjectName(_fromUtf8("rotateLabel"))
         self.verticalLayout.addWidget(self.rotateLabel)
-        self.horizontalLayout = QtGui.QHBoxLayout()
-        self.horizontalLayout.setObjectName(_fromUtf8("horizontalLayout"))
         self.scaleLabel = QtGui.QLabel(Form)
         self.scaleLabel.setObjectName(_fromUtf8("scaleLabel"))
-        self.horizontalLayout.addWidget(self.scaleLabel)
-        spacerItem = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.horizontalLayout.addItem(spacerItem)
+        self.verticalLayout.addWidget(self.scaleLabel)
         self.mirrorImageCheck = QtGui.QCheckBox(Form)
         self.mirrorImageCheck.setObjectName(_fromUtf8("mirrorImageCheck"))
-        self.horizontalLayout.addWidget(self.mirrorImageCheck)
-        self.verticalLayout.addLayout(self.horizontalLayout)
-        self.gridLayout.addLayout(self.verticalLayout, 0, 0, 1, 1)
+        self.verticalLayout.addWidget(self.mirrorImageCheck)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)

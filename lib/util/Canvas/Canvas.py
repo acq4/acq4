@@ -38,6 +38,8 @@ class Canvas(QtGui.QWidget):
         self.scene().addItem(self.multiSelectBox)
         self.multiSelectBox.hide()
         self.multiSelectBox.setZValue(1e6)
+        self.ui.mirrorImagesBtn.hide()
+        self.ui.resetTransformsBtn.hide()
         
         self.redirect = None  ## which canvas to redirect items to
         self.items = {}
@@ -71,6 +73,8 @@ class Canvas(QtGui.QWidget):
         self.ui.redirectCombo.currentIndexChanged.connect(self.updateRedirect)
         self.multiSelectBox.sigRegionChanged.connect(self.multiSelectBoxChanged)
         self.multiSelectBox.sigRegionChangeFinished.connect(self.multiSelectBoxChangeFinished)
+        self.ui.mirrorImagesBtn.clicked.connect(self.mirrorImagesClicked)
+        self.ui.resetTransformsBtn.clicked.connect(self.resetTransformsClicked)
         
         self.resizeEvent()
         if hideCtrl:
@@ -212,6 +216,8 @@ class Canvas(QtGui.QWidget):
             item = sel[0]
             item.ctrlWidget().show()
             self.multiSelectBox.hide()
+            self.ui.mirrorImagesBtn.hide()
+            self.ui.resetTransformsBtn.hide()
             
         elif len(sel) > 1:
             self.showMultiSelectBox()
@@ -242,7 +248,22 @@ class Canvas(QtGui.QWidget):
         self.multiSelectBox.blockSignals(False)
         
         self.multiSelectBox.show()
+        self.ui.mirrorImagesBtn.show()
+        self.ui.resetTransformsBtn.show()
         #self.multiSelectBoxBase = self.multiSelectBox.getState().copy()
+    
+    def mirrorImagesClicked(self):
+        items = self.itemList.selectedItems()
+        for i in items:
+            ci = i.item
+            ci.transformGui.mirrorImageCheck.toggle()
+        self.showMultiSelectBox()
+            
+    def resetTransformsClicked(self):
+        items = self.itemList.selectedItems()
+        for i in items:
+            i.item.resetTransformClicked()
+        self.showMultiSelectBox()
         
     def multiSelectBoxChanged(self):
         self.multiSelectBoxMoved()
@@ -870,10 +891,17 @@ class CanvasItem(QtCore.QObject):
         #print "Temp: ", self.tempTransform.matrix()
         #print "User: ", self.userTransform.matrix()
         #print "Base: ", self.baseTransform.matrix()
+        
+        
+        
         transform = self.baseTransform * self.userTransform *self.tempTransform## order is important
         #print "Transform: ", transform.matrix()
-        
-        #p2 = transform.map(p1)
+        #### matrix multiplication affects the scale factors, need to reset
+        #st = self.userTransform.saveState()
+        #if st['scale'][0] < 0 or st['scale'][1] < 0:
+            #nst = transform.saveState()
+            #transform.setScale([-nst['scale'][0], -nst['scale'][1]])
+            
         s = transform.saveState()
         self.item.setPos(*s['pos'])
         
