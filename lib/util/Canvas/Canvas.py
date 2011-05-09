@@ -896,11 +896,6 @@ class CanvasItem(QtCore.QObject):
         
         transform = self.baseTransform * self.userTransform *self.tempTransform## order is important
         #print "Transform: ", transform.matrix()
-        #### matrix multiplication affects the scale factors, need to reset
-        #st = self.userTransform.saveState()
-        #if st['scale'][0] < 0 or st['scale'][1] < 0:
-            #nst = transform.saveState()
-            #transform.setScale([-nst['scale'][0], -nst['scale'][1]])
             
         s = transform.saveState()
         self.item.setPos(*s['pos'])

@@ -21,6 +21,7 @@ class DatabaseExplorer(AnalysisModule):
         self.dbIdentity = 'Explorer'
         
         self.dbCtrl = DBCtrl(host, self.dbIdentity)
+        self.ctrl = PlotCtrl(host, self.dbIdentity)
         
         self._elements = OrderedDict([
             ('Database', {'type': 'ctrl', 'object':self.dbCtrl, 'size': (200, 300), 'host': self}),
@@ -46,4 +47,12 @@ class DBCtrl(QtGui.QWidget):
         #self.layout.addWidget(self.storeBtn)
         for name in ['getTableName', 'getDb']:
             setattr(self, name, getattr(self.dbgui, name))
+            
+class PlotCtrl(QtGui.QWidget):
+    
+    def __init__(self, host, identity):
+        QtGui.QWidget.__init__(self)
+        self.host = host
+        self.dm = host.dataManager()
+        
         

@@ -68,7 +68,7 @@ units = {
 class Obj(object):
     pass
 
-class Array(ndarray):  ## just allows us to add some dynamic attributes
+class Array(np.ndarray):  ## just allows us to add some dynamic attributes
     def __new__(cls, arr):
         return arr.view(cls)
     

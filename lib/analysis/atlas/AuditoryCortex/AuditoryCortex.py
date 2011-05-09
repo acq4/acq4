@@ -11,10 +11,11 @@ import DataManager
 class AuditoryCortex(Atlas.Atlas):
     def __init__(self, canvas=None, state=None):
         ## define slice planes and the atlas images to use for each
-        #scale = 3.78e-6
-        scale = 5.5e-6
+        scale = 3.78e-6
+        #scale = 5.5e-6
         #pos = (-676*scale/2., -577*scale/2.)
-        pos = (0.0, 0.0)
+        pos = (-681*scale/2., -231e-6)
+        #pos = (0.0, 0.0)
         self.slicePlanes = advancedTypes.OrderedDict([
             ('Thalamocortical', [('ThalamocorticalMarker.svg', scale, pos)]),
             ('Coronal', []),
