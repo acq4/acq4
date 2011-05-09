@@ -83,7 +83,7 @@ class ScanCanvasItem(CanvasItem):
         
         self.addScanImageBtn = QtGui.QPushButton()
         self.addScanImageBtn.setText('Add Scan Image')
-        self.layout.addWidget(self.addScanImageBtn,3,0,1,2)
+        self.layout.addWidget(self.addScanImageBtn,4,0,1,2)
         
         self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
         

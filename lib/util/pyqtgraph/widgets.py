@@ -814,14 +814,6 @@ class ROI(QtGui.QGraphicsObject):
         st = self.getState()
         st['scale'] = st['size']
         st = Transform(st)
-        #trans = QtGui.QTransform()
-        #trans.translate(*translate)
-        #trans.rotate(-rotate)
-        
-        #x2, y2 = trans.map(*st['pos'])
-        
-        #self.setAngle(st['angle']+rotate*np.pi/180.)
-        #self.setPos([x2, y2])
         st = (st * tr).saveState()
         st['size'] = st['scale']
         self.setState(st)

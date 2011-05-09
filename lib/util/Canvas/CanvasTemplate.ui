@@ -59,7 +59,7 @@
          </column>
         </widget>
        </item>
-       <item row="8" column="0" colspan="2">
+       <item row="10" column="0" colspan="2">
         <layout class="QGridLayout" name="ctrlLayout">
          <property name="spacing">
           <number>0</number>
@@ -99,6 +99,20 @@
           <widget class="CanvasCombo" name="redirectCombo"/>
          </item>
         </layout>
+       </item>
+       <item row="8" column="0">
+        <widget class="QPushButton" name="mirrorImagesBtn">
+         <property name="text">
+          <string>Mirror Images</string>
+         </property>
+        </widget>
+       </item>
+       <item row="8" column="1">
+        <widget class="QPushButton" name="resetTransformsBtn">
+         <property name="text">
+          <string>Reset Transforms</string>
+         </property>
+        </widget>
        </item>
       </layout>
      </widget>

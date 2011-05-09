@@ -37,6 +37,8 @@ class Canvas(QtGui.QWidget):
         self.scene().addItem(self.multiSelectBox)
         self.multiSelectBox.hide()
         self.multiSelectBox.setZValue(1e6)
+        self.ui.mirrorImagesBtn.hide()
+        self.ui.resetTransformsBtn.hide()
         
         self.redirect = None  ## which canvas to redirect items to
         self.items = {}
@@ -65,6 +67,8 @@ class Canvas(QtGui.QWidget):
         self.ui.redirectCombo.currentIndexChanged.connect(self.updateRedirect)
         self.multiSelectBox.sigRegionChanged.connect(self.multiSelectBoxChanged)
         self.multiSelectBox.sigRegionChangeFinished.connect(self.multiSelectBoxChangeFinished)
+        self.ui.mirrorImagesBtn.clicked.connect(self.mirrorImagesClicked)
+        self.ui.resetTransformsBtn.clicked.connect(self.resetTransformsClicked)
         
         self.resizeEvent()
         if hideCtrl:
@@ -204,10 +208,11 @@ class Canvas(QtGui.QWidget):
         #gi.setZValue(z)
 
     def treeItemSelected(self):
-        sel = []
-        for listItem in self.itemList.selectedItems():
-            if hasattr(listItem, 'canvasItem') and listItem.canvasItem is not None:
-                sel.append(listItem.canvasItem)
+        sel = self.selectedItems()
+        #sel = []
+        #for listItem in self.itemList.selectedItems():
+            #if hasattr(listItem, 'canvasItem') and listItem.canvasItem is not None:
+                #sel.append(listItem.canvasItem)
         #sel = [self.items[item.name] for item in sel]
         
         if len(sel) == 0:
@@ -224,6 +229,8 @@ class Canvas(QtGui.QWidget):
             #item = sel[0]
             #item.ctrlWidget().show()
             self.multiSelectBox.hide()
+            self.ui.mirrorImagesBtn.hide()
+            self.ui.resetTransformsBtn.hide()
         elif len(sel) > 1:
             self.showMultiSelectBox()
         
@@ -275,8 +282,21 @@ class Canvas(QtGui.QWidget):
         self.multiSelectBox.blockSignals(False)
         
         self.multiSelectBox.show()
-        #self.multiSelectBoxBase = self.multiSelectBox.getState().copy()
         
+        self.ui.mirrorImagesBtn.show()
+        self.ui.resetTransformsBtn.show()
+        #self.multiSelectBoxBase = self.multiSelectBox.getState().copy()
+
+    def mirrorImagesClicked(self):
+        for ci in self.selectedItems():
+            ci.transformGui.mirrorImageCheck.toggle()
+        self.showMultiSelectBox()
+            
+    def resetTransformsClicked(self):
+        for i in self.selectedItems():
+            i.resetTransformClicked()
+        self.showMultiSelectBox()
+
     def multiSelectBoxChanged(self):
         self.multiSelectBoxMoved()
         
@@ -546,10 +566,12 @@ class Canvas(QtGui.QWidget):
             item.setCanvas(None)
             #self.view.scene().removeItem(item.item)
             self.itemList.removeTopLevelItem(item.listItem)
+            del self.items[item.name]
         else:
             self.view.scene().removeItem(item)
         
         ## disconnect signals, remove from list, etc..
+        
 
     def addToScene(self, item):
         self.view.scene().addItem(item)
