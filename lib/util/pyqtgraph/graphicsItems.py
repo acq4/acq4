@@ -2429,7 +2429,7 @@ class GridItem(UIGraphicsItem):
             #print "no pic, draw.."
             self.generatePicture()
         p.drawPicture(0, 0, self.picture)
-        print "drawing Grid."
+        #print "drawing Grid."
         
         
     def generatePicture(self):
