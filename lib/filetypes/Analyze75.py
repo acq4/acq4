@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from FileType import *
+import numpy as np
 
 class Analyze75(FileType):
     extensions = ['.nii', '.hdr']   ## list of extensions handled by this class

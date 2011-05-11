@@ -201,6 +201,7 @@ class FileHandle(QtCore.QObject):
         return (getHandle, (self.name(),))
 
     def name(self, relativeTo=None):
+        """Return the full name of this file with its absolute path"""
         #self.checkDeleted()
         with self.lock:
             path = self.path
@@ -214,9 +215,14 @@ class FileHandle(QtCore.QObject):
             return path
         
     def shortName(self):
+        """Return the name of this file without its path"""
         #self.checkDeleted()
         return os.path.split(self.name())[1]
-        
+
+    def ext(self):
+        """Return file's extension"""
+        return os.path.splitext(self.name())[1]
+
     def parent(self):
         self.checkDeleted()
         with self.lock:

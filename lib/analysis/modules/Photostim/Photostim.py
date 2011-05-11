@@ -157,15 +157,50 @@ class Photostim(AnalysisModule):
         
         ## Load the file, possibly generating multiple scans.
         canvas = self.getElement('Canvas')
-        ## probably this function should decide how to generate multiple scans rather than letting the canvas do it.
-        canvasItems = canvas.addFile(fh, separateParams=True)  ## returns list when fh is a scan
-        for citem in canvasItems:
-            scan = Scan(self, fh, citem, name=citem.opts['name'])
+        
+        ret = []
+        
+        ## get sequence parameters
+        params = self.dataModel.listSequenceParams(fh)
+        params.remove(('Scanner', 'targets'))
+        
+        ## If the scan has sequence parameters other than the spot position, 
+        ## load each sub-scan separately.
+        if len(params) > 0:
+            seq = True
+        else:
+            seq = False
+            
+        ## Determine the set of subdirs for each scan present in the sequence
+        ## (most sequences will have only one scan)
+        scans = {}
+        for dhName in fh.subDirs():
+            dh = fh[dhName]
+            key = '_'.join([str(dh.info()[p]) for p in params])
+            if key not in scans:
+                scans[key] = []
+            scans[key].append(dh)
+            
+        ## Add each scan
+        for key, subDirs in scans.iteritems():
+            name = fh.shortName()
+            if seq:
+                name += '.' + key
+            canvasItem = ScanCanvasItem(handle=fh, subDirs=dirs.values(), name=name)
+            scan = Scan(fh, canvasItem, name=name)
             self.scans.append(scan)
-            citem.item.sigPointClicked.connect(self.scanPointClicked)
-            self.dbCtrl.scanLoaded(scan)
             ret.append(scan)
+            self.dbCtrl.scanLoaded(scan)
             self.scatterPlot.addScan(scan)
+        
+        #canvasItems = canvas.addFile(fh, separateParams=True)  ## returns list when fh is a scan
+        #for citem in canvasItems:
+            #scan = Scan(self, fh, citem, name=citem.opts['name'])
+            #self.scans.append(scan)
+            #citem.item.sigPointClicked.connect(self.scanPointClicked)
+            #self.dbCtrl.scanLoaded(scan)
+            #ret.append(scan)
+            #self.scatterPlot.addScan(scan)
         return ret
                 
 
