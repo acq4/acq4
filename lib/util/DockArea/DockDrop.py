@@ -93,6 +93,8 @@ class DropAreaOverlay(QtGui.QWidget):
         if area is None:
             self.hide()
         else:
+            ## Resize overlay to just the region where drop area should be displayed.
+            ## This works around a Qt bug--can't display transparent widgets over QGLWidget
             prgn = self.parent().rect()
             rgn = QtCore.QRect(prgn)
             w = min(30, prgn.width()/3.)
