@@ -85,10 +85,32 @@ class DropAreaOverlay(QtGui.QWidget):
     def __init__(self, parent):
         QtGui.QWidget.__init__(self, parent)
         self.dropArea = None
+        self.hide()
         self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
         
     def setDropArea(self, area):
         self.dropArea = area
+        if area is None:
+            self.hide()
+        else:
+            prgn = self.parent().rect()
+            rgn = QtCore.QRect(prgn)
+            w = min(30, prgn.width()/3.)
+            h = min(30, prgn.height()/3.)
+            
+            if self.dropArea == 'left':
+                rgn.setWidth(w)
+            elif self.dropArea == 'right':
+                rgn.setLeft(rgn.left() + prgn.width() - w)
+            elif self.dropArea == 'top':
+                rgn.setHeight(h)
+            elif self.dropArea == 'bottom':
+                rgn.setTop(rgn.top() + prgn.height() - h)
+            elif self.dropArea == 'center':
+                rgn.adjust(w, h, -w, -h)
+            self.setGeometry(rgn)
+            self.show()
+
         self.update()
     
     def paintEvent(self, ev):
@@ -96,19 +118,6 @@ class DropAreaOverlay(QtGui.QWidget):
             return
         p = QtGui.QPainter(self)
         rgn = self.rect()
-        w = min(30, self.width()/3.)
-        h = min(30, self.height()/3.)
-        
-        if self.dropArea == 'left':
-            rgn.setWidth(w)
-        elif self.dropArea == 'right':
-            rgn.setLeft(rgn.left() + self.width() - w)
-        elif self.dropArea == 'top':
-            rgn.setHeight(h)
-        elif self.dropArea == 'bottom':
-            rgn.setTop(rgn.top() + self.height() - h)
-        elif self.dropArea == 'center':
-            rgn.adjust(w, h, -w, -h)
 
         p.setBrush(QtGui.QBrush(QtGui.QColor(100, 100, 255, 50)))
         p.setPen(QtGui.QPen(QtGui.QColor(50, 50, 150), 3))
