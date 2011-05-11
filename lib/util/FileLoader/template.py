@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'template.ui'
+# Form implementation generated from reading ui file './lib/util/FileLoader/template.ui'
 #
-# Created: Fri Apr  1 09:13:29 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Thu May 05 17:56:53 2011
+#      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
 

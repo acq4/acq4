@@ -10,8 +10,9 @@ Includes:
   - ThreadsafeDict, ThreadsafeList - Self-mutexed data structures
 """
 
-import threading, sys
+import threading, sys, copy
 from debug import *
+
 
 class OrderedDict(dict):
     """extends dict so that elements are iterated in the order that they were added.
@@ -76,7 +77,9 @@ class OrderedDict(dict):
         for k in self.order:
             yield (k, self[k])
             
-    
+    def __deepcopy__(self, memo):
+        return OrderedDict([(k, copy.deepcopy(v, memo)) for k, v in self.iteritems()])
+        
         
 
 class ReverseDict(dict):
@@ -105,6 +108,10 @@ class ReverseDict(dict):
         self.reverse[value] = item
         dict.__setitem__(self, item, value)
 
+    def __deepcopy__(self, memo):
+        raise Exception("deepcopy not implemented")
+        
+        
 class BiDict(dict):
     """extends dict so that reverse lookups are possible by adding each reverse combination to the dict.
     This only works if all values and keys are unique."""
@@ -119,6 +126,8 @@ class BiDict(dict):
         dict.__setitem__(self, item, value)
         dict.__setitem__(self, value, item)
     
+    def __deepcopy__(self, memo):
+        raise Exception("deepcopy not implemented")
 
 class ThreadsafeDict(dict):
     """Extends dict so that getitem, setitem, and contains are all thread-safe.
@@ -171,6 +180,9 @@ class ThreadsafeDict(dict):
         
     def unlock(self):
         self.mutex.release()
+
+    def __deepcopy__(self, memo):
+        raise Exception("deepcopy not implemented")
         
 class ThreadsafeList(list):
     """Extends list so that getitem, setitem, and contains are all thread-safe.
@@ -221,6 +233,10 @@ class ThreadsafeList(list):
         
     def unlock(self):
         self.mutex.release()
+
+    def __deepcopy__(self, memo):
+        raise Exception("deepcopy not implemented")
+        
         
 def makeThreadsafe(obj):
     if type(obj) is dict:
@@ -281,4 +297,116 @@ class CaselessDict(dict):
         dict.__delitem__(self, self.keyMap[kl])
         del self.keyMap[kl]
             
+    def __deepcopy__(self, memo):
+        raise Exception("deepcopy not implemented")
+
+class ProtectedDict:
+    """
+    A class allowing read-only 'view' of a dict. 
+    The object can be treated like a normal dict, but will never modify the original dict it points to.
+    If any values in the dict are either list or dict, they will be returned as protected objects when accessed.
+    """
+    def __init__(self, data):
+        self._data_ = data
+        #for fn in ['keys', 'items', 'values', '__iter__', 'copy', 'itervalues', 'iteritems']:
+            #setattr(self, fn, getattr(self._data_, fn))
+                   
+    #def keys(self):
+        #return _data_.keys()
             
+    def items(self):
+        return ProtectedList(self._data_.items())
+    
+    def values(self):
+        return ProtectedList(self._data_.values())
+    
+    def __getattr__(self, attr):
+        return getattr(self._data_, attr)
+    
+    def __getitem__(self, ind):
+        val = self._data_.__getitem__(ind)
+        return protect(val)
+    
+    #def __iter__(self):
+        #return self._data_.__iter__()
+    
+    def copy(self):
+        raise Exception("It is not safe to copy protected dicts! (instead try deepcopy, but be careful.)")
+    
+    def deepcopy(self):
+        return copy.deepcopy(self._data_)
+    
+    def __deepcopy__(self, memo):
+        return copy.deepcopy(self._data_, memo)
+        
+    def itervalues(self):
+        for v in self._data_.itervalues():
+            yield protect(v)
+        
+    def iteritems(self):
+        for k, v in self._data_.iteritems():
+            yield (k, protect(v))
+            
+    
+    def error(self, *args, **kargs):
+        raise Exception("Can not modify read-only dict.")
+            
+    __setitem__ = error
+    __delitem__ = error
+    remove = error
+    update = error
+
+            
+class ProtectedList:
+    """
+    A class allowing read-only 'view' of a list or dict. 
+    The object can be treated like a normal list, but will never modify the original list it points to.
+    """
+    def __init__(self, data):
+        self._data_ = data
+    
+    def __getattr__(self, attr):
+        return getattr(self._data_, attr)
+    
+    def __getitem__(self, ind):
+        val = self._data_.__getitem__(ind)
+        return protect(val)
+    
+    def __getslice__(self, *args):
+        return ProtectedList(self._data_.__getslice__(*args))
+    
+    def __iter__(self):
+        for i in self._data_:
+            yield protect(i)
+
+    def error(self, *args, **kargs):
+        raise Exception("Can not modify read-only list.")
+            
+    __setitem__ = error
+    __setslice__ = error
+    remove = error
+    append = error
+    extend = error
+
+    def copy(self):
+        raise Exception("It is not safe to copy protected lists! (instead try deepcopy, but be careful.)")
+    
+    def deepcopy(self):
+        return copy.deepcopy(self._data_)
+    
+    def __deepcopy__(self, memo):
+        return copy.deepcopy(self._data_, memo)
+    
+    
+def protect(obj):
+    if isinstance(obj, dict):
+        return ProtectedDict(obj)
+    elif isinstance(obj, list) or isinstance(obj, tuple):
+        return ProtectedList(obj)
+    else:
+        return obj
+    
+    
+if __name__ == '__main__':
+    d1 = {'x': 1, 'y': [1,2], 'z': ({'a': 2, 'b': [3,4], 'c': (5,6)}, 1, 2)}
+    d1p = protect(d1)

@@ -132,8 +132,11 @@ class ScannerProtoGui(ProtocolGui):
         for m in mods:
             self.ui.cameraCombo.addItem(m)
             mod = man.getModule(m)
-            if 'camDev' in mod.config and mod.config['camDev'] == self.defCam:
-                self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
+            try:
+                if 'camDev' in mod.config and mod.config['camDev'] == self.defCam:
+                    self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
+            except (KeyError,AttributeError):
+                continue
         
         
     def camModChanged(self):

@@ -21,8 +21,11 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_2">
+    <property name="spacing">
+     <number>0</number>
+    </property>
     <property name="margin">
-     <number>1</number>
+     <number>0</number>
     </property>
     <item>
      <layout class="QVBoxLayout" name="verticalLayout">
@@ -32,8 +35,11 @@
          <string>Configuration</string>
         </property>
         <layout class="QVBoxLayout" name="verticalLayout_3">
+         <property name="spacing">
+          <number>0</number>
+         </property>
          <property name="margin">
-          <number>1</number>
+          <number>0</number>
          </property>
          <item>
           <widget class="QListWidget" name="configList"/>
@@ -54,8 +60,11 @@
          <string>Modules</string>
         </property>
         <layout class="QVBoxLayout" name="verticalLayout_4">
+         <property name="spacing">
+          <number>0</number>
+         </property>
          <property name="margin">
-          <number>1</number>
+          <number>0</number>
          </property>
          <item>
           <widget class="QListWidget" name="moduleList"/>
@@ -67,27 +76,27 @@
            </property>
           </widget>
          </item>
-         <item>
-          <spacer name="verticalSpacer">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item>
-          <widget class="QPushButton" name="reloadModuleBtn">
-           <property name="text">
-            <string>Reload Libraries</string>
-           </property>
-          </widget>
-         </item>
         </layout>
+       </widget>
+      </item>
+      <item>
+       <spacer name="verticalSpacer">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>20</width>
+          <height>40</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="reloadModuleBtn">
+        <property name="text">
+         <string>Reload Libraries</string>
+        </property>
        </widget>
       </item>
       <item>

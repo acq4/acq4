@@ -162,8 +162,7 @@ class Photostim(AnalysisModule):
         ret = []
         
         ## get sequence parameters
-        params = self.dataModel.listSequenceParams(fh)
-        print "parametes:", params
+        params = self.dataModel.listSequenceParams(fh).deepcopy()  ## copy is required since this info is read-only.
         params.remove(('Scanner', 'targets'))
         
         ## If the scan has sequence parameters other than the spot position, 
@@ -189,7 +188,8 @@ class Photostim(AnalysisModule):
             if seq:
                 name += '.' + key
             canvasItem = Canvas.items.ScanCanvasItem(handle=fh, subDirs=subDirs, name=name)
-            scan = Scan(fh, canvasItem, name=name)
+            canvas.addItem(canvasItem)
+            scan = Scan(self, fh, canvasItem, name=name)
             self.scans.append(scan)
             ret.append(scan)
             self.dbCtrl.scanLoaded(scan)

@@ -18,7 +18,7 @@ print "Loading ACQ4..."
 from PyQt4 import QtGui, QtCore
 #QtCore.QString = str
 #def noop(x):
-    #return x
+#    return x
 #QtCore.QVariant = noop
 
 ## Needed to keep compatibility between pyside and pyqt
@@ -61,7 +61,11 @@ dm = Manager(config, sys.argv[1:])
 
 ## Start Qt event loop unless running in interactive mode.
 try:
-    assert sys.flags.interactive == 1
+    if sys.flags.interactive != 1:
+        raise Exception('non-interactive; start event loop')
+    if 'lib.util.PySideImporter' in sys.modules:
+        raise Exception('using pyside; start event loop')
+    
     print "Interactive mode; not starting event loop."
     
     ## import some things useful on the command line

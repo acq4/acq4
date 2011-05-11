@@ -266,11 +266,12 @@ class ProtocolRunner(Module):
         
     def deviceItemClicked(self, item):
         """Respond to clicks in the device list. Add/remove devices from the current protocol and update docks."""
+        name = str(item.text())
         if item.checkState() == QtCore.Qt.Unchecked:
-            self.currentProtocol.removeDevice(str(item.text()))
+            self.currentProtocol.removeDevice(name)
         else:
-            self.currentProtocol.addDevice(str(item.text()))
-        self.updateDeviceDocks()
+            self.currentProtocol.addDevice(name)
+        self.updateDeviceDocks([name])
             
     #def deviceItemChanged(self, item):
         #newName = str(item.text())
@@ -436,15 +437,17 @@ class ProtocolRunner(Module):
         #for i in items:
             #i.setHidden(False)
         
-    def updateDeviceDocks(self, protocol = None):
-        """Create/unhide new docks if they are needed and hide old docks if they are not."""
-        if protocol is None:
-            protocol = self.currentProtocol
+    def updateDeviceDocks(self, devNames=None):
+        """Create/unhide new docks if they are needed and hide old docks if they are not.
+        If a list of device names is given, only those device docks will be affected."""
+        protocol = self.currentProtocol
         #print "update docks", protocol.name()
         #print "  devices:", protocol.enabledDevices()
         
         ## (un)hide docks as needed
         for d in self.docks:
+            if devNames is not None and d not in devNames:
+                continue
             #print "  check", d
             if self.docks[d] is None:
                 continue
@@ -458,6 +461,9 @@ class ProtocolRunner(Module):
         ## Create docks that don't exist
         #pdb.set_trace()
         for d in protocol.enabledDevices():
+            if devNames is not None and d not in devNames:
+                continue
+            
             if d not in self.docks:
                 if d not in self.manager.listDevices():
                     continue
