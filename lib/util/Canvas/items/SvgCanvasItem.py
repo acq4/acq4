@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from PyQt4 import QtCore, QtGui, QtSvg
 from CanvasItem import CanvasItem
 
 class SvgCanvasItem(CanvasItem):
     
     def __init__(self, handle, **opts):
+        opts['handle'] = handle
         item = QtSvg.QGraphicsSvgItem(handle.name())
         CanvasItem.__init__(self, item, **opts)
     

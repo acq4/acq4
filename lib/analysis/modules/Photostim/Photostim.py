@@ -13,6 +13,7 @@ import ProgressDialog
 from Scan import Scan
 from DBCtrl import DBCtrl
 from ScatterPlotter import ScatterPlotter
+import Canvas.items
 
 class Photostim(AnalysisModule):
     def __init__(self, host):
@@ -151,7 +152,7 @@ class Photostim(AnalysisModule):
         ## first see if we've already loaded this file
         for scan in self.scans:
             if scan.source() is fh:
-                ret.append(scan)
+                ret.append(scan)   ## if so, return all scans sourced by this file
         if len(ret) > 0:
             return ret
         
@@ -161,7 +162,7 @@ class Photostim(AnalysisModule):
         ret = []
         
         ## get sequence parameters
-        params = self.dataModel.listSequenceParams(fh)
+        params = self.dataModel.listSequenceParams(fh).deepcopy()  ## copy is required since this info is read-only.
         params.remove(('Scanner', 'targets'))
         
         ## If the scan has sequence parameters other than the spot position, 
@@ -186,8 +187,9 @@ class Photostim(AnalysisModule):
             name = fh.shortName()
             if seq:
                 name += '.' + key
-            canvasItem = ScanCanvasItem(handle=fh, subDirs=dirs.values(), name=name)
-            scan = Scan(fh, canvasItem, name=name)
+            canvasItem = Canvas.items.ScanCanvasItem(handle=fh, subDirs=subDirs, name=name)
+            canvas.addItem(canvasItem)
+            scan = Scan(self, fh, canvasItem, name=name)
             self.scans.append(scan)
             ret.append(scan)
             self.dbCtrl.scanLoaded(scan)

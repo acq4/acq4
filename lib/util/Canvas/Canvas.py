@@ -10,7 +10,7 @@ from CanvasTemplate import *
 #import pyqtgraph.graphicsItems as graphicsItems
 #from pyqtgraph.PlotWidget import PlotWidget
 from pyqtgraph import widgets
-from PyQt4 import QtGui, QtCore, QtSvg
+from PyQt4 import QtGui, QtCore
 #import DataManager
 import numpy as np
 import debug

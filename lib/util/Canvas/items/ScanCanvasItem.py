@@ -10,7 +10,7 @@ class ScanCanvasItem(CanvasItem):
         Create a new CanvasItem representing a scan.
         Options:
             handle: DirHandle where scan data is stored (required)
-            protos: list of DirHandles to the individual Protocols for each spot 
+            subDirs: list of DirHandles to the individual Protocols for each spot 
                      (optional; this allows the inclusion of only part of a scan sequence)
         """
         if 'handle' not in opts:
@@ -23,8 +23,8 @@ class ScanCanvasItem(CanvasItem):
             opts['name'] = dirHandle.shortName()
             
         ## Get the specific list of subdirs to use from which to pull spot information
-        if 'handles' in opts:
-            dirs = opts['handles']
+        if 'subDirs' in opts:
+            dirs = opts['subDirs']
         else:
             model = lib.Manager.getManager().dataModel
             typ = model.dirType(dirHandle)

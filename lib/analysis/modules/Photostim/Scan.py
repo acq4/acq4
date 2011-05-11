@@ -13,7 +13,7 @@ class Scan(QtCore.QObject):
     def __init__(self, host, source, canvasItem, name=None):
         QtCore.QObject.__init__(self)
         self._source = source           ## DirHandle to data for this scan
-        canvasItem.item.scan = self
+        canvasItem.graphicsItem().scan = self  ## mark the graphicsItem so that we can trace back to here when it is clicked
         self.canvasItem = canvasItem
         canvasItem.sigVisibilityChanged.connect(self.itemVisibilityChanged)
         self.item = canvasItem.graphicsItem()     ## graphics item

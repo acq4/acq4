@@ -119,6 +119,8 @@ class CanvasItem(QtCore.QObject):
             trans = self.opts['handle'].info().get('userTransform', None)
             if trans is not None:
                 self.restoreTransform(trans)
+            if self.opts['name'] is None:
+                self.opts['name'] = self.opts['handle'].shortName()
                 
         #print "Created canvas item", self
         #print "  base:", self.baseTransform
@@ -230,7 +232,20 @@ class CanvasItem(QtCore.QObject):
         """The selection box has moved; get its transformation information and pass to the graphics item"""
         self.userTransform = self.selectBox.getGlobalTransform(relativeTo=self.selectBoxBase)
         self.updateTransform()
+
+    def scale(self, x, y):
+        self.userTransform.scale(x, y)
+        self.updateTransform()
         
+    def rotate(self, ang):
+        self.userTransform.rotate(ang)
+        self.updateTransform()
+        
+    def translate(self, x, y):
+        self.userTransform.translate(x, y)
+        self.updateTransform()
+        
+
     def setTemporaryTransform(self, transform):
         self.tempTransform = transform
         self.updateTransform()
