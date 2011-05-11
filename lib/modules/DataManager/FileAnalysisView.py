@@ -93,7 +93,7 @@ class FileAnalysisView(QtGui.QWidget):
             return
         modName = str(self.ui.dataModelCombo.currentText())
         self.currentModel = models.loadModel(modName)
-        lib.Manager.getManager().currentModel = self.currentModel
+        lib.Manager.getManager().dataModel = self.currentModel  ## make model globally available
     
     
     def currentDatabase(self):

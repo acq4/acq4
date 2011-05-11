@@ -1,9 +1,64 @@
 # -*- coding: utf-8 -*-
+from PyQt4 import QtCore, QtGui
 from CanvasItem import CanvasItem
-
+import lib.Manager
+import pyqtgraph as pg
 
 class ScanCanvasItem(CanvasItem):
-    def __init__(self, item, **opts):
+    def __init__(self, **opts):
+        """
+        Create a new CanvasItem representing a scan.
+        Options:
+            handle: DirHandle where scan data is stored (required)
+            protos: list of DirHandles to the individual Protocols for each spot 
+                     (optional; this allows the inclusion of only part of a scan sequence)
+        """
+        if 'handle' not in opts:
+            raise Exception("ScanCanvasItem must be initialized with 'handle' or 'handles' specified in opts")
+        
+        ## Top-level dirHandle tells us the default name of the item 
+        ## and may have a userTransform
+        dirHandle = opts['handle']
+        if 'name' not in opts:
+            opts['name'] = dirHandle.shortName()
+            
+        ## Get the specific list of subdirs to use from which to pull spot information
+        if 'handles' in opts:
+            dirs = opts['handles']
+        else:
+            model = lib.Manager.getManager().dataModel
+            typ = model.dirType(dirHandle)
+            if typ == 'ProtocolSequence':
+                dirs = [dirHandle[d] for d in dirHandle.subDirs()]
+            elif typ == 'Protocol':
+                dirs = [dirHandle]
+            else:
+                raise Exception("Invalid dir type '%s'" % typ)
+
+        ## Generate spot data and a scatterplotitem
+        pts = []
+        for d in dirs:
+            if 'Scanner' in d.info() and 'position' in d.info()['Scanner']: #Note: this is expected to fail (gracefully) when a protocol sequence is incomplete
+                pos = d.info()['Scanner']['position']
+                if 'spotSize' in d.info()['Scanner']:
+                    size = d.info()['Scanner']['spotSize']
+                else:
+                    size = self.defaultSize
+                pts.append({'pos': pos, 'size': size, 'data': d})
+        gitem = pg.ScatterPlotItem(pts, pxMode=False)
+        #citem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
+        #self._addCanvasItem(citem)
+        #return [citem]
+        CanvasItem.__init__(self, gitem, **opts)
+        
+        self.addScanImageBtn = QtGui.QPushButton()
+        self.addScanImageBtn.setText('Add Scan Image')
+        self.layout.addWidget(self.addScanImageBtn, self.layout.rowCount(), 0, 1, 2)
+        
+        self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
+
+
+
     #def addScan(self, dirHandle, **opts):
         #"""Returns a list of ScanCanvasItems."""
         
@@ -79,14 +134,24 @@ class ScanCanvasItem(CanvasItem):
             #return scans
         
         #print "Creating ScanCanvasItem...."
-        CanvasItem.__init__(self, item, **opts)
+    
+    
+    @classmethod
+    def checkFile(cls, fh):
+        if fh.isFile():
+            return 0
+        try:
+            model = lib.Manager.getManager().dataModel
+            typ = model.dirType(fh)
+            if typ == 'ProtocolSequence':  ## should do some deeper inspection here..
+                return 10
+            elif typ == 'Protocol':
+                return 10
+            return 0
+        except AttributeError:
+            return 0
         
-        self.addScanImageBtn = QtGui.QPushButton()
-        self.addScanImageBtn.setText('Add Scan Image')
-        self.layout.addWidget(self.addScanImageBtn,4,0,1,2)
-        
-        self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
-        
+    
     def loadScanImage(self):
         #print 'loadScanImage called.'
         #dh = self.ui.fileLoader.ui.dirTree.selectedFile()

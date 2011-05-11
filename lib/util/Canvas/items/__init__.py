@@ -2,7 +2,7 @@
 import os, inspect
 from CanvasItem import CanvasItem
 
-def listItems():
+def listMods():
     d = os.path.split(__file__)[0]
     files = []
     for f in os.listdir(d):
@@ -12,12 +12,15 @@ def listItems():
             files.append(f[:-3])
     return files
 
-loc = locals()
-for i in listItems():
+_ITEMLIST_ = []
+for i in listMods():
     mod = __import__(i, globals(), locals())
     for k in dir(mod):
         o = getattr(mod, k)
         if inspect.isclass(o) and issubclass(o, CanvasItem):
-            loc[k] = o
-        
+            locals()[k] = o
+            _ITEMLIST_.append(o)
+            
+def listItems():
+    return _ITEMLIST_[:]
     

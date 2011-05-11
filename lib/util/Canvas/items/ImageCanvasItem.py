@@ -4,9 +4,25 @@ from CanvasItem import CanvasItem
 import numpy as np
 import scipy.ndimage as ndimage
 import pyqtgraph as pg
+import DataManager
 
 class ImageCanvasItem(CanvasItem):
-    def __init__(self, image, **opts):
+    def __init__(self, image=None, **opts):
+        """
+        CanvasItem displaying an image. 
+        The image may be 2 or 3-dimensional.
+        Options:
+            image: May be a fileHandle, ndarray, or GraphicsItem.
+            handle: May optionally be specified in place of image
+        
+        """
+        
+        if image is None:
+            try:
+                image = opts['handle']
+            except KeyError:
+                raise Exception("ImageCanvasItem must be initialized with either an image or an image file handle.")
+        
         item = None
         if isinstance(image, QtGui.QGraphicsItem):
             item = image
@@ -75,7 +91,18 @@ class ImageCanvasItem(CanvasItem):
         #self.levelRgn.connect(self.levelRgn, QtCore.SIGNAL('regionChangeFinished'), self.levelsChangeFinished)
         self.levelRgn.sigRegionChangeFinished.connect(self.levelsChangeFinished)
         
+    @classmethod
+    def checkFile(cls, fh):
+        if not fh.isFile():
+            return 0
+        ext = fh.ext().lower()
+        if ext == '.ma':
+            return 10
+        elif ext in ['.ma', '.png', '.jpg', '.tif']:
+            return 100
         
+        return 0
+
         #self.timeSlider
         
     def timeChanged(self, t):

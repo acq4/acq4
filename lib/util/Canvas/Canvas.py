@@ -17,7 +17,7 @@ import debug
 import pyqtgraph as pg
 import weakref
 from CanvasManager import CanvasManager
-from items.CanvasItem import CanvasItem
+import items
 
 class Canvas(QtGui.QWidget):
     
@@ -47,7 +47,7 @@ class Canvas(QtGui.QWidget):
         self.view.setAspectLocked(True)
         
         grid = pg.GridItem(self.view)
-        self.grid = CanvasItem(grid, name='Grid', movable=False)
+        self.grid = items.CanvasItem(grid, name='Grid', movable=False)
         self.addItem(self.grid)
         
         self.hideBtn = QtGui.QPushButton('>', self)
@@ -316,7 +316,7 @@ class Canvas(QtGui.QWidget):
         """Add a new GraphicsItem to the scene at pos.
         Common options are name, pos, scale, and z
         """
-        citem = CanvasItem(item, **opts)
+        citem = items.CanvasItem(item, **opts)
         self.addItem(citem)
         return citem
             
@@ -404,7 +404,21 @@ class Canvas(QtGui.QWidget):
         
     def addFile(self, fh, **opts):
         ## automatically determine what item type to load from file. May invoke dataModel for extra help.
-        pass
+        types = items.listItems()
+        
+        maxScore = 0
+        bestType = None
+        
+        for t in types:
+            score = t.checkFile(fh)
+            if score > maxScore:
+                maxScore = score
+                bestType = t
+        if bestType is None:
+            raise Exception("Don't know how to load file: '%s'" % str(fh))
+        citem = bestType(handle=fh)
+        self.addItem(citem)
+        return citem
         #if fh.isFile():
             #if fh.shortName()[-4:] == '.svg':
                 #return self.addSvg(fh, **opts)
@@ -542,7 +556,7 @@ class Canvas(QtGui.QWidget):
         citem.setCanvas(self)
 
         ## Autoscale to fit the first item added (not including the grid).
-        if len(self.items) == 1:
+        if len(self.items) == 2:
             self.autoRange()
             #self.view.setRange(gitem.mapRectToScene(gitem.boundingRect()))
             
@@ -562,7 +576,7 @@ class Canvas(QtGui.QWidget):
                 listItem.setCheckState(0, QtCore.Qt.Unchecked)
 
     def removeItem(self, item):
-        if isinstance(item, CanvasItem):
+        if isinstance(item, items.CanvasItem):
             item.setCanvas(None)
             #self.view.scene().removeItem(item.item)
             self.itemList.removeTopLevelItem(item.listItem)

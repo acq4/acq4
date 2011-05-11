@@ -163,7 +163,16 @@ class CanvasItem(QtCore.QObject):
     def handle(self):
         """Return the file handle for this item, if any exists."""
         return self.opts['handle']
-                             
+    
+    @classmethod
+    def checkFile(cls, handle):
+        """
+        Decide whether this item type can load the file specified. 
+        If so, return an integer (the class returning the largest value wins)
+        If not, return 0
+        """
+        return 0
+    
     def copyClicked(self):
         CanvasItem.transformCopyBuffer = self.saveTransform()
         

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from FileType import *
+import numpy as np
 
 class Analyze75(FileType):
     extensions = ['.nii', '.hdr']   ## list of extensions handled by this class
@@ -68,7 +69,7 @@ units = {
 class Obj(object):
     pass
 
-class Array(ndarray):  ## just allows us to add some dynamic attributes
+class Array(np.ndarray):  ## just allows us to add some dynamic attributes
     def __new__(cls, arr):
         return arr.view(cls)
     
