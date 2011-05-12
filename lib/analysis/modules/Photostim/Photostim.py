@@ -13,6 +13,7 @@ import ProgressDialog
 from Scan import Scan
 from DBCtrl import DBCtrl
 from ScatterPlotter import ScatterPlotter
+import Canvas.items
 
 class Photostim(AnalysisModule):
     def __init__(self, host):
@@ -152,21 +153,72 @@ class Photostim(AnalysisModule):
         ## first see if we've already loaded this file
         for scan in self.scans:
             if scan.source() is fh:
-                ret.append(scan)
+                ret.append(scan)   ## if so, return all scans sourced by this file
         if len(ret) > 0:
             return ret
         
         ## Load the file, possibly generating multiple scans.
         canvas = self.getElement('Canvas')
-        ## probably this function should decide how to generate multiple scans rather than letting the canvas do it.
-        canvasItems = canvas.addFile(fh, separateParams=True)  ## returns list when fh is a scan
-        for citem in canvasItems:
-            scan = Scan(self, fh, citem, name=citem.opts['name'])
+        
+        ret = []
+        
+        if self.dataModel.isSequence(fh):  ## If we are loading a sequence, there will be multiple spot locations and/or multiple scans.
+            ## get sequence parameters
+            params = self.dataModel.listSequenceParams(fh).deepcopy()  ## copy is required since this info is read-only.
+            if ('Scanner', 'targets') in params:
+                params.remove(('Scanner', 'targets'))  ## removing this key enables us to process other sequence variables independently
+        
+            ## If the scan has sequence parameters other than the spot position, 
+            ## load each sub-scan separately.
+            if len(params) > 0:
+                seq = True
+                parent = canvas.addGroup(fh.shortName())
+            else:
+                seq = False
+                parent = None
+                
+            ## Determine the set of subdirs for each scan present in the sequence
+            ## (most sequences will have only one scan)
+            scans = {}
+            for dhName in fh.subDirs():
+                dh = fh[dhName]
+                key = '_'.join([str(dh.info()[p]) for p in params])
+                if key not in scans:
+                    scans[key] = []
+                scans[key].append(dh)
+
+        else:  ## If we are not loading a sequence, then there is only a single spot
+            scans = {None: [fh]}
+            seq = False
+            parent = None
+
+
+        ## Add each scan
+        
+        for key, subDirs in scans.iteritems():
+            if seq:
+                name = key
+                sname = fh.shortName() + '.' + key
+            else:
+                name = fh.shortName()
+                sname = name
+            canvasItem = Canvas.items.ScanCanvasItem(handle=fh, subDirs=subDirs, name=name, parent=parent)
+            canvas.addItem(canvasItem)
+            canvasItem.graphicsItem().sigPointClicked.connect(self.scanPointClicked)
+            scan = Scan(self, fh, canvasItem, name=sname)
             self.scans.append(scan)
-            citem.item.sigPointClicked.connect(self.scanPointClicked)
-            self.dbCtrl.scanLoaded(scan)
             ret.append(scan)
+            self.dbCtrl.scanLoaded(scan)
             self.scatterPlot.addScan(scan)
+        
+        #canvasItems = canvas.addFile(fh, separateParams=True)  ## returns list when fh is a scan
+        #for citem in canvasItems:
+            #scan = Scan(self, fh, citem, name=citem.opts['name'])
+            #self.scans.append(scan)
+            #citem.item.sigPointClicked.connect(self.scanPointClicked)
+            #self.dbCtrl.scanLoaded(scan)
+            #ret.append(scan)
+            #self.scatterPlot.addScan(scan)
         return ret
                 
 

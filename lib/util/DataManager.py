@@ -25,6 +25,8 @@ if not hasattr(QtCore, 'Signal'):
 #from lib.filetypes.FileType import *
 import lib.filetypes as filetypes
 from debug import *
+import copy
+import advancedTypes
 
 def abspath(fileName):
     """Return an absolute path string which is guaranteed to uniquely identify a file."""
@@ -201,6 +203,7 @@ class FileHandle(QtCore.QObject):
         return (getHandle, (self.name(),))
 
     def name(self, relativeTo=None):
+        """Return the full name of this file with its absolute path"""
         #self.checkDeleted()
         with self.lock:
             path = self.path
@@ -214,9 +217,14 @@ class FileHandle(QtCore.QObject):
             return path
         
     def shortName(self):
+        """Return the name of this file without its path"""
         #self.checkDeleted()
         return os.path.split(self.name())[1]
-        
+
+    def ext(self):
+        """Return file's extension"""
+        return os.path.splitext(self.name())[1]
+
     def parent(self):
         self.checkDeleted()
         with self.lock:
@@ -227,7 +235,8 @@ class FileHandle(QtCore.QObject):
         
     def info(self):
         self.checkDeleted()
-        return self.parent()._fileInfo(self.shortName())
+        info = self.parent()._fileInfo(self.shortName())
+        return advancedTypes.ProtectedDict(info)
         
     def setInfo(self, info=None, **args):
         """Set meta-information for this file. Updates all keys specified in info, leaving others unchanged."""
@@ -687,7 +696,7 @@ class DirHandle(FileHandle):
         return len(self.ls()) > 0
     
     def info(self):
-        return self._fileInfo('.')
+        return advancedTypes.ProtectedDict(self._fileInfo('.'))
     
     def _fileInfo(self, file):
         """Return a dict of the meta info stored for file"""

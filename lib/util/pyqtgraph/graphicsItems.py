@@ -2465,9 +2465,15 @@ class GridItem(UIGraphicsItem):
                 c = np.clip(3.*(ppl-3), 0., 30.)
                 linePen = QtGui.QPen(QtGui.QColor(255, 255, 255, c)) 
                 textPen = QtGui.QPen(QtGui.QColor(255, 255, 255, c*2)) 
-                
+                #linePen.setCosmetic(True)
+                #linePen.setWidth(1)
                 bx = (ax+1) % 2
                 for x in range(0, int(nl[ax])):
+                    linePen.setCosmetic(False)
+                    if ax == 0:
+                        linePen.setWidthF(self.pixelHeight())
+                    else:
+                        linePen.setWidthF(self.pixelWidth())
                     p.setPen(linePen)
                     p1 = np.array([0.,0.])
                     p2 = np.array([0.,0.])

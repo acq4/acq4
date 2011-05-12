@@ -2,9 +2,9 @@
 
 # Form implementation generated from reading ui file 'CanvasTemplate.ui'
 #
-# Created: Fri May  6 08:44:52 2011
-#      by: PyQt4 UI code generator 4.8.3
-#
+# Created: Mon May  9 15:39:32 2011
+#      by: PyQt4 UI code generator 4.7.2
+
 # WARNING! All changes made in this file will be lost!
 
 from PyQt4 import QtCore, QtGui
@@ -52,7 +52,8 @@ class Ui_Form(object):
         self.gridLayout_2.addWidget(self.itemList, 7, 0, 1, 2)
         self.ctrlLayout = QtGui.QGridLayout()
         self.ctrlLayout.setSpacing(0)
-        self.ctrlLayout.setObjectName(_fromUtf8("ctrlLayout"))
+
+        self.ctrlLayout.setObjectName("ctrlLayout")
         self.gridLayout_2.addLayout(self.ctrlLayout, 10, 0, 1, 2)
         self.storeSvgBtn = QtGui.QPushButton(self.layoutWidget)
         self.storeSvgBtn.setObjectName(_fromUtf8("storeSvgBtn"))
@@ -71,10 +72,12 @@ class Ui_Form(object):
         self.horizontalLayout.addWidget(self.redirectCombo)
         self.gridLayout_2.addLayout(self.horizontalLayout, 6, 0, 1, 2)
         self.mirrorImagesBtn = QtGui.QPushButton(self.layoutWidget)
-        self.mirrorImagesBtn.setObjectName(_fromUtf8("mirrorImagesBtn"))
+
+        self.mirrorImagesBtn.setObjectName("mirrorImagesBtn")
+
         self.gridLayout_2.addWidget(self.mirrorImagesBtn, 8, 0, 1, 1)
         self.resetTransformsBtn = QtGui.QPushButton(self.layoutWidget)
-        self.resetTransformsBtn.setObjectName(_fromUtf8("resetTransformsBtn"))
+        self.resetTransformsBtn.setObjectName("resetTransformsBtn")
         self.gridLayout_2.addWidget(self.resetTransformsBtn, 8, 1, 1, 1)
         self.gridLayout.addWidget(self.splitter, 0, 0, 1, 1)
 

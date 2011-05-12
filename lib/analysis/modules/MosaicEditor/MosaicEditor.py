@@ -77,37 +77,36 @@ class MosaicEditor(AnalysisModule):
             return
 
         for f in files:    
-            if f.info().get('dirType', None) == 'Cell':
-                item = canvas.addMarker(handle=f, scale=[20e-6,20e-6])
-                self.items[item] = f
-            else:
-                item = canvas.addFile(f)
-                if isinstance(item, list):
-                    item = item[0]
-                self.items[item] = f
-                try:
-                    item.timestamp = f.info()['__timestamp__']
-                except:
-                    item.timestamp = None
+            #if f.info().get('dirType', None) == 'Cell':
+                #item = canvas.addMarker(handle=f, scale=[20e-6,20e-6])
+                #self.items[item] = f
+            #else:
+            item = canvas.addFile(f)
+            if isinstance(item, list):
+                item = item[0]
+            self.items[item] = f
+            try:
+                item.timestamp = f.info()['__timestamp__']
+            except:
+                item.timestamp = None
 
-                #item.timestamp = f.info()['__timestamp__']
-                if not item.hasUserTransform() and item.timestamp is not None:
-                    ## Record the timestamp for this file, see what is the most recent transformation to copy
-                    best = None
-                    for i2 in self.items:
-                        if i2 is item:
-                            continue
-                        if i2.timestamp is None :
-                            continue
-                        if i2.timestamp < item.timestamp:
-                            if best is None or i2.timestamp > best.timestamp:
-                                best = i2
-                                
-                    if best is None:
+            if not item.hasUserTransform() and item.timestamp is not None:
+                ## Record the timestamp for this file, see what is the most recent transformation to copy
+                best = None
+                for i2 in self.items:
+                    if i2 is item:
                         continue
-                        
-                    trans = best.saveTransform()
-                    item.restoreTransform(trans)
+                    if i2.timestamp is None :
+                        continue
+                    if i2.timestamp < item.timestamp:
+                        if best is None or i2.timestamp > best.timestamp:
+                            best = i2
+                            
+                if best is None:
+                    continue
+                    
+                trans = best.saveTransform()
+                item.restoreTransform(trans)
                 
         canvas.selectItem(item)
         canvas.autoRangeClicked()
