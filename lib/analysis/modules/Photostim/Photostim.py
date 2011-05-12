@@ -161,40 +161,50 @@ class Photostim(AnalysisModule):
         
         ret = []
         
-        ## get sequence parameters
-        params = self.dataModel.listSequenceParams(fh).deepcopy()  ## copy is required since this info is read-only.
-        if ('Scanner', 'targets') in params:
-            params.remove(('Scanner', 'targets'))  ## removing this key enables us to process other sequence variables independently
+        if self.dataModel.isSequence(fh):  ## If we are loading a sequence, there will be multiple spot locations and/or multiple scans.
+            ## get sequence parameters
+            params = self.dataModel.listSequenceParams(fh).deepcopy()  ## copy is required since this info is read-only.
+            if ('Scanner', 'targets') in params:
+                params.remove(('Scanner', 'targets'))  ## removing this key enables us to process other sequence variables independently
         
-        ## If the scan has sequence parameters other than the spot position, 
-        ## load each sub-scan separately.
-        if len(params) > 0:
-            seq = True
-            parent = canvas.addGroup(fh.shortName())
-        else:
+            ## If the scan has sequence parameters other than the spot position, 
+            ## load each sub-scan separately.
+            if len(params) > 0:
+                seq = True
+                parent = canvas.addGroup(fh.shortName())
+            else:
+                seq = False
+                parent = None
+                
+            ## Determine the set of subdirs for each scan present in the sequence
+            ## (most sequences will have only one scan)
+            scans = {}
+            for dhName in fh.subDirs():
+                dh = fh[dhName]
+                key = '_'.join([str(dh.info()[p]) for p in params])
+                if key not in scans:
+                    scans[key] = []
+                scans[key].append(dh)
+
+        else:  ## If we are not loading a sequence, then there is only a single spot
+            scans = {None: [fh]}
             seq = False
             parent = None
-            
-        ## Determine the set of subdirs for each scan present in the sequence
-        ## (most sequences will have only one scan)
-        scans = {}
-        for dhName in fh.subDirs():
-            dh = fh[dhName]
-            key = '_'.join([str(dh.info()[p]) for p in params])
-            if key not in scans:
-                scans[key] = []
-            scans[key].append(dh)
-            
+
+
         ## Add each scan
         
         for key, subDirs in scans.iteritems():
             if seq:
                 name = key
+                sname = fh.shortName() + '.' + key
             else:
                 name = fh.shortName()
+                sname = name
             canvasItem = Canvas.items.ScanCanvasItem(handle=fh, subDirs=subDirs, name=name, parent=parent)
             canvas.addItem(canvasItem)
-            scan = Scan(self, fh, canvasItem, name=name)
+            canvasItem.graphicsItem().sigPointClicked.connect(self.scanPointClicked)
+            scan = Scan(self, fh, canvasItem, name=sname)
             self.scans.append(scan)
             ret.append(scan)
             self.dbCtrl.scanLoaded(scan)

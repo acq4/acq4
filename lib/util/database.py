@@ -347,7 +347,7 @@ class AnalysisDatabase(SqliteDatabase):
     def addDir(self, handle, table=None):
         """Create a record based on a DirHandle and its meta-info.
         If no table is specified, use the dirType attribute as table name"""
-        info = handle.info().copy()
+        info = handle.info().deepcopy()
         
         ## determine parent directory, make sure parent is in DB.
         parent = handle.parent()
