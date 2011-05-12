@@ -38,6 +38,13 @@ class CanvasItem(QtCore.QObject):
         self.canvas = None
         self._graphicsItem = item
         
+        parent = self.opts['parent']
+        if parent is not None:
+            self._graphicsItem.setParentItem(parent.graphicsItem())
+            self._parentItem = parent
+        else:
+            self._parentItem = None
+        
         z = self.opts['z']
         if z is not None:
             item.setZValue(z)
@@ -159,6 +166,9 @@ class CanvasItem(QtCore.QObject):
     def graphicsItem(self):
         """Return the graphicsItem for this canvasItem."""
         return self._graphicsItem
+        
+    def parentItem(self):
+        return self._parentItem
 
     #def name(self):
         #return self.opts['name']

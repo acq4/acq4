@@ -41,7 +41,7 @@ class Canvas(QtGui.QWidget):
         self.ui.resetTransformsBtn.hide()
         
         self.redirect = None  ## which canvas to redirect items to
-        self.items = {}
+        self.items = []
         
         self.view.enableMouse()
         self.view.setAspectLocked(True)
@@ -104,9 +104,10 @@ class Canvas(QtGui.QWidget):
 
     def autoRange(self):
         items = []
-        for i in range(self.itemList.topLevelItemCount()):
-            name = self.itemList.topLevelItem(i).name
-            citem = self.items[name]
+        #for i in range(self.itemList.topLevelItemCount()):
+            #name = self.itemList.topLevelItem(i).name
+            #citem = self.items[name]
+        for citem in self.items:
             if citem.isVisible() and citem is not self.grid:
                 items.append(citem.graphicsItem())
         if len(items) < 1:
@@ -143,7 +144,7 @@ class Canvas(QtGui.QWidget):
 
     
     def redirectItems(self, canvas):
-        for i in self.items.itervalues():
+        for i in self.items:
             if i is self.grid:
                 continue
             li = i.listItem
@@ -161,28 +162,35 @@ class Canvas(QtGui.QWidget):
 
     def reclaimItems(self):
         items = self.items
-        self.items = {'Grid': items['Grid']}
-        del items['Grid']
-        for i in items.itervalues():
+        #self.items = {'Grid': items['Grid']}
+        #del items['Grid']
+        self.items = [self.grid]
+        items.remove(self.grid)
+        
+        for i in items:
             i.canvas.removeItem(i)
             self.addItem(i)
 
     def treeItemChanged(self, item, col):
-        gi = self.items.get(item.name, None)
-        if gi is None:
+        #gi = self.items.get(item.name, None)
+        #if gi is None:
+            #return
+        try:
+            citem = item.canvasItem
+        except AttributeError:
             return
         if item.checkState(0) == QtCore.Qt.Checked:
             for i in range(item.childCount()):
                 item.child(i).setCheckState(0, QtCore.Qt.Checked)
-            gi.show()
+            citem.show()
         else:
             for i in range(item.childCount()):
                 item.child(i).setCheckState(0, QtCore.Qt.Unchecked)
-            gi.hide()
+            citem.hide()
 
     def treeItemMoved(self, item, parent, index):
         ##Item moved in tree; update its Z value
-        zvals = [i.zValue() for i in self.items.itervalues()]
+        zvals = [i.zValue() for i in self.items]
         zvals.sort(reverse=True)
         
         for i in range(self.itemList.topLevelItemCount()):
@@ -220,7 +228,7 @@ class Canvas(QtGui.QWidget):
             return
             
         multi = len(sel) > 1
-        for i in self.items.itervalues():
+        for i in self.items:
             #i.ctrlWidget().hide()
             ## updated the selected state of every item
             i.selectionChanged(i in sel, multi)
@@ -436,14 +444,21 @@ class Canvas(QtGui.QWidget):
         #item = QtSvg.QGraphicsSvgItem(fh.name())
         #return self.addItem(item, handle=fh, **opts)
 
+    def addGroup(self, name, **kargs):
+        group = items.GroupCanvasItem(name=name)
+        self.addItem(group, **kargs)
+        return group
+        
 
     def addItem(self, citem):
-        """Add a CanvasItem to the canvas"""
+        """
+        Add an item to the canvas. 
+        """
         
         ## Check for redirections
         if self.redirect is not None:
             name = self.redirect.addItem(citem)
-            self.items[name] = citem
+            self.items.append(citem)
             return name
 
         if not self.allowTransforms:
@@ -453,81 +468,55 @@ class Canvas(QtGui.QWidget):
         citem.sigTransformChangeFinished.connect(self.itemTransformChangeFinished)
         citem.sigVisibilityChanged.connect(self.itemVisibilityChanged)
 
-        #gitem = citem.item    ##canvasitem does this now
-        #self.view.scene().addItem(gitem)
         
         ## Determine name to use in the item list
         name = citem.opts['name']
         if name is None:
             name = 'item'
         newname = name
-        
+
         ## If name already exists, append a number to the end
-        c=0
-        while newname in self.items:
-            c += 1
-            newname = name + '_%03d' %c
-        name = newname
+        ## NAH. Let items have the same name if they really want.
+        #c=0
+        #while newname in self.items:
+            #c += 1
+            #newname = name + '_%03d' %c
+        #name = newname
             
         ## find parent and add item to tree
         #currentNode = self.itemList.invisibleRootItem()
         insertLocation = 0
         #print "Inserting node:", name
         
-        
-        ## Add node to tree, allowing nested nodes
-        #for n in name:
-            #nextnode = None
-            #for x in range(currentNode.childCount()):
-                #ch = currentNode.child(x)
-                #if hasattr(ch, 'name'):    ## check Z-value of current item to determine insert location
-                    #zval = self.items[ch.name].zValue()
-                    #if zval > z:
-                        ##print "  ->", x
-                        #insertLocation = x+1
-                #if n == ch.text(0):
-                    #nextnode = ch
-                    #break
-            #if nextnode is None:  ## If name doesn't exist, create it
-                #nextnode = QtGui.QTreeWidgetItem([n])
-                #nextnode.setFlags((nextnode.flags() | QtCore.Qt.ItemIsUserCheckable) & ~QtCore.Qt.ItemIsDropEnabled)
-                #nextnode.setCheckState(0, QtCore.Qt.Checked)
-                ### Add node to correct position in list by Z-value
-                ##print "  ==>", insertLocation
-                #currentNode.insertChild(insertLocation, nextnode)
-                
-                #if n == name[-1]:   ## This is the leaf; add some extra properties.
-                    #nextnode.name = name
-                
-                #if n == name[0]:   ## This is the root; make the item movable
-                    #nextnode.setFlags(nextnode.flags() | QtCore.Qt.ItemIsDragEnabled)
-                #else:
-                    #nextnode.setFlags(nextnode.flags() & ~QtCore.Qt.ItemIsDragEnabled)
-                    
-            #currentNode = nextnode
             
+        ## determine parent list item where this item should be inserted
+        parent = citem.parentItem()
+        if parent is None:
+            parent = self.itemList.invisibleRootItem()
+        else:
+            parent = parent.listItem
+        
+        ## set Z value above all other siblings if none was specified
+        siblings = [parent.child(i).canvasItem for i in xrange(parent.childCount())]
         z = citem.zValue()
         if z is None:
-            zvals = [i.zValue() for i in self.items.itervalues()]
+            zvals = [i.zValue() for i in siblings]
             if len(zvals) == 0:
                 z = 0
             else:
                 z = max(zvals)+10
             citem.setZValue(z)
             
-        root = self.itemList.invisibleRootItem()
-        for i in range(root.childCount()):
-            ch = root.child(i)
-            zval = self.items[ch.name].graphicsItem().zValue()  ## should we use CanvasItem.zValue here?
+        ## determine location to insert item relative to its siblings
+        for i in range(parent.childCount()):
+            ch = parent.child(i)
+            zval = ch.canvasItem.graphicsItem().zValue()  ## should we use CanvasItem.zValue here?
             if zval < z:
-                #print zval, "<", z
                 insertLocation = i
                 break
             else:
                 insertLocation = i+1
-                #print zval, ">", z
                 
-        #print name, insertLocation, z
         node = QtGui.QTreeWidgetItem([name])
         node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
         if citem.opts['visible']:
@@ -536,17 +525,16 @@ class Canvas(QtGui.QWidget):
             node.setCheckState(0, QtCore.Qt.Unchecked)
         
         node.name = name
-        if citem.opts['parent'] != None:
+        #if citem.opts['parent'] != None:
             ## insertLocation is incorrect in this case
-            citem.opts['parent'].listItem.insertChild(insertLocation, node)
-        else:    
-            root.insertChild(insertLocation, node)
+        parent.insertChild(insertLocation, node)
+        #else:    
+            #root.insertChild(insertLocation, node)
         
-        #citem = CanvasItem(self, name, item)
         citem.name = name
         citem.listItem = node
         node.canvasItem = citem
-        self.items[name] = citem
+        self.items.append(citem)
 
         ctrl = citem.ctrlWidget()
         ctrl.hide()
@@ -558,11 +546,42 @@ class Canvas(QtGui.QWidget):
         ## Autoscale to fit the first item added (not including the grid).
         if len(self.items) == 2:
             self.autoRange()
-            #self.view.setRange(gitem.mapRectToScene(gitem.boundingRect()))
             
+        
+        #for n in name:
+            #nextnode = None
+            #for x in range(currentNode.childCount()):
+                #ch = currentNode.child(x)
+                #if hasattr(ch, 'name'):    ## check Z-value of current item to determine insert location
+                    #zval = ch.canvasItem.zValue()
+                    #if zval > z:
+                        ###print "  ->", x
+                        #insertLocation = x+1
+                #if n == ch.text(0):
+                    #nextnode = ch
+                    #break
+            #if nextnode is None:  ## If name doesn't exist, create it
+                #nextnode = QtGui.QTreeWidgetItem([n])
+                #nextnode.setFlags((nextnode.flags() | QtCore.Qt.ItemIsUserCheckable) & ~QtCore.Qt.ItemIsDropEnabled)
+                #nextnode.setCheckState(0, QtCore.Qt.Checked)
+                ### Add node to correct position in list by Z-value
+                ###print "  ==>", insertLocation
+                #currentNode.insertChild(insertLocation, nextnode)
+                
+                #if n == name[-1]:   ## This is the leaf; add some extra properties.
+                    #nextnode.name = name
+                
+                #if n == name[0]:   ## This is the root; make the item movable
+                    #nextnode.setFlags(nextnode.flags() | QtCore.Qt.ItemIsDragEnabled)
+                #else:
+                    #nextnode.setFlags(nextnode.flags() & ~QtCore.Qt.ItemIsDragEnabled)
+                    
+            #currentNode = nextnode
 
 
-        #self.items[tuple(name)] = item
+
+
+
         return name
         
     def itemVisibilityChanged(self, item):
@@ -665,9 +684,11 @@ if __name__ == '__main__':
     img3 = np.random.normal(size=(200, 200, 200))
     
     i1 = items.ImageCanvasItem(img1, scale=[0.01, 0.01], name="Image 1", z=10)
-    i2 = items.ImageCanvasItem(img2, scale=[0.01, 0.01], pos=[-1, -1], name="Image 2", z=100)
-    i3 = items.ImageCanvasItem(img3, scale=[0.01, 0.01], pos=[1, -1], name="Image 3", z=-100)
     c1.addItem(i1)
+    
+    gr = c1.addGroup('itemGroup')
+    i2 = items.ImageCanvasItem(img2, scale=[0.01, 0.01], pos=[-1, -1], name="Image 2", z=100, parent=gr)
+    i3 = items.ImageCanvasItem(img3, scale=[0.01, 0.01], pos=[1, -1], name="Image 3", z=-100, parent=gr)
     c1.addItem(i2)
     c1.addItem(i3)
     

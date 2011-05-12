@@ -163,14 +163,17 @@ class Photostim(AnalysisModule):
         
         ## get sequence parameters
         params = self.dataModel.listSequenceParams(fh).deepcopy()  ## copy is required since this info is read-only.
-        params.remove(('Scanner', 'targets'))
+        if ('Scanner', 'targets') in params:
+            params.remove(('Scanner', 'targets'))  ## removing this key enables us to process other sequence variables independently
         
         ## If the scan has sequence parameters other than the spot position, 
         ## load each sub-scan separately.
         if len(params) > 0:
             seq = True
+            parent = canvas.addGroup(fh.shortName())
         else:
             seq = False
+            parent = None
             
         ## Determine the set of subdirs for each scan present in the sequence
         ## (most sequences will have only one scan)
@@ -183,11 +186,13 @@ class Photostim(AnalysisModule):
             scans[key].append(dh)
             
         ## Add each scan
+        
         for key, subDirs in scans.iteritems():
-            name = fh.shortName()
             if seq:
-                name += '.' + key
-            canvasItem = Canvas.items.ScanCanvasItem(handle=fh, subDirs=subDirs, name=name)
+                name = key
+            else:
+                name = fh.shortName()
+            canvasItem = Canvas.items.ScanCanvasItem(handle=fh, subDirs=subDirs, name=name, parent=parent)
             canvas.addItem(canvasItem)
             scan = Scan(self, fh, canvasItem, name=name)
             self.scans.append(scan)
