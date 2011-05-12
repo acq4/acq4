@@ -14,7 +14,9 @@ class AuditoryCortex(Atlas.Atlas):
         scale = 3.78e-6
         #scale = 5.5e-6
         #pos = (-676*scale/2., -577*scale/2.)
-        pos = (-681*scale/2., -231e-6)
+        #pos = (-681*scale/2., -231e-6)
+        #pos = (-681*scale/2., -231*scale/2.)
+        pos = (-0.001283, -0.000205)
         #pos = (0.0, 0.0)
         self.slicePlanes = advancedTypes.OrderedDict([
             ('Thalamocortical', [('ThalamocorticalMarker.svg', scale, pos)]),
@@ -79,6 +81,7 @@ class AuditoryCortex(Atlas.Atlas):
         for imgFile, scale, pos in imgs:
             fh = DataManager.getHandle(os.path.join(atlasDir, 'images', imgFile))
             item = self.canvas.addFile(fh, pos=pos, scale=[scale,scale], index=0, movable=False, z=10000)
+            #item = self.canvas.addFile(fh, index=0, movable=False)
             self.images.append(item)
         
             

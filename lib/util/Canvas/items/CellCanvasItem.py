@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from CanvasItem import CanvasItem
+from PyQt4 import QtGui, QtCore
+import lib.util.pyqtgraph as pg
 import lib.Manager
 
 class CellCanvasItem(CanvasItem):

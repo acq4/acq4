@@ -129,6 +129,13 @@ def isClampFile(fh):
     else:
         return True
     
+def isCell(dh):
+    if dh.name()[-8:-4] == 'cell':
+        return True
+    else:
+        return False
+    
+    
     
 def getClampCommand(data, generateEmpty=True):
     """Returns the command data from a clamp MetaArray.
