@@ -78,7 +78,7 @@ class AuditoryCortex(Atlas.Atlas):
         
         for imgFile, scale, pos in imgs:
             fh = DataManager.getHandle(os.path.join(atlasDir, 'images', imgFile))
-            item = self.canvas.addFile(fh, pos=pos, scale=[scale,scale], index=0, movable=False, z=10000, name='atlasMarker')
+            item = self.canvas.addFile(fh, pos=pos, scale=[scale,scale], index=0, movable=False, z=10000)
             self.images.append(item)
         
             

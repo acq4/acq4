@@ -109,7 +109,7 @@ class MosaicEditor(AnalysisModule):
                 item.restoreTransform(trans)
                 
         canvas.selectItem(item)
-        canvas.autoRangeClicked()
+        canvas.autoRange()
     #def loadScanImage(self):
         ##print 'loadScanImage called.'
         #dh = self.ui.fileLoader.ui.dirTree.selectedFile()
