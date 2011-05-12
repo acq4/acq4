@@ -188,33 +188,6 @@ class Canvas(QtGui.QWidget):
                 item.child(i).setCheckState(0, QtCore.Qt.Unchecked)
             citem.hide()
 
-    def treeItemMoved(self, item, parent, index):
-        ##Item moved in tree; update its Z value
-        zvals = [i.zValue() for i in self.items]
-        zvals.sort(reverse=True)
-        
-        for i in range(self.itemList.topLevelItemCount()):
-            item = self.itemList.topLevelItem(i)
-            
-            #ci = self.items[item.name]
-            ci = item.canvasItem
-            if ci is None:
-                continue
-            if ci.zValue() != zvals[i]:
-                ci.setZValue(zvals[i])
-        
-        #if self.itemList.topLevelItemCount() < 2:
-            #return
-        #name = item.name
-        #gi = self.items[name]
-        #if index == 0:   
-            #next = self.itemList.topLevelItem(1)
-            #z = self.items[next.name].zValue()+1
-        #else:
-            #prev = self.itemList.topLevelItem(index-1)
-            #z = self.items[prev.name].zValue()-1
-        #gi.setZValue(z)
-
     def treeItemSelected(self):
         sel = self.selectedItems()
         #sel = []
@@ -518,7 +491,10 @@ class Canvas(QtGui.QWidget):
                 insertLocation = i+1
                 
         node = QtGui.QTreeWidgetItem([name])
-        node.setFlags((node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled) & ~QtCore.Qt.ItemIsDropEnabled)
+        flags = node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled
+        if not isinstance(citem, items.GroupCanvasItem):
+            flags = flags & ~QtCore.Qt.ItemIsDropEnabled
+        node.setFlags(flags)
         if citem.opts['visible']:
             node.setCheckState(0, QtCore.Qt.Checked)
         else:
@@ -577,12 +553,47 @@ class Canvas(QtGui.QWidget):
                     #nextnode.setFlags(nextnode.flags() & ~QtCore.Qt.ItemIsDragEnabled)
                     
             #currentNode = nextnode
+        return citem
+
+    def treeItemMoved(self, item, parent, index):
+        ##Item moved in tree; update Z values
+        if parent is self.itemList.invisibleRootItem():
+            item.canvasItem.setParentItem(None)
+        else:
+            item.canvasItem.setParentItem(parent.canvasItem)
+        siblings = [parent.child(i).canvasItem for i in xrange(parent.childCount())]
+        
+        zvals = [i.zValue() for i in siblings]
+        zvals.sort(reverse=True)
+        
+        for i in range(len(siblings)):
+            item = siblings[i]
+            item.setZValue(zvals[i])
+            #item = self.itemList.topLevelItem(i)
+            
+            ##ci = self.items[item.name]
+            #ci = item.canvasItem
+            #if ci is None:
+                #continue
+            #if ci.zValue() != zvals[i]:
+                #ci.setZValue(zvals[i])
+        
+        #if self.itemList.topLevelItemCount() < 2:
+            #return
+        #name = item.name
+        #gi = self.items[name]
+        #if index == 0:   
+            #next = self.itemList.topLevelItem(1)
+            #z = self.items[next.name].zValue()+1
+        #else:
+            #prev = self.itemList.topLevelItem(index-1)
+            #z = self.items[prev.name].zValue()-1
+        #gi.setZValue(z)
 
 
 
 
 
-        return name
         
     def itemVisibilityChanged(self, item):
         listItem = item.listItem
