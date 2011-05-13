@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from CanvasItem import CanvasItem
+from PyQt4 import QtCore, QtGui
+import pyqtgraph as pg
 import lib.Manager
 
 class CellCanvasItem(CanvasItem):
@@ -22,7 +24,7 @@ class CellCanvasItem(CanvasItem):
             return 0
         try:
             model = lib.Manager.getManager().dataModel
-            if model.isCell(fh):
+            if model.dirType(fh) == 'Cell':
                 return 100
             return 0
         except AttributeError:
