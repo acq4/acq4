@@ -135,10 +135,11 @@ class Photostim(AnalysisModule):
 
     def loadFileRequested(self, fhList):
         canvas = self.getElement('Canvas')
+        model = self.dataModel
 
         for fh in fhList:
             try:
-                if fh.isFile():
+                if fh.isFile() or model.isCell(fh):
                     canvas.addFile(fh)
                 else:
                     self.loadScan(fh)

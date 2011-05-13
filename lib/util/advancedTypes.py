@@ -300,7 +300,7 @@ class CaselessDict(dict):
     def __deepcopy__(self, memo):
         raise Exception("deepcopy not implemented")
 
-class ProtectedDict:
+class ProtectedDict(dict):
     """
     A class allowing read-only 'view' of a dict. 
     The object can be treated like a normal dict, but will never modify the original dict it points to.
@@ -313,6 +313,7 @@ class ProtectedDict:
                    
     #def keys(self):
         #return _data_.keys()
+    
             
     def items(self):
         return ProtectedList(self._data_.items())
@@ -320,9 +321,16 @@ class ProtectedDict:
     def values(self):
         return ProtectedList(self._data_.values())
     
-    def __getattr__(self, attr):
-        return getattr(self._data_, attr)
-    
+    def __getattribute__(self, attr):
+        """We need inherit functions from self._data_, but we have already inherited them from dict, so we need to
+        check if the attr is explicitly defined in ProtectedDict, and if it's not then we request the attribute
+        from self._data_ (Why do we inherit from dict? So glad you asked. Because we need isinstance(ProtectedDict(), dict) 
+        to return True)"""
+        if attr in ProtectedDict.__dict__ or attr == '_data_':
+            return object.__getattribute__(self, attr)
+        else:
+            return self._data_.__getattribute__(attr)
+        
     def __getitem__(self, ind):
         val = self._data_.__getitem__(ind)
         return protect(val)
@@ -355,9 +363,26 @@ class ProtectedDict:
     __delitem__ = error
     remove = error
     update = error
-
+    clear = error
+    pop = error
+    popitem = error
+    setdefault = error
+    
+    ### These methods all use the same template (as in ProtectedList)
+    def __repr__(self):
+        return self._data_.__repr__()
+        
+    def __len__(self):
+        return len(self._data_)
+    
+    def __contains__(self, arg):
+        return self._data_.__contains__(arg)
+    
+    def __eq__(self, arg):
+        return self._data_.__eq__(arg)
+    
             
-class ProtectedList:
+class ProtectedList(list):
     """
     A class allowing read-only 'view' of a list or dict. 
     The object can be treated like a normal list, but will never modify the original list it points to.
@@ -365,8 +390,17 @@ class ProtectedList:
     def __init__(self, data):
         self._data_ = data
     
-    def __getattr__(self, attr):
-        return getattr(self._data_, attr)
+    def __getattribute__(self, attr):
+        """We need to inherit functions from self._data_, but we have already inherited them from list, so we need to
+        check if the attr is explicitly defined in ProtectedList, and if it's not then we request the attribute
+        from self._data_ (Why do we inherit from list? So glad you asked. Because we need isinstance(ProtectedList(), list) 
+        to return True)"""
+        if attr in ProtectedList.__dict__ or attr == '_data_':
+            return object.__getattribute__(self, attr)
+        else:
+            return self._data_.__getattribute__(attr)
+        
+    
     
     def __getitem__(self, ind):
         val = self._data_.__getitem__(ind)
@@ -378,15 +412,29 @@ class ProtectedList:
     def __iter__(self):
         for i in self._data_:
             yield protect(i)
+            
+    @staticmethod
+    def makeProxyMethod(methodName):
+        return lambda self, *args: getattr(self._data_, methodName)
+    
 
     def error(self, *args, **kargs):
         raise Exception("Can not modify read-only list.")
             
     __setitem__ = error
     __setslice__ = error
+    __delitem__ = error
+    __delslice__ = error
     remove = error
     append = error
     extend = error
+    pop = error
+    insert = error
+    reverse = error
+    sort = error
+    
+    def poop(self):
+        raise Exception("This is a list. It does not poop.")
 
     def copy(self):
         raise Exception("It is not safe to copy protected lists! (instead try deepcopy, but be careful.)")
@@ -397,6 +445,24 @@ class ProtectedList:
     def __deepcopy__(self, memo):
         return copy.deepcopy(self._data_, memo)
     
+    #### Unpacking doesn't work yet either
+    
+    #### The following methods use the same template
+    def __repr__(self):
+        return self._data_.__repr__()
+    
+    def __len__(self):
+        return len(self._data_)
+    
+    def __contains__(self, arg):
+        return self._data_.__contains__(arg)
+    
+    def __eq__(self, arg):
+        return self._data_.__eq__(arg)
+    
+#for methodName in ['__len__']:
+    ##locals()[methodName] = makeProxyMethod(methodName)
+    #setattr(ProtectedList, methodName, ProtectedList.makeProxyMethod(methodName))
     
 def protect(obj):
     if isinstance(obj, dict):
@@ -410,3 +476,6 @@ def protect(obj):
 if __name__ == '__main__':
     d1 = {'x': 1, 'y': [1,2], 'z': ({'a': 2, 'b': [3,4], 'c': (5,6)}, 1, 2)}
     d1p = protect(d1)
+    
+    l = [1,2,3,4,5]
+    lp = protect(l)

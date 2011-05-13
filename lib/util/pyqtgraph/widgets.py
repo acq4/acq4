@@ -812,6 +812,7 @@ class ROI(QtGui.QGraphicsObject):
 
     def applyGlobalTransform(self, tr):
         st = self.getState()
+        
         st['scale'] = st['size']
         st = Transform(st)
         st = (st * tr).saveState()
