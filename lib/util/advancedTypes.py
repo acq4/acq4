@@ -329,6 +329,8 @@ class ProtectedDict:
     
     #def __iter__(self):
         #return self._data_.__iter__()
+    def get(self, *args):
+        return protect(self._data_.get(*args))
     
     def copy(self):
         raise Exception("It is not safe to copy protected dicts! (instead try deepcopy, but be careful.)")
