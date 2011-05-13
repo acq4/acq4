@@ -132,12 +132,15 @@ class Photostim(AnalysisModule):
             self.dbCtrl.listMaps(cell)
 
             
+
     def loadFileRequested(self, fhList):
         canvas = self.getElement('Canvas')
+        model = self.dataModel
 
         for fh in fhList:
             try:
-                if fh.isFile():
+                ## TODO: use more clever detection of Scan data here.
+                if fh.isFile() or model.dirType(fh) == 'Cell':
                     canvas.addFile(fh)
                 else:
                     self.loadScan(fh)
@@ -145,7 +148,7 @@ class Photostim(AnalysisModule):
             except:
                 debug.printExc("Error loading file %s" % fh.name())
                 return False
-    
+
     def loadScan(self, fh):
         ret = []
         
@@ -367,6 +370,7 @@ class Photostim(AnalysisModule):
         
         
     def recolor(self):
+
         ## Select only visible scans and maps for recoloring
         allScans = [s for s in self.scans if s.isVisible()]
         allScans.extend([s for s in self.maps if s.isVisible()])
@@ -597,4 +601,3 @@ class Photostim(AnalysisModule):
         return db
 
 
-    

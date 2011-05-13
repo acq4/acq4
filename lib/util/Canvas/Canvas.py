@@ -6,9 +6,11 @@ if __name__ == '__main__':
     #print md
     
 from CanvasTemplate import *
+
 #from pyqtgraph.GraphicsView import GraphicsView
 #import pyqtgraph.graphicsItems as graphicsItems
 #from pyqtgraph.PlotWidget import PlotWidget
+
 from pyqtgraph import widgets
 from PyQt4 import QtGui, QtCore
 #import DataManager
@@ -212,6 +214,7 @@ class Canvas(QtGui.QWidget):
             self.multiSelectBox.hide()
             self.ui.mirrorImagesBtn.hide()
             self.ui.resetTransformsBtn.hide()
+
         elif len(sel) > 1:
             self.showMultiSelectBox()
         
@@ -263,17 +266,19 @@ class Canvas(QtGui.QWidget):
         self.multiSelectBox.blockSignals(False)
         
         self.multiSelectBox.show()
-        
+
         self.ui.mirrorImagesBtn.show()
         self.ui.resetTransformsBtn.show()
         #self.multiSelectBoxBase = self.multiSelectBox.getState().copy()
 
     def mirrorImagesClicked(self):
+
         for ci in self.selectedItems():
             ci.transformGui.mirrorImageCheck.toggle()
         self.showMultiSelectBox()
             
     def resetTransformsClicked(self):
+
         for i in self.selectedItems():
             i.resetTransformClicked()
         self.showMultiSelectBox()
@@ -397,7 +402,7 @@ class Canvas(QtGui.QWidget):
                 bestType = t
         if bestType is None:
             raise Exception("Don't know how to load file: '%s'" % str(fh))
-        citem = bestType(handle=fh)
+        citem = bestType(handle=fh, **opts)
         self.addItem(citem)
         return citem
         #if fh.isFile():
@@ -655,10 +660,6 @@ class SelectBox(widgets.ROI):
             self.addScaleHandle([0, 0], center, lockAspect=True)
         self.addRotateHandle([0, 1], center)
         self.addRotateHandle([1, 0], center)
-
-
-
-
 
 
 

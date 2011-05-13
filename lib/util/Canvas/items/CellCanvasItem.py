@@ -13,6 +13,8 @@ class CellCanvasItem(CanvasItem):
     def __init__(self, **opts):
         if 'scale' not in opts:
             opts['scale'] = [20e-6, 20e-6]
+            #opts['size'] = [20e-6, 20e-6]
+            #opts['scale'] = [1., 1.]
         item = QtGui.QGraphicsEllipseItem(-0.5, -0.5, 1., 1.)
         item.setPen(pg.mkPen((255,255,255)))
         item.setBrush(pg.mkBrush((0,100,255)))
