@@ -101,9 +101,9 @@
         </layout>
        </item>
        <item row="8" column="0">
-        <widget class="QPushButton" name="mirrorImagesBtn">
+        <widget class="QPushButton" name="mirrorSelectionBtn">
          <property name="text">
-          <string>Mirror Images</string>
+          <string>Mirror Selection</string>
          </property>
         </widget>
        </item>
