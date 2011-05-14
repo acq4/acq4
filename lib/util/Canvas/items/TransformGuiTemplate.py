@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'TransformGuiTemplate.ui'
 #
-# Created: Mon May  9 15:39:31 2011
+# Created: Fri May 13 16:32:40 2011
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -29,9 +29,10 @@ class Ui_Form(object):
         self.scaleLabel = QtGui.QLabel(Form)
         self.scaleLabel.setObjectName("scaleLabel")
         self.verticalLayout.addWidget(self.scaleLabel)
-        self.mirrorImageCheck = QtGui.QCheckBox(Form)
-        self.mirrorImageCheck.setObjectName("mirrorImageCheck")
-        self.verticalLayout.addWidget(self.mirrorImageCheck)
+        self.mirrorImageBtn = QtGui.QPushButton(Form)
+        self.mirrorImageBtn.setToolTip("")
+        self.mirrorImageBtn.setObjectName("mirrorImageBtn")
+        self.verticalLayout.addWidget(self.mirrorImageBtn)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
@@ -41,5 +42,5 @@ class Ui_Form(object):
         self.translateLabel.setText(QtGui.QApplication.translate("Form", "Translate:", None, QtGui.QApplication.UnicodeUTF8))
         self.rotateLabel.setText(QtGui.QApplication.translate("Form", "Rotate:", None, QtGui.QApplication.UnicodeUTF8))
         self.scaleLabel.setText(QtGui.QApplication.translate("Form", "Scale:", None, QtGui.QApplication.UnicodeUTF8))
-        self.mirrorImageCheck.setText(QtGui.QApplication.translate("Form", "MirrorImage", None, QtGui.QApplication.UnicodeUTF8))
+        self.mirrorImageBtn.setText(QtGui.QApplication.translate("Form", "Mirror", None, QtGui.QApplication.UnicodeUTF8))
 

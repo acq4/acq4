@@ -139,7 +139,8 @@ class Photostim(AnalysisModule):
 
         for fh in fhList:
             try:
-                if fh.isFile() or model.isCell(fh):
+                ## TODO: use more clever detection of Scan data here.
+                if fh.isFile() or model.dirType(fh) == 'Cell':
                     canvas.addFile(fh)
                 else:
                     self.loadScan(fh)

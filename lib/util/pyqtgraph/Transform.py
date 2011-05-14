@@ -6,7 +6,8 @@ import numpy as np
 class Transform(QtGui.QTransform):
     """Transform that can always be represented as a combination of 3 matrices: scale * rotate * translate
     
-    This transform always has 0 shear."""
+    This transform always has 0 shear.
+    """
     def __init__(self, init=None):
         QtGui.QTransform.__init__(self)
         self.reset()

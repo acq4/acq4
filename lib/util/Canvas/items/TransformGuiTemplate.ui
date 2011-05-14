@@ -42,9 +42,12 @@
     </widget>
    </item>
    <item>
-    <widget class="QCheckBox" name="mirrorImageCheck">
+    <widget class="QPushButton" name="mirrorImageBtn">
+     <property name="toolTip">
+      <string extracomment="Mirror the item across the global Y axis"/>
+     </property>
      <property name="text">
-      <string>MirrorImage</string>
+      <string>Mirror</string>
      </property>
     </widget>
    </item>

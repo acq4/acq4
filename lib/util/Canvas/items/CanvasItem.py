@@ -3,7 +3,6 @@ from PyQt4 import QtGui, QtCore, QtSvg
 from pyqtgraph import widgets
 import pyqtgraph as pg
 import TransformGuiTemplate
-from lib.util import debug
 
 class SelectBox(widgets.ROI):
     def __init__(self, scalable=False):
@@ -70,7 +69,7 @@ class CanvasItem(QtCore.QObject):
         self.transformGui = TransformGuiTemplate.Ui_Form()
         self.transformGui.setupUi(self.transformWidget)
         self.layout.addWidget(self.transformWidget, 3, 0, 1, 2)
-        self.transformGui.mirrorImageCheck.stateChanged.connect(self.mirrorImage)
+        self.transformGui.mirrorImageBtn.clicked.connect(self.mirrorY)
         
         self.layout.addWidget(self.resetTransformBtn, 1, 0, 1, 2)
         self.layout.addWidget(self.copyBtn, 2, 0, 1, 1)
@@ -202,33 +201,38 @@ class CanvasItem(QtCore.QObject):
         else:
             self.restoreTransform(t)
             
-    def mirrorImage(self, state):
+    def mirrorY(self):
         if not self.isMovable():
             return
         
-        flip = self.transformGui.mirrorImageCheck.isChecked()
-        tr = self.userTransform.saveState()
+        #flip = self.transformGui.mirrorImageCheck.isChecked()
+        #tr = self.userTransform.saveState()
         
-        if flip:
-            if tr['scale'][0] < 0 or tr['scale'][1] < 0:
-                return
-            else:
-                self.userTransform.setScale([-tr['scale'][0], tr['scale'][1]])
-                self.userTransform.setTranslate([-tr['pos'][0], tr['pos'][1]])
-                self.userTransform.setRotate(-tr['angle'])
-                self.updateTransform()
-                self.selectBoxFromUser()
-                return
-        elif not flip:
-            if tr['scale'][0] > 0 and tr['scale'][1] > 0:
-                return
-            else:
-                self.userTransform.setScale([-tr['scale'][0], tr['scale'][1]])
-                self.userTransform.setTranslate([-tr['pos'][0], tr['pos'][1]])
-                self.userTransform.setRotate(-tr['angle'])
-                self.updateTransform()
-                self.selectBoxFromUser()
-                return
+        inv = pg.Transform()
+        inv.scale(-1, 1)
+        self.userTransform = self.userTransform * inv
+        self.updateTransform()
+        self.selectBoxFromUser()
+        #if flip:
+            #if tr['scale'][0] < 0 xor tr['scale'][1] < 0:
+                #return
+            #else:
+                #self.userTransform.setScale([-tr['scale'][0], tr['scale'][1]])
+                #self.userTransform.setTranslate([-tr['pos'][0], tr['pos'][1]])
+                #self.userTransform.setRotate(-tr['angle'])
+                #self.updateTransform()
+                #self.selectBoxFromUser()
+                #return
+        #elif not flip:
+            #if tr['scale'][0] > 0 and tr['scale'][1] > 0:
+                #return
+            #else:
+                #self.userTransform.setScale([-tr['scale'][0], tr['scale'][1]])
+                #self.userTransform.setTranslate([-tr['pos'][0], tr['pos'][1]])
+                #self.userTransform.setRotate(-tr['angle'])
+                #self.updateTransform()
+                #self.selectBoxFromUser()
+                #return
 
     def hasUserTransform(self):
         #print self.userRotate, self.userTranslate
