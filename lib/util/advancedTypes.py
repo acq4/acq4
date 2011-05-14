@@ -392,85 +392,106 @@ class ProtectedList(list):
     def __init__(self, data):
         self._data_ = data
     
-    def __getattribute__(self, attr):
-        """We need to inherit functions from self._data_, but we have already inherited them from list, so we need to
-        check if the attr is explicitly defined in ProtectedList, and if it's not then we request the attribute
-        from self._data_ (Why do we inherit from list? So glad you asked. Because we need isinstance(ProtectedList(), list) 
-        to return True)"""
-        if attr in ProtectedList.__dict__ or attr == '_data_':
-            return object.__getattribute__(self, attr)
-        else:
-            return self._data_.__getattribute__(attr)
+    ## List of methods to directly wrap from _data_
+    wrapMethods = ['__contains__', '__eq__', '__format__', '__ge__', '__gt__', '__le__', '__len__', '__lt__', '__ne__', '__reduce__', '__reduce_ex__', '__repr__', '__str__', 'count', 'index']
+    
+    ## List of methods which wrap from _data_ but return protected results
+    protectMethods = ['__getitem__', '__getslice__', '__iter__', '__add__', '__mul__', '__reversed__', '__rmul__']
+    
+    ## List of methods to disable
+    disableMethods = ['__delitem__', '__delslice__', '__iadd__', '__imul__', '__setitem__', '__setslice__', 'append', 'extend', 'insert', 'pop', 'remove', 'reverse', 'sort']
+    
+    
+    ## Template methods 
+    def wrapMethod(methodName):
+        return lambda self, *a, **k: getattr(self._data_, methodName)(*a, **k)
         
+    def protectMethod(methodName):
+        return lambda self, *a, **k: protect(getattr(self._data_, methodName)(*a, **k))
     
-    
-    def __getitem__(self, ind):
-        val = self._data_.__getitem__(ind)
-        return protect(val)
-    
-    def __getslice__(self, *args):
-        return ProtectedList(self._data_.__getslice__(*args))
-    
-    def __iter__(self):
-        for i in self._data_:
-            yield protect(i)
-            
-    @staticmethod
-    def makeProxyMethod(methodName):
-        return lambda self, *args: getattr(self._data_, methodName)
-    
-
     def error(self, *args, **kargs):
         raise Exception("Can not modify read-only list.")
-            
-    __setitem__ = error
-    __setslice__ = error
-    __delitem__ = error
-    __delslice__ = error
-    remove = error
-    append = error
-    extend = error
-    pop = error
-    insert = error
-    reverse = error
-    sort = error
     
-    def poop(self):
-        raise Exception("This is a list. It does not poop.")
+    
+    ## Directly (and explicitly) wrap some methods from _data_
+    ## Many of these methods can not be intercepted using __getattribute__, so they
+    ## must be implemented explicitly
+    for methodName in wrapMethods:
+        locals()[methodName] = wrapMethod(methodName)
 
-    def copy(self):
-        raise Exception("It is not safe to copy protected lists! (instead try deepcopy, but be careful.)")
+    ## Wrap some methods from _data_ with the results converted to protected objects
+    for methodName in protectMethods:
+        locals()[methodName] = protectMethod(methodName)
+
+    ## Disable any methods that could change data in the list
+    for methodName in disableMethods:
+        locals()[methodName] = error
+
     
+    ## Add a few extra methods.
     def deepcopy(self):
         return copy.deepcopy(self._data_)
     
     def __deepcopy__(self, memo):
         return copy.deepcopy(self._data_, memo)
     
-    #### Unpacking doesn't work yet either
+    def poop(self):
+        raise Exception("This is a list. It does not poop.")
+
+
+class ProtectedTuple(tuple):
+    """
+    A class allowing read-only 'view' of a tuple.
+    The object can be treated like a normal tuple, but its contents will be returned as protected objects.
+    """
+    def __init__(self, data):
+        self._data_ = data
     
-    #### The following methods use the same template
-    def __repr__(self):
-        return self._data_.__repr__()
+    ## List of methods to directly wrap from _data_
+    wrapMethods = ['__contains__', '__eq__', '__format__', '__ge__', '__getnewargs__', '__gt__', '__hash__', '__le__', '__len__', '__lt__', '__ne__', '__reduce__', '__reduce_ex__', '__repr__', '__str__', 'count', 'index']
     
-    def __len__(self):
-        return len(self._data_)
+    ## List of methods which wrap from _data_ but return protected results
+    protectMethods = ['__getitem__', '__getslice__', '__iter__', '__add__', '__mul__', '__reversed__', '__rmul__']
     
-    def __contains__(self, arg):
-        return self._data_.__contains__(arg)
     
-    def __eq__(self, arg):
-        return self._data_.__eq__(arg)
+    ## Template methods 
+    def wrapMethod(methodName):
+        return lambda self, *a, **k: getattr(self._data_, methodName)(*a, **k)
+        
+    def protectMethod(methodName):
+        return lambda self, *a, **k: protect(getattr(self._data_, methodName)(*a, **k))
     
-#for methodName in ['__len__']:
-    ##locals()[methodName] = makeProxyMethod(methodName)
-    #setattr(ProtectedList, methodName, ProtectedList.makeProxyMethod(methodName))
     
+    ## Directly (and explicitly) wrap some methods from _data_
+    ## Many of these methods can not be intercepted using __getattribute__, so they
+    ## must be implemented explicitly
+    for methodName in wrapMethods:
+        locals()[methodName] = wrapMethod(methodName)
+
+    ## Wrap some methods from _data_ with the results converted to protected objects
+    for methodName in protectMethods:
+        locals()[methodName] = protectMethod(methodName)
+
+    
+    ## Add a few extra methods.
+    def deepcopy(self):
+        return copy.deepcopy(self._data_)
+    
+    def __deepcopy__(self, memo):
+        return copy.deepcopy(self._data_, memo)
+    
+    def poop(self):
+        raise Exception("This is a list. It does not poop.")
+
+
+
 def protect(obj):
     if isinstance(obj, dict):
         return ProtectedDict(obj)
-    elif isinstance(obj, list) or isinstance(obj, tuple):
+    elif isinstance(obj, list):
         return ProtectedList(obj)
+    elif isinstance(obj, tuple):
+        return ProtectedTuple(obj)
     else:
         return obj
     
@@ -479,5 +500,5 @@ if __name__ == '__main__':
     d1 = {'x': 1, 'y': [1,2], 'z': ({'a': 2, 'b': [3,4], 'c': (5,6)}, 1, 2)}
     d1p = protect(d1)
     
-    l = [1,2,3,4,5]
+    l = [1, 'x', ['a', 'b'], ('c', 'd'), {'x': 1, 'y': 2}]
     lp = protect(l)
