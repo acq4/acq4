@@ -10,7 +10,7 @@ Includes:
   - ThreadsafeDict, ThreadsafeList - Self-mutexed data structures
 """
 
-import threading, sys, copy
+import threading, sys, copy, collections
 from debug import *
 
 
@@ -300,55 +300,59 @@ class CaselessDict(dict):
     def __deepcopy__(self, memo):
         raise Exception("deepcopy not implemented")
 
+
+
+
+
 class ProtectedDict(dict):
     """
     A class allowing read-only 'view' of a dict. 
     The object can be treated like a normal dict, but will never modify the original dict it points to.
-    If any values in the dict are either list or dict, they will be returned as protected objects when accessed.
+    Any values accessed from the dict will also be read-only.
     """
     def __init__(self, data):
         self._data_ = data
-        #for fn in ['keys', 'items', 'values', '__iter__', 'copy', 'itervalues', 'iteritems']:
-            #setattr(self, fn, getattr(self._data_, fn))
-                   
-    #def keys(self):
-        #return _data_.keys()
     
-            
-    def items(self):
-        return ProtectedList(self._data_.items())
+    ## List of methods to directly wrap from _data_
+    wrapMethods = ['_cmp_', '__contains__', '__eq__', '__format__', '__ge__', '__gt__', '__le__', '__len__', '__lt__', '__ne__', '__reduce__', '__reduce_ex__', '__repr__', '__str__', 'count', 'has_key_', 'iterkeys', 'keys', ]
     
-    def values(self):
-        return ProtectedList(self._data_.values())
+    ## List of methods which wrap from _data_ but return protected results
+    protectMethods = ['__getitem__', '__iter__', 'get', 'items', 'values']
     
-    def __getattribute__(self, attr):
-        """We need inherit functions from self._data_, but we have already inherited them from dict, so we need to
-        check if the attr is explicitly defined in ProtectedDict, and if it's not then we request the attribute
-        from self._data_ (Why do we inherit from dict? So glad you asked. Because we need isinstance(ProtectedDict(), dict) 
-        to return True)"""
-        if attr in ProtectedDict.__dict__ or attr == '_data_':
-            return object.__getattribute__(self, attr)
-        else:
-            return self._data_.__getattribute__(attr)
+    ## List of methods to disable
+    disableMethods = ['__delitem__', '__setitem__', 'clear', 'pop', 'popitem', 'setdefault', 'update']
+    
+    
+    ## Template methods 
+    def wrapMethod(methodName):
+        return lambda self, *a, **k: getattr(self._data_, methodName)(*a, **k)
         
-    def __getitem__(self, ind):
-        val = self._data_.__getitem__(ind)
-        return protect(val)
+    def protectMethod(methodName):
+        return lambda self, *a, **k: protect(getattr(self._data_, methodName)(*a, **k))
     
-    #def __iter__(self):
-        #return self._data_.__iter__()
-    def get(self, *args):
-        return protect(self._data_.get(*args))
+    def error(self, *args, **kargs):
+        raise Exception("Can not modify read-only list.")
     
+    
+    ## Directly (and explicitly) wrap some methods from _data_
+    ## Many of these methods can not be intercepted using __getattribute__, so they
+    ## must be implemented explicitly
+    for methodName in wrapMethods:
+        locals()[methodName] = wrapMethod(methodName)
+
+    ## Wrap some methods from _data_ with the results converted to protected objects
+    for methodName in protectMethods:
+        locals()[methodName] = protectMethod(methodName)
+
+    ## Disable any methods that could change data in the list
+    for methodName in disableMethods:
+        locals()[methodName] = error
+
+    
+    ## Add a few extra methods.
     def copy(self):
         raise Exception("It is not safe to copy protected dicts! (instead try deepcopy, but be careful.)")
     
-    def deepcopy(self):
-        return copy.deepcopy(self._data_)
-    
-    def __deepcopy__(self, memo):
-        return copy.deepcopy(self._data_, memo)
-        
     def itervalues(self):
         for v in self._data_.itervalues():
             yield protect(v)
@@ -356,47 +360,34 @@ class ProtectedDict(dict):
     def iteritems(self):
         for k, v in self._data_.iteritems():
             yield (k, protect(v))
-            
-    
-    def error(self, *args, **kargs):
-        raise Exception("Can not modify read-only dict.")
-            
-    __setitem__ = error
-    __delitem__ = error
-    remove = error
-    update = error
-    clear = error
-    pop = error
-    popitem = error
-    setdefault = error
-    
-    ### These methods all use the same template (as in ProtectedList)
-    def __repr__(self):
-        return self._data_.__repr__()
         
-    def __len__(self):
-        return len(self._data_)
+    def deepcopy(self):
+        return copy.deepcopy(self._data_)
     
-    def __contains__(self, arg):
-        return self._data_.__contains__(arg)
-    
-    def __eq__(self, arg):
-        return self._data_.__eq__(arg)
-    
+    def __deepcopy__(self, memo):
+        return copy.deepcopy(self._data_, memo)
+
+
             
-class ProtectedList(list):
+class ProtectedList(collections.Sequence):
     """
     A class allowing read-only 'view' of a list or dict. 
     The object can be treated like a normal list, but will never modify the original list it points to.
+    Any values accessed from the list will also be read-only.
+    
+    Note: It would be nice if we could inherit from list or tuple so that isinstance checks would work.
+          However, doing this causes tuple(obj) to return unprotected results (importantly, this means
+          unpacking into function arguments will also fail)
     """
     def __init__(self, data):
         self._data_ = data
-    
+        #self.__mro__ = (ProtectedList, object)
+        
     ## List of methods to directly wrap from _data_
     wrapMethods = ['__contains__', '__eq__', '__format__', '__ge__', '__gt__', '__le__', '__len__', '__lt__', '__ne__', '__reduce__', '__reduce_ex__', '__repr__', '__str__', 'count', 'index']
     
     ## List of methods which wrap from _data_ but return protected results
-    protectMethods = ['__getitem__', '__getslice__', '__iter__', '__add__', '__mul__', '__reversed__', '__rmul__']
+    protectMethods = ['__getitem__', '__getslice__', '__mul__', '__reversed__', '__rmul__']
     
     ## List of methods to disable
     disableMethods = ['__delitem__', '__delslice__', '__iadd__', '__imul__', '__setitem__', '__setslice__', 'append', 'extend', 'insert', 'pop', 'remove', 'reverse', 'sort']
@@ -429,6 +420,27 @@ class ProtectedList(list):
 
     
     ## Add a few extra methods.
+    def __iter__(self):
+        for item in self._data_:
+            yield protect(item)
+    
+    
+    def __add__(self, op):
+        if isinstance(op, ProtectedList):
+            return protect(self._data_.__add__(op._data_))
+        elif isinstance(op, list):
+            return protect(self._data_.__add__(op))
+        else:
+            raise TypeError("Argument must be a list.")
+    
+    def __radd__(self, op):
+        if isinstance(op, ProtectedList):
+            return protect(op._data_.__add__(self._data_))
+        elif isinstance(op, list):
+            return protect(op.__add__(self._data_))
+        else:
+            raise TypeError("Argument must be a list.")
+        
     def deepcopy(self):
         return copy.deepcopy(self._data_)
     
@@ -439,10 +451,14 @@ class ProtectedList(list):
         raise Exception("This is a list. It does not poop.")
 
 
-class ProtectedTuple(tuple):
+class ProtectedTuple(collections.Sequence):
     """
     A class allowing read-only 'view' of a tuple.
     The object can be treated like a normal tuple, but its contents will be returned as protected objects.
+    
+    Note: It would be nice if we could inherit from list or tuple so that isinstance checks would work.
+          However, doing this causes tuple(obj) to return unprotected results (importantly, this means
+          unpacking into function arguments will also fail)
     """
     def __init__(self, data):
         self._data_ = data
@@ -480,9 +496,6 @@ class ProtectedTuple(tuple):
     def __deepcopy__(self, memo):
         return copy.deepcopy(self._data_, memo)
     
-    def poop(self):
-        raise Exception("This is a list. It does not poop.")
-
 
 
 def protect(obj):
@@ -497,8 +510,11 @@ def protect(obj):
     
     
 if __name__ == '__main__':
-    d1 = {'x': 1, 'y': [1,2], 'z': ({'a': 2, 'b': [3,4], 'c': (5,6)}, 1, 2)}
-    d1p = protect(d1)
+    d = {'x': 1, 'y': [1,2], 'z': ({'a': 2, 'b': [3,4], 'c': (5,6)}, 1, 2)}
+    dp = protect(d)
     
     l = [1, 'x', ['a', 'b'], ('c', 'd'), {'x': 1, 'y': 2}]
     lp = protect(l)
+    
+    t = (1, 'x', ['a', 'b'], ('c', 'd'), {'x': 1, 'y': 2})
+    tp = protect(t)
