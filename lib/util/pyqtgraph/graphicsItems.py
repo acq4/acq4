@@ -21,14 +21,14 @@ try:
 except:
     pass
 from scipy.fftpack import fft
-from scipy.signal import resample
+#from scipy.signal import resample
 import scipy.stats
 #from metaarray import MetaArray
 from Point import *
 from functions import *
 import types, sys, struct
 import weakref
-#import debug
+import debug
 #from debug import *
 
 ## QGraphicsObject didn't appear until 4.6; this is for compatibility with 4.5
@@ -458,7 +458,7 @@ class PlotCurveItem(GraphicsObject):
         self.shadow = shadow
         if y is not None:
             self.updateData(y, x, copy)
-        #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
+        self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
         self.metaData = {}
         self.opts = {
@@ -492,7 +492,8 @@ class PlotCurveItem(GraphicsObject):
             ds = self.opts['downsample']
             if ds > 1:
                 x = x[::ds]
-                y = resample(y[:len(x)*ds], len(x))
+                #y = resample(y[:len(x)*ds], len(x))  ## scipy.signal.resample causes nasty ringing
+                y = y[::ds]
             if self.opts['spectrumMode']:
                 f = fft(y) / len(y)
                 y = abs(f[1:len(f)/2])
@@ -631,6 +632,10 @@ class PlotCurveItem(GraphicsObject):
         elif data.ndim == 1:
             y = data
         #prof.mark("data checks")
+        
+        self.setCacheMode(QtGui.QGraphicsItem.NoCache)  ## Disabling and re-enabling the cache works around a bug in Qt 4.6 causing the cached results to display incorrectly
+                                                        ##    Test this bug with test_PlotWidget and zoom in on the animated plot
+        
         self.prepareGeometryChange()
         if copy:
             self.yData = y.copy()
@@ -659,6 +664,8 @@ class PlotCurveItem(GraphicsObject):
         self.sigPlotChanged.emit(self)
         #prof.mark('emit')
         #prof.finish()
+        self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
+        
         
     def generatePath(self, x, y):
         path = QtGui.QPainterPath()
@@ -729,7 +736,7 @@ class PlotCurveItem(GraphicsObject):
         return QtCore.QRectF(xmin, ymin, xmax-xmin, ymax-ymin)
 
     def paint(self, p, opt, widget):
-        #prof = debug.Profiler('PlotCurveItem.paint '+str(id(self)), disabled=True)
+        prof = debug.Profiler('PlotCurveItem.paint '+str(id(self)), disabled=True)
         if self.xData is None:
             return
         #if self.opts['spectrumMode']:
@@ -741,7 +748,7 @@ class PlotCurveItem(GraphicsObject):
         if self.path is None:
             self.path = self.generatePath(*self.getData())
         path = self.path
-        #prof.mark('generate path')
+        prof.mark('generate path')
             
         if self.shadow is not None:
             sp = QtGui.QPen(self.shadow)
@@ -763,9 +770,9 @@ class PlotCurveItem(GraphicsObject):
             p.drawPath(path)
         p.setPen(cp)
         p.drawPath(path)
-        #prof.mark('drawPath')
+        prof.mark('drawPath')
         
-        #prof.finish()
+        prof.finish()
         #p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
         #p.drawRect(self.boundingRect())
         
@@ -1319,7 +1326,7 @@ class ScaleItem(QtGui.QGraphicsWidget):
         self.showLabel(False)
         
         self.grid = False
-            
+        self.setCacheMode(self.DeviceCoordinateCache)
             
     def close(self):
         self.scene().removeItem(self.label)
@@ -1540,8 +1547,10 @@ class ScaleItem(QtGui.QGraphicsWidget):
             xs = bounds.width() / dif
             
         tickPositions = set() # remembers positions of previously drawn ticks
-        ## draw ticks and text
+        ## draw ticks and generate list of texts to draw
+        ## (to improve performance, we do not interleave line and text drawing, since this causes unnecessary pipeline switching)
         ## draw three different intervals, long ticks first
+        texts = []
         for i in reversed([i1, i1+1, i1+2]):
             if i > len(intervals):
                 continue
@@ -1614,33 +1623,11 @@ class ScaleItem(QtGui.QGraphicsWidget):
                         rect = QtCore.QRectF(x-100, tickStop+self.tickLength, 200, height)
                     
                     p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))
-                    p.drawText(rect, textFlags, vstr)
-                    #p.drawRect(rect)
-        
-        ## Draw label
-        #if self.drawLabel:
-            #height = self.size().height()
-            #width = self.size().width()
-            #if self.orientation == 'left':
-                #p.translate(0, height)
-                #p.rotate(-90)
-                #rect = QtCore.QRectF(0, 0, height, self.textHeight)
-                #textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignTop
-            #elif self.orientation == 'right':
-                #p.rotate(10)
-                #rect = QtCore.QRectF(0, 0, height, width)
-                #textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignBottom
-                ##rect = QtCore.QRectF(tickStart+self.tickLength, x-(height/2), 100-self.tickLength, height)
-            #elif self.orientation == 'top':
-                #rect = QtCore.QRectF(0, 0, width, height)
-                #textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignTop
-                ##rect = QtCore.QRectF(x-100, tickStart-self.tickLength-height, 200, height)
-            #elif self.orientation == 'bottom':
-                #rect = QtCore.QRectF(0, 0, width, height)
-                #textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignBottom
-                ##rect = QtCore.QRectF(x-100, tickStart+self.tickLength, 200, height)
-            #p.drawText(rect, textFlags, self.labelString())
-            ##p.drawRect(rect)
+                    #p.drawText(rect, textFlags, vstr)
+                    texts.append((rect, textFlags, vstr))
+                    
+        for args in texts:
+            p.drawText(*args)
         
     def show(self):
         
@@ -1684,6 +1671,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         self.aspectLocked = False
         self.setFlag(QtGui.QGraphicsItem.ItemClipsChildrenToShape)
         #self.setFlag(QtGui.QGraphicsItem.ItemClipsToShape)
+        self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
         #self.childGroup = QtGui.QGraphicsItemGroup(self)
         self.childGroup = ItemGroup(self)

@@ -285,7 +285,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         
     def close(self):
         #print "delete", self
-        ## All this crap is needed to avoid PySide trouble. 
+        ## Most of this crap is needed to avoid PySide trouble. 
         ## The problem seems to be whenever scene.clear() leads to deletion of widgets (either through proxies or qgraphicswidgets)
         ## the solution is to manually remove all widgets before scene.clear() is called
         if self.ctrlMenu is None: ## already shut down
@@ -305,8 +305,10 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.scales = None
         self.scene().removeItem(self.vb)
         self.vb = None
-        for i in range(self.layout.count()):
-            self.layout.removeAt(i)
+        
+        ## causes invalid index errors:
+        #for i in range(self.layout.count()):
+            #self.layout.removeAt(i)
             
         for p in self.proxies:
             try:
