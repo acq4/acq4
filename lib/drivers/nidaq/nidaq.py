@@ -173,8 +173,8 @@ class _NIDAQ:
         t.ReadDigitalScalarU32(timeout, byref(val), None)
         return val.value
         
-    def listPorts(self):
-        ports = {'AI': [], 'AO': [], 'DOP': []}
+    #def listPorts(self):
+        #ports = {'AI': [], 'AO': [], 'DOP': []}
 
     def listAIChannels(self, dev=None):
         return self.GetDevAIPhysicalChans(dev).split(", ")

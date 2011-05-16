@@ -8,7 +8,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 import sys, traceback, time, gc, re, types, weakref, inspect, os
 import ptime
 from numpy import ndarray
-#from PyQt4 import QtCore, QtGui
+from PyQt4 import QtCore, QtGui
 
 def ftrace(func):
     ## Use as decorator to mark beginning and end of functions
@@ -992,3 +992,39 @@ def listRedundantModules():
             print "module at %s has 2 names: %s, %s" % (mfile, name, mods[mfile])
         else:
             mods[mfile] = name
+            
+def walkQObjectTree(obj, counts=None):
+    """
+    Walk through a tree of QObjects, doing nothing to them.
+    The purpose of this function is to find dead objects and generate a crash
+    immediately rather than stumbling upon them later.
+    Prints a count of the objects encountered, for fun. (or is it?)
+    """
+    report = False
+    if counts is None:
+        counts = {}
+        report = True
+    typ = str(type(obj))
+    try:
+        counts[typ] += 1
+    except KeyError:
+        counts[typ] = 1
+    for child in obj.children():
+        walkQObjectTree(child, counts)
+        
+    return counts
+
+def qObjectReport():
+    """
+    Generate a report counting all QObjects and their types
+    """
+    
+    count = {}
+    for obj in findObj('PyQt'):
+        if isinstance(obj, QtCore.QObject) and obj.parent() is None:
+            walkQObjectTree(obj, count)
+            
+    typs = count.keys()
+    typs.sort()
+    for t in typs:
+        print count[t], "\t", t

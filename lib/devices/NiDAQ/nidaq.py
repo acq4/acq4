@@ -19,7 +19,11 @@ class NiDAQ(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         ## make local copy of device handle
-        self.n = NIDAQ
+        if config.get('mock', False):
+            from lib.drivers.nidaq.mock import NIDAQ, SuperTask
+            self.n = MockDAQ()
+        else:
+            self.n = NIDAQ
         print "Created NiDAQ handle, devices are %s" % repr(self.n.listDevices())
         self.lock = threading.RLock()
     

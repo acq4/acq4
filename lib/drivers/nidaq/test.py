@@ -5,14 +5,25 @@ print "Starting up.."
 
 import sys, time, numpy
 from numpy import *
+
 #import os
 #md = os.path.abspath(os.path.dirname(__file__))
-sys.path.append("c:\\Documents and Settings\experimenters\\luke\\acq4")
-sys.path.append("c:\\Documents and Settings\experimenters\\luke\\acq4\\lib\\util")
+#sys.path.append("c:\\Documents and Settings\experimenters\\luke\\acq4")
+#sys.path.append("c:\\Documents and Settings\experimenters\\luke\\acq4\\lib\\util")
 
-from nidaq import NIDAQ as n
-from nidaq import SuperTask
-import nidaq
+
+if sys.argv[-1] == 'mock':
+    from mock import NIDAQ as n
+    from mock import SuperTask
+    import mock as nidaq
+else:
+    from nidaq import NIDAQ as n
+    from nidaq import SuperTask
+    import nidaq
+    
+    
+    
+
 
 print "Assert num devs > 0:"
 assert(len(n.listDevices()) > 0)
