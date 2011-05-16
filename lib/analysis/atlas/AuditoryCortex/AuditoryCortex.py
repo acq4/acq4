@@ -11,9 +11,13 @@ import DataManager
 class AuditoryCortex(Atlas.Atlas):
     def __init__(self, canvas=None, state=None):
         ## define slice planes and the atlas images to use for each
-        #scale = 3.78e-6
-        scale = 5.5e-6
-        pos = (-676*scale/2., -577*scale/2.)
+        scale = 3.78e-6
+        #scale = 5.5e-6
+        #pos = (-676*scale/2., -577*scale/2.)
+        #pos = (-681*scale/2., -231e-6)
+        #pos = (-681*scale/2., -231*scale/2.)
+        pos = (-0.001283, -0.000205)
+        #pos = (0.0, 0.0)
         self.slicePlanes = advancedTypes.OrderedDict([
             ('Thalamocortical', [('ThalamocorticalMarker.svg', scale, pos)]),
             ('Coronal', []),
@@ -69,14 +73,15 @@ class AuditoryCortex(Atlas.Atlas):
         state = self.stateGroup.state()
         slice = state['slicePlaneCombo']
         hem = state['hemisphereCombo']
-        flip = state['flipCheck']
+        #flip = state['flipCheck']
         
         imgs = self.slicePlanes[slice]
         atlasDir = os.path.split(os.path.abspath(__file__))[0]
         
         for imgFile, scale, pos in imgs:
             fh = DataManager.getHandle(os.path.join(atlasDir, 'images', imgFile))
-            item = self.canvas.addFile(fh, scale=[scale,scale], index=0, movable=True)
+            item = self.canvas.addFile(fh, pos=pos, scale=[scale,scale], index=0, movable=False, z=10000)
+            #item = self.canvas.addFile(fh, index=0, movable=False)
             self.images.append(item)
         
             

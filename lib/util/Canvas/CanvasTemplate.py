@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'CanvasTemplate.ui'
 #
-# Created: Mon May  9 15:39:32 2011
+# Created: Fri May 13 16:38:22 2011
 #      by: PyQt4 UI code generator 4.7.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -64,9 +64,9 @@ class Ui_Form(object):
         self.redirectCombo.setObjectName("redirectCombo")
         self.horizontalLayout.addWidget(self.redirectCombo)
         self.gridLayout_2.addLayout(self.horizontalLayout, 6, 0, 1, 2)
-        self.mirrorImagesBtn = QtGui.QPushButton(self.layoutWidget)
-        self.mirrorImagesBtn.setObjectName("mirrorImagesBtn")
-        self.gridLayout_2.addWidget(self.mirrorImagesBtn, 8, 0, 1, 1)
+        self.mirrorSelectionBtn = QtGui.QPushButton(self.layoutWidget)
+        self.mirrorSelectionBtn.setObjectName("mirrorSelectionBtn")
+        self.gridLayout_2.addWidget(self.mirrorSelectionBtn, 8, 0, 1, 1)
         self.resetTransformsBtn = QtGui.QPushButton(self.layoutWidget)
         self.resetTransformsBtn.setObjectName("resetTransformsBtn")
         self.gridLayout_2.addWidget(self.resetTransformsBtn, 8, 1, 1, 1)
@@ -82,7 +82,7 @@ class Ui_Form(object):
         self.storePngBtn.setText(QtGui.QApplication.translate("Form", "Store PNG", None, QtGui.QApplication.UnicodeUTF8))
         self.redirectCheck.setToolTip(QtGui.QApplication.translate("Form", "Check to display all local items in a remote canvas.", None, QtGui.QApplication.UnicodeUTF8))
         self.redirectCheck.setText(QtGui.QApplication.translate("Form", "Redirect", None, QtGui.QApplication.UnicodeUTF8))
-        self.mirrorImagesBtn.setText(QtGui.QApplication.translate("Form", "Mirror Images", None, QtGui.QApplication.UnicodeUTF8))
+        self.mirrorSelectionBtn.setText(QtGui.QApplication.translate("Form", "Mirror Selection", None, QtGui.QApplication.UnicodeUTF8))
         self.resetTransformsBtn.setText(QtGui.QApplication.translate("Form", "Reset Transforms", None, QtGui.QApplication.UnicodeUTF8))
 
 from CanvasManager import CanvasCombo

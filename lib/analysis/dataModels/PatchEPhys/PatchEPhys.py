@@ -129,8 +129,6 @@ def isClampFile(fh):
     else:
         return True
     
-    
-def getClampCommand(data, generateEmpty=True):
     """Returns the command data from a clamp MetaArray.
     If there was no command specified, the function will optionally return all zeros."""
     if data.hasColumn('Channel', 'Command'):

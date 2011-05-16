@@ -3,6 +3,7 @@ from PyQt4 import QtCore, QtGui
 from CanvasItem import CanvasItem
 import lib.Manager
 import pyqtgraph as pg
+import numpy as np
 
 class ScanCanvasItem(CanvasItem):
     def __init__(self, **opts):

@@ -1429,7 +1429,7 @@ def thresholdEvents(data, threshold, adjustTimes=True):
     except:
         dt = 1
         xvals = None
-        
+    
     ## find all threshold crossings
     masks = [(data1 > threshold).astype(np.byte), (data1 < -threshold).astype(np.byte)]
     hits = []

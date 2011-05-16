@@ -37,7 +37,7 @@ class Canvas(QtGui.QWidget):
         self.scene().addItem(self.multiSelectBox)
         self.multiSelectBox.hide()
         self.multiSelectBox.setZValue(1e6)
-        self.ui.mirrorImagesBtn.hide()
+        self.ui.mirrorSelectionBtn.hide()
         self.ui.resetTransformsBtn.hide()
         
         self.redirect = None  ## which canvas to redirect items to
@@ -67,7 +67,7 @@ class Canvas(QtGui.QWidget):
         self.ui.redirectCombo.currentIndexChanged.connect(self.updateRedirect)
         self.multiSelectBox.sigRegionChanged.connect(self.multiSelectBoxChanged)
         self.multiSelectBox.sigRegionChangeFinished.connect(self.multiSelectBoxChangeFinished)
-        self.ui.mirrorImagesBtn.clicked.connect(self.mirrorImagesClicked)
+        self.ui.mirrorSelectionBtn.clicked.connect(self.mirrorSelectionClicked)
         self.ui.resetTransformsBtn.clicked.connect(self.resetTransformsClicked)
         
         self.resizeEvent()
@@ -210,7 +210,7 @@ class Canvas(QtGui.QWidget):
             #item = sel[0]
             #item.ctrlWidget().show()
             self.multiSelectBox.hide()
-            self.ui.mirrorImagesBtn.hide()
+            self.ui.mirrorSelectionBtn.hide()
             self.ui.resetTransformsBtn.hide()
         elif len(sel) > 1:
             self.showMultiSelectBox()
@@ -264,13 +264,13 @@ class Canvas(QtGui.QWidget):
         
         self.multiSelectBox.show()
         
-        self.ui.mirrorImagesBtn.show()
+        self.ui.mirrorSelectionBtn.show()
         self.ui.resetTransformsBtn.show()
         #self.multiSelectBoxBase = self.multiSelectBox.getState().copy()
 
-    def mirrorImagesClicked(self):
+    def mirrorSelectionClicked(self):
         for ci in self.selectedItems():
-            ci.transformGui.mirrorImageCheck.toggle()
+            ci.mirrorY()
         self.showMultiSelectBox()
             
     def resetTransformsClicked(self):

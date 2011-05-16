@@ -5,7 +5,7 @@ from DirTreeWidget import *
 import numpy as np
 import metaarray
 from common import *
-from pyqtgraph import graphicsItems
+from pyqtgraph import graphicsItems, Transform, Point
 import TreeWidget
 import functions
 
