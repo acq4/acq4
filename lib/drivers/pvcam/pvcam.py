@@ -261,7 +261,7 @@ class _CameraClass:
             self.paramAttrs['GAIN_INDEX'][0] = self.paramAttrs['GAIN_INDEX'][0][:2] + (1,)    ## why did they set the step value to 0? Who knows?
         except KeyError:
             print self.paramAttrs
-            printExc("'GAIN_INDEX' missing from camera parameters. Try restarting your camera.")
+            raise Exception("'GAIN_INDEX' missing from camera parameters. Try restarting your camera.")
         
         ## define standard dependencies
         #if 'READOUT_PORT' in self.paramAttrs:

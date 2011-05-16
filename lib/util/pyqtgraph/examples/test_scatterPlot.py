@@ -9,6 +9,7 @@ import numpy as np
 
 app = QtGui.QApplication([])
 mw = QtGui.QMainWindow()
+mw.resize(800,800)
 cw = pg.PlotWidget()
 mw.setCentralWidget(cw)
 mw.show()
