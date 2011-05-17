@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/modules/Camera/CameraTemplate.ui'
+# Form implementation generated from reading ui file 'CameraTemplate.ui'
 #
-# Created: Thu May 05 17:56:51 2011
+# Created: Mon May 16 17:55:39 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -103,6 +103,7 @@ class Ui_MainWindow(object):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.dockWidget_2.sizePolicy().hasHeightForWidth())
         self.dockWidget_2.setSizePolicy(sizePolicy)
+        self.dockWidget_2.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable)
         self.dockWidget_2.setObjectName(_fromUtf8("dockWidget_2"))
         self.dockWidgetContents_2 = QtGui.QWidget()
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
@@ -207,7 +208,7 @@ class Ui_MainWindow(object):
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.dockWidget_4)
         self.dockWidget_5 = QtGui.QDockWidget(MainWindow)
         self.dockWidget_5.setFloating(False)
-        self.dockWidget_5.setFeatures(QtGui.QDockWidget.AllDockWidgetFeatures)
+        self.dockWidget_5.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable)
         self.dockWidget_5.setObjectName(_fromUtf8("dockWidget_5"))
         self.dockWidgetContents_5 = QtGui.QWidget()
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
@@ -230,6 +231,7 @@ class Ui_MainWindow(object):
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(2), self.dockWidget_5)
         self.dockWidget_3 = QtGui.QDockWidget(MainWindow)
         self.dockWidget_3.setFloating(False)
+        self.dockWidget_3.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable)
         self.dockWidget_3.setObjectName(_fromUtf8("dockWidget_3"))
         self.dockWidgetContents_3 = QtGui.QWidget()
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
