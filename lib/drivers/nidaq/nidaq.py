@@ -29,7 +29,8 @@ def init():
     #defs = cheader.getDefs(headerFiles)
     global DEFS
     DEFS = clibrary.CParser(headerFiles, cache=os.path.join(modDir, 'NIDAQmx_headers.cache'))
-    #lib = CLibrary(None, defs, prefix='DAQmx_')   ## windll.nicaiu
+    global LIB
+    LIB = clibrary.CLibrary(windll.nicaiu, DEFS, prefix='DAQmx_')
     
     
     global NIDAQ
@@ -50,7 +51,6 @@ class _NIDAQ:
     def __init__(self):
         if _NIDAQ.NIDAQ_CREATED:
             raise Exception("Will not create another nidaq instance--use the pre-existing NIDAQ object.")
-        self.lib = CLibrary(windll.nicaiu, DEFS, prefix='DAQmx_')
         self.devices = {}
         # :TODO: initialize the driver
         _NIDAQ.NIDAQ_CREATED = True
@@ -135,11 +135,11 @@ class _NIDAQ:
 
     def interpretMode(self, mode):
         modes = {
-            'rse': Val_RSE,
-            'nrse': Val_NRSE,
-            'diff': Val_Diff,
-            'chanperline': Val_ChanPerLine,
-            'chanforalllines': Val_ChanForAllLines
+            'rse': LIB.Val_RSE,
+            'nrse': LIB.Val_NRSE,
+            'diff': LIB.Val_Diff,
+            'chanperline': LIB.Val_ChanPerLine,
+            'chanforalllines': LIB.Val_ChanForAllLines
         }
         if isinstance(mode, basestring):
             mode = mode.lower()
@@ -150,18 +150,18 @@ class _NIDAQ:
     def writeAnalogSample(self, chan, value, vRange=[-10., 10.], timeout=10.0):
         """Set the value of an AO or DO port"""
         t = self.createTask()
-        t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], Val_Volts, None)
+        t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], LIB.Val_Volts, None)
         t.WriteAnalogScalarF64(True, timeout, value, None)
         return
         
     def readAnalogSample(self, chan, mode=None, vRange=[-10., 10.], timeout=10.0):
         """Get the value of an AI port"""
         if mode is None:
-            mode = Val_Cfg_Default
+            mode = LIB.Val_Cfg_Default
         else:
             mode = self.interpretMode(mode)
         t = self.createTask()
-        t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], Val_Volts, None)
+        t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], LIB.Val_Volts, None)
         val = c_double(0.)
         t.ReadAnalogScalarF64(timeout, byref(val), None)
         return val.value
@@ -169,14 +169,14 @@ class _NIDAQ:
     def writeDigitalSample(self, chan, value, timeout=10.):
         """Set the value of an AO or DO port"""
         t = self.createTask()
-        t.CreateDOChan(chan, "", Val_ChanForAllLines)
+        t.CreateDOChan(chan, "", LIB.Val_ChanForAllLines)
         t.WriteDigitalScalarU32(True, timeout, value, None)
         return
         
     def readDigitalSample(self, chan, timeout=10.0):
         """Get the value of an AI port"""
         t = self.createTask()
-        t.CreateDIChan(chan, "", Val_ChanForAllLines)
+        t.CreateDIChan(chan, "", LIB.Val_ChanForAllLines)
         val = c_ulong(0)
         t.ReadDigitalScalarU32(timeout, byref(val), None)
         return val.value
@@ -205,12 +205,12 @@ class _NIDAQ:
 init()
 
 chTypes = {
-    Val_AI: 'AI',
-    Val_AO: 'AO',
-    Val_DI: 'DI',
-    Val_DO: 'DO',
-    Val_CI: 'CI',
-    Val_CO: 'CO',
+    LIB.Val_AI: 'AI',
+    LIB.Val_AO: 'AO',
+    LIB.Val_DI: 'DI',
+    LIB.Val_DO: 'DO',
+    LIB.Val_CI: 'CI',
+    LIB.Val_CO: 'CO',
 }
 
 
@@ -265,9 +265,9 @@ class Task:
         ## Determine the default dtype based on the task type
         tt = self.taskType()
         if dtype is None:
-            if tt in [Val_AI, Val_AO]:
+            if tt in [LIB.Val_AI, LIB.Val_AO]:
                 dtype = float64
-            elif tt in [Val_DI, Val_DO]:
+            elif tt in [LIB.Val_DI, LIB.Val_DO]:
                 dtype = uint32  ## uint8 / 16 might be sufficient, but don't seem to work anyway.
             else:
                 raise Exception("No default dtype for %s tasks." % chTypes[tt])
@@ -277,19 +277,19 @@ class Task:
         
         ## Determine the correct function name to call based on the dtype requested
         fName = 'Read'
-        if tt == Val_AI:
+        if tt == LIB.Val_AI:
             if dtype == float64:
                 fName += 'Analog'
             elif dtype in [int16, uint16, int32, uint32]:
                 fName += 'Binary'
             else:
                 raise Exception('dtype %s not allowed for AI channels (must be float64, int16, uint16, int32, or uint32)' % str(dtype))
-        elif tt == Val_DI:
+        elif tt == LIB.Val_DI:
             if dtype in [uint8, uint16, uint32]:
                 fName += 'Digital'
             else:
                 raise Exception('dtype %s not allowed for DI channels (must be uint8, uint16, or uint32)' % str(dtype))
-        elif tt == Val_CI:
+        elif tt == LIB.Val_CI:
             fName += 'Counter'
         else:
             raise Exception("read() not allowed for this task type (%s)" % chTypes(tt))
@@ -305,13 +305,13 @@ class Task:
             #print "Bailing out, not enough samples"
             #return (buf, samplesRead.value)
         
-        self.SetReadRelativeTo(Val_FirstSample)
+        self.SetReadRelativeTo(LIB.Val_FirstSample)
         self.SetReadOffset(0)
         
         
-        #print "%s(%s, %s, Val_GroupByChannel, buf.ctypes.data, %d, byref(samplesRead), None)" % (fName, reqSamps, timeout, buf.size)
+        #print "%s(%s, %s, LIB.Val_GroupByChannel, buf.ctypes.data, %d, byref(samplesRead), None)" % (fName, reqSamps, timeout, buf.size)
         
-        self.__getattr__(fName)(reqSamps, timeout, Val_GroupByChannel, buf.ctypes.data, buf.size, byref(samplesRead), None)
+        self.__getattr__(fName)(reqSamps, timeout, LIB.Val_GroupByChannel, buf.ctypes.data, buf.size, byref(samplesRead), None)
         return (buf, samplesRead.value)
 
     def write(self, data, timeout=10.):
@@ -321,14 +321,14 @@ class Task:
         ## Determine the correct write function to call based on dtype and task type
         fName = 'Write'
         tt = self.taskType()
-        if tt == Val_AO:
+        if tt == LIB.Val_AO:
             if data.dtype == float64:
                 fName += 'Analog'
             elif data.dtype in [int16, uint16]:
                 fName += 'Binary'
             else:
                 raise Exception('dtype %s not allowed for AO channels (must be float64, int16, or uint16)' % str(data.dtype))
-        elif tt == Val_DO:
+        elif tt == LIB.Val_DO:
             if data.dtype in [uint8, uint16, uint32]:
                 fName += 'Digital'
             else:
@@ -337,7 +337,7 @@ class Task:
             raise Exception("write() not implemented for this task type (%s)" % chTypes[tt])
             
         fName += dtypes[data.dtype]
-        self.__getattr__(fName)(data.size / numChans, False, timeout, Val_GroupByChannel, data.ctypes.data, byref(samplesWritten), None)
+        self.__getattr__(fName)(data.size / numChans, False, timeout, LIB.Val_GroupByChannel, data.ctypes.data, byref(samplesWritten), None)
         return samplesWritten.value
 
     def absChannelName(self, n):
@@ -358,10 +358,10 @@ class Task:
         return self.GetChanType(ch)
 
     def isInputTask(self):
-        return self.taskType() in [Val_AI, Val_DI]
+        return self.taskType() in [LIB.Val_AI, LIB.Val_DI]
 
     def isOutputTask(self):
-        return self.taskType() in [Val_AO, Val_DO]
+        return self.taskType() in [LIB.Val_AO, LIB.Val_DO]
 
 
 #class SuperTask:
@@ -417,16 +417,16 @@ class Task:
         ### Determine mode to use for this channel
         #if mode is None:
             #if typ == 'ai':
-                #mode = Val_RSE
+                #mode = LIB.Val_RSE
             #elif typ in ['di', 'do']:
-                #mode = Val_ChanPerLine
+                #mode = LIB.Val_ChanPerLine
         #elif isinstance(mode, basestring):
             #modes = {
-                #'rse': Val_RSE,
-                #'nrse': Val_NRSE,
-                #'diff': Val_Diff,
-                #'chanperline': Val_ChanPerLine,
-                #'chanforalllines': Val_ChanForAllLines
+                #'rse': LIB.Val_RSE,
+                #'nrse': LIB.Val_NRSE,
+                #'diff': LIB.Val_Diff,
+                #'chanperline': LIB.Val_ChanPerLine,
+                #'chanforalllines': LIB.Val_ChanForAllLines
             #}
             #try:
                 #mode = modes[mode.lower()]
