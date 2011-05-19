@@ -424,7 +424,7 @@ Valid options are:
         try:
             sh = QtGui.QShortcut(QtGui.QKeySequence(keys), win)
             sh.setContext(QtCore.Qt.ApplicationShortcut)
-            sh.activated.connect(win.raise_)
+            sh.activated.connect(lambda *args: win.raise_)
         except:
             printExc("Error creating shortcut '%s':" % keys)
         

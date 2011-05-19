@@ -192,16 +192,12 @@ class OutputChannelGui(DaqChannelGui):
         
     def quit(self):
         DaqChannelGui.quit(self)
+        
         #if not sip.isdeleted(self.daqUI):
-            #QtCore.QObject.disconnect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
-        #QtCore.QObject.disconnect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('dataChanged'), self.updateWaves)
-        #QtCore.QObject.disconnect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('functionChanged'), self.waveFunctionChanged)
-        #QtCore.QObject.disconnect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
-        #QtCore.QObject.disconnect(self.ui.holdingCheck, QtCore.SIGNAL('stateChanged(int)'), self.holdingCheckChanged)
-        #QtCore.QObject.disconnect(self.ui.holdingSpin, QtCore.SIGNAL('valueChanged(double)'), self.holdingSpinChanged)
-        #QtCore.QObject.disconnect(self.dev, QtCore.SIGNAL('holdingChanged'), self.updateHolding)
-        if not sip.isdeleted(self.daqUI):
+        try:
             self.daqUI.sigChanged.disconnect(self.daqChanged)
+        except TypeError:
+            pass
         self.ui.waveGeneratorWidget.sigDataChanged.disconnect(self.updateWaves)
         self.ui.waveGeneratorWidget.sigFunctionChanged.disconnect(self.waveFunctionChanged)
         self.ui.waveGeneratorWidget.sigParametersChanged.disconnect(self.sequenceChanged)

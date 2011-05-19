@@ -822,13 +822,16 @@ def listRedundantModules():
             mods[mfile] = name
             
 
-def walkQObjectTree(obj, counts=None):
+def walkQObjectTree(obj, counts=None, verbose=False, depth=0):
     """
     Walk through a tree of QObjects, doing nothing to them.
     The purpose of this function is to find dead objects and generate a crash
     immediately rather than stumbling upon them later.
     Prints a count of the objects encountered, for fun. (or is it?)
     """
+    
+    if verbose:
+        print "  "*depth + typeStr(obj)
     report = False
     if counts is None:
         counts = {}
@@ -839,17 +842,28 @@ def walkQObjectTree(obj, counts=None):
     except KeyError:
         counts[typ] = 1
     for child in obj.children():
-        walkQObjectTree(child, counts)
+        walkQObjectTree(child, counts, verbose, depth+1)
         
     return counts
 
-
-def qObjectReport():
+QObjCache = {}
+def qObjectReport(verbose=False):
     """Generate a report counting all QObjects and their types"""
+    global qObjCache
     count = {}
     for obj in findObj('PyQt'):
-        if isinstance(obj, QtCore.QObject) and obj.parent() is None:
-            walkQObjectTree(obj, count)
+        if isinstance(obj, QtCore.QObject):
+            oid = id(obj)
+            if oid not in QObjCache:
+                QObjCache[oid] = typeStr(obj) + "  " + obj.objectName()
+                try:
+                    QObjCache[oid] += "  " + obj.parent().objectName()
+                    QObjCache[oid] += "  " + obj.text()
+                except:
+                    pass
+            print "check obj", oid, unicode(QObjCache[oid])
+            if obj.parent() is None:
+                walkQObjectTree(obj, count, verbose)
             
     typs = count.keys()
     typs.sort()
