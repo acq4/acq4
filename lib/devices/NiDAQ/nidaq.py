@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
 from debug import *
-try:
-    from lib.drivers.nidaq import NIDAQ, SuperTask
-except:
-    printExc("Error while loading nidaq library; devices will not be available.")
     
 from lib.devices.Device import *
 import threading, time, traceback, sys
@@ -19,7 +15,15 @@ class NiDAQ(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         ## make local copy of device handle
-        self.n = NIDAQ
+        if config.get('mock', False):
+            from lib.drivers.nidaq.mock import NIDAQ
+            self.n = NIDAQ
+        else:
+            try:
+                from lib.drivers.nidaq import NIDAQ
+            except:
+                raise Exception("Error while loading nidaq library; devices will not be available.")
+            self.n = NIDAQ
         print "Created NiDAQ handle, devices are %s" % repr(self.n.listDevices())
         self.lock = threading.RLock()
     
@@ -180,7 +184,7 @@ class Task(DeviceTask):
         
         
         ## Create supertask from nidaq driver
-        self.st = SuperTask(self.dev.n)
+        self.st = self.dev.n.createSuperTask()
         
     def configure(self, tasks, startOrder):
         #print "daq configure", tasks

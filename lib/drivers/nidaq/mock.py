@@ -1,0 +1,277 @@
+# -*- coding: utf-8 -*-
+import sys, time, os
+import numpy as np
+import clibrary
+
+modDir = os.path.dirname(__file__)
+headerFiles = [os.path.join(modDir, "NIDAQmx.h")]
+DEFS = clibrary.CParser(headerFiles, cache=os.path.join(modDir, 'NIDAQmx_headers.cache'))
+
+import SuperTask
+
+class MockNIDAQ:
+    def __init__(self):
+        self.lib = clibrary.CLibrary(None, DEFS, prefix='DAQmx_')
+        #self.data = mockdata.getMockData('cell')
+        #self.data = hstack([self.data, self.data])
+        #self.sampleRate = 20000.
+        #self.loopTime = 20.
+        #self.dataPtr = 0.0
+        self.devs = {
+            'Dev1': {
+                'aiChans': {'/Dev1/ai0': 0, '/Dev1/ai1': 0, '/Dev1/ai2': 0, '/Dev1/ai3': 0},
+                'aoChans': {'/Dev1/ao0': 0, '/Dev1/ao1': 0, '/Dev1/ao2': 0, '/Dev1/ao3': 0},
+                'ports': {'/Dev1/port0': 0},
+                'lines': {'/Dev1/port0/line0': 0, '/Dev1/port0/line1': 0, '/Dev1/port0/line2': 0, '/Dev1/port0/line3': 0,},
+            }
+        }
+        self.clocks = {}
+
+    def __getattr__(self, attr):
+        return getattr(self.lib, attr)
+
+    def listAIChannels(self, dev):
+        return self.devs[dev]['aiChans'].keys()
+    
+    def listAOChannels(self, dev):
+        return self.devs[dev]['aoChans'].keys()
+
+
+    def listDILines(self, dev):
+        return self.devs[dev]['lines'].keys()
+
+    def listDIPorts(self, dev):
+        return self.devs[dev]['ports'].keys()
+
+    def listDOLines(self, dev):
+        return self.devs[dev]['lines'].keys()
+
+    def listDOPorts(self, dev):
+        return self.devs[dev]['ports'].keys()
+
+
+    #def __getattr__(self, attr):
+        #return lambda *args: self
+    
+    def listDevices(self):
+        return self.devs.keys()
+    
+    #def getDevice(self, ind):
+        #return self.devName
+
+
+    def createTask(self, *args):
+        return self
+    
+    def createSuperTask(self):
+        return SuperTask.SuperTask(self)
+    
+    def start(self):
+        self.dataPtr = time.time()
+    
+    def read(self, size):
+        #dataLen = size / self.sampleRate
+        #dataEnd = self.dataPtr + dataLen
+        #now = time.time()
+        #if dataEnd > now:
+            #time.sleep(dataEnd-now)
+        #start = int((self.dataPtr % self.loopTime) * self.sampleRate)
+        #stop = int(start + size)
+        #self.dataPtr = dataEnd
+        ##print "read", start, stop
+        ##print "DAQ Returning %d:%d at %f" % (start, stop, time.time())
+        #return (self.data[:, start:stop], size)
+        return np.zeros(size)
+        
+    
+    def GetReadAvailSampPerChan(self):
+        return self.sampleRate * (time.time() - self.dataPtr)
+        
+
+    def createTask(self):
+        return Task(self)
+
+    def interpretMode(self, mode):
+        modes = {
+            'rse': self.lib.Val_RSE,
+            'nrse': self.lib.Val_NRSE,
+            'diff': self.lib.Val_Diff,
+            'chanperline': self.lib.Val_ChanPerLine,
+            'chanforalllines': self.lib.Val_ChanForAllLines
+        }
+        if isinstance(mode, basestring):
+            mode = mode.lower()
+            mode = modes.get(mode, None)
+        return mode
+        
+    
+    def writeAnalogSample(self, chan, value, vRange=[-10., 10.], timeout=10.0):
+        """Set the value of an AO or DO port"""
+        t = self.createTask()
+        t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], self.lib.Val_Volts, None)
+        t.WriteAnalogScalarF64(True, timeout, value, None)
+        return
+        
+    def readAnalogSample(self, chan, mode=None, vRange=[-10., 10.], timeout=10.0):
+        """Get the value of an AI port"""
+        if mode is None:
+            mode = self.lib.Val_Cfg_Default
+        else:
+            mode = self.interpretMode(mode)
+        t = self.createTask()
+        t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], self.lib.Val_Volts, None)
+        val = c_double(0.)
+        t.ReadAnalogScalarF64(timeout, byref(val), None)
+        return val.value
+
+    def writeDigitalSample(self, chan, value, timeout=10.):
+        """Set the value of an AO or DO port"""
+        t = self.createTask()
+        t.CreateDOChan(chan, "", self.lib.Val_ChanForAllLines)
+        t.WriteDigitalScalarU32(True, timeout, value, None)
+        return
+        
+    def readDigitalSample(self, chan, timeout=10.0):
+        """Get the value of an AI port"""
+        t = self.createTask()
+        t.CreateDIChan(chan, "", self.lib.Val_ChanForAllLines)
+        val = c_ulong(0)
+        t.ReadDigitalScalarU32(timeout, byref(val), None)
+        return val.value
+
+    def startClock(self, clock, duration):
+        self.clocks[clock] = (time.time(), duration)
+
+    def stopClock(self, clock):
+        now = time.time()
+        start, dur = self.clocks[clock]
+        diff = (start+dur)-now
+        if diff > 0:
+            time.sleep(diff)
+
+    def checkClock(self, clock):
+        now = time.time()
+        start, dur = self.clocks[clock]
+        diff = (start+dur)-now
+        return diff <= 0
+
+
+class Task:
+    def __init__(self, nd):
+        self.nd = nd
+        self.chans = []
+        self.clock = None
+        self.nativeClock = None
+        self.data = None
+        self.mode = None
+        
+    #def __getattr__(self, attr):
+        #return lambda *args: self
+    
+    def CreateAIVoltageChan(self, *args):
+        self.chans.append(args[0])
+        self.mode = 'ai'
+        
+    def CreateAOVoltageChan(self, *args):
+        self.chans.append(args[0])
+        self.mode = 'ao'
+        
+    def CreateDIChan(self, *args):
+        self.chans.append(args[0])
+        self.mode = 'di'
+        
+    def CreateDOChan(self, *args):
+        self.chans.append(args[0])
+        self.mode = 'do'
+        
+    def CfgSampClkTiming(self, clock, rate, b, c, nPts):
+        if 'ai' in self.chans[0]:
+            self.nativeClock = self.device()+'/ai/SampleClock'
+        elif 'ao' in self.chans[0]:
+            self.nativeClock = self.device()+'/ao/SampleClock'
+            
+        if clock == '':
+            clock = None
+        self.clock = clock 
+        self.rate = rate 
+        self.nPts = nPts
+        #print self.chans, self.clock
+        
+    def device(self):
+        return '/'+self.chans[0].split('/')[1]
+        
+    def write(self, data):
+        self.data = data
+        return len(data)
+        
+    def read(self):
+        dur = self.nPts / self.rate
+        tVals = np.linspace(0, dur, self.nPts)
+        if 'd' in self.mode:
+            return (np.zeros((len(self.chans), self.nPts), dtype=np.int32), self.nPts)
+        else:
+            return (np.random.normal(size=(len(self.chans), self.nPts)), self.nPts)
+
+    def start(self):
+        ## only start clock if it matches the native clock for this channel
+        if self.clock is None or self.clock == self.nativeClock:
+            dur = self.nPts / self.rate
+            self.nd.startClock(self.nativeClock, dur)
+        
+        
+    def stop(self):        
+        if self.clock is None:
+            self.nd.stopClock(self.nativeClock)
+        else:
+            self.nd.stopClock(self.clock)
+
+    def isDone(self):
+        if self.clock is None:
+            return self.nd.checkClock(self.nativeClock)
+        else:
+            return self.nd.checkClock(self.clock)
+        
+
+    def GetTaskNumChans(self):
+        return len(self.chans)
+        
+    def isOutputTask(self):
+        return self.mode in ['ao', 'do']
+        
+    def isInputTask(self):
+        return self.mode in ['ai', 'di']
+        
+    def TaskControl(self, *args):
+        pass
+
+    def WriteAnalogScalarF64(self, a, timeout, val, b):
+        pass
+
+#class SuperTask:
+    #def __init__(self, nd):
+        #self.nd = nd
+
+    #def __getattr__(self, attr):
+        #print "SuperTask."+attr
+        #return lambda *args, **kargs: self
+
+
+NIDAQ = MockNIDAQ()
+
+
+#class ModWrapper(object):
+    #def __init__(self, wrapped):
+        #self.wrapped = wrapped
+
+    #def __getattr__(self, name):
+        #try:
+            #return getattr(self.wrapped, name)
+        #except AttributeError:
+            #if name[:3] == 'Val':
+                #return None
+            #else:
+                #return lambda *args: NIDAQ
+
+    #def __iter__
+
+#sys.modules[__name__] = ModWrapper(sys.modules[__name__])

@@ -2,10 +2,11 @@
 from PyQt4 import QtCore, QtGui
 import weakref
 
-class Container:
+class Container(object):
     #sigStretchChanged = QtCore.Signal()  ## can't do this here; not a QObject.
     
     def __init__(self, area):
+        object.__init__(self)
         self.area = area
         self._container = None
         self._stretch = (10, 10)
