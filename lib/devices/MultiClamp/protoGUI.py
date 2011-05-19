@@ -11,7 +11,7 @@ import sip
 
 class MultiClampProtoGui(ProtocolGui):
     
-    sigSequenceChanged = QtCore.Signal(object)
+    #sigSequenceChanged = QtCore.Signal(object)  ## defined upstream
     
     def __init__(self, dev, prot):
         ProtocolGui.__init__(self, dev, prot)

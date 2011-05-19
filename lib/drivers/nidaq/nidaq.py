@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-from ctypes import *
+#from ctypes import *
 import sys, re, types, ctypes, os, time
 from numpy import *
 #import cheader
 import ptime  ## platform-independent precision timing
 import debug
 import clibrary
-
+import ctypes
+import SuperTask
 
 dtypes = {
     float64: 'F64',
@@ -28,9 +29,9 @@ def init():
     #xmlFiles = [os.path.join(os.path.dirname(__file__), "NIDAQmx.xml")]
     #defs = cheader.getDefs(headerFiles)
     global DEFS
-    DEFS = clibrary.CParser(headerFiles, cache=os.path.join(modDir, 'NIDAQmx_headers.cache'))
+    DEFS = clibrary.CParser(headerFiles, cache=os.path.join(modDir, 'NIDAQmx_headers.cache'), types={'__int64': ('long long')}, verbose=False)
     global LIB
-    LIB = clibrary.CLibrary(windll.nicaiu, DEFS, prefix='DAQmx_')
+    LIB = clibrary.CLibrary(ctypes.windll.nicaiu, DEFS, prefix=['DAQmx', 'DAQmx_'])
     
     
     global NIDAQ
@@ -62,47 +63,72 @@ class _NIDAQ:
         return self.GetSysDevNames().split(", ")
 
     def __getattr__(self, attr):
-        if attr[0] != "_" and hasattr(self.nidaq, 'DAQmx' + attr):
+        try:
+            return LIB('values', 'DAQmx_' + attr)
+        except NameError:
+            fn = LIB('functions', 'DAQmx' + attr)
             return lambda *args: self.call(attr, *args)
-        else:
-            raise NameError(attr)
+                
+        #if attr[0] != "_" and hasattr(self.nidaq, 'DAQmx' + attr):
+            #return lambda *args: self.call(attr, *args)
+        #else:
+            #raise NameError(attr)
 
     def call(self, func, *args):
         func = 'DAQmx' + func
         ret = None
-        retType, argSig = self.functions[func]
+        #retType, argSig = self.functions[func]
         #print "CALL: ", func, args, argSig
+        fn = LIB('functions', func)
+        retType, argSig = fn.sig
         
-        if func[:8] == "DAQmxGet":
-            if argSig[-1][0] == 'data':
-                ret = getattr(ctypes, argSig[-1][1])()
-                args += (byref(ret),)
-            elif argSig[-2][1:] == ('c_char', 1) and argSig[-1][1:] in [('c_ulong', 0), ('c_long', 0)]:
+        returnValue = None
+        if func[:8] == "DAQmxGet":  ## byref arguments will be handled automatically.
+            #if argSig[-1][0] == 'data':
+                #returnValue = 'data'
+                #ret = getattr(ctypes, argSig[-1][1])()
+                #args += (byref(ret),)
+            ## functions that return char* can be called with a null pointer to get the size of the buffer needed.
+            if argSig[-2][1] == ['char', '*'] and argSig[-1][0] == 'bufferSize':
+                returnValue = argSig[-2][0]
+                extra = {returnValue: None, 'bufferSize': 0}
                 #print "correct for buffer return"
-                tmpargs = args + (getattr(ctypes, argSig[-2][1])(), getattr(ctypes, argSig[-1][1])())
-                buffSize = self._call(func, *tmpargs)
-                ret = create_string_buffer('\0' * buffSize)
+                buffSize = fn(*args, **extra)()
+                #tmpargs = args + (getattr(ctypes, argSig[-2][1])(), getattr(ctypes, argSig[-1][1])())
+                #buffSize = self._call(func, *tmpargs)
+                ret = ctypes.create_string_buffer('\0' * buffSize)
                 args += (ret, buffSize)
-        
-        cArgs = []
-        if len(args) > len(argSig):
-            raise Exception("Argument list is too long (%d) for function signature: %s" % (len(args), str(argSig)))
-        for i in range(0, len(args)):
-            arg = args[i]
-            #if type(args[i]) in [types.FloatType, types.IntType, types.LongType, types.BooleanType] and argSig[i][2] == 0:
-            if hasattr(args[i], '__int__') and argSig[i][2] == 0:  ## all numbers and booleans probably have an __int__ method.
-                #print func, i, argSig[i][0], argSig[i][1], type(arg)
-                arg = getattr(ctypes, argSig[i][1])(arg)
-            #else:
-                #print "Warning: passing unknown argument type", type(args[i])
-            cArgs.append(arg)
+                
+        ## this is all handled by clibrary now.
+        #cArgs = []
+        #if len(args) > len(argSig):
+            #raise Exception("Argument list is too long (%d) for function signature: %s" % (len(args), str(argSig)))
+        #for i in range(0, len(args)):
+            #arg = args[i]
+            ##if type(args[i]) in [types.FloatType, types.IntType, types.LongType, types.BooleanType] and argSig[i][2] == 0:
+            #if hasattr(args[i], '__int__') and argSig[i][2] == 0:  ## all numbers and booleans probably have an __int__ method.
+                ##print func, i, argSig[i][0], argSig[i][1], type(arg)
+                #arg = getattr(ctypes, argSig[i][1])(arg)
+            ##else:
+                ##print "Warning: passing unknown argument type", type(args[i])
+            #cArgs.append(arg)
         
         #print "  FINAL CALL: ", cArgs
-        errCode = self._call(func, *cArgs)
+        #errCode = self._call(func, *cArgs)
+        ## if there is a 'reserved' argument, it MUST be 0 (don't let clibrary try to fill it for us)
+        if argSig[-1][0] == 'reserved':
+            ret = fn(*args, reserved=None)
+        else:
+            ret = fn(*args)
+        
+        
+        errCode = ret()
+        
         if errCode < 0:
             print "NiDAQ Error while running function '%s%s'" % (func, str(args))
-            for s in self.error(errCode):
-                print s
+            #for s in self.error(errCode):
+                #print s
+            print self.error(errCode)[1]
             raise NIDAQError(errCode)
             #raise NIDAQError(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         elif errCode > 0:
@@ -111,14 +137,21 @@ class _NIDAQ:
             debug.printExc("Traceback:")
             #raise NIDAQWarning(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         
-        if ret is None:
-            return True
-        else:
-            return ret.value
+            
+        if returnValue is not None:  ## If a specific return value was indicated, return it now
+            return ret[returnValue]
         
-    def _call(self, func, *args):
+        ## otherwise, try to guess which values should be returned
+        vals = ret.auto()
+        if len(vals) == 1:
+            return vals[0]
+        elif len(vals) > 1:
+            return vals
+        
+        
+    def _call(self, func, *args, **kargs):
         try:
-            return getattr(self.nidaq, func)(*args)
+            return getattr(self.nidaq, func)(*args, **kargs)
         except:
             print func, args
             raise
@@ -133,6 +166,9 @@ class _NIDAQ:
     def createTask(self):
         return Task(self)
 
+    def createSuperTask(self):
+        return SuperTask.SuperTask(self)
+    
     def interpretMode(self, mode):
         modes = {
             'rse': LIB.Val_RSE,
@@ -151,7 +187,7 @@ class _NIDAQ:
         """Set the value of an AO or DO port"""
         t = self.createTask()
         t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], LIB.Val_Volts, None)
-        t.WriteAnalogScalarF64(True, timeout, value, None)
+        t.WriteAnalogScalarF64(True, timeout, value)
         return
         
     def readAnalogSample(self, chan, mode=None, vRange=[-10., 10.], timeout=10.0):
@@ -162,24 +198,24 @@ class _NIDAQ:
             mode = self.interpretMode(mode)
         t = self.createTask()
         t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], LIB.Val_Volts, None)
-        val = c_double(0.)
-        t.ReadAnalogScalarF64(timeout, byref(val), None)
-        return val.value
+        #val = c_double(0.)
+        return t.ReadAnalogScalarF64(timeout)
+        #return val.value
 
     def writeDigitalSample(self, chan, value, timeout=10.):
         """Set the value of an AO or DO port"""
         t = self.createTask()
         t.CreateDOChan(chan, "", LIB.Val_ChanForAllLines)
-        t.WriteDigitalScalarU32(True, timeout, value, None)
+        t.WriteDigitalScalarU32(True, timeout, value)
         return
         
     def readDigitalSample(self, chan, timeout=10.0):
         """Get the value of an AI port"""
         t = self.createTask()
         t.CreateDIChan(chan, "", LIB.Val_ChanForAllLines)
-        val = c_ulong(0)
-        t.ReadDigitalScalarU32(timeout, byref(val), None)
-        return val.value
+        #val = c_ulong(0)
+        return t.ReadDigitalScalarU32(timeout)
+        #return val.value
         
     #def listPorts(self):
         #ports = {'AI': [], 'AO': [], 'DOP': []}
@@ -217,12 +253,11 @@ chTypes = {
         
 
 class Task:
-    TaskHandle = c_ulong
+    #TaskHandle = None
     
     def __init__(self, nidaq, taskName=""):
-        self.handle = Task.TaskHandle(0)
         self.nidaq = nidaq
-        self.nidaq.CreateTask(taskName,byref(self.handle))
+        self.handle = self.nidaq.CreateTask(taskName)
 
     def __del__(self):
         self.nidaq.ClearTask(self.handle)
@@ -235,18 +270,13 @@ class Task:
         return "<Task: %s>" % str(self.GetTaskChannels())
 
     def start(self):
-        #print "starting task.."
-        self.nidaq.StartTask(self.handle)
-        #print "started."
+        self.StartTask()
 
     def stop(self):
-        #print "stopTask", self.getTaskDevices()
-        self.nidaq.StopTask(self.handle)
+        self.StopTask()
 
     def isDone(self):
-        b = c_ulong()
-        self.nidaq.IsTaskDone(self.handle, byref(b))
-        return bool(b.value)
+        return self.IsTaskDone()
 
     def read(self, samples=None, timeout=10., dtype=None):
         #reqSamps = samples
@@ -273,7 +303,7 @@ class Task:
                 raise Exception("No default dtype for %s tasks." % chTypes[tt])
 
         buf = empty(shape, dtype=dtype)
-        samplesRead = c_long()
+        #samplesRead = ctypes.c_long()
         
         ## Determine the correct function name to call based on the dtype requested
         fName = 'Read'
@@ -295,28 +325,20 @@ class Task:
             raise Exception("read() not allowed for this task type (%s)" % chTypes(tt))
             
         fName += dtypes[dtype]
-
-        #print "Reading, looks like %d samples are available" % self.GetReadAvailSampPerChan()
-        #print "Reading, looks like %d samples are available" % self.GetReadTotalSampPerChanAcquired()
-        #self.SetReadReadAllAvailSamp(True)
-        #self.__getattr__(fName)(-1, timeout, Val_GroupByChannel, buf.ctypes.data, buf.size, byref(samplesRead), None)
-        #print "Looks like %d samples are available" % samplesRead.value
-        #if samplesRead.value < reqSamps:
-            #print "Bailing out, not enough samples"
-            #return (buf, samplesRead.value)
         
         self.SetReadRelativeTo(LIB.Val_FirstSample)
         self.SetReadOffset(0)
         
+        ## buf.ctypes is a c_void_p, but the function requires a specific pointer type so we are forced to recast the pointer:
+        fn = LIB('functions', fName)
+        cbuf = ctypes.cast(buf.ctypes, fn.argCType('readArray'))
         
-        #print "%s(%s, %s, LIB.Val_GroupByChannel, buf.ctypes.data, %d, byref(samplesRead), None)" % (fName, reqSamps, timeout, buf.size)
-        
-        self.__getattr__(fName)(reqSamps, timeout, LIB.Val_GroupByChannel, buf.ctypes.data, buf.size, byref(samplesRead), None)
-        return (buf, samplesRead.value)
+        nPts = getattr(self, fName)(reqSamps, timeout, LIB.Val_GroupByChannel, cbuf, buf.size)
+        return (buf, nPts)
 
     def write(self, data, timeout=10.):
         numChans = self.GetTaskNumChans()
-        samplesWritten = c_long()
+        #samplesWritten = c_long()
         
         ## Determine the correct write function to call based on dtype and task type
         fName = 'Write'
@@ -337,8 +359,14 @@ class Task:
             raise Exception("write() not implemented for this task type (%s)" % chTypes[tt])
             
         fName += dtypes[data.dtype]
-        self.__getattr__(fName)(data.size / numChans, False, timeout, LIB.Val_GroupByChannel, data.ctypes.data, byref(samplesWritten), None)
-        return samplesWritten.value
+        
+        
+        ## buf.ctypes is a c_void_p, but the function requires a specific pointer type so we are forced to recast the pointer:
+        fn = LIB('functions', fName)
+        cbuf = ctypes.cast(data.ctypes, fn.argCType('writeArray'))
+        
+        nPts = getattr(self, fName)(data.size / numChans, False, timeout, LIB.Val_GroupByChannel, cbuf)
+        return nPts
 
     def absChannelName(self, n):
         parts = n.lstrip('/').split('/')

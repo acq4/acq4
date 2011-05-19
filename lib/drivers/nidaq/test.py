@@ -13,7 +13,8 @@ modPath = os.path.split(__file__)[0]
 acq4Path = os.path.abspath(os.path.join(modPath, '..', '..', '..'))
 utilPath = os.path.join(acq4Path, 'lib', 'util')
 sys.path = [acq4Path, utilPath] + sys.path
-
+from nidaq import LIB as lib
+import ptime
 
 
 if sys.argv[-1] == 'mock':
@@ -24,7 +25,7 @@ else:
     #from nidaq import SuperTask
     #import nidaq
     
-from SuperTask import SuperTask
+#from SuperTask import SuperTask
     
     
 
@@ -69,11 +70,11 @@ def contReadTest():
     task.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_RSE, -10., 10., n.Val_Volts, None)
     task.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_ContSamps, 4000)
     task.start()
-    t = time.time()
+    t = ptime.time()
     for i in range(0, 10):
         data, size = task.read(1000)
-        print "Cont read %d - %d samples, %fsec" % (i, size, time.time() - t)
-        t = time.time()
+        print "Cont read %d - %d samples, %fsec" % (i, size, ptime.time() - t)
+        t = ptime.time()
     task.stop()
 
 
@@ -90,7 +91,7 @@ def outputTest():
     data[600:800] = 5.0
     task.write(data)
     task.start()
-    time.sleep(0.1)
+    time.sleep(0.2)
     task.stop()
     
 
@@ -223,7 +224,7 @@ def triggerTest():
 
   
 
-st = SuperTask(n)
+st = n.createSuperTask()
 def superTaskTest():
     print "::::::::::::::::::  SuperTask  Test  :::::::::::::::::::::"
 
@@ -302,6 +303,7 @@ def analogSuperTaskTest():
 data = finiteReadTest()
 outputTest()
 syncAIOTest()
+contReadTest()
 #syncIOTest()
 #syncADTest()
 #triggerTest()

@@ -15,14 +15,11 @@ class NiDAQ(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         ## make local copy of device handle
-        if config.get('mock', False):
+        if config is not None and config.get('mock', False):
             from lib.drivers.nidaq.mock import NIDAQ
             self.n = NIDAQ
         else:
-            try:
-                from lib.drivers.nidaq import NIDAQ
-            except:
-                raise Exception("Error while loading nidaq library; devices will not be available.")
+            from lib.drivers.nidaq.nidaq import NIDAQ
             self.n = NIDAQ
         print "Created NiDAQ handle, devices are %s" % repr(self.n.listDevices())
         self.lock = threading.RLock()
