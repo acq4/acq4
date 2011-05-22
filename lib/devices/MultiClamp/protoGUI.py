@@ -2,14 +2,17 @@
 from PyQt4 import QtCore, QtGui
 import sys
 from lib.devices.Device import ProtocolGui
-from lib.util.SequenceRunner import *
-from lib.util.WidgetGroup import *
+from SequenceRunner import *
+from WidgetGroup import *
 import numpy
 from ProtocolTemplate import *
-from lib.util.debug import *
+from debug import *
 import sip
 
 class MultiClampProtoGui(ProtocolGui):
+    
+    #sigSequenceChanged = QtCore.Signal(object)  ## defined upstream
+    
     def __init__(self, dev, prot):
         ProtocolGui.__init__(self, dev, prot)
         daqDev = self.dev.getDAQName()
@@ -39,14 +42,19 @@ class MultiClampProtoGui(ProtocolGui):
         self.ui.bottomPlotWidget.registerPlot(self.dev.name + '.Command')
 
         self.daqChanged(self.daqUI.currentState())
-        QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
-        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('dataChanged'), self.updateWaves)
-        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
+        #QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
+        self.daqUI.sigChanged.connect(self.daqChanged)
+        #QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('dataChanged'), self.updateWaves)
+        self.ui.waveGeneratorWidget.sigDataChanged.connect(self.updateWaves)
+        #QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
+        self.ui.waveGeneratorWidget.sigParametersChanged.connect(self.sequenceChanged)
         #QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         #QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
         #QtCore.QObject.connect(self.ui.i0ModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.uiStateChanged)
-        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('stateChanged'), self.devStateChanged)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.uiStateChanged)
+        self.stateGroup.sigChanged.connect(self.uiStateChanged)
+        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('stateChanged'), self.devStateChanged)
+        self.dev.sigStateChanged.connect(self.devStateChanged)
         self.devStateChanged()
         
         
@@ -129,7 +137,8 @@ class MultiClampProtoGui(ProtocolGui):
         return self.ui.waveGeneratorWidget.listSequences()
 
     def sequenceChanged(self):
-        self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        self.sigSequenceChanged.emit(self.dev.name)
 
     def updateWaves(self):
         self.clearCmdPlots()
@@ -138,9 +147,9 @@ class MultiClampProtoGui(ProtocolGui):
         params = {}
         ps = self.ui.waveGeneratorWidget.listSequences()
         for k in ps:
-            params[k] = range(ps[k])
+            params[k] = range(len(ps[k]))
         waves = []
-        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys(), passHash=True)
+        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys())
         for w in waves:
             if w is not None:
                 #self.plotCmdWave(w / self.cmdScale, color=QtGui.QColor(100, 100, 100), replot=False)
@@ -336,4 +345,5 @@ class MultiClampProtoGui(ProtocolGui):
         ProtocolGui.quit(self)
         if not sip.isdeleted(self.daqUI):
             QtCore.QObject.disconnect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
-        
+        self.ui.topPlotWidget.close()
+        self.ui.bottomPlotWidget.close()

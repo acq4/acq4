@@ -24,12 +24,18 @@ class UncagingModule(AnalysisModule):
         self.fillModuleList()
         self.prots = {}
         self.currentProt = None
-        QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteSelected)
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
-        QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*, QListWidgetItem*)'), self.itemSelected)
-        QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemClicked)
-        QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.recompute)
-        QtCore.QObject.connect(self.man, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteSelected)
+        self.ui.deleteBtn.clicked.connect(self.deleteSelected)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
+        self.stateGroup.sigChanged.connect(self.stateChanged)
+        #QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*, QListWidgetItem*)'), self.itemSelected)
+        self.ui.protList.currentItemChanged.connect(self.itemSelected)
+        #QtCore.QObject.connect(self.ui.protList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemClicked)
+        self.ui.protList.itemClicked.connect(self.itemClicked)
+        #QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.recompute)
+        self.ui.recomputeBtn.clicked.connect(self.recompute)
+        #QtCore.QObject.connect(self.man, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        self.man.sigModulesChanged.connect(self.fillModuleList)
         
     def quit(self):
         AnalysisModule.quit(self)
@@ -122,7 +128,8 @@ class UncagingModule(AnalysisModule):
             sp.recalculate(allFrames=True)
 
     def quit(self):
-        QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        #QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        getManager().sigModulesChanged.disconnect(self.fillModuleList)
         AnalysisModule.quit(self)
         for p in self.prots.values():
             p.close()
@@ -163,6 +170,9 @@ class Prot:
         
     def addFrame(self, frame):
         camDev = self.ui().cameraDevice()
+        if camDev is None:
+            print "Warning: No camera module selected in uncaging analysis dock."
+            return  
         clampDev = self.ui().clampDevice()
         scannerDev = self.ui().scannerDevice()
         
@@ -177,7 +187,8 @@ class Prot:
             camInfo = camFrame1.infoCopy()
             camFrame = MetaArray(camFrame2.astype(float32) - camFrame1.astype(float32), info=camInfo)
         else:
-            camInfo = frame['result'][camDev]['frames'][self.state['frame1Spin']].infoCopy()
+            #camInfo = frame['result'][camDev]['frames'][self.state['frame1Spin']].infoCopy()
+            camInfo = None
             camFrame = None
             
         data = {
@@ -259,7 +270,7 @@ class Prot:
                 spot.setBrush(QtGui.QBrush(QtGui.QColor(r*255, g*255, b*255, alpha)))
                 spot.setPen(QtGui.QPen(QtCore.Qt.NoPen))
                 p = f['scanner']['position']
-                s = f['scanner']['spot']
+                s = f['scanner']['spotSize']
                 self.items.append([spot, p, [s, s]])
             
         self.hide()  ## Make sure only correct items are displayed
@@ -268,12 +279,12 @@ class Prot:
         if self.state['displayImageCheck']:
             self.updateImage()
 
-        # update location of image
-        info = frames[-1]['camInfo'][-1]
-        s = info['pixelSize']
-        p = info['imagePosition']
-        self.items[0][1] = p
-        self.items[0][2] = s
+            # update location of image
+            info = frames[-1]['camInfo'][-1]
+            s = info['pixelSize']
+            p = info['imagePosition']
+            self.items[0][1] = p
+            self.items[0][2] = s
         
         ## Set correct scene
         cModName = str(self.ui().ui.cameraModCombo.currentText())
@@ -358,6 +369,8 @@ class Prot:
         
     def close(self):
         ## Remove items from scene
+        if self.items is None:
+            return
         for (item, p, s) in self.items:
             try:
                 scene = item.scene()
@@ -366,8 +379,12 @@ class Prot:
             except:
                 printExc("Error while cleaning up uncaging analysis:")
                 
-        del self.imgItem
-        del self.frames
-        del self.img
-        del self.items
+        #del self.imgItem
+        #del self.frames
+        #del self.img
+        #del self.items
+        self.imgItem = None
+        self.frames = None
+        self.img = None
+        self.items = None
         

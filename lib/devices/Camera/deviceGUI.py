@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from DevTemplate import Ui_Form
 from PyQt4 import QtCore, QtGui
-from lib.util.WidgetGroup import WidgetGroup
+from WidgetGroup import WidgetGroup
 from SpinBox import *
 #import pdb
 
@@ -18,8 +18,8 @@ class CameraDeviceGui(QtGui.QWidget):
         self.stateGroup = WidgetGroup([])
         self.labels = {}
         
-        for k in self.params:
-            p = self.params[k]
+        for k, p in self.params.iteritems():
+            #p = self.params[k]
             #print p
             #if not p[1]:
                 #continue
@@ -36,8 +36,12 @@ class CameraDeviceGui(QtGui.QWidget):
 
             else:  ## parameter is writable
                 if type(p[0]) is tuple:
-                    (mn, mx, step) = p[0]
-                    if step == 1:
+                    if len(p[0]) == 3:
+                        (mn, mx, step) = p[0]
+                    elif len(p[0]) == 2:
+                        (mn, mx) = p[0]
+                        step = 1
+                    if type(mx) in [int, long] and type(mn) in [int, long]:
                         w = QtGui.QSpinBox()
                         intmax = (2**16)-1
                         if mx is None or mx > intmax:
@@ -47,6 +51,7 @@ class CameraDeviceGui(QtGui.QWidget):
                         step = int(step)
                         w.setRange(mn, mx)
                         w.setSingleStep(step)
+                        #print k, "val:", val, type(val)
                         w.setValue(val)
                     else:
                         w = SpinBox()
@@ -68,9 +73,12 @@ class CameraDeviceGui(QtGui.QWidget):
             
                 self.stateGroup.addWidget(w, k)
             self.ui.formLayout_2.addRow(k, w)
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
-        QtCore.QObject.connect(self.ui.reconnectBtn, QtCore.SIGNAL('clicked()'), self.reconnect)
-        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('paramsChanged'), self.paramsChanged)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.stateChanged)
+        self.stateGroup.sigChanged.connect(self.stateChanged)
+        #QtCore.QObject.connect(self.ui.reconnectBtn, QtCore.SIGNAL('clicked()'), self.reconnect)
+        self.ui.reconnectBtn.clicked.connect(self.reconnect)
+        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('paramsChanged'), self.paramsChanged)
+        self.dev.sigParamsChanged.connect(self.paramsChanged)
         #print "Done with UI"
             
     def stateChanged(self, p, val):

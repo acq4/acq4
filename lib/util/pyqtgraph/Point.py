@@ -6,7 +6,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 from PyQt4 import QtCore
-from math import acos
+import numpy as np
 
 def clip(x, mn, mx):
     if x > mx:
@@ -20,7 +20,10 @@ class Point(QtCore.QPointF):
     
     def __init__(self, *args):
         if len(args) == 1:
-            if hasattr(args[0], '__getitem__'):
+            if isinstance(args[0], QtCore.QSizeF):
+                QtCore.QPointF.__init__(self, float(args[0].width()), float(args[0].height()))
+                return
+            elif hasattr(args[0], '__getitem__'):
                 QtCore.QPointF.__init__(self, float(args[0][0]), float(args[0][1]))
                 return
             elif type(args[0]) in [float, int]:
@@ -30,6 +33,12 @@ class Point(QtCore.QPointF):
             QtCore.QPointF.__init__(self, args[0], args[1])
             return
         QtCore.QPointF.__init__(self, *args)
+        
+    def __len__(self):
+        return 2
+        
+    def __reduce__(self):
+        return (Point, (self.x(), self.y()))
         
     def __getitem__(self, i):
         if i == 0:
@@ -79,33 +88,45 @@ class Point(QtCore.QPointF):
     
     def _math_(self, op, x):
         #print "point math:", op
-        try:
-            return Point(getattr(QtCore.QPointF, op)(self, x))
-        except:
-            x = Point(x)
-            return Point(getattr(self[0], op)(x[0]), getattr(self[1], op)(x[1]))
+        #try:
+            #fn  = getattr(QtCore.QPointF, op)
+            #pt = fn(self, x)
+            #print fn, pt, self, x
+            #return Point(pt)
+        #except AttributeError:
+        x = Point(x)
+        return Point(getattr(self[0], op)(x[0]), getattr(self[1], op)(x[1]))
     
     def length(self):
+        """Returns the vector length of this Point."""
         return (self[0]**2 + self[1]**2) ** 0.5
     
     def angle(self, a):
+        """Returns the angle in degrees between this vector and the vector a."""
         n1 = self.length()
         n2 = a.length()
         if n1 == 0. or n2 == 0.:
             return None
-        ang = acos(clip(self.dot(a) / (n1 * n2), -1.0, 1.0))
+        ## Probably this should be done with arctan2 instead..
+        ang = np.arccos(clip(self.dot(a) / (n1 * n2), -1.0, 1.0)) ### in radians
         c = self.cross(a)
         if c > 0:
             ang *= -1.
-        return ang
+        return ang * 180. / np.pi
     
     def dot(self, a):
+        """Returns the dot product of a and this Point."""
         a = Point(a)
         return self[0]*a[0] + self[1]*a[1]
     
     def cross(self, a):
         a = Point(a)
         return self[0]*a[1] - self[1]*a[0]
+        
+    def proj(self, b):
+        """Return the projection of this vector onto the vector b"""
+        b1 = b / b.length()
+        return self.dot(b1) * b1
     
     def __repr__(self):
         return "Point(%f, %f)" % (self[0], self[1])
@@ -116,3 +137,6 @@ class Point(QtCore.QPointF):
     
     def max(self):
         return max(self[0], self[1])
+        
+    def copy(self):
+        return Point(self)

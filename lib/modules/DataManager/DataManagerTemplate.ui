@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>600</height>
+    <width>1000</width>
+    <height>800</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -184,10 +184,18 @@
             </item>
            </layout>
           </widget>
-          <widget class="QWidget" name="tab_2">
+          <widget class="QWidget" name="analysisTab">
            <attribute name="title">
             <string>Analysis</string>
            </attribute>
+           <layout class="QGridLayout" name="gridLayout_2">
+            <property name="margin">
+             <number>0</number>
+            </property>
+            <property name="spacing">
+             <number>0</number>
+            </property>
+           </layout>
           </widget>
          </widget>
         </item>

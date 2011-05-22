@@ -62,7 +62,7 @@ class CParser():
             print s
     """
     
-    cacheVersion = 20    ## increment every time cache structure or parsing changes to invalidate old cache files.
+    cacheVersion = 22    ## increment every time cache structure or parsing changes to invalidate old cache files.
     
     def __init__(self, files=None, replace=None, copyFrom=None, processAll=True, cache=None, verbose=False, **args):
         """Create a C parser object fiven a file or list of files. Files are read to memory and operated
@@ -218,6 +218,9 @@ class CParser():
                         print cache['opts']
                         print self.initOpts
                     return False
+                elif self.verbose:
+                    print "Cache init opts are OK:"
+                    print cache['opts']
                 if cache['version'] < self.cacheVersion:
                     if self.verbose:
                         print "Cache file is not valid--cache format has changed."
@@ -398,8 +401,8 @@ class CParser():
                 elif d == 'define':
                     if not ifTrue[-1]:
                         continue
-                    #if self.verbose:
-                        #print "  "*(len(ifTrue)) + "define:", macroName, rest
+                    if self.verbose:
+                        print "  "*(len(ifTrue)) + "define:", macroName, rest
                     try:
                         self.ppDefine.parseString(macroName+ ' ' + rest) ## macro is registered here
                     except:
@@ -810,6 +813,15 @@ class CParser():
         if 'ptrs' in decl and len(decl['ptrs']) > 0:
             toks.append('*' * len(decl['ptrs']))
         if 'arrays' in decl and len(decl['arrays']) > 0:
+            #arrays  = []
+            #for x in decl['arrays']:
+                #n = self.evalExpr(x)
+                #if n == -1:           ## If an array was given as '[]', interpret it as '*' instead.
+                    #toks.append('*')
+                #else:
+                    #arrays.append(n)
+            #if len(arrays) > 0:
+                #toks.append(arrays)
             toks.append([self.evalExpr(x) for x in decl['arrays']])
         if 'args' in decl and len(decl['args']) > 0:
             #print "  process args"
@@ -839,9 +851,11 @@ class CParser():
              '__X'  - calling convention (windows only). X can be 'cdecl' or 'stdcall' 
              list   - array. Value(s) indicate the length of each array, -1 for incomplete type.
              tuple  - function, items are the output of processType for each function argument.
-        int *x[10]            =>  ('x', ['int', [10], '*'])
-        char fn(int x)         =>  ('fn', ['char', [('x', ['int'])]])
-        struct s (*)(int, int*)   =>  (None, ["struct s", ((None, ['int']), (None, ['int', '*'])), '*'])
+             
+        Examples:
+            int *x[10]            =>  ('x', ['int', [10], '*'])
+            char fn(int x)         =>  ('fn', ['char', [('x', ['int'])]])
+            struct s (*)(int, int*)   =>  (None, ["struct s", ((None, ['int']), (None, ['int', '*'])), '*'])
         """
         #print "PROCESS TYPE/DECL:", typ, decl
         (name, decl) = self.processDeclarator(decl)
@@ -1082,6 +1096,8 @@ class CParser():
             if self.isFundType(typ):
                 ## remove 'signed' before returning evaluated type
                 typ[0] = re.sub(r'\bsigned\b', '', typ[0]).strip()
+                
+                
                 return typ
             parent = typ[0]
             if parent in used:
@@ -1135,7 +1151,7 @@ if hasPyParsing:
     ## Some basic definitions
     expression = Forward()
     pexpr = '(' + expression + ')'
-    numTypes = ['int', 'float', 'double']
+    numTypes = ['int', 'float', 'double', '__int64']
     baseTypes = ['char', 'bool', 'void'] + numTypes
     sizeModifiers = ['short', 'long']
     signModifiers = ['signed', 'unsigned']

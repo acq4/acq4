@@ -4,15 +4,18 @@ import sys
 from ProtocolTemplate import *
 from DaqChannelGui import *
 from lib.devices.Device import ProtocolGui
-from lib.util.SequenceRunner import *
-from lib.util.WidgetGroup import *
+from SequenceRunner import *
+from WidgetGroup import *
 #from PyQt4 import Qwt5 as Qwt
-from lib.util.pyqtgraph.PlotWidget import PlotWidget
+from pyqtgraph.PlotWidget import PlotWidget
 import numpy
 import weakref
-from lib.util.debug import *
+from debug import *
 
 class DAQGenericProtoGui(ProtocolGui):
+    
+    #sigSequenceChanged = QtCore.Signal(object)  ## defined upstream
+    
     def __init__(self, dev, prot, ownUi=True):
         ProtocolGui.__init__(self, dev, prot)
         self.plots = weakref.WeakValueDictionary()
@@ -83,7 +86,8 @@ class DAQGenericProtoGui(ProtocolGui):
         
         if conf['type'] in ['ao', 'do']:
             w = OutputChannelGui(self, ch, conf, p, self.dev, self.prot)
-            QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
+            #QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
+            w.sigSequenceChanged.connect(self.sequenceChanged)
         elif conf['type'] in ['ai', 'di']:
             w = InputChannelGui(self, ch, conf, p, self.dev, self.prot)
         else:
@@ -125,7 +129,8 @@ class DAQGenericProtoGui(ProtocolGui):
         return l
         
     def sequenceChanged(self):
-        self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        self.sigSequenceChanged.emit(self.dev.name)
         
     def taskStarted(self, params):  ## automatically invoked from ProtocolGui
         ## Pull out parameters for this device

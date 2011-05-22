@@ -1,22 +1,24 @@
 # -*- coding: utf-8 -*-
 
 from PyQt4 import QtCore, QtGui
-from lib.DataManager import *
-import lib.Manager as Manager
-import sip
-from lib.util.pyqtgraph.MultiPlotWidget import MultiPlotWidget
-from lib.util.pyqtgraph.ImageView import ImageView
+from DataManager import *
+#import lib.Manager as Manager
+from pyqtgraph.MultiPlotWidget import MultiPlotWidget
+from pyqtgraph.ImageView import ImageView
 from DictView import *
+import metaarray
+import weakref
 
 class FileDataView(QtGui.QSplitter):
     def __init__(self, parent):
-        QtGui.QWidget.__init__(self, parent)
-        self.manager = Manager.getManager()
+        QtGui.QSplitter.__init__(self, parent)
+        #self.manager = Manager.getManager()
         self.setOrientation(QtCore.Qt.Vertical)
         self.current = None
         self.currentType = None
         self.widgets = []
         self.dictWidget = None
+        #self.plots = []
 
     def setCurrentFile(self, file):
         #print "=============== set current file ============"
@@ -59,6 +61,8 @@ class FileDataView(QtGui.QSplitter):
             else:
                 self.clear()
                 w = ImageView(self)
+                #print "add image:", w.ui.roiPlot.plotItem
+                #self.plots = [weakref.ref(w.ui.roiPlot.plotItem)]
                 self.addWidget(w)
                 w.setImage(data)
                 self.widgets.append(w)
@@ -70,8 +74,11 @@ class FileDataView(QtGui.QSplitter):
             w.plot(data)
             self.currentType = 'plot'
             self.widgets.append(w)
+            #print "add mplot:", w.mPlotItem.plots
+            
+            #self.plots = [weakref.ref(p[0]) for p in w.mPlotItem.plots]
         
-        if isinstance(data, MetaArray):
+        if isinstance(data, metaarray.MetaArray):
             if self.dictWidget is None:
                 w = DictView(data._info)
                 self.dictWidget = w
@@ -86,7 +93,8 @@ class FileDataView(QtGui.QSplitter):
         
     def clear(self):
         for w in self.widgets:
-            sip.delete(w)
+            w.close()
+            w.setParent(None)
         self.widgets = []
         self.dictWidget = None
-        
+                

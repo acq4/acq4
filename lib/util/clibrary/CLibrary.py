@@ -12,6 +12,7 @@ function calling based on C header definitions.
 from ctypes import *
 import sys
 
+
 class CLibrary:
     """The CLibrary class is intended to automate much of the work in using ctypes by integrating
     header file definitions from CParser. Ths class serves as a proxy to a ctypes, adding
@@ -38,6 +39,7 @@ class CLibrary:
         lib[type]  - Accesses the header definitions directly, returns definition dictionaries
                      based on the type requested. This is equivalent to headers.defs[type].
     """
+    Null = object()
     
     cTypes = {
         'char': c_char,
@@ -183,20 +185,28 @@ class CLibrary:
         Otherwise, the class returned is just the base type with no pointers."""
         try:
             typ = self._headers_.evalType(typ)
-            
-            # Create the initial type
             mods = typ[1:][:]
-            if len(typ) > 1 and typ[1] == '*' and typ[0] in CLibrary.cPtrTypes:
+            
+            ## Create the initial type
+            ## Some types like ['char', '*'] have a specific ctype (c_char_p)
+            ## (but only do this if pointers == True)
+            if pointers and len(typ) > 1 and typ[1] == '*' and typ[0] in CLibrary.cPtrTypes:
                 cls = CLibrary.cPtrTypes[typ[0]]
                 mods = typ[2:]
+                
+            ## If the base type is in the list of existing ctypes:
             elif typ[0] in CLibrary.cTypes:
                 cls = CLibrary.cTypes[typ[0]]
+                
+            ## structs, unions, enums:
             elif typ[0][:7] == 'struct ':
                 cls = self._cstruct('structs', self._defs_['types'][typ[0]][1])
             elif typ[0][:6] == 'union ':
                 cls = self._cstruct('unions', self._defs_['types'][typ[0]][1])
             elif typ[0][:5] == 'enum ':
                 cls = c_int
+                
+            ## void
             elif typ[0] == 'void':
                 cls = None
             else:
@@ -206,18 +216,21 @@ class CLibrary:
             if not pointers:
                 return cls
                 
-            # apply pointers and arrays
+            ## apply pointers and arrays
             while len(mods) > 0:
                 m = mods.pop(0)
                 if isinstance(m, basestring):  ## pointer or reference
-                    if m[0] == '*':
+                    if m[0] == '*' or m[0] == '&':
                         for i in m:
                             cls = POINTER(cls)
                 elif type(m) is list:          ## array
                     for i in m:
-                        cls = cls * i
+                        if i == -1:            ## -1 indicates an 'incomplete type' like "int variable[]"
+                            cls = POINTER(cls) ## which we should interpret like "int *variable"
+                        else:
+                            cls = cls * i
                 elif type(m) is tuple:   ## Probably a function pointer
-                    # Find pointer and calling convention
+                    ## Find pointer and calling convention
                     isPtr = False
                     conv = '__cdecl'
                     if len(mods) == 0:
@@ -325,9 +338,19 @@ class CFunction:
         self.argInds = dict([(self.sig[1][i][0], i) for i in range(len(self.sig[1]))])  ## mapping from argument names to indices
         #print "created func", self, sig, self.argTypes
 
+    def argCType(self, arg):
+        """Return the ctype required for the specified argument.
+        arg can be either an integer  or the name of the argument.
+        """
+        if isinstance(arg, basestring):
+            arg = self.argInds[arg]
+        return self.lib._ctype(self.sig[1][arg][1])
+    
     def __call__(self, *args, **kwargs):
         """Invoke the SO or dll function referenced, converting all arguments to the correct type.
         Keyword arguments are allowed as long as the header specifies the argument names.
+        Arguments which are passed byref may be omitted entirely, and will be automaticaly generated.
+        To pass a NULL pointer, give None as the argument.
         Returns the return value of the function call as well as all of the arguments (so that objects passed by reference can be retrieved)"""
         #print "CALL: %s(%s)" % (self.name, ", ".join(map(str, args) + ["%s=%s" % (k, str(kwargs[k])) for k in kwargs]))
         #print "  sig:", self.sig
@@ -336,7 +359,10 @@ class CFunction:
         ## First fill in args
         for i in range(len(args)):
             #argList[i] = self.argTypes[i](args[i])
-            argList[i] = args[i]
+            if args[i] is None:
+                argList[i] = self.lib.Null
+            else:
+                argList[i] = args[i]
         
         ## Next fill in kwargs
         for k in kwargs:
@@ -348,24 +374,37 @@ class CFunction:
             if ind >= len(argList):  ## stretch argument list if needed
                 argList += [None] * (ind - len(argList) + 1)
             #argList[ind] = self.coerce(kwargs[k], self.argTypes[ind])
-            argList[ind] = kwargs[k]
+            if kwargs[k] is None:
+                argList[ind] = self.lib.Null
+            else:
+                argList[ind] = kwargs[k]
         
+        guessedArgs = []
         ## Finally, fill in remaining arguments if they are pointers to int/float/void*/struct values 
         ## (we assume these are to be modified by the function and their initial value is not important)
         for i in range(len(argList)):
-            if argList[i] is None:
+            if argList[i] is None or argList[i] is self.lib.Null:
                 try:
                     sig = self.sig[1][i][1]
                     argType = self.lib._headers_.evalType(sig)
-                    if argType == ['void', '**'] or argType == ['void', '*', '*']:
-                        cls = c_void_p
+                    if argList[i] is self.lib.Null:  ## request to build a null pointer
+                        if len(argType) < 2:
+                            raise Exception("Can not create NULL for non-pointer argument type: %s" % str(argType))
+                        argList[i] = self.lib._ctype(sig)()
+                    #elif argType == ['char', '*']:  ## pass null pointer if none was specified. This is a little dangerous, but some functions will expect it.
+                        #argList[i] = c_char_p()     ##  On second thought: let's just require the user to explicitly ask for a NULL pointer.
                     else:
-                        assert len(argType) == 2 and argType[1] == '*' ## Must be 2-part type, second part must be '*'
-                        cls = self.lib._ctype(sig, pointers=False)
-                    argList[i] = pointer(cls(0))
+                        if argType == ['void', '**'] or argType == ['void', '*', '*']:
+                            cls = c_void_p
+                        else:
+                            assert len(argType) == 2 and argType[1] == '*' ## Must be 2-part type, second part must be '*'
+                            cls = self.lib._ctype(sig, pointers=False)
+                        argList[i] = pointer(cls(0))
+                        guessedArgs.append(i)
                 except:
                     if sys.exc_info()[0] is not AssertionError:
-                        sys.excepthook(*sys.exc_info())
+                        raise
+                        #sys.excepthook(*sys.exc_info())
                     print "Function signature:", self.prettySignature()
                     raise Exception("Function call '%s' missing required argument %d '%s'. (See above for signature)" % (self.name, i, self.sig[1][i][0]))
         #print "  args:", argList
@@ -378,7 +417,7 @@ class CFunction:
             raise
         #print "  result:", res
         
-        cr = CallResult(res, argList, self.sig)
+        cr = CallResult(res, argList, self.sig, guessed=guessedArgs)
         return cr
     
     def prettySignature(self):
@@ -394,16 +433,21 @@ class CallResult:
        - The return value: ()
        - The nth argument passed: [n]
        - The argument by name: ['name']
+       - All values that were auto-generated: .auto()
        
     The class can also be used as an iterator, so that tuple unpacking is possible:
        ret, arg1, arg2 = lib.runSomeFunction(...)
        """
-    def __init__(self, rval, args, sig):
-        self.rval = rval
-        self.args = args
-        self.sig = sig
+    def __init__(self, rval, args, sig, guessed):
+        self.rval = rval        ## return value of function call
+        self.args = args        ## list of arguments to function call
+        self.sig = sig          ## function signature
+        self.guessed = guessed  ## list of arguments that were generated automatically (usually byrefs)
         
     def __call__(self):
+        #print "Clibrary:", type(self.rval), self.mkVal(self.rval)
+        if self.sig[0] == ['void']:
+            return None
         return self.mkVal(self.rval)
         
     def __getitem__(self, n):
@@ -448,7 +492,8 @@ class CallResult:
         for i in range(len(self.args)):
             yield(self[i])
         
-        
+    def auto(self):
+        return [self[n] for n in self.guessed]
             
     
     

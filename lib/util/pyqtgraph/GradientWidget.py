@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
-
+import weakref
 
 class TickSlider(QtGui.QGraphicsView):
     def __init__(self, parent=None, orientation='bottom', allowAdd=True, **kargs):
@@ -161,6 +161,9 @@ class TickSlider(QtGui.QGraphicsView):
 
 
 class GradientWidget(TickSlider):
+    
+    sigGradientChanged = QtCore.Signal(object)
+    
     def __init__(self, *args, **kargs):
         TickSlider.__init__(self, *args, **kargs)
         self.currentTick = None
@@ -169,8 +172,12 @@ class GradientWidget(TickSlider):
         self.gradRect = QtGui.QGraphicsRectItem(QtCore.QRectF(0, -self.rectSize, 100, self.rectSize))
         self.colorMode = 'rgb'
         self.colorDialog = QtGui.QColorDialog()
-        QtCore.QObject.connect(self.colorDialog, QtCore.SIGNAL('currentColorChanged(const QColor&)'), self.currentColorChanged)
-        QtCore.QObject.connect(self.colorDialog, QtCore.SIGNAL('rejected()'), self.currentColorRejected)
+        self.colorDialog.setOption(QtGui.QColorDialog.ShowAlphaChannel, True)
+        self.colorDialog.setOption(QtGui.QColorDialog.DontUseNativeDialog, True)
+        #QtCore.QObject.connect(self.colorDialog, QtCore.SIGNAL('currentColorChanged(const QColor&)'), self.currentColorChanged)
+        self.colorDialog.currentColorChanged.connect(self.currentColorChanged)
+        #QtCore.QObject.connect(self.colorDialog, QtCore.SIGNAL('rejected()'), self.currentColorRejected)
+        self.colorDialog.rejected.connect(self.currentColorRejected)
         
         #self.gradient = QtGui.QLinearGradient(QtCore.QPointF(0,0), QtCore.QPointF(100,0))
         self.scene.addItem(self.gradRect)
@@ -197,7 +204,8 @@ class GradientWidget(TickSlider):
     def updateGradient(self):
         self.gradient = self.getGradient()
         self.gradRect.setBrush(QtGui.QBrush(self.gradient))
-        self.emit(QtCore.SIGNAL('gradientChanged'), self)
+        #self.emit(QtCore.SIGNAL('gradientChanged'), self)
+        self.sigGradientChanged.emit(self)
         
     def setLength(self, newLen):
         TickSlider.setLength(self, newLen)
@@ -282,7 +290,8 @@ class GradientWidget(TickSlider):
             r = c1.red() * (1.-f) + c2.red() * f
             g = c1.green() * (1.-f) + c2.green() * f
             b = c1.blue() * (1.-f) + c2.blue() * f
-            return QtGui.QColor(r, g, b)
+            a = c1.alpha() * (1.-f) + c2.alpha() * f
+            return QtGui.QColor(r, g, b,a)
         elif self.colorMode == 'hsv':
             h1,s1,v1,_ = c1.getHsv()
             h2,s2,v2,_ = c2.getHsv()
@@ -307,6 +316,43 @@ class GradientWidget(TickSlider):
         t.removeAllowed = True
         return t
         
+    def saveState(self):
+        ticks = []
+        for t in self.ticks:
+            c = t.color
+            ticks.append((self.ticks[t], (c.red(), c.green(), c.blue(), c.alpha())))
+        state = {'mode': self.colorMode, 'ticks': ticks}
+        return state
+        
+    def restoreState(self, state):
+        self.setColorMode(state['mode'])
+        for t in self.ticks.keys():
+            self.removeTick(t)
+        for t in state['ticks']:
+            c = QtGui.QColor(*t[1])
+            self.addTick(t[0], c)
+        self.updateGradient()
+
+
+
+class BlackWhiteSlider(GradientWidget):
+    def __init__(self, parent):
+        GradientWidget.__init__(self, parent)
+        self.getTick(0).colorChangeAllowed = False
+        self.getTick(1).colorChangeAllowed = False
+        self.allowAdd = False
+        self.setTickColor(self.getTick(1), QtGui.QColor(255,255,255))
+        self.setOrientation('right')
+
+    def getLevels(self):
+        return (self.tickValue(0), self.tickValue(1))
+
+    def setLevels(self, black, white):
+        self.setTickValue(0, black)
+        self.setTickValue(1, white)
+
+
+
 
 class GammaWidget(TickSlider):
     pass
@@ -316,7 +362,7 @@ class Tick(QtGui.QGraphicsPolygonItem):
     def __init__(self, view, pos, color, movable=True, scale=10):
         #QObjectWorkaround.__init__(self)
         self.movable = movable
-        self.view = view
+        self.view = weakref.ref(view)
         self.scale = scale
         self.color = color
         #self.endTick = endTick
@@ -345,7 +391,7 @@ class Tick(QtGui.QGraphicsPolygonItem):
         newPos.setY(self.pos().y())
         #newPos.setX(min(max(newPos.x(), 0), 100))
         self.setPos(newPos)
-        self.view.tickMoved(self, newPos)
+        self.view().tickMoved(self, newPos)
         self.movedSincePress = True
         #self.emit(QtCore.SIGNAL('tickChanged'), self)
         ev.accept()
@@ -365,7 +411,7 @@ class Tick(QtGui.QGraphicsPolygonItem):
     def mouseReleaseEvent(self, ev):
         #print self, "release", ev.scenePos()
         if not self.movedSincePress:
-            self.view.tickClicked(self, ev)
+            self.view().tickClicked(self, ev)
         
         #if ev.button() == QtCore.Qt.LeftButton and ev.scenePos() == self.pressPos:
             #color = QtGui.QColorDialog.getColor(self.color, None, "Select Color", QtGui.QColorDialog.ShowAlphaChannel)
@@ -376,4 +422,31 @@ class Tick(QtGui.QGraphicsPolygonItem):
                 #self.view.tickChanged(self)
         
         
+    
+    
+    
+if __name__ == '__main__':
+    app = QtGui.QApplication([])
+    w = QtGui.QMainWindow()
+    w.show()
+    w.resize(400,400)
+    cw = QtGui.QWidget()
+    w.setCentralWidget(cw)
+
+    l = QtGui.QGridLayout()
+    l.setSpacing(0)
+    cw.setLayout(l)
+
+    w1 = GradientWidget(orientation='top')
+    w2 = GradientWidget(orientation='right', allowAdd=False)
+    w2.setTickColor(1, QtGui.QColor(255,255,255))
+    w3 = GradientWidget(orientation='bottom')
+    w4 = TickSlider(orientation='left')
+
+    l.addWidget(w1, 0, 1)
+    l.addWidget(w2, 1, 2)
+    l.addWidget(w3, 2, 1)
+    l.addWidget(w4, 1, 0)
+    
+    
     

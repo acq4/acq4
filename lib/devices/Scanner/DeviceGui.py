@@ -2,20 +2,40 @@
 from DeviceTemplate import Ui_Form
 import time, os, sys
 from PyQt4 import QtCore, QtGui
-#from lib.util.metaarray import MetaArray
-from lib.util.pyqtgraph.graphicsItems import ImageItem
+from pyqtgraph.graphicsItems import ImageItem
 import lib.Manager
-from lib.util.imageAnalysis import *
-from lib.util.debug import *
+from imageAnalysis import *
+from debug import *
+import numpy as np
+import WidgetGroup
 
 class ScannerDeviceGui(QtGui.QWidget):
+    
+    
     def __init__(self, dev, win):
         QtGui.QWidget.__init__(self)
         self.dev = dev
         self.win = win
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-
+        self.stateGroup = WidgetGroup.WidgetGroup({
+            'duration': self.ui.scanDurationSpin,
+            'xMin': self.ui.xMinSpin,
+            'xMax': self.ui.xMaxSpin,
+            'yMin': self.ui.yMinSpin,
+            'yMax': self.ui.yMaxSpin,
+            'splitter': self.ui.splitter,
+        })
+        
+        spos = dev.getShutterVals()
+        if spos is None:
+            self.ui.shutterGroup.hide()
+        else:
+            self.shutterChanged()
+            self.ui.shutterXSpin.setValue(spos[0])
+            self.ui.shutterYSpin.setValue(spos[1])
+        
+        
         ## Populate Device lists
         defCam = None
         if 'defaultCamera' in self.dev.config:
@@ -38,6 +58,11 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## Populate list of calibrations
         self.updateCalibrationList()
         
+        ## load default config
+        state = self.dev.loadCalibrationDefaults()
+        if state is not None:
+            self.stateGroup.setState(state)
+        
         ## create graphics scene
         #self.image = ImageItem()
         self.scene = self.ui.view.scene
@@ -46,10 +71,29 @@ class ScannerDeviceGui(QtGui.QWidget):
         #self.ui.view.setAspectLocked(True)
         #self.ui.view.invertY()
 
-        QtCore.QObject.connect(self.ui.calibrateBtn, QtCore.SIGNAL('clicked()'), self.calibrateClicked)
-        QtCore.QObject.connect(self.ui.storeCamConfBtn, QtCore.SIGNAL('clicked()'), self.storeCamConf)
-        QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteClicked)
+        #QtCore.QObject.connect(self.ui.calibrateBtn, QtCore.SIGNAL('clicked()'), self.calibrateClicked)
+        self.ui.calibrateBtn.clicked.connect(self.calibrateClicked)
+        #QtCore.QObject.connect(self.ui.storeCamConfBtn, QtCore.SIGNAL('clicked()'), self.storeCamConf)
+        self.ui.storeCamConfBtn.clicked.connect(self.storeCamConf)
+        #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteClicked)
+        self.ui.deleteBtn.clicked.connect(self.deleteClicked)
+        self.ui.shutterBtn.clicked.connect(self.shutterClicked)
+        self.dev.sigShutterChanged.connect(self.shutterChanged)
 
+    def shutterClicked(self):
+        self.dev.setShutterOpen(not self.lastShutterState)
+        
+    def shutterChanged(self):
+        sh = self.dev.getShutterOpen()
+        self.lastShutterState = sh
+        if sh:
+            self.ui.shutterBtn.setText('Close Shutter')
+        else:
+            self.ui.shutterBtn.setText('Open Shutter')
+            
+
+            
+            
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
         
@@ -90,6 +134,8 @@ class ScannerDeviceGui(QtGui.QWidget):
         index[cam][laser][obj] = {'spot': spot, 'date': date, 'params': cal}
 
         self.dev.writeCalibrationIndex(index)
+        
+        self.dev.writeCalibrationDefaults(self.stateGroup.state())
         #cal.write(os.path.join(self.dev.config['calibrationDir'], fileName))
         
         self.updateCalibrationList()
@@ -167,7 +213,7 @@ class ScannerDeviceGui(QtGui.QWidget):
             1) Measure background frame, then scan mirrors 
                while collecting frames as fast as possible (self.scan())
             2) Locate spot in every frame using gaussian fit
-            3) Do linear regression to determine mapping between voltage and position
+            3) Do parabolic fit to determine mapping between voltage and position
         """
         camera = str(self.ui.cameraCombo.currentText())
         laser = str(self.ui.laserCombo.currentText())
@@ -183,7 +229,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         positions = positions[2:]
         
         ## Do background subtraction
-        frames = origFrames - background
+        frames = origFrames.astype(np.int32) - background.astype(np.int32)
 
         ## Find a frame with a spot close to the center (within center 1/3)
         cx = frames.shape[1] / 3
@@ -197,6 +243,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         amp = mfBlur.max() - median(mfBlur)  ## guess intensity of spot
         (x, y) = argwhere(mfBlur == mfBlur.max())[0]   ## guess location of spot
         fit = fitGaussian2D(maxFrame, [amp, x, y, maxFrame.shape[0] / 10, 0.])[0]  ## gaussian fit to locate spot exactly
+        fit[3] = abs(fit[3]) ## sometimes the fit for width comes out negative. *shrug*
         info = origFrames.infoCopy()[-1]
         pixelSize = info['pixelSize'][0]
         region = info['region']
@@ -215,6 +262,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         spotCommands = []
         spotFrames = []
         margin = fit[3]
+        #sensorSize = lib.Manager.getManager().getDevice(camera).getParam('sensorSize')
         #print "Spot size is %f x %g (%f px)" % (size, spotWidth, fit[3])
         for i in range(len(positions)):
             frame = frames[i]
@@ -235,14 +283,24 @@ class ScannerDeviceGui(QtGui.QWidget):
             if y < margin or y > frame.shape[1] - margin:
                 #print "   ..skipping; too close to edge", x, y
                 continue
+            
+            frame[x,y] = -1  ## mark location of peak in image
             #print "  ..spot is at", x, y
             
             ## x,y are currently in sensor coords, now convert to absolute scale relative to center
+            ### No, let's calibrate into sensor coords.
             #print "======="
-            #print x, y, region
-            x = (x - (region[2]*0.5 / binning[0])) * info['pixelSize'][0]
-            y = (y - (region[3]*0.5 / binning[1])) * info['pixelSize'][1]
-            #print x, y
+            ##print x, y, region
+            #print "Image location:", x, y
+            #x = (x - (region[2]/ (2*binning[0]))) * info['pixelSize'][0]
+            #y = (y - (region[3]/ (2*binning[1]))) * info['pixelSize'][1]
+            ##print x, y
+            #print "Camera region:", region, binning
+            #print "Real location:", x, y
+            
+            ## convert image location to absolute sensor pixel
+            x = region[0] + (x+0.5) * binning[0]
+            y = region[1] + (y+0.5) * binning[1]
             
             spotLocations.append([x, y])
             spotCommands.append(positions[i])
@@ -256,23 +314,26 @@ class ScannerDeviceGui(QtGui.QWidget):
         if len(spotFrames) == 0:
             #self.image.updateImage(frames.max(axis=0))
             self.ui.view.setImage(frames)
+            print "frames shape:", frames.shape
             raise Exception('Calibration never detected laser spot!\n  Looking for spots that are %f pixels wide.\n  (Check: 1. shutter is closed, 2. mirrors on, 3. objective is clean, 4. spot visible (and bright enough) when shutter is open)' % fit[3])
 
         spotFrameMax = concatenate(spotFrames).max(axis=0)
         #self.image.updateImage(maxFrame, autoRange=True)
         #self.image.updateImage(spotFrameMax, autoRange=True)
         #self.image.resetTransform()
-        impos = info['imagePosition']
-        self.ui.view.setImage(spotFrameMax, scale=[pixelSize, pixelSize], pos=[impos[0]-center[0], impos[1]-center[1]])
+        #impos = info['imagePosition']
+        #self.ui.view.setImage(spotFrameMax, scale=[pixelSize, pixelSize], pos=[impos[0]-center[0], impos[1]-center[1]])
+        self.ui.view.setImage(spotFrameMax, scale=binning, pos=region[:2])
         #self.image.scale(pixelSize, pixelSize)
         #self.image.setPos(impos[0]-center[0], impos[1]-center[1])
         #self.ui.view.setRange(self.image.mapRectToScene(self.image.boundingRect()))
         
         self.clearSpots()
         for sl in spotLocations:
-            self.addSpot(sl, spotWidth)
+            #self.addSpot(sl, spotWidth)
+            self.addSpot(sl, fit[3]*binning[0])
         
-        if len(spotFrames) == 10:
+        if len(spotFrames) <= 10:
             raise Exception('Calibration detected only %d frames with laser spot; need minimum of 10.' % len(spotFrames))
 
         self.updatePrgDlg(90, "Calibrating scanner: Doing linear regression..")
@@ -285,22 +346,41 @@ class ScannerDeviceGui(QtGui.QWidget):
         return (mapParams, (spotHeight, spotWidth))
 
     def generateMap(self, loc, cmd):
-        """Generates parameters for functions that map image locations to command values.
-        We assume that command values can be approximated by planar functions:
+        """Generates parameters for functions that map image locations (Loc) to command values (Cmd).
+        We assume that command values can be approximated by parabolic functions:
           Cmd.X  =  A  +  B * Loc.X  +  C * Loc.Y  +  D * Loc.X^2  +  E * Loc.Y^2
           Cmd.Y  =  F  +  G * Loc.X  +  H * Loc.Y  +  I * Loc.X^2  +  J * Loc.Y^2
         Returns [[A, B, C, D, E], [F, G, H, I, J]]
         """
-        def fn(v, loc):
+        
+        ## do a two-stage fit, using only linear parameters first.
+        ## this is to make sure the second-order parameters do no interfere with the first-order fit.
+        def fn1(v, loc):
+            return v[0] + v[1] * loc[:, 0] + v[2] * loc[:, 1]
+        def fn2(v, loc):
             return v[0] + v[1] * loc[:, 0] + v[2] * loc[:, 1] + v[3] * loc[:, 0]**2 + v[4] * loc[:, 1]**2
             
-        def erf(v, loc, cmd):
-            return fn(v, loc) - cmd
+        def erf1(v, loc, cmd):
+            return fn1(v, loc) - cmd
+        def erf2(v, loc, cmd):
+            return fn2(v, loc) - cmd
             
         ### sanity checks here on loc and cmd
-            
-        xFit = leastsq(erf, [0, 1, 1, 0, 0], (loc, cmd[:,0]))[0]
-        yFit = leastsq(erf, [0, 1, 1, 0, 0], (loc, cmd[:,1]))[0]
+        if loc.shape[0] < 6:
+            raise Exception("Calibration only detected %d spots; this is not enough." % loc.shape[0])
+
+        ## fit linear parameters first
+        xFit = leastsq(erf1, [0, 0, 0], (loc, cmd[:,0]))[0]
+        yFit = leastsq(erf1, [0, 0, 0], (loc, cmd[:,1]))[0]
+        #print "fit stage 1:", xFit, yFit
+        
+        ## then fit the parabolic equations, using the linear fit as the seed
+        xFit = leastsq(erf2, list(xFit)+[0, 0], (loc, cmd[:,0]))[0]
+        yFit = leastsq(erf2, list(yFit)+[0, 0], (loc, cmd[:,1]))[0]
+        #print "fit stage 2:", xFit, yFit
+        #xFit = list(xFit)+[0,0]
+        #yFit = list(yFit)+[0,0]
+        
         return (list(xFit), list(yFit))
 
     def spotSize(self, frame):
@@ -322,58 +402,67 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         camParams = self.dev.getCameraConfig(camera)        
         
-        duration = 4.0
+        duration = self.ui.scanDurationSpin.value()
         rate = 10000
         nPts = int(rate * duration)
         sweeps = 20
 
         #cameraTrigger = ones(nPts, dtype=byte)
 
-        (cmdMin, cmdMax) = self.dev.config['commandLimits']
-        cmdRange = cmdMax - cmdMin
-        xCommand = fromfunction(lambda i: cmdMin + ((cmdRange * i * float(sweeps) / nPts) % cmdRange), (nPts,), dtype=float)
+        ##(cmdMin, cmdMax) = self.dev.config['commandLimits']
+        xRange = (self.ui.xMinSpin.value(), self.ui.xMaxSpin.value())
+        yRange = (self.ui.yMinSpin.value(), self.ui.yMaxSpin.value())
+        xDiff = xRange[1] - xRange[0]
+        yDiff = yRange[1] - yRange[0]
+        
+        xCommand = np.fromfunction(lambda i: xRange[0] + ((xDiff * i * float(sweeps) / nPts) % xDiff), (nPts,), dtype=float)
         xCommand[-1] = 0.0
-        yCommand = empty((nPts,), dtype=float)
+        yCommand = np.empty((nPts,), dtype=float)
         start = 0
         for i in range(sweeps):
             stop = start + (nPts / sweeps)
-            yCommand[start:stop] = cmdMin + cmdRange * (float(i)/(sweeps-1))
+            yCommand[start:stop] = yRange[0] + yDiff * (float(i)/(sweeps-1))
             start = stop
         yCommand[-1] = 0.0
         daqName = self.dev.config['XAxis'][0]
 
         ## Record 10 camera frames with the shutter closed 
+        #print "parameters:", camParams
         cmd = {
-            'protocol': {'duration': 0.0},
-            camera: {'record': True, 'minFrames': 10, 'params': camParams, 'pushState': 'scanProt', 'popState': 'scanProt'},  ## binning/params are specific for QuantEM512
+            'protocol': {'duration': 0.0, 'timeout': 5.0},
+            camera: {'record': True, 'minFrames': 10, 'params': camParams, 'pushState': 'scanProt'}, 
             laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
+        #print "\n\n====> Record background\n"
         task = lib.Manager.getManager().createTask(cmd)
         task.execute()
         result = task.getResult()
         ## pull result, convert to ndarray float, take average over all frames
-        background = result[camera]['frames'].view(ndarray).astype(float).mean(axis=0)
+        background = result[camera]['frames'].view(np.ndarray).astype(float).mean(axis=0)
+        #print "Background shape:", result[camera]['frames'].shape
         
         ## Record full scan.
         cmd = {
-            'protocol': {'duration': duration},
+            'protocol': {'duration': duration, 'timeout': duration+5.0},
             camera: {'record': True, 'triggerProtocol': True, 'params': camParams, 'channels': {
                 'exposure': {'record': True}, 
                 #'trigger': {'preset': 0, 'command': cameraTrigger}
                 },
                 #'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3, 
-                'pushState': 'scanProt', 'popState': 'scanProt'},
-            laser: {'Shutter': {'preset': 1, 'holding': 0}},
+                'popState': 'scanProt'},
+            laser: {'Shutter': {'preset': 0, 'holding': 0, 'command': np.ones(len(xCommand), dtype=byte)}},
             #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
             self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},
             daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}
         }
-
+        #print "\n\n====> Scan\n"
         task = lib.Manager.getManager().createTask(cmd)
         task.execute()
         result = task.getResult()
 
         frames = result[camera]['frames']
+        #print "scan shape:", frames.shape
+        #print "parameters:", camParams
         
         ## Generate a list of the scanner command values for each frame
         positions = []

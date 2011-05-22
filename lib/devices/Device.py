@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 import time, traceback, sys
-#import threading
 from PyQt4 import QtCore, QtGui
-from lib.util.Mutex import Mutex
-#from lib.util.Mutex import Mutex
-from lib.util.debug import *
+from Mutex import Mutex
+from debug import *
 
 class Device(QtCore.QObject):
     """Abstract class defining the standard interface for Device subclasses."""
@@ -111,6 +109,9 @@ class DeviceTask:
         self.stop(abort=True)
     
 class ProtocolGui(QtGui.QWidget):
+    
+    sigSequenceChanged = QtCore.Signal(object)
+    
     def __init__(self, dev, prot):
         QtGui.QWidget.__init__(self)
         self.dev = dev
@@ -120,16 +121,22 @@ class ProtocolGui(QtGui.QWidget):
         
     def enable(self):
         if not self._PGConnected:
-            QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)        ## called at the beginning of a protocol/sequence
-            QtCore.QObject.connect(self.prot, QtCore.SIGNAL('taskStarted'), self.taskStarted)     ## called at the beginning of all protocol runs
-            QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolFinished'), self.protocolFinished) ## called at the end of a protocol/sequence
+            #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)        ## called at the beginning of a protocol/sequence
+            #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('taskStarted'), self.taskStarted)     ## called at the beginning of all protocol runs
+            #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolFinished'), self.protocolFinished) ## called at the end of a protocol/sequence
+            self.prot.sigProtocolStarted.connect(self.protocolStarted)
+            self.prot.sigTaskStarted.connect(self.taskStarted)
+            self.prot.sigProtocolFinished.connect(self.protocolFinished)
             self._PGConnected = True
         
     def disable(self):
         if self._PGConnected:
-            QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)
-            QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('taskStarted'), self.taskStarted)
-            QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolFinished'), self.protocolFinished)
+            #QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)
+            #QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('taskStarted'), self.taskStarted)
+            #QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolFinished'), self.protocolFinished)
+            self.prot.sigProtocolStarted.disconnect(self.protocolStarted)
+            self.prot.sigTaskStarted.disconnect(self.taskStarted)
+            self.prot.sigProtocolFinished.disconnect(self.protocolFinished)
             self._PGConnected = False
         
     def saveState(self):

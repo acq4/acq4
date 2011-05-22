@@ -1,0 +1,2 @@
+The Manager Module
+==================

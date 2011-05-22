@@ -3,9 +3,9 @@ from PyQt4 import QtCore, QtGui
 from ProtocolTemplate import *
 from lib.devices.DAQGeneric.protoGUI import DAQGenericProtoGui
 from lib.devices.Device import ProtocolGui
-from lib.util.WidgetGroup import *
+from WidgetGroup import *
 from numpy import ndarray
-from pyqtgraph.graphicsItems import InfiniteLine
+from pyqtgraph.graphicsItems import InfiniteLine, VTickGroup
 #from PyQt4 import Qwt5 as Qwt
 
 class CameraProtoGui(DAQGenericProtoGui):
@@ -40,8 +40,8 @@ class CameraProtoGui(DAQGenericProtoGui):
         conf = self.dev.camConfig
         #if 'exposeChannel' not in conf:
             #self.ui.exposureGroupBox.hide()
-        if 'triggerInChannel' not in conf:
-            self.ui.triggerGroupBox.hide()
+        #if 'triggerInChannel' not in conf:
+            #self.ui.triggerGroupBox.hide()
         #if 'triggerOutChannel' not in conf:
             #self.ui.triggerCheck.hide()
             
@@ -54,12 +54,17 @@ class CameraProtoGui(DAQGenericProtoGui):
             item = self.ui.triggerModeCombo.addItem(m)
         
         self.vLines = []
-        l = InfiniteLine(self.plots['trigger'])
-        self.vLines.append(l)
-        l = InfiniteLine(self.plots['exposure'])
-        self.vLines.append(l)
-        self.plots['trigger'].addItem(self.vLines[0])
-        self.plots['exposure'].addItem(self.vLines[1])
+        if 'trigger' in self.plots:
+            l = InfiniteLine(self.plots['trigger'])
+            self.vLines.append(l)
+            self.plots['trigger'].addItem(self.vLines[0])
+        if 'exposure' in self.plots:
+            l = InfiniteLine(self.plots['exposure'])
+            self.vLines.append(l)
+            self.plots['exposure'].addItem(self.vLines[1])
+            
+        self.frameTicks = VTickGroup(view=self.ui.imageView.ui.roiPlot)
+        self.frameTicks.setYRange([0.8, 1.0], relative=True)
         
         #self.roiRect = QtGui.QGraphicsRectItem()
         #self.cameraModule = None
@@ -69,8 +74,11 @@ class CameraProtoGui(DAQGenericProtoGui):
         #self.ui.imageView.ui.roiPlot.registerPlot(self.dev.name + '.ROI')
         
         #QtCore.QObject.connect(self.ui.recordExposeCheck, QtCore.SIGNAL('clicked()'), self.recordExposeClicked)
-        QtCore.QObject.connect(self.ui.imageView, QtCore.SIGNAL('timeChanged'), self.timeChanged)
-        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolPaused'), self.protocolPaused)
+        #QtCore.QObject.connect(self.ui.imageView, QtCore.SIGNAL('timeChanged'), self.timeChanged)
+        self.ui.imageView.sigTimeChanged.connect(self.timeChanged)
+        
+        #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolPaused'), self.protocolPaused)
+        self.prot.sigProtocolPaused.connect(self.protocolPaused)
         #QtCore.QObject.connect(self.ui.imageView.ui.roiBtn, QtCore.SIGNAL('clicked'), self.connectROI)
         
         
@@ -143,6 +151,8 @@ class CameraProtoGui(DAQGenericProtoGui):
                 print "No images returned from camera protocol."
             else:
                 self.ui.imageView.setImage(result['frames'])
+                #print "  frame times:", list(result['frames'].xvals('Time'))
+                self.frameTicks.setXVals(result['frames'].xvals('Time'))
                 
         DAQGenericProtoGui.handleResult(self, result['channels'], params)
         #if state['displayExposureCheck'] and 'expose' in result and result['expose'] is not None:
@@ -158,5 +168,7 @@ class CameraProtoGui(DAQGenericProtoGui):
         #daq = self.dev.config['exposeChannel'][0]
         #self.prot.getDevice(daq)
         
-        
+    def quit(self):
+        self.ui.imageView.close()
+        DAQGenericProtoGui.quit(self)
         

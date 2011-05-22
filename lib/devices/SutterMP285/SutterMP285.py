@@ -2,11 +2,14 @@
 from __future__ import with_statement
 from lib.devices.Device import *
 import serial, struct
-from lib.util.Mutex import Mutex, MutexLocker
+from Mutex import Mutex, MutexLocker
 from debug import *
 #import pdb
 
 class SutterMP285(Device):
+    
+    sigPositionChanged = QtCore.Signal(object)
+    
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.lock = Mutex(QtCore.QMutex.Recursive)
@@ -15,7 +18,8 @@ class SutterMP285(Device):
         self.mThread = SutterMP285Thread(self)
         self.pos = [0, 0, 0]
 	#self.posxyz = [0, 0, 0];
-        QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('positionChanged'), self.posChanged)
+        #QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('positionChanged'), self.posChanged)
+        self.mThread.sigPositionChanged.connect(self.posChanged)
         #QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('buttonChanged'), self.btnChanged)
         self.mThread.start()
         
@@ -35,7 +39,8 @@ class SutterMP285(Device):
 	    rel[:len(data['rel'])] = [data['rel'][i] * self.scale for i in range(len(data))]
         #print "SutterMP285: posChanged emit.."
 	#print "position change:", rel, self.pos
-        self.emit(QtCore.SIGNAL('positionChanged'), {'rel': rel, 'abs': self.pos[:]})
+        #self.emit(QtCore.SIGNAL('positionChanged'), {'rel': rel, 'abs': self.pos[:]})
+        self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
         #print "SutterMP285: posChanged done"
         
     def getPosition(self):
@@ -58,7 +63,8 @@ class SMP285Interface(QtGui.QLabel):
         QtGui.QWidget.__init__(self)
         self.win = win
         self.dev = dev
-        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.update)
+        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('positionChanged'), self.update)
+        self.dev.sigPositionChanged.connect(self.update)
         self.update()
         
     def update(self):
@@ -69,6 +75,9 @@ class SMP285Interface(QtGui.QLabel):
     
     
 class SutterMP285Thread(QtCore.QThread):
+    
+    sigPositionChanged = QtCore.Signal(object)
+    
     def __init__(self, dev):
         QtCore.QThread.__init__(self)
         self.lock = Mutex(QtCore.QMutex.Recursive)
@@ -100,7 +109,8 @@ class SutterMP285Thread(QtCore.QThread):
 		self.pos = newPos
 		
                 if any(change):
-                    self.emit(QtCore.SIGNAL('positionChanged'), {'rel': change, 'abs': self.pos})
+                    #self.emit(QtCore.SIGNAL('positionChanged'), {'rel': change, 'abs': self.pos})
+                    self.sigPositionChanged.emit({'rel': change, 'abs': self.pos})
 		
                         
             self.lock.lock()

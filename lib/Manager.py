@@ -21,18 +21,21 @@ import os.path as osp
 d = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path = [osp.join(d, 'lib', 'util')] + sys.path + [d]
 
-
-
-import time, atexit, weakref
+import time, atexit, weakref, reload
 from PyQt4 import QtCore, QtGui
-from DataManager import *
-import lib.util.ptime as ptime
-from lib.util import configfile
-from lib.util.Mutex import Mutex
-from lib.util.debug import *
+if not hasattr(QtCore, 'Signal'):
+    QtCore.Signal = QtCore.pyqtSignal
+    QtCore.Slot = QtCore.pyqtSlot
+
+import DataManager
+from Interfaces import *
+import ptime
+import configfile
+from Mutex import Mutex
+from debug import *
 import getopt, glob
 import ptime
-#import pdb
+from advancedTypes import OrderedDict
 
 ### All other modules can use this function to get the manager instance
 def getManager():
@@ -40,17 +43,26 @@ def getManager():
         raise Exception("No manager created yet")
     return Manager.single
 
-
+def __reload__(old):
+    Manager.CREATED = old['Manager'].CREATED
+    Manager.single = old['Manager'].single
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
       - Loading/configuring device modules and storing their handles
       - Managing the device rack GUI
       - Creating protocol task handles
-      - Loading interface modules and storing their handles
+      - Loading gui modules and storing their handles
       - Creating and managing DirectoryHandle objects
       - Providing unified timestamps
       - Making sure all devices/modules are properly shut down at the end of the program"""
+      
+    sigConfigChanged = QtCore.Signal()
+    sigModulesChanged = QtCore.Signal() 
+    sigModuleHasQuit = QtCore.Signal(object) ## (module name)
+    sigCurrentDirChanged = QtCore.Signal(object, object, object) # (file, change, args)
+    sigBaseDirChanged = QtCore.Signal()
+    
     CREATED = False
     single = None
     
@@ -81,12 +93,14 @@ Valid options are:
         self.config = OrderedDict()
         self.definedModules = OrderedDict()
         #self.devRack = None
-        self.dataManager = DataManager()
+        #self.dataManager = DataManager()
         self.currentDir = None
         self.baseDir = None
-        self.interface = None
+        self.gui = None
         self.shortcuts = []
         self.disableDevs = []
+        
+        self.interfaceDir = InterfaceDirectory()        
         
         ## Handle command line options
         loadModules = []
@@ -126,49 +140,49 @@ Valid options are:
             if setStorageDir is not None:
                 self.setCurrentDir(setStorageDir)
             if loadManager:
-                mm = self.loadModule(module='Manager', name='Manager', config={})
-                self.createWindowShortcut('F1', mm.win)
+                #mm = self.loadModule(module='Manager', name='Manager', config={})
+                self.showGUI()
+                self.createWindowShortcut('F1', self.gui.win)
             for m in loadModules:
                 try:
                     self.loadDefinedModule(m)
                 except:
                     if not loadManager:
-                        self.loadModule(module='Manager', name='Manager', config={})
+                        self.showGUI()
+                        #self.loadModule(module='Manager', name='Manager', config={})
                     raise
                     
         except:
             printExc("\nError while acting on command line options: (but continuing on anyway..)")
             
             
-        win = QtGui.QApplication.instance().activeWindow()
+        #win = QtGui.QApplication.instance().activeWindow()
+        if len(self.modules) == 0:
+            self.quit()
+            raise Exception("No modules loaded during startup, exiting now.")
+        win = self.modules[self.modules.keys()[0]].window()
         #if win is None:   ## Breaks on some systems..
             #raise Exception("No GUI windows created during startup, exiting now.")
         #print "active window:", win
         self.quitShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+q'), win)
         self.quitShortcut.setContext(QtCore.Qt.ApplicationShortcut)
-        QtCore.QObject.connect(self.quitShortcut, QtCore.SIGNAL('activated()'), self.quit)
+        self.reloadShortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+r'), win)
+        self.reloadShortcut.setContext(QtCore.Qt.ApplicationShortcut)
+        self.quitShortcut.activated.connect(self.quit)
+        self.reloadShortcut.activated.connect(self.reloadAll)
         
         #QtCore.QObject.connect(QtGui.QApplication.instance(), QtCore.SIGNAL('lastWindowClosed()'), self.lastWindowClosed)
             
             
             
-
     def readConfig(self, configFile):
         """Read configuration file, create device objects, add devices to list"""
         print "============= Starting Manager configuration from %s =================" % configFile
         cfg = configfile.readConfigFile(configFile)
-        #self.config = cfg
-        
-        #if not cfg.has_key('devices'):
-            #raise Exception('configuration file %s has no "devices" section.' % configFile)
             
         ## read modules, devices, and stylesheet out of config
         self.configure(cfg)
         
-        #if 'configurations' in cfg:
-            #self.setCurrentDir('')
-        #else:
-            #raise Exception("No configuration found for data management!")
         print "\n============= Manager configuration complete =================\n"
         
     def configure(self, cfg):
@@ -233,7 +247,7 @@ Valid options are:
         except:
             printExc("Error while configuring manager:")
         #print self.config
-        self.emit(QtCore.SIGNAL('configChanged'))
+        self.sigConfigChanged.emit()
 
     def listConfigurations(self):
         """Return a list of the named configurations available"""
@@ -295,33 +309,37 @@ Valid options are:
         Ugh. Sorry about the "python module" vs "acq4 module" name collision which I
         should have anticipated."""
         
-        #print 'Loading module "%s" as "%s"...' % (module, name)
+        print 'Loading module "%s" as "%s"...' % (module, name)
         if name in self.modules:
             raise Exception('Module already exists with name "%s"' % name)
         if config is None:
             config = {}
-            
+        
+        #print "  import"
         mod = __import__('lib.modules.%s' % module, fromlist=['*'])
-        if forceReload:
-            ## Reload all .py files in module's directory
-            modDir = os.path.join('lib', 'modules', module)
-            files = glob.glob(os.path.join(modDir, '*.py'))
-            files = [os.path.basename(f[:-3]) for f in files]
-            for f in [module, '__init__']:
-                if f in files:  ## try to rearrange so we load in correct order
-                    files.remove('__init__')
-                    files.append('__init__')
-            modName = 'lib.modules.' + module
-            modNames = [modName + '.' + m for m in files] + [modName]
-            print "RELOAD", modNames
-            for m in modNames:
-                if m in sys.modules:
-                    reload(sys.modules[m])
-            mod = __import__('lib.modules.%s' % module, fromlist=['*'])
+        #if forceReload:
+            ### Reload all .py files in module's directory
+            #modDir = os.path.join('lib', 'modules', module)
+            #files = glob.glob(os.path.join(modDir, '*.py'))
+            #files = [os.path.basename(f[:-3]) for f in files]
+            #for f in [module, '__init__']:
+                #if f in files:  ## try to rearrange so we load in correct order
+                    #files.remove('__init__')
+                    #files.append('__init__')
+            #modName = 'lib.modules.' + module
+            #modNames = [modName + '.' + m for m in files] + [modName]
+            #print "RELOAD", modNames
+            #for m in modNames:
+                #if m in sys.modules:
+                    #reload(sys.modules[m])
+            #mod = __import__('lib.modules.%s' % module, fromlist=['*'])
             
         modclass = getattr(mod, module)
+        #print "  create"
         self.modules[name] = modclass(self, name, config)
-        self.emit(QtCore.SIGNAL('modulesChanged'))
+        #print "  emit"
+        self.sigModulesChanged.emit()
+        #print "  return"
         return self.modules[name]
         
         
@@ -373,9 +391,10 @@ Valid options are:
     def moduleHasQuit(self, mod):
         if mod.name in self.modules:
             del self.modules[mod.name]
-            self.emit(QtCore.SIGNAL('modulesChanged'))
-            self.emit(QtCore.SIGNAL('moduleHasQuit'), mod.name)
+            self.sigModulesChanged.emit()
+            self.sigModuleHasQuit.emit(mod.name)
             #print "Module", mod.name, "has quit"
+
 
 
     def unloadModule(self, name):
@@ -389,14 +408,23 @@ Valid options are:
         ## Module should have called moduleHasQuit already, but just in case:
         if name in self.modules:
             del self.modules[name]
-            self.emit(QtCore.SIGNAL('modulesChanged'))
+            self.sigModulesChanged.emit()
         #print "Unloaded module", name
+
+    def reloadAll(self):
+        """Reload all python code"""
+        path = os.path.split(os.path.abspath(__file__))[0]
+        path = os.path.abspath(os.path.join(path, '..'))
+        print "\n---- Reloading all libraries under %s ----" % path
+        reload.reloadAll(prefix=path, debug=True)
+        print "Done reloading.\n"
+        
 
     def createWindowShortcut(self, keys, win):
         try:
             sh = QtGui.QShortcut(QtGui.QKeySequence(keys), win)
             sh.setContext(QtCore.Qt.ApplicationShortcut)
-            QtCore.QObject.connect(sh, QtCore.SIGNAL('activated()'), win.raise_)
+            sh.activated.connect(lambda *args: win.raise_)
         except:
             printExc("Error creating shortcut '%s':" % keys)
         
@@ -410,10 +438,11 @@ Valid options are:
     def createTask(self, cmd):
         return Task(self, cmd)
 
-    def showInterface(self):
-        if self.interface is None:
-            self.interface = self.loadModule('Manager', 'Manager', {})
-        self.interface.show()
+    def showGUI(self):
+        """Show the Manager GUI"""
+        if self.gui is None:
+            self.gui = self.loadModule('Manager', 'Manager', {})
+        self.gui.show()
     
     
     def getCurrentDir(self):
@@ -423,22 +452,30 @@ Valid options are:
 
     def setCurrentDir(self, d):
         if self.currentDir is not None:
-            QtCore.QObject.disconnect(self.currentDir, QtCore.SIGNAL('changed'), self.currentDirChanged)
+            try:
+                self.currentDir.sigChanged.disconnect(self.currentDirChanged)
+            except TypeError:
+                pass
             
             
         if isinstance(d, basestring):
             self.currentDir = self.baseDir.getDir(d, create=True)
-        elif isinstance(d, DirHandle):
+        elif isinstance(d, DataManager.DirHandle):
             self.currentDir = d
         else:
             raise Exception("Invalid argument type: ", type(d), d)
-        QtCore.QObject.connect(self.currentDir, QtCore.SIGNAL('changed'), self.currentDirChanged)
-        self.emit(QtCore.SIGNAL('currentDirChanged'))
+        
+        #self.currentDir.sigChanged.connect(self.currentDirChanged)
+        #self.sigCurrentDirChanged.emit()
+        self.currentDir.sigChanged.connect(self.currentDirChanged)
+        #self.emit(QtCore.SIGNAL('currentDirChanged'))
+        self.sigCurrentDirChanged.emit(None, None, None)
 
-    def currentDirChanged(self, *args):
+    def currentDirChanged(self, fh, change=None, args=()):
         """Handle situation where currentDir is moved or renamed"""
-        #print "Changed:", args
-        self.emit(QtCore.SIGNAL('currentDirChanged'), *args)
+        #self.sigCurrentDirChanged.emit(*args)
+        #self.emit(QtCore.SIGNAL('currentDirChanged'), fh, change, args)
+        self.sigCurrentDirChanged.emit(fh, change, args)
             
             
     def getBaseDir(self):
@@ -449,23 +486,26 @@ Valid options are:
     def setBaseDir(self, d):
         if isinstance(d, basestring):
             self.baseDir = self.dirHandle(d, create=False)
-        elif isinstance(d, DirHandle):
+        elif isinstance(d, DataManager.DirHandle):
             self.baseDir = d
         else:
             raise Exception("Invalid argument type: ", type(d), d)
         if not self.baseDir.isManaged():
             self.baseDir.createIndex()
 
-        self.emit(QtCore.SIGNAL('baseDirChanged'))
+        #self.emit(QtCore.SIGNAL('baseDirChanged'))
+        self.sigBaseDirChanged.emit()
         self.setCurrentDir(self.baseDir)
 
     def dirHandle(self, d, create=False):
         """Return a directory handle for d."""
-        return self.dataManager.getDirHandle(d, create)
+        #return self.dataManager.getDirHandle(d, create)
+        return DataManager.getDirHandle(d, create=create)
 
     def fileHandle(self, d):
         """Return a file or directory handle for d"""
-        return self.dataManager.getHandle(d)
+        #return self.dataManager.getHandle(d)
+        return DataManager.getFileHandle(d)
         
     def lockReserv(self):
         """Lock the reservation system so that only one task may reserve its set of devices at a time.
@@ -485,6 +525,41 @@ Valid options are:
         cd = self.getCurrentDir()
         cd.logMsg(msg, tags)
 
+        
+        
+    ## These functions just wrap the functionality of an InterfaceDirectory
+    def declareInterface(self, *args, **kargs):  ## args should be name, [types..], object  
+        return self.interfaceDir.declareInterface(*args, **kargs)
+        
+    def removeInterface(self, *args, **kargs):
+        return self.interfaceDir.removeInterface(*args, **kargs)
+        
+    def listInterfaces(self, *args, **kargs):
+        return self.interfaceDir.listInterfaces(*args, **kargs)
+        
+    def getInterface(self, *args, **kargs):
+        return self.interfaceDir.getInterface(*args, **kargs)
+        
+    
+    def suggestedDirFields(self, file):
+        """Given a DirHandle with a dirType, suggest a set of meta-info fields to use."""
+        fields = OrderedDict()
+        if isinstance(file, DataManager.DirHandle):
+            info = file.info()
+            if 'dirType' in info:
+                #infoKeys.remove('dirType')
+                dt = info['dirType']
+                if dt in self.config['folderTypes']:
+                    fields = self.config['folderTypes'][dt]['info']
+        
+        if 'notes' not in fields:
+            fields['notes'] = 'text', 5
+        if 'important' not in fields:
+            fields['important'] = 'bool'
+        
+        return fields
+        
+        
     def quit(self):
         """Nicely request that all devices and modules shut down"""
         #app = QtGui.QApplication.instance()
@@ -575,7 +650,10 @@ class Task:
             self.tasks[devName] = task
         
         
-    def execute(self, block=True):
+    def execute(self, block=True, processEvents=True):
+        """Start the protocol task.
+        If block is true, then the function blocks until the task is complete.
+        if processEvents is true, then Qt events are processed while waiting for the task to complete."""
         self.lockedDevs = []
         self.startedDevs = []
         self.stopped = False
@@ -663,8 +741,27 @@ class Task:
             
             ## Wait until all tasks are done
             #print "Waiting for all tasks to finish.."
+            timeout = self.cfg.get('timeout', None)
+            
+            lastProcess = ptime.time()
+            isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
+            #print "isGuiThread:", isGuiThread
             while not self.isDone():
-                time.sleep(1e-3)
+                now = ptime.time()
+                elapsed = now - self.startTime
+                if timeout is not None and elapsed > timeout:
+                    raise Exception("Protocol timed out (>%0.2fs); aborting." % timeout)
+                if isGuiThread:
+                    if processEvents and now-lastProcess > 20e-3:  ## only process Qt events every 20ms
+                        QtGui.QApplication.processEvents()
+                        lastProcess = ptime.time()
+                    
+                if elapsed < self.cfg['duration']-10e-3:  ## If the protocol duration has not elapsed yet, only wake up every 10ms, and attempt to wake up 5ms before the end
+                    sleep = min(10e-3, self.cfg['duration']-elapsed-5e-3)
+                else:
+                    sleep = 1.0e-3  ## afterward, wake up more quickly so we can respond as soon as the protocol finishes
+                #print "sleep for", sleep
+                time.sleep(sleep)
             #print "all tasks finshed."
             
             self.stop()
@@ -677,12 +774,18 @@ class Task:
         
         
     def isDone(self):
-        if not self.abort:
+        #print "Manager.Task.isDone"
+        if not self.abortRequested:
             t = ptime.time()
             if t - self.startTime < self.cfg['duration']:
+                #print "  not done yet"
                 return False
+            #else:
+                #print "  duration elapsed; start:", self.startTime, "now:", t, "diff:", t-self.startTime, 'duration:', self.cfg['duration']
+        #else:
+            #print "  aborted, checking tasks.."
         d = self.tasksDone()
-        #print "Is done:", d
+        #print "  tasks say:", d
         return d
         
     def tasksDone(self):
@@ -768,3 +871,8 @@ class Task:
         """Stop all tasks, to not attempt to get data."""
         self.stop(abort=True)
         
+        
+
+    
+    
+    

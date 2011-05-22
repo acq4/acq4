@@ -13,12 +13,12 @@ for evaluation are provided in waveforms.py.
 import sys, types, re
 from numpy import *
 import numpy
-from PyQt4 import Qt, QtCore, QtGui
-from lib.util.advancedTypes import OrderedDict
-from lib.util.functions import logSpace
+from PyQt4 import QtCore, QtGui
+from advancedTypes import OrderedDict
+from functions import logSpace
 from GeneratorTemplate import *
 import waveforms
-from lib.util.debug import *
+from debug import *
 
 #import PyQt4.Qwt5 as Qwt
 #from PyQt4.Qwt5.anynumpy import *
@@ -27,6 +27,12 @@ from lib.util.debug import *
 
 
 class StimGenerator(QtGui.QWidget):
+    
+    sigDataChanged = QtCore.Signal()
+    sigStateChanged = QtCore.Signal()
+    sigParametersChanged = QtCore.Signal()
+    sigFunctionChanged = QtCore.Signal()
+    
     """ PyStim creates an object with multiple stimulus channels
     and handles the GUI interface. 
     """
@@ -46,15 +52,21 @@ class StimGenerator(QtGui.QWidget):
         self.cache = {}
         self.cacheRate = None
         self.cacheNPts = None
-        QtCore.QObject.connect(self.ui.functionText, QtCore.SIGNAL('textChanged()'), self.funcChanged)
-        QtCore.QObject.connect(self.ui.paramText, QtCore.SIGNAL('textChanged()'), self.paramChanged)
-        QtCore.QObject.connect(self.ui.updateBtn, QtCore.SIGNAL('clicked()'), self.update)
-        QtCore.QObject.connect(self.ui.autoUpdateCheck, QtCore.SIGNAL('clicked()'), self.autoUpdateClicked)
-        QtCore.QObject.connect(self.ui.errorBtn, QtCore.SIGNAL('clicked()'), self.errorBtnClicked)
-        QtCore.QObject.connect(self.ui.helpBtn, QtCore.SIGNAL('clicked()'), self.helpBtnClicked)
+        #QtCore.QObject.connect(self.ui.functionText, QtCore.SIGNAL('textChanged()'), self.funcChanged)
+        self.ui.functionText.textChanged.connect(self.funcChanged)
+        #QtCore.QObject.connect(self.ui.paramText, QtCore.SIGNAL('textChanged()'), self.paramChanged)
+        self.ui.paramText.textChanged.connect(self.paramChanged)
+        #QtCore.QObject.connect(self.ui.updateBtn, QtCore.SIGNAL('clicked()'), self.update)
+        self.ui.updateBtn.clicked.connect(self.update)
+        #QtCore.QObject.connect(self.ui.autoUpdateCheck, QtCore.SIGNAL('clicked()'), self.autoUpdateClicked)
+        self.ui.autoUpdateCheck.clicked.connect(self.autoUpdateClicked)
+        #QtCore.QObject.connect(self.ui.errorBtn, QtCore.SIGNAL('clicked()'), self.errorBtnClicked)
+        self.ui.errorBtn.clicked.connect(self.errorBtnClicked)
+        #QtCore.QObject.connect(self.ui.helpBtn, QtCore.SIGNAL('clicked()'), self.helpBtnClicked)
+        self.ui.helpBtn.clicked.connect(self.helpBtnClicked)
 
     def widgetGroupInterface(self):
-        return ('stateChanged', StimGenerator.saveState, StimGenerator.loadState)
+        return (self.sigStateChanged, StimGenerator.saveState, StimGenerator.loadState)
 
     def setTimeScale(self, s):
         if self.timeScale != s:
@@ -79,7 +91,8 @@ class StimGenerator(QtGui.QWidget):
 
     def update(self):
         if self.test():
-            self.emit(QtCore.SIGNAL('dataChanged'))
+            #self.emit(QtCore.SIGNAL('dataChanged'))
+            self.sigDataChanged.emit()
         
     def autoUpdate(self):
         if self.ui.autoUpdateCheck.isChecked():
@@ -87,7 +100,8 @@ class StimGenerator(QtGui.QWidget):
             
     def autoUpdateClicked(self):
         self.autoUpdate()
-        self.emit(QtCore.SIGNAL('stateChanged'))        
+        #self.emit(QtCore.SIGNAL('stateChanged'))        
+        self.sigStateChanged.emit()        
         
     def errorBtnClicked(self):
         self.ui.errorText.setVisible(self.ui.errorBtn.isChecked())
@@ -103,8 +117,10 @@ class StimGenerator(QtGui.QWidget):
         self.clearCache()
         if self.test():
             self.autoUpdate()
-            self.emit(QtCore.SIGNAL('functionChanged'))
-        self.emit(QtCore.SIGNAL('stateChanged'))
+            #self.emit(QtCore.SIGNAL('functionChanged'))
+            self.sigFunctionChanged.emit()
+        #self.emit(QtCore.SIGNAL('stateChanged'))
+        self.sigStateChanged.emit()
         
         
     def paramChanged(self):
@@ -113,8 +129,10 @@ class StimGenerator(QtGui.QWidget):
         self.cacheOk = False
         if self.test():
             self.autoUpdate()
-        self.emit(QtCore.SIGNAL('parametersChanged'))
-        self.emit(QtCore.SIGNAL('stateChanged'))
+        #self.emit(QtCore.SIGNAL('parametersChanged'))
+        self.sigParametersChanged.emit()
+        #self.emit(QtCore.SIGNAL('stateChanged'))
+        self.sigStateChanged.emit()
         
     def functionString(self):
         return str(self.ui.functionText.toPlainText())
@@ -154,13 +172,13 @@ class StimGenerator(QtGui.QWidget):
             self.ui.autoUpdateCheck.setChecked(state['autoUpdate'])
     
     def listSequences(self):
-        """ return an ordered dict of the sequence parameter names and lengths in the same order as that
+        """ return an ordered dict of the sequence parameter names and values in the same order as that
         of the axes returned by get Sequence"""
         ps = self.paramSpace()
-        l = [(k, len(ps[k][1])) for k in ps.keys() if ps[k][1] != None]
+        l = [(k, (ps[k][1]*self.scale)+self.offset) for k in ps.keys() if ps[k][1] != None]
         d = OrderedDict(l)
         
-        ## d should look like: { 'param1': length,  'param2': length, ...  }
+        ## d should look like: { 'param1': [val1, val2, ...],  ...  }
         return d
         
     def flatParamSpace(self):
@@ -274,7 +292,7 @@ def seqParse(seqStr):
     ## Match list format: "[val1,val2,...]"
     m = re.match(r'\[[\deE\-\.,]+\]$', seqStr)
     if m is not None:
-        seq = eval(seqStr)
+        seq = array(eval(seqStr))
         return (name, single, seq)
     
     ## Match like this: "start:stop/length:opts" or "start:stop:step:opts"

@@ -9,7 +9,7 @@ of a large group of widgets.
 """
 
 from PyQt4 import QtCore, QtGui
-import weakref
+import weakref, inspect
 
 def splitterState(w):
     s = str(w.saveState().toPercentEncoding())
@@ -31,10 +31,19 @@ def restoreSplitter(w, s):
 def comboState(w):
     ind = w.currentIndex()
     data = w.itemData(ind)
-    if not data.isValid():
+    #if not data.isValid():
+    if data is not None:
+        try:
+            if not data.isValid():
+                data = None
+            else:
+                data = data.toInt()[0]
+        except AttributeError:
+            pass
+    if data is None:
         return w.itemText(ind)
     else:
-        return data.toInt()[0]    
+        return data
     
 def setComboState(w, v):
     if type(v) is int:
@@ -49,19 +58,19 @@ class WidgetGroup(QtCore.QObject):
     """This class takes a list of widgets and keeps an internal record of their state which is always up to date. Allows reading and writing from groups of widgets simultaneously."""
     
     ## List of widget types which can be handled by WidgetGroup.
-    ## The value for each type is a tuple (change signal, get function, set function, [auto-add children])
-    ## The change signal should be a signal that is emitted any time the state of the widget changes, not just 
+    ## The value for each type is a tuple (change signal function, get function, set function, [auto-add children])
+    ## The change signal function that takes an object and returns a signal that is emitted any time the state of the widget changes, not just 
     ##   when it is changed by user interaction. (for example, 'clicked' is not a valid signal here)
     ## If the change signal is None, the value of the widget is not cached.
     ## Custom widgets not in this list can be made to work with WidgetGroup by giving them a 'widgetGroupInterface' method
     ##   which returns the tuple.
     classes = {
         QtGui.QSpinBox: 
-            ('valueChanged(int)', 
+            (lambda w: w.valueChanged, 
             QtGui.QSpinBox.value, 
             QtGui.QSpinBox.setValue),
         QtGui.QDoubleSpinBox: 
-            ('valueChanged(double)', 
+            (lambda w: w.valueChanged, 
             QtGui.QDoubleSpinBox.value, 
             QtGui.QDoubleSpinBox.setValue),
         QtGui.QSplitter: 
@@ -70,15 +79,15 @@ class WidgetGroup(QtCore.QObject):
             restoreSplitter,
             True),
         QtGui.QCheckBox: 
-            ('stateChanged(int)',
+            (lambda w: w.stateChanged,
             QtGui.QCheckBox.isChecked,
             QtGui.QCheckBox.setChecked),
         QtGui.QComboBox:
-            ('currentIndexChanged(int)',
+            (lambda w: w.currentIndexChanged,
             comboState,
             setComboState),
         QtGui.QGroupBox:
-            ('toggled(bool)',
+            (lambda w: w.toggled,
             QtGui.QGroupBox.isChecked,
             QtGui.QGroupBox.setChecked,
             True),
@@ -91,24 +100,28 @@ class WidgetGroup(QtCore.QObject):
             #PlotWidget.saveState,
             #PlotWidget.restoreState),
         QtGui.QLineEdit:
-            ('editingFinished()',
+            (lambda w: w.editingFinished,
             lambda w: str(w.text()),
             QtGui.QLineEdit.setText),
         QtGui.QRadioButton:
-            ('toggled(bool)',
+            (lambda w: w.toggled,
             QtGui.QRadioButton.isChecked,
             QtGui.QRadioButton.setChecked),
         QtGui.QSlider:
-            ('valueChanged(int)',
+            (lambda w: w.valueChanged,
             QtGui.QSlider.value,
             QtGui.QSlider.setValue),
     }
     
+    sigChanged = QtCore.Signal(str, object)
+    
     
     def __init__(self, widgetList):
         """Initialize WidgetGroup, adding specified widgets into this group.
-        widgetList can be either a list of widget specifications (widget, [name], [scale])
-        or it can be any QObject, and all compatible child widgets will be added recursively.
+        widgetList can be: 
+         - a list of widget specifications (widget, [name], [scale])
+         - a dict of name: widget pairs
+         - any QObject, and all compatible child widgets will be added recursively.
         
         The 'scale' parameter for each widget allows QSpinBox to display a different value than the value recorded
         in the group state (for example, the program may set a spin box value to 100e-6 and have it displayed as 100 to the user)
@@ -123,6 +136,9 @@ class WidgetGroup(QtCore.QObject):
         elif isinstance(widgetList, list):
             for w in widgetList:
                 self.addWidget(*w)
+        elif isinstance(widgetList, dict):
+            for name, w in widgetList.iteritems():
+                self.addWidget(w, name)
         else:
             raise Exception("Wrong argument type %s" % type(widgetList))
         
@@ -131,6 +147,8 @@ class WidgetGroup(QtCore.QObject):
             raise Exception("Widget type %s not supported by WidgetGroup" % type(w))
         if name is None:
             name = str(w.objectName())
+        if name == '':
+            raise Exception("Cannot add widget '%s' without a name." % str(w))
         self.widgetList[w] = name
         self.scales[w] = scale
         self.readWidget(w)
@@ -141,7 +159,9 @@ class WidgetGroup(QtCore.QObject):
             signal = w.widgetGroupInterface()[0]
             
         if signal is not None:
-            QtCore.QObject.connect(w, QtCore.SIGNAL(signal), self.mkChangeCallback(w))
+            if inspect.isfunction(signal) or inspect.ismethod(signal):
+                signal = signal(w)
+            signal.connect(self.mkChangeCallback(w))
         else:
             self.uncachedWidgets[w] = None
        
@@ -201,6 +221,7 @@ class WidgetGroup(QtCore.QObject):
         if v1 != v2:
             #print "widget", n, " = ", v2
             self.emit(QtCore.SIGNAL('changed'), self.widgetList[w], v2)
+            self.sigChanged.emit(self.widgetList[w], v2)
         
     def state(self):
         for w in self.uncachedWidgets:

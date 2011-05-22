@@ -2,13 +2,16 @@
 from __future__ import with_statement
 from lib.devices.Device import *
 from metaarray import MetaArray, axis
-from lib.util.Mutex import Mutex, MutexLocker
+from Mutex import Mutex, MutexLocker
 from numpy import *
 from protoGUI import *
 from debug import *
 from SpinBox import *
 
 class DAQGeneric(Device):
+    
+    sigHoldingChanged = QtCore.Signal(object, object)
+    
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self._DGLock = Mutex(QtCore.QMutex.Recursive)
@@ -46,7 +49,8 @@ class DAQGeneric(Device):
             #print "set", chan, self._DGHolding[channel]*scale
             val = self._DGHolding[channel]*scale
             daqDev.setChannelValue(chan, val, block=False)
-            self.emit(QtCore.SIGNAL('holdingChanged'), channel, val)
+            #self.emit(QtCore.SIGNAL('holdingChanged'), channel, val)
+            self.sigHoldingChanged.emit(channel, val)
         
     def getChanHolding(self, chan):
         with self._DGLock:
@@ -67,6 +71,8 @@ class DAQGeneric(Device):
                 scale = 1.0            
             return daqDev.getChannelValue(chan, mode=mode)/scale
 
+    def reconfigureChannel(self, chan, config):
+        self._DGConfig[chan].update(config)
         
     def deviceInterface(self, win):
         """Return a widget with a UI to put in the device rack"""
@@ -124,6 +130,7 @@ class DAQGenericTask(DeviceTask):
         with MutexLocker(self.dev._DGLock):
             #self.daqTasks = {}
             self.initialState = {}
+            self.holdingVals = {}
             for ch in self._DAQCmd:
                 dev = self.dev.dm.getDevice(self.dev._DGConfig[ch]['channel'][0])
                 if 'preset' in self._DAQCmd[ch]:
@@ -132,6 +139,10 @@ class DAQGenericTask(DeviceTask):
                     self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
                 if 'recordInit' in self._DAQCmd[ch] and self._DAQCmd[ch]['recordInit']:
                     self.initialState[ch] = self.dev.getChannelValue(ch)
+            for ch in self.dev._DGConfig:
+                ## record current holding value for all output channels (even those that were not buffered for this task)
+                if self.dev._DGConfig[ch]['type'] in ['ao', 'do']:
+                    self.holdingVals[ch] = self.dev.getChanHolding(ch)
                 
     def createChannels(self, daqTask):
         self.daqTasks = {}
@@ -184,6 +195,7 @@ class DAQGenericTask(DeviceTask):
                     mode = None
                     if len(chConf['channel']) > 2:
                         mode = chConf['channel'][2]
+                    #print "Adding channel %s to DAQ task" % chConf['channel'][1]
                     daqTask.addChannel(chConf['channel'][1], chConf['type'], mode=mode)
                     self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                 #print "  done: ", self.daqTasks.keys()
@@ -214,7 +226,10 @@ class DAQGenericTask(DeviceTask):
             #print "STOP"
             for ch in self.daqTasks:
                 #print "Stop task", ch
-                self.daqTasks[ch].stop(abort=abort)
+                try:
+                    self.daqTasks[ch].stop(abort=abort)
+                except:
+                    printExc("Error while stopping DAQ task:")
             for ch in self._DAQCmd:
                 if 'holding' in self._DAQCmd[ch]:
                     self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
@@ -233,8 +248,10 @@ class DAQGenericTask(DeviceTask):
             result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'][1])
             #prof.mark("get data for channel "+str(ch))
             #print "get data", ch, self.getChanScale(ch), result[ch]['data'].max()
-            result[ch]['data'] = result[ch]['data'] / self.getChanScale(ch)
+            scale = self.getChanScale(ch)
+            result[ch]['data'] = result[ch]['data'] / scale
             result[ch]['units'] = self.getChanUnits(ch)
+            #print "channel", ch, "returned:\n  ", result[ch]
             #prof.mark("scale data for channel "+str(ch))
             #del _DAQCmd[ch]['task']
         #print "RESULT:", result    
@@ -259,7 +276,28 @@ class DAQGenericTask(DeviceTask):
                 print chanList
                 print [a.shape for a in chanList]
                 raise
-            info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'rate': rate, 'numPts': nPts, 'startTime': meta['startTime']}]
+            
+            daqState = {}
+            for ch in self.dev._DGConfig:
+                if ch in result:
+                    daqState[ch] = result[ch]['info']
+                else:
+                    daqState[ch] = {}
+                
+                ## record current holding value for all output channels (even those that were not buffered for this task)    
+                if self.dev._DGConfig[ch]['type'] in ['ao', 'do']:
+                    
+                    daqState[ch]['holding'] = self.holdingVals[ch]
+            
+            info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'DAQ': daqState}]
+            
+            
+            protInfo = self._DAQCmd.copy()  ## copy everything but the command arrays 
+            for ch in protInfo:
+                if 'command' in protInfo[ch]:
+                    del protInfo[ch]['command']
+            info[-1]['Protocol'] = protInfo
+                
             marr = MetaArray(arr, info=info)
             #print marr
             #prof.mark("post-process data")
@@ -288,10 +326,12 @@ class DAQDevGui(QtGui.QWidget):
             l = QtGui.QLabel("%s (%s)" % (ch, chans[ch]['channel'][1]))
             if chans[ch]['type'] == 'ao':
                 hw = SpinBox(value=self.dev.getChanHolding(ch))
-                QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
+                #QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
+                hw.sigValueChanged.connect(self.spinChanged)
             elif chans[ch]['type'] == 'do':
                 hw = SpinBox(value=self.dev.getChanHolding(ch), step=1, bounds=(0,1))
-                QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
+                #QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
+                hw.sigValueChanged.connect(self.spinChanged)
             else:
                 hw = QtGui.QWidget()
             hw.channel = ch
@@ -299,7 +339,8 @@ class DAQDevGui(QtGui.QWidget):
             self.layout.addWidget(l, row, 0)
             self.layout.addWidget(hw, row, 1)
             row += 1
-        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.holdingChanged)
+        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.holdingChanged)
+        self.dev.sigHoldingChanged.connect(self.holdingChanged)
     
     def holdingChanged(self, ch, val):
         self.widgets[ch][1].blockSignals(True)

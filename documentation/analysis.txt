@@ -1,0 +1,15 @@
+
+First, MosaicEditor - The purpose is to get all the images and scans in the right places. Load images - if you select the image in the list in the canvas window you can
+    move and rotate it, as well as adjust its alpha level (using the alpha slider) and contrast (using the markers in the histogram). Any future images you add will have
+    this same transform applied upon adding. Don't worry, all the original position information is saved. If you
+    want to go back to original positions hit "Reset Transform." If you need to move the position of a scan, move an image that goes with it, select that image and
+    hit "copy" then select the scan and hit "paste." 
+    
+    The last thing you need to do is select the Cell directory you are working from, and press 'Load File.' This will load a cell marker into the Canvas. Position
+    this marker over your cell.
+    
+    All of the new position information will be exported to the other analysis modules.
+    
+    Eventually you will be able to do image editing and be able to export images, but this doesn't work yet. Also, Markers aren't implemented yet.
+    
+Second, PhotoStim - This module analyzes maps and stores info to databases.

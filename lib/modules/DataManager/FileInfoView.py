@@ -1,20 +1,24 @@
 # -*- coding: utf-8 -*-
 from FileInfoViewTemplate import *
 from PyQt4 import QtCore, QtGui
-from lib.DataManager import *
+from DataManager import DirHandle
 import lib.Manager as Manager
-import sip
+#import sip
 import time
 import configfile
 from DictView import *
 
 class FocusEventCatcher(QtCore.QObject):
+    
+    sigLostFocus = QtCore.Signal(object)
+    
     def __init__(self):
         QtCore.QObject.__init__(self)
         
     def eventFilter(self, obj, event):
         if event.type() == QtCore.QEvent.FocusOut:
-            self.emit(QtCore.SIGNAL("lostFocus"), obj)
+            #self.emit(QtCore.SIGNAL("lostFocus"), obj)
+            self.sigLostFocus.emit(obj)
         return False
 
 
@@ -28,7 +32,8 @@ class FileInfoView(QtGui.QWidget):
         self.widgets = {}
         self.ui.fileInfoLayout = self.ui.formLayout_2
         self.focusEventCatcher = FocusEventCatcher()
-        QtCore.QObject.connect(self.focusEventCatcher, QtCore.SIGNAL('lostFocus'), self.focusLost)
+        #QtCore.QObject.connect(self.focusEventCatcher, QtCore.SIGNAL('lostFocus'), self.focusLost)
+        self.focusEventCatcher.sigLostFocus.connect(self.focusLost)
         
     def setCurrentFile(self, file):
         #print "=============== set current file ============"
@@ -50,18 +55,8 @@ class FileInfoView(QtGui.QWidget):
         ## Decide on the list of fields to display
         info = file.info()
         infoKeys = info.keys()
-        fields = OrderedDict()
-        if isinstance(file, DirHandle):
-            if 'dirType' in info:
-                infoKeys.remove('dirType')
-                dt = info['dirType']
-                if dt in self.manager.config['folderTypes']:
-                    fields = self.manager.config['folderTypes'][dt]['info']
-        
-        if 'notes' not in fields:
-            fields['notes'] = 'text', 5
-        if 'important' not in fields:
-            fields['important'] = 'bool'
+        #fields = OrderedDict()
+        fields = self.manager.suggestedDirFields(file)
             
         
         ## Generate fields, populate if data exists
@@ -107,8 +102,16 @@ class FileInfoView(QtGui.QWidget):
                 #s = configfile.genString(info[f])
             else:
                 s = str(info[f])
-                if f == '__timestamp__':
-                    s = time.strftime("%Y.%m.%d   %H:%m:%S", time.localtime(float(s)))
+                if isinstance(f, basestring) and 'time' in f.lower() and info[f] > 1e9 and info[f] < 2e9:  ## probably this is a timestamp
+                    try:
+                        t0 = file.parent().info()['__timestamp__']
+                        dt = " [elapsed = %0.3f s]" % (info[f] - t0)
+                    except:
+                        dt = ""
+                        #raise
+                    s = time.strftime("%Y.%m.%d   %H:%M:%S", time.localtime(float(s))) + dt
+                    
+                    
                 w = QtGui.QLabel(s)
             if type(f) is tuple:
                 f = '.'.join(f)
@@ -149,7 +152,10 @@ class FileInfoView(QtGui.QWidget):
         #count = 0
         while self.ui.fileInfoLayout.count() > 0:
             w = self.ui.fileInfoLayout.takeAt(0).widget()
-            sip.delete(w)
+            #sip.delete(w)
+            w.setParent(None)
+            
+            
             #w.setParent(None)
             #count += 1
         #print "removed %d widgets" % count

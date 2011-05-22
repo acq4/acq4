@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 from advancedTypes import OrderedDict
 
@@ -7,6 +8,7 @@ class DictView(QtGui.QTreeWidget):
         self.setData(data)
         self.setColumnCount(2)
         self.setHeaderLabels(['key', 'value'])
+        self.setVerticalScrollMode(self.ScrollPerPixel)
         
     def setData(self, data):
         """data should be a dictionary."""
@@ -34,5 +36,7 @@ class DictView(QtGui.QTreeWidget):
             node = QtGui.QTreeWidgetItem([unicode(name), unicode(v)])
         return node
         
-        
+    def close(self):
+        self.clear()
+        self.setParent(None)
         
