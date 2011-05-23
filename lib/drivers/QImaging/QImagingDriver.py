@@ -590,6 +590,13 @@ class QCameraClass:
                 for y in tuples:
                     params[y[0]]= y[1]
                 del params[x]
+            elif x == 'binning':
+                params['binningX'] = params[x][0]
+                del params[x]
+            elif x == 'binningY':
+                params['binningX'] = params[x]
+                del params[x]
+                
                 #return self.setParams(newDict)
             
         #changeTuple = {}
@@ -600,6 +607,8 @@ class QCameraClass:
         ## will also see whether there are actually any changes to make
         current = self.getParams(params.keys())
         changed = False
+        #changedKeys = []  ## keys for parameters that have changed 
+                          ### (this is not necessarily the same as params)
         
         for x in params:
             #print "0 x:", x
@@ -690,8 +699,13 @@ class QCameraClass:
         #self.queueSettingsDict = {}
         #for x in params:
             #self.queueSettingsDict[x] = value
-        
+            #if 'binning' in x:
+                #changedKeys.append('binningX')
+            #else:    
+                #changedKeys.append(x)
+            
         if not changed:
+            #return self.getParams(changedKeys), False
             return current, False
         
         with self.mutex:
@@ -721,7 +735,7 @@ class QCameraClass:
         #ret = {}
         #for x in params:
             #ret[x] = self.getParam(x)
-        ret = self.getParams(params.keys())
+        ret = self.getParams(self.getParams(params.keys()))
         self.getImageSize() ## Run this function to update image size in cameraInfo dictionary
         #print "Set params to:", dict
         #if not autoRestart:
