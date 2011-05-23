@@ -2,12 +2,18 @@
 from DirTreeTemplate import Ui_Form
 from PyQt4 import QtGui,QtCore
 from debug import *
+import DataManager
 
 class DirTreeLoader(QtGui.QWidget):
-    def __init__(self, baseDir, *args):
+    
+    sigCurrentFileChanged = QtCore.Signal(object, object, object)
+    
+    def __init__(self, baseDir, sortMode='alpha', *args):
         QtGui.QWidget.__init__(self, *args)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        if isinstance(baseDir, basestring):
+            baseDir = DataManager.getHandle(baseDir)
         self.baseDir = baseDir
         self.currentFile = None
         
@@ -20,12 +26,18 @@ class DirTreeLoader(QtGui.QWidget):
 
         self.ui.deleteBtn.focusOutEvent = self.delBtnLostFocus
 
-        QtCore.QObject.connect(self.ui.newBtn, QtCore.SIGNAL('clicked()'), self.newClicked)
-        QtCore.QObject.connect(self.ui.newDirBtn, QtCore.SIGNAL('clicked()'), self.newDirClicked)
-        QtCore.QObject.connect(self.ui.saveBtn, QtCore.SIGNAL('clicked()'), self.saveClicked)
-        QtCore.QObject.connect(self.ui.loadBtn, QtCore.SIGNAL('clicked()'), self.loadClicked)
-        QtCore.QObject.connect(self.ui.saveAsBtn, QtCore.SIGNAL('clicked()'), self.saveAsClicked)
-        QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteClicked)
+        #QtCore.QObject.connect(self.ui.newBtn, QtCore.SIGNAL('clicked()'), self.newClicked)
+        self.ui.newBtn.clicked.connect(self.newClicked)
+        #QtCore.QObject.connect(self.ui.newDirBtn, QtCore.SIGNAL('clicked()'), self.newDirClicked)
+        self.ui.newDirBtn.clicked.connect(self.newDirClicked)
+        #QtCore.QObject.connect(self.ui.saveBtn, QtCore.SIGNAL('clicked()'), self.saveClicked)
+        self.ui.saveBtn.clicked.connect(self.saveClicked)
+        #QtCore.QObject.connect(self.ui.loadBtn, QtCore.SIGNAL('clicked()'), self.loadClicked)
+        self.ui.loadBtn.clicked.connect(self.loadClicked)
+        #QtCore.QObject.connect(self.ui.saveAsBtn, QtCore.SIGNAL('clicked()'), self.saveAsClicked)
+        self.ui.saveAsBtn.clicked.connect(self.saveAsClicked)
+        #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteClicked)
+        self.ui.deleteBtn.clicked.connect(self.deleteClicked)
 
 
     def selectedFile(self):
@@ -141,7 +153,11 @@ class DirTreeLoader(QtGui.QWidget):
         
     def setCurrentFile(self, handle):
         if self.currentFile is not None:
-            QtCore.QObject.disconnect(self.currentFile, QtCore.SIGNAL('changed'), self.currentFileChanged)
+            #QtCore.QObject.disconnect(self.currentFile, QtCore.SIGNAL('changed'), self.currentFileChanged)
+            try:
+                self.currentFile.sigChanged.disconnect(self.currentFileChanged)
+            except TypeError:
+                pass
             
         if handle is None:
             self.ui.currentLabel.setText("")
@@ -149,13 +165,15 @@ class DirTreeLoader(QtGui.QWidget):
         else:
             self.ui.currentLabel.setText(handle.name(relativeTo=self.baseDir))
             self.ui.saveBtn.setEnabled(True)
-            QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self.currentFileChanged)
+            #QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self.currentFileChanged)
+            handle.sigChanged.connect(self.currentFileChanged)
             
         self.currentFile = handle
             
         
-    def currentFileChanged(self, handle, change, *args):
+    def currentFileChanged(self, handle, change, args):
         if change == 'deleted':
             self.ui.currentLabel.setText("[deleted]")
         else:
             self.ui.currentLabel.setText(self.currentFile.name(relativeTo=self.baseDir))
+        self.sigCurrentFileChanged.emit(handle, change, args)

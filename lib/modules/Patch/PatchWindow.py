@@ -129,25 +129,37 @@ class PatchWindow(QtGui.QMainWindow):
         self.ui.commandPlot.setLabel('left', text='Secondary', units='V')
         self.commandCurve = self.ui.commandPlot.plot(pen=QtGui.QPen(QtGui.QColor(200, 200, 200)))
         
-        QtCore.QObject.connect(self.ui.startBtn, QtCore.SIGNAL('clicked()'), self.startClicked)
-        QtCore.QObject.connect(self.ui.recordBtn, QtCore.SIGNAL('clicked()'), self.recordClicked)
-        QtCore.QObject.connect(self.ui.bathModeBtn, QtCore.SIGNAL('clicked()'), self.bathMode)
-        QtCore.QObject.connect(self.ui.patchModeBtn, QtCore.SIGNAL('clicked()'), self.patchMode)
-        QtCore.QObject.connect(self.ui.cellModeBtn, QtCore.SIGNAL('clicked()'), self.cellMode)
-        QtCore.QObject.connect(self.ui.monitorModeBtn, QtCore.SIGNAL('clicked()'), self.monitorMode)
-        QtCore.QObject.connect(self.ui.resetBtn, QtCore.SIGNAL('clicked()'), self.resetClicked)
-        QtCore.QObject.connect(self.thread, QtCore.SIGNAL('finished()'), self.threadStopped)
-        QtCore.QObject.connect(self.thread, QtCore.SIGNAL('newFrame'), self.handleNewFrame)
+        #QtCore.QObject.connect(self.ui.startBtn, QtCore.SIGNAL('clicked()'), self.startClicked)
+        self.ui.startBtn.clicked.connect(self.startClicked)
+        #QtCore.QObject.connect(self.ui.recordBtn, QtCore.SIGNAL('clicked()'), self.recordClicked)
+        self.ui.recordBtn.clicked.connect(self.recordClicked)
+        #QtCore.QObject.connect(self.ui.bathModeBtn, QtCore.SIGNAL('clicked()'), self.bathMode)
+        self.ui.bathModeBtn.clicked.connect(self.bathMode)
+        #QtCore.QObject.connect(self.ui.patchModeBtn, QtCore.SIGNAL('clicked()'), self.patchMode)
+        self.ui.patchModeBtn.clicked.connect(self.patchMode)
+        #QtCore.QObject.connect(self.ui.cellModeBtn, QtCore.SIGNAL('clicked()'), self.cellMode)
+        self.ui.cellModeBtn.clicked.connect(self.cellMode)
+        #QtCore.QObject.connect(self.ui.monitorModeBtn, QtCore.SIGNAL('clicked()'), self.monitorMode)
+        self.ui.monitorModeBtn.clicked.connect(self.monitorMode)
+        #QtCore.QObject.connect(self.ui.resetBtn, QtCore.SIGNAL('clicked()'), self.resetClicked)
+        self.ui.resetBtn.clicked.connect(self.resetClicked)
+        #QtCore.QObject.connect(self.thread, QtCore.SIGNAL('finished()'), self.threadStopped)
+        self.thread.finished.connect(self.threadStopped)
+        #QtCore.QObject.connect(self.thread, QtCore.SIGNAL('newFrame'), self.handleNewFrame)
+        self.thread.sigNewFrame.connect(self.handleNewFrame)
         #QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('toggled(bool)'), self.updateParams)
-        QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('toggled(bool)'), self.updateParams)
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.updateParams)
+        #QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('toggled(bool)'), self.updateParams)
+        self.ui.vcModeRadio.toggled.connect(self.updateParams)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.updateParams)
+        self.stateGroup.sigChanged.connect(self.updateParams)
                 
         ## Configure analysis plots, curves, and data arrays
         self.analysisCurves = {}
         self.analysisData = {'time': []}
         for n in self.analysisItems:
             w = getattr(self.ui, n+'Check')
-            QtCore.QObject.connect(w, QtCore.SIGNAL('clicked()'), self.showPlots)
+            #QtCore.QObject.connect(w, QtCore.SIGNAL('clicked()'), self.showPlots)
+            w.clicked.connect(self.showPlots)
             p = self.plots[n]
             #p.setCanvasBackground(QtGui.QColor(0,0,0))
             #p.replot()
@@ -169,7 +181,7 @@ class PatchWindow(QtGui.QMainWindow):
         getManager().writeConfigFile(uiState, self.stateFile)
         
         self.thread.stop(block=True)
-        print "Patch thread exited; module quitting."
+        #print "Patch thread exited; module quitting."
         
     def closeEvent(self, ev):
         self.quit()
@@ -259,6 +271,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.startTime = None
         
     def handleNewFrame(self, frame):
+        prof = Profiler('PatchWindow.handleNewFrame', disabled=True)
         with self.paramLock:
             mode = self.params['mode']
         
@@ -266,18 +279,27 @@ class PatchWindow(QtGui.QMainWindow):
         
         if mode == 'vc':
             self.ui.patchPlot.setLabel('left', units='A')
-            self.ui.commandPlot.setLabel('left', units='V')
+            #self.ui.commandPlot.setLabel('left', units='V')
             #scale1 = 1e12
             #scale2 = 1e3
         else:
             self.ui.patchPlot.setLabel('left', units='V')
-            self.ui.commandPlot.setLabel('left', units='A')
+            #self.ui.commandPlot.setLabel('left', units='A')
             #scale1 = 1e3
             #scale2 = 1e12
+        prof.mark('1')
+            
         self.patchCurve.setData(data.xvals('Time'), data['primary'])
+        prof.mark('2')
         if self.redrawCommand > 0:
             self.redrawCommand -= 1
-            self.commandCurve.setData(data.xvals('Time'), data['Command'])
+            #print "set command curve"
+            self.commandCurve.setData(data.xvals('Time'), data['command'])
+            if mode == 'vc':
+                self.ui.commandPlot.setLabel('left', units='V')
+            else:
+                self.ui.commandPlot.setLabel('left', units='A')
+        prof.mark('3')
         #self.ui.patchPlot.replot()
         #self.ui.commandPlot.replot()
         if frame['analysis']['fitTrace'] is not None:
@@ -285,29 +307,34 @@ class PatchWindow(QtGui.QMainWindow):
             self.patchFitCurve.setData(data.xvals('Time'), frame['analysis']['fitTrace'])
         else:
             self.patchFitCurve.hide()
+        prof.mark('4')
         
         for k in self.analysisItems:
             if k in frame['analysis']:
                 self.analysisData[k].append(frame['analysis'][k])
+        prof.mark('5')
                 
         for r in ['input', 'access']:
             res = r+'Resistance'
             label = getattr(self.ui, res+'Label')
             resistance = frame['analysis'][res]
             label.setText(siFormat(resistance) + u'Ω')
+        prof.mark('6')
         self.ui.restingPotentialLabel.setText(siFormat(frame['analysis']['restingPotential'], error=frame['analysis']['restingPotentialStd'], suffix='V'))
         self.ui.restingCurrentLabel.setText(siFormat(frame['analysis']['restingCurrent'], error=frame['analysis']['restingCurrentStd'], suffix='A'))
         self.ui.capacitanceLabel.setText('%sF' % siFormat(frame['analysis']['capacitance']))
         self.ui.fitErrorLabel.setText('%7.2g' % frame['analysis']['fitError'])
+        prof.mark('7')
         
-        print data._info[-1]
         start = data._info[-1]['DAQ']['command']['startTime']
         if self.startTime is None:
             self.startTime = start
             if self.ui.recordBtn.isChecked() and self.storageFile is not None:
                 self.storageFile.setInfo({'startTime': self.startTime})
         self.analysisData['time'].append(start - self.startTime)
+        prof.mark('8')
         self.updateAnalysisPlots()
+        prof.mark('9')
         
         ## Record to disk if requested.
         if self.ui.recordBtn.isChecked():
@@ -318,6 +345,8 @@ class PatchWindow(QtGui.QMainWindow):
                 self.newFile(arr)
             else:
                 arr.write(self.storageFile.name(), appendAxis='Time')
+        prof.mark('10')
+        prof.finish()
         
     def makeAnalysisArray(self, lastOnly=False):
         ## Determine how much of the data to include in this array
@@ -384,6 +413,9 @@ class PatchWindow(QtGui.QMainWindow):
         
         
 class PatchThread(QtCore.QThread):
+    
+    sigNewFrame = QtCore.Signal(object)
+    
     def __init__(self, ui):
         self.ui = ui
         self.manager = ui.manager
@@ -410,6 +442,7 @@ class PatchThread(QtCore.QThread):
                 
                 lastTime = None
                 while True:
+                    prof = Profiler('PatchThread.run', disabled=True)
                     lastTime = time.clock()
                     
                     updateCommand = False
@@ -449,7 +482,7 @@ class PatchThread(QtCore.QThread):
                         }
                         
                     }
-                    
+                    prof.mark('build command')
                     
                     ## Create and execute task.
                     ## the try/except block is just to catch errors that come up during multiclamp auto pipette offset procedure.
@@ -477,7 +510,10 @@ class PatchThread(QtCore.QThread):
                         
                         ## analyze trace 
                         result = task.getResult()
+                        #print result
                         results.append(result)
+                        
+                    prof.mark('execute')
                         
                     ## average together results if we collected more than 1
                     if len(results) == 1:
@@ -493,15 +529,17 @@ class PatchThread(QtCore.QThread):
                     #print result[clampName]
                     analysis = self.analyze(avg, params)
                     frame = {'data': result, 'analysis': analysis}
+                    prof.mark('analyze')
                     
-                    self.emit(QtCore.SIGNAL('newFrame'), frame)
+                    #self.emit(QtCore.SIGNAL('newFrame'), frame)
+                    self.sigNewFrame.emit(frame)
                     
                     ## sleep until it is time for the next run
                     c = 0
                     stop = False
                     while True:
                         ## check for stop button every 100ms
-                        if c % 100 == 0:
+                        if c % 10 == 0:
                             l.relock()
                             if self.stopThread:
                                 l.unlock()
@@ -512,10 +550,11 @@ class PatchThread(QtCore.QThread):
                         if now >= (lastTime+params['cycleTime']):
                             break
                         
-                        time.sleep(1e-3) ## Wake up every 1ms
+                        time.sleep(10e-3) ## Wake up every 10ms
                         c += 1
                     if stop:
                         break
+                    prof.mark('wait')
         except:
             printExc("Error in patch acquisition thread, exiting.")
         #self.emit(QtCore.SIGNAL('threadStopped'))
@@ -601,8 +640,8 @@ class PatchThread(QtCore.QThread):
             iBase = base['Channel': 'primary']
             iPulse = pulse['Channel': 'primary'] 
             iPulseEnd = pulseEnd['Channel': 'primary'] 
-            vBase = base['Channel': 'Command']
-            vPulse = pulse['Channel': 'Command'] 
+            vBase = base['Channel': 'command']
+            vPulse = pulse['Channel': 'command'] 
             vStep = vPulse.mean() - vBase.mean()
             sign = [-1, 1][vStep > 0]
 
@@ -629,8 +668,8 @@ class PatchThread(QtCore.QThread):
             cap = Cm
             
         if params['mode'] == 'ic':
-            iBase = base['Channel': 'Command']
-            iPulse = pulse['Channel': 'Command'] 
+            iBase = base['Channel': 'command']
+            iPulse = pulse['Channel': 'command'] 
             vBase = base['Channel': 'primary']
             vPulse = pulse['Channel': 'primary'] 
             vPulseEnd = pulseEnd['Channel': 'primary'] 

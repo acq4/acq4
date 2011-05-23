@@ -23,9 +23,7 @@ class Camera(DAQGeneric):
     The list/get/setParams functions should implement a few standard items:
     (Note: these number values are just examples, but the data types and strings must be the same.)
         triggerMode:     str, ['Normal', 'TriggerStart', 'Strobe', 'Bulb']
-        triggerType:     str, ['Software', 'Hardware']
         exposure:        float, (0.0, 10.0)
-        exposureMode:    str, ['Exact', 'Maximize']
         binning:         (int,int) , [[1,2,4,8,16], [1,2,4,8,16]]
         region:          (int, int, int, int), [(0, 511), (0, 511), (1, 512), (1, 512)] #[x, y, w, h]
         gain:            float, (0.1, 10.0)
@@ -37,13 +35,16 @@ class Camera(DAQGeneric):
         exposeChannel: 'DAQ', '/Dev1/port0/line14'  ## Channel for recording expose signal
         triggerOutChannel: 'DAQ', '/Dev1/PFI5'  ## Channel the DAQ should trigger off of to sync with camera
         triggerInChannel: 'DAQ', '/Dev1/port0/line13'  ## Channel the DAQ should raise to trigger the camera
-        paramLimits:
-            binning:  [1,2,4,6,8,16]  ## set the limits for binning manually since the driver can't
         params:
             GAIN_INDEX: 2
             CLEAR_MODE: 'CLEAR_PRE_SEQUENCE'  ## Overlap mode for QuantEM
     """
 
+    sigCameraStopped = QtCore.Signal()
+    sigCameraStarted = QtCore.Signal()
+    sigShowMessage = QtCore.Signal(object)  # (string message)
+    sigNewFrame = QtCore.Signal(object)  # (frame data)
+    sigParamsChanged = QtCore.Signal(object)
 
     def __init__(self, dm, config, name):
         self.lock = Mutex(Mutex.Recursive)
@@ -78,8 +79,10 @@ class Camera(DAQGeneric):
         
         if 'scopeDevice' in config:
             self.scopeDev = self.dm.getDevice(config['scopeDevice'])
-            QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
-            QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            #QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
+            #QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            self.scopeDev.sigPositionChanged.connect(self.positionChanged)
+            self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
             ## Cache microscope state for fast access later
             self.objectiveChanged()
             self.positionChanged()
@@ -93,10 +96,14 @@ class Camera(DAQGeneric):
         
         self.acqThread = AcquireThread(self)
         #print "Camera: acqThread created, about to connect signals."
-        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('finished()'), self.acqThreadFinished)
-        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('started()'), self.acqThreadStarted)
-        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('showMessage'), self.showMessage)
-        QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('newFrame'), self.newFrame)
+        #QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('finished()'), self.acqThreadFinished)
+        #QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('started()'), self.acqThreadStarted)
+        #QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('showMessage'), self.showMessage)
+        #QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('newFrame'), self.newFrame)
+        self.acqThread.finished.connect(self.acqThreadFinished)
+        self.acqThread.started.connect(self.acqThreadStarted)
+        self.acqThread.sigShowMessage.connect(self.showMessage)
+        self.acqThread.sigNewFrame.connect(self.newFrame)
         #print "Camera: signals connected:"
         
         if config != None and 'params' in config:
@@ -321,7 +328,7 @@ class Camera(DAQGeneric):
         
         with MutexLocker(self.lock):
             sf = self.camConfig['scaleFactor']
-            size = self.cam.getParam('sensorSize')
+            size = self.getParam('sensorSize')
             sx = size[0] * obj['scale'] * sf[0]
             sy = size[1] * obj['scale'] * sf[1]
             bounds = QtCore.QRectF(-sx * 0.5 + obj['offset'][0], -sy * 0.5 + obj['offset'][1], sx, sy)
@@ -387,16 +394,20 @@ class Camera(DAQGeneric):
     ###############################################
     
     def acqThreadFinished(self):
-        self.emit(QtCore.SIGNAL('cameraStopped'))
+        #self.emit(QtCore.SIGNAL('cameraStopped'))
+        self.sigCameraStopped.emit()
 
     def acqThreadStarted(self):
-        self.emit(QtCore.SIGNAL('cameraStarted'))
+        #self.emit(QtCore.SIGNAL('cameraStarted'))
+        self.sigCameraStarted.emit()
 
-    def showMessage(self, *args):
-        self.emit(QtCore.SIGNAL('showMessage'), *args)
+    def showMessage(self, msg):
+        #self.emit(QtCore.SIGNAL('showMessage'), msg)
+        self.sigShowMessage.emit(msg)
 
-    def newFrame(self, *args):
-        self.emit(QtCore.SIGNAL('newFrame'), *args)
+    def newFrame(self, data):
+        #self.emit(QtCore.SIGNAL('newFrame'), *args)
+        self.sigNewFrame.emit(data)
         
     def isRunning(self):
         return self.acqThread.isRunning()
@@ -510,7 +521,7 @@ class CameraTask(DAQGenericTask):
             
         ## connect using acqThread's connect method because there may be no event loop
         ## to deliver signals here.
-        self.dev.acqThread.connect(self.newFrame)
+        self.dev.acqThread.connectCallback(self.newFrame)
         
         ## Call the DAQ configure
         DAQGenericTask.configure(self, tasks, startOrder)
@@ -529,7 +540,7 @@ class CameraTask(DAQGenericTask):
                 self.recording = False
                 disconnect = True
         if disconnect:   ## Must be done only after unlocking mutex
-            self.dev.acqThread.disconnect(self.newFrame)
+            self.dev.acqThread.disconnectCallback(self.newFrame)
 
         
     def start(self):
@@ -712,6 +723,10 @@ class CameraTask(DAQGenericTask):
                 dh.writeFile(result[k], k)
         
 class AcquireThread(QtCore.QThread):
+    
+    sigNewFrame = QtCore.Signal(object)
+    sigShowMessage = QtCore.Signal(object)
+    
     def __init__(self, dev):
         QtCore.QThread.__init__(self)
         self.dev = dev
@@ -745,11 +760,11 @@ class AcquireThread(QtCore.QThread):
         QtCore.QThread.start(self, *args)
         
     
-    def connect(self, method):
+    def connectCallback(self, method):
         with MutexLocker(self.connectMutex):
             self.connections.add(method)
     
-    def disconnect(self, method):
+    def disconnectCallback(self, method):
         with MutexLocker(self.connectMutex):
             if method in self.connections:
                 self.connections.remove(method)
@@ -848,7 +863,8 @@ class AcquireThread(QtCore.QThread):
                             conn = list(self.connections)
                         for c in conn:
                             c(out)
-                        self.emit(QtCore.SIGNAL("newFrame"), out)
+                        #self.emit(QtCore.SIGNAL("newFrame"), out)
+                        self.sigNewFrame.emit(out)
                         
                     lastFrameTime = now
                     lastFrameId = frames[-1]['id']
@@ -891,7 +907,8 @@ class AcquireThread(QtCore.QThread):
             except:
                 pass
             printExc("Error starting camera acquisition:")
-            self.emit(QtCore.SIGNAL("showMessage"), "ERROR starting acquisition (see console output)")
+            #self.emit(QtCore.SIGNAL("showMessage"), "ERROR starting acquisition (see console output)")
+            self.sigShowMessage.emit("ERROR starting acquisition (see console output)")
         finally:
             pass
             #print "Camera ACQ thread exited."

@@ -2,6 +2,10 @@
 from PyQt4 import QtGui, QtCore
 
 class FlowchartGraphicsView(QtGui.QGraphicsView):
+    
+    sigHoverOver = QtCore.Signal(object)
+    sigClicked = QtCore.Signal(object)
+    
     def __init__(self, *args):
         QtGui.QGraphicsView.__init__(self, *args)
         self.setMouseTracking(True)
@@ -28,7 +32,8 @@ class FlowchartGraphicsView(QtGui.QGraphicsView):
                 dif = ev.pos() - self.lastPos
                 self.translate(dif.x(), -dif.y())
         else:
-            self.emit(QtCore.SIGNAL('hoverOver'), self.items(ev.pos()))
+            #self.emit(QtCore.SIGNAL('hoverOver'), self.items(ev.pos()))
+            self.sigHoverOver.emit(self.items(ev.pos()))
             callSuper = True
         self.lastPos = ev.pos()
         
@@ -37,5 +42,6 @@ class FlowchartGraphicsView(QtGui.QGraphicsView):
             
     def mouseReleaseEvent(self, ev):
         if not self.moved:
-            self.emit(QtCore.SIGNAL('clicked'), ev)
+            #self.emit(QtCore.SIGNAL('clicked'), ev)
+            self.sigClicked.emit(ev)
         return QtGui.QGraphicsView.mouseReleaseEvent(self, ev)

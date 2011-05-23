@@ -1,24 +1,29 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'DevTemplate.ui'
+# Form implementation generated from reading ui file './lib/devices/Camera/DevTemplate.ui'
 #
-# Created: Fri Jul 09 12:37:19 2010
-#      by: PyQt4 UI code generator 4.5.4
+# Created: Wed May 18 20:44:14 2011
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
 from PyQt4 import QtCore, QtGui
 
+try:
+    _fromUtf8 = QtCore.QString.fromUtf8
+except AttributeError:
+    _fromUtf8 = lambda s: s
+
 class Ui_Form(object):
     def setupUi(self, Form):
-        Form.setObjectName("Form")
+        Form.setObjectName(_fromUtf8("Form"))
         Form.resize(628, 234)
         self.verticalLayout = QtGui.QVBoxLayout(Form)
         self.verticalLayout.setSpacing(0)
         self.verticalLayout.setMargin(0)
-        self.verticalLayout.setObjectName("verticalLayout")
+        self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
         self.reconnectBtn = QtGui.QPushButton(Form)
-        self.reconnectBtn.setObjectName("reconnectBtn")
+        self.reconnectBtn.setObjectName(_fromUtf8("reconnectBtn"))
         self.verticalLayout.addWidget(self.reconnectBtn)
         self.scrollArea = QtGui.QScrollArea(Form)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
@@ -28,15 +33,15 @@ class Ui_Form(object):
         self.scrollArea.setSizePolicy(sizePolicy)
         self.scrollArea.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.scrollArea.setWidgetResizable(True)
-        self.scrollArea.setObjectName("scrollArea")
-        self.scrollAreaWidgetContents = QtGui.QWidget(self.scrollArea)
+        self.scrollArea.setObjectName(_fromUtf8("scrollArea"))
+        self.scrollAreaWidgetContents = QtGui.QWidget()
         self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 626, 209))
-        self.scrollAreaWidgetContents.setObjectName("scrollAreaWidgetContents")
+        self.scrollAreaWidgetContents.setObjectName(_fromUtf8("scrollAreaWidgetContents"))
         self.formLayout_2 = QtGui.QFormLayout(self.scrollAreaWidgetContents)
         self.formLayout_2.setFieldGrowthPolicy(QtGui.QFormLayout.ExpandingFieldsGrow)
         self.formLayout_2.setMargin(0)
         self.formLayout_2.setSpacing(0)
-        self.formLayout_2.setObjectName("formLayout_2")
+        self.formLayout_2.setObjectName(_fromUtf8("formLayout_2"))
         self.scrollArea.setWidget(self.scrollAreaWidgetContents)
         self.verticalLayout.addWidget(self.scrollArea)
 

@@ -5,7 +5,9 @@ from DirTreeWidget import *
 import numpy as np
 import metaarray
 from common import *
-from pyqtgraph import graphicsItems
+from pyqtgraph import graphicsItems, Transform, Point
+import TreeWidget
+import functions
 
 class SubtreeNode(Node):
     """Select files from within a directory. Input must be a DirHandle."""
@@ -16,7 +18,8 @@ class SubtreeNode(Node):
         self.files = set()
         self.lastInput = None
         self.fileList = DirTreeWidget(checkState=False, allowMove=False, allowRename=False)
-        QtCore.QObject.connect(self.fileList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
+        #QtCore.QObject.connect(self.fileList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*, int)'), self.itemChanged)
+        self.fileList.itemChanged.connect(self.itemChanged)
         
     def process(self, In, display=True):
         #print "subtree process", In
@@ -86,7 +89,8 @@ class ColumnSelectNode(Node):
         #self.fileList = DirTreeWidget(defaultFlags=QtCore.Qt.ItemIsUserCheckable|QtCore.Qt.ItemIsEnabled, defaultCheckState=False)
         self.columnList = QtGui.QListWidget()
         self.axis = 0
-        QtCore.QObject.connect(self.columnList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.itemChanged)
+        #QtCore.QObject.connect(self.columnList, QtCore.SIGNAL('itemChanged(QListWidgetItem*)'), self.itemChanged)
+        self.columnList.itemChanged.connect(self.itemChanged)
         
     def process(self, In, display=True):
         #print "MetaArrayColumn process:"
@@ -171,7 +175,9 @@ class RegionSelectNode(CtrlNode):
     nodeName = "RegionSelect"
     uiTemplate = [
         ('start', 'spin', {'value': 0, 'step': 0.1}),
-        ('stop', 'spin', {'value': 0.1, 'step': 0.1})
+        ('stop', 'spin', {'value': 0.1, 'step': 0.1}),
+        ('display', 'check', {'value': True}),
+        ('movable', 'check', {'value': True}),
     ]
     
     def __init__(self, name):
@@ -182,35 +188,55 @@ class RegionSelectNode(CtrlNode):
             'region': {'io': 'out'},
             'widget': {'io': 'out', 'multi': True}
         })
+        self.ctrls['display'].toggled.connect(self.displayToggled)
+        self.ctrls['movable'].toggled.connect(self.movableToggled)
+        
+    def displayToggled(self, b):
+        for item in self.items.itervalues():
+            item.setVisible(b)
+            
+    def movableToggled(self, b):
+        for item in self.items.itervalues():
+            item.setMovable(b)
+            
         
     def process(self, data=None, display=True):
         #print "process.."
         s = self.stateGroup.state()
         region = [s['start'], s['stop']]
-        conn = self['widget'].connections()
-        for c in conn:
-            plot = c.node().getPlot()
-            if plot is None:
-                continue
-            if c in self.items:
-                item = self.items[c]
-                item.setRegion(region)
-                #print "  set rgn:", c, region
-                #item.setXVals(events)
+        
+        if display:
+            conn = self['widget'].connections()
+            for c in conn:
+                plot = c.node().getPlot()
+                if plot is None:
+                    continue
+                if c in self.items:
+                    item = self.items[c]
+                    item.setRegion(region)
+                    #print "  set rgn:", c, region
+                    #item.setXVals(events)
+                else:
+                    item = graphicsItems.LinearRegionItem(plot, vals=region)
+                    self.items[c] = item
+                    #item.connect(item, QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+                    item.sigRegionChanged.connect(self.rgnChanged)
+                    item.setVisible(s['display'])
+                    item.setMovable(s['movable'])
+                    #print "  new rgn:", c, region
+                    #self.items[c].setYRange([0., 0.2], relative=True)
+        
+        if self.selected.isConnected():
+            if data is None:
+                sliced = None
+            elif isinstance(data, MetaArray):
+                sliced = data[0:s['start']:s['stop']]
             else:
-                item = graphicsItems.LinearRegionItem(plot, vals=region)
-                self.items[c] = item
-                item.connect(item, QtCore.SIGNAL('regionChanged'), self.rgnChanged)
-                #print "  new rgn:", c, region
-                #self.items[c].setYRange([0., 0.2], relative=True)
-                
-        if data is None:
-            sliced = None
-        elif isinstance(data, MetaArray):
-            sliced = data[0:s['start']:s['stop']]
-        else:
-            mask = (data['time'] >= s['start']) * (data['time'] < s['stop'])
+                mask = (data['time'] >= s['start']) * (data['time'] < s['stop'])
             sliced = data[mask]
+        else:
+            sliced = None
+            
         return {'selected': sliced, 'widget': self.items, 'region': region}
         
         
@@ -221,7 +247,10 @@ class RegionSelectNode(CtrlNode):
         
         
 class EvalNode(Node):
-    """Return the output of a string evaluated by the python interpreter."""
+    """Return the output of a string evaluated/executed by the python interpreter.
+    The string may be either an expression or a python script, and inputs are accessed as the name of the terminal. 
+    For expressions, a single value may be evaluated for a single output, or a dict for multiple outputs.
+    For a script, the text will be executed as the body of a function."""
     nodeName = 'PythonEval'
     
     def __init__(self, name):
@@ -240,14 +269,15 @@ class EvalNode(Node):
         self.layout.addWidget(self.text, 1, 0, 1, 2)
         self.ui.setLayout(self.layout)
         
-        QtCore.QObject.connect(self.addInBtn, QtCore.SIGNAL('clicked()'), self.addInput)
-        QtCore.QObject.connect(self.addOutBtn, QtCore.SIGNAL('clicked()'), self.addOutput)
+        #QtCore.QObject.connect(self.addInBtn, QtCore.SIGNAL('clicked()'), self.addInput)
+        self.addInBtn.clicked.connect(self.addInput)
+        #QtCore.QObject.connect(self.addOutBtn, QtCore.SIGNAL('clicked()'), self.addOutput)
+        self.addOutBtn.clicked.connect(self.addOutput)
         self.ui.focusOutEvent = lambda ev: self.focusOutEvent(ev)
         self.lastText = None
         
     def ctrlWidget(self):
         return self.ui
-        
         
     def addInput(self):
         Node.addInput(self, 'input', renamable=True)
@@ -265,9 +295,16 @@ class EvalNode(Node):
     def process(self, display=True, **args):
         l = locals()
         l.update(args)
-        text = str(self.text.toPlainText()).replace('\n', ' ')
-        out = eval(text, globals(), l)
-        return {'output': out}
+        ## try eval first, then exec
+        try:  
+            text = str(self.text.toPlainText()).replace('\n', ' ')
+            output = eval(text, globals(), l)
+        except SyntaxError:
+            fn = "def fn(**args):\n"
+            run = "\noutput=fn(**args)\n"
+            text = fn + "\n".join(["    "+l for l in str(self.text.toPlainText()).split('\n')]) + run
+            exec(text)
+        return output
         
     def saveState(self):
         state = Node.saveState(self)
@@ -281,4 +318,98 @@ class EvalNode(Node):
         self.text.insertPlainText(state['text'])
         self.restoreTerminals(state['terminals'])
         self.update()
+        
+class ColumnJoinNode(Node):
+    """Concatenates record arrays and/or adds new columns"""
+    nodeName = 'ColumnJoin'
+    
+    def __init__(self, name):
+        Node.__init__(self, name, terminals = {
+            'output': {'io': 'out'},
+        })
+        
+        #self.items = []
+        
+        self.ui = QtGui.QWidget()
+        self.layout = QtGui.QGridLayout()
+        self.ui.setLayout(self.layout)
+        
+        self.tree = TreeWidget.TreeWidget()
+        self.addInBtn = QtGui.QPushButton('+ Input')
+        self.remInBtn = QtGui.QPushButton('- Input')
+        
+        self.layout.addWidget(self.tree, 0, 0, 1, 2)
+        self.layout.addWidget(self.addInBtn, 1, 0)
+        self.layout.addWidget(self.remInBtn, 1, 1)
+
+        self.addInBtn.clicked.connect(self.addInput)
+        self.remInBtn.clicked.connect(self.remInput)
+        self.tree.sigItemMoved.connect(self.update)
+        
+    def ctrlWidget(self):
+        return self.ui
+        
+    def addInput(self):
+        term = Node.addInput(self, 'input', renamable=True)
+        item = QtGui.QTreeWidgetItem([term.name()])
+        item.term = term
+        term.joinItem = item
+        #self.items.append((term, item))
+        self.tree.addTopLevelItem(item)
+
+    def remInput(self):
+        sel = self.tree.currentItem()
+        term = sel.term
+        term.joinItem = None
+        sel.term = None
+        self.tree.removeTopLevelItem(sel)
+        self.removeTerminal(term)
+        self.update()
+
+    def process(self, display=True, **args):
+        order = self.order()
+        vals = []
+        for name in order:
+            if name not in args:
+                continue
+            val = args[name]
+            if isinstance(val, np.ndarray) and len(val.dtype) > 0:
+                vals.append(val)
+            else:
+                vals.append((name, None, val))
+        return {'output': functions.concatenateColumns(vals)}
+
+    def order(self):
+        return [str(self.tree.topLevelItem(i).text(0)) for i in range(self.tree.topLevelItemCount())]
+
+    def saveState(self):
+        state = Node.saveState(self)
+        state['order'] = self.order()
+        return state
+        
+    def restoreState(self, state):
+        Node.restoreState(self, state)
+        inputs = [inp.name() for inp in self.inputs()]
+        for name in inputs:
+            if name not in state['order']:
+                self.removeTerminal(name)
+        for name in state['order']:
+            if name not in inputs:
+                Node.addInput(self, name, renamable=True)
+        
+        self.tree.clear()
+        for name in state['order']:
+            term = self[name]
+            item = QtGui.QTreeWidgetItem([name])
+            item.term = term
+            term.joinItem = item
+            #self.items.append((term, item))
+            self.tree.addTopLevelItem(item)
+
+    def terminalRenamed(self, term, oldName):
+        Node.terminalRenamed(self, term, oldName)
+        item = term.joinItem
+        item.setText(0, term.name())
+        self.update()
+        
         

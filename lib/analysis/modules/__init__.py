@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 
 def listModules():
@@ -13,6 +14,7 @@ def listModules():
 def getModuleClass(modName):
     mod = __import__('lib.analysis.modules.'+modName, fromlist=['*'])
     cls = getattr(mod, modName)
+    #print id(cls)
     return cls
 
 def load(modName, host):

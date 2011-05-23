@@ -6,6 +6,7 @@ class ParamList(QtGui.QTreeWidget):
     def __init__(self, *args):
         QtGui.QTreeWidget.__init__(self, *args)
         self.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
+        self.setAnimated(False)
 
 
     checkStateMap = {
@@ -36,8 +37,11 @@ class ParamList(QtGui.QTreeWidget):
                     self.insertTopLevelItem(0, item)
                 else:
                     self.addTopLevelItem(item)
-                item.setExpanded(True)  ## Must happen AFTER adding to tree.
-            items[p].setData(2, QtCore.Qt.DisplayRole, QtCore.QVariant(str(len(params[p]))))
+                self.expandAll()
+                #item.setExpanded(True)  ## Must happen AFTER adding to tree.  Also this causes warnings to appear (and possibly other problems?)
+            #items[p].setData(2, QtCore.Qt.DisplayRole, QtCore.QVariant(str(len(params[p]))))
+            items[p].setText(2, str(len(params[p])))
+            items[p].paramData = [dev, p, str(len(params[p]))]
             items[p].params = list(params[p])
             
         ## remove non-existent sequence parameters (but not their children)
@@ -89,19 +93,13 @@ class ParamList(QtGui.QTreeWidget):
                 if item is None:
                     continue
                 item.setCheckState(0, ParamList.checkStateMap[enabled])
-                o2.append([self.takeItem(item), []])
+                o2.append(self.takeItem(item))
         
         ## Re-add items from param list in correct order
         for i in ordered:
             self.addTopLevelItem(i[0])
             for i2 in i[1]:
-                try:
-                    i[0].addChild(i2[0])
-                except:
-                    print "add", i2, "to", i[0]
-                    raise
-        
-        
+                i[0].addChild(i2)
         
     
     def dropEvent(self, ev):
@@ -129,7 +127,8 @@ class ParamList(QtGui.QTreeWidget):
     def findItem(self, dev, param):
         items = self.findItems(dev, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive, 0)
         for i in items:
-            p = str(i.data(1, QtCore.Qt.DisplayRole).toString())
+            #p = str(i.data(1, QtCore.Qt.DisplayRole).toString())
+            p = i.paramData[1]
             if p == param:
                 return i
         return None
@@ -149,7 +148,8 @@ class ParamList(QtGui.QTreeWidget):
         for i in self.topLevelItems():
             (dev, param, enabled) = self.itemData(i)
             if enabled:
-                num = i.text(2).toInt()[0]
+                #num = i.text(2).toInt()[0]
+                num = i.paramData[2]
                 childs = []
                 for j in range(i.childCount()):
                     (dev2, param2, en2) = self.itemData(i.child(j))

@@ -10,6 +10,8 @@ import numpy as np
 import WidgetGroup
 
 class ScannerDeviceGui(QtGui.QWidget):
+    
+    
     def __init__(self, dev, win):
         QtGui.QWidget.__init__(self)
         self.dev = dev
@@ -24,6 +26,15 @@ class ScannerDeviceGui(QtGui.QWidget):
             'yMax': self.ui.yMaxSpin,
             'splitter': self.ui.splitter,
         })
+        
+        spos = dev.getShutterVals()
+        if spos is None:
+            self.ui.shutterGroup.hide()
+        else:
+            self.shutterChanged()
+            self.ui.shutterXSpin.setValue(spos[0])
+            self.ui.shutterYSpin.setValue(spos[1])
+        
         
         ## Populate Device lists
         defCam = None
@@ -60,10 +71,29 @@ class ScannerDeviceGui(QtGui.QWidget):
         #self.ui.view.setAspectLocked(True)
         #self.ui.view.invertY()
 
-        QtCore.QObject.connect(self.ui.calibrateBtn, QtCore.SIGNAL('clicked()'), self.calibrateClicked)
-        QtCore.QObject.connect(self.ui.storeCamConfBtn, QtCore.SIGNAL('clicked()'), self.storeCamConf)
-        QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteClicked)
+        #QtCore.QObject.connect(self.ui.calibrateBtn, QtCore.SIGNAL('clicked()'), self.calibrateClicked)
+        self.ui.calibrateBtn.clicked.connect(self.calibrateClicked)
+        #QtCore.QObject.connect(self.ui.storeCamConfBtn, QtCore.SIGNAL('clicked()'), self.storeCamConf)
+        self.ui.storeCamConfBtn.clicked.connect(self.storeCamConf)
+        #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteClicked)
+        self.ui.deleteBtn.clicked.connect(self.deleteClicked)
+        self.ui.shutterBtn.clicked.connect(self.shutterClicked)
+        self.dev.sigShutterChanged.connect(self.shutterChanged)
 
+    def shutterClicked(self):
+        self.dev.setShutterOpen(not self.lastShutterState)
+        
+    def shutterChanged(self):
+        sh = self.dev.getShutterOpen()
+        self.lastShutterState = sh
+        if sh:
+            self.ui.shutterBtn.setText('Close Shutter')
+        else:
+            self.ui.shutterBtn.setText('Open Shutter')
+            
+
+            
+            
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
         

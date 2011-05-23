@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 from __future__ import with_statement
 from lib.devices.Camera import Camera
 from lib.drivers.QImaging.QImagingDriver import *
@@ -78,7 +79,8 @@ class QCam(Camera):
         
         if autoRestart and restart:
             self.restart()
-        self.emit(QtCore.SIGNAL('paramsChanged'), newVals)
+        #self.emit(QtCore.SIGNAL('paramsChanged'), newVals)
+        self.sigParamsChanged.emit(newVals)
         return (newVals, restart)
         
     def getParams(self, params=None):

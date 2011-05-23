@@ -4,15 +4,21 @@ from lib.devices.Device import ProtocolGui
 from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager
 from WidgetGroup import WidgetGroup
-from pyqtgraph.widgets import *
+import pyqtgraph.widgets as widgets
+#from pyqtgraph.widgets import *
 import random
 import numpy
+from debug import Profiler
 
 class ScannerProtoGui(ProtocolGui):
+    
+    #sigSequenceChanged = QtCore.Signal(object)  ## inherited from Device
+    
     def __init__(self, dev, prot):
         ProtocolGui.__init__(self, dev, prot)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        self.ui.programControlsLayout.setEnabled(False)
         dm = getManager()
         self.targets = None
         self.items = {}
@@ -41,24 +47,45 @@ class ScannerProtoGui(ProtocolGui):
             (self.ui.laserCombo,),
             (self.ui.minTimeSpin, 'minTime'),
             (self.ui.minDistSpin, 'minDist', 1e6),
+            (self.ui.simulateShutterCheck, 'simulateShutter'),
 #            (self.ui.packingSpin, 'packingDensity')  ## packing density should be suggested by device rather than loaded with protocol (I think..)
         ])
         self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6})
 
-        QtCore.QObject.connect(self.ui.addPointBtn, QtCore.SIGNAL('clicked()'), self.addPoint)
-        QtCore.QObject.connect(self.ui.addGridBtn, QtCore.SIGNAL('clicked()'), self.addGrid)
-        QtCore.QObject.connect(self.ui.addOcclusionBtn, QtCore.SIGNAL('clicked()'), self.addOcclusion)
-        QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.delete)
-        QtCore.QObject.connect(self.ui.deleteAllBtn, QtCore.SIGNAL('clicked()'), self.deleteAll)
-        QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemToggled)
-        QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*,QListWidgetItem*)'), self.itemSelected)
-        QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('toggled(bool)'), self.showInterface)
-        QtCore.QObject.connect(self.ui.cameraCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.camModChanged)
-        QtCore.QObject.connect(self.ui.packingSpin, QtCore.SIGNAL('valueChanged(double)'), self.packingSpinChanged)
-        QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
-        QtCore.QObject.connect(self.ui.minDistSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
-        QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.generateTargets)
-        QtCore.QObject.connect(dm, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
+        
+        #QtCore.QObject.connect(self.ui.addPointBtn, QtCore.SIGNAL('clicked()'), self.addPoint)
+        self.ui.addPointBtn.clicked.connect(lambda: self.addPoint())
+        #QtCore.QObject.connect(self.ui.addGridBtn, QtCore.SIGNAL('clicked()'), self.addGrid)
+        self.ui.addGridBtn.clicked.connect(lambda: self.addGrid())
+        #QtCore.QObject.connect(self.ui.addOcclusionBtn, QtCore.SIGNAL('clicked()'), self.addOcclusion)
+        self.ui.addOcclusionBtn.clicked.connect(lambda: self.addOcclusion())
+        #QtCore.QObject.connect(self.ui.addProgramBtn, QtCore.SIGNAL('clicked()'), self.addProgram)
+        self.ui.addProgramBtn.clicked.connect(lambda: self.addProgram())
+        #QtCore.QObject.connect(self.ui.addSpiralScanBtn, QtCore.SIGNAL('clicked()'), self.addSpiral)
+        self.ui.addSpiralScanBtn.clicked.connect(lambda: self.addSpiral())
+        #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.delete)
+        self.ui.deleteBtn.clicked.connect(lambda: self.delete())
+        #QtCore.QObject.connect(self.ui.deleteAllBtn, QtCore.SIGNAL('clicked()'), self.deleteAll)
+        self.ui.deleteAllBtn.clicked.connect(lambda: self.deleteAll())
+        #QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemToggled)
+        self.ui.itemList.itemClicked.connect(self.itemToggled)
+        #QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*,QListWidgetItem*)'), self.itemSelected)
+        self.ui.itemList.currentItemChanged.connect(self.itemSelected)
+        #QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('toggled(bool)'), self.showInterface)
+        self.ui.displayCheck.toggled.connect(self.showInterface)
+        #QtCore.QObject.connect(self.ui.cameraCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.camModChanged)
+        self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
+        #QtCore.QObject.connect(self.ui.packingSpin, QtCore.SIGNAL('valueChanged(double)'), self.packingSpinChanged)
+        self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
+        #QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
+        self.ui.minTimeSpin.valueChanged.connect(self.sequenceChanged)
+        #QtCore.QObject.connect(self.ui.minDistSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
+        self.ui.minDistSpin.valueChanged.connect(self.sequenceChanged)
+        #QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.generateTargets)
+        self.ui.recomputeBtn.clicked.connect(self.generateTargets)
+        #QtCore.QObject.connect(dm, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        dm.sigModulesChanged.connect(self.fillModuleList)
 
         #self.currentTargetMarker = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
         #pen = QtGui.QPen(QtGui.QBrush(QtGui.QColor(255, 255, 255)), 3.0)
@@ -105,8 +132,11 @@ class ScannerProtoGui(ProtocolGui):
         for m in mods:
             self.ui.cameraCombo.addItem(m)
             mod = man.getModule(m)
-            if 'camDev' in mod.config and mod.config['camDev'] == self.defCam:
-                self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
+            try:
+                if 'camDev' in mod.config and mod.config['camDev'] == self.defCam:
+                    self.ui.cameraCombo.setCurrentIndex(self.ui.cameraCombo.count()-1)
+            except (KeyError,AttributeError):
+                continue
         
         
     def camModChanged(self):
@@ -115,10 +145,12 @@ class ScannerProtoGui(ProtocolGui):
         if self.currentCamMod is not None:
             self.currentCamMod.ui.removeItem(self.testTarget)
             #self.currentCamMod.ui.removeItem(self.currentTargetMarker)
-            QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+            #QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+            self.currentCamMod.ui.sigCameraScaleChanged.disconnect(self.objectiveChanged)
             
         if self.currentScope is not None:
-            QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            #QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            self.currentScope.sigObjectiveChanged.disconnect(self.objectiveChanged)
             
         self.currentCamMod = camMod
         if camDev is None or camMod is None:
@@ -126,10 +158,12 @@ class ScannerProtoGui(ProtocolGui):
             return
         self.currentScope = camDev.getScopeDevice()
         self.currentCamMod = camMod
-        QtCore.QObject.connect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+        #QtCore.QObject.connect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+        self.currentCamMod.ui.sigCameraScaleChanged.connect(self.objectiveChanged)
         
         if self.currentScope is not None:
-            QtCore.QObject.connect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            #QtCore.QObject.connect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+            self.currentScope.sigObjectiveChanged.connect(self.objectiveChanged)
             
         camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
         #camMod.ui.addItem(self.currentTargetMarker, None, [1,1], 1010)
@@ -158,7 +192,7 @@ class ScannerProtoGui(ProtocolGui):
         camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
 
     def packingSpinChanged(self):
-        print "packingSpinChanged."
+        #print "packingSpinChanged."
         #self.updateSpotSizes()
         self.dev.updateTargetPacking(self.ui.packingSpin.value())
         self.updateSpotSizes()
@@ -245,7 +279,9 @@ class ScannerProtoGui(ProtocolGui):
             'position': target, 
             'minWaitTime': delay,
             'camera': self.cameraModule().config['camDev'], 
-            'laser': str(self.ui.laserCombo.currentText())
+            'laser': str(self.ui.laserCombo.currentText()),
+            'simulateShutter': self.ui.simulateShutterCheck.isChecked(),
+            'duration': self.prot.getParam('duration')
         }
         return prot
         
@@ -253,6 +289,19 @@ class ScannerProtoGui(ProtocolGui):
         
     def handleResult(self, result, params):
         pass
+    
+    def addSpiral(self, pos=None, name=None):
+        autoName = False
+        if name is None:
+            name = 'Point'
+            autoName = True
+        autoPos = False
+        if pos is None:
+            pos = [0,0]
+            autoPos = True
+        pt = widgets.SpiralROI(pos)
+        self.addItem(pt, name,  autoPos,  autoName)
+        return pt
 
     def addPoint(self, pos=None,  name=None):
         autoName = False
@@ -270,7 +319,6 @@ class ScannerProtoGui(ProtocolGui):
         self.addItem(pt, name,  autoPos,  autoName)
         return pt
         
-
     def addGrid(self, pos=None, size=None, angle=0,  name=None):
         autoName = False
         if name is None:
@@ -297,9 +345,34 @@ class ScannerProtoGui(ProtocolGui):
             points = ([0,0], [0,s*3], [s*3,0])
         if pos is None:
             pos = [0,0]
-        item = TargetOcclusion(points, pos=pos)
+        item =TargetOcclusion(points, pos=pos)
         self.addItem(item, name, autoName=auto, autoPosition=auto)
         return item
+        
+    def addProgram(self, name=None): 
+        pass
+        #camMod = self.cameraModule()
+        #if camMod is None:
+            #return False
+        #self.ui.programControlsLayout.setEnabled(True)
+        #item = TargetProgram()
+        #if name is None:
+            #name = 'Program' + str(self.nextId)
+        #self.nextId += 1 
+        #item.name = name
+        #item.objective = self.currentObjective
+        #self.items[name] = item
+        #listitem = QtGui.QListWidgetItem(name)
+        #listitem.setCheckState(QtCore.Qt.Checked)
+        #self.ui.itemList.addItem(listitem)
+        #self.updateItemColor(listitem)
+        #camMod.ui.addItem(item.origin, None, [1,1], 1000)
+        #item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
+        #item.connect(QtCore.SIGNAL('regionChanged'), self.getTargetList)
+        #item.connect(QtCore.SIGNAL('pointsChanged'), self.itemChanged)
+        #self.itemChanged(item)
+        #self.updateDeviceTargetList(item)
+        
         
 
     def addItem(self, item, name,  autoPosition=True,  autoName=True):
@@ -323,9 +396,12 @@ class ScannerProtoGui(ProtocolGui):
         else:
             pos = item.stateCopy()['pos'] 
         camMod.ui.addItem(item, pos, [1, 1], 1000)
-        item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
-        item.connect(QtCore.SIGNAL('regionChanged'), self.getTargetList)
-        item.connect(QtCore.SIGNAL('pointsChanged'), self.itemChanged)
+        #item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
+        item.sigRegionChangeFinished.connect(self.itemMoved)
+        #item.connect(QtCore.SIGNAL('regionChanged'), self.getTargetList)
+        item.sigRegionChanged.connect(self.getTargetList)
+        #item.connect(QtCore.SIGNAL('pointsChanged'), self.itemChanged)
+        item.sigPointsChanged.connect(self.itemChanged)
         #QtCore.QObject.connect(item, QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
         #QtCore.QObject.connect(item, QtCore.SIGNAL('pointsChanged'), self.itemChanged)
         self.itemChanged(item)
@@ -411,6 +487,8 @@ class ScannerProtoGui(ProtocolGui):
             info = ['grid', state['pos'], state['size'], state['angle']]
         elif isinstance(item, TargetOcclusion):
             info = ['occlusion', item.pos(), item.listPoints()]
+        elif isinstance(item, widgets.SpiralROI):
+            info = ['spiral', item.pos()]
         
         self.dev.updateTarget(name, info)
     
@@ -423,7 +501,7 @@ class ScannerProtoGui(ProtocolGui):
                 occArea |= i.mapToScene(i.shape())
             
         for i in items:
-            if isinstance(i, TargetOcclusion):
+            if isinstance(i, TargetOcclusion) or isinstance(i, TargetProgram) or isinstance(i, widgets.SpiralROI):
                 continue
             pts = i.listPoints()
             #for x in self.occlusions.keys():  ##can we just join the occlusion areas together?
@@ -441,10 +519,12 @@ class ScannerProtoGui(ProtocolGui):
     
     def sequenceChanged(self):
         self.targets = None
-        self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        self.sigSequenceChanged.emit(self.dev.name)
 
     def generateTargets(self):
         #items = self.activeItems()
+        #prof= Profiler('ScanerProtoGui.generateTargets()')
         self.targets = []
         locations = self.getTargetList()
         #locations = []
@@ -456,23 +536,31 @@ class ScannerProtoGui(ProtocolGui):
         
         minTime = None
         bestSolution = None
-        nTries = 10
+        if len(locations) > 200:
+            nTries = 1
+        else:
+            nTries = 10
         
         
         ## About to compute order/timing of targets; display a progress dialog
-        
+        #prof.mark('setup')
         progressDlg = QtGui.QProgressDialog("Computing pseudo-optimal target sequence...", "Cancel", 0, nTries)
         #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         progressDlg.setMinimumDuration(250)
-        
+        #prof.mark('progressDlg')
         try:
+            #times=[]
             for i in range(nTries):
+                #prof.mark('attempt: %i' %i)
                 solution = self.findSolution(locations)
+                #prof.mark('foundSolution')
                 time = sum([l[1] for l in solution])
+                #times.append(time)
                 if minTime is None or time < minTime:
                     #print "  new best time:", time
                     minTime = time
                     bestSolution = solution[:]
+                #prof.mark('check time')
                 progressDlg.setValue(i)
                 QtGui.QApplication.processEvents()
                 if progressDlg.wasCanceled():
@@ -481,6 +569,7 @@ class ScannerProtoGui(ProtocolGui):
             raise
         finally:
             ## close progress dialog no matter what happens
+            #print "Times: ", times
             progressDlg.setValue(nTries)
         
         
@@ -496,24 +585,69 @@ class ScannerProtoGui(ProtocolGui):
         #for t in self.targets:
             #print "  ", t
         self.ui.timeLabel.setText('Total time: %0.1f sec'% minTime)
+        #prof.mark('Done.')
+        #prof.finish()
         
     def findSolution(self, locations):
+        #prof2 = Profiler('     findSolution()')
+        targetNumber = len(locations)
         locations = locations[:]
         random.shuffle(locations)
-        solution = [(locations.pop(), 0.0)]
-        
-        while len(locations) > 0:
-            minTime = None
-            minIndex = None
-            for i in range(len(locations)):
-                time = self.computeTime(solution, locations[i])
-                if minTime is None or time < minTime:
-                    minTime = time
-                    minIndex = i
-                if time == 0.0:  ## can't get any better; stop searching
-                    break
-            solution.append((locations.pop(minIndex), minTime))
-        return solution
+        #prof2.mark('setup')
+        if True:
+            solution = [(locations.pop(), 0.0)]
+            while len(locations) > 0:
+                #prof2.mark('lenLocations: %i' %len(locations))
+                minTime = None
+                minIndex = None
+                n=len(locations)-1
+                for i in range(len(locations)):
+                    #if i > n:
+                        #break
+                    #prof2.mark(i)
+                    time, dist = self.computeTime(solution, locations[i])
+                    #prof2.mark('found time')
+                    if minTime is None or time < minTime:
+                        minTime = time
+                        minIndex = i
+                    if time == 0.0:  ## can't get any better; stop searching
+                        #solution.append((locations.pop(i), time))
+                        #n-=1
+                        break
+                solution.append((locations.pop(minIndex), minTime))
+            #prof2.finish()
+            return solution
+        #elif False:
+        ##elif targetNumber >= 200:
+            #minDist = self.stateGroup.state()['minDist']
+            #swap = True
+            #count = 0
+            #while swap == True:
+                #count += 1
+                ##prof2.mark('Trial: %i' %count)
+                #swap = False
+                #solution = [(locations.pop(), 0.0)]
+                #for i in range(len(locations)):
+                    ##prof3 = Profiler('         iterating')
+                    #minTime = None
+                    #minIndex = None
+                    #for j in range(3):
+                        #time, dist = self.computeTime(solution, locations[(i+j)%(len(locations)-1)])
+                        #if dist < minDist:
+                            #loc = locations[i]
+                            #n = int(random.random()*10)
+                            #locations[i]= locations[(i+n)%(len(locations)-1)]
+                            #locations[(i+n)%(len(locations)-1)] = loc
+                            #swap = True
+                            #break
+                    #solution.append((locations[i], time))
+                    ##prof3.mark('%i' %i)
+                #if swap:
+                    #locations, times = zip(*solution)
+                    #locations = list(locations)
+            #print "count: ", count
+            ##prof2.finish()
+            #return locations
         
     #def swapWorst(self, solution):
         #"""Find points very close together, swap elsewhere to improve time"""
@@ -572,7 +706,7 @@ class ScannerProtoGui(ProtocolGui):
             if cumWaitTime > minTime:
                 break
         #print "--> minimum:", minWaitTime
-        return minWaitTime
+        return minWaitTime, dist
             
             
             
@@ -591,28 +725,37 @@ class ScannerProtoGui(ProtocolGui):
         #self.currentTargetMarker.setRect
     
     def quit(self):
-        print "scanner dock quit"
+        #print "scanner dock quit"
         self.deleteAll(clearHistory = False)
         s = self.testTarget.scene()
         if s is not None:
             self.testTarget.scene().removeItem(self.testTarget)
-        QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        #QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
+        try:
+            getManager().sigModulesChanged.disconnect(self.fillModuleList)
+        except TypeError:
+            pass
             
         if self.currentCamMod is not None:
             try:
-                QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+                #QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
+                self.currentCamMod.ui.sigCameraScaleChanged.disconnect(self.objectiveChanged)
             except:
                 pass
         if self.currentScope is not None:
             try:
-                QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+                #QtCore.QObject.disconnect(self.currentScope, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
+                self.currentScope.sigObjectiveChanged.disconnect(self.objectiveChanged)
             except:
                 pass
-        print "  ..done."
+        #print "  ..done."
     
-class TargetPoint(EllipseROI):
+class TargetPoint(widgets.EllipseROI):
+    
+    sigPointsChanged = QtCore.Signal(object)
+    
     def __init__(self, pos, radius, **args):
-        ROI.__init__(self, pos, [radius] * 2, **args)
+        widgets.ROI.__init__(self, pos, [radius] * 2, **args)
         self.aspectLocked = True
         self.overPen = None
         self.underPen = self.pen
@@ -627,28 +770,33 @@ class TargetPoint(EllipseROI):
         
     def setPen(self, pen):
         self.underPen = pen
-        EllipseROI.setPen(self, pen)
+        widgets.EllipseROI.setPen(self, pen)
     
     def setTargetPen(self, index, pen):
         self.overPen = pen
         if pen is None:
             pen = self.underPen
-        EllipseROI.setPen(self, pen)
+        widgets.EllipseROI.setPen(self, pen)
         
 
-class TargetGrid(ROI):
+class TargetGrid(widgets.ROI):
+    
+    sigPointsChanged = QtCore.Signal(object)
+    
     def __init__(self, pos, size, ptSize, pd, angle):
-        ROI.__init__(self, pos=pos, size=size, angle=angle)
+        widgets.ROI.__init__(self, pos=pos, size=size, angle=angle)
         self.addScaleHandle([0, 0], [1, 1])
         self.addScaleHandle([1, 1], [0, 0])
         self.addRotateHandle([0, 1], [0.5, 0.5])
         self.addRotateHandle([1, 0], [0.5, 0.5])
         self.lastSize = self.state['size']
-        self.connect(QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+        #self.connect(QtCore.SIGNAL('regionChanged'), self.rgnChanged)
+        self.sigRegionChanged.connect(self.rgnChanged)
         self.points = []
         self.pens = []
         self.pointSize = ptSize
         self.gridPacking = pd
+        self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         self.regeneratePoints()
         
     def setPointSize(self, size, packing):
@@ -671,7 +819,8 @@ class TargetGrid(ROI):
         self.generateGrid([self.pointSize*0.5, self.pointSize*0.5], [sepx, sepy])  ## make every other row of the grid starting from top
         self.generateGrid([self.pointSize*0.5+0.5*sepx, 0.5*self.pointSize + sepy/2.0 ], [sepx, sepy]) ### make every other row of the grid starting with 2nd row
         self.update()
-        self.emit(QtCore.SIGNAL('pointsChanged'), self)
+        #self.emit(QtCore.SIGNAL('pointsChanged'), self)
+        self.sigPointsChanged.emit(self)
         
     def listPoints(self):
         pts = []
@@ -699,7 +848,7 @@ class TargetGrid(ROI):
         
 
     def paint(self, p, opt, widget):
-        ROI.paint(self, p, opt, widget)
+        widgets.ROI.paint(self, p, opt, widget)
         ps2 = self.pointSize * 0.5
         #ps2 = self.pointSize * 0.5 * self.gridPacking
         #p.setPen(self.pen)
@@ -712,11 +861,34 @@ class TargetGrid(ROI):
                 p.setPen(self.pen)
             p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
         
-class TargetOcclusion(PolygonROI):
+class TargetOcclusion(widgets.PolygonROI):
+    
+    
+    
+    
+    
+    
     def __init__(self, points, pos=None):
-        PolygonROI.__init__(self, points, pos)
-        
-        
+        widgets.PolygonROI.__init__(self, points, pos)
+        self.setZValue(10000000)
     
     def setPointSize(self, size, packing):
         pass
+    
+class TargetProgram(QtCore.QObject):
+    
+    
+    
+    
+    
+    
+    def __init__(self):
+        self.origin = QtGui.QGraphicsEllipseItem(0,0,1,1)
+        self.paths = []
+        
+    def setPen(self, pen):
+        self.origin.setPen(pen)
+        
+    def listPoints(self):
+        pass
+        

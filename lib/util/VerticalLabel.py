@@ -17,8 +17,9 @@ from PyQt4 import QtCore, QtGui
             #return QtCore.QSize(16, 50)
 
 class VerticalLabel(QtGui.QLabel):
-    def __init__(self, text, orientation='vertical'):
+    def __init__(self, text, orientation='vertical', forceWidth=True):
         QtGui.QLabel.__init__(self, text)
+        self.forceWidth = forceWidth
         self.orientation = None
         self.setOrientation(orientation)
         
@@ -50,12 +51,20 @@ class VerticalLabel(QtGui.QLabel):
         
         if self.orientation == 'vertical':
             self.setMaximumWidth(self.hint.height())
+            self.setMinimumWidth(0)
             self.setMaximumHeight(16777215)
-            self.setMinimumHeight(self.hint.width())
+            if self.forceWidth:
+                self.setMinimumHeight(self.hint.width())
+            else:
+                self.setMinimumHeight(0)
         else:
             self.setMaximumHeight(self.hint.height())
-            self.setMaximumWidth(16777215)
             self.setMinimumHeight(0)
+            self.setMaximumWidth(16777215)
+            if self.forceWidth:
+                self.setMinimumWidth(self.hint.width())
+            else:
+                self.setMinimumWidth(0)
 
     def sizeHint(self):
         if self.orientation == 'vertical':

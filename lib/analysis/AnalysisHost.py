@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import modules
 import DockArea
+import lib.Manager
 
 class AnalysisHost(QtGui.QMainWindow):
     """Window for hosting analysis widgets.
@@ -11,9 +13,10 @@ class AnalysisHost(QtGui.QMainWindow):
     
     """
     
-    def __init__(self, dataManager=None, module=None):
+    def __init__(self, dataManager=None, dataModel=None, module=None):
         QtGui.QMainWindow.__init__(self)
         self.dm = dataManager
+        self.dataModel = dataModel
         self.mod = None
         self.dockArea = DockArea.DockArea()
         self.setCentralWidget(self.dockArea)
@@ -31,7 +34,7 @@ class AnalysisHost(QtGui.QMainWindow):
         
         elems = self.mod.listElements()
         for name, el in elems.iteritems():
-            w = self.mod.getElement(name)
+            w = self.mod.getElement(name, create=True)
             d = DockArea.Dock(name=name, size=el.size())
             if w is not None:
                 d.addWidget(w)
@@ -40,6 +43,13 @@ class AnalysisHost(QtGui.QMainWindow):
                 pos = ()
             #print d, pos
             self.dockArea.addDock(d, *pos)
+        self.elements = elems
         
         self.setWindowTitle(modName)
         
+        lib.Manager.getManager().declareInterface(modName, 'analysisMod', self.mod)
+        
+    def quit(self):
+        for el in self.elements:
+            if hasattr(el, 'close'):
+                el.close()

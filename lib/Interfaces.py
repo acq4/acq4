@@ -3,16 +3,10 @@ import weakref
 from Mutex import *
 
 
-
-
-
-
-
-
-
 class InterfaceDirectory(QtCore.QObject):
     """Class for managing a phonebook of interfaces.
     Any object in the program may advertise its services via this directory"""
+    sigInterfaceListChanged = QtCore.Signal(object)
     
     def __init__(self):
         QtCore.QObject.__init__(self)
@@ -41,7 +35,7 @@ class InterfaceDirectory(QtCore.QObject):
                 self.typeList[t][name] = None
                 self.nameList[name][t] = None
             
-            self.emit(QtCore.SIGNAL('interfaceListChanged'), types)
+            self.sigInterfaceListChanged.emit(types)
             return True
 
     def removeInterface(self, name, types=None):
@@ -62,7 +56,7 @@ class InterfaceDirectory(QtCore.QObject):
                 del self.nameList[name]
                 del self.objList[name]
                 
-            self.emit(QtCore.SIGNAL('interfaceListChanged'), types)
+            self.sigInterfaceListChanged.emit(types)
         
     def listInterfaces(self, types):
         with self.lock:

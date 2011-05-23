@@ -5,17 +5,24 @@ from Terminal import *
 from advancedTypes import OrderedDict
 from debug import *
 import numpy as np
-from pyqtgraph.ObjectWorkaround import QObjectWorkaround
+#from pyqtgraph.ObjectWorkaround import QObjectWorkaround
 from eq import *
 
 def strDict(d):
     return dict([(str(k), v) for k, v in d.iteritems()])
 
 class Node(QtCore.QObject):
+    
+    sigOutputChanged = QtCore.Signal(object)
+    sigClosed = QtCore.Signal(object)
+    sigRenamed = QtCore.Signal(object, object)
+    sigTerminalRenamed = QtCore.Signal(object, object)
+    
     def __init__(self, name, terminals=None):
         QtCore.QObject.__init__(self)
         self._name = name
         self._bypass = False
+        self.bypassButton = None  ## this will be set by the flowchart ctrl widget..
         self._graphicsItem = None
         self.terminals = OrderedDict()
         self._inputs = {}
@@ -42,9 +49,16 @@ class Node(QtCore.QObject):
     def addOutput(self, name="Output", **args):
         return self.addTerminal(name, io='out', **args)
         
-    def removeTerminal(self, name):
+    def removeTerminal(self, term):
+        ## term may be a terminal or its name
+        
+        if isinstance(term, Terminal):
+            name = term.name()
+        else:
+            name = term
+            term = self.terminals[name]
+        
         #print "remove", name
-        term = self.terminals[name]
         term.close()
         del self.terminals[name]
         if name in self._inputs:
@@ -65,7 +79,8 @@ class Node(QtCore.QObject):
             del d[oldName]
             
         self.graphicsItem().updateTerminals()
-        self.emit(QtCore.SIGNAL('terminalRenamed'), term, oldName)
+        #self.emit(QtCore.SIGNAL('terminalRenamed'), term, oldName)
+        self.sigTerminalRenamed.emit(term, oldName)
         
     def addTerminal(self, name, **opts):
         name = self.nextTerminalName(name)
@@ -97,7 +112,7 @@ class Node(QtCore.QObject):
     def __getattr__(self, attr):
         """Return the terminal with the given name"""
         if attr not in self.terminals:
-            raise NameError(attr)
+            raise AttributeError(attr)
         else:
             return self.terminals[attr]
             
@@ -110,7 +125,8 @@ class Node(QtCore.QObject):
     def rename(self, name):
         oldName = self._name
         self._name = name
-        self.emit(QtCore.SIGNAL('renamed'), self, oldName)
+        #self.emit(QtCore.SIGNAL('renamed'), self, oldName)
+        self.sigRenamed.emit(self, oldName)
 
     def dependentNodes(self):
         """Return the list of nodes which provide direct input to this node"""
@@ -121,13 +137,15 @@ class Node(QtCore.QObject):
         #return set([t.inputTerminals().node() for t in self.listInputs().itervalues()])
         
     def __repr__(self):
-        return "<Node %s>" % self.name()
+        return "<Node %s @%x>" % (self.name(), id(self))
         
     def ctrlWidget(self):
         return None
 
     def bypass(self, byp):
         self._bypass = byp
+        if self.bypassButton is not None:
+            self.bypassButton.setChecked(byp)
         self.update()
         
     def isBypassed(self):
@@ -143,7 +161,7 @@ class Node(QtCore.QObject):
             if not eq(oldVal, v):
                 changed = True
             term.setValue(v, process=False)
-        if changed:
+        if changed and '_updatesHandled_' not in args:
             self.update()
         
     def inputValues(self):
@@ -166,9 +184,8 @@ class Node(QtCore.QObject):
         """Called whenever one of this node's terminals is connected elsewhere."""
         pass 
     
-    def update(self):
+    def update(self, signal=True):
         """Collect all input values, attempt to process new output values, and propagate downstream."""
-        #print "processing", self
         vals = self.inputValues()
         #print "  inputs:", vals
         try:
@@ -178,7 +195,10 @@ class Node(QtCore.QObject):
                 out = self.process(**strDict(vals))
             #print "  output:", out
             if out is not None:
-                self.setOutput(**out)
+                if signal:
+                    self.setOutput(**out)
+                else:
+                    self.setOutputNoSignal(**out)
             for n,t in self.inputs().iteritems():
                 t.setValueAcceptable(True)
             self.clearException()
@@ -187,29 +207,37 @@ class Node(QtCore.QObject):
             for n,t in self.outputs().iteritems():
                 t.setValue(None)
             self.setException(sys.exc_info())
-        self.emit(QtCore.SIGNAL('outputChanged'))
+            
+            if signal:
+                #self.emit(QtCore.SIGNAL('outputChanged'), self)  ## triggers flowchart to propagate new data
+                self.sigOutputChanged.emit(self)  ## triggers flowchart to propagate new data
 
     def processBypassed(self, args):
         result = {}
-        for t in self.outputs().values():
-            byp = t.bypassValue()
+        for term in self.outputs().values():
+            byp = term.bypassValue()
             if byp is None:
-                result[t.name()] = None
+                result[term.name()] = None
             else:
-                result[t.name()] = args.get(byp, None)
+                result[term.name()] = args.get(byp, None)
         return result
 
     def setOutput(self, **vals):
+        self.setOutputNoSignal(**vals)
+        #self.emit(QtCore.SIGNAL('outputChanged'), self)  ## triggers flowchart to propagate new data
+        self.sigOutputChanged.emit(self)  ## triggers flowchart to propagate new data
+
+    def setOutputNoSignal(self, **vals):
         for k, v in vals.iteritems():
             term = self.outputs()[k]
             term.setValue(v)
-            targets = term.connections()
-            for t in targets:  ## propagate downstream
-                if t is term:
-                    continue
-                t.inputChanged(term)
+            #targets = term.connections()
+            #for t in targets:  ## propagate downstream
+                #if t is term:
+                    #continue
+                #t.inputChanged(term)
             term.setValueAcceptable(True)
-            
+
     def setException(self, exc):
         self.exception = exc
         self.recolor()
@@ -225,12 +253,13 @@ class Node(QtCore.QObject):
 
     def saveState(self):
         pos = self.graphicsItem().pos()
-        return {'pos': (pos.x(), pos.y())}
+        return {'pos': (pos.x(), pos.y()), 'bypass': self.isBypassed()}
         
     def restoreState(self, state):
         pos = state.get('pos', (0,0))
         self.graphicsItem().setPos(*pos)
-        
+        self.bypass(state.get('bypass', False))
+
     def saveTerminals(self):
         terms = OrderedDict()
         for n, t in self.terminals.iteritems():
@@ -269,7 +298,8 @@ class Node(QtCore.QObject):
         w = self.ctrlWidget()
         if w is not None:
             w.setParent(None)
-        self.emit(QtCore.SIGNAL('closed'), self)
+        #self.emit(QtCore.SIGNAL('closed'), self)
+        self.sigClosed.emit(self)
             
     def disconnectAll(self):
         for t in self.terminals.values():
@@ -289,12 +319,9 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         self.pen = QtGui.QPen(QtGui.QColor(0,0,0))
         self.brush = QtGui.QBrush(QtGui.QColor(200, 200, 200))
         self.node = node
-        self.setFlags(
-            self.ItemIsMovable |
-            self.ItemIsSelectable | 
-            self.ItemIsFocusable |
-            self.ItemSendsGeometryChanges
-        )
+        flags = self.ItemIsMovable | self.ItemIsSelectable | self.ItemIsFocusable |self.ItemSendsGeometryChanges
+        self.setFlags(flags)
+        
         bounds = self.boundingRect()
         self.nameItem = QtGui.QGraphicsTextItem(self.node.name(), self)
         self.nameItem.moveBy(bounds.width()/2. - self.nameItem.boundingRect().width()/2., 0)

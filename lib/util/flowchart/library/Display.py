@@ -9,6 +9,7 @@ import numpy as np
 class PlotWidgetNode(Node):
     """Connection to PlotWidget. Will plot arrays, metaarrays, and display event lists."""
     nodeName = 'PlotWidget'
+    sigPlotChanged = QtCore.Signal(object)
     
     def __init__(self, name):
         Node.__init__(self, name, terminals={'In': {'io': 'in', 'multi': True}})
@@ -23,6 +24,7 @@ class PlotWidgetNode(Node):
     def setPlot(self, plot):
         #print "======set plot"
         self.plot = plot
+        self.sigPlotChanged.emit(self)
         
     def getPlot(self):
         return self.plot
@@ -113,16 +115,25 @@ class CanvasNode(Node):
             
                     
             
-class EventListPlotter(Node):
+class EventListPlotter(CtrlNode):
     """Prepares an event list for display in a PlotWidget."""
     nodeName = 'EventListPlotter'
+    uiTemplate = [
+        ('color', 'color'),
+    ]
     
     def __init__(self, name):
-        Node.__init__(self, name, terminals={
+        CtrlNode.__init__(self, name, terminals={
             'events': {'io': 'in'}, 
             'plot': {'io': 'out', 'multi': True}
-        })
+        }, ui=self.uiTemplate)
         self.items = {}
+        self.ctrls['color'].sigColorChanged.connect(self.colorChanged)
+        
+    def colorChanged(self):
+        c = self.ctrls['color'].color()
+        for i in self.items.itervalues():
+            i.setPen(c)
         
     def process(self, events, display=True):
         if not display:
@@ -130,16 +141,24 @@ class EventListPlotter(Node):
         conn = self['plot'].connections()
         if len(events) > 200:
             events = events[:200]
+        color = self.ctrls['color'].color()
+        
+        ## don't keep items from last run; they may have been removed already.
+        self.items = {}
+        
         for c in conn:
             plot = c.node().getPlot()
             if plot is None:
                 continue
-            if c in self.items:
-                item = self.items[c]
-                item.setXVals(events)
-            else:
-                self.items[c] = graphicsItems.VTickGroup(events, view=plot)
-                self.items[c].setYRange([0., 0.2], relative=True)
+            ## It's possible items were cleared out already; always rebuild.
+            #if c in self.items:
+                #item = self.items[c]
+                #item.setXVals(events)  
+            #else:
+                #self.items[c] = graphicsItems.VTickGroup(events, view=plot, pen=color)
+                #self.items[c].setYRange([0., 0.2], relative=True)
+            self.items[c] = graphicsItems.VTickGroup(events, view=plot, pen=color)
+            self.items[c].setYRange([0., 0.2], relative=True)
         return {'plot': self.items}
         
 

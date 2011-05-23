@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
+if not hasattr(QtCore, 'Signal'):
+    QtCore.Signal = QtCore.pyqtSignal
 from weakref import *
 
 class TreeWidget(QtGui.QTreeWidget):
     """Extends QTreeWidget to allow internal drag/drop with widgets in the tree.
     Also maintains the expanded state of subtrees as they are moved.
     This class demonstrates the absurd lengths one must go to to make drag/drop work."""
+    
+    sigItemMoved = QtCore.Signal(object, object, object) # (item, parent, index)
+    
     def __init__(self, parent=None):
         QtGui.QTreeWidget.__init__(self, parent)
         #self.itemWidgets = WeakKeyDictionary()
@@ -36,7 +41,7 @@ class TreeWidget(QtGui.QTreeWidget):
     def dropMimeData(self, parent, index, data, action):
         item = self.currentItem()
         p = parent
-        print "drop", item, "->", parent, index
+        #print "drop", item, "->", parent, index
         while True:
             if p is None:
                 break
@@ -60,12 +65,13 @@ class TreeWidget(QtGui.QTreeWidget):
         self.prepareMove(item)
             
         currentParent.removeChild(item)
-        print "  insert child to index", index
+        #print "  insert child to index", index
         parent.insertChild(index, item)  ## index will not be correct
         self.setCurrentItem(item)
         
         self.recoverMove(item)
-        self.emit(QtCore.SIGNAL('itemMoved'), item, parent, index)
+        #self.emit(QtCore.SIGNAL('itemMoved'), item, parent, index)
+        self.sigItemMoved.emit(item, parent, index)
         return True
 
     def itemMoving(self, item, parent, index):
@@ -108,6 +114,7 @@ class TreeWidget(QtGui.QTreeWidget):
             if self.topLevelItem(i) is item:
                 self.takeTopLevelItem(i)
                 return
+        raise Exception("Item '%s' not in top-level items." % str(item))
             
             
 if __name__ == '__main__':

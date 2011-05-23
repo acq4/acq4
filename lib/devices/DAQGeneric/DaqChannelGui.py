@@ -51,10 +51,13 @@ class DaqChannelGui(QtGui.QWidget):
         ## Automatically locate all read/writable widgets and group them together for easy 
         ## save/restore operations
         self.stateGroup = WidgetGroup(self)
+        self.stateGroup.addWidget(self.plot, name='plot')
         
         self.displayCheckChanged()
-        QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('stateChanged(int)'), self.displayCheckChanged)
-        QtCore.QObject.connect(self.ui.groupBox, QtCore.SIGNAL('toggled(bool)'), self.groupBoxClicked)
+        #QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('stateChanged(int)'), self.displayCheckChanged)
+        self.ui.displayCheck.stateChanged.connect(self.displayCheckChanged)
+        #QtCore.QObject.connect(self.ui.groupBox, QtCore.SIGNAL('toggled(bool)'), self.groupBoxClicked)
+        self.ui.groupBox.toggled.connect(self.groupBoxClicked)
         
         if 'userScale' in self.config:
             self.setScale(self.config['userScale'])
@@ -133,9 +136,14 @@ class DaqChannelGui(QtGui.QWidget):
         pass
     
     def quit(self):
-        pass
+        #print "quit DAQGeneric channel", self.name
+        self.plot.close()
+        
         
 class OutputChannelGui(DaqChannelGui):
+    
+    sigSequenceChanged = QtCore.Signal(object)
+    
     def __init__(self, *args):
         DaqChannelGui.__init__(self, *args)
         self.units = ''
@@ -157,13 +165,20 @@ class OutputChannelGui(DaqChannelGui):
             for s in self.getSpins():
                 s.setOpts(dec=True, range=[None, None], step=1.0, minStep=1e-12, siPrefix=True)
 
-        QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
-        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('dataChanged'), self.updateWaves)
-        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('functionChanged'), self.waveFunctionChanged)
-        QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
-        QtCore.QObject.connect(self.ui.holdingCheck, QtCore.SIGNAL('stateChanged(int)'), self.holdingCheckChanged)
-        QtCore.QObject.connect(self.ui.holdingSpin, QtCore.SIGNAL('valueChanged(double)'), self.holdingSpinChanged)
-        QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.updateHolding)
+        #QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
+        #QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('dataChanged'), self.updateWaves)
+        #QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('functionChanged'), self.waveFunctionChanged)
+        #QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
+        #QtCore.QObject.connect(self.ui.holdingCheck, QtCore.SIGNAL('stateChanged(int)'), self.holdingCheckChanged)
+        #QtCore.QObject.connect(self.ui.holdingSpin, QtCore.SIGNAL('valueChanged(double)'), self.holdingSpinChanged)
+        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.updateHolding)
+        self.daqUI.sigChanged.connect(self.daqChanged)
+        self.ui.waveGeneratorWidget.sigDataChanged.connect(self.updateWaves)
+        self.ui.waveGeneratorWidget.sigFunctionChanged.connect(self.waveFunctionChanged)
+        self.ui.waveGeneratorWidget.sigParametersChanged.connect(self.sequenceChanged)
+        self.ui.holdingCheck.stateChanged.connect(self.holdingCheckChanged)
+        self.ui.holdingSpin.valueChanged.connect(self.holdingSpinChanged)
+        self.dev.sigHoldingChanged.connect(self.updateHolding)
         
         self.holdingCheckChanged()
 
@@ -177,15 +192,20 @@ class OutputChannelGui(DaqChannelGui):
         
     def quit(self):
         DaqChannelGui.quit(self)
-        if not sip.isdeleted(self.daqUI):
-            QtCore.QObject.disconnect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
-        QtCore.QObject.disconnect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('dataChanged'), self.updateWaves)
-        QtCore.QObject.disconnect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('functionChanged'), self.waveFunctionChanged)
-        QtCore.QObject.disconnect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
-        QtCore.QObject.disconnect(self.ui.holdingCheck, QtCore.SIGNAL('stateChanged(int)'), self.holdingCheckChanged)
-        QtCore.QObject.disconnect(self.ui.holdingSpin, QtCore.SIGNAL('valueChanged(double)'), self.holdingSpinChanged)
-        QtCore.QObject.disconnect(self.dev, QtCore.SIGNAL('holdingChanged'), self.updateHolding)
-    
+        
+        #if not sip.isdeleted(self.daqUI):
+        try:
+            self.daqUI.sigChanged.disconnect(self.daqChanged)
+        except TypeError:
+            pass
+        self.ui.waveGeneratorWidget.sigDataChanged.disconnect(self.updateWaves)
+        self.ui.waveGeneratorWidget.sigFunctionChanged.disconnect(self.waveFunctionChanged)
+        self.ui.waveGeneratorWidget.sigParametersChanged.disconnect(self.sequenceChanged)
+        self.ui.holdingCheck.stateChanged.disconnect(self.holdingCheckChanged)
+        self.ui.holdingSpin.valueChanged.disconnect(self.holdingSpinChanged)
+        self.dev.sigHoldingChanged.disconnect(self.updateHolding)
+
+
     def daqChanged(self, state):
         self.rate = state['rate']
         self.numPts = state['numPts']
@@ -196,7 +216,8 @@ class OutputChannelGui(DaqChannelGui):
         return self.ui.waveGeneratorWidget.listSequences()
     
     def sequenceChanged(self):
-        self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        self.sigSequenceChanged.emit(self.dev.name)
         
     
     def generateProtocol(self, params=None):
@@ -230,7 +251,7 @@ class OutputChannelGui(DaqChannelGui):
         for k in ps:
             params[k] = range(len(ps[k]))
         waves = []
-        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys(), passHash=True)
+        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys())
         for w in waves:
             if w is not None:
                 self.ui.functionCheck.setChecked(True)

@@ -1,49 +1,54 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'DOChannelTemplate.ui'
+# Form implementation generated from reading ui file './lib/devices/DAQGeneric/DOChannelTemplate.ui'
 #
-# Created: Thu Aug 13 00:15:16 2009
-#      by: PyQt4 UI code generator 4.5.2
+# Created: Wed May 18 20:44:12 2011
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
 from PyQt4 import QtCore, QtGui
 
+try:
+    _fromUtf8 = QtCore.QString.fromUtf8
+except AttributeError:
+    _fromUtf8 = lambda s: s
+
 class Ui_Form(object):
     def setupUi(self, Form):
-        Form.setObjectName("Form")
+        Form.setObjectName(_fromUtf8("Form"))
         Form.resize(400, 300)
         self.verticalLayout_3 = QtGui.QVBoxLayout(Form)
         self.verticalLayout_3.setSpacing(0)
         self.verticalLayout_3.setMargin(0)
-        self.verticalLayout_3.setObjectName("verticalLayout_3")
+        self.verticalLayout_3.setObjectName(_fromUtf8("verticalLayout_3"))
         self.groupBox = QtGui.QGroupBox(Form)
         font = QtGui.QFont()
         font.setWeight(75)
         font.setBold(True)
         self.groupBox.setFont(font)
         self.groupBox.setCheckable(True)
-        self.groupBox.setObjectName("groupBox")
+        self.groupBox.setObjectName(_fromUtf8("groupBox"))
         self.verticalLayout_2 = QtGui.QVBoxLayout(self.groupBox)
         self.verticalLayout_2.setSpacing(0)
         self.verticalLayout_2.setContentsMargins(5, 0, 0, 0)
-        self.verticalLayout_2.setObjectName("verticalLayout_2")
+        self.verticalLayout_2.setObjectName(_fromUtf8("verticalLayout_2"))
         self.gridLayout = QtGui.QGridLayout()
         self.gridLayout.setSpacing(0)
-        self.gridLayout.setObjectName("gridLayout")
+        self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
         self.preSetCheck = QtGui.QCheckBox(self.groupBox)
         font = QtGui.QFont()
         font.setWeight(50)
         font.setBold(False)
         self.preSetCheck.setFont(font)
-        self.preSetCheck.setObjectName("preSetCheck")
+        self.preSetCheck.setObjectName(_fromUtf8("preSetCheck"))
         self.gridLayout.addWidget(self.preSetCheck, 0, 0, 1, 1)
         self.holdingCheck = QtGui.QCheckBox(self.groupBox)
         font = QtGui.QFont()
         font.setWeight(50)
         font.setBold(False)
         self.holdingCheck.setFont(font)
-        self.holdingCheck.setObjectName("holdingCheck")
+        self.holdingCheck.setObjectName(_fromUtf8("holdingCheck"))
         self.gridLayout.addWidget(self.holdingCheck, 1, 0, 1, 1)
         self.preSetSpin = QtGui.QSpinBox(self.groupBox)
         font = QtGui.QFont()
@@ -51,7 +56,7 @@ class Ui_Form(object):
         font.setBold(False)
         self.preSetSpin.setFont(font)
         self.preSetSpin.setMaximum(1)
-        self.preSetSpin.setObjectName("preSetSpin")
+        self.preSetSpin.setObjectName(_fromUtf8("preSetSpin"))
         self.gridLayout.addWidget(self.preSetSpin, 0, 1, 1, 1)
         self.holdingSpin = QtGui.QSpinBox(self.groupBox)
         font = QtGui.QFont()
@@ -59,25 +64,25 @@ class Ui_Form(object):
         font.setBold(False)
         self.holdingSpin.setFont(font)
         self.holdingSpin.setMaximum(1)
-        self.holdingSpin.setObjectName("holdingSpin")
+        self.holdingSpin.setObjectName(_fromUtf8("holdingSpin"))
         self.gridLayout.addWidget(self.holdingSpin, 1, 1, 1, 1)
         self.verticalLayout_2.addLayout(self.gridLayout)
         self.frame = QtGui.QFrame(self.groupBox)
         self.frame.setFrameShape(QtGui.QFrame.Box)
         self.frame.setFrameShadow(QtGui.QFrame.Raised)
-        self.frame.setObjectName("frame")
+        self.frame.setObjectName(_fromUtf8("frame"))
         self.verticalLayout = QtGui.QVBoxLayout(self.frame)
         self.verticalLayout.setSpacing(0)
         self.verticalLayout.setMargin(0)
-        self.verticalLayout.setObjectName("verticalLayout")
+        self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
         self.horizontalLayout = QtGui.QHBoxLayout()
-        self.horizontalLayout.setObjectName("horizontalLayout")
+        self.horizontalLayout.setObjectName(_fromUtf8("horizontalLayout"))
         self.functionCheck = QtGui.QCheckBox(self.frame)
         font = QtGui.QFont()
         font.setWeight(50)
         font.setBold(False)
         self.functionCheck.setFont(font)
-        self.functionCheck.setObjectName("functionCheck")
+        self.functionCheck.setObjectName(_fromUtf8("functionCheck"))
         self.horizontalLayout.addWidget(self.functionCheck)
         self.displayCheck = QtGui.QCheckBox(self.frame)
         font = QtGui.QFont()
@@ -85,7 +90,7 @@ class Ui_Form(object):
         font.setBold(False)
         self.displayCheck.setFont(font)
         self.displayCheck.setChecked(True)
-        self.displayCheck.setObjectName("displayCheck")
+        self.displayCheck.setObjectName(_fromUtf8("displayCheck"))
         self.horizontalLayout.addWidget(self.displayCheck)
         self.verticalLayout.addLayout(self.horizontalLayout)
         self.waveGeneratorWidget = StimGenerator(self.frame)
@@ -98,7 +103,7 @@ class Ui_Form(object):
         font.setWeight(50)
         font.setBold(False)
         self.waveGeneratorWidget.setFont(font)
-        self.waveGeneratorWidget.setObjectName("waveGeneratorWidget")
+        self.waveGeneratorWidget.setObjectName(_fromUtf8("waveGeneratorWidget"))
         self.verticalLayout.addWidget(self.waveGeneratorWidget)
         self.verticalLayout_2.addWidget(self.frame)
         self.verticalLayout_3.addWidget(self.groupBox)

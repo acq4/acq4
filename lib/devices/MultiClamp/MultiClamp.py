@@ -12,6 +12,9 @@ from protoGUI import *
 from debug import *
 
 class MultiClamp(Device):
+    
+    sigStateChanged = QtCore.Signal(object)
+    
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.lock = Mutex(Mutex.Recursive)
@@ -95,7 +98,8 @@ class MultiClamp(Device):
             self.lastMode = state['mode']
             ## Has mode changed? has extCmdScale changed?
             
-        QtCore.QObject.emit(self, QtCore.SIGNAL('stateChanged'), state)
+        #QtCore.QObject.emit(self, QtCore.SIGNAL('stateChanged'), state)
+        self.sigStateChanged.emit(state)
         
     def getLastState(self, mode=None):
         """Return the last known state for the given mode."""
@@ -154,6 +158,15 @@ class MultiClamp(Device):
         #with MutexLocker(self.lock):
             #return self.mc.getMode()
     
+    def getHolding(self, mode=None):
+        with MutexLocker(self.lock):
+            if mode is None:  ## If no mode is specified, use the current mode
+                mode = self.mc.getMode()
+            if mode == 'I=0':
+                return 0.0
+            else:
+                return self.holding[mode]
+            
     def setHolding(self, mode=None, value=None):
         """Define and/or set the holding values for this device. 
         Note--these are computer-controlled holding values, NOT the holding values used by the amplifier.
@@ -255,6 +268,8 @@ class MultiClamp(Device):
 
 
 class MultiClampTask(DeviceTask):
+    
+    
     recordParams = ['Holding', 'HoldingEnable', 'PipetteOffset', 'FastCompCap', 'SlowCompCap', 'FastCompTau', 'SlowCompTau', 'NeutralizationEnable', 'NeutralizationCap', 'WholeCellCompEnable', 'WholeCellCompCap', 'WholeCellCompResist', 'RsCompEnable', 'RsCompBandwidth', 'RsCompCorrection', 'PrimarySignalLPF', 'PrimarySignalHPF', 'OutputZeroEnable', 'OutputZeroAmplitude', 'LeakSubEnable', 'LeakSubResist', 'BridgeBalEnable', 'BridgeBalResist']
     
     def __init__(self, dev, cmd):
@@ -340,7 +355,7 @@ class MultiClampTask(DeviceTask):
                     
             #prof.mark('    Multiclamp: recordState?')
                     
-                
+            self.holdingVal = self.dev.getHolding(self.cmd['mode'])
             #self.state['primarySignal'] = self.dev.mc.getPrimarySignalInfo()
             #self.state['secondarySignal'] = self.dev.mc.getSecondarySignalInfo()
             
@@ -415,7 +430,7 @@ class MultiClampTask(DeviceTask):
                 if ch == 'command':
                     #result[ch]['data'] = result[ch]['data'] / self.dev.config['cmdScale'][self.cmd['mode']]
                     result[ch]['data'] = result[ch]['data'] * self.state['extCmdScale']
-                    result[ch]['name'] = 'Command'
+                    result[ch]['name'] = 'command'
                     if self.cmd['mode'] == 'VC':
                         result[ch]['units'] = 'V'
                     else:
@@ -439,6 +454,11 @@ class MultiClampTask(DeviceTask):
             daqState = {}
             for ch in result:
                 daqState[ch] = result[ch]['info']
+                
+            ## record command holding value
+            if 'command' not in daqState:
+                daqState['command'] = {}
+            daqState['command']['holding'] = self.holdingVal
                 
             #timeVals = linspace(0, float(self.state['numPts']-1) / float(self.state['rate']), self.state['numPts'])
             timeVals = linspace(0, float(nPts-1) / float(rate), nPts)

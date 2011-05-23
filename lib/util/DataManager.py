@@ -19,20 +19,36 @@ import time
 from Mutex import Mutex, MutexLocker
 from SignalProxy import proxyConnect
 from PyQt4 import QtCore, QtGui
+if not hasattr(QtCore, 'Signal'):
+    QtCore.Signal = QtCore.pyqtSignal
+    QtCore.Slot = QtCore.pyqtSlot
 #from lib.filetypes.FileType import *
 import lib.filetypes as filetypes
 from debug import *
+import copy
+import advancedTypes
 
 def abspath(fileName):
     """Return an absolute path string which is guaranteed to uniquely identify a file."""
     return os.path.normcase(os.path.abspath(fileName))
 
 
-def getHandle(fileName):
+def getDataManager():
     inst = DataManager.INSTANCE
     if inst is None:
         raise Exception('No DataManger created yet!')
-    return inst.getHandle(fileName)
+    return inst
+
+def getHandle(fileName):
+    return getDataManager().getHandle(fileName)
+
+def getDirHandle(fileName, create=False):
+    return getDataManager().getDirHandle(fileName)
+
+def getFileHandle(fileName):
+    return getDataManager().getFileHandle(fileName)
+
+
 
 
 class DataManager(QtCore.QObject):
@@ -88,7 +104,9 @@ class DataManager(QtCore.QObject):
         #print "*******data manager caching new handle", handle
         self._setCache(fileName, handle)
         ## make sure all file handles belong to the main GUI thread
-        handle.moveToThread(QtGui.QApplication.instance().thread())
+        app = QtGui.QApplication.instance()
+        if app is not None:
+            handle.moveToThread(app.thread())
         ## No signals; handles should explicitly inform the manager of changes
         #QtCore.QObject.connect(handle, QtCore.SIGNAL('changed'), self._handleChanged)
         
@@ -163,6 +181,10 @@ class DataManager(QtCore.QObject):
 
 
 class FileHandle(QtCore.QObject):
+    
+    sigChanged = QtCore.Signal(object, object, object)  # (self, change, (args))
+    sigDelayedChange = QtCore.Signal(object, object)  # (self, changes)
+    
     def __init__(self, path, manager):
         QtCore.QObject.__init__(self)
         self.manager = manager
@@ -171,7 +193,8 @@ class FileHandle(QtCore.QObject):
         self.parentDir = None
         #self.lock = threading.RLock()
         self.lock = Mutex(QtCore.QMutex.Recursive)
-        self.sigproxy = proxyConnect(self, QtCore.SIGNAL('changed'), self.delayedChange)
+        self.sigproxy = proxyConnect(None, self.sigChanged, self.delayedChange)
+        
         
     def __repr__(self):
         return "<%s '%s' (0x%x)>" % (self.__class__.__name__, self.name(), self.__hash__())
@@ -180,6 +203,7 @@ class FileHandle(QtCore.QObject):
         return (getHandle, (self.name(),))
 
     def name(self, relativeTo=None):
+        """Return the full name of this file with its absolute path"""
         #self.checkDeleted()
         with self.lock:
             path = self.path
@@ -193,9 +217,14 @@ class FileHandle(QtCore.QObject):
             return path
         
     def shortName(self):
+        """Return the name of this file without its path"""
         #self.checkDeleted()
         return os.path.split(self.name())[1]
-        
+
+    def ext(self):
+        """Return file's extension"""
+        return os.path.splitext(self.name())[1]
+
     def parent(self):
         self.checkDeleted()
         with self.lock:
@@ -206,7 +235,8 @@ class FileHandle(QtCore.QObject):
         
     def info(self):
         self.checkDeleted()
-        return self.parent()._fileInfo(self.shortName())
+        info = self.parent()._fileInfo(self.shortName())
+        return advancedTypes.ProtectedDict(info)
         
     def setInfo(self, info=None, **args):
         """Set meta-information for this file. Updates all keys specified in info, leaving others unchanged."""
@@ -230,21 +260,28 @@ class FileHandle(QtCore.QObject):
             if os.path.exists(fn2):
                 raise Exception("Destination file %s already exists." % fn2)
 #            print "<> DataManager.move: about to move %s => %s" % (fn1, fn2)
+
+            if oldDir.isManaged() and not newDir.isManaged():
+                raise Exception("Not moving managed file to unmanaged location--this would cause loss of meta info.")
+            
+
             os.rename(fn1, fn2)
 #            print "<> DataManager.move: moved."
             self.path = fn2
             self.parentDir = None
 #            print "<> DataManager.move: inform DM of change.."
             self.manager._handleChanged(self, 'moved', fn1, fn2)
-            if oldDir.isManaged() and oldDir.isManaged(name):
-#                print "<> DataManager.move: old parent forget child.."
-                oldDir.forget(name)
+            
             if oldDir.isManaged() and newDir.isManaged():
 #                print "<> DataManager.move: new parent index old info.."
                 newDir.indexFile(name, info=oldDir._fileInfo(name))
             elif newDir.isManaged():
 #                print "<> DataManager.move: new parent index (no info)"
                 newDir.indexFile(name)
+                
+            if oldDir.isManaged() and oldDir.isManaged(name):
+#                print "<> DataManager.move: old parent forget child.."
+                oldDir.forget(name)
                 
 #            print "<> DataManager.move: emit 'moved'.."
             self.emitChanged('moved', fn1, fn2)
@@ -329,12 +366,13 @@ class FileHandle(QtCore.QObject):
 
     def emitChanged(self, change, *args):
         self.delayedChanges.append(change)
-        self.emit(QtCore.SIGNAL('changed'), self, change, *args)
+        self.sigChanged.emit(self, change, args)
 
     def delayedChange(self, *args):
         changes = list(set(self.delayedChanges))
         self.delayedChanges = []
-        self.emit(QtCore.SIGNAL('delayedChange'), self, changes)
+        #self.emit(QtCore.SIGNAL('delayedChange'), self, changes)
+        self.sigDelayedChange.emit(self, changes)
     
     def hasChildren(self):
         self.checkDeleted()
@@ -388,7 +426,7 @@ class DirHandle(FileHandle):
     def __init__(self, path, manager, create=False):
         FileHandle.__init__(self, path, manager)
         self._index = None
-        self.lsCache = None
+        self.lsCache = {}  # sortMode: [files...]
         self.cTimeCache = {}
         
         if not os.path.isdir(self.path):
@@ -572,16 +610,17 @@ class DirHandle(FileHandle):
     def dirExists(self, dirName):
         return os.path.isdir(os.path.join(self.path, dirName))
             
-    def ls(self, normcase=False):
+    def ls(self, normcase=False, sortMode='date'):
         """Return a list of all files in the directory.
-        If normcase is True, normalize the case of all names in the list."""
+        If normcase is True, normalize the case of all names in the list.
+        sortMode may be 'date', 'alpha', or None."""
         #p = Profiler('      DirHandle.ls:')
         with self.lock:
             #p.mark('lock')
             #self._readIndex()
             #ls = self.index.keys()
             #ls.remove('.')
-            if self.lsCache is None:
+            if sortMode not in self.lsCache:
                 #p.mark('(cache miss)')
                 try:
                     files = os.listdir(self.name())
@@ -594,19 +633,29 @@ class DirHandle(FileHandle):
                         files.remove(i)
                 #self.lsCache.sort(self._cmpFileTimes)  ## very expensive!
                 
-                ## Sort files by creation time
-                for f in files:
-                    if f not in self.cTimeCache:
-                        self.cTimeCache[f] = self._getFileCTime(f)
-                files.sort(lambda a,b: cmp(self.cTimeCache[a], self.cTimeCache[b]))
-                self.lsCache = files
+                if sortMode == 'date':
+                    ## Sort files by creation time
+                    for f in files:
+                        if f not in self.cTimeCache:
+                            self.cTimeCache[f] = self._getFileCTime(f)
+                    files.sort(lambda a,b: cmp(self.cTimeCache[a], self.cTimeCache[b]))
+                elif sortMode == 'alpha':
+                    files.sort()
+                elif sortMode == None:
+                    pass
+                else:
+                    raise Exception('Unrecognized sort mode "%s"' % str(sortMode))
+                    
+                self.lsCache[sortMode] = files
                 #p.mark('sort')
+            files = self.lsCache[sortMode]
+            
             if normcase:
-                ret = map(os.path.normcase, self.lsCache)
+                ret = map(os.path.normcase, files)
                 #p.mark('return norm')
                 return ret
             else:
-                ret = self.lsCache[:]
+                ret = files[:]
                 #p.mark('return copy')
                 return ret
     
@@ -618,6 +667,16 @@ class DirHandle(FileHandle):
                 return t
             except KeyError:
                 pass
+            
+            ## try getting time directly from file
+            try:
+                t = self[fileName].info()['__timestamp__']
+            except:
+                #printExc("No time for file %s:" % fileName)
+                #print self[fileName].info().keys()
+                pass
+                    
+        ## if all else fails, just ask the file system
         return os.path.getctime(os.path.join(self.name(), fileName))
     
     #def _cmpFileTimes(self, a, b):
@@ -644,7 +703,7 @@ class DirHandle(FileHandle):
         return len(self.ls()) > 0
     
     def info(self):
-        return self._fileInfo('.')
+        return advancedTypes.ProtectedDict(self._fileInfo('.'))
     
     def _fileInfo(self, file):
         """Return a dict of the meta info stored for file"""
@@ -917,6 +976,8 @@ class DirHandle(FileHandle):
             
         
     def _childChanged(self):
-        self.lsCache = None
+        self.lsCache = {}
         self.emitChanged('children')
 
+
+dm = DataManager()

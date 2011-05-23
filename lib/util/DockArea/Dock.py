@@ -4,7 +4,10 @@ from DockDrop import *
 from VerticalLabel import *
 
 class Dock(QtGui.QWidget, DockDrop):
-    def __init__(self, name, area=None, size=(None,None)):
+    
+    sigStretchChanged = QtCore.Signal()
+    
+    def __init__(self, name, area=None, size=(10, 10)):
         QtGui.QWidget.__init__(self)
         DockDrop.__init__(self)
         self.area = area
@@ -22,6 +25,8 @@ class Dock(QtGui.QWidget, DockDrop):
         self.widgetArea = QtGui.QWidget()
         self.topLayout.addWidget(self.widgetArea, 1, 1)
         self.layout = QtGui.QGridLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
         self.widgetArea.setLayout(self.layout)
         self.widgetArea.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         self.widgets = []
@@ -60,15 +65,24 @@ class Dock(QtGui.QWidget, DockDrop):
         self.setStretch(*size)
 
     def setStretch(self, x=None, y=None):
+        #print "setStretch", self, x, y
         #self._stretch = (x, y)
         if x is None:
             x = 0
         if y is None:
             y = 0
-        policy = self.sizePolicy()
-        policy.setHorizontalStretch(x)
-        policy.setVerticalStretch(y)
-        self.setSizePolicy(policy)
+        #policy = self.sizePolicy()
+        #policy.setHorizontalStretch(x)
+        #policy.setVerticalStretch(y)
+        #self.setSizePolicy(policy)
+        self._stretch = (x, y)
+        self.sigStretchChanged.emit()
+        #print "setStretch", self, x, y, self.stretch()
+        
+    def stretch(self):
+        #policy = self.sizePolicy()
+        #return policy.horizontalStretch(), policy.verticalStretch()
+        return self._stretch
         
     #def stretch(self):
         #return self._stretch
@@ -160,17 +174,25 @@ class Dock(QtGui.QWidget, DockDrop):
             
         self.setOrientation(force=True)
 
-
+    def __repr__(self):
+        return "<Dock %s %s>" % (self.name(), self.stretch())
             
 class DockLabel(VerticalLabel):
+    
+    sigClicked = QtCore.Signal(object, object)
+    
     def __init__(self, text, dock):
         self.dim = False
         self.fixedWidth = False
-        VerticalLabel.__init__(self, text, orientation='horizontal')
+        VerticalLabel.__init__(self, text, orientation='horizontal', forceWidth=False)
         self.setAlignment(QtCore.Qt.AlignTop|QtCore.Qt.AlignHCenter)
         self.dock = dock
         self.updateStyle()
         self.setAutoFillBackground(False)
+
+    #def minimumSizeHint(self):
+        ##sh = QtGui.QWidget.minimumSizeHint(self)
+        #return QtCore.QSize(20, 20)
 
     def updateStyle(self):
         r = '3px'
@@ -235,7 +257,8 @@ class DockLabel(VerticalLabel):
             
     def mouseReleaseEvent(self, ev):
         if not self.startedDrag:
-            self.emit(QtCore.SIGNAL('clicked'), self, ev)
+            #self.emit(QtCore.SIGNAL('clicked'), self, ev)
+            self.sigClicked.emit(self, ev)
         ev.accept()
         
     def mouseDoubleClickEvent(self, ev):

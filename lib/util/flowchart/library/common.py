@@ -7,6 +7,7 @@ from ColorMapper import ColorMapper
 from ..Node import Node
 import metaarray
 import numpy as np
+from pyqtgraph.ColorButton import ColorButton
 
 def generateUi(opts):
     """Convenience function for generating common UI types"""
@@ -15,8 +16,15 @@ def generateUi(opts):
     l.setSpacing(0)
     widget.setLayout(l)
     ctrls = {}
+    row = 0
     for opt in opts:
-        k, t, o = opt
+        if len(opt) == 2:
+            k, t = opt
+            o = {}
+        elif len(opt) == 3:
+            k, t, o = opt
+        else:
+            raise Exception("Widget specification must be (name, type) or (name, type, {opts})")
         if t == 'intSpin':
             w = QtGui.QSpinBox()
             if 'max' in o:
@@ -46,13 +54,22 @@ def generateUi(opts):
                 w.addItem(i)
         elif t == 'colormap':
             w = ColorMapper()
+        elif t == 'color':
+            w = ColorButton()
         else:
             raise Exception("Unknown widget type '%s'" % str(t))
         if 'tip' in o:
             w.setTooltip(o['tip'])
         w.setObjectName(k)
         l.addRow(k, w)
+        if o.get('hidden', False):
+            w.hide()
+            label = l.labelForField(w)
+            label.hide()
+            
         ctrls[k] = w
+        w.rowNum = row
+        row += 1
     group = WidgetGroup(widget)
     return widget, group, ctrls
 
@@ -68,6 +85,9 @@ def generateUi(opts):
 
 class CtrlNode(Node):
     """Abstract class for nodes with auto-generated control UI"""
+    
+    sigStateChanged = QtCore.Signal(object)
+    
     def __init__(self, name, ui=None, terminals=None):
         if ui is None:
             if hasattr(self, 'uiTemplate'):
@@ -79,16 +99,19 @@ class CtrlNode(Node):
         Node.__init__(self, name=name, terminals=terminals)
         
         self.ui, self.stateGroup, self.ctrls = generateUi(ui)
-        QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
+        self.stateGroup.sigChanged.connect(self.changed)
        
     def ctrlWidget(self):
         return self.ui
        
     def changed(self):
         self.update()
+        self.sigStateChanged.emit(self)
 
     def process(self, In, display=True):
-        return {'Out': self.processData(In)}
+        out = self.processData(In)
+        return {'Out': out}
     
     def saveState(self):
         state = Node.saveState(self)
@@ -100,7 +123,21 @@ class CtrlNode(Node):
         if self.stateGroup is not None:
             self.stateGroup.setState(state.get('ctrl', {}))
             
-            
+    def hideRow(self, name):
+        w = self.ctrls[name]
+        #row = w.rowNum
+        #l = self.ui.layout().itemAt(row, QtGui.QFormLayout.LabelRole)
+        l = self.ui.layout().labelForField(w)
+        w.hide()
+        l.hide()
+        
+    def showRow(self, name):
+        w = self.ctrls[name]
+        #row = w.rowNum
+        #l = self.ui.layout().itemAt(row, QtGui.QFormLayout.LabelRole)
+        l = self.ui.layout().labelForField(w)
+        w.show()
+        l.show()
 
 #class Filter(Node):
     #"""Abstract node for waveform filters having a single input and output"""

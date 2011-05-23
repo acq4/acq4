@@ -74,8 +74,11 @@ class CameraProtoGui(DAQGenericProtoGui):
         #self.ui.imageView.ui.roiPlot.registerPlot(self.dev.name + '.ROI')
         
         #QtCore.QObject.connect(self.ui.recordExposeCheck, QtCore.SIGNAL('clicked()'), self.recordExposeClicked)
-        QtCore.QObject.connect(self.ui.imageView, QtCore.SIGNAL('timeChanged'), self.timeChanged)
-        QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolPaused'), self.protocolPaused)
+        #QtCore.QObject.connect(self.ui.imageView, QtCore.SIGNAL('timeChanged'), self.timeChanged)
+        self.ui.imageView.sigTimeChanged.connect(self.timeChanged)
+        
+        #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolPaused'), self.protocolPaused)
+        self.prot.sigProtocolPaused.connect(self.protocolPaused)
         #QtCore.QObject.connect(self.ui.imageView.ui.roiBtn, QtCore.SIGNAL('clicked'), self.connectROI)
         
         
@@ -98,7 +101,8 @@ class CameraProtoGui(DAQGenericProtoGui):
         
     def restoreState(self, state):
         self.stateGroup.setState(state)
-        DAQGenericProtoGui.restoreState(self, state['daqState'])
+        if 'daqState' in state:
+            DAQGenericProtoGui.restoreState(self, state['daqState'])
         
         
     def generateProtocol(self, params=None):
@@ -165,5 +169,7 @@ class CameraProtoGui(DAQGenericProtoGui):
         #daq = self.dev.config['exposeChannel'][0]
         #self.prot.getDevice(daq)
         
-        
+    def quit(self):
+        self.ui.imageView.close()
+        DAQGenericProtoGui.quit(self)
         

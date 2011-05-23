@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import numpy as np
 import metaarray
@@ -7,6 +8,7 @@ class TableWidget(QtGui.QTableWidget):
     
     def __init__(self, *args):
         QtGui.QTableWidget.__init__(self, *args)
+        self.setVerticalScrollMode(self.ScrollPerPixel)
         self.clear()
         
     def clear(self):
@@ -27,9 +29,18 @@ class TableWidget(QtGui.QTableWidget):
         list-of-lists, list-of-dicts or dict-of-lists
         """
         fn0, header0 = self.iteratorFn(data)
+        if fn0 is None:
+            self.clear()
+            return
         it0 = fn0(data)
-        first = it0.next()
+        try:
+            first = it0.next()
+        except StopIteration:
+            return
         fn1, header1 = self.iteratorFn(first)
+        if fn1 is None:
+            self.clear()
+            return
         
         #print fn0, header0
         #print fn1, header1
@@ -70,6 +81,10 @@ class TableWidget(QtGui.QTableWidget):
             return self.iterFirstAxis, None
         elif isinstance(data, np.void):
             return self.iterate, map(str, data.dtype.names)
+        elif data is None:
+            return (None,None)
+        else:
+            raise Exception("Don't know how to iterate over data type: %s" % str(type(data)))
         
     def iterFirstAxis(self, data):
         for i in xrange(data.shape[0]):
@@ -92,13 +107,31 @@ class TableWidget(QtGui.QTableWidget):
         if row > self.rowCount()-1:
             self.setRowCount(row+1)
         for col in xrange(self.columnCount()):
-            item = QtGui.QTableWidgetItem(str(vals[col]))
-            item.value = vals[col]
+            val = vals[col]
+            if isinstance(val, float) or isinstance(val, np.floating):
+                s = "%0.3g" % val
+            else:
+                s = str(val)
+            item = QtGui.QTableWidgetItem(s)
+            item.value = val
             #print "add item to row %d:"%row, item, item.value
             self.items.append(item)
             self.setItem(row, col, item)
             
 
+    def copy(self):
+        """Copy selected data to clipboard."""
+        s = ''
+        for r in range(self.rowCount()):
+            row = []
+            for c in range(self.columnCount()):
+                item = t.item(r, c)
+                if item is not None:
+                    row.append(str(item.value))
+                else:
+                    row.append('')
+            s += ('\t'.join(row) + '\n')
+        QtGui.QApplication.clipboard().setText(s)
 
 
 

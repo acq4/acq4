@@ -51,8 +51,8 @@ cameraDefaults = {
     'Quantix57': [
         ('READOUT_PORT', 0),  ## Only option for Q57
         ('SPDTAB_INDEX', 2),  ## Fastest option for Q57
-        ('binningX', 1, [1,2,3,4,8,12,16,24,32,48,64]),
-        ('binningY', 1, [1,2,3,4,8,12,16,24,32,48,64]),
+        ('binningX', 1, [1,2,3,4,8,12,16,24,32,48,64,128,256,512]),
+        ('binningY', 1, [1,2,3,4,8,12,16,24,32,48,64,128,256,512]),
     ],
 }
 cameraDefaults['Quantix EEV57  '] = cameraDefaults['Quantix57']  ## different names, same camera.
@@ -175,7 +175,6 @@ class _PVCamClass:
         self.quit()
 
     def quit(self):
-        print "quit() called from pvcam driver."
         for c in self.cams:
             try:
                 self.cams[c].close()
@@ -258,7 +257,11 @@ class _CameraClass:
         
         ## correct the stupid
         #if 'GAIN_INDEX' in self.paramAttrs:
-        self.paramAttrs['GAIN_INDEX'][0] = self.paramAttrs['GAIN_INDEX'][0][:2] + (1,)    ## why did they set the step value to 0? Who knows?
+        try:
+            self.paramAttrs['GAIN_INDEX'][0] = self.paramAttrs['GAIN_INDEX'][0][:2] + (1,)    ## why did they set the step value to 0? Who knows?
+        except KeyError:
+            print self.paramAttrs
+            raise Exception("'GAIN_INDEX' missing from camera parameters. Try restarting your camera.")
         
         ## define standard dependencies
         #if 'READOUT_PORT' in self.paramAttrs:
@@ -366,11 +369,15 @@ class _CameraClass:
         if params is None:
             return self.paramAttrs.copy()
         else:
+            unList = False
             if isinstance(params, basestring):
-                try:
-                    return self.paramAttrs[params]
-                except KeyError:
-                    raise Exception("No parameter named '%s'" % params)
+                params = [params]
+                unList = True
+                #try:
+                    #return self.paramAttrs[params]
+                #except KeyError:
+                    #print self.paramAttrs.keys()
+                    #raise Exception("No parameter named '%s'. Full list is printed above." % params)
                 
             plist = params
             params = {}
@@ -378,7 +385,11 @@ class _CameraClass:
                 try:
                     params[p] = self.paramAttrs[p]
                 except KeyError:
-                    raise Exception("No parameter named '%s'" % p)
+                    print self.paramAttrs.keys()
+                    raise Exception("No parameter named '%s'. Full list is printed above." % p)
+                
+            if unList:
+                return params[plist[0]]
             return params
 
 

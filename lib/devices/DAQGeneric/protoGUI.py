@@ -13,6 +13,9 @@ import weakref
 from debug import *
 
 class DAQGenericProtoGui(ProtocolGui):
+    
+    #sigSequenceChanged = QtCore.Signal(object)  ## defined upstream
+    
     def __init__(self, dev, prot, ownUi=True):
         ProtocolGui.__init__(self, dev, prot)
         self.plots = weakref.WeakValueDictionary()
@@ -83,7 +86,8 @@ class DAQGenericProtoGui(ProtocolGui):
         
         if conf['type'] in ['ao', 'do']:
             w = OutputChannelGui(self, ch, conf, p, self.dev, self.prot)
-            QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
+            #QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
+            w.sigSequenceChanged.connect(self.sequenceChanged)
         elif conf['type'] in ['ai', 'di']:
             w = InputChannelGui(self, ch, conf, p, self.dev, self.prot)
         else:
@@ -108,6 +112,11 @@ class DAQGenericProtoGui(ProtocolGui):
             if self.stateGroup is not None:
                 self.stateGroup.setState(state)
             for ch in state['channels']:
+                try:
+                    self.channels[ch].restoreState(state['channels'][ch])
+                except KeyError:
+                    printExc("Warning: Cannot restore state for channel %s.%s (channel does not exist on this device)" % (self.dev.name, ch))
+                    continue    
                 self.channels[ch].restoreState(state['channels'][ch])
         except:
             printExc('Error while restoring GUI state:')
@@ -125,7 +134,8 @@ class DAQGenericProtoGui(ProtocolGui):
         return l
         
     def sequenceChanged(self):
-        self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        self.sigSequenceChanged.emit(self.dev.name)
         
     def taskStarted(self, params):  ## automatically invoked from ProtocolGui
         ## Pull out parameters for this device

@@ -52,6 +52,9 @@ from TreeWidget import *
         #return True
 
 class FilterList(QtGui.QWidget):
+    
+    sigChanged = QtCore.Signal()
+    
     """This widget presents a customizable filter chain. The user (or program) can add and remove
     filters from the chain. Each filter defines its own widget of control parameters."""
     
@@ -82,13 +85,16 @@ class FilterList(QtGui.QWidget):
         for k in fl:
             self.filterCombo.addItem(k)
             
-        QtCore.QObject.connect(self.filterCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.filterComboChanged)
-        QtCore.QObject.connect(self.filterList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.itemChanged)
-        QtCore.QObject.connect(self.filterList, QtCore.SIGNAL('itemMoved'), self.emitChange)
+        #QtCore.QObject.connect(self.filterCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.filterComboChanged)
+        self.filterCombo.currentIndexChanged.connect(self.filterComboChanged)
+        #QtCore.QObject.connect(self.filterList, QtCore.SIGNAL('itemChanged(QTreeWidgetItem*,int)'), self.itemChanged)
+        self.filterList.itemChanged.connect(self.itemChanged)
+        #QtCore.QObject.connect(self.filterList, QtCore.SIGNAL('itemMoved'), self.emitChange)
+        self.filterList.sigItemMoved.connect(self.emitChange)
         #self.filters = []
 
     def widgetGroupInterface(self):
-        return ('changed', FilterList.saveState, FilterList.restoreState)
+        return (self.sigChanged, FilterList.saveState, FilterList.restoreState)
 
     def filterComboChanged(self, ind):
         if ind == 0:
@@ -125,7 +131,8 @@ class FilterList(QtGui.QWidget):
         delBtn = QtGui.QPushButton('X', self)
         delBtn.item = item
         item.delBtn = delBtn
-        QtCore.QObject.connect(delBtn, QtCore.SIGNAL('clicked()'), self.removeFilter)
+        #QtCore.QObject.connect(delBtn, QtCore.SIGNAL('clicked()'), self.removeFilter)
+        delBtn.clicked.connect(lambda: self.removeFilter())
         self.filterList.setItemWidget(item, 1, delBtn)
         if ctrl is not None:
             item2 = QtGui.QTreeWidgetItem([])
@@ -135,7 +142,8 @@ class FilterList(QtGui.QWidget):
             item.setExpanded(True)
         
         #self.filters.append((filter, item, ctrl))
-        QtCore.QObject.connect(filter, QtCore.SIGNAL('delayedChange'), self.emitChange)
+        #QtCore.QObject.connect(filter, QtCore.SIGNAL('delayedChange'), self.emitChange)
+        filter.sigDelayedChange.connect(self.emitChange)
         self.emitChange()
         
         
@@ -144,8 +152,10 @@ class FilterList(QtGui.QWidget):
             item = self.sender().item
         else:
             item = self.filterList.topLevelItem(index)
-        QtCore.QObject.disconnect(item.delBtn, QtCore.SIGNAL('clicked()'), self.removeFilter)
-        QtCore.QObject.disconnect(item.filter, QtCore.SIGNAL('delayedChange'), self.emitChange)
+        #QtCore.QObject.disconnect(item.delBtn, QtCore.SIGNAL('clicked()'), self.removeFilter)
+        item.delBtn.clicked.disconnect(self.removeFilter)
+        #QtCore.QObject.disconnect(item.filter, QtCore.SIGNAL('delayedChange'), self.emitChange)
+        item.filter.sigDelayedChange.disconnect(self.emitChange)
         self.filterList.invisibleRootItem().removeChild(item)
         self.emitChange()
         
@@ -163,7 +173,8 @@ class FilterList(QtGui.QWidget):
         
         
     def emitChange(self):
-        self.emit(QtCore.SIGNAL('changed'))
+        #self.emit(QtCore.SIGNAL('changed'))
+        self.sigChanged.emit()
     
     def listFilters(self):
         pass

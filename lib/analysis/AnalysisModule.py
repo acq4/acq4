@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import pyqtgraph as pg
-import Canvas, FileLoader, DatabaseGui, TableWidget
+import Canvas, FileLoader, DatabaseGui, TableWidget, DataTreeWidget
+from advancedTypes import OrderedDict
 
 class AnalysisModule(QtCore.QObject):
     """
@@ -48,17 +49,21 @@ class AnalysisModule(QtCore.QObject):
         self._elements_ is a dict of (name: element) pairs, but can be initially defined
         as (name: (args..)) pairs, and the element objects will be created automatically."""
         QtCore.QObject.__init__(self)
-        self.host = host
-        
+        self._host_ = host
+        self.dataModel = host.dataModel
+
+    def initializeElements(self):
+        """Must be called sometime during the construction of the module."""
         for name, el in self._elements_.iteritems():
             if isinstance(el, tuple):
-                self._elements_[name] = Element(name, *el)
+                self._elements_[name] = Element(name, args=el)
             elif isinstance(el, dict):
-                self._elements_[name] = Element(name, **el)
+                self._elements_[name] = Element(name, args=el)
             elif isinstance(el, basestring):
                 self._elements_[name] = Element(name, type=el)
+            self._elements_[name].sigObjectChanged.connect(self.elementChanged)
             
-        
+
     def processData(self, data):
         pass
     
@@ -66,73 +71,109 @@ class AnalysisModule(QtCore.QObject):
         """Return a dict of (name: element) pairs for all elements used by the module"""
         return self._elements_
     
-    def getElement(self, name):
+    def getElement(self, name, create=False):
         """Return the named element's object. """
         el = self.elementSpec(name)
         if el.hasObject():
             return el.object()
-        else:
+        elif create:
             return self.createElement(name)
-    
+        else:
+            return None
+            #raise Exception("Element %s has no object yet." % name)
+
+    def getAllElements(self):
+        """Return a dict of all objects referenced by elements."""
+        el = OrderedDict()
+        for name in self.listElements():
+            el[k] = self.getElement(k)
+        return el
+        
+
     def createElement(self, name):
         """Instruct the module to create its own element.
         The default implementation can create some of the more common elements used
           (plot, canvas, ...)"""
         spec = self.elementSpec(name)
-        return spec.makeObject(self.host)
-          
+        obj = spec.makeObject(self._host_)
+        self.setElement(name, obj)
+        return obj
+
+    def setElement(self, name, obj):
+        spec = self.elementSpec(name)
+        spec.setObject(obj)
+        
+    def elementChanged(self, element, old, new):
+        """Override this function to handle changes to elements."""
+        pass
+
     def elementSpec(self, name):
         """Return the specification for the named element"""
         return self._elements_[name]
 
+    def dataManager(self):
+        return self._host_.dataManager()
 
-
-class Element:
+class Element(QtCore.QObject):
     """Simple class for holding options and attributes for elements"""
-    def __init__(self, name, type, optional=False, object=None, pos=None, size=(None, None), **args):
-        self.name = name
-        self._type = type          ## string such as 'plot', 'canvas', 'ctrl'
-        self._optional = optional  ## bool
-        self._object = object      ## any object; usually the widget associated with the element
-        self._position = pos
-        self._size = size
-        self._args = args
+    sigObjectChanged = QtCore.Signal(object, object, object)  ## Element, old obj, new obj
+    
+    def __init__(self, name, type=None, args=None):
+        QtCore.QObject.__init__(self)
+        self.params = {
+            'type': type,         ## string such as 'plot', 'canvas', 'ctrl'
+            'name': name,
+            'optional': False,    ## bool
+            'object': None,       ## any object; usually the widget associated with the element
+            'pos': None,
+            'size': (None, None),
+            'args': {}            ## arguments to be passed to the element's object when it is created
+        }
+        self.setParams(**args)
         
-    def type(self):
-        return self._type
+    def __getattr__(self, attr):
+        if attr in self.params:
+            return lambda: self.params[attr]
+        raise AttributeError(attr)
         
-    def pos(self):
-        return self._position 
+    def setParams(self, **args):
+        for k in args:
+            if k == 'args':
+                self.params['args'].update(args[k])
+            elif k in self.params:
+                self.params[k] = args[k]
+            else:
+                self.params['args'][k] = args[k]
+        return self
         
     def setObject(self, obj):
-        self._object = obj
+        old = self.params['object']
+        self.params['object'] = obj
+        self.sigObjectChanged.emit(self, old, obj)
         
     def hasObject(self):
-        return self._object is not None
-        
-    def object(self):
-        return self._object
-        
-    def size(self):
-        return self._size
+        return self.params['object'] is not None
         
     def makeObject(self, host):
         
         typ = self.type()
-        args = self._args
+        args = self.args()
         if typ == 'plot':
-            obj = pg.PlotWidget(name=self.name, **args)
+            obj = pg.PlotWidget(name=self.name(), **args)
         elif typ == 'canvas':
-            obj = Canvas.Canvas(name=self.name, **args)
+            obj = Canvas.Canvas(**args)
         elif typ == 'fileInput':
             obj = FileLoader.FileLoader(host.dataManager(), **args)
-        elif typ == 'database':
-            obj = DatabaseGui.DatabaseGui(host.dataManager(), name=self.name, **args)
+        #elif typ == 'database':
+            #obj = DatabaseGui.DatabaseGui(host.dataManager(), **args)
         elif typ == 'table':
             obj = TableWidget.TableWidget(**args)
+        elif typ == 'dataTree':
+            obj = DataTreeWidget.DataTreeWidget(**args)
         else:
             raise Exception("Cannot automatically create element '%s' (type=%s)" % (self.name, typ))
-        self.setObject(obj)
+        #self.setObject(obj)  ## handled indirectly..
         return obj
+        
         
         

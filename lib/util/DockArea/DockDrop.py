@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 
-class DockDrop:
+class DockDrop(object):
     """Provides dock-dropping methods"""
     def __init__(self, allowedAreas=None):
+        object.__init__(self)
         if allowedAreas is None:
             allowedAreas = ['center', 'right', 'left', 'top', 'bottom']
         self.allowedAreas = set(allowedAreas)
@@ -18,7 +20,7 @@ class DockDrop:
         self.overlay.raise_()
     
     def dragEnterEvent(self, ev):
-        if isinstance(ev.source(), Dock):
+        if isinstance(ev.source(), Dock.Dock):
             #print "drag enter accept"
             ev.accept()
         else:
@@ -84,10 +86,34 @@ class DropAreaOverlay(QtGui.QWidget):
     def __init__(self, parent):
         QtGui.QWidget.__init__(self, parent)
         self.dropArea = None
+        self.hide()
         self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
         
     def setDropArea(self, area):
         self.dropArea = area
+        if area is None:
+            self.hide()
+        else:
+            ## Resize overlay to just the region where drop area should be displayed.
+            ## This works around a Qt bug--can't display transparent widgets over QGLWidget
+            prgn = self.parent().rect()
+            rgn = QtCore.QRect(prgn)
+            w = min(30, prgn.width()/3.)
+            h = min(30, prgn.height()/3.)
+            
+            if self.dropArea == 'left':
+                rgn.setWidth(w)
+            elif self.dropArea == 'right':
+                rgn.setLeft(rgn.left() + prgn.width() - w)
+            elif self.dropArea == 'top':
+                rgn.setHeight(h)
+            elif self.dropArea == 'bottom':
+                rgn.setTop(rgn.top() + prgn.height() - h)
+            elif self.dropArea == 'center':
+                rgn.adjust(w, h, -w, -h)
+            self.setGeometry(rgn)
+            self.show()
+
         self.update()
     
     def paintEvent(self, ev):
@@ -95,22 +121,9 @@ class DropAreaOverlay(QtGui.QWidget):
             return
         p = QtGui.QPainter(self)
         rgn = self.rect()
-        w = min(30, self.width()/3.)
-        h = min(30, self.height()/3.)
-        
-        if self.dropArea == 'left':
-            rgn.setWidth(w)
-        elif self.dropArea == 'right':
-            rgn.setLeft(rgn.left() + self.width() - w)
-        elif self.dropArea == 'top':
-            rgn.setHeight(h)
-        elif self.dropArea == 'bottom':
-            rgn.setTop(rgn.top() + self.height() - h)
-        elif self.dropArea == 'center':
-            rgn.adjust(w, h, -w, -h)
 
         p.setBrush(QtGui.QBrush(QtGui.QColor(100, 100, 255, 50)))
         p.setPen(QtGui.QPen(QtGui.QColor(50, 50, 150), 3))
         p.drawRect(rgn)
 
-from Dock import Dock
+import Dock
