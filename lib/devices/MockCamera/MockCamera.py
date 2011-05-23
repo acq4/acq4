@@ -24,8 +24,14 @@ class MockCamera(Camera):
         self.params = {
             'triggerMode':     'Normal',
             'exposure':        0.001,
-            'binning':         (1,1),
-            'region':          (0, 0, 512, 512), 
+            #'binning':         (1,1),
+            #'region':          (0, 0, 512, 512), 
+            'binningX':        1,
+            'binningY':        1,
+            'regionX':         0,
+            'regionY':         0,
+            'regionW':         512,
+            'regionH':         512,
             'gain':            1.0,
             'sensorSize':      (512, 512),
             'bitDepth':        16,
@@ -34,11 +40,22 @@ class MockCamera(Camera):
         self.paramRanges = {
             'triggerMode':     (['Normal'], True, True, []),
             'exposure':        ((0.001, 10.), True, True, []),
-            'binning':         ([range(1,10), range(1,10)], True, True, []),
-            'region':          ([(0, 511), (0, 511), (1, 512), (1, 512)], True, True, []),
+            #'binning':         ([range(1,10), range(1,10)], True, True, []),
+            #'region':          ([(0, 511), (0, 511), (1, 512), (1, 512)], True, True, []),
+            'binningX':        (range(0,10), True, True, []),
+            'binningY':        (range(0,10), True, True, []),
+            'regionX':         (range(0,10), True, True, ['regionW']),
+            'regionY':         (range(0,10), True, True, ['regionH']),
+            'regionW':         (range(0,10), True, True, ['regionX']),
+            'regionH':         (range(0,10), True, True, ['regionY']),
             'gain':            ((0.1, 10.0), True, True, []),
             'sensorSize':      (None, False, True, []),
             'bitDepth':        (None, False, True, []),
+        }
+        
+        self.groupParams = {
+            'binning':         ('binningX', 'binningY'),
+            'region':          ('regionX', 'regionY', 'regionW', 'regionH')
         }
         
         sig = np.random.normal(size=(512, 512), loc=1.0, scale=0.3)
@@ -207,6 +224,22 @@ class MockCamera(Camera):
         ##restart = True  ## pretty much _always_ need a restart with these cameras.
         
         #self.emit(QtCore.SIGNAL('paramsChanged'), newVals)
+        dp = []
+        ap = {}
+        for k in params:
+            if k in self.groupParams:
+                ap.update(dict(zip(self.groupParams[k], params[k])))
+                dp.append(k)
+        params.update(ap)
+        for k in dp:
+            del params[k]
+        
+        #if 'region' in params:
+            #params['regionX'], params['regionY'], params['regionW'], params['regionH'] = params['region']
+            #del params['region']
+        #if 'binning' in params:
+            #params['binningX'], params['binningY'] = params['binning']
+            #del params['binning']
         
         self.params.update(params)
         newVals = params
@@ -223,7 +256,14 @@ class MockCamera(Camera):
             #return self.cam.getParams(params)
         vals = OrderedDict()
         for k in params:
-            vals[k] = self.params[k]
+            if k in self.groupParams:
+                vals[k] = self.getParams(self.groupParams[k]).values()
+            #if k == 'region':
+                #vals[k] = self.getParams(['regionX', 'regionY', 'regionW', 'regionH']).values()
+            #elif k == 'binning':
+                #vals[k] = self.getParams(['binningX', 'binningY']).values()
+            else:
+                vals[k] = self.params[k]
         return vals
 
 

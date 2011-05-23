@@ -181,7 +181,7 @@ class PatchWindow(QtGui.QMainWindow):
         getManager().writeConfigFile(uiState, self.stateFile)
         
         self.thread.stop(block=True)
-        print "Patch thread exited; module quitting."
+        #print "Patch thread exited; module quitting."
         
     def closeEvent(self, ev):
         self.quit()

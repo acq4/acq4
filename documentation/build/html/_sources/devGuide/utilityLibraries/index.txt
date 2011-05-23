@@ -12,3 +12,4 @@ Contents:
     debug
     advancedTypes
     clibrary
+    generator

@@ -3,9 +3,6 @@
 acq4.py -  Main ACQ4 invocation script
 Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
-
-This script is about the simplest way to start up ACQ4. All it does is start the 
-manager with a configuration file and let it go from there.
 """
 
 print "Loading ACQ4..."
@@ -38,9 +35,8 @@ from numpy import *
 ## may break some debuggers.
 import disableExceptionStorage
 
-
-
 ## Initialize Qt
+QtGui.QApplication.setGraphicsSystem('raster')  ## needed for specific composition modes
 app = QtGui.QApplication(sys.argv)
 
 ## For logging ALL python activity
