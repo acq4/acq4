@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
@@ -12,12 +14,13 @@
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    '../',
         VERSION:     '1.0',
-        COLLAPSE_MODINDEX: false,
+        COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  true
       };
     </script>
     <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
     <script type="text/javascript" src="../_static/doctools.js"></script>
     <link rel="top" title="ACQ4 v1.0 documentation" href="../index.html" />
     <link rel="next" title="Introduction" href="introduction.html" />
@@ -48,67 +51,69 @@
   <div class="section" id="user-s-guide">
 <h1>User&#8217;s Guide<a class="headerlink" href="#user-s-guide" title="Permalink to this headline">¶</a></h1>
 <p>Contents:</p>
+<div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference external" href="introduction.html">Introduction</a><ul>
-<li class="toctree-l2"><a class="reference external" href="whatis.html">What is ACQ4?</a></li>
-<li class="toctree-l2"><a class="reference external" href="quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="whatis.html">What is ACQ4?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html">Quick Start Guide</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference external" href="principles.html">Principles of Operation</a><ul>
-<li class="toctree-l2"><a class="reference external" href="principles.html#overview">Overview</a></li>
-<li class="toctree-l2"><a class="reference external" href="principles.html#manager">Manager</a></li>
-<li class="toctree-l2"><a class="reference external" href="principles.html#devices">Devices</a></li>
-<li class="toctree-l2"><a class="reference external" href="principles.html#modules">Modules</a></li>
-<li class="toctree-l2"><a class="reference external" href="principles.html#protocols">Protocols</a></li>
-<li class="toctree-l2"><a class="reference external" href="principles.html#data-handling">Data Handling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="principles.html">Principles of Operation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="principles.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="principles.html#manager">Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="principles.html#devices">Devices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="principles.html#modules">Modules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="principles.html#protocols">Protocols</a></li>
+<li class="toctree-l2"><a class="reference internal" href="principles.html#data-handling">Data Handling</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference external" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference external" href="configuration.html">Configuration</a><ul>
-<li class="toctree-l2"><a class="reference external" href="configuration.html#cfg-file-syntax">.cfg File Syntax</a></li>
-<li class="toctree-l2"><a class="reference external" href="configuration.html#configuration-structure">Configuration Structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#cfg-file-syntax">.cfg File Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#configuration-structure">Configuration Structure</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference external" href="modules/index.html">Modules</a><ul>
-<li class="toctree-l2"><a class="reference external" href="modules/Manager.html">The Manager Module</a></li>
-<li class="toctree-l2"><a class="reference external" href="modules/DataManager.html">The Data Manager Module</a></li>
-<li class="toctree-l2"><a class="reference external" href="modules/Camera.html">The Camera Module</a></li>
-<li class="toctree-l2"><a class="reference external" href="modules/Patch.html">The Patch Module</a></li>
-<li class="toctree-l2"><a class="reference external" href="modules/ProtocolRunner.html">The Protocol Runner Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="modules/index.html">Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="modules/Manager.html">The Manager Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="modules/DataManager.html">The Data Manager Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="modules/Camera.html">The Camera Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="modules/Patch.html">The Patch Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="modules/ProtocolRunner.html">The Protocol Runner Module</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference external" href="devices/index.html">Devices</a><ul>
-<li class="toctree-l2"><a class="reference external" href="devices/NiDAQDevice.html">NiDAQ Devices</a></li>
-<li class="toctree-l2"><a class="reference external" href="devices/DAQGenericDevice.html">Generic DAQ Devices</a></li>
-<li class="toctree-l2"><a class="reference external" href="devices/QCamDevice.html">QImaging Cameras</a></li>
-<li class="toctree-l2"><a class="reference external" href="devices/PVCamDevice.html">Photometrics Cameras</a></li>
-<li class="toctree-l2"><a class="reference external" href="devices/MultiClampDevice.html">MultiClamp Devices</a></li>
-<li class="toctree-l2"><a class="reference external" href="devices/AxoPatch200Device.html">AxoPatch Devices</a></li>
-<li class="toctree-l2"><a class="reference external" href="devices/ScannerDevice.html">NiDAQ Devices</a></li>
-<li class="toctree-l2"><a class="reference external" href="devices/MicroscopeDevice.html">NiDAQ Devices</a></li>
-<li class="toctree-l2"><a class="reference external" href="devices/TriggerDevice.html">Trigger Devices</a></li>
-<li class="toctree-l2"><a class="reference external" href="devices/SutterMP285Device.html">Sutter MP285 Devices</a></li>
-<li class="toctree-l2"><a class="reference external" href="devices/SerialMouseDevice.html">Serial Mouse Devices</a></li>
-<li class="toctree-l2"><a class="reference external" href="devices/CameraDevice.html">Camera Devices</a></li>
-<li class="toctree-l2"><a class="reference external" href="devices/MockCameraDevice.html">Simulated Cameras</a></li>
+<li class="toctree-l1"><a class="reference internal" href="devices/index.html">Devices</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="devices/NiDAQDevice.html">NiDAQ Devices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devices/DAQGenericDevice.html">Generic DAQ Devices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devices/QCamDevice.html">QImaging Cameras</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devices/PVCamDevice.html">Photometrics Cameras</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devices/MultiClampDevice.html">MultiClamp Devices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devices/AxoPatch200Device.html">AxoPatch Devices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devices/ScannerDevice.html">NiDAQ Devices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devices/MicroscopeDevice.html">NiDAQ Devices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devices/TriggerDevice.html">Trigger Devices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devices/SutterMP285Device.html">Sutter MP285 Devices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devices/SerialMouseDevice.html">Serial Mouse Devices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devices/CameraDevice.html">Camera Devices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devices/MockCameraDevice.html">Simulated Cameras</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference external" href="dataManagement.html">Data Management</a></li>
-<li class="toctree-l1"><a class="reference external" href="analysis/index.html">Analysis</a><ul>
-<li class="toctree-l2"><a class="reference external" href="analysis/MosaicEditor.html">Mosaic Editor</a></li>
-<li class="toctree-l2"><a class="reference external" href="analysis/Photostim.html">Photostimulation Mapping</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dataManagement.html">Data Management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="analysis/index.html">Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="analysis/MosaicEditor.html">Mosaic Editor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analysis/Photostim.html">Photostimulation Mapping</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference external" href="tutorials/index.html">Tutorials</a><ul>
-<li class="toctree-l2"><a class="reference external" href="tutorials/PatchCell.html">Patch a Cell</a></li>
-<li class="toctree-l2"><a class="reference external" href="tutorials/RecordIVCurve.html">Record an I/V Curve</a></li>
-<li class="toctree-l2"><a class="reference external" href="tutorials/CalibrateScanner.html">Calibrate Scanning Mirrors</a></li>
-<li class="toctree-l2"><a class="reference external" href="tutorials/PhotostimMapping.html">Record a Photostimulation Map</a></li>
-<li class="toctree-l2"><a class="reference external" href="tutorials/MosaicBuilding.html">Build an Image Mosaic</a></li>
-<li class="toctree-l2"><a class="reference external" href="tutorials/PhotostimAnalysis.html">Analyze Photostimulation Maps</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/index.html">Tutorials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/PatchCell.html">Patch a Cell</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/RecordIVCurve.html">Record an I/V Curve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/CalibrateScanner.html">Calibrate Scanning Mirrors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/PhotostimMapping.html">Record a Photostimulation Map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/MosaicBuilding.html">Build an Image Mosaic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/PhotostimAnalysis.html">Analyze Photostimulation Maps</a></li>
 </ul>
 </li>
 </ul>
+</div>
 </div>
 
 
@@ -117,30 +122,30 @@
       </div>
       <div class="sphinxsidebar">
         <div class="sphinxsidebarwrapper">
-            <h4>Previous topic</h4>
-            <p class="topless"><a href="../index.html"
-                                  title="previous chapter">Welcome to ACQ4&#8217;s documentation!</a></p>
-            <h4>Next topic</h4>
-            <p class="topless"><a href="introduction.html"
-                                  title="next chapter">Introduction</a></p>
-            <h3>This Page</h3>
-            <ul class="this-page-menu">
-              <li><a href="../_sources/userGuide/index.txt"
-                     rel="nofollow">Show Source</a></li>
-            </ul>
-          <div id="searchbox" style="display: none">
-            <h3>Quick search</h3>
-              <form class="search" action="../search.html" method="get">
-                <input type="text" name="q" size="18" />
-                <input type="submit" value="Go" />
-                <input type="hidden" name="check_keywords" value="yes" />
-                <input type="hidden" name="area" value="default" />
-              </form>
-              <p class="searchtip" style="font-size: 90%">
-              Enter search terms or a module, class or function name.
-              </p>
-          </div>
-          <script type="text/javascript">$('#searchbox').show(0);</script>
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../index.html"
+                        title="previous chapter">Welcome to ACQ4&#8217;s documentation!</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="introduction.html"
+                        title="next chapter">Introduction</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/userGuide/index.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" size="18" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -161,8 +166,8 @@
       </ul>
     </div>
     <div class="footer">
-      &copy; Copyright 2011, Luke Campagnola, Megan B. Kratz.
-      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 0.6.4.
+        &copy; Copyright 2011, Luke Campagnola, Megan B. Kratz.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.1.
     </div>
   </body>
 </html>
