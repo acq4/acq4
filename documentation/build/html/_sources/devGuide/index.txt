@@ -11,8 +11,11 @@ Contents:
     dependencies
     conventions
     internalStructure
+    dataManager
     deviceDrivers
     devices/index
     modules/index
     utilityLibraries/index
+    fileTypes
+    analysis
     debugging
