@@ -399,9 +399,9 @@ Valid options are:
 
     def unloadModule(self, name):
         try:
-            print "    request quit.."
+            #print "    request quit.."
             self.getModule(name).quit()
-            print "    request quit done"
+            #print "    request quit done"
         except:
             printExc("Error while requesting module '%s' quit." % name)
             
