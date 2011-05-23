@@ -710,7 +710,7 @@ class ProtocolRunner(Module):
                 paramInds[key] = range(len(i[2]))
                 pLen *= len(i[2])
                 linkedParams[key] = i[3]
-            
+                
             ## Set storage dir
             self.currentDir = self.manager.getCurrentDir()
             if store:
@@ -739,6 +739,7 @@ class ProtocolRunner(Module):
             raise
         
     def generateProtocol(self, dh, params=None, progressDlg=None):
+        #print "generate:", params
         #prof = Profiler("Generate Protocol: %s" % str(params))
         ## params should be in the form {(dev, param): value, ...}
         ## Generate executable conf from protocol object
@@ -774,6 +775,7 @@ class ProtocolRunner(Module):
                 ## select out just the parameters needed for this device
                 p = dict([(i[1], params[i]) for i in params.keys() if i[0] == d])
                 ## Ask the device to generate its protocol command
+                #print d, p
                 prot[d] = self.docks[d].widget().generateProtocol(p)
                 #prof.mark("get protocol from %s" % d)
         #print prot['protocol']['storageDir'].name()

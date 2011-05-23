@@ -95,7 +95,11 @@ class ParamList(QtGui.QTreeWidget):
         for i in ordered:
             self.addTopLevelItem(i[0])
             for i2 in i[1]:
-                i[0].addChild(i2)
+                try:
+                    i[0].addChild(i2[0])
+                except:
+                    print "add", i2, "to", i[0]
+                    raise
         
         
         
