@@ -44,6 +44,16 @@ def printExc(msg='', indent=4, prefix='|'):
     print exc
     print " "*indent + prefix + '='*30 + '<<'
     
+def printTrace(msg='', indent=4, prefix='|'):
+    """Print an error message followed by an indented stack trace"""
+    trace = backtrace(1)
+    #exc = getExc(indent, prefix + '  ')
+    print "[%s]  %s\n" % (time.strftime("%H:%M:%S"), msg)
+    print " "*indent + prefix + '='*30 + '>>'
+    for line in trace.split('\n'):
+        print " "*indent + prefix + " " + line
+    print " "*indent + prefix + '='*30 + '<<'
+    
 
 def backtrace(skip=0):
     return ''.join(traceback.format_stack()[:-(skip+1)])    
