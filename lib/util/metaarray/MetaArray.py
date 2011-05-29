@@ -595,10 +595,14 @@ class MetaArray(ndarray):
     def max(self, axis=None, *args, **kargs):
         return self.axisCollapsingFn('max', axis, *args, **kargs)
 
-    def transpose(self, order):
+    def transpose(self, *args):
+        if len(args) == 1 and hasattr(args[0], '__iter__'):
+            order = args[0]
+        else:
+            order = args
         order = list(order) + range(len(order), len(self._info))
         info = [self._info[i] for i in order]
-        return MetaArray(self.view(ndarray), info=info)
+        return MetaArray(ndarray.transpose(self, *args), info=info)
 
     #### File I/O Routines
 

@@ -36,7 +36,7 @@ from numpy import *
 import disableExceptionStorage
 
 ## Initialize Qt
-QtGui.QApplication.setGraphicsSystem('raster')  ## needed for specific composition modes
+#QtGui.QApplication.setGraphicsSystem('raster')  ## needed for specific composition modes
 app = QtGui.QApplication(sys.argv)
 
 ## For logging ALL python activity
