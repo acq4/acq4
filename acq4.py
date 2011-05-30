@@ -11,6 +11,16 @@ print "Loading ACQ4..."
 #sip.setapi('QString', 2)
 #sip.setapi('QVariant', 2)
 
+## PyQt bug: make sure qt.conf was installed correctly
+import os, sys
+pyDir = os.path.split(sys.executable)[0]
+qtConf = os.path.join(pyDir, 'qt.conf')
+if not os.path.exists(qtConf):
+    print "PyQt fix: installing qt.conf where it should be.."
+    import shutil
+    pyqtConf = os.path.join(pyDir, 'Lib', 'site-packages', 'PyQt4', 'qt.conf')
+    shutil.copy(pyqtConf, qtConf)
+
 #import lib.util.PySideImporter  ## Use PySide instead of PyQt
 from PyQt4 import QtGui, QtCore
 #QtCore.QString = str
@@ -26,7 +36,6 @@ if not hasattr(QtCore, 'Signal'):
 
     
 from lib.Manager import *
-import os, sys
 from numpy import *
 
 
