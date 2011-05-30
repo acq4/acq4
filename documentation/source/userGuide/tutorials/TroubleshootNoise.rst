@@ -5,11 +5,12 @@ Troubleshoot Electrical Noise
 2) configure daq to run at maximum rate possible (500kHz for MIO-6259)
 3) set protocol to loop and start
 4) switch plot to FFT mode
-5) turn off everything, turn back on one at a time.
+5) turn off *and unplug* everything, turn back on one at a time.
 6) check for noise first with a model cell on the headstage, wrapped in foil
 7) next, remove the foil and check again
 8) remove the model cell, replace with an ACSF-loaded pipette, check again
 9) place the pipette in the recording chamber with ACSF flowing
+10) experiment with different grounding conditions
 
 
 Common noise sources:
@@ -23,5 +24,7 @@ Common noise sources:
 5) brush motor pumps
 6) any cables running parallel to the headstage cables
 7) cell phones. just turn 'em off.
+8) 60Hz. It's everywhere; use a faraday cage. Sutter MP-285s can be particularly bad; I keep them separated from all the other equipment by ~5 feet.
+
 
 In general, noise can be reduced significantly by oversampling and then downsampling. See the DAQ interface in the prorocol runner [link]. 

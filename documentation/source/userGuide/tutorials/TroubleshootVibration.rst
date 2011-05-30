@@ -1,9 +1,11 @@
 Troubleshooting Table Vibration
 ===============================
 
-1) Run camera at high frame rate--use binning, restricted region, etc.
+1) Run camera at high frame rate--use binning, restricted region, etc. (remember nyquist)
 2) Create ROIs at the edges of a dark/light boundary
 3) Enable ROI plot, switch to FFT mode
+
+OR if your table already has accelerometer outputs, just make recordings in protocol runner and display in FFT mode.
 
 
 Common causes of vibration:
