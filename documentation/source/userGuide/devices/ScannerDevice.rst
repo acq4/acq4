@@ -1,5 +1,5 @@
-NiDAQ Devices
-=============
+Scanner Devices
+===============
 
 
 

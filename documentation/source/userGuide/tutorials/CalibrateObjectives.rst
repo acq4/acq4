@@ -1,2 +1,2 @@
-Calibrate Scanning Mirrors
-==========================
+Calibrate Microscope Objectives
+===============================

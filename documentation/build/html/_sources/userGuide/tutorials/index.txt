@@ -8,6 +8,9 @@ Tutorials
     PatchCell
     RecordIVCurve
     CalibrateScanner
+    CalibrateObjectives
+    TroubleshootVibration
+    TroubleshootNoise
     PhotostimMapping
     MosaicBuilding
     PhotostimAnalysis
