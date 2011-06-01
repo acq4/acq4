@@ -153,18 +153,24 @@ class MetaArray(np.ndarray):
 
 
         elif file is not None:
+            ## decide which read function to use
             fd = open(file, 'rb')
-            meta = MetaArray._readMeta(fd)
-            if 'version' in meta:
-                ver = meta['version']
+            magic = fd.read(8)
+            if magic == '\x89HDF\r\n\x1a\n':
+                fd.close()
+                return MetaArray._readHDF5(file, subtype, **kwargs)
             else:
-                ver = 1
-            rFuncName = '_readData%s' % str(ver)
-            if not hasattr(MetaArray, rFuncName):
-                raise Exception("This MetaArray library does not support array version '%s'" % ver)
-            rFunc = getattr(MetaArray, rFuncName)
-            subarr = rFunc(fd, meta, subtype, **kwargs)
-                
+                fd.seek(0)
+                meta = MetaArray._readMeta(fd)
+                if 'version' in meta:
+                    ver = meta['version']
+                else:
+                    ver = 1
+                rFuncName = '_readData%s' % str(ver)
+                if not hasattr(MetaArray, rFuncName):
+                    raise Exception("This MetaArray library does not support array version '%s'" % ver)
+                rFunc = getattr(MetaArray, rFuncName)
+                subarr = rFunc(fd, meta, subtype, **kwargs)
 
         return subarr
 
@@ -757,11 +763,60 @@ class MetaArray(np.ndarray):
         subarr._info = meta['info']
         #raise Exception()  ## stress-testing
         return subarr
-                    
+
+    @staticmethod
+    def _readHDF5(fileName, subtype):
+        if not HAVE_HDF5:
+            raise Exception("The file '%s' is HDF5-formatted, but the HDF5 library (h5py) was not found." % fileName)
+        f = h5py.File(fileName, 'r')
+        ver = f.attrs['MetaArray']
+        if ver > MetaArray.version:
+            print "Warning: This file was written with MetaArray version %s, but you are using version %s. (Will attempt to read anyway)" % (str(ver), str(MetaArray.version))
+        arr = f['data'][:]
+        #meta = H5MetaList(f['info'])
+        meta = MetaArray.readHDF5Meta(f['info'])
+        subarr = arr.view(subtype)
+        subarr._info = meta
+        return subarr
+    
+    @staticmethod
+    def readHDF5Meta(root):
+        data = {}
+        
+        for k in root.attrs:
+            data[k] = root.attrs[k]
+        for k in root:
+            obj = root[k]
+            if isinstance(obj, h5py.highlevel.Group):
+                val = MetaArray.readHDF5Meta(obj)
+            elif isinstance(obj, h5py.highlevel.Dataset):
+                val = obj[:]
+            else:
+                raise Exception("Don't know what to do with type '%s'" % str(type(obj)))
+            data[k] = val
+        
+        typ = root.attrs['_metaType_']
+        del data['_metaType_']
+        
+        if typ == 'dict':
+            return data
+        elif typ == 'list' or typ == 'tuple':
+            d2 = [None]*len(data)
+            for k in data:
+                d2[int(k)] = data[k]
+            if typ == 'tuple':
+                d2 = tuple(d2)
+            return d2
+        else:
+            raise Exception("Don't understand metaType '%s'" % typ)
+        
+
+
     def write(self, fileName, **opts):
         """Write this object to a file. The object can be restored by calling MetaArray(file=fileName)
         hdf5: bool
         opts:
+            appendAxis: the name (or index) of the appendable axis. Allows the array to grow.
             hdf5: bool
             compress: bool
             chunk: bool
@@ -774,27 +829,61 @@ class MetaArray(np.ndarray):
             return self.writeMa(fileName, **opts)
   
     def writeHDF5(self, fileName, **opts):
-        if os.path.splitext(fileName)[1] != '.h5':
-            fileName += '.h5'
-        f = h5py.File(fileName)
-        f.attrs['MetaArray'] = MetaArray.version
-        f.create_dataset('data', data=self.view(np.ndarray))
-        self.writeHDF5Meta(f, 'info', self._info)
-        f.close()
+        #if os.path.splitext(fileName)[1] != '.h5':
+            #fileName += '.h5'
+        maxShape = list(self.shape)
+        append = False
+        if 'appendAxis' in opts:
+            ax = self._interpretAxis(opts['appendAxis'])
+            maxShape[ax] = None
+            if os.path.exists(fileName):
+                append = True
+            
+        if append:
+            f = h5py.File(fileName, 'r+')
+            if f.attrs['MetaArray'] != MetaArray.version:
+                raise Exception("The file %s was created with a different version of MetaArray. Will not modify." % fileName)
+            
+            ## resize data and write in new values
+            data = f['data']
+            shape = list(data.shape)
+            shape[ax] += self.shape[ax]
+            data.resize(tuple(shape))
+            sl = [slice(None)] * len(data.shape)
+            sl[ax] = slice(-self.shape[ax], None)
+            data[tuple(sl)] = self.view(np.ndarray)
+            
+            ## add axis values if they are present.
+            axInfo = f['info'][str(ax)]
+            if 'values' in axInfo:
+                v = axInfo['values']
+                v2 = self._info[ax]['values']
+                shape = list(v.shape)
+                shape[0] += v2.shape[0]
+                v.resize(shape)
+                v[-v2.shape[0]:] = v2
+            f.close()
+        else:
+            f = h5py.File(fileName)
+            f.attrs['MetaArray'] = MetaArray.version
+            f.create_dataset('data', data=self.view(np.ndarray), maxshape=tuple(maxShape))#, compression='gzip')
+            self.writeHDF5Meta(f, 'info', self._info)
+            f.close()
     
     def writeHDF5Meta(self, root, name, data):
         if isinstance(data, np.ndarray):
             print "create:", name, data.shape, data.dtype
-            root.create_dataset(name, data=data)
+            maxShape = (None,) + data.shape[1:]
+            root.create_dataset(name, data=data, maxshape=maxShape)#, compression='gzip')
         elif isinstance(data, list) or isinstance(data, tuple):
             gr = root.create_group(name)
             if isinstance(data, list):
                 gr.attrs['_metaType_'] = 'list'
             else:
                 gr.attrs['_metaType_'] = 'tuple'
-            n = int(np.log10(len(data))) + 1
+            #n = int(np.log10(len(data))) + 1
             for i in xrange(len(data)):
-                self.writeHDF5Meta(gr, ('%%0%dd'%n) % i, data[i])
+                self.writeHDF5Meta(gr, str(i), data[i])
         elif isinstance(data, dict):
             gr = root.create_group(name)
             gr.attrs['_metaType_'] = 'dict'
@@ -887,6 +976,9 @@ class MetaArray(np.ndarray):
             return ret
         
 
+
+#class H5MetaList():
+    
 
 #def rewriteContiguous(fileName, newName):
     #"""Rewrite a dynamic array file as contiguous"""
@@ -1102,7 +1194,7 @@ if __name__ == '__main__':
     ma2 = MetaArray(file=tf)
     
     print ma2
-    print "\nArrays are equivalent:", all(ma == ma2)
+    print "\nArrays are equivalent:", (ma == ma2).all()
     #print "Meta info is equivalent:", ma.infoCopy() == ma2.infoCopy()
     os.remove(tf)
     
@@ -1119,7 +1211,11 @@ if __name__ == '__main__':
     ma2 = MetaArray(file=tf)
     
     print ma2
-    print "\nArrays are equivalent:", all(ma == ma2)
+    print "\nArrays are equivalent:", (ma == ma2).all()
     #print "Meta info is equivalent:", ma.infoCopy() == ma2.infoCopy()
     
     os.remove(tf)    
+    
+    
+    
+    
