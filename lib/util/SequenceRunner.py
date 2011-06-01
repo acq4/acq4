@@ -6,7 +6,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 from metaarray import *
-from numpy import zeros
+import numpy as np
 
 def runSequence(func, params, order, dtype=None, passArgs=False, linkedParams=None):
     """Convenience function that iterates a function over a given parameter space, inserting the function's return value into an array (see SequenceRunner for documentation)"""
@@ -179,7 +179,7 @@ class SequenceRunner:
         
         shapeExtra = ()
         dtype = self._dtype
-        if isinstance(ret, ndarray):
+        if isinstance(ret, np.ndarray):
             if dtype is None:
                 dtype = ret.dtype
             shapeExtra = ret.shape
@@ -191,8 +191,8 @@ class SequenceRunner:
             dtype = object
             
         info = [{'name': p, 'values': self._paramSpace[p]} for p in self._order]
-        self._return = MetaArray(zeros(shape + shapeExtra, dtype=dtype), info=info)
-        self._runMask = MetaArray(zeros(shape, dtype=bool), info=info)
+        self._return = MetaArray(np.zeros(shape + shapeExtra, dtype=dtype), info=info)
+        self._runMask = MetaArray(np.zeros(shape, dtype=bool), info=info)
 
 
 
@@ -264,7 +264,7 @@ if __name__ == '__main__':
     print "\n========== ndarray return test: kernel function returns an array, return is 2D array ============"
     def fn(tVals, yVals, nPts):
         """Generate a waveform n points long with steps defined by tVals and yVals"""
-        arr = zeros((nPts))
+        arr = np.zeros((nPts))
         tVals.append(nPts)
         for i in range(len(yVals)):
             arr[tVals[i]:tVals[i+1]] = yVals[i]

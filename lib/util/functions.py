@@ -1887,6 +1887,85 @@ def expReconvolve(data, tau=None):
 
     
 
+def concatenateColumns(data):
+    """Returns a single record array with columns taken from the elements in data. 
+    data should be a list of elements, which can be either record arrays or tuples (name, type, data)
+    """
+    
+    ## first determine dtype
+    dtype = []
+    names = set()
+    maxLen = 0
+    for element in data:
+        if isinstance(element, np.ndarray):
+            ## use existing columns
+            for i in range(len(element.dtype)):
+                name = element.dtype.names[i]
+                dtype.append((name, element.dtype[i]))
+            maxLen = max(maxLen, len(element))
+        else:
+            name, type, d = element
+            if type is None:
+                type = suggestDType(d)
+            dtype.append((name, type))
+            if isinstance(d, list) or isinstance(d, np.ndarray):
+                maxLen = max(maxLen, len(d))
+        if name in names:
+            raise Exception('Name "%s" repeated' % name)
+        names.add(name)
+            
+            
+    
+    ## create empty array
+    out = np.empty(maxLen, dtype)
+    
+    ## fill columns
+    for element in data:
+        if isinstance(element, np.ndarray):
+            for i in range(len(element.dtype)):
+                name = element.dtype.names[i]
+                try:
+                    out[name] = element[name]
+                except:
+                    print "Column:", name
+                    print "Input shape:", element.shape, element.dtype
+                    print "Output shape:", out.shape, out.dtype
+                    raise
+        else:
+            name, type, d = element
+            out[name] = d
+            
+    return out
+    
+def suggestDType(x):
+    """Return a suitable dtype for x"""
+    if isinstance(x, list) or isinstance(x, tuple):
+        if len(x) == 0:
+            raise Exception('can not determine dtype for empty list')
+        x = x[0]
+        
+    if hasattr(x, 'dtype'):
+        return x.dtype
+    elif isinstance(x, float):
+        return float
+    elif isinstance(x, int):
+        return int
+    else:
+        return object
+    
+def suggestRecordDType(x):
+    """Given a dict of values, suggest a record array dtype to use"""
+    dt = []
+    for k, v in x.iteritems():
+        dt.append((k, suggestDType(v)))
+    return dt
+    
+    
+def isFloat(x):
+    return isinstance(x, float) or isinstance(x, np.floating)
+
+def isInt(x):
+    return isinstance(x, int) or isinstance(x, np.integer)
 
 
 
@@ -2010,82 +2089,3 @@ def getSpikeTemplate(ivc, traces):
     return traces[thrIndex][['Time', 'Inp0'], start:stop]
 
 
-def concatenateColumns(data):
-    """Returns a single record array with columns taken from the elements in data. 
-    data should be a list of elements, which can be either record arrays or tuples (name, type, data)
-    """
-    
-    ## first determine dtype
-    dtype = []
-    names = set()
-    maxLen = 0
-    for element in data:
-        if isinstance(element, np.ndarray):
-            ## use existing columns
-            for i in range(len(element.dtype)):
-                name = element.dtype.names[i]
-                dtype.append((name, element.dtype[i]))
-            maxLen = max(maxLen, len(element))
-        else:
-            name, type, d = element
-            if type is None:
-                type = suggestDType(d)
-            dtype.append((name, type))
-            if isinstance(d, list) or isinstance(d, np.ndarray):
-                maxLen = max(maxLen, len(d))
-        if name in names:
-            raise Exception('Name "%s" repeated' % name)
-        names.add(name)
-            
-            
-    
-    ## create empty array
-    out = np.empty(maxLen, dtype)
-    
-    ## fill columns
-    for element in data:
-        if isinstance(element, np.ndarray):
-            for i in range(len(element.dtype)):
-                name = element.dtype.names[i]
-                try:
-                    out[name] = element[name]
-                except:
-                    print "Column:", name
-                    print "Input shape:", element.shape, element.dtype
-                    print "Output shape:", out.shape, out.dtype
-                    raise
-        else:
-            name, type, d = element
-            out[name] = d
-            
-    return out
-    
-def suggestDType(x):
-    """Return a suitable dtype for x"""
-    if isinstance(x, list) or isinstance(x, tuple):
-        if len(x) == 0:
-            raise Exception('can not determine dtype for empty list')
-        x = x[0]
-        
-    if hasattr(x, 'dtype'):
-        return x.dtype
-    elif isinstance(x, float):
-        return float
-    elif isinstance(x, int):
-        return int
-    else:
-        return object
-    
-def suggestRecordDType(x):
-    """Given a dict of values, suggest a record array dtype to use"""
-    dt = []
-    for k, v in x.iteritems():
-        dt.append((k, suggestDType(v)))
-    return dt
-    
-    
-def isFloat(x):
-    return isinstance(x, float) or isinstance(x, np.floating)
-
-def isInt(x):
-    return isinstance(x, int) or isinstance(x, np.integer)

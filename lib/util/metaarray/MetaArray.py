@@ -784,7 +784,10 @@ class MetaArray(np.ndarray):
         data = {}
         
         for k in root.attrs:
-            data[k] = root.attrs[k]
+            val = root.attrs[k]
+            if isinstance(val, basestring):  
+                val = eval(val)
+            data[k] = val
         for k in root:
             obj = root[k]
             if isinstance(obj, h5py.highlevel.Group):
@@ -866,15 +869,14 @@ class MetaArray(np.ndarray):
         else:
             f = h5py.File(fileName)
             f.attrs['MetaArray'] = MetaArray.version
-            f.create_dataset('data', data=self.view(np.ndarray), maxshape=tuple(maxShape))#, compression='gzip')
+            f.create_dataset('data', data=self.view(np.ndarray), maxshape=tuple(maxShape), compression='gzip')
             self.writeHDF5Meta(f, 'info', self._info)
             f.close()
     
     def writeHDF5Meta(self, root, name, data):
         if isinstance(data, np.ndarray):
-            print "create:", name, data.shape, data.dtype
             maxShape = (None,) + data.shape[1:]
-            root.create_dataset(name, data=data, maxshape=maxShape)#, compression='gzip')
+            root.create_dataset(name, data=data, maxshape=maxShape, compression='gzip')
         elif isinstance(data, list) or isinstance(data, tuple):
             gr = root.create_group(name)
             if isinstance(data, list):
@@ -889,11 +891,14 @@ class MetaArray(np.ndarray):
             gr.attrs['_metaType_'] = 'dict'
             for k, v in data.iteritems():
                 self.writeHDF5Meta(gr, k, v)
+        elif isinstance(data, int) or isinstance(data, float) or isinstance(data, np.integer) or isinstance(data, np.floating):
+            root.attrs[name] = data
         else:
             try:
-                root.attrs[name] = data
+                root.attrs[name] = repr(data)
             except:
-                raise Exception("Can not store meta data of type '%s' in HDF5. (key is '%s')" % (str(type(data)), str(name)))
+                print "Can not store meta data of type '%s' in HDF5. (key is '%s')" % (str(type(data)), str(name))
+                raise 
         
         
     def writeMa(self, fileName, appendAxis=None, newFile=False):

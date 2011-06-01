@@ -6,7 +6,7 @@ import Image
 Image._MODE_CONV["I;16"] = ('%su2' % Image._ENDIAN, None)
 Image._fromarray_typemap[((1, 1), "<u2")] = ("I", "I;16")
 
-import png ## better png support than PIL
+#import png ## better png support than PIL
 
 from numpy import array, ndarray
 from metaarray import MetaArray as MA
@@ -32,11 +32,9 @@ class ImageFile(FileType):
         """
         fileName = cls.addExtension(fileName)
         ext = os.path.splitext(fileName)[1].lower()[1:]
-        if ext == 'png':
-            
-        else:
-            img = Image.fromarray(data.transpose())
-            img.save(os.path.join(dirHandle.name(), fileName))
+        
+        img = Image.fromarray(data.transpose())
+        img.save(os.path.join(dirHandle.name(), fileName))
         
         #if ext in ['tif', 'tiff']:
             #d = data.transpose()

@@ -607,7 +607,7 @@ class PatchThread(QtCore.QThread):
         fit1 = scipy.optimize.leastsq(
             lambda v, t, y: y - expFn(v, t), pred1, 
             args=(tVals1, pulse['primary'] - baseMean),
-            maxfev=200, full_output=1, warning=False)
+            maxfev=200, full_output=1)
         #fit2 = scipy.optimize.leastsq(
             #lambda v, t, y: y - expFn(v, t), pred2, 
             #args=(tVals2, end['primary'] - baseMean),
