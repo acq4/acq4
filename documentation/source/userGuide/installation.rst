@@ -3,16 +3,16 @@ Installation
 
 ACQ4 depends on several free software packages to work properly.
     
-    #. Python 2.7
-    #. Numpy
-    #. Scipy
-    #. PyQt 4.8
-    #. h5py
+* Python 2.7
+* Numpy
+* Scipy
+* PyQt 4.8
+* h5py
 
 These are the minimal requirements to run ACQ4 (eg, for data analysis). For data acquisition, there are extra requirements:
     
-    #. pyparsing
-    #. pyserial (only if using serial devices--Sutter MP285, serial mice, etc)
+* pyparsing
+* pyserial (only if using serial devices--Sutter MP285, arduino, serial mice, etc)
     
 You also need to make sure that the drivers for your devices are installed and working properly. 
 
