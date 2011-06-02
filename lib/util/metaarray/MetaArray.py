@@ -783,9 +783,10 @@ class MetaArray(np.ndarray):
     def readHDF5Meta(root):
         data = {}
         
+        ## Pull list of values from attributes and child objects
         for k in root.attrs:
             val = root.attrs[k]
-            if isinstance(val, basestring):  
+            if isinstance(val, basestring):  ## strings need to be re-evaluated to their original types
                 val = eval(val)
             data[k] = val
         for k in root:
