@@ -765,22 +765,36 @@ class MetaArray(np.ndarray):
         return subarr
 
     @staticmethod
-    def _readHDF5(fileName, subtype):
+    def _readHDF5(fileName, subtype, mmap=False):
         if not HAVE_HDF5:
             raise Exception("The file '%s' is HDF5-formatted, but the HDF5 library (h5py) was not found." % fileName)
         f = h5py.File(fileName, 'r')
         ver = f.attrs['MetaArray']
         if ver > MetaArray.version:
             print "Warning: This file was written with MetaArray version %s, but you are using version %s. (Will attempt to read anyway)" % (str(ver), str(MetaArray.version))
-        arr = f['data'][:]
-        #meta = H5MetaList(f['info'])
         meta = MetaArray.readHDF5Meta(f['info'])
+        
+        if mmap:
+            arr = MetaArray.mapHDF5Array(f['data'])
+        else:
+            arr = f['data'][:]
+        #meta = H5MetaList(f['info'])
         subarr = arr.view(subtype)
         subarr._info = meta
         return subarr
-    
+
     @staticmethod
-    def readHDF5Meta(root):
+    def mapHDF5Array(data):
+        off = data.id.get_offset()
+        if off is None:
+            raise Exception("This dataset uses chunked storage; it can not be memory-mapped. (store using mappable=True)")
+        return np.memmap(filename=data.file.filename, offset=off, dtype=data.dtype, shape=data.shape)
+        
+
+
+
+    @staticmethod
+    def readHDF5Meta(root, mmap=False):
         data = {}
         
         ## Pull list of values from attributes and child objects
@@ -794,7 +808,10 @@ class MetaArray(np.ndarray):
             if isinstance(obj, h5py.highlevel.Group):
                 val = MetaArray.readHDF5Meta(obj)
             elif isinstance(obj, h5py.highlevel.Dataset):
-                val = obj[:]
+                if mmap:
+                    val = MetaArray.mapHDF5Array(obj)
+                else:
+                    val = obj[:]
             else:
                 raise Exception("Don't know what to do with type '%s'" % str(type(obj)))
             data[k] = val
@@ -818,30 +835,66 @@ class MetaArray(np.ndarray):
 
     def write(self, fileName, **opts):
         """Write this object to a file. The object can be restored by calling MetaArray(file=fileName)
-        hdf5: bool
         opts:
             appendAxis: the name (or index) of the appendable axis. Allows the array to grow.
-            hdf5: bool
-            compress: bool
-            chunk: bool
-            
-        
+            compress: None, 'gzip', 'lzw', etc.
+            chunks: bool or tuple specifying chunk shape
         """
+        
         if USE_HDF5 and HAVE_HDF5:
             return self.writeHDF5(fileName, **opts)
         else:
             return self.writeMa(fileName, **opts)
   
     def writeHDF5(self, fileName, **opts):
-        #if os.path.splitext(fileName)[1] != '.h5':
-            #fileName += '.h5'
-        maxShape = list(self.shape)
+        ## default options for writing datasets
+        dsOpts = {  
+            'compression': 'gzip',
+            'chunks': True,
+        }
+        
+        ## if there is an appendable axis, then we can guess the desired chunk shape (optimized for appending)
+        appAxis = opts.get('appendAxis', None)
+        if appAxis is not None:
+            appAxis = self._interpretAxis(appAxis)
+            cs = [min(100000, x) for x in self.shape]
+            cs[appAxis] = 1
+            dsOpts['chunks'] = tuple(cs)
+            
+        ## if there are columns, then we can guess a different chunk shape
+        ## (read one column at a time)
+        else:
+            cs = [min(100000, x) for x in self.shape]
+            for i in range(self.ndim):
+                if 'cols' in self._info[i]:
+                    cs[i] = 1
+            dsOpts['chunks'] = tuple(cs)
+        
+        ## update options if they were passed in
+        for k in dsOpts:
+            if k in opts:
+                dsOpts[k] = opts[k]
+        
+        
+        ## If mappable is in options, it disables chunking/compression
+        if opts.get('mappable', False):
+            dsOpts = {
+                'chunks': None,
+                'compression': None
+            }
+        
+            
+        ## set maximum shape to allow expansion along appendAxis
         append = False
-        if 'appendAxis' in opts:
-            ax = self._interpretAxis(opts['appendAxis'])
+        if appAxis is not None:
+            maxShape = list(self.shape)
+            ax = self._interpretAxis(appAxis)
             maxShape[ax] = None
             if os.path.exists(fileName):
                 append = True
+            dsOpts['maxshape'] = tuple(maxShape)
+        else:
+            dsOpts['maxshape'] = None
             
         if append:
             f = h5py.File(fileName, 'r+')
@@ -870,14 +923,23 @@ class MetaArray(np.ndarray):
         else:
             f = h5py.File(fileName)
             f.attrs['MetaArray'] = MetaArray.version
-            f.create_dataset('data', data=self.view(np.ndarray), maxshape=tuple(maxShape), compression='gzip')
-            self.writeHDF5Meta(f, 'info', self._info)
+            #print dsOpts
+            f.create_dataset('data', data=self.view(np.ndarray), **dsOpts)
+            
+            ## dsOpts is used when storing meta data whenever an array is encountered
+            ## however, 'chunks' will no longer be valid for these arrays if it specifies a chunk shape.
+            ## 'maxshape' is right-out.
+            if isinstance(dsOpts['chunks'], tuple):
+                dsOpts['chunks'] = True
+                if 'maxshape' in dsOpts:
+                    del dsOpts['maxshape']
+            self.writeHDF5Meta(f, 'info', self._info, **dsOpts)
             f.close()
-    
-    def writeHDF5Meta(self, root, name, data):
+
+    def writeHDF5Meta(self, root, name, data, **dsOpts):
         if isinstance(data, np.ndarray):
-            maxShape = (None,) + data.shape[1:]
-            root.create_dataset(name, data=data, maxshape=maxShape, compression='gzip')
+            dsOpts['maxshape'] = (None,) + data.shape[1:]
+            root.create_dataset(name, data=data, **dsOpts)
         elif isinstance(data, list) or isinstance(data, tuple):
             gr = root.create_group(name)
             if isinstance(data, list):
@@ -886,12 +948,12 @@ class MetaArray(np.ndarray):
                 gr.attrs['_metaType_'] = 'tuple'
             #n = int(np.log10(len(data))) + 1
             for i in xrange(len(data)):
-                self.writeHDF5Meta(gr, str(i), data[i])
+                self.writeHDF5Meta(gr, str(i), data[i], **dsOpts)
         elif isinstance(data, dict):
             gr = root.create_group(name)
             gr.attrs['_metaType_'] = 'dict'
             for k, v in data.iteritems():
-                self.writeHDF5Meta(gr, k, v)
+                self.writeHDF5Meta(gr, k, v, **dsOpts)
         elif isinstance(data, int) or isinstance(data, float) or isinstance(data, np.integer) or isinstance(data, np.floating):
             root.attrs[name] = data
         else:
@@ -1199,7 +1261,7 @@ if __name__ == '__main__':
     ma.write(tf)
     ma2 = MetaArray(file=tf)
     
-    print ma2
+    #print ma2
     print "\nArrays are equivalent:", (ma == ma2).all()
     #print "Meta info is equivalent:", ma.infoCopy() == ma2.infoCopy()
     os.remove(tf)
@@ -1209,14 +1271,14 @@ if __name__ == '__main__':
     # append mode
     
     
-    print "\n  -- append test (%s)" % tf
+    print "\n================append test (%s)===============" % tf
     ma['Axis2':0:2].write(tf, appendAxis='Axis2')
     for i in range(2,ma.shape[1]):
         ma['Axis2':[i]].write(tf, appendAxis='Axis2')
     
     ma2 = MetaArray(file=tf)
     
-    print ma2
+    #print ma2
     print "\nArrays are equivalent:", (ma == ma2).all()
     #print "Meta info is equivalent:", ma.infoCopy() == ma2.infoCopy()
     
@@ -1224,4 +1286,10 @@ if __name__ == '__main__':
     
     
     
+    ## memmap test
+    print "\n==========Memmap test============"
+    ma.write(tf, mappable=True)
+    ma2 = MetaArray(file=tf, mmap=True)
+    print "\nArrays are equivalent:", (ma == ma2).all()
+    os.remove(tf)    
     
