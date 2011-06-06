@@ -19,7 +19,10 @@ if not os.path.exists(qtConf):
     print "PyQt fix: installing qt.conf where it should be.."
     import shutil
     pyqtConf = os.path.join(pyDir, 'Lib', 'site-packages', 'PyQt4', 'qt.conf')
-    shutil.copy(pyqtConf, qtConf)
+    if os.path.exists(pyqtConf):
+        shutil.copy(pyqtConf, qtConf)
+    else:
+        print "  ERROR: can't find any qt.conf. This is sorta ok, but you may be missing some image plugins."
 
 #import lib.util.PySideImporter  ## Use PySide instead of PyQt
 from PyQt4 import QtGui, QtCore

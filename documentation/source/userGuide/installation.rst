@@ -29,6 +29,7 @@ Download and install all prerequisites in order:
 #. h5py:  http://code.google.com/p/h5py/downloads/list   (Windows installer for Python 2.7)
 #. pypasring version *1.5.2* http://sourceforge.net/projects/pyparsing/files/pyparsing/pyparsing-1.5.2/  (later versions do not work yet)
 #. pyserial: http://pypi.python.org/pypi/pyserial
+#. Python Imaging Library: http://www.pythonware.com/products/pil/
 
 I know it is tempting to use easy_install for this. Don't. 
 Once all prerequisites are installed, download ACQ4 (stable or development branch):
@@ -52,7 +53,7 @@ Make all your windows-using friends jealous:
 
 ::
 
-    $ sudo apt-get install python-qt4 python-pyserial python-scipy python-pyparsing python-h5py bazaar
+    $ sudo apt-get install python-qt4 python-pyserial python-scipy python-pyparsing python-h5py python-imaging bazaar
     $ bzr branch lp:acq4
     
     
