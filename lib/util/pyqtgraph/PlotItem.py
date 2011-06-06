@@ -1168,16 +1168,19 @@ class PlotItem(QtGui.QGraphicsWidget):
         return c
 
     def saveSvgClicked(self):
-        self.fileDialog = QtGui.QFileDialog()
+        fileName = QtGui.QFileDialog.getSaveFileName()        
+        self.writeSvg(fileName)
+        #self.fileDialog = QtGui.QFileDialog()
+        ##if PlotItem.lastFileDir is not None:
+            ##self.fileDialog.setDirectory(PlotItem.lastFileDir)
+        #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+        #self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
         #if PlotItem.lastFileDir is not None:
             #self.fileDialog.setDirectory(PlotItem.lastFileDir)
-        self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
-        self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
-        if PlotItem.lastFileDir is not None:
-            self.fileDialog.setDirectory(PlotItem.lastFileDir)
-        self.fileDialog.show()
-        #QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.writeSvg)
-        self.fileDialog.fileSelected.connect(self.writeSvg)
+        
+        #self.fileDialog.show()
+        ##QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.writeSvg)
+        #self.fileDialog.fileSelected.connect(self.writeSvg)
             
     #def svgFileSelected(self, fileName):
         ##PlotWidget.lastFileDir = os.path.split(fileName)[0]

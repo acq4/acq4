@@ -1,5 +1,5 @@
 pos: (0.0, 0.0)
-connects: [('PositionFinder', 'angle', 'DictBuilder', 'angle'), ('FileHandleTest', 'dirHandle', 'PositionFinder', 'fileHandle'), ('DictBuilder', 'output', 'Output', 'dataOut'), ('Input', 'events', 'EventFilter', 'events'), ('GetLaserDur', 'laserDur', 'DictBuilder', 'lasurDur'), ('EventFilter', 'output', 'SpikeCounter', 'events'), ('SpikeCounter', 'output', 'DictBuilder', 'spikeCount'), ('Input', 'fileHandle', 'FileHandleTest', 'fileHandle'), ('FileHandleTest', 'dirHandle', 'GetLaserDur', 'fileHandle'), ('PositionFinder', 'distance', 'DictBuilder', 'distance')]
+connects: [('FileHandleTest', 'dirHandle', 'PositionFinder', 'fileHandle'), ('EventFilter', 'output', 'SpikeCounter', 'events'), ('PositionFinder', 'angle', 'DictBuilder', 'angle'), ('DictBuilder', 'output', 'Output', 'dataOut'), ('SpikeCounter', 'output', 'DictBuilder', 'spikeCount'), ('GetLaserDur', 'laserDur', 'DictBuilder', 'lasurDur'), ('FileHandleTest', 'dirHandle', 'GetLaserDur', 'fileHandle'), ('Input', 'fileHandle', 'FileHandleTest', 'fileHandle'), ('Input', 'events', 'EventFilter', 'events'), ('PositionFinder', 'distance', 'DictBuilder', 'distance')]
 terminals:
     events:
         multi: False
