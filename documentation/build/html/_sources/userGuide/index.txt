@@ -8,6 +8,7 @@ Contents:
     
     introduction
     principles
+    quickstart
     installation
     configuration
     modules/index

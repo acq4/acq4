@@ -25,7 +25,7 @@
     <link rel="top" title="ACQ4 v1.0 documentation" href="../index.html" />
     <link rel="up" title="User’s Guide" href="index.html" />
     <link rel="next" title="Configuration" href="configuration.html" />
-    <link rel="prev" title="Principles of Operation" href="principles.html" /> 
+    <link rel="prev" title="Quick Start Guide" href="quickstart.html" /> 
   </head>
   <body>
     <div class="related">
@@ -38,7 +38,7 @@
           <a href="configuration.html" title="Configuration"
              accesskey="N">next</a> |</li>
         <li class="right" >
-          <a href="principles.html" title="Principles of Operation"
+          <a href="quickstart.html" title="Quick Start Guide"
              accesskey="P">previous</a> |</li>
         <li><a href="../index.html">ACQ4 v1.0 documentation</a> &raquo;</li>
           <li><a href="index.html" accesskey="U">User&#8217;s Guide</a> &raquo;</li> 
@@ -52,25 +52,54 @@
             
   <div class="section" id="installation">
 <h1>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h1>
-<p>ACQ4 depends on several free software packages to work properly. These packages must be installed (in order) before running ACQ4:</p>
-<blockquote>
-<ol class="arabic simple">
-<li>Python 2.6</li>
+<p>ACQ4 depends on several free software packages to work properly.</p>
+<ul class="simple">
+<li>Python 2.7</li>
 <li>Numpy</li>
 <li>Scipy</li>
-<li>PyQt 4.x  (PySide support in development)</li>
-</ol>
-</blockquote>
-<p>These are the minimal requirements to run ACQ4 (eg, for data analysis). It is probably easiest to ask Luke to send you the needed files.</p>
-<p>For data acquisition, there are extra requirements:</p>
-<blockquote>
-<ol class="arabic simple">
+<li>PyQt 4.8</li>
+<li>h5py</li>
+</ul>
+<p>These are the minimal requirements to run ACQ4 (eg, for data analysis). For data acquisition, there are extra requirements:</p>
+<ul class="simple">
 <li>pyparsing</li>
-<li>pyserial (only if using serial devices&#8211;Sutter MP285, serial mice, etc)</li>
-</ol>
-</blockquote>
+<li>pyserial (only if using serial devices&#8211;Sutter MP285, arduino, serial mice, etc)</li>
+</ul>
 <p>You also need to make sure that the drivers for your devices are installed and working properly.</p>
-<p>Once all prerequisites are installed, download ACQ4 (stable or development branch)</p>
+<div class="section" id="windows-installation">
+<h2>Windows Installation<a class="headerlink" href="#windows-installation" title="Permalink to this headline">¶</a></h2>
+<p>In Windows, there is currently no way to install all requirements in one shot (sorry, maybe later).
+Download and install all prerequisites in order:</p>
+<ol class="arabic simple">
+<li>Python 2.7: <a class="reference external" href="http://python.org">http://python.org</a></li>
+<li>PyQt4: <a class="reference external" href="http://www.riverbankcomputing.co.uk/software/pyqt/download">http://www.riverbankcomputing.co.uk/software/pyqt/download</a>  (Be sure to get the version built for python 2.7)</li>
+<li>Numpy <em>and</em> Scipy: <a class="reference external" href="http://scipy.org/Download">http://scipy.org/Download</a> (look for the &#8216;superpack&#8217; files for python 2.7)</li>
+<li>h5py:  <a class="reference external" href="http://code.google.com/p/h5py/downloads/list">http://code.google.com/p/h5py/downloads/list</a>   (Windows installer for Python 2.7)</li>
+<li>pypasring version <em>1.5.2</em> <a class="reference external" href="http://sourceforge.net/projects/pyparsing/files/pyparsing/pyparsing-1.5.2/">http://sourceforge.net/projects/pyparsing/files/pyparsing/pyparsing-1.5.2/</a>  (later versions do not work yet)</li>
+<li>pyserial: <a class="reference external" href="http://pypi.python.org/pypi/pyserial">http://pypi.python.org/pypi/pyserial</a></li>
+<li>Python Imaging Library: <a class="reference external" href="http://www.pythonware.com/products/pil/">http://www.pythonware.com/products/pil/</a></li>
+</ol>
+<p>I know it is tempting to use easy_install for this. Don&#8217;t.
+Once all prerequisites are installed, download ACQ4 (stable or development branch):</p>
+<ol class="arabic simple">
+<li>Download and install bazaar: <a class="reference external" href="http://wiki.bazaar.canonical.com/Download">http://wiki.bazaar.canonical.com/Download</a></li>
+<li>Start a command shell (or powershell or cygwin, if you prefer) and download a copy of the ACQ4 code:</li>
+</ol>
+<div class="highlight-python"><pre>bzr branch lp:acq4</pre>
+</div>
+<p>If all goes well, you now have everything ready and can proceed to configuration.</p>
+</div>
+<div class="section" id="linux-installation">
+<h2>Linux Installation<a class="headerlink" href="#linux-installation" title="Permalink to this headline">¶</a></h2>
+<p>Make all your windows-using friends jealous:</p>
+<div class="highlight-python"><pre>$ sudo apt-get install python-qt4 python-pyserial python-scipy python-pyparsing python-h5py python-imaging bazaar
+$ bzr branch lp:acq4</pre>
+</div>
+</div>
+<div class="section" id="osx-installation">
+<h2>OSX Installation<a class="headerlink" href="#osx-installation" title="Permalink to this headline">¶</a></h2>
+<p>Ask MBK.</p>
+</div>
 </div>
 
 
@@ -79,9 +108,19 @@
       </div>
       <div class="sphinxsidebar">
         <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Installation</a><ul>
+<li><a class="reference internal" href="#windows-installation">Windows Installation</a></li>
+<li><a class="reference internal" href="#linux-installation">Linux Installation</a></li>
+<li><a class="reference internal" href="#osx-installation">OSX Installation</a></li>
+</ul>
+</li>
+</ul>
+
   <h4>Previous topic</h4>
-  <p class="topless"><a href="principles.html"
-                        title="previous chapter">Principles of Operation</a></p>
+  <p class="topless"><a href="quickstart.html"
+                        title="previous chapter">Quick Start Guide</a></p>
   <h4>Next topic</h4>
   <p class="topless"><a href="configuration.html"
                         title="next chapter">Configuration</a></p>
@@ -117,7 +156,7 @@
           <a href="configuration.html" title="Configuration"
              >next</a> |</li>
         <li class="right" >
-          <a href="principles.html" title="Principles of Operation"
+          <a href="quickstart.html" title="Quick Start Guide"
              >previous</a> |</li>
         <li><a href="../index.html">ACQ4 v1.0 documentation</a> &raquo;</li>
           <li><a href="index.html" >User&#8217;s Guide</a> &raquo;</li> 
