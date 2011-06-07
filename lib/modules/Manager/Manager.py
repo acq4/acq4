@@ -78,9 +78,13 @@ class Manager(Module):
         self.manager.quit()
         
     def loadModule(self):
-        mod = str(self.ui.moduleList.currentItem().text())
-        self.manager.loadDefinedModule(mod)
-        self.showMessage("Loaded module '%s'." % mod, 10000)
+        try:
+            QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            mod = str(self.ui.moduleList.currentItem().text())
+            self.manager.loadDefinedModule(mod)
+            self.showMessage("Loaded module '%s'." % mod, 10000)
+        finally:
+            QtGui.QApplication.restoreOverrideCursor()
         
     def reloadAll(self):
         self.manager.reloadAll()

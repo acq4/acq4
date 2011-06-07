@@ -458,7 +458,7 @@ class PlotCurveItem(GraphicsObject):
         self.shadow = shadow
         if y is not None:
             self.updateData(y, x, copy)
-        self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
+        #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
         self.metaData = {}
         self.opts = {
@@ -604,7 +604,7 @@ class PlotCurveItem(GraphicsObject):
         self.updateData(y, x, copy)
         
     def updateData(self, data, x=None, copy=False):
-        #prof = debug.Profiler('PlotCurveItem.updateData', disabled=True)
+        prof = debug.Profiler('PlotCurveItem.updateData', disabled=True)
         if isinstance(data, list):
             data = np.array(data)
         if isinstance(x, list):
@@ -631,7 +631,7 @@ class PlotCurveItem(GraphicsObject):
             x = data[tuple(ind)]
         elif data.ndim == 1:
             y = data
-        #prof.mark("data checks")
+        prof.mark("data checks")
         
         self.setCacheMode(QtGui.QGraphicsItem.NoCache)  ## Disabling and re-enabling the cache works around a bug in Qt 4.6 causing the cached results to display incorrectly
                                                         ##    Test this bug with test_PlotWidget and zoom in on the animated plot
@@ -646,7 +646,7 @@ class PlotCurveItem(GraphicsObject):
             self.xData = x.copy()
         else:
             self.xData = x
-        #prof.mark('copy')
+        prof.mark('copy')
         
         if x is None:
             self.xData = np.arange(0, self.yData.shape[0])
@@ -657,17 +657,19 @@ class PlotCurveItem(GraphicsObject):
         self.path = None
         self.xDisp = self.yDisp = None
         
-        #prof.mark('set')
+        prof.mark('set')
         self.update()
-        #prof.mark('update')
+        prof.mark('update')
         #self.emit(QtCore.SIGNAL('plotChanged'), self)
         self.sigPlotChanged.emit(self)
-        #prof.mark('emit')
+        prof.mark('emit')
         #prof.finish()
-        self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
-        
+        #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
+        prof.mark('set cache mode')
+        prof.finish()
         
     def generatePath(self, x, y):
+        prof = debug.Profiler('PlotCurveItem.generatePath', disabled=True)
         path = QtGui.QPainterPath()
         
         ## Create all vertices in path. The method used below creates a binary format so that all 
@@ -687,31 +689,31 @@ class PlotCurveItem(GraphicsObject):
         ##
         ## All values are big endian--pack using struct.pack('>d') or struct.pack('>i')
         
-        #prof = debug.Profiler('PlotCurveItem.generatePath', disabled=True)
-        
         n = x.shape[0]
         # create empty array, pad with extra space on either end
         arr = np.empty(n+2, dtype=[('x', '>f8'), ('y', '>f8'), ('c', '>i4')])
-        #prof.mark('create empty')
         # write first two integers
+        prof.mark('allocate empty')
         arr.data[12:20] = struct.pack('>ii', n, 0)
+        prof.mark('pack header')
         # Fill array with vertex values
         arr[1:-1]['x'] = x
         arr[1:-1]['y'] = y
         arr[1:-1]['c'] = 1
-        #prof.mark('fill array')
+        prof.mark('fill array')
         # write last 0
         lastInd = 20*(n+1) 
         arr.data[lastInd:lastInd+4] = struct.pack('>i', 0)
-        
+        prof.mark('footer')
         # create datastream object and stream into path
         buf = QtCore.QByteArray(arr.data[12:lastInd+4])  # I think one unnecessary copy happens here
-        #prof.mark('create buffer')
+        prof.mark('create buffer')
         ds = QtCore.QDataStream(buf)
-        #prof.mark('create dataStream')
+        prof.mark('create datastream')
         ds >> path
-        #prof.mark('load path')
-        #prof.finish()
+        prof.mark('load')
+        
+        prof.finish()
         return path
         
     def boundingRect(self):
@@ -1356,12 +1358,16 @@ class UIGraphicsItem(GraphicsObject):
         pass
 
 
-
+class DebugText(QtGui.QGraphicsTextItem):
+    def paint(self, *args):
+        p = debug.Profiler("DebugText.paint", disable=True)
+        QtGui.QGraphicsTextItem.paint(self, *args)
+        p.finish()
 
 class LabelItem(QtGui.QGraphicsWidget):
     def __init__(self, text, parent=None, **args):
         QtGui.QGraphicsWidget.__init__(self, parent)
-        self.item = QtGui.QGraphicsTextItem(self)
+        self.item = DebugText(self)
         self.opts = args
         if 'color' not in args:
             self.opts['color'] = 'CCC'
@@ -1644,6 +1650,7 @@ class ScaleItem(QtGui.QGraphicsWidget):
             return self.mapRectFromParent(self.geometry()) | self.mapRectFromScene(self.linkedView().mapRectToScene(self.linkedView().boundingRect()))
         
     def paint(self, p, opt, widget):
+        prof = debug.Profiler("ScaleItem.paint", disabled=True)
         p.setPen(self.pen)
         
         #bounds = self.boundingRect()
@@ -1704,6 +1711,8 @@ class ScaleItem(QtGui.QGraphicsWidget):
             xs = -bounds.height() / dif
         else:
             xs = bounds.width() / dif
+        
+        prof.mark('init')
             
         tickPositions = set() # remembers positions of previously drawn ticks
         ## draw ticks and generate list of texts to draw
@@ -1785,8 +1794,11 @@ class ScaleItem(QtGui.QGraphicsWidget):
                     #p.drawText(rect, textFlags, vstr)
                     texts.append((rect, textFlags, vstr))
                     
+        prof.mark('draw ticks')
         for args in texts:
             p.drawText(*args)
+        prof.mark('draw text')
+        prof.finish()
         
     def show(self):
         
@@ -1830,7 +1842,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         self.aspectLocked = False
         self.setFlag(QtGui.QGraphicsItem.ItemClipsChildrenToShape)
         #self.setFlag(QtGui.QGraphicsItem.ItemClipsToShape)
-        self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
+        #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         
         #self.childGroup = QtGui.QGraphicsItemGroup(self)
         self.childGroup = ItemGroup(self)

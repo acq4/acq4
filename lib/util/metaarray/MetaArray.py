@@ -560,7 +560,7 @@ class MetaArray(np.ndarray):
             if len(axs) > maxl:
                 maxl = len(axs)
         
-        for i in range(len(self._info)-1):
+        for i in range(min(self.ndim, len(self._info)-1)):
             ax = self._info[i]
             axs = titles[i]
             axs += '%s[%d] :' % (' ' * (maxl + 2 - len(axs)), self.shape[i])
