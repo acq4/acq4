@@ -212,6 +212,9 @@ p, li { white-space: pre-wrap; }
      <verstretch>0</verstretch>
     </sizepolicy>
    </property>
+   <property name="features">
+    <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable</set>
+   </property>
    <property name="windowTitle">
     <string>Display Gain</string>
    </property>
@@ -437,7 +440,7 @@ the entire frame.</string>
     <bool>false</bool>
    </property>
    <property name="features">
-    <set>QDockWidget::AllDockWidgetFeatures</set>
+    <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable</set>
    </property>
    <property name="windowTitle">
     <string>Persistent Frames</string>
@@ -479,6 +482,9 @@ the entire frame.</string>
   <widget class="QDockWidget" name="dockWidget_3">
    <property name="floating">
     <bool>false</bool>
+   </property>
+   <property name="features">
+    <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable</set>
    </property>
    <property name="windowTitle">
     <string>Background Subtraction</string>

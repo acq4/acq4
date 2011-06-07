@@ -1,0 +1,151 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Troubleshoot Electrical Noise &mdash; ACQ4 v1.0 documentation</title>
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="ACQ4 v1.0 documentation" href="../../index.html" />
+    <link rel="up" title="Tutorials" href="index.html" />
+    <link rel="next" title="Record a Photostimulation Map" href="PhotostimMapping.html" />
+    <link rel="prev" title="Troubleshooting Table Vibration" href="TroubleshootVibration.html" />
+    <link rel="stylesheet" href="_static/style.css">
+     
+
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="PhotostimMapping.html" title="Record a Photostimulation Map"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="TroubleshootVibration.html" title="Troubleshooting Table Vibration"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../../index.html">ACQ4 v1.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >User&#8217;s Guide</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Tutorials</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="troubleshoot-electrical-noise">
+<h1>Troubleshoot Electrical Noise<a class="headerlink" href="#troubleshoot-electrical-noise" title="Permalink to this headline">¶</a></h1>
+<ol class="arabic simple">
+<li>create protocol with clamp device</li>
+<li>configure daq to run at maximum rate possible (500kHz for MIO-6259)</li>
+<li>set protocol to loop and start</li>
+<li>switch plot to FFT mode</li>
+<li>turn off <em>and unplug</em> everything, turn back on one at a time.</li>
+<li>check for noise first with a model cell on the headstage, wrapped in foil</li>
+<li>next, remove the foil and check again</li>
+<li>remove the model cell, replace with an ACSF-loaded pipette, check again</li>
+<li>place the pipette in the recording chamber with ACSF flowing</li>
+<li>experiment with different grounding conditions</li>
+</ol>
+<div class="section" id="common-noise-sources">
+<h2>Common noise sources<a class="headerlink" href="#common-noise-sources" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>some MultiClamps produce a wide band of HF noise that is not attenuated by the bessel filter. The best way around this is to oversample (&gt;300kHz) and then downsample.</li>
+<li>most cameras produce noise. The noise may vary depending on the state of the camera (initialized/not, acquiring/not, frame rate...). Camera noise can be addressed by making sure the scope is grounded, and the firewire connection uses a &#8216;quality&#8217; interface.</li>
+<li>fluid management (pumps, aspirators, drips) is often the cause of random spiky noise</li>
+<li>temperature probes in the recording chamber</li>
+<li>brush motor pumps</li>
+<li>any cables running parallel to the headstage cables</li>
+<li>cell phones. just turn &#8216;em off.</li>
+<li>60Hz. It&#8217;s everywhere; use a faraday cage. Sutter MP-285s can be particularly bad; I keep them separated from all the other equipment by ~5 feet.</li>
+</ul>
+<p>In general, noise can be reduced significantly by oversampling and then downsampling. See the DAQ interface in the prorocol runner [link].</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Troubleshoot Electrical Noise</a><ul>
+<li><a class="reference internal" href="#common-noise-sources">Common noise sources</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="TroubleshootVibration.html"
+                        title="previous chapter">Troubleshooting Table Vibration</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="PhotostimMapping.html"
+                        title="next chapter">Record a Photostimulation Map</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../../_sources/userGuide/tutorials/TroubleshootNoise.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" size="18" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="PhotostimMapping.html" title="Record a Photostimulation Map"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="TroubleshootVibration.html" title="Troubleshooting Table Vibration"
+             >previous</a> |</li>
+        <li><a href="../../index.html">ACQ4 v1.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >User&#8217;s Guide</a> &raquo;</li>
+          <li><a href="index.html" >Tutorials</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2011; University of North Carolina at Chapel Hill.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.1.
+    </div>
+  </body>
+</html>

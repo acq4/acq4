@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 
-class DockDrop:
+class DockDrop(object):
     """Provides dock-dropping methods"""
     def __init__(self, allowedAreas=None):
+        object.__init__(self)
         if allowedAreas is None:
             allowedAreas = ['center', 'right', 'left', 'top', 'bottom']
         self.allowedAreas = set(allowedAreas)

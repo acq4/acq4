@@ -399,9 +399,9 @@ Valid options are:
 
     def unloadModule(self, name):
         try:
-            print "    request quit.."
+            #print "    request quit.."
             self.getModule(name).quit()
-            print "    request quit done"
+            #print "    request quit done"
         except:
             printExc("Error while requesting module '%s' quit." % name)
             
@@ -424,7 +424,7 @@ Valid options are:
         try:
             sh = QtGui.QShortcut(QtGui.QKeySequence(keys), win)
             sh.setContext(QtCore.Qt.ApplicationShortcut)
-            sh.activated.connect(win.raise_)
+            sh.activated.connect(lambda *args: win.raise_)
         except:
             printExc("Error creating shortcut '%s':" % keys)
         

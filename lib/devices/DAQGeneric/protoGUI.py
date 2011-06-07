@@ -14,7 +14,7 @@ from debug import *
 
 class DAQGenericProtoGui(ProtocolGui):
     
-    sigSequenceChanged = QtCore.Signal(object)
+    #sigSequenceChanged = QtCore.Signal(object)  ## defined upstream
     
     def __init__(self, dev, prot, ownUi=True):
         ProtocolGui.__init__(self, dev, prot)

@@ -3,9 +3,6 @@
 acq4.py -  Main ACQ4 invocation script
 Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
-
-This script is about the simplest way to start up ACQ4. All it does is start the 
-manager with a configuration file and let it go from there.
 """
 
 print "Loading ACQ4..."
@@ -13,6 +10,19 @@ print "Loading ACQ4..."
 #import sip
 #sip.setapi('QString', 2)
 #sip.setapi('QVariant', 2)
+
+## PyQt bug: make sure qt.conf was installed correctly
+import os, sys
+pyDir = os.path.split(sys.executable)[0]
+qtConf = os.path.join(pyDir, 'qt.conf')
+if not os.path.exists(qtConf):
+    print "PyQt fix: installing qt.conf where it should be.."
+    import shutil
+    pyqtConf = os.path.join(pyDir, 'Lib', 'site-packages', 'PyQt4', 'qt.conf')
+    if os.path.exists(pyqtConf):
+        shutil.copy(pyqtConf, qtConf)
+    else:
+        print "  ERROR: can't find any qt.conf. This is sorta ok, but you may be missing some image plugins."
 
 #import lib.util.PySideImporter  ## Use PySide instead of PyQt
 from PyQt4 import QtGui, QtCore
@@ -29,7 +39,6 @@ if not hasattr(QtCore, 'Signal'):
 
     
 from lib.Manager import *
-import os, sys
 from numpy import *
 
 
@@ -38,9 +47,8 @@ from numpy import *
 ## may break some debuggers.
 import disableExceptionStorage
 
-
-
 ## Initialize Qt
+#QtGui.QApplication.setGraphicsSystem('raster')  ## needed for specific composition modes
 app = QtGui.QApplication(sys.argv)
 
 ## For logging ALL python activity

@@ -56,9 +56,9 @@ externalParams = ['triggerMode',
                   #'triggerType', ## Add this in when we figure out TriggerModes
                   'exposure',
                   #'exposureMode',
-                  'binning',
-                  #'binningX',
-                  #'binningY',
+                  #'binning',
+                  'binningX',
+                  'binningY',
                   'regionX',
                   'regionY',
                   'regionW',
@@ -191,6 +191,7 @@ class QCameraClass:
             'qprmTriggerType': 'QCam_qcTriggerType'
         }
         
+        ## translates public parameter names to QCam parameter names
         self.userToCameraDict = {
             'triggerMode':'qprmTriggerType',
             'exposure':'qprm64Exposure',
@@ -211,7 +212,7 @@ class QCameraClass:
         self.cameraToUserDict = {
             'qprmTriggerType':'triggerMode',
             'qprm64Exposure':'exposure',
-            'qprmBinning':'binning',
+            'qprmBinning':'binningX',
             'qprmRoiX':'regionX',
             'qprmRoiY':'regionY',
             'qprmRoiWidth':'regionW',
@@ -329,8 +330,8 @@ class QCameraClass:
         if param == None:
             return self.fillParamDict(allParams=allParams)
         else:
-            if param in ['binningX', 'binningY']:
-                param = 'binning'
+            #if param in ['binningX', 'binningY']:
+                #param = 'binning'
             return self.paramAttrs[param]
 
     def fillParamDict(self, allParams=False):
@@ -524,7 +525,9 @@ class QCameraClass:
             if param in self.groupParams:
                 vals[param] = self.getParams(self.groupParams[param], asList=True)
                 continue
+            
             param2 = self.translateToCamera(param)
+                
             if param2 in lib('enums', 'QCam_Param'):
                 value = self.call(lib.GetParam, byref(s), getattr(lib, param2))[2]
             elif param2 in lib('enums', 'QCam_ParamS32'):
@@ -535,15 +538,18 @@ class QCameraClass:
                 value = self.cameraInfo[param2]
             else:
                 raise Exception("%s is not recognized as a parameter." %param)
+            
             if param2 in ['qprmRoiX', 'qprmRoiY', 'qprmRoiWidth', 'qprmRoiHeight']:
-                value = value*self.getParam('binning')[0]
+                value = value*self.getParam('binningX')
+                
             value = self.getNameFromEnum(param2, value)
             value = self.convertUnitsToAcq4(self.translateToUser(param2), value)
-            if param2 != 'qprmBinning':
-                vals[param] = value
-                continue
-            elif param2 == 'qprmBinning':
+            
+            if param == 'binning':           ## just fake it.
                 vals[param] = (value,value)
+                continue
+            else:
+                vals[param] = value
                 continue
         
         
@@ -584,6 +590,13 @@ class QCameraClass:
                 for y in tuples:
                     params[y[0]]= y[1]
                 del params[x]
+            elif x == 'binning':
+                params['binningX'] = params[x][0]
+                del params[x]
+            elif x == 'binningY':
+                params['binningX'] = params[x]
+                del params[x]
+                
                 #return self.setParams(newDict)
             
         #changeTuple = {}
@@ -594,6 +607,8 @@ class QCameraClass:
         ## will also see whether there are actually any changes to make
         current = self.getParams(params.keys())
         changed = False
+        #changedKeys = []  ## keys for parameters that have changed 
+                          ### (this is not necessarily the same as params)
         
         for x in params:
             #print "0 x:", x
@@ -614,7 +629,7 @@ class QCameraClass:
                 if params[x] != 'qfmtMono16':
                     print "QCam driver currently only supports the 'qfmtMono16' image format."
                     continue
-            print "changed param", x, current[x], params[x]
+            #print "changed param", x, current[x], params[x]
             changed = True
                 
             param = self.translateToCamera(x)
@@ -684,8 +699,13 @@ class QCameraClass:
         #self.queueSettingsDict = {}
         #for x in params:
             #self.queueSettingsDict[x] = value
-        
+            #if 'binning' in x:
+                #changedKeys.append('binningX')
+            #else:    
+                #changedKeys.append(x)
+            
         if not changed:
+            #return self.getParams(changedKeys), False
             return current, False
         
         with self.mutex:
@@ -715,7 +735,7 @@ class QCameraClass:
         #ret = {}
         #for x in params:
             #ret[x] = self.getParam(x)
-        ret = self.getParams(params.keys())
+        ret = self.getParams(self.getParams(params.keys()))
         self.getImageSize() ## Run this function to update image size in cameraInfo dictionary
         #print "Set params to:", dict
         #if not autoRestart:

@@ -192,7 +192,7 @@ class ScannerProtoGui(ProtocolGui):
         camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
 
     def packingSpinChanged(self):
-        print "packingSpinChanged."
+        #print "packingSpinChanged."
         #self.updateSpotSizes()
         self.dev.updateTargetPacking(self.ui.packingSpin.value())
         self.updateSpotSizes()

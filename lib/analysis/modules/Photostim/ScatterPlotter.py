@@ -7,7 +7,7 @@ import debug
 
 class ScatterPlotter(QtGui.QSplitter):
     ### Draws scatter plots, allows the user to pick which data is used for x and y axes.
-    sigPointClicked = QtCore.Signal(object)
+    sigClicked = QtCore.Signal(object, object)
     
     def __init__(self):
         QtGui.QSplitter.__init__(self)
@@ -82,13 +82,13 @@ class ScatterPlotter(QtGui.QSplitter):
             pts = [{'pos': (data['output'][i][x], data['output'][i][y]), 'data': (scan, data['output'][i]['SourceFile'], data['output'][i]['fitTime'])} for i in xrange(len(data['output']))]
             plot.setPoints(pts)
             #print pts
-            plot.sigPointClicked.connect(self.pointClicked)
+            plot.sigClicked.connect(self.plotClicked)
         except:
             pass
             #debug.printExc("Error updating scatter plot:")
         
-    def pointClicked(self, plot, point):
-        self.sigPointClicked.emit(point)
+    def plotClicked(self, plot, points):
+        self.sigClicked.emit(self, points)
     
     def updateAll(self):
         for s in self.scans:

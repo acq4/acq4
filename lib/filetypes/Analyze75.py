@@ -2,6 +2,7 @@
 
 from FileType import *
 import numpy as np
+from metaarray import MetaArray
 
 class Analyze75(FileType):
     extensions = ['.nii', '.hdr']   ## list of extensions handled by this class
@@ -17,8 +18,12 @@ class Analyze75(FileType):
         
     @classmethod
     def read(cls, fileHandle):
+        if isinstance(fileHandle, basestring):
+            fn = fileHandle
+        else:
+            fn = fileHandle.name()
         """Read a file, return a data object"""
-        return readA75(fileHandle.name())
+        return readA75(fn)
 
 
 
@@ -69,9 +74,9 @@ units = {
 class Obj(object):
     pass
 
-class Array(np.ndarray):  ## just allows us to add some dynamic attributes
-    def __new__(cls, arr):
-        return arr.view(cls)
+#class Array(np.ndarray):  ## just allows us to add some dynamic attributes
+    #def __new__(cls, arr):
+        #return arr.view(cls)
     
 import struct
 def readA75(hdrFile):
@@ -162,6 +167,9 @@ def parseNii(headerFH, imgFile):
     m.intent = image_dim[8:11]
     m.intent_code, m.datatype, m.bitpix, m.slice_start = image_dim[11:15]
     m.pixdim = image_dim[15:23]
+    m.qfac = m.pixdim[0]
+    if m.qfac == 0.0:
+        m.qfac = 1.0
     m.vox_offset, m.scl_slope, m.scl_inter, m.slice_end, m.slice_code = image_dim[23:28]
     m.xyzt_units, m.cal_max, m.cal_min, m.slice_duration, m.toffset, m.glmax, m.glmin = image_dim[28:35]
     
@@ -173,14 +181,19 @@ def parseNii(headerFH, imgFile):
     m.srow_z = data_history[18:22]
     m.intent_name, m.magic = data_history[22:]
     
+    try:
+        m.descrip = m.descrip[:m.descrip.index('\0')]
+    except ValueError:
+        pass
+    
     #print "Description:", descrip[:descrip.index('\0')]
 
     ## sanity checks
-    if magic not in ['nii\0', 'n+1\0']:
-        raise Exception('Unsupported NiFTI version: "%s"' % magic)
-    if dim[0] > 7:
-        raise Exception('Dim > 7 not supported. (got %d)' % dim[0])
-    m.vox_offset = int(vox_offset)
+    if m.magic not in ['nii\0', 'n+1\0']:
+        raise Exception('Unsupported NiFTI version: "%s"' % m.magic)
+    if m.dim[0] > 7:
+        raise Exception('Dim > 7 not supported. (got %d)' % m.dim[0])
+    m.vox_offset = int(m.vox_offset)
 
 
     ## read extended data (nothing done here yet, we just let the user know that the data is there.)
@@ -197,9 +210,9 @@ def parseNii(headerFH, imgFile):
             print "Header has extended data in unknown format (code=%d; ignored)" % ecode
     
     ## do a little parsing
-    shape = dim[1:dim[0]+1]
-    size = (bitpix / 8) * reduce(lambda a,b: a*b, shape)
-    dtype = niiDataTypes[datatype]
+    shape = m.dim[1:m.dim[0]+1]
+    size = (m.bitpix / 8) * reduce(lambda a,b: a*b, shape)
+    dtype = niiDataTypes[m.datatype]
     if isinstance(dtype, basestring):
         raise Exception("Data type not supported: %s"% dtype)
     #print "Dimensions:", dim[0]
@@ -208,14 +221,14 @@ def parseNii(headerFH, imgFile):
     
     ## read image data. Anything more than 200MB, use memmap.
     if size < 200e6:
-        if magic == 'n+1\0':  ## data is in the same file as the header
-            vox_offset = max(352, vox_offset)
-            headerFH.seek(int(vox_offset))
+        if m.magic == 'n+1\0':  ## data is in the same file as the header
+            m.vox_offset = max(352, m.vox_offset)
+            headerFH.seek(int(m.vox_offset))
             data = headerFH.read(size)
-        elif magic == 'nii\0':               ## data is in a separate .img file
+        elif m.magic == 'nii\0':               ## data is in a separate .img file
             imgFile = os.path.splitext(hdrFile)[0] + '.img'
             fh = open(imgFile, 'rb')
-            fh.seek(vox_offset)
+            fh.seek(m.vox_offset)
             data = fh.read(size)
         headerFH.close()
         
@@ -223,55 +236,77 @@ def parseNii(headerFH, imgFile):
             raise Exception("Data size is incorrect. Expected %d, got %d" % (size, len(data)))
             
         data = np.fromstring(data, dtype=dtype)
-        data.shape = dim[1:dim[0]+1]
+        data.shape = m.dim[1:m.dim[0]+1]
     else:
         #print "Large file; loading by memmap"
-        if magic == 'n+1\0':  ## data is in the same file as the header
-            vox_offset = max(352, vox_offset)
+        if m.magic == 'n+1\0':  ## data is in the same file as the header
+            m.vox_offset = max(352, m.vox_offset)
             fh = headerFH
-        elif magic == 'nii\0':               ## data is in a separate .img file
+        elif m.magic == 'nii\0':               ## data is in a separate .img file
             imgFile = os.path.splitext(hdrFile)[0] + '.img'
             fh = open(imgFile, 'rb')
             headerFH.close()
-        data = np.memmap(fh, offset=vox_offset, dtype=dtype, shape=shape, mode='r')
+        data = np.memmap(fh, offset=m.vox_offset, dtype=dtype, shape=shape, mode='r')
     
     ## apply scaling
-    if scl_slope == 0.0:
-        scl_slope = 1.0
+    if m.scl_slope == 0.0:
+        m.scl_slope = 1.0
     
-    if (scl_slope != 1.0 or scl_inter != 0.0) and datatype != 128: ## scaling not allowed for RGB24
+    if (m.scl_slope != 1.0 or m.scl_inter != 0.0) and m.datatype != 128: ## scaling not allowed for RGB24
         #print "Applying scale and offset"
-        data = (data.astype(np.float32) * scl_slope) + scl_inter
+        data = (data.astype(np.float32) * m.scl_slope) + m.scl_inter
 
-    xUnits = units[xyzt_units & 0x07]
-    tUnits = units[xyzt_units & 0x38]
+    m.xUnits = units[m.xyzt_units & 0x07]
+    m.tUnits = units[m.xyzt_units & 0x38]
 
+    info = []
+    for x in shape:
+        info.append({})
+    
+    
     ## determine coordinate system
-    if sform_code > 0:
-        pass
+    if m.qform_code > 0:  ## coordinate method 2  (currently rotation matrix is not implemented, only offset.)
+        m.xVals = []
+        for i in range(min(3, m.dim[0])):
+            offset = m.qoffset[i] * m.xUnits[1]
+            width = (m.pixdim[i+1] * m.xUnits[1] * (m.dim[i+1]-1))
+            info[i]['values'] = np.linspace(offset, offset + width, m.dim[i+1])
+    
+    if m.sform_code > 0:  ## coordinate method 3
+        print "Warning: This data (%s) has an unsupported affine transform." % headerFH.name
         #print "affine transform:"
         #print srow_x
         #print srow_y
         #print srow_z
-    else:
-        pixdim = list(pixdim)
-        pixdim[1] *= xUnits[1]
-        pixdim[2] *= xUnits[1]
-        pixdim[3] *= xUnits[1]
-        pixdim[4] *= tUnits[1]
+    else:  ## coordinate method 1
+        m.pixdim = list(m.pixdim)
+        m.pixdim[1] *= m.xUnits[1]
+        m.pixdim[2] *= m.xUnits[1]
+        m.pixdim[3] *= m.xUnits[1]
+        m.pixdim[4] *= m.tUnits[1]
         #print "Voxel dimensions:", pixdim
         ## try just using pixdim
     
     #print "Voxel units:", xUnits[0]
     
     ## In NiFTI, dimensions MUST represent (x, y, z, t, v, ...)
+    ## x = right, y = anterior, z = superior
+    names = ['right', 'anterior', 'dorsal', 'time']
+    for i in range(min(4, m.dim[0])):
+        info[i]['name'] = names[i]
+        
+    
     ## pixdim[1:] specifies voxel length along each axis
     ## intent_code
     ## orientation
     ## bitpix
     ## cal_min, cal_max are calibrated display black and white levels
-    data = Array(data)
-    data.meta = m.__dict__   ## store some header info aongside the array
+    
+    info.append(m.__dict__)
+    
+    #print "dims:", m.dim
+    #print info
+    data = MetaArray(data, info=info)
     return data
 
 def getByteOrder(hLen):

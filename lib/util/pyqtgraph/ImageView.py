@@ -382,7 +382,7 @@ class ImageView(QtGui.QWidget):
             self.axes[x] = self.axes.get(x, None)
             
         self.imageDisp = None
-        if autoLevels:
+        if levels is None and autoLevels:
             self.autoLevels()
         if levels is not None:
             self.levelMax = levels[1]

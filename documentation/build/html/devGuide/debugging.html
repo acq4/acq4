@@ -1,0 +1,290 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Debugging &mdash; ACQ4 v1.0 documentation</title>
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="ACQ4 v1.0 documentation" href="../index.html" />
+    <link rel="up" title="Developer’s Guide" href="index.html" />
+    <link rel="prev" title="Utility Libraries" href="utilityLibraries/index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="utilityLibraries/index.html" title="Utility Libraries"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">ACQ4 v1.0 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Developer&#8217;s Guide</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="debugging">
+<h1>Debugging<a class="headerlink" href="#debugging" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="python-debugging-and-ides">
+<h2>Python debugging and IDEs<a class="headerlink" href="#python-debugging-and-ides" title="Permalink to this headline">¶</a></h2>
+<p>We use Wing IDE Pro, many have also recommended Eric and Elipse + PyDev
+All of these options offer a comprehensive set of debugging features.</p>
+</div>
+<div class="section" id="memory-leaks">
+<h2>Memory Leaks<a class="headerlink" href="#memory-leaks" title="Permalink to this headline">¶</a></h2>
+<dl class="docutils">
+<dt>debug library has some tools for tracking down memory leaks:</dt>
+<dd>ObjTracker
+GarbageWatcher</dd>
+</dl>
+</div>
+<div class="section" id="lockups-bus-errors-segmentation-faults">
+<h2>Lockups, bus errors, segmentation faults<a class="headerlink" href="#lockups-bus-errors-segmentation-faults" title="Permalink to this headline">¶</a></h2>
+<dl class="docutils">
+<dt>Things that crash PyQt4:</dt>
+<dd><ul class="first last">
+<li><p class="first">Model/View anything. TableView, TreeView, etc. They are too hard to program correctly, and any mistakes lead to untraceable crashing.</p>
+</li>
+<li><p class="first">Changing the bounds of graphicsitems without calling preparegeometrychange first</p>
+</li>
+<li><dl class="first docutils">
+<dt>Situations where Qt auto-deletes objects, leaving the python wrapper alive.(make sure you keep references to the objects you want to stay alive, and remove bad references before they cause trouble)</dt>
+<dd><ul class="first last simple">
+<li>joined widgets such as a scrollarea and its scroll bars. When the scrollarea is deleted, the scrollbars go as well, but any references to the scrollbars are NOT informed of this, so accessing those objects causes crash (Pyside does not have this problem)</li>
+<li>parents auto-deleting children, tree items deleting child widgets when moved</li>
+<li>GraphicsItems should NEVER keep a reference to the view they live in. (weakrefs are ok)</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p class="first">As always, be careful with multi-threading. Never access GUI objects outside the main thread.</p>
+</li>
+<li><dl class="first docutils">
+<dt>If graphicsView seems to be involved, try disabling OpenGL</dt>
+<dd><p class="first last">on 2.6+, OpenGL-enabled graphicsviews can crawl to a halt over time.</p>
+</dd>
+</dl>
+</li>
+<li><p class="first">using QTimer.singleShot repeatedly can cause lockups</p>
+</li>
+</ul>
+</dd>
+<dt>PySide: an alternative to PyQt4</dt>
+<dd><ul class="first last simple">
+<li>Not mature yet</li>
+<li>Developing quickly; may be a viable alternative in the near future..</li>
+</ul>
+</dd>
+</dl>
+</div>
+<div class="section" id="installing-pyqt-with-debugging-symbols">
+<h2>Installing PyQt with debugging symbols:<a class="headerlink" href="#installing-pyqt-with-debugging-symbols" title="Permalink to this headline">¶</a></h2>
+<p>on Linux:</p>
+<div class="highlight-python"><pre>apt-get install libqt4-dbg python-qt4-dbg python-dbg
+gdb python
+&gt;&gt;&gt; run acq4.py
+    [crash]
+&gt;&gt;&gt; backtrace</pre>
+</div>
+<dl class="docutils">
+<dt>on Windows:</dt>
+<dd><p class="first">Debugging on windows is a rotten pain. My first recommendation is to see if you can reproduce the bug in Linux. There are a few simulated devices that will allow you to use the camera and protocol runner modules on a testing machine.</p>
+<p>If that isn&#8217;t working out for you, then it&#8217;s time to compile pyqt with debugging symbols.</p>
+<ul class="simple">
+<li>We are going to install PyQt with GDB-style debugging symbols, but _without_ python debugging.</li>
+<li>Hints: <a class="reference external" href="http://www.gubatron.com/blog/2007/02/23/how-to-build-pyqt4-for-windows/">http://www.gubatron.com/blog/2007/02/23/how-to-build-pyqt4-for-windows/</a></li>
+</ul>
+<ol class="last arabic">
+<li><p class="first">Download, install Qt SDK</p>
+</li>
+<li><p class="first">download sip and pyqt source</p>
+</li>
+<li><p class="first">unzip to a path with <em>no</em> spaces in the full path name</p>
+</li>
+<li><p class="first">Use Qt&#8217;s mingw command prompt or VS&#8217;s command prompt (not cmd, powershell, cygwin..)</p>
+</li>
+<li><p class="first">If sh is installed via cygwin, it must not be in the PATH during build</p>
+</li>
+<li><p class="first">set environment variables:  (example below is for mingw builds)</p>
+<blockquote>
+<div class="highlight-python"><pre>&gt; set QTMAKESPEC=win32-g++    (for mingw builds)
+&gt; set QTDIR=C:\QtSDK\Desktop\Qt\4.7.3\mingw</pre>
+</div>
+</blockquote>
+</li>
+<li><p class="first">configure sip:</p>
+<blockquote>
+<div class="highlight-python"><pre>&gt; python configure.py -p win32-g++ --debug</pre>
+</div>
+</blockquote>
+</li>
+<li><p class="first">replace all occurrences of &#8220;python2X_d&#8221; with &#8220;python2X&#8221; in all Makefiles (unless you have debugging python installed). A short python script takes care of this:</p>
+<blockquote>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">os</span><span class="o">,</span> <span class="nn">re</span>
+<span class="k">for</span> <span class="n">path</span><span class="p">,</span> <span class="n">sd</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="s">&#39;.&#39;</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">f</span> <span class="o">!=</span> <span class="s">&#39;Makefile&#39;</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">fn</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+        <span class="k">print</span> <span class="n">fn</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="s">&#39;r&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+        <span class="n">fh</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+            <span class="n">line2</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r&#39;python(\d+)_d&#39;</span><span class="p">,</span> <span class="s">&#39;python</span><span class="se">\\</span><span class="s">1&#39;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+            <span class="n">fh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">line2</span><span class="p">)</span>
+        <span class="n">fh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</pre></div>
+</div>
+</blockquote>
+</li>
+<li><p class="first">run mingw32-make or nmake for VS, but do <em>not</em> use cygwin&#8217;s make. Note that just running mingw32-make install is often allowed, but will fail in this case.</p>
+<blockquote>
+<div class="highlight-python"><pre>&gt; mingw32-make
+&gt; mingw32-make install</pre>
+</div>
+</blockquote>
+</li>
+<li><p class="first">After installing, you should have sip_d.pyd. Rename this to sip.pyd</p>
+</li>
+<li><p class="first">repeat for pyqt source</p>
+</li>
+<li><p class="first">rename all installed *_d.pyd files to *.pyd (c:\python26\lib\site-packages\pyqt4...)</p>
+<blockquote>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">os</span><span class="o">,</span> <span class="nn">re</span><span class="o">,</span> <span class="nn">glob</span>
+<span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s">&#39;*_d.pyd&#39;</span><span class="p">):</span>
+    <span class="n">f2</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">&#39;_d&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">f2</span><span class="p">)</span>
+    <span class="k">print</span> <span class="s">&quot;</span><span class="si">%s</span><span class="s"> -&gt; </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">f2</span><span class="p">)</span>
+</pre></div>
+</div>
+</blockquote>
+</li>
+<li><p class="first">This does not install .dll and .exe files. Copy these files from C:\QtSDK\Desktop\Qt\4.7.3\mingw. I think DLLS should be in c:\python26\Lib\site-packages\PyQt4, and EXEs should be in \bin from there (wherever you put them should be in PATH so windows can find the DLLs).</p>
+</li>
+</ol>
+</dd>
+</dl>
+</div>
+<div class="section" id="debugging-acq4-with-gdb">
+<h2>Debugging ACQ4 with GDB<a class="headerlink" href="#debugging-acq4-with-gdb" title="Permalink to this headline">¶</a></h2>
+<ol class="arabic">
+<li><p class="first">Start up:</p>
+<blockquote>
+<div class="highlight-python"><pre>&gt; gdb python
+...
+(gdb) run -i acq4.py</pre>
+</div>
+</blockquote>
+</li>
+<li><p class="first">Crash the program. You will not see any crash message immediately; it will appear frozen, but go back to the terminal window, and GDB should say something like this:</p>
+<blockquote>
+<div class="highlight-python"><pre>Program received signal SIGSEGV, Segmentation fault.</pre>
+</div>
+<p>Alternately, if the program is genuinely frozen, then pressing Ctrl-C should get you back to a GDB prompt.</p>
+</blockquote>
+</li>
+<li><p class="first">Get a backtrace</p>
+<blockquote>
+<div class="highlight-python"><pre>(gdb) backtrace</pre>
+</div>
+<p>The beginning of the backtrace should offer hints about what was happening when the crash/freeze occurred.</p>
+</blockquote>
+</li>
+</ol>
+<p>There are lots of easy ways you can crash python to test this. Here&#8217;s one:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">PyQt4</span> <span class="kn">import</span> <span class="n">QtGui</span>
+<span class="n">app</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QApplication</span><span class="p">([])</span>
+<span class="n">s</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QSpinBox</span><span class="p">()</span>
+<span class="n">l</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">lineEdit</span><span class="p">()</span>
+<span class="k">del</span> <span class="n">s</span>
+<span class="n">l</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Debugging</a><ul>
+<li><a class="reference internal" href="#python-debugging-and-ides">Python debugging and IDEs</a></li>
+<li><a class="reference internal" href="#memory-leaks">Memory Leaks</a></li>
+<li><a class="reference internal" href="#lockups-bus-errors-segmentation-faults">Lockups, bus errors, segmentation faults</a></li>
+<li><a class="reference internal" href="#installing-pyqt-with-debugging-symbols">Installing PyQt with debugging symbols:</a></li>
+<li><a class="reference internal" href="#debugging-acq4-with-gdb">Debugging ACQ4 with GDB</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="utilityLibraries/index.html"
+                        title="previous chapter">Utility Libraries</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/devGuide/debugging.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" size="18" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="utilityLibraries/index.html" title="Utility Libraries"
+             >previous</a> |</li>
+        <li><a href="../index.html">ACQ4 v1.0 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Developer&#8217;s Guide</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2011; University of North Carolina at Chapel Hill.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.1.
+    </div>
+  </body>
+</html>

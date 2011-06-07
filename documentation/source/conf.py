@@ -38,7 +38,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'ACQ4'
-copyright = u'2011, Luke Campagnola, Megan B. Kratz'
+copyright = u'2011; University of North Carolina at Chapel Hill'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -173,7 +173,7 @@ htmlhelp_basename = 'ACQ4doc'
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
   ('index', 'ACQ4.tex', u'ACQ4 Documentation',
-   u'Luke Campagnola, Megan B. Kratz', 'manual'),
+   u'Luke Campagnola, Megan B. Kratz, Paul B. Manis', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
