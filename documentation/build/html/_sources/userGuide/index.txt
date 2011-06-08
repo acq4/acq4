@@ -9,6 +9,7 @@ Contents:
     introduction
     principles
     quickstart
+    hardware
     installation
     configuration
     modules/index
