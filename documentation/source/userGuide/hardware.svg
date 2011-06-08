@@ -929,20 +929,15 @@
       <text
          sodipodi:linespacing="125%"
          id="text5622"
-         y="601.98529"
+         y="609.98529"
          x="272.15234"
          style="font-size:20px;font-style:normal;font-weight:normal;text-align:center;line-height:125%;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
          xml:space="preserve"><tspan
            style="font-size:12px"
-           y="601.98529"
-           x="274.0625"
-           id="tspan5624"
-           sodipodi:role="line">NI PCI-MIO </tspan><tspan
-           style="font-size:12px"
            id="tspan5626"
-           y="616.98529"
+           y="609.98529"
            x="272.15234"
-           sodipodi:role="line">6259</tspan></text>
+           sodipodi:role="line">NI PCI-6259</tspan></text>
     </g>
     <g
        id="g6461"
@@ -2115,7 +2110,7 @@
        inkscape:connection-start-point="d4" />
     <path
        style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="m 195.46167,505.84788 5.25555,-0.0239"
+       d="m 195.46167,505.79805 5.25555,-0.0311"
        id="path9208"
        inkscape:connector-type="polyline"
        inkscape:connector-curvature="0"

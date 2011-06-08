@@ -151,8 +151,6 @@ There are lots of easy ways you can crash python to test this. Here's one:
         
     from PyQt4 import QtGui
     app = QtGui.QApplication([])
-    s = QtGui.QSpinBox()
-    l = s.lineEdit()
-    del s
+    l = QtGui.QSpinBox().lineEdit()
     l.parent()
     
