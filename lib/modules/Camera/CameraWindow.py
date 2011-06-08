@@ -712,6 +712,7 @@ class CameraWindow(QtGui.QMainWindow):
     #@trace
     def addPlotFrame(self, frame):
         #sys.stdout.write('+')
+        prof = Profiler('CameraWindow.addPlotFrame', disabled=True)
         if self.imageItem.width() is None:
             return
         
@@ -732,17 +733,17 @@ class CameraWindow(QtGui.QMainWindow):
         if minTime is None:
             minTime = frame[1]['time']
                 
+        prof.mark('remove old frames')
+            
         ## add new frame
         draw = False
         if self.lastPlotTime is None or now - self.lastPlotTime > 0.05:
             draw = True
             self.lastPlotTime = now
-        #self.frameBuffer.append(frame)
-        #if len(self.frameBuffer) < 2: 
-            #sys.stdout.write('-')
-            #return
+            
         for r in self.ROIs:
             d = r['roi'].getArrayRegion(frame[0], self.imageItem, axes=(0,1))
+            prof.mark('get array rgn')
             if d is None:
                 continue
             if d.size < 1:
@@ -751,15 +752,11 @@ class CameraWindow(QtGui.QMainWindow):
                 val = d.mean()
             r['vals'].append(val)
             r['times'].append(frame[1]['time'])
+            prof.mark('append')
             if draw:
-                #r['plot'].updateData(array(r['vals']))
                 r['plot'].setData(array(r['times'])-minTime, r['vals'])
-            #if ptime.time() - now > 10:
-                #print "Stuck in loop 4"
-                #break
-            
-        #self.ui.plotWidget.replot()
-        #sys.stdout.write('!')
+                prof.mark('draw')
+        prof.finish()
     
             
     #@trace

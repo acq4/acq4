@@ -70,6 +70,8 @@ class PatchWindow(QtGui.QMainWindow):
         if 'window' in uiState:
             ws = QtCore.QByteArray.fromPercentEncoding(uiState['window'])
             self.restoreState(ws)
+            
+        self.ui.splitter_2.setSizes([self.width()/4, self.width()*3./4.])
 
 
         self.plots = {}

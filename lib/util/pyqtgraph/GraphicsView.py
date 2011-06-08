@@ -11,7 +11,7 @@ from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
 from Point import *
 #from vector import *
 import sys, os
-#import debug    
+import debug    
         
 class GraphicsView(QtGui.QGraphicsView):
     
@@ -80,7 +80,7 @@ class GraphicsView(QtGui.QGraphicsView):
         self.clickAccepted = False
         
     #def paintEvent(self, *args):
-        #prof = debug.Profiler('GraphicsView.paintEvent '+str(id(self)), disabled=True)
+        #prof = debug.Profiler('GraphicsView.paintEvent '+str(id(self)), disabled=False)
         #QtGui.QGraphicsView.paintEvent(self, *args)
         #prof.finish()
         

@@ -864,9 +864,7 @@ class TargetGrid(widgets.ROI):
 class TargetOcclusion(widgets.PolygonROI):
     
     
-    
-    
-    
+    sigPointsChanged = QtCore.Signal(object)
     
     def __init__(self, points, pos=None):
         widgets.PolygonROI.__init__(self, points, pos)

@@ -596,79 +596,84 @@ class ProtocolRunner(Module):
     
     #def loadProtocol(self, index=None):
     def loadProtocol(self, handle):
-        self.stopSingle()
-        
-        ## Determine selected item
-        #if index is None:
-            #sel = list(self.ui.protocolList.selectedIndexes())
-            #if len(sel) == 1:
-                #index = sel[0]
-            #else:
-                #raise Exception("Can not load--%d items selected" % len(sel))
+        try:
+            QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            self.stopSingle()
             
-        #fn = self.protocolList.getFileName(index)
-        fn = handle.name()
-        
-        ## Remove all docks
-        self.clearDocks()
-        
-        ## Create protocol object from requested file
-        prot = Protocol(self, fileName=fn)
-        ## Set current protocol
-        self.currentProtocol = prot
-        
-        #print "Docks cleared."
-        
-        ## Update protocol parameters
-        self.protoStateGroup.setState(prot.conf['conf'])
-        #self.updateProtParams(prot)
-        
-        ## update dev list
-        self.updateDeviceList()
-        
-        ## Update sequence parameters, dis/enable sequence dock
-        
-        ## Create new docks
-        
-        self.updateDeviceDocks()
-        
-        
-        ## Configure docks
-        for d in prot.devices:
-            if d in self.docks:
-                try:
-                    self.docks[d].widget().restoreState(prot.devices[d])
-                except:
-                    printExc("Error while loading protocol dock:")
-
-        ## create and configure analysis docks
-        if 'analysis' in prot.conf:
-            for k in prot.conf['analysis']:
-                try:
-                    self.createAnalysisDock(k)
-                    conf = prot.conf['analysis'][k]
-                    self.analysisDocks[k].widget().restoreState(conf)
-                except:
-                    printExc("Error while loading analysis dock:")
-                    
-
-        ## Load sequence parameter state (must be done after docks have loaded)
-        self.ui.sequenceParamList.loadState(prot.conf['params'])
-        self.updateSeqParams('protocol')
-        
-        ## Configure dock positions
-        winState = prot.conf['windowState']
-        if winState is not None:
-            self.win.restoreState(winState)
+            ## Determine selected item
+            #if index is None:
+                #sel = list(self.ui.protocolList.selectedIndexes())
+                #if len(sel) == 1:
+                    #index = sel[0]
+                #else:
+                    #raise Exception("Can not load--%d items selected" % len(sel))
+                
+            #fn = self.protocolList.getFileName(index)
+            fn = handle.name()
             
-        
+            ## Remove all docks
+            self.clearDocks()
+            
+            ## Create protocol object from requested file
+            prot = Protocol(self, fileName=fn)
+            ## Set current protocol
+            self.currentProtocol = prot
+            
+            #print "Docks cleared."
+            
+            ## Update protocol parameters
+            self.protoStateGroup.setState(prot.conf['conf'])
+            #self.updateProtParams(prot)
+            
+            ## update dev list
+            self.updateDeviceList()
+            
+            ## Update sequence parameters, dis/enable sequence dock
+            
+            ## Create new docks
+            
+            self.updateDeviceDocks()
             
             
-        #pn = fn.replace(self.protocolList.baseDir, '')
-        #self.ui.currentProtocolLabel.setText(pn)
-        #self.ui.saveProtocolBtn.setEnabled(True)
-        #self.currentIsModified(False)
+            ## Configure docks
+            for d in prot.devices:
+                if d in self.docks:
+                    try:
+                        self.docks[d].widget().restoreState(prot.devices[d])
+                    except:
+                        printExc("Error while loading protocol dock:")
     
+            ## create and configure analysis docks
+            if 'analysis' in prot.conf:
+                for k in prot.conf['analysis']:
+                    try:
+                        self.createAnalysisDock(k)
+                        conf = prot.conf['analysis'][k]
+                        self.analysisDocks[k].widget().restoreState(conf)
+                    except:
+                        printExc("Error while loading analysis dock:")
+                        
+    
+            ## Load sequence parameter state (must be done after docks have loaded)
+            self.ui.sequenceParamList.loadState(prot.conf['params'])
+            self.updateSeqParams('protocol')
+            
+            ## Configure dock positions
+            winState = prot.conf['windowState']
+            if winState is not None:
+                self.win.restoreState(winState)
+                
+            
+                
+                
+            #pn = fn.replace(self.protocolList.baseDir, '')
+            #self.ui.currentProtocolLabel.setText(pn)
+            #self.ui.saveProtocolBtn.setEnabled(True)
+            #self.currentIsModified(False)
+        finally:
+            QtGui.QApplication.restoreOverrideCursor()
+            
+            
     def saveProtocol(self, fileHandle=None):
         ## Write protocol config to file
         self.currentProtocol.write(fileHandle.name())
