@@ -12,7 +12,7 @@ The ACQ4 user interface is broken up into *modules*. Each module is designed for
 Manager
 -------
 
-The Manager is the central object in ACQ4. It is used mainly to configure devices, launch new modules, inquire about existing modules and devices, and configure hardware for running synchronized protocols. The Manager is not visible to the user, but it is nevertheless helpful to understand that it exists and that it is working behind the scenes to make sure everything runs together smoothly. 
+The Manager is the central object in ACQ4. It is used mainly to initialize devices, launch new modules, inquire about existing modules and devices, and configure hardware for running synchronized protocols. The Manager is not visible to the user, but it is nevertheless helpful to understand that it exists and that it is working behind the scenes to make sure everything runs together smoothly. 
 
 Devices
 -------
@@ -23,7 +23,7 @@ A *device*, as discussed in this documentation, refers either to a single physic
 Modules
 -------
 
-A *module* is a single, independently functioning user interface. Each module has its own window and can be opened/closed without affecting other modules. By default, ACQ4 starts my displaying the *manager module*. As you might guess, this is a user interface to the Manager itself, from which you can launch new modules and interact directly with devices in the system. Other modules include:
+A *module* is a single, independently functioning user interface. Each module has its own window and can be opened/closed without affecting other modules. By default, ACQ4 starts my displaying the *manager module*. As you might guess, this is a user interface to the :term:`Manager` itself, from which you can launch new modules and interact directly with devices in the system. Other modules include:
     * Camera - live streaming and recording of video
     * Patch - for monitoring progress in cell patching and long-term cell health
     * Protocol Runner - the workhorse for running arbitrary protocols

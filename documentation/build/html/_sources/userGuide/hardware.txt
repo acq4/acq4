@@ -1,3 +1,6 @@
+.. index::
+    single: hardware configuration
+
 Hardware Configuration
 ======================
 
@@ -18,11 +21,17 @@ It is ultimately up to the experimenter to understand their hardware and decide 
     #. Digitally controlled LEDs for fluorescence imaging
     #. Temperature recording from a Warner controller
 
+.. index::
+    pair: multiclamp; hardware configuration
+
 MultiClamp 700A/B
 -----------------
 
 ACQ4 records data and outputs stimuli to the MultiClamp channels via the DAQ. At the same time, the state of the MultiClamp is controlled and recorded via serial or USB interface and the "Commander" software supplied by Molecular Devices. In a typical configuration, each channel of the MultiClamp will use one analog output and two analog inputs on the DAQ board, but each of these connections is optional.
 
+
+.. index::
+    pair: camera; hardware configuration
 
 Cameras
 -------
@@ -34,9 +43,13 @@ At a minimum, cameras will connect to the CPU via firewire, USB, frame grabber, 
     
 That takes care of starting the DAQ and camera simultaneously. In addition, we ideally want to know the exact time that each frame is acquired so they can be aligned correctly with other signals recorded on the DAQ. To accomplish this, the camera's exposure TTL output must be connected to a buffered input on the DAQ board (digital input is recommended, but E-series boards do not have buffered digital I/O, so analog input would be required there). During synchronized acquisition, each camera frame will be automatically tagged with the exact time it was acquired.
 
-Note: In the diagram above the exposure TTL signal is connected to both PFI and DI lines on the DAQ. Depending on your camera, this can cause trouble because if the PFI line is not in use, it goes into a low-impedance state which may prevent the exposure signal being recorded correctly on the DI line. Solutions to this are 1) disconnect the PFI line when it is not in use, 2) always make sure the PFI line is in use by requiring that the camera trigger the DAQ, or 3) add some electronics in between to properly isolate the two input lines.
+.. note::
+    
+    In the diagram above, the exposure TTL signal is connected to both PFI and DI lines on the DAQ. Depending on your camera, this can cause trouble because if the PFI line is not in use, it goes into a low-impedance state which may prevent the exposure signal being recorded correctly on the DI line. Solutions to this are 1) disconnect the PFI line when it is not in use, 2) always make sure the PFI line is in use by requiring that the camera trigger the DAQ, or 3) add some electronics in between to properly isolate the two input lines.
 
-
+.. index::
+    pair: stage; hardware configuration
+    
 Stage Position Control
 ----------------------
 
