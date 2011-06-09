@@ -21,10 +21,10 @@ debug library has some tools for tracking down memory leaks:
 Lockups, bus errors, segmentation faults
 ----------------------------------------
 
-Things that crash PyQt4:
+Things that crash PyQt4 (of which there are many):
     - Model/View anything. TableView, TreeView, etc. They are too hard to program correctly, and any mistakes lead to untraceable crashing.
     - Changing the bounds of graphicsitems without calling preparegeometrychange first
-    - Situations where Qt auto-deletes objects, leaving the python wrapper alive.(make sure you keep references to the objects you want to stay alive, and remove bad references before they cause trouble)
+    - Situations where Qt auto-deletes objects, leaving the python wrapper alive. Make sure you keep references to the objects you want to stay alive, and remove bad references before they cause trouble.
         - joined widgets such as a scrollarea and its scroll bars. When the scrollarea is deleted, the scrollbars go as well, but any references to the scrollbars are NOT informed of this, so accessing those objects causes crash (Pyside does not have this problem)
         - parents auto-deleting children, tree items deleting child widgets when moved
         - GraphicsItems should NEVER keep a reference to the view they live in. (weakrefs are ok)
@@ -65,55 +65,45 @@ on Windows:
     #. unzip to a path with *no* spaces in the full path name
     #. Use Qt's mingw command prompt or VS's command prompt (not cmd, powershell, cygwin..)
     #. If sh is installed via cygwin, it must not be in the PATH during build
-    #. set environment variables:  (example below is for mingw builds)
+    #. set environment variables:  (example below is for mingw builds) ::
         
-        ::
+        > set QTMAKESPEC=win32-g++    (for mingw builds)
+        > set QTDIR=C:\QtSDK\Desktop\Qt\4.7.3\mingw
         
-            > set QTMAKESPEC=win32-g++    (for mingw builds)
-            > set QTDIR=C:\QtSDK\Desktop\Qt\4.7.3\mingw
-        
-    #. configure sip: 
-    
-        ::
+    #. configure sip::
             
-            > python configure.py -p win32-g++ --debug
+        > python configure.py -p win32-g++ --debug
         
-    #. replace all occurrences of "python2X_d" with "python2X" in all Makefiles (unless you have debugging python installed). A short python script takes care of this:
-        
-        ::
+    #. replace all occurrences of "python2X_d" with "python2X" in all Makefiles (unless you have debugging python installed). A short python script takes care of this::
             
-            import os, re
-            for path, sd, files in os.walk('.'):
-                for f in files:
-                    if f != 'Makefile':
-                        continue
-                    fn = os.path.join(path, f)
-                    print fn
-                    data = open(fn, 'r').readlines()
-                    fh = open(fn, 'w')
-                    for line in data:
-                        line2 = re.sub(r'python(\d+)_d', 'python\\1', line)
-                        fh.write(line2)
-                    fh.close()
+        import os, re
+        for path, sd, files in os.walk('.'):
+            for f in files:
+                if f != 'Makefile':
+                    continue
+                fn = os.path.join(path, f)
+                print fn
+                data = open(fn, 'r').readlines()
+                fh = open(fn, 'w')
+                for line in data:
+                    line2 = re.sub(r'python(\d+)_d', 'python\\1', line)
+                    fh.write(line2)
+                fh.close()
     
-    #. run mingw32-make or nmake for VS, but do *not* use cygwin's make. Note that just running mingw32-make install is often allowed, but will fail in this case. 
-    
-        ::
+    #. run mingw32-make or nmake for VS, but do *not* use cygwin's make. Note that just running mingw32-make install is often allowed, but will fail in this case. ::
             
-            > mingw32-make 
-            > mingw32-make install
+        > mingw32-make 
+        > mingw32-make install
         
     #. After installing, you should have sip_d.pyd. Rename this to sip.pyd
     #. repeat for pyqt source
-    #. rename all installed \*_d.pyd files to \*.pyd (c:\\python26\\lib\\site-packages\\pyqt4\...)
-    
-        ::
+    #. rename all installed \*_d.pyd files to \*.pyd (c:\\python26\\lib\\site-packages\\pyqt4\...) ::
         
-            import os, re, glob
-            for f in glob.glob('*_d.pyd'):
-                f2 = re.sub('_d', '', f)
-                os.rename(f, f2)
-                print "%s -> %s" % (f, f2)
+        import os, re, glob
+        for f in glob.glob('*_d.pyd'):
+            f2 = re.sub('_d', '', f)
+            os.rename(f, f2)
+            print "%s -> %s" % (f, f2)
 
     #. This does not install .dll and .exe files. Copy these files from C:\\QtSDK\\Desktop\\Qt\\4.7.3\\mingw. I think DLLS should be in c:\\python26\\Lib\\site-packages\\PyQt4, and EXEs should be in \\bin from there (wherever you put them should be in PATH so windows can find the DLLs). 
     
@@ -121,34 +111,26 @@ on Windows:
 Debugging ACQ4 with GDB
 -----------------------
 
-#. Start up:
-    
-    ::
+#. Start up::
         
-        > gdb python
-        ...
-        (gdb) run -i acq4.py
+    > gdb python
+    ...
+    (gdb) run -i acq4.py
         
-#. Crash the program. You will not see any crash message immediately; it will appear frozen, but go back to the terminal window, and GDB should say something like this:  
+#. Crash the program. You will not see any crash message immediately; it will appear frozen, but go back to the terminal window, and GDB should say something like this::
 
-    ::
+    Program received signal SIGSEGV, Segmentation fault.
         
-        Program received signal SIGSEGV, Segmentation fault.
-        
-    Alternately, if the program is genuinely frozen, then pressing Ctrl-C should get you back to a GDB prompt.
+   Alternately, if the program is genuinely frozen, then pressing Ctrl-C should get you back to a GDB prompt.
     
-#. Get a backtrace
-
-    :: 
+#. Get a backtrace::
     
-        (gdb) backtrace
+    (gdb) backtrace
         
-    The beginning of the backtrace should offer hints about what was happening when the crash/freeze occurred.
+   The beginning of the backtrace should offer hints about what was happening when the crash/freeze occurred.
         
-There are lots of easy ways you can crash python to test this. Here's one:
+There are lots of easy ways you can crash python to test this. Here's one::
     
-::
-        
     from PyQt4 import QtGui
     app = QtGui.QApplication([])
     l = QtGui.QSpinBox().lineEdit()

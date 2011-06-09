@@ -52,6 +52,31 @@
             
   <div class="section" id="data-management">
 <h1>Data Management<a class="headerlink" href="#data-management" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="hierarchical-file-storage">
+<h2>Hierarchical File Storage<a class="headerlink" href="#hierarchical-file-storage" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="meta-information">
+<h2>Meta Information<a class="headerlink" href="#meta-information" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="user-defined-folder-types">
+<h2>User-defined Folder Types<a class="headerlink" href="#user-defined-folder-types" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="notes-and-logs">
+<h2>Notes and Logs<a class="headerlink" href="#notes-and-logs" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="metaarray-files">
+<span id="user-metaarray-files"></span><h2>MetaArray Files<a class="headerlink" href="#metaarray-files" title="Permalink to this headline">¶</a></h2>
+<p>Raw data in ACQ4 is most commonly handled and stored using the MetaArray format. A single MetaArray consists of an N-dimensional array of values accompanied by meta-info describing the data. Here is an example of the type of data one might store as MetaArray:</p>
+<img alt="../_images/metaarray.png" src="../_images/metaarray.png" />
+<p>Notice that each axis is named and can store different types of meta information:</p>
+<ul class="simple">
+<li>The Signal axis has named columns with different units for each column</li>
+<li>The Time axis associates a numerical value with each row</li>
+<li>The Trial axis uses normal integer indexes</li>
+</ul>
+<p>MetaArrays may also include a extra meta data pertaining to the entire data set. For example, camera images are recorded along with the current exposure time, binning, region of interest, etc.</p>
+<p>On disk, MetaArrays are stored using the standard HDF5 file format, which allows these files to be easily read by other analysis programs.</p>
+</div>
 </div>
 
 
@@ -60,6 +85,18 @@
       </div>
       <div class="sphinxsidebar">
         <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Data Management</a><ul>
+<li><a class="reference internal" href="#hierarchical-file-storage">Hierarchical File Storage</a></li>
+<li><a class="reference internal" href="#meta-information">Meta Information</a></li>
+<li><a class="reference internal" href="#user-defined-folder-types">User-defined Folder Types</a></li>
+<li><a class="reference internal" href="#notes-and-logs">Notes and Logs</a></li>
+<li><a class="reference internal" href="#metaarray-files">MetaArray Files</a></li>
+</ul>
+</li>
+</ul>
+
   <h4>Previous topic</h4>
   <p class="topless"><a href="devices/MockCameraDevice.html"
                         title="previous chapter">Simulated Cameras</a></p>

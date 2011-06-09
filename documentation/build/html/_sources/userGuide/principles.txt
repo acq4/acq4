@@ -39,9 +39,9 @@ The Protocol Runner module is designed to allow fast and easy prototyping of pro
 Data Handling
 -------------
 
-Experimental results are generally stored as they are collected. It is the user's responsibility to decide where to store data *before* actually collecting it. This allows data to be collected rapidly and efficiently during those crucial moments. 
+Experimental results are generally stored immediately as they are collected. It is the user's responsibility to decide where to store data *before* actually collecting it. This allows data to be collected rapidly and efficiently during crucial moments. 
 
-Data is stored in hierarchies of folders with a file named ".index" in each folder. This index file stores meta-information about each file and allows the user (and modules) to annotate each file as it is stored. The index files are human-readable, although it is gemerally preferred to use ACQ4's built-in data management to handle these files.
+Data is stored in hierarchies of folders with a file named ".index" in each folder. This index file stores meta-information about each file and allows the user (and modules) to annotate each file as it is stored. The index files are human-readable, although it is gemerally preferred to use ACQ4's built-in data management to handle these files. Individual raw data files are stored as :ref:`MetaArray files <user-metaarray-files>`, which use the standard `HDF5 <http://www.hdfgroup.org/HDF5/>`_ format. This data can be read by many third-party analysis applications.
 
 The hierarchical file storage allows complete flexibility when designing experiments. This can be problematic for analysis, however, since there is no guarantee that all data will be laid out according to some predetermined structure. To some extent, it is the responsibility of the experimenter to make sure data is organized consistently wnere required. 
 
