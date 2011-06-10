@@ -79,14 +79,16 @@ Download and install all prerequisites in order:</p>
 <li>pyserial: <a class="reference external" href="http://pypi.python.org/pypi/pyserial">http://pypi.python.org/pypi/pyserial</a></li>
 <li>Python Imaging Library: <a class="reference external" href="http://www.pythonware.com/products/pil/">http://www.pythonware.com/products/pil/</a></li>
 </ol>
-<p>I know it is tempting to use easy_install for this. Don&#8217;t.
+<p>I know it is tempting to use easy_install or cygwin for this. Don&#8217;t.
 Once all prerequisites are installed, download ACQ4 (stable or development branch):</p>
-<ol class="arabic simple">
-<li>Download and install bazaar: <a class="reference external" href="http://wiki.bazaar.canonical.com/Download">http://wiki.bazaar.canonical.com/Download</a></li>
-<li>Start a command shell (or powershell or cygwin, if you prefer) and download a copy of the ACQ4 code:</li>
-</ol>
+<ol class="arabic">
+<li><p class="first">Download and install bazaar: <a class="reference external" href="http://wiki.bazaar.canonical.com/Download">http://wiki.bazaar.canonical.com/Download</a></p>
+</li>
+<li><p class="first">Start a command shell (or powershell or cygwin, if you prefer) and download a copy of the ACQ4 code:</p>
 <div class="highlight-python"><pre>bzr branch lp:acq4</pre>
 </div>
+</li>
+</ol>
 <p>If all goes well, you now have everything ready and can proceed to configuration.</p>
 </div>
 <div class="section" id="linux-installation">
@@ -99,113 +101,93 @@ $ bzr branch lp:acq4</pre>
 <div class="section" id="osx-installation">
 <h2>OSX Installation<a class="headerlink" href="#osx-installation" title="Permalink to this headline">¶</a></h2>
 <p>These instructions are for building on MacOSX 10.5. If you&#8217;re building on 10.6 or 10.7 some of these libraries will be available as binaries.
-You need to have xcode installed on your machine.</p>
+You will need to have xcode installed on your machine.</p>
+<p>Download and install the following packages in order:</p>
 <ol class="arabic">
-<li><p class="first">Python 2.7: <a class="reference external" href="http://python.org">http://python.org</a> (available as a dmg)</p>
+<li><p class="first"><strong>Python 2.7</strong>: <a class="reference external" href="http://python.org">http://python.org</a> (available as a dmg)</p>
 </li>
-<li><p class="first">Download and install Bazaar: <a class="reference external" href="http://wiki.bazaar.canonical.com/Download">http://wiki.bazaar.canonical.com/Download</a> (This needs to be done before installing Qt/PyQt)</p>
+<li><p class="first"><strong>Bazaar</strong>: <a class="reference external" href="http://wiki.bazaar.canonical.com/Download">http://wiki.bazaar.canonical.com/Download</a> (This needs to be done before installing Qt/PyQt)</p>
 </li>
-<li><dl class="first docutils">
-<dt>Qt 4.7: <a class="reference external" href="http://qt.nokia.com">http://qt.nokia.com</a></dt>
-<dd><p class="first last"><a href="#id1"><span class="problematic" id="id2">*</span></a>Unfortunately the SDK installation does not work on 10.5 - But installing the libraries should be fine.
-<a href="#id3"><span class="problematic" id="id4">*</span></a>The libraries are available as dmg</p>
-</dd>
-</dl>
+<li><div class="first line-block">
+<div class="line"><strong>Qt 4.7</strong>: <a class="reference external" href="http://qt.nokia.com">http://qt.nokia.com</a></div>
+<div class="line">Unfortunately the SDK installation does not work on 10.5 - But installing the libraries should be fine.</div>
+<div class="line">The libraries are available as dmg</div>
+</div>
 </li>
-<li><dl class="first docutils">
-<dt>Download and install SIP(I used 4.12.3) <span class="classifier-delimiter">:</span> <span class="classifier"><a class="reference external" href="http://www.riverbankcomputing.com/software/sip/download">http://www.riverbankcomputing.com/software/sip/download</a>.</span></dt>
-<dd><p class="first last"><a href="#id5"><span class="problematic" id="id6">*</span></a>From the SIP directory in a Terminal:</p>
-</dd>
-</dl>
-</li>
-</ol>
+<li><div class="first line-block">
+<div class="line"><strong>SIP</strong> (I used 4.12.3): <a class="reference external" href="http://www.riverbankcomputing.com/software/sip/download">http://www.riverbankcomputing.com/software/sip/download</a>.</div>
+<div class="line">From the SIP directory in a Terminal:</div>
+</div>
 <div class="highlight-python"><pre>$ python configure.py
 $ make
 $ make install</pre>
 </div>
-<ol class="arabic">
-<li><dl class="first docutils">
-<dt>PyQt4: <a class="reference external" href="http://www.riverbankcomputing.co.uk/software/pyqt/download">http://www.riverbankcomputing.co.uk/software/pyqt/download</a>  (Be sure to get the version built for python 2.7 and the Qt version you installed)</dt>
-<dd><ul class="first last simple">
-<li>in a terminal navigate to the PyQt4 folder:</li>
-</ul>
-</dd>
-</dl>
 </li>
-</ol>
+<li><div class="first line-block">
+<div class="line"><strong>PyQt4</strong>: <a class="reference external" href="http://www.riverbankcomputing.co.uk/software/pyqt/download">http://www.riverbankcomputing.co.uk/software/pyqt/download</a></div>
+<div class="line">Be sure to get the version built for python 2.7 and the Qt version you installed.</div>
+<div class="line">In a terminal navigate to the PyQt4 folder:</div>
+</div>
 <div class="highlight-python"><pre>$ python configure.py
 $ make
 $ make install</pre>
 </div>
-<ol class="arabic">
-<li><dl class="first docutils">
-<dt>Numpy: <a class="reference external" href="http://numpy.scipy.org">http://numpy.scipy.org</a></dt>
-<dd><p class="first last"><a href="#id7"><span class="problematic" id="id8">*</span></a>make sure you get the version for python 2.7, this may involve searching through files instead of simply getting the latest version.
-<a href="#id9"><span class="problematic" id="id10">*</span></a>I use numpy 1.6.0 which is available as a .dmg</p>
-</dd>
-</dl>
 </li>
-<li><dl class="first docutils">
-<dt>Scipy: <a class="reference external" href="http://numpy.scipy.org">http://numpy.scipy.org</a></dt>
-<dd><p class="first last"><a href="#id11"><span class="problematic" id="id12">*</span></a>same deal as numpy, I used scipy 0.9.0</p>
-</dd>
-</dl>
+<li><div class="first line-block">
+<div class="line"><strong>Numpy</strong>: <a class="reference external" href="http://numpy.scipy.org">http://numpy.scipy.org</a></div>
+<div class="line">Make sure you get the version for python 2.7, this may involve searching through files instead of simply getting the latest version.</div>
+<div class="line">I use numpy 1.6.0 which is available as a .dmg</div>
+</div>
 </li>
-<li><p class="first">ZLib: <a class="reference external" href="http://zlib.net">http://zlib.net</a></p>
+<li><div class="first line-block">
+<div class="line"><strong>Scipy</strong>: <a class="reference external" href="http://numpy.scipy.org">http://numpy.scipy.org</a></div>
+<div class="line">Same deal as numpy, I used scipy 0.9.0</div>
+</div>
 </li>
-</ol>
+<li><p class="first"><strong>ZLib</strong>: <a class="reference external" href="http://zlib.net">http://zlib.net</a></p>
 <div class="highlight-python"><pre>$ ./configure
 $ make test
-$ (sudo) make install</pre>
+$ sudo make install</pre>
 </div>
-<ol class="arabic">
-<li><dl class="first docutils">
-<dt>Python Imaging Library (PIL): <a class="reference external" href="http://www.pythonware.com/products/pil">http://www.pythonware.com/products/pil</a></dt>
-<dd><p class="first last"><a href="#id13"><span class="problematic" id="id14">*</span></a>get the PIL-1.1.7.tar.gz package
-<a href="#id15"><span class="problematic" id="id16">*</span></a>unpack it and in Terminal navigate to the PIL folder and:</p>
-</dd>
-</dl>
 </li>
-</ol>
+<li><div class="first line-block">
+<div class="line"><strong>Python Imaging Library (PIL)</strong>: <a class="reference external" href="http://www.pythonware.com/products/pil">http://www.pythonware.com/products/pil</a></div>
+<div class="line">Get the PIL-1.1.7.tar.gz package.</div>
+<div class="line">Unpack it and in Terminal navigate to the PIL folder and:</div>
+</div>
 <div class="highlight-python"><pre>$ python setup.py install</pre>
 </div>
-<ol class="arabic simple">
-<li>PyParsing: <a class="reference external" href="http://pyparsing.wikispaces.com">http://pyparsing.wikispaces.com</a></li>
-</ol>
+</li>
+<li><p class="first"><strong>PyParsing</strong>: <a class="reference external" href="http://pyparsing.wikispaces.com">http://pyparsing.wikispaces.com</a></p>
 <div class="highlight-python"><pre>$ python setup.py install</pre>
 </div>
-<ol class="arabic">
-<li><dl class="first docutils">
-<dt>HDF5: <a class="reference external" href="http://www.hdfgroup.org/HDF5">http://www.hdfgroup.org/HDF5</a></dt>
-<dd><p class="first last"><a href="#id17"><span class="problematic" id="id18">*</span></a>download the source code (I used version 1.8.7)
-<a href="#id19"><span class="problematic" id="id20">*</span></a>unpack it and navigate to the folder in terminal</p>
-</dd>
-</dl>
 </li>
-</ol>
+<li><div class="first line-block">
+<div class="line"><strong>HDF5</strong>: <a class="reference external" href="http://www.hdfgroup.org/HDF5">http://www.hdfgroup.org/HDF5</a></div>
+<div class="line">Download the source code (I used version 1.8.7).</div>
+<div class="line">Unpack it and navigate to the folder in terminal</div>
+</div>
 <div class="highlight-python"><pre>$ ./configure --prefix=/usr/local/hdf5
 $ make
-$ make check
-$ (sudo) make install
+$ make check           # If check succeeds, go on..
+$ sudo make install
 $ make check-install</pre>
 </div>
-<ol class="arabic">
-<li><dl class="first docutils">
-<dt>h5py: <a class="reference external" href="http://code.google.com/p/h5py">http://code.google.com/p/h5py</a></dt>
-<dd><ul class="first last simple">
-<li>I got version 1.3.1</li>
-<li>navigate to the folder in terminal and:</li>
-</ul>
-</dd>
-</dl>
 </li>
-</ol>
+<li><div class="first line-block">
+<div class="line"><strong>h5py</strong>: <a class="reference external" href="http://code.google.com/p/h5py">http://code.google.com/p/h5py</a></div>
+<div class="line">I use version 1.3.1.</div>
+<div class="line">Navigate to the folder in terminal and:</div>
+</div>
 <div class="highlight-python"><pre>$ python setup.py build --hdf5=/usr/local/hdf5
 $ python setup.py install</pre>
 </div>
-<p>Finally, navigate to the place where you would like to store acq4.</p>
-<div class="highlight-python"><pre>bzr branch lp:acq4</pre>
+</li>
+<li><p class="first">Finally, navigate to the place where you would like to store acq4.</p>
+<div class="highlight-python"><pre>$ bzr branch lp:acq4</pre>
 </div>
+</li>
+</ol>
 <p>That&#8217;s it, you&#8217;re done and ready to setup configuration files.</p>
 </div>
 </div>
