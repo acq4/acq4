@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 from CanvasItem import CanvasItem
+from ImageCanvasItem import ImageCanvasItem
 import lib.Manager
 import pyqtgraph as pg
 import numpy as np
@@ -188,7 +189,8 @@ class ScanCanvasItem(CanvasItem):
     
         pos =  info['imagePosition']
         scale = info['pixelSize']
-        item = self.canvas.addImage(scanImages, pos=pos, scale=scale, z=self.opts['z']-1, name='scanImage')
+        image = ImageCanvasItem(scanImages, pos=pos, scale=scale, z=self.opts['z']-1, name='scanImage')
+        item = self.canvas.addItem(image)
         self.scanImage = item
         
         self.scanImage.restoreTransform(self.saveTransform())

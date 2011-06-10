@@ -60,4 +60,87 @@ Make all your windows-using friends jealous:
 OSX Installation
 ----------------
 
-Ask MBK.
+These instructions are for building on MacOSX 10.5. If you're building on 10.6 or 10.7 some of these libraries will be available as binaries. 
+You need to have xcode installed on your machine.
+
+#. Python 2.7: http://python.org (available as a dmg)
+#. Download and install Bazaar: http://wiki.bazaar.canonical.com/Download (This needs to be done before installing Qt/PyQt)
+#. Qt 4.7: http://qt.nokia.com 
+        *Unfortunately the SDK installation does not work on 10.5 - But installing the libraries should be fine. 
+        *The libraries are available as dmg
+#. Download and install SIP(I used 4.12.3) : http://www.riverbankcomputing.com/software/sip/download.
+        *From the SIP directory in a Terminal:
+
+::
+
+        $ python configure.py
+        $ make
+        $ make install
+        
+        
+#. PyQt4: http://www.riverbankcomputing.co.uk/software/pyqt/download  (Be sure to get the version built for python 2.7 and the Qt version you installed)
+        * in a terminal navigate to the PyQt4 folder:
+        
+::
+        
+        $ python configure.py
+        $ make
+        $ make install
+        
+#. Numpy: http://numpy.scipy.org
+        *make sure you get the version for python 2.7, this may involve searching through files instead of simply getting the latest version.
+        *I use numpy 1.6.0 which is available as a .dmg
+#. Scipy: http://numpy.scipy.org
+        *same deal as numpy, I used scipy 0.9.0
+#. ZLib: http://zlib.net 
+
+::
+
+        $ ./configure
+        $ make test
+        $ (sudo) make install
+        
+        
+#. Python Imaging Library (PIL): http://www.pythonware.com/products/pil
+        *get the PIL-1.1.7.tar.gz package
+        *unpack it and in Terminal navigate to the PIL folder and:
+        
+::
+
+        $ python setup.py install
+        
+#. PyParsing: http://pyparsing.wikispaces.com
+        
+::
+
+        $ python setup.py install
+        
+#. HDF5: http://www.hdfgroup.org/HDF5
+        *download the source code (I used version 1.8.7)
+        *unpack it and navigate to the folder in terminal
+        
+::
+
+        $ ./configure --prefix=/usr/local/hdf5
+        $ make
+        $ make check
+        $ (sudo) make install
+        $ make check-install
+        
+#. h5py: http://code.google.com/p/h5py
+        * I got version 1.3.1
+        * navigate to the folder in terminal and:
+        
+::
+
+        $ python setup.py build --hdf5=/usr/local/hdf5
+        $ python setup.py install
+        
+        
+Finally, navigate to the place where you would like to store acq4.
+
+::
+
+        bzr branch lp:acq4
+        
+That's it, you're done and ready to setup configuration files.

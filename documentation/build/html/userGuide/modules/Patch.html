@@ -53,6 +53,39 @@
             
   <div class="section" id="the-patch-module">
 <h1>The Patch Module<a class="headerlink" href="#the-patch-module" title="Permalink to this headline">¶</a></h1>
+<p>This module is used to assist in patching cells and to monitor cell health throughout the experiment.</p>
+<div class="section" id="mode-shortcut-buttons-and-controls">
+<h2>Mode Shortcut Buttons and Controls<a class="headerlink" href="#mode-shortcut-buttons-and-controls" title="Permalink to this headline">¶</a></h2>
+<p>First, click Start to start the module running. The command that you are sending to the electrode is displayed in the lower
+right plot, while the data coming back is displayed in the top right plot.</p>
+<ul class="simple">
+<li>Bath: Bath mode is a voltage clamp mode where the holding voltage is 0 mV. A pulse is applied so that properties of the electrode can be monitored.</li>
+<li>Patch: Patch mode is the same as bath, except that now a holding voltage is applied. The default is to hold at -50 mV, but this can be adjusted in the Hold spin box under VC.</li>
+<li>Cell: Cell mode is a current clamp mode. By default, no holding current is applied, but a negative pulse given.</li>
+</ul>
+<p>These three modes are meant to be used while actively patching a cell. Once a cell is patched you can click Monitor. This
+leaves the patch in the configuration that it is in, but instead of sampling every 200 ms it now samples every 30 seconds.
+This is meant to be used to monitor the cell health while you are doing your experiment and running protocols.</p>
+<p>You can also manually adjust all of the parameters of the modes. You can turn holding current/voltage and pulses on and off,
+and you can adjust their values. Changes that you make to the values will not be reset by clicking one of the Mode shortcut
+buttons.</p>
+<ul class="simple">
+<li>Delay Length: Determines how much baseline there is before the pulse is given.</li>
+<li>Pulse Length: Determines how long the pulse lasts (as you may have guessed...)</li>
+<li>Cycle Time: Determines how often samples are taken. This is what changes when you click Monitor.</li>
+<li>Average: Causes recordings to be rapidly repeated multiple times and averaged together before displaying.</li>
+</ul>
+</div>
+<div class="section" id="parameter-measurements">
+<h2>Parameter Measurements<a class="headerlink" href="#parameter-measurements" title="Permalink to this headline">¶</a></h2>
+<p>The software automatically calculates a fit to the trace collected in each of the modes. From this fit it calulates
+parameters of the cell, electrode or patch. By default the fit that is calculated is displayed with the patch recording
+as a blue line. To speed things up you can turn off the drawing of this fit by unchecking Draw Fit. If you do this the
+fit and parameters will still be calculated, just not drawn.</p>
+<p>All of the parameters will be calulated (and saved if record is pressed). You can plot one or more of the parameters in the
+bottom plot window by selecting the check box next to the parameter. You can reset the plot by clicking Reset History. Whenever
+you press record, data for all the time that is in the plot window is saved, and incoming data is also saved.</p>
+</div>
 </div>
 
 
@@ -61,6 +94,15 @@
       </div>
       <div class="sphinxsidebar">
         <div class="sphinxsidebarwrapper">
+  <h3><a href="../../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">The Patch Module</a><ul>
+<li><a class="reference internal" href="#mode-shortcut-buttons-and-controls">Mode Shortcut Buttons and Controls</a></li>
+<li><a class="reference internal" href="#parameter-measurements">Parameter Measurements</a></li>
+</ul>
+</li>
+</ul>
+
   <h4>Previous topic</h4>
   <p class="topless"><a href="Camera.html"
                         title="previous chapter">The Camera Module</a></p>
