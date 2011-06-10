@@ -23,7 +23,7 @@ A *device*, as discussed in this documentation, refers either to a single physic
 Modules
 -------
 
-A *module* is a single, independently functioning user interface. Each module has its own window and can be opened/closed without affecting other modules. By default, ACQ4 starts my displaying the *manager module*. As you might guess, this is a user interface to the Manager itself, from which you can launch new modules and interact directly with devices in the system. Other modules include:
+A *module* is a single, independently functioning user interface. Each module has its own window and can be opened/closed without affecting other modules. By default, ACQ4 starts by displaying the *manager module*. As you might guess, this is a user interface to the Manager itself, from which you can launch new modules and interact directly with devices in the system. Other modules include:
     * Camera - live streaming and recording of video
     * Patch - for monitoring progress in cell patching and long-term cell health
     * Protocol Runner - the workhorse for running arbitrary protocols
@@ -43,6 +43,6 @@ Experimental results are generally stored as they are collected. It is the user'
 
 Data is stored in hierarchies of folders with a file named ".index" in each folder. This index file stores meta-information about each file and allows the user (and modules) to annotate each file as it is stored. The index files are human-readable, although it is gemerally preferred to use ACQ4's built-in data management to handle these files.
 
-The hierarchical file storage allows complete flexibility when designing experiments. This can be problematic for analysis, however, since there is no guarantee that all data will be laid out according to some predetermined structure. To some extent, it is the responsibility of the experimenter to make sure data is organized consistently wnere required. 
+The hierarchical file storage allows complete flexibility when designing experiments. This can be problematic for analysis, however, since there is no guarantee that all data will be laid out according to some predetermined structure. To some extent, it is the responsibility of the experimenter to make sure data is organized consistently where required. 
 
 The built-in analysis system also stores data and results using an SQL database, which generally forces all data to conform to the same layout. Thus we have a 2-tier approach to data handling: data is first collected in a hierarchical format allowing flexibility, and is later homogenized into SQL tables for analysis.
