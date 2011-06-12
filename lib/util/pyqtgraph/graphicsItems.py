@@ -214,7 +214,11 @@ class ImageItem(QtGui.QGraphicsObject):
         if image is not None:
             self.updateImage(image, copy, autoRange=True)
         #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
-        
+
+    def setCompositionMode(self, mode):
+        self.paintMode = mode
+        self.update()
+
     def setAlpha(self, alpha):
         self.alpha = alpha
         self.updateImage()

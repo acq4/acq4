@@ -7,6 +7,7 @@ labelFile = "CochlearNucleus/images/cochlear_nucleus_label.ma"
 
 from PyQt4 import QtCore, QtGui
 import pyqtgraph as pg
+import pyqtgraph.ColorButton as ColorButton
 import numpy as np
 import builderTemplate
 import metaarray
@@ -30,6 +31,7 @@ if not os.path.exists(labelFile):
 else:
     label = metaarray.MetaArray(file=labelFile)
 labelCache = None    
+labelInfo = {}
 #ui.view.enableMouse()
 #ui.view.setAspectLocked(True)
 
@@ -52,7 +54,10 @@ def connectSignals():
         r.toggled.connect(imageChanged)
     ui.zSlider.valueChanged.connect(updateImage)
     ui.radiusSpin.valueChanged.connect(updateKernel)
-
+    ui.greyCheck.toggled.connect(imageChanged)
+    ui.labelSlider.valueChanged.connect(imageChanged)
+    ui.labelTree.itemChanged.connect(itemChanged)
+    ui.labelTree.currentItemChanged.connect(itemSelected)
 
 def init():
     connectSignals()
@@ -84,29 +89,58 @@ currentPos = [0,0,0]
 zAxis = 0
 
 def draw(src, dst, mask, srcSlice, dstSlice, ev):
-    p = debug.Profiler('draw', disabled=True)
+    addLabel()
+    
+    #p = debug.Profiler('draw', disabled=True)
     l = displayLabel.view(np.ndarray)[ui.zSlider.value()]
-    p.mark('1')
+    #p.mark('1')
     mod = ev.modifiers()
     mask = mask[srcSlice]
     src = src[srcSlice]
     if mod & QtCore.Qt.ShiftModifier:
         src = 1-src
+        l[dstSlice] &= src * 2**ui.labelSpin.value()
     #l[dstSlice] = l[dstSlice] * (1-mask) + src * mask
-    p.mark('2')
-    l[dstSlice] |= src * 2**ui.labelSpin.value()
-    p.mark('3')
+    #p.mark('2')
+    else:
+        l[dstSlice] |= src * 2**ui.labelSpin.value()
+    #p.mark('3')
     updateLabelImage(dstSlice)
-    p.mark('4')
-    p.finish()
+    #p.mark('4')
+    #p.finish()
     
+def addLabel():
+    global labelInfo
+    l = ui.labelSpin.value()
+    if l in labelInfo:
+        return
+    name = 'label'
+    item = QtGui.QTreeWidgetItem([str(l), name, ''])
+    item.setFlags(item.flags() | QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsUserCheckable)
+    item.setCheckState(0, QtCore.Qt.Checked)
+    btn = ColorButton.ColorButton(color=pg.intColor(len(labelInfo), 16))
+    ui.labelTree.addTopLevelItem(item)
+    ui.labelTree.setItemWidget(item, 2, btn)
+    labelInfo[l] = {'item': item, 'btn': btn}
+    btn.sigColorChanged.connect(imageChanged)
+
+
+def itemChanged(item, col):
+    imageChanged()
+
+def itemSelected(item):
+    ui.labelTree.editItem(item, 1)
 
 def copyLabel(n):
     pass
 
 def updateImage():
     currentPos[zAxis] = ui.zSlider.value()
-    dataImg.updateImage(displayData.view(np.ndarray)[ui.zSlider.value()], copy=False)
+    if ui.greyCheck.isChecked():
+        img = displayData.view(np.ndarray)[ui.zSlider.value()].mean(axis=2)
+    else:
+        img = displayData.view(np.ndarray)[ui.zSlider.value()]
+    dataImg.updateImage(img, copy=False)
     #labelImg.updateImage(displayLabel.view(np.ndarray)[ui.zSlider.value()], copy=False, white=10, black=0)
     updateLabelImage()
 
@@ -120,11 +154,26 @@ def updateLabelImage(sl=None):
     lsl = l[sl]
     img = np.empty(lsl.shape+(3,), dtype=np.ubyte)
     #p.mark('2')
+    #if ui.greyCheck.isChecked():
+        #img.fill(255)
+        #labelImg.setCompositionMode(QtGui.QPainter.CompositionMode_Multiply)
+        #img[...,0] -= (lsl&1>0) * 50
+        #img[...,1] -= (lsl&2>0) * 50
+        #img[...,2] -= (lsl&4>0) * 50
+    #else:
     img.fill(0)
+    labelImg.setCompositionMode(QtGui.QPainter.CompositionMode_Plus)
+    val = ui.labelSlider.value()/255.
+    
+    for k, v in labelInfo.iteritems():
+        if not v['item'].checkState(0) == QtCore.Qt.Checked:
+            continue
+        c = pg.colorTuple(v['btn'].color())
+        mask = (lsl&(2**k) > 0)
+        img[...,0] += mask * int(c[0] * val)
+        img[...,1] += mask * int(c[1] * val)
+        img[...,2] += mask * int(c[2] * val)
     #p.mark('3')
-    img[...,0] += (lsl&1>0) * 200
-    img[...,1] += (lsl&2>0) * 200
-    img[...,2] += (lsl&4>0) * 200
     #p.mark('4')
     if labelCache is None:
         labelCache = img
