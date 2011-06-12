@@ -615,9 +615,17 @@ class MetaArray(np.ndarray):
             order = args[0]
         else:
             order = args
-        order = list(order) + range(len(order), len(self._info))
-        info = [self._info[i] for i in order]
-        return MetaArray(np.ndarray.transpose(self, *args), info=info)
+        
+        order = [self._interpretAxis(ax) for ax in order]
+        infoOrder = order  + range(len(order), len(self._info))
+        info = [self._info[i] for i in infoOrder]
+        order = order + range(len(order), self.ndim)
+        
+        try:
+            return MetaArray(self.view(np.ndarray).transpose(order), info=info)
+        except:
+            print order
+            raise
 
     #### File I/O Routines
 

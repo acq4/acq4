@@ -97,7 +97,7 @@ class CameraWindow(QtGui.QMainWindow):
             self.restoreState(ws)
         
         
-        self.ui.histogram.invertY(False)
+        #self.ui.histogram.invertY(False)
         self.avgLevelLine = QtGui.QGraphicsLineItem()
         self.avgLevelLine.setPen(QtGui.QPen(QtGui.QColor(200, 200, 0)))
         self.histogramCurve = PlotCurveItem()
@@ -170,7 +170,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         #self.gv.setScene(self.scene)
         self.gv.setAspectLocked(True)
-        self.gv.invertY()
+        #self.gv.invertY()
         self.AGCLastMax = None
 
         self.persistentFrames = []
