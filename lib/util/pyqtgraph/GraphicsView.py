@@ -111,6 +111,7 @@ class GraphicsView(QtGui.QGraphicsView):
             self.scene().removeItem(self.centralWidget)
         self.centralWidget = item
         self.sceneObj.addItem(item)
+        self.resizeEvent(None)
         
     def addItem(self, *args):
         return self.scene().addItem(*args)

@@ -191,12 +191,13 @@ class ImageItem(QtGui.QGraphicsObject):
     else:
         useWeave = False
     
-    def __init__(self, image=None, copy=True, parent=None, border=None, *args):
+    def __init__(self, image=None, copy=True, parent=None, border=None, mode=None, *args):
         #QObjectWorkaround.__init__(self)
         QtGui.QGraphicsObject.__init__(self)
         #self.pixmapItem = QtGui.QGraphicsPixmapItem(self)
         self.qimage = QtGui.QImage()
         self.pixmap = None
+        self.paintMode = mode
         #self.useWeave = True
         self.blackLevel = None
         self.whiteLevel = None
@@ -389,7 +390,7 @@ class ImageItem(QtGui.QGraphicsObject):
         return self.pixmap.copy()
 
     def getHistogram(self, bins=500, step=3):
-        """returns an x and y arrays containing the histogram values for the current image.
+        """returns x and y arrays containing the histogram values for the current image.
         The step argument causes pixels to be skipped when computing the histogram to save time."""
         stepData = self.image[::step, ::step]
         hist = np.histogram(stepData, bins=bins)
@@ -397,7 +398,7 @@ class ImageItem(QtGui.QGraphicsObject):
         
     def mousePressEvent(self, ev):
         if self.drawKernel is not None and ev.button() == QtCore.Qt.LeftButton:
-            self.drawAt(ev.pos())
+            self.drawAt(ev.pos(), ev)
             ev.accept()
         else:
             ev.ignore()
@@ -405,24 +406,80 @@ class ImageItem(QtGui.QGraphicsObject):
     def mouseMoveEvent(self, ev):
         #print "mouse move", ev.pos()
         if self.drawKernel is not None:
-            self.drawAt(ev.pos())
+            self.drawAt(ev.pos(), ev)
     
     def mouseReleaseEvent(self, ev):
         pass
     
-    def drawAt(self, pos):
-        self.image[int(pos.x()), int(pos.y())] += 1
+    def tabletEvent(self, ev):
+        print ev.device()
+        print ev.pointerType()
+        print ev.pressure()
+    
+    def drawAt(self, pos, ev=None):
+        pos = [int(pos.x()), int(pos.y())]
+        dk = self.drawKernel
+        kc = self.drawKernelCenter
+        sx = [0,dk.shape[0]]
+        sy = [0,dk.shape[1]]
+        tx = [pos[0] - kc[0], pos[0] - kc[0]+ dk.shape[0]]
+        ty = [pos[1] - kc[1], pos[1] - kc[1]+ dk.shape[1]]
+        
+        for i in [0,1]:
+            dx1 = -min(0, tx[i])
+            dx2 = min(0, self.image.shape[0]-tx[i])
+            tx[i] += dx1+dx2
+            sx[i] += dx1+dx2
+
+            dy1 = -min(0, ty[i])
+            dy2 = min(0, self.image.shape[1]-ty[i])
+            ty[i] += dy1+dy2
+            sy[i] += dy1+dy2
+
+        #print sx
+        #print sy
+        #print tx
+        #print ty
+        #print self.image.shape
+        #print self.image[tx[0]:tx[1], ty[0]:ty[1]].shape
+        #print dk[sx[0]:sx[1], sy[0]:sy[1]].shape
+        ts = (slice(tx[0],tx[1]), slice(ty[0],ty[1]))
+        ss = (slice(sx[0],sx[1]), slice(sy[0],sy[1]))
+        #src = dk[sx[0]:sx[1], sy[0]:sy[1]]
+        #mask = self.drawMask[sx[0]:sx[1], sy[0]:sy[1]]
+        mask = self.drawMask
+        src = dk
+        #print self.image[ts].shape, src.shape
+        
+        if callable(self.drawMode):
+            self.drawMode(dk, self.image, mask, ss, ts, ev)
+        else:
+            mask = mask[ss]
+            src = src[ss]
+            if self.drawMode == 'set':
+                if mask is not None:
+                    self.image[ts] = self.image[ts] * (1-mask) + src * mask
+                else:
+                    self.image[ts] = src
+            elif self.drawMode == 'add':
+                self.image[ts] += src
+            else:
+                raise Exception("Unknown draw mode '%s'" % self.drawMode)
         self.updateImage()
         
-    def setDrawKernel(self, kernel=None):
+    def setDrawKernel(self, kernel=None, mask=None, center=(0,0), mode='set'):
         self.drawKernel = kernel
+        self.drawKernelCenter = center
+        self.drawMode = mode
+        self.drawMask = mask
     
     def paint(self, p, *args):
         
         #QtGui.QGraphicsPixmapItem.paint(self, p, *args)
         if self.pixmap is None:
             return
-            
+        if self.paintMode is not None:
+            p.setCompositionMode(self.paintMode)
         p.drawPixmap(self.boundingRect(), self.pixmap, QtCore.QRectF(0, 0, self.pixmap.width(), self.pixmap.height()))
         if self.border is not None:
             p.setPen(self.border)
