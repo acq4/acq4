@@ -258,6 +258,8 @@ class ImageItem(QtGui.QGraphicsObject):
         return self.whiteLevel, self.blackLevel
 
     def updateImage(self, image=None, copy=True, autoRange=False, clipMask=None, white=None, black=None, axes=None):
+        prof = debug.Profiler('ImageItem.updateImage 0x%x' %id(self), disabled=True)
+        #debug.printTrace()
         if axes is None:
             axh = {'x': 0, 'y': 1, 'c': 2}
         else:
@@ -281,6 +283,7 @@ class ImageItem(QtGui.QGraphicsObject):
             else:
                 self.image = image.view(np.ndarray)
         #print "  image max:", self.image.max(), "min:", self.image.min()
+        prof.mark('1')
         
         # Determine scale factors
         if autoRange or self.blackLevel is None:
@@ -297,41 +300,49 @@ class ImageItem(QtGui.QGraphicsObject):
         else:
             scale = 0.
         
+        prof.mark('2')
         
         ## Recolor and convert to 8 bit per channel
         # Try using weave, then fall back to python
         shape = self.image.shape
         black = float(self.blackLevel)
-        try:
-            if not ImageItem.useWeave:
-                raise Exception('Skipping weave compile')
-            sim = np.ascontiguousarray(self.image)
-            sim.shape = sim.size
-            im = np.empty(sim.shape, dtype=np.ubyte)
-            n = im.size
+        white = float(self.whiteLevel)
+        
+        if black == 0 and white == 255 and self.image.dtype == np.ubyte:
+            im = self.image
             
-            code = """
-            for( int i=0; i<n; i++ ) {
-                float a = (sim(i)-black) * (float)scale;
-                if( a > 255.0 )
-                    a = 255.0;
-                else if( a < 0.0 )
-                    a = 0.0;
-                im(i) = a;
-            }
-            """
-            
-            weave.inline(code, ['sim', 'im', 'n', 'black', 'scale'], type_converters=converters.blitz, compiler = 'gcc')
-            sim.shape = shape
-            im.shape = shape
-        except:
-            if ImageItem.useWeave:
-                ImageItem.useWeave = False
-                #sys.excepthook(*sys.exc_info())
-                #print "=============================================================================="
-                print "Weave compile failed, falling back to slower version."
-            self.image.shape = shape
-            im = ((self.image - black) * scale).clip(0.,255.).astype(np.ubyte)
+        else:
+            try:
+                if not ImageItem.useWeave:
+                    raise Exception('Skipping weave compile')
+                sim = np.ascontiguousarray(self.image)
+                sim.shape = sim.size
+                im = np.empty(sim.shape, dtype=np.ubyte)
+                n = im.size
+                
+                code = """
+                for( int i=0; i<n; i++ ) {
+                    float a = (sim(i)-black) * (float)scale;
+                    if( a > 255.0 )
+                        a = 255.0;
+                    else if( a < 0.0 )
+                        a = 0.0;
+                    im(i) = a;
+                }
+                """
+                
+                weave.inline(code, ['sim', 'im', 'n', 'black', 'scale'], type_converters=converters.blitz, compiler = 'gcc')
+                sim.shape = shape
+                im.shape = shape
+            except:
+                if ImageItem.useWeave:
+                    ImageItem.useWeave = False
+                    #sys.excepthook(*sys.exc_info())
+                    #print "=============================================================================="
+                    print "Weave compile failed, falling back to slower version."
+                self.image.shape = shape
+                im = ((self.image - black) * scale).clip(0.,255.).astype(np.ubyte)
+        prof.mark('3')
 
         try:
             im1 = np.empty((im.shape[axh['y']], im.shape[axh['x']], 4), dtype=np.ubyte)
@@ -339,6 +350,7 @@ class ImageItem(QtGui.QGraphicsObject):
             print im.shape, axh
             raise
         alpha = np.clip(int(255 * self.alpha), 0, 255)
+        prof.mark('4')
         # Fill image 
         if im.ndim == 2:
             im2 = im.transpose(axh['y'], axh['x'])
@@ -364,27 +376,34 @@ class ImageItem(QtGui.QGraphicsObject):
             raise Exception("Image must be 2 or 3 dimensions")
         #self.im1 = im1
         # Display image
-        
+        prof.mark('5')
         if self.clipLevel is not None or clipMask is not None:
-                if clipMask is not None:
-                        mask = clipMask.transpose()
-                else:
-                        mask = (self.image < self.clipLevel).transpose()
-                im1[..., 0][mask] *= 0.5
-                im1[..., 1][mask] *= 0.5
-                im1[..., 2][mask] = 255
+            if clipMask is not None:
+                mask = clipMask.transpose()
+            else:
+                mask = (self.image < self.clipLevel).transpose()
+            im1[..., 0][mask] *= 0.5
+            im1[..., 1][mask] *= 0.5
+            im1[..., 2][mask] = 255
+        prof.mark('6')
         #print "Final image:", im1.dtype, im1.min(), im1.max(), im1.shape
         self.ims = im1.tostring()  ## Must be held in memory here because qImage won't do it for us :(
+        prof.mark('7')
         qimage = QtGui.QImage(buffer(self.ims), im1.shape[1], im1.shape[0], QtGui.QImage.Format_ARGB32)
+        prof.mark('8')
         self.pixmap = QtGui.QPixmap.fromImage(qimage)
+        prof.mark('9')
         ##del self.ims
         #self.pixmapItem.setPixmap(self.pixmap)
         
         self.update()
+        prof.mark('10')
         
         if gotNewData:
             #self.emit(QtCore.SIGNAL('imageChanged'))
             self.sigImageChanged.emit()
+            
+        prof.finish()
         
     def getPixmap(self):
         return self.pixmap.copy()
@@ -465,7 +484,7 @@ class ImageItem(QtGui.QGraphicsObject):
                 self.image[ts] += src
             else:
                 raise Exception("Unknown draw mode '%s'" % self.drawMode)
-        self.updateImage()
+            self.updateImage()
         
     def setDrawKernel(self, kernel=None, mask=None, center=(0,0), mode='set'):
         self.drawKernel = kernel
