@@ -57,7 +57,7 @@ def connectSignals():
         r.toggled.connect(imageChanged)
     ui.zSlider.valueChanged.connect(updateImage)
     ui.radiusSpin.valueChanged.connect(updateKernel)
-    ui.greyCheck.toggled.connect(imageChanged)
+    ui.greyCheck.toggled.connect(updateImage)
     ui.labelSlider.valueChanged.connect(imageChanged)
     ui.labelTree.itemChanged.connect(itemChanged)
     ui.labelTree.currentItemChanged.connect(itemSelected)
@@ -91,6 +91,8 @@ def keyPressEvent(ev):
         ui.radiusSpin.setValue(ui.radiusSpin.value()-1)
     elif k == QtCore.Qt.Key_Space:
         labelImg.setVisible(not labelImg.isVisible())
+    elif k == QtCore.Qt.Key_G:
+        ui.greyCheck.toggle()
     else:
         ev.ignore()
 cw.keyPressEvent = keyPressEvent
@@ -110,7 +112,7 @@ def draw(src, dst, mask, srcSlice, dstSlice, ev):
     src = src[srcSlice]
     if mod & QtCore.Qt.ShiftModifier:
         #src = 1-src
-        l[dstSlice] &= src * ~(2**ui.labelSpin.value())
+        l[dstSlice] &= ~(src * 2**ui.labelSpin.value())
     #l[dstSlice] = l[dstSlice] * (1-mask) + src * mask
     #p.mark('2')
     else:
