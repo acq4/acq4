@@ -27,9 +27,12 @@ win.resize(800,600)
 data = metaarray.MetaArray(file=dataFile, mmap=True)
 ## data must have axes (anterior, dorsal, right)
 if not os.path.exists(labelFile):
-    label = metaarray.MetaArray(np.zeros(data.shape[:-1], dtype=np.uint16), info=data.infoCopy()[:3])
-else:
-    label = metaarray.MetaArray(file=labelFile)
+    label = metaarray.MetaArray(np.zeros(data.shape[:-1], dtype=np.uint16), info=data.infoCopy()[:3] + [{'labels': {}}])
+    label.write(labelFile, mappable=True)
+label = metaarray.MetaArray(file=labelFile, mmap=True, writable=True)
+
+    
+    
 labelCache = None    
 labelInfo = {}
 #ui.view.enableMouse()
@@ -62,6 +65,14 @@ def connectSignals():
 def init():
     connectSignals()
     updateKernel()
+
+    labelData = label._info[-1]['labels']
+    d = dict([(x['id'], x) for x in labelData])
+    keys = d.keys()
+    keys.sort()
+    for k in keys:
+        addLabel(d[k])
+
 
 def keyPressEvent(ev):
     k = ev.key()
@@ -98,8 +109,8 @@ def draw(src, dst, mask, srcSlice, dstSlice, ev):
     mask = mask[srcSlice]
     src = src[srcSlice]
     if mod & QtCore.Qt.ShiftModifier:
-        src = 1-src
-        l[dstSlice] &= src * 2**ui.labelSpin.value()
+        #src = 1-src
+        l[dstSlice] &= src * ~(2**ui.labelSpin.value())
     #l[dstSlice] = l[dstSlice] * (1-mask) + src * mask
     #p.mark('2')
     else:
@@ -109,30 +120,67 @@ def draw(src, dst, mask, srcSlice, dstSlice, ev):
     #p.mark('4')
     #p.finish()
     
-def addLabel():
+def addLabel(info=None):
     global labelInfo
-    l = ui.labelSpin.value()
-    if l in labelInfo:
-        return
-    name = 'label'
-    item = QtGui.QTreeWidgetItem([str(l), name, ''])
+    create = False
+    if info is None:
+        create = True
+        l = ui.labelSpin.value()
+        if l in labelInfo:
+            return
+        info = {
+            'visible': True,
+            'name': 'label',
+            'color': pg.intColor(len(labelInfo), 16),
+            'id': l
+        }
+    else:
+        info = info.copy()
+        info['color'] = pg.mkColor(info['color'])
+    
+    l = info['id']
+    item = QtGui.QTreeWidgetItem([str(l), info['name'], ''])
     item.setFlags(item.flags() | QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsUserCheckable)
-    item.setCheckState(0, QtCore.Qt.Checked)
-    btn = ColorButton.ColorButton(color=pg.intColor(len(labelInfo), 16))
+    if info['visible']:
+        item.setCheckState(0, QtCore.Qt.Checked)
+    else:
+        item.setCheckState(0, QtCore.Qt.Unchecked)
+    btn = ColorButton.ColorButton(color=info['color'])
     ui.labelTree.addTopLevelItem(item)
     ui.labelTree.setItemWidget(item, 2, btn)
     labelInfo[l] = {'item': item, 'btn': btn}
-    btn.sigColorChanged.connect(imageChanged)
+    btn.sigColorChanged.connect(itemChanged)
+    btn.sigColorChanging.connect(imageChanged)
+    
+    if create:
+        writeMeta()
 
 
-def itemChanged(item, col):
+def itemChanged(*args):
     imageChanged()
+    writeMeta()
+    
+def writeMeta():
+    meta = []
+    for k, v in labelInfo.iteritems():
+        meta.append( {
+            'id': k,
+            'name': str(v['item'].text(1)),
+            'color': pg.colorStr(v['btn'].color()),
+            'visible': v['item'].checkState(0) == QtCore.Qt.Checked
+        } )
+    label._info[-1]['labels'] = meta
+    label.writeMeta(labelFile)
 
 def itemSelected(item):
     ui.labelTree.editItem(item, 1)
 
 def copyLabel(n):
-    pass
+    i1 = ui.zSlider.value()
+    i2 = i1 + n
+    if i2 < 0 or i2 > displayLabel.shape[0]:
+        return
+    displayLabel[i2] = displayLabel[i1]
 
 def updateImage():
     currentPos[zAxis] = ui.zSlider.value()
@@ -140,7 +188,7 @@ def updateImage():
         img = displayData.view(np.ndarray)[ui.zSlider.value()].mean(axis=2)
     else:
         img = displayData.view(np.ndarray)[ui.zSlider.value()]
-    dataImg.updateImage(img, copy=False)
+    dataImg.updateImage(img, copy=False, black=0, white=255)
     #labelImg.updateImage(displayLabel.view(np.ndarray)[ui.zSlider.value()], copy=False, white=10, black=0)
     updateLabelImage()
 
@@ -161,9 +209,9 @@ def updateLabelImage(sl=None):
         #img[...,1] -= (lsl&2>0) * 50
         #img[...,2] -= (lsl&4>0) * 50
     #else:
-    img.fill(0)
-    labelImg.setCompositionMode(QtGui.QPainter.CompositionMode_Plus)
-    val = ui.labelSlider.value()/255.
+    img.fill(128)
+    labelImg.setCompositionMode(QtGui.QPainter.CompositionMode_Overlay)
+    val = ui.labelSlider.value()/128.
     
     for k, v in labelInfo.iteritems():
         if not v['item'].checkState(0) == QtCore.Qt.Checked:

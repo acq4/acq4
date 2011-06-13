@@ -773,7 +773,7 @@ class MetaArray(np.ndarray):
         return subarr
 
     @staticmethod
-    def _readHDF5(fileName, subtype, mmap=False):
+    def _readHDF5(fileName, subtype, mmap=False, writable=False):
         if not HAVE_HDF5:
             raise Exception("The file '%s' is HDF5-formatted, but the HDF5 library (h5py) was not found." % fileName)
         f = h5py.File(fileName, 'r')
@@ -783,7 +783,7 @@ class MetaArray(np.ndarray):
         meta = MetaArray.readHDF5Meta(f['info'])
         
         if mmap:
-            arr = MetaArray.mapHDF5Array(f['data'])
+            arr = MetaArray.mapHDF5Array(f['data'], writable=writable)
         else:
             arr = f['data'][:]
         #meta = H5MetaList(f['info'])
@@ -792,11 +792,15 @@ class MetaArray(np.ndarray):
         return subarr
 
     @staticmethod
-    def mapHDF5Array(data):
+    def mapHDF5Array(data, writable=False):
         off = data.id.get_offset()
+        if writable:
+            mode = 'r+'
+        else:
+            mode = 'r'
         if off is None:
             raise Exception("This dataset uses chunked storage; it can not be memory-mapped. (store using mappable=True)")
-        return np.memmap(filename=data.file.filename, offset=off, dtype=data.dtype, shape=data.shape)
+        return np.memmap(filename=data.file.filename, offset=off, dtype=data.dtype, shape=data.shape, mode=mode)
         
 
 
@@ -809,7 +813,10 @@ class MetaArray(np.ndarray):
         for k in root.attrs:
             val = root.attrs[k]
             if isinstance(val, basestring):  ## strings need to be re-evaluated to their original types
-                val = eval(val)
+                try:
+                    val = eval(val)
+                except:
+                    raise Exception('Can not evaluate string: "%s"' % val)
             data[k] = val
         for k in root:
             obj = root[k]
@@ -840,7 +847,6 @@ class MetaArray(np.ndarray):
             raise Exception("Don't understand metaType '%s'" % typ)
         
 
-
     def write(self, fileName, **opts):
         """Write this object to a file. The object can be restored by calling MetaArray(file=fileName)
         opts:
@@ -853,7 +859,19 @@ class MetaArray(np.ndarray):
             return self.writeHDF5(fileName, **opts)
         else:
             return self.writeMa(fileName, **opts)
-  
+
+    def writeMeta(self, fileName):
+        """Used to re-write meta info to the given file.
+        This feature is only available for HDF5 files."""
+        f = h5py.File(fileName, 'r+')
+        if f.attrs['MetaArray'] != MetaArray.version:
+            raise Exception("The file %s was created with a different version of MetaArray. Will not modify." % fileName)
+        del f['info']
+        
+        self.writeHDF5Meta(f, 'info', self._info)
+        f.close()
+
+
     def writeHDF5(self, fileName, **opts):
         ## default options for writing datasets
         dsOpts = {  
@@ -965,12 +983,12 @@ class MetaArray(np.ndarray):
         elif isinstance(data, int) or isinstance(data, float) or isinstance(data, np.integer) or isinstance(data, np.floating):
             root.attrs[name] = data
         else:
-            try:
+            try:   ## strings, bools, None are stored as repr() strings
                 root.attrs[name] = repr(data)
             except:
                 print "Can not store meta data of type '%s' in HDF5. (key is '%s')" % (str(type(data)), str(name))
                 raise 
-        
+
         
     def writeMa(self, fileName, appendAxis=None, newFile=False):
         """Write an old-style .ma file"""
