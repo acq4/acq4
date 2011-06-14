@@ -176,9 +176,6 @@
             <property name="itemsExpandable">
              <bool>false</bool>
             </property>
-            <property name="headerHidden">
-             <bool>false</bool>
-            </property>
             <property name="expandsOnDoubleClick">
              <bool>false</bool>
             </property>

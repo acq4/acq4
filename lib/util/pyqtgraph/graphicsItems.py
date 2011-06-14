@@ -1041,24 +1041,35 @@ class ScatterPlotItem(GraphicsObject):
     #sigPointClicked = QtCore.Signal(object, object)
     sigClicked = QtCore.Signal(object, object)  ## self, points
     
-    def __init__(self, spots=None, pxMode=True, pen=None, brush=None, size=5):
+    def __init__(self, spots=None, x=None, y=None, pxMode=True, pen='default', brush='default', size=5, identical=False, data=None):
+        """
+        Arguments:
+            spots: list of dicts. Each dict specifies parameters for a single spot.
+            x,y: array of x,y values. Alternatively, specify spots['pos'] = (x,y)
+            pxMode: If True, spots are always the same size regardless of scaling
+            identical: If True, all spots are forced to look identical. 
+                       This can result in performance enhancement."""
         GraphicsObject.__init__(self)
         self.spots = []
         self.range = [[0,0], [0,0]]
+        self.identical = identical
+        self._spotPixmap = None
         
-        if brush is None:
-            brush = QtGui.QBrush(QtGui.QColor(100, 100, 150))
-        self.brush = brush
+        if brush == 'default':
+            self.brush = QtGui.QBrush(QtGui.QColor(100, 100, 150))
+        else:
+            self.brush = mkBrush(brush)
         
-        if pen is None:
-            pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
-        self.pen = pen
+        if pen == 'default':
+            self.pen = QtGui.QPen(QtGui.QColor(200, 200, 200))
+        else:
+            self.pen = mkPen(pen)
         
         self.size = size
         
         self.pxMode = pxMode
-        if spots is not None:
-            self.setPoints(spots)
+        if spots is not None or x is not None:
+            self.setPoints(spots, x, y, data)
             
         #self.optimize = optimize
         #if optimize:
@@ -1089,15 +1100,28 @@ class ScatterPlotItem(GraphicsObject):
     def getRange(self, ax, percent):
         return self.range[ax]
         
-    def setPoints(self, spots):
+    def setPoints(self, spots=None, x=None, y=None, data=None):
         self.clear()
         self.range = [[0,0],[0,0]]
-        self.addPoints(spots)
+        self.addPoints(spots, x, y, data)
 
-    def addPoints(self, spots):
+    def addPoints(self, spots=None, x=None, y=None, data=None):
         xmn = ymn = xmx = ymx = None
-        for s in spots:
-            pos = Point(s['pos'])
+        if spots is not None:
+            n = len(spots)
+        else:
+            n = len(x)
+        
+        for i in range(n):
+            if spots is not None:
+                s = spots[i]
+                pos = Point(s['pos'])
+            else:
+                s = {}
+                pos = Point(x[i], y[i])
+            if data is not None:
+                s['data'] = data[i]
+                
             size = s.get('size', self.size)
             if self.pxMode:
                 psize = 0
@@ -1117,8 +1141,8 @@ class ScatterPlotItem(GraphicsObject):
             brush = s.get('brush', self.brush)
             pen = s.get('pen', self.pen)
             pen.setCosmetic(True)
-            data = s.get('data', None)
-            item = self.mkSpot(pos, size, self.pxMode, brush, pen, data)
+            data2 = s.get('data', None)
+            item = self.mkSpot(pos, size, self.pxMode, brush, pen, data2, index=len(self.spots))
             self.spots.append(item)
             #if self.optimize:
                 #item.hide()
@@ -1135,11 +1159,19 @@ class ScatterPlotItem(GraphicsObject):
     def paint(self, *args):
         pass
 
-    def mkSpot(self, pos, size, pxMode, brush, pen, data):
+    def spotPixmap(self):
+        if not self.identical:
+            return None
+        if self._spotPixmap is None:
+            self._spotPixmap = PixmapSpotItem.makeSpotImage(self.size, self.pen, self.brush)
+        return self._spotPixmap
+
+    def mkSpot(self, pos, size, pxMode, brush, pen, data, index=None):
         if pxMode:
-            item = PixmapSpotItem(size, brush, pen, data)
+            img = self.spotPixmap()
+            item = PixmapSpotItem(size, brush, pen, data, image=img, index=index)
         else:
-            item = SpotItem(size, pxMode, brush, pen, data)
+            item = SpotItem(size, pxMode, brush, pen, data, index=index)
         item.setParentItem(self)
         item.setPos(pos)
         #item.sigClicked.connect(self.pointClicked)
@@ -1211,13 +1243,14 @@ class ScatterPlotItem(GraphicsObject):
 class SpotItem(QtGui.QGraphicsWidget):
     #sigClicked = QtCore.Signal(object)
     
-    def __init__(self, size, pxMode, brush, pen, data):
+    def __init__(self, size, pxMode, brush, pen, data, index=None):
         QtGui.QGraphicsWidget.__init__(self)
         self.pxMode = pxMode
             
         self.pen = pen
         self.brush = brush
         self.size = size
+        self.index = index
         #s2 = size/2.
         self.path = QtGui.QPainterPath()
         self.path.addEllipse(QtCore.QRectF(-0.5, -0.5, 1, 1))
@@ -1282,7 +1315,7 @@ class SpotItem(QtGui.QGraphicsWidget):
 class PixmapSpotItem(QtGui.QGraphicsItem):
     #sigClicked = QtCore.Signal(object)
     
-    def __init__(self, size, brush, pen, data, image=None):
+    def __init__(self, size, brush, pen, data, image=None, index=None):
         """This class draws a scale-invariant image centered at 0,0.
         If no image is specified, then an antialiased circle is constructed instead.
         It should be quite fast, but large spots will use a lot of memory."""
@@ -1291,6 +1324,7 @@ class PixmapSpotItem(QtGui.QGraphicsItem):
         self.pen = pen
         self.brush = brush
         self.size = size
+        self.index = index
         self.setFlags(self.flags() | self.ItemIgnoresTransformations | self.ItemHasNoContents)
         if image is None:
             self.image = self.makeSpotImage(self.size, self.pen, self.brush)
@@ -1311,11 +1345,13 @@ class PixmapSpotItem(QtGui.QGraphicsItem):
         img = QtGui.QImage(size+2, size+2, QtGui.QImage.Format_ARGB32_Premultiplied)
         img.fill(0)
         p = QtGui.QPainter(img)
-        p.setRenderHint(p.Antialiasing)
-        p.setBrush(brush)
-        p.setPen(pen)
-        p.drawEllipse(1, 1, size, size)
-        p.end()
+        try:
+            p.setRenderHint(p.Antialiasing)
+            p.setBrush(brush)
+            p.setPen(pen)
+            p.drawEllipse(1, 1, size, size)
+        finally:
+            p.end()  ## failure to end a painter properly causes crash.
         return img
         
         
@@ -1440,7 +1476,7 @@ class UIGraphicsItem(GraphicsObject):
 
 class DebugText(QtGui.QGraphicsTextItem):
     def paint(self, *args):
-        p = debug.Profiler("DebugText.paint", disable=True)
+        p = debug.Profiler("DebugText.paint", disabled=True)
         QtGui.QGraphicsTextItem.paint(self, *args)
         p.finish()
 
@@ -2083,7 +2119,8 @@ class ViewBox(QtGui.QGraphicsWidget):
         # scale 'around' mouse cursor position
         center = Point(self.childGroup.transform().inverted()[0].map(ev.pos()))
         self.scaleBy(s, center)
-        self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
+        #self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
+        self.sigRangeChangedManually.emit(self.mouseEnabled)
         ev.accept()
 
     def mouseMoveEvent(self, ev):

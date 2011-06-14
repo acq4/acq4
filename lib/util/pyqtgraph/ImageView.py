@@ -427,7 +427,7 @@ class ImageView(QtGui.QWidget):
         self.imageItem.resetTransform()
         if scale is not None:
             self.imageItem.scale(*scale)
-        if scale is not None:
+        if pos is not None:
             self.imageItem.setPos(*pos)
         prof.mark('6')
             

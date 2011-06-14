@@ -110,6 +110,22 @@ class SqliteDatabase:
         cmd = "DELETE FROM %s WHERE %s" % (table, where)
         return self(cmd)
 
+    def update(self, table, vals, where=None, rowid=None):
+        """Update records in the DB.
+        Arguments:
+            vals: dict of {field: value} pairs
+            where: SQL clause specifying rows to update
+            rowid: int row IDs. Used instead of 'where'"""
+        if where is None:
+            if rowid is None:
+                raise Exception("Must specify 'where' or 'rowids'")
+            else:
+                where = "rowid=%d" % rowid
+        setStr = ', '.join(['"%s"=:%s' % (k, k) for k in vals])
+        data = self._prepareData(table, [vals])
+        cmd = "UPDATE %s SET %s WHERE %s" % (table, setStr, where)
+        return self(cmd, data)
+
     def lastInsertRow(self):
         q = self("select last_insert_rowid()")
         return q[0].values()[0]
@@ -404,7 +420,7 @@ class AnalysisDatabase(SqliteDatabase):
         res = self.select(table, ['Dir'], 'where rowid=%d'%rowid)
         if len(res) < 1:
             raise Exception('rowid %d does not exist in %s' % (rowid, table))
-        print res
+        #print res
         return self.baseDir()[res[0]['Dir']]
 
     def dirTypeName(self, dh):
