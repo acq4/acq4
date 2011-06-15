@@ -61,7 +61,7 @@ OSX Installation
 ----------------
 
 These instructions are for building on MacOSX 10.5. If you're building on 10.6 or 10.7 some of these libraries will be available as binaries. 
-You need to have xcode installed on your machine.
+You need to have Xcode installed on your machine.
 
 #. Python 2.7: http://python.org (available as a dmg)
 #. Download and install Bazaar: http://wiki.bazaar.canonical.com/Download (This needs to be done before installing Qt/PyQt)
