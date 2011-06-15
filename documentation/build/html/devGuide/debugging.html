@@ -64,14 +64,14 @@ GarbageWatcher</dd>
 <div class="section" id="lockups-bus-errors-segmentation-faults">
 <h2>Lockups, bus errors, segmentation faults<a class="headerlink" href="#lockups-bus-errors-segmentation-faults" title="Permalink to this headline">¶</a></h2>
 <dl class="docutils">
-<dt>Things that crash PyQt4:</dt>
+<dt>Things that crash PyQt4 (of which there are many):</dt>
 <dd><ul class="first last">
 <li><p class="first">Model/View anything. TableView, TreeView, etc. They are too hard to program correctly, and any mistakes lead to untraceable crashing.</p>
 </li>
 <li><p class="first">Changing the bounds of graphicsitems without calling preparegeometrychange first</p>
 </li>
 <li><dl class="first docutils">
-<dt>Situations where Qt auto-deletes objects, leaving the python wrapper alive.(make sure you keep references to the objects you want to stay alive, and remove bad references before they cause trouble)</dt>
+<dt>Situations where Qt auto-deletes objects, leaving the python wrapper alive. Make sure you keep references to the objects you want to stay alive, and remove bad references before they cause trouble.</dt>
 <dd><ul class="first last simple">
 <li>joined widgets such as a scrollarea and its scroll bars. When the scrollarea is deleted, the scrollbars go as well, but any references to the scrollbars are NOT informed of this, so accessing those objects causes crash (Pyside does not have this problem)</li>
 <li>parents auto-deleting children, tree items deleting child widgets when moved</li>
@@ -129,20 +129,15 @@ gdb python
 <li><p class="first">If sh is installed via cygwin, it must not be in the PATH during build</p>
 </li>
 <li><p class="first">set environment variables:  (example below is for mingw builds)</p>
-<blockquote>
 <div class="highlight-python"><pre>&gt; set QTMAKESPEC=win32-g++    (for mingw builds)
 &gt; set QTDIR=C:\QtSDK\Desktop\Qt\4.7.3\mingw</pre>
 </div>
-</blockquote>
 </li>
 <li><p class="first">configure sip:</p>
-<blockquote>
 <div class="highlight-python"><pre>&gt; python configure.py -p win32-g++ --debug</pre>
 </div>
-</blockquote>
 </li>
 <li><p class="first">replace all occurrences of &#8220;python2X_d&#8221; with &#8220;python2X&#8221; in all Makefiles (unless you have debugging python installed). A short python script takes care of this:</p>
-<blockquote>
 <div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">os</span><span class="o">,</span> <span class="nn">re</span>
 <span class="k">for</span> <span class="n">path</span><span class="p">,</span> <span class="n">sd</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="s">&#39;.&#39;</span><span class="p">):</span>
     <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
@@ -158,21 +153,17 @@ gdb python
         <span class="n">fh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </pre></div>
 </div>
-</blockquote>
 </li>
 <li><p class="first">run mingw32-make or nmake for VS, but do <em>not</em> use cygwin&#8217;s make. Note that just running mingw32-make install is often allowed, but will fail in this case.</p>
-<blockquote>
 <div class="highlight-python"><pre>&gt; mingw32-make
 &gt; mingw32-make install</pre>
 </div>
-</blockquote>
 </li>
 <li><p class="first">After installing, you should have sip_d.pyd. Rename this to sip.pyd</p>
 </li>
 <li><p class="first">repeat for pyqt source</p>
 </li>
 <li><p class="first">rename all installed *_d.pyd files to *.pyd (c:\python26\lib\site-packages\pyqt4...)</p>
-<blockquote>
 <div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">os</span><span class="o">,</span> <span class="nn">re</span><span class="o">,</span> <span class="nn">glob</span>
 <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s">&#39;*_d.pyd&#39;</span><span class="p">):</span>
     <span class="n">f2</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s">&#39;_d&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
@@ -180,7 +171,6 @@ gdb python
     <span class="k">print</span> <span class="s">&quot;</span><span class="si">%s</span><span class="s"> -&gt; </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">f2</span><span class="p">)</span>
 </pre></div>
 </div>
-</blockquote>
 </li>
 <li><p class="first">This does not install .dll and .exe files. Copy these files from C:\QtSDK\Desktop\Qt\4.7.3\mingw. I think DLLS should be in c:\python26\Lib\site-packages\PyQt4, and EXEs should be in \bin from there (wherever you put them should be in PATH so windows can find the DLLs).</p>
 </li>
@@ -192,34 +182,26 @@ gdb python
 <h2>Debugging ACQ4 with GDB<a class="headerlink" href="#debugging-acq4-with-gdb" title="Permalink to this headline">¶</a></h2>
 <ol class="arabic">
 <li><p class="first">Start up:</p>
-<blockquote>
 <div class="highlight-python"><pre>&gt; gdb python
 ...
 (gdb) run -i acq4.py</pre>
 </div>
-</blockquote>
 </li>
 <li><p class="first">Crash the program. You will not see any crash message immediately; it will appear frozen, but go back to the terminal window, and GDB should say something like this:</p>
-<blockquote>
 <div class="highlight-python"><pre>Program received signal SIGSEGV, Segmentation fault.</pre>
 </div>
 <p>Alternately, if the program is genuinely frozen, then pressing Ctrl-C should get you back to a GDB prompt.</p>
-</blockquote>
 </li>
-<li><p class="first">Get a backtrace</p>
-<blockquote>
+<li><p class="first">Get a backtrace:</p>
 <div class="highlight-python"><pre>(gdb) backtrace</pre>
 </div>
 <p>The beginning of the backtrace should offer hints about what was happening when the crash/freeze occurred.</p>
-</blockquote>
 </li>
 </ol>
 <p>There are lots of easy ways you can crash python to test this. Here&#8217;s one:</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">PyQt4</span> <span class="kn">import</span> <span class="n">QtGui</span>
 <span class="n">app</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QApplication</span><span class="p">([])</span>
-<span class="n">s</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QSpinBox</span><span class="p">()</span>
-<span class="n">l</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">lineEdit</span><span class="p">()</span>
-<span class="k">del</span> <span class="n">s</span>
+<span class="n">l</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QSpinBox</span><span class="p">()</span><span class="o">.</span><span class="n">lineEdit</span><span class="p">()</span>
 <span class="n">l</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span>
 </pre></div>
 </div>

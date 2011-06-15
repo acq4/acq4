@@ -14,7 +14,7 @@ class Analyze75(FileType):
         """Write data to fileName.
         Return the file name written (this allows the function to modify the requested file name)
         """
-        raise Exception('Wrinting NiFTI not implemented.')
+        raise Exception('Writing NiFTI not implemented.')
         
     @classmethod
     def read(cls, fileHandle):
@@ -313,12 +313,14 @@ def getByteOrder(hLen):
     order = '<'
     hLen1 = struct.unpack('<i', hLen)[0]
     if hLen1 == 348:
-        print "Byte order is LE"
+        pass
+        #print "Byte order is LE"
     else:
         order = '>'
         hLen2 = struct.unpack('>i', hLen)[0]
         if hLen2 == 348:
-            print "Byte order is BE"
+            pass
+            #print "Byte order is BE"
         else:
             raise Exception('Header length must be 348 (got %d (LE) or %d (BE))' % (hLen1, hLen2))
     return order

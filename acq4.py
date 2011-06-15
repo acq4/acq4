@@ -80,6 +80,7 @@ try:
     from debug import *
     import pyqtgraph as pg
     import functions as fn
+    import numpy as np
 
     ### Use CLI history and tab completion
     import atexit

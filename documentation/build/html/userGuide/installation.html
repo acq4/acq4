@@ -25,7 +25,7 @@
     <link rel="top" title="ACQ4 v1.0 documentation" href="../index.html" />
     <link rel="up" title="User’s Guide" href="index.html" />
     <link rel="next" title="Configuration" href="configuration.html" />
-    <link rel="prev" title="Quick Start Guide" href="quickstart.html" /> 
+    <link rel="prev" title="Hardware Configuration" href="hardware.html" /> 
   </head>
   <body>
     <div class="related">
@@ -38,7 +38,7 @@
           <a href="configuration.html" title="Configuration"
              accesskey="N">next</a> |</li>
         <li class="right" >
-          <a href="quickstart.html" title="Quick Start Guide"
+          <a href="hardware.html" title="Hardware Configuration"
              accesskey="P">previous</a> |</li>
         <li><a href="../index.html">ACQ4 v1.0 documentation</a> &raquo;</li>
           <li><a href="index.html" accesskey="U">User&#8217;s Guide</a> &raquo;</li> 
@@ -79,14 +79,16 @@ Download and install all prerequisites in order:</p>
 <li>pyserial: <a class="reference external" href="http://pypi.python.org/pypi/pyserial">http://pypi.python.org/pypi/pyserial</a></li>
 <li>Python Imaging Library: <a class="reference external" href="http://www.pythonware.com/products/pil/">http://www.pythonware.com/products/pil/</a></li>
 </ol>
-<p>I know it is tempting to use easy_install for this. Don&#8217;t.
+<p>I know it is tempting to use easy_install or cygwin for this. Don&#8217;t.
 Once all prerequisites are installed, download ACQ4 (stable or development branch):</p>
-<ol class="arabic simple">
-<li>Download and install bazaar: <a class="reference external" href="http://wiki.bazaar.canonical.com/Download">http://wiki.bazaar.canonical.com/Download</a></li>
-<li>Start a command shell (or powershell or cygwin, if you prefer) and download a copy of the ACQ4 code:</li>
-</ol>
+<ol class="arabic">
+<li><p class="first">Download and install bazaar: <a class="reference external" href="http://wiki.bazaar.canonical.com/Download">http://wiki.bazaar.canonical.com/Download</a></p>
+</li>
+<li><p class="first">Start a command shell (or powershell or cygwin, if you prefer) and download a copy of the ACQ4 code:</p>
 <div class="highlight-python"><pre>bzr branch lp:acq4</pre>
 </div>
+</li>
+</ol>
 <p>If all goes well, you now have everything ready and can proceed to configuration.</p>
 </div>
 <div class="section" id="linux-installation">
@@ -98,7 +100,95 @@ $ bzr branch lp:acq4</pre>
 </div>
 <div class="section" id="osx-installation">
 <h2>OSX Installation<a class="headerlink" href="#osx-installation" title="Permalink to this headline">¶</a></h2>
-<p>Ask MBK.</p>
+<p>These instructions are for building on MacOSX 10.5. If you&#8217;re building on 10.6 or 10.7 some of these libraries will be available as binaries.
+You will need to have xcode installed on your machine.</p>
+<p>Download and install the following packages in order:</p>
+<ol class="arabic">
+<li><p class="first"><strong>Python 2.7</strong>: <a class="reference external" href="http://python.org">http://python.org</a> (available as a dmg)</p>
+</li>
+<li><p class="first"><strong>Bazaar</strong>: <a class="reference external" href="http://wiki.bazaar.canonical.com/Download">http://wiki.bazaar.canonical.com/Download</a> (This needs to be done before installing Qt/PyQt)</p>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>Qt 4.7</strong>: <a class="reference external" href="http://qt.nokia.com">http://qt.nokia.com</a></div>
+<div class="line">Unfortunately the SDK installation does not work on 10.5 - But installing the libraries should be fine.</div>
+<div class="line">The libraries are available as dmg</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>SIP</strong> (I used 4.12.3): <a class="reference external" href="http://www.riverbankcomputing.com/software/sip/download">http://www.riverbankcomputing.com/software/sip/download</a>.</div>
+<div class="line">From the SIP directory in a Terminal:</div>
+</div>
+<div class="highlight-python"><pre>$ python configure.py
+$ make
+$ make install</pre>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>PyQt4</strong>: <a class="reference external" href="http://www.riverbankcomputing.co.uk/software/pyqt/download">http://www.riverbankcomputing.co.uk/software/pyqt/download</a></div>
+<div class="line">Be sure to get the version built for python 2.7 and the Qt version you installed.</div>
+<div class="line">In a terminal navigate to the PyQt4 folder:</div>
+</div>
+<div class="highlight-python"><pre>$ python configure.py
+$ make
+$ make install</pre>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>Numpy</strong>: <a class="reference external" href="http://numpy.scipy.org">http://numpy.scipy.org</a></div>
+<div class="line">Make sure you get the version for python 2.7, this may involve searching through files instead of simply getting the latest version.</div>
+<div class="line">I use numpy 1.6.0 which is available as a .dmg</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>Scipy</strong>: <a class="reference external" href="http://numpy.scipy.org">http://numpy.scipy.org</a></div>
+<div class="line">Same deal as numpy, I used scipy 0.9.0</div>
+</div>
+</li>
+<li><p class="first"><strong>ZLib</strong>: <a class="reference external" href="http://zlib.net">http://zlib.net</a></p>
+<div class="highlight-python"><pre>$ ./configure
+$ make test
+$ sudo make install</pre>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>Python Imaging Library (PIL)</strong>: <a class="reference external" href="http://www.pythonware.com/products/pil">http://www.pythonware.com/products/pil</a></div>
+<div class="line">Get the PIL-1.1.7.tar.gz package.</div>
+<div class="line">Unpack it and in Terminal navigate to the PIL folder and:</div>
+</div>
+<div class="highlight-python"><pre>$ python setup.py install</pre>
+</div>
+</li>
+<li><p class="first"><strong>PyParsing</strong>: <a class="reference external" href="http://pyparsing.wikispaces.com">http://pyparsing.wikispaces.com</a></p>
+<div class="highlight-python"><pre>$ python setup.py install</pre>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>HDF5</strong>: <a class="reference external" href="http://www.hdfgroup.org/HDF5">http://www.hdfgroup.org/HDF5</a></div>
+<div class="line">Download the source code (I used version 1.8.7).</div>
+<div class="line">Unpack it and navigate to the folder in terminal</div>
+</div>
+<div class="highlight-python"><pre>$ ./configure --prefix=/usr/local/hdf5
+$ make
+$ make check           # If check succeeds, go on..
+$ sudo make install
+$ make check-install</pre>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>h5py</strong>: <a class="reference external" href="http://code.google.com/p/h5py">http://code.google.com/p/h5py</a></div>
+<div class="line">I use version 1.3.1.</div>
+<div class="line">Navigate to the folder in terminal and:</div>
+</div>
+<div class="highlight-python"><pre>$ python setup.py build --hdf5=/usr/local/hdf5
+$ python setup.py install</pre>
+</div>
+</li>
+<li><p class="first">Finally, navigate to the place where you would like to store acq4.</p>
+<div class="highlight-python"><pre>$ bzr branch lp:acq4</pre>
+</div>
+</li>
+</ol>
+<p>That&#8217;s it, you&#8217;re done and ready to setup configuration files.</p>
 </div>
 </div>
 
@@ -119,8 +209,8 @@ $ bzr branch lp:acq4</pre>
 </ul>
 
   <h4>Previous topic</h4>
-  <p class="topless"><a href="quickstart.html"
-                        title="previous chapter">Quick Start Guide</a></p>
+  <p class="topless"><a href="hardware.html"
+                        title="previous chapter">Hardware Configuration</a></p>
   <h4>Next topic</h4>
   <p class="topless"><a href="configuration.html"
                         title="next chapter">Configuration</a></p>
@@ -156,7 +246,7 @@ $ bzr branch lp:acq4</pre>
           <a href="configuration.html" title="Configuration"
              >next</a> |</li>
         <li class="right" >
-          <a href="quickstart.html" title="Quick Start Guide"
+          <a href="hardware.html" title="Hardware Configuration"
              >previous</a> |</li>
         <li><a href="../index.html">ACQ4 v1.0 documentation</a> &raquo;</li>
           <li><a href="index.html" >User&#8217;s Guide</a> &raquo;</li> 

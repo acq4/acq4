@@ -1,0 +1,36 @@
+The examples here are configuration files from a few of the systems we use with ACQ4. 
+They have a variety of different hardware configurations:
+
+noyo:
+   Used primarily for UV uncaging and calcium imaging experiments
+   NI PCI-6259
+   MultiClamp 700A
+   Photometrics Quantix 57 (camera)
+   Cambridge Tech. galvometric scan mirrors
+   DPSS UV laser with uniblitz shutter
+   Serial device reading stage position and objective lens
+   Digitally controlled LEDs
+     
+tulare:
+   Used primarily for ChR2 photostimulation experiments
+   NI PCI-6251
+   NI PCI-MIO 16E
+   AxoPatch 200
+   AxoProbe 1A
+   QImaging Retiga 2000 (camera)
+   Thorlabs galvo scan mirrors
+   Uniblitz shutter (for blue laser)
+   (no stage position readout)
+
+cambria:
+   Used primarily for calcium imaging experiments
+   NI PCI-6251
+   Photometrics QuantEM 512
+   MultiClamp 700B
+
+underwood:
+   A laptop running Linux, used primarily for data analysis.
+   This configuration has a few 'mock' devices which allow the acquisition 
+   system to be tested in the absence of real hardware.
+
+
