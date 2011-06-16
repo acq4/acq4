@@ -57,6 +57,7 @@ OSX Installation
 ----------------
 
 These instructions are for building on MacOSX 10.5. If you're building on 10.6 or 10.7 some of these libraries will be available as binaries. 
+
 You will need to have xcode installed on your machine.
 
 Download and install the following packages in order:
