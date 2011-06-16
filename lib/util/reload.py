@@ -185,6 +185,7 @@ def updateClass(old, new, debug):
             except AttributeError:
                 if debug:
                     print "    Skipping method update for %s; new class does not have this attribute" % attr
+                continue
                 
             if oa.im_func is not na.im_func:
                 depth = updateFunction(oa.im_func, na.im_func, debug)

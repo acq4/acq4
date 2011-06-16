@@ -1,5 +1,5 @@
-NiDAQ Devices
-=============
+Microscope Devices
+==================
 
 
 

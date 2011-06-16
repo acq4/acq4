@@ -89,7 +89,7 @@ class _NIDAQ:
                 #ret = getattr(ctypes, argSig[-1][1])()
                 #args += (byref(ret),)
             ## functions that return char* can be called with a null pointer to get the size of the buffer needed.
-            if argSig[-2][1] == ['char', '*'] and argSig[-1][0] == 'bufferSize':
+            if (argSig[-2][1] == ['char', '*'] or argSig[-2][1] == ['char', [-1]]) and argSig[-1][0] == 'bufferSize':
                 returnValue = argSig[-2][0]
                 extra = {returnValue: None, 'bufferSize': 0}
                 #print "correct for buffer return"
@@ -134,7 +134,7 @@ class _NIDAQ:
         elif errCode > 0:
             print "NiDAQ Warning while running function '%s%s'" % (func, str(args))
             print self.error(errCode)
-            debug.printExc("Traceback:")
+            debug.printTrace("Traceback:")
             #raise NIDAQWarning(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         
             

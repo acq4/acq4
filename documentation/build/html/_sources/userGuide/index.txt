@@ -8,6 +8,8 @@ Contents:
     
     introduction
     principles
+    quickstart
+    hardware
     installation
     configuration
     modules/index
@@ -15,3 +17,10 @@ Contents:
     dataManagement
     analysis/index
     tutorials/index
+
+
+.. glossary::
+    
+    Manager
+        Works behind the scenes to manage devices and modules; runs protocols on behalf of modules.
+    

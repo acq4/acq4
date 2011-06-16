@@ -397,7 +397,7 @@ class Canvas(QtGui.QWidget):
                 bestType = t
         if bestType is None:
             raise Exception("Don't know how to load file: '%s'" % str(fh))
-        citem = bestType(handle=fh)
+        citem = bestType(handle=fh, **opts)
         self.addItem(citem)
         return citem
         #if fh.isFile():

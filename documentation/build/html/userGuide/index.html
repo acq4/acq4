@@ -67,7 +67,19 @@
 <li class="toctree-l2"><a class="reference internal" href="principles.html#data-handling">Data Handling</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware.html">Hardware Configuration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="hardware.html#multiclamp-700a-b">MultiClamp 700A/B</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hardware.html#cameras">Cameras</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hardware.html#stage-position-control">Stage Position Control</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#windows-installation">Windows Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#linux-installation">Linux Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#osx-installation">OSX Installation</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html#cfg-file-syntax">.cfg File Syntax</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html#configuration-structure">Configuration Structure</a></li>
@@ -88,8 +100,8 @@
 <li class="toctree-l2"><a class="reference internal" href="devices/PVCamDevice.html">Photometrics Cameras</a></li>
 <li class="toctree-l2"><a class="reference internal" href="devices/MultiClampDevice.html">MultiClamp Devices</a></li>
 <li class="toctree-l2"><a class="reference internal" href="devices/AxoPatch200Device.html">AxoPatch Devices</a></li>
-<li class="toctree-l2"><a class="reference internal" href="devices/ScannerDevice.html">NiDAQ Devices</a></li>
-<li class="toctree-l2"><a class="reference internal" href="devices/MicroscopeDevice.html">NiDAQ Devices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devices/ScannerDevice.html">Scanner Devices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devices/MicroscopeDevice.html">Microscope Devices</a></li>
 <li class="toctree-l2"><a class="reference internal" href="devices/TriggerDevice.html">Trigger Devices</a></li>
 <li class="toctree-l2"><a class="reference internal" href="devices/SutterMP285Device.html">Sutter MP285 Devices</a></li>
 <li class="toctree-l2"><a class="reference internal" href="devices/SerialMouseDevice.html">Serial Mouse Devices</a></li>
@@ -97,7 +109,14 @@
 <li class="toctree-l2"><a class="reference internal" href="devices/MockCameraDevice.html">Simulated Cameras</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="dataManagement.html">Data Management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dataManagement.html">Data Management</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="dataManagement.html#hierarchical-file-storage">Hierarchical File Storage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataManagement.html#meta-information">Meta Information</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataManagement.html#user-defined-folder-types">User-defined Folder Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataManagement.html#notes-and-logs">Notes and Logs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataManagement.html#metaarray-files">MetaArray Files</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="analysis/index.html">Analysis</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="analysis/MosaicEditor.html">Mosaic Editor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="analysis/Photostim.html">Photostimulation Mapping</a></li>
@@ -107,6 +126,9 @@
 <li class="toctree-l2"><a class="reference internal" href="tutorials/PatchCell.html">Patch a Cell</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tutorials/RecordIVCurve.html">Record an I/V Curve</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tutorials/CalibrateScanner.html">Calibrate Scanning Mirrors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/CalibrateObjectives.html">Calibrate Microscope Objectives</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/TroubleshootVibration.html">Troubleshooting Table Vibration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/TroubleshootNoise.html">Troubleshoot Electrical Noise</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tutorials/PhotostimMapping.html">Record a Photostimulation Map</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tutorials/MosaicBuilding.html">Build an Image Mosaic</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tutorials/PhotostimAnalysis.html">Analyze Photostimulation Maps</a></li>
@@ -114,6 +136,10 @@
 </li>
 </ul>
 </div>
+<dl class="glossary docutils">
+<dt id="term-manager">Manager</dt>
+<dd>Works behind the scenes to manage devices and modules; runs protocols on behalf of modules.</dd>
+</dl>
 </div>
 
 
@@ -166,7 +192,7 @@
       </ul>
     </div>
     <div class="footer">
-        &copy; Copyright 2011, Luke Campagnola, Megan B. Kratz.
+        &copy; Copyright 2011; University of North Carolina at Chapel Hill.
       Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.1.
     </div>
   </body>

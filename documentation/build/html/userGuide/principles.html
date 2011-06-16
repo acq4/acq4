@@ -24,7 +24,7 @@
     <script type="text/javascript" src="../_static/doctools.js"></script>
     <link rel="top" title="ACQ4 v1.0 documentation" href="../index.html" />
     <link rel="up" title="User’s Guide" href="index.html" />
-    <link rel="next" title="Installation" href="installation.html" />
+    <link rel="next" title="Quick Start Guide" href="quickstart.html" />
     <link rel="prev" title="Quick Start Guide" href="quickstart.html" /> 
   </head>
   <body>
@@ -35,7 +35,7 @@
           <a href="../genindex.html" title="General Index"
              accesskey="I">index</a></li>
         <li class="right" >
-          <a href="installation.html" title="Installation"
+          <a href="quickstart.html" title="Quick Start Guide"
              accesskey="N">next</a> |</li>
         <li class="right" >
           <a href="quickstart.html" title="Quick Start Guide"
@@ -59,7 +59,7 @@
 </div>
 <div class="section" id="manager">
 <h2>Manager<a class="headerlink" href="#manager" title="Permalink to this headline">¶</a></h2>
-<p>The Manager is the central object in ACQ4. It is used mainly to configure devices, launch new modules, inquire about existing modules and devices, and configure hardware for running synchronized protocols. The Manager is not visible to the user, but it is nevertheless helpful to understand that it exists and that it is working behind the scenes to make sure everything runs together smoothly.</p>
+<p>The Manager is the central object in ACQ4. It is used mainly to initialize devices, launch new modules, inquire about existing modules and devices, and configure hardware for running synchronized protocols. The Manager is not visible to the user, but it is nevertheless helpful to understand that it exists and that it is working behind the scenes to make sure everything runs together smoothly.</p>
 </div>
 <div class="section" id="devices">
 <h2>Devices<a class="headerlink" href="#devices" title="Permalink to this headline">¶</a></h2>
@@ -67,16 +67,13 @@
 </div>
 <div class="section" id="modules">
 <h2>Modules<a class="headerlink" href="#modules" title="Permalink to this headline">¶</a></h2>
-<dl class="docutils">
-<dt>A <em>module</em> is a single, independently functioning user interface. Each module has its own window and can be opened/closed without affecting other modules. By default, ACQ4 starts my displaying the <em>manager module</em>. As you might guess, this is a user interface to the Manager itself, from which you can launch new modules and interact directly with devices in the system. Other modules include:</dt>
-<dd><ul class="first last simple">
+<p>A <em>module</em> is a single, independently functioning user interface. Each module has its own window and can be opened/closed without affecting other modules. By default, ACQ4 starts by displaying the <em>manager module</em>. As you might guess, this is a user interface to the <a class="reference internal" href="index.html#term-manager"><em class="xref std std-term">Manager</em></a> itself, from which you can launch new modules and interact directly with devices in the system. Other modules include:</p>
+<ul class="simple">
 <li>Camera - live streaming and recording of video</li>
 <li>Patch - for monitoring progress in cell patching and long-term cell health</li>
-<li>Protocol Runner - the workhorse for running arbitrary protocols</li>
+<li>Protocol Runner - the workhorse for designing and running protocols</li>
 <li>Data Manager - for organizing and browsing data, also the access point for analysis modules [link]</li>
 </ul>
-</dd>
-</dl>
 </div>
 <div class="section" id="protocols">
 <h2>Protocols<a class="headerlink" href="#protocols" title="Permalink to this headline">¶</a></h2>
@@ -85,9 +82,9 @@
 </div>
 <div class="section" id="data-handling">
 <h2>Data Handling<a class="headerlink" href="#data-handling" title="Permalink to this headline">¶</a></h2>
-<p>Experimental results are generally stored as they are collected. It is the user&#8217;s responsibility to decide where to store data <em>before</em> actually collecting it. This allows data to be collected rapidly and efficiently during those crucial moments.</p>
-<p>Data is stored in hierarchies of folders with a file named &#8220;.index&#8221; in each folder. This index file stores meta-information about each file and allows the user (and modules) to annotate each file as it is stored. The index files are human-readable, although it is gemerally preferred to use ACQ4&#8217;s built-in data management to handle these files.</p>
-<p>The hierarchical file storage allows complete flexibility when designing experiments. This can be problematic for analysis, however, since there is no guarantee that all data will be laid out according to some predetermined structure. To some extent, it is the responsibility of the experimenter to make sure data is organized consistently wnere required.</p>
+<p>Experimental results are generally stored immediately as they are collected. It is the user&#8217;s responsibility to decide where to store data <em>before</em> actually collecting it. This allows data to be collected rapidly and efficiently during crucial moments.</p>
+<p>Data is stored in hierarchies of folders with a file named &#8220;.index&#8221; in each folder. This index file stores meta-information about each file and allows the user (and modules) to annotate each file as it is stored. The index files are human-readable, although it is gemerally preferred to use ACQ4&#8217;s built-in data management to handle these files. Individual raw data files are stored as <a class="reference internal" href="dataManagement.html#user-metaarray-files"><em>MetaArray files</em></a>, which use the standard <a class="reference external" href="http://www.hdfgroup.org/HDF5/">HDF5</a> format. This data can be read by many third-party analysis applications.</p>
+<p>The hierarchical file storage allows complete flexibility when designing experiments. This can be problematic for analysis, however, since there is no guarantee that all data will be laid out according to some predetermined structure. To some extent, it is the responsibility of the experimenter to make sure data is organized consistently where required.</p>
 <p>The built-in analysis system also stores data and results using an SQL database, which generally forces all data to conform to the same layout. Thus we have a 2-tier approach to data handling: data is first collected in a hierarchical format allowing flexibility, and is later homogenized into SQL tables for analysis.</p>
 </div>
 </div>
@@ -115,8 +112,8 @@
   <p class="topless"><a href="quickstart.html"
                         title="previous chapter">Quick Start Guide</a></p>
   <h4>Next topic</h4>
-  <p class="topless"><a href="installation.html"
-                        title="next chapter">Installation</a></p>
+  <p class="topless"><a href="quickstart.html"
+                        title="next chapter">Quick Start Guide</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
     <li><a href="../_sources/userGuide/principles.txt"
@@ -146,7 +143,7 @@
           <a href="../genindex.html" title="General Index"
              >index</a></li>
         <li class="right" >
-          <a href="installation.html" title="Installation"
+          <a href="quickstart.html" title="Quick Start Guide"
              >next</a> |</li>
         <li class="right" >
           <a href="quickstart.html" title="Quick Start Guide"
@@ -156,7 +153,7 @@
       </ul>
     </div>
     <div class="footer">
-        &copy; Copyright 2011, Luke Campagnola, Megan B. Kratz.
+        &copy; Copyright 2011; University of North Carolina at Chapel Hill.
       Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.1.
     </div>
   </body>

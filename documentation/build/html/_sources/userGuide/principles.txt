@@ -12,7 +12,7 @@ The ACQ4 user interface is broken up into *modules*. Each module is designed for
 Manager
 -------
 
-The Manager is the central object in ACQ4. It is used mainly to configure devices, launch new modules, inquire about existing modules and devices, and configure hardware for running synchronized protocols. The Manager is not visible to the user, but it is nevertheless helpful to understand that it exists and that it is working behind the scenes to make sure everything runs together smoothly. 
+The Manager is the central object in ACQ4. It is used mainly to initialize devices, launch new modules, inquire about existing modules and devices, and configure hardware for running synchronized protocols. The Manager is not visible to the user, but it is nevertheless helpful to understand that it exists and that it is working behind the scenes to make sure everything runs together smoothly. 
 
 Devices
 -------
@@ -23,11 +23,12 @@ A *device*, as discussed in this documentation, refers either to a single physic
 Modules
 -------
 
-A *module* is a single, independently functioning user interface. Each module has its own window and can be opened/closed without affecting other modules. By default, ACQ4 starts my displaying the *manager module*. As you might guess, this is a user interface to the Manager itself, from which you can launch new modules and interact directly with devices in the system. Other modules include:
-    * Camera - live streaming and recording of video
-    * Patch - for monitoring progress in cell patching and long-term cell health
-    * Protocol Runner - the workhorse for running arbitrary protocols
-    * Data Manager - for organizing and browsing data, also the access point for analysis modules [link]
+A *module* is a single, independently functioning user interface. Each module has its own window and can be opened/closed without affecting other modules. By default, ACQ4 starts by displaying the *manager module*. As you might guess, this is a user interface to the :term:`Manager` itself, from which you can launch new modules and interact directly with devices in the system. Other modules include:
+    
+* Camera - live streaming and recording of video
+* Patch - for monitoring progress in cell patching and long-term cell health
+* Protocol Runner - the workhorse for designing and running protocols
+* Data Manager - for organizing and browsing data, also the access point for analysis modules [link]
 
 Protocols
 ---------
@@ -39,10 +40,10 @@ The Protocol Runner module is designed to allow fast and easy prototyping of pro
 Data Handling
 -------------
 
-Experimental results are generally stored as they are collected. It is the user's responsibility to decide where to store data *before* actually collecting it. This allows data to be collected rapidly and efficiently during those crucial moments. 
+Experimental results are generally stored immediately as they are collected. It is the user's responsibility to decide where to store data *before* actually collecting it. This allows data to be collected rapidly and efficiently during crucial moments. 
 
-Data is stored in hierarchies of folders with a file named ".index" in each folder. This index file stores meta-information about each file and allows the user (and modules) to annotate each file as it is stored. The index files are human-readable, although it is gemerally preferred to use ACQ4's built-in data management to handle these files.
+Data is stored in hierarchies of folders with a file named ".index" in each folder. This index file stores meta-information about each file and allows the user (and modules) to annotate each file as it is stored. The index files are human-readable, although it is gemerally preferred to use ACQ4's built-in data management to handle these files. Individual raw data files are stored as :ref:`MetaArray files <user-metaarray-files>`, which use the standard `HDF5 <http://www.hdfgroup.org/HDF5/>`_ format. This data can be read by many third-party analysis applications.
 
-The hierarchical file storage allows complete flexibility when designing experiments. This can be problematic for analysis, however, since there is no guarantee that all data will be laid out according to some predetermined structure. To some extent, it is the responsibility of the experimenter to make sure data is organized consistently wnere required. 
+The hierarchical file storage allows complete flexibility when designing experiments. This can be problematic for analysis, however, since there is no guarantee that all data will be laid out according to some predetermined structure. To some extent, it is the responsibility of the experimenter to make sure data is organized consistently where required. 
 
 The built-in analysis system also stores data and results using an SQL database, which generally forces all data to conform to the same layout. Thus we have a 2-tier approach to data handling: data is first collected in a hierarchical format allowing flexibility, and is later homogenized into SQL tables for analysis.

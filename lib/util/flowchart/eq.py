@@ -7,6 +7,12 @@ def eq(a, b):
         e = a==b
     except ValueError:
         return False
+    except AttributeError: 
+        return False
+    except:
+        print "a:", str(type(a)), str(a)
+        print "b:", str(type(b)), str(b)
+        raise
     t = type(e)
     if t is bool:
         return e

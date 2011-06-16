@@ -51,7 +51,7 @@ class Photostim(AnalysisModule):
         
         ## scatter plot
         self.scatterPlot = ScatterPlotter()
-        self.scatterPlot.sigPointClicked.connect(self.scatterPointClicked)
+        self.scatterPlot.sigClicked.connect(self.scatterPlotClicked)
         
         ## setup map DB ctrl
         self.dbCtrl = DBCtrl(self, self.dbIdentity)
@@ -206,7 +206,7 @@ class Photostim(AnalysisModule):
                 sname = name
             canvasItem = Canvas.items.ScanCanvasItem(handle=fh, subDirs=subDirs, name=name, parent=parent)
             canvas.addItem(canvasItem)
-            canvasItem.graphicsItem().sigPointClicked.connect(self.scanPointClicked)
+            canvasItem.graphicsItem().sigClicked.connect(self.scanPointClicked)
             scan = Scan(self, fh, canvasItem, name=sname)
             self.scans.append(scan)
             ret.append(scan)
@@ -228,18 +228,18 @@ class Photostim(AnalysisModule):
         #if map in self.maps:
             #return
         canvas = self.getElement('Canvas')
-        canvas.addItem(map.sPlotItem, name=map.name())
+        map.canvasItem = canvas.addGraphicsItem(map.sPlotItem, name=map.name())
         self.maps.append(map)
-        map.sPlotItem.sigPointClicked.connect(self.mapPointClicked)
+        map.sPlotItem.sigClicked.connect(self.mapPointClicked)
         
     def unregisterMap(self, map):
         canvas = self.getElement('Canvas')
-        canvas.removeItem(map.sPlotItem)
+        canvas.removeItem(map.canvasItem)
         if map in self.maps:
             self.maps.remove(map)
             
         try:
-            map.sPlotItem.sigPointClicked.disconnect(self.mapPointClicked)
+            map.sPlotItem.sigClicked.disconnect(self.mapPointClicked)
         except TypeError:
             pass
     
@@ -247,8 +247,9 @@ class Photostim(AnalysisModule):
     def storeToDB(self):
         pass
 
-    def scanPointClicked(self, plotItem, point):
+    def scanPointClicked(self, plotItem, points):
         try:
+            point = points[0]
             QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
             #print "click!", point.data
             plot = self.getElement("Data Plot")
@@ -262,13 +263,16 @@ class Photostim(AnalysisModule):
             QtGui.QApplication.restoreOverrideCursor()
             
         
-    def mapPointClicked(self, scan, point):
-        self.redisplayData(point.data)
-        #self.dbCtrl.mapSpotClicked(point.data)  ## Did this method exist at some point?
+    def mapPointClicked(self, scan, points):
+        data = []
+        for p in points:
+            data.extend(p.data)
+        self.redisplayData(data)
+        ##self.dbCtrl.mapSpotClicked(point.data)  ## Did this method exist at some point?
 
-    def scatterPointClicked(self, point):
+    def scatterPlotClicked(self, plot, points):
         #scan, fh, time = point.data
-        self.redisplayData([point.data])
+        self.redisplayData([p.data for p in points])
         #self.scatterLine =
 
     def redisplayData(self, points):  ## data must be [(scan, fh, <event time>), ...]  
@@ -328,7 +332,12 @@ class Photostim(AnalysisModule):
             try:
                 eTable.setData(np.concatenate(evList))
             except:
-                print evList
+                for i in range(1,len(evList)):
+                    for j in range(len(evList[i].dtype)):
+                        if evList[i-1].dtype[j] != evList[i].dtype[j]:
+                            for l in evList:
+                                print l
+                            print "Warning: can not concatenate--field '%s' has inconsistent types %s, %s  (data printed above)" % (evList[i].dtype.names[j], str(evList[i-1].dtype[j]), str(evList[i].dtype[j]))
                 raise
         finally:
             QtGui.QApplication.restoreOverrideCursor()

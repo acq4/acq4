@@ -11,6 +11,19 @@ print "Loading ACQ4..."
 #sip.setapi('QString', 2)
 #sip.setapi('QVariant', 2)
 
+## PyQt bug: make sure qt.conf was installed correctly
+import os, sys
+pyDir = os.path.split(sys.executable)[0]
+qtConf = os.path.join(pyDir, 'qt.conf')
+if not os.path.exists(qtConf):
+    print "PyQt fix: installing qt.conf where it should be.."
+    import shutil
+    pyqtConf = os.path.join(pyDir, 'Lib', 'site-packages', 'PyQt4', 'qt.conf')
+    if os.path.exists(pyqtConf):
+        shutil.copy(pyqtConf, qtConf)
+    else:
+        print "  ERROR: can't find any qt.conf. This is sorta ok, but you may be missing some image plugins."
+
 #import lib.util.PySideImporter  ## Use PySide instead of PyQt
 from PyQt4 import QtGui, QtCore
 #QtCore.QString = str
@@ -26,7 +39,6 @@ if not hasattr(QtCore, 'Signal'):
 
     
 from lib.Manager import *
-import os, sys
 from numpy import *
 
 
@@ -36,7 +48,7 @@ from numpy import *
 import disableExceptionStorage
 
 ## Initialize Qt
-QtGui.QApplication.setGraphicsSystem('raster')  ## needed for specific composition modes
+#QtGui.QApplication.setGraphicsSystem('raster')  ## needed for specific composition modes
 app = QtGui.QApplication(sys.argv)
 
 ## For logging ALL python activity
@@ -68,6 +80,7 @@ try:
     from debug import *
     import pyqtgraph as pg
     import functions as fn
+    import numpy as np
 
     ### Use CLI history and tab completion
     import atexit
