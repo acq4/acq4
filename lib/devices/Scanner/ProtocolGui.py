@@ -594,6 +594,18 @@ class ScannerProtoGui(ProtocolGui):
         locations = locations[:]
         random.shuffle(locations)
         #prof2.mark('setup')
+        ### Try sorting points into quadrants -- to go back to what was, comment out code until the if True
+        locs = numpy.array(locations, [('x', numpy.float32),('y', numpy.float32)])
+        medx = numpy.median(locs['x'])
+        medy = numpy.median(locs['y'])
+        
+        quad1 = locs[(locs['x'] <= medx)*(locs['y'] > medy)].tolist()
+        quad2 = locs[(locs['x'] > medx)*(locs['y'] > medy)].tolist()
+        quad3 = locs[(locs['x'] <= medx)*(locs['y'] <= medy)].tolist()
+        quad4 = locs[(locs['x'] > medx)*(locs['y'] <= medy)].tolist()
+        
+        locations = quad1 + quad2 + quad3 + quad4
+        
         if True:
             solution = [(locations.pop(), 0.0)]
             while len(locations) > 0:

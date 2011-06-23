@@ -101,7 +101,8 @@ class CameraProtoGui(DAQGenericProtoGui):
         
     def restoreState(self, state):
         self.stateGroup.setState(state)
-        DAQGenericProtoGui.restoreState(self, state['daqState'])
+        if 'daqState' in state:
+            DAQGenericProtoGui.restoreState(self, state['daqState'])
         
         
     def generateProtocol(self, params=None):

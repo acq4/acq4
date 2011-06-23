@@ -812,7 +812,7 @@ class ProtocolRunner(Module):
                 paramInds[key] = range(len(i[2]))
                 pLen *= len(i[2])
                 linkedParams[key] = i[3]
-            
+                
             ## Set storage dir
             self.currentDir = self.manager.getCurrentDir()
             if store:
