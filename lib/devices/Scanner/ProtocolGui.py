@@ -614,9 +614,10 @@ class ScannerProtoGui(ProtocolGui):
         locs[:,3] = quad4[:minLen]
         
         ## add sets of 4 spots to list
-        locations = []
-        for i in range(minLen):
-            locations += locs[i].tolist()
+        #locations = []
+        #for i in range(minLen):
+            #locations += locs[i].tolist()
+        locations = locs.flatten().tolist()
             
         ## add any remaining spots that didn't fit evenly into the locs array
         for q in [quad1, quad2, quad3, quad4]:
