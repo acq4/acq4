@@ -599,12 +599,14 @@ class ScannerProtoGui(ProtocolGui):
         medx = numpy.median(locs['x'])
         medy = numpy.median(locs['y'])
         
-        quad1 = locs[(locs['x'] <= medx)*(locs['y'] > medy)].tolist()
-        quad2 = locs[(locs['x'] > medx)*(locs['y'] > medy)].tolist()
-        quad3 = locs[(locs['x'] <= medx)*(locs['y'] <= medy)].tolist()
-        quad4 = locs[(locs['x'] > medx)*(locs['y'] <= medy)].tolist()
+        quad1 = locs[(locs['x'] <= medx)*(locs['y'] > medy)]
+        quad2 = locs[(locs['x'] > medx)*(locs['y'] > medy)]
+        quad3 = locs[(locs['x'] <= medx)*(locs['y'] <= medy)]
+        quad4 = locs[(locs['x'] > medx)*(locs['y'] <= medy)]
         
-        locations = quad1 + quad2 + quad3 + quad4
+        minLen = [len(quad1), len(quad2), len(quad3), len(quad4)].min()
+        
+        locations = quad1 + quad2 + quad3 + quad4 ### in process of lining these up so I can add groups of 4 (1 from each quadrant) to the list.....
         
         if True:
             solution = [(locations.pop(), 0.0)]
