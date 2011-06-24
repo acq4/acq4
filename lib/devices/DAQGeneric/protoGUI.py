@@ -112,6 +112,11 @@ class DAQGenericProtoGui(ProtocolGui):
             if self.stateGroup is not None:
                 self.stateGroup.setState(state)
             for ch in state['channels']:
+                try:
+                    self.channels[ch].restoreState(state['channels'][ch])
+                except KeyError:
+                    printExc("Warning: Cannot restore state for channel %s.%s (channel does not exist on this device)" % (self.dev.name, ch))
+                    continue    
                 self.channels[ch].restoreState(state['channels'][ch])
         except:
             printExc('Error while restoring GUI state:')
