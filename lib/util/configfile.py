@@ -9,9 +9,28 @@ file format. Data structures may be nested and contain any data type as long
 as it can be converted to/from a string using repr and eval.
 """
 
-import re, os
+import re, os, sys
 from advancedTypes import OrderedDict
 GLOBAL_PATH = None # so not thread safe.
+
+
+class ParseError(Exception):
+    def __init__(self, message, lineNum, line, fileName=None):
+        self.lineNum = lineNum
+        self.line = line
+        #self.message = message
+        self.fileName = fileName
+        Exception.__init__(self, message)
+        
+    def __str__(self):
+        if self.fileName is None:
+            msg = "Error parsing string at line %d:\n" % self.lineNum
+        else:
+            msg = "Error parsing config file '%s' at line %d:\n" % (self.fileName, self.lineNum)
+        msg += "%s\n%s" % (self.line, self.message)
+        return msg
+        #raise Exception()
+        
 
 def writeConfigFile(data, fname):
     s = genString(data)
@@ -34,8 +53,12 @@ def readConfigFile(fname):
         fd = open(fname)
         s = unicode(fd.read(), 'UTF-8')
         fd.close()
-        s = s.replace("\r", "")
+        s = s.replace("\r\n", "\n")
+        s = s.replace("\r", "\n")
         data = parseString(s)[1]
+    except ParseError:
+        sys.exc_info()[1].fileName = fname
+        raise
     except:
         print "Error while reading config file %s:"% fname
         raise
@@ -76,55 +99,63 @@ def parseString(lines, start=0):
     indent = measureIndent(lines[start])
     ln = start - 1
     
-    while True:
-        ln += 1
-        #print ln
-        if ln >= len(lines):
-            break
-        
-        l = lines[ln]
-        
-        ## Skip blank lines or lines starting with #
-        if re.match(r'\s*#', l) or not re.search(r'\S', l):
-            continue
-        
-        ## Measure line indentation, make sure it is correct for this level
-        lineInd = measureIndent(l)
-        if lineInd < indent:
-            ln -= 1
-            break
-        if lineInd > indent:
-            #print lineInd, indent
-            raise Exception('Error processing config file around line %d (indent is too deep)' % (ln+1), lineInd, indent)
-        
-        
-        if ':' not in l:
-            raise Exception('config line %d has no colon' % (ln+1))
-        
-        (k, p, v) = l.partition(':')
-        k = k.lstrip()
-        if k[0] == '(' and k[-1] == ')':
-            try:
-                k1 = eval(k)
-                if type(k1) is tuple:
-                    k = k1
-            except:
-                pass
-        if re.search(r'\S', v):
-            try:
-                val = eval(v)
-            except:
-                print "Error evaluating expression at config line %d" % (ln+1)
-                raise
-        else:
-            if ln+1 >= len(lines) or measureIndent(lines[ln+1]) <= indent:
-                #print "blank dict"
-                val = {}
+    try:
+        while True:
+            ln += 1
+            #print ln
+            if ln >= len(lines):
+                break
+            
+            l = lines[ln]
+            
+            ## Skip blank lines or lines starting with #
+            if re.match(r'\s*#', l) or not re.search(r'\S', l):
+                continue
+            
+            ## Measure line indentation, make sure it is correct for this level
+            lineInd = measureIndent(l)
+            if lineInd < indent:
+                ln -= 1
+                break
+            if lineInd > indent:
+                #print lineInd, indent
+                raise ParseError('Indentation is incorrect. Expected %d, got %d' % (indent, lineInd), ln+1, l)
+            
+            
+            if ':' not in l:
+                raise ParseError('Missing colon', ln+1, l)
+            
+            (k, p, v) = l.partition(':')
+            k = k.strip()
+            if len(k) < 1:
+                raise ParseError('Missing name preceding colon', ln+1, l)
+            if k[0] == '(' and k[-1] == ')':
+                try:
+                    k1 = eval(k)
+                    if type(k1) is tuple:
+                        k = k1
+                except:
+                    pass
+            if re.search(r'\S', v):
+                try:
+                    val = eval(v)
+                except:
+                    ex = sys.exc_info()[1]
+                    raise ParseError("Error evaluating expression '%s': [%s: %s]" % (v, ex.__class__.__name__, str(ex)), (ln+1), l)
             else:
-                #print "Going deeper..", ln+1
-                (ln, val) = parseString(lines, start=ln+1)
-        data[k] = val
+                if ln+1 >= len(lines) or measureIndent(lines[ln+1]) <= indent:
+                    #print "blank dict"
+                    val = {}
+                else:
+                    #print "Going deeper..", ln+1
+                    (ln, val) = parseString(lines, start=ln+1)
+            data[k] = val
         #print k, repr(val)
+    except ParseError:
+        raise
+    except:
+        ex = sys.exc_info()[1]
+        raise ParseError("%s: %s" % (ex.__class__.__name__, str(ex)), ln+1, l)
     #print "Returning shallower..", ln+1
     return (ln, data)
     
@@ -133,3 +164,25 @@ def measureIndent(s):
     while n < len(s) and s[n] == ' ':
         n += 1
     return n
+    
+    
+    
+if __name__ == '__main__':
+    import tempfile
+    fn = tempfile.mktemp()
+    tf = open(fn, 'w')
+    cf = """
+key: 'value'
+key2:
+    key21: 'value'
+    key22: [1,2,3]
+    key23: 234  #comment
+    """
+    tf.write(cf)
+    tf.close()
+    print "=== Test:==="
+    print cf
+    print "============"
+    data = readConfigFile(fn)
+    print data
+    os.remove(fn)

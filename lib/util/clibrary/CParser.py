@@ -208,7 +208,7 @@ class CParser():
         try:
             ## read cache file
             import pickle
-            cache = pickle.load(open(cacheFile))
+            cache = pickle.load(open(cacheFile, 'rb'))
             
             ## make sure __init__ options match
             if checkValidity:
@@ -253,7 +253,7 @@ class CParser():
         #for k in self.dataList:
             #cache[k] = getattr(self, k)
         import pickle
-        pickle.dump(cache, open(cacheFile, 'w'))
+        pickle.dump(cache, open(cacheFile, 'wb'))
 
     def loadFile(self, file, replace=None):
         """Read a file, make replacements if requested. Called by __init__, should

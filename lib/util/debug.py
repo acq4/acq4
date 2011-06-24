@@ -358,6 +358,12 @@ class GarbageWatcher:
     
 class Profiler:
     """Simple profiler allowing measurement of multiple time intervals.
+    Arguments:
+        msg: message to print at start and finish of profiling
+        disabled: If true, profiler does nothing (so you can leave it in place)
+        delayed: If true, all messages are printed after call to finish()
+                 (this can result in more accurate time step measurements)
+        globalDelay: if True, all nested profilers delay printing until the top level finishes
     
     Example:
         prof = Profiler('Function')
@@ -368,34 +374,57 @@ class Profiler:
         prof.finish()
     """
     depth = 0
+    msgs = []
     
-    def __init__(self, msg="Profiler", disabled=False):
-        self.depth = Profiler.depth 
-        Profiler.depth += 1
-        
+    def __init__(self, msg="Profiler", disabled=False, delayed=True, globalDelay=True):
         self.disabled = disabled
         if disabled: 
             return
+        self.finished = False
+        self.depth = Profiler.depth 
+        Profiler.depth += 1
+        if not globalDelay:
+            self.msgs = []
+        self.delayed = delayed
+        self.msg = "  "*self.depth + msg
+        msg2 = self.msg + " >>> Started"
+        if self.delayed:
+            self.msgs.append(msg2)
+        else:
+            print msg2
         self.t0 = ptime.time()
         self.t1 = self.t0
-        self.msg = "  "*self.depth + msg
-        print self.msg, ">>> Started"
     
     def mark(self, msg=''):
         if self.disabled: 
             return
         t1 = ptime.time()
-        print "  "+self.msg, msg, "%gms" % ((t1-self.t1)*1000)
-        self.t1 = t1
+        msg2 = "  "+self.msg+" "+msg+" "+"%gms" % ((t1-self.t1)*1000)
+        if self.delayed:
+            self.msgs.append(msg2)
+        else:
+            print msg2
+        self.t1 = ptime.time()  ## don't measure time it took to print
         
     def finish(self):
         if self.disabled: 
             return
         t1 = ptime.time()
-        print self.msg, '<<< Finished, total time:', "%gms" % ((t1-self.t0)*1000)
+        msg = self.msg + ' <<< Finished, total time: %gms' % ((t1-self.t0)*1000)
+        if self.delayed:
+            self.msgs.append(msg)
+            if self.depth == 0:
+                for line in self.msgs:
+                    print line
+                Profiler.msgs = []
+        else:
+            print msg
+        Profiler.depth = self.depth
+        self.finished = True
         
-    def __del__(self):
-        Profiler.depth -= 1
+    #def __del__(self):
+        #if not self.finished:
+            #Profiler.depth -= 1
         
 
 def profile(code, name='profile_run', sort='cumulative', num=30):

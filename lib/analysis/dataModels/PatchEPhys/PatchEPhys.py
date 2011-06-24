@@ -181,7 +181,12 @@ def getClampHoldingLevel(fh):
     
     data = fh.read()
     info = data._info[-1]
-    sinfo = fh.parentDir.info()
+    p1 = fh.parent()
+    p2 = p1.parent()
+    if isSequence(p2):
+        sinfo = p2.info()
+    else:
+        sinfo = p1.info()
     
     ## There are a few places we could find the holding value, depending on how old the data is
     if 'ClampState' in info and 'holding' in info['ClampState']:

@@ -28,9 +28,9 @@ w3.enableMouse()
 w3.aspectLocked = True
 layout.addWidget(w3, 0,1)
 
-w4 = pg.GraphicsView()
-vb = pg.ViewBox()
-w4.setCentralItem(vb)
+w4 = pg.PlotWidget()
+#vb = pg.ViewBox()
+#w4.setCentralItem(vb)
 layout.addWidget(w4, 1,1)
 
 mw.show()
@@ -67,6 +67,13 @@ s3.addPoints(spots)
 w3.addItem(s3)
 w3.setRange(s3.boundingRect())
 s3.sigClicked.connect(clicked)
+
+
+s4 = pg.ScatterPlotItem(identical=True, size=10, pen=QtGui.QPen(QtCore.Qt.NoPen), brush=QtGui.QBrush(QtGui.QColor(255, 255, 255, 20)))
+#pos = np.random.normal(size=(2,n), scale=1e-5)
+#spots = [{'pos': pos[:,i], 'data': 1} for i in range(n)] + [{'pos': [0,0], 'data': 1}]
+s4.addPoints(spots)
+w4.addDataItem(s4)
 
 
 ## Start Qt event loop unless running in interactive mode.

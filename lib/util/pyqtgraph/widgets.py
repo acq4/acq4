@@ -665,9 +665,20 @@ class ROI(QtGui.QGraphicsObject):
         
         origin = self.mapToItem(img, QtCore.QPointF(0, 0))
         
+        ## vx and vy point in the directions of the slice axes, but must be scaled properly
         vx = self.mapToItem(img, QtCore.QPointF(1, 0)) - origin
         vy = self.mapToItem(img, QtCore.QPointF(0, 1)) - origin
-        vectors = ((vx.x(), vx.y()), (vy.x(), vy.y()))
+        
+        lvx = np.sqrt(vx.x()**2 + vx.y()**2)
+        lvy = np.sqrt(vy.x()**2 + vy.y()**2)
+        pxLen = img.width() / data.shape[axes[0]]
+        sx =  pxLen / lvx
+        sy =  pxLen / lvy
+        
+        vectors = ((vx.x()*sx, vx.y()*sx), (vy.x()*sy, vy.y()*sy))
+        shape = self.state['size']
+        shape = [abs(shape[0]/sx), abs(shape[1]/sy)]
+        
         origin = (origin.x(), origin.y())
         
         #print "shape", shape, "vectors", vectors, "origin", origin

@@ -710,6 +710,11 @@ class PlotItem(QtGui.QGraphicsWidget):
         
         return curve
 
+    def scatterPlot(self, *args, **kargs):
+        sp = ScatterPlotItem(*args, **kargs)
+        self.addDataItem(sp)
+        return sp
+
     def addDataItem(self, item):
         self.addItem(item)
         self.dataItems.append(item)
@@ -1077,9 +1082,9 @@ class PlotItem(QtGui.QGraphicsWidget):
             mode = False
         return mode
         
-    #def wheelEvent(self, ev):
-        # disables panning the whole scene by mousewheel
-        #ev.accept()
+    def wheelEvent(self, ev):
+        # disables default panning the whole scene by mousewheel
+        ev.accept()
 
     def resizeEvent(self, ev):
         if self.ctrlBtn is None:  ## already closed down
@@ -1172,6 +1177,8 @@ class PlotItem(QtGui.QGraphicsWidget):
     def saveSvgClicked(self):
         fileName = QtGui.QFileDialog.getSaveFileName()        
         self.writeSvg(fileName)
+
+        ## QFileDialog seems to be broken under OSX
         #self.fileDialog = QtGui.QFileDialog()
         ##if PlotItem.lastFileDir is not None:
             ##self.fileDialog.setDirectory(PlotItem.lastFileDir)
