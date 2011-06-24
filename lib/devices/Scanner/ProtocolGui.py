@@ -594,20 +594,38 @@ class ScannerProtoGui(ProtocolGui):
         locations = locations[:]
         random.shuffle(locations)
         #prof2.mark('setup')
-        ### Try sorting points into quadrants -- to go back to what was, comment out code until the if True
+        #### Try sorting points into quadrants to make both computing order and scanning faster -- use this as a best guess to compute order
         locs = numpy.array(locations, [('x', numpy.float32),('y', numpy.float32)])
         medx = numpy.median(locs['x'])
         medy = numpy.median(locs['y'])
         
+        ## sort spots into quadrants
         quad1 = locs[(locs['x'] <= medx)*(locs['y'] > medy)]
         quad2 = locs[(locs['x'] > medx)*(locs['y'] > medy)]
         quad3 = locs[(locs['x'] <= medx)*(locs['y'] <= medy)]
         quad4 = locs[(locs['x'] > medx)*(locs['y'] <= medy)]
         
-        minLen = [len(quad1), len(quad2), len(quad3), len(quad4)].min()
+        ## rearrange spots so that sets of 4 (1 from each quadrant) can be added to the locations list
+        minLen = min([len(quad1), len(quad2), len(quad3), len(quad4)])
+        locs = numpy.zeros((minLen, 4), [('x', numpy.float32), ('y', numpy.float32)])
+        locs[:,0] = quad1[:minLen]
+        locs[:,1] = quad2[:minLen]
+        locs[:,2] = quad3[:minLen]
+        locs[:,3] = quad4[:minLen]
         
-        locations = quad1 + quad2 + quad3 + quad4 ### in process of lining these up so I can add groups of 4 (1 from each quadrant) to the list.....
+        ## add sets of 4 spots to list
+        locations = []
+        for i in range(minLen):
+            locations += locs[i].tolist()
+            
+        ## add any remaining spots that didn't fit evenly into the locs array
+        for q in [quad1, quad2, quad3, quad4]:
+            if minLen < len(q):
+                locations += q[minLen:].tolist()
+                
+        #print "Target Number: ", targetNumber, "    locations: ", len(locations)
         
+        #### Computer order 
         if True:
             solution = [(locations.pop(), 0.0)]
             while len(locations) > 0:
@@ -631,37 +649,7 @@ class ScannerProtoGui(ProtocolGui):
                 solution.append((locations.pop(minIndex), minTime))
             #prof2.finish()
             return solution
-        #elif False:
-        ##elif targetNumber >= 200:
-            #minDist = self.stateGroup.state()['minDist']
-            #swap = True
-            #count = 0
-            #while swap == True:
-                #count += 1
-                ##prof2.mark('Trial: %i' %count)
-                #swap = False
-                #solution = [(locations.pop(), 0.0)]
-                #for i in range(len(locations)):
-                    ##prof3 = Profiler('         iterating')
-                    #minTime = None
-                    #minIndex = None
-                    #for j in range(3):
-                        #time, dist = self.computeTime(solution, locations[(i+j)%(len(locations)-1)])
-                        #if dist < minDist:
-                            #loc = locations[i]
-                            #n = int(random.random()*10)
-                            #locations[i]= locations[(i+n)%(len(locations)-1)]
-                            #locations[(i+n)%(len(locations)-1)] = loc
-                            #swap = True
-                            #break
-                    #solution.append((locations[i], time))
-                    ##prof3.mark('%i' %i)
-                #if swap:
-                    #locations, times = zip(*solution)
-                    #locations = list(locations)
-            #print "count: ", count
-            ##prof2.finish()
-            #return locations
+       
         
     #def swapWorst(self, solution):
         #"""Find points very close together, swap elsewhere to improve time"""
