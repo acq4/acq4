@@ -18,7 +18,7 @@ class ScannerProtoGui(ProtocolGui):
         ProtocolGui.__init__(self, dev, prot)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        self.ui.programControlsLayout.setEnabled(False)
+        #self.ui.programControlsLayout.setEnabled(False)
         dm = getManager()
         self.targets = None
         self.items = {}
@@ -48,9 +48,10 @@ class ScannerProtoGui(ProtocolGui):
             (self.ui.minTimeSpin, 'minTime'),
             (self.ui.minDistSpin, 'minDist', 1e6),
             (self.ui.simulateShutterCheck, 'simulateShutter'),
+            (self.ui.sizeSpin, 'spotSize', 1e6),
 #            (self.ui.packingSpin, 'packingDensity')  ## packing density should be suggested by device rather than loaded with protocol (I think..)
         ])
-        self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6})
+        self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6, 'sizeSpin':100e-6})
 
         ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
         
@@ -78,6 +79,8 @@ class ScannerProtoGui(ProtocolGui):
         self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
         #QtCore.QObject.connect(self.ui.packingSpin, QtCore.SIGNAL('valueChanged(double)'), self.packingSpinChanged)
         self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
+        self.ui.sizeFromCalibrationRadio.toggled.connect(self.updateSpotSizes)
+        self.ui.sizeSpin.valueChanged.connect(self.updateSpotSizes)
         #QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         self.ui.minTimeSpin.valueChanged.connect(self.sequenceChanged)
         #QtCore.QObject.connect(self.ui.minDistSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
@@ -94,8 +97,9 @@ class ScannerProtoGui(ProtocolGui):
         
         #self.currentTargetMarker.hide()
         
-        self.testTarget = TargetPoint([0,0], self.pointSize()[0])
+        self.testTarget = TargetPoint([0,0], 100e-6)
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
+        self.updateSpotSizes()
         #camMod = self.cameraModule()
         
         self.currentObjective = None
@@ -214,16 +218,20 @@ class ScannerProtoGui(ProtocolGui):
         return self.ui.itemList.findItems(name, QtCore.Qt.MatchExactly)[0]
 
     def pointSize(self):
-        try:
-            cam = self.cameraModule().config['camDev']
-            laser = str(self.ui.laserCombo.currentText())
-            cal = self.dev.getCalibration(cam, laser)
-            #ss = cal['spot'][1] * self.ui.packingSpin.value()
-            packing = self.ui.packingSpin.value()
-            ss = cal['spot'][1]
-        except:
-            ss = 1
-            packing = self.ui.packingSpin.value()
+        packing = self.ui.packingSpin.value()
+        if self.ui.sizeFromCalibrationRadio.isChecked():
+            try:
+                cam = self.cameraModule().config['camDev']
+                laser = str(self.ui.laserCombo.currentText())
+                cal = self.dev.getCalibration(cam, laser)
+                #ss = cal['spot'][1] * self.ui.packingSpin.value()
+                ss = cal['spot'][1]
+                self.stateGroup.setState({'spotSize':ss})
+            except:
+                print "Could not find spot size from calibration. Please use custom spot size."
+                raise         
+        elif self.ui.sizeCustomRadio.isChecked():
+            ss = self.ui.sizeSpin.value()
         return (ss, packing)
         #return (0.0001, packing)
         
