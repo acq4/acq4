@@ -5,7 +5,9 @@ import clibrary
 
 modDir = os.path.dirname(__file__)
 headerFiles = [os.path.join(modDir, "NIDAQmx.h")]
-DEFS = clibrary.CParser(headerFiles, cache=os.path.join(modDir, 'NIDAQmx_headers.cache'))
+cacheFile = os.path.join(modDir, 'NIDAQmx_headers_%s.cache' % sys.platform)   
+
+DEFS = clibrary.CParser(headerFiles, cache=cacheFile)
 
 import SuperTask
 

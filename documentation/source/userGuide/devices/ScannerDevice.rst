@@ -1,8 +1,8 @@
 Scanner Devices
 ==========================
 
-The scanner device is used to control a set of scan mirrors. It translates a position that is designated by the user in 
-the camera window into a pair of voltages applied to the mirrors. 
+The scanner device is used to control a set of galvometric mirrors to precisely direct a scanning laser beam. 
+The device allows the user to specify the desired laser spot location by graphically selecting the location from within a camera module. The transformation between camera coordinates and X,Y voltages is determined by an automatic calibration procedure.
 
 Configuration
 ---------------------------
@@ -11,17 +11,36 @@ Configuration
 
 Manager Interface
 ---------------------------
-Scanner calibration happens in the main Acq4 Manager window. In order to calibrate the scan mirrors you need to have a 
-camera module open and running. 
 
-To calibrate:
-    #. In camera window, set Binning to 2.
-    #. Open the shutter(s).
-    #. Make sure spot is visible, in focus, and not saturated. (You may need to increase/decrease the exposure time in the 
-    camera window.)
-    #. Close the shutter(s).
-    #. Make sure that the appropriate objective is selected in the Manager window.
-    #. Click "Calibrate"
+Calibration
+'''''''''''
+
+The primary function of the Scanner device is to allow the user to select the a laser spot position relative to camera coordinates. The scanner device, therefore, must know the corresponding transformation. This is achieved through a simple, automatic calibration routine: 
+
+#. The pre-stored camera configuration is loaded
+#. The camera begins recording at a high frame rate (30-100fps)
+#. The mirror voltages are systematically varied to raster-scan the laser spot
+#. Spots are automatically detected in each camera frame and matched with their corresponding voltages
+#. The relationship between camera coordinates and mirror voltages are determined by linear regression
+#. The camera is returned to its previous state
+
+If there are multiple cameras, lasers, or objective lenses, one calibration must be made for each combination.
+This process is somewhat complex and requires that the user ensure the hardware is configured properly prior to calibration:
+    
+* The camera must indicate its frame exposure times via a TTL signal connected to the DAQ board.
+* The camera must be acquiring at a high frame rate, usually 30fps or more. If the camera is acquiring too slowly, then too few spots will be captured to make an accurate linear regression.
+* The exposure time of each frame must be short, usually less than 5ms. Otherwise, the spot images captured will be 'smeared' and their location will not be detected accurately.
+* The laser spot must be brightly visible to the camera
+* Objective lenses must be clean
+* Laser spot should be projected on a flat, bright surface (we recommend using small pieces of fluorescent tape or plastic)
+
+To achieve these requirements, it is common to configure the camera to use binning and to operate over a restricted region of interest. When the camera is configured with all appropriate settings, click the "Store Camera Config" button in the manager interface. All calibrations from then on will load these camera settings before starting and restore the original settings afterward.
+
+When all hardware is configured correctly, do the following to start a calibration:
+
+#. Select the laser and camera to be calibrated in the manager interface
+#. Be sure that the correct microscope objective is selected in the scope interface
+#. Click 'Calibrate'.
     
 The results of the calibration should appear in the window to the right. There should be clear laser spots with circles 
 drawn around them. In the table, the Spot column lists a relative measure of the amount of light in the spot, and diameter 
@@ -36,21 +55,17 @@ Calibration Parameters
 
 * Laser and Camera selection boxes: You can tell the scanner which camera and laser to use (if you
     have more than one) for the calibration by selecting them here. 
-* Scan Duration: Sets the total amount of time for the calibration. Make the scan duration longer if the calibration is not
-    working because too few spots are being detected. 
-* X & Y Min and Max: Set the range of voltages that are scanned over during the calibration. 
+* Scan Duration: Sets the total amount of time for the calibration. For cameras that are slow or not sensitive enough, increase the scan duration to allow more time for frame collection and integration.
+* X & Y Min and Max: Set the range of voltages that are scanned over during the calibration.
 * Store Camera Config: Clicking this button stores the current configuration of the camera to use for future calibrations.
     If you are having trouble calibrating, it is a good idea to manually adjust all the camera settings and then re-click 
     "Store Camera Config."
 
 Virtual Shutter
-+++++++++++++++
+'''''''''''''''
 
-The scanner can be used to simulate a shutter by directing the laser out to the side so that it doesn't enter the objective. 
-If you use this make sure that when in the "off" position the laser is directed onto an absorbant surface. Use the X and Y boxes
-designate the voltage to use for the "off" position. If the virtual shutter is closed an "Open Shutter" button should be available.
-Click "Open Shutter" to enable scanning. When scanning is enabled this button should switch to read "Close Shutter". Click "Close
-Shutter" to send the scanner to the "off" position and disable scanning. 
+The scanner can be used to simulate a shutter by directing the laser to a beam block outside the microscope illumination path. 
+If you use this make sure that when in the "off" position the laser is directed onto an absorbant surface (please use common sense). Use the X and Y boxes to designate the voltage to use for the "off" position. The shutter can be 'opened' and 'closed' using the button that reads either 'Open Shutter' or 'Close Shutter'.
 
 
 

@@ -28,8 +28,12 @@ def init():
     headerFiles = [os.path.join(modDir, "NIDAQmx.h")]
     #xmlFiles = [os.path.join(os.path.dirname(__file__), "NIDAQmx.xml")]
     #defs = cheader.getDefs(headerFiles)
+    
+    ## cache files appear to be platform-dependent due to some pickling bug..
+    cacheFile = os.path.join(modDir, 'NIDAQmx_headers_%s.cache' % sys.platform)   
+    
     global DEFS
-    DEFS = clibrary.CParser(headerFiles, cache=os.path.join(modDir, 'NIDAQmx_headers.cache'), types={'__int64': ('long long')}, verbose=False)
+    DEFS = clibrary.CParser(headerFiles, cache=cacheFile, types={'__int64': ('long long')}, verbose=False)
     global LIB
     LIB = clibrary.CLibrary(ctypes.windll.nicaiu, DEFS, prefix=['DAQmx', 'DAQmx_'])
     
