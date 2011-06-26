@@ -35,7 +35,7 @@ class PVCam(Camera):
             if self.camConfig['serial'] in cams:
                 ind = cams.index(self.camConfig['serial'])
             else:
-                raise Exception('Can not find pvcam camera "%s"' % str(self.camConfig['serial']))
+                raise Exception('Can not find pvcam camera "%s". Options are: %s' % (str(self.camConfig['serial']), str(cams)))
         print "Selected camera:", cams[ind]
         self.cam = self.pvc.getCamera(cams[ind])
         

@@ -143,6 +143,8 @@ class MockNIDAQ:
         self.clocks[clock] = (time.time(), duration)
 
     def stopClock(self, clock):
+        if clock not in self.clocks:
+            return
         now = time.time()
         start, dur = self.clocks[clock]
         diff = (start+dur)-now
@@ -160,6 +162,7 @@ class Task:
     def __init__(self, nd):
         self.nd = nd
         self.chans = []
+        self.chOpts = []
         self.clock = None
         self.nativeClock = None
         self.data = None
@@ -168,20 +171,24 @@ class Task:
     #def __getattr__(self, attr):
         #return lambda *args: self
     
-    def CreateAIVoltageChan(self, *args):
+    def CreateAIVoltageChan(self, *args, **kargs):
         self.chans.append(args[0])
+        self.chOpts.append(kargs)
         self.mode = 'ai'
         
-    def CreateAOVoltageChan(self, *args):
+    def CreateAOVoltageChan(self, *args, **kargs):
         self.chans.append(args[0])
+        self.chOpts.append(kargs)
         self.mode = 'ao'
         
-    def CreateDIChan(self, *args):
+    def CreateDIChan(self, *args, **kargs):
         self.chans.append(args[0])
+        self.chOpts.append(kargs)
         self.mode = 'di'
         
-    def CreateDOChan(self, *args):
+    def CreateDOChan(self, *args, **kargs):
         self.chans.append(args[0])
+        self.chOpts.append(kargs)
         self.mode = 'do'
         
     def CfgSampClkTiming(self, clock, rate, b, c, nPts):
@@ -202,15 +209,29 @@ class Task:
         
     def write(self, data):
         self.data = data
+        
+        ## Send data off to callbacks if they were specified
+        #print "write:", self.chOpts
+        for i in range(len(self.chOpts)):
+            if 'mockFunc' in self.chOpts[i]:
+                self.chOpts[i]['mockFunc'](data[i], 1.0/self.rate)  
+        
         return len(data)
         
     def read(self):
         dur = self.nPts / self.rate
         tVals = np.linspace(0, dur, self.nPts)
         if 'd' in self.mode:
-            return (np.zeros((len(self.chans), self.nPts), dtype=np.int32), self.nPts)
+            data = np.empty((len(self.chans), self.nPts), dtype=np.int32)
         else:
-            return (np.random.normal(size=(len(self.chans), self.nPts)), self.nPts)
+            data = np.empty((len(self.chans), self.nPts))
+            
+        for i in range(len(self.chOpts)):
+            if 'mockFunc' in self.chOpts[i]:
+                data[i] = self.chOpts[i]['mockFunc']()
+            else:
+                data[i] = 0
+        return (data, self.nPts)
 
     def start(self):
         ## only start clock if it matches the native clock for this channel

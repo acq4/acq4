@@ -26,12 +26,14 @@ def plot(*args, **kargs):
     w.show()
     return w
     
-def show(*args, **kargs):
+def image(*args, **kargs):
     mkQApp()
     w = ImageWindow(*args, **kargs)
     images.append(w)
     w.show()
     return w
+show = image  ## for backward compatibility
+    
     
 def mkQApp():
     if QtGui.QApplication.instance() is None:

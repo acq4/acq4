@@ -220,7 +220,7 @@ class Task(DeviceTask):
         #print "daq configure complete"
         
     def addChannel(self, *args, **kwargs):
-        #print "Adding channel:", args
+        #print "Adding channel:", args, kwargs
         return self.st.addChannel(*args, **kwargs)
         
     def setWaveform(self, *args, **kwargs):

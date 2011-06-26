@@ -13,7 +13,7 @@ makeDispMap / matchDistortImg - for measuring and correcting motion/distortion b
 
 """
 import sys
-import os, re, math, time, threading
+import os, re, math, time, threading, decimal
 from metaarray import *
 #from scipy import *
 #from scipy.optimize import leastsq
@@ -30,6 +30,15 @@ SI_PREFIXES = u'yzafpnµm kMGTPEZY'
 
 def siScale(x, minVal=1e-25):
     """Return the recommended scale factor and SI prefix string for x."""
+    if isinstance(x, decimal.Decimal):
+        x = float(x)
+        
+    try:
+        if np.isnan(x) or np.isinf(x):
+            return(1, '')
+    except:
+        print x, type(x)
+        raise
     if abs(x) < minVal:
         m = 0
         x = 0
