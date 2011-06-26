@@ -15,7 +15,7 @@ Manager Interface
 Calibration
 +++++++++++
 
-The primary function of the Scanner device is to allow the user to select the a laser spot position relative to camera coordinates. The scanner device, therefore, must know the corresponding transformation. This is achieved through a simple, automatic calibration routine: 
+The primary function of the Scanner device is to allow the user to select the a laser spot position relative to camera coordinates. The scanner device, therefore, must know the corresponding transformation. This is achieved through an automatic calibration routine: 
 
 #. The pre-stored camera configuration is loaded
 #. The camera begins recording at a high frame rate (30-100fps)
