@@ -65,12 +65,10 @@ The scanner can be used to simulate a shutter by directing the laser to a beam b
 If you use this make sure that when in the "off" position the laser is directed onto an absorbant surface (please use common sense). Use the X and Y boxes to designate the voltage to use for the "off" position. The shutter can be 'opened' and 'closed' using the button that reads either 'Open Shutter' or 'Close Shutter'.
 
 
-
 Protocol Runner Interface
 ---------------------------
 
-To include the scanner in a protocol, first mark the Scanner check box in the list of devices. This should bring up the Scanner's
-protocol interface.
+To include the scanner in a protocol, first mark the Scanner check box in the list of devices. This should bring up the Scanner's protocol interface.
 
 Controls
 ++++++++
@@ -91,7 +89,9 @@ stimulating multiple locations within the same trace. But not yet.....
 Whenever there is a scanner protocol interface open, a pink target spot will appear in the selected camera. This pink spot is a test
 spot and will be stimulated whenever Test Single or Record Single is clicked. 
 
-To add targets that will be stimulated in sequence click Add Grid or Add Point. Add Grid will add a grid of points to the camera window. You can adjust the position of this grid in the camera window. To translate the grid click in the middle of the grid and drag. To rotate the grid, click and drag on of the circular handles on the corner of the grid. And to scale the grid, click and drag one of the square handles. You can add as many grids and points to a protocol sequence as you like. If you do not want to use a grid or point during a protocol sequence, you can either uncheck it in the Items list, or you can select it in the Items list and delete it by clicking Delete. Active target points will appear in green by default. If they are selected in the item list they will appear in light pink. Use this to identify which spots to delete/uncheck.
+To add targets that will be stimulated in sequence click Add Grid or Add Point. Add Grid will add a grid of points to the camera window. You can adjust the position of this grid in the camera window. To translate the grid click in the middle of the grid and drag. To rotate the grid, click and drag on of the circular handles on the corner of the grid. And to scale the grid, click and drag one of the square handles. You can add as many grids and points to a protocol sequence as you like. If you do not want to use a grid or point during a protocol sequence, you can either uncheck it in the Items list, or you can select it in the Items list and delete it by clicking Delete. 
+
+Active target points will appear in green by default. If they are selected in the item list they will appear in light pink. Use this to identify which spots to delete/uncheck.
 
 If you want a grid (perhaps over the area around a cell) but have an area that you don't want to stimulate (for example where an electrode is over the slice) you can add an Occlusion. You can adjust the location of the corners of the occlusion by dragging any of the corner handles, and you can translate the occlusion by clicking and dragging it by the middle. Any points whose centers fall within the occlusion will be removed from the target list (and appear in dark grey in the camera window). 
 
