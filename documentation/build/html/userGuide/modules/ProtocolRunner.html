@@ -53,13 +53,13 @@
             
   <div class="section" id="the-protocol-runner-module">
 <h1>The Protocol Runner Module<a class="headerlink" href="#the-protocol-runner-module" title="Permalink to this headline">¶</a></h1>
-<p>The Protocol Runner is where you design and run protocols for your experiments. It is incredibly flexible because it lets you use any combination of the devices configured in your system. It can be used for relatively simple protocols, like steps of current injection, or more complex protocols like recording a response to stimulation.</p>
+<p>The Protocol Runner is ACQ4&#8217;s primary data acquisition module. It allows one to rapidly design stimulation and recording protocols using any combination of devices in the system. It can be used for relatively simple protocols, like steps of current injection, or more complex protocols like recording a response to a sequence of stimulations.</p>
 <div class="section" id="loader-dock">
 <h2>Loader Dock<a class="headerlink" href="#loader-dock" title="Permalink to this headline">¶</a></h2>
-<p>The loader dock is used to load old protocols, create new protocols and save changes to protocols. The file list on the left shows all of the existing protocols. These are pulled in from the config/protocols directory.</p>
+<p>The loader dock is used to load previously saved protocols, create new protocols and save changes to protocols. The file list on the left shows all of the existing protocols. These are read from the config/protocols directory.</p>
 <ul class="simple">
-<li>To create a new protocol from scratch: Click the &#8220;New&#8221; button. Add any devices to the protocol (using the Protocol Dock, explained in the next section). Then press either the &#8220;Save&#8221; or the &#8220;Save As...&#8221; button. Name the protocol by double clicking the current name (probably something like protocol_000) and typing the name you want.</li>
-<li>To create a new protocol based on an existing protocol: Load the existing protocol by selecting it in the list and pressing the &#8220;Load&#8221; button. Make any changes to it. Then, press the &#8220;Save As...&#8221; button. The &#8220;Save As...&#8221; button saves that protocol under the name of the existing protocol with _000 added to it. The original protocol is not affected. To change the name of the protocol, double-click it in the list, and it should appear as editable text.</li>
+<li>To create a new protocol: Click the &#8220;New&#8221; button. Add any devices to the protocol (using the Protocol Dock, explained in the next section). Then press either the &#8220;Save&#8221; or the &#8220;Save As...&#8221; button. Name the protocol by double clicking the current name (probably something like protocol_000) and typing the name you want.</li>
+<li>To create a new protocol based on an existing protocol: Load the existing protocol by selecting it in the list and pressing the &#8220;Load&#8221; button. Make any changes to it. Then, press the &#8220;Save As...&#8221; button. The &#8220;Save As...&#8221; button saves that protocol under the name of the existing protocol with _000 added to it. The original protocol is not affected. To change the name of the protocol, double-click it in the list and type the new name.</li>
 <li>To load an existing protocol: Select it in the list and press the &#8220;Load&#8221; button.</li>
 <li>To make changes to a protocol: Load the protocol. Make your changes, then press the &#8220;Save&#8221; button.</li>
 <li>The &#8220;New Dir&#8221; button creates a directory that you can then move protocols into. Move protocols by selecting and dragging them to the folder you want them to be in.</li>
@@ -69,26 +69,29 @@
 <div class="section" id="protocol-dock">
 <h2>Protocol Dock<a class="headerlink" href="#protocol-dock" title="Permalink to this headline">¶</a></h2>
 <p>The Protocol Dock is where you select which devices to use in the protocol, set the length of the protocol, and run single trials of the protocol.</p>
-<p>Selecting Devices: To include a device in the protocol, check the box next to the device. For each device that is checked, the Protocol interface for that device will appear in the lower space of the window. You can include any number of devices in the protocol.</p>
+<p>Selecting Devices: To include a device in the protocol, check the box next to the device. For each device that is checked, the Protocol interface for that device will appear in the lower space of the window. You can include any number of devices in the protocol. Docks may be rearranged and stacked by dragging their title bars.</p>
 <ul class="simple">
-<li>Continuous: LUKE???</li>
+<li>Continuous: [not yet supported]</li>
 <li>Duration: Sets the length of one trial of the protocol.</li>
-<li>Lead Time: LUKE???</li>
-<li>Loop: When checked, the protocol keeps running over and over, until the &#8220;Stop Single&#8221; button is pressed.</li>
-<li>Cycle Time: LUKE????</li>
+<li>Lead Time: This forces the protocol system to reserve the selected hardware for the time specified before running the protocol. This is useful, for example, for allowing a patch clamp amplifier to settle after switching modes before making a recording.</li>
+<li>Loop: When checked, the protocol runs repeatedly until the &#8220;Stop Single&#8221; button is pressed.</li>
+<li>Cycle Time: Specifies the time interval between runs when in loop mode.</li>
 </ul>
 <p>Buttons:</p>
 <ul class="simple">
 <li>Test: Runs the protocol once (unless loop is checked) without saving any data.</li>
 <li>Record Single: Runs the protocol once and saves the data.</li>
-<li>Stop Single: Stops the protocol when it is looping.</li>
+<li>Stop Single: Aborts the currently running recording.</li>
 </ul>
 </div>
 <div class="section" id="sequence-dock">
 <h2>Sequence Dock<a class="headerlink" href="#sequence-dock" title="Permalink to this headline">¶</a></h2>
+<p>Once a stimulation/recording protocol is designed, it is common to repeat that protocol mutiple times while varying parameters. Each device dock will have its own capabilities for specifying parameters to vary. Any sequence parameters in use will be displayed in the list. If there are multiple parameters, they can be re-ordered by dragging to new positions in the list.</p>
+<p>[more]</p>
 </div>
 <div class="section" id="analysis-dock">
 <h2>Analysis Dock<a class="headerlink" href="#analysis-dock" title="Permalink to this headline">¶</a></h2>
+<p>Lists all available plugins for online analysis.</p>
 </div>
 </div>
 

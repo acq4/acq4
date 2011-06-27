@@ -75,7 +75,6 @@ Controls
 
 * Camera and Laser: Select the camera and laser that you want to use in the protocol. Be sure that you have calibrated whatever combination of camera and laser that you choose.
 * Simulate Shutter Check: This determines whether you are using the Virtual Shutter function or not. If checked, the scanner will send the spot to the "off" position whenever the shutter is closed (set this in the Protocol runner interface for the shutter.) If not checked, the scanner ignores the virtual shutter option and you need to have a real shutter somewhere in the path.
-* Display Controls Check: Not sure if this does anything or not......LUKE?????????
 * Minimum Time and Minimum Distance: These two numbers determine how frequently sites can be stimulated in space and time. If Minimum Time is 5 seconds and Minimum Distance is 500 microns, this means that when Spot A is stimulated, spots that are less then 500 microns away won't be stimulated within 5 seconds. However, spots further than 500 microns can be stimulated with no delay.
 * Grid Spacing: This determines how closely the target spots in grids are packed. Lowering the grid spacing packs the spots closer together. Note: This has absolutely NO effect on the actual spot size. 
     
