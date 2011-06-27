@@ -3,7 +3,7 @@ The Data Manager Module
 
 The Data Manager provides an interface to browse through data. Use it to:
 
-    * Specify where data should be saved during aquisition.
+    * Create new folders and specify where data should be saved during aquisition.
     * Browse through and annotate data that has been collected.
     * Access analysis modules.
 

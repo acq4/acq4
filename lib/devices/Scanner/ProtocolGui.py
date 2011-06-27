@@ -536,11 +536,11 @@ class ScannerProtoGui(ProtocolGui):
         
         minTime = None
         bestSolution = None
-        if len(locations) > 200:
-            nTries = 1
-        else:
-            nTries = 10
-        
+        #if len(locations) > 200:
+            #nTries = 1
+        #else:
+            #nTries = 10
+        nTries = numpy.clip(int(10 - len(locations)/20), 1, 10)
         
         ## About to compute order/timing of targets; display a progress dialog
         #prof.mark('setup')
@@ -552,7 +552,11 @@ class ScannerProtoGui(ProtocolGui):
             #times=[]
             for i in range(nTries):
                 #prof.mark('attempt: %i' %i)
-                solution = self.findSolution(locations)
+                for n, m in optimize.optimizeSequence(locations, self.costFn):
+                    ## we can update the progress dialog here.
+                    if m is None:
+                        solution = n
+                #solution = self.findSolution(locations)
                 #prof.mark('foundSolution')
                 time = sum([l[1] for l in solution])
                 #times.append(time)
@@ -588,68 +592,73 @@ class ScannerProtoGui(ProtocolGui):
         #prof.mark('Done.')
         #prof.finish()
         
-    def findSolution(self, locations):
-        #prof2 = Profiler('     findSolution()')
-        targetNumber = len(locations)
-        locations = locations[:]
-        random.shuffle(locations)
-        #prof2.mark('setup')
-        #### Try sorting points into quadrants to make both computing order and scanning faster -- use this as a best guess to compute order
-        locs = numpy.array(locations, [('x', numpy.float32),('y', numpy.float32)])
-        medx = numpy.median(locs['x'])
-        medy = numpy.median(locs['y'])
+    #def findSolution(self, locations):
+        ### locations is a list of (x,y) tuples
+        ### return value is a sorted list of tuples: ((x,y), time)
+        ###    where 'time' is the minimum interval before stimulating the current spot.
         
-        ## sort spots into quadrants
-        quad1 = locs[(locs['x'] <= medx)*(locs['y'] > medy)]
-        quad2 = locs[(locs['x'] > medx)*(locs['y'] > medy)]
-        quad3 = locs[(locs['x'] <= medx)*(locs['y'] <= medy)]
-        quad4 = locs[(locs['x'] > medx)*(locs['y'] <= medy)]
+        ##prof2 = Profiler('     findSolution()')
+        #targetNumber = len(locations)
+        #locations = locations[:]
+        #random.shuffle(locations)
+        ##prof2.mark('setup')
         
-        ## rearrange spots so that sets of 4 (1 from each quadrant) can be added to the locations list
-        minLen = min([len(quad1), len(quad2), len(quad3), len(quad4)])
-        locs = numpy.zeros((minLen, 4), [('x', numpy.float32), ('y', numpy.float32)])
-        locs[:,0] = quad1[:minLen]
-        locs[:,1] = quad2[:minLen]
-        locs[:,2] = quad3[:minLen]
-        locs[:,3] = quad4[:minLen]
+        ##### Try sorting points into quadrants to make both computing order and scanning faster -- use this as a best guess to compute order
+        #locs = numpy.array(locations, [('x', numpy.float32),('y', numpy.float32)])
+        #medx = numpy.median(locs['x'])
+        #medy = numpy.median(locs['y'])
         
-        ## add sets of 4 spots to list
-        #locations = []
-        #for i in range(minLen):
-            #locations += locs[i].tolist()
-        locations = locs.flatten().tolist()
+        ### sort spots into quadrants
+        #quad1 = locs[(locs['x'] <= medx)*(locs['y'] > medy)]
+        #quad2 = locs[(locs['x'] > medx)*(locs['y'] > medy)]
+        #quad3 = locs[(locs['x'] <= medx)*(locs['y'] <= medy)]
+        #quad4 = locs[(locs['x'] > medx)*(locs['y'] <= medy)]
+        
+        ### rearrange spots so that sets of 4 (1 from each quadrant) can be added to the locations list
+        #minLen = min([len(quad1), len(quad2), len(quad3), len(quad4)])
+        #locs = numpy.zeros((minLen, 4), [('x', numpy.float32), ('y', numpy.float32)])
+        #locs[:,0] = quad1[:minLen]
+        #locs[:,1] = quad2[:minLen]
+        #locs[:,2] = quad3[:minLen]
+        #locs[:,3] = quad4[:minLen]
+        
+        ### add sets of 4 spots to list
+        ##locations = []
+        ##for i in range(minLen):
+            ##locations += locs[i].tolist()
+        #locations = locs.flatten().tolist()
             
-        ## add any remaining spots that didn't fit evenly into the locs array
-        for q in [quad1, quad2, quad3, quad4]:
-            if minLen < len(q):
-                locations += q[minLen:].tolist()
+        ### add any remaining spots that didn't fit evenly into the locs array
+        #for q in [quad1, quad2, quad3, quad4]:
+            #if minLen < len(q):
+                #locations += q[minLen:].tolist()
                 
-        #print "Target Number: ", targetNumber, "    locations: ", len(locations)
+        ##print "Target Number: ", targetNumber, "    locations: ", len(locations)
         
-        #### Computer order 
-        if True:
-            solution = [(locations.pop(), 0.0)]
-            while len(locations) > 0:
-                #prof2.mark('lenLocations: %i' %len(locations))
-                minTime = None
-                minIndex = None
-                n=len(locations)-1
-                for i in range(len(locations)):
-                    #if i > n:
+        ##### Computer order 
+        #if True:
+            #solution = [(locations.pop(), 0.0)]
+            #while len(locations) > 0:
+                ##prof2.mark('lenLocations: %i' %len(locations))
+                #minTime = None
+                #minIndex = None
+                #n=len(locations)-1
+                #for i in range(len(locations)):
+                    ##if i > n:
+                        ##break
+                    ##prof2.mark(i)
+                    #time, dist = self.computeTime(solution, locations[i])
+                    ##prof2.mark('found time')
+                    #if minTime is None or time < minTime:
+                        #minTime = time
+                        #minIndex = i
+                    #if time == 0.0:  ## can't get any better; stop searching
+                        ##solution.append((locations.pop(i), time))
+                        ##n-=1
                         #break
-                    #prof2.mark(i)
-                    time, dist = self.computeTime(solution, locations[i])
-                    #prof2.mark('found time')
-                    if minTime is None or time < minTime:
-                        minTime = time
-                        minIndex = i
-                    if time == 0.0:  ## can't get any better; stop searching
-                        #solution.append((locations.pop(i), time))
-                        #n-=1
-                        break
-                solution.append((locations.pop(minIndex), minTime))
-            #prof2.finish()
-            return solution
+                #solution.append((locations.pop(minIndex), minTime))
+            ##prof2.finish()
+            #return solution
        
         
     #def swapWorst(self, solution):
@@ -685,31 +694,31 @@ class ScannerProtoGui(ProtocolGui):
         b = numpy.log(0.1) / minDist**2
         return lambda dist: minTime * numpy.exp(b * dist**2)
 
-    def computeTime(self, solution, loc, func=None):
-        """Return the minimum time that must be waited before stimulating the location, given that solution has already run"""
-        if func is None:
-            func = self.costFunction()
-        state = self.stateGroup.state()
-        minDist = state['minDist']
-        minTime = state['minTime']
-        minWaitTime = 0.0
-        cumWaitTime = 0
-        for i in range(len(solution)-1, -1, -1):
-            l = solution[i][0]
-            dx = loc[0] - l[0]
-            dy = loc[1] - l[1]
-            dist = (dx **2 + dy **2) ** 0.5
-            if dist > minDist:
-                time = 0.0
-            else:
-                time = func(dist) - cumWaitTime
-            #print i, "cumulative time:", cumWaitTime, "distance: %0.1fum" % (dist * 1e6), "time:", time
-            minWaitTime = max(minWaitTime, time)
-            cumWaitTime += solution[i][1]
-            if cumWaitTime > minTime:
-                break
-        #print "--> minimum:", minWaitTime
-        return minWaitTime, dist
+    #def computeTime(self, solution, loc, func=None):
+        #"""Return the minimum time that must be waited before stimulating the location, given that solution has already run"""
+        #if func is None:
+            #func = self.costFunction()
+        #state = self.stateGroup.state()
+        #minDist = state['minDist']
+        #minTime = state['minTime']
+        #minWaitTime = 0.0
+        #cumWaitTime = 0
+        #for i in range(len(solution)-1, -1, -1):
+            #l = solution[i][0]
+            #dx = loc[0] - l[0]
+            #dy = loc[1] - l[1]
+            #dist = (dx **2 + dy **2) ** 0.5
+            #if dist > minDist:
+                #time = 0.0
+            #else:
+                #time = func(dist) - cumWaitTime
+            ##print i, "cumulative time:", cumWaitTime, "distance: %0.1fum" % (dist * 1e6), "time:", time
+            #minWaitTime = max(minWaitTime, time)
+            #cumWaitTime += solution[i][1]
+            #if cumWaitTime > minTime:
+                #break
+        ##print "--> minimum:", minWaitTime
+        #return minWaitTime, dist
             
             
             

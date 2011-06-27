@@ -1187,7 +1187,7 @@ class TaskThread(QtCore.QThread):
                     
     def runOnce(self, params=None):
         #print "TaskThread:runOnce"
-        prof = Profiler("ProtocolRunner.TaskThread.runOnce", disabled=True)
+        prof = Profiler("ProtocolRunner.TaskThread.runOnce", disabled=True, delayed=False)
         startTime = ptime.time()
         if params is None:
             params = {}

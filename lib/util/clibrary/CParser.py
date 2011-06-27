@@ -126,7 +126,7 @@ class CParser():
             if type(copyFrom) not in [list, tuple]:
                 copyFrom = [copyFrom]
             for p in copyFrom:
-                self.importDict(p.fileDefs)
+                self.importDict(p.fileDefs, p.fileOrder)
                 
         if processAll:
             self.processAll(cache=cache, verbose=verbose)
@@ -227,18 +227,19 @@ class CParser():
                     return False
                 
             ## import all parse results
-            self.importDict(cache['fileDefs'])
+            self.importDict(cache['fileDefs'], cache['fileOrder'])
             return True
         except:
             print "Warning--cache read failed:"
             sys.excepthook(*sys.exc_info())
             return False
 
-    def importDict(self, data):
+    def importDict(self, data, order):
         """Import definitions from a dictionary. The dict format should be the
         same as CParser.fileDefs. Used internally; does not need to be called
         manually."""
-        for f in data.keys():
+        for f in order:
+            f = os.path.split(f)[1]
             self.currentFile = f
             for k in self.dataList:
                 for n in data[f][k]:
@@ -249,6 +250,7 @@ class CParser():
         cache = {}
         cache['opts'] = self.initOpts
         cache['fileDefs'] = self.fileDefs
+        cache['fileOrder'] = self.fileOrder
         cache['version'] = self.cacheVersion
         #for k in self.dataList:
             #cache[k] = getattr(self, k)
@@ -955,7 +957,7 @@ class CParser():
                     sname = t.name[0]
             if self.verbose:
                 print "  NAME:", sname
-            if sname not in self.defs[strTyp+'s'] or self.defs[strTyp+'s'][sname] == {}:
+            if sname not in self.defs[strTyp+'s'] or self.defs[strTyp+'s'][sname].get('members', []) == []:
                 if self.verbose:
                     print "  NEW " + strTyp.upper()
                 struct = []
@@ -974,6 +976,9 @@ class CParser():
                 self.addDef(strTyp+'s', sname, {'pack': packing, 'members': struct})
                 self.addDef('types', strTyp+' '+sname, (strTyp, sname))
                 #self.updateStructDefn()
+            else:
+                if self.verbose:
+                    print "  (already defined)"
             return strTyp+' '+sname
         except:
             #print t

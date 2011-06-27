@@ -188,7 +188,10 @@ class DAQGenericTask(DeviceTask):
                         cmdData[cmdData<=0] = 0
                         cmdData[cmdData>0] = 0xFFFFFFFF
                     #print "channel", chConf['channel'][1], cmdData
-                    daqTask.addChannel(chConf['channel'][1], chConf['type'])
+                    
+                    #print "channel", self._DAQCmd[ch]
+                    #print "LOW LEVEL:", self._DAQCmd[ch].get('lowLevelConf', {})
+                    daqTask.addChannel(chConf['channel'][1], chConf['type'], **self._DAQCmd[ch].get('lowLevelConf', {}))
                     self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                     daqTask.setWaveform(chConf['channel'][1], cmdData)
                 else:
@@ -196,7 +199,7 @@ class DAQGenericTask(DeviceTask):
                     if len(chConf['channel']) > 2:
                         mode = chConf['channel'][2]
                     #print "Adding channel %s to DAQ task" % chConf['channel'][1]
-                    daqTask.addChannel(chConf['channel'][1], chConf['type'], mode=mode)
+                    daqTask.addChannel(chConf['channel'][1], chConf['type'], mode=mode, **self._DAQCmd[ch].get('lowLevelConf', {}))
                     self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                 #print "  done: ", self.daqTasks.keys()
         

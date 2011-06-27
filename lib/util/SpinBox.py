@@ -3,7 +3,7 @@ from PyQt4 import QtGui, QtCore
 if not hasattr(QtCore, 'Signal'):
     QtCore.Signal = QtCore.pyqtSignal
 
-from functions import siEval, siFormat
+import functions as fn
 from math import log
 from SignalProxy import proxyConnect
 from decimal import Decimal as D  ## Use decimal to avoid accumulating floating-point errors
@@ -199,6 +199,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         if value == self.val:
             #print "  value not changed; ignore."
             return
+        prev = self.val
         
         bounds = self.opts['bounds']
         if bounds[0] is not None and value < bounds[0]:
@@ -207,7 +208,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
             return
         self.val = value
         if update:
-            self.updateText()
+            self.updateText(prev=prev)
             
         #self.emit(QtCore.SIGNAL('valueChanging'), float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
         self.sigValueChanging.emit(float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
@@ -239,11 +240,15 @@ class SpinBox(QtGui.QAbstractSpinBox):
     def value(self):
         return float(self.val)
 
-    def updateText(self):
+    def updateText(self, prev=None):
         #print "Update text."
         self.skipValidate = True
         if self.opts['siPrefix']:
-            self.lineEdit().setText(siFormat(float(self.val), suffix=self.opts['suffix']))
+            if self.val == 0 and prev is not None:
+                (s, p) = fn.siScale(prev)
+                self.lineEdit().setText("0.0 %s%s" % (p, self.opts['suffix']))
+            else:
+                self.lineEdit().setText(fn.siFormat(float(self.val), suffix=self.opts['suffix']))
         else:
             self.lineEdit().setText('%g%s' % (self.val , self.opts['suffix']))
         self.skipValidate = False
@@ -255,7 +260,9 @@ class SpinBox(QtGui.QAbstractSpinBox):
         try:
             val = self.interpret()
             if val is False:
-                return (QtGui.QValidator.Invalid, pos)
+                self.lineEdit().setStyleSheet('border: 2px solid #C55;')
+                return (QtGui.QValidator.Intermediate, pos)
+                #return (QtGui.QValidator.Invalid, pos)
                 
             if not self.opts['delayUntilEditFinished']:
                 self.setValue(val, update=False)
@@ -265,8 +272,8 @@ class SpinBox(QtGui.QAbstractSpinBox):
             return (QtGui.QValidator.Acceptable, pos)
         except:
             #print "  BAD"
-            import sys
-            sys.excepthook(*sys.exc_info())
+            #import sys
+            #sys.excepthook(*sys.exc_info())
             self.lineEdit().setStyleSheet('border: 2px solid #C55;')
             return (QtGui.QValidator.Intermediate, pos)
         
@@ -280,9 +287,11 @@ class SpinBox(QtGui.QAbstractSpinBox):
             #raise Exception("Units are invalid.")
             strn = strn[:-len(suf)]
         try:
-            val = siEval(strn)
+            val = fn.siEval(strn)
         except:
+            print "invalid"
             return False
+        print val
         return val
         
     #def interpretText(self, strn=None):
@@ -325,6 +334,11 @@ class SpinBox(QtGui.QAbstractSpinBox):
         
 if __name__ == '__main__':
     app = QtGui.QApplication([])
+    
+    def valueChanged():
+        sb = QtCore.QObject.sender()
+        str(sb) + " valueChanged: %s\n" % str(sb.value())
+    
     def mkWin():
         win = QtGui.QMainWindow()
         g = QtGui.QFormLayout()
@@ -351,10 +365,10 @@ if __name__ == '__main__':
             
             #QtCore.QObject.connect(sb, QtCore.SIGNAL('valueChanged(double)'), lambda v: sys.stdout.write(str(sb) + " valueChanged\n"))
             #QtCore.QObject.connect(sb, QtCore.SIGNAL('editingFinished()'), lambda: sys.stdout.write(str(sb) + " editingFinished\n"))
-            sb.valueChanged.connect(lambda v: sys.stdout.write(str(sb) + " valueChanged\n"))
+            sb.valueChanged.connect(valueChanged)
             sb.editingFinished.connect(lambda: sys.stdout.write(str(sb) + " editingFinished\n"))
         return win, w, [s1, s2, s3, s4]
-        
+    a= mkWin()
     
         
     def test(n=100):

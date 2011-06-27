@@ -152,6 +152,7 @@ class CLibrary:
             names = self._allNames_(name)
             for k in ['values', 'functions', 'types', 'structs', 'unions', 'enums', None]:
                 if k is None:
+                    #obj = getattr(self._lib_, name)  # pull directly from the lib as a last resort?
                     raise NameError(name)
                 obj = None
                 for n in names:
@@ -417,7 +418,7 @@ class CFunction:
             raise
         #print "  result:", res
         
-        cr = CallResult(res, argList, self.sig, guessed=guessedArgs)
+        cr = CallResult(res, argList, self.sig, guessed=guessedArgs, restype=self.restype)
         return cr
     
     def prettySignature(self):
@@ -438,11 +439,12 @@ class CallResult:
     The class can also be used as an iterator, so that tuple unpacking is possible:
        ret, arg1, arg2 = lib.runSomeFunction(...)
        """
-    def __init__(self, rval, args, sig, guessed):
+    def __init__(self, rval, args, sig, guessed, restype):
         self.rval = rval        ## return value of function call
         self.args = args        ## list of arguments to function call
         self.sig = sig          ## function signature
         self.guessed = guessed  ## list of arguments that were generated automatically (usually byrefs)
+        self.restype = restype  ## return type specified by signature
         
     def __call__(self):
         #print "Clibrary:", type(self.rval), self.mkVal(self.rval)
@@ -493,9 +495,11 @@ class CallResult:
             yield(self[i])
         
     def auto(self):
+        """Return auto-filled values"""
         return [self[n] for n in self.guessed]
             
-    
+    def cast(self):
+        return cast(self(), self.restype)
     
     
 
