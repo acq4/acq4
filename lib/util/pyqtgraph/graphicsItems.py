@@ -1167,6 +1167,8 @@ class ScatterPlotItem(GraphicsObject):
         return self._spotPixmap
 
     def mkSpot(self, pos, size, pxMode, brush, pen, data, index=None):
+        brush = mkBrush(brush)
+        pen = mkPen(pen)
         if pxMode:
             img = self.spotPixmap()
             item = PixmapSpotItem(size, brush, pen, data, image=img, index=index)

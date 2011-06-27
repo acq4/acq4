@@ -77,7 +77,7 @@ def optimizeSequence(locations, costFn):
     
         
 
-def computeTime(solution, loc, func=None):
+def computeTime(solution, loc, func):
     """Return the minimum time that must be waited before stimulating the location, given that solution has already run"""
     #if func is None:
         #func = self.costFunction()
@@ -98,6 +98,7 @@ def computeTime(solution, loc, func=None):
         minWaitTime = max(minWaitTime, time)
         cumWaitTime += solution[i][1]
         if cumWaitTime > minTime:
+            #print "break after", len(solution)-i
             break
     #print "--> minimum:", minWaitTime
     return minWaitTime, dist
@@ -109,24 +110,30 @@ def computeTime(solution, loc, func=None):
 
 
 if __name__ == '__main__':
+    import sys, os
+    path = os.path.abspath(os.path.split(__file__)[0])
+    sys.path.append(os.path.join(path, '..', '..', 'util'))
+    
     import user, time, collections
+    from PyQt4 import QtGui, QtCore
+    import pyqtgraph as pg
+    app = QtGui.QApplication([])
+    
     minTime = 10.
     minDist = 0.5e-3
     b = np.log(0.1) / minDist**2
-    def costFn(dist): 
-        return minTime * np.exp(b * dist**2)
+    costCache = {}
+    def costFn(dist):
+        global costCache, b, minTime
+        try:
+            cost = costCache[dist]
+        except KeyError:
+            cost = minTime * np.exp(b * dist**2)
+            costCache[dist] = cost
+        return cost
     
     locSets = collections.OrderedDict()
-    
-    for d in [0.2e-3, 0.5e-3, 2e-3]:
-        for n in [5, 10, 20]:
-            locs = []
-            for i in np.linspace(-d, d, n):
-                for j in np.linspace(-d, d, n):
-                    locs.append((i,j))
-            key = "grid\td=%0.1g\tn=%d" % (d, n)
-            locSets[key] = locs
-            
+
     def check(a, b):
         bLocs = [x[0] for x in b]
         bTimes = [x[1] for x in b]
@@ -145,20 +152,65 @@ if __name__ == '__main__':
         #print "List check OK"
         print "  total cost:\t%0.1f" % sum(bTimes)
         print "  max interval:\t%0.1f" % max(bTimes)
-        
-    for k, locs in locSets.iteritems():
-        print k
-        start = time.time()
-        for step, last in optimizeSequence(locs, costFn):
-            if last is None:
-                l2 = step
-            else:
-                pass
-                #print step, '/', last
-        print "  compute time:\t%0.1f" % (time.time()-start)
-        
-        check(locs, l2)
 
+
+    view = pg.GraphicsWindow()
+    view.show()
+    for d in [0.2e-3, 0.5e-3]:
+        for n in [5, 10, 20]:
+            locs = []
+            for i in np.linspace(-d, d, n):
+                for j in np.linspace(-d, d, n):
+                    locs.append((i,j))
+            key = "grid\td=%0.1gmm\tn=%d" % (d*2000, n)
+            locSets[key] = locs
+            
+            print key
+            start = time.time()
+            for step, last in optimizeSequence(locs, costFn):
+                if last is None:
+                    l2 = step
+                else:
+                    pass
+                    #print step, '/', last
+            print "  compute time:\t%0.1f" % (time.time()-start)
+            
+            check(locs, l2)
+            
+            vb = pg.ViewBox()
+            view.addItem(vb)
+            data = [{'pos': l2[i][0], 'brush': (i * 255/ len(l2),)*3} for i in range(len(l2))]
+            
+            sp = pg.ScatterPlotItem(data, pen='w', pxMode=False, size=1e-4)
+            vb.addItem(sp)
+            vb.autoRange()
+        view.nextRow()
+        
+    #views = []
+    #for k, locs in locSets.iteritems():
+        #print k
+        #start = time.time()
+        #for step, last in optimizeSequence(locs, costFn):
+            #if last is None:
+                #l2 = step
+            #else:
+                #pass
+                ##print step, '/', last
+        #print "  compute time:\t%0.1f" % (time.time()-start)
+        
+        #check(locs, l2)
+        
+        #v = pg.GraphicsWindow(title=k)
+        #v.vb = pg.ViewBox()
+        #v.setCentralItem(v.vb)
+        #v.show()
+        #data = [{'pos': l2[i][0], 'brush': (i * 255/ len(l2),)*3} for i in range(len(l2))]
+        
+        #sp = pg.ScatterPlotItem(data, pen='w', pxMode=False, size=1e-4)
+        #v.vb.addItem(sp)
+        #v.vb.autoRange()
+        #views.append(v)
+        ##v.setRange(QtCore.QRectF(-0.002, -0.002, 0.004, 0.004))
     
     
     
