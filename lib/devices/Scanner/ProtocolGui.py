@@ -7,8 +7,9 @@ from WidgetGroup import WidgetGroup
 import pyqtgraph.widgets as widgets
 #from pyqtgraph.widgets import *
 import random
-import numpy
+import numpy as np
 from debug import Profiler
+import optimize ## for determining random scan patterns
 
 class ScannerProtoGui(ProtocolGui):
     
@@ -24,7 +25,7 @@ class ScannerProtoGui(ProtocolGui):
         self.items = {}
         #self.occlusions = {}
         self.nextId = 0
-
+        
         ## Populate module/device lists, auto-select based on device defaults 
         self.defCam = None
         if 'defaultCamera' in self.dev.config:
@@ -54,6 +55,7 @@ class ScannerProtoGui(ProtocolGui):
 
         ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
         
+        #self.prot.sigProtocolChanged.connect(self.protocolChanged)
         #QtCore.QObject.connect(self.ui.addPointBtn, QtCore.SIGNAL('clicked()'), self.addPoint)
         self.ui.addPointBtn.clicked.connect(lambda: self.addPoint())
         #QtCore.QObject.connect(self.ui.addGridBtn, QtCore.SIGNAL('clicked()'), self.addGrid)
@@ -123,6 +125,10 @@ class ScannerProtoGui(ProtocolGui):
                 #gr.setAngle(angle)
             elif t[0] == 'occlusion':
                 self.addOcclusion(t[1], t[2], name=k)
+
+    #def protocolChanged(self, name, val):
+        #if name == 'duration':
+            #self.protDuration = val
         
         
     def fillModuleList(self):
@@ -273,6 +279,7 @@ class ScannerProtoGui(ProtocolGui):
         else:
             if self.targets is None:
                 self.generateTargets()
+            print "targets:", len(self.targets), params['targets']
             (target, delay) = self.targets[params['targets']]
             
         prot = {
@@ -527,35 +534,33 @@ class ScannerProtoGui(ProtocolGui):
         #prof= Profiler('ScanerProtoGui.generateTargets()')
         self.targets = []
         locations = self.getTargetList()
-        #locations = []
-        #for i in items:
-        #    pts = i.listPoints()
-        #    for p in pts:
-        #        locations.append(p)
-
         
         minTime = None
         bestSolution = None
-        #if len(locations) > 200:
-            #nTries = 1
-        #else:
-            #nTries = 10
         nTries = np.clip(int(10 - len(locations)/20), 1, 10)
         
         ## About to compute order/timing of targets; display a progress dialog
         #prof.mark('setup')
-        progressDlg = QtGui.QProgressDialog("Computing pseudo-optimal target sequence...", "Cancel", 0, nTries)
+        progressDlg = QtGui.QProgressDialog("Computing pseudo-optimal target sequence...", "Cancel", 0, 1000)
         #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
-        progressDlg.setMinimumDuration(250)
+        progressDlg.setMinimumDuration(500)
         #prof.mark('progressDlg')
+        
         try:
             #times=[]
             for i in range(nTries):
                 #prof.mark('attempt: %i' %i)
-                for n, m in optimize.optimizeSequence(locations, self.costFn):
+                for n, m in optimize.opt2(locations, self.costFn2, greed=1.0):
                     ## we can update the progress dialog here.
                     if m is None:
                         solution = n
+                    else:
+                        prg = int(((i/float(nTries)) + ((n/float(m))/float(nTries))) * 1000)
+                        progressDlg.setValue(prg)
+                        print i
+                        QtGui.QApplication.processEvents()
+                        if progressDlg.wasCanceled():
+                            raise Exception("Target sequence computation canceled by user.")
                 #solution = self.findSolution(locations)
                 #prof.mark('foundSolution')
                 time = sum([l[1] for l in solution])
@@ -564,17 +569,14 @@ class ScannerProtoGui(ProtocolGui):
                     #print "  new best time:", time
                     minTime = time
                     bestSolution = solution[:]
+                    print "new best:", len(bestSolution), minTime
                 #prof.mark('check time')
-                progressDlg.setValue(i)
-                QtGui.QApplication.processEvents()
-                if progressDlg.wasCanceled():
-                    raise Exception("Target sequence computation canceled by user.")
         except:
             raise
         finally:
             ## close progress dialog no matter what happens
             #print "Times: ", times
-            progressDlg.setValue(nTries)
+            progressDlg.setValue(1000)
         
         
         #for i in range(10):
@@ -604,9 +606,9 @@ class ScannerProtoGui(ProtocolGui):
         ##prof2.mark('setup')
         
         ##### Try sorting points into quadrants to make both computing order and scanning faster -- use this as a best guess to compute order
-        #locs = numpy.array(locations, [('x', numpy.float32),('y', numpy.float32)])
-        #medx = numpy.median(locs['x'])
-        #medy = numpy.median(locs['y'])
+        #locs = np.array(locations, [('x', np.float32),('y', np.float32)])
+        #medx = np.median(locs['x'])
+        #medy = np.median(locs['y'])
         
         ### sort spots into quadrants
         #quad1 = locs[(locs['x'] <= medx)*(locs['y'] > medy)]
@@ -616,7 +618,7 @@ class ScannerProtoGui(ProtocolGui):
         
         ### rearrange spots so that sets of 4 (1 from each quadrant) can be added to the locations list
         #minLen = min([len(quad1), len(quad2), len(quad3), len(quad4)])
-        #locs = numpy.zeros((minLen, 4), [('x', numpy.float32), ('y', numpy.float32)])
+        #locs = np.zeros((minLen, 4), [('x', np.float32), ('y', np.float32)])
         #locs[:,0] = quad1[:minLen]
         #locs[:,1] = quad2[:minLen]
         #locs[:,2] = quad3[:minLen]
@@ -687,12 +689,52 @@ class ScannerProtoGui(ProtocolGui):
         ##print "  new time is ", minTime
         #return bestSolution
             
-    def costFunction(self):
+    #def costFunction(self):
+        #state = self.stateGroup.state()
+        #minTime = state['minTime']
+        #minDist = state['minDist']
+        #b = np.log(0.1) / minDist**2
+        #return lambda dist: minTime * np.exp(b * dist**2)
+
+    #def costFn2(dist2, deadTime, b, minTime):
+        #### Takes distance^2 as argument!
+        #costCache = self.costFnCache
+        #try:
+            #cost = costCache[dist2]
+        #except KeyError:
+            #cost = minTime * np.exp(b * dist2)
+            #cost = np.clip(cost - deadTime, 0, minTime)  ## factor in dead time -- this prevents waiting small periods when the recording time is longer
+            #costCache[dist2] = cost
+        #return cost
+
+    #def costFn2(self, dist2):
+        #### Takes distance^2 as argument!
+        #state = self.stateGroup.state()
+        #minTime = state['minTime']
+        #minDist = state['minDist']
+        #deadTime = self.prot.getParam('duration')
+        #A = minTime / minDist**2
+        #return minTime - A * dist2
+
+    def costFn2(self, dist2):
+        ### Takes distance^2 as argument!
         state = self.stateGroup.state()
         minTime = state['minTime']
         minDist = state['minDist']
-        b = numpy.log(0.1) / minDist**2
-        return lambda dist: minTime * numpy.exp(b * dist**2)
+        deadTime = self.prot.getParam('duration')
+        A = 2 * minTime / minDist**2
+        cost = np.where(
+            dist2 < minDist, 
+            np.where(
+                dist2 < minDist/2., 
+                minTime - A * dist2, 
+                A * (dist2**0.5-minDist)**2
+            ), 
+            0
+        )
+        return np.clip(cost-deadTime, 0, minTime)
+
+
 
     #def computeTime(self, solution, loc, func=None):
         #"""Return the minimum time that must be waited before stimulating the location, given that solution has already run"""

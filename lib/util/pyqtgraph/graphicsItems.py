@@ -179,6 +179,58 @@ class GraphicsObject(QtGui.QGraphicsObject):
         return vt.mapRect(obj)
         
         
+class GraphicsLayout(QtGui.QGraphicsWidget):
+    def __init__(self, parent=None, border=None):
+        QtGui.QGraphicsWidget.__init__(self, parent)
+        self.border = border
+        self.layout = QtGui.QGraphicsGridLayout()
+        self.setLayout(self.layout)
+        self.items = {}
+        self.currentRow = 0
+        self.currentCol = 0
+    
+    def nextRow(self):
+        """Advance to next row for automatic item placement"""
+        self.currentRow += 1
+        self.currentCol = 0
+        
+    def nextCol(self, colspan=1):
+        """Advance to next column, while returning the current column number 
+        (generally only for internal use)"""
+        self.currentCol += colspan
+        return self.currentCol-colspan
+        
+    def addPlot(self, row=None, col=None, rowspan=1, colspan=1, **kargs):
+        plot = PlotItem(**kargs)
+        self.addItem(plot, row, col, rowspan, colspan)
+        return plot
+
+    def addItem(self, item, row=None, col=None, rowspan=1, colspan=1):
+        if row is None:
+            row = self.currentRow
+        if col is None:
+            col = self.nextCol(colspan)
+            
+        if row not in self.items:
+            self.items[row] = {}
+        self.items[row][col] = item
+        
+        self.layout.addItem(item, row, col, rowspan, colspan)
+
+    def getItem(self, row, col):
+        return self.items[row][col]
+
+    def boundingRect(self):
+        return self.rect()
+        
+    def paint(self, p, *args):
+        if self.border is None:
+            return
+        p.setPen(mkPen(self.border))
+        for row in self.items.itervalues():
+            for i in row.itervalues():
+                r = i.mapRectToParent(i.boundingRect())
+                p.drawRect(r)
         
         
 
