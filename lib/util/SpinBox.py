@@ -107,6 +107,9 @@ class SpinBox(QtGui.QAbstractSpinBox):
             #sip.setdeleted(lec)  ## PyQt should handle this, but does not. Potentially leads to crashes.
         #del self.lineEditCache
         
+    def setDecimals(self, arg):
+        
+        
     def emitChanged(self):
         self.lastValEmitted = self.val
         #self.emit(QtCore.SIGNAL('valueChanged(double)'), float(self.val))
