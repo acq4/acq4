@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>898</width>
-    <height>458</height>
+    <height>481</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -200,7 +200,7 @@
       </widget>
      </item>
      <item row="2" column="0">
-      <widget class="QDoubleSpinBox" name="packingSpin">
+      <widget class="SpinBox" name="packingSpin">
        <property name="minimum">
         <double>0.100000000000000</double>
        </property>
@@ -262,6 +262,12 @@
          </property>
          <property name="maximum">
           <double>100000.000000000000000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.000001000000000</double>
+         </property>
+         <property name="value">
+          <double>0.000000000000000</double>
          </property>
         </widget>
        </item>
@@ -365,7 +371,7 @@
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>lib/util/SpinBox</header>
+   <header>SpinBox</header>
   </customwidget>
  </customwidgets>
  <resources/>

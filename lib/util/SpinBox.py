@@ -60,7 +60,10 @@ class SpinBox(QtGui.QAbstractSpinBox):
             'suffix': '',
             'siPrefix': False,   ## Set to True to display numbers with SI prefix (ie, 100pA instead of 1e-10A)
             
-            'delayUntilEditFinished': True   ## do not send signals until text editing has finished
+            'delayUntilEditFinished': True,   ## do not send signals until text editing has finished
+            
+            ## for compatibility with QDoubleSpinBox and QSpinBox
+            'decimals': 2
         }
         
         self.decOpts = ['step', 'minStep']
@@ -106,9 +109,6 @@ class SpinBox(QtGui.QAbstractSpinBox):
             ##### NOTE!! This approach causes memory corruption and random crashes.
             #sip.setdeleted(lec)  ## PyQt should handle this, but does not. Potentially leads to crashes.
         #del self.lineEditCache
-        
-    def setDecimals(self, arg):
-        
         
     def emitChanged(self):
         self.lastValEmitted = self.val
@@ -239,6 +239,9 @@ class SpinBox(QtGui.QAbstractSpinBox):
 
     def setSingleStep(self, step):
         self.setOpts(step=step)
+        
+    def setDecimals(self, decimals):
+        self.setOpts(decimals=decimals)
 
     def value(self):
         return float(self.val)

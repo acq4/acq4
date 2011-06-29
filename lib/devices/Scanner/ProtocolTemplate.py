@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Fri Jun 24 16:32:00 2011
+# Created: Wed Jun 29 14:58:09 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(898, 458)
+        Form.resize(898, 481)
         self.gridLayout_2 = QtGui.QGridLayout(Form)
         self.gridLayout_2.setObjectName(_fromUtf8("gridLayout_2"))
         self.horizontalLayout_3 = QtGui.QHBoxLayout()
@@ -105,7 +105,7 @@ class Ui_Form(object):
         self.label_3 = QtGui.QLabel(Form)
         self.label_3.setObjectName(_fromUtf8("label_3"))
         self.gridLayout.addWidget(self.label_3, 0, 1, 1, 1)
-        self.packingSpin = QtGui.QDoubleSpinBox(Form)
+        self.packingSpin = SpinBox(Form)
         self.packingSpin.setMinimum(0.1)
         self.packingSpin.setMaximum(1000.0)
         self.packingSpin.setSingleStep(0.1)
@@ -134,6 +134,8 @@ class Ui_Form(object):
         self.sizeSpin.setSuffix(_fromUtf8(""))
         self.sizeSpin.setMinimum(0.0)
         self.sizeSpin.setMaximum(100000.0)
+        self.sizeSpin.setSingleStep(1e-06)
+        self.sizeSpin.setProperty(_fromUtf8("value"), 0.0)
         self.sizeSpin.setObjectName(_fromUtf8("sizeSpin"))
         self.horizontalLayout_2.addWidget(self.sizeSpin)
         self.verticalLayout_2.addLayout(self.horizontalLayout_2)
@@ -208,4 +210,4 @@ class Ui_Form(object):
         self.timeLabel.setText(QtGui.QApplication.translate("Form", "Total Time:", None, QtGui.QApplication.UnicodeUTF8))
         self.displayCheck.setText(QtGui.QApplication.translate("Form", "Display items", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.SpinBox import SpinBox
+from SpinBox import SpinBox

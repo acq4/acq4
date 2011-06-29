@@ -41,15 +41,19 @@ class ScannerProtoGui(ProtocolGui):
                 self.ui.laserCombo.setCurrentIndex(self.ui.laserCombo.count()-1)
 
         self.fillModuleList()
-              
+        
+        ## Set up SpinBoxes
+        self.ui.minTimeSpin.setOpts(dec=True, step=1, minStep=1e-3, siPrefix=True, suffix='s', bounds=[0, 50])
+        self.ui.minDistSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[0, 10e-3])
+        self.ui.sizeSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[0, 1e-3])
         ## Create state group for saving/restoring state
         self.stateGroup = WidgetGroup([
             (self.ui.cameraCombo,),
             (self.ui.laserCombo,),
             (self.ui.minTimeSpin, 'minTime'),
-            (self.ui.minDistSpin, 'minDist', 1e6),
+            (self.ui.minDistSpin, 'minDist'),
             (self.ui.simulateShutterCheck, 'simulateShutter'),
-            (self.ui.sizeSpin, 'spotSize', 1e6),
+            (self.ui.sizeSpin, 'spotSize'),
 #            (self.ui.packingSpin, 'packingDensity')  ## packing density should be suggested by device rather than loaded with protocol (I think..)
         ])
         self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6, 'sizeSpin':100e-6})
@@ -208,10 +212,10 @@ class ScannerProtoGui(ProtocolGui):
         self.updateSpotSizes()
         
     def updateSpotSizes(self):
-        size, packing = self.pointSize()
+        size, packing, displaySize = self.pointSize()
         #pd = self.pointSize()[1]
         for i in self.items.values():
-            i.setPointSize(size, packing)
+            i.setPointSize(size, packing, displaySize)
         self.testTarget.setPointSize(size)
 
     def showInterface(self, b):
@@ -225,20 +229,20 @@ class ScannerProtoGui(ProtocolGui):
 
     def pointSize(self):
         packing = self.ui.packingSpin.value()
+        try:
+            cam = self.cameraModule().config['camDev']
+            laser = str(self.ui.laserCombo.currentText())
+            cal = self.dev.getCalibration(cam, laser)
+            ss = cal['spot'][1]
+        except:
+            print "Could not find spot size from calibration."
+            raise   
         if self.ui.sizeFromCalibrationRadio.isChecked():
-            try:
-                cam = self.cameraModule().config['camDev']
-                laser = str(self.ui.laserCombo.currentText())
-                cal = self.dev.getCalibration(cam, laser)
-                #ss = cal['spot'][1] * self.ui.packingSpin.value()
-                ss = cal['spot'][1]
-                self.stateGroup.setState({'spotSize':ss})
-            except:
-                print "Could not find spot size from calibration. Please use custom spot size."
-                raise         
+            displaySize = ss
+            self.stateGroup.setState({'spotSize':ss})
         elif self.ui.sizeCustomRadio.isChecked():
-            ss = self.ui.sizeSpin.value()
-        return (ss, packing)
+            displaySize = self.ui.sizeSpin.value()
+        return (ss, packing, displaySize)
         #return (0.0001, packing)
         
     def cameraModule(self):
@@ -339,7 +343,7 @@ class ScannerProtoGui(ProtocolGui):
         if name is None:
             name = 'Grid'
             autoName = True
-        s, packing = self.pointSize()
+        s, packing, dispSize = self.pointSize()
         autoPos = False
         if pos is None:
             pos = [0,0]
@@ -696,13 +700,15 @@ class TargetGrid(widgets.ROI):
         self.points = []
         self.pens = []
         self.pointSize = ptSize
+        self.pointDisplaySize = self.pointSize
         self.gridPacking = pd
         self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         self.regeneratePoints()
         
-    def setPointSize(self, size, packing):
+    def setPointSize(self, size, packing, displaySize):
         self.pointSize = size
         self.gridPacking = packing
+        self.pointDisplaySize = displaySize
         self.regeneratePoints()
         
         
@@ -751,6 +757,7 @@ class TargetGrid(widgets.ROI):
     def paint(self, p, opt, widget):
         widgets.ROI.paint(self, p, opt, widget)
         ps2 = self.pointSize * 0.5
+        radius = self.pointDisplaySize*0.5
         #ps2 = self.pointSize * 0.5 * self.gridPacking
         #p.setPen(self.pen)
         p.scale(self.pointSize, self.pointSize) ## do scaling here because otherwise we end up with squares instead of circles (GL bug)
@@ -760,7 +767,8 @@ class TargetGrid(widgets.ROI):
                 p.setPen(self.pens[i])
             else:
                 p.setPen(self.pen)
-            p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
+            #p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
+            p.drawEllipse(QtCore.QPointF(pt[0]/self.pointSize, pt[1]/self.pointSize), radius/self.pointSize, radius/self.pointSize)
         
 class TargetOcclusion(widgets.PolygonROI):
     
