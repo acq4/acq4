@@ -225,6 +225,12 @@ class SpinBox(QtGui.QAbstractSpinBox):
     def setMinimum(self, m):
         self.opts['bounds'][0] = D(str(m))
         
+    def setPrefix(self, p):
+        self.setOpts(prefix=p)
+    
+    def setRange(self, r0, r1):
+        self.setOpts(bounds = [r0,r1])
+        
     def setProperty(self, prop, val):
         """setProperty is just for compatibility with QSpinBox"""
         if prop == 'value':

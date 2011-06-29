@@ -234,6 +234,7 @@ class ScannerProtoGui(ProtocolGui):
             laser = str(self.ui.laserCombo.currentText())
             cal = self.dev.getCalibration(cam, laser)
             ss = cal['spot'][1]
+           
         except:
             print "Could not find spot size from calibration."
             raise   
