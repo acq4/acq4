@@ -279,7 +279,7 @@ class ScannerProtoGui(ProtocolGui):
         else:
             if self.targets is None:
                 self.generateTargets()
-            print "targets:", len(self.targets), params['targets']
+            #print "targets:", len(self.targets), params['targets']
             (target, delay) = self.targets[params['targets']]
             
         prot = {
@@ -550,14 +550,15 @@ class ScannerProtoGui(ProtocolGui):
             #times=[]
             for i in range(nTries):
                 #prof.mark('attempt: %i' %i)
-                for n, m in optimize.opt2(locations, self.costFn2, greed=1.0):
+                for n, m in optimize.opt2(locations, self.costFn, greed=1.0):
                     ## we can update the progress dialog here.
                     if m is None:
                         solution = n
                     else:
                         prg = int(((i/float(nTries)) + ((n/float(m))/float(nTries))) * 1000)
+                        #print n,m, prg
                         progressDlg.setValue(prg)
-                        print i
+                        #print i
                         QtGui.QApplication.processEvents()
                         if progressDlg.wasCanceled():
                             raise Exception("Target sequence computation canceled by user.")
@@ -569,7 +570,7 @@ class ScannerProtoGui(ProtocolGui):
                     #print "  new best time:", time
                     minTime = time
                     bestSolution = solution[:]
-                    print "new best:", len(bestSolution), minTime
+                    #print "new best:", len(bestSolution), minTime
                 #prof.mark('check time')
         except:
             raise
@@ -577,14 +578,6 @@ class ScannerProtoGui(ProtocolGui):
             ## close progress dialog no matter what happens
             #print "Times: ", times
             progressDlg.setValue(1000)
-        
-        
-        #for i in range(10):
-            #solution = self.swapWorst(bestSolution)
-            #if solution is None:
-                #continue
-            #bestSolution = solution
-        
         
         self.targets = bestSolution
         #print "Solution:"
@@ -594,178 +587,23 @@ class ScannerProtoGui(ProtocolGui):
         #prof.mark('Done.')
         #prof.finish()
         
-    #def findSolution(self, locations):
-        ### locations is a list of (x,y) tuples
-        ### return value is a sorted list of tuples: ((x,y), time)
-        ###    where 'time' is the minimum interval before stimulating the current spot.
-        
-        ##prof2 = Profiler('     findSolution()')
-        #targetNumber = len(locations)
-        #locations = locations[:]
-        #random.shuffle(locations)
-        ##prof2.mark('setup')
-        
-        ##### Try sorting points into quadrants to make both computing order and scanning faster -- use this as a best guess to compute order
-        #locs = np.array(locations, [('x', np.float32),('y', np.float32)])
-        #medx = np.median(locs['x'])
-        #medy = np.median(locs['y'])
-        
-        ### sort spots into quadrants
-        #quad1 = locs[(locs['x'] <= medx)*(locs['y'] > medy)]
-        #quad2 = locs[(locs['x'] > medx)*(locs['y'] > medy)]
-        #quad3 = locs[(locs['x'] <= medx)*(locs['y'] <= medy)]
-        #quad4 = locs[(locs['x'] > medx)*(locs['y'] <= medy)]
-        
-        ### rearrange spots so that sets of 4 (1 from each quadrant) can be added to the locations list
-        #minLen = min([len(quad1), len(quad2), len(quad3), len(quad4)])
-        #locs = np.zeros((minLen, 4), [('x', np.float32), ('y', np.float32)])
-        #locs[:,0] = quad1[:minLen]
-        #locs[:,1] = quad2[:minLen]
-        #locs[:,2] = quad3[:minLen]
-        #locs[:,3] = quad4[:minLen]
-        
-        ### add sets of 4 spots to list
-        ##locations = []
-        ##for i in range(minLen):
-            ##locations += locs[i].tolist()
-        #locations = locs.flatten().tolist()
-            
-        ### add any remaining spots that didn't fit evenly into the locs array
-        #for q in [quad1, quad2, quad3, quad4]:
-            #if minLen < len(q):
-                #locations += q[minLen:].tolist()
-                
-        ##print "Target Number: ", targetNumber, "    locations: ", len(locations)
-        
-        ##### Computer order 
-        #if True:
-            #solution = [(locations.pop(), 0.0)]
-            #while len(locations) > 0:
-                ##prof2.mark('lenLocations: %i' %len(locations))
-                #minTime = None
-                #minIndex = None
-                #n=len(locations)-1
-                #for i in range(len(locations)):
-                    ##if i > n:
-                        ##break
-                    ##prof2.mark(i)
-                    #time, dist = self.computeTime(solution, locations[i])
-                    ##prof2.mark('found time')
-                    #if minTime is None or time < minTime:
-                        #minTime = time
-                        #minIndex = i
-                    #if time == 0.0:  ## can't get any better; stop searching
-                        ##solution.append((locations.pop(i), time))
-                        ##n-=1
-                        #break
-                #solution.append((locations.pop(minIndex), minTime))
-            ##prof2.finish()
-            #return solution
-       
-        
-    #def swapWorst(self, solution):
-        #"""Find points very close together, swap elsewhere to improve time"""
-        #maxTime = None
-        #maxInd = None
-        ### find worst pair
-        #for i in range(len(solution)):
-            #if maxTime is None or maxTime < solution[i][1]:
-                #maxTime = solution[i][1]
-                #maxInd = i
-        
-        ### Try moving
-        
-        #minTime = sum([l[1] for l in solution])
-        ##print "Trying swap, time is currently", minTime
-        #bestSolution = None
-        #for i in range(len(solution)):
-            #newSoln = solution[:]
-            #loc = newSoln.pop(maxInd)
-            #newSoln.insert(i, loc)
-            #(soln, time) = self.computeTimes([l[0] for l in newSoln])
-            #if time < minTime:
-                #minTime = time
-                #bestSolution = soln
-        ##print "  new time is ", minTime
-        #return bestSolution
-            
-    #def costFunction(self):
-        #state = self.stateGroup.state()
-        #minTime = state['minTime']
-        #minDist = state['minDist']
-        #b = np.log(0.1) / minDist**2
-        #return lambda dist: minTime * np.exp(b * dist**2)
-
-    #def costFn2(dist2, deadTime, b, minTime):
-        #### Takes distance^2 as argument!
-        #costCache = self.costFnCache
-        #try:
-            #cost = costCache[dist2]
-        #except KeyError:
-            #cost = minTime * np.exp(b * dist2)
-            #cost = np.clip(cost - deadTime, 0, minTime)  ## factor in dead time -- this prevents waiting small periods when the recording time is longer
-            #costCache[dist2] = cost
-        #return cost
-
-    #def costFn2(self, dist2):
-        #### Takes distance^2 as argument!
-        #state = self.stateGroup.state()
-        #minTime = state['minTime']
-        #minDist = state['minDist']
-        #deadTime = self.prot.getParam('duration')
-        #A = minTime / minDist**2
-        #return minTime - A * dist2
-
-    def costFn2(self, dist2):
+    def costFn(self, dist):
         ### Takes distance^2 as argument!
         state = self.stateGroup.state()
         minTime = state['minTime']
         minDist = state['minDist']
         deadTime = self.prot.getParam('duration')
         A = 2 * minTime / minDist**2
-        cost = np.where(
-            dist2 < minDist, 
+        return np.where(
+            dist < minDist, 
             np.where(
-                dist2 < minDist/2., 
-                minTime - A * dist2, 
-                A * (dist2**0.5-minDist)**2
+                dist < minDist/2., 
+                minTime - A * dist**2, 
+                A * (dist-minDist)**2
             ), 
             0
         )
         return np.clip(cost-deadTime, 0, minTime)
-
-
-
-    #def computeTime(self, solution, loc, func=None):
-        #"""Return the minimum time that must be waited before stimulating the location, given that solution has already run"""
-        #if func is None:
-            #func = self.costFunction()
-        #state = self.stateGroup.state()
-        #minDist = state['minDist']
-        #minTime = state['minTime']
-        #minWaitTime = 0.0
-        #cumWaitTime = 0
-        #for i in range(len(solution)-1, -1, -1):
-            #l = solution[i][0]
-            #dx = loc[0] - l[0]
-            #dy = loc[1] - l[1]
-            #dist = (dx **2 + dy **2) ** 0.5
-            #if dist > minDist:
-                #time = 0.0
-            #else:
-                #time = func(dist) - cumWaitTime
-            ##print i, "cumulative time:", cumWaitTime, "distance: %0.1fum" % (dist * 1e6), "time:", time
-            #minWaitTime = max(minWaitTime, time)
-            #cumWaitTime += solution[i][1]
-            #if cumWaitTime > minTime:
-                #break
-        ##print "--> minimum:", minWaitTime
-        #return minWaitTime, dist
-            
-            
-            
-            
-        
 
     def activeItems(self):
         return [self.items[i] for i in self.items if self.listItem(i).checkState() == QtCore.Qt.Checked]
