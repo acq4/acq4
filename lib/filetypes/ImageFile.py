@@ -53,7 +53,7 @@ class ImageFile(FileType):
         img = Image.open(fileHandle.name())
         arr = array(img)
         if arr.ndim == 0:
-            raise Exception("Image has no data. Either 1) this is not a valid image or 2) the PIL script is not correctly installed.")
+            raise Exception("Image has no data. Either 1) this is not a valid image or 2) PIL does not support this image type.")
             
         #ext = os.path.splitext(fileHandle.name())[1].lower()[1:]
         #if ext in ['tif', 'tiff']:
@@ -79,6 +79,15 @@ class ImageFile(FileType):
             transp[1] = 0
             axisHint = ['x', 'y']
         elif arr.ndim == 3:
+            if len(img.getbands()) > 1:
+                transp[0] = 1
+                transp[1] = 0
+                axisHint = ['x', 'y']
+            else:
+                transp[1] = 2
+                transp[2] = 1
+                axisHint = ['t', 'x', 'y']
+        elif arr.ndim == 4:
             transp[1] = 2
             transp[2] = 1
             axisHint = ['t', 'x', 'y']
@@ -86,7 +95,7 @@ class ImageFile(FileType):
             raise Exception("Bad image size: %s" % str(arr.ndim))
         #print arr.shape
         arr = arr.transpose(tuple(transp))
-        axisHint.append(img.mode)
+        axisHint.append(img.getbands())
         
         arr = Array(arr) ## allow addition of new attributes
         arr.axisHint = arr

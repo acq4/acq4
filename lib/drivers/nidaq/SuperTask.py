@@ -51,7 +51,7 @@ class SuperTask:
             self.taskInfo[key] = {'cache': None, 'chans': [], 'dataWritten': False}
         return self.tasks[key]
         
-    def addChannel(self, chan, typ, mode=None, vRange=[-10., 10.]):
+    def addChannel(self, chan, typ, mode=None, vRange=[-10., 10.], **kargs):
         chan = self.absChanName(chan)
         (dev, typ) = self.getTaskKey(chan, typ)
         t = self.getTask(chan, typ)
@@ -77,16 +77,16 @@ class SuperTask:
             
         if typ == 'ai':
             #print 'CreateAIVoltageChan(%s, "", %s, vRange[0], vRange[1], Val_Volts, None)' % (chan, str(mode))
-            t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], self.daq.Val_Volts, None)
+            t.CreateAIVoltageChan(chan, "", mode, vRange[0], vRange[1], self.daq.Val_Volts, None, **kargs)
         elif typ == 'ao':
             #print 'CreateAOVoltageChan(%s, "", vRange[0], vRange[1], Val_Volts, None)' % (chan)
-            t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], self.daq.Val_Volts, None)
+            t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], self.daq.Val_Volts, None, **kargs)
         elif typ == 'di':
             #print 'CreateDIChan(%s, "", %s)' % (chan, str(mode))
-            t.CreateDIChan(chan, "", mode)
+            t.CreateDIChan(chan, "", mode, **kargs)
         elif typ == 'do':
             #print 'CreateDOChan(%s, "", %s)' % (chan, str(mode))
-            t.CreateDOChan(chan, "", mode)
+            t.CreateDOChan(chan, "", mode, **kargs)
         else:
             raise Exception("Don't know how to create channel type %s" % typ)
         self.taskInfo[(dev, typ)]['chans'].append(chan)

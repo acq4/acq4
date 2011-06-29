@@ -812,7 +812,7 @@ class ProtocolRunner(Module):
                 paramInds[key] = range(len(i[2]))
                 pLen *= len(i[2])
                 linkedParams[key] = i[3]
-            
+                
             ## Set storage dir
             self.currentDir = self.manager.getCurrentDir()
             if store:
@@ -1187,7 +1187,7 @@ class TaskThread(QtCore.QThread):
                     
     def runOnce(self, params=None):
         #print "TaskThread:runOnce"
-        prof = Profiler("ProtocolRunner.TaskThread.runOnce", disabled=True)
+        prof = Profiler("ProtocolRunner.TaskThread.runOnce", disabled=True, delayed=False)
         startTime = ptime.time()
         if params is None:
             params = {}

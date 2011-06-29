@@ -449,28 +449,8 @@ class AxoPatchProtoGui(DAQGenericProtoGui):
             'daqProtocol': daqProto
         }
         
-        ## we want to handle holding values manually
-        #if 'holding' in daqProto['Command']:
-        #    proto['holding'] = daqProto['holding']
-        #    del daqProto['holding']
-        #if 'holding' in daqProto['Command']:
-        #    proto['holding'] = daqProto['holding']
-        #    del daqProto['holding']
-        
-        #if self.ctrl.holdingCheck.isChecked():
-        #    proto['holding'] = self.ctrl.holdingSpin.value()
             
         return proto
-        
-    #def holdingCheckChanged(self, v):
-    #    self.ctrl.holdingSpin.setEnabled(self.ctrl.holdingCheck.isChecked())
-    #    self.holdingChanged()
-            
-    #def holdingChanged(self, *args):
-    #    
-    #    if not self.ctrl.holdingCheck.isChecked():
-    #        hv = self.dev.getHolding(self.getMode())
-    #        self.ctrl.holdingSpin.setValue(hv)
         
     def modeChanged(self):
         global ivModes

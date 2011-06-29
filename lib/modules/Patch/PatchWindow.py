@@ -445,7 +445,7 @@ class PatchThread(QtCore.QThread):
                 lastTime = None
                 while True:
                     prof = Profiler('PatchThread.run', disabled=True)
-                    lastTime = time.clock()
+                    #lastTime = time.clock()   ## moved to after the command run
                     
                     updateCommand = False
                     l.relock()
@@ -535,6 +535,9 @@ class PatchThread(QtCore.QThread):
                     
                     #self.emit(QtCore.SIGNAL('newFrame'), frame)
                     self.sigNewFrame.emit(frame)
+                    
+                    
+                    lastTime = time.clock()-params['recordTime'] ## This is not a proper 'cycle time', but instead enforces a minimum interval between cycles (but this can be very important for performance)
                     
                     ## sleep until it is time for the next run
                     c = 0

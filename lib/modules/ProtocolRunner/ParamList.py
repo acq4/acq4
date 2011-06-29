@@ -101,8 +101,6 @@ class ParamList(QtGui.QTreeWidget):
             for i2 in i[1]:
                 i[0].addChild(i2)
         
-        
-        
     
     def dropEvent(self, ev):
         QtGui.QTreeWidget.dropEvent(self, ev)

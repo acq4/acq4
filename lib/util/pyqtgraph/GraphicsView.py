@@ -59,7 +59,7 @@ class GraphicsView(QtGui.QGraphicsView):
         self.lastMousePos = None
         #self.setMouseTracking(False)
         self.aspectLocked = False
-        self.yInverted = True
+        #self.yInverted = True
         self.range = QtCore.QRectF(0, 0, 1, 1)
         self.autoPixelRange = True
         self.currentItem = None
@@ -111,6 +111,7 @@ class GraphicsView(QtGui.QGraphicsView):
             self.scene().removeItem(self.centralWidget)
         self.centralWidget = item
         self.sceneObj.addItem(item)
+        self.resizeEvent(None)
         
     def addItem(self, *args):
         return self.scene().addItem(*args)
@@ -252,11 +253,11 @@ class GraphicsView(QtGui.QGraphicsView):
         r1.setBottom(r.bottom())
         self.setRange(r1, padding=[0, padding], propagate=False)
         
-    def invertY(self, invert=True):
-        #if self.yInverted != invert:
-            #self.scale[1] *= -1.
-        self.yInverted = invert
-        self.updateMatrix()
+    #def invertY(self, invert=True):
+        ##if self.yInverted != invert:
+            ##self.scale[1] *= -1.
+        #self.yInverted = invert
+        #self.updateMatrix()
     
     
     def wheelEvent(self, ev):

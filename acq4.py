@@ -16,13 +16,11 @@ import os, sys
 pyDir = os.path.split(sys.executable)[0]
 qtConf = os.path.join(pyDir, 'qt.conf')
 if not os.path.exists(qtConf):
-    print "PyQt fix: installing qt.conf where it should be.."
     import shutil
     pyqtConf = os.path.join(pyDir, 'Lib', 'site-packages', 'PyQt4', 'qt.conf')
     if os.path.exists(pyqtConf):
+        print "PyQt fix: installing qt.conf where it should be.."
         shutil.copy(pyqtConf, qtConf)
-    else:
-        print "  ERROR: can't find any qt.conf. This is sorta ok, but you may be missing some image plugins."
 
 #import lib.util.PySideImporter  ## Use PySide instead of PyQt
 from PyQt4 import QtGui, QtCore
@@ -80,6 +78,7 @@ try:
     from debug import *
     import pyqtgraph as pg
     import functions as fn
+    import numpy as np
 
     ### Use CLI history and tab completion
     import atexit
