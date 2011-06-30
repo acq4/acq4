@@ -60,7 +60,10 @@ class SpinBox(QtGui.QAbstractSpinBox):
             'suffix': '',
             'siPrefix': False,   ## Set to True to display numbers with SI prefix (ie, 100pA instead of 1e-10A)
             
-            'delayUntilEditFinished': True   ## do not send signals until text editing has finished
+            'delayUntilEditFinished': True,   ## do not send signals until text editing has finished
+            
+            ## for compatibility with QDoubleSpinBox and QSpinBox
+            'decimals': 2
         }
         
         self.decOpts = ['step', 'minStep']
@@ -222,6 +225,12 @@ class SpinBox(QtGui.QAbstractSpinBox):
     def setMinimum(self, m):
         self.opts['bounds'][0] = D(str(m))
         
+    def setPrefix(self, p):
+        self.setOpts(prefix=p)
+    
+    def setRange(self, r0, r1):
+        self.setOpts(bounds = [r0,r1])
+        
     def setProperty(self, prop, val):
         """setProperty is just for compatibility with QSpinBox"""
         if prop == 'value':
@@ -236,6 +245,9 @@ class SpinBox(QtGui.QAbstractSpinBox):
 
     def setSingleStep(self, step):
         self.setOpts(step=step)
+        
+    def setDecimals(self, decimals):
+        self.setOpts(decimals=decimals)
 
     def value(self):
         return float(self.val)

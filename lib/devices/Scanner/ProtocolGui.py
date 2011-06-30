@@ -19,7 +19,7 @@ class ScannerProtoGui(ProtocolGui):
         ProtocolGui.__init__(self, dev, prot)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        self.ui.programControlsLayout.setEnabled(False)
+        #self.ui.programControlsLayout.setEnabled(False)
         dm = getManager()
         self.targets = None
         self.items = {}
@@ -41,17 +41,22 @@ class ScannerProtoGui(ProtocolGui):
                 self.ui.laserCombo.setCurrentIndex(self.ui.laserCombo.count()-1)
 
         self.fillModuleList()
-              
+        
+        ## Set up SpinBoxes
+        self.ui.minTimeSpin.setOpts(dec=True, step=1, minStep=1e-3, siPrefix=True, suffix='s', bounds=[0, 50])
+        self.ui.minDistSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[0, 10e-3])
+        self.ui.sizeSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[0, 1e-3])
         ## Create state group for saving/restoring state
         self.stateGroup = WidgetGroup([
             (self.ui.cameraCombo,),
             (self.ui.laserCombo,),
             (self.ui.minTimeSpin, 'minTime'),
-            (self.ui.minDistSpin, 'minDist', 1e6),
+            (self.ui.minDistSpin, 'minDist'),
             (self.ui.simulateShutterCheck, 'simulateShutter'),
+            (self.ui.sizeSpin, 'spotSize'),
 #            (self.ui.packingSpin, 'packingDensity')  ## packing density should be suggested by device rather than loaded with protocol (I think..)
         ])
-        self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6})
+        self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6, 'sizeSpin':100e-6})
 
         ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
         
@@ -68,6 +73,9 @@ class ScannerProtoGui(ProtocolGui):
         self.ui.displayCheck.toggled.connect(self.showInterface)
         self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
         self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
+        self.ui.sizeFromCalibrationRadio.toggled.connect(self.updateSpotSizes)
+        self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
+        #QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         self.ui.minTimeSpin.valueChanged.connect(self.sequenceChanged)
         self.ui.minDistSpin.valueChanged.connect(self.sequenceChanged)
         self.ui.recomputeBtn.clicked.connect(self.generateTargets)
@@ -80,8 +88,9 @@ class ScannerProtoGui(ProtocolGui):
         
         #self.currentTargetMarker.hide()
         
-        self.testTarget = TargetPoint([0,0], self.pointSize()[0])
+        self.testTarget = TargetPoint([0,0], 100e-6)
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
+        self.updateSpotSizes()
         #camMod = self.cameraModule()
         
         self.currentObjective = None
@@ -187,11 +196,15 @@ class ScannerProtoGui(ProtocolGui):
         self.dev.updateTargetPacking(self.ui.packingSpin.value())
         self.updateSpotSizes()
         
+    def sizeSpinEdited(self):
+        self.ui.sizeCustomRadio.setChecked(True)
+        self.updateSpotSizes()
+        
     def updateSpotSizes(self):
-        size, packing = self.pointSize()
+        size, packing, displaySize = self.pointSize()
         #pd = self.pointSize()[1]
         for i in self.items.values():
-            i.setPointSize(size, packing)
+            i.setPointSize(size, packing, displaySize)
         self.testTarget.setPointSize(size)
 
     def showInterface(self, b):
@@ -204,17 +217,24 @@ class ScannerProtoGui(ProtocolGui):
         return self.ui.itemList.findItems(name, QtCore.Qt.MatchExactly)[0]
 
     def pointSize(self):
+        packing = self.ui.packingSpin.value()
         try:
             cam = self.cameraModule().config['camDev']
             laser = str(self.ui.laserCombo.currentText())
             cal = self.dev.getCalibration(cam, laser)
-            #ss = cal['spot'][1] * self.ui.packingSpin.value()
-            packing = self.ui.packingSpin.value()
             ss = cal['spot'][1]
+           
         except:
-            ss = 1
-            packing = self.ui.packingSpin.value()
-        return (ss, packing)
+            print "Could not find spot size from calibration."
+            raise   
+        if self.ui.sizeFromCalibrationRadio.isChecked():
+            displaySize = ss
+            self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
+            self.stateGroup.setState({'spotSize':ss})
+            self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
+        elif self.ui.sizeCustomRadio.isChecked():
+            displaySize = self.ui.sizeSpin.value()
+        return (ss, packing, displaySize)
         #return (0.0001, packing)
         
     def cameraModule(self):
@@ -315,7 +335,7 @@ class ScannerProtoGui(ProtocolGui):
         if name is None:
             name = 'Grid'
             autoName = True
-        s, packing = self.pointSize()
+        s, packing, dispSize = self.pointSize()
         autoPos = False
         if pos is None:
             pos = [0,0]
@@ -487,7 +507,7 @@ class ScannerProtoGui(ProtocolGui):
         items = self.activeItems()
         locations = []
         occArea = QtGui.QPainterPath()
-        for i in self.items.itervalues():
+        for i in items:
             if isinstance(i, TargetOcclusion):
                 occArea |= i.mapToScene(i.shape())
             
@@ -521,6 +541,7 @@ class ScannerProtoGui(ProtocolGui):
         
         minTime = None
         bestSolution = None
+
         nTries = np.clip(int(10 - len(locations)/20), 1, 10)
         
         ## About to compute order/timing of targets; display a progress dialog
@@ -670,14 +691,16 @@ class TargetGrid(widgets.ROI):
         self.points = []
         self.pens = []
         self.pointSize = ptSize
+        self.pointDisplaySize = self.pointSize
         self.gridPacking = pd
         ## cache is not working in qt 4.7
         self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         self.regeneratePoints()
         
-    def setPointSize(self, size, packing):
+    def setPointSize(self, size, packing, displaySize):
         self.pointSize = size
         self.gridPacking = packing
+        self.pointDisplaySize = displaySize
         self.regeneratePoints()
         
         
@@ -726,6 +749,7 @@ class TargetGrid(widgets.ROI):
     def paint(self, p, opt, widget):
         widgets.ROI.paint(self, p, opt, widget)
         ps2 = self.pointSize * 0.5
+        radius = self.pointDisplaySize*0.5
         #ps2 = self.pointSize * 0.5 * self.gridPacking
         #p.setPen(self.pen)
         p.scale(self.pointSize, self.pointSize) ## do scaling here because otherwise we end up with squares instead of circles (GL bug)
@@ -735,7 +759,8 @@ class TargetGrid(widgets.ROI):
                 p.setPen(self.pens[i])
             else:
                 p.setPen(self.pen)
-            p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
+            #p.drawEllipse(QtCore.QRectF((pt[0] - ps2)/self.pointSize, (pt[1] - ps2)/self.pointSize, 1, 1))
+            p.drawEllipse(QtCore.QPointF(pt[0]/self.pointSize, pt[1]/self.pointSize), radius/self.pointSize, radius/self.pointSize)
         
 class TargetOcclusion(widgets.PolygonROI):
     
@@ -746,7 +771,7 @@ class TargetOcclusion(widgets.PolygonROI):
         widgets.PolygonROI.__init__(self, points, pos)
         self.setZValue(10000000)
     
-    def setPointSize(self, size, packing):
+    def setPointSize(self, size, packing, displaySize=None):
         pass
     
 class TargetProgram(QtCore.QObject):

@@ -207,6 +207,7 @@ class CameraWindow(QtGui.QMainWindow):
 
         self.recordThread = RecordThread(self, self.module.manager)
         self.recordThread.start()
+    
 
 
 
