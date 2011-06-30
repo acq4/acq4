@@ -545,12 +545,13 @@ class ScannerProtoGui(ProtocolGui):
         #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         progressDlg.setMinimumDuration(500)
         #prof.mark('progressDlg')
+        deadTime = self.prot.getParam('duration')
         
         try:
             #times=[]
             for i in range(nTries):
                 #prof.mark('attempt: %i' %i)
-                for n, m in optimize.opt2(locations, self.costFn, greed=1.0):
+                for n, m in optimize.opt2(locations, self.costFn, deadTime, greed=1.0):
                     ## we can update the progress dialog here.
                     if m is None:
                         solution = n
@@ -592,7 +593,6 @@ class ScannerProtoGui(ProtocolGui):
         state = self.stateGroup.state()
         minTime = state['minTime']
         minDist = state['minDist']
-        deadTime = self.prot.getParam('duration')
         A = 2 * minTime / minDist**2
         return np.where(
             dist < minDist, 
@@ -603,7 +603,6 @@ class ScannerProtoGui(ProtocolGui):
             ), 
             0
         )
-        return np.clip(cost-deadTime, 0, minTime)
 
     def activeItems(self):
         return [self.items[i] for i in self.items if self.listItem(i).checkState() == QtCore.Qt.Checked]
