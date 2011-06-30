@@ -56,37 +56,21 @@ class ScannerProtoGui(ProtocolGui):
         ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
         
         #self.prot.sigProtocolChanged.connect(self.protocolChanged)
-        #QtCore.QObject.connect(self.ui.addPointBtn, QtCore.SIGNAL('clicked()'), self.addPoint)
         self.ui.addPointBtn.clicked.connect(lambda: self.addPoint())
-        #QtCore.QObject.connect(self.ui.addGridBtn, QtCore.SIGNAL('clicked()'), self.addGrid)
         self.ui.addGridBtn.clicked.connect(lambda: self.addGrid())
-        #QtCore.QObject.connect(self.ui.addOcclusionBtn, QtCore.SIGNAL('clicked()'), self.addOcclusion)
         self.ui.addOcclusionBtn.clicked.connect(lambda: self.addOcclusion())
-        #QtCore.QObject.connect(self.ui.addProgramBtn, QtCore.SIGNAL('clicked()'), self.addProgram)
         self.ui.addProgramBtn.clicked.connect(lambda: self.addProgram())
-        #QtCore.QObject.connect(self.ui.addSpiralScanBtn, QtCore.SIGNAL('clicked()'), self.addSpiral)
         self.ui.addSpiralScanBtn.clicked.connect(lambda: self.addSpiral())
-        #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.delete)
         self.ui.deleteBtn.clicked.connect(lambda: self.delete())
-        #QtCore.QObject.connect(self.ui.deleteAllBtn, QtCore.SIGNAL('clicked()'), self.deleteAll)
         self.ui.deleteAllBtn.clicked.connect(lambda: self.deleteAll())
-        #QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemToggled)
         self.ui.itemList.itemClicked.connect(self.itemToggled)
-        #QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*,QListWidgetItem*)'), self.itemSelected)
         self.ui.itemList.currentItemChanged.connect(self.itemSelected)
-        #QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('toggled(bool)'), self.showInterface)
         self.ui.displayCheck.toggled.connect(self.showInterface)
-        #QtCore.QObject.connect(self.ui.cameraCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.camModChanged)
         self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
-        #QtCore.QObject.connect(self.ui.packingSpin, QtCore.SIGNAL('valueChanged(double)'), self.packingSpinChanged)
         self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
-        #QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         self.ui.minTimeSpin.valueChanged.connect(self.sequenceChanged)
-        #QtCore.QObject.connect(self.ui.minDistSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         self.ui.minDistSpin.valueChanged.connect(self.sequenceChanged)
-        #QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.generateTargets)
         self.ui.recomputeBtn.clicked.connect(self.generateTargets)
-        #QtCore.QObject.connect(dm, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
         dm.sigModulesChanged.connect(self.fillModuleList)
 
         #self.currentTargetMarker = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
@@ -687,6 +671,7 @@ class TargetGrid(widgets.ROI):
         self.pens = []
         self.pointSize = ptSize
         self.gridPacking = pd
+        ## cache is not working in qt 4.7
         self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         self.regeneratePoints()
         

@@ -1,5 +1,5 @@
 import numpy as np
-from debug import Profiler
+#from debug import Profiler
 
 #def optimizeSequence(locations, costFn):
     ### determine an optimal sequence of locations to stimulate
@@ -140,7 +140,7 @@ def opt2(locs, costFn, deadTime, greed=1.0, seed=None):
         
         ## subtract off dead time
         cost['cost'] = np.clip(cost['cost']-deadTime, 0, np.inf)
-        
+          
         ## sort by cost, find the median cost
         sortedCost = np.sort(cost, order=['cost'])
         mid = int(len(sortedCost) * gFactor)
@@ -225,9 +225,9 @@ if __name__ == '__main__':
 
 
     view = pg.GraphicsWindow(border=(50, 50, 50))
-    for d in [0.2e-3, 0.5e-3, 1e-3]:
-        for greed in [1.0]:
-            for n in [20, 20, 20, 20, 20]:
+    for d in [0.5e-3]:
+        for n in [20]:
+            for greed in [1.0]:
                 locs = []
                 for i in np.linspace(-d, d, n):
                     for j in np.linspace(-d, d, n):
@@ -269,33 +269,33 @@ if __name__ == '__main__':
                 
                 vb.setRange(sp.boundingRect())
                 
-                ### show video of sequence
-                #img = np.zeros((n**2, n, n, 3), dtype=float)
-                #l3 = [x[0] for x in l2]
-                #l3.sort(lambda a,b: cmp(a[0], b[0]) if a[0]!= b[0] else cmp(a[1], b[1]))
-                #l3 = np.array(l3)
-                #indx = ((n-1) * (l3[0]+d) / (2*d)).astype(int)
-                #indy = ((n-1) * (l3[1]+d) / (2*d)).astype(int)
-                #for i in range(n**2):
-                    #if i > 0:
-                        #img[i] = img[i-1]
+                ## show video of sequence
+                img = np.zeros((n**2, n, n, 3), dtype=float)
+                l3 = [x[0] for x in l2]
+                l3.sort(lambda a,b: cmp(a[0], b[0]) if a[0]!= b[0] else cmp(a[1], b[1]))
+                l3 = np.array(l3)
+                indx = ((n-1) * (l3[0]+d) / (2*d)).astype(int)
+                indy = ((n-1) * (l3[1]+d) / (2*d)).astype(int)
+                for i in range(n**2):
+                    if i > 0:
+                        img[i] = img[i-1]
                         
-                    #dist = np.sqrt(((l3-l2[i][0])**2).sum(axis=1))  ## distances from current point to each remaining location
+                    dist = np.sqrt(((l3-l2[i][0])**2).sum(axis=1))  ## distances from current point to each remaining location
                     
-                    #img[i,:,:,1:] = np.clip(img[i,:,:,1:] - (deadTime + l2[i][1]), 0, minTime)
+                    img[i,:,:,1:] = np.clip(img[i,:,:,1:] - (deadTime + l2[i][1]), 0, minTime)
 
-                    ### Compute direct costs and take the max value of direct and leftover cost
-                    #dCost = costFn2(dist)
-                    #dCost.shape = (n,n,1)
+                    ## Compute direct costs and take the max value of direct and leftover cost
+                    dCost = costFn2(dist)
+                    dCost.shape = (n,n,1)
                     
-                    #img[i,:,:,1:] = np.where(dCost > img[i,:,:,1:], dCost, img[i,:,:,1:])
+                    img[i,:,:,1:] = np.where(dCost > img[i,:,:,1:], dCost, img[i,:,:,1:])
                     
                     
-                    #x = int(((n-1) * (l2[i][0][0]+d) / (2*d))+0.5)
-                    #y = int(((n-1) * (l2[i][0][1]+d) / (2*d))+0.5)
-                    #img[i,x,y,0] = 7
-                    ##img[i, x, y] = minTime
-                #view2 = pg.show(img, title=key)
+                    x = int(((n-1) * (l2[i][0][0]+d) / (2*d))+0.5)
+                    y = int(((n-1) * (l2[i][0][1]+d) / (2*d))+0.5)
+                    img[i,x,y,0] = 7
+                    #img[i, x, y] = minTime
+                view2 = pg.show(img, title=key)
                 
                 
                 
