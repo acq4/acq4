@@ -70,7 +70,7 @@ class ScannerProtoGui(ProtocolGui):
         self.ui.deleteAllBtn.clicked.connect(lambda: self.deleteAll())
         self.ui.itemList.itemClicked.connect(self.itemToggled)
         self.ui.itemList.currentItemChanged.connect(self.itemSelected)
-        self.ui.displayCheck.toggled.connect(self.showInterface)
+        self.ui.hideCheck.toggled.connect(self.showInterface)
         self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
         self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
         self.ui.sizeFromCalibrationRadio.toggled.connect(self.updateSpotSizes)
@@ -208,10 +208,10 @@ class ScannerProtoGui(ProtocolGui):
         self.testTarget.setPointSize(size)
 
     def showInterface(self, b):
-        for k in self.items:
-            if self.listItem(k).checkState() == QtCore.Qt.Checked:
-                self.items[k].setVisible(b)
-        self.testTarget.setVisible(b)
+            for k in self.items:
+                if self.listItem(k).checkState() == QtCore.Qt.Checked:
+                    self.items[k].setVisible(not b)
+            self.testTarget.setVisible(not b)
 
     def listItem(self, name):
         return self.ui.itemList.findItems(name, QtCore.Qt.MatchExactly)[0]
@@ -453,7 +453,7 @@ class ScannerProtoGui(ProtocolGui):
     def itemToggled(self, item):
         name = str(item.text())
         i = self.items[name]
-        if item.checkState() == QtCore.Qt.Checked and self.ui.displayCheck.isChecked():
+        if item.checkState() == QtCore.Qt.Checked and not self.ui.hideCheck.isChecked():
             i.show()
         else:
             i.hide()
@@ -495,7 +495,7 @@ class ScannerProtoGui(ProtocolGui):
             pos[1] += state['size'][1]/2.0
             info = ['point', pos]
         elif isinstance(item, TargetGrid):
-            info = ['grid', state['pos'], state['size'], state['angle']]
+            info = ['grid', state['pos'], state['size'], -state['angle']]
         elif isinstance(item, TargetOcclusion):
             info = ['occlusion', item.pos(), item.listPoints()]
         elif isinstance(item, widgets.SpiralROI):
