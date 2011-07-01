@@ -61,39 +61,24 @@ class ScannerProtoGui(ProtocolGui):
         ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
         
         #self.prot.sigProtocolChanged.connect(self.protocolChanged)
-        #QtCore.QObject.connect(self.ui.addPointBtn, QtCore.SIGNAL('clicked()'), self.addPoint)
         self.ui.addPointBtn.clicked.connect(lambda: self.addPoint())
-        #QtCore.QObject.connect(self.ui.addGridBtn, QtCore.SIGNAL('clicked()'), self.addGrid)
         self.ui.addGridBtn.clicked.connect(lambda: self.addGrid())
-        #QtCore.QObject.connect(self.ui.addOcclusionBtn, QtCore.SIGNAL('clicked()'), self.addOcclusion)
         self.ui.addOcclusionBtn.clicked.connect(lambda: self.addOcclusion())
-        #QtCore.QObject.connect(self.ui.addProgramBtn, QtCore.SIGNAL('clicked()'), self.addProgram)
         self.ui.addProgramBtn.clicked.connect(lambda: self.addProgram())
-        #QtCore.QObject.connect(self.ui.addSpiralScanBtn, QtCore.SIGNAL('clicked()'), self.addSpiral)
         self.ui.addSpiralScanBtn.clicked.connect(lambda: self.addSpiral())
-        #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.delete)
         self.ui.deleteBtn.clicked.connect(lambda: self.delete())
-        #QtCore.QObject.connect(self.ui.deleteAllBtn, QtCore.SIGNAL('clicked()'), self.deleteAll)
         self.ui.deleteAllBtn.clicked.connect(lambda: self.deleteAll())
-        #QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.itemToggled)
         self.ui.itemList.itemClicked.connect(self.itemToggled)
-        #QtCore.QObject.connect(self.ui.itemList, QtCore.SIGNAL('currentItemChanged(QListWidgetItem*,QListWidgetItem*)'), self.itemSelected)
         self.ui.itemList.currentItemChanged.connect(self.itemSelected)
-        #QtCore.QObject.connect(self.ui.displayCheck, QtCore.SIGNAL('toggled(bool)'), self.showInterface)
         self.ui.displayCheck.toggled.connect(self.showInterface)
-        #QtCore.QObject.connect(self.ui.cameraCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.camModChanged)
         self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
-        #QtCore.QObject.connect(self.ui.packingSpin, QtCore.SIGNAL('valueChanged(double)'), self.packingSpinChanged)
         self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
         self.ui.sizeFromCalibrationRadio.toggled.connect(self.updateSpotSizes)
-        self.ui.sizeSpin.valueChanged.connect(self.updateSpotSizes)
+        self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
         #QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         self.ui.minTimeSpin.valueChanged.connect(self.sequenceChanged)
-        #QtCore.QObject.connect(self.ui.minDistSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         self.ui.minDistSpin.valueChanged.connect(self.sequenceChanged)
-        #QtCore.QObject.connect(self.ui.recomputeBtn, QtCore.SIGNAL('clicked()'), self.generateTargets)
         self.ui.recomputeBtn.clicked.connect(self.generateTargets)
-        #QtCore.QObject.connect(dm, QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
         dm.sigModulesChanged.connect(self.fillModuleList)
 
         #self.currentTargetMarker = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
@@ -211,6 +196,10 @@ class ScannerProtoGui(ProtocolGui):
         self.dev.updateTargetPacking(self.ui.packingSpin.value())
         self.updateSpotSizes()
         
+    def sizeSpinEdited(self):
+        self.ui.sizeCustomRadio.setChecked(True)
+        self.updateSpotSizes()
+        
     def updateSpotSizes(self):
         size, packing, displaySize = self.pointSize()
         #pd = self.pointSize()[1]
@@ -240,7 +229,9 @@ class ScannerProtoGui(ProtocolGui):
             raise   
         if self.ui.sizeFromCalibrationRadio.isChecked():
             displaySize = ss
+            self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
             self.stateGroup.setState({'spotSize':ss})
+            self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
         elif self.ui.sizeCustomRadio.isChecked():
             displaySize = self.ui.sizeSpin.value()
         return (ss, packing, displaySize)
@@ -516,7 +507,7 @@ class ScannerProtoGui(ProtocolGui):
         items = self.activeItems()
         locations = []
         occArea = QtGui.QPainterPath()
-        for i in self.items.itervalues():
+        for i in items:
             if isinstance(i, TargetOcclusion):
                 occArea |= i.mapToScene(i.shape())
             
@@ -551,7 +542,7 @@ class ScannerProtoGui(ProtocolGui):
         minTime = None
         bestSolution = None
 
-        nTries = numpy.clip(int(10 - len(locations)/20), 1, 10)
+        nTries = np.clip(int(10 - len(locations)/20), 1, 10)
         
         ## About to compute order/timing of targets; display a progress dialog
         #prof.mark('setup')
@@ -559,12 +550,13 @@ class ScannerProtoGui(ProtocolGui):
         #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         progressDlg.setMinimumDuration(500)
         #prof.mark('progressDlg')
+        deadTime = self.prot.getParam('duration')
         
         try:
             #times=[]
             for i in range(nTries):
                 #prof.mark('attempt: %i' %i)
-                for n, m in optimize.opt2(locations, self.costFn, greed=1.0):
+                for n, m in optimize.opt2(locations, self.costFn, deadTime, greed=1.0):
                     ## we can update the progress dialog here.
                     if m is None:
                         solution = n
@@ -606,7 +598,6 @@ class ScannerProtoGui(ProtocolGui):
         state = self.stateGroup.state()
         minTime = state['minTime']
         minDist = state['minDist']
-        deadTime = self.prot.getParam('duration')
         A = 2 * minTime / minDist**2
         return np.where(
             dist < minDist, 
@@ -617,7 +608,6 @@ class ScannerProtoGui(ProtocolGui):
             ), 
             0
         )
-        return np.clip(cost-deadTime, 0, minTime)
 
     def activeItems(self):
         return [self.items[i] for i in self.items if self.listItem(i).checkState() == QtCore.Qt.Checked]
@@ -703,6 +693,7 @@ class TargetGrid(widgets.ROI):
         self.pointSize = ptSize
         self.pointDisplaySize = self.pointSize
         self.gridPacking = pd
+        ## cache is not working in qt 4.7
         self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         self.regeneratePoints()
         
@@ -780,7 +771,7 @@ class TargetOcclusion(widgets.PolygonROI):
         widgets.PolygonROI.__init__(self, points, pos)
         self.setZValue(10000000)
     
-    def setPointSize(self, size, packing):
+    def setPointSize(self, size, packing, displaySize=None):
         pass
     
 class TargetProgram(QtCore.QObject):

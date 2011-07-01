@@ -71,11 +71,8 @@ class ScannerDeviceGui(QtGui.QWidget):
         #self.ui.view.setAspectLocked(True)
         #self.ui.view.invertY()
 
-        #QtCore.QObject.connect(self.ui.calibrateBtn, QtCore.SIGNAL('clicked()'), self.calibrateClicked)
         self.ui.calibrateBtn.clicked.connect(self.calibrateClicked)
-        #QtCore.QObject.connect(self.ui.storeCamConfBtn, QtCore.SIGNAL('clicked()'), self.storeCamConf)
         self.ui.storeCamConfBtn.clicked.connect(self.storeCamConf)
-        #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteClicked)
         self.ui.deleteBtn.clicked.connect(self.deleteClicked)
         self.ui.shutterBtn.clicked.connect(self.shutterClicked)
         self.dev.sigShutterChanged.connect(self.shutterChanged)
