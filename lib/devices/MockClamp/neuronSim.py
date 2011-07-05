@@ -49,7 +49,7 @@ def run(cmd):
     h.dt = dt
     data = cmd['data']
     mode = cmd['mode']
-    print "data:", data.min(), data.max()
+    #print "data:", data.min(), data.max()
 
     #times = h.Vector(np.linspace(h.t, h.t+len(data)*dt, len(data)))
     #print "times:", times.min(), times.max()

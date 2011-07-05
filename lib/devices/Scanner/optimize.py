@@ -1,9 +1,9 @@
 import numpy as np
-from debug import Profiler
+#from debug import Profiler
 
-
-
-def opt2(locs, minTime, minDist, deadTime, greed=1.0, seed=None):
+def opt2(locs, minTime, minDist, deadTime, greed=1.0, seed=None, compMethod='rms'):
+    ## compMethod defines how costs are composited. 
+    ##   values are 'rms', 'max', 'sum'
     ## Generally greed=1 gives the fastest solution, but not necessarily the most ideal.
     gFactor = np.clip(1.0-greed, 0, 0.9999)
     
@@ -34,11 +34,16 @@ def opt2(locs, minTime, minDist, deadTime, greed=1.0, seed=None):
 
         ## Compute direct costs and take the max value of direct and leftover cost
         dCost = costFn(dist, minTime, minDist)
-        cost['cost'] = np.where(dCost > cost['cost'], dCost, cost['cost'])
+        if compMethod == 'max':
+            cost['cost'] = np.where(dCost > cost['cost'], dCost, cost['cost'])
+        elif compMethod == 'rms':
+            cost['cost'] = np.sqrt(cost['cost']**2 + dCost**2)
+        elif compMethod == 'sum':
+            cost['cost'] += dCost
         
         ## subtract off dead time
         cost['cost'] = np.clip(cost['cost']-deadTime, 0, np.inf)
-        
+          
         ## sort by cost, find the median cost
         sortedCost = np.sort(cost, order=['cost'])
         mid = int(len(sortedCost) * gFactor)
@@ -95,30 +100,6 @@ if __name__ == '__main__':
     b = np.log(0.1) / minDist**2
     costCache = {}
     deadTime = 1.0  ## mandatory waiting time between stimuli due to recording length
-    #def costFn(dist):
-        #global costCache, b, minTime
-        #try:
-            #cost = costCache[dist]
-        #except KeyError:
-            #cost = minTime * np.exp(b * dist**2)
-            #costCache[dist] = cost
-        #return cost
-
-    def costFn2(dist):
-        ### Takes distance^2 as argument!
-        global minTime, minDist
-        A = 2 * minTime / minDist**2
-        return np.where(
-            dist < minDist, 
-            np.where(
-                dist < minDist/2., 
-                minTime - A * dist**2, 
-                A * (dist-minDist)**2
-            ), 
-            0
-        )
-
-
     locSets = collections.OrderedDict()
 
     def check(a, b):
@@ -140,9 +121,10 @@ if __name__ == '__main__':
 
 
     view = pg.GraphicsWindow(border=(50, 50, 50))
-    for d in [0.2e-3, 0.5e-3, 1e-3]:
-        for greed in [1.0]:
-            for n in [20, 20, 20, 20, 20]:
+    greed = 1.0
+    for d in [0.2e-3, 0.5e-3, 2e-3]:
+        for n in [20]:
+            for compMethod in ['max', 'rms', 'sum']:
                 locs = []
                 for i in np.linspace(-d, d, n):
                     for j in np.linspace(-d, d, n):
@@ -151,7 +133,7 @@ if __name__ == '__main__':
                 locSets[key] = locs
                 
                 start = time.time()
-                for step, last in opt2(locs, costFn2, deadTime, greed=greed):
+                for step, last in opt2(locs, minTime, minDist, deadTime, greed=greed, compMethod=compMethod):
                     if last is None:
                         l2 = step
                     else:
