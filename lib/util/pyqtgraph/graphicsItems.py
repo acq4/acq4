@@ -201,6 +201,7 @@ class GraphicsLayout(QtGui.QGraphicsWidget):
         return self.currentCol-colspan
         
     def addPlot(self, row=None, col=None, rowspan=1, colspan=1, **kargs):
+        from PlotItem import PlotItem
         plot = PlotItem(**kargs)
         self.addItem(plot, row, col, rowspan, colspan)
         return plot

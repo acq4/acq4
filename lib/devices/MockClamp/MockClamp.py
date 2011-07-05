@@ -23,6 +23,7 @@ class NeuronProc(m.Process):
     def __init__(self):
         self.pipe = m.Pipe()
         m.Process.__init__(self)
+        self.daemon = True
         
     def send(self, data):
         self.pipe[0].send(data)

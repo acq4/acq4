@@ -851,7 +851,7 @@ class MetaArray(np.ndarray):
         """Write this object to a file. The object can be restored by calling MetaArray(file=fileName)
         opts:
             appendAxis: the name (or index) of the appendable axis. Allows the array to grow.
-            compress: None, 'gzip', 'lzw', etc.
+            compression: None, 'gzip' (good compression), 'lzf' (fast compression), etc.
             chunks: bool or tuple specifying chunk shape
         """
         
@@ -875,7 +875,7 @@ class MetaArray(np.ndarray):
     def writeHDF5(self, fileName, **opts):
         ## default options for writing datasets
         dsOpts = {  
-            'compression': 'gzip',
+            'compression': 'lzf',
             'chunks': True,
         }
         

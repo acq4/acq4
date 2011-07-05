@@ -20,6 +20,7 @@ class MockCamera(Camera):
         self.camLock = Mutex(Mutex.Recursive)  ## Lock to protect access to camera
         self.ringSize = 100
         self.frameId = 0
+        self.noise = np.random.normal(size=10000000, loc=100, scale=50)  ## pre-generate noise for use in images
         
         self.params = {
             'triggerMode':     'Normal',
@@ -122,6 +123,13 @@ class MockCamera(Camera):
                 #time.sleep(1.0)
             #self.cam.stop()
         
+    def getNoise(self, shape):
+        n = shape[0] * shape[1]
+        s = np.random.randint(len(self.noise)-n)
+        d = self.noise[s:s+n]
+        d.shape = shape
+        return d.copy()
+        
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
         now = ptime.time()
@@ -134,7 +142,8 @@ class MockCamera(Camera):
         nf = int(dt / (exp+10e-3))
         if nf > 0:
             self.lastFrameTime = now
-            data = np.random.normal(size=(shape[0], shape[1]), loc=100, scale=50)
+            #data = np.random.normal(size=(shape[0], shape[1]), loc=100, scale=50)
+            data = self.getNoise(shape)
             data[data<0] = 0
             
             sig = self.signal[region[0]:region[0]+region[2], region[1]:region[1]+region[3]]
