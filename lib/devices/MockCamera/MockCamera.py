@@ -139,7 +139,7 @@ class MockCamera(Camera):
         region = self.getParam('region') 
         shape = region[2:]
         bin = self.getParam('binning')
-        nf = int(dt / (exp+10e-3))
+        nf = int(dt / (exp+(40e-3/(bin[0]*bin[1]))))
         if nf > 0:
             self.lastFrameTime = now
             #data = np.random.normal(size=(shape[0], shape[1]), loc=100, scale=50)

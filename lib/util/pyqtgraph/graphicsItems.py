@@ -439,11 +439,21 @@ class ImageItem(QtGui.QGraphicsObject):
         prof.finish()
         
     def getLookupTable(self, num, black, white):
+        num = int(num)
+        black = int(black)
+        white = int(white)
+        if white < black:
+            b = black
+            black = white
+            white = b
         key = (num, black, white)
         lut = np.empty(num, dtype=np.ubyte)
         lut[:black] = 0
         rng = lut[black:white]
-        rng[:] = np.linspace(0, 255, white-black)[:len(rng)]
+        try:
+            rng[:] = np.linspace(0, 255, white-black)[:len(rng)]
+        except:
+            print key, rng.shape
         lut[white:] = 255
         return lut
         

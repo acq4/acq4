@@ -239,6 +239,10 @@ class GraphicsView(QtGui.QGraphicsView):
         """Scales such that pixels in image are the same size as screen pixels. This may result in a significant performance increase."""
         pxSize = image.pixelSize()
         image.setPxMode(True)
+        try:
+            self.sigScaleChanged.disconnect(image.setScaledMode)
+        except TypeError:
+            pass
         tl = image.sceneBoundingRect().topLeft()
         w = self.size().width() * pxSize[0]
         h = self.size().height() * pxSize[1]
