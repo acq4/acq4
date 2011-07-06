@@ -13,7 +13,7 @@ import scipy.optimize
 from debug import *
 from functions import siFormat
 from lib.Manager import getManager
-
+import ptime
 
 class PatchWindow(QtGui.QMainWindow):
     def __init__(self, dm, clampName):
@@ -537,7 +537,7 @@ class PatchThread(QtCore.QThread):
                     self.sigNewFrame.emit(frame)
                     
                     
-                    lastTime = time.clock()-params['recordTime'] ## This is not a proper 'cycle time', but instead enforces a minimum interval between cycles (but this can be very important for performance)
+                    lastTime = ptime.time()-params['recordTime'] ## This is not a proper 'cycle time', but instead enforces a minimum interval between cycles (but this can be very important for performance)
                     
                     ## sleep until it is time for the next run
                     c = 0
@@ -551,7 +551,7 @@ class PatchThread(QtCore.QThread):
                                 stop = True
                                 break
                             l.unlock()
-                        now = time.clock()
+                        now = ptime.time()
                         if now >= (lastTime+params['cycleTime']):
                             break
                         
@@ -560,6 +560,7 @@ class PatchThread(QtCore.QThread):
                     if stop:
                         break
                     prof.mark('wait')
+                    prof.finish()
         except:
             printExc("Error in patch acquisition thread, exiting.")
         #self.emit(QtCore.SIGNAL('threadStopped'))

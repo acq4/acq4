@@ -2,7 +2,7 @@
 ## Add path to library (just for examples; you do not need this)
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-
+import ptime
 
 from PyQt4 import QtCore, QtGui
 import numpy as np
@@ -32,17 +32,26 @@ view.scene().addItem(img)
 view.setRange(QtCore.QRectF(0, 0, 200, 200))
 
 ## Create random image
-data = np.random.normal(size=(50, 200, 200))
+data = np.random.normal(size=(50, 600, 600), loc=1024, scale=64).astype(np.uint16)
 i = 0
 
+updateTime = ptime.time()
+fps = 0
+
 def updateData():
-    global img, data, i
+    global img, data, i, updateTime, fps
 
     ## Display the data
-    img.updateImage(data[i])
+    img.updateImage(data[i], copy=False)
     i = (i+1) % data.shape[0]
 
-    QtCore.QTimer.singleShot(20, updateData)
+    QtCore.QTimer.singleShot(1, updateData)
+    now = ptime.time()
+    fps2 = 1.0 / (now-updateTime)
+    updateTime = now
+    fps = fps * 0.9 + fps2 * 0.1
+    
+    #print "%0.1f fps" % fps
     
 
 # update image data every 20ms (or so)
@@ -51,16 +60,19 @@ def updateData():
 #t.start(20)
 updateData()
 
+view.scaleToImage(img)
 
-def doWork():
-    while True:
-        x = '.'.join(['%f'%i for i in range(100)])  ## some work for the thread to do
-        if time is None:  ## main thread has started cleaning up, bail out now
-            break
-        time.sleep(1e-3)
+#img.setFlag(img.ItemIgnoresTransformations, True)
 
-import thread
-thread.start_new_thread(doWork, ())
+#def doWork():
+    #while True:
+        #x = '.'.join(['%f'%i for i in range(100)])  ## some work for the thread to do
+        #if time is None:  ## main thread has started cleaning up, bail out now
+            #break
+        #time.sleep(1e-3)
+
+#import thread
+#thread.start_new_thread(doWork, ())
 
 
 ## Start Qt event loop unless running in interactive mode.

@@ -11,15 +11,24 @@ class ProgressDialog(QtGui.QProgressDialog):
                 raise Exception("Processing canceled by user")
     """
     def __init__(self, *args, **kargs):
+        self.busyCursor = False
+        if 'busyCursor' in kargs:
+            self.busyCursor = kargs['busyCursor']
+            del kargs['busyCursor']
+            
         QtGui.QProgressDialog.__init__(self, *args, **kargs)
         self.setMinimumDuration(250)
         self.setWindowModality(QtCore.Qt.WindowModal)
         self.setValue(self.minimum())
 
     def __enter__(self):
+        if self.busyCursor:
+            QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
         return self
 
     def __exit__(self, exType, exValue, exTrace):
+        if self.busyCursor:
+            QtGui.QApplication.restoreOverrideCursor()
         self.setValue(self.maximum())
         
     def __iadd__(self, val):

@@ -10,6 +10,7 @@ import random
 import numpy as np
 from debug import Profiler
 import optimize ## for determining random scan patterns
+import ForkedIterator, ProgressDialog
 
 class ScannerProtoGui(ProtocolGui):
     
@@ -78,7 +79,7 @@ class ScannerProtoGui(ProtocolGui):
         #QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         self.ui.minTimeSpin.valueChanged.connect(self.sequenceChanged)
         self.ui.minDistSpin.valueChanged.connect(self.sequenceChanged)
-        self.ui.recomputeBtn.clicked.connect(self.generateTargets)
+        self.ui.recomputeBtn.clicked.connect(self.recomputeClicked)
         dm.sigModulesChanged.connect(self.fillModuleList)
 
         #self.currentTargetMarker = QtGui.QGraphicsEllipseItem(0, 0, 1, 1)
@@ -533,81 +534,97 @@ class ScannerProtoGui(ProtocolGui):
         #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
         self.sigSequenceChanged.emit(self.dev.name)
 
+    def recomputeClicked(self):
+        try:
+            self.ui.recomputeBtn.setEnabled(False)
+            self.generateTargets()
+        finally:
+            self.ui.recomputeBtn.setEnabled(True)
+
     def generateTargets(self):
         #items = self.activeItems()
         #prof= Profiler('ScanerProtoGui.generateTargets()')
         self.targets = []
         locations = self.getTargetList()
         
-        minTime = None
+        bestTime = None
         bestSolution = None
 
         nTries = np.clip(int(10 - len(locations)/20), 1, 10)
         
         ## About to compute order/timing of targets; display a progress dialog
         #prof.mark('setup')
-        progressDlg = QtGui.QProgressDialog("Computing pseudo-optimal target sequence...", "Cancel", 0, 1000)
+        #progressDlg = QtGui.QProgressDialog("Computing pseudo-optimal target sequence...", "Cancel", 0, 1000)
         #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
-        progressDlg.setMinimumDuration(500)
+        #progressDlg.setMinimumDuration(500)
         #prof.mark('progressDlg')
         deadTime = self.prot.getParam('duration')
-        
-        try:
+
+        state = self.stateGroup.state()
+        minTime = state['minTime']
+        minDist = state['minDist']
+
+        #try:
+        with ProgressDialog.ProgressDialog("Computing random target sequence...", "Cancel", 0, 1000, busyCursor=True) as dlg:
             #times=[]
             for i in range(nTries):
                 #prof.mark('attempt: %i' %i)
-                for n, m in optimize.opt2(locations, self.costFn, deadTime, greed=1.0):
+                
+                ## Run in a remote process for a little speedup
+                #for n, m in optimize.opt2(locations, self.costFn, deadTime, greed=1.0):
+                proc = ForkedIterator.ForkedIterator(optimize.opt2, locations, minTime, minDist, deadTime, greed=1.0)
+                for n,m in proc:
                     ## we can update the progress dialog here.
                     if m is None:
                         solution = n
                     else:
                         prg = int(((i/float(nTries)) + ((n/float(m))/float(nTries))) * 1000)
                         #print n,m, prg
-                        progressDlg.setValue(prg)
+                        dlg.setValue(prg)
                         #print i
-                        QtGui.QApplication.processEvents()
-                        if progressDlg.wasCanceled():
+                        #QtGui.QApplication.processEvents()
+                        if dlg.wasCanceled():
                             raise Exception("Target sequence computation canceled by user.")
                 #solution = self.findSolution(locations)
                 #prof.mark('foundSolution')
                 time = sum([l[1] for l in solution])
                 #times.append(time)
-                if minTime is None or time < minTime:
+                if bestTime is None or time < bestTime:
                     #print "  new best time:", time
-                    minTime = time
+                    bestTime = time
                     bestSolution = solution[:]
                     #print "new best:", len(bestSolution), minTime
                 #prof.mark('check time')
-        except:
-            raise
-        finally:
+        #except:
+            #raise
+        #finally:
             ## close progress dialog no matter what happens
             #print "Times: ", times
-            progressDlg.setValue(1000)
+            #progressDlg.setValue(1000)
         
         self.targets = bestSolution
         #print "Solution:"
         #for t in self.targets:
             #print "  ", t
-        self.ui.timeLabel.setText('Total time: %0.1f sec'% minTime)
+        self.ui.timeLabel.setText('Total time: %0.1f sec'% bestTime)
         #prof.mark('Done.')
         #prof.finish()
         
-    def costFn(self, dist):
-        ### Takes distance^2 as argument!
-        state = self.stateGroup.state()
-        minTime = state['minTime']
-        minDist = state['minDist']
-        A = 2 * minTime / minDist**2
-        return np.where(
-            dist < minDist, 
-            np.where(
-                dist < minDist/2., 
-                minTime - A * dist**2, 
-                A * (dist-minDist)**2
-            ), 
-            0
-        )
+    #def costFn(self, dist):
+        #### Takes distance^2 as argument!
+        #state = self.stateGroup.state()
+        #minTime = state['minTime']
+        #minDist = state['minDist']
+        #A = 2 * minTime / minDist**2
+        #return np.where(
+            #dist < minDist, 
+            #np.where(
+                #dist < minDist/2., 
+                #minTime - A * dist**2, 
+                #A * (dist-minDist)**2
+            #), 
+            #0
+        #)
 
     def activeItems(self):
         return [self.items[i] for i in self.items if self.listItem(i).checkState() == QtCore.Qt.Checked]

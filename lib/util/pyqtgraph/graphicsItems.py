@@ -201,6 +201,7 @@ class GraphicsLayout(QtGui.QGraphicsWidget):
         return self.currentCol-colspan
         
     def addPlot(self, row=None, col=None, rowspan=1, colspan=1, **kargs):
+        from PlotItem import PlotItem
         plot = PlotItem(**kargs)
         self.addItem(plot, row, col, rowspan, colspan)
         return plot
@@ -238,10 +239,8 @@ class ImageItem(QtGui.QGraphicsObject):
     
     sigImageChanged = QtCore.Signal()
     
-    if 'linux' not in sys.platform:  ## disable weave optimization on linux--broken there.
-        useWeave = True
-    else:
-        useWeave = False
+    ## performance gains from this are marginal, and it's rather unreliable.
+    useWeave = False
     
     def __init__(self, image=None, copy=True, parent=None, border=None, mode=None, *args):
         #QObjectWorkaround.__init__(self)
@@ -266,6 +265,8 @@ class ImageItem(QtGui.QGraphicsObject):
         if image is not None:
             self.updateImage(image, copy, autoRange=True)
         #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
+        
+        #self.item = QtGui.QGraphicsPixmapItem(parent=self)
 
     def setCompositionMode(self, mode):
         self.paintMode = mode
@@ -366,38 +367,14 @@ class ImageItem(QtGui.QGraphicsObject):
         
         if black == 0 and white == 255 and self.image.dtype == np.ubyte:
             im = self.image
-            
+        elif self.image.dtype in [np.ubyte, np.uint16]:
+            # use lookup table instead
+            npts = 2**(self.image.itemsize * 8)
+            lut = self.getLookupTable(npts, black, white)
+            im = lut[self.image]
         else:
-            try:
-                if not ImageItem.useWeave:
-                    raise Exception('Skipping weave compile')
-                sim = np.ascontiguousarray(self.image)
-                sim.shape = sim.size
-                im = np.empty(sim.shape, dtype=np.ubyte)
-                n = im.size
-                
-                code = """
-                for( int i=0; i<n; i++ ) {
-                    float a = (sim(i)-black) * (float)scale;
-                    if( a > 255.0 )
-                        a = 255.0;
-                    else if( a < 0.0 )
-                        a = 0.0;
-                    im(i) = a;
-                }
-                """
-                
-                weave.inline(code, ['sim', 'im', 'n', 'black', 'scale'], type_converters=converters.blitz, compiler = 'gcc')
-                sim.shape = shape
-                im.shape = shape
-            except:
-                if ImageItem.useWeave:
-                    ImageItem.useWeave = False
-                    #sys.excepthook(*sys.exc_info())
-                    #print "=============================================================================="
-                    print "Weave compile failed, falling back to slower version."
-                self.image.shape = shape
-                im = ((self.image - black) * scale).clip(0.,255.).astype(np.ubyte)
+            im = self.applyColorScaling(self.image, black, scale)
+            
         prof.mark('3')
 
         try:
@@ -450,7 +427,7 @@ class ImageItem(QtGui.QGraphicsObject):
         self.pixmap = QtGui.QPixmap.fromImage(qimage)
         prof.mark('9')
         ##del self.ims
-        #self.pixmapItem.setPixmap(self.pixmap)
+        #self.item.setPixmap(self.pixmap)
         
         self.update()
         prof.mark('10')
@@ -461,6 +438,61 @@ class ImageItem(QtGui.QGraphicsObject):
             
         prof.finish()
         
+    def getLookupTable(self, num, black, white):
+        num = int(num)
+        black = int(black)
+        white = int(white)
+        if white < black:
+            b = black
+            black = white
+            white = b
+        key = (num, black, white)
+        lut = np.empty(num, dtype=np.ubyte)
+        lut[:black] = 0
+        rng = lut[black:white]
+        try:
+            rng[:] = np.linspace(0, 255, white-black)[:len(rng)]
+        except:
+            print key, rng.shape
+        lut[white:] = 255
+        return lut
+        
+        
+    def applyColorScaling(self, img, offset, scale):
+        try:
+            if not ImageItem.useWeave:
+                raise Exception('Skipping weave compile')
+            #sim = np.ascontiguousarray(self.image)  ## should not be needed
+            sim = img.reshape(img.size)
+            #sim.shape = sim.size
+            im = np.empty(sim.shape, dtype=np.ubyte)
+            n = im.size
+            
+            code = """
+            for( int i=0; i<n; i++ ) {
+                float a = (sim(i)-offset) * (float)scale;
+                if( a > 255.0 )
+                    a = 255.0;
+                else if( a < 0.0 )
+                    a = 0.0;
+                im(i) = a;
+            }
+            """
+            
+            weave.inline(code, ['sim', 'im', 'n', 'offset', 'scale'], type_converters=converters.blitz, compiler = 'gcc')
+            #sim.shape = shape
+            im.shape = img.shape
+        except:
+            if ImageItem.useWeave:
+                ImageItem.useWeave = False
+                #sys.excepthook(*sys.exc_info())
+                #print "=============================================================================="
+                #print "Weave compile failed, falling back to slower version."
+            #img.shape = shape
+            im = ((img - offset) * scale).clip(0.,255.).astype(np.ubyte)
+        return im
+        
+        
     def getPixmap(self):
         return self.pixmap.copy()
 
@@ -470,7 +502,14 @@ class ImageItem(QtGui.QGraphicsObject):
         stepData = self.image[::step, ::step]
         hist = np.histogram(stepData, bins=bins)
         return hist[1][:-1], hist[0]
-        
+
+    def setPxMode(self, b):
+        """Set whether the item ignores transformations and draws directly to screen pixels."""
+        self.setFlag(self.ItemIgnoresTransformations, b)
+            
+    def setScaledMode(self):
+        self.setPxMode(False)
+
     def mousePressEvent(self, ev):
         if self.drawKernel is not None and ev.button() == QtCore.Qt.LeftButton:
             self.drawAt(ev.pos(), ev)
