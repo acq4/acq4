@@ -879,7 +879,7 @@ class CameraWindow(QtGui.QMainWindow):
             #m.scale(info['pixelSize'][0], info['pixelSize'][1])
             
             ## update image in viewport
-            self.imageItem.updateImage(data, clipMask=self.currentClipMask, white=wl, black=bl)
+            self.imageItem.updateImage(data, clipMask=self.currentClipMask, white=wl, black=bl, copy=False)
             self.imageItem.setTransform(m)
 
             ## Update viewport to correct for scope movement/scaling

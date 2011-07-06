@@ -19,6 +19,7 @@ class GraphicsView(QtGui.QGraphicsView):
     sigMouseReleased = QtCore.Signal(object)
     sigSceneMouseMoved = QtCore.Signal(object)
     #sigRegionChanged = QtCore.Signal(object)
+    sigScaleChanged = QtCore.Signal(object)
     lastFileDir = None
     
     def __init__(self, parent=None, useOpenGL=False):
@@ -210,6 +211,7 @@ class GraphicsView(QtGui.QGraphicsView):
         
         
         self.updateMatrix()
+        self.sigScaleChanged.emit(self)
 
     def setRange(self, newRect=None, padding=0.05, lockAspect=None, propagate=True, disableAutoPixel=True):
         if disableAutoPixel:
@@ -217,23 +219,32 @@ class GraphicsView(QtGui.QGraphicsView):
         if newRect is None:
             newRect = self.visibleRange()
             padding = 0
+        
         padding = Point(padding)
         newRect = QtCore.QRectF(newRect)
         pw = newRect.width() * padding[0]
         ph = newRect.height() * padding[1]
-        self.range = newRect.adjusted(-pw, -ph, pw, ph)
+        newRect = newRect.adjusted(-pw, -ph, pw, ph)
+        scaleChanged = False
+        if self.range.width() != newRect.width() or self.range.height() != newRect.height():
+            scaleChanged = True
+        self.range = newRect
         #print "New Range:", self.range
         self.centralWidget.setGeometry(self.range)
         self.updateMatrix(propagate)
+        if scaleChanged:
+            self.sigScaleChanged.emit(self)
 
     def scaleToImage(self, image):
         """Scales such that pixels in image are the same size as screen pixels. This may result in a significant performance increase."""
         pxSize = image.pixelSize()
+        image.setPxMode(True)
         tl = image.sceneBoundingRect().topLeft()
         w = self.size().width() * pxSize[0]
         h = self.size().height() * pxSize[1]
         range = QtCore.QRectF(tl.x(), tl.y(), w, h)
         self.setRange(range, padding=0)
+        self.sigScaleChanged.connect(image.setScaledMode)
         
         
         
