@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'CameraTemplate.ui'
 #
-# Created: Thu Jul 07 15:47:29 2011
+# Created: Thu Jul 07 16:10:33 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -265,11 +265,11 @@ class Ui_MainWindow(object):
         self.label_4.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.label_4.setObjectName(_fromUtf8("label_4"))
         self.hboxlayout3.addWidget(self.label_4)
-        self.spinFilterTime = QtGui.QDoubleSpinBox(self.frame_2)
-        self.spinFilterTime.setSingleStep(1.0)
-        self.spinFilterTime.setProperty(_fromUtf8("value"), 5.0)
-        self.spinFilterTime.setObjectName(_fromUtf8("spinFilterTime"))
-        self.hboxlayout3.addWidget(self.spinFilterTime)
+        self.bgTimeSpin = QtGui.QDoubleSpinBox(self.frame_2)
+        self.bgTimeSpin.setSingleStep(1.0)
+        self.bgTimeSpin.setProperty(_fromUtf8("value"), 5.0)
+        self.bgTimeSpin.setObjectName(_fromUtf8("bgTimeSpin"))
+        self.hboxlayout3.addWidget(self.bgTimeSpin)
         self.vboxlayout2.addWidget(self.frame_2)
         self.frame_3 = QtGui.QFrame(self.dockWidgetContents_3)
         self.frame_3.setFrameShape(QtGui.QFrame.StyledPanel)
@@ -283,15 +283,15 @@ class Ui_MainWindow(object):
         self.label_5.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.label_5.setObjectName(_fromUtf8("label_5"))
         self.hboxlayout4.addWidget(self.label_5)
-        self.spinFlattenSize = QtGui.QDoubleSpinBox(self.frame_3)
-        self.spinFlattenSize.setProperty(_fromUtf8("value"), 0.0)
-        self.spinFlattenSize.setObjectName(_fromUtf8("spinFlattenSize"))
-        self.hboxlayout4.addWidget(self.spinFlattenSize)
+        self.bgBlurSpin = QtGui.QDoubleSpinBox(self.frame_3)
+        self.bgBlurSpin.setProperty(_fromUtf8("value"), 0.0)
+        self.bgBlurSpin.setObjectName(_fromUtf8("bgBlurSpin"))
+        self.hboxlayout4.addWidget(self.bgBlurSpin)
         self.vboxlayout2.addWidget(self.frame_3)
-        self.btnDivideBackground = QtGui.QPushButton(self.dockWidgetContents_3)
-        self.btnDivideBackground.setCheckable(True)
-        self.btnDivideBackground.setObjectName(_fromUtf8("btnDivideBackground"))
-        self.vboxlayout2.addWidget(self.btnDivideBackground)
+        self.divideBgBtn = QtGui.QPushButton(self.dockWidgetContents_3)
+        self.divideBgBtn.setCheckable(True)
+        self.divideBgBtn.setObjectName(_fromUtf8("divideBgBtn"))
+        self.vboxlayout2.addWidget(self.divideBgBtn)
         spacerItem3 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.vboxlayout2.addItem(spacerItem3)
         self.dockWidget_3.setWidget(self.dockWidgetContents_3)
@@ -347,11 +347,11 @@ class Ui_MainWindow(object):
         self.staticBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Static", None, QtGui.QApplication.UnicodeUTF8))
         self.continuousBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Continuous", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("MainWindow", "Time const.", None, QtGui.QApplication.UnicodeUTF8))
-        self.spinFilterTime.setToolTip(QtGui.QApplication.translate("MainWindow", "Sets the approximate number of frames to be averaged for\n"
+        self.bgTimeSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Sets the approximate number of frames to be averaged for\n"
 "background division.", None, QtGui.QApplication.UnicodeUTF8))
         self.label_5.setText(QtGui.QApplication.translate("MainWindow", "Blur Bg.", None, QtGui.QApplication.UnicodeUTF8))
-        self.spinFlattenSize.setToolTip(QtGui.QApplication.translate("MainWindow", "Blurs the background frame before dividing it from the current frame.", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnDivideBackground.setText(QtGui.QApplication.translate("MainWindow", "Divide Background", None, QtGui.QApplication.UnicodeUTF8))
+        self.bgBlurSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Blurs the background frame before dividing it from the current frame.", None, QtGui.QApplication.UnicodeUTF8))
+        self.divideBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Divide Background", None, QtGui.QApplication.UnicodeUTF8))
 
 from SpinBox import SpinBox
 from pyqtgraph.GradientWidget import GradientWidget
