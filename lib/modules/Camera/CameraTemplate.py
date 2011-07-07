@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'CameraTemplate.ui'
 #
-# Created: Thu Jul  7 13:51:21 2011
+# Created: Thu Jul 07 15:47:29 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -246,11 +246,12 @@ class Ui_MainWindow(object):
         self.splitter = QtGui.QSplitter(self.dockWidgetContents_3)
         self.splitter.setOrientation(QtCore.Qt.Horizontal)
         self.splitter.setObjectName(_fromUtf8("splitter"))
-        self.pushButton = QtGui.QPushButton(self.splitter)
-        self.pushButton.setObjectName(_fromUtf8("pushButton"))
-        self.pushButton_2 = QtGui.QPushButton(self.splitter)
-        self.pushButton_2.setCheckable(True)
-        self.pushButton_2.setObjectName(_fromUtf8("pushButton_2"))
+        self.staticBgBtn = QtGui.QPushButton(self.splitter)
+        self.staticBgBtn.setCheckable(True)
+        self.staticBgBtn.setObjectName(_fromUtf8("staticBgBtn"))
+        self.continuousBgBtn = QtGui.QPushButton(self.splitter)
+        self.continuousBgBtn.setCheckable(True)
+        self.continuousBgBtn.setObjectName(_fromUtf8("continuousBgBtn"))
         self.vboxlayout2.addWidget(self.splitter)
         self.frame_2 = QtGui.QFrame(self.dockWidgetContents_3)
         self.frame_2.setFrameShape(QtGui.QFrame.StyledPanel)
@@ -293,10 +294,6 @@ class Ui_MainWindow(object):
         self.vboxlayout2.addWidget(self.btnDivideBackground)
         spacerItem3 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.vboxlayout2.addItem(spacerItem3)
-        self.btnLockBackground = QtGui.QToolButton(self.dockWidgetContents_3)
-        self.btnLockBackground.setCheckable(True)
-        self.btnLockBackground.setObjectName(_fromUtf8("btnLockBackground"))
-        self.vboxlayout2.addWidget(self.btnLockBackground)
         self.dockWidget_3.setWidget(self.dockWidgetContents_3)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(2), self.dockWidget_3)
 
@@ -347,16 +344,14 @@ class Ui_MainWindow(object):
         self.clearFramesBtn.setText(QtGui.QApplication.translate("MainWindow", "Clear", None, QtGui.QApplication.UnicodeUTF8))
         self.dockWidget_3.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Background Subtraction", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("MainWindow", "Collect Background:", None, QtGui.QApplication.UnicodeUTF8))
-        self.pushButton.setText(QtGui.QApplication.translate("MainWindow", "Static", None, QtGui.QApplication.UnicodeUTF8))
-        self.pushButton_2.setText(QtGui.QApplication.translate("MainWindow", "Continuous", None, QtGui.QApplication.UnicodeUTF8))
+        self.staticBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Static", None, QtGui.QApplication.UnicodeUTF8))
+        self.continuousBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Continuous", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("MainWindow", "Time const.", None, QtGui.QApplication.UnicodeUTF8))
         self.spinFilterTime.setToolTip(QtGui.QApplication.translate("MainWindow", "Sets the approximate number of frames to be averaged for\n"
 "background division.", None, QtGui.QApplication.UnicodeUTF8))
         self.label_5.setText(QtGui.QApplication.translate("MainWindow", "Blur Bg.", None, QtGui.QApplication.UnicodeUTF8))
         self.spinFlattenSize.setToolTip(QtGui.QApplication.translate("MainWindow", "Blurs the background frame before dividing it from the current frame.", None, QtGui.QApplication.UnicodeUTF8))
         self.btnDivideBackground.setText(QtGui.QApplication.translate("MainWindow", "Divide Background", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnLockBackground.setToolTip(QtGui.QApplication.translate("MainWindow", "Locks the background frame so that it no longer integrates new frames into itself.", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnLockBackground.setText(QtGui.QApplication.translate("MainWindow", "Lock Background", None, QtGui.QApplication.UnicodeUTF8))
 
 from SpinBox import SpinBox
 from pyqtgraph.GradientWidget import GradientWidget

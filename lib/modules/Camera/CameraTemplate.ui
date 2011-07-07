@@ -503,12 +503,15 @@ the entire frame.</string>
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
        </property>
-       <widget class="QPushButton" name="pushButton">
+       <widget class="QPushButton" name="staticBgBtn">
         <property name="text">
          <string>Static</string>
         </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
        </widget>
-       <widget class="QPushButton" name="pushButton_2">
+       <widget class="QPushButton" name="continuousBgBtn">
         <property name="text">
          <string>Continuous</string>
         </property>
@@ -620,19 +623,6 @@ background division.</string>
         </size>
        </property>
       </spacer>
-     </item>
-     <item>
-      <widget class="QToolButton" name="btnLockBackground">
-       <property name="toolTip">
-        <string>Locks the background frame so that it no longer integrates new frames into itself.</string>
-       </property>
-       <property name="text">
-        <string>Lock Background</string>
-       </property>
-       <property name="checkable">
-        <bool>true</bool>
-       </property>
-      </widget>
      </item>
     </layout>
    </widget>
