@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/modules/Camera/CameraTemplate.ui'
+# Form implementation generated from reading ui file 'CameraTemplate.ui'
 #
-# Created: Wed May 18 20:44:21 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Thu Jul  7 13:51:21 2011
+#      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName(_fromUtf8("MainWindow"))
-        MainWindow.resize(799, 600)
+        MainWindow.resize(766, 585)
         self.centralwidget = QtGui.QWidget(MainWindow)
         self.centralwidget.setObjectName(_fromUtf8("centralwidget"))
         self.horizontalLayout_3 = QtGui.QHBoxLayout(self.centralwidget)
@@ -63,8 +63,7 @@ class Ui_MainWindow(object):
         self.btnRecord.setFlat(False)
         self.btnRecord.setObjectName(_fromUtf8("btnRecord"))
         self.hboxlayout.addWidget(self.btnRecord)
-        self.btnSnap = QtGui.QToolButton(self.dockWidgetContents)
-        self.btnSnap.setEnabled(True)
+        self.btnSnap = QtGui.QPushButton(self.dockWidgetContents)
         self.btnSnap.setObjectName(_fromUtf8("btnSnap"))
         self.hboxlayout.addWidget(self.btnSnap)
         spacerItem = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
@@ -103,6 +102,7 @@ class Ui_MainWindow(object):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.dockWidget_2.sizePolicy().hasHeightForWidth())
         self.dockWidget_2.setSizePolicy(sizePolicy)
+        self.dockWidget_2.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable)
         self.dockWidget_2.setObjectName(_fromUtf8("dockWidget_2"))
         self.dockWidgetContents_2 = QtGui.QWidget()
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
@@ -177,23 +177,20 @@ class Ui_MainWindow(object):
         self.gridLayout.addWidget(self.checkEnableROIs, 0, 0, 1, 2)
         self.label_7 = QtGui.QLabel(self.dockWidgetContents_4)
         self.label_7.setObjectName(_fromUtf8("label_7"))
-        self.gridLayout.addWidget(self.label_7, 4, 0, 1, 1)
+        self.gridLayout.addWidget(self.label_7, 5, 0, 1, 1)
         self.spinROITime = QtGui.QDoubleSpinBox(self.dockWidgetContents_4)
         self.spinROITime.setSingleStep(0.1)
         self.spinROITime.setProperty(_fromUtf8("value"), 5.0)
         self.spinROITime.setObjectName(_fromUtf8("spinROITime"))
-        self.gridLayout.addWidget(self.spinROITime, 4, 1, 1, 1)
+        self.gridLayout.addWidget(self.spinROITime, 5, 1, 1, 1)
         spacerItem2 = QtGui.QSpacerItem(88, 17, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.gridLayout.addItem(spacerItem2, 5, 0, 1, 2)
-        self.horizontalLayout_4 = QtGui.QHBoxLayout()
-        self.horizontalLayout_4.setObjectName(_fromUtf8("horizontalLayout_4"))
-        self.gridLayout.addLayout(self.horizontalLayout_4, 1, 0, 1, 1)
-        self.btnClearROIs = QtGui.QToolButton(self.dockWidgetContents_4)
-        self.btnClearROIs.setObjectName(_fromUtf8("btnClearROIs"))
-        self.gridLayout.addWidget(self.btnClearROIs, 2, 1, 1, 1)
-        self.btnAddROI = QtGui.QToolButton(self.dockWidgetContents_4)
+        self.gridLayout.addItem(spacerItem2, 6, 0, 1, 2)
+        self.btnAddROI = QtGui.QPushButton(self.dockWidgetContents_4)
         self.btnAddROI.setObjectName(_fromUtf8("btnAddROI"))
-        self.gridLayout.addWidget(self.btnAddROI, 2, 0, 1, 1)
+        self.gridLayout.addWidget(self.btnAddROI, 1, 0, 1, 1)
+        self.btnClearROIs = QtGui.QPushButton(self.dockWidgetContents_4)
+        self.btnClearROIs.setObjectName(_fromUtf8("btnClearROIs"))
+        self.gridLayout.addWidget(self.btnClearROIs, 1, 1, 1, 1)
         self.horizontalLayout.addLayout(self.gridLayout)
         self.plotWidget = PlotWidget(self.dockWidgetContents_4)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
@@ -207,7 +204,7 @@ class Ui_MainWindow(object):
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(4), self.dockWidget_4)
         self.dockWidget_5 = QtGui.QDockWidget(MainWindow)
         self.dockWidget_5.setFloating(False)
-        self.dockWidget_5.setFeatures(QtGui.QDockWidget.AllDockWidgetFeatures)
+        self.dockWidget_5.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable)
         self.dockWidget_5.setObjectName(_fromUtf8("dockWidget_5"))
         self.dockWidgetContents_5 = QtGui.QWidget()
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
@@ -220,16 +217,17 @@ class Ui_MainWindow(object):
         self.horizontalLayout_2.setSpacing(0)
         self.horizontalLayout_2.setMargin(0)
         self.horizontalLayout_2.setObjectName(_fromUtf8("horizontalLayout_2"))
-        self.addFrameBtn = QtGui.QToolButton(self.dockWidgetContents_5)
+        self.addFrameBtn = QtGui.QPushButton(self.dockWidgetContents_5)
         self.addFrameBtn.setObjectName(_fromUtf8("addFrameBtn"))
         self.horizontalLayout_2.addWidget(self.addFrameBtn)
-        self.clearFramesBtn = QtGui.QToolButton(self.dockWidgetContents_5)
+        self.clearFramesBtn = QtGui.QPushButton(self.dockWidgetContents_5)
         self.clearFramesBtn.setObjectName(_fromUtf8("clearFramesBtn"))
         self.horizontalLayout_2.addWidget(self.clearFramesBtn)
         self.dockWidget_5.setWidget(self.dockWidgetContents_5)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(2), self.dockWidget_5)
         self.dockWidget_3 = QtGui.QDockWidget(MainWindow)
         self.dockWidget_3.setFloating(False)
+        self.dockWidget_3.setFeatures(QtGui.QDockWidget.DockWidgetFloatable|QtGui.QDockWidget.DockWidgetMovable)
         self.dockWidget_3.setObjectName(_fromUtf8("dockWidget_3"))
         self.dockWidgetContents_3 = QtGui.QWidget()
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
@@ -242,14 +240,18 @@ class Ui_MainWindow(object):
         self.vboxlayout2.setSpacing(2)
         self.vboxlayout2.setMargin(0)
         self.vboxlayout2.setObjectName(_fromUtf8("vboxlayout2"))
-        self.btnDivideBackground = QtGui.QToolButton(self.dockWidgetContents_3)
-        self.btnDivideBackground.setCheckable(True)
-        self.btnDivideBackground.setObjectName(_fromUtf8("btnDivideBackground"))
-        self.vboxlayout2.addWidget(self.btnDivideBackground)
-        self.btnLockBackground = QtGui.QToolButton(self.dockWidgetContents_3)
-        self.btnLockBackground.setCheckable(True)
-        self.btnLockBackground.setObjectName(_fromUtf8("btnLockBackground"))
-        self.vboxlayout2.addWidget(self.btnLockBackground)
+        self.label = QtGui.QLabel(self.dockWidgetContents_3)
+        self.label.setObjectName(_fromUtf8("label"))
+        self.vboxlayout2.addWidget(self.label)
+        self.splitter = QtGui.QSplitter(self.dockWidgetContents_3)
+        self.splitter.setOrientation(QtCore.Qt.Horizontal)
+        self.splitter.setObjectName(_fromUtf8("splitter"))
+        self.pushButton = QtGui.QPushButton(self.splitter)
+        self.pushButton.setObjectName(_fromUtf8("pushButton"))
+        self.pushButton_2 = QtGui.QPushButton(self.splitter)
+        self.pushButton_2.setCheckable(True)
+        self.pushButton_2.setObjectName(_fromUtf8("pushButton_2"))
+        self.vboxlayout2.addWidget(self.splitter)
         self.frame_2 = QtGui.QFrame(self.dockWidgetContents_3)
         self.frame_2.setFrameShape(QtGui.QFrame.StyledPanel)
         self.frame_2.setFrameShadow(QtGui.QFrame.Raised)
@@ -285,8 +287,16 @@ class Ui_MainWindow(object):
         self.spinFlattenSize.setObjectName(_fromUtf8("spinFlattenSize"))
         self.hboxlayout4.addWidget(self.spinFlattenSize)
         self.vboxlayout2.addWidget(self.frame_3)
+        self.btnDivideBackground = QtGui.QPushButton(self.dockWidgetContents_3)
+        self.btnDivideBackground.setCheckable(True)
+        self.btnDivideBackground.setObjectName(_fromUtf8("btnDivideBackground"))
+        self.vboxlayout2.addWidget(self.btnDivideBackground)
         spacerItem3 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.vboxlayout2.addItem(spacerItem3)
+        self.btnLockBackground = QtGui.QToolButton(self.dockWidgetContents_3)
+        self.btnLockBackground.setCheckable(True)
+        self.btnLockBackground.setObjectName(_fromUtf8("btnLockBackground"))
+        self.vboxlayout2.addWidget(self.btnLockBackground)
         self.dockWidget_3.setWidget(self.dockWidgetContents_3)
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(2), self.dockWidget_3)
 
@@ -303,13 +313,6 @@ class Ui_MainWindow(object):
 "Frames are written to the current storage directory set in \n"
 "the data manager window.", None, QtGui.QApplication.UnicodeUTF8))
         self.btnRecord.setText(QtGui.QApplication.translate("MainWindow", "Record", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnSnap.setToolTip(QtGui.QApplication.translate("MainWindow", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
-"<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
-"p, li { white-space: pre-wrap; }\n"
-"</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Save a single frame to disk.</p>\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-size:8pt;\">Frames are written to the current storage directory set in </p>\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-size:8pt;\">the data manager window.</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
         self.btnSnap.setText(QtGui.QApplication.translate("MainWindow", "Snap", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("MainWindow", "Binning", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("MainWindow", "Exposure", None, QtGui.QApplication.UnicodeUTF8))
@@ -337,27 +340,23 @@ class Ui_MainWindow(object):
         self.dockWidget_4.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Plots", None, QtGui.QApplication.UnicodeUTF8))
         self.checkEnableROIs.setText(QtGui.QApplication.translate("MainWindow", "Enable ROIs", None, QtGui.QApplication.UnicodeUTF8))
         self.label_7.setText(QtGui.QApplication.translate("MainWindow", "Time:", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnClearROIs.setText(QtGui.QApplication.translate("MainWindow", "Clear", None, QtGui.QApplication.UnicodeUTF8))
         self.btnAddROI.setText(QtGui.QApplication.translate("MainWindow", "Add", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnClearROIs.setText(QtGui.QApplication.translate("MainWindow", "Clear", None, QtGui.QApplication.UnicodeUTF8))
         self.dockWidget_5.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Persistent Frames", None, QtGui.QApplication.UnicodeUTF8))
         self.addFrameBtn.setText(QtGui.QApplication.translate("MainWindow", "Add", None, QtGui.QApplication.UnicodeUTF8))
         self.clearFramesBtn.setText(QtGui.QApplication.translate("MainWindow", "Clear", None, QtGui.QApplication.UnicodeUTF8))
         self.dockWidget_3.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Background Subtraction", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnDivideBackground.setToolTip(QtGui.QApplication.translate("MainWindow", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
-"<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
-"p, li { white-space: pre-wrap; }\n"
-"</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Enable/disable background division. Accumulates a running</p>\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">average of several previous frames and divides this from the</p>\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">current visible frame. Does <span style=\" font-style:italic;\">not</span> affect images written to disk.</p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnDivideBackground.setText(QtGui.QApplication.translate("MainWindow", "Divide Background", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnLockBackground.setToolTip(QtGui.QApplication.translate("MainWindow", "Locks the background frame so that it no longer integrates new frames into itself.", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnLockBackground.setText(QtGui.QApplication.translate("MainWindow", "Lock Background", None, QtGui.QApplication.UnicodeUTF8))
+        self.label.setText(QtGui.QApplication.translate("MainWindow", "Collect Background:", None, QtGui.QApplication.UnicodeUTF8))
+        self.pushButton.setText(QtGui.QApplication.translate("MainWindow", "Static", None, QtGui.QApplication.UnicodeUTF8))
+        self.pushButton_2.setText(QtGui.QApplication.translate("MainWindow", "Continuous", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("MainWindow", "Time const.", None, QtGui.QApplication.UnicodeUTF8))
         self.spinFilterTime.setToolTip(QtGui.QApplication.translate("MainWindow", "Sets the approximate number of frames to be averaged for\n"
 "background division.", None, QtGui.QApplication.UnicodeUTF8))
         self.label_5.setText(QtGui.QApplication.translate("MainWindow", "Blur Bg.", None, QtGui.QApplication.UnicodeUTF8))
         self.spinFlattenSize.setToolTip(QtGui.QApplication.translate("MainWindow", "Blurs the background frame before dividing it from the current frame.", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnDivideBackground.setText(QtGui.QApplication.translate("MainWindow", "Divide Background", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnLockBackground.setToolTip(QtGui.QApplication.translate("MainWindow", "Locks the background frame so that it no longer integrates new frames into itself.", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnLockBackground.setText(QtGui.QApplication.translate("MainWindow", "Lock Background", None, QtGui.QApplication.UnicodeUTF8))
 
 from SpinBox import SpinBox
 from pyqtgraph.GradientWidget import GradientWidget
