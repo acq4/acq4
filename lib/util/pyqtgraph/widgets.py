@@ -7,6 +7,9 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 Implements a series of graphics items which display movable/scalable/rotatable shapes
 for use as region-of-interest markers. ROI class automatically handles extraction 
 of array data from ImageItems.
+
+The ROI class is meant to serve as the base for more specific types; see several examples
+of how to build an ROI at the bottom of the file.
 """
 
 from PyQt4 import QtCore, QtGui
@@ -671,7 +674,7 @@ class ROI(QtGui.QGraphicsObject):
         
         lvx = np.sqrt(vx.x()**2 + vx.y()**2)
         lvy = np.sqrt(vy.x()**2 + vy.y()**2)
-        pxLen = img.width() / data.shape[axes[0]]
+        pxLen = img.width() / float(data.shape[axes[0]])
         sx =  pxLen / lvx
         sy =  pxLen / lvy
         
@@ -1070,17 +1073,25 @@ class MultiLineROI(QtGui.QGraphicsObject):
         self.sigRegionChangeFinished.emit(self)
         
             
-    def getArrayRegion(self, arr, img=None):
+    def getArrayRegion(self, arr, img=None, axes=(0,1)):
         rgns = []
         for l in self.lines:
-            rgn = l.getArrayRegion(arr, img)
+            rgn = l.getArrayRegion(arr, img, axes=axes)
             if rgn is None:
                 continue
                 #return None
             rgns.append(rgn)
             #print l.state['size']
-        #print [(r.shape) for r in rgns]
-        return np.vstack(rgns)
+            
+        ## make sure orthogonal axis is the same size
+        ## (sometimes fp errors cause differences)
+        ms = min([r.shape[axes[1]] for r in rgns])
+        sl = [slice(None)] * rgns[0].ndim
+        sl[axes[1]] = slice(0,ms)
+        rgns = [r[sl] for r in rgns]
+        #print [r.shape for r in rgns], axes
+        
+        return np.concatenate(rgns, axis=axes[0])
         
         
 class EllipseROI(ROI):

@@ -393,6 +393,8 @@ class ImageItem(QtGui.QGraphicsObject):
             im1[..., 3] = alpha
         elif im.ndim == 3: #color image
             im2 = im.transpose(axh['y'], axh['x'], axh['c'])
+            if im2.shape[2] > 4:
+                raise Exception("ImageItem got image with more than 4 color channels (shape is %s; axes are %s)" % (str(im.shape), str(axh)))
             ##      [B G R A]    Reorder colors
             order = [2,1,0,3] ## for some reason, the colors line up as BGR in the final image.
             

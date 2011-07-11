@@ -34,6 +34,7 @@ class PlotROI(ROI):
 class ImageView(QtGui.QWidget):
     
     sigTimeChanged = QtCore.Signal(object, object)
+    sigProcessingChanged = QtCore.Signal(object)
     
     def __init__(self, parent=None, name="ImageView", *args):
         QtGui.QWidget.__init__(self, parent, *args)
@@ -109,49 +110,26 @@ class ImageView(QtGui.QWidget):
         for fn in ['addItem', 'removeItem']:
             setattr(self, fn, getattr(self.ui.graphicsView, fn))
 
-        #QtCore.QObject.connect(self.ui.timeSlider, QtCore.SIGNAL('valueChanged(int)'), self.timeChanged)
-        #self.timeLine.connect(self.timeLine, QtCore.SIGNAL('positionChanged'), self.timeLineChanged)
         self.timeLine.sigPositionChanged.connect(self.timeLineChanged)
-        #QtCore.QObject.connect(self.ui.whiteSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
-        #QtCore.QObject.connect(self.ui.blackSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateImage)
-        #QtCore.QObject.connect(self.ui.gradientWidget, QtCore.SIGNAL('gradientChanged'), self.updateImage)
         self.ui.gradientWidget.sigGradientChanged.connect(self.updateImage)
-        #QtCore.QObject.connect(self.ui.roiBtn, QtCore.SIGNAL('clicked()'), self.roiClicked)
         self.ui.roiBtn.clicked.connect(self.roiClicked)
-        #self.roi.connect(self.roi, QtCore.SIGNAL('regionChanged'), self.roiChanged)
         self.roi.sigRegionChanged.connect(self.roiChanged)
-        #QtCore.QObject.connect(self.ui.normBtn, QtCore.SIGNAL('toggled(bool)'), self.normToggled)
         self.ui.normBtn.toggled.connect(self.normToggled)
-        #QtCore.QObject.connect(self.ui.normDivideRadio, QtCore.SIGNAL('clicked()'), self.updateNorm)
-        self.ui.normDivideRadio.clicked.connect(self.updateNorm)
-        #QtCore.QObject.connect(self.ui.normSubtractRadio, QtCore.SIGNAL('clicked()'), self.updateNorm)
-        self.ui.normSubtractRadio.clicked.connect(self.updateNorm)
-        #QtCore.QObject.connect(self.ui.normOffRadio, QtCore.SIGNAL('clicked()'), self.updateNorm)
-        self.ui.normOffRadio.clicked.connect(self.updateNorm)
-        #QtCore.QObject.connect(self.ui.normROICheck, QtCore.SIGNAL('clicked()'), self.updateNorm)
+        self.ui.normDivideRadio.clicked.connect(self.normRadioChanged)
+        self.ui.normSubtractRadio.clicked.connect(self.normRadioChanged)
+        self.ui.normOffRadio.clicked.connect(self.normRadioChanged)
         self.ui.normROICheck.clicked.connect(self.updateNorm)
-        #QtCore.QObject.connect(self.ui.normFrameCheck, QtCore.SIGNAL('clicked()'), self.updateNorm)
         self.ui.normFrameCheck.clicked.connect(self.updateNorm)
-        #QtCore.QObject.connect(self.ui.normTimeRangeCheck, QtCore.SIGNAL('clicked()'), self.updateNorm)
         self.ui.normTimeRangeCheck.clicked.connect(self.updateNorm)
-        #QtCore.QObject.connect(self.playTimer, QtCore.SIGNAL('timeout()'), self.timeout)
         self.playTimer.timeout.connect(self.timeout)
         
-        ##QtCore.QObject.connect(self.ui.normStartSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
-        #QtCore.QObject.connect(self.ui.normStopSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateNorm)
         self.normProxy = proxyConnect(None, self.normRgn.sigRegionChanged, self.updateNorm)
-        #self.normRoi.connect(self.normRoi, QtCore.SIGNAL('regionChangeFinished'), self.updateNorm)
         self.normRoi.sigRegionChangeFinished.connect(self.updateNorm)
         
         self.ui.roiPlot.registerPlot(self.name + '_ROI')
         
         self.noRepeatKeys = [QtCore.Qt.Key_Right, QtCore.Qt.Key_Left, QtCore.Qt.Key_Up, QtCore.Qt.Key_Down, QtCore.Qt.Key_PageUp, QtCore.Qt.Key_PageDown]
 
-    #def __dtor__(self):
-        ##print "Called ImageView sip destructor"
-        #self.quit()
-        #QtGui.QWidget.__dtor__(self)
-        
     def close(self):
         self.ui.roiPlot.close()
         self.ui.graphicsView.close()
@@ -159,8 +137,6 @@ class ImageView(QtGui.QWidget):
         self.scene.clear()
         del self.image
         del self.imageDisp
-        #self.image = None
-        #self.imageDisp = None
         self.setParent(None)
         
     def keyPressEvent(self, ev):
@@ -266,6 +242,13 @@ class ImageView(QtGui.QWidget):
         if self.axes['t'] is not None:
             self.setCurrentIndex(self.currentIndex + n)
 
+    def normRadioChanged(self):
+        self.imageDisp = None
+        self.updateImage()
+        self.roiChanged()
+        self.sigProcessingChanged.emit(self)
+        
+    
     def updateNorm(self):
         #for l, sl in zip(self.normLines, [self.ui.normStartSlider, self.ui.normStopSlider]):
             #if self.ui.normTimeRangeCheck.isChecked():
@@ -288,9 +271,11 @@ class ImageView(QtGui.QWidget):
         else:
             self.normRoi.hide()
         
-        self.imageDisp = None
-        self.updateImage()
-        self.roiChanged()
+        if not self.ui.normOffRadio.isChecked():
+            self.imageDisp = None
+            self.updateImage()
+            self.roiChanged()
+            self.sigProcessingChanged.emit(self)
 
     def normToggled(self, b):
         self.ui.normGroup.setVisible(b)

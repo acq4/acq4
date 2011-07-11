@@ -332,7 +332,7 @@ class FileHandle(QtCore.QObject):
             self.emitChanged('deleted', fn1)
             parent._childChanged()
         
-    def read(self):
+    def read(self, *args, **kargs):
         self.checkDeleted()
         with self.lock:
             typ = self.fileType()
@@ -343,7 +343,7 @@ class FileHandle(QtCore.QObject):
                 fd.close()
             else:
                 cls = filetypes.getFileType(typ)
-                data = cls.read(self)
+                data = cls.read(self, *args, **kargs)
                 #mod = __import__('lib.filetypes.%s' % typ, fromlist=['*'])
                 #func = getattr(mod, 'fromFile')
                 #data = func(fileName=self.name())
