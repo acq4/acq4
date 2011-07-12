@@ -54,6 +54,8 @@ class RecordThread(QtCore.QThread):
                 ## remember the record/snap/storageDir states since they might change 
                 ## before the write thread gets to this frame
                 self.newCamFrames.append({'frame': frame, 'record': recording, 'snap': takeSnap, 'newRec': newRec, 'lastRec': lastRec})
+                if self.currentRecord is not None:
+                    self.showMessage("Recording %s - %d" % (self.currentRecord.name(), self.currentFrameNum))
     
     def run(self):
         self.stopThread = False
@@ -68,8 +70,9 @@ class RecordThread(QtCore.QThread):
                 break
             
             try:
-                while len(handleCamFrames) > 0:
-                    self.handleCamFrame(handleCamFrames.pop(0))
+                self.handleCamFrames(handleCamFrames)
+                #while len(handleCamFrames) > 0:
+                    #self.handleCamFrame(handleCamFrames.pop(0))
             except:
                 debug.printExc('Error in camera recording thread:')
                 self.toggleRecord(False)
@@ -86,51 +89,111 @@ class RecordThread(QtCore.QThread):
                     break
             #print "  RecordThread run:   unlocked"
 
-
-    def handleCamFrame(self, frame):
-        (data, info) = frame['frame']
-        
-        if frame['record']:
-            if frame['newRec']:
-                self.startFrameTime = info['time']
+    def handleCamFrames(self, frames):
+        recFrames = []
+        newRec = False
+        for frame in frames:
+            (data, info) = frame['frame']
+            if frame['record']:
+                recFrames.append((data, info))
+                if frame['newRec']:
+                    self.startFrameTime = info['time']
+                    newRec = True
                 
-            arrayInfo = [
-                {'name': 'Time', 'values': array([info['time'] - self.startFrameTime]), 'units': 's'},
-                {'name': 'X'},
-                {'name': 'Y'}
-            ]
-            #import random
-            #if random.random() < 0.01:
-                #raise Exception("TEST")
-            data = MetaArray(data[np.newaxis], info=arrayInfo)
-            if frame['newRec']:
-                self.currentRecord = self.m.getCurrentDir().writeFile(data, 'video', autoIncrement=True, info=info, appendAxis='Time')
-                self.currentFrameNum = 0
+                
+                if frame['lastRec']:
+                    dur = info['time'] - self.startFrameTime
+                    self.currentRecord.setInfo({'frames': self.currentFrameNum, 'duration': dur, 'averageFPS': ((self.currentFrameNum-1)/dur)})
+                    self.showMessage('Finished recording %s - %d frames, %02f sec' % (self.currentRecord.name(), self.currentFrameNum, dur)) 
             else:
-                now = ptime.time()
-                data.write(self.currentRecord.name(), appendAxis='Time')
-                print "Frame write: %0.2gms" % (1000*(ptime.time()-now))
-                s = 1.0/self.currentFrameNum
+                if len(recFrames) > 0:
+                    ## do recording
+                    self.writeFrames(recFrames, newRec)
+                    recFrames = []
+                    newRec = False
                 
-            self.showMessage("Recording %s - %d" % (self.currentRecord.name(), self.currentFrameNum))
             
-            self.currentFrameNum += 1
+            if frame['snap']:
+                fileName = 'image.tif'
+                
+                fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
+                fn = fh.name()
+                self.showMessage("Saved image %s" % fn)
+                with MutexLocker(self.lock):
+                    self.takeSnap = False
+                    
+        if len(recFrames) > 0:
+            self.writeFrames(recFrames, newRec)
             
-            if frame['lastRec']:
-                dur = info['time'] - self.startFrameTime
-                self.currentRecord.setInfo({'frames': self.currentFrameNum, 'duration': dur, 'averageFPS': ((self.currentFrameNum-1)/dur)})
-                self.showMessage('Finished recording %s - %d frames, %02f sec' % (self.currentRecord.name(), self.currentFrameNum, dur)) 
+
+    def writeFrames(self, frames, newRec):
+        times = [f[1]['time'] for f in frames]
+        arrayInfo = [
+            {'name': 'Time', 'values': array(times) - self.startFrameTime, 'units': 's'},
+            {'name': 'X'},
+            {'name': 'Y'}
+        ]
+        #import random
+        #if random.random() < 0.01:
+            #raise Exception("TEST")
+        imgs = [f[0][np.newaxis,...] for f in frames]
+        
+        data = MetaArray(np.concatenate(imgs, axis=0), info=arrayInfo)
+        if newRec:
+            self.currentRecord = self.m.getCurrentDir().writeFile(data, 'video', autoIncrement=True, info=frames[0][1], appendAxis='Time')
+            self.currentFrameNum = 0
+        else:
+            data.write(self.currentRecord.name(), appendAxis='Time')
+            s = 1.0/self.currentFrameNum
+            
+        #self.showMessage("Recording %s - %d" % (self.currentRecord.name(), self.currentFrameNum))
+        
+        self.currentFrameNum += len(frames)
+
+    #def handleCamFrame(self, frame):
+        #(data, info) = frame['frame']
+        
+        #if frame['record']:
+            #if frame['newRec']:
+                #self.startFrameTime = info['time']
+                
+            #arrayInfo = [
+                #{'name': 'Time', 'values': array([info['time'] - self.startFrameTime]), 'units': 's'},
+                #{'name': 'X'},
+                #{'name': 'Y'}
+            #]
+            ##import random
+            ##if random.random() < 0.01:
+                ##raise Exception("TEST")
+            #data = MetaArray(data[np.newaxis], info=arrayInfo)
+            #if frame['newRec']:
+                #self.currentRecord = self.m.getCurrentDir().writeFile(data, 'video', autoIncrement=True, info=info, appendAxis='Time')
+                #self.currentFrameNum = 0
+            #else:
+                #now = ptime.time()
+                #data.write(self.currentRecord.name(), appendAxis='Time')
+                #print "Frame write: %0.2gms" % (1000*(ptime.time()-now))
+                #s = 1.0/self.currentFrameNum
+                
+            #self.showMessage("Recording %s - %d" % (self.currentRecord.name(), self.currentFrameNum))
+            
+            #self.currentFrameNum += 1
+            
+            #if frame['lastRec']:
+                #dur = info['time'] - self.startFrameTime
+                #self.currentRecord.setInfo({'frames': self.currentFrameNum, 'duration': dur, 'averageFPS': ((self.currentFrameNum-1)/dur)})
+                #self.showMessage('Finished recording %s - %d frames, %02f sec' % (self.currentRecord.name(), self.currentFrameNum, dur)) 
                 
             
         
-        if frame['snap']:
-            fileName = 'image.tif'
+        #if frame['snap']:
+            #fileName = 'image.tif'
             
-            fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
-            fn = fh.name()
-            self.showMessage("Saved image %s" % fn)
-            with self.lock:
-                self.takeSnap = False
+            #fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
+            #fn = fh.name()
+            #self.showMessage("Saved image %s" % fn)
+            #with self.lock:
+                #self.takeSnap = False
     
     def showMessage(self, msg):
         #self.emit(QtCore.SIGNAL('showMessage'), msg)

@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
-import serial, struct, time, sys
-sp = serial.Serial(0, baudrate=19200, bytesize=serial.EIGHTBITS)
+import serial, struct, time, sys, collections
+sp = serial.Serial(3, baudrate=9600, bytesize=serial.EIGHTBITS)
 print "Opened", sp.portstr
 
 ## convert byte to signed byte
 def sint(x):
     return ((x+128)%256)-128
 
-def readPacket(sp):
+def getPos():
+    global sp
     ## be absolutely sure the buffer is empty
     d = read()
     #time.sleep(0.1)
@@ -41,7 +42,7 @@ def readPacket(sp):
     x = packet[-13:-9]
     y = packet[-9:-5]
     #print repr(x), repr(y)
-    print struct.unpack('i4', x)[0], struct.unpack('i4', y)[0]
+    print struct.unpack('i', x)[0], struct.unpack('i', y)[0]
 
 def read():
     n = sp.inWaiting()
@@ -49,14 +50,53 @@ def read():
         return sp.read(n)
     return ''
 
-c = 0
-while True:
-    print "===============", c
-    try:
+
+def setPos(x, y):
+    cmd = 'm' + struct.pack('3l', x, y, 0) + '\r'
+    sp.write(cmd)
+    while True:
+        s = read()
+        if len(s) > 0:
+            print "return:", repr(s)
+            break
+
         
-        readPacket(sp)
-    except KeyboardInterrupt:
-        break
-    except:
-        sys.excepthook(*sys.exc_info())
-    c += 1
+def setVel(v):  ## mm/s
+    if v > 2**14:
+        v = 2**14
+    cmd = 'V' + struct.pack('H', v) + '\r'
+    sp.write(cmd)
+    while True:
+        s = read()
+        if len(s) > 0:
+            print "return:", repr(s)
+            break
+    
+def stat():
+    global sp
+    sp.write('s\r')
+    s = sp.read(33)
+    paramNames = ['flags', 'udirx', 'udiry', 'udirz', 'roe_vari', 'uoffset', 'urange', 'pulse', 
+                  'uspeed', 'indevice', 'flags2', 'jumpspd', 'highspd', 'watch_dog',
+                  'step_div', 'step_mul', 'xspeed', 'version', 'res1', 'res2']
+    vals = struct.unpack('4B5H2B7H2B', s[:32])
+    params = collections.OrderedDict()
+    for i,n in enumerate(paramNames):
+        params[n] = vals[i]
+    print params
+    
+        
+#c = 0
+#while True:
+    #print "===============", c
+    #try:
+        
+        #readPacket(sp)
+    #except KeyboardInterrupt:
+        #break
+    #except:
+        #sys.excepthook(*sys.exc_info())
+    #c += 1
+
+
+

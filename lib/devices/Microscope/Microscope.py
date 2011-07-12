@@ -47,7 +47,7 @@ class Microscope(Device):
             #QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
             self.posDev.sigPositionChanged.connect(self.positionChanged)
         else:
-            self.position = [0.0, 0.0]
+            self.position = [0.0, 0.0, 0.0]
         
         self.allObjectives = self.config['objectives']  ## all available objectives
         for l in self.allObjectives.itervalues():  ## Set default values for each objective
@@ -84,6 +84,7 @@ class Microscope(Device):
             #for i in range(len(self.position)):
                 #rel.append(p['rel'][i] * self.positionScale[i])
                 #self.position[i] += rel[i]
+            #print p['abs'], self.axisOrder, self.positionScale, self.position
             self.position = [p['abs'][self.axisOrder[i]] * self.positionScale[i] for i in range(len(self.position))]
             rel = [p['rel'][self.axisOrder[i]] * self.positionScale[i] for i in range(len(self.position))]
             p = self.position[:]
