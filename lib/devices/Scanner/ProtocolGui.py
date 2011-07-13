@@ -571,9 +571,9 @@ class ScannerProtoGui(ProtocolGui):
                 #prof.mark('attempt: %i' %i)
                 
                 ## Run in a remote process for a little speedup
-                #for n, m in optimize.opt2(locations, self.costFn, deadTime, greed=1.0):
-                proc = ForkedIterator.ForkedIterator(optimize.opt2, locations, minTime, minDist, deadTime, greed=1.0)
-                for n,m in proc:
+                for n, m in optimize.opt2(locations, minTime, minDist, deadTime, greed=1.0):
+                #proc = ForkedIterator.ForkedIterator(optimize.opt2, locations, minTime, minDist, deadTime, greed=1.0)
+                #for n,m in proc:
                     ## we can update the progress dialog here.
                     if m is None:
                         solution = n
