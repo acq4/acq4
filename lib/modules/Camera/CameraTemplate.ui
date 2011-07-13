@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>799</width>
-    <height>600</height>
+    <width>766</width>
+    <height>585</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -99,19 +99,7 @@ the data manager window.</string>
         </widget>
        </item>
        <item>
-        <widget class="QToolButton" name="btnSnap">
-         <property name="enabled">
-          <bool>true</bool>
-         </property>
-         <property name="toolTip">
-          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'MS Shell Dlg 2'; font-size:8.25pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Save a single frame to disk.&lt;/p&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-size:8pt;&quot;&gt;Frames are written to the current storage directory set in &lt;/p&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-size:8pt;&quot;&gt;the data manager window.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
+        <widget class="QPushButton" name="btnSnap">
          <property name="text">
           <string>Snap</string>
          </property>
@@ -373,14 +361,14 @@ the entire frame.</string>
          </property>
         </widget>
        </item>
-       <item row="4" column="0">
+       <item row="5" column="0">
         <widget class="QLabel" name="label_7">
          <property name="text">
           <string>Time:</string>
          </property>
         </widget>
        </item>
-       <item row="4" column="1">
+       <item row="5" column="1">
         <widget class="QDoubleSpinBox" name="spinROITime">
          <property name="singleStep">
           <double>0.100000000000000</double>
@@ -390,7 +378,7 @@ the entire frame.</string>
          </property>
         </widget>
        </item>
-       <item row="5" column="0" colspan="2">
+       <item row="6" column="0" colspan="2">
         <spacer name="verticalSpacer_2">
          <property name="orientation">
           <enum>Qt::Vertical</enum>
@@ -404,19 +392,16 @@ the entire frame.</string>
         </spacer>
        </item>
        <item row="1" column="0">
-        <layout class="QHBoxLayout" name="horizontalLayout_4"/>
-       </item>
-       <item row="2" column="1">
-        <widget class="QToolButton" name="btnClearROIs">
+        <widget class="QPushButton" name="btnAddROI">
          <property name="text">
-          <string>Clear</string>
+          <string>Add</string>
          </property>
         </widget>
        </item>
-       <item row="2" column="0">
-        <widget class="QToolButton" name="btnAddROI">
+       <item row="1" column="1">
+        <widget class="QPushButton" name="btnClearROIs">
          <property name="text">
-          <string>Add</string>
+          <string>Clear</string>
          </property>
         </widget>
        </item>
@@ -463,14 +448,14 @@ the entire frame.</string>
       <number>0</number>
      </property>
      <item>
-      <widget class="QToolButton" name="addFrameBtn">
+      <widget class="QPushButton" name="addFrameBtn">
        <property name="text">
         <string>Add</string>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QToolButton" name="clearFramesBtn">
+      <widget class="QPushButton" name="clearFramesBtn">
        <property name="text">
         <string>Clear</string>
        </property>
@@ -507,35 +492,33 @@ the entire frame.</string>
       <number>0</number>
      </property>
      <item>
-      <widget class="QToolButton" name="btnDivideBackground">
-       <property name="toolTip">
-        <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'MS Shell Dlg 2'; font-size:8.25pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Enable/disable background division. Accumulates a running&lt;/p&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;average of several previous frames and divides this from the&lt;/p&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;current visible frame. Does &lt;span style=&quot; font-style:italic;&quot;&gt;not&lt;/span&gt; affect images written to disk.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-       </property>
+      <widget class="QLabel" name="label">
        <property name="text">
-        <string>Divide Background</string>
-       </property>
-       <property name="checkable">
-        <bool>true</bool>
+        <string>Collect Background:</string>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QToolButton" name="btnLockBackground">
-       <property name="toolTip">
-        <string>Locks the background frame so that it no longer integrates new frames into itself.</string>
+      <widget class="QSplitter" name="splitter">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
        </property>
-       <property name="text">
-        <string>Lock Background</string>
-       </property>
-       <property name="checkable">
-        <bool>true</bool>
-       </property>
+       <widget class="QPushButton" name="staticBgBtn">
+        <property name="text">
+         <string>Static</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="continuousBgBtn">
+        <property name="text">
+         <string>Continuous</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
       </widget>
      </item>
      <item>
@@ -564,7 +547,7 @@ p, li { white-space: pre-wrap; }
          </widget>
         </item>
         <item>
-         <widget class="QDoubleSpinBox" name="spinFilterTime">
+         <widget class="QDoubleSpinBox" name="bgTimeSpin">
           <property name="toolTip">
            <string>Sets the approximate number of frames to be averaged for
 background division.</string>
@@ -606,7 +589,7 @@ background division.</string>
          </widget>
         </item>
         <item>
-         <widget class="QDoubleSpinBox" name="spinFlattenSize">
+         <widget class="QDoubleSpinBox" name="bgBlurSpin">
           <property name="toolTip">
            <string>Blurs the background frame before dividing it from the current frame.</string>
           </property>
@@ -616,6 +599,16 @@ background division.</string>
          </widget>
         </item>
        </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="divideBgBtn">
+       <property name="text">
+        <string>Divide Background</string>
+       </property>
+       <property name="checkable">
+        <bool>true</bool>
+       </property>
       </widget>
      </item>
      <item>

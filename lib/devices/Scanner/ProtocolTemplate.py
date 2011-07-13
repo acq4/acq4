@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Wed Jun 29 14:58:09 2011
+# Created: Fri Jul 01 11:53:48 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -172,10 +172,11 @@ class Ui_Form(object):
         self.timeLabel = QtGui.QLabel(Form)
         self.timeLabel.setObjectName(_fromUtf8("timeLabel"))
         self.gridLayout_2.addWidget(self.timeLabel, 8, 0, 1, 1)
-        self.displayCheck = QtGui.QCheckBox(Form)
-        self.displayCheck.setChecked(True)
-        self.displayCheck.setObjectName(_fromUtf8("displayCheck"))
-        self.gridLayout_2.addWidget(self.displayCheck, 8, 2, 1, 1)
+        self.hideCheck = QtGui.QCheckBox(Form)
+        self.hideCheck.setEnabled(True)
+        self.hideCheck.setChecked(False)
+        self.hideCheck.setObjectName(_fromUtf8("hideCheck"))
+        self.gridLayout_2.addWidget(self.hideCheck, 8, 2, 1, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
@@ -208,6 +209,6 @@ class Ui_Form(object):
         self.recomputeBtn.setText(QtGui.QApplication.translate("Form", "Recompute", None, QtGui.QApplication.UnicodeUTF8))
         self.checkBox.setText(QtGui.QApplication.translate("Form", "Auto recompute", None, QtGui.QApplication.UnicodeUTF8))
         self.timeLabel.setText(QtGui.QApplication.translate("Form", "Total Time:", None, QtGui.QApplication.UnicodeUTF8))
-        self.displayCheck.setText(QtGui.QApplication.translate("Form", "Display items", None, QtGui.QApplication.UnicodeUTF8))
+        self.hideCheck.setText(QtGui.QApplication.translate("Form", "Hide items", None, QtGui.QApplication.UnicodeUTF8))
 
 from SpinBox import SpinBox
