@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>179</width>
-    <height>207</height>
+    <width>255</width>
+    <height>218</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -23,25 +23,38 @@
       <set>Qt::AlignCenter</set>
      </property>
      <layout class="QGridLayout" name="gridLayout">
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <property name="spacing">
+       <number>0</number>
+      </property>
       <item row="0" column="0" colspan="3">
-       <widget class="QLabel" name="posLabel">
-        <property name="text">
-         <string>0,0</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="QPushButton" name="joyBtn">
-        <property name="minimumSize">
-         <size>
-          <width>50</width>
-          <height>50</height>
-         </size>
-        </property>
-        <property name="text">
-         <string/>
-        </property>
-       </widget>
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QLabel" name="posLabel">
+          <property name="text">
+           <string>0,0</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="monitorPosBtn">
+          <property name="text">
+           <string>Monitor</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
       <item row="1" column="0">
        <spacer name="horizontalSpacer">
@@ -55,6 +68,19 @@
          </size>
         </property>
        </spacer>
+      </item>
+      <item row="1" column="1">
+       <widget class="JoystickButton" name="joyBtn">
+        <property name="minimumSize">
+         <size>
+          <width>50</width>
+          <height>50</height>
+         </size>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
       </item>
       <item row="1" column="2">
        <spacer name="horizontalSpacer_2">
@@ -159,7 +185,7 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0" colspan="2">
+      <item row="3" column="0" colspan="2">
        <widget class="QLabel" name="label_4">
         <property name="text">
          <string>Speed</string>
@@ -169,8 +195,8 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="3">
-       <widget class="QDoubleSpinBox" name="maxSpeedSpin"/>
+      <item row="3" column="3">
+       <widget class="SpinBox" name="maxSpeedSpin"/>
       </item>
       <item row="0" column="3">
        <widget class="QLabel" name="xMinLabel">
@@ -206,11 +232,86 @@
         </property>
        </widget>
       </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Z</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QPushButton" name="zMinBtn">
+        <property name="maximumSize">
+         <size>
+          <width>30</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>set</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="5">
+       <widget class="QPushButton" name="zMaxBtn">
+        <property name="maximumSize">
+         <size>
+          <width>30</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>set</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="3">
+       <widget class="QLabel" name="zMinLabel">
+        <property name="text">
+         <string>0</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="4">
+       <widget class="QLabel" name="zMaxLabel">
+        <property name="text">
+         <string>0</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
+   <item row="1" column="1">
+    <spacer name="horizontalSpacer_3">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>40</width>
+       <height>20</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>SpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>SpinBox</header>
+  </customwidget>
+  <customwidget>
+   <class>JoystickButton</class>
+   <extends>QPushButton</extends>
+   <header>JoystickButton</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

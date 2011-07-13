@@ -42,7 +42,7 @@ def getPos():
     x = packet[-13:-9]
     y = packet[-9:-5]
     #print repr(x), repr(y)
-    print struct.unpack('i', x)[0], struct.unpack('i', y)[0]
+    return struct.unpack('i', x)[0], struct.unpack('i', y)[0]
 
 def read():
     n = sp.inWaiting()
@@ -51,22 +51,35 @@ def read():
     return ''
 
 
-def setPos(x, y):
+def setPos(x, y, block=True):
+    if block:
+        p1 = getPos()
+        t = time.time()
     cmd = 'm' + struct.pack('3l', x, y, 0) + '\r'
     sp.write(cmd)
-    while True:
+    while block:
         s = read()
         if len(s) > 0:
             print "return:", repr(s)
             break
+    if block:
+        dt = time.time()-t
+        print "time: %g" % (dt)
+        p2 = getPos()
+        print p1, p2
+        print "spd: %gmm/s" % ( ((p2[0]-p1[0])**2+(p2[1]-p1[1])**2)**0.5 *1e-4 / dt )
 
         
-def setVel(v):  ## mm/s
+def setVel(v, step=False, block=True):
+    ## step==True -> 50uSteps/step    False -> 10uSteps/step
     if v > 2**14:
         v = 2**14
+    if step:
+        v = v | 0x8000
+    print "new vel: 0x%x" % v 
     cmd = 'V' + struct.pack('H', v) + '\r'
     sp.write(cmd)
-    while True:
+    while block:
         s = read()
         if len(s) > 0:
             print "return:", repr(s)
@@ -85,7 +98,8 @@ def stat():
         params[n] = vals[i]
     print params
     
-        
+def stop():
+    sp.write('\3')
 #c = 0
 #while True:
     #print "===============", c

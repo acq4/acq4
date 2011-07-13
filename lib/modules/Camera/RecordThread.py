@@ -119,7 +119,7 @@ class RecordThread(QtCore.QThread):
                 fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
                 fn = fh.name()
                 self.showMessage("Saved image %s" % fn)
-                with MutexLocker(self.lock):
+                with self.lock:
                     self.takeSnap = False
                     
         if len(recFrames) > 0:

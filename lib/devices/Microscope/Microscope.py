@@ -70,7 +70,7 @@ class Microscope(Device):
             self.objSwitchId = config['objectiveSwitch'][1]           ## Switch ID
             currentObj = str(self.objDev.getSwitch(self.objSwitchId))           ## Get current switch state
             #QtCore.QObject.connect(self.posDev, QtCore.SIGNAL('switchChanged'), self.objectiveSwitched)
-            self.posDev.sigSwitchChanged.connect(self.objectiveSwitched)
+            self.objDev.sigSwitchChanged.connect(self.objectiveSwitched)
         
         self.setObjective(currentObj)
 
@@ -93,7 +93,7 @@ class Microscope(Device):
         #self.emit(QtCore.SIGNAL('positionChanged'), {'abs': p, 'rel': rel})
         self.sigPositionChanged.emit({'abs': p, 'rel': rel})
         
-    def objectiveSwitched(self, change):
+    def objectiveSwitched(self, sw, change):
         """Called when the switch device has changed, NOT when the user has selected a different objective."""
         if self.objSwitchId not in change:
             return
