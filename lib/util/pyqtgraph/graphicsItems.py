@@ -1240,6 +1240,11 @@ class ScatterPlotItem(GraphicsObject):
                 #frag = QtGui.QPainter.PixmapFragment.create(pos, QtCore.QRectF(0, 0, size, size))
                 #self.optimizeFragments.append(frag)
         self.range = [[xmn, xmx], [ymn, ymx]]
+        
+    def setPointSize(self, size):
+        for s in self.spots:
+            s['size'] = size
+        self.setPoints(self.spots)
                 
     #def paint(self, p, *args):
         #if not self.optimize:

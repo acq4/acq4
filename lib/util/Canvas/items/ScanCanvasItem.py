@@ -52,10 +52,20 @@ class ScanCanvasItem(CanvasItem):
         #self._addCanvasItem(citem)
         #return [citem]
         CanvasItem.__init__(self, gitem, **opts)
+        self.scatterPlot = gitem
         
         self.addScanImageBtn = QtGui.QPushButton()
         self.addScanImageBtn.setText('Add Scan Image')
         self.layout.addWidget(self.addScanImageBtn, self.layout.rowCount(), 0, 1, 2)
+        
+        self.sizeWidget = QtGui.QWidget()
+        self.spotSizeGui = SpotSizeGuiTemplate.Ui_Form()
+        self.spotSizeGui.setupUi(self.sizeWidget)
+        self.layout.addWidget(self.sizeWidget, 3, 0, 1, 2)
+        #self.transformGui.mirrorImageBtn.clicked.connect(self.mirrorY)
+        self.spotSizeGui.sizeSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[0, 1e-3])
+        self.spotSizeGui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
+        
         
         self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
 
@@ -196,4 +206,9 @@ class ScanCanvasItem(CanvasItem):
         self.scanImage.restoreTransform(self.saveTransform())
         
         #self.canvas.items[item] = scanImages
+        
+    def sizeSpinEdited(self):
+        self.spotSizeGui.sizeCustomRadio.setChecked(True)
+        size = self.spotSizeGui.sizeSpin.value()
+        self.scatterPlot.setPointSize(size)
         
