@@ -80,34 +80,106 @@ def listSequenceParams(dh):
     except KeyError:
         raise Exception("Directory '%s' does not appear to be a protocol sequence." % dh.name())
 
-def buildSequenceArray(dh, func):
+def buildSequenceArray(*args, **kargs):
     """Builds a MetaArray of data compiled across a sequence. 
     Arguments:
-        dh:   directory handle for the protocol sequence
-        func: a function that returns an array or scalar, given a protocol dir handle.
+        dh:      directory handle for the protocol sequence
+        func:    a function (optional) that returns an array or scalar, given a protocol dir handle.
+                 If func is None, return an object array containing the DirHandles (forces join=False)
+        join:    If True (default), attempt to join all results into a single array. This assumes that
+                 func returns arrays of equal shape for every point in the parameter space.
+                 If False, just return an object array pointing to individual results.
+        truncate: If join=True and some elements differ in shape, truncate to the smallest shape
+        fill:    If join=True, pre-fill the empty array with this value. Any points in the
+                 parameter space with no data will be left with this value.
         
     Example: Return an array of all primary-channel clamp recordings across a sequence 
         buildSequenceArray(seqDir, lambda protoDir: getClampFile(protoDir).read()['primary'])"""
+        
+    for i,m in buildSequenceArrayIter(*args, **kargs):
+        if m is None:
+            return i
+        
+def buildSequenceArrayIter(dh, func=None, join=True, truncate=False, fill=None):
+    """Iterator for buildSequenceArray that yields progress updates."""
+        
+    if func is None:
+        func = lambda dh: dh
+        join = False
+        
     params = listSequenceParams(dh)
-    inds = OrderedDict([(k, range(len(v))) for k,v in params.iteritems()])
-    def runFunc(dh, func, params):
-        name = '_'.join(['%03d'%n for n in params.values()])
-        fh = dh[name]
-        return func(fh)
-    data = SequenceRunner.runSequence(functools.partial(runFunc, dh, func), inds, inds.keys())
+    #inds = OrderedDict([(k, range(len(v))) for k,v in params.iteritems()])
+    #def runFunc(dh, func, params):
+        #name = '_'.join(['%03d'%n for n in params.values()])
+        #fh = dh[name]
+        #return func(fh)
+    #data = SequenceRunner.runSequence(functools.partial(runFunc, dh, func), inds, inds.keys())
+    subDirs = dh.subDirs()
+    if len(subDirs) == 0:
+        yield None, None
     
-    ## Pick up more meta info if available
-    subd = dh.subDirs()
-    if len(subd) > 0:
-        d1 = func(dh[subd[0]])
-        data._info = data._info[:len(params)] + d1._info
+    ## set up meta-info for sequence axes
+    seqShape = tuple([len(p) for p in params.itervalues()])
+    info = [[] for i in range(len(seqShape))]
+    i = 0
+    for k,v in params.iteritems():
+        info[i] = {'name': k, 'values': np.array(v)}
+        i += 1
+    
+    ## get a data sample
+    first = func(dh[subDirs[0]])
+    
+    ## build empty MetaArray
+    if join:
+        shape = seqShape + first.shape
+        if isinstance(first, MetaArray):
+            info = info + first._info
+        else:
+            info = info + [[] for i in range(first.ndim+1)]
+        data = MetaArray(np.empty(shape, first.dtype), info=info)
+        if fill is not None:
+            data[:] = fill
         
-    ## correct parameter values
-    for i in range(len(params)):
-        vals = params.values()[i]
-        data._info[i]['values'] = vals
+    else:
+        shape = seqShape
+        info = info + []
+        data = MetaArray(np.empty(shape, object), info=info)
+    
+    
+    ## fill data
+    i = 0
+    if join and truncate:
+        minShape = first.shape
+        for name in subDirs:
+            subd = dh[name]
+            d = func(subd)
+            minShape = [min(d.shape[j], minShape[j]) for j in range(d.ndim)]
+            dhInfo = subd.info()
+            ind = []
+            for k in params:
+                ind.append(dhInfo[k])
+            sl = [slice(0,m) for m in minShape]
+            ind += sl
+            data[tuple(ind)] = d[sl]
+            i += 1
+            yield i, len(subDirs)
+        sl = [slice(None)] * len(seqShape)
+        sl += [slice(0,m) for m in minShape]
+        data = data[sl]
+    else:
+        for name in subDirs:
+            subd = dh[name]
+            d = func(subd)
+            dhInfo = subd.info()
+            ind = []
+            for k in params:
+                ind.append(dhInfo[k])
+            data[tuple(ind)] = d
+            i += 1
+            yield i, len(subDirs)
         
-    return data
+    
+    yield data, None
 
 
 def getClampFile(protoDH):

@@ -24,6 +24,13 @@ import numpy.ma
 from debug import *
 import numpy as np
 
+try:
+    import scipy.weave as weave
+    from scipy.weave import converters
+except:
+    pass
+
+
 ## Number <==> string conversion functions
 
 SI_PREFIXES = u'yzafpnµm kMGTPEZY'
@@ -1978,6 +1985,103 @@ def isInt(x):
 
 
 
+def find(data, val, op='==', arrayOp='all', axis=0, useWeave=True):
+    operands = {'==': 'eq', '!=': 'ne', '<': 'lt', '>': 'gt', '<=': 'le', '>=': 'ge'}
+    if op not in operands:
+        raise Exception("Operand '%s' is not supported. Options are: %s" % (str(op), str(operands.keys())))
+    ## fallback for when weave is not available
+    if not useWeave:
+        axes = range(data.ndim)
+        axes.remove(axis)
+        axes = [axis] + axes
+        d2 = data.transpose(axes)
+        op = '__'+operands[op]+'__'
+        for i in range(d2.shape[0]):
+            d3 = d2[i]
+            test = getattr(d3, op)
+            if getattr(test, arrayOp)():
+                return i
+        return None
+    
+    ## simple scalar test
+    if data.ndim == 1:
+        template = """
+            if (op == "%s") {
+                for (int i=0; i<data_array->dimensions[0]; i++) {
+                    if (data[i] %s val) {
+                        return_val = i;
+                        break;
+                    }
+                }
+            }
+        """
+        
+        code = "return_val = -1;\n"
+        for op1 in operands:
+            code += template % (op1, op1)
+        
+        #ret = weave.inline(code, ['data', 'val', 'op'], type_converters=converters.blitz, compiler = 'gcc')
+        ret = weave.inline(code, ['data', 'val', 'op'], compiler = 'gcc')
+        if ret == -1:
+            ret = None
+        return ret
+        
+    ## broadcasting test
+    else:
+        template = """
+            if (op == "%s") {
+                for (int i=0; i<data_array->dimensions[0]; i++) {
+                    PyArrayObject* d2 = // PyArray_TakeFrom(data_array, PyInt_FromLong(i), 0, NULL, NPY_CLIP);
+                    PyObject *itr;
+                    itr = PyArray_MultiIterNew(2, d2, val);
+                    int fail = 0;
+                    while(PyArray_MultiIter_NOTDONE(itr)) {
+                        if (PyArray_MultiIter_DATA(itr, 0) %s PyArray_MultiIter_DATA(itr, 1)) {
+                            fail = 1;
+                            break;
+                        }
+                        PyArray_MultiIter_NEXT(itr);
+                    }
+                    
+                    if (fail == 0) {
+                        return_val = i;
+                        break;
+                    }
+                }
+            }
+        """
+        
+        code = "return_val = -1;\n"
+        for op1 in operands:
+            code += template % (op1, op1)
+        
+        ret = weave.inline(code, ['data', 'val', 'op'], compiler = 'gcc')
+        if ret == -1:
+            ret = None
+        return ret
+    
+    
+    ## broadcasting test
+    #else:
+        #template = """
+            #if (op == "%s") {
+                #for (int i=0; i<data_array->dimensions[0]; i++) {
+                    #PyArrayObject* d2 = data(i);
+                    #PyObject *itr;
+                    #itr = PyArray_MultiIterNew(2, a_array, b_array);
+                    #while(PyArray_MultiIter_NOTDONE(itr)) {
+                        #p1 = (%s *) PyArray_MultiIter_DATA(itr, 0);
+                        #p2 = (%s *) PyArray_MultiIter_DATA(itr, 1);
+                        #*p1 = (*p1) * (*p2);
+                        #PyArray_MultiIter_NEXT(itr);
+                    #}
+                #}
+            #}
+        #"""
+        #pass
+
+
+
 
 #------------------------------------------
 #       Useless function graveyard:
@@ -2098,3 +2202,17 @@ def getSpikeTemplate(ivc, traces):
     return traces[thrIndex][['Time', 'Inp0'], start:stop]
 
 
+    
+
+
+
+
+
+
+
+
+if __name__ == '__main__':
+    import user
+    
+    
+    

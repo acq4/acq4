@@ -282,7 +282,7 @@ class CameraWindow(QtGui.QMainWindow):
         #self.ui.divideBgBtn.clicked.connect(self.divideClicked)
         self.ui.bgBlurSpin.valueChanged.connect(self.updateBackgroundBlur)
         self.ui.staticBgBtn.clicked.connect(self.collectStaticBackground)
-        
+        self.ui.divideBgBtn.clicked.connect(self.divideClicked)
         #QtCore.QObject.connect(self.ui.btnAddROI, QtCore.SIGNAL('clicked()'), self.addROI)
         self.ui.btnAddROI.clicked.connect(self.addROI)
         #QtCore.QObject.connect(self.ui.btnClearROIs, QtCore.SIGNAL('clicked()'), self.clearROIs)
@@ -453,9 +453,9 @@ class CameraWindow(QtGui.QMainWindow):
         self.updateFrame = True
 
     #@trace
-    #def divideClicked(self):
-        #self.AGCLastMax = None
-        #self.AGCLastMin = None
+    def divideClicked(self):
+        self.AGCLastMax = None
+        self.AGCLastMin = None
         #self.setLevelRange()
         #if self.ui.divideBgBtn.isChecked() and not self.ui.btnLockBackground.isChecked():
             #self.backgroundFrame = None
@@ -802,10 +802,11 @@ class CameraWindow(QtGui.QMainWindow):
             if ptime.time()-self.bgStartTime < self.ui.bgTimeSpin.value():
                 if self.backgroundFrame == None:
                     self.backgroundFrame = frame[0].astype(float)
-                    self.bgFrameCount += 1
                 else:
-                    x = self.bgFrameCount/(self.bgFrameCount + 1)
+                    x = float(self.bgFrameCount)/(self.bgFrameCount + 1)
+                    print "mix:", x
                     self.backgroundFrame = x * self.backgroundFrame + (1-x)*frame[0].astype(float)
+                self.bgFrameCount += 1
             else:
                 self.ui.staticBgBtn.setChecked(False)
                 self.updateBackgroundBlur()
@@ -869,19 +870,19 @@ class CameraWindow(QtGui.QMainWindow):
                     s = 1.0 - 1.0 / (self.ui.bgTimeSpin.value()+1.0)
                     self.backgroundFrame *= s
                     self.backgroundFrame += data * (1.0-s)
-
+                    #b = self.ui.bgBlurSpin.value()
+                    #if b > 0.0:
+                        #self.blurredBackgroundFrame = scipy.ndimage.gaussian_filter(self.backgroundFrame, (b, b))
+                    #else:
+                        #self.blurredBackgroundFrame = self.backgroundFrame
+                if self.ui.continuousBgBtn.isChecked() or self.ui.staticBgBtn.isChecked():
+                    self.updateBackgroundBlur()
             (data, info) = self.currentFrame
 
             
             ## divide the background out of the current frame if needed
             if self.ui.divideBgBtn.isChecked() and self.backgroundFrame is not None:
-                b = self.ui.bgBlurSpin.value()
-                if b > 0.0 and self.ui.continuousBgBtn.isChecked():
-                    data = data / scipy.ndimage.gaussian_filter(self.backgroundFrame, (b, b))
-                elif b > 0.0 and not self.ui.continuousBgBtn.isChecked():
-                    data = data / self.blurredBackgroundFrame
-                else: 
-                    data = data / self.backgroundFrame
+                data = data / self.blurredBackgroundFrame
             
             ## determine black/white levels from level controls
             (bl, wl) = self.getLevels()

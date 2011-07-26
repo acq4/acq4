@@ -160,6 +160,8 @@ class Element(QtCore.QObject):
         args = self.args()
         if typ == 'plot':
             obj = pg.PlotWidget(name=self.name(), **args)
+        elif typ == 'imageView':
+            obj = pg.ImageView(**args)
         elif typ == 'canvas':
             obj = Canvas.Canvas(**args)
         elif typ == 'fileInput':

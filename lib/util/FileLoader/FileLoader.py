@@ -49,6 +49,7 @@ class FileLoader(QtGui.QWidget):
         #self.emit(QtCore.SIGNAL('fileLoaded'), fh)
         
     def selectedFile(self):
+        """Returns the file selected from the list of already loaded files"""
         return self.ui.fileTree.currentItem().file
         
     #def setSelectedFile(self, fh):

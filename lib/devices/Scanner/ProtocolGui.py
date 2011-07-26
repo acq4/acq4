@@ -209,10 +209,10 @@ class ScannerProtoGui(ProtocolGui):
         self.testTarget.setPointSize(size)
 
     def showInterface(self, b):
-            for k in self.items:
-                if self.listItem(k).checkState() == QtCore.Qt.Checked:
-                    self.items[k].setVisible(not b)
-            self.testTarget.setVisible(not b)
+        for k in self.items:
+            if self.listItem(k).checkState() == QtCore.Qt.Checked:
+                self.items[k].setVisible(not b)
+        self.testTarget.setVisible(not b)
 
     def listItem(self, name):
         return self.ui.itemList.findItems(name, QtCore.Qt.MatchExactly)[0]
@@ -496,7 +496,7 @@ class ScannerProtoGui(ProtocolGui):
             pos[1] += state['size'][1]/2.0
             info = ['point', pos]
         elif isinstance(item, TargetGrid):
-            info = ['grid', state['pos'], state['size'], -state['angle']]
+            info = ['grid', state['pos'], state['size'], state['angle']]
         elif isinstance(item, TargetOcclusion):
             info = ['occlusion', item.pos(), item.listPoints()]
         elif isinstance(item, widgets.SpiralROI):
@@ -571,9 +571,9 @@ class ScannerProtoGui(ProtocolGui):
                 #prof.mark('attempt: %i' %i)
                 
                 ## Run in a remote process for a little speedup
-                #for n, m in optimize.opt2(locations, self.costFn, deadTime, greed=1.0):
-                proc = ForkedIterator.ForkedIterator(optimize.opt2, locations, minTime, minDist, deadTime, greed=1.0)
-                for n,m in proc:
+                for n, m in optimize.opt2(locations, minTime, minDist, deadTime, greed=1.0):
+                #proc = ForkedIterator.ForkedIterator(optimize.opt2, locations, minTime, minDist, deadTime, greed=1.0)
+                #for n,m in proc:
                     ## we can update the progress dialog here.
                     if m is None:
                         solution = n

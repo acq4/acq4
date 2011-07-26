@@ -39,6 +39,6 @@ class MetaArray(FileType):
         return fileName
         
     @classmethod
-    def read(cls, fileHandle):
+    def read(cls, fileHandle, *args, **kargs):
         """Read a file, return a data object"""
-        return MA(file=fileHandle.name())
+        return MA(file=fileHandle.name(), *args, **kargs)
