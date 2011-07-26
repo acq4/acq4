@@ -81,8 +81,11 @@ class CameraWindow(QtGui.QMainWindow):
         self.currentFrame = None
         self.currentClipMask = None
         self.backgroundFrame = None
+        self.blurredBackgroundFrame = None
         self.lastDrawTime = None
         self.fps = None
+        self.bgStartTime = None
+        self.bgFrameCount = 0
         
         QtGui.QMainWindow.__init__(self)
         self.ui = Ui_MainWindow()
@@ -176,6 +179,7 @@ class CameraWindow(QtGui.QMainWindow):
 
         self.persistentFrames = []
         
+        ### Set up status bar labels
         self.recLabel = QtGui.QLabel()
         self.fpsLabel = QtGui.QLabel()
         self.rgnLabel = QtGui.QLabel()
@@ -198,6 +202,8 @@ class CameraWindow(QtGui.QMainWindow):
         self.statusBar().addPermanentWidget(self.tLabel)
         self.statusBar().addPermanentWidget(self.vLabel)
         self.statusBar().addPermanentWidget(self.fpsLabel)
+        
+        
         self.show()
         self.openCamera()
         self.ui.plotWidget.resize(self.ui.plotWidget.size().width(), 40)
@@ -272,8 +278,10 @@ class CameraWindow(QtGui.QMainWindow):
         self.cam.sigShowMessage.connect(self.showMessage)
         #QtCore.QObject.connect(self.gv, QtCore.SIGNAL("sceneMouseMoved(PyQt_PyObject)"), self.setMouse)
         self.gv.sigSceneMouseMoved.connect(self.setMouse)
-        #QtCore.QObject.connect(self.ui.btnDivideBackground, QtCore.SIGNAL('clicked()'), self.divideClicked)
-        self.ui.btnDivideBackground.clicked.connect(self.divideClicked)
+        #QtCore.QObject.connect(self.ui.divideBgBtn, QtCore.SIGNAL('clicked()'), self.divideClicked)
+        #self.ui.divideBgBtn.clicked.connect(self.divideClicked)
+        self.ui.bgBlurSpin.valueChanged.connect(self.updateBackgroundBlur)
+        self.ui.staticBgBtn.clicked.connect(self.collectStaticBackground)
         
         #QtCore.QObject.connect(self.ui.btnAddROI, QtCore.SIGNAL('clicked()'), self.addROI)
         self.ui.btnAddROI.clicked.connect(self.addROI)
@@ -287,8 +295,8 @@ class CameraWindow(QtGui.QMainWindow):
         #QtCore.QObject.connect(self.ui.sliderBlackLevel, QtCore.SIGNAL('valueChanged(int)'), self.levelsChanged)
         #QtCore.QObject.connect(self.ui.gradientWidget, QtCore.SIGNAL('gradientChanged'), self.levelsChanged)
         self.ui.gradientWidget.sigGradientChanged.connect(self.levelsChanged)
-        #QtCore.QObject.connect(self.ui.spinFlattenSize, QtCore.SIGNAL('valueChanged(int)'), self.requestFrameUpdate)
-        self.ui.spinFlattenSize.valueChanged.connect(self.requestFrameUpdate)
+        #QtCore.QObject.connect(self.ui.bgBlurSpin, QtCore.SIGNAL('valueChanged(int)'), self.requestFrameUpdate)
+        self.ui.bgBlurSpin.valueChanged.connect(self.requestFrameUpdate)
 
         #QtCore.QObject.connect(self.ui.addFrameBtn, QtCore.SIGNAL('clicked()'), self.addPersistentFrame)
         self.ui.addFrameBtn.clicked.connect(self.addPersistentFrame)
@@ -445,13 +453,13 @@ class CameraWindow(QtGui.QMainWindow):
         self.updateFrame = True
 
     #@trace
-    def divideClicked(self):
-        self.AGCLastMax = None
-        self.AGCLastMin = None
-        self.setLevelRange()
-        if self.ui.btnDivideBackground.isChecked() and not self.ui.btnLockBackground.isChecked():
-            self.backgroundFrame = None
-        self.requestFrameUpdate()
+    #def divideClicked(self):
+        #self.AGCLastMax = None
+        #self.AGCLastMin = None
+        #self.setLevelRange()
+        #if self.ui.divideBgBtn.isChecked() and not self.ui.btnLockBackground.isChecked():
+            #self.backgroundFrame = None
+        #self.requestFrameUpdate()
             
     #@trace
     def showMessage(self, msg):
@@ -563,8 +571,8 @@ class CameraWindow(QtGui.QMainWindow):
         #printExc("ACQ stopped; stopping record.")
         #print "Signal sender was: ", self.sender()
         self.toggleRecord(False)
-        if not self.ui.btnLockBackground.isChecked():
-            self.backgroundFrame = None
+        #if not self.ui.btnLockBackground.isChecked():
+        self.backgroundFrame = None
         self.ui.btnAcquire.setChecked(False)
         self.ui.btnAcquire.setEnabled(True)
         
@@ -674,7 +682,7 @@ class CameraWindow(QtGui.QMainWindow):
                 rmin = 0.0
                 rmax = 1.0
             else:
-                if self.ui.btnDivideBackground.isChecked():
+                if self.ui.divideBgBtn.isChecked():
                     rmin = 0.0
                     rmax = 2.0
                 else:
@@ -787,8 +795,36 @@ class CameraWindow(QtGui.QMainWindow):
             
         ## self.nextFrame gets picked up by drawFrame() at some point
         self.nextFrame = frame
-
-
+        
+        if self.ui.staticBgBtn.isChecked():
+            if self.bgStartTime == None:
+                self.bgStartTime = ptime.time()
+            if ptime.time()-self.bgStartTime < self.ui.bgTimeSpin.value():
+                if self.backgroundFrame == None:
+                    self.backgroundFrame = frame[0].astype(float)
+                    self.bgFrameCount += 1
+                else:
+                    x = self.bgFrameCount/(self.bgFrameCount + 1)
+                    self.backgroundFrame = x * self.backgroundFrame + (1-x)*frame[0].astype(float)
+            else:
+                self.ui.staticBgBtn.setChecked(False)
+                self.updateBackgroundBlur()
+    
+    def collectStaticBackground(self):
+        ###self.backgroundFrame = ### an average of frames collected -- how to do this?
+        self.backgroundFrame = None ## reset background frame
+        self.bgFrameCount = 0
+        self.bgStartTime = ptime.time()
+        #self.updateBackgroundBlur()
+        #pass
+    
+    def updateBackgroundBlur(self):
+        b = self.ui.bgBlurSpin.value()
+        if b > 0.0:
+            self.blurredBackgroundFrame = scipy.ndimage.gaussian_filter(self.backgroundFrame, (b, b))
+        else:
+            self.blurredBackgroundFrame = self.backgroundFrame
+        
     #@trace
     def drawFrame(self):
         if self.hasQuit:
@@ -824,23 +860,26 @@ class CameraWindow(QtGui.QMainWindow):
                 
                 #self.ui.levelThermo.setValue(int(data.mean()))
                 
-                ## If background division is enabled, mix the current frame into the background frame
-                if self.ui.btnDivideBackground.isChecked():
+                ## If continous background division is enabled, mix the current frame into the background frame
+                #if self.ui.divideBgBtn.isChecked():
+                if self.ui.continuousBgBtn.isChecked():
                     if self.backgroundFrame is None or self.backgroundFrame.shape != data.shape:
                         self.backgroundFrame = data.astype(float)
-                    if not self.ui.btnLockBackground.isChecked():
-                        s = 1.0 - 1.0 / (self.ui.spinFilterTime.value()+1.0)
-                        self.backgroundFrame *= s
-                        self.backgroundFrame += data * (1.0-s)
+                    #if not self.ui.btnLockBackground.isChecked():
+                    s = 1.0 - 1.0 / (self.ui.bgTimeSpin.value()+1.0)
+                    self.backgroundFrame *= s
+                    self.backgroundFrame += data * (1.0-s)
 
             (data, info) = self.currentFrame
 
             
             ## divide the background out of the current frame if needed
-            if self.ui.btnDivideBackground.isChecked() and self.backgroundFrame is not None:
-                b = self.ui.spinFlattenSize.value()
-                if b > 0.0:
+            if self.ui.divideBgBtn.isChecked() and self.backgroundFrame is not None:
+                b = self.ui.bgBlurSpin.value()
+                if b > 0.0 and self.ui.continuousBgBtn.isChecked():
                     data = data / scipy.ndimage.gaussian_filter(self.backgroundFrame, (b, b))
+                elif b > 0.0 and not self.ui.continuousBgBtn.isChecked():
+                    data = data / self.blurredBackgroundFrame
                 else: 
                     data = data / self.backgroundFrame
             
