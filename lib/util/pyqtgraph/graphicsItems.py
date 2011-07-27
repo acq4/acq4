@@ -1245,8 +1245,8 @@ class ScatterPlotItem(GraphicsObject):
         
     def setPointSize(self, size):
         for s in self.spots:
-            s['size'] = size
-        self.setPoints(self.spots)
+            s.size = size
+        self.setPoints([{'size':s.size, 'pos':s.pos(), 'data':s.data} for s in self.spots])
                 
     #def paint(self, p, *args):
         #if not self.optimize:
