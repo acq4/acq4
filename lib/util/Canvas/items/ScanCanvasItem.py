@@ -177,11 +177,10 @@ class ScanCanvasItem(CanvasItem):
                 image = frames[0]
                 
             mx = image.max()
-            if mx < 50:
-                nulls.append(d.shortName())
-                continue
             image *= (1000. / mx)
             images.append(image)
+            if mx < 50:
+                nulls.append(d.shortName())
             
         print "Null frames for %s:" %dh.shortName(), nulls
         scanImages = np.zeros(images[0].shape)
