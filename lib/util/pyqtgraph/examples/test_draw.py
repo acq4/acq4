@@ -20,7 +20,6 @@ win.show()
 
 ## Allow mouse scale/pan
 view.enableMouse()
-
 ## ..But lock the aspect ratio
 view.setAspectLocked(True)
 
@@ -31,7 +30,13 @@ view.scene().addItem(img)
 ## Set initial view bounds
 view.setRange(QtCore.QRectF(0, 0, 200, 200))
 
-img.setDrawKernel(1)
+## start drawing with 3x3 brush
+kern = np.array([
+    [0.0, 0.5, 0.0],
+    [0.5, 1.0, 0.5],
+    [0.0, 0.5, 0.0]
+])
+img.setDrawKernel(kern, mask=kern, center=(1,1), mode='add')
 img.setLevels(10,0)
 
 ## Start Qt event loop unless running in interactive mode.

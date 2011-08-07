@@ -718,6 +718,7 @@ class PlotItem(QtGui.QGraphicsWidget):
     def addDataItem(self, item):
         self.addItem(item)
         self.dataItems.append(item)
+        self.plotChanged()
     
     def addCurve(self, c, params=None):
         if params is None:
@@ -1157,7 +1158,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             #print 'xvals:', xv
         except:
             if x is None:
-                xv = arange(arr.shape[0])
+                xv = np.arange(arr.shape[0])
             else:
                 xv = x
         c = PlotCurveItem()

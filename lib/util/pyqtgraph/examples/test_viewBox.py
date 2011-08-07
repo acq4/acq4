@@ -26,12 +26,15 @@ gv.enableMouse(False)    ## Mouse interaction will be handled by the ViewBox
 l = QtGui.QGraphicsGridLayout()
 l.setHorizontalSpacing(0)
 l.setVerticalSpacing(0)
+vl.addWidget(gv)
 
 
 vb = pg.ViewBox()
+#grid = pg.GridItem()
+#vb.addItem(grid)
+
 p1 = pg.PlotCurveItem()
 vb.addItem(p1)
-vl.addWidget(gv)
 
 class movableRect(QtGui.QGraphicsRectItem):
     def __init__(self, *args):

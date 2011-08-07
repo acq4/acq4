@@ -82,21 +82,78 @@ class GraphicsObject(QtGui.QGraphicsObject):
     
     def __init__(self, *args):
         QtGui.QGraphicsObject.__init__(self, *args)
-        self._view = None
+        self._viewWidget = None
+        self._viewBox = None
     
     def getViewWidget(self):
         """Return the view widget for this item. If the scene has multiple views, only the first view is returned.
-        the view is remembered for the lifetime of the object, so expect trouble if the object is moved to another view."""
-        if self._view is None:
+        The return value is cached; clear the cached value with forgetViewWidget()"""
+        if self._viewWidget is None:
             scene = self.scene()
             if scene is None:
                 return None
             views = scene.views()
             if len(views) < 1:
                 return None
-            self._view = weakref.ref(self.scene().views()[0])
-        return self._view()
-    
+            self._viewWidget = weakref.ref(self.scene().views()[0])
+        return self._viewWidget()
+        
+    def forgetViewWidget(self):
+        self._viewWidget = None
+        
+    def getViewBox(self):
+        """Return the first ViewBox or GraphicsView which bounds this item's visible space.
+        If this item is not contained within a ViewBox, then the GraphicsView is returned.
+        If the item is contained inside nested ViewBoxes, then the inner-most ViewBox is returned.
+        The result is cached; clear the cache with forgetViewBox()
+        """
+        if self._viewBox is None:
+            p = self
+            while True:
+                p = p.parentItem()
+                if p is None:
+                    vb = self.getViewWidget()
+                    if vb is None:
+                        return None
+                    else:
+                        self._viewBox = weakref.ref(vb)
+                        break
+                if isinstance(p, ViewBox):
+                    self._viewBox = weakref.ref(p)
+                    break
+                    
+        return self._viewBox()  ## If we made it this far, _viewBox is definitely not None
+
+    def forgetViewBox(self):
+        self._viewBox = None
+        
+        
+    def deviceTransform(self, viewportTransform=None):
+        """Return the transform that converts item coordinates to device coordinates.
+        Extends deviceTransform to automatically determine the viewportTransform.
+        """
+        if viewportTransform is None:
+            view = self.getViewWidget()
+            if view is None:
+                return None
+            viewportTransform = view.viewportTransform()
+        return QtGui.QGraphicsObject.deviceTransform(self, viewportTransform)
+        
+    def viewTransform(self):
+        """Return the transform that maps from local coordinates to the item's ViewBox coordinates
+        If there is no ViewBox, return the scene transform.
+        Returns None if the item does not have a view."""
+        view = self.getViewBox()
+        if view is None:
+            return None
+        if isinstance(view, ViewBox):
+            return self.itemTransform(view.innerSceneItem())[0]
+        else:
+            return self.sceneTransform()
+            #return self.deviceTransform(view.viewportTransform())
+
+
+
     def getBoundingParents(self):
         """Return a list of parents to this item that have child clipping enabled."""
         p = self
@@ -109,48 +166,49 @@ class GraphicsObject(QtGui.QGraphicsObject):
                 parents.append(p)
         return parents
     
-    def viewBounds(self):
-        """Return the allowed visible boundaries for this item. Takes into account the viewport as well as any parents that clip."""
-        bounds = QtCore.QRectF(0, 0, 1, 1)
-        view = self.getViewWidget()
+    def viewRect(self):
+        """Return the bounds (in item coordinates) of this item's ViewBox or GraphicsWidget"""
+        view = self.getViewBox()
         if view is None:
             return None
-        bounds = self.mapRectFromScene(view.visibleRange())
+        bounds = self.mapRectFromView(view.viewRect())
         
-        for p in self.getBoundingParents():
-            bounds &= self.mapRectFromScene(p.sceneBoundingRect())
+        ## nah.
+        #for p in self.getBoundingParents():
+            #bounds &= self.mapRectFromScene(p.sceneBoundingRect())
             
         return bounds
         
-    def viewTransform(self):
-        """Return the transform that maps from local coordinates to the item's view coordinates"""
-        view = self.getViewWidget()
-        if view is None:
-            return None
-        return self.deviceTransform(view.viewportTransform())
-
+        
+        
     def pixelVectors(self):
         """Return vectors in local coordinates representing the width and height of a view pixel."""
-        vt = self.viewTransform()
+        vt = self.deviceTransform()
         if vt is None:
             return None
         vt = vt.inverted()[0]
         orig = vt.map(QtCore.QPointF(0, 0))
         return vt.map(QtCore.QPointF(1, 0))-orig, vt.map(QtCore.QPointF(0, 1))-orig
 
+    def pixelSize(self):
+        v = self.pixelVectors()
+        return (v[0].x()**2+v[0].y()**2)**0.5, (v[1].x()**2+v[1].y()**2)**0.5
+
     def pixelWidth(self):
-        vt = self.viewTransform()
+        vt = self.deviceTransform()
         if vt is None:
             return 0
         vt = vt.inverted()[0]
         return abs((vt.map(QtCore.QPointF(1, 0))-vt.map(QtCore.QPointF(0, 0))).x())
         
     def pixelHeight(self):
-        vt = self.viewTransform()
+        vt = self.deviceTransform()
         if vt is None:
             return 0
         vt = vt.inverted()[0]
         return abs((vt.map(QtCore.QPointF(0, 1))-vt.map(QtCore.QPointF(0, 0))).y())
+        
+        
 
     def mapToView(self, obj):
         vt = self.viewTransform()
@@ -177,8 +235,153 @@ class GraphicsObject(QtGui.QGraphicsObject):
             return None
         vt = vt.inverted()[0]
         return vt.mapRect(obj)
+
+
+class UIGraphicsItem(GraphicsObject):
+    """Base class for graphics items with boundaries relative to a GraphicsView or ViewBox.
+    The purpose of this class is to allow the creation of GraphicsItems which live inside 
+    a scalable view, but whose boundaries will always stay fixed relative to the view's boundaries.
+    For example: GridItem, InfiniteLine
+    
+    The view can be specified on initialization or it can be automatically detected when the item is painted.
+    """
+    
+    #sigViewChanged = QtCore.Signal(object)  ## emitted whenever the viewport coords have changed
+    
+    def __init__(self, bounds=None):
+        """
+        Initialization Arguments:
+            #view: The view box whose bounds will be used as a reference vor this item's bounds
+            bounds: QRectF with coordinates relative to view box. The default is QRectF(0,0,1,1),
+                    which means the item will have the same bounds as the view.
+        """
+        GraphicsObject.__init__(self)
+        #self.updateView()
+        self._connectedView = None
+            
+        if bounds is None:
+            self._bounds = QtCore.QRectF(0, 0, 1, 1)
+        else:
+            self._bounds = bounds
+            
+            
+        self._boundingRect = None
+        #self._viewTransform = self.viewTransform()
+        #self.setNewBounds()
+        #QtCore.QObject.connect(view, QtCore.SIGNAL('viewChanged'), self.viewChangedEvent)
         
+    def paint(self, *args):
+        ## check for a new view object every time we paint.
+        self.updateView()
+    
+    def updateView(self):
+        ## if we already have a proper bounding rect, return immediately
+        if self._boundingRect is not None:
+            return
         
+        ## check for this item's current viewbox or view widget
+        view = self.getViewBox()
+        if view is None:
+            return
+            
+        if view is self._connectedView:
+            return
+            
+        ## disconnect from previous view
+        if self._connectedView is not None:
+            cv = self._connectedView()
+            if cv is not None:
+                cv.sigRangeChanged.disconnect(self.viewRangeChanged)
+            
+        ## connect to new view
+        view.sigRangeChanged.connect(self.viewRangeChanged)
+        self._connectedView = weakref.ref(view)
+        self.setNewBounds()
+        #self._viewRect = self._view().rect()
+            
+        #if view is None:
+            #view = self.getView()
+            #if view is None:  ## definitely no view available yet
+                #self._view = None
+                #return
+            
+        #if self._view is not None:
+            #self._view.sigRangeChanged.disconnect(self.viewRangeChanged)
+            
+        #self._view = weakref.ref(view)
+        #self._viewRect = self._view().rect()
+        #view.sigRangeChanged.connect(self.viewRangeChanged)
+
+        
+    def boundingRect(self):
+        self.updateView()
+        if self._boundingRect is None:
+            return QtCore.QRectF()
+        return self._boundingRect
+        #if self.view() is None:
+            #self.bounds = self._bounds
+        #else:
+            #vr = self._view().rect()
+            #tr = self.viewTransform()
+            #if vr != self._viewRect or tr != self._viewTransform:
+                ##self.viewChangedEvent(vr, self._viewRect)
+                #self._viewRect = vr
+                #self._viewTransform = tr
+                #self.setNewBounds()
+        ##print "viewRect", self._viewRect.x(), self._viewRect.y(), self._viewRect.width(), self._viewRect.height()
+        ##print "bounds", self.bounds.x(), self.bounds.y(), self.bounds.width(), self.bounds.height()
+        #return self.bounds
+
+    def setNewBounds(self):
+        #if self.view() is None:
+            #self.bounds = QtCore.QRectF()
+            #return
+        #bounds = QtCore.QRectF(
+            #QtCore.QPointF(self._bounds.left()*self._viewRect.width(), self._bounds.top()*self._viewRect.height()),
+            #QtCore.QPointF(self._bounds.right()*self._viewRect.width(), self._bounds.bottom()*self._viewRect.height())
+        #)
+        #bounds.adjust(0.5, 0.5, 0.5, 0.5)
+        #self.bounds = self.viewTransform().inverted()[0].mapRect(bounds)
+        self._boundingRect = self.viewRect()
+        self.prepareGeometryChange()
+        self.viewChangedEvent()
+
+    def viewRangeChanged(self):
+        """Called when the view widget is resized"""
+        self.setNewBounds()
+        #self.boundingRect()
+        self.update()
+
+    def viewChangedEvent(self):
+        """Called whenever the view coordinates have changed."""
+        pass
+
+    #def viewTransform(self):
+        #"""Returns a matrix that maps viewport coordinates onto scene coordinates"""
+        #if self.view() is None:
+            #return QtGui.QTransform()
+        #else:
+            #return self.view().viewportTransform()
+        
+    #def unitRect(self):
+        #return self.viewTransform().inverted()[0].mapRect(QtCore.QRectF(0, 0, 1, 1))
+
+    ## handled by GraphicsObject
+    #def view(self):
+        #if self._viewWidget is None or self._viewWidget() is None:
+            #return None
+        #return self._view()
+        
+    #def viewRect(self):
+        #"""Return the viewport widget rect"""
+        #v = self.view()
+        #if v is None:
+            #return QtCore.QRectF()
+        #return v.rect()
+        
+
+
+
 class GraphicsLayout(QtGui.QGraphicsWidget):
     def __init__(self, parent=None, border=None):
         QtGui.QGraphicsWidget.__init__(self, parent)
@@ -570,10 +773,10 @@ class ImageItem(QtGui.QGraphicsObject):
         if callable(self.drawMode):
             self.drawMode(dk, self.image, mask, ss, ts, ev)
         else:
-            mask = mask[ss]
             src = src[ss]
             if self.drawMode == 'set':
                 if mask is not None:
+                    mask = mask[ss]
                     self.image[ts] = self.image[ts] * (1-mask) + src * mask
                 else:
                     self.image[ts] = src
@@ -1507,66 +1710,6 @@ class ROIPlotItem(PlotCurveItem):
 
 
 
-class UIGraphicsItem(GraphicsObject):
-    """Base class for graphics items with boundaries relative to a GraphicsView widget"""
-    def __init__(self, view, bounds=None):
-        GraphicsObject.__init__(self)
-        self._view = weakref.ref(view)
-        if bounds is None:
-            self._bounds = QtCore.QRectF(0, 0, 1, 1)
-        else:
-            self._bounds = bounds
-        self._viewRect = self._view().rect()
-        self._viewTransform = self.viewTransform()
-        self.setNewBounds()
-        #QtCore.QObject.connect(view, QtCore.SIGNAL('viewChanged'), self.viewChangedEvent)
-        view.sigRangeChanged.connect(self.viewRangeChanged)
-        
-    def viewRect(self):
-        """Return the viewport widget rect"""
-        return self._view().rect()
-    
-    def viewTransform(self):
-        """Returns a matrix that maps viewport coordinates onto scene coordinates"""
-        if self._view() is None:
-            return QtGui.QTransform()
-        else:
-            return self._view().viewportTransform()
-        
-    def boundingRect(self):
-        if self._view() is None:
-            self.bounds = self._bounds
-        else:
-            vr = self._view().rect()
-            tr = self.viewTransform()
-            if vr != self._viewRect or tr != self._viewTransform:
-                #self.viewChangedEvent(vr, self._viewRect)
-                self._viewRect = vr
-                self._viewTransform = tr
-                self.setNewBounds()
-        #print "viewRect", self._viewRect.x(), self._viewRect.y(), self._viewRect.width(), self._viewRect.height()
-        #print "bounds", self.bounds.x(), self.bounds.y(), self.bounds.width(), self.bounds.height()
-        return self.bounds
-
-    def setNewBounds(self):
-        bounds = QtCore.QRectF(
-            QtCore.QPointF(self._bounds.left()*self._viewRect.width(), self._bounds.top()*self._viewRect.height()),
-            QtCore.QPointF(self._bounds.right()*self._viewRect.width(), self._bounds.bottom()*self._viewRect.height())
-        )
-        bounds.adjust(0.5, 0.5, 0.5, 0.5)
-        self.bounds = self.viewTransform().inverted()[0].mapRect(bounds)
-        self.prepareGeometryChange()
-
-    def viewRangeChanged(self):
-        """Called when the view widget is resized"""
-        self.boundingRect()
-        self.update()
-        
-    def unitRect(self):
-        return self.viewTransform().inverted()[0].mapRect(QtCore.QRectF(0, 0, 1, 1))
-
-    def paint(self, *args):
-        pass
 
 
 class DebugText(QtGui.QGraphicsTextItem):
@@ -2074,6 +2217,9 @@ class ViewBox(QtGui.QGraphicsWidget):
         
         self.mouseEnabled = [True, True]
     
+    def innerSceneItem(self):
+        return self.childGroup
+    
     def setMouseEnabled(self, x, y):
         self.mouseEnabled = [x, y]
     
@@ -2092,6 +2238,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         
 
     def viewRect(self):
+        """Return a QRectF bounding the region visible within the ViewBox"""
         try:
             vr0 = self.viewRange[0]
             vr1 = self.viewRange[1]
@@ -2099,6 +2246,10 @@ class ViewBox(QtGui.QGraphicsWidget):
         except:
             print "make qrectf failed:", self.viewRange
             raise
+    
+    #def viewportTransform(self):
+        ##return self.itemTransform(self.childGroup)[0]
+        #return self.childGroup.itemTransform(self)[0]
     
     def targetRect(self):  
         """Return the region which has been requested to be visible. 
@@ -2852,8 +3003,8 @@ class VTickGroup(QtGui.QGraphicsPathItem):
 class GridItem(UIGraphicsItem):
     """Class used to make square grids in plots. NOT the grid used for running scanner sequences."""
     
-    def __init__(self, view, bounds=None, *args):
-        UIGraphicsItem.__init__(self, view, bounds)
+    def __init__(self):
+        UIGraphicsItem.__init__(self)
         #QtGui.QGraphicsItem.__init__(self, *args)
         self.setFlag(QtGui.QGraphicsItem.ItemClipsToShape)
         #self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
@@ -2861,15 +3012,15 @@ class GridItem(UIGraphicsItem):
         self.picture = None
         
         
-    def viewRangeChanged(self):
+    def viewChangedEvent(self):
         self.picture = None
-        UIGraphicsItem.viewRangeChanged(self)
+        #UIGraphicsItem.viewRangeChanged(self)
         #self.update()
         
     def paint(self, p, opt, widget):
         #p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))
         #p.drawRect(self.boundingRect())
-        
+        UIGraphicsItem.paint(self, p, opt, widget)
         ## draw picture
         if self.picture is None:
             #print "no pic, draw.."
@@ -2885,7 +3036,7 @@ class GridItem(UIGraphicsItem):
         
         dt = self.viewTransform().inverted()[0]
         vr = self.viewRect()
-        unit = self.unitRect()
+        unit = self.pixelWidth(), self.pixelHeight()
         dim = [vr.width(), vr.height()]
         lvr = self.boundingRect()
         ul = np.array([lvr.left(), lvr.top()])
@@ -2917,9 +3068,11 @@ class GridItem(UIGraphicsItem):
                 for x in range(0, int(nl[ax])):
                     linePen.setCosmetic(False)
                     if ax == 0:
-                        linePen.setWidthF(self.pixelHeight())
-                    else:
                         linePen.setWidthF(self.pixelWidth())
+                        #print "ax 0 height", self.pixelHeight()
+                    else:
+                        linePen.setWidthF(self.pixelHeight())
+                        #print "ax 1 width", self.pixelWidth()
                     p.setPen(linePen)
                     p1 = np.array([0.,0.])
                     p2 = np.array([0.,0.])
@@ -2931,11 +3084,11 @@ class GridItem(UIGraphicsItem):
                     if i < 2:
                         p.setPen(textPen)
                         if ax == 0:
-                            x = p1[0] + unit.width()
-                            y = ul[1] + unit.height() * 8.
+                            x = p1[0] + unit[0]
+                            y = ul[1] + unit[1] * 8.
                         else:
-                            x = ul[0] + unit.width()*3
-                            y = p1[1] + unit.height()
+                            x = ul[0] + unit[0]*3
+                            y = p1[1] + unit[1]
                         texts.append((QtCore.QPointF(x, y), "%g"%p1[ax]))
         tr = self.viewTransform()
         tr.scale(1.5, 1.5)
@@ -2961,10 +3114,12 @@ class ScaleBar(UIGraphicsItem):
         self.width = width
         
     def paint(self, p, opt, widget):
+        UIGraphicsItem.paint(self, p, opt, widget)
+        
         rect = self.boundingRect()
-        unit = self.unitRect()
+        unit = self.pixelSize()
         y = rect.bottom() + (rect.top()-rect.bottom()) * 0.02
-        y1 = y + unit.height()*self.width
+        y1 = y + unit[1]*self.width
         x = rect.right() + (rect.left()-rect.right()) * 0.02
         x1 = x - self.size
         
@@ -2979,7 +3134,7 @@ class ScaleBar(UIGraphicsItem):
         p.scale(rect.width(), rect.height())
         p.drawRect(0, 0, 1, 1)
         
-        alpha = np.clip(((self.size/unit.width()) - 40.) * 255. / 80., 0, 255)
+        alpha = np.clip(((self.size/unit[0]) - 40.) * 255. / 80., 0, 255)
         p.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0, alpha)))
         for i in range(1, 10):
             #x2 = x + (x1-x) * 0.1 * i
@@ -3025,8 +3180,9 @@ class ColorScaleBar(UIGraphicsItem):
         self.update()
         
     def paint(self, p, opt, widget):
+        UIGraphicsItem.paint(self, p, opt, widget)
         rect = self.boundingRect()   ## Boundaries of visible area in scene coords.
-        unit = self.unitRect()       ## Size of one view pixel in scene coords.
+        unit = self.pixelSize()       ## Size of one view pixel in scene coords.
         
         ## determine max width of all labels
         labelWidth = 0
@@ -3036,57 +3192,57 @@ class ColorScaleBar(UIGraphicsItem):
             labelWidth = max(labelWidth, b.width())
             labelHeight = max(labelHeight, b.height())
             
-        labelWidth *= unit.width()
-        labelHeight *= unit.height()
+        labelWidth *= unit[0]
+        labelHeight *= unit[1]
         
         textPadding = 2  # in px
         
         if self.offset[0] < 0:
-            x3 = rect.right() + unit.width() * self.offset[0]
-            x2 = x3 - labelWidth - unit.width()*textPadding*2
-            x1 = x2 - unit.width() * self.size[0]
+            x3 = rect.right() + unit[0] * self.offset[0]
+            x2 = x3 - labelWidth - unit[0]*textPadding*2
+            x1 = x2 - unit[0] * self.size[0]
         else:
-            x1 = rect.left() + unit.width() * self.offset[0]
-            x2 = x1 + unit.width() * self.size[0]
-            x3 = x2 + labelWidth + unit.width()*textPadding*2
+            x1 = rect.left() + unit[0] * self.offset[0]
+            x2 = x1 + unit[0] * self.size[0]
+            x3 = x2 + labelWidth + unit[0]*textPadding*2
         if self.offset[1] < 0:
-            y2 = rect.top() - unit.height() * self.offset[1]
-            y1 = y2 + unit.height() * self.size[1]
+            y2 = rect.top() - unit[1] * self.offset[1]
+            y1 = y2 + unit[1] * self.size[1]
         else:
-            y1 = rect.bottom() - unit.height() * self.offset[1]
-            y2 = y1 - unit.height() * self.size[1]
+            y1 = rect.bottom() - unit[1] * self.offset[1]
+            y2 = y1 - unit[1] * self.size[1]
         self.b = [x1,x2,x3,y1,y2,labelWidth]
             
         ## Draw background
         p.setPen(self.pen)
         p.setBrush(QtGui.QBrush(QtGui.QColor(255,255,255,100)))
         rect = QtCore.QRectF(
-            QtCore.QPointF(x1 - unit.width()*textPadding, y1 + labelHeight/2 + unit.height()*textPadding), 
-            QtCore.QPointF(x3, y2 - labelHeight/2 - unit.height()*textPadding)
+            QtCore.QPointF(x1 - unit[0]*textPadding, y1 + labelHeight/2 + unit[1]*textPadding), 
+            QtCore.QPointF(x3, y2 - labelHeight/2 - unit[1]*textPadding)
         )
         p.drawRect(rect)
         
         
         ## Have to scale painter so that text and gradients are correct size. Bleh.
-        p.scale(unit.width(), unit.height())
+        p.scale(unit[0], unit[1])
         
         ## Draw color bar
-        self.gradient.setStart(0, y1/unit.height())
-        self.gradient.setFinalStop(0, y2/unit.height())
+        self.gradient.setStart(0, y1/unit[1])
+        self.gradient.setFinalStop(0, y2/unit[1])
         p.setBrush(self.gradient)
         rect = QtCore.QRectF(
-            QtCore.QPointF(x1/unit.width(), y1/unit.height()), 
-            QtCore.QPointF(x2/unit.width(), y2/unit.height())
+            QtCore.QPointF(x1/unit[0], y1/unit[1]), 
+            QtCore.QPointF(x2/unit[0], y2/unit[1])
         )
         p.drawRect(rect)
         
         
         ## draw labels
         p.setPen(QtGui.QPen(QtGui.QColor(0,0,0)))
-        tx = x2 + unit.width()*textPadding
-        lh = labelHeight/unit.height()
+        tx = x2 + unit[0]*textPadding
+        lh = labelHeight/unit[1]
         for k in self.labels:
             y = y1 + self.labels[k] * (y2-y1)
-            p.drawText(QtCore.QRectF(tx/unit.width(), y/unit.height() - lh/2.0, 1000, lh), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, str(k))
+            p.drawText(QtCore.QRectF(tx/unit[0], y/unit[1] - lh/2.0, 1000, lh), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, str(k))
         
         
