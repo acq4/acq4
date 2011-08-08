@@ -11,6 +11,7 @@ class RecordThread(QtCore.QThread):
     
     sigShowMessage = QtCore.Signal(object)
     sigRecordingFailed = QtCore.Signal()
+    sigRecordingFinished = QtCore.Signal()
     
     def __init__(self, ui, manager):
         QtCore.QThread.__init__(self)
@@ -28,6 +29,7 @@ class RecordThread(QtCore.QThread):
         self.recordStop = False
         self.takeSnap = False
         self.currentRecord = None
+        self.frameLimit = None
         
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.camLock = Mutex()
@@ -38,7 +40,14 @@ class RecordThread(QtCore.QThread):
             return
         with self.lock:
             newRec = self.recordStart
-            lastRec = self.recordStop
+            
+            if self.frameLimit is not None:
+                self.frameLimit -= 1
+                if self.frameLimit < 0:
+                    self.recordStop = True
+                    self.frameLimit = None
+                    self.sigRecordingFinished.emit()
+            lastRec = self.recordStop and self.recording
             if self.recordStop:
                 self.recording = False
                 self.recordStop = False
@@ -57,7 +66,7 @@ class RecordThread(QtCore.QThread):
                 if self.currentRecord is not None:
                     self.showMessage("Recording %s - %d" % (self.currentRecord.name(), self.currentFrameNum))
     
-    def run(self):
+    def run(self): ### run is called indirectly (by C somewhere) by calling start() from the parent thread; DO NOT call directly
         self.stopThread = False
         
         while True:
@@ -114,13 +123,18 @@ class RecordThread(QtCore.QThread):
                 
             
             if frame['snap']:
-                fileName = 'image.tif'
-                
-                fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
-                fn = fh.name()
-                self.showMessage("Saved image %s" % fn)
-                with self.lock:
-                    self.takeSnap = False
+                try:
+                    fileName = 'image.tif'
+                    
+                    fh = self.m.getCurrentDir().writeFile(data, fileName, info, fileType="ImageFile", autoIncrement=True)
+                    fn = fh.name()
+                    self.showMessage("Saved image %s" % fn)
+                    with self.lock:
+                        self.takeSnap = False
+                    self.ui.ui.btnSnap.success("Saved.")
+                except:
+                    self.ui.ui.btnSnap.failure("Error.")
+                    raise
                     
         if len(recFrames) > 0:
             self.writeFrames(recFrames, newRec)
@@ -205,8 +219,11 @@ class RecordThread(QtCore.QThread):
 
     def toggleRecord(self, b):
         with self.lock:
-            if b:
+            if b: ### Only the GUI thread is allowed to initiate recording
                 self.recordStart = True
+                self.frameLimit = None
+                if self.ui.ui.recordXframesCheck.isChecked():
+                    self.frameLimit = self.ui.ui.recordXframesSpin.value()
             else:
                 if self.recording:
                     self.recordStop = True

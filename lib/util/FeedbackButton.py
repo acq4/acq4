@@ -1,6 +1,12 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 class FeedbackButton(QtGui.QPushButton):
+    
+    ### For thread-safetyness
+    sigCallSuccess = QtCore.Signal(object, object)
+    sigCallFailure = QtCore.Signal(object, object)
+    sigCallProcess = QtCore.Signal(object, object, object)
+    
     def __init__(self, *args):
         QtGui.QPushButton.__init__(self, *args)
         self.origStyle = None
@@ -13,29 +19,49 @@ class FeedbackButton(QtGui.QPushButton):
         #self.textTimer.timeout.connect(self.setText)
         #self.tipTimer.timeout.connect(self.setToolTip)
         
+        self.sigCallSuccess.connect(self.success)
+        self.sigCallFailure.connect(self.failure)
+        self.sigCallProcess.connect(self.processing)
+        
 
     def feedback(self, success, message=None, tip=""):
+        """Calls success() or failure(). Threadsafe."""
         if success:
             self.success(message, tip)
         else:
             self.failure(message, tip)
     
     def success(self, message=None, tip=""):
-        self.setEnabled(True)
-        #print "success"
-        self.startBlink("#0F0", message, tip)
-        
+        """Displays specified message on button and flashes button green to let user know action was successful. Threadsafe. """
+        isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
+        if isGuiThread:
+            self.setEnabled(True)
+            #print "success"
+            self.startBlink("#0F0", message, tip)
+        else:
+            self.sigCallSuccess.emit(message, tip)
+            
     def failure(self, message=None, tip=""):
-        self.setEnabled(True)
-        #print "fail"
-        self.startBlink("#F00", message, tip)
+        """Displays specified message on button and flashes button red to let user know there was an error. Threadsafe. """
+        isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
+        if isGuiThread:
+            self.setEnabled(True)
+            #print "fail"
+            self.startBlink("#F00", message, tip)
+        else:
+            self.sigCallFailure.emit(message, tip)
 
     def processing(self, message="Processing..", tip="", processEvents=True):
-        self.setEnabled(False)
-        self.setText(message, temporary=True)
-        self.setToolTip(tip, temporary=True)
-        if processEvents:
-            QtGui.QApplication.processEvents()
+        """Displays specified message on button to let user know the action is in progress. Threadsafe. """
+        isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
+        if isGuiThread:
+            self.setEnabled(False)
+            self.setText(message, temporary=True)
+            self.setToolTip(tip, temporary=True)
+            if processEvents:
+                QtGui.QApplication.processEvents()
+        else:
+            self.sigCallProcess.emit(message, tip, processEvents)
         
     def startBlink(self, color, message=None, tip=""):
         #if self.origStyle is None:
