@@ -187,14 +187,17 @@ class ScanCanvasItem(CanvasItem):
             if 'Camera' not in d.subDirs():
                 continue
             frames = d['Camera']['frames.ma'].read()
-            image = frames[1]-frames[0]
-            image[frames[0] > frames[1]] = 0.  ## unsigned type; avoid negative values
+            if frames.shape[0] == 2:
+                image = frames[1]-frames[0]
+                image[frames[0] > frames[1]] = 0.  ## unsigned type; avoid negative values
+            else:
+                image = frames[0]
+                
             mx = image.max()
-            if mx < 50:
-                nulls.append(d.shortName())
-                continue
             image *= (1000. / mx)
             images.append(image)
+            if mx < 50:
+                nulls.append(d.shortName())
             
         print "Null frames for %s:" %dh.shortName(), nulls
         scanImages = np.zeros(images[0].shape)

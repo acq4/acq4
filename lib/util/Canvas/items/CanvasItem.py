@@ -3,6 +3,7 @@ from PyQt4 import QtGui, QtCore, QtSvg
 from pyqtgraph import widgets
 import pyqtgraph as pg
 import TransformGuiTemplate
+import debug
 
 class SelectBox(widgets.ROI):
     def __init__(self, scalable=False):
