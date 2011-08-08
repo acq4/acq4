@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import serial, struct, time, sys, collections
-sp = serial.Serial(3, baudrate=9600, bytesize=serial.EIGHTBITS)
+sp = serial.Serial(3, baudrate=19200, bytesize=serial.EIGHTBITS)
 print "Opened", sp.portstr
 
 ## convert byte to signed byte
@@ -39,10 +39,9 @@ def getPos():
     if len(packet) != 13:
         print "  bad packet:", repr(packet)
         return
-    x = packet[-13:-9]
-    y = packet[-9:-5]
-    #print repr(x), repr(y)
-    return struct.unpack('i', x)[0], struct.unpack('i', y)[0]
+    pos = [packet[-13:-9], packet[-9:-5], packet[-5:-1]]
+    pos = [struct.unpack('l', x)[0] for x in pos]    #print repr(x), repr(y)
+    return pos
 
 def read():
     n = sp.inWaiting()

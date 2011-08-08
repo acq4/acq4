@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from lib.devices.Device import *
-import serial, struct
-from Mutex import Mutex, MutexLocker
+#import serial, struct
+from lib.drivers.SutterMP285 import *
+from Mutex import Mutex
 from debug import *
 #import pdb
 import devTemplate
