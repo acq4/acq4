@@ -2,7 +2,7 @@
 from PyQt4 import QtCore, QtGui
 from CanvasItem import CanvasItem
 from ImageCanvasItem import ImageCanvasItem
-import SpotSizeGuiTemplate
+import ScanCanvasItemTemplate
 import lib.Manager
 import pyqtgraph as pg
 import numpy as np
@@ -59,21 +59,18 @@ class ScanCanvasItem(CanvasItem):
         
         
         
-        self.sizeWidget = QtGui.QWidget()
-        self.spotSizeGui = SpotSizeGuiTemplate.Ui_Form()
-        self.spotSizeGui.setupUi(self.sizeWidget)
-        self.layout.addWidget(self.sizeWidget, self.layout.rowCount(), 0, 1, 2)
+        self._ctrlWidget = QtGui.QWidget()
+        self.ui = ScanCanvasItemTemplate.Ui_Form()
+        self.ui.setupUi(self._ctrlWidget)
+        self.layout.addWidget(self._ctrlWidget, self.layout.rowCount(), 0, 1, 2)
         
-        self.addScanImageBtn = QtGui.QPushButton()
-        self.addScanImageBtn.setText('Add Scan Image')
-        self.layout.addWidget(self.addScanImageBtn, self.layout.rowCount(), 0, 1, 2)
+        self.addScanImageBtn = self.ui.loadSpotImagesBtn
         
         #self.transformGui.mirrorImageBtn.clicked.connect(self.mirrorY)
-        self.spotSizeGui.sizeSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[1e-6, None])
-        self.spotSizeGui.sizeSpin.setValue(self.originalSpotSize)
-        self.spotSizeGui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
-        self.spotSizeGui.sizeFromCalibrationRadio.clicked.connect(self.calibrationRadioClicked)
-        
+        self.ui.sizeSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[1e-6, None])
+        self.ui.sizeSpin.setValue(self.originalSpotSize)
+        self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
+        self.ui.sizeFromCalibrationRadio.clicked.connect(self.updateSpotSize)
         
         self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
 
@@ -219,24 +216,25 @@ class ScanCanvasItem(CanvasItem):
         #self.canvas.items[item] = scanImages
         
     def sizeSpinEdited(self):
-        self.spotSizeGui.sizeCustomRadio.setChecked(True)
-        size = self.getSpotSize()
-        self.graphicsItem().setPointSize(size)
+        self.ui.sizeCustomRadio.setChecked(True)
+        self.updateSpotSize()
         
-    def calibrationRadioClicked(self):
+    #def calibrationRadioClicked(self):
+        #self.updateSpotSize()
+
+    def updateSpotSize(self):
         size = self.getSpotSize()
-        #self.graphicsItem().setPointSize(size)
         for p in self.scatterPlotData:
             p['size'] = size
         self.graphicsItem().setPoints(self.scatterPlotData)
         
     def getSpotSize(self):
-        if self.spotSizeGui.sizeCustomRadio.isChecked():
-            size = self.spotSizeGui.sizeSpin.value()
-        elif self.spotSizeGui.sizeFromCalibrationRadio.isChecked():
-            self.spotSizeGui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
-            self.spotSizeGui.sizeSpin.setValue(self.originalSpotSize)
-            self.spotSizeGui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
+        if self.ui.sizeCustomRadio.isChecked():
+            size = self.ui.sizeSpin.value()
+        elif self.ui.sizeFromCalibrationRadio.isChecked():
+            self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
+            self.ui.sizeSpin.setValue(self.originalSpotSize)
+            self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
             size = self.originalSpotSize
         return size
         

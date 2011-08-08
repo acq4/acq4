@@ -37,6 +37,8 @@ class TableWidget(QtGui.QTableWidget):
             first = it0.next()
         except StopIteration:
             return
+        #if type(first) == type(np.float64(1)):
+        #   return
         fn1, header1 = self.iteratorFn(first)
         if fn1 is None:
             self.clear()
