@@ -827,7 +827,7 @@ class ProtocolRunner(Module):
             
             #print params, linkedParams
             ## Generate the complete array of command structures. This can take a long time, so we start a progress dialog.
-            progressDlg = QtGui.QProgressDialog("Generating protocol commands..", "Cancel", 0, pLen)
+            progressDlg = QtGui.QProgressDialog("Generating protocol commands..", 0, pLen)
             progressDlg.setMinimumDuration(500)  ## If this takes less than 500ms, progress dialog never appears.
             self.lastQtProcessTime = ptime.time()
             prot = runSequence(lambda p: self.generateProtocol(dh, p, progressDlg), paramInds, paramInds.keys(), linkedParams=linkedParams)

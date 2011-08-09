@@ -554,7 +554,7 @@ class ScannerProtoGui(ProtocolGui):
         
         ## About to compute order/timing of targets; display a progress dialog
         #prof.mark('setup')
-        #progressDlg = QtGui.QProgressDialog("Computing pseudo-optimal target sequence...", "Cancel", 0, 1000)
+        #progressDlg = QtGui.QProgressDialog("Computing pseudo-optimal target sequence...", 0, 1000)
         #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         #progressDlg.setMinimumDuration(500)
         #prof.mark('progressDlg')
@@ -565,7 +565,7 @@ class ScannerProtoGui(ProtocolGui):
         minDist = state['minDist']
 
         #try:
-        with ProgressDialog.ProgressDialog("Computing random target sequence...", "Cancel", 0, 1000, busyCursor=True) as dlg:
+        with ProgressDialog.ProgressDialog("Computing random target sequence...", 0, 1000, busyCursor=True) as dlg:
             #times=[]
             for i in range(nTries):
                 #prof.mark('attempt: %i' %i)

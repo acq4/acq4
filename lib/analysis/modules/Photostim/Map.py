@@ -221,7 +221,7 @@ class Map:
             return
         spots = self.sPlotItem.points()
         colors = []
-        with ProgressDialog.ProgressDialog("Computing map %s (%d/%d)" % (self.name(), n, nMax), "Cancel", 0, len(spots)) as dlg:
+        with ProgressDialog.ProgressDialog("Computing map %s (%d/%d)" % (self.name(), n, nMax), 0, len(spots)) as dlg:
             for i in xrange(len(spots)):
                 s = spots[i]
                 data = []
@@ -262,7 +262,7 @@ class Map:
 
     def loadStubs(self):
         ### Turn all stubs into fully-loaded scans.
-        with ProgressDialog.ProgressDialog("Loading scans...", "Cancel", 0, len(self.stubs)) as dlg:
+        with ProgressDialog.ProgressDialog("Loading scans...", 0, len(self.stubs)) as dlg:
             for stub in self.stubs:
                 QtGui.QApplication.processEvents()
                 ### can we load a partial map if one scan fails? (should we?)

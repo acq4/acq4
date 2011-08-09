@@ -571,7 +571,7 @@ Valid options are:
             self.alreadyQuit = True
             lm = len(self.modules)
             ld = len(self.devices)
-            with ProgressDialog("Shutting down..", None, 0, lm+ld, wait=0) as dlg:
+            with ProgressDialog("Shutting down..", 0, lm+ld, cancelText=None, wait=0) as dlg:
                 print "Requesting all modules shut down.."
                 
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit

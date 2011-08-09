@@ -306,7 +306,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         except:
             print "invalid"
             return False
-        print val
+        #print val
         return val
         
     #def interpretText(self, strn=None):
