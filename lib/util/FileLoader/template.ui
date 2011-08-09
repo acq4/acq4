@@ -78,6 +78,16 @@
          </column>
         </widget>
        </item>
+       <item>
+        <widget class="QLabel" name="label">
+         <property name="text">
+          <string>Notes:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QTextEdit" name="notesTextEdit"/>
+       </item>
       </layout>
      </widget>
     </widget>

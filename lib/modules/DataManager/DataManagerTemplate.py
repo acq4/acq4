@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/modules/DataManager/DataManagerTemplate.ui'
+# Form implementation generated from reading ui file 'DataManagerTemplate.ui'
 #
-# Created: Wed May 18 20:44:23 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Tue Aug  9 11:12:24 2011
+#      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
 
