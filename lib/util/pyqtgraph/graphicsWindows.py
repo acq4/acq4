@@ -16,11 +16,11 @@ def mkQApp():
         global QAPP
         QAPP = QtGui.QApplication([])
 
-class GraphicsLayoutWidget(GraphicsView):
+class GraphicsLayoutView(GraphicsView):
     def __init__(self, parent=None, **kargs):
         GraphicsView.__init__(self, parent)
         self.ci = GraphicsLayout(**kargs)
-        for n in ['nextRow', 'nextCol', 'addPlot', 'addItem', 'getItem']:
+        for n in ['nextRow', 'nextCol', 'addPlot', 'addViewBox', 'addItem', 'getItem']:
             setattr(self, n, getattr(self.ci, n))
         self.setCentralItem(self.ci)
         #self.items = {}
@@ -58,7 +58,7 @@ class GraphicsLayoutWidget(GraphicsView):
         #return self.items[row][col]
 
 
-class GraphicsWindow(GraphicsLayoutWidget):
+class GraphicsWindow(GraphicsLayoutView):
     def __init__(self, title=None, size=(800,600), **kargs):
         mkQApp()
         self.win = QtGui.QMainWindow()

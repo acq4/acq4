@@ -53,6 +53,7 @@ class PlotItem(QtGui.QGraphicsWidget):
     def __init__(self, parent=None, name=None, labels=None, **kargs):
         QtGui.QGraphicsWidget.__init__(self, parent)
         
+        self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         ## Set up control buttons
         
         self.ctrlBtn = QtGui.QToolButton()

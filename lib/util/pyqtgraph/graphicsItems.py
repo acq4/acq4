@@ -399,7 +399,7 @@ class GraphicsLayout(QtGui.QGraphicsWidget):
         
     def nextCol(self, colspan=1):
         """Advance to next column, while returning the current column number 
-        (generally only for internal use)"""
+        (generally only for internal use--called by addItem)"""
         self.currentCol += colspan
         return self.currentCol-colspan
         
@@ -408,6 +408,12 @@ class GraphicsLayout(QtGui.QGraphicsWidget):
         plot = PlotItem(**kargs)
         self.addItem(plot, row, col, rowspan, colspan)
         return plot
+        
+    def addViewBox(self, row=None, col=None, rowspan=1, colspan=1, **kargs):
+        vb = ViewBox(**kargs)
+        self.addItem(vb, row, col, rowspan, colspan)
+        return vb
+        
 
     def addItem(self, item, row=None, col=None, rowspan=1, colspan=1):
         if row is None:
@@ -892,7 +898,6 @@ class PlotCurveItem(GraphicsObject):
         #self.xSpec = linspace(0, 0.5*len(self.xData)/dt, len(self.ySpec))
         
     def getRange(self, ax, frac=1.0):
-        #print "getRange", ax, frac
         (x, y) = self.getData()
         if x is None or len(x) == 0:
             return (0, 1)
