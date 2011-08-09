@@ -199,7 +199,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.statusBar().addPermanentWidget(self.vLabel)
         self.statusBar().addPermanentWidget(self.fpsLabel)
         
-        
+        self.ui.btnAutoGain.setChecked(True)
         self.show()
         self.openCamera()
         self.ui.plotWidget.resize(self.ui.plotWidget.size().width(), 40)
@@ -283,7 +283,7 @@ class CameraWindow(QtGui.QMainWindow):
         ## Connect DisplayGain dock
         self.ui.gradientWidget.sigGradientChanged.connect(self.levelsChanged)
         self.ui.btnAutoGain.toggled.connect(self.toggleAutoGain)
-        self.ui.btnAutoGain.setChecked(True)
+        
         
         ## Connect Persistent Frames dock
         self.ui.addFrameBtn.clicked.connect(self.addPersistentFrame)
@@ -673,19 +673,26 @@ class CameraWindow(QtGui.QMainWindow):
     
     #@trace
     def setLevelRange(self, rmin=None, rmax=None):
+        
         if rmin is None:
             if self.ui.btnAutoGain.isChecked():
                 rmin = 0.0
                 rmax = 1.0
+                self.ui.gradientWidget.tickMoved(self.ticks[1], QtCore.QPointF(rmax, 0.0))
+                self.ui.gradientWidget.tickMoved(self.ticks[0], QtCore.QPointF(rmin, 0.0))
             else:
+                bl, wl = self.getLevels()
                 if self.ui.divideBgBtn.isChecked():
                     rmin = 0.0
                     rmax = 2.0
                 else:
-                    rmin = 0
-                    rmax = 2**self.bitDepth - 1
+                    rmin = 0.0
+                    rmax = float(2**self.bitDepth - 1)
+                    self.ui.gradientWidget.tickMoved(self.ticks[1], QtCore.QPointF(wl/rmax, 0.0))
+                    self.ui.gradientWidget.tickMoved(self.ticks[0], QtCore.QPointF(bl/rmax, 0.0))
         self.levelMin = rmin
         self.levelMax = rmax
+        
         
     #@trace
     def getLevels(self):
