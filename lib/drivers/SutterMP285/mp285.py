@@ -81,7 +81,14 @@ class SutterMP285(object):
     
     def stop(self):
         self.write('\3')
-        self.readPacket()
+        try:
+            self.readPacket()
+        except MP285Error as err:
+            for e in err.args[0]:
+                if e[0] == 8:   ## move interrupted, like we asked for
+                    return
+            raise
+                    
             
     def setSpeed(self, speed, fine=True):
         """Set the speed of movements used when setPos is called.
@@ -99,6 +106,7 @@ class SutterMP285(object):
             maxSpd = 1310
             
         v = max(min(v, maxSpd), 1)
+        #print "MP285 speed:", v
         if fine:
             v |= 0x8000
         cmd = 'V' + struct.pack('H', v) + '\r'
@@ -213,9 +221,9 @@ class SutterMP285(object):
             for k in ErrorVals:
                 if ord(err) & k:
                     hit = True
-                    errors.append(ErrorVals[k])
+                    errors.append((k,)+ErrorVals[k])
             if not hit:
-                errors.append(("Unknown error code", ord(err)))
+                errors.append((ord(err), "Unknown error code", ""))
         raise MP285Error(errors)
                     
     def readPacket(self, expect=0, timeout=2, block=True):
@@ -228,7 +236,7 @@ class SutterMP285(object):
         packets = []
         while True:
             s = self.read()
-            
+            #print "read:", repr(s)
             if not block and len(s) == 0:
                 return
             
@@ -245,7 +253,7 @@ class SutterMP285(object):
                         errors.append(res)
                     else:
                         packets.append(res)
-                        res = ''
+                    res = ''
             except ValueError:   ## partial packet; append and wait for more data
                 res += s  
                 
@@ -267,7 +275,7 @@ class SutterMP285(object):
                 #break
             time.sleep(0.01)
             if time.time() - start > timeout:
-                raise TimeoutError("Timeout while waiting for response.")
+                raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % repr(res))
         
 if __name__ == '__main__':
     s = SutterMP285(port=3, baud=19200)

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'devTemplate.ui'
 #
-# Created: Tue Jul 12 19:34:41 2011
+# Created: Mon Aug 08 20:47:55 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(255, 218)
+        Form.resize(276, 237)
         self.gridLayout_3 = QtGui.QGridLayout(Form)
         self.gridLayout_3.setObjectName(_fromUtf8("gridLayout_3"))
         self.groupBox_2 = QtGui.QGroupBox(Form)
@@ -47,6 +47,16 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.joyBtn, 1, 1, 1, 1)
         spacerItem1 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.gridLayout.addItem(spacerItem1, 1, 2, 1, 1)
+        self.horizontalLayout_2 = QtGui.QHBoxLayout()
+        self.horizontalLayout_2.setObjectName(_fromUtf8("horizontalLayout_2"))
+        self.fineStepRadio = QtGui.QRadioButton(self.groupBox_2)
+        self.fineStepRadio.setChecked(True)
+        self.fineStepRadio.setObjectName(_fromUtf8("fineStepRadio"))
+        self.horizontalLayout_2.addWidget(self.fineStepRadio)
+        self.coarseStepRadio = QtGui.QRadioButton(self.groupBox_2)
+        self.coarseStepRadio.setObjectName(_fromUtf8("coarseStepRadio"))
+        self.horizontalLayout_2.addWidget(self.coarseStepRadio)
+        self.gridLayout.addLayout(self.horizontalLayout_2, 2, 0, 1, 3)
         self.gridLayout_3.addWidget(self.groupBox_2, 0, 0, 1, 1)
         self.groupBox = QtGui.QGroupBox(Form)
         self.groupBox.setAlignment(QtCore.Qt.AlignCenter)
@@ -84,7 +94,7 @@ class Ui_Form(object):
         self.gridLayout_2.addWidget(self.label_4, 3, 0, 1, 2)
         self.maxSpeedSpin = SpinBox(self.groupBox)
         self.maxSpeedSpin.setObjectName(_fromUtf8("maxSpeedSpin"))
-        self.gridLayout_2.addWidget(self.maxSpeedSpin, 3, 3, 1, 1)
+        self.gridLayout_2.addWidget(self.maxSpeedSpin, 3, 3, 1, 3)
         self.xMinLabel = QtGui.QLabel(self.groupBox)
         self.xMinLabel.setObjectName(_fromUtf8("xMinLabel"))
         self.gridLayout_2.addWidget(self.xMinLabel, 0, 3, 1, 1)
@@ -129,6 +139,8 @@ class Ui_Form(object):
         self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Position", None, QtGui.QApplication.UnicodeUTF8))
         self.posLabel.setText(QtGui.QApplication.translate("Form", "0,0", None, QtGui.QApplication.UnicodeUTF8))
         self.monitorPosBtn.setText(QtGui.QApplication.translate("Form", "Monitor", None, QtGui.QApplication.UnicodeUTF8))
+        self.fineStepRadio.setText(QtGui.QApplication.translate("Form", "Fine step", None, QtGui.QApplication.UnicodeUTF8))
+        self.coarseStepRadio.setText(QtGui.QApplication.translate("Form", "Coarse step", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Limits", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("Form", "X", None, QtGui.QApplication.UnicodeUTF8))
         self.xMinBtn.setText(QtGui.QApplication.translate("Form", "set", None, QtGui.QApplication.UnicodeUTF8))
@@ -136,7 +148,7 @@ class Ui_Form(object):
         self.label_3.setText(QtGui.QApplication.translate("Form", "Y", None, QtGui.QApplication.UnicodeUTF8))
         self.yMinBtn.setText(QtGui.QApplication.translate("Form", "set", None, QtGui.QApplication.UnicodeUTF8))
         self.yMaxBtn.setText(QtGui.QApplication.translate("Form", "set", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Form", "Speed", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_4.setText(QtGui.QApplication.translate("Form", "Max Speed", None, QtGui.QApplication.UnicodeUTF8))
         self.xMinLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
         self.yMinLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))
         self.xMaxLabel.setText(QtGui.QApplication.translate("Form", "0", None, QtGui.QApplication.UnicodeUTF8))

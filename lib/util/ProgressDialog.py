@@ -20,7 +20,7 @@ class ProgressDialog(QtGui.QProgressDialog):
             if dlg.wasCanceled():
                 raise Exception("Processing canceled by user")
     """
-    def __init__(self, labelText, cancelText='Cancel', minimum=0, maximum=100, parent=None, wait=250, busyCursor=False):
+    def __init__(self, labelText, minimum=0, maximum=100, cancelText='Cancel', parent=None, wait=250, busyCursor=False):
         noCancel = False
         if cancelText is None:
             cancelText = ''
@@ -51,7 +51,7 @@ class ProgressDialog(QtGui.QProgressDialog):
         self.setValue(self.value()+val)
         return self
 
-        #progressDlg = QtGui.QProgressDialog("Computing spot colors (Map %d/%d)" % (n+1,nMax), "Cancel", 0, len(spots))
+        #progressDlg = QtGui.QProgressDialog("Computing spot colors (Map %d/%d)" % (n+1,nMax), 0, len(spots))
         ##progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         #progressDlg.setMinimumDuration(250)
         #ops = []

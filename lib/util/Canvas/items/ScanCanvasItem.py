@@ -6,6 +6,7 @@ import ScanCanvasItemTemplate
 import lib.Manager
 import pyqtgraph as pg
 import numpy as np
+import ProgressDialog
 
 class ScanCanvasItem(CanvasItem):
     def __init__(self, **opts):
@@ -179,23 +180,30 @@ class ScanCanvasItem(CanvasItem):
             print "No image data for this scan."
             return
         
+        spotFrame = self.ui.spotFrameSpin.value()
+        bgFrame = self.ui.bgFrameSpin.value()
+        
         images = []
         nulls = []
-        for d in dirs:
-            if 'Camera' not in d.subDirs():
-                continue
-            frames = d['Camera']['frames.ma'].read()
-            if frames.shape[0] == 2:
-                image = frames[1]-frames[0]
-                image[frames[0] > frames[1]] = 0.  ## unsigned type; avoid negative values
-            else:
-                image = frames[0]
-                
-            mx = image.max()
-            image *= (1000. / mx)
-            images.append(image)
-            if mx < 50:
-                nulls.append(d.shortName())
+        with ProgressDialog.ProgressDialog("Processing scan images..", 0, len(dirs)) as dlg:
+            for d in dirs:
+                if 'Camera' not in d.subDirs():
+                    continue
+                frames = d['Camera']['frames.ma'].read()
+                if self.ui.bgFrameCheck.isChecked():
+                    image = frames[spotFrame]-frames[bgFrame]
+                    image[frames[bgFrame] > frames[spotFrame]] = 0.  ## unsigned type; avoid negative values
+                else:
+                    image = frames[spotFrame]
+                    
+                mx = image.max()
+                image *= (1000. / mx)
+                images.append(image)
+                if mx < 50:
+                    nulls.append(d.shortName())
+                dlg += 1
+                if dlg.wasCanceled():
+                    raise Exception("Processing canceled by user")                
             
         print "Null frames for %s:" %dh.shortName(), nulls
         scanImages = np.zeros(images[0].shape)
