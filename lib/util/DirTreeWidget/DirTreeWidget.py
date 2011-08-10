@@ -9,6 +9,9 @@ import os
 class DirTreeWidget(QtGui.QTreeWidget):
     
     sigSelectionChanged = QtCore.Signal(object)
+    ### something funny is happening with sigSelectionChanged and currentItemChanged; the signals seem to be emitted before the DirTreeWidget actually knows that the item changed.
+    ### ie. if a function is connected to the signal, and the function asks DirTreeWidget.selectedFile() the previously selected file is returned, not the new selection.
+    ### you can get around this by using the (current, previous) items that are passed with the currentItemChanged signal.
     
     def __init__(self, parent=None, baseDirHandle=None, checkState=None, allowMove=True, allowRename=True, sortMode='date'):
         QtGui.QTreeWidget.__init__(self, parent)

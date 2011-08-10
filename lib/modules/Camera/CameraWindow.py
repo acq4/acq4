@@ -829,6 +829,9 @@ class CameraWindow(QtGui.QMainWindow):
         #sys.stdout.write('+')
         try:
             
+            
+            
+            
             ## If we last drew a frame < 1/30s ago, return.
             t = ptime.time()
             if (self.lastDrawTime is not None) and (t - self.lastDrawTime < .033333):
@@ -850,6 +853,12 @@ class CameraWindow(QtGui.QMainWindow):
             
             ## Handle the next available frame, if there is one.
             if self.nextFrame is not None:
+                #print "===== New Frame ====="
+                #print "   pre: LevelMin ", self.levelMin
+                #print "        LevelMax ", self.levelMax
+                #print "        AGCLastMax", self.AGCLastMax
+                #print "        AGCLastMin", self.AGCLastMin
+                
                 self.currentFrame = self.nextFrame
                 self.nextFrame = None
                 (data, info) = self.currentFrame
@@ -903,6 +912,10 @@ class CameraWindow(QtGui.QMainWindow):
                 wl = minVal + (maxVal-minVal) * wl
                 bl = minVal + (maxVal-minVal) * bl
             
+            #print "  post: LevelMin ", self.levelMin
+            #print "        LevelMax ", self.levelMax
+            #print "        AGCLastMax", self.AGCLastMax
+            #print "        AGCLastMin", self.AGCLastMin
             
             ## Update histogram plot
             #self.updateHistogram(self.currentFrame[0], wl, bl)
@@ -950,6 +963,7 @@ class CameraWindow(QtGui.QMainWindow):
             
             #if self.ui.checkEnableROIs.isChecked():
                 #self.ui.plotWidget.replot()
+           
 
 
         except:

@@ -18,6 +18,7 @@ class TreeWidget(QtGui.QTreeWidget):
         self.setDragEnabled(True)
         self.setEditTriggers(QtGui.QAbstractItemView.EditKeyPressed|QtGui.QAbstractItemView.SelectedClicked)
         self.placeholders = []
+        self.childNestingLimit = None
 
     def setItemWidget(self, item, col, wid):
         w = QtGui.QWidget()  ## foster parent / surrogate child widget
@@ -115,7 +116,43 @@ class TreeWidget(QtGui.QTreeWidget):
                 self.takeTopLevelItem(i)
                 return
         raise Exception("Item '%s' not in top-level items." % str(item))
+    
+    def listAllItems(self, item=None):
+        items = []
+        if item != None:
+            items.append(item)
+        else:
+            item = self.invisibleRootItem()
+        
+        for cindex in range(item.childCount()):
+            foundItems = self.listAllItems(item=item.child(cindex))
+            for f in foundItems:
+                items.append(f)
+        return items
             
+    def dropEvent(self, ev):
+        QtGui.QTreeWidget.dropEvent(self, ev)
+        self.updateDropFlags()
+
+    
+    def updateDropFlags(self):
+        ### intended to put a limit on how deep nests of children can go.
+        ### self.childNestingLimit is upheld when moving items without children, but if the item being moved has children/grandchildren, the children/grandchildren
+        ### can end up over the childNestingLimit. 
+        if self.childNestingLimit == None:
+            pass # enable drops in all items (but only if there are drops that aren't enabled? for performance...)
+        else:
+            items = self.listAllItems()
+            for item in items:
+                parentCount = 0
+                p = item.parent()
+                while p is not None:
+                    parentCount += 1
+                    p = p.parent()
+                if parentCount >= self.childNestingLimit:
+                    item.setFlags(item.flags() & (~QtCore.Qt.ItemIsDropEnabled))
+                else:
+                    item.setFlags(item.flags() | QtCore.Qt.ItemIsDropEnabled)
             
 if __name__ == '__main__':
     app = QtGui.QApplication([])
@@ -150,4 +187,6 @@ if __name__ == '__main__':
     
     b1 = QtGui.QPushButton("B1")
     w.setItemWidget(i1, 1, b1)
+    
+    app.exec_()
 
