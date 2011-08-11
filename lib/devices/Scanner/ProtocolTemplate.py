@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Wed Aug 10 11:28:31 2011
+# Created: Thu Aug 11 10:39:23 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -98,16 +98,6 @@ class Ui_Form(object):
         self.label_3 = QtGui.QLabel(Form)
         self.label_3.setObjectName(_fromUtf8("label_3"))
         self.gridLayout.addWidget(self.label_3, 0, 1, 1, 1)
-        self.packingSpin = SpinBox(Form)
-        self.packingSpin.setMinimum(0.1)
-        self.packingSpin.setMaximum(1000.0)
-        self.packingSpin.setSingleStep(0.1)
-        self.packingSpin.setProperty(_fromUtf8("value"), 1.0)
-        self.packingSpin.setObjectName(_fromUtf8("packingSpin"))
-        self.gridLayout.addWidget(self.packingSpin, 2, 0, 1, 1)
-        self.label_7 = QtGui.QLabel(Form)
-        self.label_7.setObjectName(_fromUtf8("label_7"))
-        self.gridLayout.addWidget(self.label_7, 2, 1, 1, 1)
         self.gridLayout_2.addLayout(self.gridLayout, 3, 0, 1, 2)
         self.verticalLayout_2 = QtGui.QVBoxLayout()
         self.verticalLayout_2.setObjectName(_fromUtf8("verticalLayout_2"))
@@ -195,7 +185,6 @@ class Ui_Form(object):
         self.simulateShutterCheck.setText(QtGui.QApplication.translate("Form", "Simulate Shutter", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("Form", "Minimum distance", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("Form", "Minimum time", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_7.setText(QtGui.QApplication.translate("Form", "Grid Spacing", None, QtGui.QApplication.UnicodeUTF8))
         self.spotSizeLabel.setText(QtGui.QApplication.translate("Form", "Spot Display Size:", None, QtGui.QApplication.UnicodeUTF8))
         self.sizeFromCalibrationRadio.setText(QtGui.QApplication.translate("Form", "Use size from calibration", None, QtGui.QApplication.UnicodeUTF8))
         self.sizeCustomRadio.setText(QtGui.QApplication.translate("Form", "Use custom size:", None, QtGui.QApplication.UnicodeUTF8))
