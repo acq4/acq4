@@ -73,6 +73,7 @@ class ScannerProtoGui(ProtocolGui):
         self.ui.deleteAllBtn.clicked.connect(lambda: self.deleteAll())
         self.ui.itemTree.itemClicked.connect(self.itemToggled)
         self.ui.itemTree.currentItemChanged.connect(self.itemSelected)
+        self.ui.itemTree.sigItemMoved.connect(self.treeItemMoved)
         self.ui.hideCheck.toggled.connect(self.showInterface)
         self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
         #self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
@@ -460,14 +461,32 @@ class ScannerProtoGui(ProtocolGui):
         #self.occlusions = {}
         self.sequenceChanged()
         
+    def treeItemMoved(self, item, parent, index):
+        if parent != self.ui.itemTree.invisibleRootItem():
+            g = item.graphicsItem
+            newPos = parent.graphicsItem.mapFromScene(g.scenePos())
+            g.setParentItem(parent.graphicsItem)
+            g.setPos(newPos)
+        else:
+            item.graphicsItem.setParentItem(None)
+        item.graphicsItem.updateFamily()
+        #print "tree Item Moved"
+        
+        
     def itemToggled(self, item, column):
         name = str(item.text(0))
         i = self.items[name]
         if item.checkState(0) == QtCore.Qt.Checked and not self.ui.hideCheck.isChecked():
-            i.show()
+            i.setOpacity(1.0)
+            for h in i.handles:
+                h['item'].setOpacity(1.0)
+            self.cameraModule().ui.update()
         else:
-            i.hide()
-        
+            i.setOpacity(0.0)
+            self.cameraModule().ui.update()
+            for h in i.handles:
+                h['item'].setOpacity(0.0)
+            
         #self.updateItemColor(item)
         self.sequenceChanged()
         
@@ -686,6 +705,7 @@ class TargetPoint(widgets.EllipseROI):
         self.overPen = None
         self.underPen = self.pen
         self.treeItem = None
+        self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         #self.host = args.get('host', None)
         
         
@@ -747,7 +767,7 @@ class TargetGrid(widgets.ROI):
         self.pens = []
         self.pointSize = ptSize
         self.pointDisplaySize = self.pointSize
-
+        self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         
         self.treeItem = None ## will become a QTreeWidgetItem when ScannerProtoGui runs addItem()
         ## cache is not working in qt 4.7
@@ -769,11 +789,32 @@ class TargetGrid(widgets.ROI):
                 self.gridLayoutCombo.setCurrentIndex(0)
             elif layout == "Square":
                 self.gridLayoutCombo.setCurrentIndex(1)
+                
+    def updateFamily(self):
+        if self.treeItem.parent() is not None:
+            self.gridSpacingSpin.setEnabled(False)
+            self.gridLayoutCombo.setEnabled(False)
+            self.parentGridSpacingSpin = self.treeItem.treeWidget().itemWidget(self.treeItem.parent(), 1)
+            self.parentGridSpacingSpin.valueChanged.connect(self.parentValueChanged)
+            self.parentGridLayoutCombo = self.treeItem.treeWidget().itemWidget(self.treeItem.parent(), 2)
+            self.parentGridLayoutCombo.currentIndexChanged.connect(self.parentValueChanged)
+            self.parentValueChanged()
+        if self.treeItem.parent() is None:
+            self.gridSpacingSpin.setEnabled(True)
+            self.gridLayoutCombo.setEnabled(True)
+            
+        
+    def parentValueChanged(self):
+        if self.treeItem.parent() is not None:
+            self.gridSpacingSpin.setValue(self.parentGridSpacingSpin.value())
+            self.gridLayoutCombo.setCurrentIndex(self.parentGridLayoutCombo.currentIndex())
         
     def updateGridPacking(self):
         #print "TargetGrid.updateGridPacking() called."
+      
         self.gridPacking = self.gridSpacingSpin.value()
         #print "   new self.gridPacking: ", self.gridPacking
+    
         self.regeneratePoints()
         
     def setPointSize(self):
