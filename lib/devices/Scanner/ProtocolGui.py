@@ -11,6 +11,7 @@ import numpy as np
 from debug import Profiler
 import optimize ## for determining random scan patterns
 import ForkedIterator, ProgressDialog
+from SpinBox import SpinBox
 
 class ScannerProtoGui(ProtocolGui):
     
@@ -26,6 +27,7 @@ class ScannerProtoGui(ProtocolGui):
         self.items = {}
         #self.occlusions = {}
         self.nextId = 0
+        self.defaultGridSpacing = 1.0
         
         ## Populate module/device lists, auto-select based on device defaults 
         self.defCam = None
@@ -69,12 +71,14 @@ class ScannerProtoGui(ProtocolGui):
         self.ui.addSpiralScanBtn.clicked.connect(lambda: self.addSpiral())
         self.ui.deleteBtn.clicked.connect(lambda: self.delete())
         self.ui.deleteAllBtn.clicked.connect(lambda: self.deleteAll())
-        self.ui.itemList.itemClicked.connect(self.itemToggled)
-        self.ui.itemList.currentItemChanged.connect(self.itemSelected)
+        self.ui.itemTree.itemClicked.connect(self.itemToggled)
+        self.ui.itemTree.currentItemChanged.connect(self.itemSelected)
         self.ui.hideCheck.toggled.connect(self.showInterface)
         self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
-        self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
+        #self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
         self.ui.sizeFromCalibrationRadio.toggled.connect(self.updateSpotSizes)
+        self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
+        self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
         self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
         #QtCore.QObject.connect(self.ui.minTimeSpin, QtCore.SIGNAL('valueChanged(double)'), self.sequenceChanged)
         self.ui.minTimeSpin.valueChanged.connect(self.sequenceChanged)
@@ -102,7 +106,7 @@ class ScannerProtoGui(ProtocolGui):
         
         ## load target list from device, allowing targets to persist across protocols
         oldTargetList = self.dev.getTargetList()
-        self.ui.packingSpin.setValue(oldTargetList[0])
+        #self.ui.packingSpin.setValue(oldTargetList[0])
         for k in oldTargetList[1].keys():
             t = oldTargetList[1][k]
             if t[0] == 'point':
@@ -202,10 +206,10 @@ class ScannerProtoGui(ProtocolGui):
         self.updateSpotSizes()
         
     def updateSpotSizes(self):
-        size, packing, displaySize = self.pointSize()
+        size, displaySize = self.pointSize()
         #pd = self.pointSize()[1]
         for i in self.items.values():
-            i.setPointSize(size, packing, displaySize)
+            i.setPointSize(size, displaySize)
         self.testTarget.setPointSize(size)
 
     def showInterface(self, b):
@@ -215,10 +219,10 @@ class ScannerProtoGui(ProtocolGui):
         self.testTarget.setVisible(not b)
 
     def listItem(self, name):
-        return self.ui.itemList.findItems(name, QtCore.Qt.MatchExactly)[0]
+        return self.ui.itemTree.findItems(name, QtCore.Qt.MatchRecursive)[0]
 
     def pointSize(self):
-        packing = self.ui.packingSpin.value()
+        #packing = self.ui.packingSpin.value()
         try:
             cam = self.cameraModule().config['camDev']
             laser = str(self.ui.laserCombo.currentText())
@@ -230,12 +234,13 @@ class ScannerProtoGui(ProtocolGui):
             raise   
         if self.ui.sizeFromCalibrationRadio.isChecked():
             displaySize = ss
+            self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited) ## get around a reload error
             self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
             self.stateGroup.setState({'spotSize':ss})
             self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
         elif self.ui.sizeCustomRadio.isChecked():
             displaySize = self.ui.sizeSpin.value()
-        return (ss, packing, displaySize)
+        return (ss, displaySize)
         #return (0.0001, packing)
         
     def cameraModule(self):
@@ -336,14 +341,14 @@ class ScannerProtoGui(ProtocolGui):
         if name is None:
             name = 'Grid'
             autoName = True
-        s, packing, dispSize = self.pointSize()
+        ptSize, dispSize = self.pointSize()
         autoPos = False
         if pos is None:
             pos = [0,0]
             autoPos = True
         if size is None:
-            size = [s*4, s*4]
-        pt = TargetGrid(pos, size, s, packing, angle)
+            size = [ptSize*4, ptSize*4]
+        pt = TargetGrid(pos, size, ptSize, self.defaultGridSpacing, angle)
         self.addItem(pt, name,  autoPos,  autoName)
         return pt
     
@@ -374,10 +379,10 @@ class ScannerProtoGui(ProtocolGui):
         #item.name = name
         #item.objective = self.currentObjective
         #self.items[name] = item
-        #listitem = QtGui.QListWidgetItem(name)
-        #listitem.setCheckState(QtCore.Qt.Checked)
-        #self.ui.itemList.addItem(listitem)
-        #self.updateItemColor(listitem)
+        #treeitem = QtGui.QTreeWidgetItem(QtCore.QStringList(name))
+        #treeitem.setCheckState(0, QtCore.Qt.Checked)
+        #self.ui.itemTree.addTopLevelItem(treeitem)
+        #self.updateItemColor(treeitem)
         #camMod.ui.addItem(item.origin, None, [1,1], 1000)
         #item.connect(QtCore.SIGNAL('regionChangeFinished'), self.itemMoved)
         #item.connect(QtCore.SIGNAL('regionChanged'), self.getTargetList)
@@ -398,11 +403,16 @@ class ScannerProtoGui(ProtocolGui):
         self.items[name] = item
         #if isinstance(item, TargetOcclusion):
             #self.occlusions[name] = item
-        listitem = QtGui.QListWidgetItem(name)
-        listitem.setCheckState(QtCore.Qt.Checked)
-        self.ui.itemList.addItem(listitem)
+        item.treeitem = QtGui.QTreeWidgetItem(QtCore.QStringList(name))
+        item.treeitem.setCheckState(0, QtCore.Qt.Checked)
+        gridSpacingSpin = SpinBox(value = self.defaultGridSpacing, step=0.1)
+        gridLayoutCombo = QtGui.QComboBox()
+        gridLayoutCombo.addItems(["Hexagonal", "Square"])
+        self.ui.itemTree.addTopLevelItem(item.treeitem)
+        self.ui.itemTree.setItemWidget(item.treeitem, 1, gridSpacingSpin)
+        self.ui.itemTree.setItemWidget(item.treeitem, 2, gridLayoutCombo)
         self.nextId += 1
-        self.updateItemColor(listitem)
+        self.updateItemColor(item.treeitem)
         if autoPosition:
             pos = None
         else:
@@ -426,11 +436,17 @@ class ScannerProtoGui(ProtocolGui):
         pass
     
     def delete(self):
-        row = self.ui.itemList.currentRow()
-        item = self.ui.itemList.takeItem(row)
+        #row = self.ui.itemTree.currentRow()
+        item = self.ui.itemTree.currentItem()
+        parent = item.parent()
+        if parent == None:
+            item = self.ui.itemTree.takeTopLevelItem(self.ui.itemTree.indexOfTopLevelItem(item))
+        else:
+            item = parent.takeChild(parent.indexOfChild(item))
+        #item = self.ui.itemTree.takeItem(row)
         if item is None:
             return
-        name = str(item.text())
+        name = str(item.text(0))
         self.dev.updateTarget(name, None)  ## inform the device that this target is no more
         i = self.items[name]
         #self.removeItemPoints(i)
@@ -440,7 +456,7 @@ class ScannerProtoGui(ProtocolGui):
         self.sequenceChanged()
 
     def deleteAll(self, clearHistory=True):
-        self.ui.itemList.clear()
+        self.ui.itemTree.clear()
         for k in self.items:
             if clearHistory == True:
                 self.dev.updateTarget(k, None)  ## inform the device that this target is no more
@@ -451,10 +467,10 @@ class ScannerProtoGui(ProtocolGui):
         #self.occlusions = {}
         self.sequenceChanged()
         
-    def itemToggled(self, item):
-        name = str(item.text())
+    def itemToggled(self, item, column):
+        name = str(item.text(0))
         i = self.items[name]
-        if item.checkState() == QtCore.Qt.Checked and not self.ui.hideCheck.isChecked():
+        if item.checkState(0) == QtCore.Qt.Checked and not self.ui.hideCheck.isChecked():
             i.show()
         else:
             i.hide()
@@ -469,11 +485,11 @@ class ScannerProtoGui(ProtocolGui):
     def updateItemColor(self, item):
         if item is None:
             return
-        if item is self.ui.itemList.currentItem():
+        if item is self.ui.itemTree.currentItem():
             color = QtGui.QColor(255, 255, 200)
         else:
             color = QtGui.QColor(200, 255, 100)
-        name = str(item.text())
+        name = str(item.text(0))
         self.items[name].setPen(QtGui.QPen(color))
 
     def itemMoved(self, item):
@@ -627,7 +643,7 @@ class ScannerProtoGui(ProtocolGui):
         #)
 
     def activeItems(self):
-        return [self.items[i] for i in self.items if self.listItem(i).checkState() == QtCore.Qt.Checked]
+        return [self.items[i] for i in self.items if self.listItem(i).checkState(0) == QtCore.Qt.Checked]
 
     
     def taskStarted(self, params):
@@ -710,13 +726,14 @@ class TargetGrid(widgets.ROI):
         self.pointSize = ptSize
         self.pointDisplaySize = self.pointSize
         self.gridPacking = pd
+        self.treeitem = None ## will become a QTreeWidgetItem when ScannerProtoGui runs addItem()
         ## cache is not working in qt 4.7
         self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         self.regeneratePoints()
         
-    def setPointSize(self, size, packing, displaySize):
+    def setPointSize(self, size, displaySize):
         self.pointSize = size
-        self.gridPacking = packing
+        #self.gridPacking = packing
         self.pointDisplaySize = displaySize
         self.regeneratePoints()
         
@@ -788,7 +805,7 @@ class TargetOcclusion(widgets.PolygonROI):
         widgets.PolygonROI.__init__(self, points, pos)
         self.setZValue(10000000)
     
-    def setPointSize(self, size, packing, displaySize=None):
+    def setPointSize(self, size, displaySize=None):
         pass
     
 class TargetProgram(QtCore.QObject):

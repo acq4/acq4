@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Fri Jul 01 11:53:48 2011
+# Created: Wed Aug 10 11:28:31 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -29,10 +29,6 @@ class Ui_Form(object):
         self.cameraCombo.setObjectName(_fromUtf8("cameraCombo"))
         self.horizontalLayout_3.addWidget(self.cameraCombo)
         self.gridLayout_2.addLayout(self.horizontalLayout_3, 0, 0, 1, 2)
-        self.label_5 = QtGui.QLabel(Form)
-        self.label_5.setAlignment(QtCore.Qt.AlignCenter)
-        self.label_5.setObjectName(_fromUtf8("label_5"))
-        self.gridLayout_2.addWidget(self.label_5, 0, 2, 1, 1)
         self.label_8 = QtGui.QLabel(Form)
         self.label_8.setObjectName(_fromUtf8("label_8"))
         self.gridLayout_2.addWidget(self.label_8, 0, 3, 1, 1)
@@ -45,9 +41,6 @@ class Ui_Form(object):
         self.laserCombo.setObjectName(_fromUtf8("laserCombo"))
         self.horizontalLayout_4.addWidget(self.laserCombo)
         self.gridLayout_2.addLayout(self.horizontalLayout_4, 1, 0, 1, 2)
-        self.itemList = QtGui.QListWidget(Form)
-        self.itemList.setObjectName(_fromUtf8("itemList"))
-        self.gridLayout_2.addWidget(self.itemList, 1, 2, 7, 1)
         self.horizontalLayout = QtGui.QHBoxLayout()
         self.horizontalLayout.setObjectName(_fromUtf8("horizontalLayout"))
         self.verticalLayout = QtGui.QVBoxLayout()
@@ -177,6 +170,13 @@ class Ui_Form(object):
         self.hideCheck.setChecked(False)
         self.hideCheck.setObjectName(_fromUtf8("hideCheck"))
         self.gridLayout_2.addWidget(self.hideCheck, 8, 2, 1, 1)
+        self.label_5 = QtGui.QLabel(Form)
+        self.label_5.setAlignment(QtCore.Qt.AlignCenter)
+        self.label_5.setObjectName(_fromUtf8("label_5"))
+        self.gridLayout_2.addWidget(self.label_5, 0, 2, 1, 1)
+        self.itemTree = TreeWidget(Form)
+        self.itemTree.setObjectName(_fromUtf8("itemTree"))
+        self.gridLayout_2.addWidget(self.itemTree, 1, 2, 7, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
@@ -184,7 +184,6 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("Form", "Camera Module:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_5.setText(QtGui.QApplication.translate("Form", "Items", None, QtGui.QApplication.UnicodeUTF8))
         self.label_8.setText(QtGui.QApplication.translate("Form", "Program Controls:", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("Form", "Laser Device:", None, QtGui.QApplication.UnicodeUTF8))
         self.addLineScanBtn.setText(QtGui.QApplication.translate("Form", "Add Line Scan", None, QtGui.QApplication.UnicodeUTF8))
@@ -210,5 +209,11 @@ class Ui_Form(object):
         self.checkBox.setText(QtGui.QApplication.translate("Form", "Auto recompute", None, QtGui.QApplication.UnicodeUTF8))
         self.timeLabel.setText(QtGui.QApplication.translate("Form", "Total Time:", None, QtGui.QApplication.UnicodeUTF8))
         self.hideCheck.setText(QtGui.QApplication.translate("Form", "Hide items", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_5.setText(QtGui.QApplication.translate("Form", "Items", None, QtGui.QApplication.UnicodeUTF8))
+        self.itemTree.headerItem().setText(0, QtGui.QApplication.translate("Form", "Item", None, QtGui.QApplication.UnicodeUTF8))
+        self.itemTree.headerItem().setText(1, QtGui.QApplication.translate("Form", "Grid Spacing", None, QtGui.QApplication.UnicodeUTF8))
+        self.itemTree.headerItem().setText(2, QtGui.QApplication.translate("Form", "Grid Layout", None, QtGui.QApplication.UnicodeUTF8))
+        self.itemTree.headerItem().setText(3, QtGui.QApplication.translate("Form", "# of points", None, QtGui.QApplication.UnicodeUTF8))
 
 from SpinBox import SpinBox
+from TreeWidget import TreeWidget
