@@ -2,9 +2,11 @@
 from PyQt4 import QtCore, QtGui
 from CanvasItem import CanvasItem
 from ImageCanvasItem import ImageCanvasItem
+import ScanCanvasItemTemplate
 import lib.Manager
 import pyqtgraph as pg
 import numpy as np
+import ProgressDialog
 
 class ScanCanvasItem(CanvasItem):
     def __init__(self, **opts):
@@ -47,15 +49,31 @@ class ScanCanvasItem(CanvasItem):
                 else:
                     size = self.defaultSize
                 pts.append({'pos': pos, 'size': size, 'data': d})
+        self.scatterPlotData = pts
+        if len(pts) == 0:
+            raise Exception("No data found in scan.")
         gitem = pg.ScatterPlotItem(pts, pxMode=False)
         #citem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
         #self._addCanvasItem(citem)
         #return [citem]
         CanvasItem.__init__(self, gitem, **opts)
+        #self.scatterPlot = gitem
+        self.originalSpotSize = size
         
-        self.addScanImageBtn = QtGui.QPushButton()
-        self.addScanImageBtn.setText('Add Scan Image')
-        self.layout.addWidget(self.addScanImageBtn, self.layout.rowCount(), 0, 1, 2)
+        
+        
+        self._ctrlWidget = QtGui.QWidget()
+        self.ui = ScanCanvasItemTemplate.Ui_Form()
+        self.ui.setupUi(self._ctrlWidget)
+        self.layout.addWidget(self._ctrlWidget, self.layout.rowCount(), 0, 1, 2)
+        
+        self.addScanImageBtn = self.ui.loadSpotImagesBtn
+        
+        #self.transformGui.mirrorImageBtn.clicked.connect(self.mirrorY)
+        self.ui.sizeSpin.setOpts(dec=True, step=1, minStep=1e-6, siPrefix=True, suffix='m', bounds=[1e-6, None])
+        self.ui.sizeSpin.setValue(self.originalSpotSize)
+        self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
+        self.ui.sizeFromCalibrationRadio.clicked.connect(self.updateSpotSize)
         
         self.addScanImageBtn.connect(self.addScanImageBtn, QtCore.SIGNAL('clicked()'), self.loadScanImage)
 
@@ -164,20 +182,30 @@ class ScanCanvasItem(CanvasItem):
             print "No image data for this scan."
             return
         
+        spotFrame = self.ui.spotFrameSpin.value()
+        bgFrame = self.ui.bgFrameSpin.value()
+        
         images = []
         nulls = []
-        for d in dirs:
-            if 'Camera' not in d.subDirs():
-                continue
-            frames = d['Camera']['frames.ma'].read()
-            image = frames[1]-frames[0]
-            image[frames[0] > frames[1]] = 0.  ## unsigned type; avoid negative values
-            mx = image.max()
-            if mx < 50:
-                nulls.append(d.shortName())
-                continue
-            image *= (1000. / mx)
-            images.append(image)
+        with ProgressDialog.ProgressDialog("Processing scan images..", 0, len(dirs)) as dlg:
+            for d in dirs:
+                if 'Camera' not in d.subDirs():
+                    continue
+                frames = d['Camera']['frames.ma'].read()
+                if self.ui.bgFrameCheck.isChecked():
+                    image = frames[spotFrame]-frames[bgFrame]
+                    image[frames[bgFrame] > frames[spotFrame]] = 0.  ## unsigned type; avoid negative values
+                else:
+                    image = frames[spotFrame]
+                    
+                mx = image.max()
+                image *= (1000. / mx)
+                images.append(image)
+                if mx < 50:
+                    nulls.append(d.shortName())
+                dlg += 1
+                if dlg.wasCanceled():
+                    raise Exception("Processing canceled by user")                
             
         print "Null frames for %s:" %dh.shortName(), nulls
         scanImages = np.zeros(images[0].shape)
@@ -196,4 +224,27 @@ class ScanCanvasItem(CanvasItem):
         self.scanImage.restoreTransform(self.saveTransform())
         
         #self.canvas.items[item] = scanImages
+        
+    def sizeSpinEdited(self):
+        self.ui.sizeCustomRadio.setChecked(True)
+        self.updateSpotSize()
+        
+    #def calibrationRadioClicked(self):
+        #self.updateSpotSize()
+
+    def updateSpotSize(self):
+        size = self.getSpotSize()
+        for p in self.scatterPlotData:
+            p['size'] = size
+        self.graphicsItem().setPoints(self.scatterPlotData)
+        
+    def getSpotSize(self):
+        if self.ui.sizeCustomRadio.isChecked():
+            size = self.ui.sizeSpin.value()
+        elif self.ui.sizeFromCalibrationRadio.isChecked():
+            self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
+            self.ui.sizeSpin.setValue(self.originalSpotSize)
+            self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
+            size = self.originalSpotSize
+        return size
         

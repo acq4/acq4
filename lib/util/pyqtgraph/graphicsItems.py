@@ -1450,6 +1450,12 @@ class ScatterPlotItem(GraphicsObject):
                 #frag = QtGui.QPainter.PixmapFragment.create(pos, QtCore.QRectF(0, 0, size, size))
                 #self.optimizeFragments.append(frag)
         self.range = [[xmn, xmx], [ymn, ymx]]
+        
+    #def setPointSize(self, size):
+        #for s in self.spots:
+            #s.size = size
+        ##self.setPoints([{'size':s.size, 'pos':s.pos(), 'data':s.data} for s in self.spots])
+        #self.setPoints()
                 
     #def paint(self, p, *args):
         #if not self.optimize:
@@ -3095,11 +3101,11 @@ class GridItem(UIGraphicsItem):
                             x = ul[0] + unit[0]*3
                             y = p1[1] + unit[1]
                         texts.append((QtCore.QPointF(x, y), "%g"%p1[ax]))
-        tr = self.viewTransform()
-        tr.scale(1.5, 1.5)
+        tr = self.deviceTransform()
+        #tr.scale(1.5, 1.5)
         p.setWorldTransform(tr.inverted()[0])
         for t in texts:
-            x = tr.map(t[0])
+            x = tr.map(t[0]) + Point(0.5, 0.5)
             p.drawText(x, t[1])
         p.end()
 

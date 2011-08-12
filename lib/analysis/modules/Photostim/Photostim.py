@@ -486,7 +486,7 @@ class Photostim(AnalysisModule):
         dh = scan.source()
         spots = scan.spots()
         print "Store scan:", dh.name()
-        with ProgressDialog.ProgressDialog("Storing scan %s" % scan.name(), "Cancel", 0, len(spots)) as dlg:
+        with ProgressDialog.ProgressDialog("Storing scan %s" % scan.name(), 0, len(spots)) as dlg:
             for i in xrange(len(spots)):
                 s = spots[i]
                 #fh = self.getClampFile(s.data)

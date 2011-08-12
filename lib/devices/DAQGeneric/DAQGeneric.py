@@ -128,21 +128,28 @@ class DAQGenericTask(DeviceTask):
     def configure(self, tasks, startOrder):
         ## Record initial state or set initial value
         with MutexLocker(self.dev._DGLock):
+            prof = Profiler('DAQGenericTask.configure', disabled=True)
             #self.daqTasks = {}
             self.initialState = {}
             self.holdingVals = {}
             for ch in self._DAQCmd:
                 dev = self.dev.dm.getDevice(self.dev._DGConfig[ch]['channel'][0])
+                prof.mark(ch+' get dev')
                 if 'preset' in self._DAQCmd[ch]:
                     dev.setChannelValue(self.dev._DGConfig[ch]['channel'][1], self._DAQCmd[ch]['preset'])
+                    prof.mark(ch+' preset')
                 elif 'holding' in self._DAQCmd[ch]:
                     self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
+                    prof.mark(ch+' set holding')
                 if 'recordInit' in self._DAQCmd[ch] and self._DAQCmd[ch]['recordInit']:
                     self.initialState[ch] = self.dev.getChannelValue(ch)
+                    prof.mark(ch+' record init')
             for ch in self.dev._DGConfig:
                 ## record current holding value for all output channels (even those that were not buffered for this task)
                 if self.dev._DGConfig[ch]['type'] in ['ao', 'do']:
                     self.holdingVals[ch] = self.dev.getChanHolding(ch)
+                    prof.mark(ch+' record holding')
+            prof.finish()
                 
     def createChannels(self, daqTask):
         self.daqTasks = {}

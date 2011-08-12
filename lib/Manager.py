@@ -36,6 +36,7 @@ from debug import *
 import getopt, glob
 import ptime
 from advancedTypes import OrderedDict
+from ProgressDialog import ProgressDialog
 
 ### All other modules can use this function to get the manager instance
 def getManager():
@@ -568,34 +569,40 @@ Valid options are:
         #QtCore.QObject.connect(app, QtCore.SIGNAL('lastWindowClosed()'), q)
         if not self.alreadyQuit:  ## Need this because multiple triggers can call this function during quit
             self.alreadyQuit = True
-            
-            print "Requesting all modules shut down.."
-            while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
-                m = self.modules.keys()[0]
-                print "    %s" % m
+            lm = len(self.modules)
+            ld = len(self.devices)
+            with ProgressDialog("Shutting down..", 0, lm+ld, cancelText=None, wait=0) as dlg:
+                print "Requesting all modules shut down.."
                 
-                self.unloadModule(m)
-                #print "Unloaded mod %s, modules left:" % m
-                #try:
-                    #self.modules[m].quit()
-                #except:
-                    #printExc("Error while requesting module '%s' quit." % m)
-                #if m in self.modules:
-                    #del self.modules[m]
-            #pdb.set_trace()
-                
-            print "Requesting all devices shut down.."
-            for d in self.devices:
-                print "    %s" % d
-                try:
-                    self.devices[d].quit()
-                except:
-                    printExc("Error while requesting device '%s' quit." % d)
-                #print "  done."
-                
-            print "Closing windows.."
-            QtGui.QApplication.instance().closeAllWindows()
-            QtGui.QApplication.instance().processEvents()
+                while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
+                    m = self.modules.keys()[0]
+                    print "    %s" % m
+                    
+                    self.unloadModule(m)
+                    #print "Unloaded mod %s, modules left:" % m
+                    #try:
+                        #self.modules[m].quit()
+                    #except:
+                        #printExc("Error while requesting module '%s' quit." % m)
+                    #if m in self.modules:
+                        #del self.modules[m]
+                    dlg.setValue(lm-len(self.modules))
+                #pdb.set_trace()
+                    
+                print "Requesting all devices shut down.."
+                for d in self.devices:
+                    print "    %s" % d
+                    try:
+                        self.devices[d].quit()
+                    except:
+                        printExc("Error while requesting device '%s' quit." % d)
+                    #print "  done."
+                    dlg.setValue(lm+ld-len(self.devices))
+                    
+                    
+                print "Closing windows.."
+                QtGui.QApplication.instance().closeAllWindows()
+                QtGui.QApplication.instance().processEvents()
             #print "  done."
             print "\n    ciao."
         #app= QtGui.QApplication.instance()

@@ -217,7 +217,7 @@ class Analyzer(QtGui.QMainWindow):
         self.recompute([i.data for i in items])
         
     def recompute(self, inputs):
-        progressDlg = QtGui.QProgressDialog("Processing:", "Cancel", 0, len(inputs))
+        progressDlg = QtGui.QProgressDialog("Processing:", 0, len(inputs))
         progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         for i in range(len(inputs)):
             inp = inputs[i]

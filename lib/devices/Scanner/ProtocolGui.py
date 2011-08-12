@@ -71,7 +71,7 @@ class ScannerProtoGui(ProtocolGui):
         self.ui.deleteAllBtn.clicked.connect(lambda: self.deleteAll())
         self.ui.itemList.itemClicked.connect(self.itemToggled)
         self.ui.itemList.currentItemChanged.connect(self.itemSelected)
-        self.ui.displayCheck.toggled.connect(self.showInterface)
+        self.ui.hideCheck.toggled.connect(self.showInterface)
         self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
         self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
         self.ui.sizeFromCalibrationRadio.toggled.connect(self.updateSpotSizes)
@@ -211,8 +211,8 @@ class ScannerProtoGui(ProtocolGui):
     def showInterface(self, b):
         for k in self.items:
             if self.listItem(k).checkState() == QtCore.Qt.Checked:
-                self.items[k].setVisible(b)
-        self.testTarget.setVisible(b)
+                self.items[k].setVisible(not b)
+        self.testTarget.setVisible(not b)
 
     def listItem(self, name):
         return self.ui.itemList.findItems(name, QtCore.Qt.MatchExactly)[0]
@@ -454,7 +454,7 @@ class ScannerProtoGui(ProtocolGui):
     def itemToggled(self, item):
         name = str(item.text())
         i = self.items[name]
-        if item.checkState() == QtCore.Qt.Checked and self.ui.displayCheck.isChecked():
+        if item.checkState() == QtCore.Qt.Checked and not self.ui.hideCheck.isChecked():
             i.show()
         else:
             i.hide()
@@ -554,7 +554,7 @@ class ScannerProtoGui(ProtocolGui):
         
         ## About to compute order/timing of targets; display a progress dialog
         #prof.mark('setup')
-        #progressDlg = QtGui.QProgressDialog("Computing pseudo-optimal target sequence...", "Cancel", 0, 1000)
+        #progressDlg = QtGui.QProgressDialog("Computing pseudo-optimal target sequence...", 0, 1000)
         #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         #progressDlg.setMinimumDuration(500)
         #prof.mark('progressDlg')
@@ -565,15 +565,15 @@ class ScannerProtoGui(ProtocolGui):
         minDist = state['minDist']
 
         #try:
-        with ProgressDialog.ProgressDialog("Computing random target sequence...", "Cancel", 0, 1000, busyCursor=True) as dlg:
+        with ProgressDialog.ProgressDialog("Computing random target sequence...", 0, 1000, busyCursor=True) as dlg:
             #times=[]
             for i in range(nTries):
                 #prof.mark('attempt: %i' %i)
                 
                 ## Run in a remote process for a little speedup
-                #for n, m in optimize.opt2(locations, self.costFn, deadTime, greed=1.0):
-                proc = ForkedIterator.ForkedIterator(optimize.opt2, locations, minTime, minDist, deadTime, greed=1.0)
-                for n,m in proc:
+                for n, m in optimize.opt2(locations, minTime, minDist, deadTime, greed=1.0):
+                #proc = ForkedIterator.ForkedIterator(optimize.opt2, locations, minTime, minDist, deadTime, greed=1.0)
+                #for n,m in proc:
                     ## we can update the progress dialog here.
                     if m is None:
                         solution = n

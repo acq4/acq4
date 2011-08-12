@@ -181,7 +181,7 @@ class ScannerDeviceGui(QtGui.QWidget):
 
     def runCalibration(self):
         """Wraps around runCalibrationInner, adds progress dialog and error reporting"""
-        self.progressDlg = QtGui.QProgressDialog("Calibrating scanner: Running protocol..", "Cancel", 0, 100)
+        self.progressDlg = QtGui.QProgressDialog("Calibrating scanner: Running protocol..", 0, 100)
         self.progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         self.progressDlg.setMinimumDuration(0)
         

@@ -8,7 +8,7 @@ from Mutex import Mutex, MutexLocker
 
 class SerialMouse(Device):
     
-    sigSwitchChanged = QtCore.Signal(object)
+    sigSwitchChanged = QtCore.Signal(object, object)
     sigPositionChanged = QtCore.Signal(object)
     
     def __init__(self, dm, config, name):
@@ -65,7 +65,7 @@ class SerialMouse(Device):
                     change[i] = btns[i]
                     self.buttons[i] = btns[i]
         #self.emit(QtCore.SIGNAL('switchChanged'), change)
-        self.sigSwitchChanged.emit(change)
+        self.sigSwitchChanged.emit(self, change)
         #print "Mouse: btnChanged done"
         
     def getPosition(self):

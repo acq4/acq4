@@ -3,23 +3,38 @@ from PyQt4 import QtCore, QtGui
 
 class ProgressDialog(QtGui.QProgressDialog):
     """Extends QProgressDialog for use in 'with' statements.
+    Arguments:
+        labelText   (required)
+        cancelText   Text to display on cancel button, or None to disable it.
+        minimum
+        maximum
+        parent       
+        wait         Length of time (im ms) to wait before displaying dialog
+        busyCursor   If True, show busy cursor until dialog finishes
+    
+    
     Example:
-        with ProgressDialog("Processing..", "Cancel", minVal, maxVal) as dlg:
+        with ProgressDialog("Processing..", minVal, maxVal) as dlg:
             # do stuff
             dlg.setValue(i)   ## could also use dlg += 1
             if dlg.wasCanceled():
                 raise Exception("Processing canceled by user")
     """
-    def __init__(self, *args, **kargs):
-        self.busyCursor = False
-        if 'busyCursor' in kargs:
-            self.busyCursor = kargs['busyCursor']
-            del kargs['busyCursor']
+    def __init__(self, labelText, minimum=0, maximum=100, cancelText='Cancel', parent=None, wait=250, busyCursor=False):
+        noCancel = False
+        if cancelText is None:
+            cancelText = ''
+            noCancel = True
             
-        QtGui.QProgressDialog.__init__(self, *args, **kargs)
-        self.setMinimumDuration(250)
+        self.busyCursor = busyCursor
+            
+        QtGui.QProgressDialog.__init__(self, labelText, cancelText, minimum, maximum, parent)
+        self.setMinimumDuration(wait)
         self.setWindowModality(QtCore.Qt.WindowModal)
         self.setValue(self.minimum())
+        if noCancel:
+            self.setCancelButton(None)
+        
 
     def __enter__(self):
         if self.busyCursor:
@@ -36,7 +51,7 @@ class ProgressDialog(QtGui.QProgressDialog):
         self.setValue(self.value()+val)
         return self
 
-        #progressDlg = QtGui.QProgressDialog("Computing spot colors (Map %d/%d)" % (n+1,nMax), "Cancel", 0, len(spots))
+        #progressDlg = QtGui.QProgressDialog("Computing spot colors (Map %d/%d)" % (n+1,nMax), 0, len(spots))
         ##progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         #progressDlg.setMinimumDuration(250)
         #ops = []

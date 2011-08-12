@@ -343,7 +343,7 @@ class Camera(DAQGeneric):
         """Return the sub-pixel location on the sensor that corresponds to global position pos"""
         ss = self.getScopeState()
         boundary = self.getBoundary()
-        boundary.translate(*ss['scopePosition'])
+        boundary.translate(*ss['scopePosition'][:2])
         size = self.sensorSize
         x = (pos[0] - boundary.left()) * (float(size[0]) / boundary.width())
         y = (pos[1] - boundary.top()) * (float(size[1]) / boundary.height())

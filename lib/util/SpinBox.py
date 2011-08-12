@@ -36,6 +36,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         QtGui.QAbstractSpinBox.__init__(self, parent)
         self.lastValEmitted = None
         self.setMinimumWidth(0)
+        self.setMaximumHeight(20)
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Preferred)
         self.opts = {
             'bounds': [None, None],
@@ -93,7 +94,28 @@ class SpinBox(QtGui.QAbstractSpinBox):
             #sip.setdeleted(lec)  ## PyQt should handle this, but does not. Potentially leads to crashes.
         #else:
             #print "ALREADY DELETED"
-        
+
+    ##lots of config options, just gonna stuff 'em all in here rather than do the get/set crap.
+    def setOpts(self, **opts):
+        for k in opts:
+            if k == 'bounds':
+                #print opts[k]
+                for i in [0,1]:
+                    if opts[k][i] is None:
+                        self.opts[k][i] = None
+                    else:
+                        self.opts[k][i] = D(str(opts[k][i]))
+            elif k in ['step', 'minStep']:
+                self.opts[k] = D(str(opts[k]))
+            elif k == 'value':
+                pass   ## don't set value until bounds have been set
+            else:
+                self.opts[k] = opts[k]
+        if 'value' in opts:
+            self.setValue(opts['value'])
+        self.updateText()
+            
+            
     ## Note: can't rely on __del__ since it may not be called for a long time
     #def __del__(self):
         #print "deleted"
@@ -133,25 +155,6 @@ class SpinBox(QtGui.QAbstractSpinBox):
     def sizeHint(self):
         return QtCore.QSize(120, 0)
         
-    ##lots of config options, just gonna stuff 'em all in here rather than do the get/set crap.
-    def setOpts(self, **opts):
-        for k in opts:
-            if k == 'bounds':
-                #print opts[k]
-                for i in [0,1]:
-                    if opts[k][i] is None:
-                        self.opts[k][i] = None
-                    else:
-                        self.opts[k][i] = D(str(opts[k][i]))
-            elif k in ['step', 'minStep']:
-                self.opts[k] = D(str(opts[k]))
-            elif k == 'value':
-                pass   ## don't set value until bounds have been set
-            else:
-                self.opts[k] = opts[k]
-        if 'value' in opts:
-            self.setValue(opts['value'])
-        self.updateText()
     
     def stepEnabled(self):
         return self.StepUpEnabled | self.StepDownEnabled        
@@ -303,7 +306,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         except:
             print "invalid"
             return False
-        print val
+        #print val
         return val
         
     #def interpretText(self, strn=None):

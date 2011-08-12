@@ -100,8 +100,8 @@ class Scan(QtCore.QObject):
         if not self.item.isVisible():
             return
         spots = self.spots()
-        with ProgressDialog.ProgressDialog("Computing spot colors (Scan %d/%d)" % (n+1,nMax), "Cancel", 0, len(spots)) as dlg:
-        #progressDlg = QtGui.QProgressDialog("Computing spot colors (Map %d/%d)" % (n+1,nMax), "Cancel", 0, len(spots))
+        with ProgressDialog.ProgressDialog("Computing spot colors (Scan %d/%d)" % (n+1,nMax), 0, len(spots)) as dlg:
+        #progressDlg = QtGui.QProgressDialog("Computing spot colors (Map %d/%d)" % (n+1,nMax), 0, len(spots))
         #progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         #progressDlg.setMinimumDuration(250)
         #try:

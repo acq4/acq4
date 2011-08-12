@@ -66,7 +66,7 @@ class ROI(QtGui.QGraphicsObject):
         self.lastState = None
         self.setPos(pos)
         #self.rotate(-angle * 180. / np.pi)
-        self.rotate(-angle)
+        self.rotate(angle)
         self.setZValue(10)
         self.isMoving = False
         

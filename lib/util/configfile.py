@@ -127,6 +127,7 @@ def parseString(lines, start=0):
             
             (k, p, v) = l.partition(':')
             k = k.strip()
+            v = v.strip()
             if len(k) < 1:
                 raise ParseError('Missing name preceding colon', ln+1, l)
             if k[0] == '(' and k[-1] == ')':
@@ -136,7 +137,7 @@ def parseString(lines, start=0):
                         k = k1
                 except:
                     pass
-            if re.search(r'\S', v):
+            if re.search(r'\S', v) and v[0] != '#':
                 try:
                     val = eval(v)
                 except:

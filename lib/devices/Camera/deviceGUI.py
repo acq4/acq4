@@ -87,7 +87,7 @@ class CameraDeviceGui(QtGui.QWidget):
             #ind = 
         #if typ[5:8] in ['INT', 'UNS', 'FLT']:
         #print val, type(val)
-        self.dev.setParam(p, val)    
+        self.dev.setParam(str(p), val)    
         
     def paramsChanged(self, params):
         for p in params.keys()[:]:  ## flatten out nested dicts

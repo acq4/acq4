@@ -595,7 +595,7 @@ class UncagingWindow(QtGui.QMainWindow):
         #for i in self.scanItems:
             #color = self.spotColor(i)
             #i.setBrush(QtGui.QBrush(color))
-        progressDlg = QtGui.QProgressDialog("Detecting events in all traces...", "Cancel", 0, 100)
+        progressDlg = QtGui.QProgressDialog("Detecting events in all traces...", 0, 100)
         progressDlg.setWindowModality(QtCore.Qt.WindowModal)
         #self.progressDlg.setMinimumDuration(0)
         for n in range(len(self.scanItems)):
