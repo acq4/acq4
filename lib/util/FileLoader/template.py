@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/util/FileLoader/template.ui'
+# Form implementation generated from reading ui file 'template.ui'
 #
-# Created: Wed May 18 20:44:18 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Tue Aug  9 11:13:02 2011
+#      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -54,6 +54,12 @@ class Ui_Form(object):
         self.fileTree.setObjectName(_fromUtf8("fileTree"))
         self.fileTree.headerItem().setText(0, _fromUtf8("1"))
         self.verticalLayout_2.addWidget(self.fileTree)
+        self.label = QtGui.QLabel(self.layoutWidget1)
+        self.label.setObjectName(_fromUtf8("label"))
+        self.verticalLayout_2.addWidget(self.label)
+        self.notesTextEdit = QtGui.QTextEdit(self.layoutWidget1)
+        self.notesTextEdit.setObjectName(_fromUtf8("notesTextEdit"))
+        self.verticalLayout_2.addWidget(self.notesTextEdit)
         self.gridLayout.addWidget(self.splitter, 0, 0, 1, 1)
 
         self.retranslateUi(Form)
@@ -63,5 +69,6 @@ class Ui_Form(object):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
         self.setDirBtn.setText(QtGui.QApplication.translate("Form", "Set Base Dir ->", None, QtGui.QApplication.UnicodeUTF8))
         self.loadBtn.setText(QtGui.QApplication.translate("Form", "Load File ->", None, QtGui.QApplication.UnicodeUTF8))
+        self.label.setText(QtGui.QApplication.translate("Form", "Notes:", None, QtGui.QApplication.UnicodeUTF8))
 
 from DirTreeWidget import DirTreeWidget

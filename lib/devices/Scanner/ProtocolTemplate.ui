@@ -28,16 +28,6 @@
      </item>
     </layout>
    </item>
-   <item row="0" column="2">
-    <widget class="QLabel" name="label_5">
-     <property name="text">
-      <string>Items</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-    </widget>
-   </item>
    <item row="0" column="3">
     <widget class="QLabel" name="label_8">
      <property name="text">
@@ -58,9 +48,6 @@
       <widget class="QComboBox" name="laserCombo"/>
      </item>
     </layout>
-   </item>
-   <item row="1" column="2" rowspan="7">
-    <widget class="QListWidget" name="itemList"/>
    </item>
    <item row="1" column="3" rowspan="7">
     <layout class="QHBoxLayout" name="horizontalLayout">
@@ -196,29 +183,6 @@
       <widget class="QLabel" name="label_3">
        <property name="text">
         <string>Minimum time</string>
-       </property>
-      </widget>
-     </item>
-     <item row="2" column="0">
-      <widget class="SpinBox" name="packingSpin">
-       <property name="minimum">
-        <double>0.100000000000000</double>
-       </property>
-       <property name="maximum">
-        <double>1000.000000000000000</double>
-       </property>
-       <property name="singleStep">
-        <double>0.100000000000000</double>
-       </property>
-       <property name="value">
-        <double>1.000000000000000</double>
-       </property>
-      </widget>
-     </item>
-     <item row="2" column="1">
-      <widget class="QLabel" name="label_7">
-       <property name="text">
-        <string>Grid Spacing</string>
        </property>
       </widget>
      </item>
@@ -368,6 +332,40 @@
      </property>
     </widget>
    </item>
+   <item row="0" column="2">
+    <widget class="QLabel" name="label_5">
+     <property name="text">
+      <string>Items</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="2" rowspan="7">
+    <widget class="TreeWidget" name="itemTree">
+     <column>
+      <property name="text">
+       <string>Item</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Grid Spacing</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Grid Layout</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string># of points</string>
+      </property>
+     </column>
+    </widget>
+   </item>
   </layout>
  </widget>
  <customwidgets>
@@ -375,6 +373,11 @@
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
    <header>SpinBox</header>
+  </customwidget>
+  <customwidget>
+   <class>TreeWidget</class>
+   <extends>QTreeWidget</extends>
+   <header location="global">TreeWidget</header>
   </customwidget>
  </customwidgets>
  <resources/>

@@ -111,6 +111,10 @@ class CameraWindow(QtGui.QMainWindow):
         self.histogramCurve.scale(1.0, -1.0)
         self.lastHistogramUpdate = 0
         
+        self.levelMax = 1
+        self.levelMin = 0
+        self.lastMinMax = None  ## Records most recently measured maximum/minimum image values
+        
         
         self.ticks = [t[0] for t in self.ui.gradientWidget.listTicks()]
         self.ticks[0].colorChangeAllowed = False
@@ -199,7 +203,6 @@ class CameraWindow(QtGui.QMainWindow):
         self.statusBar().addPermanentWidget(self.vLabel)
         self.statusBar().addPermanentWidget(self.fpsLabel)
         
-        
         self.show()
         self.openCamera()
         self.ui.plotWidget.resize(self.ui.plotWidget.size().width(), 40)
@@ -284,6 +287,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.gradientWidget.sigGradientChanged.connect(self.levelsChanged)
         self.ui.btnAutoGain.toggled.connect(self.toggleAutoGain)
         self.ui.btnAutoGain.setChecked(True)
+        
         
         ## Connect Persistent Frames dock
         self.ui.addFrameBtn.clicked.connect(self.addPersistentFrame)
@@ -673,19 +677,30 @@ class CameraWindow(QtGui.QMainWindow):
     
     #@trace
     def setLevelRange(self, rmin=None, rmax=None):
+        
         if rmin is None:
             if self.ui.btnAutoGain.isChecked():
                 rmin = 0.0
                 rmax = 1.0
+                #self.ui.gradientWidget.tickMoved(self.ticks[1], QtCore.QPointF(rmax, 0.0))
+                #self.ui.gradientWidget.tickMoved(self.ticks[0], QtCore.QPointF(rmin, 0.0))
+                self.ui.gradientWidget.setTickValue(1, rmax)
+                self.ui.gradientWidget.setTickValue(0, rmin)
             else:
+                bl, wl = self.getLevels()
                 if self.ui.divideBgBtn.isChecked():
                     rmin = 0.0
                     rmax = 2.0
                 else:
-                    rmin = 0
-                    rmax = 2**self.bitDepth - 1
+                    rmin = 0.0
+                    rmax = float(2**self.bitDepth - 1)
+                    #self.ui.gradientWidget.tickMoved(self.ticks[1], QtCore.QPointF(wl/rmax, 0.0))
+                    #self.ui.gradientWidget.tickMoved(self.ticks[0], QtCore.QPointF(bl/rmax, 0.0))
+                    self.ui.gradientWidget.setTickValue(1, wl/rmax)
+                    self.ui.gradientWidget.setTickValue(0, bl/rmax)
         self.levelMin = rmin
         self.levelMax = rmax
+        
         
     #@trace
     def getLevels(self):
@@ -695,7 +710,17 @@ class CameraWindow(QtGui.QMainWindow):
 
     #@trace
     def toggleAutoGain(self, b):
+        bl, wl = self.getLevels()
         self.setLevelRange()
+        if not b and self.lastMinMax is not None:
+            print bl, wl
+            wl = self.lastMinMax[0] + (self.lastMinMax[1]-self.lastMinMax[0]) * wl
+            bl = self.lastMinMax[0] + (self.lastMinMax[1]-self.lastMinMax[0]) * bl
+            print bl, wl, self.lastMinMax
+            self.ui.gradientWidget.setTickValue(1, wl/float(2**self.bitDepth - 1))
+            self.ui.gradientWidget.setTickValue(0, bl/float(2**self.bitDepth - 1))
+            
+            
 
     #@trace
     def toggleAcquire(self):
@@ -829,6 +854,9 @@ class CameraWindow(QtGui.QMainWindow):
         #sys.stdout.write('+')
         try:
             
+            
+            
+            
             ## If we last drew a frame < 1/30s ago, return.
             t = ptime.time()
             if (self.lastDrawTime is not None) and (t - self.lastDrawTime < .033333):
@@ -850,6 +878,12 @@ class CameraWindow(QtGui.QMainWindow):
             
             ## Handle the next available frame, if there is one.
             if self.nextFrame is not None:
+                #print "===== New Frame ====="
+                #print "   pre: LevelMin ", self.levelMin
+                #print "        LevelMax ", self.levelMax
+                #print "        AGCLastMax", self.AGCLastMax
+                #print "        AGCLastMin", self.AGCLastMin
+                
                 self.currentFrame = self.nextFrame
                 self.nextFrame = None
                 (data, info) = self.currentFrame
@@ -902,7 +936,11 @@ class CameraWindow(QtGui.QMainWindow):
                 
                 wl = minVal + (maxVal-minVal) * wl
                 bl = minVal + (maxVal-minVal) * bl
-            
+                self.lastMinMax = minVal, maxVal
+            #print "  post: LevelMin ", self.levelMin
+            #print "        LevelMax ", self.levelMax
+            #print "        AGCLastMax", self.AGCLastMax
+            #print "        AGCLastMin", self.AGCLastMin
             
             ## Update histogram plot
             #self.updateHistogram(self.currentFrame[0], wl, bl)
@@ -950,6 +988,7 @@ class CameraWindow(QtGui.QMainWindow):
             
             #if self.ui.checkEnableROIs.isChecked():
                 #self.ui.plotWidget.replot()
+           
 
 
         except:

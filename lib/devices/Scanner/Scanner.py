@@ -265,8 +265,9 @@ class Scanner(Device):
         #pickle.dump(fd, self.targetList)
         #fd.close()
         
-    def updateTargetPacking(self, p):
-        self.targetList[0] = p
+    def updateTargetDisplaySize(self, s):
+        
+        self.targetList[0] = s
         #fd = open(self.targetFileName)
         #pickle.dump(fd, self.targetList)
         #fd.close()
