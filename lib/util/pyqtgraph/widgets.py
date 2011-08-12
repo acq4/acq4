@@ -55,6 +55,7 @@ class ROI(QtGui.QGraphicsObject):
         size = Point(size)
         self.aspectLocked = False
         self.translatable = True
+        self.rotateAllowed = True
         
         if pen is None:
             self.pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
@@ -407,6 +408,8 @@ class ROI(QtGui.QGraphicsObject):
             self.updateHandles()
         
         elif h['type'] in ['r', 'rf']:
+            if not self.rotateAllowed:
+                return
             ## If the handle is directly over its center point, we can't compute an angle.
             if lp1.length() == 0 or lp0.length() == 0:
                 return

@@ -12,6 +12,7 @@ from debug import Profiler
 import optimize ## for determining random scan patterns
 import ForkedIterator, ProgressDialog
 from SpinBox import SpinBox
+from pyqtgraph.Point import *
 
 class ScannerProtoGui(ProtocolGui):
     
@@ -120,7 +121,8 @@ class ScannerProtoGui(ProtocolGui):
                 #gr.setAngle(angle)
             elif t['type'] == 'occlusion':
                 self.addOcclusion(points = t['points'], pos = t['pos'], name=k)
-
+        for item in self.items.values():
+            item.resetParents()
     #def protocolChanged(self, name, val):
         #if name == 'duration':
             #self.protDuration = val
@@ -391,12 +393,17 @@ class ScannerProtoGui(ProtocolGui):
         
         
 
-    def addItem(self, item, name,  autoPosition=True,  autoName=True):
+    def addItem(self, item, name0,  autoPosition=True,  autoName=True):
         camMod = self.cameraModule()
         if camMod is None:
             return False
         if autoName:
-            name = name + str(self.nextId)
+            name = name0 + str(self.nextId)
+            while name in self.items.keys():
+                self.nextId += 1
+                name = name0 + str(self.nextId) 
+        else:
+            name=name0
         item.name = name
         item.objective = self.currentObjective
         self.items[name] = item
@@ -714,6 +721,9 @@ class TargetPoint(widgets.EllipseROI):
         self.treeItem.setText(3, "1")
         self.host = host
         
+    def updateFamily(self):
+        pass
+        
     def setPointSize(self):
         size, displaySize = self.host.pointSize()
         if self.treeItem is None: ## then you're the target point and should be the size from calibration
@@ -748,6 +758,7 @@ class TargetGrid(widgets.ROI):
     sigPointsChanged = QtCore.Signal(object)
     
     def __init__(self, pos, size, ptSize, pd, angle, rebuildOpts = None):
+        ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         self.gridSpacingSpin = SpinBox(step=0.1)
         self.gridSpacingSpin.setValue(pd)
         self.gridPacking = self.gridSpacingSpin.value()
@@ -755,6 +766,8 @@ class TargetGrid(widgets.ROI):
         self.gridLayoutCombo.addItems(["Hexagonal", "Square"])
         self.gridSpacingSpin.valueChanged.connect(self.updateGridPacking)
         self.gridLayoutCombo.currentIndexChanged.connect(self.regeneratePoints)
+        self.treeItem = None ## will become a QTreeWidgetItem when ScannerProtoGui runs addItem()
+        
         widgets.ROI.__init__(self, pos=pos, size=size, angle=angle)
         self.addScaleHandle([0, 0], [1, 1])
         self.addScaleHandle([1, 1], [0, 0])
@@ -769,7 +782,7 @@ class TargetGrid(widgets.ROI):
         self.pointDisplaySize = self.pointSize
         self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         
-        self.treeItem = None ## will become a QTreeWidgetItem when ScannerProtoGui runs addItem()
+        
         ## cache is not working in qt 4.7
         self.setCacheMode(QtGui.QGraphicsItem.DeviceCoordinateCache)
         self.regeneratePoints()
@@ -788,8 +801,23 @@ class TargetGrid(widgets.ROI):
             if layout == "Hexagonal":
                 self.gridLayoutCombo.setCurrentIndex(0)
             elif layout == "Square":
-                self.gridLayoutCombo.setCurrentIndex(1)
-                
+                self.gridLayoutCombo.setCurrentIndex(1)       
+        self.host.updateDeviceTargetList(self)
+    
+    def resetParents(self):
+        """For use when rebuilding scanner targets from the deviceTargetList"""
+        if self.rebuildOpts['parentName'] is not None:
+            tw = self.treeItem.treeWidget()
+            parent = tw.findItems(self.rebuildOpts['parentName'], QtCore.Qt.MatchRecursive)[0]
+            tw.prepareMove(self.treeItem)
+            tw.invisibleRootItem().removeChild(self.treeItem)
+            parent.insertChild(0, self.treeItem)
+            tw.recoverMove(self.treeItem)
+            parent.setExpanded(True)
+            self.host.treeItemMoved(self.treeItem, parent, 0)
+            
+           
+            
     def updateFamily(self):
         if self.treeItem.parent() is not None:
             self.gridSpacingSpin.setEnabled(False)
@@ -798,29 +826,40 @@ class TargetGrid(widgets.ROI):
             self.parentGridSpacingSpin.valueChanged.connect(self.parentValueChanged)
             self.parentGridLayoutCombo = self.treeItem.treeWidget().itemWidget(self.treeItem.parent(), 2)
             self.parentGridLayoutCombo.currentIndexChanged.connect(self.parentValueChanged)
+            self.translateSnap = True
+            self.rotateAllowed = False
+            self.setAngle(0)
+            #self.setAngle(self.treeItem.parent().graphicsItem.stateCopy()['angle'])
             self.parentValueChanged()
         if self.treeItem.parent() is None:
             self.gridSpacingSpin.setEnabled(True)
             self.gridLayoutCombo.setEnabled(True)
-            
+            self.translateSnap = False
+            self.rotateAllowed = True
+        self.host.updateDeviceTargetList(self)
+        self.updateSnapSize()
         
     def parentValueChanged(self):
         if self.treeItem.parent() is not None:
             self.gridSpacingSpin.setValue(self.parentGridSpacingSpin.value())
             self.gridLayoutCombo.setCurrentIndex(self.parentGridLayoutCombo.currentIndex())
+            
         
     def updateGridPacking(self):
-        #print "TargetGrid.updateGridPacking() called."
-      
         self.gridPacking = self.gridSpacingSpin.value()
-        #print "   new self.gridPacking: ", self.gridPacking
-    
+        self.updateSnapSize()
         self.regeneratePoints()
+        
+    def updateSnapSize(self):
+        self.snapSizeX = self.pointSize * self.gridPacking
+        if self.gridLayoutCombo.currentText() == "Square":
+            self.snapSizeY = self.snapSizeX
+        elif self.gridLayoutCombo.currentText() == "Hexagonal":
+            self.snapSizeY = 0.5 * self.snapSizeX * 3.**0.5
         
     def setPointSize(self):
         size, displaySize = self.host.pointSize()
         self.pointSize = size
-        #self.gridPacking = packing
         self.pointDisplaySize = displaySize
         self.regeneratePoints()
         
@@ -828,6 +867,16 @@ class TargetGrid(widgets.ROI):
         if self.state['size'] != self.lastSize:
             self.regeneratePoints()
             self.lastSize = self.state['size']
+            
+    def mouseMoveEvent(self, ev):
+        #print "mouse move", ev.pos()
+        if self.translatable and self.isMoving and ev.buttons() == QtCore.Qt.LeftButton:
+            snap = None
+            if self.translateSnap or (ev.modifiers() & QtCore.Qt.ControlModifier):
+                snap = Point(self.snapSizeX, self.snapSizeY)
+            newPos = ev.scenePos() + self.cursorOffset
+            newPos = self.mapSceneToParent(newPos)
+            self.translate(newPos - self.pos(), snap=snap)
 
     def regeneratePoints(self):
         if self.treeItem is None:
@@ -898,6 +947,11 @@ class TargetGrid(widgets.ROI):
         sc = widgets.ROI.stateCopy(self)
         sc['gridPacking'] = self.gridPacking
         sc['gridLayout'] = str(self.gridLayoutCombo.currentText())
+        if self.treeItem is not None:
+            if self.treeItem.parent() is None:
+                sc['parentName'] = None
+            else:
+                sc['parentName'] = self.treeItem.parent().text(0)
         return sc
         #sc['displaySize'] = self.displaySize
         
