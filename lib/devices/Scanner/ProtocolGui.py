@@ -440,6 +440,20 @@ class ScannerProtoGui(ProtocolGui):
     def delete(self):
         item = self.ui.itemTree.currentItem()
         parent = item.parent()
+        if item.childCount() > 0:
+            for i in range(item.childCount()):
+                child = item.child(i)
+                self.ui.itemTree.prepareMove(child)
+                item.removeChild(child)
+                child.graphicsItem.setParentItem(parent)
+                child.graphicsItem.updateFamily()
+                if parent is not None:
+                    parent.addChild(child)
+                    self.ui.itemTree.recoverMove(child)
+                else:
+                    self.ui.itemTree.addTopLevelItem(child)
+                    self.ui.itemTree.recoverMove(child)
+                    
         if parent == None:
             item = self.ui.itemTree.takeTopLevelItem(self.ui.itemTree.indexOfTopLevelItem(item))
         else:
@@ -837,7 +851,7 @@ class TargetGrid(widgets.ROI):
             self.translateSnap = False
             self.rotateAllowed = True
         self.host.updateDeviceTargetList(self)
-        self.updateSnapSize()
+        #self.updateSnapSize()
         
     def parentValueChanged(self):
         if self.treeItem.parent() is not None:
@@ -847,15 +861,15 @@ class TargetGrid(widgets.ROI):
         
     def updateGridPacking(self):
         self.gridPacking = self.gridSpacingSpin.value()
-        self.updateSnapSize()
+        #self.updateSnapSize()
         self.regeneratePoints()
         
-    def updateSnapSize(self):
-        self.snapSizeX = self.pointSize * self.gridPacking
-        if self.gridLayoutCombo.currentText() == "Square":
-            self.snapSizeY = self.snapSizeX
-        elif self.gridLayoutCombo.currentText() == "Hexagonal":
-            self.snapSizeY = 0.5 * self.snapSizeX * 3.**0.5
+    #def updateSnapSize(self):
+        #self.snapSizeX = self.pointSize * self.gridPacking
+        #if self.gridLayoutCombo.currentText() == "Square":
+            #self.snapSizeY = self.snapSizeX
+        #elif self.gridLayoutCombo.currentText() == "Hexagonal":
+            #self.snapSizeY = 0.5 * self.snapSizeX * 3.**0.5
         
     def setPointSize(self):
         size, displaySize = self.host.pointSize()
@@ -868,15 +882,38 @@ class TargetGrid(widgets.ROI):
             self.regeneratePoints()
             self.lastSize = self.state['size']
             
-    def mouseMoveEvent(self, ev):
-        #print "mouse move", ev.pos()
-        if self.translatable and self.isMoving and ev.buttons() == QtCore.Qt.LeftButton:
-            snap = None
-            if self.translateSnap or (ev.modifiers() & QtCore.Qt.ControlModifier):
-                snap = Point(self.snapSizeX, self.snapSizeY)
-            newPos = ev.scenePos() + self.cursorOffset
-            newPos = self.mapSceneToParent(newPos)
-            self.translate(newPos - self.pos(), snap=snap)
+    def getSnapPosition(self, pos, snap=None):
+        ## Given that pos has been requested, return the nearest snap-to position
+        ## optionally, snap may be passed in to specify a rectangular snap grid.
+        ## override this function for more interesting snap functionality..
+        
+        if snap is None:
+            if self.snapSize is None:
+                return pos
+        layout = self.gridLayoutCombo.currentText()
+        
+        if layout == 'Square':
+            snap = Point(self.pointSize * self.gridPacking, self.pointSize*self.gridPacking)
+            w = round(pos[0] / snap[0]) * snap[0]
+            h = round(pos[1] / snap[1]) * snap[1]
+            return Point(w, h)
+        
+        elif layout == 'Hexagonal':
+            snap1 = Point(self.pointSize*self.gridPacking, self.pointSize*self.gridPacking*3.0**0.5)
+            dx = 0.5*snap1[0]
+            dy = 0.5*snap1[1]
+            w1 = round(pos[0] / snap1[0]) * snap1[0]
+            h1 = round(pos[1] / snap1[1]) * snap1[1]
+            w2 = round((pos[0]-dx) / snap1[0]) * snap1[0] + dx
+            h2 = round((pos[1]-dy) / snap1[1]) * snap1[1] + dy
+            #snap2 = snap1 + Point(snap1[0]*0.5, snap1[1]/2)
+            #w2 = round(pos[0] / snap2[0]) * snap2[0]
+            #h2 = round(pos[1] / snap2[1]) * snap2[1] 
+            if (Point(w1, h1)-pos).length() < (Point(w2,h2) - pos).length():
+                return Point(w1, h1)
+            else:
+                return Point(w2, h2)
+        
 
     def regeneratePoints(self):
         if self.treeItem is None:
@@ -891,7 +928,7 @@ class TargetGrid(widgets.ROI):
 
         if layout == "Hexagonal":
             self.generateGrid([self.pointSize*0.5, self.pointSize*0.5], [sepx, sepy])  ## make every other row of the grid starting from top
-            self.generateGrid([self.pointSize*0.5+0.5*sepx, 0.5*self.pointSize + sepy/2.0 ], [sepx, sepy]) ### make every other row of the grid starting with 2nd row
+            self.generateGrid([self.pointSize*0.5+0.5*sepx, 0.5*self.pointSize + 0.5*sepy ], [sepx, sepy]) ### make every other row of the grid starting with 2nd row
         elif layout == "Square":
             self.generateGrid([self.pointSize*0.5, self.pointSize*0.5], [sepx, sepx]) ## points in x and y dimensions have same separation, so use same value.
       
