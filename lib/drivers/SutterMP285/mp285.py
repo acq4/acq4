@@ -25,7 +25,7 @@ class SutterMP285(object):
         self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS)
         self._scale = None
 
-    def getPos(self):
+    def getPos(self, scaled=True):
         """Get current position reported by controller. Returns a tuple (x,y,z); values given in m."""
         ## request position
         self.write('c\r')
@@ -34,8 +34,11 @@ class SutterMP285(object):
             raise Exception("Sutter MP285: bad position packet: '%s'" % repr(packet))
         
         pos = [packet[:4], packet[4:8], packet[8:]]
+        pos = [struct.unpack('l', x)[0] for x in pos]
+        if not scaled:
+            return pos
         scale = self.scale()
-        pos = [struct.unpack('l', x)[0]*scale for x in pos]
+        pos = [x*scale for x in pos]
         return pos
         
     def setPos(self, pos, block=True, timeout=10.):
@@ -45,12 +48,13 @@ class SutterMP285(object):
                  Setting a coordinate to None leaves it unchanged.
             block: bool, if true then the function does not return until the move is complete.
         """
+        scale = self.scale()
         if len(pos) < 3:
             pos = list(pos) + [None] * (3-len(pos))
+            
         if None in pos:
-            pos = list(pos)
-            currentPos = self.getPos()
-            pos = [(pos[i] if pos[i] is not None else currentPos[i]) for i in range(3)]
+            currentPos = self.getPos(scaled=False)
+        pos = [(pos[i]/scale if pos[i] is not None else currentPos[i]) for i in range(3)]
             
         #if block:
             #st = self.stat()
@@ -60,9 +64,9 @@ class SutterMP285(object):
             
             
         #pos = np.array(pos) / self.scale
-        scale = self.scale()
-        posv = [x/scale for x in pos]
-        cmd = 'm' + struct.pack('3l', int(posv[0]), int(posv[1]), int(posv[2])) + '\r'
+        #posv = [x/scale for x in pos]
+        #print "Set pos:  %09d  %09d  %09d" % tuple(pos)
+        cmd = 'm' + struct.pack('3l', int(pos[0]), int(pos[1]), int(pos[2])) + '\r'
         self.write(cmd)
         if block:
             #dist = ((currentPos[0]-pos[0])**2 + (currentPos[1]-pos[1])**2 + (currentPos[2]-pos[2])**2) ** 0.5
@@ -278,7 +282,7 @@ class SutterMP285(object):
                 raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % repr(res))
         
 if __name__ == '__main__':
-    s = SutterMP285(port=3, baud=19200)
+    s = SutterMP285(port=2, baud=19200)
     def pos():
         p = s.getPos()
         print "x: %0.2fum  y: %0.2fum,  z: %0.2fum" % (p[0]*1e6, p[1]*1e6, p[2]*1e6)
