@@ -58,7 +58,7 @@ class GraphicsView(QtGui.QGraphicsView):
         
         self.lockedViewports = []
         self.lastMousePos = None
-        #self.setMouseTracking(False)
+        self.setMouseTracking(True)
         self.aspectLocked = False
         #self.yInverted = True
         self.range = QtCore.QRectF(0, 0, 1, 1)

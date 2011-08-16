@@ -539,6 +539,7 @@ class CameraWindow(QtGui.QMainWindow):
 
     #@trace
     def setMouse(self, qpt=None):
+        #print "mouse:", qpt
         if qpt is None:
             if not hasattr(self, 'mouse'):
                 return

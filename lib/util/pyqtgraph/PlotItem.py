@@ -518,7 +518,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         if key not in self.avgCurves:
             plot = PlotCurveItem()
             plot.setPen(mkPen([0, 200, 0]))
-            plot.setShadowPen(mkPen([0, 0, 0, 100], 3))
+            plot.setShadowPen(mkPen([0, 0, 0, 100], width=3))
             plot.setAlpha(1.0, False)
             plot.setZValue(100)
             self.addItem(plot)
