@@ -13,6 +13,7 @@ import optimize ## for determining random scan patterns
 import ForkedIterator, ProgressDialog
 from SpinBox import SpinBox
 from pyqtgraph.Point import *
+from pyqtgraph.functions import mkPen
 
 class ScannerProtoGui(ProtocolGui):
     
@@ -96,7 +97,11 @@ class ScannerProtoGui(ProtocolGui):
         
         self.testTarget = TargetPoint([0,0], 100e-6, host=self)
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
+        self.spotMarker = TargetPoint([0,0], 100e-6, host=self)
+        self.spotMarker.setPen(mkPen(color=(255,255,255), width = 2))
         self.updateSpotSizes()
+        self.spotMarker.hide()
+        
         #camMod = self.cameraModule()
         
         self.currentObjective = None
@@ -147,6 +152,7 @@ class ScannerProtoGui(ProtocolGui):
         camMod = self.cameraModule()
         if self.currentCamMod is not None:
             self.currentCamMod.ui.removeItem(self.testTarget)
+            self.currentCamMod.ui.removeItem(self.spotMarker)
             #self.currentCamMod.ui.removeItem(self.currentTargetMarker)
             #QtCore.QObject.disconnect(self.currentCamMod.ui, QtCore.SIGNAL('cameraScaleChanged'), self.objectiveChanged)
             self.currentCamMod.ui.sigCameraScaleChanged.disconnect(self.objectiveChanged)
@@ -169,6 +175,7 @@ class ScannerProtoGui(ProtocolGui):
             self.currentScope.sigObjectiveChanged.connect(self.objectiveChanged)
             
         camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
+        camMod.ui.addItem(self.spotMarker, None, [1,1], 1010)
         #camMod.ui.addItem(self.currentTargetMarker, None, [1,1], 1010)
         self.objectiveChanged()
         
@@ -190,10 +197,13 @@ class ScannerProtoGui(ProtocolGui):
                 self.itemToggled(li)
             #self.testTarget.setPointSize(self.pointSize()[0])
             self.testTarget.setPointSize()
+            self.spotMarker.setPointSize()
             #self.cameraModule().ui.centerItem(self.testTarget)
         camMod = self.cameraModule()
         camMod.ui.removeItem(self.testTarget)
+        camMod.ui.removeItem(self.spotMarker)
         camMod.ui.addItem(self.testTarget, None, [1,1], 1010)
+        camMod.ui.addItem(self.spotMarker, None, [1,1], 1010)
 
     def sizeSpinChanged(self):
         #print "packingSpinChanged."
@@ -212,6 +222,7 @@ class ScannerProtoGui(ProtocolGui):
         for i in self.items.values():
             i.setPointSize()
         self.testTarget.setPointSize()
+        self.spotMarker.setPointSize()
 
     def showInterface(self, b):
         for k in self.items:
@@ -306,7 +317,14 @@ class ScannerProtoGui(ProtocolGui):
         
         
     def handleResult(self, result, params):
-        pass
+        if not self.spotMarker.isVisible():
+            self.spotMarker.show()
+        pos = result['position']
+        ss = result['spotSize']
+        self.spotMarker.setPos((pos[0]-ss*0.5, pos[1]-ss*0.5))
+        print 'handleResult'
+        
+        
     
     def addSpiral(self, pos=None, name=None):
         autoName = False
@@ -694,6 +712,7 @@ class ScannerProtoGui(ProtocolGui):
         s = self.testTarget.scene()
         if s is not None:
             self.testTarget.scene().removeItem(self.testTarget)
+            self.spotMarker.scene().removeItem(self.spotMarker)
         #QtCore.QObject.disconnect(getManager(), QtCore.SIGNAL('modulesChanged'), self.fillModuleList)
         try:
             getManager().sigModulesChanged.disconnect(self.fillModuleList)

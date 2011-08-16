@@ -121,12 +121,12 @@ class ProtocolGui(QtGui.QWidget):
         
     def enable(self):
         if not self._PGConnected:
-            #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)        ## called at the beginning of a protocol/sequence
-            #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('taskStarted'), self.taskStarted)     ## called at the beginning of all protocol runs
-            #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolFinished'), self.protocolFinished) ## called at the end of a protocol/sequence
-            self.prot.sigProtocolStarted.connect(self.protocolStarted)
-            self.prot.sigTaskStarted.connect(self.taskStarted)
-            self.prot.sigProtocolFinished.connect(self.protocolFinished)
+            #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)        
+            #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('taskStarted'), self.taskStarted)     
+            #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolFinished'), self.protocolFinished) 
+            self.prot.sigProtocolStarted.connect(self.protocolStarted) ## called at the beginning of a protocol/sequence
+            self.prot.sigTaskStarted.connect(self.taskStarted)## called at the beginning of all protocol runs
+            self.prot.sigProtocolFinished.connect(self.protocolFinished) ## called at the end of a protocol/sequence
             self._PGConnected = True
         
     def disable(self):
