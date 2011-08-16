@@ -16,6 +16,7 @@ import ptime
 import analysisModules
 import time, gc
 import sip
+from ProgressDialog import ProgressDialog
 #import pdb
 
 class Window(QtGui.QMainWindow):
@@ -827,11 +828,11 @@ class ProtocolRunner(Module):
             
             #print params, linkedParams
             ## Generate the complete array of command structures. This can take a long time, so we start a progress dialog.
-            progressDlg = QtGui.QProgressDialog("Generating protocol commands..", 0, pLen)
-            progressDlg.setMinimumDuration(500)  ## If this takes less than 500ms, progress dialog never appears.
-            self.lastQtProcessTime = ptime.time()
-            prot = runSequence(lambda p: self.generateProtocol(dh, p, progressDlg), paramInds, paramInds.keys(), linkedParams=linkedParams)
-            progressDlg.setValue(pLen)
+            with ProgressDialog("Generating protocol commands..", 0, pLen) as progressDlg:
+                #progressDlg.setMinimumDuration(500)  ## If this takes less than 500ms, progress dialog never appears.
+                self.lastQtProcessTime = ptime.time()
+                prot = runSequence(lambda p: self.generateProtocol(dh, p, progressDlg), paramInds, paramInds.keys(), linkedParams=linkedParams)
+                #progressDlg.setValue(pLen)
             
             #print "==========Sequence Protocol=============="
             #print prot
