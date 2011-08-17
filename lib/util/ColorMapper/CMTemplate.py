@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'CMTemplate.ui'
 #
-# Created: Wed Aug 17 15:38:01 2011
+# Created: Wed Aug 17 16:18:30 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(315, 219)
+        Form.resize(264, 249)
         self.gridLayout = QtGui.QGridLayout(Form)
         self.gridLayout.setMargin(0)
         self.gridLayout.setHorizontalSpacing(0)
@@ -58,12 +58,12 @@ class Ui_Form(object):
         self.saveBtn.setText(QtGui.QApplication.translate("Form", "Save", None, QtGui.QApplication.UnicodeUTF8))
         self.saveAsBtn.setText(QtGui.QApplication.translate("Form", "Save As..", None, QtGui.QApplication.UnicodeUTF8))
         self.deleteBtn.setText(QtGui.QApplication.translate("Form", "Delete", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(1, QtGui.QApplication.translate("Form", "arg", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(2, QtGui.QApplication.translate("Form", "op", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(3, QtGui.QApplication.translate("Form", "min", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(4, QtGui.QApplication.translate("Form", "max", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(5, QtGui.QApplication.translate("Form", "colors", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.headerItem().setText(6, QtGui.QApplication.translate("Form", "remove", None, QtGui.QApplication.UnicodeUTF8))
+        self.tree.headerItem().setText(0, QtGui.QApplication.translate("Form", "arg", None, QtGui.QApplication.UnicodeUTF8))
+        self.tree.headerItem().setText(1, QtGui.QApplication.translate("Form", "op", None, QtGui.QApplication.UnicodeUTF8))
+        self.tree.headerItem().setText(2, QtGui.QApplication.translate("Form", "min", None, QtGui.QApplication.UnicodeUTF8))
+        self.tree.headerItem().setText(3, QtGui.QApplication.translate("Form", "max", None, QtGui.QApplication.UnicodeUTF8))
+        self.tree.headerItem().setText(4, QtGui.QApplication.translate("Form", "colors", None, QtGui.QApplication.UnicodeUTF8))
+        self.tree.headerItem().setText(5, QtGui.QApplication.translate("Form", "remove", None, QtGui.QApplication.UnicodeUTF8))
 
 from FeedbackButton import FeedbackButton
 from TreeWidget import TreeWidget

@@ -34,15 +34,15 @@ class ColorMapper(QtGui.QWidget):
         self.ui = CMTemplate.Ui_Form()
         self.ui.setupUi(self)
         
-        self.ui.tree.setColumnWidth(0, 15)
-        self.ui.tree.setColumnWidth(2, 35)
-        self.ui.tree.setColumnWidth(3, 80)
-        self.ui.tree.setColumnWidth(4, 80)
+        
+        self.ui.tree.setColumnWidth(1, 50)
+        self.ui.tree.setColumnWidth(2, 60)
+        self.ui.tree.setColumnWidth(3, 60)
         
         self.addBtn = QtGui.QPushButton('Add New')
         item = QtGui.QTreeWidgetItem()
         self.ui.tree.addTopLevelItem(item)
-        self.ui.tree.setItemWidget(item, 1, self.addBtn)
+        self.ui.tree.setItemWidget(item, 0, self.addBtn)
         
         self.argList = []
         self.items = []
@@ -53,16 +53,16 @@ class ColorMapper(QtGui.QWidget):
         self.refreshFileList()
         
         self.addBtn.clicked.connect(self.addClicked)
-        self.ui.saveBtn.clicked.connect(self.save)
-        self.ui.fileCombo.lineEdit().editingFinished.connect(self.save)
+        self.ui.saveBtn.clicked.connect(self.saveClicked)
+        self.ui.fileCombo.lineEdit().editingFinished.connect(self.editDone)
         self.ui.fileCombo.setEditable(False)
         self.ui.saveAsBtn.clicked.connect(self.saveAs)
         self.ui.deleteBtn.clicked.connect(self.deleteClicked)
         self.ui.fileCombo.currentIndexChanged[int].connect(self.load)
 
-    def event(self, event):
+    def event(self, event): ## This is because QComboBox does not emit the editingFinished signal when enter is pressed.
         if event.type() == QtCore.QEvent.KeyPress and event.key() == QtCore.Qt.Key_Return:
-            self.save()
+            self.editDone()
             return True
         return False
         
@@ -97,22 +97,38 @@ class ColorMapper(QtGui.QWidget):
         self.restoreState(state)
         self.loadedFile = name
 
+    def editDone(self):
+        if self.save():
+            self.ui.saveAsBtn.success("Saved.")
+        else:
+            self.ui.saveAsBtn.failure("Error.")
+        
+    def saveClicked(self):
+        if self.save():
+            self.ui.saveBtn.success("Saved.")
+        
+            
     def save(self):
-        if self.ui.fileCombo.isEditable():
-            #self.ui.fileCombo.lineEdit().releaseKeyboard()
-            self.ui.fileCombo.setEditable(False)
-
-        #print 'save clicked'
-        name = str(self.ui.fileCombo.currentText())
-        if name == 'Load...':
-            self.saveAs()
-            return
-        file = os.path.join(self.filePath, name)
-        #print "save:", file
-        state = self.saveState()
-        configfile.writeConfigFile(state, file)
-        self.loadedFile = str(name)
-        self.refreshFileList()
+        try:
+            if self.ui.fileCombo.isEditable():
+                #self.ui.fileCombo.lineEdit().releaseKeyboard()
+                self.ui.fileCombo.setEditable(False)
+    
+            #print 'save clicked'
+            name = str(self.ui.fileCombo.currentText())
+            if name == 'Load...':
+                self.saveAs()
+                return
+            file = os.path.join(self.filePath, name)
+            #print "save:", file
+            state = self.saveState()
+            configfile.writeConfigFile(state, file)
+            self.loadedFile = str(name)
+            self.refreshFileList()
+            return True
+        except:
+            self.ui.saveBtn.failure("Error.")
+            raise
         #self.origStyle = self.ui.fileCombo.styleSheet()
         #self.ui.fileCombo.setStyleSheet("QComboBox {background-color: #0F0}")
         #QtCore.QTimer.singleShot(200, self.unblink)
@@ -243,13 +259,13 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
         
     def postAdd(self):
         t = self.treeWidget()
-        self.setText(0, "-")
-        t.setItemWidget(self, 1, self.argCombo)
-        t.setItemWidget(self, 2, self.opCombo)
-        t.setItemWidget(self, 3, self.minSpin)
-        t.setItemWidget(self, 4, self.maxSpin)
-        t.setItemWidget(self, 5, self.gradient)
-        t.setItemWidget(self, 6, self.remBtn)
+        #self.setText(0, "-")
+        t.setItemWidget(self, 0, self.argCombo)
+        t.setItemWidget(self, 1, self.opCombo)
+        t.setItemWidget(self, 2, self.minSpin)
+        t.setItemWidget(self, 3, self.maxSpin)
+        t.setItemWidget(self, 4, self.gradient)
+        t.setItemWidget(self, 5, self.remBtn)
         
     def delete(self):
         self.cm.remClicked(self)

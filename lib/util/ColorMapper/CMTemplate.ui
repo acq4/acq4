@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>315</width>
-    <height>219</height>
+    <width>264</width>
+    <height>249</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -73,11 +73,6 @@
      <property name="rootIsDecorated">
       <bool>false</bool>
      </property>
-     <column>
-      <property name="text">
-       <string/>
-      </property>
-     </column>
      <column>
       <property name="text">
        <string>arg</string>
