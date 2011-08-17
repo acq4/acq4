@@ -30,6 +30,7 @@ class ColorMapper(QtGui.QWidget):
         #self.tree.setColumnCount(5)
         #self.tree.setHeaderLabels(['  ', 'arg', 'op', 'min', 'max', 'colors'])
         
+        
         self.ui = CMTemplate.Ui_Form()
         self.ui.setupUi(self)
         
@@ -38,20 +39,26 @@ class ColorMapper(QtGui.QWidget):
         self.ui.tree.setColumnWidth(3, 80)
         self.ui.tree.setColumnWidth(4, 80)
         
+        self.addBtn = QtGui.QPushButton('Add New')
+        item = QtGui.QTreeWidgetItem()
+        self.ui.tree.addTopLevelItem(item)
+        self.ui.tree.setItemWidget(item, 1, self.addBtn)
+        
         self.argList = []
         self.items = []
         self.loadedFile = None
         self.filePath = filePath
+        self.deleteState = 0
         
         self.refreshFileList()
         
-        #self.connect(self.ui.addBtn, QtCore.SIGNAL('clicked()'), self.addClicked)
-        self.ui.addBtn.clicked.connect(self.addClicked)
-        #self.connect(self.ui.remBtn, QtCore.SIGNAL('clicked()'), self.remClicked)
-        self.ui.remBtn.clicked.connect(self.remClicked)
+        self.addBtn.clicked.connect(self.addClicked)
+        self.ui.saveBtn.clicked.connect(self.save)
+        self.ui.fileCombo.lineEdit().editingFinished.connect(self.save)
+        self.ui.fileCombo.setEditable(False)
+        self.ui.saveAsBtn.clicked.connect(self.saveAs)
+        self.ui.deleteBtn.clicked.connect(self.deleteClicked)
         self.ui.fileCombo.currentIndexChanged[int].connect(self.load)
-        #self.ui.fileCombo.lineEdit().editingFinished.connect(self.save)
-        self.ui.delBtn.clicked.connect(self.delete)
 
     def event(self, event):
         if event.type() == QtCore.QEvent.KeyPress and event.key() == QtCore.Qt.Key_Return:
@@ -91,8 +98,14 @@ class ColorMapper(QtGui.QWidget):
         self.loadedFile = name
 
     def save(self):
+        if self.ui.fileCombo.isEditable():
+            #self.ui.fileCombo.lineEdit().releaseKeyboard()
+            self.ui.fileCombo.setEditable(False)
+
+        #print 'save clicked'
         name = str(self.ui.fileCombo.currentText())
         if name == 'Load...':
+            self.saveAs()
             return
         file = os.path.join(self.filePath, name)
         #print "save:", file
@@ -104,18 +117,48 @@ class ColorMapper(QtGui.QWidget):
         #self.ui.fileCombo.setStyleSheet("QComboBox {background-color: #0F0}")
         #QtCore.QTimer.singleShot(200, self.unblink)
         
+    def saveAs(self):
+        self.ui.fileCombo.currentIndexChanged[int].disconnect(self.load)
+        self.ui.fileCombo.addItem("New Color Scheme")
+        self.ui.fileCombo.setCurrentIndex(self.ui.fileCombo.count()-1)
+        self.ui.fileCombo.setEditable(True)
+        self.ui.fileCombo.lineEdit().selectAll()
+        self.ui.fileCombo.lineEdit().setFocus()
+        self.ui.fileCombo.currentIndexChanged[int].connect(self.load)
+
     #def unblink(self):
         #self.ui.fileCombo.setStyleSheet(self.origStyle)
         
 
-    def delete(self):
-        if self.ui.fileCombo.currentIndex() == 0:
-            return
-        file = os.path.join(self.filePath, self.loadedFile)
-        #print "delete", file
-        os.remove(file)
-        self.loadedFile = None
-        self.refreshFileList()
+    #def delete(self):
+        #if self.ui.fileCombo.currentIndex() == 0:
+            #return
+        #file = os.path.join(self.filePath, self.loadedFile)
+        ##print "delete", file
+        #os.remove(file)
+        #self.loadedFile = None
+        #self.refreshFileList()
+        
+    def deleteClicked(self):
+        ## Delete button must be clicked twice.
+        if self.deleteState == 0:
+            self.ui.deleteBtn.setText('Really?')
+            self.deleteState = 1
+        elif self.deleteState == 1:
+            try:
+                if self.ui.fileCombo.currentIndex() == 0:
+                    return
+                file = os.path.join(self.filePath, self.loadedFile)
+                #print "delete", file
+                os.remove(file)
+                self.loadedFile = None
+                self.refreshFileList()
+            except:
+                printExc('Error while deleting color scheme:')
+                return
+            finally:
+                self.deleteState = 0
+                self.ui.deleteBtn.setText('Delete')
 
     def widgetGroupInterface(self):
         return (None, ColorMapper.saveState, ColorMapper.restoreState)
@@ -151,15 +194,15 @@ class ColorMapper(QtGui.QWidget):
         
     def addItem(self, state=None):
         item = ColorMapperItem(self)
-        self.ui.tree.addTopLevelItem(item)
+        self.ui.tree.insertTopLevelItem(self.ui.tree.topLevelItemCount()-1, item)
         item.postAdd()
         self.items.append(item)
         if state is not None:
             item.restoreState(state)
         
         
-    def remClicked(self):
-        item = self.ui.tree.currentItem()
+    def remClicked(self, item):
+        #item = self.ui.tree.currentItem()
         if item is None:
             return
         self.remItem(item)
@@ -171,7 +214,7 @@ class ColorMapper(QtGui.QWidget):
         self.items.remove(item)
 
     def saveState(self):
-        items = [self.ui.tree.topLevelItem(i) for i in range(self.ui.tree.topLevelItemCount())]
+        items = [self.ui.tree.topLevelItem(i) for i in range(self.ui.tree.topLevelItemCount()-1)]
         state = {'args': self.argList, 'items': [i.saveState() for i in items]}
         return state
         
@@ -195,7 +238,9 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
         self.updateArgList()
         self.opCombo.addItem('+')
         self.opCombo.addItem('*')
-
+        self.remBtn = QtGui.QPushButton('Remove')
+        self.remBtn.clicked.connect(self.delete)
+        
     def postAdd(self):
         t = self.treeWidget()
         self.setText(0, "-")
@@ -204,6 +249,10 @@ class ColorMapperItem(QtGui.QTreeWidgetItem):
         t.setItemWidget(self, 3, self.minSpin)
         t.setItemWidget(self, 4, self.maxSpin)
         t.setItemWidget(self, 5, self.gradient)
+        t.setItemWidget(self, 6, self.remBtn)
+        
+    def delete(self):
+        self.cm.remClicked(self)
 
     def updateArgList(self):
         prev = str(self.argCombo.currentText())
@@ -254,4 +303,5 @@ if __name__ == '__main__':
     win.resize(400,400)
     
     w.setArgList(['x', 'y', 'amp', 'tau'])
-    #app.exec_()
+    app.exec_()
+   
