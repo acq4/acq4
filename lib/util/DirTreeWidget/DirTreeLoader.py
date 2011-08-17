@@ -26,18 +26,13 @@ class DirTreeLoader(QtGui.QWidget):
 
         self.ui.deleteBtn.focusOutEvent = self.delBtnLostFocus
 
-        #QtCore.QObject.connect(self.ui.newBtn, QtCore.SIGNAL('clicked()'), self.newClicked)
         self.ui.newBtn.clicked.connect(self.newClicked)
-        #QtCore.QObject.connect(self.ui.newDirBtn, QtCore.SIGNAL('clicked()'), self.newDirClicked)
         self.ui.newDirBtn.clicked.connect(self.newDirClicked)
-        #QtCore.QObject.connect(self.ui.saveBtn, QtCore.SIGNAL('clicked()'), self.saveClicked)
         self.ui.saveBtn.clicked.connect(self.saveClicked)
-        #QtCore.QObject.connect(self.ui.loadBtn, QtCore.SIGNAL('clicked()'), self.loadClicked)
         self.ui.loadBtn.clicked.connect(self.loadClicked)
-        #QtCore.QObject.connect(self.ui.saveAsBtn, QtCore.SIGNAL('clicked()'), self.saveAsClicked)
         self.ui.saveAsBtn.clicked.connect(self.saveAsClicked)
-        #QtCore.QObject.connect(self.ui.deleteBtn, QtCore.SIGNAL('clicked()'), self.deleteClicked)
         self.ui.deleteBtn.clicked.connect(self.deleteClicked)
+        self.ui.fileTree.itemDoubleClicked.connect(self.loadClicked)
 
 
     def selectedFile(self):
@@ -59,9 +54,12 @@ class DirTreeLoader(QtGui.QWidget):
     def save(self, fileHandle):
         raise Exception("Function must be reimplemented in subclass.")
     
-    def loadClicked(self):
-        fh = self.ui.fileTree.selectedFile()
-        
+    def loadClicked(self, item=None, column=0):
+        if item == None:
+            fh = self.ui.fileTree.selectedFile()
+        else:
+            fh = self.ui.fileTree.handle(item)
+            
         if self.load(fh):
             fn = fh.name(relativeTo=self.baseDir)
             self.setCurrentFile(fh)

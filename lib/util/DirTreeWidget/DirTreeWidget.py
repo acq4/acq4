@@ -22,6 +22,7 @@ class DirTreeWidget(QtGui.QTreeWidget):
         self.allowRename = allowRename
         self.currentDir = None
         self.sortMode = sortMode
+	self.setEditTriggers(QtGui.QAbstractItemView.SelectedClicked)
         #self.handles = {}
         self.items = {}
         #QtCore.QObject.connect(self, QtCore.SIGNAL('itemExpanded(QTreeWidgetItem*)'), self.itemExpanded)
