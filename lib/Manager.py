@@ -37,6 +37,7 @@ import getopt, glob
 import ptime
 from advancedTypes import OrderedDict
 from ProgressDialog import ProgressDialog
+from LogWindow import LogWindow
 
 ### All other modules can use this function to get the manager instance
 def getManager():
@@ -101,7 +102,9 @@ Valid options are:
         self.shortcuts = []
         self.disableDevs = []
         
-        self.interfaceDir = InterfaceDirectory()        
+        self.interfaceDir = InterfaceDirectory()
+        self.logWindow = LogWindow()
+        self.logWindow.displayText('ACQ4 started.')
         
         ## Handle command line options
         loadModules = []
@@ -171,6 +174,7 @@ Valid options are:
         self.reloadShortcut.setContext(QtCore.Qt.ApplicationShortcut)
         self.quitShortcut.activated.connect(self.quit)
         self.reloadShortcut.activated.connect(self.reloadAll)
+    
         
         #QtCore.QObject.connect(QtGui.QApplication.instance(), QtCore.SIGNAL('lastWindowClosed()'), self.lastWindowClosed)
             

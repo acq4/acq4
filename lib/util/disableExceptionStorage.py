@@ -6,11 +6,16 @@ has two major effects:
  - Debuggers may have a hard time handling uncaught exceptions """
 
 import sys
+from lib.Manager import getManager
+import traceback
 
 original_excepthook = sys.excepthook
 def excepthook(*args):
     global original_excepthook
+    #print args
     ret = original_excepthook(*args)
+    getManager().logWindow.displayException(*args)
     sys.last_traceback = None           ## the important bit
-
+    
+    
 sys.excepthook = excepthook
