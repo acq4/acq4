@@ -25,6 +25,7 @@ from SignalProxy import proxyConnect
 from lib.Manager import getManager
 import numpy as np
 from RecordThread import RecordThread
+from lib.LogWindow import LogButton
 
 traceDepth = 0
 def trace(func):
@@ -192,12 +193,15 @@ class CameraWindow(QtGui.QMainWindow):
         self.fpsLabel.setFont(font)
         self.fpsLabel.setFixedWidth(50)
         self.vLabel.setFixedWidth(50)
+        self.logBtn = LogButton('Log')
         self.statusBar().addPermanentWidget(self.recLabel)
         self.statusBar().addPermanentWidget(self.xyLabel)
         self.statusBar().addPermanentWidget(self.rgnLabel)
         self.statusBar().addPermanentWidget(self.tLabel)
         self.statusBar().addPermanentWidget(self.vLabel)
         self.statusBar().addPermanentWidget(self.fpsLabel)
+        self.statusBar().addPermanentWidget(self.logBtn)
+        self.logBtn.clicked.connect(self.module.manager.logWindow.show)
         
         self.ui.btnAutoGain.setChecked(True)
         self.show()
@@ -256,6 +260,7 @@ class CameraWindow(QtGui.QMainWindow):
         #Signals from self.ui.btnSnap and self.ui.btnRecord are caught by the RecordThread
         self.ui.btnFullFrame.clicked.connect(lambda: self.setRegion())
         self.ui.scaleToImageBtn.clicked.connect(self.scaleToImage)
+        
         
         ## Use delayed connection for these two widgets
         self.proxy1 = proxyConnect(self.ui.binningCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.setBinning)

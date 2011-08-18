@@ -5,6 +5,8 @@ from DataManager import *
 import os, re, sys, time, sip
 from debug import *
 import FileAnalysisView
+from lib.LogWindow import LogButton
+
 
 class Window(QtGui.QMainWindow):
     
@@ -70,6 +72,8 @@ class DataManager(Module):
         #QtCore.QObject.connect(self.win, QtCore.SIGNAL('closed'), self.quit)
         self.win.sigClosed.connect(self.quit)
         self.ui.analysisWidget.sigDbChanged.connect(self.analysisDbChanged)
+        self.logBtn = LogButton('Log')
+        self.win.statusBar().addPermanentWidget(self.logBtn)
         self.win.show()
         
     #def hasInterface(self, interface):

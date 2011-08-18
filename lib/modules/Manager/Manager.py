@@ -44,7 +44,8 @@ class Manager(Module):
         self.ui.configList.itemDoubleClicked.connect(self.loadConfig)
         #QtCore.QObject.connect(self.ui.moduleList, QtCore.SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.loadModule)
         self.ui.moduleList.itemDoubleClicked.connect(self.loadModule)
-        self.ui.logBtn.clicked.connect(manager.logWindow.show)
+        #self.logBtn = self.ui.logBtn ## to be able to access logBtns uniformly in all modules
+        #self.logBtn.clicked.connect(manager.logWindow.show)
         #QtCore.QObject.connect(self.ui.quitBtn, QtCore.SIGNAL('clicked()'), self.requestQuit)
         self.ui.quitBtn.clicked.connect(self.requestQuit)
 
@@ -77,6 +78,8 @@ class Manager(Module):
 
     def requestQuit(self):
         self.manager.quit()
+    
+
         
     def loadModule(self):
         try:

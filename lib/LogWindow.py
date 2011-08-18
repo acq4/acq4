@@ -3,8 +3,20 @@ import traceback
 
 from PyQt4 import QtGui, QtCore
 import LogWindowTemplate
+from FeedbackButton import FeedbackButton
+#from lib.Manager import getManager
 
+WIN = None
 
+class LogButton(FeedbackButton):
+
+    def __init__(self, *args):
+        FeedbackButton.__init__(self, *args)
+        #self.setMaximumHeight(30)
+        global WIN
+        self.clicked.connect(WIN.show)
+        
+        
 
 class LogWindow(QtGui.QMainWindow):
     
@@ -12,6 +24,8 @@ class LogWindow(QtGui.QMainWindow):
         QtGui.QMainWindow.__init__(self)
         self.ui = LogWindowTemplate.Ui_MainWindow()
         self.ui.setupUi(self)
+        global WIN
+        WIN = self
         #self.resize(800, 500)
         #self.cw = QtGui.QWidget()
         #self.setCentralWidget(self.cw)
@@ -65,6 +79,11 @@ class LogWindow(QtGui.QMainWindow):
         
     def setStorageDir(self):
         print x
+        
+    def show(self):
+        QtGui.QMainWindow.show(self)
+        self.activateWindow()
+        self.raise_()
         
 if __name__ == "__main__":
     import sys

@@ -14,6 +14,8 @@ from debug import *
 from functions import siFormat
 from lib.Manager import getManager
 import ptime
+from lib.LogWindow import LogButton
+
 
 class PatchWindow(QtGui.QMainWindow):
     def __init__(self, dm, clampName):
@@ -61,6 +63,8 @@ class PatchWindow(QtGui.QMainWindow):
         self.setCentralWidget(self.cw)
         self.ui = Ui_Form()
         self.ui.setupUi(self.cw)
+        self.logBtn = LogButton("Log")
+        self.statusBar().addPermanentWidget(self.logBtn)
 
         self.stateFile = os.path.join('modules', self.clampName + '_ui.cfg')
         uiState = getManager().readConfigFile(self.stateFile)
