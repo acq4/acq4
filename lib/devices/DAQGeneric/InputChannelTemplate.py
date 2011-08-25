@@ -2,44 +2,39 @@
 
 # Form implementation generated from reading ui file './lib/devices/DAQGeneric/InputChannelTemplate.ui'
 #
-# Created: Wed May 18 20:44:13 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Wed Aug 17 13:49:52 2011
+#      by: pyside-uic 0.2.11 running on PySide 1.0.5
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
-
-try:
-    _fromUtf8 = QtCore.QString.fromUtf8
-except AttributeError:
-    _fromUtf8 = lambda s: s
+from PySide import QtCore, QtGui
 
 class Ui_Form(object):
     def setupUi(self, Form):
-        Form.setObjectName(_fromUtf8("Form"))
+        Form.setObjectName("Form")
         Form.resize(427, 220)
         self.verticalLayout = QtGui.QVBoxLayout(Form)
         self.verticalLayout.setSpacing(0)
-        self.verticalLayout.setMargin(0)
-        self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
+        self.verticalLayout.setContentsMargins(0, 0, 0, 0)
+        self.verticalLayout.setObjectName("verticalLayout")
         self.groupBox = QtGui.QGroupBox(Form)
         font = QtGui.QFont()
         font.setWeight(75)
         font.setBold(True)
         self.groupBox.setFont(font)
         self.groupBox.setCheckable(True)
-        self.groupBox.setObjectName(_fromUtf8("groupBox"))
+        self.groupBox.setObjectName("groupBox")
         self.gridLayout = QtGui.QGridLayout(self.groupBox)
         self.gridLayout.setSpacing(0)
         self.gridLayout.setContentsMargins(5, 0, 0, 0)
-        self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
+        self.gridLayout.setObjectName("gridLayout")
         self.recordCheck = QtGui.QCheckBox(self.groupBox)
         font = QtGui.QFont()
         font.setWeight(50)
         font.setBold(False)
         self.recordCheck.setFont(font)
         self.recordCheck.setChecked(True)
-        self.recordCheck.setObjectName(_fromUtf8("recordCheck"))
+        self.recordCheck.setObjectName("recordCheck")
         self.gridLayout.addWidget(self.recordCheck, 0, 0, 1, 1)
         self.displayCheck = QtGui.QCheckBox(self.groupBox)
         font = QtGui.QFont()
@@ -47,14 +42,14 @@ class Ui_Form(object):
         font.setBold(False)
         self.displayCheck.setFont(font)
         self.displayCheck.setChecked(True)
-        self.displayCheck.setObjectName(_fromUtf8("displayCheck"))
+        self.displayCheck.setObjectName("displayCheck")
         self.gridLayout.addWidget(self.displayCheck, 0, 1, 1, 1)
         self.recordInitCheck = QtGui.QCheckBox(self.groupBox)
         font = QtGui.QFont()
         font.setWeight(50)
         font.setBold(False)
         self.recordInitCheck.setFont(font)
-        self.recordInitCheck.setObjectName(_fromUtf8("recordInitCheck"))
+        self.recordInitCheck.setObjectName("recordInitCheck")
         self.gridLayout.addWidget(self.recordInitCheck, 1, 0, 1, 2)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.gridLayout.addItem(spacerItem, 2, 0, 1, 1)

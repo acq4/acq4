@@ -2,52 +2,47 @@
 
 # Form implementation generated from reading ui file './lib/util/flowchart/FlowchartTemplate.ui'
 #
-# Created: Wed May 18 20:44:19 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Wed Aug 17 13:49:55 2011
+#      by: pyside-uic 0.2.11 running on PySide 1.0.5
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
-
-try:
-    _fromUtf8 = QtCore.QString.fromUtf8
-except AttributeError:
-    _fromUtf8 = lambda s: s
+from PySide import QtCore, QtGui
 
 class Ui_Form(object):
     def setupUi(self, Form):
-        Form.setObjectName(_fromUtf8("Form"))
+        Form.setObjectName("Form")
         Form.resize(529, 329)
         self.selInfoWidget = QtGui.QWidget(Form)
         self.selInfoWidget.setGeometry(QtCore.QRect(260, 10, 264, 222))
-        self.selInfoWidget.setObjectName(_fromUtf8("selInfoWidget"))
+        self.selInfoWidget.setObjectName("selInfoWidget")
         self.gridLayout = QtGui.QGridLayout(self.selInfoWidget)
-        self.gridLayout.setMargin(0)
-        self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
+        self.gridLayout.setContentsMargins(0, 0, 0, 0)
+        self.gridLayout.setObjectName("gridLayout")
         self.selDescLabel = QtGui.QLabel(self.selInfoWidget)
-        self.selDescLabel.setText(_fromUtf8(""))
+        self.selDescLabel.setText("")
         self.selDescLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignTop)
         self.selDescLabel.setWordWrap(True)
-        self.selDescLabel.setObjectName(_fromUtf8("selDescLabel"))
+        self.selDescLabel.setObjectName("selDescLabel")
         self.gridLayout.addWidget(self.selDescLabel, 0, 0, 1, 1)
         self.selNameLabel = QtGui.QLabel(self.selInfoWidget)
         font = QtGui.QFont()
         font.setWeight(75)
         font.setBold(True)
         self.selNameLabel.setFont(font)
-        self.selNameLabel.setText(_fromUtf8(""))
-        self.selNameLabel.setObjectName(_fromUtf8("selNameLabel"))
+        self.selNameLabel.setText("")
+        self.selNameLabel.setObjectName("selNameLabel")
         self.gridLayout.addWidget(self.selNameLabel, 0, 1, 1, 1)
         self.selectedTree = DataTreeWidget(self.selInfoWidget)
-        self.selectedTree.setObjectName(_fromUtf8("selectedTree"))
-        self.selectedTree.headerItem().setText(0, _fromUtf8("1"))
+        self.selectedTree.setObjectName("selectedTree")
+        self.selectedTree.headerItem().setText(0, "1")
         self.gridLayout.addWidget(self.selectedTree, 1, 0, 1, 2)
         self.hoverText = QtGui.QTextEdit(Form)
         self.hoverText.setGeometry(QtCore.QRect(0, 240, 521, 81))
-        self.hoverText.setObjectName(_fromUtf8("hoverText"))
+        self.hoverText.setObjectName("hoverText")
         self.view = FlowchartGraphicsView(Form)
         self.view.setGeometry(QtCore.QRect(0, 0, 256, 192))
-        self.view.setObjectName(_fromUtf8("view"))
+        self.view.setObjectName("view")
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)

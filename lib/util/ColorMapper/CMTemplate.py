@@ -2,44 +2,39 @@
 
 # Form implementation generated from reading ui file './lib/util/ColorMapper/CMTemplate.ui'
 #
-# Created: Wed May 18 20:44:18 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Wed Aug 17 13:49:54 2011
+#      by: pyside-uic 0.2.11 running on PySide 1.0.5
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
-
-try:
-    _fromUtf8 = QtCore.QString.fromUtf8
-except AttributeError:
-    _fromUtf8 = lambda s: s
+from PySide import QtCore, QtGui
 
 class Ui_Form(object):
     def setupUi(self, Form):
-        Form.setObjectName(_fromUtf8("Form"))
+        Form.setObjectName("Form")
         Form.resize(400, 247)
         self.gridLayout = QtGui.QGridLayout(Form)
-        self.gridLayout.setMargin(0)
+        self.gridLayout.setContentsMargins(0, 0, 0, 0)
         self.gridLayout.setSpacing(0)
-        self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
+        self.gridLayout.setObjectName("gridLayout")
         self.tree = TreeWidget(Form)
         self.tree.setRootIsDecorated(False)
-        self.tree.setObjectName(_fromUtf8("tree"))
+        self.tree.setObjectName("tree")
         self.gridLayout.addWidget(self.tree, 0, 0, 1, 4)
         self.addBtn = QtGui.QPushButton(Form)
         self.addBtn.setMaximumSize(QtCore.QSize(40, 16777215))
-        self.addBtn.setObjectName(_fromUtf8("addBtn"))
+        self.addBtn.setObjectName("addBtn")
         self.gridLayout.addWidget(self.addBtn, 1, 0, 1, 1)
         self.remBtn = QtGui.QPushButton(Form)
         self.remBtn.setMaximumSize(QtCore.QSize(40, 16777215))
-        self.remBtn.setObjectName(_fromUtf8("remBtn"))
+        self.remBtn.setObjectName("remBtn")
         self.gridLayout.addWidget(self.remBtn, 1, 1, 1, 1)
         self.fileCombo = QtGui.QComboBox(Form)
         self.fileCombo.setEditable(True)
-        self.fileCombo.setObjectName(_fromUtf8("fileCombo"))
+        self.fileCombo.setObjectName("fileCombo")
         self.gridLayout.addWidget(self.fileCombo, 1, 2, 1, 1)
         self.delBtn = QtGui.QToolButton(Form)
-        self.delBtn.setObjectName(_fromUtf8("delBtn"))
+        self.delBtn.setObjectName("delBtn")
         self.gridLayout.addWidget(self.delBtn, 1, 3, 1, 1)
 
         self.retranslateUi(Form)

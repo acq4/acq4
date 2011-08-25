@@ -2,45 +2,40 @@
 
 # Form implementation generated from reading ui file './lib/devices/AxoPatch200/devGuiTemplate.ui'
 #
-# Created: Wed May 18 20:44:14 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Wed Aug 17 13:49:53 2011
+#      by: pyside-uic 0.2.11 running on PySide 1.0.5
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
-
-try:
-    _fromUtf8 = QtCore.QString.fromUtf8
-except AttributeError:
-    _fromUtf8 = lambda s: s
+from PySide import QtCore, QtGui
 
 class Ui_devGui(object):
     def setupUi(self, devGui):
-        devGui.setObjectName(_fromUtf8("devGui"))
+        devGui.setObjectName("devGui")
         devGui.resize(126, 88)
         self.gridLayout = QtGui.QGridLayout(devGui)
-        self.gridLayout.setMargin(0)
+        self.gridLayout.setContentsMargins(0, 0, 0, 0)
         self.gridLayout.setSpacing(3)
-        self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
+        self.gridLayout.setObjectName("gridLayout")
         self.modeCombo = QtGui.QComboBox(devGui)
-        self.modeCombo.setObjectName(_fromUtf8("modeCombo"))
-        self.modeCombo.addItem(_fromUtf8(""))
-        self.modeCombo.addItem(_fromUtf8(""))
-        self.modeCombo.addItem(_fromUtf8(""))
-        self.modeCombo.addItem(_fromUtf8(""))
-        self.modeCombo.addItem(_fromUtf8(""))
+        self.modeCombo.setObjectName("modeCombo")
+        self.modeCombo.addItem("")
+        self.modeCombo.addItem("")
+        self.modeCombo.addItem("")
+        self.modeCombo.addItem("")
+        self.modeCombo.addItem("")
         self.gridLayout.addWidget(self.modeCombo, 0, 0, 1, 2)
         self.label = QtGui.QLabel(devGui)
-        self.label.setObjectName(_fromUtf8("label"))
+        self.label.setObjectName("label")
         self.gridLayout.addWidget(self.label, 1, 0, 1, 1)
         self.vcHoldingSpin = SpinBox(devGui)
-        self.vcHoldingSpin.setObjectName(_fromUtf8("vcHoldingSpin"))
+        self.vcHoldingSpin.setObjectName("vcHoldingSpin")
         self.gridLayout.addWidget(self.vcHoldingSpin, 1, 1, 1, 1)
         self.label_2 = QtGui.QLabel(devGui)
-        self.label_2.setObjectName(_fromUtf8("label_2"))
+        self.label_2.setObjectName("label_2")
         self.gridLayout.addWidget(self.label_2, 2, 0, 1, 1)
         self.icHoldingSpin = SpinBox(devGui)
-        self.icHoldingSpin.setObjectName(_fromUtf8("icHoldingSpin"))
+        self.icHoldingSpin.setObjectName("icHoldingSpin")
         self.gridLayout.addWidget(self.icHoldingSpin, 2, 1, 1, 1)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.gridLayout.addItem(spacerItem, 3, 0, 1, 1)

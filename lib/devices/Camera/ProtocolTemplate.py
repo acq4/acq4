@@ -2,49 +2,44 @@
 
 # Form implementation generated from reading ui file './lib/devices/Camera/ProtocolTemplate.ui'
 #
-# Created: Wed May 18 20:44:13 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Wed Aug 17 13:49:52 2011
+#      by: pyside-uic 0.2.11 running on PySide 1.0.5
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
-
-try:
-    _fromUtf8 = QtCore.QString.fromUtf8
-except AttributeError:
-    _fromUtf8 = lambda s: s
+from PySide import QtCore, QtGui
 
 class Ui_Form(object):
     def setupUi(self, Form):
-        Form.setObjectName(_fromUtf8("Form"))
+        Form.setObjectName("Form")
         Form.resize(209, 134)
         self.horizontalLayout = QtGui.QHBoxLayout(Form)
         self.horizontalLayout.setSpacing(0)
-        self.horizontalLayout.setMargin(0)
-        self.horizontalLayout.setObjectName(_fromUtf8("horizontalLayout"))
+        self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
+        self.horizontalLayout.setObjectName("horizontalLayout")
         self.horizSplitter = QtGui.QSplitter(Form)
         self.horizSplitter.setOrientation(QtCore.Qt.Horizontal)
-        self.horizSplitter.setObjectName(_fromUtf8("horizSplitter"))
+        self.horizSplitter.setObjectName("horizSplitter")
         self.ctrlSplitter = QtGui.QSplitter(self.horizSplitter)
         self.ctrlSplitter.setOrientation(QtCore.Qt.Vertical)
-        self.ctrlSplitter.setObjectName(_fromUtf8("ctrlSplitter"))
+        self.ctrlSplitter.setObjectName("ctrlSplitter")
         self.cameraGroupBox = QtGui.QGroupBox(self.ctrlSplitter)
         font = QtGui.QFont()
         font.setWeight(75)
         font.setBold(True)
         self.cameraGroupBox.setFont(font)
-        self.cameraGroupBox.setObjectName(_fromUtf8("cameraGroupBox"))
+        self.cameraGroupBox.setObjectName("cameraGroupBox")
         self.gridLayout = QtGui.QGridLayout(self.cameraGroupBox)
-        self.gridLayout.setMargin(0)
+        self.gridLayout.setContentsMargins(0, 0, 0, 0)
         self.gridLayout.setSpacing(0)
-        self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
+        self.gridLayout.setObjectName("gridLayout")
         self.recordCheck = QtGui.QCheckBox(self.cameraGroupBox)
         font = QtGui.QFont()
         font.setWeight(50)
         font.setBold(False)
         self.recordCheck.setFont(font)
         self.recordCheck.setChecked(True)
-        self.recordCheck.setObjectName(_fromUtf8("recordCheck"))
+        self.recordCheck.setObjectName("recordCheck")
         self.gridLayout.addWidget(self.recordCheck, 0, 0, 1, 1)
         self.displayCheck = QtGui.QCheckBox(self.cameraGroupBox)
         font = QtGui.QFont()
@@ -52,28 +47,28 @@ class Ui_Form(object):
         font.setBold(False)
         self.displayCheck.setFont(font)
         self.displayCheck.setChecked(True)
-        self.displayCheck.setObjectName(_fromUtf8("displayCheck"))
+        self.displayCheck.setObjectName("displayCheck")
         self.gridLayout.addWidget(self.displayCheck, 0, 1, 1, 1)
         self.triggerModeCombo = QtGui.QComboBox(self.cameraGroupBox)
         font = QtGui.QFont()
         font.setWeight(50)
         font.setBold(False)
         self.triggerModeCombo.setFont(font)
-        self.triggerModeCombo.setObjectName(_fromUtf8("triggerModeCombo"))
+        self.triggerModeCombo.setObjectName("triggerModeCombo")
         self.gridLayout.addWidget(self.triggerModeCombo, 1, 0, 1, 2)
         self.triggerCheck = QtGui.QCheckBox(self.cameraGroupBox)
         font = QtGui.QFont()
         font.setWeight(50)
         font.setBold(False)
         self.triggerCheck.setFont(font)
-        self.triggerCheck.setObjectName(_fromUtf8("triggerCheck"))
+        self.triggerCheck.setObjectName("triggerCheck")
         self.gridLayout.addWidget(self.triggerCheck, 2, 0, 1, 2)
         self.releaseBetweenRadio = QtGui.QRadioButton(self.cameraGroupBox)
         font = QtGui.QFont()
         font.setWeight(50)
         font.setBold(False)
         self.releaseBetweenRadio.setFont(font)
-        self.releaseBetweenRadio.setObjectName(_fromUtf8("releaseBetweenRadio"))
+        self.releaseBetweenRadio.setObjectName("releaseBetweenRadio")
         self.gridLayout.addWidget(self.releaseBetweenRadio, 3, 0, 1, 2)
         self.releaseAfterRadio = QtGui.QRadioButton(self.cameraGroupBox)
         font = QtGui.QFont()
@@ -81,18 +76,18 @@ class Ui_Form(object):
         font.setBold(False)
         self.releaseAfterRadio.setFont(font)
         self.releaseAfterRadio.setChecked(True)
-        self.releaseAfterRadio.setObjectName(_fromUtf8("releaseAfterRadio"))
+        self.releaseAfterRadio.setObjectName("releaseAfterRadio")
         self.gridLayout.addWidget(self.releaseAfterRadio, 4, 0, 1, 2)
         self.plotSplitter = QtGui.QSplitter(self.horizSplitter)
         self.plotSplitter.setOrientation(QtCore.Qt.Vertical)
-        self.plotSplitter.setObjectName(_fromUtf8("plotSplitter"))
+        self.plotSplitter.setObjectName("plotSplitter")
         self.imageView = ImageView(self.plotSplitter)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.imageView.sizePolicy().hasHeightForWidth())
         self.imageView.setSizePolicy(sizePolicy)
-        self.imageView.setObjectName(_fromUtf8("imageView"))
+        self.imageView.setObjectName("imageView")
         self.horizontalLayout.addWidget(self.horizSplitter)
 
         self.retranslateUi(Form)

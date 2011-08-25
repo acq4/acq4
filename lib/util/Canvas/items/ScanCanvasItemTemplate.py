@@ -1,67 +1,62 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'ScanCanvasItemTemplate.ui'
+# Form implementation generated from reading ui file './lib/util/Canvas/items/ScanCanvasItemTemplate.ui'
 #
-# Created: Mon Aug 08 18:07:51 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Wed Aug 17 13:49:54 2011
+#      by: pyside-uic 0.2.11 running on PySide 1.0.5
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
-
-try:
-    _fromUtf8 = QtCore.QString.fromUtf8
-except AttributeError:
-    _fromUtf8 = lambda s: s
+from PySide import QtCore, QtGui
 
 class Ui_Form(object):
     def setupUi(self, Form):
-        Form.setObjectName(_fromUtf8("Form"))
+        Form.setObjectName("Form")
         Form.resize(185, 134)
         self.gridLayout = QtGui.QGridLayout(Form)
-        self.gridLayout.setMargin(0)
+        self.gridLayout.setContentsMargins(0, 0, 0, 0)
         self.gridLayout.setHorizontalSpacing(0)
         self.gridLayout.setVerticalSpacing(3)
-        self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
+        self.gridLayout.setObjectName("gridLayout")
         self.spotSizeLabel = QtGui.QLabel(Form)
-        self.spotSizeLabel.setObjectName(_fromUtf8("spotSizeLabel"))
+        self.spotSizeLabel.setObjectName("spotSizeLabel")
         self.gridLayout.addWidget(self.spotSizeLabel, 0, 0, 1, 1)
         self.sizeFromCalibrationRadio = QtGui.QRadioButton(Form)
         self.sizeFromCalibrationRadio.setChecked(True)
-        self.sizeFromCalibrationRadio.setObjectName(_fromUtf8("sizeFromCalibrationRadio"))
+        self.sizeFromCalibrationRadio.setObjectName("sizeFromCalibrationRadio")
         self.gridLayout.addWidget(self.sizeFromCalibrationRadio, 1, 0, 1, 3)
         self.sizeCustomRadio = QtGui.QRadioButton(Form)
-        self.sizeCustomRadio.setObjectName(_fromUtf8("sizeCustomRadio"))
+        self.sizeCustomRadio.setObjectName("sizeCustomRadio")
         self.gridLayout.addWidget(self.sizeCustomRadio, 2, 0, 1, 1)
         self.sizeSpin = SpinBox(Form)
-        self.sizeSpin.setSuffix(_fromUtf8(""))
+        self.sizeSpin.setSuffix("")
         self.sizeSpin.setMinimum(0.0)
         self.sizeSpin.setMaximum(100000.0)
         self.sizeSpin.setSingleStep(1e-06)
-        self.sizeSpin.setProperty(_fromUtf8("value"), 0.0)
-        self.sizeSpin.setObjectName(_fromUtf8("sizeSpin"))
+        self.sizeSpin.setProperty("value", 0.0)
+        self.sizeSpin.setObjectName("sizeSpin")
         self.gridLayout.addWidget(self.sizeSpin, 2, 1, 1, 2)
         self.loadSpotImagesBtn = QtGui.QPushButton(Form)
-        self.loadSpotImagesBtn.setObjectName(_fromUtf8("loadSpotImagesBtn"))
+        self.loadSpotImagesBtn.setObjectName("loadSpotImagesBtn")
         self.gridLayout.addWidget(self.loadSpotImagesBtn, 4, 0, 1, 3)
         self.label = QtGui.QLabel(Form)
-        self.label.setObjectName(_fromUtf8("label"))
+        self.label.setObjectName("label")
         self.gridLayout.addWidget(self.label, 5, 0, 1, 1)
         self.spotFrameSpin = QtGui.QSpinBox(Form)
-        self.spotFrameSpin.setProperty(_fromUtf8("value"), 1)
-        self.spotFrameSpin.setObjectName(_fromUtf8("spotFrameSpin"))
+        self.spotFrameSpin.setProperty("value", 1)
+        self.spotFrameSpin.setObjectName("spotFrameSpin")
         self.gridLayout.addWidget(self.spotFrameSpin, 5, 1, 1, 2)
         self.bgFrameCheck = QtGui.QCheckBox(Form)
         self.bgFrameCheck.setChecked(True)
-        self.bgFrameCheck.setObjectName(_fromUtf8("bgFrameCheck"))
+        self.bgFrameCheck.setObjectName("bgFrameCheck")
         self.gridLayout.addWidget(self.bgFrameCheck, 6, 0, 1, 1)
         self.bgFrameSpin = QtGui.QSpinBox(Form)
-        self.bgFrameSpin.setObjectName(_fromUtf8("bgFrameSpin"))
+        self.bgFrameSpin.setObjectName("bgFrameSpin")
         self.gridLayout.addWidget(self.bgFrameSpin, 6, 1, 1, 2)
         self.line = QtGui.QFrame(Form)
         self.line.setFrameShape(QtGui.QFrame.HLine)
         self.line.setFrameShadow(QtGui.QFrame.Sunken)
-        self.line.setObjectName(_fromUtf8("line"))
+        self.line.setObjectName("line")
         self.gridLayout.addWidget(self.line, 3, 0, 1, 3)
 
         self.retranslateUi(Form)

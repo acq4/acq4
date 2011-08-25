@@ -22,12 +22,12 @@ if not os.path.exists(qtConf):
         print "PyQt fix: installing qt.conf where it should be.."
         shutil.copy(pyqtConf, qtConf)
 
-#import lib.util.PySideImporter  ## Use PySide instead of PyQt
+import lib.util.PySideImporter  ## Use PySide instead of PyQt
 from PyQt4 import QtGui, QtCore
-#QtCore.QString = str
-#def noop(x):
-#    return x
-#QtCore.QVariant = noop
+QtCore.QString = str
+def noop(x):
+   return x
+QtCore.QVariant = noop
 
 ## Needed to keep compatibility between pyside and pyqt
 ## (this can go away once the transition to PySide is complete)

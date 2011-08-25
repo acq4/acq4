@@ -246,7 +246,8 @@ class ProtocolRunner(Module):
         for d in devList:
             if d not in self.devListItems:
                 self.devListItems[d] = QtGui.QListWidgetItem(d, self.ui.deviceList)
-                self.devListItems[d].setData(32, QtCore.QVariant(d))
+                #self.devListItems[d].setData(32, QtCore.QVariant(d))
+                self.devListItems[d].setData(32, d)
             self.devListItems[d].setForeground(QtGui.QBrush(QtGui.QColor(0,0,0)))
             
             
