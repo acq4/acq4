@@ -64,6 +64,7 @@ class Manager(QtCore.QObject):
     sigModuleHasQuit = QtCore.Signal(object) ## (module name)
     sigCurrentDirChanged = QtCore.Signal(object, object, object) # (file, change, args)
     sigBaseDirChanged = QtCore.Signal()
+    sigLogDirChanged = QtCore.Signal(object) #dir
     
     CREATED = False
     single = None
@@ -103,8 +104,7 @@ Valid options are:
         self.disableDevs = []
         
         self.interfaceDir = InterfaceDirectory()
-        self.logWindow = LogWindow()
-        self.logWindow.displayText('ACQ4 started.')
+
         
         ## Handle command line options
         loadModules = []
@@ -133,6 +133,8 @@ Valid options are:
         self.configDir = os.path.dirname(configFile)
         self.readConfig(configFile)
         
+        self.logWindow = LogWindow(self)
+        self.logMsg('ACQ4 started.', importance=9)
         
         Manager.CREATED = True
         Manager.single = self
@@ -454,6 +456,16 @@ Valid options are:
         if self.currentDir is None:
             raise Exception("CurrentDir has not been set!")
         return self.currentDir
+    
+    def setLogDir(self, d):
+        p = d
+        while not p.info().get('expUnit', False) and p != self.baseDir:  
+            p = p.parent()
+        if p != self.baseDir:
+            self.logWindow.setLogDir(p)
+        
+    def sudoSetLogDir(self, d):
+        self.logWindow.setLogDir(d)
 
     def setCurrentDir(self, d):
         if self.currentDir is not None:
@@ -470,6 +482,8 @@ Valid options are:
         else:
             raise Exception("Invalid argument type: ", type(d), d)
         
+        
+        self.setLogDir(d)
         #self.currentDir.sigChanged.connect(self.currentDirChanged)
         #self.sigCurrentDirChanged.emit()
         self.currentDir.sigChanged.connect(self.currentDirChanged)
@@ -524,13 +538,17 @@ Valid options are:
         """Unlock reservation system"""
         self.taskLock.unlock()
         
-    def logMsg(self, msg, tags=None):
-        if tags is None:
-            tags = {}
-        cd = self.getCurrentDir()
-        cd.logMsg(msg, tags)
-
+    #def logMsg(self, msg, tags=None):
+        #if tags is None:
+            #tags = {}
+        #cd = self.getCurrentDir()
+        #cd.logMsg(msg, tags)
         
+    def logMsg(self, *args, **kwargs):
+        self.logWindow.logMsg(*args, currentDir=self.currentDir, **kwargs)
+        
+    def logExc(self, *args, **kwargs):
+        self.logWindow.logExc(*args, currentDir=self.currentDir, **kwargs)
         
     ## These functions just wrap the functionality of an InterfaceDirectory
     def declareInterface(self, *args, **kargs):  ## args should be name, [types..], object  

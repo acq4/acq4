@@ -305,6 +305,9 @@ class CameraWindow(QtGui.QMainWindow):
         self.frameTimer.start(10)
         #QtCore.QTimer.singleShot(1, self.drawFrame)
         ## avoiding possible singleShot-induced crashes
+        
+    def writeToLog(self, msg):
+        self.module.manager.logMsg(msg)
 
     #@trace
     def updateBorders(self):
@@ -718,14 +721,17 @@ class CameraWindow(QtGui.QMainWindow):
                 self.setExposure(autoRestart=False)
                 self.updateRegion(autoRestart=False)
                 self.cam.start()
+                self.writeToLog("Camera started aquisition.")
             except:
                 self.ui.btnAcquire.setChecked(False)
                 printExc("Error starting camera:")
+                self.writeToLog("Error starting camera:")
                 
         else:
             #print "ACQ untoggled, stop record"
             self.toggleRecord(False)
             self.cam.stop()
+            self.writeToLog("Camera stopped acquisition.")
             
     #@trace
     def addPlotFrame(self, frame):

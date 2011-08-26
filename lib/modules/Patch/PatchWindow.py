@@ -407,10 +407,15 @@ class PatchWindow(QtGui.QMainWindow):
         if self.ui.startBtn.isChecked():
             if not self.thread.isRunning():
                 self.thread.start()
+                self.writeToLog("Patch window started."
             self.ui.startBtn.setText('Stop')
         else:
             self.ui.startBtn.setEnabled(False)
             self.thread.stop()
+            self.writeToLog("Patch window stopped.")
+            
+    def writeToLog(self, msg):
+        self.manager.logMsg(msg)
             
     def threadStopped(self):
         self.ui.startBtn.setText('Start')
