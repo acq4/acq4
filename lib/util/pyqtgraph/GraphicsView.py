@@ -58,7 +58,7 @@ class GraphicsView(QtGui.QGraphicsView):
         
         self.lockedViewports = []
         self.lastMousePos = None
-        #self.setMouseTracking(False)
+        self.setMouseTracking(True)
         self.aspectLocked = False
         #self.yInverted = True
         self.range = QtCore.QRectF(0, 0, 1, 1)
@@ -180,11 +180,15 @@ class GraphicsView(QtGui.QGraphicsView):
             for v in self.lockedViewports:
                 v.setXRange(self.range, padding=0)
         
-    def visibleRange(self):
+    def viewRect(self):
         """Return the boundaries of the view in scene coordinates"""
         ## easier to just return self.range ?
         r = QtCore.QRectF(self.rect())
         return self.viewportTransform().inverted()[0].mapRect(r)
+
+    def visibleRange(self):
+        ## for backward compatibility
+        return self.viewRect()
 
     def translate(self, dx, dy):
         self.range.adjust(dx, dy, dx, dy)
@@ -441,7 +445,7 @@ class GraphicsView(QtGui.QGraphicsView):
             if GraphicsView.lastFileDir is not None:
                 self.fileDialog.setDirectory(GraphicsView.lastFileDir)
             self.fileDialog.show()
-            self.fileDialog.fileSelected.connect(self.writePng)
+            self.fileDialog.fileSelected.connect(self.writeImage)
             return
         fileName = str(fileName)
         GraphicsView.lastFileDir = os.path.split(fileName)[0]

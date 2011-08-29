@@ -7,73 +7,78 @@ from PyQt4 import QtGui, QtCore
 import pyqtgraph as pg
 import numpy as np
 
-#QtGui.QApplication.setGraphicsSystem('raster')
 app = QtGui.QApplication([])
-
 mw = QtGui.QMainWindow()
 mw.resize(800,800)
-cw = QtGui.QWidget()
-layout = QtGui.QGridLayout()
-cw.setLayout(layout)
-mw.setCentralWidget(cw)
-
-w1 = pg.PlotWidget()
-layout.addWidget(w1, 0,0)
-
-w2 = pg.PlotWidget()
-layout.addWidget(w2, 1,0)
-
-w3 = pg.GraphicsView()
-w3.enableMouse()
-w3.aspectLocked = True
-layout.addWidget(w3, 0,1)
-
-w4 = pg.PlotWidget()
-#vb = pg.ViewBox()
-#w4.setCentralItem(vb)
-layout.addWidget(w4, 1,1)
-
+view = pg.GraphicsLayoutView()  ## GraphicsView with GraphicsLayout inserted by default
+mw.setCentralWidget(view)
 mw.show()
 
+## create four areas to add plots
+w1 = view.addPlot()
+w2 = view.addViewBox()
+w2.setAspectLocked(True)
+view.nextRow()
+w3 = view.addPlot()
+w4 = view.addPlot()
+print "Generating data, this takes a few seconds..."
+
+## There are a few different ways we can draw scatter plots; each is optimized for different types of data:
+
+
+## 1) All spots identical and transform-invariant (top-left plot). 
+## In this case we can get a huge performance boost by pre-rendering the spot 
+## image and just drawing that image repeatedly. (use identical=True in the constructor)
+## (An even faster approach might be to use QPainter.drawPixmapFragments)
 
 n = 3000
-s1 = pg.ScatterPlotItem(size=10, pen=QtGui.QPen(QtCore.Qt.NoPen), brush=QtGui.QBrush(QtGui.QColor(255, 255, 255, 20)))
+s1 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 20), identical=True)
 pos = np.random.normal(size=(2,n), scale=1e-5)
 spots = [{'pos': pos[:,i], 'data': 1} for i in range(n)] + [{'pos': [0,0], 'data': 1}]
 s1.addPoints(spots)
 w1.addDataItem(s1)
 
+## This plot is clickable
 def clicked(plot, points):
     print "clicked points", points
-    
 s1.sigClicked.connect(clicked)
 
 
-s2 = pg.ScatterPlotItem(pxMode=False)
-spots2 = []
-for i in range(10):
-    for j in range(10):
-        spots2.append({'pos': (1e-6*i, 1e-6*j), 'size': 1e-6, 'brush':pg.intColor(i*10+j, 100)})
-s2.addPoints(spots2)
-w2.addDataItem(s2)
 
+## 2) Spots are transform-invariant, but not identical (top-right plot). 
+## In this case, drawing is as fast as 1), but there is more startup overhead
+## and memory usage since each spot generates its own pre-rendered image.
+
+s2 = pg.ScatterPlotItem(size=10, pen=pg.mkPen('w'), pxMode=True)
+pos = np.random.normal(size=(2,3000), scale=1e-5)
+spots = [{'pos': pos[:,i], 'data': 1, 'brush':pg.intColor(i, 3000)} for i in range(3000)]
+s2.addPoints(spots)
+w2.addItem(s2)
+w2.setRange(s2.boundingRect())
 s2.sigClicked.connect(clicked)
 
 
-s3 = pg.ScatterPlotItem(size=10, pen=pg.mkPen('w'), pxMode=True)
-pos = np.random.normal(size=(2,3000), scale=1e-5)
-spots = [{'pos': pos[:,i], 'data': 1, 'brush':pg.intColor(i, 3000)} for i in range(3000)]
-s3.addPoints(spots)
-w3.addItem(s3)
-w3.setRange(s3.boundingRect())
+## 3) Spots are not transform-invariant, not identical (bottom-left). 
+## This is the slowest case, since all spots must be completely re-drawn 
+## every time because their apparent transformation may have changed.
+
+s3 = pg.ScatterPlotItem(pxMode=False)   ## Set pxMode=False to allow spots to transform with the view
+spots3 = []
+for i in range(10):
+    for j in range(10):
+        spots3.append({'pos': (1e-6*i, 1e-6*j), 'size': 1e-6, 'brush':pg.intColor(i*10+j, 100)})
+s3.addPoints(spots3)
+w3.addDataItem(s3)
 s3.sigClicked.connect(clicked)
 
 
-s4 = pg.ScatterPlotItem(identical=True, size=10, pen=QtGui.QPen(QtCore.Qt.NoPen), brush=QtGui.QBrush(QtGui.QColor(255, 255, 255, 20)))
-#pos = np.random.normal(size=(2,n), scale=1e-5)
-#spots = [{'pos': pos[:,i], 'data': 1} for i in range(n)] + [{'pos': [0,0], 'data': 1}]
-s4.addPoints(spots)
+## Coming: use qpainter.drawpixmapfragments for scatterplots which do not require mouse interaction
+
+s4 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 20), identical=True)
+pos = np.random.normal(size=(2,10000), scale=1e-9)
+s4.addPoints(x=pos[0], y=pos[1])
 w4.addDataItem(s4)
+
 
 
 ## Start Qt event loop unless running in interactive mode.

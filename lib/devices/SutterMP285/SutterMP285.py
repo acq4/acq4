@@ -5,7 +5,7 @@ from lib.devices.Device import *
 from lib.drivers.SutterMP285 import *
 from lib.drivers.SutterMP285 import SutterMP285 as SutterMP285Driver  ## name collision with device class
 from Mutex import Mutex
-from debug import *
+import debug
 #import pdb
 import devTemplate
 import functions as fn
@@ -217,61 +217,64 @@ class SutterMP285Thread(QtCore.QThread):
         velocity = np.array([0,0,0])
         pos = [0,0,0]
         while True:
-            with self.lock:
-                monitor = self.monitor
-                limits = [x[:] for x in self.limits]
-                maxSpeed = self.maxSpeed
-                newVelocity = np.array(self.velocity[:])
-                resolution = self.resolution
+            try:
+                with self.lock:
+                    monitor = self.monitor
+                    limits = [x[:] for x in self.limits]
+                    maxSpeed = self.maxSpeed
+                    newVelocity = np.array(self.velocity[:])
+                    resolution = self.resolution
+                
+                if np.any(newVelocity != velocity):
+                    speed = np.clip(np.sum(newVelocity**2)**0.5, 0., 1.)   ## should always be 0.0-1.0
+                    #print "new velocity:", newVelocity, "speed:", speed
+                    
+                    if speed == 0:
+                        nv = np.array([0,0,0])
+                    else:
+                        nv = newVelocity/speed
+                        
+                    speed = np.clip(speed, 0, maxSpeed)
+                    #print "final speed:", speed
+                    
+                    ## stop current move, get position, start new move
+                    #print "stop.."
+                    self.stopMove()
+                    #print "stop done."
+                    
+                    #print "getpos..."
+                    pos1 = self.readPosition()
+                    if pos1 is not None:
+                        
+                        if speed > 0:
+                            #print "   set new velocity"
+                            self.writeVelocity(speed, nv, limits=limits, pos=pos1, resolution=resolution)
+                            #print "   done"
+                            
+                        ## report current position
+                        
+                            
+                        velocity = newVelocity
+                    #print "done"
+                    
+                if np.all(velocity == 0):
+                    if monitor:
+                        newPos = self.readPosition()
+    
+                        if newPos is not None:
             
-            if np.any(newVelocity != velocity):
-                speed = np.clip(np.sum(newVelocity**2)**0.5, 0., 1.)   ## should always be 0.0-1.0
-                #print "new velocity:", newVelocity, "speed:", speed
-                
-                if speed == 0:
-                    nv = np.array([0,0,0])
+                            change = [newPos[i] - pos[i] for i in range(len(newPos))]
+                            pos = newPos
+            
+                            if any(change):
+                                #self.emit(QtCore.SIGNAL('positionChanged'), {'rel': change, 'abs': self.pos})
+                                self.sigPositionChanged.emit({'rel': change, 'abs': pos})
                 else:
-                    nv = newVelocity/speed
-                    
-                speed = np.clip(speed, 0, maxSpeed)
-                #print "final speed:", speed
+                    ## moving; make a guess about the current position
+                    pass
+            except:
+                debug.printExc("Error in MP285 thread:")
                 
-                ## stop current move, get position, start new move
-                #print "stop.."
-                self.stopMove()
-                #print "stop done."
-                
-                #print "getpos..."
-                pos1 = self.readPosition()
-                if pos1 is not None:
-                    
-                    if speed > 0:
-                        #print "   set new velocity"
-                        self.writeVelocity(speed, nv, limits=limits, pos=pos1, resolution=resolution)
-                        #print "   done"
-                        
-                    ## report current position
-                    
-                        
-                    velocity = newVelocity
-                #print "done"
-                
-            if np.all(velocity == 0):
-                if monitor:
-                    newPos = self.readPosition()
-
-                    if newPos is not None:
-        
-                        change = [newPos[i] - pos[i] for i in range(len(newPos))]
-                        pos = newPos
-        
-                        if any(change):
-                            #self.emit(QtCore.SIGNAL('positionChanged'), {'rel': change, 'abs': self.pos})
-                            self.sigPositionChanged.emit({'rel': change, 'abs': pos})
-            else:
-                ## moving; make a guess about the current position
-                pass
-
             self.lock.lock()
             if self.stopThread:
                 self.lock.unlock()
@@ -303,7 +306,7 @@ class SutterMP285Thread(QtCore.QThread):
             return None
         except:
             self.sigError.emit("Read error--see console.")
-            printExc("Error getting packet:")
+            debug.printExc("Error getting packet:")
             return None
         
     def writeVelocity(self, spd, v, limits, pos, resolution):

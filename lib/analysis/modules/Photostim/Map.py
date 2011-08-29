@@ -143,6 +143,8 @@ class Map:
         elif next.exists('Clamp2.ma'):
             cname = 'Clamp2'
             file = next['Clamp2.ma']
+        else:
+            raise Exception("No clamp file found in %s" % next.name())
             
         data = file.read()
         info = data._info[-1]

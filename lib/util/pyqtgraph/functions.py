@@ -39,12 +39,18 @@ def siScale(x, minVal=1e-25):
     p = .001**m
     return (p, pref)
 
-def mkBrush(color):
-    if isinstance(color, QtGui.QBrush):
-        return color
+def mkBrush(*args):
+    if len(args) == 1:
+        arg = args[0]
+        if isinstance(arg, QtGui.QBrush):
+            return arg
+        else:
+            color = arg
+    if len(args) > 1:
+        color = args
     return QtGui.QBrush(mkColor(color))
 
-def mkPen(arg='default', color=None, width=1, style=None, cosmetic=True, hsv=None, ):
+def mkPen(*args, **kargs):
     """Convenience function for making pens. Examples:
     mkPen(color)
     mkPen(color, width=2)
@@ -52,15 +58,25 @@ def mkPen(arg='default', color=None, width=1, style=None, cosmetic=True, hsv=Non
     mkPen({'color': "FF0", width: 2})
     mkPen(None)   (no pen)
     """
-    if isinstance(arg, dict):
-        return mkPen(**arg)
-    elif arg != 'default':
+    
+    color = kargs.get('color', None)
+    width = kargs.get('width', 1)
+    style = kargs.get('style', None)
+    cosmetic = kargs.get('cosmetic', True)
+    hsv = kargs.get('hsv', None)
+    
+    if len(args) == 1:
+        arg = args[0]
+        if isinstance(arg, dict):
+            return mkPen(**arg)
         if isinstance(arg, QtGui.QPen):
             return arg
         elif arg is None:
             style = QtCore.Qt.NoPen
         else:
             color = arg
+    if len(args) > 1:
+        color = args
         
     if color is None:
         color = mkColor(200, 200, 200)

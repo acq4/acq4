@@ -47,17 +47,22 @@ class FileLoader(QtGui.QWidget):
         self.loadFile([fh])
         
     def loadFile(self, files):
-        for fh in files:
-            if self.host is None:
-                self.sigFileLoaded.emit(fh)
+        try:
+            QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+            for fh in files:
+                if self.host is None:
+                    self.sigFileLoaded.emit(fh)
 
-            elif self.host.loadFileRequested([fh]):
-                name = fh.name(relativeTo=self.ui.dirTree.baseDirHandle())
-                item = QtGui.QTreeWidgetItem([name])
-                item.file = fh
-                self.ui.fileTree.addTopLevelItem(item)
-                self.sigFileLoaded.emit(fh)
-        #self.emit(QtCore.SIGNAL('fileLoaded'), fh)
+                elif self.host.loadFileRequested([fh]):
+                    name = fh.name(relativeTo=self.ui.dirTree.baseDirHandle())
+                    item = QtGui.QTreeWidgetItem([name])
+                    item.file = fh
+                    self.ui.fileTree.addTopLevelItem(item)
+                    self.sigFileLoaded.emit(fh)
+            #self.emit(QtCore.SIGNAL('fileLoaded'), fh)
+        finally:
+            QtGui.QApplication.restoreOverrideCursor()
+            
         
     def selectedFile(self):
         """Returns the file selected from the list of already loaded files"""
