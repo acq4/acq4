@@ -595,7 +595,7 @@ Valid options are:
             ld = len(self.devices)
             with ProgressDialog("Shutting down..", 0, lm+ld, cancelText=None, wait=0) as dlg:
                 print "Requesting all modules shut down.."
-                
+                self.logMsg("Shutting Down.", importance=9)
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
                     m = self.modules.keys()[0]
                     print "    %s" % m

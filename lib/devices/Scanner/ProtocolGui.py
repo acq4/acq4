@@ -243,6 +243,7 @@ class ScannerProtoGui(ProtocolGui):
            
         except:
             print "Could not find spot size from calibration."
+            logMsg("Could not find spot size from calibration.", msgType='error') ### This should turn into a HelpfulException.
             raise   
         if self.ui.sizeFromCalibrationRadio.isChecked():
             displaySize = ss

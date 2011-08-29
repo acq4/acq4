@@ -6,6 +6,7 @@ import LogWindowTemplate
 from FeedbackButton import FeedbackButton
 import configfile
 from DataManager import DirHandle
+from HelpfulException import HelpfulException
 #from lib.Manager import getManager
 
 WIN = None
@@ -143,8 +144,12 @@ class LogWindow(QtGui.QMainWindow):
             b.reset()
         
     def setStorageDir(self):
-        print x
-        
+        try:
+            print x
+        except Exception, err:
+            raise HelpfulException('the message')
+            
+            
     def show(self):
         QtGui.QMainWindow.show(self)
         self.activateWindow()
