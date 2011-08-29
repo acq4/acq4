@@ -323,9 +323,7 @@ class ScannerProtoGui(ProtocolGui):
         pos = result['position']
         ss = result['spotSize']
         self.spotMarker.setPos((pos[0]-ss*0.5, pos[1]-ss*0.5))
-        print 'handleResult'
-        
-        
+        #print 'handleResult'
     
     def addSpiral(self, pos=None, name=None):
         autoName = False
