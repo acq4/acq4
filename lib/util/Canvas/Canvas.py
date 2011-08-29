@@ -46,7 +46,7 @@ class Canvas(QtGui.QWidget):
         self.view.enableMouse()
         self.view.setAspectLocked(True)
         
-        grid = pg.GridItem(self.view)
+        grid = pg.GridItem()
         self.grid = items.CanvasItem(grid, name='Grid', movable=False)
         self.addItem(self.grid)
         

@@ -82,9 +82,15 @@ class SqliteDatabase:
         #return self._queryToDict(q)
         return q
         
-    def insert(self, table, records=None, replaceOnConflict=False, **args):
+    def insert(self, table, records=None, replaceOnConflict=False, ignoreExtraColumns=False, addExtraColumns=False, **args):
         """Insert records (a dict or list of dicts) into table.
-        If records is None, a single record may be specified via keyword arguments."""
+        If records is None, a single record may be specified via keyword arguments.
+        
+        Arguments:
+            ignoreExtraColumns:  If True, ignore any extra columns in the data that do not exist in the table
+            addExtraColumns:   If True, add any columns that exist in the data but do not yet exist in the table
+                              (NOT IMPLEMENTED YET)
+        """
         
         ## can we optimize this by using batch execution?
         
@@ -96,13 +102,16 @@ class SqliteDatabase:
             return
         ret = []
             
+        ## Rememember that _prepareData may change the number of columns!
+        records = self._prepareData(table, records, removeUnknownColumns=ignoreExtraColumns)
+        
         fields = records[0].keys()
         insert = "INSERT"
         if replaceOnConflict:
             insert += " OR REPLACE"
         #print "Insert:", fields
         cmd = "%s INTO %s (%s) VALUES (%s)" % (insert, table, quoteList(fields), ','.join([':'+f for f in fields]))
-        records = self._prepareData(table, records)
+        
         #print len(fields), len(records[0]), len(self.tableSchema(table))
         self.exe(cmd, records)
 
@@ -173,17 +182,19 @@ class SqliteDatabase:
             self._readTableList()
     
     
-    def _prepareData(self, table, data):
+    def _prepareData(self, table, data, removeUnknownColumns=False):
         """Massage data so it is ready for insert into the DB. (internal use only)
          - data destined for BLOB fields is pickled
          - numerical fields convert to int or float
-         - text fields convert to unicode"""
+         - text fields convert to unicode
+         
+         """
          
          ## This can probably be optimized a bit..
         #rec = data[0]
         funcs = {}
         ## determine the functions to use for each field.
-        schema = self.tables[table]
+        schema = self.tableSchema(table)
         for k in schema:
             #if k not in schema:
                 #raise Exception("Table %s has no field named '%s'. Schema is: %s" % (table, k, str(schema)))
@@ -202,6 +213,11 @@ class SqliteDatabase:
         for rec in data:
             newRec = {}
             for k in rec:
+                if removeUnknownColumns and (k not in schema):
+                    print "skip column", k
+                    continue
+                print "include column", k
+                
                 try:
                     newRec[k] = funcs[k](rec[k])
                 except:
@@ -211,6 +227,7 @@ class SqliteDatabase:
                             raise Exception("Field '%s' not present in table '%s'" % (k, table))
                         print "Warning: Setting %s field %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
             newData.append(newRec)
+        print "new data:", newData
         return newData
 
     def _queryToDict(self, q):
@@ -396,7 +413,8 @@ class AnalysisDatabase(SqliteDatabase):
         if parentRowId is not None:
             info['Source'] = parentRowId
         info['Dir'] = handle.name(relativeTo=self.baseDir())
-        self.insert(table, info)
+        
+        self.insert(table, info, ignoreExtraColumns=True)
 
         return table, self.lastInsertRow()
 

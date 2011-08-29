@@ -312,17 +312,22 @@ class DirTreeWidget(QtGui.QTreeWidget):
     def itemExpandedEvent(self, item):
         """Called whenever an item in the tree is expanded; responsible for loading children if they have not been loaded yet."""
         if not item.childrenLoaded:
-            ## Display loading message before starting load
-            loading = None
-            if item.handle.isDir():
-                loading = QtGui.QTreeWidgetItem(['loading..'])
-                item.addChild(loading)
-            QtGui.QApplication.instance().processEvents()  ## make sure the 'loading' item is displayed before building the tree
-            if loading is not None:
-                item.removeChild(loading)
-            ## now load all children
-            self.rebuildChildren(item)
-            item.childrenLoaded = True
+            try:
+                QtGui.QApplication.setOverrideCursor(QtGui.QCursor(QtCore.Qt.WaitCursor))
+                ## Display loading message before starting load
+                loading = None
+                if item.handle.isDir():
+                    loading = QtGui.QTreeWidgetItem(['loading..'])
+                    item.addChild(loading)
+                QtGui.QApplication.instance().processEvents()  ## make sure the 'loading' item is displayed before building the tree
+                if loading is not None:
+                    item.removeChild(loading)
+                ## now load all children
+                self.rebuildChildren(item)
+                item.childrenLoaded = True
+            finally:
+                QtGui.QApplication.restoreOverrideCursor()
+
         item.expanded()
         self.scrollToItem(item.child(item.childCount()-1))
         self.scrollToItem(item)

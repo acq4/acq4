@@ -53,6 +53,7 @@ class PlotItem(QtGui.QGraphicsWidget):
     def __init__(self, parent=None, name=None, labels=None, **kargs):
         QtGui.QGraphicsWidget.__init__(self, parent)
         
+        self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         ## Set up control buttons
         
         self.ctrlBtn = QtGui.QToolButton()
@@ -517,7 +518,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         if key not in self.avgCurves:
             plot = PlotCurveItem()
             plot.setPen(mkPen([0, 200, 0]))
-            plot.setShadowPen(mkPen([0, 0, 0, 100], 3))
+            plot.setShadowPen(mkPen([0, 0, 0, 100], width=3))
             plot.setAlpha(1.0, False)
             plot.setZValue(100)
             self.addItem(plot)
@@ -718,6 +719,7 @@ class PlotItem(QtGui.QGraphicsWidget):
     def addDataItem(self, item):
         self.addItem(item)
         self.dataItems.append(item)
+        self.plotChanged()
     
     def addCurve(self, c, params=None):
         if params is None:
@@ -1157,7 +1159,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             #print 'xvals:', xv
         except:
             if x is None:
-                xv = arange(arr.shape[0])
+                xv = np.arange(arr.shape[0])
             else:
                 xv = x
         c = PlotCurveItem()
