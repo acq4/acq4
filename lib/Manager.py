@@ -48,6 +48,13 @@ def getManager():
 def __reload__(old):
     Manager.CREATED = old['Manager'].CREATED
     Manager.single = old['Manager'].single
+    
+def logMsg(*args, **kwargs):
+    """See lib.LogWindow.logMsg() for arguments and how to use."""
+    getManager().logMsg(*args, **kwargs)
+    
+def logExc(*args, **kwargs):
+    getManager().logExc(*args, **kwargs)
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:

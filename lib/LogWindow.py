@@ -1,5 +1,6 @@
 import time
 import traceback
+import sys
 
 from PyQt4 import QtGui, QtCore
 import LogWindowTemplate
@@ -73,9 +74,18 @@ class LogWindow(QtGui.QMainWindow):
         
     def logExc(self, *args, **kwargs):
         self.flashButtons()
-        error, tb = self.formatException(*args)
-        self.logMsg(error, msgType='error', exception=tb)
-        
+        exc = args[1]
+        if isinstance(exc, HelpfulException):
+            error, tb, docs = self.formatHelpfulException(*args)
+            self.logMsg(error, msgType='error', exception=tb, documentation=docs **kwargs)
+        else: 
+            message = kwargs.get('message', '')
+            if message is not '':
+                kwargs.pop('message')
+                message += '\n'
+            error, tb = self.formatException(*args)
+            self.logMsg(message+error, msgType='error', exception=tb, **kwargs)
+    
         
     def textEntered(self):
         msg = str(self.ui.input.text())
@@ -101,14 +111,21 @@ class LogWindow(QtGui.QMainWindow):
                 colorStr = 'green'
             self.displayText(entry['message'], colorStr=colorStr, timeStamp=entry['timestamp'])
         elif entry['msgType'] == 'error':
-            self.displayText(entry['message'], colorStr='red', timeStamp=entry['timestamp'])
+            self.displayText(entry['message'], colorStr='red', timeStamp=entry['timestamp'], reasons=entry.get('reasons', None), docs=entry.get('documentation', None))
             self.displayTraceback(entry['exception'])
         elif entry['msgType'] == 'warning':
             self.displayText(entry['message'], colorStr='orange', timeStamp=entry['timestamp'])
         else:
             self.displayText(entry['message'], colorStr='black', timeStamp=entry['timestamp'])
         
-    def displayText(self, msg, colorStr = 'black', timeStamp=None):
+    def displayText(self, msg, colorStr = 'black', timeStamp=None, reasons=None, docs=None):
+        if reasons is not None:
+            msg += "Reasons: " + reasons + '\n'
+        if docs is not None:
+            msg += "Documentation: " + docs
+        if msg[-1:] == '\n':
+            msg = msg[:-1]     
+        msg = '<br>'.join(msg.split('\n'))
         if timeStamp is not None:
             strn = '<i style="color:gray"> %s </i> <span style="color:%s"> %s </span> \n' % (timeStamp, colorStr, msg)
         else:
@@ -118,7 +135,33 @@ class LogWindow(QtGui.QMainWindow):
     def formatException(self, *args):
         tb = traceback.format_exception(*args)
         error = tb.pop(-1)
-        return (error, tb)
+        return (error,tb)
+    
+    def formatHelpfulException(self, *args):
+        ### so ugly.....
+        number = 1
+        tbs = []
+        errors, tbs = self.formatException(*args)
+        tbs.insert(0, str(number)+'. ')
+        errors = str(number) + '. ' + exc.messages[0]
+        errors += '  Reasons: ' 
+        for i in exc.reasons[0]:
+            errors += str(i) + ' '
+        errors += '\n More documentation at: ', exc.docs[0]
+        for i, e in enumerate(exc.excs):
+            number += 1
+            error, tb = self.formatException(*e)
+            if e != exc.excs[-1]:
+                errors += str(number) + '. ' + exc.messages[i+1]
+                errors += '  Reasons: '
+                for i in exc.reasons[i+1]:
+                    errors += str(i) + ' '
+                errors += '\n More documentation at: ', exc.docs[i+1]                
+            else:
+                errors += str(number) + '. ' + error
+            tbs.append(str(number) + '. ')
+            tbs.extend(tb) 
+        return (errors, tbs)
         
     def displayTraceback(self, tb, color='grey'):
         #tb = traceback.format_exception(*args)
@@ -145,10 +188,27 @@ class LogWindow(QtGui.QMainWindow):
         
     def setStorageDir(self):
         try:
+            #self.makeError()
             print x
-        except Exception, err:
-            raise HelpfulException('the message')
-            
+        except:
+            t, exc, tb = sys.exc_info()
+            self.manager.logExc(t, exc, tb, message="This button doesn't work", reasons='reason a, reason b', docs='documentation')
+            #if isinstance(exc, HelpfulException):
+                #exc.prependErr("Button doesn't work", (t,exc,tb), "a. It's supposed to raise an error for testing purposes, b. You're doing it wrong.")
+                #raise
+            #else:
+                #raise HelpfulException(message='This button does not work.', exc=(t, exc, tb), reasons="a. It's supposed to raise an error for testing purposes, b. You're doing it wrong.")
+    
+    def makeError(self):
+        try:
+            print x
+        except:
+            t, exc, tb = sys.exc_info()
+            if isinstance(exc, HelpfulException):
+                exc.prependErr("msg from makeError", (t,exc,tb), ["a. mkErr reason one", "b. mkErr reason 2"])
+                raise
+            else:
+                raise HelpfulException(message='msg from makeError', exc=(t, exc, tb), reasons=["a. reason one", "b. reason 2"])
             
     def show(self):
         QtGui.QMainWindow.show(self)
