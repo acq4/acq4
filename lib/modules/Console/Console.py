@@ -1,6 +1,7 @@
 from PyQt4 import QtCore, QtGui
 from lib.modules.Module import *
 import sys, debug
+import traceback
 
 class Console(Module):
     def __init__(self, manager, name, config):
@@ -13,7 +14,7 @@ class Console(Module):
         self.win.setCentralWidget(self.cw)
         self.layout = QtGui.QVBoxLayout()
         self.cw.setLayout(self.layout)
-        self.output = QtGui.QTextEdit()
+        self.output = QtGui.QPlainTextEdit()
         self.output.setReadOnly(True)
         self.layout.addWidget(self.output)
         self.input = QtGui.QLineEdit()
@@ -21,7 +22,7 @@ class Console(Module):
         self.input.returnPressed.connect(self.runCmd)
         
     def runCmd(self):
-        cmd = self.input.text()
+        cmd = str(self.input.text())
         stdout = sys.stdout
         stderr = sys.stderr
         sys.stdout = self
@@ -32,6 +33,8 @@ class Console(Module):
             self.write(str(output) + '\n')
         except SyntaxError:
             exec(cmd, globals(), self.locals)
+        except:
+            self.displayException()
         finally:
             sys.stdout = stdout
             sys.stderr = stderr
@@ -42,7 +45,16 @@ class Console(Module):
             
         else:
             self.output.appendPlainText(strn)
-    
+            
+    def displayException(self):
+        tb = traceback.format_exc()
+        lines = []
+        indent = 4
+        prefix = '' 
+        for l in tb.split('\n'):
+            lines.append(" "*indent + prefix + l)
+        self.write('\n'.join(lines))
+        
     
     #def showException(self):
         #text = debug.getExc()

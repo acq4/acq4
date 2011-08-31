@@ -16,7 +16,11 @@ import ptime
 import analysisModules
 import time, gc
 import sip
+import sys
+from HelpfulException import HelpfulException
 from ProgressDialog import ProgressDialog
+from lib.LogWindow import LogButton
+
 #import pdb
 
 class Window(QtGui.QMainWindow):
@@ -93,6 +97,9 @@ class ProtocolRunner(Module):
         #print "  5"; sys.stdout.flush()
         self.win.setGeometry(g)
         #print "  6"; sys.stdout.flush()
+        
+        self.logBtn = LogButton("Log")
+        self.win.statusBar().addPermanentWidget(self.logBtn)
         
         self.ui.protoDurationSpin.setOpts(dec=True, bounds=[1e-3,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
         self.ui.protoLeadTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=10e-3, suffix='s', siPrefix=True)
@@ -1274,8 +1281,9 @@ class TaskThread(QtCore.QThread):
                     task.stop(abort=True)
                 except:
                     pass
-                printExc("\nError starting protocol:")
-                raise
+                #printExc("\nError starting protocol:")
+                exc = sys.exc_info()
+                raise HelpfulException("\nError starting protocol:", exc)
             
             prof.mark('start task')
             ### Do not put code outside of these try: blocks; may cause device lockup
@@ -1297,11 +1305,11 @@ class TaskThread(QtCore.QThread):
                 result = task.getResult()
             except:
                 ## Make sure the task is fully stopped if there was a failure at any point.
-                printExc("\nError during protocol execution:")
+                #printExc("\nError during protocol execution:")
                 print "\nStopping task.."
                 task.stop(abort=True)
                 print ""
-                raise
+                raise HelpfulException("\nError during protocol execution:", sys.exc_info())
             #print "\nAFTER:\n", cmd
             prof.mark('getResult')
             
