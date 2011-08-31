@@ -780,6 +780,7 @@ class ProtocolRunner(Module):
             self.enableStartBtns(True)
             self.loopEnabled = False
             print "Error starting protocol. "
+            exc.addMessage("Error starting protocol:")
             raise
         
    
@@ -882,6 +883,17 @@ class ProtocolRunner(Module):
                 ## select out just the parameters needed for this device
                 p = dict([(i[1], params[i]) for i in params.keys() if i[0] == d])
                 ## Ask the device to generate its protocol command
+                if d not in self.docks:
+                    raise HelpfulException("The device '%s' currently has no dock loaded." % d,
+                                           reasons=[
+                                               "This device name does not exist in the system's configuration",
+                                               "There was an error when creating the device at program startup",
+                                               ],
+                                           tags={},
+                                           importance=8,
+                                           addImportance=3,
+                                           docSections=['userGuide/modules/ProtocolRunner/loadingNonexistentDevices']
+                                           )
                 prot[d] = self.docks[d].widget().generateProtocol(p)
                 #prof.mark("get protocol from %s" % d)
         #print prot['protocol']['storageDir'].name()

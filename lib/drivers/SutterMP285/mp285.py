@@ -6,6 +6,9 @@ ErrorVals = {
     2: ('Buffer Over-run', 'The input buffer is filled and CR has not been received.'),
     4: ('Bad Command', 'Input can not be interpreted -- command byte not valid.'),
     8: ('Move Interrupted', 'A requested move was interrupted by input on the serial port.'),
+    16:('Arduino error', 'Error was reported by arduino interface.'),
+    32:('MP285 Timeout', 'Arduino timed out waiting for response from MP285.'),
+    64:('Command timeout', 'Arduino timed out waiting for full command from computer.'),
 }
     
 
@@ -24,6 +27,8 @@ class SutterMP285(object):
         self.baud = baud
         self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS)
         self._scale = None
+        time.sleep(0.3)  ## Give devices a moment to chill after opening the serial line.
+        self.read()
 
     def getPos(self, scaled=True):
         """Get current position reported by controller. Returns a tuple (x,y,z); values given in m."""
@@ -40,7 +45,24 @@ class SutterMP285(object):
         scale = self.scale()
         pos = [x*scale for x in pos]
         return pos
+
+    def getImmediatePos(self):
+        """This is a non-standard command provided by custom hardware.
+        It returns an estimated position even while the ROE is in use. 
+        (if getPos() is called while the ROE is in use, the MP285 will very likely crash.)
+        """
+        self.write('p')  
+        packet = self.readPacket(expect=12);
+        if len(packet) != 12:
+            raise Exception("Sutter MP285: bad position packet: '%s'" % repr(packet))
         
+        pos = [packet[:4], packet[4:8], packet[8:]]
+        pos = [struct.unpack('l', x)[0] for x in pos]
+        scale = self.scale()
+        pos = [x*scale for x in pos]
+        return pos
+    
+    
     def setPos(self, pos, block=True, timeout=10.):
         """Set the position. 
         Arguments:
@@ -153,6 +175,20 @@ class SutterMP285(object):
         params['speed'] = params['xspeed'] & 0x7FFF
         
         return params
+    
+    def setLimits(self, limits):
+        """Set position limits on the device which may not be exceeded.
+        This command is only available when using custom hardware.
+        limits = [+x, -x, +y, -y, +z, -z]
+        If a limit is None, it will be ignored.
+        """
+        scale = self.scale()
+        useLims = [(1 if x is not None else 0) for x in limits]
+        limits = [(0 if x is None else int(x/scale)) for x in limits]
+        data = struct.pack("6l6B", *(limits + useLims))
+        self.write('l'+data+'\r');
+        self.readPacket()
+        
 
     def reset(self, hard=False):
         """Reset the controller. 
@@ -282,9 +318,13 @@ class SutterMP285(object):
                 raise TimeoutError("Timeout while waiting for response. (Data so far: %s)" % repr(res))
         
 if __name__ == '__main__':
-    s = SutterMP285(port=2, baud=19200)
+    s = SutterMP285(port=5, baud=115200)
     def pos():
         p = s.getPos()
+        print "x: %0.2fum  y: %0.2fum,  z: %0.2fum" % (p[0]*1e6, p[1]*1e6, p[2]*1e6)
+        
+    def ipos():
+        p = s.getImmediatePos()
         print "x: %0.2fum  y: %0.2fum,  z: %0.2fum" % (p[0]*1e6, p[1]*1e6, p[2]*1e6)
         
     def stat():
@@ -308,4 +348,7 @@ if __name__ == '__main__':
         s.setPos(pos, timeout=runtime*2)
         dt = 0.5*(time.clock()-t)
         print "%d: dt=%0.2gs, dx=%0.2gm, %0.2f mm/s" % (int(speed), dt, dist, dist*1e3/dt)
+        
+    ipos()
+    pos()
         
