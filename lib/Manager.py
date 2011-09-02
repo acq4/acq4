@@ -39,6 +39,8 @@ from advancedTypes import OrderedDict
 from ProgressDialog import ProgressDialog
 from LogWindow import LogWindow
 
+LOG = None
+
 ### All other modules can use this function to get the manager instance
 def getManager():
     if Manager.single is None:
@@ -51,10 +53,23 @@ def __reload__(old):
     
 def logMsg(*args, **kwargs):
     """See lib.LogWindow.logMsg() for arguments and how to use."""
-    getManager().logMsg(*args, **kwargs)
+    global LOG
+    if LOG is not None:
+        LOG.logMsg(*args, **kwargs)
+    else:
+        print "Can't log error message; no log created yet."
+        print args
+        print kwargs
+        
     
 def logExc(*args, **kwargs):
-    getManager().logExc(*args, **kwargs)
+    global LOG
+    if LOG is not None:
+        LOG.logExc(*args, **kwargs)
+    else:
+        print "Can't log error message; no log created yet."
+        print args
+        print kwargs
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
@@ -79,6 +94,10 @@ class Manager(QtCore.QObject):
     def __init__(self, configFile=None, argv=None):
         if Manager.CREATED:
             raise Exception("Manager object already created!")
+        
+        global LOG
+        LOG = LogWindow(self)
+        self.logWindow = LOG
         
         if argv is not None:
             try:
@@ -140,8 +159,7 @@ Valid options are:
         self.configDir = os.path.dirname(configFile)
         self.readConfig(configFile)
         
-        self.logWindow = LogWindow(self)
-        self.logMsg('ACQ4 started.', importance=9)
+        logMsg('ACQ4 started.', importance=9)
         
         Manager.CREATED = True
         Manager.single = self
@@ -465,15 +483,8 @@ Valid options are:
         return self.currentDir
     
     def setLogDir(self, d):
-        p = d
-        while not p.info().get('expUnit', False) and p != self.baseDir:  
-            p = p.parent()
-        if p != self.baseDir:
-            self.logWindow.setLogDir(p)
-        
-    def sudoSetLogDir(self, d):
         self.logWindow.setLogDir(d)
-
+        
     def setCurrentDir(self, d):
         if self.currentDir is not None:
             try:
@@ -489,8 +500,16 @@ Valid options are:
         else:
             raise Exception("Invalid argument type: ", type(d), d)
         
-        
-        self.setLogDir(d)
+        p = d
+        ## Storage directory is about to change; 
+        logDir = self.logWindow.getLogDir()
+        while not p.info().get('expUnit', False) and p != self.baseDir and p != logDir:
+            p = p.parent()
+        if p != self.baseDir:
+            self.setLogDir(p)
+        else:
+            if logDir is None:
+                logMsg("No log directory set. Log messages will not be stored.", type='warning', importance=8, docs="UserGuide/logging")
         #self.currentDir.sigChanged.connect(self.currentDirChanged)
         #self.sigCurrentDirChanged.emit()
         self.currentDir.sigChanged.connect(self.currentDirChanged)
@@ -551,11 +570,14 @@ Valid options are:
         #cd = self.getCurrentDir()
         #cd.logMsg(msg, tags)
         
-    def logMsg(self, *args, **kwargs):
-        self.logWindow.logMsg(*args, currentDir=self.currentDir, **kwargs)
+    #def logMsg(self, *args, **kwargs):
+        #self.logWindow.logMsg(*args, currentDir=self.currentDir, **kwargs)
         
-    def logExc(self, *args, **kwargs):
-        self.logWindow.logExc(*args, currentDir=self.currentDir, **kwargs)
+    #def logExc(self, *args, **kwargs):
+        #self.logWindow.logExc(*args, currentDir=self.currentDir, **kwargs)
+        
+    def showLogWindow(self):
+        self.logWindow.show()
         
     ## These functions just wrap the functionality of an InterfaceDirectory
     def declareInterface(self, *args, **kargs):  ## args should be name, [types..], object  
@@ -602,7 +624,7 @@ Valid options are:
             ld = len(self.devices)
             with ProgressDialog("Shutting down..", 0, lm+ld, cancelText=None, wait=0) as dlg:
                 print "Requesting all modules shut down.."
-                self.logMsg("Shutting Down.", importance=9)
+                logMsg("Shutting Down.", importance=9)
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
                     m = self.modules.keys()[0]
                     print "    %s" % m

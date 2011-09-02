@@ -55,7 +55,7 @@ class DirTreeLoader(QtGui.QWidget):
         raise Exception("Function must be reimplemented in subclass.")
     
     def loadClicked(self, item=None, column=0):
-        if item == None:
+        if item == None or isinstance(item, bool):
             fh = self.ui.fileTree.selectedFile()
         else:
             fh = self.ui.fileTree.handle(item)

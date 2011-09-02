@@ -22,7 +22,8 @@ from debug import *
 from metaarray import *
 import sip
 from SignalProxy import proxyConnect
-from lib.Manager import getManager
+#from lib.Manager import getManager
+import lib.Manager as Manager
 import numpy as np
 from RecordThread import RecordThread
 from lib.LogWindow import LogButton
@@ -93,7 +94,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.setupUi(self)
         
         self.stateFile = os.path.join('modules', self.module.name + '_ui.cfg')
-        uiState = getManager().readConfigFile(self.stateFile)
+        uiState = module.manager.readConfigFile(self.stateFile)
         if 'geometry' in uiState:
             geom = QtCore.QRect(*uiState['geometry'])
             self.setGeometry(geom)
@@ -205,7 +206,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.statusBar().addPermanentWidget(self.vLabel)
         self.statusBar().addPermanentWidget(self.fpsLabel)
         self.statusBar().addPermanentWidget(self.logBtn)
-        self.logBtn.clicked.connect(self.module.manager.logWindow.show)
+        self.logBtn.clicked.connect(module.manager.showLogWindow)
         
         self.show()
         self.openCamera()
@@ -310,9 +311,6 @@ class CameraWindow(QtGui.QMainWindow):
         #QtCore.QTimer.singleShot(1, self.drawFrame)
         ## avoiding possible singleShot-induced crashes
         
-    def writeToLog(self, msg):
-        self.module.manager.logMsg(msg)
-
     #@trace
     def updateBorders(self):
         """Draw the camera boundaries for each objective"""
@@ -498,7 +496,7 @@ class CameraWindow(QtGui.QMainWindow):
         #self.frameTimer.stop()
         geom = self.geometry()
         uiState = {'window': str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
-        getManager().writeConfigFile(uiState, self.stateFile)
+        Manager.getManager().writeConfigFile(uiState, self.stateFile)
         
         
         
@@ -740,17 +738,16 @@ class CameraWindow(QtGui.QMainWindow):
                 self.setExposure(autoRestart=False)
                 self.updateRegion(autoRestart=False)
                 self.cam.start()
-                self.writeToLog("Camera started aquisition.")
+                Manager.logMsg("Camera started aquisition.")
             except:
                 self.ui.btnAcquire.setChecked(False)
                 printExc("Error starting camera:")
-                self.writeToLog("Error starting camera:")
                 
         else:
             #print "ACQ untoggled, stop record"
             self.toggleRecord(False)
             self.cam.stop()
-            self.writeToLog("Camera stopped acquisition.")
+            Manager.logMsg("Camera stopped acquisition.")
             
     #@trace
     def addPlotFrame(self, frame):

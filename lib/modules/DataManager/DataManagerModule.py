@@ -86,7 +86,7 @@ class DataManager(Module):
         d = self.selectedFile()
         if not isinstance(d, DirHandle):
             d = d.parent()
-        self.manager.sudoSetLogDir(d)
+        self.manager.setLogDir(d)
         
     def updateLogDir(self, d):
         self.ui.logDirText.setText(d.name(relativeTo=self.baseDir))
@@ -198,7 +198,9 @@ class DataManager(Module):
             nd = parent.mkdir(name, autoIncrement=True)
             
             ## Add meta-info
-            info = {'dirType': ftype, 'expUnit': spec.get('experimentalUnit', False)}
+            info = {'dirType': ftype}
+            if spec.get('experimentalUnit', False):
+                info['expUnit'] = True
             nd.setInfo(info)
             
             ## set display to info

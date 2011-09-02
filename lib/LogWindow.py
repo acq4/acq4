@@ -35,8 +35,8 @@ class LogWindow(QtGui.QMainWindow):
         WIN = self
         #self.msgCount = 0
         self.logCount=0
-        self.fileName = 'tempLog.txt'
-        configfile.writeConfigFile('', 'tempLog.txt')
+        self.logFile = None
+        configfile.writeConfigFile('', self.fileName())  ## start a new temp log file, destroying anything left over from the last session.
         self.buttons = [] ## all Log Buttons get added to this list, so it's easy to make them all do things, like flash red.
         
         ## self.ui.input is a QLineEdit
@@ -46,45 +46,72 @@ class LogWindow(QtGui.QMainWindow):
         self.ui.setStorageDirBtn.clicked.connect(self.setStorageDir)
         
         
-    def logMsg(self, msg, importance=5, msgType='status', exception=None, **kwargs):
+    def logMsg(self, msg, importance=5, msgType='status', exception=(None,None,None), **kwargs):
         """msgTypes: user, status, error, warning
            importance: 0-9
-           exception: holds a list of strings with the traceback"""
+           exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
+        """
         
-        currentDir = kwargs.get('currentDir', None)
-        if currentDir is not None:
-            kwargs.pop('currentDir')
+        try:
+            currentDir = self.manager.getCurrentDir()
+        except:
+            currentDir = None
         if isinstance(currentDir, DirHandle):
-            currentDir = currentDir.name()
-        now = str(time.strftime('%Y.%m.%d %H:%M:%S'))
-        name = 'LogEntry_' + str(time.strftime('%Y.%m.%d %H.%M.%S'))
-        #self.msgCount += 1
-        entry = {}
-        entry[name] = {}
-        entry[name]['message'] = msg
-        entry[name]['timestamp'] = now
-        entry[name]['currentDir'] = currentDir
-        entry[name]['importance'] = importance
-        entry[name]['msgType'] = msgType
-        entry[name]['exception'] = exception
-        for k in kwargs:
-            entry[name][k] = kwargs[k]
-        self.saveEntry(entry)
-        self.displayEntry(entry[name])
+            kwargs['currentDir'] = currentDir.name()
         
-    def logExc(self, *args, **kwargs):
-        self.flashButtons()
-        exc = args[1]
+        now = str(time.strftime('%Y.%m.%d %H:%M:%S'))
+        name = 'LogEntry_' + str(time.strftime('%Y.%m.%d %H.%M.%S'))  ## TODO: not unique
+        #self.msgCount += 1
+        entry = {
+            'docs': None,
+            'reasons': None,
+            'message': msg,
+            'timestamp': now,
+            'importance': importance,
+            'msgType': msgType,
+            'exception': exception,
+        }
+        for k in kwargs:
+            entry[k] = kwargs[k]
+        self.processEntry(entry)
+        self.saveEntry({name:entry})
+        self.displayEntry(entry)
+        
+        
+    def logExc(self, *args, **kargs):
+        kargs['exception'] = sys.exc_info()
+        self.logMsg(*args, **kargs)
+        
+    def processEntry(self, entry):
+        ## pre-processing common to saveEntry and displayEntry
+        exc_info = entry.pop('exception')
+        exTyp, exc, tb = exc_info
         if isinstance(exc, HelpfulException):
-            error, tb, docs = self.formatHelpfulException(*args)
-            self.logMsg(error, msgType='error', exception=tb, documentation=docs **kwargs)
+            error, tb, docs = self.formatHelpfulException(*exc_info)
+            entry['message'] += error
+            entry['docs'] += docs
+            #self.logMsg(error, msgType='error', exception=tb, documentation=docs **kwargs)
         else: 
-            message = kwargs.get('message', '')
-            if message is not '':
-                kwargs.pop('message')
-                message += '\n'
-            error, tb = self.formatException(*args)
-            self.logMsg(message+error, msgType='error', exception=tb, **kwargs)
+            error, tb = self.formatException(*exc_info)
+            entry['message'] += '\n' + error
+            entry['msgType'] = 'error'
+            #self.logMsg(message+error, msgType='error', exception=tb, **kwargs)
+        entry['traceback'] = tb
+        
+    #def logExc(self, *args, **kwargs):
+        #self.flashButtons()
+        #exc_info = kwargs.pop('exc_info', sys.exc_info())
+        #exc = exc_info[1]
+        #if isinstance(exc, HelpfulException):
+            #error, tb, docs = self.formatHelpfulException(*exc_info)
+            #self.logMsg(error, msgType='error', exception=tb, documentation=docs **kwargs)
+        #else: 
+            #message = kwargs.get('message', '')
+            #if message is not '':
+                #kwargs.pop('message')
+                #message += '\n'
+            #error, tb = self.formatException(*exc_info)
+            #self.logMsg(message+error, msgType='error', exception=tb, **kwargs)
     
         
     def textEntered(self):
@@ -111,8 +138,10 @@ class LogWindow(QtGui.QMainWindow):
                 colorStr = 'green'
             self.displayText(entry['message'], colorStr=colorStr, timeStamp=entry['timestamp'])
         elif entry['msgType'] == 'error':
-            self.displayText(entry['message'], colorStr='red', timeStamp=entry['timestamp'], reasons=entry.get('reasons', None), docs=entry.get('documentation', None))
-            self.displayTraceback(entry['exception'])
+            self.displayText(entry['message'], colorStr='#AA0000', timeStamp=entry['timestamp'], reasons=entry.get('reasons', None), docs=entry.get('documentation', None))
+            self.displayTraceback(entry['traceback'])
+            self.flashButtons()
+            
         elif entry['msgType'] == 'warning':
             self.displayText(entry['message'], colorStr='orange', timeStamp=entry['timestamp'])
         else:
@@ -127,7 +156,7 @@ class LogWindow(QtGui.QMainWindow):
             msg = msg[:-1]     
         msg = '<br>'.join(msg.split('\n'))
         if timeStamp is not None:
-            strn = '<i style="color:gray"> %s </i> <span style="color:%s"> %s </span> \n' % (timeStamp, colorStr, msg)
+            strn = '<b style="color:black"> %s </b> <span style="color:%s"> %s </span> \n' % (timeStamp, colorStr, msg)
         else:
             strn = '<span style="color:%s"> %s </span> \n' % (colorStr, msg)
         self.ui.output.appendHtml(strn)
@@ -192,7 +221,7 @@ class LogWindow(QtGui.QMainWindow):
             print x
         except:
             t, exc, tb = sys.exc_info()
-            self.manager.logExc(t, exc, tb, message="This button doesn't work", reasons='reason a, reason b', docs='documentation')
+            self.manager.logExc(message="This button doesn't work", reasons='reason a, reason b', docs='documentation')
             #if isinstance(exc, HelpfulException):
                 #exc.prependErr("Button doesn't work", (t,exc,tb), "a. It's supposed to raise an error for testing purposes, b. You're doing it wrong.")
                 #raise
@@ -216,27 +245,39 @@ class LogWindow(QtGui.QMainWindow):
         self.raise_()
         self.resetButtons()
         
-    def setLogDir(self, d):
-        self.logMsg('Moving log storage to %s.' % (d.name(relativeTo=self.manager.baseDir) +'/log.txt'))
-        oldfName = self.fileName
-        self.fileName = d.name() + '/log.txt'
+    def fileName(self):
+        ## return the log file currently used
+        if self.logFile is None:
+            return "tempLog.txt"
+        else:
+            return self.logFile.name()
+        
+    def setLogDir(self, dh):
+        oldfName = self.fileName()
+        
+        if dh.exists('log.txt'):
+            self.logFile = dh['log.txt']
+        else:
+            self.logFile = dh.createFile('log.txt')
+        self.logMsg('Moving log storage to %s.' % (self.logFile.name(relativeTo=self.manager.baseDir)))
+        
         if oldfName == 'tempLog.txt':
             temp = configfile.readConfigFile(oldfName)
             self.saveEntry(temp)
-        self.logMsg('Moved log storage from %s to %s.' % (oldfName, self.fileName))
-        self.ui.storageDirLabel.setText(self.fileName)
-        self.manager.sigLogDirChanged.emit(d)
+        self.logMsg('Moved log storage from %s to %s.' % (oldfName, self.fileName()))
+        self.ui.storageDirLabel.setText(self.fileName())
+        self.manager.sigLogDirChanged.emit(dh)
+        
+    def getLogDir(self):
+        if self.logFile is None:
+            return None
+        else:
+            return self.logFile.parent()
         
     def saveEntry(self, entry):
         ## in foldertypes.cfg make a way to specify a folder type as an experimental unit. Then whenever one of these units is created, give it a new log file (perhaps numbered if it's not the first one made in that run of the experiment?). Also, make a way in the Data Manager to specify where a log file is stored (so you can store it another place if you really want to...).  
         
-        
-        
-        #if self.fileName == None:
-            #i=0
-            #self.fileName = self.manager.baseDir.name() + '/'+ str(time.strftime('%Y.%m.%d')) + '_Log.txt'
-            ##configfile.writeConfigFile('', self.fileName)
-        configfile.appendConfigFile(entry, self.fileName)
+        configfile.appendConfigFile(entry, self.fileName())
             
             
         

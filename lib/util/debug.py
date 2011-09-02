@@ -39,7 +39,7 @@ def getExc(indent=4, prefix='|  '):
 def printExc(msg='', indent=4, prefix='|'):
     """Print an error message followed by an indented exception backtrace
     (This function is intended to be called within except: blocks)"""
-    lib.Manager.logExc(sys.exc_info(), msg=msg)
+    lib.Manager.logExc(msg=msg)
     exc = getExc(indent, prefix + '  ')
     print "[%s]  %s\n" % (time.strftime("%H:%M:%S"), msg)
     print " "*indent + prefix + '='*30 + '>>'
