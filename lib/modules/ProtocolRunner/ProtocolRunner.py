@@ -783,12 +783,15 @@ class ProtocolRunner(Module):
             #print "runSingle: Starting taskThread.."
             self.taskThread.startProtocol(prot)
             #print "runSingle: taskThreadStarted"
-        except:
+        except Exception, e:
             self.enableStartBtns(True)
             self.loopEnabled = False
             print "Error starting protocol. "
-            exc.addMessage("Error starting protocol:")
-            raise
+            #exc.addMessage("Error starting protocol:")
+            if isinstance(e[1], HelpfulException):
+                e[1].prependInfo("Error starting protocol. ", e)
+            else:    
+                raise HelpfulException("Error starting protocol. ", exc=e)
         
    
     def runSequenceClicked(self):
