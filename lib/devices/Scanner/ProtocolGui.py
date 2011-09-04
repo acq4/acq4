@@ -783,6 +783,9 @@ class TargetPoint(widgets.EllipseROI):
         sc = widgets.ROI.stateCopy(self)
         #sc['displaySize'] = self.displaySize
         return sc
+    
+    def resetParents(self):
+        pass
         
 
 class TargetGrid(widgets.ROI):
