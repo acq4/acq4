@@ -136,7 +136,7 @@ class LogWindow(QtGui.QMainWindow):
     def displayEntry(self, entry):
         isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
         if not isGuiThread:
-            sigDisplayEntry.emit(entry)
+            self.sigDisplayEntry.emit(entry)
             return
         
         else:
