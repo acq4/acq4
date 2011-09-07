@@ -77,6 +77,7 @@ class ScannerProtoGui(ProtocolGui):
         self.ui.itemTree.currentItemChanged.connect(self.itemSelected)
         self.ui.itemTree.sigItemMoved.connect(self.treeItemMoved)
         self.ui.hideCheck.toggled.connect(self.showInterface)
+        self.ui.hideMarkerBtn.clicked.connect(self.hideSpotMarker)
         self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
         #self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
         self.ui.sizeFromCalibrationRadio.toggled.connect(self.updateSpotSizes)
@@ -241,13 +242,17 @@ class ScannerProtoGui(ProtocolGui):
             cal = self.dev.getCalibration(cam, laser)
             ss = cal['spot'][1]
            
-        except:
+        except Exception, e:
             print "Could not find spot size from calibration."
-            logMsg("Could not find spot size from calibration.", msgType='error') ### This should turn into a HelpfulException.
-            raise   
+            #logMsg("Could not find spot size from calibration.", msgType='error') ### This should turn into a HelpfulException.
+            if isinstance(e[1], HelpfulException):
+                e[1].prependInfo("Could not find spot size from calibration. ", exc=e, reasons=["Correct camera and/or laser device are not selected.", "There is no calibration file for selected camera and laser."])
+            else:
+                raise HelpfulException("Could not find spot size from calibration. ", exc=e, reasons=["Correct camera and/or laser device are not selected.", "There is no calibration file for selected camera and laser."])
+            
         if self.ui.sizeFromCalibrationRadio.isChecked():
             displaySize = ss
-            self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited) ## get around a reload error
+            ## reconnecting before this to get around reload errors, breaks the disconnect
             self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
             self.stateGroup.setState({'spotSize':ss})
             self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
@@ -314,7 +319,9 @@ class ScannerProtoGui(ProtocolGui):
             'duration': self.prot.getParam('duration')
         }
         return prot
-        
+    
+    def hideSpotMarker(self):
+        self.spotMarker.hide()
         
         
     def handleResult(self, result, params):
@@ -354,7 +361,7 @@ class ScannerProtoGui(ProtocolGui):
         self.addItem(pt, name,  autoPos,  autoName)
         return pt
         
-    def addGrid(self, pos=None, size=None, angle=0,  name=None, rebuildOpts = None):
+    def addGrid(self, pos=None, size=None, angle=0,  name=None, rebuildOpts = {}):
         autoName = False
         if name is None:
             name = 'Grid'
@@ -746,6 +753,7 @@ class TargetPoint(widgets.EllipseROI):
         self.treeItem = None
         self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         #self.host = args.get('host', None)
+        self.rebuildOpts = args.get('rebuildOpts', {})
         
         
     def updateInit(self, host):
@@ -755,6 +763,18 @@ class TargetPoint(widgets.EllipseROI):
         
     def updateFamily(self):
         pass
+    
+    def resetParents(self):
+        """For use when rebuilding scanner targets from the deviceTargetList"""
+        if self.rebuildOpts.get('parentName', None) is not None:
+            tw = self.treeItem.treeWidget()
+            parent = tw.findItems(self.rebuildOpts['parentName'], QtCore.Qt.MatchRecursive)[0]
+            tw.prepareMove(self.treeItem)
+            tw.invisibleRootItem().removeChild(self.treeItem)
+            parent.insertChild(0, self.treeItem)
+            tw.recoverMove(self.treeItem)
+            parent.setExpanded(True)
+            self.host.treeItemMoved(self.treeItem, parent, 0)
         
     def setPointSize(self):
         size, displaySize = self.host.pointSize()
@@ -789,7 +809,7 @@ class TargetGrid(widgets.ROI):
     
     sigPointsChanged = QtCore.Signal(object)
     
-    def __init__(self, pos, size, ptSize, pd, angle, rebuildOpts = None):
+    def __init__(self, pos, size, ptSize, pd, angle, rebuildOpts = {}):
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         self.gridSpacingSpin = SpinBox(step=0.1)
         self.gridSpacingSpin.setValue(pd)
@@ -827,7 +847,7 @@ class TargetGrid(widgets.ROI):
         self.treeItem.setText(3, "14")
         self.host = host
         self.pointSize, self.pointDisplaySize = self.host.pointSize()
-        if self.rebuildOpts is not None:
+        if len(self.rebuildOpts) > 0:
             self.gridSpacingSpin.setValue(self.rebuildOpts.get('gridPacking', self.gridPacking))
             layout = self.rebuildOpts.get('gridLayout', "Hexagonal")
             if layout == "Hexagonal":
@@ -838,7 +858,7 @@ class TargetGrid(widgets.ROI):
     
     def resetParents(self):
         """For use when rebuilding scanner targets from the deviceTargetList"""
-        if self.rebuildOpts['parentName'] is not None:
+        if self.rebuildOpts.get('parentName', None) is not None:
             tw = self.treeItem.treeWidget()
             parent = tw.findItems(self.rebuildOpts['parentName'], QtCore.Qt.MatchRecursive)[0]
             tw.prepareMove(self.treeItem)
@@ -1024,6 +1044,9 @@ class TargetOcclusion(widgets.PolygonROI):
         self.host = host
         
     def setPointSize(self):
+        pass
+    
+    def resetParents(self):
         pass
     
 class TargetProgram(QtCore.QObject):

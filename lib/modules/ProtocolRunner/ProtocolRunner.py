@@ -10,7 +10,7 @@ from advancedTypes import OrderedDict
 from SequenceRunner import *
 from WidgetGroup import *
 from Mutex import Mutex, MutexLocker
-from lib.Manager import getManager
+from lib.Manager import getManager, logMsg
 from debug import *
 import ptime
 import analysisModules
@@ -784,11 +784,14 @@ class ProtocolRunner(Module):
             self.taskThread.startProtocol(prot)
             #print "runSingle: taskThreadStarted"
         except:
+            exc = sys.exc_info()
             self.enableStartBtns(True)
             self.loopEnabled = False
             print "Error starting protocol. "
-            exc.addMessage("Error starting protocol:")
-            raise
+            if isinstance(exc[1], HelpfulException):
+                e[1].prependErr("Error starting protocol:", exc=exc)
+            else:
+                raise HelpfulException("Error starting protocol:", exc=exc)
         
    
     def runSequenceClicked(self):

@@ -65,7 +65,7 @@ def logMsg(*args, **kwargs):
 def logExc(*args, **kwargs):
     global LOG
     if LOG is not None:
-        LOG.logExc(*args, **kwargs)
+        LOG.logExc(*args, msgType='error', **kwargs)
     else:
         print "Can't log error message; no log created yet."
         print args

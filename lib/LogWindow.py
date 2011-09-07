@@ -26,7 +26,7 @@ class LogButton(FeedbackButton):
 
 class LogWindow(QtGui.QMainWindow):
     
-    sigDisplayEntry = QtCore.SIGNAL(object) ## for thread-safetyness
+    sigDisplayEntry = QtCore.Signal(object) ## for thread-safetyness
     
     def __init__(self, manager):
         QtGui.QMainWindow.__init__(self)
@@ -234,12 +234,12 @@ class LogWindow(QtGui.QMainWindow):
             print x
         except:
             t, exc, tb = sys.exc_info()
-            self.manager.logExc(message="This button doesn't work", reasons='reason a, reason b', docs='documentation')
-            #if isinstance(exc, HelpfulException):
-                #exc.prependErr("Button doesn't work", (t,exc,tb), "a. It's supposed to raise an error for testing purposes, b. You're doing it wrong.")
-                #raise
-            #else:
-                #raise HelpfulException(message='This button does not work.', exc=(t, exc, tb), reasons="a. It's supposed to raise an error for testing purposes, b. You're doing it wrong.")
+            #logExc(message="This button doesn't work", reasons='reason a, reason b', docs='documentation')
+            if isinstance(exc, HelpfulException):
+                exc.prependErr("Button doesn't work", (t,exc,tb), "a. It's supposed to raise an error for testing purposes, b. You're doing it wrong.")
+                raise
+            else:
+                raise HelpfulException(message='This button does not work.', exc=(t, exc, tb), reasons="a. It's supposed to raise an error for testing purposes, b. You're doing it wrong.")
     
     def makeError(self):
         try:
@@ -291,7 +291,7 @@ class LogWindow(QtGui.QMainWindow):
         
     def saveEntry(self, entry):
         ## in foldertypes.cfg make a way to specify a folder type as an experimental unit. Then whenever one of these units is created, give it a new log file (perhaps numbered if it's not the first one made in that run of the experiment?). Also, make a way in the Data Manager to specify where a log file is stored (so you can store it another place if you really want to...).  
-        with self.lock():
+        with self.lock:
             configfile.appendConfigFile(entry, self.fileName())
             
             
