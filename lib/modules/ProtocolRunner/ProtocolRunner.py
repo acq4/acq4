@@ -16,6 +16,11 @@ import ptime
 import analysisModules
 import time, gc
 import sip
+import sys
+from HelpfulException import HelpfulException
+from ProgressDialog import ProgressDialog
+from lib.LogWindow import LogButton
+
 #import pdb
 
 class Window(QtGui.QMainWindow):
@@ -92,6 +97,9 @@ class ProtocolRunner(Module):
         #print "  5"; sys.stdout.flush()
         self.win.setGeometry(g)
         #print "  6"; sys.stdout.flush()
+        
+        self.logBtn = LogButton("Log")
+        self.win.statusBar().addPermanentWidget(self.logBtn)
         
         self.ui.protoDurationSpin.setOpts(dec=True, bounds=[1e-3,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
         self.ui.protoLeadTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=10e-3, suffix='s', siPrefix=True)
@@ -775,11 +783,15 @@ class ProtocolRunner(Module):
             #print "runSingle: Starting taskThread.."
             self.taskThread.startProtocol(prot)
             #print "runSingle: taskThreadStarted"
-        except:
+        except Exception, e:
             self.enableStartBtns(True)
             self.loopEnabled = False
             print "Error starting protocol. "
-            raise
+            #exc.addMessage("Error starting protocol:")
+            if isinstance(e[1], HelpfulException):
+                e[1].prependInfo("Error starting protocol. ", e)
+            else:    
+                raise HelpfulException("Error starting protocol. ", exc=e)
         
    
     def runSequenceClicked(self):
@@ -827,11 +839,11 @@ class ProtocolRunner(Module):
             
             #print params, linkedParams
             ## Generate the complete array of command structures. This can take a long time, so we start a progress dialog.
-            progressDlg = QtGui.QProgressDialog("Generating protocol commands..", 0, pLen)
-            progressDlg.setMinimumDuration(500)  ## If this takes less than 500ms, progress dialog never appears.
-            self.lastQtProcessTime = ptime.time()
-            prot = runSequence(lambda p: self.generateProtocol(dh, p, progressDlg), paramInds, paramInds.keys(), linkedParams=linkedParams)
-            progressDlg.setValue(pLen)
+            with ProgressDialog("Generating protocol commands..", 0, pLen) as progressDlg:
+                #progressDlg.setMinimumDuration(500)  ## If this takes less than 500ms, progress dialog never appears.
+                self.lastQtProcessTime = ptime.time()
+                prot = runSequence(lambda p: self.generateProtocol(dh, p, progressDlg), paramInds, paramInds.keys(), linkedParams=linkedParams)
+                #progressDlg.setValue(pLen)
             
             #print "==========Sequence Protocol=============="
             #print prot
@@ -881,6 +893,17 @@ class ProtocolRunner(Module):
                 ## select out just the parameters needed for this device
                 p = dict([(i[1], params[i]) for i in params.keys() if i[0] == d])
                 ## Ask the device to generate its protocol command
+                if d not in self.docks:
+                    raise HelpfulException("The device '%s' currently has no dock loaded." % d,
+                                           reasons=[
+                                               "This device name does not exist in the system's configuration",
+                                               "There was an error when creating the device at program startup",
+                                               ],
+                                           tags={},
+                                           importance=8,
+                                           addImportance=3,
+                                           docSections=['userGuide/modules/ProtocolRunner/loadingNonexistentDevices']
+                                           )
                 prot[d] = self.docks[d].widget().generateProtocol(p)
                 #prof.mark("get protocol from %s" % d)
         #print prot['protocol']['storageDir'].name()
@@ -1145,7 +1168,7 @@ class TaskThread(QtCore.QThread):
             self.lastRunTime = None
             #l.unlock()
             #print "TaskThread:startProtocol starting..", self.lock.depth()
-            self.start()
+            self.start() ### causes self.run() to be called from somewhere in C code
             #print "TaskThread:startProtocol started", self.lock.depth()
     
     def pause(self, pause):
@@ -1261,8 +1284,9 @@ class TaskThread(QtCore.QThread):
                     task.stop(abort=True)
                 except:
                     pass
-                printExc("\nError starting protocol:")
-                raise
+                #printExc("\nError starting protocol:")
+                exc = sys.exc_info()
+                raise HelpfulException("\nError starting protocol:", exc)
             
             prof.mark('start task')
             ### Do not put code outside of these try: blocks; may cause device lockup
@@ -1284,11 +1308,11 @@ class TaskThread(QtCore.QThread):
                 result = task.getResult()
             except:
                 ## Make sure the task is fully stopped if there was a failure at any point.
-                printExc("\nError during protocol execution:")
+                #printExc("\nError during protocol execution:")
                 print "\nStopping task.."
                 task.stop(abort=True)
                 print ""
-                raise
+                raise HelpfulException("\nError during protocol execution:", sys.exc_info())
             #print "\nAFTER:\n", cmd
             prof.mark('getResult')
             

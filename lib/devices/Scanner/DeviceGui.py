@@ -8,6 +8,7 @@ from imageAnalysis import *
 from debug import *
 import numpy as np
 import WidgetGroup
+from ProgressDialog import ProgressDialog
 
 class ScannerDeviceGui(QtGui.QWidget):
     
@@ -181,19 +182,19 @@ class ScannerDeviceGui(QtGui.QWidget):
 
     def runCalibration(self):
         """Wraps around runCalibrationInner, adds progress dialog and error reporting"""
-        self.progressDlg = QtGui.QProgressDialog("Calibrating scanner: Running protocol..", 0, 100)
-        self.progressDlg.setWindowModality(QtCore.Qt.WindowModal)
-        self.progressDlg.setMinimumDuration(0)
+        with ProgressDialog("Calibrating scanner: Running protocol..", 0, 100) as self.progressDlg:
+            #self.progressDlg.setWindowModality(QtCore.Qt.WindowModal)
+            #self.progressDlg.setMinimumDuration(0)
         
-        try:
-            self.updatePrgDlg(0)
-            return self.runCalibrationInner()
-        except:
-            #print "SHOW ERROR"
-            self.win.showMessage("Error during scanner calibration, see console.", 30000)
-            raise
-        finally:
-            self.progressDlg.setValue(100)
+            try:
+                self.updatePrgDlg(0)
+                return self.runCalibrationInner()
+            except:
+                #print "SHOW ERROR"
+                self.win.showMessage("Error during scanner calibration, see console.", 30000)
+                raise
+            #finally:
+                #self.progressDlg.setValue(100)
 
     def updatePrgDlg(self, val=None, text=None):
         if text is not None:

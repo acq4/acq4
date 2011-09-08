@@ -48,13 +48,14 @@ class ROI(QtGui.QGraphicsObject):
     sigRegionChangeStarted = QtCore.Signal(object)
     sigRegionChanged = QtCore.Signal(object)
     
-    def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None):
+    def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None, movable=True):
         #QObjectWorkaround.__init__(self)
         QtGui.QGraphicsObject.__init__(self, parent)
         pos = Point(pos)
         size = Point(size)
         self.aspectLocked = False
-        self.translatable = True
+        self.translatable = movable
+        self.rotateAllowed = True
         
         if pen is None:
             self.pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
@@ -236,6 +237,8 @@ class ROI(QtGui.QGraphicsObject):
                 #self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
                 self.sigRegionChangeStarted.emit(self)
                 ev.accept()
+            else:
+                ev.ignore()
         elif ev.button() == QtCore.Qt.RightButton:
             if self.isMoving:
                 ev.accept()
@@ -248,9 +251,9 @@ class ROI(QtGui.QGraphicsObject):
     def mouseMoveEvent(self, ev):
         #print "mouse move", ev.pos()
         if self.translatable and self.isMoving and ev.buttons() == QtCore.Qt.LeftButton:
-            snap = None
-            if self.translateSnap or (ev.modifiers() & QtCore.Qt.ControlModifier):
-                snap = Point(self.snapSize, self.snapSize)
+            snap = True if (ev.modifiers() & QtCore.Qt.ControlModifier) else None
+            #if self.translateSnap or (ev.modifiers() & QtCore.Qt.ControlModifier):
+                #snap = Point(self.snapSize, self.snapSize)
             newPos = ev.scenePos() + self.cursorOffset
             newPos = self.mapSceneToParent(newPos)
             self.translate(newPos - self.pos(), snap=snap)
@@ -334,9 +337,9 @@ class ROI(QtGui.QGraphicsObject):
         if h['type'] == 't':
             #p0 = Point(self.mapToScene(h['item'].pos()))
             #p1 = Point(pos + self.mapToScene(self.pressHandlePos) - self.mapToScene(self.pressPos))
-            snap = None
-            if self.translateSnap or (modifiers & QtCore.Qt.ControlModifier):
-                snap = Point(self.snapSize, self.snapSize)
+            snap = True if (modifiers & QtCore.Qt.ControlModifier) else None
+            #if self.translateSnap or ():
+                #snap = Point(self.snapSize, self.snapSize)
             self.translate(p1-p0, snap=snap, update=False)
         
         elif h['type'] == 'f':
@@ -407,6 +410,8 @@ class ROI(QtGui.QGraphicsObject):
             self.updateHandles()
         
         elif h['type'] in ['r', 'rf']:
+            if not self.rotateAllowed:
+                return
             ## If the handle is directly over its center point, we can't compute an angle.
             if lp1.length() == 0 or lp0.length() == 0:
                 return
@@ -558,11 +563,14 @@ class ROI(QtGui.QGraphicsObject):
         
    
     def translate(self, *args, **kargs):
-        """accepts either (x, y, snap) or ([x,y], snap) as arguments"""
-        if 'snap' not in kargs:
-            snap = None
-        else:
-            snap = kargs['snap']
+        """accepts either (x, y, snap) or ([x,y], snap) as arguments
+        
+        snap can be:
+           None (default): use self.translateSnap and self.snapSize to determine whether/how to snap
+           False:          do no snap
+           Point(w,h)      snap to rectangular grid with spacing (w,h)
+           True:           snap using self.snapSize (and ignoring self.translateSnap)
+        """
 
         if len(args) == 1:
             pt = args[0]
@@ -571,10 +579,16 @@ class ROI(QtGui.QGraphicsObject):
             
         newState = self.stateCopy()
         newState['pos'] = newState['pos'] + pt
-        if snap != None:
-            newState['pos'][0] = round(newState['pos'][0] / snap[0]) * snap[0]
-            newState['pos'][1] = round(newState['pos'][1] / snap[1]) * snap[1]
-            
+        
+        ## snap position
+        #snap = kargs.get('snap', None)
+        #if (snap is not False)   and   not (snap is None and self.translateSnap is False):
+        
+        snap = kargs.get('snap', None)
+        if snap is None:
+            snap = self.translateSnap
+        if snap is not False:
+            newState['pos'] = self.getSnapPosition(newState['pos'], snap=snap)
         
         #d = ev.scenePos() - self.mapToScene(self.pressPos)
         if self.maxBounds is not None:
@@ -603,6 +617,23 @@ class ROI(QtGui.QGraphicsObject):
         tr.rotate(-state['angle'])
         r = tr.mapRect(r)
         return r.adjusted(state['pos'][0], state['pos'][1], state['pos'][0], state['pos'][1])
+    
+    
+    def getSnapPosition(self, pos, snap=None):
+        ## Given that pos has been requested, return the nearest snap-to position
+        ## optionally, snap may be passed in to specify a rectangular snap grid.
+        ## override this function for more interesting snap functionality..
+        
+        if snap is None or snap is True:
+            if self.snapSize is None:
+                return pos
+            snap = Point(self.snapSize, self.snapSize)
+        
+        return Point(
+            round(pos[0] / snap[0]) * snap[0],
+            round(pos[1] / snap[1]) * snap[1]
+        )
+    
     
     def boundingRect(self):
         return QtCore.QRectF(0, 0, self.state['size'][0], self.state['size'][1])

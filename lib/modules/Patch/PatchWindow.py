@@ -12,8 +12,10 @@ from numpy import *
 import scipy.optimize
 from debug import *
 from functions import siFormat
-from lib.Manager import getManager
+import lib.Manager as Manager
 import ptime
+from lib.LogWindow import LogButton
+
 
 class PatchWindow(QtGui.QMainWindow):
     def __init__(self, dm, clampName):
@@ -61,9 +63,11 @@ class PatchWindow(QtGui.QMainWindow):
         self.setCentralWidget(self.cw)
         self.ui = Ui_Form()
         self.ui.setupUi(self.cw)
+        self.logBtn = LogButton("Log")
+        self.statusBar().addPermanentWidget(self.logBtn)
 
         self.stateFile = os.path.join('modules', self.clampName + '_ui.cfg')
-        uiState = getManager().readConfigFile(self.stateFile)
+        uiState = Manager.getManager().readConfigFile(self.stateFile)
         if 'geometry' in uiState:
             geom = QtCore.QRect(*uiState['geometry'])
             self.setGeometry(geom)
@@ -180,7 +184,7 @@ class PatchWindow(QtGui.QMainWindow):
         #print "Stopping patch thread.."
         geom = self.geometry()
         uiState = {'window': str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
-        getManager().writeConfigFile(uiState, self.stateFile)
+        Manager.getManager().writeConfigFile(uiState, self.stateFile)
         
         self.thread.stop(block=True)
         #print "Patch thread exited; module quitting."
@@ -403,10 +407,12 @@ class PatchWindow(QtGui.QMainWindow):
         if self.ui.startBtn.isChecked():
             if not self.thread.isRunning():
                 self.thread.start()
+                Manager.logMsg("Patch module started.")
             self.ui.startBtn.setText('Stop')
         else:
             self.ui.startBtn.setEnabled(False)
             self.thread.stop()
+            Manager.logMsg("Patch module stopped.")
             
     def threadStopped(self):
         self.ui.startBtn.setText('Start')

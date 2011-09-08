@@ -37,6 +37,7 @@ class DIOSwitch(Device):
             for name, conf in self.daqs.iteritems():
                 daq, chan = conf
                 val = daq.getChannelValue(chan)
+                #print name, val
                 if self.state.get(name, None) != val:
                     change[name] = val
                 self.state[name] = val

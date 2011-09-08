@@ -22,9 +22,11 @@ from debug import *
 from metaarray import *
 import sip
 from SignalProxy import proxyConnect
-from lib.Manager import getManager
+#from lib.Manager import getManager
+import lib.Manager as Manager
 import numpy as np
 from RecordThread import RecordThread
+from lib.LogWindow import LogButton
 
 traceDepth = 0
 def trace(func):
@@ -92,7 +94,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.setupUi(self)
         
         self.stateFile = os.path.join('modules', self.module.name + '_ui.cfg')
-        uiState = getManager().readConfigFile(self.stateFile)
+        uiState = module.manager.readConfigFile(self.stateFile)
         if 'geometry' in uiState:
             geom = QtCore.QRect(*uiState['geometry'])
             self.setGeometry(geom)
@@ -110,6 +112,10 @@ class CameraWindow(QtGui.QMainWindow):
         self.histogramCurve.rotate(90)
         self.histogramCurve.scale(1.0, -1.0)
         self.lastHistogramUpdate = 0
+        
+        self.levelMax = 1
+        self.levelMin = 0
+        self.lastMinMax = None  ## Records most recently measured maximum/minimum image values
         
         
         self.ticks = [t[0] for t in self.ui.gradientWidget.listTicks()]
@@ -192,13 +198,15 @@ class CameraWindow(QtGui.QMainWindow):
         self.fpsLabel.setFont(font)
         self.fpsLabel.setFixedWidth(50)
         self.vLabel.setFixedWidth(50)
+        self.logBtn = LogButton('Log')
         self.statusBar().addPermanentWidget(self.recLabel)
         self.statusBar().addPermanentWidget(self.xyLabel)
         self.statusBar().addPermanentWidget(self.rgnLabel)
         self.statusBar().addPermanentWidget(self.tLabel)
         self.statusBar().addPermanentWidget(self.vLabel)
         self.statusBar().addPermanentWidget(self.fpsLabel)
-        
+        self.statusBar().addPermanentWidget(self.logBtn)
+        self.logBtn.clicked.connect(module.manager.showLogWindow)
         
         self.show()
         self.openCamera()
@@ -257,6 +265,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.btnFullFrame.clicked.connect(lambda: self.setRegion())
         self.ui.scaleToImageBtn.clicked.connect(self.scaleToImage)
         
+        
         ## Use delayed connection for these two widgets
         self.proxy1 = proxyConnect(self.ui.binningCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.setBinning)
         self.ui.spinExposure.valueChanged.connect(self.setExposure)  ## note that this signal (from lib.util.SpinBox) is delayed.
@@ -285,6 +294,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.btnAutoGain.toggled.connect(self.toggleAutoGain)
         self.ui.btnAutoGain.setChecked(True)
         
+        
         ## Connect Persistent Frames dock
         self.ui.addFrameBtn.clicked.connect(self.addPersistentFrame)
         self.ui.clearFramesBtn.clicked.connect(self.clearPersistentFrames)
@@ -300,7 +310,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.frameTimer.start(10)
         #QtCore.QTimer.singleShot(1, self.drawFrame)
         ## avoiding possible singleShot-induced crashes
-
+        
     #@trace
     def updateBorders(self):
         """Draw the camera boundaries for each objective"""
@@ -486,7 +496,7 @@ class CameraWindow(QtGui.QMainWindow):
         #self.frameTimer.stop()
         geom = self.geometry()
         uiState = {'window': str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
-        getManager().writeConfigFile(uiState, self.stateFile)
+        Manager.getManager().writeConfigFile(uiState, self.stateFile)
         
         
         
@@ -535,6 +545,7 @@ class CameraWindow(QtGui.QMainWindow):
 
     #@trace
     def setMouse(self, qpt=None):
+        #print "mouse:", qpt
         if qpt is None:
             if not hasattr(self, 'mouse'):
                 return
@@ -673,19 +684,30 @@ class CameraWindow(QtGui.QMainWindow):
     
     #@trace
     def setLevelRange(self, rmin=None, rmax=None):
+        
         if rmin is None:
             if self.ui.btnAutoGain.isChecked():
                 rmin = 0.0
                 rmax = 1.0
+                #self.ui.gradientWidget.tickMoved(self.ticks[1], QtCore.QPointF(rmax, 0.0))
+                #self.ui.gradientWidget.tickMoved(self.ticks[0], QtCore.QPointF(rmin, 0.0))
+                self.ui.gradientWidget.setTickValue(1, rmax)
+                self.ui.gradientWidget.setTickValue(0, rmin)
             else:
+                bl, wl = self.getLevels()
                 if self.ui.divideBgBtn.isChecked():
                     rmin = 0.0
                     rmax = 2.0
                 else:
-                    rmin = 0
-                    rmax = 2**self.bitDepth - 1
+                    rmin = 0.0
+                    rmax = float(2**self.bitDepth - 1)
+                    #self.ui.gradientWidget.tickMoved(self.ticks[1], QtCore.QPointF(wl/rmax, 0.0))
+                    #self.ui.gradientWidget.tickMoved(self.ticks[0], QtCore.QPointF(bl/rmax, 0.0))
+                    self.ui.gradientWidget.setTickValue(1, wl/rmax)
+                    self.ui.gradientWidget.setTickValue(0, bl/rmax)
         self.levelMin = rmin
         self.levelMax = rmax
+        
         
     #@trace
     def getLevels(self):
@@ -695,7 +717,17 @@ class CameraWindow(QtGui.QMainWindow):
 
     #@trace
     def toggleAutoGain(self, b):
+        bl, wl = self.getLevels()
         self.setLevelRange()
+        if not b and self.lastMinMax is not None:
+            print bl, wl
+            wl = self.lastMinMax[0] + (self.lastMinMax[1]-self.lastMinMax[0]) * wl
+            bl = self.lastMinMax[0] + (self.lastMinMax[1]-self.lastMinMax[0]) * bl
+            print bl, wl, self.lastMinMax
+            self.ui.gradientWidget.setTickValue(1, wl/float(2**self.bitDepth - 1))
+            self.ui.gradientWidget.setTickValue(0, bl/float(2**self.bitDepth - 1))
+            
+            
 
     #@trace
     def toggleAcquire(self):
@@ -706,6 +738,7 @@ class CameraWindow(QtGui.QMainWindow):
                 self.setExposure(autoRestart=False)
                 self.updateRegion(autoRestart=False)
                 self.cam.start()
+                Manager.logMsg("Camera started aquisition.")
             except:
                 self.ui.btnAcquire.setChecked(False)
                 printExc("Error starting camera:")
@@ -714,6 +747,7 @@ class CameraWindow(QtGui.QMainWindow):
             #print "ACQ untoggled, stop record"
             self.toggleRecord(False)
             self.cam.stop()
+            Manager.logMsg("Camera stopped acquisition.")
             
     #@trace
     def addPlotFrame(self, frame):
@@ -829,6 +863,9 @@ class CameraWindow(QtGui.QMainWindow):
         #sys.stdout.write('+')
         try:
             
+            
+            
+            
             ## If we last drew a frame < 1/30s ago, return.
             t = ptime.time()
             if (self.lastDrawTime is not None) and (t - self.lastDrawTime < .033333):
@@ -850,6 +887,12 @@ class CameraWindow(QtGui.QMainWindow):
             
             ## Handle the next available frame, if there is one.
             if self.nextFrame is not None:
+                #print "===== New Frame ====="
+                #print "   pre: LevelMin ", self.levelMin
+                #print "        LevelMax ", self.levelMax
+                #print "        AGCLastMax", self.AGCLastMax
+                #print "        AGCLastMin", self.AGCLastMin
+                
                 self.currentFrame = self.nextFrame
                 self.nextFrame = None
                 (data, info) = self.currentFrame
@@ -902,7 +945,11 @@ class CameraWindow(QtGui.QMainWindow):
                 
                 wl = minVal + (maxVal-minVal) * wl
                 bl = minVal + (maxVal-minVal) * bl
-            
+                self.lastMinMax = minVal, maxVal
+            #print "  post: LevelMin ", self.levelMin
+            #print "        LevelMax ", self.levelMax
+            #print "        AGCLastMax", self.AGCLastMax
+            #print "        AGCLastMin", self.AGCLastMin
             
             ## Update histogram plot
             #self.updateHistogram(self.currentFrame[0], wl, bl)
@@ -950,6 +997,7 @@ class CameraWindow(QtGui.QMainWindow):
             
             #if self.ui.checkEnableROIs.isChecked():
                 #self.ui.plotWidget.replot()
+           
 
 
         except:

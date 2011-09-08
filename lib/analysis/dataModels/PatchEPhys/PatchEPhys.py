@@ -57,6 +57,8 @@ def dirType(dh):
     if type is None:
         if '__object_type__' in info:
             type = info['__object_type__']
+        elif dh.name()[-5:] == 'Patch':
+            type = 'Patch'
         elif 'protocol' in info:
             if 'sequenceParams' in info:
                 type = 'ProtocolSequence'  

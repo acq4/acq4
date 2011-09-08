@@ -1,2 +1,2 @@
-items: []
+items: [{'gradient': {'ticks': [(0, (0, 0, 0, 255)), (1, (255, 0, 0, 255))], 'mode': 'rgb'}, 'max': 1.0, 'op': '+', 'min': 0.0, 'arg': 'x'}, {'gradient': {'ticks': [(0, (0, 0, 0, 255)), (1, (255, 0, 0, 255))], 'mode': 'rgb'}, 'max': 1.0, 'op': '+', 'min': 0.0, 'arg': 'x'}]
 args: ['x', 'y', 'amp', 'tau']

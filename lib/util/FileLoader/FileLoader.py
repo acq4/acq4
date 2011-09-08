@@ -17,9 +17,16 @@ class FileLoader(QtGui.QWidget):
         self.ui = template.Ui_Form()
         self.ui.setupUi(self)
         self.setHost(host)
+        
         self.ui.setDirBtn.clicked.connect(self.setBaseClicked)
         self.ui.loadBtn.clicked.connect(self.loadClicked)
+        self.ui.dirTree.currentItemChanged.connect(self.updateNotes) ## self.ui.dirTree is a DirTreeWidget
+        self.ui.dirTree.itemDoubleClicked.connect(self.doubleClickEvent)
+        
         self.ui.fileTree.setVisible(showFileTree)
+        self.ui.notesTextEdit.setReadOnly(True)
+        
+        
         
     def setHost(self, host):
         self.host = host
@@ -34,6 +41,10 @@ class FileLoader(QtGui.QWidget):
     def loadClicked(self):
         fh = self.ui.dirTree.selectedFiles()
         self.loadFile(fh)
+        
+    def doubleClickEvent(self, item, column):
+        fh = self.ui.dirTree.handle(item)
+        self.loadFile([fh])
         
     def loadFile(self, files):
         try:
@@ -57,6 +68,16 @@ class FileLoader(QtGui.QWidget):
         """Returns the file selected from the list of already loaded files"""
         return self.ui.fileTree.currentItem().file
         
-    #def setSelectedFile(self, fh):
+    def updateNotes(self, current, previous):
+        #sFile = self.ui.dirTree.selectedFile()
+        fh = current
+        if fh is None:
+            return
+        
+        notes = fh.handle.info().get('notes', ' ')
+        
+        self.ui.notesTextEdit.setPlainText(notes)
+        #print fh
+        #print fh.info()
         
         

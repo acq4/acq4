@@ -5,11 +5,12 @@ from lib.devices.Device import *
 from lib.drivers.SutterMP285 import *
 from lib.drivers.SutterMP285 import SutterMP285 as SutterMP285Driver  ## name collision with device class
 from Mutex import Mutex
-from debug import *
+import debug
 #import pdb
 import devTemplate
 import functions as fn
 import numpy as np
+from copy import deepcopy
 
 class SutterMP285(Device):
 
@@ -24,7 +25,11 @@ class SutterMP285(Device):
         self.scale = config.get('scale', None) ## Allow config to apply extra scale factor
         self.baud = config.get('baud', 9600)   ## 9600 is probably factory default
         self.pos = [0, 0, 0]
-        self.limits = [[-0.01,0.01],[-0.01,0.01],[-0.01,0.01]]
+        self.limits = [
+            [[0,False], [0,False]],
+            [[0,False], [0,False]],
+            [[0,False], [0,False]]
+        ]
         self.maxSpeed = 1e-3
         self.loadConfig()
         self.mThread = SutterMP285Thread(self, self.port, self.baud, self.scale, self.limits, self.maxSpeed)
@@ -48,9 +53,13 @@ class SutterMP285(Device):
         }
         self.dm.writeConfigFile(cfg, self.configFile)
 
-    def setLimit(self, axis, limit, val):
-        self.mThread.setLimit(axis, limit, val)
-        self.limits[axis][limit] = val
+    def setLimit(self, axis, limit, val=None, enabled=None):
+        if val is not None:
+            self.limits[axis][limit][0] = val
+        elif enabled is not None:
+            self.limits[axis][limit][1] = enabled
+        
+        self.mThread.setLimits(self.limits)
         self.storeConfig()
         
     def setMaxSpeed(self, val):
@@ -113,31 +122,43 @@ class SMP285Interface(QtGui.QWidget):
             [self.ui.yMinBtn, self.ui.yMaxBtn],
             [self.ui.zMinBtn, self.ui.zMaxBtn],
         ]
-        self.limitLabels = [
-            [self.ui.xMinLabel, self.ui.xMaxLabel],
-            [self.ui.yMinLabel, self.ui.yMaxLabel],
-            [self.ui.zMinLabel, self.ui.zMaxLabel],
+        self.limitChecks = [
+            [self.ui.xMinCheck, self.ui.xMaxCheck],
+            [self.ui.yMinCheck, self.ui.yMaxCheck],
+            [self.ui.zMinCheck, self.ui.zMaxCheck],
         ]
+        def mkLimitCallback(fn, *args):
+            return lambda: fn(*args)
         for axis in range(3):
             for limit in range(2):
-                self.limitBtns[axis][limit].clicked.connect(self.mkLimitCallback(axis, limit))
-                pos = self.dev.limits[axis][limit]
-                self.limitLabels[axis][limit].setText(fn.siFormat(pos, suffix='m', precision=5))
+                self.limitBtns[axis][limit].clicked.connect(mkLimitCallback(self.updateLimit, axis, limit))
+                self.limitChecks[axis][limit].toggled.connect(mkLimitCallback(self.enableLimit, axis, limit))
+                pos, enabled = self.dev.limits[axis][limit]
+                #self.limitLabels[axis][limit].setText(fn.siFormat(pos, suffix='m', precision=5))
+                self.limitBtns[axis][limit].setText(fn.siFormat(pos, suffix='m', precision=5))
+                self.limitChecks[axis][limit].setChecked(enabled)
         
         self.ui.maxSpeedSpin.setOpts(value=self.dev.maxSpeed, siPrefix=True, dec=True, suffix='m/s', step=0.1, minStep=1e-6)
         self.ui.maxSpeedSpin.valueChanged.connect(self.maxSpeedChanged)
-        self.ui.monitorPosBtn.clicked.connect(self.monitorClicked)
+        self.ui.updatePosBtn.clicked.connect(self.updateClicked)
         self.ui.joyBtn.sigStateChanged.connect(self.joyStateChanged)
         self.ui.coarseStepRadio.toggled.connect(self.resolutionChanged)
         self.ui.fineStepRadio.toggled.connect(self.resolutionChanged)
 
-    def mkLimitCallback(self, *args):
-        return lambda: self.updateLimit(*args)
         
     def updateLimit(self, axis, limit):
+        ## called when the limit buttons are pressed in the GUI
         pos = self.dev.getPosition()[axis]
-        self.dev.setLimit(axis, limit, pos)
-        self.limitLabels[axis][limit].setText(fn.siFormat(pos, suffix='m', precision=5))
+        self.limitBtns[axis][limit].setText(fn.siFormat(pos, suffix='m', precision=5))
+        self.dev.setLimit(axis, limit, val=pos)
+        self.limitChecks[axis][limit].setChecked(True)
+        
+
+    def enableLimit(self, axis, limit):
+        ## called when the limit checks are toggled in the GUI
+        en = self.limitChecks[axis][limit].isChecked()
+        self.dev.setLimit(axis, limit, enabled=en)
+        
         
     def maxSpeedChanged(self):
         self.dev.setMaxSpeed(self.ui.maxSpeedSpin.value())
@@ -150,11 +171,13 @@ class SMP285Interface(QtGui.QWidget):
         #for i in [0,1,2]:
             #if pos[i] < self.limit
 
-        text = ', '.join([fn.siFormat(x, suffix='m', precision=5) for x in pos])
-        self.ui.posLabel.setText(text)
+        text = [fn.siFormat(x, suffix='m', precision=5) for x in pos]
+        self.ui.xPosLabel.setText(text[0])
+        self.ui.yPosLabel.setText(text[1])
+        self.ui.zPosLabel.setText(text[2])
 
-    def monitorClicked(self):
-        self.dev.mThread.setMonitor(self.ui.monitorPosBtn.isChecked())
+    def updateClicked(self):
+        self.dev.mThread.updatePos()
         
     def joyStateChanged(self, btn, v):
         ms = self.ui.maxSpeedSpin.value()
@@ -172,14 +195,16 @@ class SutterMP285Thread(QtCore.QThread):
         QtCore.QThread.__init__(self)
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.scale = scale
-        self.monitor = True
+        #self.monitor = True
+        self.update = False
         self.resolution = 'fine'
         self.dev = dev
         self.port = port
         #self.pos = [0, 0, 0]
         self.baud = baud
         self.velocity = [0,0,0]
-        self.limits = limits
+        self.limits = deepcopy(limits)
+        self.limitChanged = False
         self.maxSpeed = maxSpd
         
         #self.posxyz = [ 0, 0, 0]
@@ -189,17 +214,21 @@ class SutterMP285Thread(QtCore.QThread):
         with self.lock:
             self.resolution = res
         
-    def setLimit(self, axis, limit, pos):
+    def setLimits(self, limits):
         with self.lock:
-            self.limits[axis][limit] = pos
+            self.limits = deepcopy(limits)
+            self.limitChanged = True
             
     def setMaxSpeed(self, s):
         with self.lock:
             self.maxSpeed = s
             
-    def setMonitor(self, mon):
+    #def setMonitor(self, mon):
+        #with self.lock:
+            #self.monitor = mon
+    def updatePos(self):
         with self.lock:
-            self.monitor = mon
+            self.update = True
         
     def setVelocity(self, v):
         with self.lock:
@@ -216,51 +245,73 @@ class SutterMP285Thread(QtCore.QThread):
             
         velocity = np.array([0,0,0])
         pos = [0,0,0]
+        
+        try:
+            self.getImmediatePos()
+            monitor = True
+        except:
+            debug.printExc("Immediate position not available:")
+            monitor = False
+        
         while True:
-            with self.lock:
-                monitor = self.monitor
-                limits = [x[:] for x in self.limits]
-                maxSpeed = self.maxSpeed
-                newVelocity = np.array(self.velocity[:])
-                resolution = self.resolution
-            
-            if np.any(newVelocity != velocity):
-                speed = np.clip(np.sum(newVelocity**2)**0.5, 0., 1.)   ## should always be 0.0-1.0
-                #print "new velocity:", newVelocity, "speed:", speed
-                
-                if speed == 0:
-                    nv = np.array([0,0,0])
-                else:
-                    nv = newVelocity/speed
+            try:
+                ## Lock and copy state to local variables
+                with self.lock:
+                    update = self.update
+                    self.update = False
+                    limits = deepcopy(self.limits)
+                    maxSpeed = self.maxSpeed
+                    newVelocity = np.array(self.velocity[:])
+                    resolution = self.resolution
+                    limitChanged = self.limitChanged
+                    self.limitChanged = False
                     
-                speed = np.clip(speed, 0, maxSpeed)
-                #print "final speed:", speed
+                ## if limits have changed, inform the device
+                if monitor and limitChanged:   ## monitor is only true if this is a customized device with limit checking
+                    self.sendLimits()
                 
-                ## stop current move, get position, start new move
-                #print "stop.."
-                self.stopMove()
-                #print "stop done."
-                
-                #print "getpos..."
-                pos1 = self.readPosition()
-                if pos1 is not None:
+                ## If requested velocity is different from the current velocity, handle that.
+                if np.any(newVelocity != velocity):
+                    speed = np.clip(np.sum(newVelocity**2)**0.5, 0., 1.)   ## should always be 0.0-1.0
+                    #print "new velocity:", newVelocity, "speed:", speed
                     
-                    if speed > 0:
-                        #print "   set new velocity"
-                        self.writeVelocity(speed, nv, limits=limits, pos=pos1, resolution=resolution)
-                        #print "   done"
+                    if speed == 0:
+                        nv = np.array([0,0,0])
+                    else:
+                        nv = newVelocity/speed
                         
-                    ## report current position
+                    speed = np.clip(speed, 0, maxSpeed)
+                    #print "final speed:", speed
                     
+                    ## stop current move, get position, start new move
+                    #print "stop.."
+                    self.stopMove()
+                    #print "stop done."
+                    
+                    #print "getpos..."
+                    pos1 = self.readPosition()
+                    if pos1 is not None:
                         
-                    velocity = newVelocity
-                #print "done"
+                        if speed > 0:
+                            #print "   set new velocity"
+                            self.writeVelocity(speed, nv, limits=limits, pos=pos1, resolution=resolution)
+                            #print "   done"
+                            
+                        ## report current position
+                        
+                            
+                        velocity = newVelocity
+                    #print "done"
                 
-            if np.all(velocity == 0):
-                if monitor:
-                    newPos = self.readPosition()
-
-                    if newPos is not None:
+                ## If velocity is 0, we can do some position checks
+                if np.all(velocity == 0):
+                    newPos = None
+                    if update:
+                        newPos = self.readPosition()
+                    elif monitor:
+                        newPos = self.getImmediatePos()
+    
+                    if newPos is not None: ## If position has changed, emit a signal.
         
                         change = [newPos[i] - pos[i] for i in range(len(newPos))]
                         pos = newPos
@@ -268,10 +319,12 @@ class SutterMP285Thread(QtCore.QThread):
                         if any(change):
                             #self.emit(QtCore.SIGNAL('positionChanged'), {'rel': change, 'abs': self.pos})
                             self.sigPositionChanged.emit({'rel': change, 'abs': pos})
-            else:
-                ## moving; make a guess about the current position
-                pass
-
+                else:
+                    ## moving; make a guess about the current position
+                    pass
+            except:
+                debug.printExc("Error in MP285 thread:")
+                
             self.lock.lock()
             if self.stopThread:
                 self.lock.unlock()
@@ -303,7 +356,7 @@ class SutterMP285Thread(QtCore.QThread):
             return None
         except:
             self.sigError.emit("Read error--see console.")
-            printExc("Error getting packet:")
+            debug.printExc("Error getting packet:")
             return None
         
     def writeVelocity(self, spd, v, limits, pos, resolution):
@@ -353,6 +406,13 @@ class SutterMP285Thread(QtCore.QThread):
                 return False
         return True
         
+    def sendLimits(self):
+        limits = []
+        for ax in [0,1,2]:
+            for lim in [1,0]:
+                pos, en = self.limits[ax][lim]
+                limits.append(pos/self.scale[ax] if en else None)
+        self.mp285.setLimits(limits)
         
     #def read(self):
         #n = self.sp.inWaiting()
@@ -379,6 +439,12 @@ class SutterMP285Thread(QtCore.QThread):
         ## This should be done with a calibrated speed table instead.
         v = int(v*1e6)
         self.mp285.setSpeed(v, fineStep)
+            
+        
+    def getImmediatePos(self):
+        pos = np.array(self.mp285.getImmediatePos())
+        return pos*self.scale
+            
             
     #def readResponse(self):
         #start = ptime.time()

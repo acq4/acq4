@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>898</width>
-    <height>481</height>
+    <width>977</width>
+    <height>484</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -24,7 +24,11 @@
       </widget>
      </item>
      <item>
-      <widget class="QComboBox" name="cameraCombo"/>
+      <widget class="QComboBox" name="cameraCombo">
+       <property name="toolTip">
+        <string>Selects the camera module to use with the scanner. This, along with the laser device, determines which calibration files will be used.</string>
+       </property>
+      </widget>
      </item>
     </layout>
    </item>
@@ -55,14 +59,39 @@
       </widget>
      </item>
      <item>
-      <widget class="QComboBox" name="laserCombo"/>
+      <widget class="QComboBox" name="laserCombo">
+       <property name="toolTip">
+        <string>Selects the laser to be used.</string>
+       </property>
+      </widget>
      </item>
     </layout>
    </item>
-   <item row="1" column="2" rowspan="7">
-    <widget class="QListWidget" name="itemList"/>
+   <item row="1" column="2" rowspan="8">
+    <widget class="TreeWidget" name="itemTree">
+     <column>
+      <property name="text">
+       <string>Item</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Grid Spacing</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Grid Layout</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string># of points</string>
+      </property>
+     </column>
+    </widget>
    </item>
-   <item row="1" column="3" rowspan="7">
+   <item row="1" column="3" rowspan="8">
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
       <layout class="QVBoxLayout" name="verticalLayout">
@@ -140,89 +169,25 @@
      </item>
     </layout>
    </item>
-   <item row="1" column="4">
-    <spacer name="horizontalSpacer">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>63</width>
-       <height>25</height>
-      </size>
-     </property>
-    </spacer>
-   </item>
-   <item row="2" column="0" colspan="2">
+   <item row="2" column="0" rowspan="2" colspan="2">
     <widget class="QCheckBox" name="simulateShutterCheck">
      <property name="text">
       <string>Simulate Shutter</string>
      </property>
     </widget>
    </item>
-   <item row="3" column="0" colspan="2">
-    <layout class="QGridLayout" name="gridLayout">
-     <item row="0" column="0">
-      <widget class="SpinBox" name="minTimeSpin">
-       <property name="suffix">
-        <string/>
-       </property>
-       <property name="decimals">
-        <number>2</number>
-       </property>
-       <property name="maximum">
-        <double>1000000.000000000000000</double>
-       </property>
-      </widget>
-     </item>
-     <item row="1" column="0">
-      <widget class="SpinBox" name="minDistSpin">
-       <property name="suffix">
-        <string/>
-       </property>
-       <property name="maximum">
-        <double>1000000.000000000000000</double>
-       </property>
-      </widget>
-     </item>
-     <item row="1" column="1">
-      <widget class="QLabel" name="label_4">
-       <property name="text">
-        <string>Minimum distance</string>
-       </property>
-      </widget>
-     </item>
-     <item row="0" column="1">
-      <widget class="QLabel" name="label_3">
-       <property name="text">
-        <string>Minimum time</string>
-       </property>
-      </widget>
-     </item>
-     <item row="2" column="0">
-      <widget class="SpinBox" name="packingSpin">
-       <property name="minimum">
-        <double>0.100000000000000</double>
-       </property>
-       <property name="maximum">
-        <double>1000.000000000000000</double>
-       </property>
-       <property name="singleStep">
-        <double>0.100000000000000</double>
-       </property>
-       <property name="value">
-        <double>1.000000000000000</double>
-       </property>
-      </widget>
-     </item>
-     <item row="2" column="1">
-      <widget class="QLabel" name="label_7">
-       <property name="text">
-        <string>Grid Spacing</string>
-       </property>
-      </widget>
-     </item>
-    </layout>
+   <item row="3" column="4">
+    <spacer name="horizontalSpacer">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>145</width>
+       <height>20</height>
+      </size>
+     </property>
+    </spacer>
    </item>
    <item row="4" column="0" colspan="2">
     <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -235,6 +200,9 @@
      </item>
      <item>
       <widget class="QRadioButton" name="sizeFromCalibrationRadio">
+       <property name="toolTip">
+        <string>Causes target spots to be displayed at the size determined by the calibration file. Does not affect how data is collected.</string>
+       </property>
        <property name="text">
         <string>Use size from calibration</string>
        </property>
@@ -247,6 +215,9 @@
       <layout class="QHBoxLayout" name="horizontalLayout_2">
        <item>
         <widget class="QRadioButton" name="sizeCustomRadio">
+         <property name="toolTip">
+          <string>Lets the user change the display size of target spots. Does not change the way data is collected.</string>
+         </property>
          <property name="text">
           <string>Use custom size:</string>
          </property>
@@ -254,6 +225,9 @@
        </item>
        <item>
         <widget class="SpinBox" name="sizeSpin">
+         <property name="toolTip">
+          <string>Specifies the display size of the target spots. Does not change the way data is collected.</string>
+         </property>
          <property name="suffix">
           <string/>
          </property>
@@ -279,6 +253,9 @@
     <layout class="QFormLayout" name="formLayout">
      <item row="0" column="0">
       <widget class="QPushButton" name="addPointBtn">
+       <property name="toolTip">
+        <string>Add a target point to the canvas.</string>
+       </property>
        <property name="text">
         <string>Add Point</string>
        </property>
@@ -286,6 +263,9 @@
      </item>
      <item row="0" column="1">
       <widget class="QPushButton" name="addOcclusionBtn">
+       <property name="toolTip">
+        <string>Add an occlusion. Occlusions can be placed over points that the user doesn't want included in the protocol. (For example, points that lie over a pipette.)</string>
+       </property>
        <property name="text">
         <string>Add Occlusion</string>
        </property>
@@ -293,6 +273,9 @@
      </item>
      <item row="1" column="0">
       <widget class="QPushButton" name="addGridBtn">
+       <property name="toolTip">
+        <string>Add a grid of points to the canvas.</string>
+       </property>
        <property name="text">
         <string>Add Grid</string>
        </property>
@@ -300,6 +283,9 @@
      </item>
      <item row="1" column="1">
       <widget class="QPushButton" name="addProgramBtn">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
        <property name="text">
         <string>Add Program</string>
        </property>
@@ -307,6 +293,9 @@
      </item>
      <item row="2" column="0">
       <widget class="QPushButton" name="deleteBtn">
+       <property name="toolTip">
+        <string>Delete the selected item.</string>
+       </property>
        <property name="text">
         <string>Delete</string>
        </property>
@@ -314,6 +303,9 @@
      </item>
      <item row="2" column="1">
       <widget class="QPushButton" name="deleteAllBtn">
+       <property name="toolTip">
+        <string>Delete all the items in the canvas.</string>
+       </property>
        <property name="text">
         <string>Delete All</string>
        </property>
@@ -334,31 +326,20 @@
      </property>
     </spacer>
    </item>
-   <item row="7" column="0">
-    <widget class="QPushButton" name="recomputeBtn">
-     <property name="text">
-      <string>Recompute</string>
-     </property>
-    </widget>
-   </item>
-   <item row="7" column="1">
-    <widget class="QCheckBox" name="checkBox">
-     <property name="text">
-      <string>Auto recompute</string>
-     </property>
-    </widget>
-   </item>
-   <item row="8" column="0">
+   <item row="9" column="0">
     <widget class="QLabel" name="timeLabel">
      <property name="text">
       <string>Total Time:</string>
      </property>
     </widget>
    </item>
-   <item row="8" column="2">
+   <item row="9" column="2">
     <widget class="QCheckBox" name="hideCheck">
      <property name="enabled">
       <bool>true</bool>
+     </property>
+     <property name="toolTip">
+      <string>Hide all items from view.</string>
      </property>
      <property name="text">
       <string>Hide items</string>
@@ -368,6 +349,93 @@
      </property>
     </widget>
    </item>
+   <item row="7" column="0" colspan="2">
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string>Spot Sequence</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_3">
+      <property name="margin">
+       <number>3</number>
+      </property>
+      <property name="spacing">
+       <number>3</number>
+      </property>
+      <item row="2" column="0">
+       <widget class="QPushButton" name="recomputeBtn">
+        <property name="text">
+         <string>Recompute</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QCheckBox" name="checkBox">
+        <property name="text">
+         <string>Auto recompute</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="SpinBox" name="minTimeSpin">
+        <property name="toolTip">
+         <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'MS Shell Dlg 2'; font-size:8.25pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:8pt;&quot;&gt;When stimulating a sequence of points, this is the minimum amount of time that must pass before stimulating the same spot a second time. Points farther away will require smaller delays. Points farther than the minimum distance (specified below) will require no delay.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="suffix">
+         <string/>
+        </property>
+        <property name="decimals">
+         <number>2</number>
+        </property>
+        <property name="maximum">
+         <double>1000000.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="SpinBox" name="minDistSpin">
+        <property name="toolTip">
+         <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'MS Shell Dlg 2'; font-size:8.25pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:8pt;&quot;&gt;When stimulating a sequence of points, this is the minimum distance between two spots such that no time delay is required between stimulating them. Points closer than this distance will require some delay, which is determined in part by the minimum time specified above.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="suffix">
+         <string/>
+        </property>
+        <property name="maximum">
+         <double>1000000.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_3">
+        <property name="text">
+         <string>Minimum time</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_4">
+        <property name="text">
+         <string>Minimum distance</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+     <zorder>recomputeBtn</zorder>
+     <zorder>recomputeBtn</zorder>
+     <zorder>checkBox</zorder>
+     <zorder>minTimeSpin</zorder>
+     <zorder>minDistSpin</zorder>
+     <zorder>label_3</zorder>
+     <zorder>label_4</zorder>
+    </widget>
+   </item>
   </layout>
  </widget>
  <customwidgets>
@@ -375,6 +443,11 @@
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
    <header>SpinBox</header>
+  </customwidget>
+  <customwidget>
+   <class>TreeWidget</class>
+   <extends>QTreeWidget</extends>
+   <header location="global">TreeWidget</header>
   </customwidget>
  </customwidgets>
  <resources/>
