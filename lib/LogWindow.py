@@ -183,13 +183,14 @@ class LogWindow(QtGui.QMainWindow):
         ### so ugly.....
         number = 1
         tbs = []
+        exc = args[1]
         errors, tbs = self.formatException(*args)
         tbs.insert(0, str(number)+'. ')
         errors = str(number) + '. ' + exc.messages[0]
         errors += '  Reasons: ' 
-        for i in exc.reasons[0]:
+        for i in exc.reasons:
             errors += str(i) + ' '
-        errors += '\n More documentation at: ', exc.docs[0]
+        errors += '\n More documentation at: ' + exc.docs[0]
         for i, e in enumerate(exc.excs):
             number += 1
             error, tb = self.formatException(*e)
