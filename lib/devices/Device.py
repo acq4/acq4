@@ -37,6 +37,7 @@ class Device(QtCore.QObject):
         
 
     def reserve(self, block=True, timeout=20):
+        #print "Device %s attempting lock.." % self.name
         if block:
             l = self._lock_.tryLock(int(timeout*1000))
             if not l:
@@ -47,10 +48,13 @@ class Device(QtCore.QObject):
         else:
             l = self._lock_.tryLock()
             if not l:
-                print "  Device is currently locked from:"
-                print self._lock_tb_
-                raise Exception("Could not acquire lock")
+                #print "Device %s lock failed." % self.name
+                return False
+                #print "  Device is currently locked from:"
+                #print self._lock_tb_
+                #raise Exception("Could not acquire lock", 1)  ## 1 indicates failed non-blocking attempt
         self._lock_tb_ = ''.join(traceback.format_stack()[:-1])
+        #print "Device %s lock ok" % self.name
         return True
         
     def release(self):
@@ -78,7 +82,7 @@ class DeviceTask:
         pass
     
     def reserve(self, block=True, timeout=20):
-        self.dev.reserve(block=block, timeout=timeout)
+        return self.dev.reserve(block=block, timeout=timeout)
     
     def start(self):
         pass

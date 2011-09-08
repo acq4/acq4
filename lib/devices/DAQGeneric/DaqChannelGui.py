@@ -18,7 +18,7 @@ class DaqChannelGui(QtGui.QWidget):
         ## Name of this channel
         self.name = name
         
-        ## PArent protoGui object
+        ## Parent protoGui object
         self.protoGui = weakref.ref(parent)
         
         ## Configuration for this channel defined in the device configuration file

@@ -56,20 +56,20 @@ def logMsg(*args, **kwargs):
     global LOG
     if LOG is not None:
         LOG.logMsg(*args, **kwargs)
-    else:
-        print "Can't log error message; no log created yet."
-        print args
-        print kwargs
+    #else:
+        #print "Can't log error message; no log created yet."
+        #print args
+        #print kwargs
         
     
 def logExc(*args, **kwargs):
     global LOG
     if LOG is not None:
         LOG.logExc(*args, **kwargs)
-    else:
-        print "Can't log error message; no log created yet."
-        print args
-        print kwargs
+    #else:
+        #print "Can't log error message; no log created yet."
+        #print args
+        #print kwargs
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
@@ -723,7 +723,6 @@ class Task:
         ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
         from debug import Profiler
         prof = Profiler('Manager.Task.execute', disabled=True)
-        
         try:
         
             #print "execute:", self.tasks
@@ -732,7 +731,13 @@ class Task:
             try:
                 for devName in self.tasks:
                     #print "  %d Reserving hardware" % self.id, devName
-                    self.tasks[devName].reserve()
+                    res = self.tasks[devName].reserve(block=True)
+                    #if not res:
+                        #print "Locked from:"
+                        #for tb in self.tasks[devName].dev._lock_.tb:
+                            #print "====="
+                            #print tb
+                        #raise Exception('Damn')
                     self.lockedDevs.append(devName)
                     #print "  %d reserved" % self.id, devName
                 #self.reserved = True
@@ -913,9 +918,9 @@ class Task:
 
     def releaseAll(self):
         #if self.reserved:
-        #print "release hardware.."
+        print "release hardware.."
         for t in self.lockedDevs[:]:
-            #print "  %d releasing" % self.id, t
+            print "  %d releasing" % self.id, t
             try:
                 self.tasks[t].release()
                 self.lockedDevs.remove(t)

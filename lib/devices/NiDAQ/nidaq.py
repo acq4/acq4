@@ -44,8 +44,10 @@ class NiDAQ(Device):
         finally:
             self.release()
         
-    def getChannelValue(self, chan, mode=None):
-        self.reserve(block=True)
+    def getChannelValue(self, chan, mode=None, block=True):
+        res = self.reserve(block=block)
+        if not res:  ## False means non-blocking lock attempt failed.
+            return False
         #print "Setting channel %s to %f" % (chan, value)
         try:
             if 'ai' in chan:

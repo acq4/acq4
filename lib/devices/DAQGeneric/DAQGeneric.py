@@ -56,7 +56,7 @@ class DAQGeneric(Device):
         with self._DGLock:
             return self._DGHolding[chan]
         
-    def getChannelValue(self, channel):
+    def getChannelValue(self, channel, block=True):
         with self._DGLock:
             chConf = self._DGConfig[channel]['channel']
             daq, chan = chConf[:2]
@@ -69,7 +69,7 @@ class DAQGeneric(Device):
                 scale = self._DGConfig[channel]['scale']
             else:
                 scale = 1.0            
-            return daqDev.getChannelValue(chan, mode=mode)/scale
+            return daqDev.getChannelValue(chan, mode=mode, block=block)/scale
 
     def reconfigureChannel(self, chan, config):
         self._DGConfig[chan].update(config)
