@@ -186,12 +186,15 @@ class ScanCanvasItem(CanvasItem):
         bgFrame = self.ui.bgFrameSpin.value()
         
         images = []
+        handles = []
         nulls = []
-        with ProgressDialog.ProgressDialog("Processing scan images..", 0, len(dirs)) as dlg:
+        with ProgressDialog.ProgressDialog("Loading scan images..", 0, len(dirs)) as dlg:
             for d in dirs:
                 if 'Camera' not in d.subDirs():
                     continue
-                frames = d['Camera']['frames.ma'].read()
+                fh = d['Camera']['frames.ma']
+                handles.append(fh)
+                frames = fh.read()
                 if self.ui.bgFrameCheck.isChecked():
                     image = frames[spotFrame]-frames[bgFrame]
                     image[frames[bgFrame] > frames[spotFrame]] = 0.  ## unsigned type; avoid negative values
@@ -207,21 +210,28 @@ class ScanCanvasItem(CanvasItem):
                 if dlg.wasCanceled():
                     raise Exception("Processing canceled by user")                
             
-        print "Null frames for %s:" %dh.shortName(), nulls
-        scanImages = np.zeros(images[0].shape)
-        for im in images:
-            mask = im > scanImages
-            scanImages[mask] = im[mask]
+            #print "Null frames for %s:" %dh.shortName(), nulls
+            dlg.setLabelText("Processing scan images..")
+            dlg.setValue(0)
+            dlg.setMaximum(len(images))
+            scanImages = np.zeros(images[0].shape)
+            for im in images:
+                mask = im > scanImages
+                scanImages[mask] = im[mask]
+                dlg += 1
+                if dlg.wasCanceled():
+                    raise Exception("Processing canceled by user")                
         
-        info = dirs[0]['Camera']['frames.ma'].read()._info[-1]
+        #info = dirs[0]['Camera']['frames.ma'].read()._info[-1]
     
-        pos =  info['imagePosition']
-        scale = info['pixelSize']
-        image = ImageCanvasItem(scanImages, pos=pos, scale=scale, z=self.opts['z']-1, name='scanImage')
+        #pos =  info['imagePosition']
+        #scale = info['pixelSize']
+        #image = ImageCanvasItem(scanImages, pos=pos, scale=scale, z=self.opts['z']-1, name='scanImage')
+        image = ScanImageCanvasItem(scanImages, handles, z=self.opts['z']-1)
         item = self.canvas.addItem(image)
         self.scanImage = item
         
-        self.scanImage.restoreTransform(self.saveTransform())
+        #self.scanImage.restoreTransform(self.saveTransform())
         
         #self.canvas.items[item] = scanImages
         
@@ -248,3 +258,17 @@ class ScanCanvasItem(CanvasItem):
             size = self.originalSpotSize
         return size
         
+class ScanImageCanvasItem(ImageCanvasItem):
+    def __init__(self, img, handles, **kargs):
+        self.img = img
+        self.handles = handles
+        ImageCanvasItem.__init__(self, self.handles[0], **kargs)
+        self.graphicsItem().updateImage(self.img)
+        self.updateHistogram(autoRange=True)
+
+    def storeUserTransform(self, fh=None):
+        trans = self.saveTransform()
+        for fh in self.handles:
+            fh.setInfo(userTransform=trans)
+            
+            

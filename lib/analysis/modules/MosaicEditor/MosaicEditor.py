@@ -148,13 +148,16 @@ class MosaicEditor(AnalysisModule):
     def itemMoved(self, canvas, item):
         """Save an item's transformation if the user has moved it. 
         This is saved in the 'userTransform' attribute; the original position data is not affected."""
-        if item not in self.items:
-            return
-        fh = self.items[item]
-        trans = item.saveTransform()
-        if hasattr(fh, 'setInfo'):
-            fh.setInfo(userTransform=trans)
-        #print fh, "moved"
+        fh = self.items.get(item, None)
+        if not hasattr(fh, 'setInfo'):
+            fh = None
+        item.storeUserTransform(fh)
+        #if item not in self.items:
+            #return
+        #fh = self.items[item]
+        #trans = item.saveTransform()
+        #if hasattr(fh, 'setInfo'):
+            #fh.setInfo(userTransform=trans)
         
     #def exportSvg(self):
         #self.ui.canvas.view.writeSvg()
