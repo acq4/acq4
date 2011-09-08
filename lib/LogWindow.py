@@ -51,10 +51,14 @@ class LogWindow(QtGui.QMainWindow):
         self.sigDisplayEntry.connect(self.displayEntry)
         
         
-    def logMsg(self, msg, importance=5, msgType='status', exception=(None,None,None), **kwargs):
+    def logMsg(self, msg, importance=5, msgType='status', **kwargs):
         """msgTypes: user, status, error, warning
-           importance: 0-9
-           exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
+           importance: 0-9 (0 is low importance, 9 is high)
+           other keywords:
+              exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
+              docs: a list of strings where documentation related to the message can be found
+              reasons: a list of reasons (as strings) for the message
+              traceback: ??? not supported yet
         """
 
         
@@ -69,41 +73,44 @@ class LogWindow(QtGui.QMainWindow):
         name = 'LogEntry_' + str(time.strftime('%Y.%m.%d %H.%M.%S'))  ## TODO: not unique
         #self.msgCount += 1
         entry = {
-            'docs': None,
-            'reasons': None,
+            #'docs': None,
+            #'reasons': None,
             'message': msg,
             'timestamp': now,
             'importance': importance,
             'msgType': msgType,
-            'exception': exception,
+            #'exception': exception,
         }
         for k in kwargs:
             entry[k] = kwargs[k]
+            
         self.processEntry(entry)
         self.saveEntry({name:entry})
         self.displayEntry(entry)
         
         
-    def logExc(self, *args, **kargs):
-        kargs['exception'] = sys.exc_info()
-        self.logMsg(*args, **kargs)
+    def logExc(self, *args, **kwargs):
+        kwargs['exception'] = sys.exc_info()
+        self.logMsg(*args, **kwargs)
         
     def processEntry(self, entry):
         ## pre-processing common to saveEntry and displayEntry
-        if entry['msgType'] == 'error':
+        if entry.get('exception', None) is not None:
             exc_info = entry.pop('exception')
-            exTyp, exc, tb = exc_info
-            if isinstance(exc, HelpfulException):
-                error, tb, docs = self.formatHelpfulException(*exc_info)
-                entry['message'] += error
-                entry['docs'] += docs
-                #self.logMsg(error, msgType='error', exception=tb, documentation=docs **kwargs)
-            else: 
-                error, tb = self.formatException(*exc_info)
-                entry['message'] += '\n' + error
-                #entry['msgType'] = 'error'
-                #self.logMsg(message+error, msgType='error', exception=tb, **kwargs)
-            entry['traceback'] = tb
+            exType, exc, tb = exc_info
+            entry['exception'] = self.exceptionToDict(*exc_info)
+            
+            #if isinstance(exc, HelpfulException):
+                #error, tb, docs = self.formatHelpfulException(*exc_info)
+                #entry['message'] += error
+                #entry['docs'] += docs
+                ##self.logMsg(error, msgType='error', exception=tb, documentation=docs **kwargs)
+            #else: 
+                #error, tb = self.formatException(*exc_info)
+                #entry['message'] += '\n' + error
+                ##entry['msgType'] = 'error'
+                ##self.logMsg(message+error, msgType='error', exception=tb, **kwargs)
+            #entry['traceback'] = tb
         
     #def logExc(self, *args, **kwargs):
         #self.flashButtons()
@@ -134,32 +141,85 @@ class LogWindow(QtGui.QMainWindow):
      #   self.displayText(msg, colorStr = 'green')
             
     def displayEntry(self, entry):
+        ## for thread-safetyness:
         isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
         if not isGuiThread:
-            sigDisplayEntry.emit(entry)
+            self.sigDisplayEntry.emit(entry)
             return
         
         else:
-            if entry['msgType'] == 'user':
+            if entry['msgType'] == 'user': ## user messages will never have exceptions, reasons, tracebacks, documentation, etc attached
                 self.displayText(entry['message'], colorStr='blue', timeStamp=entry['timestamp'])
-            elif entry['msgType'] == 'status':
-                if entry['importance'] > 7:
-                    colorStr = 'black'
-                elif entry['importance'] < 4:
-                    colorStr = 'gray'
-                else:
-                    colorStr = 'green'
-                self.displayText(entry['message'], colorStr=colorStr, timeStamp=entry['timestamp'])
-            elif entry['msgType'] == 'error':
-                self.displayText(entry['message'], colorStr='#AA0000', timeStamp=entry['timestamp'], reasons=entry.get('reasons', None), docs=entry.get('documentation', None))
-                self.displayTraceback(entry['traceback'])
-                self.flashButtons()
                 
-            elif entry['msgType'] == 'warning':
-                self.displayText(entry['message'], colorStr='orange', timeStamp=entry['timestamp'])
-            else:
-                self.displayText(entry['message'], colorStr='black', timeStamp=entry['timestamp'])
+            elif entry.has_key('exception') or entry.has_key('docs') or entry.has_key('reasons'):
+                self.displayComplexMessage(entry)
+ 
+            
+                
+            #elif entry['msgType'] == 'status':
+                #colorStr = 'green'
+                #self.displayText(entry['message'], colorStr=colorStr, timeStamp=entry['timestamp'])
+            #elif entry['msgType'] == 'error':
+                #self.displayText(entry['message'], colorStr='#AA0000', timeStamp=entry['timestamp'], reasons=entry.get('reasons', None), docs=entry.get('documentation', None))
+                #self.displayTraceback(entry['traceback'])
+                #self.flashButtons()
+                
+            #elif entry['msgType'] == 'warning':
+                #self.displayText(entry['message'], colorStr='orange', timeStamp=entry['timestamp'])
+            #else:
+                #self.displayText(entry['message'], colorStr='black', timeStamp=entry['timestamp'])
+                
+    def displayComplexMessage(self, entry):
+        if entry['msgType'] == 'status':
+            color = 'green'
+        elif entry['msgType'] == 'error':
+            color = 'red'
+        elif entry['msgType'] == 'warning':
+            color = 'orange'
+        else:
+            color = 'black'
         
+        self.displayText(entry['message'], color, timeStamp = entry['timestamp'])
+        if entry.has_key('reasons'):
+            reasons = self.formatReasonStrForHTML(entry['reasons'])
+            self.displayText(reasons, color)
+        if entry.has_key('docs'):
+            docs = self.formatDocsStrForHTML(entry['docs'])
+            self.displayText(docs, color)
+        if entry.has_key('exception'):
+            self.displayException(entry['exception'], color)
+            
+
+    
+    def displayException(self, exception, color, count=None, tracebacks=[]):
+        ### Here, exception is a dict that holds the message, reasons, docs, traceback and oldExceptions (which are also dicts, with the same entries)
+        ## the count and tracebacks keywords are for calling recursively
+        
+        if count is None:
+            count = 1
+        else:
+            count += 1
+            
+        self.displayText(str(count)+'. ' + exception['message'], color)
+        tracebacks.append(exception['traceback'])
+        
+        if exception.has_key('reasons'):
+            reasons = self.formatReasonsStrForHTML(exception['reasons'])
+            self.displayText(reasons, color)
+        if exception.has_key('docs'):
+            docs = self.formatDocsStrForHTML(entry['docs'])
+            self.displayText(docs, color)
+        
+        if exception.has_key('oldExc'):
+            self.displayException(exception['oldExc'], color, count=count, tracebacks=tracebacks)
+        else:
+            for i, tb in enumerate(tracebacks):
+                self.displayTraceback(tb, number=i+1)
+        
+        
+        
+    
+    
     def displayText(self, msg, colorStr = 'black', timeStamp=None, reasons=None, docs=None):
         if reasons is not None:
             msg += "Reasons: " + reasons + '\n'
@@ -178,6 +238,23 @@ class LogWindow(QtGui.QMainWindow):
         tb = traceback.format_exception(*args)
         error = tb.pop(-1)
         return (error,tb)
+    
+    def exceptionToDict(self, exType, exc, tb):
+        #print exc
+        excDict = {}
+        excDict['message'] = exc.message
+        excDict['traceback'] = traceback.format_exception(exType, exc, tb)[:-1]
+        if hasattr(exc, 'docs'):
+            excDict['docs'] = exc.docs
+        if hasattr(exc, 'reasons'):
+            excDict['reasons'] = exc.reasons
+        for k in exc.kwargs:
+            excDict[k] = exc.kwargs[k]
+        if hasattr(exc, 'oldExc'):
+            excDict['oldExc'] = self.exceptionToDict(*exc.oldExc)
+        return excDict
+        
+        
     
     def formatHelpfulException(self, *args):
         ### so ugly.....
@@ -206,7 +283,7 @@ class LogWindow(QtGui.QMainWindow):
             tbs.extend(tb) 
         return (errors, tbs)
         
-    def displayTraceback(self, tb, color='grey'):
+    def displayTraceback(self, tb, color='grey', number=None):
         #tb = traceback.format_exception(*args)
         #self.displayText(tb[0], 'red')
         lines = []
@@ -220,6 +297,14 @@ class LogWindow(QtGui.QMainWindow):
                 spaceCount += 1
             lines.append("&nbsp;"*(indent+spaceCount*2) + prefix + l)
         self.displayText('<br>'.join(lines), color)
+        
+    def formatReasonStrForHTML(self, reasons):
+        indent = 4
+        reasonStr = ""
+        pass
+    
+    def formatDocsStrForHTML(self, docs):
+        pass
 
     def flashButtons(self):
         for b in self.buttons:

@@ -57,15 +57,16 @@ def logMsg(*args, **kwargs):
     if LOG is not None:
         LOG.logMsg(*args, **kwargs)
     else:
-        print "Can't log error message; no log created yet."
+        print "Can't log message; no log created yet."
         print args
         print kwargs
         
     
 def logExc(*args, **kwargs):
+    """Calls logMsg, but adds in the current exception. Must be called within an except block."""
     global LOG
     if LOG is not None:
-        LOG.logExc(*args, msgType='error', **kwargs)
+        LOG.logExc(*args, **kwargs)
     else:
         print "Can't log error message; no log created yet."
         print args

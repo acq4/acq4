@@ -11,17 +11,17 @@ class HelpfulException(Exception):
            -- add additional information to the original exception
            -- use self.prependErr("Additional message, ex: Protocol initiation failed. ", exc, reasons="a. A device could not be found.", docs='')
            """
-    def __init__(self, message='', exc=(None, None, None), reasons='', docs='', **kwargs):
+    def __init__(self, message='', exc=(None, None, None), reasons=[], docs=[], **kwargs):
         Exception.__init__(self, message)
         self.kwargs = kwargs
-        self.excs=[exc]
-        self.messages = [message]
-        self.reasons = [reasons]
-        self.docs=[docs]
+        self.oldExc = exc
+        #self.messages = [message]
+        self.reasons = reasons
+        self.docs = docs
         
-    def prependErr(self, msg, exc, reasons='', docs=''):
-        self.messages.insert(0, msg)
-        self.excs.insert(0, exc)
-        self.reasons.insert(0, reasons)
-        self.reasons.insert(0, docs)
+    #def prependErr(self, msg, exc, reasons='', docs=''):
+        #self.messages.insert(0, msg)
+        #self.excs.insert(0, exc)
+        #self.reasons.insert(0, reasons)
+        #self.reasons.insert(0, docs)
     
