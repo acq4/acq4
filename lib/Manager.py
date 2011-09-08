@@ -506,11 +506,11 @@ Valid options are:
         logDir = self.logWindow.getLogDir()
         while not p.info().get('expUnit', False) and p != self.baseDir and p != logDir:
             p = p.parent()
-        if p != self.baseDir:
+        if p != self.baseDir and p != logDir:
             self.setLogDir(p)
         else:
             if logDir is None:
-                logMsg("No log directory set. Log messages will not be stored.", type='warning', importance=8, docs="UserGuide/logging")
+                logMsg("No log directory set. Log messages will not be stored.", msgType='warning', importance=8, docs=["UserGuide/logging"])
         #self.currentDir.sigChanged.connect(self.currentDirChanged)
         #self.sigCurrentDirChanged.emit()
         self.currentDir.sigChanged.connect(self.currentDirChanged)

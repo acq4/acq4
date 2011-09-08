@@ -60,7 +60,8 @@ class LogWindow(QtGui.QMainWindow):
               reasons: a list of reasons (as strings) for the message
               traceback: ??? not supported yet
         """
-
+        if msgType == 'error':
+            self.flashButtons()
         
         try:
             currentDir = self.manager.getCurrentDir()
@@ -148,13 +149,47 @@ class LogWindow(QtGui.QMainWindow):
             return
         
         else:
-            if entry['msgType'] == 'user': ## user messages will never have exceptions, reasons, tracebacks, documentation, etc attached
-                self.displayText(entry['message'], colorStr='blue', timeStamp=entry['timestamp'])
+            ## determine message color:
+            if entry['msgType'] == 'status':
+                i = entry['importance']
+                if i < 4:
+                    color = 'grey'
+                elif i > 6:
+                    color = 'black'
+                else:
+                    color = 'green'
+            elif entry['msgType'] == 'user':
+                color = 'blue'
+            elif entry['msgType'] == 'error':
+                color = 'red'
+            elif entry['msgType'] == 'warning':
+                color = '#DD4400' ## orange
+            else:
+                color = 'black'
                 
-            elif entry.has_key('exception') or entry.has_key('docs') or entry.has_key('reasons'):
-                self.displayComplexMessage(entry)
- 
+                
             
+                
+            if entry.has_key('exception') or entry.has_key('docs') or entry.has_key('reasons'):
+                self.displayComplexMessage(entry, color)
+            else: 
+                self.displayText(entry['message'], color, timeStamp=entry['timestamp'])
+            
+            #elif entry['msgType'] == 'warning':
+                #self.displayText(entry['message'], '#AA8800', timeStamp = entry['timestamp'])
+            #elif entry['msgType'] == 'error':
+                #self.displayText(entry['message'], 'red', timeStamp = entry['timestamp'])
+            #elif entry['msgType'] == 'status':
+                #i = entry['importance']
+                #if i < 4:
+                    #self.displayText(entry['message'], 'gray', timeStamp = entry['timestamp'])
+                #elif i > 6:
+                    #self.displayText(entry['message'], 'black', timeStamp = entry['timestamp'])
+                #else:
+                    #self.displayText(entry['message'], 'green', timeStamp = entry['timestamp'])
+ 
+            #else:
+                #self.displayText(entry['message'], 'black', timeStamp = entry['timestamp'])
                 
             #elif entry['msgType'] == 'status':
                 #colorStr = 'green'
@@ -169,29 +204,29 @@ class LogWindow(QtGui.QMainWindow):
             #else:
                 #self.displayText(entry['message'], colorStr='black', timeStamp=entry['timestamp'])
                 
-    def displayComplexMessage(self, entry):
-        if entry['msgType'] == 'status':
-            color = 'green'
-        elif entry['msgType'] == 'error':
-            color = 'red'
-        elif entry['msgType'] == 'warning':
-            color = 'orange'
-        else:
-            color = 'black'
+    def displayComplexMessage(self, entry, color='black'):
+        #if entry['msgType'] == 'status':
+            #color = 'green'
+        #elif entry['msgType'] == 'error':
+            #color = 'red'
+        #elif entry['msgType'] == 'warning':
+            #color = '#AA8800' ## orange
+        #else:
+            #color = 'black'
         
         self.displayText(entry['message'], color, timeStamp = entry['timestamp'])
         if entry.has_key('reasons'):
             reasons = self.formatReasonStrForHTML(entry['reasons'])
-            self.displayText(reasons, color)
+            self.displayText(reasons, 'black')
         if entry.has_key('docs'):
             docs = self.formatDocsStrForHTML(entry['docs'])
-            self.displayText(docs, color)
+            self.displayText(docs, 'black')
         if entry.has_key('exception'):
-            self.displayException(entry['exception'], color)
+            self.displayException(entry['exception'], 'black')
             
 
     
-    def displayException(self, exception, color, count=None, tracebacks=[]):
+    def displayException(self, exception, color, count=None, tracebacks=None):
         ### Here, exception is a dict that holds the message, reasons, docs, traceback and oldExceptions (which are also dicts, with the same entries)
         ## the count and tracebacks keywords are for calling recursively
         
@@ -199,15 +234,25 @@ class LogWindow(QtGui.QMainWindow):
             count = 1
         else:
             count += 1
+        
+        if tracebacks is None:
+            tracebacks = []
             
-        self.displayText(str(count)+'. ' + exception['message'], color)
+        indent = 10
+        
+        
+        if exception.has_key('oldExc'):    
+            self.displayText("&nbsp;"*indent + str(count)+'. ' + exception['message'], color)
+        else:
+            self.displayText("&nbsp;"*indent + str(count)+'. Original error: ' +exception['message'], color)
+            
         tracebacks.append(exception['traceback'])
         
         if exception.has_key('reasons'):
             reasons = self.formatReasonsStrForHTML(exception['reasons'])
             self.displayText(reasons, color)
         if exception.has_key('docs'):
-            docs = self.formatDocsStrForHTML(entry['docs'])
+            docs = self.formatDocsStrForHTML(exception['docs'])
             self.displayText(docs, color)
         
         if exception.has_key('oldExc'):
@@ -220,11 +265,11 @@ class LogWindow(QtGui.QMainWindow):
         
     
     
-    def displayText(self, msg, colorStr = 'black', timeStamp=None, reasons=None, docs=None):
-        if reasons is not None:
-            msg += "Reasons: " + reasons + '\n'
-        if docs is not None:
-            msg += "Documentation: " + docs
+    def displayText(self, msg, colorStr = 'black', timeStamp=None):
+        #if reasons is not None:
+            #msg += "Reasons: " + reasons + '\n'
+        #if docs is not None:
+            #msg += "Documentation: " + docs
         if msg[-1:] == '\n':
             msg = msg[:-1]     
         msg = '<br>'.join(msg.split('\n'))
@@ -234,10 +279,10 @@ class LogWindow(QtGui.QMainWindow):
             strn = '<span style="color:%s"> %s </span> \n' % (colorStr, msg)
         self.ui.output.appendHtml(strn)
         
-    def formatException(self, *args):
-        tb = traceback.format_exception(*args)
-        error = tb.pop(-1)
-        return (error,tb)
+    #def formatException(self, *args):
+        #tb = traceback.format_exception(*args)
+        #error = tb.pop(-1)
+        #return (error,tb)
     
     def exceptionToDict(self, exType, exc, tb):
         #print exc
@@ -245,66 +290,79 @@ class LogWindow(QtGui.QMainWindow):
         excDict['message'] = exc.message
         excDict['traceback'] = traceback.format_exception(exType, exc, tb)[:-1]
         if hasattr(exc, 'docs'):
-            excDict['docs'] = exc.docs
+            if len(exc.docs) > 0:
+                excDict['docs'] = exc.docs
         if hasattr(exc, 'reasons'):
-            excDict['reasons'] = exc.reasons
-        for k in exc.kwargs:
-            excDict[k] = exc.kwargs[k]
+            if len(exc.reasons) > 0:
+                excDict['reasons'] = exc.reasons
+        if hasattr(exc, 'kwargs'):
+            for k in exc.kwargs:
+                excDict[k] = exc.kwargs[k]
         if hasattr(exc, 'oldExc'):
             excDict['oldExc'] = self.exceptionToDict(*exc.oldExc)
         return excDict
         
         
     
-    def formatHelpfulException(self, *args):
-        ### so ugly.....
-        number = 1
-        tbs = []
-        exc = args[1]
-        errors, tbs = self.formatException(*args)
-        tbs.insert(0, str(number)+'. ')
-        errors = str(number) + '. ' + exc.messages[0]
-        errors += '  Reasons: ' 
-        for i in exc.reasons:
-            errors += str(i) + ' '
-        errors += '\n More documentation at: ' + exc.docs[0]
-        for i, e in enumerate(exc.excs):
-            number += 1
-            error, tb = self.formatException(*e)
-            if e != exc.excs[-1]:
-                errors += str(number) + '. ' + exc.messages[i+1]
-                errors += '  Reasons: '
-                for i in exc.reasons[i+1]:
-                    errors += str(i) + ' '
-                errors += '\n More documentation at: ', exc.docs[i+1]                
-            else:
-                errors += str(number) + '. ' + error
-            tbs.append(str(number) + '. ')
-            tbs.extend(tb) 
-        return (errors, tbs)
+    #def formatHelpfulException(self, *args):
+        #### so ugly.....
+        #number = 1
+        #tbs = []
+        #exc = args[1]
+        #errors, tbs = self.formatException(*args)
+        #tbs.insert(0, str(number)+'. ')
+        #errors = str(number) + '. ' + exc.messages[0]
+        #errors += '  Reasons: ' 
+        #for i in exc.reasons:
+            #errors += str(i) + ' '
+        #errors += '\n More documentation at: ' + exc.docs[0]
+        #for i, e in enumerate(exc.excs):
+            #number += 1
+            #error, tb = self.formatException(*e)
+            #if e != exc.excs[-1]:
+                #errors += str(number) + '. ' + exc.messages[i+1]
+                #errors += '  Reasons: '
+                #for i in exc.reasons[i+1]:
+                    #errors += str(i) + ' '
+                #errors += '\n More documentation at: ', exc.docs[i+1]                
+            #else:
+                #errors += str(number) + '. ' + error
+            #tbs.append(str(number) + '. ')
+            #tbs.extend(tb) 
+        #return (errors, tbs)
         
-    def displayTraceback(self, tb, color='grey', number=None):
+    def displayTraceback(self, tb, color='grey', number=1):
         #tb = traceback.format_exception(*args)
         #self.displayText(tb[0], 'red')
         lines = []
-        indent = 4
-        prefix = ''
+        indent = 16
         for l in ''.join(tb).split('\n'):
+            prefix = ''
             if l == '':
                 continue
+            if l[:9] == "Traceback":
+                prefix = str(number) + '. '
             spaceCount = 0
             while l[spaceCount] == ' ':
                 spaceCount += 1
-            lines.append("&nbsp;"*(indent+spaceCount*2) + prefix + l)
+            lines.append("&nbsp;"*(indent+spaceCount*4) + prefix + l)
         self.displayText('<br>'.join(lines), color)
         
-    def formatReasonStrForHTML(self, reasons):
-        indent = 4
-        reasonStr = ""
-        pass
+    def formatReasonsStrForHTML(self, reasons):
+        indent = 6
+        letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
+        reasonStr = "&nbsp;"*16 + "Possible reasons include: <br>"
+        for i, r in enumerate(reasons):
+            reasonStr += "&nbsp;"*22 + letters[i] + ". " + r + "<br>"
+        return reasonStr[:-4]
     
     def formatDocsStrForHTML(self, docs):
-        pass
+        indent = 6
+        docStr = "&nbsp;"*16 + "Relevant documentation: <br>"
+        letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
+        for i, d in enumerate(docs):
+            docStr += "&nbsp;"*22 + letters[i] + ". " + d + "<br>"
+        return docStr[:-4]
 
     def flashButtons(self):
         for b in self.buttons:
@@ -316,27 +374,23 @@ class LogWindow(QtGui.QMainWindow):
         
     def setStorageDir(self):
         try:
-            #self.makeError()
-            print x
+            self.makeError()
+            #print x
         except:
             t, exc, tb = sys.exc_info()
             #logExc(message="This button doesn't work", reasons='reason a, reason b', docs='documentation')
-            if isinstance(exc, HelpfulException):
-                exc.prependErr("Button doesn't work", (t,exc,tb), "a. It's supposed to raise an error for testing purposes, b. You're doing it wrong.")
-                raise
-            else:
-                raise HelpfulException(message='This button does not work.', exc=(t, exc, tb), reasons="a. It's supposed to raise an error for testing purposes, b. You're doing it wrong.")
+            #if isinstance(exc, HelpfulException):
+                #exc.prependErr("Button doesn't work", (t,exc,tb), reasons = ["It's supposed to raise an error for testing purposes", "You're doing it wrong."])
+                #raise
+            #else:
+            raise HelpfulException(message='This button does not work.', exc=(t, exc, tb), reasons=["It's supposed to raise an error for testing purposes", "You're doing it wrong."])
     
     def makeError(self):
         try:
-            print x
+            print y
         except:
             t, exc, tb = sys.exc_info()
-            if isinstance(exc, HelpfulException):
-                exc.prependErr("msg from makeError", (t,exc,tb), ["a. mkErr reason one", "b. mkErr reason 2"])
-                raise
-            else:
-                raise HelpfulException(message='msg from makeError', exc=(t, exc, tb), reasons=["a. reason one", "b. reason 2"])
+            raise HelpfulException(message='msg from makeError', exc=(t, exc, tb), reasons=["reason one", "reason 2"], docs=['what, you expect documentation?'])
             
     def show(self):
         QtGui.QMainWindow.show(self)
@@ -352,9 +406,12 @@ class LogWindow(QtGui.QMainWindow):
             return self.logFile.name()
         
     def setLogDir(self, dh):
+        if self.fileName() == dh.name():
+            return
+        
         oldfName = self.fileName()
         
-        self.logMsg('Moving log storage to %s.' % (self.logFile.name(relativeTo=self.manager.baseDir))) ## make this note before we change the log file, so when a log ends, you know where it went after.
+        self.logMsg('Moving log storage to %s.' % (dh.name(relativeTo=self.manager.baseDir))) ## make this note before we change the log file, so when a log ends, you know where it went after.
         
         if dh.exists('log.txt'):
             self.logFile = dh['log.txt']
