@@ -2808,6 +2808,7 @@ class LinearRegionItem(GraphicsObject):
         self.view = weakref.ref(view)
         self.setBrush = self.rect.setBrush
         self.brush = self.rect.brush
+        self.blockLineSignal = False
         
         if orientation[0] == 'h':
             self.lines = [
@@ -2845,6 +2846,8 @@ class LinearRegionItem(GraphicsObject):
         return self.rect.boundingRect()
             
     def lineMoved(self):
+        if self.blockLineSignal:
+            return
         self.updateBounds()
         #self.emit(QtCore.SIGNAL('regionChanged'), self)
         self.sigRegionChanged.emit(self)
@@ -2902,8 +2905,14 @@ class LinearRegionItem(GraphicsObject):
         return (min(r), max(r))
 
     def setRegion(self, rgn):
+        if self.lines[0].value() == rgn[0] and self.lines[1].value() == rgn[1]:
+            return
+        self.blockLineSignal = True
         self.lines[0].setValue(rgn[0])
         self.lines[1].setValue(rgn[1])
+        self.blockLineSignal = False
+        self.lineMoved()
+        self.lineMoveFinished()
 
 
 class VTickGroup(QtGui.QGraphicsPathItem):

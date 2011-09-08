@@ -255,7 +255,7 @@ def downsamplend(data, div):
     shape = [float(data.shape[i]) / div[i] for i in range(0, data.ndim)]
     res = np.empty(tuple(shape), dtype=float)
     
-    for ind, i in ndenumerate(res):
+    for ind, i in np.ndenumerate(res):
         sl = [slice(ind[j]*div[j], (ind[j]+1)*div[j]) for j in range(0, data.ndim)]
         res[tuple(ind)] = data[tuple(sl)].mean()
     
@@ -282,7 +282,7 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
     imScale[-1] = [im1, im2]
     time2 = time.clock()
     for i in range(nit-2,-1,-1):
-        imScale[i] = [ndimage.zoom(imScale[i+1][0], 1.0/spow, order=1), ndimage.zoom(imScale[i+1][1], 1.0/spow, order=1)]
+        imScale[i] = [scipy.ndimage.zoom(imScale[i+1][0], 1.0/spow, order=1), scipy.ndimage.zoom(imScale[i+1][1], 1.0/spow, order=1)]
     print scales
 
     time3 = time.clock()
@@ -306,7 +306,8 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
         ## get prediction
         #print "Scale %f: start: %s  end: %s" % (sf, str(start), str(end))
         if any(start != end):
-            center = registerImages(im1s, im2s, start, end)
+            print "register:", start, end
+            center = registerImages(im1s, im2s, (start, end))
         #print "   center = %s" % str(center/sf)
         
         
@@ -321,10 +322,16 @@ def xcMax(xc):
     return mi
 
 def registerImages(im1, im2, searchRange):
+    """
+    searchRange is [[xmin, ymin], [xmax, ymax]]
+    """
     #print "Registering images %s and %s, %s-%s" % (str(im1.shape), str(im2.shape), str(start), str(end))
-    (sx, sy) = searchRange
-    start=[sx[0], sy[0]]
-    end = [sx[1], sy[1]]
+    #(sx, sy) = searchRange
+    #start=[sx[0], sy[0]]
+    #end = [sx[1], sy[1]]
+    start, end = searchRange
+    print "start:",start,"end:",end
+    
     if end == None:
         mode='full'
         im1c = im1
@@ -336,13 +343,13 @@ def registerImages(im1, im2, searchRange):
         s1y = max(0, start[1])
         e1x = min(im1.shape[0], im2.shape[0]+end[0])
         e1y = min(im1.shape[1], im2.shape[1]+end[1])
-        #print "%d,%d - %d,%d" % (s1x, s1y, e1x, e1y)
+        print "%d,%d - %d,%d" % (s1x, s1y, e1x, e1y)
         
         s2x = max(0, -start[0])
         s2y = max(0, -start[1])
         e2x = min(im2.shape[0], im1.shape[0]-end[0])
         e2y = min(im2.shape[1], im1.shape[1]-end[1])
-        #print "%d,%d - %d,%d" % (s2x, s2y, e2x, e2y)
+        print "%d,%d - %d,%d" % (s2x, s2y, e2x, e2y)
         
         ## Crop images
         im1c = im1[s1x:e1x, s1y:e1y]
@@ -358,8 +365,13 @@ def registerImages(im1, im2, searchRange):
     #turns out cross-correlation is a really lousy way to register images.
     #xc = scipy.signal.signaltools.correlate2d(im1c, im2c, boundary='fill', fillvalue=im1c.mean(), mode=mode)
     def err(img):
-        img.shape = im2c.shape
+        try:
+            img.shape = im2c.shape
+        except:
+            print img.shape, im2c.shape
+            raise
         return abs(im2c - img).sum()
+    print im1c.shape, im2c.shape
     xc = scipy.ndimage.generic_filter(im1c, err, footprint=im2c) 
     print xc.min(), xc.max()
     #xcb = ndimage.filters.gaussian_filter(xc, 20)
@@ -1102,7 +1114,7 @@ def stdFilter(data, kernShape):
     if len(kernShape) != data.ndim:
         raise Exception("Kernel shape must have length = data.ndim")
     res = np.empty(tuple(shape), dtype=float)
-    for ind, i in ndenumerate(res):
+    for ind, i in np.ndenumerate(res):
         sl = [slice(max(0, ind[j]-kernShape[j]/2), min(shape[j], ind[j]+(kernShape[j]/2))) for j in range(0, data.ndim)]
         res[tuple(ind)] = std(data[tuple(sl)])
     return res

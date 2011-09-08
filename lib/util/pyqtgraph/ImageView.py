@@ -29,6 +29,7 @@ class PlotROI(ROI):
     def __init__(self, size):
         ROI.__init__(self, pos=[0,0], size=size, scaleSnap=True, translateSnap=True)
         self.addScaleHandle([1, 1], [0, 0])
+        self.addRotateHandle([0, 0], [0.5, 0.5])
 
 
 class ImageView(QtGui.QWidget):
@@ -314,7 +315,11 @@ class ImageView(QtGui.QWidget):
         if data is not None:
             while data.ndim > 1:
                 data = data.mean(axis=1)
-            self.roiCurve.setData(y=data, x=self.tVals)
+            if image.ndim == 3:
+                self.roiCurve.setData(y=data, x=self.tVals)
+            else:
+                self.roiCurve.setData(y=data, x=range(len(data)))
+                
             #self.ui.roiPlot.replot()
 
     def setImage(self, img, autoRange=True, autoLevels=True, levels=None, axes=None, xvals=None, pos=None, scale=None):
@@ -522,10 +527,10 @@ class ImageView(QtGui.QWidget):
         if self.axes['t'] is None:
             #self.ui.timeSlider.hide()
             self.imageItem.updateImage(image, white=self.whiteLevel(), black=self.blackLevel())
-            self.ui.roiPlot.hide()
-            self.ui.roiBtn.hide()
+            #self.ui.roiPlot.hide()
+            #self.ui.roiBtn.hide()
         else:
-            self.ui.roiBtn.show()
+            #self.ui.roiBtn.show()
             self.ui.roiPlot.show()
             #self.ui.timeSlider.show()
             self.imageItem.updateImage(image[self.currentIndex], white=self.whiteLevel(), black=self.blackLevel())
