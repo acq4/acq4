@@ -31,8 +31,11 @@ class DAQGeneric(Device):
         return DAQGenericTask(self, cmd)
     
         
-    def setChanHolding(self, channel, level=None, scale=None):
-        """Define and set the holding values for this channel"""
+    def setChanHolding(self, channel, level=None, scale=None, block=True):
+        """Define and set the holding values for this channel
+        If block is True, then wait until the value has been set onthe DAQ.
+        If block is False, then simply schedule the change to take place when the DAQ is available.
+        """
         with self._DGLock:
             #print "set holding", channel, level
             ### Set correct holding level here...
@@ -48,7 +51,10 @@ class DAQGeneric(Device):
                 scale = self.getChanScale(channel)
             #print "set", chan, self._DGHolding[channel]*scale
             val = self._DGHolding[channel]*scale
-            daqDev.setChannelValue(chan, val, block=False)
+            if block:
+                daqDev.setChannelValue(chan, val, block=True)
+            else:
+                daqDev.setChannelValue(chan, val, block=False, delaySetIfBusy=True)  ## Note: If a protocol is running, this will not be set until it completes.
             #self.emit(QtCore.SIGNAL('holdingChanged'), channel, val)
             self.sigHoldingChanged.emit(channel, val)
         
@@ -359,5 +365,5 @@ class DAQDevGui(QtGui.QWidget):
         
     def spinChanged(self, spin):
         ch = spin.channel
-        self.dev.setChanHolding(ch, spin.value())
+        self.dev.setChanHolding(ch, spin.value(), block=False)
         

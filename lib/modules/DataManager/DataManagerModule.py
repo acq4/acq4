@@ -2,7 +2,7 @@
 from DataManagerTemplate import *
 from lib.modules.Module import *
 from DataManager import *
-import os, re, sys, time, sip
+import os, re, sys, time
 from debug import *
 import FileAnalysisView
 from lib.LogWindow import LogButton
@@ -129,6 +129,11 @@ class DataManager(Module):
         self.dialog.show()
 
     def setBaseDir(self, dirName):
+        if isinstance(dirName, list):
+            if len(dirName) == 1:
+                dirName = dirName[0]
+            else:
+                raise Exception("Caught. Please to be examined: %s" % str(dirName))
         #if dirName is None:
             #dirName = QtGui.QFileDialog.getExistingDirectory()
         if type(dirName) is QtCore.QStringList:

@@ -725,12 +725,12 @@ class Task:
         prof = Profiler('Manager.Task.execute', disabled=True)
         try:
         
-            #print "execute:", self.tasks
+            #print self.id, "Task.execute:", self.tasks
             ## Reserve all hardware
             self.dm.lockReserv()
             try:
                 for devName in self.tasks:
-                    #print "  %d Reserving hardware" % self.id, devName
+                    #print "  %d Task.execute: Reserving hardware" % self.id, devName
                     res = self.tasks[devName].reserve(block=True)
                     #if not res:
                         #print "Locked from:"
@@ -739,8 +739,11 @@ class Task:
                             #print tb
                         #raise Exception('Damn')
                     self.lockedDevs.append(devName)
-                    #print "  %d reserved" % self.id, devName
+                    #print "  %d Task.execute: reserved" % self.id, devName
                 #self.reserved = True
+            except:
+                #print "  %d Task.execute: problem reserving hardware; will unreserve these:"%self.id, self.lockedDevs
+                raise
             finally:
                 self.dm.unlockReserv()
                 
@@ -918,9 +921,9 @@ class Task:
 
     def releaseAll(self):
         #if self.reserved:
-        print "release hardware.."
+        #print self.id,"Task.releaseAll:"
         for t in self.lockedDevs[:]:
-            print "  %d releasing" % self.id, t
+            #print "  %d releasing" % self.id, t
             try:
                 self.tasks[t].release()
                 self.lockedDevs.remove(t)

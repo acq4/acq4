@@ -62,7 +62,7 @@ class GraphicsWindow(GraphicsLayoutView):
     def __init__(self, title=None, size=(800,600), **kargs):
         mkQApp()
         self.win = QtGui.QMainWindow()
-        GraphicsLayoutWidget.__init__(self, **kargs)
+        GraphicsLayoutView.__init__(self, **kargs)
         self.win.setCentralWidget(self)
         self.win.resize(*size)
         if title is not None:

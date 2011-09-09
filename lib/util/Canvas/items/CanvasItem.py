@@ -360,9 +360,21 @@ class CanvasItem(QtCore.QObject):
         #print "set transform", self, self.userTranslate
         
     def saveTransform(self):
+        """Return a dict containing the current user transform"""
         #print "save transform", self, self.userTranslate
         #return {'trans': list(self.userTranslate), 'rot': self.userRotate}
         return self.userTransform.saveState()
+        
+    def storeUserTransform(self, fh=None):
+        """Store the current user transform to disk.
+        If fh is specified, store data to that file handle.
+        Otherwise, use self.handle if it is set."""
+        if fh is None:
+            fh = self.handle
+        if fh is None:
+            raise Exception("Can not store position--no file handle for this item.", 1)
+        trans = self.saveTransform()
+        fh.setInfo(userTransform=trans)
     
     def selectBoxFromUser(self):
         """Move the selection box to match the current userTransform"""

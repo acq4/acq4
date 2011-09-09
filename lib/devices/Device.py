@@ -9,9 +9,9 @@ class Device(QtCore.QObject):
     def __init__(self, deviceManager, config, name):
         QtCore.QObject.__init__(self)
         #self._lock_ = threading.Lock()
-        self._lock_ = Mutex(QtCore.QMutex.Recursive)
+        #self._lock_ = Mutex(QtCore.QMutex.Recursive)  ## bad idea.
+        self._lock_ = Mutex()
         self._lock_tb_ = None
-        #self._lock_ = Mutex()
         self.dm = deviceManager
         self.config = config
         self.name = name
