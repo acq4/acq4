@@ -3,20 +3,20 @@
 import lib.LogWidgetTemplate
 from PyQt4 import QtGui, QtCore
 import lib.Manager
-from lib.LogWindow import LogPrinter
+from lib.LogWindow import LogWidget
 import configfile as cf
 
-class FileLogView(QtGui.QWidget):
+class FileLogView(LogWidget):
     
     def __init__(self, parent, mod):
-        QtGui.QWidget.__init__(self, parent)
+        LogWidget.__init__(self, parent)
         self.manager = lib.Manager.getManager()
-        self.ui = lib.LogWidgetTemplate.Ui_Form()
-        self.ui.setupUi(self)
+        #self.ui = lib.LogWidgetTemplate.Ui_Form()
+        #self.ui.setupUi(self)
         
-        self.ui.input.hide()
+        #self.ui.input.hide()
         
-        self.logPrinter = LogPrinter(self.ui.output)
+        #self.logPrinter = LogPrinter(self.ui.output)
         
         self.currentLogDirs = None
         self.mod = mod
@@ -65,6 +65,7 @@ class FileLogView(QtGui.QWidget):
                 self.setCurrentLog()
             else:
                 self.clear()
+                self.ui.dirLabel.setText("")
 
     def setCurrentLog(self):
         if len(self.currentLogDirs) > 1:
@@ -73,9 +74,9 @@ class FileLogView(QtGui.QWidget):
             entries = self.readCurrentLog()
             
         self.clear()
-        for k in entries.iterkeys():
-            self.logPrinter.displayEntry(entries[k])
-    
+        for k in entries:
+            self.displayEntry(entries[k])
+        self.ui.dirLabel.setText("Currently displaying " + self.currentLogDirs[0].name(relativeTo=self.manager.baseDir)+'/log.txt')
             
     def orderLogEntries(self):
         pass

@@ -380,6 +380,16 @@ Valid options are:
         """List currently loaded modules. """
         return self.modules.keys()[:]
 
+    def getDirOfSelectedFile(self):
+        """Returns the directory that is currently selected, or the directory of the file that is currently selected in Data Manager."""
+        try:
+            f = self.getModule("Data Manager").selectedFile()
+            if isinstance(f, DataManager.FileHandle):
+                f = f.parent()
+        except Exception:
+            f = False
+            logMsg("Can't find currently selected directory, Data Manager has not been loaded.", msgType='warning')
+        return f
 
     def getModule(self, name):
         """Return an already loaded module"""
