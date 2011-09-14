@@ -384,7 +384,7 @@ Valid options are:
         """Returns the directory that is currently selected, or the directory of the file that is currently selected in Data Manager."""
         try:
             f = self.getModule("Data Manager").selectedFile()
-            if isinstance(f, DataManager.FileHandle):
+            if not isinstance(f, DataManager.DirHandle):
                 f = f.parent()
         except Exception:
             f = False

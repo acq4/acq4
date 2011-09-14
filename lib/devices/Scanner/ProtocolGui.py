@@ -2,7 +2,7 @@
 from ProtocolTemplate import Ui_Form
 from lib.devices.Device import ProtocolGui
 from PyQt4 import QtCore, QtGui
-from lib.Manager import getManager
+from lib.Manager import getManager, logMsg, logExc
 from WidgetGroup import WidgetGroup
 import pyqtgraph.widgets as widgets
 #from pyqtgraph.widgets import *
@@ -253,7 +253,10 @@ class ScannerProtoGui(ProtocolGui):
         if self.ui.sizeFromCalibrationRadio.isChecked():
             displaySize = ss
             ## reconnecting before this to get around reload errors, breaks the disconnect
-            self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
+            try:
+                self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
+            except TypeError:
+                logExc("An exception was caught in ScannerProtoGui.pointSize(). It was probably caused by a reload.", msgType='status', importance=0)
             self.stateGroup.setState({'spotSize':ss})
             self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
         elif self.ui.sizeCustomRadio.isChecked():
@@ -832,6 +835,7 @@ class TargetGrid(widgets.ROI):
         self.pens = []
         self.pointSize = ptSize
         self.pointDisplaySize = self.pointSize
+        self.oldDisplaySize = self.pointSize
         self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         
         
@@ -1001,9 +1005,28 @@ class TargetGrid(widgets.ROI):
                 y += sep[1]
             x += sep[0]
         
+    def boundingRect(self):
+        displaySize = max([self.oldDisplaySize, self.pointDisplaySize])
+        a = displaySize-self.pointSize
+        if a <= 0:
+            a = 0
+        self.oldDisplaySize = self.pointDisplaySize
+        return QtCore.QRectF(0, 0, self.state['size'][0], self.state['size'][1]).adjusted(-a, -a, a, a)
+
 
     def paint(self, p, opt, widget):
-        widgets.ROI.paint(self, p, opt, widget)
+        #widgets.ROI.paint(self, p, opt, widget)
+        ##draw rectangle
+        p.save()
+        r = QtCore.QRectF(0,0, self.state['size'][0], self.state['size'][1])
+        p.setRenderHint(QtGui.QPainter.Antialiasing)
+        p.setPen(self.pen)
+        p.translate(r.left(), r.top())
+        p.scale(r.width(), r.height())
+        p.drawRect(0, 0, 1, 1)
+        p.restore()
+        
+        ## draw circles
         ps2 = self.pointSize * 0.5
         radius = self.pointDisplaySize*0.5
         #ps2 = self.pointSize * 0.5 * self.gridPacking

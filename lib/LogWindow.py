@@ -12,7 +12,7 @@ from Mutex import Mutex
 import numpy as np
 #from lib.Manager import getManager
 
-WIN = None
+#WIN = None
 
 class LogButton(FeedbackButton):
 
@@ -38,8 +38,9 @@ class LogWindow(QtGui.QMainWindow):
         self.setCentralWidget(self.wid)
         self.resize(1000, 500)
         self.manager = manager
-        global WIN
+        #global WIN
         WIN = self
+        global WIN
         self.msgCount = 0
         self.logCount=0
         self.logFile = None
@@ -229,6 +230,7 @@ class LogWidget(QtGui.QWidget):
         self.ui.filterTree.topLevelItem(1).setExpanded(True)
         
         self.entries = [] ## stores all log entries in memory
+        self.cache = {} ## for storing html strings of entries that have already been processed
         #self.currentEntries = None ## recordArray that stores currently displayed entries -- so that if filters get more restrictive we can just refilter this list instead of filtering everything
         self.typeFilters = []
         self.importanceFilter = 0
@@ -240,20 +242,32 @@ class LogWidget(QtGui.QWidget):
             ('directory', '|S100')
         ])
         
+        self.filtersChanged()
+        
         self.sigDisplayEntry.connect(self.displayEntry)
         self.ui.makeErrorBtn.clicked.connect(self.makeError1)
         self.ui.filterTree.itemChanged.connect(self.setCheckStates)
         self.ui.importanceSlider.valueChanged.connect(self.filtersChanged)
         
         
-    def loadFile(self, fh):
-        log = configfile.readConfigFile(fh)
-        self.entryArray.resize(len(log)-1)
+    def loadFile(self, f):
+        """Loads the file, f. f must be able to be read by configfile.py"""
+        log = configfile.readConfigFile(f)
+        self.entries = []
+        self.entryArray = np.zeros(len(log),dtype=[
+            ('index', 'int32'),
+            ('importance', 'int32'),
+            ('msgType', '|S10'),
+            ('directory', '|S100')
+        ])
                                    
         i = 0
         for v in log.itervalues():
             self.entries.append(v)
-            self.entryArray[i] = [(i, v['importance'], v['msgType'], v['currentDir'])]
+            self.entryArray[i] = np.array([(i, v['importance'], v['msgType'], v['currentDir'])], dtype=[('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
+            i += 1
+            
+        self.filterEntries()
         
     def addEntry(self, entry):
         self.entries.append(entry)
@@ -286,14 +300,24 @@ class LogWidget(QtGui.QWidget):
                 self.typeFilters.append(str(text))
             
         self.importanceFilter = self.ui.importanceSlider.value()
-        if tree.topLevelItem(0).checkState(0):
-            self.dirFilter = self.manager.getDirOfSelectedFile()
-        else:
-            self.dirFilter = False
+    
+        self.updateDirFilter()
+            #self.dirFilter = self.manager.getDirOfSelectedFile().name()
+        #else:
+            #self.dirFilter = False
             
         self.filterEntries()
         
+    def updateDirFilter(self, dh=None):
+        if self.ui.filterTree.topLevelItem(0).checkState(0):
+            if dh==None:
+                self.dirFilter = self.manager.getDirOfSelectedFile().name()
+            else:
+                self.dirFilter = dh.name()
+        else:
+            self.dirFilter = False
     
+        
     def filterEntries(self):
         """Runs each entry in self.entries through the filters and displays if it makes it through."""
         ### make self.entries a record array, then filtering will be much faster (to OR true/false arrays, + them)
@@ -302,13 +326,27 @@ class LogWidget(QtGui.QWidget):
             typeMask += self.entryArray['msgType'] == t
         mask = (self.entryArray['importance'] > self.importanceFilter) * typeMask
         if self.dirFilter != False:
-            mask *= (self.entryArray['directory'] == self.dirFilter)
+            d = np.ascontiguousarray(self.entryArray['directory'])
+            j = len(self.dirFilter)
+            i = len(d)
+            d = d.view(np.byte).reshape(i, 100)[:, :j]
+            d = d.reshape(i*j).view('|S%s' %str(j))
+            mask *= (d == self.dirFilter)
+            
             
         self.ui.output.clear()
-        indices = self.entryArray[mask]['index']
+        indices = list(self.entryArray[mask]['index'])
+        inds = indices
+        
+        #if self.dirFilter != False:
+            #j = len(self.dirFilter)
+            #for i, n in inds:
+                #if not self.entries[n]['currentDir'][:j] == self.dirFilter:
+                    #indices.pop(i)
+                    
         for i in indices:
             self.displayEntry(self.entries[i])
-        
+            
         
     def displayEntry(self, entry):
         ## for thread-safetyness:
@@ -316,49 +354,49 @@ class LogWidget(QtGui.QWidget):
         if not isGuiThread:
             self.sigDisplayEntry.emit(entry)
             return
-            
         
         else:
-            ## determine message color:
-            if entry['msgType'] == 'status':
-                i = entry['importance']
-                if i < 4:
-                    color = 'grey'
-                elif i > 6:
-                    color = 'black'
-                else:
+            if not self.cache.has_key(id(entry)):
+                self.cache[id(entry)] = []
+                ## determine message color:
+                if entry['msgType'] == 'status':
                     color = 'green'
-            elif entry['msgType'] == 'user':
-                color = 'blue'
-            elif entry['msgType'] == 'error':
-                color = 'red'
-            elif entry['msgType'] == 'warning':
-                color = '#DD4400' ## orange
+                elif entry['msgType'] == 'user':
+                    color = 'blue'
+                elif entry['msgType'] == 'error':
+                    color = 'red'
+                elif entry['msgType'] == 'warning':
+                    color = '#DD4400' ## orange
+                else:
+                    color = 'black'
+                    
+                    
+                
+                    
+                if entry.has_key('exception') or entry.has_key('docs') or entry.has_key('reasons'):
+                    self.displayComplexMessage(entry, color)
+                else: 
+                    self.displayText(entry['message'], entry, color, timeStamp=entry['timestamp'])
+                for x in self.cache[id(entry)]:
+                    self.ui.output.appendHtml(x)
             else:
-                color = 'black'
-                
-                
-            
-                
-            if entry.has_key('exception') or entry.has_key('docs') or entry.has_key('reasons'):
-                self.displayComplexMessage(entry, color)
-            else: 
-                self.displayText(entry['message'], color, timeStamp=entry['timestamp'])
-            
+                for x in self.cache[id(entry)]:
+                    self.ui.output.appendHtml(x)
+                    
     def displayComplexMessage(self, entry, color='black'):
-        self.displayText(entry['message'], color, timeStamp = entry['timestamp'])
+        self.displayText(entry['message'], entry, color, timeStamp = entry['timestamp'])
         if entry.has_key('reasons'):
             reasons = self.formatReasonStrForHTML(entry['reasons'])
-            self.displayText(reasons, 'black')
+            self.displayText(reasons, entry, 'black')
         if entry.has_key('docs'):
             docs = self.formatDocsStrForHTML(entry['docs'])
-            self.displayText(docs, 'black')
+            self.displayText(docs, entry, 'black')
         if entry.get('exception', None) is not None:
-            self.displayException(entry['exception'], 'black')
+            self.displayException(entry['exception'], entry, 'black')
             
 
     
-    def displayException(self, exception, color, count=None, tracebacks=None):
+    def displayException(self, exception, entry, color, count=None, tracebacks=None):
         ### Here, exception is a dict that holds the message, reasons, docs, traceback and oldExceptions (which are also dicts, with the same entries)
         ## the count and tracebacks keywords are for calling recursively
         
@@ -374,27 +412,27 @@ class LogWidget(QtGui.QWidget):
         
         
         if exception.has_key('oldExc'):    
-            self.displayText("&nbsp;"*indent + str(count)+'. ' + exception['message'], color)
+            self.displayText("&nbsp;"*indent + str(count)+'. ' + exception['message'], entry, color)
         else:
-            self.displayText("&nbsp;"*indent + str(count)+'. Original error: ' +exception['message'], color)
+            self.displayText("&nbsp;"*indent + str(count)+'. Original error: ' +exception['message'],entry, color)
             
         tracebacks.append(exception['traceback'])
         
         if exception.has_key('reasons'):
             reasons = self.formatReasonsStrForHTML(exception['reasons'])
-            self.displayText(reasons, color)
+            self.displayText(reasons, entry, color)
         if exception.has_key('docs'):
             docs = self.formatDocsStrForHTML(exception['docs'])
-            self.displayText(docs, color)
+            self.displayText(docs, entry, color)
         
         if exception.has_key('oldExc'):
-            self.displayException(exception['oldExc'], color, count=count, tracebacks=tracebacks)
+            self.displayException(exception['oldExc'], entry, color, count=count, tracebacks=tracebacks)
         else:
             for i, tb in enumerate(tracebacks):
-                self.displayTraceback(tb, number=i+1)
+                self.displayTraceback(tb, entry, number=i+1)
         
         
-    def displayText(self, msg, colorStr='black', timeStamp=None):
+    def displayText(self, msg, entry, colorStr='black', timeStamp=None):
         if msg[-1:] == '\n':
             msg = msg[:-1]     
         msg = '<br />'.join(msg.split('\n'))
@@ -402,9 +440,10 @@ class LogWidget(QtGui.QWidget):
             strn = '<b style="color:black"> %s </b> <span style="color:%s"> %s </span>' % (timeStamp, colorStr, msg)
         else:
             strn = '<span style="color:%s"> %s </span>' % (colorStr, msg)
-        self.ui.output.appendHtml(strn)
+        #self.ui.output.appendHtml(strn)
+        self.cache[id(entry)].append(strn)
             
-    def displayTraceback(self, tb, color='grey', number=1):
+    def displayTraceback(self, tb, entry, color='grey', number=1):
         lines = []
         indent = 16
         for l in ''.join(tb).split('\n'):
@@ -417,7 +456,7 @@ class LogWidget(QtGui.QWidget):
             while l[spaceCount] == ' ':
                 spaceCount += 1
             lines.append("&nbsp;"*(indent+spaceCount*4) + prefix + l)
-        self.displayText('<br>'.join(lines), color)
+        self.displayText('<br />'.join(lines), entry, color)
         
     def formatReasonsStrForHTML(self, reasons):
         indent = 6
@@ -436,6 +475,7 @@ class LogWidget(QtGui.QWidget):
         return docStr[:-4]
     
     def makeError1(self):
+        
         try:
             self.makeError2()
             #print x
