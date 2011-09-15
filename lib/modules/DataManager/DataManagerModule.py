@@ -7,6 +7,7 @@ from debug import *
 import FileAnalysisView
 from lib.LogWindow import LogButton, LogWindow
 import FileLogView
+from lib.util.pyqtgraph.FileDialog import FileDialog
 
 
 
@@ -39,7 +40,7 @@ class DataManager(Module):
         w = self.ui.splitter.width()
         self.ui.splitter.setSizes([int(w*0.3), int(w*0.7)])
         self.ui.logDock.hide()
-        self.dialog = QtGui.QFileDialog()
+        self.dialog = FileDialog()
         self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
         ## Load values into GUI
         #self.model = DMModel(self.manager.getBaseDir())

@@ -12,6 +12,7 @@ from Point import *
 #from vector import *
 import sys, os
 import debug    
+from FileDialog import FileDialog
         
 class GraphicsView(QtGui.QGraphicsView):
     
@@ -420,7 +421,7 @@ class GraphicsView(QtGui.QGraphicsView):
         
     def writeSvg(self, fileName=None):
         if fileName is None:
-            self.fileDialog = QtGui.QFileDialog()
+            self.fileDialog = FileDialog()
             self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
             self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
             if GraphicsView.lastFileDir is not None:
@@ -439,9 +440,9 @@ class GraphicsView(QtGui.QGraphicsView):
         
     def writeImage(self, fileName=None):
         if fileName is None:
-            self.fileDialog = QtGui.QFileDialog()
+            self.fileDialog = FileDialog()
             self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
-            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) ## this is the line that makes the fileDialog not show on mac
             if GraphicsView.lastFileDir is not None:
                 self.fileDialog.setDirectory(GraphicsView.lastFileDir)
             self.fileDialog.show()
@@ -459,7 +460,14 @@ class GraphicsView(QtGui.QGraphicsView):
         
     def writePs(self, fileName=None):
         if fileName is None:
-            fileName = str(QtGui.QFileDialog.getSaveFileName())
+            self.fileDialog = FileDialog()
+            self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
+            self.fileDialog.show()
+            self.fileDialog.fileSelected.connect(self.writePs)
+            return
+        #if fileName is None:
+        #    fileName = str(QtGui.QFileDialog.getSaveFileName())
         printer = QtGui.QPrinter(QtGui.QPrinter.HighResolution)
         printer.setOutputFileName(fileName)
         painter = QtGui.QPainter(printer)
