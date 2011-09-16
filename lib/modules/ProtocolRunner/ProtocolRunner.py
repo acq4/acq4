@@ -788,11 +788,7 @@ class ProtocolRunner(Module):
             self.enableStartBtns(True)
             self.loopEnabled = False
             print "Error starting protocol. "
-            if isinstance(exc[1], HelpfulException):
-                e[1].prependErr("Error starting protocol:", exc=exc)
-            else:
-                raise HelpfulException("Error starting protocol:", exc=exc)
-        
+            raise HelpfulException("Error starting protocol:", exc=exc)      
    
     def runSequenceClicked(self):
         self.runSequence(store=True)

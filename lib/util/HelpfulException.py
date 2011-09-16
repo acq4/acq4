@@ -2,7 +2,7 @@
 
 class HelpfulException(Exception):
     """Allows for stacked exceptions.
-        Initiation:
+        Initalization:
            message: The error message to the user. ex: Device could not be found.
            exc: The original exception object
            reasons: Reasons why the exception may have occurred. ex: "a. Device initialization failed during startup. b. Device Gui was closed."

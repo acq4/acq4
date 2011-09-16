@@ -45,18 +45,20 @@ class FileDataView(QtGui.QSplitter):
                 if typ == 'ImageFile': 
                     image = True
                 elif typ == 'MetaArray':
-                    if data.ndim > 2:
+                    if data.ndim == 2 and not data.axisHasColumns(0) and not data.axisHasColumns(1):
+                        image = True
+                    elif data.ndim > 2:
                         image = True
                 else:
                     return
                         
         
         if image:
-            if self.currentType == 'image':
+            if self.currentType == 'image' and len(self.widgets) > 0:
                 try:
                     self.widgets[0].setImage(data, autoRange=False)
                 except:
-                    print "widget type:", type(self.widgets[0])
+                    print "widget types:", map(type, self.widgets)
                     raise
             else:
                 self.clear()

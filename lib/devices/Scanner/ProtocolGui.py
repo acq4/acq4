@@ -98,7 +98,7 @@ class ScannerProtoGui(ProtocolGui):
         
         self.testTarget = TargetPoint([0,0], 100e-6, host=self)
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
-        self.spotMarker = TargetPoint([0,0], 100e-6, host=self)
+        self.spotMarker = TargetPoint([0,0], 100e-6, host=self, movable=False)
         self.spotMarker.setPen(mkPen(color=(255,255,255), width = 2))
         self.updateSpotSizes()
         self.spotMarker.hide()
