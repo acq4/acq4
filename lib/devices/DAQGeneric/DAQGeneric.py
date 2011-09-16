@@ -7,6 +7,9 @@ from numpy import *
 from protoGUI import *
 from debug import *
 from SpinBox import *
+from functions import siFormat
+import DeviceTemplate
+
 
 class DAQGeneric(Device):
     
@@ -21,18 +24,37 @@ class DAQGeneric(Device):
         for ch in config:
             if 'scale' not in config[ch]:
                 config[ch]['scale'] = 1.0
+            if 'offset' not in config[ch]:
+                config[ch]['offset'] = 0.0
             #print "chan %s scale %f" % (ch, config[ch]['scale'])
             if 'holding' not in config[ch]:
                 config[ch]['holding'] = 0.0
             self._DGHolding[ch] = config[ch]['holding']
         
+    def setScale(self, ch, scale):
+        with self._DGLock:
+            self._DGConfig[ch]['scale'] = scale
+            
+    def setOffset(self, ch, offset):
+        with self._DGLock:
+            self._DGConfig[ch]['offset'] = offset
+            
+    def mapToDAQ(self, channel, value):
+        scale = self._DGConfig[channel]['scale']
+        offset = self._DGConfig[channel]['offset']
+        return (value*scale) - offset
     
+    def mapFromDAQ(self, channel, value):
+        scale = self._DGConfig[channel]['scale']
+        offset = self._DGConfig[channel]['offset']
+        return (value + offset) * scale
+            
     def createTask(self, cmd):
         return DAQGenericTask(self, cmd)
     
         
-    def setChanHolding(self, channel, level=None, scale=None):
-        """Define and set the holding values for this channel"""
+    def setChanHolding(self, channel, level=None):
+        """Define and set the holding values for this channel."""
         with self._DGLock:
             #print "set holding", channel, level
             ### Set correct holding level here...
@@ -42,12 +64,13 @@ class DAQGeneric(Device):
                     raise Exception("No remembered holding level for channel %s" % channel)
             else:
                 self._DGHolding[channel] = level
+                
             daq, chan = self._DGConfig[channel]['channel']
             daqDev = self.dm.getDevice(daq)
-            if scale is None:
-                scale = self.getChanScale(channel)
+            #if scale is None:
+                #scale = self.getChanScale(channel)
             #print "set", chan, self._DGHolding[channel]*scale
-            val = self._DGHolding[channel]*scale
+            val = self.mapToDAQ(channel, self._DGHolding[channel])
             daqDev.setChannelValue(chan, val, block=False)
             #self.emit(QtCore.SIGNAL('holdingChanged'), channel, val)
             self.sigHoldingChanged.emit(channel, val)
@@ -65,11 +88,13 @@ class DAQGeneric(Device):
                 mode = chConf[2]
     
             daqDev = self.dm.getDevice(daq)
-            if 'scale' in self._DGConfig[channel]:
-                scale = self._DGConfig[channel]['scale']
-            else:
-                scale = 1.0            
-            return daqDev.getChannelValue(chan, mode=mode)/scale
+            #if 'scale' in self._DGConfig[channel]:
+                #scale = self._DGConfig[channel]['scale']
+            #else:
+                #scale = 1.0            
+            #return daqDev.getChannelValue(chan, mode=mode)/scale
+            val = daqDev.getChannelValue(chan, mode=mode)
+            return self.mapFromDAQ(channel, val)
 
     def reconfigureChannel(self, chan, config):
         self._DGConfig[chan].update(config)
@@ -327,37 +352,112 @@ class DAQDevGui(QtGui.QWidget):
     def __init__(self, dev):
         self.dev = dev
         QtGui.QWidget.__init__(self)
-        self.layout = QtGui.QGridLayout()
+        self.layout = QtGui.QVBoxLayout()
         self.setLayout(self.layout)
         chans = self.dev.listChannels()
         self.widgets = {}
+        #self.uis = {}
+        self.defaults = {}
         row = 0
+        #for ch in chans:
+            #l = QtGui.QLabel("%s (%s)" % (ch, chans[ch]['channel'][1]))
+            #if chans[ch]['type'] == 'ao':
+                #hw = SpinBox(value=self.dev.getChanHolding(ch))
+                ##QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
+                #hw.sigValueChanged.connect(self.spinChanged)
+            #elif chans[ch]['type'] == 'do':
+                #hw = SpinBox(value=self.dev.getChanHolding(ch), step=1, bounds=(0,1))
+                ##QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
+                #hw.sigValueChanged.connect(self.spinChanged)
+            #else:
+                #hw = QtGui.QWidget()
+            #hw.channel = ch
+            #self.widgets[ch] = (l, hw)
+            #self.layout.addWidget(l, row, 0)
+            #self.layout.addWidget(hw, row, 1)
+            #row += 1
         for ch in chans:
-            l = QtGui.QLabel("%s (%s)" % (ch, chans[ch]['channel'][1]))
-            if chans[ch]['type'] == 'ao':
-                hw = SpinBox(value=self.dev.getChanHolding(ch))
-                #QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
-                hw.sigValueChanged.connect(self.spinChanged)
-            elif chans[ch]['type'] == 'do':
-                hw = SpinBox(value=self.dev.getChanHolding(ch), step=1, bounds=(0,1))
-                #QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
-                hw.sigValueChanged.connect(self.spinChanged)
-            else:
-                hw = QtGui.QWidget()
-            hw.channel = ch
-            self.widgets[ch] = (l, hw)
-            self.layout.addWidget(l, row, 0)
-            self.layout.addWidget(hw, row, 1)
-            row += 1
+            wid = QtGui.QWidget()
+            ui = DeviceTemplate.Ui_Form()
+            ui.setupUi(wid)
+            self.layout.addWidget(wid)
+            ui.analogCtrls = [ui.scaleDefaultBtn, ui.scaleSpin, ui.offsetDefaultBtn, ui.offsetSpin, ui.scaleLabel, ui.offsetLabel]
+            ui.channel = ch
+            self.widgets[ch] = ui
+            ui.nameLabel.setText(str(ch))
+            ui.channelCombo.addItem("%s (%s)" % (ch, chans[ch]['channel'][1]))
+            holding = chans[ch].get('holding', 0)
+            
+            if chans[ch]['type'] in ['ao', 'ai']:
+                ui.inputRadio.setEnabled(False)
+                ui.outputRadio.setEnabled(False)
+                ui.invertCheck.hide()
+                scale = chans[ch].get('scale', 1)
+                units = chans[ch].get('units', 'V')
+                offset = chans[ch].get('offset', 0)
+                ui.offsetSpin.setOpts(suffix = 'V')
+                ui.offsetSpin.setValue(offset)
+                ui.offsetDefaultBtn.setText("Default (%s)" % siFormat(offset, suffix='V'))
+                ui.offsetDefaultBtn.clicked.connect(self.offsetDefaultBtnClicked)
+                if chans[ch]['type'] == 'ao':
+                    ui.outputRadio.setChecked(True)
+                    ui.scaleDefaultBtn.setText("Default (%s)" % siFormat(scale, suffix='V/'+units))
+                    ui.scaleDefaultBtn.clicked.connect(self.scaleDefaultBtnClicked)
+                    ui.scaleSpin.setOpts(suffix= 'V/'+units)
+                    ui.holdingSpin.setOpts(suffix=units)
+                    ui.holdingSpin.setValue(holding)
+                    ui.holdingSpin.sigValueChanged.connect(self.holdingSpinChanged)
+                elif chans[ch]['type'] == 'ai':
+                    ui.inputRadio.setChecked(True)
+                    ui.holdingLabel.hide()
+                    ui.holdingSpin.hide()
+                    ui.scaleDefaultBtn.setText("Default (%s)" % siFormat(scale, suffix=units+'/V'))
+                    ui.scaleDefaultBtn.clicked.connect(self.scaleDefaultBtnClicked)
+                    ui.scaleSpin.setOpts(suffix= units+'/V')
+                ui.scaleSpin.setValue(scale) 
+                ui.scaleSpin.sigValueChanged.connect(self.scaleSpinChanged)
+                self.defaults[ch] = {
+                    'scale': scale,
+                    'offset': offset}
+            elif chans[ch]['type'] in ['do', 'di']:
+                for item in ui.analogCtrls:
+                    item.hide()
+                if chans[ch].get('invert', False):
+                    ui.invertCheck.setChecked(True)
+                if chans[ch]['type'] == 'do':
+                    ui.outputRadio.setChecked(True)
+                    ui.holdingSpin.setOpts(bounds=[0,1], step=1)
+                    ui.holdingSpin.setValue(holding)
+                    ui.holdingSpin.sigValueChanged.connect(self.holdingSpinChanged)
+                elif chans[ch]['type'] == 'di':
+                    ui.inputRadio.setChecked(True)
+                    ui.holdingLabel.hide()
+                    ui.holdingSpin.hide()
         #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.holdingChanged)
         self.dev.sigHoldingChanged.connect(self.holdingChanged)
     
     def holdingChanged(self, ch, val):
-        self.widgets[ch][1].blockSignals(True)
-        self.widgets[ch][1].setValue(val)
-        self.widgets[ch][1].blockSignals(False)
+        self.widgets[ch].holdingSpin.blockSignals(True)
+        self.widgets[ch].holdingSpin.setValue(val)
+        self.widgets[ch].holdinSpin.blockSignals(False)
         
-    def spinChanged(self, spin):
-        ch = spin.channel
+    def holdingSpinChanged(self, spin):
+        ch = spin.parent().channel
         self.dev.setChanHolding(ch, spin.value())
+        
+    def scaleSpinChanged(self, spin):
+        ch = spin.parent().channel
+        self.dev.setScale(ch, spin.value())
+    
+    def offsetSpinChanged(self, spin):
+        ch = spin.parent().channel
+        self.dev.setOffset(ch, spin.value())
+        
+    def offsetDefaultBtnClicked(self):
+        ch = self.sender().parent().channel
+        self.widgets[ch].offsetSpin.setValue(self.defaults[ch]['offset'])
+        
+    def scaleDefaultBtnClicked(self):
+        ch = self.sender().parent().channel
+        self.widgets[ch].scaleSpin.setValue(self.defaults[ch]['scale'])
         
