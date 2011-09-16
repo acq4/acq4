@@ -10,6 +10,7 @@ from DataManager import DirHandle
 from HelpfulException import HelpfulException
 from Mutex import Mutex
 import numpy as np
+from pyqtgraph.FileDialog import FileDialog
 #from lib.Manager import getManager
 
 #WIN = None
@@ -31,6 +32,7 @@ class LogWindow(QtGui.QMainWindow):
     
     def __init__(self, manager):
         QtGui.QMainWindow.__init__(self)
+        self.setWindowTitle("Log")
         self.wid = LogWidget(self, manager)
         self.wid.ui.input = QtGui.QLineEdit()
         self.wid.ui.gridLayout.addWidget(self.wid.ui.input, 2, 0, 1, 3)
@@ -98,6 +100,7 @@ class LogWindow(QtGui.QMainWindow):
         
     def logExc(self, *args, **kwargs):
         kwargs['exception'] = sys.exc_info()
+        kwargs['traceback'] = [traceback.format_stack()]
         self.logMsg(*args, **kwargs)
         
     def processEntry(self, entry):
@@ -119,6 +122,11 @@ class LogWindow(QtGui.QMainWindow):
         self.wid.ui.input.clear()
     
     def exceptionToDict(self, exType, exc, tb):
+        #lines = (traceback.format_stack()[:-skip] 
+            #+ ["  ---- exception caught ---->\n"] 
+            #+ traceback.format_tb(sys.exc_info()[2])
+            #+ traceback.format_exception_only(*sys.exc_info()[:2]))
+        
         excDict = {}
         excDict['message'] = traceback.format_exception(exType, exc, tb)[-1]
         excDict['traceback'] = traceback.format_exception(exType, exc, tb)[:-1]
@@ -245,7 +253,7 @@ class LogWidget(QtGui.QWidget):
         self.filtersChanged()
         
         self.sigDisplayEntry.connect(self.displayEntry)
-        self.ui.makeErrorBtn.clicked.connect(self.makeError1)
+        self.ui.exportHtmlBtn.clicked.connect(self.exportHtml)
         self.ui.filterTree.itemChanged.connect(self.setCheckStates)
         self.ui.importanceSlider.valueChanged.connect(self.filtersChanged)
         
@@ -272,7 +280,7 @@ class LogWidget(QtGui.QWidget):
     def addEntry(self, entry):
         self.entries.append(entry)
         i = len(self.entryArray)
-        arr = np.array([(i, entry['importance'], entry['msgType'], entry['currentDir'])], dtype = [('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
+        arr = np.array([(i, entry['importance'], entry['msgType'], entry.get('currentDir', ''))], dtype = [('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
         self.entryArray.resize(i+1)
         #self.entryArray[i] = [(i, entry['importance'], entry['msgType'], entry['currentDir'])]
         self.entryArray[i] = arr
@@ -392,7 +400,7 @@ class LogWidget(QtGui.QWidget):
             docs = self.formatDocsStrForHTML(entry['docs'])
             self.displayText(docs, entry, 'black')
         if entry.get('exception', None) is not None:
-            self.displayException(entry['exception'], entry, 'black')
+            self.displayException(entry['exception'], entry, 'black', tracebacks=entry.get('traceback', None))
             
 
     
@@ -409,7 +417,6 @@ class LogWidget(QtGui.QWidget):
             tracebacks = []
             
         indent = 10
-        
         
         if exception.has_key('oldExc'):    
             self.displayText("&nbsp;"*indent + str(count)+'. ' + exception['message'], entry, color)
@@ -428,8 +435,12 @@ class LogWidget(QtGui.QWidget):
         if exception.has_key('oldExc'):
             self.displayException(exception['oldExc'], entry, color, count=count, tracebacks=tracebacks)
         else:
+            if len(tracebacks)==count:
+                n=0
+            else: 
+                n=1
             for i, tb in enumerate(tracebacks):
-                self.displayTraceback(tb, entry, number=i+1)
+                self.displayTraceback(tb, entry, number=i+n)
         
         
     def displayText(self, msg, entry, colorStr='black', timeStamp=None):
@@ -473,6 +484,23 @@ class LogWidget(QtGui.QWidget):
         for i, d in enumerate(docs):
             docStr += "&nbsp;"*22 + letters[i] + ". " + d + "<br>"
         return docStr[:-4]
+    
+    def exportHtml(self, fileName=False):
+        if fileName is False:
+            self.fileDialog = FileDialog(self, "Save HTML as...", self.manager.getCurrentDir().name())
+            #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+            self.fileDialog.show()
+            self.fileDialog.fileSelected.connect(self.exportHtml)
+            return
+        if fileName[-5:] != '.html':
+            fileName += '.html'
+        doc = self.ui.output.document().toHtml()
+        f = open(fileName, 'w')
+        f.write(doc)
+        f.close()
+        
+        
     
     def makeError1(self):
         

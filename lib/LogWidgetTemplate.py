@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'LogWidgetTemplate.ui'
 #
-# Created: Mon Sep 12 16:20:58 2011
+# Created: Fri Sep 16 09:48:42 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -47,9 +47,9 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.dirLabel, 0, 0, 1, 1)
         spacerItem = QtGui.QSpacerItem(148, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.gridLayout.addItem(spacerItem, 0, 1, 1, 1)
-        self.makeErrorBtn = QtGui.QPushButton(self.widget)
-        self.makeErrorBtn.setObjectName(_fromUtf8("makeErrorBtn"))
-        self.gridLayout.addWidget(self.makeErrorBtn, 0, 2, 1, 1)
+        self.exportHtmlBtn = QtGui.QPushButton(self.widget)
+        self.exportHtmlBtn.setObjectName(_fromUtf8("exportHtmlBtn"))
+        self.gridLayout.addWidget(self.exportHtmlBtn, 0, 2, 1, 1)
         self.output = QtGui.QPlainTextEdit(self.widget)
         self.output.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.output.setUndoRedoEnabled(False)
@@ -143,7 +143,7 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
-        self.makeErrorBtn.setText(QtGui.QApplication.translate("Form", "make error", None, QtGui.QApplication.UnicodeUTF8))
+        self.exportHtmlBtn.setText(QtGui.QApplication.translate("Form", "Export HTML", None, QtGui.QApplication.UnicodeUTF8))
         self.filterTree.headerItem().setText(0, QtGui.QApplication.translate("Form", "Display:", None, QtGui.QApplication.UnicodeUTF8))
         __sortingEnabled = self.filterTree.isSortingEnabled()
         self.filterTree.setSortingEnabled(False)
