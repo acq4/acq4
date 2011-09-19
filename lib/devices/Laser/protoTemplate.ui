@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>494</width>
+    <height>343</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <widget class="QGroupBox" name="groupBox">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>30</y>
+     <width>171</width>
+     <height>108</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>Control Mode:</string>
+   </property>
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
+     <widget class="QRadioButton" name="powerWaveRadio">
+      <property name="text">
+       <string>Power waveform (mW)</string>
+      </property>
+      <property name="checked">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="0">
+     <widget class="QRadioButton" name="switchWaveRadio">
+      <property name="text">
+       <string>Switch Waveform (1/0)</string>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="0">
+     <widget class="QRadioButton" name="pulseWaveRadio">
+      <property name="text">
+       <string>Pulses</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QTreeWidget" name="pulseTable">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>230</y>
+     <width>461</width>
+     <height>101</height>
+    </rect>
+   </property>
+   <column>
+    <property name="text">
+     <string>Start (ms)</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Duration (ms)</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Power (mW)</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Energy (pJ)</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string/>
+    </property>
+   </column>
+  </widget>
+  <widget class="QWidget" name="wavelengthBox" native="true">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>0</y>
+     <width>147</width>
+     <height>25</height>
+    </rect>
+   </property>
+   <layout class="QHBoxLayout" name="horizontalLayout">
+    <item>
+     <widget class="QLabel" name="label">
+      <property name="text">
+       <string>Wavelength</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QSpinBox" name="spinBox">
+      <property name="suffix">
+       <string> nm</string>
+      </property>
+      <property name="maximum">
+       <number>4000</number>
+      </property>
+      <property name="value">
+       <number>1080</number>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QGroupBox" name="groupBox_2">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>150</y>
+     <width>171</width>
+     <height>83</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>Power Mode:</string>
+   </property>
+   <layout class="QGridLayout" name="gridLayout_2">
+    <item row="0" column="0">
+     <widget class="QRadioButton" name="radioButton">
+      <property name="text">
+       <string>Analog</string>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="0">
+     <widget class="QRadioButton" name="radioButton_2">
+      <property name="text">
+       <string>PWM</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
