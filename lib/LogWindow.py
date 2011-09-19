@@ -11,6 +11,7 @@ from HelpfulException import HelpfulException
 from Mutex import Mutex
 import numpy as np
 from pyqtgraph.FileDialog import FileDialog
+from debug import printExc
 #from lib.Manager import getManager
 
 #WIN = None
@@ -100,7 +101,7 @@ class LogWindow(QtGui.QMainWindow):
         
     def logExc(self, *args, **kwargs):
         kwargs['exception'] = sys.exc_info()
-        kwargs['traceback'] = [traceback.format_stack()]
+        kwargs['traceback'] = [['Callstack: \n'] + traceback.format_stack()[:-3] + ["------- exception caught ----------"]]
         self.logMsg(*args, **kwargs)
         
     def processEntry(self, entry):
@@ -435,7 +436,7 @@ class LogWidget(QtGui.QWidget):
         if exception.has_key('oldExc'):
             self.displayException(exception['oldExc'], entry, color, count=count, tracebacks=tracebacks)
         else:
-            if len(tracebacks)==count:
+            if len(tracebacks)==count+1:
                 n=0
             else: 
                 n=1
@@ -457,16 +458,20 @@ class LogWidget(QtGui.QWidget):
     def displayTraceback(self, tb, entry, color='grey', number=1):
         lines = []
         indent = 16
+        prefix = ''
         for l in ''.join(tb).split('\n'):
-            prefix = ''
             if l == '':
                 continue
             if l[:9] == "Traceback":
-                prefix = str(number) + '. '
+                prefix = ' ' + str(number) + '. '
+                continue
             spaceCount = 0
             while l[spaceCount] == ' ':
                 spaceCount += 1
+            if prefix is not '':
+                spaceCount -= 1
             lines.append("&nbsp;"*(indent+spaceCount*4) + prefix + l)
+            prefix = ''
         self.displayText('<br />'.join(lines), entry, color)
         
     def formatReasonsStrForHTML(self, reasons):
@@ -486,6 +491,8 @@ class LogWidget(QtGui.QWidget):
         return docStr[:-4]
     
     def exportHtml(self, fileName=False):
+        self.makeError1()
+        return
         if fileName is False:
             self.fileDialog = FileDialog(self, "Save HTML as...", self.manager.getCurrentDir().name())
             #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
@@ -514,7 +521,8 @@ class LogWidget(QtGui.QWidget):
                 #exc.prependErr("Button doesn't work", (t,exc,tb), reasons = ["It's supposed to raise an error for testing purposes", "You're doing it wrong."])
                 #raise
             #else:
-            raise HelpfulException(message='This button does not work.', exc=(t, exc, tb), reasons=["It's supposed to raise an error for testing purposes", "You're doing it wrong."])
+            printExc("This is the message sent to printExc.")
+            #raise HelpfulException(message='This button does not work.', exc=(t, exc, tb), reasons=["It's supposed to raise an error for testing purposes", "You're doing it wrong."])
     
     def makeError2(self):
         try:
