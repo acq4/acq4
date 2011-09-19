@@ -90,7 +90,7 @@ class Mutex(QtCore.QMutex):
     def __enter__(self):
         self.lock()
         return self
-
+        
 
 class MutexLocker:
     def __init__(self, lock):
@@ -127,9 +127,208 @@ class MutexLocker:
     def mutex(self):
         return self.lock
 
+import functools, weakref
+
+class ThreadsafeObject:
+    """Wrapper that makes access to any object thread-safe (within reasonable limits).
+    - all method calls and attribute/item accesses are protected by mutex
+    - optionally, attribute/item accesses may return protected objects
+    - can be manually locked for extended operations
+    """
+    def __init__(self, obj, recursive=False, reentrant=True):
+        """
+        If recursive is True, then sub-objects accessed from obj are wrapped threadsafe as well.
+        If reentrant is True, then the object can be locked multiple times from the same thread."""
+
+        try:
+            self.__TSOwrapped_object__ = weakref.ref(obj)
+        except:
+            self.__TSOwrapped_object__ = obj
+            
+        if reentrant:
+            self.__TSOwrap_lock__ = Mutex(QtCore.QMutex.Recursive)
+        else:
+            self.__TSOwrap_lock__ = Mutex()
+        self.__TSOrecursive__ = recursive
+        self.__TSOreentrant__ = reentrant
+        self.__TSOwrapped_objs__ = {}
+
+    def lock(self, id=None):
+        self.__TSOwrap_lock__.lock(id=id)
+        
+    def tryLock(self, timeout=None, id=None):
+        self.__TSOwrap_lock__.tryLock(timeout=timeout, id=id)
+        
+    def unlock(self):
+        self.__TSOwrap_lock__.unlock()
+        
+    def unwrap(self):
+        return self.__TSOwrapped_object__
+
+
+    def __getattr__(self, attr):
+        #try:
+            #return object.__getattribute__(self, attr)
+        #except AttributeError:
+        with self.__TSOwrap_lock__:
+            val = getattr(self.__wrapped_object__(), attr)
+            if callable(val):
+                return self.__wrap_object__(val)
+            if self.__TSOrecursive__:
+                return self.__wrap_object__(val)
+            return val
+
+    def __setattr__(self, attr, val):
+        if attr[:5] == '__TSO':
+            #return object.__setattr__(self, attr, val)
+            self.__dict__[attr] = val
+            return
+        with self.__TSOwrap_lock__:
+            return setattr(self.__wrapped_object__(), attr, val)
+            
+    #def __getitem__(self, item):
+        #with self.__TSOwrap_lock__:
+            #val = self.__wrapped_object__()[item]
+            #if self.__TSOrecursive__:
+                #return self.__wrap_object__(val)
+                ##return ThreadsafeObject(val, recursive=self.__TSOrecursive__, reentrant=self.__TSOreentrant__)
+            #else:
+                #return val
+
+    #def __setitem__(self, item, val):
+        #with self.__TSOwrap_lock__:
+            #self.__wrapped_object__()[item] = val
+            
+    #def __call__(self, *args, **kargs):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__()(*args, **kargs)
+            
+    #def __repr__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().__repr__()
+
+    #def __str__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().__str__()
+
+    #def __eq__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().__eq__()
+
+    #def __ne__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().__ne__()
+
+    #def __lt__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __gt__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __le__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __ge__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __add__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __sub__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __mul__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __div__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __iadd__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __isub__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __imul__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __idiv__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __radd__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __rsub__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __rmul__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __rdiv__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __pow__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __ipow__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __rpow__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __len__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def __abs__(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+    #def ____(self):
+        #with self.__TSOwrap_lock__:
+            #return self.__wrapped_object__().____()
+
+
+
+    def __wrap_object__(self, obj):
+        if obj.__class__ in [int, float, str, unicode, tuple]:
+            return obj
+        if id(obj) not in self.__TSOwrapped_objs__:
+            self.__TSOwrapped_objs__[id(obj)] = ThreadsafeObject(obj, recursive=self.__TSOrecursive__, reentrant=self.__TSOreentrant__)
+        return self.__TSOwrapped_objs__[id(obj)]
+        
+    def __wrapped_object__(self):
+        if isinstance(self.__TSOwrapped_object__, weakref.ref):
+            return self.__TSOwrapped_object__()
+        else:
+            return self.__TSOwrapped_object__
 
 
 
 #class Mutex(QtCore
 #class MutexLocker(QtCore.QMutexLocker):
     #pass
+
+
+if __name__ == '__main__':
+    d = {'x': 1, 'y': [1,2,3,4,5]}
+    t = ThreadsafeObject(d, recursive=False, reentrant=False)
