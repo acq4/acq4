@@ -45,7 +45,7 @@ def printExc(msg='', indent=4, prefix='|', msgType='error'):
     (This function is intended to be called within except: blocks)"""
 
     if HAVE_MANAGER:
-        lib.Manager.logExc(msg=msg)
+        lib.Manager.logExc(msg=msg, msgType=msgType)
     exc = getExc(indent, prefix + '  ')
     print "[%s]  %s\n" % (time.strftime("%H:%M:%S"), msg)
     print " "*indent + prefix + '='*30 + '>>'

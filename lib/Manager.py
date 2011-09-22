@@ -51,22 +51,31 @@ def __reload__(old):
     Manager.CREATED = old['Manager'].CREATED
     Manager.single = old['Manager'].single
     
-def logMsg(*args, **kwargs):
-    """See lib.LogWindow.logMsg() for arguments and how to use."""
+def logMsg(msg, **kwargs):
+    """msg: the text of the log message
+       msgTypes: user, status, error, warning (status is default)
+       importance: 0-9 (0 is low importance, 9 is high, 5 is default)
+       other supported keywords:
+          exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
+          docs: a list of strings where documentation related to the message can be found
+          reasons: a list of reasons (as strings) for the message
+          traceback: a list of formatted callstack/trackback objects (formatting a traceback/callstack returns a list of strings), usually looks like [['line 1', 'line 2', 'line3'], ['line1', 'line2']]
+       Feel free to add your own keyword arguments. These will be saved in the log.txt file, but will not affect the content or way that messages are displayed.
+        """
     global LOG
     if LOG is not None:
-        LOG.logMsg(*args, **kwargs)
+        LOG.logMsg(msg, **kwargs)
     else:
         print "Can't log message; no log created yet."
         print args
         print kwargs
         
     
-def logExc(*args, **kwargs):
-    """Calls logMsg, but adds in the current exception. Must be called within an except block."""
+def logExc(msg, *args, **kwargs):
+    """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
     global LOG
     if LOG is not None:
-        LOG.logExc(*args, **kwargs)
+        LOG.logExc(msg, *args, **kwargs)
     else:
         print "Can't log error message; no log created yet."
         print args
