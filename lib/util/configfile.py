@@ -12,7 +12,7 @@ as it can be converted to/from a string using repr and eval.
 import re, os, sys
 from advancedTypes import OrderedDict
 GLOBAL_PATH = None # so not thread safe.
-
+import units
 
 class ParseError(Exception):
     def __init__(self, message, lineNum, line, fileName=None):
@@ -128,18 +128,22 @@ def parseString(lines, start=0):
             (k, p, v) = l.partition(':')
             k = k.strip()
             v = v.strip()
+            
+            ## set up local variables to use for eval
+            local = units.allUnits.copy()
+            local['readConfigFile'] = readConfigFile
             if len(k) < 1:
                 raise ParseError('Missing name preceding colon', ln+1, l)
-            if k[0] == '(' and k[-1] == ')':
+            if k[0] == '(' and k[-1] == ')':  ## If the key looks like a tuple, try evaluating it.
                 try:
-                    k1 = eval(k)
+                    k1 = eval(k, local)
                     if type(k1) is tuple:
                         k = k1
                 except:
                     pass
-            if re.search(r'\S', v) and v[0] != '#':
+            if re.search(r'\S', v) and v[0] != '#':  ## eval the value
                 try:
-                    val = eval(v)
+                    val = eval(v, local)
                 except:
                     ex = sys.exc_info()[1]
                     raise ParseError("Error evaluating expression '%s': [%s: %s]" % (v, ex.__class__.__name__, str(ex)), (ln+1), l)

@@ -38,7 +38,7 @@ class NiDAQ(Device):
             ignoreLock: attempt to set the channel value even if the device is reserved.
         Returns True if the channel was set, False otherwise.
         """
-        print "Setting channel %s to %f" % (chan, value)
+        #print "Setting channel %s to %f" % (chan, value)
         if ignoreLock:
             res = True
         else:
@@ -46,7 +46,7 @@ class NiDAQ(Device):
             
         if not block and not res:
             if delaySetIfBusy:
-                print "  busy, schedule for later."
+                #print "  busy, schedule for later."
                 self.delayedSet[chan] = value
             return False
         
@@ -67,6 +67,18 @@ class NiDAQ(Device):
                 self.release()
         return True
         
+    def release(self):
+        ## take care of any channel-value-set requests that arrived while the device was locked
+        try:
+            self.delayedSet.lock()
+            for chan, val in self.delayedSet.iteritems():
+                #print "Set delayed:", chan, val
+                self.setChannelValue(chan, val, ignoreLock=True)
+            self.delayedSet.clear()
+        finally:
+            self.delayedSet.unlock()
+        return Device.release(self)
+
     def getChannelValue(self, chan, mode=None, block=True):
         res = self.reserve(block=block)
         if not res:  ## False means non-blocking lock attempt failed.
@@ -195,18 +207,6 @@ class NiDAQ(Device):
         d6[:radius] = data[:radius]
         d6[-radius:] = data[-radius:]
         return d6
-
-    def release(self):
-        ## take care of any channel-value-set requests that arrived while the device was locked
-        try:
-            self.delayedSet.lock()
-            for chan, val in self.delayedSet.iteritems():
-                print "Set delayed:", chan, val
-                self.setChannelValue(chan, val, ignoreLock=True)
-            self.delayedSet.clear()
-        finally:
-            self.delayedSet.unlock()
-        return Device.release(self)
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
