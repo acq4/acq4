@@ -9,7 +9,11 @@ import sys, traceback, time, gc, re, types, weakref, inspect, os, cProfile
 import ptime
 from numpy import ndarray
 from PyQt4 import QtCore, QtGui
-import lib.Manager
+try:
+    import lib.Manager
+    HAVE_MANAGER = True
+except:
+    HAVE_MANAGER = False
 
 __ftraceDepth = 0
 def ftrace(func):
@@ -46,7 +50,8 @@ def getExc(indent=4, prefix='|  ', skip=1):
 def printExc(msg='', indent=4, prefix='|'):
     """Print an error message followed by an indented exception backtrace
     (This function is intended to be called within except: blocks)"""
-    #lib.Manager.logExc(msg=msg)
+    if HAVE_MANAGER:
+        lib.Manager.logExc(msg=msg)
     exc = getExc(indent, prefix + '  ', skip=2)
     print "[%s]  %s\n" % (time.strftime("%H:%M:%S"), msg)
     print " "*indent + prefix + '='*30 + '>>'
