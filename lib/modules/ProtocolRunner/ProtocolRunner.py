@@ -10,7 +10,7 @@ from advancedTypes import OrderedDict
 from SequenceRunner import *
 from WidgetGroup import *
 from Mutex import Mutex, MutexLocker
-from lib.Manager import getManager
+from lib.Manager import getManager, logMsg
 from debug import *
 import ptime
 import analysisModules
@@ -783,16 +783,12 @@ class ProtocolRunner(Module):
             #print "runSingle: Starting taskThread.."
             self.taskThread.startProtocol(prot)
             #print "runSingle: taskThreadStarted"
-        except Exception, e:
+        except:
+            exc = sys.exc_info()
             self.enableStartBtns(True)
             self.loopEnabled = False
             print "Error starting protocol. "
-            #exc.addMessage("Error starting protocol:")
-            if isinstance(e[1], HelpfulException):
-                e[1].prependInfo("Error starting protocol. ", e)
-            else:    
-                raise HelpfulException("Error starting protocol. ", exc=e)
-        
+            raise HelpfulException("Error starting protocol:", exc=exc)      
    
     def runSequenceClicked(self):
         self.runSequence(store=True)
@@ -1169,6 +1165,7 @@ class TaskThread(QtCore.QThread):
             #l.unlock()
             #print "TaskThread:startProtocol starting..", self.lock.depth()
             self.start() ### causes self.run() to be called from somewhere in C code
+            logMsg("Protocol Started.")
             #print "TaskThread:startProtocol started", self.lock.depth()
     
     def pause(self, pause):

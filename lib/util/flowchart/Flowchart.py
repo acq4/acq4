@@ -16,6 +16,7 @@ import configfile
 import DockArea
 import DataTreeWidget
 import FlowchartGraphicsView
+from lib.util.pyqtgraph.FileDialog import FileDialog
 
 def strDict(d):
     return dict([(str(k), v) for k, v in d.iteritems()])
@@ -462,8 +463,14 @@ class Flowchart(Node):
                 startDir = self.filePath
             if startDir is None:
                 startDir = '.'
+            self.fileDialog = FileDialog(None, "Load Flowchart..", startDir, "Flowchart (*.fc)")
+            #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+            #self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
+            self.fileDialog.show()
+            self.fileDialog.fileSelected.connect(self.loadFile)
+            return
             ## NOTE: was previously using a real widget for the file dialog's parent, but this caused weird mouse event bugs..
-            fileName = QtGui.QFileDialog.getOpenFileName(None, "Load Flowchart..", startDir, "Flowchart (*.fc)")
+            #fileName = QtGui.QFileDialog.getOpenFileName(None, "Load Flowchart..", startDir, "Flowchart (*.fc)")
         fileName = str(fileName)
         state = configfile.readConfigFile(fileName)
         self.restoreState(state, clear=True)
@@ -476,7 +483,14 @@ class Flowchart(Node):
                 startDir = self.filePath
             if startDir is None:
                 startDir = '.'
-            fileName = QtGui.QFileDialog.getSaveFileName(None, "Save Flowchart..", startDir, "Flowchart (*.fc)")
+            self.fileDialog = FileDialog(None, "Save Flowchart..", startDir, "Flowchart (*.fc)")
+            #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
+            #self.fileDialog.setDirectory(startDir)
+            self.fileDialog.show()
+            self.fileDialog.fileSelected.connect(self.saveFile)
+            return
+            #fileName = QtGui.QFileDialog.getSaveFileName(None, "Save Flowchart..", startDir, "Flowchart (*.fc)")
         configfile.writeConfigFile(self.saveState(), fileName)
 
     def clear(self):
