@@ -56,20 +56,20 @@ def logMsg(*args, **kwargs):
     global LOG
     if LOG is not None:
         LOG.logMsg(*args, **kwargs)
-    else:
-        print "Can't log error message; no log created yet."
-        print args
-        print kwargs
+    #else:
+        #print "Can't log error message; no log created yet."
+        #print args
+        #print kwargs
         
     
 def logExc(*args, **kwargs):
     global LOG
     if LOG is not None:
         LOG.logExc(*args, **kwargs)
-    else:
-        print "Can't log error message; no log created yet."
-        print args
-        print kwargs
+    #else:
+        #print "Can't log error message; no log created yet."
+        #print args
+        #print kwargs
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
@@ -723,19 +723,27 @@ class Task:
         ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
         from debug import Profiler
         prof = Profiler('Manager.Task.execute', disabled=True)
-        
         try:
         
-            #print "execute:", self.tasks
+            #print self.id, "Task.execute:", self.tasks
             ## Reserve all hardware
             self.dm.lockReserv()
             try:
                 for devName in self.tasks:
-                    #print "  %d Reserving hardware" % self.id, devName
-                    self.tasks[devName].reserve()
+                    #print "  %d Task.execute: Reserving hardware" % self.id, devName
+                    res = self.tasks[devName].reserve(block=True)
+                    #if not res:
+                        #print "Locked from:"
+                        #for tb in self.tasks[devName].dev._lock_.tb:
+                            #print "====="
+                            #print tb
+                        #raise Exception('Damn')
                     self.lockedDevs.append(devName)
-                    #print "  %d reserved" % self.id, devName
+                    #print "  %d Task.execute: reserved" % self.id, devName
                 #self.reserved = True
+            except:
+                #print "  %d Task.execute: problem reserving hardware; will unreserve these:"%self.id, self.lockedDevs
+                raise
             finally:
                 self.dm.unlockReserv()
                 
@@ -913,7 +921,7 @@ class Task:
 
     def releaseAll(self):
         #if self.reserved:
-        #print "release hardware.."
+        #print self.id,"Task.releaseAll:"
         for t in self.lockedDevs[:]:
             #print "  %d releasing" % self.id, t
             try:

@@ -2,7 +2,7 @@
 from ProtocolTemplate import Ui_Form
 from lib.devices.Device import ProtocolGui
 from PyQt4 import QtCore, QtGui
-from lib.Manager import getManager
+from lib.Manager import getManager, logMsg
 from WidgetGroup import WidgetGroup
 import pyqtgraph.widgets as widgets
 #from pyqtgraph.widgets import *
@@ -783,6 +783,9 @@ class TargetPoint(widgets.EllipseROI):
         sc = widgets.ROI.stateCopy(self)
         #sc['displaySize'] = self.displaySize
         return sc
+    
+    def resetParents(self):
+        pass
         
 
 class TargetGrid(widgets.ROI):

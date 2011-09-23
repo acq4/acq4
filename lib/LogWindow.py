@@ -8,6 +8,7 @@ from FeedbackButton import FeedbackButton
 import configfile
 from DataManager import DirHandle
 from HelpfulException import HelpfulException
+from Mutex import Mutex
 #from lib.Manager import getManager
 
 WIN = None
@@ -25,6 +26,8 @@ class LogButton(FeedbackButton):
 
 class LogWindow(QtGui.QMainWindow):
     
+    sigDisplayEntry = QtCore.Signal(object) ## for thread-safetyness
+    
     def __init__(self, manager):
         QtGui.QMainWindow.__init__(self)
         self.ui = LogWindowTemplate.Ui_MainWindow()
@@ -38,12 +41,14 @@ class LogWindow(QtGui.QMainWindow):
         self.logFile = None
         configfile.writeConfigFile('', self.fileName())  ## start a new temp log file, destroying anything left over from the last session.
         self.buttons = [] ## all Log Buttons get added to this list, so it's easy to make them all do things, like flash red.
+        self.lock = Mutex()
         
         ## self.ui.input is a QLineEdit
         ## self.ui.output is a QPlainTextEdit
         
         self.ui.input.returnPressed.connect(self.textEntered)
         self.ui.setStorageDirBtn.clicked.connect(self.setStorageDir)
+        self.sigDisplayEntry.connect(self.displayEntry)
         
         
     def logMsg(self, msg, importance=5, msgType='status', exception=(None,None,None), **kwargs):
@@ -51,6 +56,7 @@ class LogWindow(QtGui.QMainWindow):
            importance: 0-9
            exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
         """
+
         
         try:
             currentDir = self.manager.getCurrentDir()
@@ -84,19 +90,20 @@ class LogWindow(QtGui.QMainWindow):
         
     def processEntry(self, entry):
         ## pre-processing common to saveEntry and displayEntry
-        exc_info = entry.pop('exception')
-        exTyp, exc, tb = exc_info
-        if isinstance(exc, HelpfulException):
-            error, tb, docs = self.formatHelpfulException(*exc_info)
-            entry['message'] += error
-            entry['docs'] += docs
-            #self.logMsg(error, msgType='error', exception=tb, documentation=docs **kwargs)
-        else: 
-            error, tb = self.formatException(*exc_info)
-            entry['message'] += '\n' + error
-            entry['msgType'] = 'error'
-            #self.logMsg(message+error, msgType='error', exception=tb, **kwargs)
-        entry['traceback'] = tb
+        if entry['msgType'] == 'error':
+            exc_info = entry.pop('exception')
+            exTyp, exc, tb = exc_info
+            if isinstance(exc, HelpfulException):
+                error, tb, docs = self.formatHelpfulException(*exc_info)
+                entry['message'] += error
+                entry['docs'] += docs
+                #self.logMsg(error, msgType='error', exception=tb, documentation=docs **kwargs)
+            else: 
+                error, tb = self.formatException(*exc_info)
+                entry['message'] += '\n' + error
+                #entry['msgType'] = 'error'
+                #self.logMsg(message+error, msgType='error', exception=tb, **kwargs)
+            entry['traceback'] = tb
         
     #def logExc(self, *args, **kwargs):
         #self.flashButtons()
@@ -127,25 +134,31 @@ class LogWindow(QtGui.QMainWindow):
      #   self.displayText(msg, colorStr = 'green')
             
     def displayEntry(self, entry):
-        if entry['msgType'] == 'user':
-            self.displayText(entry['message'], colorStr='blue', timeStamp=entry['timestamp'])
-        elif entry['msgType'] == 'status':
-            if entry['importance'] > 7:
-                colorStr = 'black'
-            elif entry['importance'] < 4:
-                colorStr = 'gray'
-            else:
-                colorStr = 'green'
-            self.displayText(entry['message'], colorStr=colorStr, timeStamp=entry['timestamp'])
-        elif entry['msgType'] == 'error':
-            self.displayText(entry['message'], colorStr='#AA0000', timeStamp=entry['timestamp'], reasons=entry.get('reasons', None), docs=entry.get('documentation', None))
-            self.displayTraceback(entry['traceback'])
-            self.flashButtons()
-            
-        elif entry['msgType'] == 'warning':
-            self.displayText(entry['message'], colorStr='orange', timeStamp=entry['timestamp'])
+        isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
+        if not isGuiThread:
+            self.sigDisplayEntry.emit(entry)
+            return
+        
         else:
-            self.displayText(entry['message'], colorStr='black', timeStamp=entry['timestamp'])
+            if entry['msgType'] == 'user':
+                self.displayText(entry['message'], colorStr='blue', timeStamp=entry['timestamp'])
+            elif entry['msgType'] == 'status':
+                if entry['importance'] > 7:
+                    colorStr = 'black'
+                elif entry['importance'] < 4:
+                    colorStr = 'gray'
+                else:
+                    colorStr = 'green'
+                self.displayText(entry['message'], colorStr=colorStr, timeStamp=entry['timestamp'])
+            elif entry['msgType'] == 'error':
+                self.displayText(entry['message'], colorStr='#AA0000', timeStamp=entry['timestamp'], reasons=entry.get('reasons', None), docs=entry.get('documentation', None))
+                self.displayTraceback(entry['traceback'])
+                self.flashButtons()
+                
+            elif entry['msgType'] == 'warning':
+                self.displayText(entry['message'], colorStr='orange', timeStamp=entry['timestamp'])
+            else:
+                self.displayText(entry['message'], colorStr='black', timeStamp=entry['timestamp'])
         
     def displayText(self, msg, colorStr = 'black', timeStamp=None, reasons=None, docs=None):
         if reasons is not None:
@@ -254,16 +267,23 @@ class LogWindow(QtGui.QMainWindow):
         
     def setLogDir(self, dh):
         oldfName = self.fileName()
+        if self.logFile is not None:
+            self.logMsg('Moving log storage to %s.' % (self.logFile.name(relativeTo=self.manager.baseDir))) ## make this note before we change the log file, so when a log ends, you know where it went after.
         
         if dh.exists('log.txt'):
             self.logFile = dh['log.txt']
         else:
             self.logFile = dh.createFile('log.txt')
-        self.logMsg('Moving log storage to %s.' % (self.logFile.name(relativeTo=self.manager.baseDir)))
+        
+        
+        
         
         if oldfName == 'tempLog.txt':
-            temp = configfile.readConfigFile(oldfName)
-            self.saveEntry(temp)
+            try:
+                temp = configfile.readConfigFile(oldfName)
+                self.saveEntry(temp)
+            except:
+                print "Error moving temp logfile:", sys.exc_info()
         self.logMsg('Moved log storage from %s to %s.' % (oldfName, self.fileName()))
         self.ui.storageDirLabel.setText(self.fileName())
         self.manager.sigLogDirChanged.emit(dh)
@@ -276,8 +296,8 @@ class LogWindow(QtGui.QMainWindow):
         
     def saveEntry(self, entry):
         ## in foldertypes.cfg make a way to specify a folder type as an experimental unit. Then whenever one of these units is created, give it a new log file (perhaps numbered if it's not the first one made in that run of the experiment?). Also, make a way in the Data Manager to specify where a log file is stored (so you can store it another place if you really want to...).  
-        
-        configfile.appendConfigFile(entry, self.fileName())
+        with self.lock:
+            configfile.appendConfigFile(entry, self.fileName())
             
             
         
