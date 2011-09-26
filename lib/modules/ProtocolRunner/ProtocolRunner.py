@@ -1281,7 +1281,7 @@ class TaskThread(QtCore.QThread):
                     task.stop(abort=True)
                 except:
                     pass
-                #printExc("\nError starting protocol:")
+                printExc("\nError starting protocol:")
                 exc = sys.exc_info()
                 raise HelpfulException("\nError starting protocol:", exc)
             

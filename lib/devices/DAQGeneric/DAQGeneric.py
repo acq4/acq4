@@ -87,8 +87,11 @@ class DAQGeneric(Device):
         return DAQGenericTask(self, cmd)
     
         
-    def setChanHolding(self, channel, level=None):
-        """Define and set the holding values for this channel."""
+    def setChanHolding(self, channel, level=None, block=True):
+        """Define and set the holding values for this channel
+        If block is True, then wait until the value has been set onthe DAQ.
+        If block is False, then simply schedule the change to take place when the DAQ is available.
+        """
         with self._DGLock:
             #print "set holding", channel, level
             ### Set correct holding level here...
@@ -104,8 +107,12 @@ class DAQGeneric(Device):
             #if scale is None:
                 #scale = self.getChanScale(channel)
             #print "set", chan, self._DGHolding[channel]*scale
+            #val = self._DGHolding[channel]*scale
             val = self.mapToDAQ(channel, self._DGHolding[channel])
-            daqDev.setChannelValue(chan, val, block=False)
+            if block:
+                daqDev.setChannelValue(chan, val, block=True)
+            else:
+                daqDev.setChannelValue(chan, val, block=False, delaySetIfBusy=True)  ## Note: If a protocol is running, this will not be set until it completes.
             #self.emit(QtCore.SIGNAL('holdingChanged'), channel, val)
             self.sigHoldingChanged.emit(channel, val)
         
@@ -113,7 +120,7 @@ class DAQGeneric(Device):
         with self._DGLock:
             return self._DGHolding[chan]
         
-    def getChannelValue(self, channel):
+    def getChannelValue(self, channel, block=True):
         with self._DGLock:
             chConf = self._DGConfig[channel]['channel']
             daq, chan = chConf[:2]
@@ -127,7 +134,7 @@ class DAQGeneric(Device):
             #else:
                 #scale = 1.0            
             #return daqDev.getChannelValue(chan, mode=mode)/scale
-            val = daqDev.getChannelValue(chan, mode=mode)
+            val = daqDev.getChannelValue(chan, mode=mode, block=block)
             return self.mapFromDAQ(channel, val)
 
     def reconfigureChannel(self, chan, config):
@@ -454,6 +461,8 @@ class DAQDevGui(QtGui.QWidget):
             
             holding = chans[ch].get('holding', 0)
             
+            
+            
             if chans[ch]['type'] in ['ao', 'ai']:
                 ui.inputRadio.setEnabled(False)
                 ui.outputRadio.setEnabled(False)
@@ -461,7 +470,7 @@ class DAQDevGui(QtGui.QWidget):
                 scale = chans[ch].get('scale', 1)
                 units = chans[ch].get('units', 'V')
                 offset = chans[ch].get('offset', 0)
-                ui.offsetSpin.setOpts(suffix = 'V', siPrefix=True, dec=True, minStep=1e-6)
+                ui.offsetSpin.setOpts(suffix = 'V', siPrefix=True, dec=True, step=1.0, minStep=1e-4)
                 ui.offsetSpin.setValue(offset)
                 ui.offsetSpin.sigValueChanged.connect(self.offsetSpinChanged)
                 ui.offsetDefaultBtn.setText("Default (%s)" % siFormat(offset, suffix='V'))
@@ -469,8 +478,8 @@ class DAQDevGui(QtGui.QWidget):
                 if chans[ch]['type'] == 'ao':
                     ui.outputRadio.setChecked(True)
                     ui.scaleDefaultBtn.setText("Default (%s)" % siFormat(scale, suffix='V/'+units))
-                    ui.scaleSpin.setOpts(suffix= 'V/'+units, siPrefix=True, dec=True)
-                    ui.holdingSpin.setOpts(suffix=units, siPrefix=True, dec=True)
+                    ui.scaleSpin.setOpts(suffix= 'V/'+units, siPrefix=True, dec=True, step=1.0, minStep=1e-9)
+                    ui.holdingSpin.setOpts(suffix=units, siPrefix=True, step=0.01)
                     ui.holdingSpin.setValue(holding)
                     ui.holdingSpin.sigValueChanged.connect(self.holdingSpinChanged)
                 elif chans[ch]['type'] == 'ai':
@@ -511,7 +520,7 @@ class DAQDevGui(QtGui.QWidget):
         
     def holdingSpinChanged(self, spin):
         ch = spin.channel
-        self.dev.setChanHolding(ch, spin.value())
+        self.dev.setChanHolding(ch, spin.value(), block=False)
         
     def scaleSpinChanged(self, spin):
         ch = spin.channel
@@ -537,5 +546,7 @@ class DAQDevGui(QtGui.QWidget):
         else:
             self.dev.setChanScale(ch, 1, update=False)
             self.dev.setChanOffset(ch, 0)
-            
+
+
+
         

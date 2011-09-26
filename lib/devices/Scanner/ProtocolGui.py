@@ -11,6 +11,7 @@ import numpy as np
 from debug import Profiler
 import optimize ## for determining random scan patterns
 import ForkedIterator, ProgressDialog
+import sys
 from SpinBox import SpinBox
 from pyqtgraph.Point import *
 from pyqtgraph.functions import mkPen
@@ -242,13 +243,12 @@ class ScannerProtoGui(ProtocolGui):
             cal = self.dev.getCalibration(cam, laser)
             ss = cal['spot'][1]
            
-        except Exception, e:
+        except:
             print "Could not find spot size from calibration."
             #logMsg("Could not find spot size from calibration.", msgType='error') ### This should turn into a HelpfulException.
             if isinstance(e[1], HelpfulException):
-                e[1].prependInfo("Could not find spot size from calibration. ", exc=e, reasons=["Correct camera and/or laser device are not selected.", "There is no calibration file for selected camera and laser."])
-            else:
-                raise HelpfulException("Could not find spot size from calibration. ", exc=e, reasons=["Correct camera and/or laser device are not selected.", "There is no calibration file for selected camera and laser."])
+                exc = sys.exc_info()
+                raise HelpfulException("Could not find spot size from calibration. ", exc=exc, reasons=["Correct camera and/or laser device are not selected.", "There is no calibration file for selected camera and laser."])
             
         if self.ui.sizeFromCalibrationRadio.isChecked():
             displaySize = ss
@@ -466,6 +466,9 @@ class ScannerProtoGui(ProtocolGui):
     
     def delete(self):
         item = self.ui.itemTree.currentItem()
+        if item is None:
+            logMsg("No item is selected, nothing was deleted.", msgType='error')
+            return
         parent = item.parent()
         if item.childCount() > 0:
             for i in range(item.childCount()):
@@ -806,6 +809,9 @@ class TargetPoint(widgets.EllipseROI):
         sc = widgets.ROI.stateCopy(self)
         #sc['displaySize'] = self.displaySize
         return sc
+    
+    def resetParents(self):
+        pass
         
 
 class TargetGrid(widgets.ROI):
