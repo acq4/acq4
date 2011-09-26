@@ -52,17 +52,12 @@ class StimGenerator(QtGui.QWidget):
         self.cache = {}
         self.cacheRate = None
         self.cacheNPts = None
-        #QtCore.QObject.connect(self.ui.functionText, QtCore.SIGNAL('textChanged()'), self.funcChanged)
+        
         self.ui.functionText.textChanged.connect(self.funcChanged)
-        #QtCore.QObject.connect(self.ui.paramText, QtCore.SIGNAL('textChanged()'), self.paramChanged)
         self.ui.paramText.textChanged.connect(self.paramChanged)
-        #QtCore.QObject.connect(self.ui.updateBtn, QtCore.SIGNAL('clicked()'), self.update)
         self.ui.updateBtn.clicked.connect(self.update)
-        #QtCore.QObject.connect(self.ui.autoUpdateCheck, QtCore.SIGNAL('clicked()'), self.autoUpdateClicked)
         self.ui.autoUpdateCheck.clicked.connect(self.autoUpdateClicked)
-        #QtCore.QObject.connect(self.ui.errorBtn, QtCore.SIGNAL('clicked()'), self.errorBtnClicked)
         self.ui.errorBtn.clicked.connect(self.errorBtnClicked)
-        #QtCore.QObject.connect(self.ui.helpBtn, QtCore.SIGNAL('clicked()'), self.helpBtnClicked)
         self.ui.helpBtn.clicked.connect(self.helpBtnClicked)
 
     def widgetGroupInterface(self):

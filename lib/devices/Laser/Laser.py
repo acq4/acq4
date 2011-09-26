@@ -76,6 +76,7 @@ class Laser(DAQGeneric):
         """Set the laser's wavelength (if tunable).
         Arguments:
           wl:  """
+        pass
         
     def runCalibration(self):
         pass
