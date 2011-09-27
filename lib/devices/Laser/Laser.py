@@ -1,3 +1,8 @@
+from PyQt4 import QtGui
+#import configfile
+from lib.Manager import getManager, logExc, logMsg
+
+
 class Laser(DAQGeneric):
     """The laser device accomplishes a few tasks:
        - Calibration of laser power so that the power at the specimen can be controlled
@@ -21,6 +26,7 @@ class Laser(DAQGeneric):
             qSwitch:
                 channel: 'DAQ', '/Dev1/line11'    ## channel for triggering q-switch
             calibrationChannel: 'PowerMeter', 'Power [100mA max]'   ## a channel on a DAQGeneric device
+            wavelength: 355*nm
             alignmentMode:
                 qSwitch: False                    ## For alignment, shutter is open but QS is off
                 shutter: True
@@ -61,9 +67,31 @@ class Laser(DAQGeneric):
             daqConfig['powerInd'] = {'channel': config['powerIndicator'], 'mode': 'ai'}
         else:
             self.hasPowerIndicator = False
-            
-            
+                        
         DAQGeneric.__init__(self, manager, daqConfig, name)
+        self._configDir = os.path.join('devices', self.name + '_config')
+
+        
+    def configDir(self):
+        """Return the name of the directory where configuration/calibration data should be stored"""
+        return self._configDir
+    
+    def getCalibrationIndex(self):
+        with MutexLocker(self.lock):
+            if self.calibrationIndex is None:
+                calDir = self.configDir()
+                fileName = os.path.join(calDir, 'index')
+                index = self.dm.readConfigFile(fileName)
+                self.calibrationIndex = index
+            return self.calibrationIndex
+        
+    def writeCalibrationIndex(self, index):
+        with MutexLocker(self.lock):
+            calDir = self.configDir()
+            fileName = os.path.join(calDir, 'index')
+            self.dm.writeConfigFile(index, fileName)
+            #configfile.writeConfigFile(index, fileName)
+            self.calibrationIndex = index
         
     def setAlignmentMode(self, b):
         """If true, configures the laser for low-power alignment mode. 
@@ -76,10 +104,12 @@ class Laser(DAQGeneric):
         """Set the laser's wavelength (if tunable).
         Arguments:
           wl:  """
-        pass
+        raise HelpfulException("%s device does not support wavelength tuning." %str(self.name), reasons=["Hardware doesn't support tuning.", "setWavelenth function is not reimplemented in subclass."])
+    
+    def getWavelength(self):
+        return self.config.get('wavelength', None)
         
-    def runCalibration(self):
-        pass
+    
     
     def createTask(self, cmd):
         return LaserTask(self, cmd)
@@ -99,6 +129,12 @@ class Laser(DAQGeneric):
            4. The output power is specified in the config file
         """
         pass
+    
+
+            
+        
+        
+        
 
 
 class LaserTask(DAQGenericTask):
