@@ -191,11 +191,11 @@ class ScannerProtoGui(ProtocolGui):
             self.currentObjective = obj
             self.updateSpotSizes()
             for i in self.items.values():
-                li = self.listItem(i.name)
+                li = self.listItem(i.name) ## actually a tree item
                 if i.objective == obj:
-                    li.setCheckState(QtCore.Qt.Checked)
+                    li.setCheckState(0, QtCore.Qt.Checked)
                 else:
-                    li.setCheckState(QtCore.Qt.Unchecked)
+                    li.setCheckState(0, QtCore.Qt.Unchecked)
                 self.itemToggled(li)
             #self.testTarget.setPointSize(self.pointSize()[0])
             self.testTarget.setPointSize()

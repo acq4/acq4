@@ -41,7 +41,7 @@ class Scanner(Device):
     def setCommand(self, vals):
         """Requests to set the command output to the mirrors.
         (The request is denied if the virtual shutter is closed)"""
-        with MutexLocker(self.lock):
+        with self.lock:
             self.currentCommand = vals
             if self.getShutterOpen():
                 ## make sure we have not requested a command outside the allowed limits

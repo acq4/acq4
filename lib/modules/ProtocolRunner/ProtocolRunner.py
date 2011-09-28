@@ -777,7 +777,7 @@ class ProtocolRunner(Module):
             
             ## Generate executable conf from protocol object
             prot = self.generateProtocol(dh)
-            
+            print prot
             #self.emit(QtCore.SIGNAL('protocolStarted'), {})
             self.sigProtocolStarted.emit({})
             #print "runSingle: Starting taskThread.."

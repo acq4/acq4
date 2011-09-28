@@ -1,6 +1,12 @@
-from PyQt4 import QtGui
+from PyQt4 import QtGui, QtCore
 #import configfile
 from lib.Manager import getManager, logExc, logMsg
+from Mutex import Mutex
+from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from LaserDevGui import LaserDevGui
+from LaserProtocolGui import LaserProtoGui
+import os
+
 
 
 class Laser(DAQGeneric):
@@ -19,13 +25,13 @@ class Laser(DAQGeneric):
         config: 
             scope: 'Microscope'
             pulseRate: 100*kHz                      ## Laser's pulse rate
-            powerIndicator: 'DAQ', '/Dev1/ai11'   ## photocell channel for immediate recalibration
+            powerIndicator: 
+                channel: 'DAQ', '/Dev1/ai11'      ## photocell channel for immediate recalibration
             shutter:
                 channel: 'DAQ', '/Dev1/line10'    ## channel for triggering shutter
                 delay: 10*ms                      ## how long it takes the shutter to fully open
             qSwitch:
                 channel: 'DAQ', '/Dev1/line11'    ## channel for triggering q-switch
-            calibrationChannel: 'PowerMeter', 'Power [100mA max]'   ## a channel on a DAQGeneric device
             wavelength: 355*nm
             alignmentMode:
                 qSwitch: False                    ## For alignment, shutter is open but QS is off
@@ -39,15 +45,14 @@ class Laser(DAQGeneric):
             pulseRate: 100*kHz                      ## Laser's pulse rate; limits minimum pulse duration
             pCell:
                 channel: 'DAQ', '/Dev2/ao1'       ## channel for pockels cell control
-            calibrationChannel: 'PowerMeter', 'Power [100mA max]'   ## a channel on a DAQGeneric device
             namedWavelengths:
                 UV uncaging: 710*nm
                 AF488: 976*nm
             alignmentMode:
-                power: 5*mW                        ## For alignment, reduce power to 5mW via pCell
+                pCellVoltage:
                 
     Notes: 
-        must handle CW, QS, ML lasers
+        must handle CW (continuous wave), QS (Q-switched), ML (modelocked) lasers
         
         
         
@@ -60,24 +65,38 @@ class Laser(DAQGeneric):
     
     
     def __init__(self, manager, config, name):
+        self.hasPowerIndicator = False
+        self.hasShutter = False
+        self.hasQSwitch = False
+        self.hasPCell = False
+        self.hasTunableWavelength = False
         
-        daqConfig = {}
+        daqConfig = {} ### DAQ generic needs to know about powerIndicator, pCell, shutter, qswitch
         if 'powerIndicator' in config:
             self.hasPowerIndicator = True
-            daqConfig['powerInd'] = {'channel': config['powerIndicator'], 'mode': 'ai'}
-        else:
-            self.hasPowerIndicator = False
+            #### name of powerIndicator is config['powerIndicator']['channel'][0]
+            #daqConfig['powerInd'] = {'channel': config['powerIndicator']['channel'], 'type': 'ai'}
+        if 'shutter' in config:
+            daqConfig['shutter'] = {'channel': config['shutter']['channel'], 'type': 'do'}
+            self.hasShutter = True
+        if 'qSwitch' in config:
+            daqConfig['qSwitch'] = {'channel': config['qSwitch']['channel'], 'type': 'do'}
+        if 'pCell' in config:
+            daqConfig['pCell'] = {'channel': config['pCell']['channel'], 'type': 'ao'}
                         
         DAQGeneric.__init__(self, manager, daqConfig, name)
+        
+        self.config = config
         self._configDir = os.path.join('devices', self.name + '_config')
-
+        self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.calibrationIndex = None
         
     def configDir(self):
         """Return the name of the directory where configuration/calibration data should be stored"""
         return self._configDir
     
     def getCalibrationIndex(self):
-        with MutexLocker(self.lock):
+        with self.lock:
             if self.calibrationIndex is None:
                 calDir = self.configDir()
                 fileName = os.path.join(calDir, 'index')
@@ -86,7 +105,7 @@ class Laser(DAQGeneric):
             return self.calibrationIndex
         
     def writeCalibrationIndex(self, index):
-        with MutexLocker(self.lock):
+        with self.lock:
             calDir = self.configDir()
             fileName = os.path.join(calDir, 'index')
             self.dm.writeConfigFile(index, fileName)
@@ -138,6 +157,31 @@ class Laser(DAQGeneric):
 
 
 class LaserTask(DAQGenericTask):
+    """
+    
+    Example protocol command structure:
+    {                                  #### powerWaveform, switchWaveform and pulses are mutually exclusive; result of specifying more than one is undefined
+        'powerWaveform': array(...),   ## array of power values (specifies the power that should enter the sample)
+                                       ## only useful if there is an analog modulator of some kind (Pockel cell, etc)
+        'switchWaveform': array(...),  ## array of values 0-1 specifying the fraction of full power to output.
+                                       ## For Q-switched lasers, a value > 0 activates the switch
+        'pulses': [(time, energy, duration), ...],
+                                       ## the device will generate its own command structure with the requested pulse energies.
+                                       ## duration may only be specified if a modulator is available.
+                                       
+                                       #### shutterWaveform and shutterMode are exclusive; if shutterWaveform is specified shutterMode will be ignored
+        'shutterWaveform': array(...)  ## array of 0/1 values that specify whether shutter is open (1) or closed (0)
+        'shutterMode': 'auto',         ## specifies how the shutter should be used:
+                                       ##   auto -- the shutter is opened immediately (with small delay) before laser output is needed
+                                       ##           and closed immediately (with no delay) after.
+                                       ##   open -- the shutter is opened for the whole protocol and returned to its holding state afterward
+                                       ##   closed -- the shutter is kept closed for the protocol and returned to its holding state afterward
+                                       
+        'wavelength': x,               ## sets the wavelength before executing the protocol
+        'checkPower': True,            ## If true, the laser will check its output power before executing the protocol.
+    }
+    
+    """
     def __init__(self, dev, cmd):
         cmd['daqProtocol'] = {}
         if 'powerWaveform' in cmd:
