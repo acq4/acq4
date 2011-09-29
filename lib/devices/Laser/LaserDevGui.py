@@ -11,6 +11,14 @@ class LaserDevGui(QtGui.QWidget):
         self.dev = dev
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        self.ui.wavelengthSpin.setOpts('suffix': m, 'siPrefix':True)
+        if not self.dev.hasTunableWavelength:
+            self.ui.wavelengthGroup.setDisabled()
+            self.ui.wavelengthSpin.setValue(self.dev.config.get('wavelength', None))
+        else:
+            self.ui.wavelengthSpin.setValue(self.dev.getWavelength())
+            for x in self.dev.config.get('namedWavelengths', {}).keys():
+                self.ui.wavelengthCombo.addItem(x)
         
         defMicroscope = self.dev.config.get('scope', None)
         defPowerMeter = self.dev.config.get('defaultPowerMeter', None)
@@ -101,8 +109,8 @@ class LaserDevGui(QtGui.QWidget):
                 powerMeter: {x: {'record':True, 'recordInit':False} for x in getManager().getDevice(powerMeter).config.keys()},
                 #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
                 #self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand}, ## scanner
-                daqName: {'numPts': nPts, 'rate': rate}
-            }
+                daqName: {'numPts': nPts, 'rate': rate}}
+            
             ##cmd = {
                 ##'protocol': {'duration': 1},
                 ##'Laser-UV': {'shutter': {'preset': 0, 'holding': 0, 'command': shutterCmd}},

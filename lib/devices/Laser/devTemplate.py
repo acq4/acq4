@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'devTemplate.ui'
 #
-# Created: Wed Sep 28 16:19:59 2011
+# Created: Wed Sep 28 21:35:51 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(492, 316)
+        Form.resize(627, 403)
         self.gridLayout = QtGui.QGridLayout(Form)
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
         self.powerGroup = QtGui.QGroupBox(Form)
@@ -25,7 +25,6 @@ class Ui_Form(object):
         self.powerGroup.setObjectName(_fromUtf8("powerGroup"))
         self.gridLayout_4 = QtGui.QGridLayout(self.powerGroup)
         self.gridLayout_4.setMargin(6)
-        self.gridLayout_4.setSpacing(6)
         self.gridLayout_4.setObjectName(_fromUtf8("gridLayout_4"))
         self.label_4 = QtGui.QLabel(self.powerGroup)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Preferred)
@@ -47,6 +46,9 @@ class Ui_Form(object):
         self.label_6.setObjectName(_fromUtf8("label_6"))
         self.gridLayout_4.addWidget(self.label_6, 1, 2, 1, 1)
         self.toleranceSpin = SpinBox(self.powerGroup)
+        self.toleranceSpin.setDecimals(1)
+        self.toleranceSpin.setMinimum(0.1)
+        self.toleranceSpin.setProperty(_fromUtf8("value"), 5.0)
         self.toleranceSpin.setObjectName(_fromUtf8("toleranceSpin"))
         self.gridLayout_4.addWidget(self.toleranceSpin, 1, 3, 1, 1)
         self.powerLabel = QtGui.QLabel(self.powerGroup)
@@ -77,17 +79,19 @@ class Ui_Form(object):
         self.wavelengthGroup.setObjectName(_fromUtf8("wavelengthGroup"))
         self.gridLayout_5 = QtGui.QGridLayout(self.wavelengthGroup)
         self.gridLayout_5.setMargin(6)
-        self.gridLayout_5.setSpacing(6)
         self.gridLayout_5.setObjectName(_fromUtf8("gridLayout_5"))
         self.label_7 = QtGui.QLabel(self.wavelengthGroup)
         self.label_7.setObjectName(_fromUtf8("label_7"))
         self.gridLayout_5.addWidget(self.label_7, 0, 0, 1, 1)
         self.wavelengthSpin = SpinBox(self.wavelengthGroup)
-        self.wavelengthSpin.setSuffix(_fromUtf8(""))
+        self.wavelengthSpin.setDecimals(0)
+        self.wavelengthSpin.setMaximum(1200.0)
+        self.wavelengthSpin.setProperty(_fromUtf8("value"), 750.0)
         self.wavelengthSpin.setObjectName(_fromUtf8("wavelengthSpin"))
         self.gridLayout_5.addWidget(self.wavelengthSpin, 0, 1, 1, 1)
         self.wavelengthCombo = QtGui.QComboBox(self.wavelengthGroup)
         self.wavelengthCombo.setObjectName(_fromUtf8("wavelengthCombo"))
+        self.wavelengthCombo.addItem(_fromUtf8(""))
         self.gridLayout_5.addWidget(self.wavelengthCombo, 0, 2, 1, 1)
         self.gridLayout.addWidget(self.wavelengthGroup, 1, 0, 1, 1)
         self.groupBox_2 = QtGui.QGroupBox(Form)
@@ -115,7 +119,6 @@ class Ui_Form(object):
         self.groupBox.setObjectName(_fromUtf8("groupBox"))
         self.gridLayout_3 = QtGui.QGridLayout(self.groupBox)
         self.gridLayout_3.setMargin(6)
-        self.gridLayout_3.setSpacing(6)
         self.gridLayout_3.setObjectName(_fromUtf8("gridLayout_3"))
         self.gridLayout_2 = QtGui.QGridLayout()
         self.gridLayout_2.setVerticalSpacing(0)
@@ -148,9 +151,9 @@ class Ui_Form(object):
         self.label.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.label.setObjectName(_fromUtf8("label"))
         self.gridLayout_2.addWidget(self.label, 2, 3, 1, 1)
-        self.doubleSpinBox = SpinBox(self.groupBox)
-        self.doubleSpinBox.setObjectName(_fromUtf8("doubleSpinBox"))
-        self.gridLayout_2.addWidget(self.doubleSpinBox, 2, 4, 1, 1)
+        self.settlingTimeSpin = SpinBox(self.groupBox)
+        self.settlingTimeSpin.setObjectName(_fromUtf8("settlingTimeSpin"))
+        self.gridLayout_2.addWidget(self.settlingTimeSpin, 2, 4, 1, 1)
         self.gridLayout_3.addLayout(self.gridLayout_2, 0, 0, 1, 1)
         self.gridLayout_6.addWidget(self.groupBox, 2, 0, 1, 2)
         self.gridLayout.addWidget(self.groupBox_2, 2, 0, 1, 1)
@@ -164,12 +167,16 @@ class Ui_Form(object):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("Form", "Current Power:", None, QtGui.QApplication.UnicodeUTF8))
         self.label_5.setText(QtGui.QApplication.translate("Form", "Expected Power:", None, QtGui.QApplication.UnicodeUTF8))
+        self.expectedPowerSpin.setSuffix(QtGui.QApplication.translate("Form", " W", None, QtGui.QApplication.UnicodeUTF8))
         self.label_6.setText(QtGui.QApplication.translate("Form", "Tolerance:", None, QtGui.QApplication.UnicodeUTF8))
+        self.toleranceSpin.setSuffix(QtGui.QApplication.translate("Form", " %", None, QtGui.QApplication.UnicodeUTF8))
         self.powerLabel.setText(QtGui.QApplication.translate("Form", "100 mW", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox_3.setTitle(QtGui.QApplication.translate("Form", "For energy calculations use:", None, QtGui.QApplication.UnicodeUTF8))
         self.currentPowerRadio.setText(QtGui.QApplication.translate("Form", "Current Power", None, QtGui.QApplication.UnicodeUTF8))
         self.expectedPowerRadio.setText(QtGui.QApplication.translate("Form", "Expected Power", None, QtGui.QApplication.UnicodeUTF8))
         self.label_7.setText(QtGui.QApplication.translate("Form", "Current Wavelength: ", None, QtGui.QApplication.UnicodeUTF8))
+        self.wavelengthSpin.setSuffix(QtGui.QApplication.translate("Form", " nm", None, QtGui.QApplication.UnicodeUTF8))
+        self.wavelengthCombo.setItemText(0, QtGui.QApplication.translate("Form", "Set wavelength for:", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Power Calibration", None, QtGui.QApplication.UnicodeUTF8))
         self.calibrationList.headerItem().setText(0, QtGui.QApplication.translate("Form", "Microscope", None, QtGui.QApplication.UnicodeUTF8))
         self.calibrationList.headerItem().setText(1, QtGui.QApplication.translate("Form", "Objective", None, QtGui.QApplication.UnicodeUTF8))
@@ -182,6 +189,6 @@ class Ui_Form(object):
         self.scanDurationSpin.setSuffix(QtGui.QApplication.translate("Form", " s", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("Form", "Power Meter:", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("Form", "Settling Time:", None, QtGui.QApplication.UnicodeUTF8))
-        self.doubleSpinBox.setToolTip(QtGui.QApplication.translate("Form", "Specify the time it takes for the selected power meter to settle on a value.", None, QtGui.QApplication.UnicodeUTF8))
+        self.settlingTimeSpin.setToolTip(QtGui.QApplication.translate("Form", "Specify the time it takes for the selected power meter to settle on a value.", None, QtGui.QApplication.UnicodeUTF8))
 
 from SpinBox import SpinBox
