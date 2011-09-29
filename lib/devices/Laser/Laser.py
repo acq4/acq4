@@ -6,6 +6,8 @@ from lib.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from LaserDevGui import LaserDevGui
 from LaserProtocolGui import LaserProtoGui
 import os
+import time
+import numpy as np
 
 
 
@@ -20,6 +22,18 @@ class Laser(DAQGeneric):
 
     Configuration examples:
     
+    Laser-blue:
+        driver: 'Laser'
+        config:
+            scope: 'Microscope'
+            shutter:
+                channel: 'DAQ', '/Dev3/line14'
+                delay: 10*ms
+            wavelength: 473*nm
+            power: 10*mW
+            alignmentMode:
+                shutter: True
+    
     Laser-UV:
         driver: 'Laser'
         config: 
@@ -27,6 +41,9 @@ class Laser(DAQGeneric):
             pulseRate: 100*kHz                      ## Laser's pulse rate
             powerIndicator: 
                 channel: 'DAQ', '/Dev1/ai11'      ## photocell channel for immediate recalibration
+                rate: 1.2*MHz
+                settlingTime: 1*ms
+                measurmentTime: 5*ms
             shutter:
                 channel: 'DAQ', '/Dev1/line10'    ## channel for triggering shutter
                 delay: 10*ms                      ## how long it takes the shutter to fully open
@@ -70,6 +87,9 @@ class Laser(DAQGeneric):
         self.hasQSwitch = False
         self.hasPCell = False
         self.hasTunableWavelength = False
+        self.expectedPower = None ## Power we expect at slice
+        self.currentPower = None ## last measured power of laser at slice (Only available after a calibration)
+        self.scopeTransmission = None ## percentage of output power that is transmitted to slice
         
         daqConfig = {} ### DAQ generic needs to know about powerIndicator, pCell, shutter, qswitch
         if 'powerIndicator' in config:
@@ -90,6 +110,7 @@ class Laser(DAQGeneric):
         self._configDir = os.path.join('devices', self.name + '_config')
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.calibrationIndex = None
+        self.getPowerHistory()
         
     def configDir(self):
         """Return the name of the directory where configuration/calibration data should be stored"""
@@ -104,6 +125,29 @@ class Laser(DAQGeneric):
                 self.calibrationIndex = index
             return self.calibrationIndex
         
+    def getPowerHistory(self):
+        with self.lock:
+            fileName = os.path.join(self.configDir(), 'powerHistory')
+            if os.path.exists(os.path.join(self.dm.configDir, fileName)):
+                ph = self.dm.readConfigFile(fileName)
+                self.powerHistoryCount = len(ph)
+                self.expectedPower = ph.values()[-1]['expectedPower']
+                return ph
+            else:
+                date = str(time.strftime('%Y.%m.%d %H:%M:%S'))
+                self.dm.writeConfigFile({'entry_0': {'date':date, 'expectedPower':0}}, fileName)
+                self.expectedPower = 0
+                self.powerHistoryCount = 1
+                
+    def appendPowerHistory(self, power):
+        with self.lock:
+            calDir = self.configDir()
+            fileName = os.path.join(calDir, 'powerHistory')
+            date = str(time.strftime('%Y.%m.%d %H:%M:%S'))
+            self.dm.appendConfigFile({'entry_'+str(self.powerHistoryCount):{'date': date, 'expectedPower':power}}, fileName)
+            
+    
+
     def writeCalibrationIndex(self, index):
         with self.lock:
             calDir = self.configDir()
@@ -142,12 +186,55 @@ class Laser(DAQGeneric):
     def outputPower(self):
         """Return the current output power of the laser (excluding the effect of pockel cell, shutter, etc.)
         This information is determined in one of a few ways:
-           1. The laser directly reports its power output
+           1. The laser directly reports its power output (function needs to be reimplemented in subclass)
            2. A photodiode receves a small fraction of the beam and reports an estimated power
-           3. The most recent calibration
-           4. The output power is specified in the config file
+           3. The output power is specified in the config file
         """
-        pass
+        
+        if self.hasPowerIndicator:
+            ## run a protocol that checks the power
+            daqName = self.dev.config[self.dev.config.keys()[0]]['channel'][0]
+            powerInd = self.dev.config['powerIndicator']['channel']
+            rate = self.dev.config['powerIndicator']['rate']
+            sTime = self.dev.config['powerIndicator']['settlingTime']
+            mTime = self.dev.config['powerIndicator']['measurmentTime']
+            
+            reps = 10
+            dur = 0.1 + reps*0.1(sTime+mTime)
+            nPts = dur*rate
+            
+            waveform = np.zeros(nPts, dtype=np.byte)
+            for i in range(reps):
+                waveform[(i+1)/10.*rate:((i+1)/10.+sTime+mTime)*rate] = 1
+            
+            cmd = {
+                'protocol': {'duration': dur},
+                self.name: {'switchWaveform':waveform, 'shutterMode':'closed'},
+                powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
+                daqName: {'numPts': nPts, 'rate': rate}
+            }
+            
+            task = getManager().createTask(cmd)
+            task.execute()
+            result = task.getResult()
+            
+            onMask = np.zeros(nPts, dtype=np.byte)
+            offMask = np.zeros(nPts, dtype=np.byte)
+            for i in range(reps):
+                onMask[((i+1)/10+sTime)*rate:((i+1)/10+sTime+mTime)*rate] = 1
+                offMask[(i/10.+2*sTime+mTime)*rate:(i/10.)*rate] = 1
+            laserOn = result[onMask==True]
+            laserOff = result[offMask==True]
+            powerOn = laserOn.mean()
+            powerOff = laserOff.mean()
+            if laserOn is statistically > laserOff: ### TODO!
+                return powerOn
+            else:
+                raise Exception("No QSwitch (or other way of turning on) detected while measuring Laser.outputPower()")
+            
+        else:
+            return self.config.get('power', None)
+        
     
 
             

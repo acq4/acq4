@@ -323,6 +323,14 @@ Valid options are:
         if not os.path.exists(dirName):
             os.makedirs(dirName)
         return configfile.writeConfigFile(data, fileName)
+    
+    def appendConfigFile(self, data, fileName):
+        fileName = self.configFileName(fileName)
+        if os.path.exists(fileName):
+            return configfile.appendConfigFile(data, fileName)
+        else:
+            raise Exception("Could not find file %s" % fileName)
+        
         
     def configFileName(self, name):
         return os.path.join(self.configDir, name)

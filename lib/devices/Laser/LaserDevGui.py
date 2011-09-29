@@ -4,6 +4,7 @@ from devTemplate import Ui_Form
 import numpy as np
 
 
+
 class LaserDevGui(QtGui.QWidget):
     
     def __init__(self, dev):
@@ -11,19 +12,26 @@ class LaserDevGui(QtGui.QWidget):
         self.dev = dev
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        self.ui.wavelengthSpin.setOpts('suffix': m, 'siPrefix':True)
+        
+        ### configure gui
+        self.ui.wavelengthSpin.setOpts(suffix='m', siPrefix=True)
         if not self.dev.hasTunableWavelength:
-            self.ui.wavelengthGroup.setDisabled()
+            self.ui.wavelengthGroup.setDisabled(True)
             self.ui.wavelengthSpin.setValue(self.dev.config.get('wavelength', None))
         else:
             self.ui.wavelengthSpin.setValue(self.dev.getWavelength())
             for x in self.dev.config.get('namedWavelengths', {}).keys():
                 self.ui.wavelengthCombo.addItem(x)
+        self.ui.durationSpin.setOpts(suffix='s', siPrefix=True, bounds=[0.0, 3.0])
+        self.ui.settlingSpin.setOpts(suffix='s', siPrefix=True, value=0.1)
+        self.ui.expectedPowerSpin.setOpts(suffix='W', siPrefix=True, bounds=[0.0, None], value=self.dev.expectedPower)
+        self.ui.toleranceSpin.setOpts(step=0.1, suffix='%', bounds=[0.1, 100.0], value=5.0)
         
-        defMicroscope = self.dev.config.get('scope', None)
-        defPowerMeter = self.dev.config.get('defaultPowerMeter', None)
+        
         
         ## Populate device lists
+        defMicroscope = self.dev.config.get('scope', None)     
+        defPowerMeter = self.dev.config.get('defaultPowerMeter', None)
         devs = self.dev.dm.listDevices()
         for d in devs:
             self.ui.microscopeCombo.addItem(d)
@@ -36,8 +44,60 @@ class LaserDevGui(QtGui.QWidget):
         ## Populate list of calibrations
         self.updateCalibrationList()
 
+        ## make connections
         self.ui.calibrateBtn.clicked.connect(self.calibrateClicked)
         self.ui.deleteBtn.clicked.connect(self.deleteClicked)
+        self.ui.currentPowerRadio.toggled.connect(self.currentPowerToggled)
+        self.ui.expectedPowerRadio.toggled.connect(self.expectedPowerToggled)
+        self.ui.expectedPowerSpin.valueChanged.connect(self.expectedPowerSpinChanged)
+        self.ui.toleranceSpin.valueChanged.connect(self.toleranceSpinChanged)
+        self.ui.wavelengthSpin.valueChanged.connect(self.wavelengthSpinChanged)
+        self.ui.wavelengthCombo.currentIndexChanged.connect(self.wavelengthComboChanged)
+        self.ui.microscopeCombo.currentIndexChanged.connect(self.microscopeChanged)
+        self.ui.meterCombo.currentIndexChanged.connect(self.powerMeterChanged)
+        self.ui.durationSpin.valueChanged.connect(self.durationSpinChanged)
+        self.ui.settlingSpin.valueChanged.connect(self.settlingSpinChanged)
+        
+    def currentPowerToggled(self, b):
+        print b
+        pass
+    
+    def expectedPowerToggled(self, b):
+        pass
+    
+    def expectedPowerSpinChanged(self, value):
+        self.dev.expectedPower = value
+        self.dev.appendPowerHistory(value)
+    
+    def toleranceSpinChanged(self, value):
+        pass
+    
+    def wavelengthSpinChanged(self, value):
+        self.dev.setWavelength(value)
+        if value not in self.dev.config.get('namedWavelengths', {}).keys():
+            self.ui.wavelengthCombo.setCurrentIndex(0)
+    
+    def wavelengthComboChanged(self):
+        if self.ui.wavelengthCombo.currentIndex() == 0:
+            return
+        text = str(self.ui.wavelengthCombo.currentText())
+        wl = self.dev.config.get('namedWavelengths', {}).get(text, None)
+        if wl is not None:
+            self.ui.wavelengthSpin.setValue(wl)
+    
+    def microscopeChanged(self):
+        pass
+    
+    def powerMeterChanged(self):
+        pass
+    
+    def durationSpinChanged(self, value):
+        pass
+    
+    def settlingSpinChanged(self, value):
+        pass
+    
+    
 
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
