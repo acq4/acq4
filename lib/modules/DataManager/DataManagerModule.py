@@ -5,7 +5,10 @@ from DataManager import *
 import os, re, sys, time
 from debug import *
 import FileAnalysisView
-from lib.LogWindow import LogButton
+from lib.LogWindow import LogButton, LogWindow
+import FileLogView
+from lib.util.pyqtgraph.FileDialog import FileDialog
+
 
 
 class Window(QtGui.QMainWindow):
@@ -31,10 +34,13 @@ class DataManager(Module):
         self.ui.setupUi(self.win)
         self.ui.analysisWidget = FileAnalysisView.FileAnalysisView(self.ui.analysisTab, self)
         self.ui.analysisTab.layout().addWidget(self.ui.analysisWidget)
+        self.ui.logWidget = FileLogView.FileLogView(self.ui.logTab, self)
+        self.ui.logTab.layout().addWidget(self.ui.logWidget)
+        
         w = self.ui.splitter.width()
         self.ui.splitter.setSizes([int(w*0.3), int(w*0.7)])
         self.ui.logDock.hide()
-        self.dialog = QtGui.QFileDialog()
+        self.dialog = FileDialog()
         self.dialog.setFileMode(QtGui.QFileDialog.DirectoryOnly)
         ## Load values into GUI
         #self.model = DMModel(self.manager.getBaseDir())
@@ -56,7 +62,7 @@ class DataManager(Module):
         self.ui.setLogDirBtn.clicked.connect(self.setLogDir)
         self.ui.newFolderList.currentIndexChanged.connect(self.newFolder)
         self.ui.fileTreeWidget.itemSelectionChanged.connect(self.fileSelectionChanged)
-        self.ui.logEntryText.returnPressed.connect(self.logEntry)
+        #self.ui.logEntryText.returnPressed.connect(self.logEntry)
         self.ui.fileDisplayTabs.currentChanged.connect(self.tabChanged)
         self.win.sigClosed.connect(self.quit)
         self.ui.analysisWidget.sigDbChanged.connect(self.analysisDbChanged)
@@ -81,6 +87,9 @@ class DataManager(Module):
         self.ui.baseDirText.setText(QtCore.QString(dh.name()))
         self.ui.fileTreeWidget.setBaseDirHandle(dh)
         #self.currentDirChanged()
+        
+    def loadLog(self, *args, **kwargs):
+        pass
 
     def setLogDir(self):
         d = self.selectedFile()
@@ -117,11 +126,11 @@ class DataManager(Module):
         if change == None:
             self.loadLog(self.manager.getCurrentDir(), self.ui.logView)
 
-    def loadLog(self, dirHandle, widget, recursive=0):
-        widget.clear()
-        log = dirHandle.readLog(recursive)
-        for line in self.logRender(log):
-            widget.append(line)
+    #def loadLog(self, dirHandle, widget, recursive=0):
+        #widget.clear()
+        #log = dirHandle.readLog(recursive)
+        #for line in self.logRender(log):
+            #widget.append(line)
             
 
     def showFileDialog(self):
@@ -240,10 +249,11 @@ class DataManager(Module):
             self.selFile.sigChanged.connect(self.selectedFileAltered)
         
     def loadFile(self, fh):
-        self.ui.selectedLogView.clear()
+        #self.ui.selectedLogView.clear()
         if fh is None:
             self.ui.fileInfo.setCurrentFile(None)
             self.ui.dataViewWidget.setCurrentFile(None)
+            self.ui.logWidget.selectedFileChanged(None)
             self.ui.fileNameLabel.setText('')
         else:
             #self.ui.fileInfo.setCurrentFile(fh)
@@ -260,8 +270,9 @@ class DataManager(Module):
         if n == 0:
             self.ui.fileInfo.setCurrentFile(fh)
         elif n == 1:
-            if fh.isDir():
-                self.loadLog(fh, self.ui.selectedLogView, recursive=3)
+            self.ui.logWidget.selectedFileChanged(fh)
+            #if fh.isDir():
+                #self.loadLog(fh, self.ui.selectedLogView, recursive=3)
         elif n == 2:
             self.ui.dataViewWidget.setCurrentFile(fh)
             
@@ -276,45 +287,45 @@ class DataManager(Module):
         
         #self.fileSelectionChanged()
         
-    def logEntry(self):
-        text = str(self.ui.logEntryText.text())
-        cd = self.manager.getCurrentDir()
-        self.ui.logEntryText.setText('')
-        if text == '' or cd is None:
-            return
-        cd.logMsg(text, {'source': 'user'})
+    #def logEntry(self):
+        #text = str(self.ui.logEntryText.text())
+        #cd = self.manager.getCurrentDir()
+        #self.ui.logEntryText.setText('')
+        #if text == '' or cd is None:
+            #return
+        #cd.logMsg(text, {'source': 'user'})
         
-    def updateLogView(self, *args):
-        msg = args[0]
-        self.ui.logView.append(self.logRender(msg))
-        #print "new log msg"
+    #def updateLogView(self, *args):
+        #msg = args[0]
+        #self.ui.logView.append(self.logRender(msg))
+        ##print "new log msg"
         
-    def logRender(self, log):
-        returnList = True
-        if type(log) is dict:
-            log = [log]
-            returnList = False
-        elif type(log) is not list:
-            raise Exception('logRender requires dict or list of dicts as argument')
+    #def logRender(self, log):
+        #returnList = True
+        #if type(log) is dict:
+            #log = [log]
+            #returnList = False
+        #elif type(log) is not list:
+            #raise Exception('logRender requires dict or list of dicts as argument')
             
-        lines = []
-        for msg in log:
-            t = time.strftime('%Y.%m.%d %H:%M:%S', time.localtime(msg['__timestamp__']))
-            style = 'color: #000; font-style: normal'
-            sourceStyles = {
-                'user': 'color: #008; font-style: italic'
-            }
-            if 'source' in msg and msg['source'] in sourceStyles:
-                style = sourceStyles[msg['source']]
-            parts = ["<span style='color: #888'>[%s]</span>" % t]
-            if 'subdir' in msg:
-                parts.append(msg['subdir'])
-            parts.append("<span style='%s'>%s</span>" % (style, msg['__message__']))
-            lines.append('&nbsp;&nbsp;'.join(parts))
-        if returnList:
-            return lines
-        else:
-            return lines[0]
+        #lines = []
+        #for msg in log:
+            #t = time.strftime('%Y.%m.%d %H:%M:%S', time.localtime(msg['__timestamp__']))
+            #style = 'color: #000; font-style: normal'
+            #sourceStyles = {
+                #'user': 'color: #008; font-style: italic'
+            #}
+            #if 'source' in msg and msg['source'] in sourceStyles:
+                #style = sourceStyles[msg['source']]
+            #parts = ["<span style='color: #888'>[%s]</span>" % t]
+            #if 'subdir' in msg:
+                #parts.append(msg['subdir'])
+            #parts.append("<span style='%s'>%s</span>" % (style, msg['__message__']))
+            #lines.append('&nbsp;&nbsp;'.join(parts))
+        #if returnList:
+            #return lines
+        #else:
+            #return lines[0]
             
     def quit(self):
         ## Silly: needed to prevent lockup on some systems.

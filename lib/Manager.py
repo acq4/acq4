@@ -51,25 +51,35 @@ def __reload__(old):
     Manager.CREATED = old['Manager'].CREATED
     Manager.single = old['Manager'].single
     
-def logMsg(*args, **kwargs):
-    """See lib.LogWindow.logMsg() for arguments and how to use."""
+def logMsg(msg, **kwargs):
+    """msg: the text of the log message
+       msgTypes: user, status, error, warning (status is default)
+       importance: 0-9 (0 is low importance, 9 is high, 5 is default)
+       other supported keywords:
+          exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
+          docs: a list of strings where documentation related to the message can be found
+          reasons: a list of reasons (as strings) for the message
+          traceback: a list of formatted callstack/trackback objects (formatting a traceback/callstack returns a list of strings), usually looks like [['line 1', 'line 2', 'line3'], ['line1', 'line2']]
+       Feel free to add your own keyword arguments. These will be saved in the log.txt file, but will not affect the content or way that messages are displayed.
+        """
     global LOG
     if LOG is not None:
-        LOG.logMsg(*args, **kwargs)
-    #else:
-        #print "Can't log error message; no log created yet."
-        #print args
-        #print kwargs
+        LOG.logMsg(msg, **kwargs)
+    else:
+        print "Can't log message; no log created yet."
+        print args
+        print kwargs
         
     
-def logExc(*args, **kwargs):
+def logExc(msg, *args, **kwargs):
+    """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
     global LOG
     if LOG is not None:
-        LOG.logExc(*args, **kwargs)
-    #else:
-        #print "Can't log error message; no log created yet."
-        #print args
-        #print kwargs
+        LOG.logExc(msg, *args, **kwargs)
+    else:
+        print "Can't log error message; no log created yet."
+        print args
+        print kwargs
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
@@ -379,6 +389,16 @@ Valid options are:
         """List currently loaded modules. """
         return self.modules.keys()[:]
 
+    def getDirOfSelectedFile(self):
+        """Returns the directory that is currently selected, or the directory of the file that is currently selected in Data Manager."""
+        try:
+            f = self.getModule("Data Manager").selectedFile()
+            if not isinstance(f, DataManager.DirHandle):
+                f = f.parent()
+        except Exception:
+            f = False
+            logMsg("Can't find currently selected directory, Data Manager has not been loaded.", msgType='warning')
+        return f
 
     def getModule(self, name):
         """Return an already loaded module"""
@@ -505,11 +525,11 @@ Valid options are:
         logDir = self.logWindow.getLogDir()
         while not p.info().get('expUnit', False) and p != self.baseDir and p != logDir:
             p = p.parent()
-        if p != self.baseDir:
+        if p != self.baseDir and p != logDir:
             self.setLogDir(p)
         else:
             if logDir is None:
-                logMsg("No log directory set. Log messages will not be stored.", type='warning', importance=8, docs="UserGuide/logging")
+                logMsg("No log directory set. Log messages will not be stored.", msgType='warning', importance=8, docs=["UserGuide/logging"])
         #self.currentDir.sigChanged.connect(self.currentDirChanged)
         #self.sigCurrentDirChanged.emit()
         self.currentDir.sigChanged.connect(self.currentDirChanged)

@@ -513,6 +513,7 @@ class DirHandle(FileHandle):
             return log
         
     def subDirs(self):
+        """Return a list of string names for all sub-directories."""
         with self.lock:
             ls = self.ls()
             subdirs = filter(lambda d: os.path.isdir(os.path.join(self.name(), d)), ls)
@@ -884,6 +885,7 @@ class DirHandle(FileHandle):
         
 
     def exists(self, name):
+        """Returns True if the file 'name' exists in this directory, False otherwise."""
         with self.lock:
             try:
                 fn = os.path.abspath(os.path.join(self.path, name))

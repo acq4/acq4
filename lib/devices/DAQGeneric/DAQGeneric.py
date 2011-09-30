@@ -2,11 +2,46 @@
 from __future__ import with_statement
 from lib.devices.Device import *
 from metaarray import MetaArray, axis
-from Mutex import Mutex, MutexLocker
+from Mutex import Mutex
 from numpy import *
 from protoGUI import *
 from debug import *
 from SpinBox import *
+from functions import siFormat
+import DeviceTemplate
+
+
+class DataMapping:
+    """Class that maps values between the voltages on a DAQ channel and the physically measured units.
+    By default, this class applies a simple linear scale and offset for analog channels. Digital channels
+    may optionally be inverted.
+        Vout = Value * scale - offset
+        Value = (Vin + offset) * scale
+    This class may be subclassed to allow any arbitrary mapping (eg, calibration curves, etc.)
+    """
+    def __init__(self, device, chans=None):
+        """When mapping initializes, it immediately grabs the scale and offset for each channel
+        specified in chans (or all channels if None). This means that the mapping is only valid
+        as long as these values have not changed."""
+        self.device = device
+        self.scale = {}
+        self.offset = {}
+        if chans is None:
+            chans = device.listChannels()
+        for ch in chans:
+            self.scale[ch] = device.getChanScale(ch)
+            self.offset[ch] = device.getChanOffset(ch)
+            
+    def mapToDaq(self, chan, data):
+        scale = self.scale[chan]
+        offset = self.offset[chan]
+        return (data*scale) - offset
+        
+    def mapFromDaq(self, chan, data):
+        scale = self.scale[chan]
+        offset = self.offset[chan]
+        return (data + offset) * scale
+            
 
 class DAQGeneric(Device):
     
@@ -19,19 +54,40 @@ class DAQGeneric(Device):
         self._DGConfig = config
         self._DGHolding = {}
         for ch in config:
+            if config[ch]['type'][0] != 'a' and ('scale' in config[ch] or 'offset' in config[ch]):
+                raise Exception("Scale/offset only allowed for analog channels. (%s.%s)" % (name, ch))
+                
             if 'scale' not in config[ch]:
-                config[ch]['scale'] = 1.0
+                config[ch]['scale'] = 1  ## must be int to prevent accidental type conversion on digital data
+            if 'offset' not in config[ch]:
+                config[ch]['offset'] = 0
+            if config[ch].get('invert', False):
+                if config[ch]['type'][0] != 'd':
+                    raise Exception("Inversion only allowed for digital channels. (%s.%s)" % (name, ch))
+                config[ch]['scale'] = -1
+                config[ch]['offset'] = 1
+                
             #print "chan %s scale %f" % (ch, config[ch]['scale'])
             if 'holding' not in config[ch]:
                 config[ch]['holding'] = 0.0
             self._DGHolding[ch] = config[ch]['holding']
         
+    def mapToDAQ(self, channel, data):
+        mapping = self.getMapping(chans=[channel])
+        return mapping.mapToDaq(channel, data)
     
+    def mapFromDAQ(self, channel, data):
+        mapping = self.getMapping(chans=[channel])
+        return mapping.mapFromDaq(channel, data)
+    
+    def getMapping(self, chans=None):
+        return DataMapping(self, chans)
+            
     def createTask(self, cmd):
         return DAQGenericTask(self, cmd)
     
         
-    def setChanHolding(self, channel, level=None, scale=None, block=True):
+    def setChanHolding(self, channel, level=None, block=True):
         """Define and set the holding values for this channel
         If block is True, then wait until the value has been set onthe DAQ.
         If block is False, then simply schedule the change to take place when the DAQ is available.
@@ -45,12 +101,14 @@ class DAQGeneric(Device):
                     raise Exception("No remembered holding level for channel %s" % channel)
             else:
                 self._DGHolding[channel] = level
+                
             daq, chan = self._DGConfig[channel]['channel']
             daqDev = self.dm.getDevice(daq)
-            if scale is None:
-                scale = self.getChanScale(channel)
+            #if scale is None:
+                #scale = self.getChanScale(channel)
             #print "set", chan, self._DGHolding[channel]*scale
-            val = self._DGHolding[channel]*scale
+            #val = self._DGHolding[channel]*scale
+            val = self.mapToDAQ(channel, self._DGHolding[channel])
             if block:
                 daqDev.setChannelValue(chan, val, block=True)
             else:
@@ -71,11 +129,13 @@ class DAQGeneric(Device):
                 mode = chConf[2]
     
             daqDev = self.dm.getDevice(daq)
-            if 'scale' in self._DGConfig[channel]:
-                scale = self._DGConfig[channel]['scale']
-            else:
-                scale = 1.0            
-            return daqDev.getChannelValue(chan, mode=mode, block=block)/scale
+            #if 'scale' in self._DGConfig[channel]:
+                #scale = self._DGConfig[channel]['scale']
+            #else:
+                #scale = 1.0            
+            #return daqDev.getChannelValue(chan, mode=mode)/scale
+            val = daqDev.getChannelValue(chan, mode=mode, block=block)
+            return self.mapFromDAQ(channel, val)
 
     def reconfigureChannel(self, chan, config):
         self._DGConfig[chan].update(config)
@@ -94,22 +154,36 @@ class DAQGeneric(Device):
     def quit(self):
         pass
 
+    def setChanScale(self, ch, scale, update=True):
+        with self._DGLock:
+            self._DGConfig[ch]['scale'] = scale
+        if update and self._DGConfig[ch]['type'][1] == 'o': ## only set Holding for output channels
+            self.setChanHolding(ch)
+            
+    def setChanOffset(self, ch, offset, update=True):
+        with self._DGLock:
+            self._DGConfig[ch]['offset'] = offset
+        if update and self._DGConfig[ch]['type'][1] == 'o': ## only set Holding for output channels
+            self.setChanHolding(ch)
+            
     def getChanScale(self, chan):
-        with MutexLocker(self._DGLock):
+        with self._DGLock:
             ## Scale defaults to 1.0
             ## - can be overridden in configuration
-            scale = 1.0
-            if 'scale' in self._DGConfig[chan]:
-                scale = self._DGConfig[chan]['scale']
-            return scale
+            return self._DGConfig[chan].get('scale', 1.0)
+
+    def getChanOffset(self, chan):
+        with self._DGLock:
+            ## Offset defaults to 0.0
+            ## - can be overridden in configuration
+            return self._DGConfig[chan].get('offset', 0.0)
 
     def getChanUnits(self, ch):
-        with MutexLocker(self._DGLock):
+        with self._DGLock:
             if 'units' in self._DGConfig[ch]:
                 return self._DGConfig[ch]['units']
             else:
                 return None
-
 
     def listChannels(self):
         with self._DGLock:
@@ -133,9 +207,17 @@ class DAQGenericTask(DeviceTask):
         
     def configure(self, tasks, startOrder):
         ## Record initial state or set initial value
-        with MutexLocker(self.dev._DGLock):
+        ## NOTE:
+        ## Subclasses should call this function only _after_ making any changes that will affect the mapping between
+        ## physical values and channel voltages.
+        
+        
+        with self.dev._DGLock:
             prof = Profiler('DAQGenericTask.configure', disabled=True)
             #self.daqTasks = {}
+            self.mapping = self.dev.getMapping(chans=self._DAQCmd.keys())  ## remember the mapping so we can properly translate data after it has been returned
+            
+            
             self.initialState = {}
             self.holdingVals = {}
             for ch in self._DAQCmd:
@@ -160,7 +242,7 @@ class DAQGenericTask(DeviceTask):
     def createChannels(self, daqTask):
         self.daqTasks = {}
         #print "createChannels"
-        with MutexLocker(self.dev._DGLock):
+        with self.dev._DGLock:
             ## Is this the correct DAQ device for any of my channels?
             ## create needed channels + info
             ## write waveform to command channel if needed
@@ -190,16 +272,19 @@ class DAQGenericTask(DeviceTask):
                 self.bufferedChannels.append(ch)
                 #_DAQCmd[ch]['task'] = daqTask  ## ALSO DON't FORGET TO DELETE IT, ASS.
                 if chConf['type'] in ['ao', 'do']:
-                    scale = self.getChanScale(ch)
+                    #scale = self.getChanScale(ch)
                     cmdData = self._DAQCmd[ch]['command']
                     if cmdData is None:
                         #print "No command for channel %s, skipping." % ch
                         continue
-                    cmdData = cmdData * scale
+                    #cmdData = cmdData * scale
                     if chConf['type'] == 'do':
                         cmdData = cmdData.astype(uint32)
                         cmdData[cmdData<=0] = 0
                         cmdData[cmdData>0] = 0xFFFFFFFF
+                        
+                    ## apply scale, offset or inversion for output lines
+                    cmdData = self.mapping.mapToDaq(ch, cmdData) 
                     #print "channel", chConf['channel'][1], cmdData
                     
                     #print "channel", self._DAQCmd[ch]
@@ -216,11 +301,11 @@ class DAQGenericTask(DeviceTask):
                     self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                 #print "  done: ", self.daqTasks.keys()
         
-    def getChanScale(self, chan):
-        if 'scale' in self._DAQCmd[chan]:
-            return self._DAQCmd[chan]['scale']
-        else:
-            return self.dev.getChanScale(chan)
+    #def getChanScale(self, chan):
+        #if 'scale' in self._DAQCmd[chan]:
+            #return self._DAQCmd[chan]['scale']
+        #else:
+            #return self.dev.getChanScale(chan)
         
     def getChanUnits(self, chan):
         if 'units' in self._DAQCmd[chan]:
@@ -237,7 +322,7 @@ class DAQGenericTask(DeviceTask):
         return True
         
     def stop(self, abort=False):
-        with MutexLocker(self.dev._DGLock):
+        with self.dev._DGLock:
             ## This is just a bit sketchy, but these tasks have to be stopped before the holding level can be reset.
             #print "STOP"
             for ch in self.daqTasks:
@@ -264,8 +349,9 @@ class DAQGenericTask(DeviceTask):
             result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'][1])
             #prof.mark("get data for channel "+str(ch))
             #print "get data", ch, self.getChanScale(ch), result[ch]['data'].max()
-            scale = self.getChanScale(ch)
-            result[ch]['data'] = result[ch]['data'] / scale
+            #scale = self.getChanScale(ch)
+            #result[ch]['data'] = result[ch]['data'] / scale
+            result[ch]['data'] = self.mapping.mapFromDaq(ch, result[ch]['data']) ## scale/offset/invert
             result[ch]['units'] = self.getChanUnits(ch)
             #print "channel", ch, "returned:\n  ", result[ch]
             #prof.mark("scale data for channel "+str(ch))
@@ -333,37 +419,134 @@ class DAQDevGui(QtGui.QWidget):
     def __init__(self, dev):
         self.dev = dev
         QtGui.QWidget.__init__(self)
-        self.layout = QtGui.QGridLayout()
+        self.layout = QtGui.QVBoxLayout()
         self.setLayout(self.layout)
         chans = self.dev.listChannels()
         self.widgets = {}
+        #self.uis = {}
+        self.defaults = {}
         row = 0
+        #for ch in chans:
+            #l = QtGui.QLabel("%s (%s)" % (ch, chans[ch]['channel'][1]))
+            #if chans[ch]['type'] == 'ao':
+                #hw = SpinBox(value=self.dev.getChanHolding(ch))
+                ##QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
+                #hw.sigValueChanged.connect(self.spinChanged)
+            #elif chans[ch]['type'] == 'do':
+                #hw = SpinBox(value=self.dev.getChanHolding(ch), step=1, bounds=(0,1))
+                ##QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
+                #hw.sigValueChanged.connect(self.spinChanged)
+            #else:
+                #hw = QtGui.QWidget()
+            #hw.channel = ch
+            #self.widgets[ch] = (l, hw)
+            #self.layout.addWidget(l, row, 0)
+            #self.layout.addWidget(hw, row, 1)
+            #row += 1
         for ch in chans:
-            l = QtGui.QLabel("%s (%s)" % (ch, chans[ch]['channel'][1]))
-            if chans[ch]['type'] == 'ao':
-                hw = SpinBox(value=self.dev.getChanHolding(ch))
-                #QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
-                hw.sigValueChanged.connect(self.spinChanged)
-            elif chans[ch]['type'] == 'do':
-                hw = SpinBox(value=self.dev.getChanHolding(ch), step=1, bounds=(0,1))
-                #QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
-                hw.sigValueChanged.connect(self.spinChanged)
-            else:
-                hw = QtGui.QWidget()
-            hw.channel = ch
-            self.widgets[ch] = (l, hw)
-            self.layout.addWidget(l, row, 0)
-            self.layout.addWidget(hw, row, 1)
-            row += 1
+            wid = QtGui.QWidget()
+            ui = DeviceTemplate.Ui_Form()
+            ui.setupUi(wid)
+            self.layout.addWidget(wid)
+            ui.analogCtrls = [ui.scaleDefaultBtn, ui.scaleSpin, ui.offsetDefaultBtn, ui.offsetSpin, ui.scaleLabel, ui.offsetLabel]
+            #ui.channel = ch
+            for s in dir(ui):
+                i = getattr(ui, s)
+                if isinstance(i, QtGui.QWidget):
+                    i.channel = ch
+                
+            self.widgets[ch] = ui
+            ui.nameLabel.setText(str(ch))
+            ui.channelCombo.addItem("%s (%s)" % (ch, chans[ch]['channel'][1]))
+            
+            holding = chans[ch].get('holding', 0)
+            
+            
+            
+            if chans[ch]['type'] in ['ao', 'ai']:
+                ui.inputRadio.setEnabled(False)
+                ui.outputRadio.setEnabled(False)
+                ui.invertCheck.hide()
+                scale = chans[ch].get('scale', 1)
+                units = chans[ch].get('units', 'V')
+                offset = chans[ch].get('offset', 0)
+                ui.offsetSpin.setOpts(suffix = 'V', siPrefix=True, dec=True, step=1.0, minStep=1e-4)
+                ui.offsetSpin.setValue(offset)
+                ui.offsetSpin.sigValueChanged.connect(self.offsetSpinChanged)
+                ui.offsetDefaultBtn.setText("Default (%s)" % siFormat(offset, suffix='V'))
+                ui.offsetDefaultBtn.clicked.connect(self.offsetDefaultBtnClicked)
+                if chans[ch]['type'] == 'ao':
+                    ui.outputRadio.setChecked(True)
+                    ui.scaleDefaultBtn.setText("Default (%s)" % siFormat(scale, suffix='V/'+units))
+                    ui.scaleSpin.setOpts(suffix= 'V/'+units, siPrefix=True, dec=True, step=1.0, minStep=1e-9)
+                    ui.holdingSpin.setOpts(suffix=units, siPrefix=True, step=0.01)
+                    ui.holdingSpin.setValue(holding)
+                    ui.holdingSpin.sigValueChanged.connect(self.holdingSpinChanged)
+                elif chans[ch]['type'] == 'ai':
+                    ui.inputRadio.setChecked(True)
+                    ui.holdingLabel.hide()
+                    ui.holdingSpin.hide()
+                    ui.scaleDefaultBtn.setText("Default (%s)" % siFormat(scale, suffix=units+'/V'))
+                    #ui.scaleDefaultBtn.clicked.connect(self.scaleDefaultBtnClicked)
+                    ui.scaleSpin.setOpts(suffix= units+'/V', siPrefix=True, dec=True)
+                ui.scaleSpin.setValue(scale) 
+                ui.scaleDefaultBtn.clicked.connect(self.scaleDefaultBtnClicked)
+                ui.scaleSpin.sigValueChanged.connect(self.scaleSpinChanged)
+                self.defaults[ch] = {
+                    'scale': scale,
+                    'offset': offset}
+            elif chans[ch]['type'] in ['do', 'di']:
+                for item in ui.analogCtrls:
+                    item.hide()
+                if chans[ch].get('invert', False):
+                    ui.invertCheck.setChecked(True)
+                if chans[ch]['type'] == 'do':
+                    ui.outputRadio.setChecked(True)
+                    ui.holdingSpin.setOpts(bounds=[0,1], step=1)
+                    ui.holdingSpin.setValue(holding)
+                    ui.holdingSpin.sigValueChanged.connect(self.holdingSpinChanged)
+                elif chans[ch]['type'] == 'di':
+                    ui.inputRadio.setChecked(True)
+                    ui.holdingLabel.hide()
+                    ui.holdingSpin.hide()
+                ui.invertCheck.toggled.connect(self.invertToggled)
         #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.holdingChanged)
         self.dev.sigHoldingChanged.connect(self.holdingChanged)
     
     def holdingChanged(self, ch, val):
-        self.widgets[ch][1].blockSignals(True)
-        self.widgets[ch][1].setValue(val)
-        self.widgets[ch][1].blockSignals(False)
+        self.widgets[ch].holdingSpin.blockSignals(True)
+        self.widgets[ch].holdingSpin.setValue(val)
+        self.widgets[ch].holdingSpin.blockSignals(False)
         
-    def spinChanged(self, spin):
+    def holdingSpinChanged(self, spin):
         ch = spin.channel
         self.dev.setChanHolding(ch, spin.value(), block=False)
+        
+    def scaleSpinChanged(self, spin):
+        ch = spin.channel
+        self.dev.setChanScale(ch, spin.value())
+    
+    def offsetSpinChanged(self, spin):
+        ch = spin.channel
+        self.dev.setChanOffset(ch, spin.value())
+        
+    def offsetDefaultBtnClicked(self):
+        ch = self.sender().channel
+        self.widgets[ch].offsetSpin.setValue(self.defaults[ch]['offset'])
+        
+    def scaleDefaultBtnClicked(self):
+        ch = self.sender().channel
+        self.widgets[ch].scaleSpin.setValue(self.defaults[ch]['scale'])
+
+    def invertToggled(self, b):
+        ch = self.sender().channel
+        if b:
+            self.dev.setChanScale(ch, -1, update=False)
+            self.dev.setChanOffset(ch, 1)
+        else:
+            self.dev.setChanScale(ch, 1, update=False)
+            self.dev.setChanOffset(ch, 0)
+
+
+
         

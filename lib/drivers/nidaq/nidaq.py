@@ -2,6 +2,7 @@
 #from ctypes import *
 import sys, re, types, ctypes, os, time
 from numpy import *
+import numpy as np
 #import cheader
 import ptime  ## platform-independent precision timing
 import debug
@@ -9,13 +10,19 @@ import clibrary
 import ctypes
 import SuperTask
 
-dtypes = {
-    float64: 'F64',
-    int16: 'I16',
-    int32: 'I32',
-    uint16: 'U16',
-    uint32: 'U32',
-    uint8: 'U8'
+dtypes = {  ## for converting numpy dtypes to nidaq type strings
+    '<f8': 'F64',
+    '<i2': 'I16',
+    '<i4': 'I32',
+    '<u2': 'U16',
+    '<u4': 'U32',
+    '|u1': 'U8',
+    #float64.descr[0][1]: 'F64',
+    #int16.descr[0][1]: 'I16',
+    #int32.descr[0][1]: 'I32',
+    #uint16.descr[0][1]: 'U16',
+    #uint32.descr[0][1]: 'U32',
+    #uint8.descr[0][1]: 'U8'
 }
 for d in dtypes.keys():
     dtypes[dtypes[d]] = d
@@ -328,7 +335,7 @@ class Task:
         else:
             raise Exception("read() not allowed for this task type (%s)" % chTypes(tt))
             
-        fName += dtypes[dtype]
+        fName += dtypes[np.dtype(dtype).descr[0][1]]
         
         self.SetReadRelativeTo(LIB.Val_FirstSample)
         self.SetReadOffset(0)
@@ -362,7 +369,7 @@ class Task:
         else:
             raise Exception("write() not implemented for this task type (%s)" % chTypes[tt])
             
-        fName += dtypes[data.dtype]
+        fName += dtypes[data.dtype.descr[0][1]]
         
         
         ## buf.ctypes is a c_void_p, but the function requires a specific pointer type so we are forced to recast the pointer:

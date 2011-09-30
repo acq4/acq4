@@ -29,9 +29,9 @@ if sys.platform == 'darwin':
     dll = cdll.LoadLibrary('/Library/Frameworks/QCam.framework/QCam')
 else:
     dll = windll.QCamDriver
-lib = CLibrary(dll, p, prefix = 'QCam_')        #makes it so that functions in the header file can be accessed using lib.nameoffunction, ie: QCam_LoadDriver is lib.LoadDriver
-                                                #also interprets all the typedefs for you....very handy
-                                                #anything from the header needs to be accessed through lib.yourFunctionOrParamete
+lib = CLibrary(dll, p, prefix = 'QCam_')        ##makes it so that functions in the header file can be accessed using lib.nameoffunction, ie: QCam_LoadDriver is lib.LoadDriver
+                                                ##also interprets all the typedefs for you....very handy
+                                                ##anything from the header needs to be accessed through lib.yourFunctionOrParameter
 
 
 #modDir = os.path.dirname(__file__)
@@ -55,8 +55,6 @@ lib = CLibrary(dll, p, prefix = 'QCam_')        #makes it so that functions in t
 externalParams = ['triggerMode',
                   #'triggerType', ## Add this in when we figure out TriggerModes
                   'exposure',
-                  #'exposureMode',
-                  #'binning',
                   'binningX',
                   'binningY',
                   'regionX',
@@ -69,7 +67,6 @@ externalParams = ['triggerMode',
                   'qprmCoolerActive',
                   'qprmS32RegulatedCoolingTemp',
                   'qprmBlackoutMode',
-                  #'qprmImageFormat',
                   'qprmSyncb',
                   'ringSize'
                   ]
@@ -87,7 +84,6 @@ class QCamFunctionError(Exception):
     def __init__(self, value, message):
         self.value = value
         self.message = message
-    #def _message(self, message)
     
     def __str__(self):
         return repr(self.message)
@@ -99,14 +95,13 @@ class QCamDriverClass:
         
         self.loadDriver()
         
-        
         global externalParams
         for p in externalParams:
             self.paramTable[p] = p        
     
     def call(self, function, *args):
+        """"""
         a = function(*args)
-        #print "Call Result for %s: a()=%i" %(function.name, a())
         if a() == None:
             return a
         elif a() != 0:

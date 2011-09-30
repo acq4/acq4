@@ -234,15 +234,21 @@ class Analyzer(QtGui.QMainWindow):
         self.emit(QtCore.SIGNAL('resultsChanged'))
         #self.flowchart2.dataIn.setValue(self.results)
                     
-    def saveAll(self):
+    def saveAll(self, saveFile=None):
         saveDir = self.data[0].name()
         proto = self.loader.currentFile
         if proto is None:
             protoName = "Analysis.pk"
         else:
             protoName = proto.shortName() + '.pk'
-        
-        saveFile = QtGui.QFileDialog.getSaveFileName(None, "Save session", os.path.join(saveDir, protoName))
+        if saveFile is None:
+            self.fileDialog = FileDialog(None, "Save session", os.path.join(saveDir, protoName))
+            self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
+            self.fileDialog.show()
+            self.fileDialog.fileSelected.connect(self.saveAll)
+            return
+        #saveFile = QtGui.QFileDialog.getSaveFileName(None, "Save session", os.path.join(saveDir, protoName))
         state = {}
         state['program'] = self.dumpProtocol()
         state['data'] = self.data

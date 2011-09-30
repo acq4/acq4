@@ -10,7 +10,7 @@ class Device(QtCore.QObject):
         QtCore.QObject.__init__(self)
         #self._lock_ = threading.Lock()
         #self._lock_ = Mutex(QtCore.QMutex.Recursive)  ## bad idea.
-        self._lock_ = Mutex()
+        self._lock_ = Mutex(QtCore.QMutex.Recursive)  ## no, good idea
         self._lock_tb_ = None
         self.dm = deviceManager
         self.config = config

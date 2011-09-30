@@ -47,16 +47,17 @@ def getExc(indent=4, prefix='|  ', skip=1):
     lines3 = [" "*indent + prefix + l for l in lines2]
     return '\n'.join(lines3)
 
-def printExc(msg='', indent=4, prefix='|'):
+def printExc(msg='', indent=4, prefix='|', msgType='error'):
     """Print an error message followed by an indented exception backtrace
     (This function is intended to be called within except: blocks)"""
     if HAVE_MANAGER:
-        lib.Manager.logExc(msg=msg)
+        lib.Manager.logExc(msg=msg, msgType=msgType)
     exc = getExc(indent, prefix + '  ', skip=2)
     print "[%s]  %s\n" % (time.strftime("%H:%M:%S"), msg)
     print " "*indent + prefix + '='*30 + '>>'
     print exc
     print " "*indent + prefix + '='*30 + '<<'
+    #lib.Manager.logExc(msg=msg, msgType=msgType)
     
 def printTrace(msg='', indent=4, prefix='|'):
     """Print an error message followed by an indented stack trace"""

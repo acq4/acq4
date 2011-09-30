@@ -83,7 +83,7 @@ class Canvas(QtGui.QWidget):
         self.ui.view.writeSvg()
 
     def storePng(self):
-        self.ui.view.writePng()
+        self.ui.view.writeImage()
 
     def splitterMoved(self):
         self.resizeEvent()
