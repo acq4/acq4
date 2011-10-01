@@ -2,7 +2,7 @@ from PyQt4 import QtCore, QtGui
 from TreeWidget import TreeWidget
 from SpinBox import SpinBox
 from pyqtgraph.ColorButton import ColorButton
-import collections, os
+import collections, os, weakref
 
 PARAM_TYPES = {}
 
@@ -37,6 +37,7 @@ class Parameter(QtCore.QObject):
         self.opts = opts
         self.childs = []
         self.names = {}
+        self.items = weakref.WeakKeyDictionary()
         self._parent = None
         
         if 'value' not in opts:
@@ -50,6 +51,8 @@ class Parameter(QtCore.QObject):
             
         if 'value' in opts and 'default' not in opts:
             opts['default'] = opts['value']
+            
+        
             
         
     def name(self):
@@ -217,7 +220,8 @@ class Parameter(QtCore.QObject):
         del self.names[child.name()]
         return name
 
-        
+    def registerItem(self, item):
+        self.items[item] = None
         
        
 
@@ -285,14 +289,14 @@ class ParameterTree(TreeWidget):
     def setParameters(self, paramSet, root=None, depth=0):
         if root is None:
             root = self.invisibleRootItem()
-        expand = False
+        #expand = False
         for param in paramSet:
             item = param.makeTreeItem(depth=depth)
             root.addChild(item)
             item.updateWidgets()
             self.setParameters(param, root=item, depth=depth+1)
-            expand = True
-        root.setExpanded(expand)
+            #expand = True
+        #root.setExpanded(expand)
         
         self.paramSet = paramSet
         
@@ -314,6 +318,7 @@ class ParameterTree(TreeWidget):
 class ParameterItem(QtGui.QTreeWidgetItem):
     def __init__(self, param, depth=0):
         self.param = param
+        self.param.registerItem(self)  ## let parameter know this item is connected to it
         self.depth = depth
         name = param.name()
         QtGui.QTreeWidgetItem.__init__(self, [name, ''])
@@ -348,7 +353,9 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         w = self.makeWidget()  
         if w is None:
             return
-        
+
+        w.setValue(opts['value'])
+
         if 'tip' in opts:
             w.setToolTip(opts['tip'])
         w.setObjectName(name)
@@ -420,13 +427,13 @@ class ParameterItem(QtGui.QTreeWidgetItem):
             w.sigChanged = w.valueChanged
         elif t == 'bool':
             w = QtGui.QCheckBox()
-            w.setChecked(opts.get('value', False))
+            #w.setChecked(opts.get('value', False))
             w.sigChanged = w.toggled
             w.value = w.isChecked
             w.setValue = w.setChecked
         elif t == 'str':
             w = QtGui.QLineEdit()
-            w.setText(opts['value'])
+            #w.setText(opts['value'])
             w.sigChanged = w.editingFinished
             w.value = lambda: str(w.text())
             w.setValue = w.setText
@@ -442,14 +449,13 @@ class ParameterItem(QtGui.QTreeWidgetItem):
             #w = ColorMapper()
         elif t == 'color':
             w = ColorButton()
-            if 'value' in opts:
-                w.setColor(opts['value'])
+            #if 'value' in opts:
+                #w.setColor(opts['value'])
             w.sigChanged = w.sigColorChanged
             w.value = w.color
             w.setValue = w.setColor
         else:
             raise Exception("Unknown type '%s'" % str(t))
-        
         return w
 
 
@@ -465,7 +471,8 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         ## called when the parameter's value has changed
         self.widget.sigChanged.disconnect(self.widgetValueChanged)
         try:
-            self.widget.setValue(val)
+            if val != self.widget.value():
+                self.widget.setValue(val)
         finally:
             self.widget.sigChanged.connect(self.widgetValueChanged)
         self.defaultBtn.setEnabled(not self.param.valueIsDefault())
@@ -475,6 +482,7 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         if hasattr(self, 'widget'):
             tree = self.treeWidget()
             tree.setItemWidget(self, 1, self.layoutWidget)
+        self.setExpanded(self.param.opts.get('expanded', True))
 
     def childAdded(self, param, child, pos):
         item = child.makeTreeItem(depth=self.depth+1)

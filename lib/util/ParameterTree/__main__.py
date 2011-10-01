@@ -60,6 +60,36 @@ class ScalableGroup(pTypes.GroupParameter):
         self.addChild(dict(name="ScalableParam %d" % (len(self.childs)+1), type=typ, value=val, removable=True, renamable=True))
 
 
+## test column spanning
+
+class TextParameterItem(ParameterItem):
+    def __init__(self, param, depth):
+        ParameterItem.__init__(self, param, depth)
+        self.subItem = QtGui.QTreeWidgetItem()
+        self.addChild(self.subItem)
+        
+    def updateWidgets(self):
+        self.treeWidget().setFirstItemColumnSpanned(self.subItem, True)
+        self.treeWidget().setItemWidget(self.subItem, 0, self.textBox)
+        self.setExpanded(True)
+        
+    def makeWidget(self):
+        self.textBox = QtGui.QTextEdit()
+        self.textBox.setMaximumHeight(100)
+        self.textBox.value = lambda: str(self.textBox.toPlainText())
+        self.textBox.setValue = self.textBox.setPlainText
+        self.textBox.sigChanged = self.textBox.textChanged
+        return self.textBox
+
+class TextParameter(Parameter):
+    type = 'text'
+    itemClass = TextParameterItem
+    
+registerParameterType('text', TextParameter)
+
+
+
+
 params = [
     {'name': 'Group 0', 'type': 'group', 'params': [
         {'name': 'Param 1', 'type': 'int', 'value': 10},
@@ -84,6 +114,7 @@ params = [
     ]},
     {'name': 'Param 5', 'type': 'bool', 'value': True, 'tip': "This is a checkbox"},
     {'name': 'Param 6', 'type': 'color', 'value': "FF0", 'tip': "This is a color button. It cam be renamed.", 'renamable': True},
+    {'name': 'TextParam', 'type': 'text', 'value': 'Some text...'},
 ]
 
 p = ParameterSet("params", params)
