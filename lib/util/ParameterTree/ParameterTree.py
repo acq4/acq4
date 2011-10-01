@@ -19,6 +19,8 @@ class Parameter(QtCore.QObject):
     sigChildAdded = QtCore.Signal(object, object, object)  ## self, child, index
     sigChildRemoved = QtCore.Signal(object, object)  ## self, child
     sigParentChanged = QtCore.Signal(object, object)  ## self, parent
+    sigLimitsChanged = QtCore.Signal(object, object)  ## self, limits
+    sigNameChanged = QtCore.Signal(object, object)  ## self, name
     
     
     def __new__(cls, *args, **opts):
@@ -53,9 +55,21 @@ class Parameter(QtCore.QObject):
     def name(self):
         return self.opts['name']
     
+    def setName(self, name):
+        """Attempt to change the name of this parameter; return the actual name. 
+        (The parameter may reject the name change or automatically pick a different name)"""
+        parent = self.parent()
+        if parent is not None:
+            name = parent._renameChild(self, name)  ## first ask parent if it's ok to rename
+        if self.opts['name'] != name:
+            self.opts['name'] = name
+            self.sigNameChanged.emit(self, name)
+        return name
+    
     def setValue(self, value):
         ## return the actual value that was set
         ## (this may be different from the value that was requested)
+        #print self, "Set value:", value, self.opts['value'], self.opts['value'] == value
         if self.opts['value'] == value:
             return value
         self.opts['value'] = value
@@ -67,7 +81,7 @@ class Parameter(QtCore.QObject):
 
     def getValues(self):
         """Return a tree of all values that are children of this parameter"""
-        vals = {}
+        vals = collections.OrderedDict()
         for ch in self:
             vals[ch.name()] = (ch.value(), ch.getValues())
         return vals
@@ -94,6 +108,13 @@ class Parameter(QtCore.QObject):
         
     def valueIsDefault(self):
         return self.value() == self.defaultValue()
+        
+    def setLimits(self, limits):
+        if 'limits' in self.opts and self.opts['limits'] == limits:
+            return
+        self.opts['limits'] = limits
+        self.sigLimitsChanged.emit(self, limits)
+        return limits
 
     def makeTreeItem(self, depth):
         """Return a TreeWidgetItem suitable for displaying/controlling the content of this parameter.
@@ -106,15 +127,9 @@ class Parameter(QtCore.QObject):
             return ParameterItem(self, depth=depth)
 
 
-    def addChild(self, *args, **opts):
-        """Add a child parameter to the end of this parameter's child list.
-        Arguments: either specify a Parameter object or the keword arguments to build a new Parameter."""
-        if len(args) == 1:
-            ch = args[0]
-        else:
-            ch = Parameter(**opts)
-        #print "insert:", ch
-        self.insertChild(len(self.childs), ch)
+    def addChild(self, child):
+        """Add another parameter to the end of this parameter's child list."""
+        return self.insertChild(len(self.childs), child)
         
     def insertChild(self, pos, child):
         """Insert a new child at pos.
@@ -148,7 +163,7 @@ class Parameter(QtCore.QObject):
         self.childs.pop(self.childs.index(child))
         child.parentChanged(None)
         self.sigChildRemoved.emit(self, child)
-        
+
     def parentChanged(self, parent):
         self._parent = parent
         self.sigParentChanged.emit(self, parent)
@@ -194,6 +209,14 @@ class Parameter(QtCore.QObject):
     def __repr__(self):
         return "<%s '%s' at 0x%x>" % (self.__class__.__name__, self.name(), id(self))
        
+    def _renameChild(self, child, name):
+        ## Only to be called from Parameter.rename
+        if name in self.names:
+            return child.name()
+        self.names[name] = child
+        del self.names[child.name()]
+        return name
+
         
         
        
@@ -256,6 +279,7 @@ class ParameterTree(TreeWidget):
         self.setAlternatingRowColors(True)
         self.paramSet = None
         self.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
+        self.itemChanged.connect(self.itemChangedEvent)
         
     def setParameters(self, paramSet, root=None, depth=0):
         if root is None:
@@ -278,7 +302,12 @@ class ParameterTree(TreeWidget):
 
     def contextMenuEvent(self, ev):
         item = self.currentItem()
-        item.contextMenuEvent(ev)
+        if hasattr(item, 'contextMenuEvent'):
+            item.contextMenuEvent(ev)
+            
+    def itemChangedEvent(self, item, col):
+        if hasattr(item, 'columnChangedEvent'):
+            item.columnChangedEvent(col)
 
 
 class ParameterItem(QtGui.QTreeWidgetItem):
@@ -288,33 +317,35 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         name = param.name()
         QtGui.QTreeWidgetItem.__init__(self, [name, ''])
         
+        
         param.sigValueChanged.connect(self.valueChanged)
         param.sigChildAdded.connect(self.childAdded)
         param.sigChildRemoved.connect(self.childRemoved)
+        param.sigNameChanged.connect(self.nameChanged)
+        self.ignoreNameColumnChange = False
+        
         
         opts = param.opts
-        t = opts['type']
-        if t == 'group':
-            if depth == 0:
-                for c in [0,1]:
-                    self.setBackground(c, QtGui.QBrush(QtGui.QColor(100,100,100)))
-                    self.setForeground(c, QtGui.QBrush(QtGui.QColor(220,220,255)))
-                    font = self.font(c)
-                    font.setBold(True)
-                    font.setPointSize(font.pointSize()+1)
-                    self.setFont(c, font)
-                    self.setSizeHint(0, QtCore.QSize(0, 25))
-            else:
-                for c in [0,1]:
-                    self.setBackground(c, QtGui.QBrush(QtGui.QColor(220,220,220)))
-                    font = self.font(c)
-                    font.setBold(True)
-                    #font.setPointSize(font.pointSize()+1)
-                    self.setFont(c, font)
-                    self.setSizeHint(0, QtCore.QSize(0, 20))
+        
+        self.contextMenu = QtGui.QMenu()
+        self.contextMenu.addSeparator()
+        flags = QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled
+        if opts.get('renamable', False):
+            flags |= QtCore.Qt.ItemIsEditable
+            self.contextMenu.addAction('Rename')
+        if opts.get('removable', False):
+            self.contextMenu.addAction("Remove").triggered.connect(self.param.remove)
+        
+        if opts.get('movable', False):
+            flags |= QtCore.Qt.ItemIsDragEnabled
+        if opts.get('dropEnabled', False):
+            flags |= QtCore.Qt.ItemIsDropEnabled
+        self.setFlags(flags)
+        
+        ## If this item type provides a widget, build it into column 1 with a default button.
+        w = self.makeWidget()  
+        if w is None:
             return
-            
-        w = self.makeWidget()
         
         if 'tip' in opts:
             w.setToolTip(opts['tip'])
@@ -322,7 +353,6 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         
         if opts.get('readonly', False):
             w.setEnabled(False)
-        
         
         layout = QtGui.QHBoxLayout()
         layout.setContentsMargins(0,0,0,0)
@@ -349,8 +379,6 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         if w.sigChanged is not None:
             w.sigChanged.connect(self.widgetValueChanged)
             
-        self.contextMenu = QtGui.QMenu()
-        self.contextMenu.addAction("Remove").triggered.connect(self.param.remove)
             
 
     def makeWidget(self):
@@ -389,7 +417,7 @@ class ParameterItem(QtGui.QTreeWidgetItem):
             w = QtGui.QLineEdit()
             w.setText(opts['value'])
             w.sigChanged = w.editingFinished
-            w.value = w.text
+            w.value = lambda: str(w.text())
             w.setValue = w.setText
         #elif t == 'list':
             #w = QtGui.QComboBox()
@@ -418,8 +446,8 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         ## called when the widget's value has been changed by the user
         val = self.widget.value()
         newVal = self.param.setValue(val)
-        if val != newVal:
-            self.valueChanged(newVal)
+        #if val != newVal:
+            #self.valueChanged(newVal)  ## should be handled automatically.
         self.defaultBtn.setEnabled(not self.param.valueIsDefault())
             
     def valueChanged(self, val):
@@ -459,5 +487,20 @@ class ParameterItem(QtGui.QTreeWidgetItem):
             
         self.contextMenu.popup(ev.globalPos())
         
+    def columnChangedEvent(self, col):
+        """Called when the text in a column has been edited."""
+        if col == 0:
+            if self.ignoreNameColumnChange:
+                return
+            newName = self.param.setName(str(self.text(col)))
+            try:
+                self.ignoreNameColumnChange = True
+                self.nameChanged(self, newName)  ## If the parameter rejects the name change, we need to set it back.
+            finally:
+                self.ignoreNameColumnChange = False
+                
+    def nameChanged(self, param, name):
+        ## called when the parameter's name has changed.
+        self.setText(0, name)
 
     

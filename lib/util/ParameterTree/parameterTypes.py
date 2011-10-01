@@ -14,6 +14,8 @@ class ListParameterItem(ParameterItem):
         w.sigChanged = w.currentIndexChanged
         w.value = self.value
         w.setValue = self.setValue
+        self.widget = w
+        self.setValue(self.param.value())
         return w
         
     def value(self):
@@ -42,7 +44,36 @@ class ListParameter(Parameter):
     type = 'list'
     itemClass = ListParameterItem
 
-        
-    
-
 registerParameterType('list', ListParameter)
+        
+
+class GroupParameterItem(ParameterItem):
+    def __init__(self, param, depth):
+        ParameterItem.__init__(self, param, depth)
+        if depth == 0:
+            for c in [0,1]:
+                self.setBackground(c, QtGui.QBrush(QtGui.QColor(100,100,100)))
+                self.setForeground(c, QtGui.QBrush(QtGui.QColor(220,220,255)))
+                font = self.font(c)
+                font.setBold(True)
+                font.setPointSize(font.pointSize()+1)
+                self.setFont(c, font)
+                self.setSizeHint(0, QtCore.QSize(0, 25))
+        else:
+            for c in [0,1]:
+                self.setBackground(c, QtGui.QBrush(QtGui.QColor(220,220,220)))
+                font = self.font(c)
+                font.setBold(True)
+                #font.setPointSize(font.pointSize()+1)
+                self.setFont(c, font)
+                self.setSizeHint(0, QtCore.QSize(0, 20))
+        
+    def makeWidget(self):
+        return None
+
+class GroupParameter(Parameter):
+    type = 'group'
+    itemClass = GroupParameterItem
+
+registerParameterType('group', GroupParameter)
+

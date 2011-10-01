@@ -19,29 +19,33 @@ class ComplexParameter(Parameter):
         opts['value'] = True
         Parameter.__init__(self, **opts)
         
-        self.addChild({'name': 'SubParam1', 'type': 'int', 'value': 7})
-        self.addChild({'name': 'SubParam2', 'type': 'float', 'value': 1/7.})
-        self.addChild({'name': 'SubParam3', 'type': 'int', 'value': 9})
-
-        self.param('SubParam1').sigValueChanged.connect(self.param1Changed)
-        self.param('SubParam2').sigValueChanged.connect(self.param2Changed)
+        self.addChild({'name': 'A = 1/B', 'type': 'float', 'value': 7, 'suffix': 'Hz', 'siPrefix': True})
+        self.addChild({'name': 'B = 1/A', 'type': 'float', 'value': 1/7., 'suffix': 's', 'siPrefix': True})
+        self.a = self.param('A = 1/B')
+        self.b = self.param('B = 1/A')
+        self.a.sigValueChanged.connect(self.aChanged)
+        self.b.sigValueChanged.connect(self.bChanged)
         
-    def param1Changed(self):
-        self.param('SubParam2').sigValueChanged.disconnect(self.param2Changed)
-        self['SubParam2'] = 1.0 / self['SubParam1']
-        self.param('SubParam2').sigValueChanged.connect(self.param2Changed)
+    def aChanged(self):
+        try:
+            self.b.sigValueChanged.disconnect(self.bChanged)
+            self.b.setValue(1.0 / self.a.value())
+        finally:
+            self.b.sigValueChanged.connect(self.bChanged)
 
-    def param2Changed(self):
-        self.param('SubParam1').sigValueChanged.disconnect(self.param1Changed)
-        self['SubParam1'] = 1.0 / self['SubParam2']
-        self.param('SubParam1').sigValueChanged.connect(self.param1Changed)
+    def bChanged(self):
+        try:
+            self.a.sigValueChanged.disconnect(self.aChanged)
+            self.a.setValue(1.0 / self.b.value())
+        finally:
+            self.a.sigValueChanged.connect(self.aChanged)
 
 
 ## test add/remove
 
-class ScalableGroupItem(ParameterItem):
+class ScalableGroupItem(pTypes.GroupParameterItem):
     def __init__(self, param, depth):
-        ParameterItem.__init__(self, param, depth)
+        pTypes.GroupParameterItem.__init__(self, param, depth)
         self.addBtn = QtGui.QPushButton("Add new")
         self.addBtnItem = QtGui.QTreeWidgetItem([])
         ParameterItem.addChild(self, self.addBtnItem)
@@ -57,15 +61,15 @@ class ScalableGroupItem(ParameterItem):
     def addChild(self, child):  ## make sure added childs are actually inserted before add btn
         ParameterItem.insertChild(self, self.childCount()-1, child)
 
-class ScalableGroup(Parameter):
+class ScalableGroup(pTypes.GroupParameter):
     itemClass = ScalableGroupItem
     
     def __init__(self, **opts):
         opts['type'] = 'group'
-        Parameter.__init__(self, **opts)
+        pTypes.GroupParameter.__init__(self, **opts)
     
     def addNew(self):
-        self.addChild(name="ScalableParam %d" % (len(self.childs)+1), type="str", value="", removable=True)
+        self.addChild(dict(name="ScalableParam %d" % (len(self.childs)+1), type="str", value="", removable=True))
 
 
 params = [
@@ -91,11 +95,13 @@ params = [
         ])
     ]},
     {'name': 'Param 5', 'type': 'bool', 'value': True, 'tip': "This is a checkbox"},
-    {'name': 'Param 6', 'type': 'color', 'value': "FF0", 'tip': "This is a checkbox"},
+    {'name': 'Param 6', 'type': 'color', 'value': "FF0", 'tip': "This is a checkbox", 'renamable': True},
 ]
 
 p = ParameterSet("params", params)
-
+def change(*args):
+    print "change:", args
+p.sigStateChanged.connect(change)
 
 
 t = ParameterTree()
