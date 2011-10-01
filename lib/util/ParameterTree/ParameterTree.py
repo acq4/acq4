@@ -273,6 +273,7 @@ class ParameterTree(TreeWidget):
     
     def __init__(self, parent=None):
         TreeWidget.__init__(self, parent)
+        self.setAnimated(False)
         self.setColumnCount(2)
         self.setHeaderLabels(["Parameter", "Value"])
         self.setRootIsDecorated(False)
@@ -322,6 +323,7 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         param.sigChildAdded.connect(self.childAdded)
         param.sigChildRemoved.connect(self.childRemoved)
         param.sigNameChanged.connect(self.nameChanged)
+        param.sigLimitsChanged.connect(self.limitsChanged)
         self.ignoreNameColumnChange = False
         
         
@@ -332,7 +334,7 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         flags = QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled
         if opts.get('renamable', False):
             flags |= QtCore.Qt.ItemIsEditable
-            self.contextMenu.addAction('Rename')
+            self.contextMenu.addAction('Rename').triggered.connect(self.editName)
         if opts.get('removable', False):
             self.contextMenu.addAction("Remove").triggered.connect(self.param.remove)
         
@@ -393,17 +395,26 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         opts = self.param.opts
         t = opts['type']
         if t == 'int':
-            w = QtGui.QSpinBox()
-            if 'max' in opts:
-                w.setMaximum(opts['max'])
-            if 'min' in opts:
-                w.setMinimum(opts['min'])
-            if 'value' in opts:
-                w.setValue(opts['value'])
+            defs = {'value': 0, 'min': None, 'max': None, 'step': 1.0, 'minStep': 1.0, 'dec': False, 'siPrefix': False, 'suffix': ''}
+            defs.update(opts)
+            if 'limits' in opts:
+                defs['bounds'] = opts['limits']
+            w = SpinBox()
+            w.setOpts(**defs)
             w.sigChanged = w.valueChanged
+            #w = SpinBox()
+            #if 'max' in opts:
+                #w.setMaximum(opts['max'])
+            #if 'min' in opts:
+                #w.setMinimum(opts['min'])
+            #if 'value' in opts:
+                #w.setValue(opts['value'])
+            #w.sigChanged = w.valueChanged
         elif t == 'float':
             defs = {'value': 0, 'min': None, 'max': None, 'step': 1.0, 'dec': False, 'siPrefix': False, 'suffix': ''}
             defs.update(opts)
+            if 'limits' in opts:
+                defs['bounds'] = opts['limits']
             w = SpinBox()
             w.setOpts(**defs)
             w.sigChanged = w.valueChanged
@@ -482,7 +493,7 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         self.param.setToDefault()
 
     def contextMenuEvent(self, ev):
-        if not self.param.opts.get('removable', False):
+        if not self.param.opts.get('removable', False) and not self.param.opts.get('renamable', False):
             return
             
         self.contextMenu.popup(ev.globalPos())
@@ -503,4 +514,12 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         ## called when the parameter's name has changed.
         self.setText(0, name)
 
-    
+    def limitsChanged(self, param, limits):
+        t = self.param.opts['type']
+        if t == 'int' or t == 'float':
+            self.widget.setOpts(bounds=limits)
+        else:
+            return  ## don't know what to do with any other types..
+            
+    def editName(self):
+        self.treeWidget().editItem(self, 0)

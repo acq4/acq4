@@ -13,6 +13,7 @@ from ParameterTree import *
 
 
 ## test subclassing parameters
+## This parameter automatically generates two child parameters which are always reciprocals of each other
 class ComplexParameter(Parameter):
     def __init__(self, **opts):
         opts['type'] = 'bool'
@@ -42,34 +43,21 @@ class ComplexParameter(Parameter):
 
 
 ## test add/remove
-
-class ScalableGroupItem(pTypes.GroupParameterItem):
-    def __init__(self, param, depth):
-        pTypes.GroupParameterItem.__init__(self, param, depth)
-        self.addBtn = QtGui.QPushButton("Add new")
-        self.addBtnItem = QtGui.QTreeWidgetItem([])
-        ParameterItem.addChild(self, self.addBtnItem)
-        self.addBtn.clicked.connect(self.addClicked)
-        
-    def updateWidgets(self):
-        ParameterItem.updateWidgets(self)
-        self.treeWidget().setItemWidget(self.addBtnItem, 0, self.addBtn)
-        
-    def addClicked(self):
-        self.param.addNew()
-
-    def addChild(self, child):  ## make sure added childs are actually inserted before add btn
-        ParameterItem.insertChild(self, self.childCount()-1, child)
-
+## this group includes a menu allowing the user to add new parameters into its child list
 class ScalableGroup(pTypes.GroupParameter):
-    itemClass = ScalableGroupItem
-    
     def __init__(self, **opts):
         opts['type'] = 'group'
+        opts['addText'] = "Add"
+        opts['addList'] = ['str', 'float', 'int']
         pTypes.GroupParameter.__init__(self, **opts)
     
-    def addNew(self):
-        self.addChild(dict(name="ScalableParam %d" % (len(self.childs)+1), type="str", value="", removable=True))
+    def addNew(self, typ):
+        val = {
+            'str': '',
+            'float': 0.0,
+            'int': 0
+        }[typ]
+        self.addChild(dict(name="ScalableParam %d" % (len(self.childs)+1), type=typ, value=val, removable=True, renamable=True))
 
 
 params = [
@@ -81,7 +69,7 @@ params = [
         {'name': 'Param 1.1', 'type': 'float', 'value': 1.2e-6, 'dec': True, 'siPrefix': True, 'suffix': 'V'},
         {'name': 'Param 1.2', 'type': 'float', 'value': 1.2e6, 'dec': True, 'siPrefix': True, 'suffix': 'Hz'},
         {'name': 'Group 1.3', 'type': 'group', 'params': [
-            {'name': 'Param 1.3.1', 'type': 'int', 'value': 11, 'max': 15, 'min': -7, 'default': -6},
+            {'name': 'Param 1.3.1', 'type': 'int', 'value': 11, 'limits': (-7, 15), 'default': -6},
             {'name': 'Param 1.3.2', 'type': 'float', 'value': 1.2e6, 'dec': True, 'siPrefix': True, 'suffix': 'Hz', 'readonly': True},
         ]},
         {'name': 'Param 1.4', 'type': 'str', 'value': "hi"},
@@ -95,7 +83,7 @@ params = [
         ])
     ]},
     {'name': 'Param 5', 'type': 'bool', 'value': True, 'tip': "This is a checkbox"},
-    {'name': 'Param 6', 'type': 'color', 'value': "FF0", 'tip': "This is a checkbox", 'renamable': True},
+    {'name': 'Param 6', 'type': 'color', 'value': "FF0", 'tip': "This is a color button. It cam be renamed.", 'renamable': True},
 ]
 
 p = ParameterSet("params", params)
