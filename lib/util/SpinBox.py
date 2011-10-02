@@ -307,7 +307,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         try:
             val = fn.siEval(strn)
         except:
-            print "invalid"
+            #print "invalid"
             return False
         #print val
         return val

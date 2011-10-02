@@ -8,9 +8,10 @@ import ptime as ptime
 from Mutex import Mutex, MutexLocker
 from debug import *
 import functions as fn
-from advancedTypes import OrderedDict
+#from advancedTypes import OrderedDict
 import numpy as np
 import scipy
+from collections import OrderedDict
 
 class MockCamera(Camera):
     
@@ -22,37 +23,37 @@ class MockCamera(Camera):
         self.frameId = 0
         self.noise = np.random.normal(size=10000000, loc=100, scale=50)  ## pre-generate noise for use in images
         
-        self.params = {
-            'triggerMode':     'Normal',
-            'exposure':        0.001,
-            #'binning':         (1,1),
-            #'region':          (0, 0, 512, 512), 
-            'binningX':        1,
-            'binningY':        1,
-            'regionX':         0,
-            'regionY':         0,
-            'regionW':         512,
-            'regionH':         512,
-            'gain':            1.0,
-            'sensorSize':      (512, 512),
-            'bitDepth':        16,
-        }
+        self.params = OrderedDict([
+            ('triggerMode',     'Normal'),
+            ('exposure',        0.001),
+            #('binning',         (1,1)),
+            #('region',          (0, 0, 512, 512)), 
+            ('binningX',        1),
+            ('binningY',        1),
+            ('regionX',         0),
+            ('regionY',         0),
+            ('regionW',         512),
+            ('regionH',         512),
+            ('gain',            1.0),
+            ('sensorSize',      (512, 512)),
+            ('bitDepth',        16),
+        ])
             
-        self.paramRanges = {
-            'triggerMode':     (['Normal'], True, True, []),
-            'exposure':        ((0.001, 10.), True, True, []),
-            #'binning':         ([range(1,10), range(1,10)], True, True, []),
-            #'region':          ([(0, 511), (0, 511), (1, 512), (1, 512)], True, True, []),
-            'binningX':        (range(0,10), True, True, []),
-            'binningY':        (range(0,10), True, True, []),
-            'regionX':         (range(0,10), True, True, ['regionW']),
-            'regionY':         (range(0,10), True, True, ['regionH']),
-            'regionW':         (range(0,10), True, True, ['regionX']),
-            'regionH':         (range(0,10), True, True, ['regionY']),
-            'gain':            ((0.1, 10.0), True, True, []),
-            'sensorSize':      (None, False, True, []),
-            'bitDepth':        (None, False, True, []),
-        }
+        self.paramRanges = OrderedDict([
+            ('triggerMode',     (['Normal'], True, True, [])),
+            ('exposure',        ((0.001, 10.), True, True, [])),
+            #('binning',         ([range(1,10), range(1,10)], True, True, [])),
+            #('region',          ([(0, 511), (0, 511), (1, 512), (1, 512)], True, True, [])),
+            ('binningX',        (range(0,10), True, True, [])),
+            ('binningY',        (range(0,10), True, True, [])),
+            ('regionX',         ((0, 511), True, True, ['regionW'])),
+            ('regionY',         ((0, 511), True, True, ['regionH'])),
+            ('regionW',         ((1, 512), True, True, ['regionX'])),
+            ('regionH',         ((1, 512), True, True, ['regionY'])),
+            ('gain',            ((0.1, 10.0), True, True, [])),
+            ('sensorSize',      (None, False, True, [])),
+            ('bitDepth',        (None, False, True, [])),
+        ])
         
         self.groupParams = {
             'binning':         ('binningX', 'binningY'),
