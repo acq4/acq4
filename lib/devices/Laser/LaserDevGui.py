@@ -10,6 +10,7 @@ class LaserDevGui(QtGui.QWidget):
     def __init__(self, dev):
         QtGui.QWidget.__init__(self)
         self.dev = dev
+        #self.dev.devGui = self  ## make this gui accessible from LaserDevice, so device can change power values. NO, BAD FORM
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         
@@ -24,7 +25,8 @@ class LaserDevGui(QtGui.QWidget):
                 self.ui.wavelengthCombo.addItem(x)
         self.ui.durationSpin.setOpts(suffix='s', siPrefix=True, bounds=[0.0, 3.0])
         self.ui.settlingSpin.setOpts(suffix='s', siPrefix=True, value=0.1)
-        self.ui.expectedPowerSpin.setOpts(suffix='W', siPrefix=True, bounds=[0.0, None], value=self.dev.expectedPower)
+        with self.dev.variableLock:
+            self.ui.expectedPowerSpin.setOpts(suffix='W', siPrefix=True, bounds=[0.0, None], value=self.dev.params['expectedPower'])
         self.ui.toleranceSpin.setOpts(step=0.1, suffix='%', bounds=[0.1, 100.0], value=5.0)
         
         
@@ -58,19 +60,23 @@ class LaserDevGui(QtGui.QWidget):
         self.ui.durationSpin.valueChanged.connect(self.durationSpinChanged)
         self.ui.settlingSpin.valueChanged.connect(self.settlingSpinChanged)
         
+        self.dev.sigPowerChanged.connect(self.updatePowerLabels)
+        
     def currentPowerToggled(self, b):
-        print b
-        pass
+        if b:
+            self.dev.setParam(useExpectedPower=False)
     
     def expectedPowerToggled(self, b):
-        pass
+        if b:
+            self.dev.setParam(useExpectedPower=True)
     
     def expectedPowerSpinChanged(self, value):
-        self.dev.expectedPower = value
+        self.dev.setParam(expectedPower=value)
+        #self.dev.expectedPower = value
         self.dev.appendPowerHistory(value)
     
     def toleranceSpinChanged(self, value):
-        pass
+        self.dev.setParam(tolerance=value)
     
     def wavelengthSpinChanged(self, value):
         self.dev.setWavelength(value)
@@ -97,7 +103,9 @@ class LaserDevGui(QtGui.QWidget):
     def settlingSpinChanged(self, value):
         pass
     
-    
+    def updatePowerLabels(self, power):
+        self.ui.outputPowerLabel.setText(str(siFormat(power)))
+        self.ui.samplePowerLabel.setText(str(siFormat(power*self.dev.scopeTransmission)))
 
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
@@ -132,7 +140,10 @@ class LaserDevGui(QtGui.QWidget):
         self.updateCalibrationList()
     
     def deleteClicked(self):
+        self.dev.testProtocol()
         cur = self.ui.calibrationList.currentItem()
+        if cur is None:
+            return
         scope = str(cur.text(0))
         obj = str(cur.text(1))
         

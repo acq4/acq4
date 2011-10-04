@@ -14,6 +14,7 @@ class Scanner(Device):
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.devGui = None
         self.lastRunTime = None
@@ -322,7 +323,7 @@ class ScannerTask(DeviceTask):
         laser = laserTask.cmd['QSwitch']['command']
         offPos = self.dev.getShutterVals()
         
-        if 'xCommand' not in self.cmd:   ## If no command was specified, then we just use the current command values whenever tyhe shutter is open
+        if 'xCommand' not in self.cmd:   ## If no command was specified, then we just use the current command values whenever the shutter is open
             x, y = self.dev.getCommand()
             self.cmd['xCommand'] = np.empty(len(laser), dtype=float)
             self.cmd['yCommand'] = np.empty(len(laser), dtype=float)

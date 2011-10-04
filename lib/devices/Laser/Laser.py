@@ -8,6 +8,8 @@ from LaserProtocolGui import LaserProtoGui
 import os
 import time
 import numpy as np
+from scipy import stats
+from functions import siFormat
 
 
 
@@ -80,16 +82,23 @@ class Laser(DAQGeneric):
     { 'pulse': [(0.5*s, 100*uJ), ...] }                     ## (time, pulse energy) pairs
     """
     
+    sigPowerChanged = QtCore.Signal(object)
     
     def __init__(self, manager, config, name):
+        self.config = config
         self.hasPowerIndicator = False
         self.hasShutter = False
         self.hasQSwitch = False
         self.hasPCell = False
         self.hasTunableWavelength = False
-        self.expectedPower = None ## Power we expect at slice
-        self.currentPower = None ## last measured power of laser at slice (Only available after a calibration)
-        self.scopeTransmission = None ## percentage of output power that is transmitted to slice
+        
+        self.params = {
+            'expectedPower': config.get('power', None), ## Expected output
+            'currentPower': None, ## Last measured output power
+            'scopeTransmission': None, ## percentage of output power that is transmitted to slice
+            'tolerance': None,
+            'useExpectedPower': True
+            }
         
         daqConfig = {} ### DAQ generic needs to know about powerIndicator, pCell, shutter, qswitch
         if 'powerIndicator' in config:
@@ -106,15 +115,22 @@ class Laser(DAQGeneric):
                         
         DAQGeneric.__init__(self, manager, daqConfig, name)
         
-        self.config = config
+       
         self._configDir = os.path.join('devices', self.name + '_config')
         self.lock = Mutex(QtCore.QMutex.Recursive)
+        self.variableLock = Mutex(QtCore.QMutex.Recursive)
         self.calibrationIndex = None
         self.getPowerHistory()
         
     def configDir(self):
         """Return the name of the directory where configuration/calibration data should be stored"""
         return self._configDir
+    
+    def setParam(self, **kwargs):
+        """Set the self.calcPower variable. setting can be 'expected' or 'current'"""
+        with self.variableLock:
+            for k in kwargs:
+                self.params[k] = kwargs[k]
     
     def getCalibrationIndex(self):
         with self.lock:
@@ -126,21 +142,21 @@ class Laser(DAQGeneric):
             return self.calibrationIndex
         
     def getPowerHistory(self):
-        with self.lock:
+        with self.variableLock:
             fileName = os.path.join(self.configDir(), 'powerHistory')
             if os.path.exists(os.path.join(self.dm.configDir, fileName)):
                 ph = self.dm.readConfigFile(fileName)
                 self.powerHistoryCount = len(ph)
-                self.expectedPower = ph.values()[-1]['expectedPower']
+                self.params['expectedPower'] = ph.values()[-1]['expectedPower']
                 return ph
             else:
                 date = str(time.strftime('%Y.%m.%d %H:%M:%S'))
                 self.dm.writeConfigFile({'entry_0': {'date':date, 'expectedPower':0}}, fileName)
-                self.expectedPower = 0
+                self.params['expectedPower'] = 0
                 self.powerHistoryCount = 1
                 
     def appendPowerHistory(self, power):
-        with self.lock:
+        with self.variableLock:
             calDir = self.configDir()
             fileName = os.path.join(calDir, 'powerHistory')
             date = str(time.strftime('%Y.%m.%d %H:%M:%S'))
@@ -193,19 +209,20 @@ class Laser(DAQGeneric):
         
         if self.hasPowerIndicator:
             ## run a protocol that checks the power
-            daqName = self.dev.config[self.dev.config.keys()[0]]['channel'][0]
-            powerInd = self.dev.config['powerIndicator']['channel']
-            rate = self.dev.config['powerIndicator']['rate']
-            sTime = self.dev.config['powerIndicator']['settlingTime']
-            mTime = self.dev.config['powerIndicator']['measurmentTime']
+            daqName = self.config[self.config.keys()[0]]['channel'][0]
+            powerInd = self.config['powerIndicator']['channel']
+            rate = self.config['powerIndicator']['rate']
+            sTime = self.config['powerIndicator']['settlingTime']
+            mTime = self.config['powerIndicator']['measurmentTime']
             
             reps = 10
-            dur = 0.1 + reps*0.1(sTime+mTime)
+            dur = 0.1 + reps*0.1+(sTime+mTime)
             nPts = dur*rate
             
+            ### create a waveform that flashes the QSwitch(or other way of turning on) the number specified by reps
             waveform = np.zeros(nPts, dtype=np.byte)
             for i in range(reps):
-                waveform[(i+1)/10.*rate:((i+1)/10.+sTime+mTime)*rate] = 1
+                waveform[(i+1)/10.*rate:((i+1)/10.+sTime+mTime)*rate] = 1 ## divide i+1 by 10 to increment by hundreds of milliseconds
             
             cmd = {
                 'protocol': {'duration': dur},
@@ -218,6 +235,7 @@ class Laser(DAQGeneric):
             task.execute()
             result = task.getResult()
             
+            ## pull out time that laser was on and off so that power can be measured in each state -- discard the settlingTime around each state change
             onMask = np.zeros(nPts, dtype=np.byte)
             offMask = np.zeros(nPts, dtype=np.byte)
             for i in range(reps):
@@ -227,18 +245,58 @@ class Laser(DAQGeneric):
             laserOff = result[offMask==True]
             powerOn = laserOn.mean()
             powerOff = laserOff.mean()
-            if laserOn is statistically > laserOff: ### TODO!
+            t, prob = stats.ttest_ind(laserOn, laserOff)
+            if prob < 0.01: ### if powerOn is statistically different from powerOff
+                #self.devGui.ui.outputPowerLabel.setText(siFormat(powerOn, suffix='W')) ## NO! device does not talk to GUI!
+                self.sigPowerChanged.emit(powerOn)
+                with self.variableLock:
+                    self.params['currentPower'] = powerOn
+                    #self.devGui.ui.samplePowerLabel.setText(siFormat(powerOn*self.scopeTransmission, suffix='W'))
+                    pmin = self.params['expectedPower'] - self.params['expectedPower']*self.params['tolerance']
+                    pmax = self.params['expectedPower'] + self.params['expectedPower']*self.params['tolerance']
+                if powerOn < pmin or powerOn > pmax:
+                    raise HelpfulException("Power is outside expected range. Please adjust expected value or adjust the tuning of your laser.")
                 return powerOn
+            
             else:
                 raise Exception("No QSwitch (or other way of turning on) detected while measuring Laser.outputPower()")
             
+        ## return the power specified in the config file if there's no powerIndicator
         else:
             return self.config.get('power', None)
         
-    
+    def getPCellWaveform(self, powerCmd):
+        ### return a waveform of pCell voltages to give the power in powerCmd
+        pass
 
             
+    def testProtocol(self):
+        daqName = self.getDAQName('shutter')
+        powerInd = self.config['powerIndicator']['channel']
+        rate = self.config['powerIndicator']['rate']
+        sTime = self.config['powerIndicator']['settlingTime']
+        mTime = self.config['powerIndicator']['measurmentTime']
+        reps = 10
+        dur = 0.1 + reps*0.1+(0.001+0.005)
+        nPts = dur*rate
+       
         
+        
+        ### create a waveform that flashes the QSwitch(or other way of turning on) the number specified by reps
+        waveform = np.zeros(nPts, dtype=np.byte)
+        for i in range(reps):
+            waveform[(i+1)/10.*rate:((i+1)/10.+sTime+mTime)*rate] = 1 ## divide i+1 by 10 to increment by hundreds of milliseconds
+        
+        cmd = {
+            'protocol': {'duration': dur},
+            self.name: {'switchWaveform':waveform, 'shutterMode':'closed'},
+            powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
+            daqName: {'numPts': nPts, 'rate': rate}
+        }
+        
+        task = getManager().createTask(cmd)
+        task.execute()
+        result = task.getResult()
         
         
 
@@ -252,7 +310,7 @@ class LaserTask(DAQGenericTask):
                                        ## only useful if there is an analog modulator of some kind (Pockel cell, etc)
         'switchWaveform': array(...),  ## array of values 0-1 specifying the fraction of full power to output.
                                        ## For Q-switched lasers, a value > 0 activates the switch
-        'pulses': [(time, energy, duration), ...],
+        'pulses': [(time, energy, duration), ...], ### Not yet implemented:
                                        ## the device will generate its own command structure with the requested pulse energies.
                                        ## duration may only be specified if a modulator is available.
                                        
@@ -265,26 +323,92 @@ class LaserTask(DAQGenericTask):
                                        ##   closed -- the shutter is kept closed for the protocol and returned to its holding state afterward
                                        
         'wavelength': x,               ## sets the wavelength before executing the protocol
-        'checkPower': True,            ## If true, the laser will check its output power before executing the protocol.
+        'checkPower': True,            ## If true, the laser will check its output power before executing the protocol. 
     }
     
     """
     def __init__(self, dev, cmd):
+        self.cmd = cmd
+        self.dev = dev ## this happens in DAQGeneric initialization, but we need it here too since it is used in making the waveforms that go into DaqGeneric.__init__
+        
+        ## create protocol structure to pass to daqGeneric; protocols will get filled in when self.configure() gets called
         cmd['daqProtocol'] = {}
-        if 'powerWaveform' in cmd:
-            pass  ## convert power values using calibration data
-        elif 'switchWaveform' in cmd:
-            pass  ## convert range 0-1 to full voltage range of device
+        if 'shutter' in dev.config:
+            cmd['daqProtocol']['shutter'] = None
+        if 'qswitch' in dev.config:
+            cmd['daqProtocol']['qswitch'] = None
+        if 'pCell' in dev.config:
+            cmd['daqProtocol']['pCell'] = None
+            
+
+        DAQGenericTask.__init__(self, dev, cmd['daqProtocol'])
+        
+    def generateDaqProtocol(self, waveform, rate):
+        ### waveform should be in units of power
+        nPts = len(waveform)
+        daqCmd = {}
+        
+        if self.dev.config.get('pCell', None) is not None:
+            ## convert power values using calibration data
+            daqCmd['pCell'] = self.dev.getPCellWaveform(waveform)
+        
+        if self.dev.config.get('shutter', None) is not None:
+            shutterCmd = np.zeros(nPts, dtype=np.byte)
+            delay = self.dev.config['shutter'].get('delay', 0.0)
+            shutterCmd[waveform != 0] = 1 ## open shutter when we expect power
+            ## open shutter a little before we expect power because it has a delay
+            delayPts = int(delay*rate)
+            a = np.argwhere(shutterCmd[1:]-shutterCmd[:-1] == 1)
+            for i in range(len(a)):
+                shutterCmd[a[i]-delayPts:a[i]+1] = 1
+            daqCmd['shutter'] = shutterCmd
+            
+        if self.dev.config.get('qswitch', None) is not None:
+            qswitchCmd = np.zeros(nPts, dtype=np.byte)
+            qswitchCmd[waveform != 0] = 1
+            daqCmd['qSwitch'] = qswitchCmd
+            
+        return daqCmd
+        
+    def configure(self, tasks, startOrder):
+        ## need to generate shutter, qswitch and pcell waveforms that get passed into DaqGenericTask
+        daqName = self.dev.getDAQName('shutter')
+        daqTask = tasks[daqName]
+        rate = daqTask.getChanSampleRate(self.dev.config['shutter']['channel'][1])
+        
+        if self.cmd.get('checkPower', False):
+            self.dev.outputPower()
+        if 'powerWaveform' in self.cmd:
+            if self.dev.config.get('pCell', None) is None:
+                raise Exception("%s device does not have a pockelCell, so cannot have an analog power command." %str(self.dev.name))
+            self.cmd['daqProtocol'] = self.generateDaqProtocol(cmd['powerWaveform'], rate)
+            
+        elif 'switchWaveform' in self.cmd:
+            ## convert range 0-1 to full voltage range of device
+            
+            ## make function in dev instead
+            with self.dev.variableLock:
+                if self.dev.params['useExpectedPower']:
+                    power = self.dev.params['expectedPower']
+                else:
+                    power = self.dev.params['currentPower']
+                transmission = self.dev.params['scopeTransmission']
+                transmission = 0.1
+            powerCmd = self.cmd['switchWaveform']*power*transmission
+            self.cmd['daqProtocol'] = self.generateDaqProtocol(powerCmd, rate)
+            
         elif 'pulse' in cmd:
             pass  ## generate pulse waveform
         
-        DAQGenericTask.__init__(self, dev, cmd['daqProtocol'])
-        
-    def configure(self, tasks, startOrder):
         if 'wavelength' in self.cmd:
             self.dev.setWavelength(self.cmd['wavelength'])
+        self._DAQCmd = self.cmd['daqProtocol']
         DAQGenericTask.configure(self, tasks, startOrder)
 
-    def storeResult(self, dirHandle):
+    def getResult(self):
+        ## getResult from DAQGeneric, then add in command waveform
         pass
+    
+    #def storeResult(self, dirHandle):
+        #pass
 
