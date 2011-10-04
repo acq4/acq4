@@ -2,7 +2,9 @@ from PyQt4 import QtGui, QtCore
 from lib.Manager import getManager, logExc, logMsg
 from devTemplate import Ui_Form
 import numpy as np
-
+from scipy import stats
+from functions import siFormat
+import time
 
 
 class LaserDevGui(QtGui.QWidget):
@@ -116,8 +118,9 @@ class LaserDevGui(QtGui.QWidget):
             for obj in index[scope]:
                 cal = index[scope][obj]
                 power = cal['power']
+                scale = cal['scale']
                 date = cal['date']
-                item = QtGui.QTreeWidgetItem([scope, obj, str(power), date])
+                item = QtGui.QTreeWidgetItem([scope, obj, '%.2f' %(scale*100) + '%', siFormat(power, suffix='W'), date])
                 self.ui.calibrationList.addTopLevelItem(item)
     
     def calibrateClicked(self):
@@ -156,8 +159,8 @@ class LaserDevGui(QtGui.QWidget):
     
     def runCalibration(self):
         
-        powerMeter = self.dev.manager.getDevice(self.ui.meterCombo.text())
-        daqName = self.dev.config[self.dev.config.keys()[0]]['channel'][0]
+        powerMeter = str(self.ui.meterCombo.currentText())
+        daqName = self.dev.getDAQName('shutter')
         
         power = None
         scale = None
@@ -171,13 +174,13 @@ class LaserDevGui(QtGui.QWidget):
         shutterCmd[nPts/10:] = 1 ## have the first 10% of the trace be a baseline so that we can check to make sure laser was detected
         shutterCmd[-1] = 0 ## close shutter when done
    
-        if self.hasPowerIndicator:
+        if self.dev.hasPowerIndicator:
             powerInd = self.dev.config['powerIndicator']['channel']
             cmd = {
                 'protocol': {'duration': duration, 'timeout': duration+5.0},
                 powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
                 self.dev.name: {'shutterWaveform': shutterCmd}, ## laser
-                powerMeter: {x: {'record':True, 'recordInit':False} for x in getManager().getDevice(powerMeter).config.keys()},
+                powerMeter: {x: {'record':True, 'recordInit':False} for x in getManager().getDevice(powerMeter).listChannels()},
                 #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
                 #self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand}, ## scanner
                 daqName: {'numPts': nPts, 'rate': rate}}
@@ -194,7 +197,7 @@ class LaserDevGui(QtGui.QWidget):
             task.execute()
             result = task.getResult()
             
-            scale = (result['NewportMeter'][0]/result['Photodiode'][0])[nPts/10+0.01/rate:-1].mean()
+            scale = (result[powerMeter][0]/result[powerInd[0]][0])[nPts/10+0.01/rate:-1].mean()
            
             pass
             
@@ -203,14 +206,30 @@ class LaserDevGui(QtGui.QWidget):
            
             
         else:
-            
+            cmd = {
+                'protocol': {'duration': duration, 'timeout': duration+5.0},
+                #powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
+                self.dev.name: {'shutterWaveform': shutterCmd}, ## laser
+                powerMeter: {x: {'record':True, 'recordInit':False} for x in getManager().getDevice(powerMeter).config.keys()},
+                #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
+                #self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand}, ## scanner
+                daqName: {'numPts': nPts, 'rate': rate}}
             ## record signal on powerMeter with laser on for some duration
             ## determine power under objective
+            task = getManager().createTask(cmd)
+            task.execute()
+            result = task.getResult()
             
-            pass
-        
-        if power == None or scale == None:
-            raise Exception("Was not able to calibrate laser power.")
+            power = self.dev.outputPower()
+            scale = (result[powerMeter][0]/power)[nPts/10+0.01/rate:-1].mean()
+            
+        laserOff = result[powerMeter][0][:nPts/10]
+        laserOn = result[powerMeter][0][nPts/10+0.01/rate:-1]
+            
+        t, prob = stats.ttest_ind(laserOn, laserOff)
+        if prob < 0.01:
+            raise Exception("Power meter device %s could not detect laser." %powerMeter)
+           
         else:
-            return (power, scale)
+            return (laserOn.mean(), scale)
         

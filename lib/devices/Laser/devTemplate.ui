@@ -241,6 +241,16 @@
         </column>
         <column>
          <property name="text">
+          <string>Transmission</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Power at Sample</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
           <string>Date</string>
          </property>
         </column>
