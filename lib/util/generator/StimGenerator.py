@@ -19,11 +19,7 @@ from functions import logSpace
 from GeneratorTemplate import *
 import waveforms
 from debug import *
-
-#import PyQt4.Qwt5 as Qwt
-#from PyQt4.Qwt5.anynumpy import *
-#from Stim_Form import Ui_Form
-#import MPlot # our graphics support...
+from ParameterTree import GroupParameter
 
 
 class StimGenerator(QtGui.QWidget):
@@ -33,12 +29,7 @@ class StimGenerator(QtGui.QWidget):
     sigParametersChanged = QtCore.Signal()
     sigFunctionChanged = QtCore.Signal()
     
-    """ PyStim creates an object with multiple stimulus channels
-    and handles the GUI interface. 
-    """
     def __init__(self, parent=None):
-        """ PyStim.__init__ defines standard variables, and initialzes the GUI interface
-        """
         QtGui.QWidget.__init__(self, parent)
         self.timeScale = 1.0
         self.scale = 1.0
@@ -52,18 +43,40 @@ class StimGenerator(QtGui.QWidget):
         self.cache = {}
         self.cacheRate = None
         self.cacheNPts = None
-        #QtCore.QObject.connect(self.ui.functionText, QtCore.SIGNAL('textChanged()'), self.funcChanged)
+        
+        self.advancedGroup = [
+            self.ui.functionText,
+            self.ui.paramText,
+            self.ui.errorBtn,
+            self.ui.helpBtn,
+        ]
+        self.updateWidgets()
+        
+        
+        #self.stimParams = ParameterSet('stimulus parameters', [])   ## stores structure of simple stim (say that 10x fast)
+        #self.stimParams = Parameter(name='stimulus parameters', type='group', addText='Add stimulus..', addList=['Pulse', 'PulseTrain'])
+        self.stimParams = StimParameter()
+        
+        #self.addCombo = QtGui.QComboBox()
+        #for s in ['Add Stimulus...', 'Pulse', 'Pulse Train']:
+            #self.addCombo.addItem(s)
+        
+        self.ui.paramTree.setParameters(self.stimParams)
+        
+        #self.addItem = QtGui.QTreeWidgetItem()
+        #self.ui.paramTree.addTopLevelItem(self.addItem)
+        #self.ui.paramTree.setItemWidget(self.addItem, 0, self.addCombo)
+        #self.addCombo.currentIndexChanged.connect(self.addComboChanged)
+        
         self.ui.functionText.textChanged.connect(self.funcChanged)
-        #QtCore.QObject.connect(self.ui.paramText, QtCore.SIGNAL('textChanged()'), self.paramChanged)
         self.ui.paramText.textChanged.connect(self.paramChanged)
-        #QtCore.QObject.connect(self.ui.updateBtn, QtCore.SIGNAL('clicked()'), self.update)
         self.ui.updateBtn.clicked.connect(self.update)
-        #QtCore.QObject.connect(self.ui.autoUpdateCheck, QtCore.SIGNAL('clicked()'), self.autoUpdateClicked)
         self.ui.autoUpdateCheck.clicked.connect(self.autoUpdateClicked)
-        #QtCore.QObject.connect(self.ui.errorBtn, QtCore.SIGNAL('clicked()'), self.errorBtnClicked)
-        self.ui.errorBtn.clicked.connect(self.errorBtnClicked)
-        #QtCore.QObject.connect(self.ui.helpBtn, QtCore.SIGNAL('clicked()'), self.helpBtnClicked)
-        self.ui.helpBtn.clicked.connect(self.helpBtnClicked)
+        #self.ui.errorBtn.clicked.connect(self.errorBtnClicked)
+        #self.ui.helpBtn.clicked.connect(self.helpBtnClicked)
+        self.ui.errorBtn.clicked.connect(self.updateWidgets)
+        self.ui.helpBtn.clicked.connect(self.updateWidgets)
+        self.ui.advancedBtn.toggled.connect(self.updateWidgets)
 
     def widgetGroupInterface(self):
         return (self.sigStateChanged, StimGenerator.saveState, StimGenerator.loadState)
@@ -102,15 +115,65 @@ class StimGenerator(QtGui.QWidget):
         self.autoUpdate()
         #self.emit(QtCore.SIGNAL('stateChanged'))        
         self.sigStateChanged.emit()        
+
+    #def addComboChanged(self, ind):
+        #if ind == 0:
+            #return
+        #typ = str(self.addCombo.currentText())
+        #self.addCombo.setCurrentIndex(0)
         
-    def errorBtnClicked(self):
-        self.ui.errorText.setVisible(self.ui.errorBtn.isChecked())
+        #if typ == 'Pulse':
+            #self.stimParams.addChild({'name': 'Pulse', 'autoIncrementName': True, 
+                                    #'type': 'group', 'removable': True, 'renamable': True,
+                                    #'params': [
+                #{'name': 'start', 'type': 'float', 'value': 0},
+                #{'name': 'stop', 'type': 'float', 'value': 0},
+                #{'name': 'pulse length', 'type': 'float', 'value': 0},
+                #{'name': 'amplitude', 'type': 'float', 'value': 0},
+                #{'name': 'sum', 'type': 'float', 'value': 0},
+            #]})
+        #elif typ == 'Pulse Train':
+            #self.stimParams.addChild({'name': 'Pulse', 'autoIncrementName': True, 
+                                    #'type': 'group', 'removable': True, 'renamable': True,
+                                    #'params': [
+                #{'name': 'start', 'type': 'float', 'value': 0},
+                #{'name': 'pulse length', 'type': 'float', 'value': 0},
+                #{'name': 'pulse number', 'type': 'int', 'value': 10},
+                #{'name': 'amplitude', 'type': 'float', 'value': 0},
+                #{'name': 'sum', 'type': 'float', 'value': 0},
+            #]})
+                
         
-    def helpBtnClicked(self):
-        if self.ui.helpBtn.isChecked():
-            self.ui.stack.setCurrentIndex(1)
+
+    #def errorBtnClicked(self):
+        #self.ui.errorText.setVisible(self.ui.errorBtn.isChecked())
+        
+    #def helpBtnClicked(self):
+        #if self.ui.helpBtn.isChecked():
+            #self.ui.stack.setCurrentIndex(1)
+        #else:
+            #self.ui.stack.setCurrentIndex(0)
+
+    def updateWidgets(self):
+        ## show/hide widgets depending on the current mode.
+        if self.ui.advancedBtn.isChecked():
+            for w in self.advancedGroup:
+                w.show()
+            self.ui.paramTree.hide()
+            self.ui.errorText.setVisible(self.ui.errorBtn.isChecked())
+            if self.ui.helpBtn.isChecked():
+                self.ui.stack.setCurrentIndex(1)
+            else:
+                self.ui.stack.setCurrentIndex(0)
         else:
             self.ui.stack.setCurrentIndex(0)
+            for w in self.advancedGroup:
+                w.hide()
+            self.ui.paramTree.show()
+            self.ui.errorText.hide()
+            
+
+
 
     def funcChanged(self):
         # test function. If ok, auto-update
@@ -321,3 +384,38 @@ def seqParse(seqStr):
     if 'r' in opts:
         random.shuffle(seq)
     return (name, single, seq)
+
+
+
+        
+class StimParameter(GroupParameter):
+    def __init__(self):
+        GroupParameter.__init__(self, name='Stimulus params', type='group',
+                           addText='Add Stimulus..', addList=['Pulse', 'Pulse Train'])
+        
+    def addNew(self, type):
+        if type == 'Pulse':
+            self.addChild({'name': 'Pulse', 'autoIncrementName': True, 
+                                    'type': 'group', 'removable': True, 'renamable': True,
+                                    'params': [
+                {'name': 'start', 'type': 'float', 'value': 0},
+                {'name': 'stop', 'type': 'float', 'value': 0},
+                {'name': 'pulse length', 'type': 'float', 'value': 0},
+                {'name': 'amplitude', 'type': 'float', 'value': 0},
+                {'name': 'sum', 'type': 'float', 'value': 0},
+            ]})
+        elif type == 'Pulse Train':
+            self.addChild({'name': 'Pulse', 'autoIncrementName': True, 
+                                    'type': 'group', 'removable': True, 'renamable': True,
+                                    'params': [
+                {'name': 'start', 'type': 'float', 'value': 0},
+                {'name': 'pulse length', 'type': 'float', 'value': 0},
+                {'name': 'pulse number', 'type': 'int', 'value': 10},
+                {'name': 'amplitude', 'type': 'float', 'value': 0},
+                {'name': 'sum', 'type': 'float', 'value': 0},
+            ]})
+            
+        
+        
+        
+        

@@ -117,14 +117,14 @@ params = [
     {'name': 'TextParam', 'type': 'text', 'value': 'Some text...'},
 ]
 
-p = ParameterSet("params", params)
+p = pTypes.ParameterSet("params", params)
 def change(*args):
     print "change:", args
 p.sigStateChanged.connect(change)
 
 
 t = ParameterTree()
-t.setParameters(p)
+t.setParameters(p, showTop=False)
 t.show()
 t.resize(400,600)
     
