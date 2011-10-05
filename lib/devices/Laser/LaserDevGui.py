@@ -25,11 +25,20 @@ class LaserDevGui(QtGui.QWidget):
             self.ui.wavelengthSpin.setValue(self.dev.getWavelength())
             for x in self.dev.config.get('namedWavelengths', {}).keys():
                 self.ui.wavelengthCombo.addItem(x)
-        self.ui.durationSpin.setOpts(suffix='s', siPrefix=True, bounds=[0.0, 3.0])
+        if 'pCell' not in self.dev.config:
+            self.ui.pCellGroup.hide()
+        else:
+            self.ui.minVSpin.setOpts(siPrefix=True)
+            self.ui.maxVSpin.setOpts(siPrefix=True)
+            self.ui.stepsSpin.setOpts(step=1)
+            
+        self.ui.durationSpin.setOpts(suffix='s', siPrefix=True, bounds=[0.0, 5.0])
         self.ui.settlingSpin.setOpts(suffix='s', siPrefix=True, value=0.1)
         with self.dev.variableLock:
             self.ui.expectedPowerSpin.setOpts(suffix='W', siPrefix=True, bounds=[0.0, None], value=self.dev.params['expectedPower'])
         self.ui.toleranceSpin.setOpts(step=0.1, suffix='%', bounds=[0.1, 100.0], value=5.0)
+        
+        
         
         
         
@@ -107,7 +116,7 @@ class LaserDevGui(QtGui.QWidget):
     
     def updatePowerLabels(self, power):
         self.ui.outputPowerLabel.setText(str(siFormat(power)))
-        self.ui.samplePowerLabel.setText(str(siFormat(power*self.dev.scopeTransmission)))
+        self.ui.samplePowerLabel.setText(str(siFormat(power*self.dev.params['scopeTransmission'])))
 
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
@@ -143,7 +152,7 @@ class LaserDevGui(QtGui.QWidget):
         self.updateCalibrationList()
     
     def deleteClicked(self):
-        self.dev.testProtocol()
+        self.dev.outputPower()
         cur = self.ui.calibrationList.currentItem()
         if cur is None:
             return
@@ -164,7 +173,6 @@ class LaserDevGui(QtGui.QWidget):
         
         power = None
         scale = None
-        ## disable QSwitch for whole process
        
         duration = self.ui.durationSpin.value()
         rate = 10000

@@ -209,11 +209,11 @@ class Laser(DAQGeneric):
         
         if self.hasPowerIndicator:
             ## run a protocol that checks the power
-            daqName = self.config[self.config.keys()[0]]['channel'][0]
+            daqName =  self.getDAQName('shutter')
             powerInd = self.config['powerIndicator']['channel']
             rate = self.config['powerIndicator']['rate']
             sTime = self.config['powerIndicator']['settlingTime']
-            mTime = self.config['powerIndicator']['measurmentTime']
+            mTime = self.config['powerIndicator']['measurementTime']
             
             reps = 10
             dur = 0.1 + reps*0.1+(sTime+mTime)
@@ -240,13 +240,14 @@ class Laser(DAQGeneric):
             offMask = np.zeros(nPts, dtype=np.byte)
             for i in range(reps):
                 onMask[((i+1)/10+sTime)*rate:((i+1)/10+sTime+mTime)*rate] = 1
-                offMask[(i/10.+2*sTime+mTime)*rate:(i/10.)*rate] = 1
-            laserOn = result[onMask==True]
-            laserOff = result[offMask==True]
-            powerOn = laserOn.mean()
-            powerOff = laserOff.mean()
+                offMask[(i/10.+2*sTime+mTime)*rate:(i+1/10.)*rate] = 1
+            laserOn = result[powerInd[0]][0][onMask==True]
+            laserOff = result[powerInd[0]][0][offMask==True]
+            
             t, prob = stats.ttest_ind(laserOn, laserOff)
             if prob < 0.01: ### if powerOn is statistically different from powerOff
+                powerOn = laserOn.mean()
+                powerOff = laserOff.mean()
                 #self.devGui.ui.outputPowerLabel.setText(siFormat(powerOn, suffix='W')) ## NO! device does not talk to GUI!
                 self.sigPowerChanged.emit(powerOn)
                 with self.variableLock:

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'devTemplate.ui'
 #
-# Created: Tue Oct 04 12:23:45 2011
+# Created: Wed Oct 05 11:52:09 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,8 +17,9 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(670, 451)
+        Form.resize(585, 391)
         self.gridLayout = QtGui.QGridLayout(Form)
+        self.gridLayout.setMargin(6)
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
         self.powerGroup = QtGui.QGroupBox(Form)
         self.powerGroup.setTitle(_fromUtf8(""))
@@ -137,6 +138,7 @@ class Ui_Form(object):
         self.gridLayout_3.setSpacing(6)
         self.gridLayout_3.setObjectName(_fromUtf8("gridLayout_3"))
         self.gridLayout_2 = QtGui.QGridLayout()
+        self.gridLayout_2.setHorizontalSpacing(6)
         self.gridLayout_2.setVerticalSpacing(0)
         self.gridLayout_2.setObjectName(_fromUtf8("gridLayout_2"))
         self.label_2 = QtGui.QLabel(self.groupBox)
@@ -171,6 +173,46 @@ class Ui_Form(object):
         self.settlingSpin.setObjectName(_fromUtf8("settlingSpin"))
         self.gridLayout_2.addWidget(self.settlingSpin, 2, 4, 1, 1)
         self.gridLayout_3.addLayout(self.gridLayout_2, 0, 0, 1, 1)
+        self.pCellGroup = QtGui.QGroupBox(self.groupBox)
+        self.pCellGroup.setAlignment(QtCore.Qt.AlignCenter)
+        self.pCellGroup.setObjectName(_fromUtf8("pCellGroup"))
+        self.gridLayout_8 = QtGui.QGridLayout(self.pCellGroup)
+        self.gridLayout_8.setMargin(6)
+        self.gridLayout_8.setObjectName(_fromUtf8("gridLayout_8"))
+        self.gridLayout_7 = QtGui.QGridLayout()
+        self.gridLayout_7.setVerticalSpacing(0)
+        self.gridLayout_7.setObjectName(_fromUtf8("gridLayout_7"))
+        self.label_9 = QtGui.QLabel(self.pCellGroup)
+        self.label_9.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.label_9.setObjectName(_fromUtf8("label_9"))
+        self.gridLayout_7.addWidget(self.label_9, 0, 0, 1, 1)
+        self.minVSpin = SpinBox(self.pCellGroup)
+        self.minVSpin.setMinimum(-99.0)
+        self.minVSpin.setSingleStep(0.01)
+        self.minVSpin.setObjectName(_fromUtf8("minVSpin"))
+        self.gridLayout_7.addWidget(self.minVSpin, 0, 1, 1, 1)
+        self.label_11 = QtGui.QLabel(self.pCellGroup)
+        self.label_11.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.label_11.setObjectName(_fromUtf8("label_11"))
+        self.gridLayout_7.addWidget(self.label_11, 0, 2, 1, 1)
+        self.stepsSpin = SpinBox(self.pCellGroup)
+        self.stepsSpin.setDecimals(0)
+        self.stepsSpin.setMinimum(10.0)
+        self.stepsSpin.setMaximum(1000.0)
+        self.stepsSpin.setProperty(_fromUtf8("value"), 20.0)
+        self.stepsSpin.setObjectName(_fromUtf8("stepsSpin"))
+        self.gridLayout_7.addWidget(self.stepsSpin, 0, 3, 1, 1)
+        self.label_10 = QtGui.QLabel(self.pCellGroup)
+        self.label_10.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.label_10.setObjectName(_fromUtf8("label_10"))
+        self.gridLayout_7.addWidget(self.label_10, 1, 0, 1, 1)
+        self.maxVSpin = SpinBox(self.pCellGroup)
+        self.maxVSpin.setSingleStep(0.01)
+        self.maxVSpin.setProperty(_fromUtf8("value"), 1.2)
+        self.maxVSpin.setObjectName(_fromUtf8("maxVSpin"))
+        self.gridLayout_7.addWidget(self.maxVSpin, 1, 1, 1, 1)
+        self.gridLayout_8.addLayout(self.gridLayout_7, 0, 0, 1, 1)
+        self.gridLayout_3.addWidget(self.pCellGroup, 1, 0, 1, 1)
         self.gridLayout_6.addWidget(self.groupBox, 2, 0, 1, 2)
         self.gridLayout.addWidget(self.groupBox_2, 2, 0, 1, 1)
 
@@ -205,5 +247,11 @@ class Ui_Form(object):
         self.label_3.setText(QtGui.QApplication.translate("Form", "Power Meter:", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("Form", "Settling Time:", None, QtGui.QApplication.UnicodeUTF8))
         self.settlingSpin.setToolTip(QtGui.QApplication.translate("Form", "Specify the time it takes for the selected power meter to settle on a value.", None, QtGui.QApplication.UnicodeUTF8))
+        self.pCellGroup.setTitle(QtGui.QApplication.translate("Form", "Pockel Cell Parameters", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_9.setText(QtGui.QApplication.translate("Form", "Minimum Voltage:", None, QtGui.QApplication.UnicodeUTF8))
+        self.minVSpin.setSuffix(QtGui.QApplication.translate("Form", "V", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_11.setText(QtGui.QApplication.translate("Form", "Number of Steps: ", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_10.setText(QtGui.QApplication.translate("Form", "Maximum Voltage:", None, QtGui.QApplication.UnicodeUTF8))
+        self.maxVSpin.setSuffix(QtGui.QApplication.translate("Form", "V", None, QtGui.QApplication.UnicodeUTF8))
 
 from SpinBox import SpinBox
