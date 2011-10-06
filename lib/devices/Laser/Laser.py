@@ -110,8 +110,10 @@ class Laser(DAQGeneric):
             self.hasShutter = True
         if 'qSwitch' in config:
             daqConfig['qSwitch'] = {'channel': config['qSwitch']['channel'], 'type': 'do'}
+            self.hasQSwitch = True
         if 'pCell' in config:
             daqConfig['pCell'] = {'channel': config['pCell']['channel'], 'type': 'ao'}
+            self.hasPCell = True
                         
         DAQGeneric.__init__(self, manager, daqConfig, name)
         
@@ -327,6 +329,7 @@ class LaserTask(DAQGenericTask):
                                        
         'wavelength': x,               ## sets the wavelength before executing the protocol
         'checkPower': True,            ## If true, the laser will check its output power before executing the protocol. 
+        'pCellRaw': array(....),       ## array of voltages to pass through
     }
     
     """

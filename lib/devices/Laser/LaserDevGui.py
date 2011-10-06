@@ -25,7 +25,8 @@ class LaserDevGui(QtGui.QWidget):
             self.ui.wavelengthSpin.setValue(self.dev.getWavelength())
             for x in self.dev.config.get('namedWavelengths', {}).keys():
                 self.ui.wavelengthCombo.addItem(x)
-        if 'pCell' not in self.dev.config:
+                
+        if not self.dev.hasPCell:
             self.ui.pCellGroup.hide()
         else:
             self.ui.minVSpin.setOpts(siPrefix=True)
@@ -137,16 +138,14 @@ class LaserDevGui(QtGui.QWidget):
         #meter = str(self.ui.meterCombo.currentText())
         obj = getManager().getDevice(scope).getObjective()['name']
         
-        ## Run calibration
-        power, scale = self.runCalibration()
-        
         date = time.strftime('%Y.%m.%d %H:%M', time.localtime())
-        
         index = self.dev.getCalibrationIndex()
-        
-        if scope not in index:
-            index[scope] = {}
-        index[scope][obj] = {'power': power, 'scale':scale, 'date': date}
+        ## Run calibration
+        if not self.dev.hasPCell:
+            power, transmission = self.runCalibration()
+            if scope not in index:
+                index[scope] = {}
+            index[scope][obj] = {'power': power, 'transmission':transmission, 'date': date}
 
         self.dev.writeCalibrationIndex(index)
         self.updateCalibrationList()
