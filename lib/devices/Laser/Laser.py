@@ -276,7 +276,7 @@ class Laser(DAQGeneric):
         powerInd = self.config['powerIndicator']['channel']
         rate = self.config['powerIndicator']['rate']
         sTime = self.config['powerIndicator']['settlingTime']
-        mTime = self.config['powerIndicator']['measurmentTime']
+        mTime = self.config['powerIndicator']['measurementTime']
         reps = 10
         dur = 0.1 + reps*0.1+(0.001+0.005)
         nPts = int(dur*rate)
@@ -301,6 +301,7 @@ class Laser(DAQGeneric):
         
         print "Got result: ", result
         
+
 
 
 class LaserTask(DAQGenericTask):
