@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>585</width>
-    <height>391</height>
+    <width>579</width>
+    <height>388</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -244,6 +244,11 @@
         </column>
         <column>
          <property name="text">
+          <string>Wavelength</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
           <string>Transmission</string>
          </property>
         </column>
@@ -312,7 +317,7 @@
            <item row="1" column="3">
             <widget class="QLabel" name="scanLabel">
              <property name="text">
-              <string>Duration:</string>
+              <string>Measurement Duration</string>
              </property>
              <property name="alignment">
               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -320,7 +325,7 @@
             </widget>
            </item>
            <item row="1" column="4">
-            <widget class="SpinBox" name="durationSpin">
+            <widget class="SpinBox" name="measurementSpin">
              <property name="suffix">
               <string> s</string>
              </property>
@@ -351,7 +356,7 @@
            <item row="2" column="3">
             <widget class="QLabel" name="label">
              <property name="text">
-              <string>Settling Time:</string>
+              <string>Settling Duration:</string>
              </property>
              <property name="alignment">
               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -404,6 +409,9 @@
                 </property>
                 <property name="singleStep">
                  <double>0.010000000000000</double>
+                </property>
+                <property name="value">
+                 <double>-0.200000000000000</double>
                 </property>
                </widget>
               </item>

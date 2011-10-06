@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'devTemplate.ui'
 #
-# Created: Wed Oct 05 11:52:09 2011
+# Created: Thu Oct 06 14:36:34 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(585, 391)
+        Form.resize(579, 388)
         self.gridLayout = QtGui.QGridLayout(Form)
         self.gridLayout.setMargin(6)
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
@@ -152,12 +152,12 @@ class Ui_Form(object):
         self.scanLabel.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.scanLabel.setObjectName(_fromUtf8("scanLabel"))
         self.gridLayout_2.addWidget(self.scanLabel, 1, 3, 1, 1)
-        self.durationSpin = SpinBox(self.groupBox)
-        self.durationSpin.setMinimum(0.0)
-        self.durationSpin.setMaximum(100.0)
-        self.durationSpin.setProperty(_fromUtf8("value"), 1.0)
-        self.durationSpin.setObjectName(_fromUtf8("durationSpin"))
-        self.gridLayout_2.addWidget(self.durationSpin, 1, 4, 1, 1)
+        self.measurementSpin = SpinBox(self.groupBox)
+        self.measurementSpin.setMinimum(0.0)
+        self.measurementSpin.setMaximum(100.0)
+        self.measurementSpin.setProperty(_fromUtf8("value"), 1.0)
+        self.measurementSpin.setObjectName(_fromUtf8("measurementSpin"))
+        self.gridLayout_2.addWidget(self.measurementSpin, 1, 4, 1, 1)
         self.label_3 = QtGui.QLabel(self.groupBox)
         self.label_3.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.label_3.setObjectName(_fromUtf8("label_3"))
@@ -235,17 +235,18 @@ class Ui_Form(object):
         self.groupBox_2.setTitle(QtGui.QApplication.translate("Form", "Power Calibration", None, QtGui.QApplication.UnicodeUTF8))
         self.calibrationList.headerItem().setText(0, QtGui.QApplication.translate("Form", "Microscope", None, QtGui.QApplication.UnicodeUTF8))
         self.calibrationList.headerItem().setText(1, QtGui.QApplication.translate("Form", "Objective", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(2, QtGui.QApplication.translate("Form", "Transmission", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(3, QtGui.QApplication.translate("Form", "Power at Sample", None, QtGui.QApplication.UnicodeUTF8))
-        self.calibrationList.headerItem().setText(4, QtGui.QApplication.translate("Form", "Date", None, QtGui.QApplication.UnicodeUTF8))
+        self.calibrationList.headerItem().setText(2, QtGui.QApplication.translate("Form", "Wavelength", None, QtGui.QApplication.UnicodeUTF8))
+        self.calibrationList.headerItem().setText(3, QtGui.QApplication.translate("Form", "Transmission", None, QtGui.QApplication.UnicodeUTF8))
+        self.calibrationList.headerItem().setText(4, QtGui.QApplication.translate("Form", "Power at Sample", None, QtGui.QApplication.UnicodeUTF8))
+        self.calibrationList.headerItem().setText(5, QtGui.QApplication.translate("Form", "Date", None, QtGui.QApplication.UnicodeUTF8))
         self.calibrateBtn.setText(QtGui.QApplication.translate("Form", "Calibrate", None, QtGui.QApplication.UnicodeUTF8))
         self.deleteBtn.setText(QtGui.QApplication.translate("Form", "Delete", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Calibration Parameters", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("Form", "Microscope:", None, QtGui.QApplication.UnicodeUTF8))
-        self.scanLabel.setText(QtGui.QApplication.translate("Form", "Duration:", None, QtGui.QApplication.UnicodeUTF8))
-        self.durationSpin.setSuffix(QtGui.QApplication.translate("Form", " s", None, QtGui.QApplication.UnicodeUTF8))
+        self.scanLabel.setText(QtGui.QApplication.translate("Form", "Measurement Duration", None, QtGui.QApplication.UnicodeUTF8))
+        self.measurementSpin.setSuffix(QtGui.QApplication.translate("Form", " s", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("Form", "Power Meter:", None, QtGui.QApplication.UnicodeUTF8))
-        self.label.setText(QtGui.QApplication.translate("Form", "Settling Time:", None, QtGui.QApplication.UnicodeUTF8))
+        self.label.setText(QtGui.QApplication.translate("Form", "Settling Duration:", None, QtGui.QApplication.UnicodeUTF8))
         self.settlingSpin.setToolTip(QtGui.QApplication.translate("Form", "Specify the time it takes for the selected power meter to settle on a value.", None, QtGui.QApplication.UnicodeUTF8))
         self.pCellGroup.setTitle(QtGui.QApplication.translate("Form", "Pockel Cell Parameters", None, QtGui.QApplication.UnicodeUTF8))
         self.label_9.setText(QtGui.QApplication.translate("Form", "Minimum Voltage:", None, QtGui.QApplication.UnicodeUTF8))

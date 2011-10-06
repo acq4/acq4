@@ -88,6 +88,7 @@ class Laser(DAQGeneric):
         self.config = config
         self.hasPowerIndicator = False
         self.hasShutter = False
+        self.hasTriggerableShutter = False
         self.hasQSwitch = False
         self.hasPCell = False
         self.hasTunableWavelength = False
@@ -107,6 +108,7 @@ class Laser(DAQGeneric):
             #daqConfig['powerInd'] = {'channel': config['powerIndicator']['channel'], 'type': 'ai'}
         if 'shutter' in config:
             daqConfig['shutter'] = {'channel': config['shutter']['channel'], 'type': 'do'}
+            self.hasTriggerableShutter = True
             self.hasShutter = True
         if 'qSwitch' in config:
             daqConfig['qSwitch'] = {'channel': config['qSwitch']['channel'], 'type': 'do'}
@@ -122,6 +124,7 @@ class Laser(DAQGeneric):
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.variableLock = Mutex(QtCore.QMutex.Recursive)
         self.calibrationIndex = None
+        self.pCellCalibration = None
         self.getPowerHistory()
         
     def configDir(self):
@@ -141,6 +144,7 @@ class Laser(DAQGeneric):
                 fileName = os.path.join(calDir, 'index')
                 index = self.dm.readConfigFile(fileName)
                 self.calibrationIndex = index
+                self.pCellCalibration = index.get('pCellCalibration', None)
             return self.calibrationIndex
         
     def getPowerHistory(self):
@@ -329,7 +333,7 @@ class LaserTask(DAQGenericTask):
                                        
         'wavelength': x,               ## sets the wavelength before executing the protocol
         'checkPower': True,            ## If true, the laser will check its output power before executing the protocol. 
-        'pCellRaw': array(....),       ## array of voltages to pass through
+        'pCellRaw': array(....),       ## array of voltages to pass through to pCell, overrides any other waveforms that would use the pCell
     }
     
     """
@@ -423,6 +427,8 @@ class LaserTask(DAQGenericTask):
             
         if 'wavelength' in self.cmd:
             self.dev.setWavelength(self.cmd['wavelength'])
+        if 'pCellRaw' in self.cmd:
+            self.cmd['daqProtocol']['pCell'] = self.cmd['pCellRaw']
         self._DAQCmd = self.cmd['daqProtocol']
         
         DAQGenericTask.configure(self, tasks, startOrder)

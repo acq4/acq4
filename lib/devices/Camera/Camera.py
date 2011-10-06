@@ -48,6 +48,7 @@ class Camera(DAQGeneric):
 
     def __init__(self, dm, config, name):
         self.lock = Mutex(Mutex.Recursive)
+        
 
         # Generate config to use for DAQ 
         daqConfig = {}

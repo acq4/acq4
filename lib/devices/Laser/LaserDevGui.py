@@ -43,7 +43,7 @@ class LaserDevGui(QtGui.QWidget):
         
         
         
-        ## Populate device lists
+        ### Populate device lists
         defMicroscope = self.dev.config.get('scope', None)     
         defPowerMeter = self.dev.config.get('defaultPowerMeter', None)
         devs = self.dev.dm.listDevices()
@@ -124,28 +124,64 @@ class LaserDevGui(QtGui.QWidget):
         
         ## Populate calibration lists
         index = self.dev.getCalibrationIndex()
+        if index.has_key('pCellCalibration'):
+            index.pop('pCellCalibration')
         for scope in index:
             for obj in index[scope]:
-                cal = index[scope][obj]
-                power = cal['power']
-                scale = cal['scale']
-                date = cal['date']
-                item = QtGui.QTreeWidgetItem([scope, obj, '%.2f' %(scale*100) + '%', siFormat(power, suffix='W'), date])
-                self.ui.calibrationList.addTopLevelItem(item)
+                for wavelength in index[scope][obj]:
+                    cal = index[scope][obj][wavelength]
+                    power = cal['power']
+                    scale = cal['transmission']
+                    date = cal['date']
+                    item = QtGui.QTreeWidgetItem([scope, obj, wavelength, '%.2f' %(scale*100) + '%', siFormat(power, suffix='W'), date])
+                    self.ui.calibrationList.addTopLevelItem(item)
     
     def calibrateClicked(self):
         scope = str(self.ui.microscopeCombo.currentText())
         #meter = str(self.ui.meterCombo.currentText())
         obj = getManager().getDevice(scope).getObjective()['name']
+        wavelength = str(siFormat(self.dev.getWavelength()))
         
         date = time.strftime('%Y.%m.%d %H:%M', time.localtime())
         index = self.dev.getCalibrationIndex()
         ## Run calibration
         if not self.dev.hasPCell:
             power, transmission = self.runCalibration()
-            if scope not in index:
-                index[scope] = {}
-            index[scope][obj] = {'power': power, 'transmission':transmission, 'date': date}
+        else:
+            if index.has_key('pCellCalibration') and not self.ui.recalibratePCellCheck.isChecked():
+                power, transmission = self.runCalibration() ## need to tell it to run with open pCell
+            else:
+                minVal = self.ui.minVSpin.value()
+                maxVal = self.ui.maxVSpin.value()
+                steps = self.ui.stepsSpin.value()
+                power = []
+                arr = np.zeros(steps, dtype=[('voltage', float), ('trans', float)])
+                for i,v in enumerate(np.linspace(minVal, maxVal, steps)):
+                    p, t = self.runCalibration(pCellVoltage=v) ### returns power at sample(or where powermeter was), and transmission through whole system
+                    power.append(p)
+                    arr[i]['trans']= t
+                    arr[i]['voltage']= v
+                power = (min(power), max(power))
+                transmission = (arr['trans'].min(), arr['trans'].min())
+                arr['trans'] = arr['trans']/arr['trans'].max()
+                minV = arr['voltage'][arr['trans']==arr['trans'].min()]
+                maxV = arr['voltage'][arr['trans']==arr['trans'].max()]
+                if minV < maxV:
+                    self.dev.pCellCurve = arr[arr['voltage']>minV * arr['voltage']<maxV]
+                else:
+                    self.dev.pCellCurve = arr[arr['voltage']<minV * arr['voltage']>maxV]
+                    
+                index['pCellCalibration'] = {'voltage': list(self.dev.pCellCurve['voltage']), 
+                                             'trans': list(self.dev.pCellCurve['trans'])}
+                
+            
+            
+            
+        if scope not in index:
+            index[scope] = {}
+        if obj not in index[scope]:
+            index[scope][obj] = {}
+        index[scope][obj][wavelength] = {'power': power, 'transmission':transmission, 'date': date}
 
         self.dev.writeCalibrationIndex(index)
         self.updateCalibrationList()
@@ -165,32 +201,56 @@ class LaserDevGui(QtGui.QWidget):
         self.dev.writeCalibrationIndex(index)
         self.updateCalibrationList()
     
-    def runCalibration(self):
+    def runCalibration(self, pCellVoltage=None):
         
         powerMeter = str(self.ui.meterCombo.currentText())
         daqName = self.dev.getDAQName('shutter')
         
         power = None
-        scale = None
+        transmission = None
        
-        duration = self.ui.durationSpin.value()
+        mTime = self.ui.measurementSpin.value()
+        sTime = self.ui.settlingSpin.value()
+        
+        duration = mTime + sTime
         rate = 10000
         nPts = int(rate * duration)
         
-        shutterCmd = np.zeros(nPts, dtype=np.byte)
-        shutterCmd[nPts/10:] = 1 ## have the first 10% of the trace be a baseline so that we can check to make sure laser was detected
-        shutterCmd[-1] = 0 ## close shutter when done
-   
+        #shutterCmd = np.zeros(nPts, dtype=np.byte)
+        #shutterCmd[nPts/10:] = 1 ## have the first 10% of the trace be a baseline so that we can check to make sure laser was detected
+        #shutterCmd[-1] = 0 ## close shutter when done
+        cmdOff = {'protocol': {'duration': duration, 'timeout': duration+5.0},
+                self.dev.name: {'shutterMode':'closed'},
+                powerMeter: {x: {'record':True, 'recordInit':False} for x in getManager().getDevice(powerMeter).listChannels()},
+                daqName: {'numPts': nPts, 'rate': rate}
+                }
+        
         if self.dev.hasPowerIndicator:
             powerInd = self.dev.config['powerIndicator']['channel']
-            cmd = {
-                'protocol': {'duration': duration, 'timeout': duration+5.0},
-                powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
-                self.dev.name: {'shutterWaveform': shutterCmd}, ## laser
-                powerMeter: {x: {'record':True, 'recordInit':False} for x in getManager().getDevice(powerMeter).listChannels()},
-                #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
-                #self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand}, ## scanner
-                daqName: {'numPts': nPts, 'rate': rate}}
+            cmdOff[powerInd[0]] = {powerInd[1]: {'record':True, 'recordInit':False}}
+        if pCellVoltage is not None:
+            if self.dev.hasPCell:
+                a = np.zeros(nPts, dtype=float)
+                a[:] = pCellVoltage
+                cmdOff[self.dev.name]['pCellRaw'] = a
+            else:
+                raise Exception("Laser device %s does not have a pCell, therefore no pCell voltage can be set." %self.dev.name)
+            
+        cmdOn = cmdOff
+        cmdOn[self.dev.name]['shutterMode'] = 'open'
+        
+        
+                
+        #if self.dev.hasPowerIndicator:
+            #powerInd = self.dev.config['powerIndicator']['channel']
+            #cmd = {
+                #'protocol': {'duration': duration, 'timeout': duration+5.0},
+                #powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
+                #self.dev.name: {'shutterWaveform': shutterCmd}, ## laser
+                #powerMeter: {x: {'record':True, 'recordInit':False} for x in getManager().getDevice(powerMeter).listChannels()},
+                ##'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
+                ##self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand}, ## scanner
+                #daqName: {'numPts': nPts, 'rate': rate}}
             
             ##cmd = {
                 ##'protocol': {'duration': 1},
@@ -200,43 +260,56 @@ class LaserDevGui(QtGui.QWidget):
                 ##'DAQ': {'numPts': 10000, 'rate': 10000}
             ##}
             ## record some duration of signal on the laser's powerIndicator and the powerMeter under objective
-            task = getManager().createTask(cmd)
-            task.execute()
-            result = task.getResult()
+        taskOff = getManager().createTask(cmdOff)
+        taskOff.execute()
+        resultOff = taskOff.getResult()
+        
+        taskOn = getManager().createTask(cmdOn)
+        taskOn.execute()
+        resultOn = taskOn.getResult()
             
-            scale = (result[powerMeter][0]/result[powerInd[0]][0])[nPts/10+0.01/rate:-1].mean()
+            
+        if self.dev.hasPowerIndicator:
+            #powerOut1 = result1[powerInd[0]][0][mTime*rate:].mean()
+            powerOutOn = resultOn[powerInd[0]][0][mTime*rate:].mean()
+        else:
+            powerOutOn = self.dev.outputPower()
+            
+        laserOff = resultOff[powerMeter][0][mTime*rate:]
+        laserOn = resultOn[powerMeter[0]][mTime*rate:]
+                          
+        t, prob = stats.ttest_ind(laserOn, laserOff)
+        if prob < 0.01:
+            raise Exception("Power meter device %s could not detect laser." %powerMeter)
+        else:
+            powerSampleOn = laserOn.mean()
+            transmission = powerSampleOn/powerOutOn
+            return (powerSampleOn, transmission)
+        #scale = (result[powerMeter][0]/result[powerInd[0]][0])[nPts/10+0.01/rate:-1].mean()
            
-            pass
+            
             
             ## determine relationship between powerIndicator measurement and power under objective
             
            
             
-        else:
-            cmd = {
-                'protocol': {'duration': duration, 'timeout': duration+5.0},
-                #powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
-                self.dev.name: {'shutterWaveform': shutterCmd}, ## laser
-                powerMeter: {x: {'record':True, 'recordInit':False} for x in getManager().getDevice(powerMeter).config.keys()},
-                #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
-                #self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand}, ## scanner
-                daqName: {'numPts': nPts, 'rate': rate}}
-            ## record signal on powerMeter with laser on for some duration
-            ## determine power under objective
-            task = getManager().createTask(cmd)
-            task.execute()
-            result = task.getResult()
-            
-            power = self.dev.outputPower()
-            scale = (result[powerMeter][0]/power)[nPts/10+0.01/rate:-1].mean()
-            
-        laserOff = result[powerMeter][0][:nPts/10]
-        laserOn = result[powerMeter][0][nPts/10+0.01/rate:-1]
-            
-        t, prob = stats.ttest_ind(laserOn, laserOff)
-        if prob < 0.01:
-            raise Exception("Power meter device %s could not detect laser." %powerMeter)
+        #else:
+            #cmd = {
+                #'protocol': {'duration': duration, 'timeout': duration+5.0},
+                ##powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
+                #self.dev.name: {'shutterWaveform': shutterCmd}, ## laser
+                #powerMeter: {x: {'record':True, 'recordInit':False} for x in getManager().getDevice(powerMeter).config.keys()},
+                ##'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
+                ##self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand}, ## scanner
+                #daqName: {'numPts': nPts, 'rate': rate}}
+            ### record signal on powerMeter with laser on for some duration
+            ### determine power under objective
+            #task = getManager().createTask(cmd)
+            #task.execute()
+            #result = task.getResult()
            
-        else:
-            return (laserOn.mean(), scale)
+            #scale = (result[powerMeter][0]/power)[nPts/10+0.01/rate:-1].mean()
+            
+        
+       
         

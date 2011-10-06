@@ -15,6 +15,7 @@ import Mutex
 class NiDAQ(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.config = config
         ## make local copy of device handle
         if config is not None and config.get('mock', False):
             from lib.drivers.nidaq.mock import NIDAQ
