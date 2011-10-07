@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from lib.devices.Device import *
+from lib.Manager import logMsg, logExc
 from Mutex import Mutex, MutexLocker
 from DeviceGui import ScannerDeviceGui
 from ProtocolGui import ScannerProtoGui
@@ -198,18 +199,21 @@ class Scanner(Device):
             index1 = index[camera]
         else:
             print "Warning: No calibration found for camera %s" % camera
+            logMsg("Warning:No calibration found for camera %s" % camera, msgType='warning')
             return None
             
         if laser in index1:
             index2 = index1[laser]
         else:
             print "Warning: No calibration found for laser %s" % laser
+            logMsg("Warning:No calibration found for laser %s" % laser, msgType='warning')
             return None
             
         if objective in index2:
             index3 = index2[objective]
         else:
             print "Warning: No calibration found for objective %s" % objective
+            logMsg("Warning:No calibration found for objective %s" % objective, msgType='warning')
             return None
         
         #calFile = os.path.join(calDir, index3['fileName'])
@@ -282,6 +286,7 @@ class Scanner(Device):
 class ScannerTask(DeviceTask):
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
+        self.cmd = cmd
         self.daqTasks = []
         self.spotSize = None
         #print "Scanner task:", cmd

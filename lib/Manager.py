@@ -478,6 +478,7 @@ Valid options are:
         print "\n---- Reloading all libraries under %s ----" % path
         reload.reloadAll(prefix=path, debug=True)
         print "Done reloading.\n"
+        logMsg("Reloaded all libraries under %s." %path, msgType='status')
         
 
     def createWindowShortcut(self, keys, win):

@@ -10,7 +10,7 @@ from advancedTypes import OrderedDict
 from SequenceRunner import *
 from WidgetGroup import *
 from Mutex import Mutex, MutexLocker
-from lib.Manager import getManager, logMsg
+from lib.Manager import getManager, logMsg, logExc
 from debug import *
 import ptime
 import analysisModules
@@ -777,7 +777,7 @@ class ProtocolRunner(Module):
             
             ## Generate executable conf from protocol object
             prot = self.generateProtocol(dh)
-            print prot
+            #print prot
             #self.emit(QtCore.SIGNAL('protocolStarted'), {})
             self.sigProtocolStarted.emit({})
             #print "runSingle: Starting taskThread.."

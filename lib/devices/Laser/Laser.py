@@ -194,6 +194,17 @@ class Laser(DAQGeneric):
     def getWavelength(self):
         return self.config.get('wavelength', None)
         
+    def openShutter(self):
+        self.setChanHolding('shutter', 1)
+    
+    def closeShutter(self):
+        self.setChanHolding('shutter', 0)
+    
+    def openQSwitch(self):
+        self.setChanHolding('qSwitch', 1)
+    
+    def closeQSwitch(self):
+        self.setChanHolding('qSwitch', 0)
     
     
     def createTask(self, cmd):
@@ -236,7 +247,7 @@ class Laser(DAQGeneric):
                 powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
                 daqName: {'numPts': nPts, 'rate': rate}
             }
-            
+            print "outputPowerCmd: ", cmd
             task = getManager().createTask(cmd)
             task.execute()
             result = task.getResult()
@@ -408,8 +419,9 @@ class LaserTask(DAQGenericTask):
         if 'shutterWaveform' in self.cmd:
             self.cmd['daqProtocol']['shutter'] = self.cmd['shutterWaveform']
         elif 'shutterMode' in self.cmd:
+            print self.cmd
             waveform = self.cmd['daqProtocol'].get('qSwitch', self.cmd['daqProtocol'].get('pCell', None))
-            nPts = len(waveform)
+            nPts = self.cmd[daqName]['numPts']
             shutterCmd = np.zeros(nPts, dtype=np.byte)
             if self.cmd['shutterMode'] is 'auto':  
                 delay = self.dev.config['shutter'].get('delay', 0.0) 

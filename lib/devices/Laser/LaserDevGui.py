@@ -29,15 +29,20 @@ class LaserDevGui(QtGui.QWidget):
         if not self.dev.hasPCell:
             self.ui.pCellGroup.hide()
         else:
-            self.ui.minVSpin.setOpts(siPrefix=True)
-            self.ui.maxVSpin.setOpts(siPrefix=True)
-            self.ui.stepsSpin.setOpts(step=1)
+            self.ui.minVSpin.setOpts(step=0.1, minStep=0.01, siPrefix=True, dec=True)
+            self.ui.maxVSpin.setOpts(step=0.1, minStep=0.01, siPrefix=True, dec=True)
+            self.ui.stepsSpin.setOpts(step=1, dec=True)
             
-        self.ui.durationSpin.setOpts(suffix='s', siPrefix=True, bounds=[0.0, 5.0])
-        self.ui.settlingSpin.setOpts(suffix='s', siPrefix=True, value=0.1)
+        self.ui.measurementSpin.setOpts(suffix='s', siPrefix=True, bounds=[0.0, 5.0], dec=True, step=1, minStep=0.01)
+        self.ui.settlingSpin.setOpts(suffix='s', siPrefix=True, value=0.1, dec=True, step=1, minStep=0.01)
         with self.dev.variableLock:
-            self.ui.expectedPowerSpin.setOpts(suffix='W', siPrefix=True, bounds=[0.0, None], value=self.dev.params['expectedPower'])
+            self.ui.expectedPowerSpin.setOpts(suffix='W', siPrefix=True, bounds=[0.0, None], value=self.dev.params['expectedPower'], dec=True, step=0.1, minStep=0.01)
         self.ui.toleranceSpin.setOpts(step=0.1, suffix='%', bounds=[0.1, 100.0], value=5.0)
+        
+        if not self.dev.hasShutter:
+            self.ui.shutterBtn.setEnabled(False)
+        if not self.dev.hasQSwitch:
+            self.ui.qSwitchBtn.setEnabled(False)
         
         
         
@@ -67,10 +72,12 @@ class LaserDevGui(QtGui.QWidget):
         self.ui.toleranceSpin.valueChanged.connect(self.toleranceSpinChanged)
         self.ui.wavelengthSpin.valueChanged.connect(self.wavelengthSpinChanged)
         self.ui.wavelengthCombo.currentIndexChanged.connect(self.wavelengthComboChanged)
-        self.ui.microscopeCombo.currentIndexChanged.connect(self.microscopeChanged)
+        #self.ui.microscopeCombo.currentIndexChanged.connect(self.microscopeChanged)
         self.ui.meterCombo.currentIndexChanged.connect(self.powerMeterChanged)
-        self.ui.durationSpin.valueChanged.connect(self.durationSpinChanged)
-        self.ui.settlingSpin.valueChanged.connect(self.settlingSpinChanged)
+        #self.ui.measurementSpin.valueChanged.connect(self.measurmentSpinChanged)
+        #self.ui.settlingSpin.valueChanged.connect(self.settlingSpinChanged)
+        self.ui.shutterBtn.toggled.connect(self.shutterToggled)
+        self.ui.qSwitchBtn.toggled.connect(self.qSwitchToggled)
         
         self.dev.sigPowerChanged.connect(self.updatePowerLabels)
         
@@ -81,6 +88,23 @@ class LaserDevGui(QtGui.QWidget):
     def expectedPowerToggled(self, b):
         if b:
             self.dev.setParam(useExpectedPower=True)
+            
+    def shutterToggled(self, b):
+        if b:
+            self.dev.openShutter()
+            self.ui.shutterBtn.setText('Close Shutter')
+        elif not b:
+            self.dev.closeShutter()
+            self.ui.shutterBtn.setText('Open Shutter')
+            
+    def qSwitchToggled(self, b):
+        if b:
+            self.dev.openQSwitch()
+            self.ui.qSwitchBtn.setText('Turn Off QSwitch')
+        elif not b:
+            self.dev.closeQSwitch()
+            self.ui.qSwitchBtn.setText('Turn On QSwitch')
+            
     
     def expectedPowerSpinChanged(self, value):
         self.dev.setParam(expectedPower=value)
@@ -103,17 +127,20 @@ class LaserDevGui(QtGui.QWidget):
         if wl is not None:
             self.ui.wavelengthSpin.setValue(wl)
     
-    def microscopeChanged(self):
-        pass
+    #def microscopeChanged(self):
+        #pass
     
     def powerMeterChanged(self):
-        pass
+        sTime = getManager().getDevice(self.ui.meterCombo.currentText()).config.get('settlingTime', None)
+        if sTime is not None:
+            self.ui.settlingSpin.setValue(sTime)
+            
     
-    def durationSpinChanged(self, value):
-        pass
+    #def measurementSpinChanged(self, value):
+        #pass
     
-    def settlingSpinChanged(self, value):
-        pass
+    #def settlingSpinChanged(self, value):
+        #pass
     
     def updatePowerLabels(self, power):
         self.ui.outputPowerLabel.setText(str(siFormat(power)))

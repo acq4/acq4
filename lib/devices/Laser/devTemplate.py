@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'devTemplate.ui'
 #
-# Created: Thu Oct 06 14:36:34 2011
+# Created: Fri Oct 07 13:20:38 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -123,7 +123,7 @@ class Ui_Form(object):
         self.calibrationList.setItemsExpandable(False)
         self.calibrationList.setObjectName(_fromUtf8("calibrationList"))
         self.calibrationList.header().setStretchLastSection(True)
-        self.gridLayout_6.addWidget(self.calibrationList, 0, 0, 1, 2)
+        self.gridLayout_6.addWidget(self.calibrationList, 0, 0, 1, 4)
         self.calibrateBtn = QtGui.QPushButton(self.groupBox_2)
         self.calibrateBtn.setObjectName(_fromUtf8("calibrateBtn"))
         self.gridLayout_6.addWidget(self.calibrateBtn, 1, 0, 1, 1)
@@ -189,6 +189,7 @@ class Ui_Form(object):
         self.minVSpin = SpinBox(self.pCellGroup)
         self.minVSpin.setMinimum(-99.0)
         self.minVSpin.setSingleStep(0.01)
+        self.minVSpin.setProperty(_fromUtf8("value"), -0.2)
         self.minVSpin.setObjectName(_fromUtf8("minVSpin"))
         self.gridLayout_7.addWidget(self.minVSpin, 0, 1, 1, 1)
         self.label_11 = QtGui.QLabel(self.pCellGroup)
@@ -205,15 +206,26 @@ class Ui_Form(object):
         self.label_10 = QtGui.QLabel(self.pCellGroup)
         self.label_10.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.label_10.setObjectName(_fromUtf8("label_10"))
-        self.gridLayout_7.addWidget(self.label_10, 1, 0, 1, 1)
+        self.gridLayout_7.addWidget(self.label_10, 2, 0, 1, 1)
         self.maxVSpin = SpinBox(self.pCellGroup)
         self.maxVSpin.setSingleStep(0.01)
         self.maxVSpin.setProperty(_fromUtf8("value"), 1.2)
         self.maxVSpin.setObjectName(_fromUtf8("maxVSpin"))
-        self.gridLayout_7.addWidget(self.maxVSpin, 1, 1, 1, 1)
+        self.gridLayout_7.addWidget(self.maxVSpin, 2, 1, 1, 1)
+        self.recalibratePCellCheck = QtGui.QCheckBox(self.pCellGroup)
+        self.recalibratePCellCheck.setObjectName(_fromUtf8("recalibratePCellCheck"))
+        self.gridLayout_7.addWidget(self.recalibratePCellCheck, 2, 3, 1, 1)
         self.gridLayout_8.addLayout(self.gridLayout_7, 0, 0, 1, 1)
         self.gridLayout_3.addWidget(self.pCellGroup, 1, 0, 1, 1)
-        self.gridLayout_6.addWidget(self.groupBox, 2, 0, 1, 2)
+        self.gridLayout_6.addWidget(self.groupBox, 2, 0, 1, 4)
+        self.qSwitchBtn = QtGui.QPushButton(self.groupBox_2)
+        self.qSwitchBtn.setCheckable(True)
+        self.qSwitchBtn.setObjectName(_fromUtf8("qSwitchBtn"))
+        self.gridLayout_6.addWidget(self.qSwitchBtn, 1, 3, 1, 1)
+        self.shutterBtn = QtGui.QPushButton(self.groupBox_2)
+        self.shutterBtn.setCheckable(True)
+        self.shutterBtn.setObjectName(_fromUtf8("shutterBtn"))
+        self.gridLayout_6.addWidget(self.shutterBtn, 1, 2, 1, 1)
         self.gridLayout.addWidget(self.groupBox_2, 2, 0, 1, 1)
 
         self.retranslateUi(Form)
@@ -254,5 +266,8 @@ class Ui_Form(object):
         self.label_11.setText(QtGui.QApplication.translate("Form", "Number of Steps: ", None, QtGui.QApplication.UnicodeUTF8))
         self.label_10.setText(QtGui.QApplication.translate("Form", "Maximum Voltage:", None, QtGui.QApplication.UnicodeUTF8))
         self.maxVSpin.setSuffix(QtGui.QApplication.translate("Form", "V", None, QtGui.QApplication.UnicodeUTF8))
+        self.recalibratePCellCheck.setText(QtGui.QApplication.translate("Form", "Re-Calibrate Pockel Cell", None, QtGui.QApplication.UnicodeUTF8))
+        self.qSwitchBtn.setText(QtGui.QApplication.translate("Form", "Turn On QSwitch", None, QtGui.QApplication.UnicodeUTF8))
+        self.shutterBtn.setText(QtGui.QApplication.translate("Form", "Open Shutter", None, QtGui.QApplication.UnicodeUTF8))
 
 from SpinBox import SpinBox

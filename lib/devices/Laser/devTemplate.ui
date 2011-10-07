@@ -214,7 +214,7 @@
       <property name="margin">
        <number>6</number>
       </property>
-      <item row="0" column="0" colspan="2">
+      <item row="0" column="0" colspan="4">
        <widget class="QTreeWidget" name="calibrationList">
         <property name="font">
          <font>
@@ -278,7 +278,7 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0" colspan="2">
+      <item row="2" column="0" colspan="4">
        <widget class="QGroupBox" name="groupBox">
         <property name="title">
          <string>Calibration Parameters</string>
@@ -441,7 +441,7 @@
                 </property>
                </widget>
               </item>
-              <item row="1" column="0">
+              <item row="2" column="0">
                <widget class="QLabel" name="label_10">
                 <property name="text">
                  <string>Maximum Voltage:</string>
@@ -451,7 +451,7 @@
                 </property>
                </widget>
               </item>
-              <item row="1" column="1">
+              <item row="2" column="1">
                <widget class="SpinBox" name="maxVSpin">
                 <property name="suffix">
                  <string>V</string>
@@ -464,12 +464,39 @@
                 </property>
                </widget>
               </item>
+              <item row="2" column="3">
+               <widget class="QCheckBox" name="recalibratePCellCheck">
+                <property name="text">
+                 <string>Re-Calibrate Pockel Cell</string>
+                </property>
+               </widget>
+              </item>
              </layout>
             </item>
            </layout>
           </widget>
          </item>
         </layout>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QPushButton" name="qSwitchBtn">
+        <property name="text">
+         <string>Turn On QSwitch</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QPushButton" name="shutterBtn">
+        <property name="text">
+         <string>Open Shutter</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
        </widget>
       </item>
      </layout>

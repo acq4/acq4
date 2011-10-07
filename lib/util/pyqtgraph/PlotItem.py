@@ -1141,6 +1141,9 @@ class PlotItem(QtGui.QGraphicsWidget):
         return self.scales[key]['item']
         
     def setLabel(self, key, text=None, units=None, unitPrefix=None, **args):
+        """key : the name of the label; can be 'top', 'bottom', 'left', or 'right'
+           text : text to label the axis with
+           """
         self.getScale(key).setLabel(text=text, units=units, unitPrefix=unitPrefix, **args)
         
     def showLabel(self, key, show=True):
