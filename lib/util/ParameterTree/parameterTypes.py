@@ -36,6 +36,7 @@ class GroupParameterItem(ParameterItem):
                 self.addWidget = QtGui.QPushButton(addText)
                 self.addWidget.clicked.connect(self.addClicked)
             self.addItem = QtGui.QTreeWidgetItem([])
+            self.addItem.setFlags(QtCore.Qt.ItemIsEnabled)
             ParameterItem.addChild(self, self.addItem)
             
     def addClicked(self):

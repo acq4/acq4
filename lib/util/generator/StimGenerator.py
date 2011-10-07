@@ -19,7 +19,7 @@ from functions import logSpace
 from GeneratorTemplate import *
 import waveforms
 from debug import *
-from ParameterTree import GroupParameter
+from ParameterTree import Parameter, GroupParameter
 
 
 class StimGenerator(QtGui.QWidget):
@@ -53,27 +53,13 @@ class StimGenerator(QtGui.QWidget):
         self.updateWidgets()
         
         
-        #self.stimParams = ParameterSet('stimulus parameters', [])   ## stores structure of simple stim (say that 10x fast)
-        #self.stimParams = Parameter(name='stimulus parameters', type='group', addText='Add stimulus..', addList=['Pulse', 'PulseTrain'])
         self.stimParams = StimParameter()
-        
-        #self.addCombo = QtGui.QComboBox()
-        #for s in ['Add Stimulus...', 'Pulse', 'Pulse Train']:
-            #self.addCombo.addItem(s)
-        
         self.ui.paramTree.setParameters(self.stimParams)
-        
-        #self.addItem = QtGui.QTreeWidgetItem()
-        #self.ui.paramTree.addTopLevelItem(self.addItem)
-        #self.ui.paramTree.setItemWidget(self.addItem, 0, self.addCombo)
-        #self.addCombo.currentIndexChanged.connect(self.addComboChanged)
         
         self.ui.functionText.textChanged.connect(self.funcChanged)
         self.ui.paramText.textChanged.connect(self.paramChanged)
         self.ui.updateBtn.clicked.connect(self.update)
         self.ui.autoUpdateCheck.clicked.connect(self.autoUpdateClicked)
-        #self.ui.errorBtn.clicked.connect(self.errorBtnClicked)
-        #self.ui.helpBtn.clicked.connect(self.helpBtnClicked)
         self.ui.errorBtn.clicked.connect(self.updateWidgets)
         self.ui.helpBtn.clicked.connect(self.updateWidgets)
         self.ui.advancedBtn.toggled.connect(self.updateWidgets)
@@ -115,44 +101,6 @@ class StimGenerator(QtGui.QWidget):
         self.autoUpdate()
         #self.emit(QtCore.SIGNAL('stateChanged'))        
         self.sigStateChanged.emit()        
-
-    #def addComboChanged(self, ind):
-        #if ind == 0:
-            #return
-        #typ = str(self.addCombo.currentText())
-        #self.addCombo.setCurrentIndex(0)
-        
-        #if typ == 'Pulse':
-            #self.stimParams.addChild({'name': 'Pulse', 'autoIncrementName': True, 
-                                    #'type': 'group', 'removable': True, 'renamable': True,
-                                    #'params': [
-                #{'name': 'start', 'type': 'float', 'value': 0},
-                #{'name': 'stop', 'type': 'float', 'value': 0},
-                #{'name': 'pulse length', 'type': 'float', 'value': 0},
-                #{'name': 'amplitude', 'type': 'float', 'value': 0},
-                #{'name': 'sum', 'type': 'float', 'value': 0},
-            #]})
-        #elif typ == 'Pulse Train':
-            #self.stimParams.addChild({'name': 'Pulse', 'autoIncrementName': True, 
-                                    #'type': 'group', 'removable': True, 'renamable': True,
-                                    #'params': [
-                #{'name': 'start', 'type': 'float', 'value': 0},
-                #{'name': 'pulse length', 'type': 'float', 'value': 0},
-                #{'name': 'pulse number', 'type': 'int', 'value': 10},
-                #{'name': 'amplitude', 'type': 'float', 'value': 0},
-                #{'name': 'sum', 'type': 'float', 'value': 0},
-            #]})
-                
-        
-
-    #def errorBtnClicked(self):
-        #self.ui.errorText.setVisible(self.ui.errorBtn.isChecked())
-        
-    #def helpBtnClicked(self):
-        #if self.ui.helpBtn.isChecked():
-            #self.ui.stack.setCurrentIndex(1)
-        #else:
-            #self.ui.stack.setCurrentIndex(0)
 
     def updateWidgets(self):
         ## show/hide widgets depending on the current mode.
@@ -390,32 +338,79 @@ def seqParse(seqStr):
         
 class StimParameter(GroupParameter):
     def __init__(self):
-        GroupParameter.__init__(self, name='Stimulus params', type='group',
+        GroupParameter.__init__(self, name='Stimuli', type='group',
                            addText='Add Stimulus..', addList=['Pulse', 'Pulse Train'])
         
     def addNew(self, type):
         if type == 'Pulse':
-            self.addChild({'name': 'Pulse', 'autoIncrementName': True, 
-                                    'type': 'group', 'removable': True, 'renamable': True,
-                                    'params': [
-                {'name': 'start', 'type': 'float', 'value': 0},
-                {'name': 'stop', 'type': 'float', 'value': 0},
-                {'name': 'pulse length', 'type': 'float', 'value': 0},
-                {'name': 'amplitude', 'type': 'float', 'value': 0},
-                {'name': 'sum', 'type': 'float', 'value': 0},
-            ]})
+            self.addChild(PulseParameter())
         elif type == 'Pulse Train':
-            self.addChild({'name': 'Pulse', 'autoIncrementName': True, 
-                                    'type': 'group', 'removable': True, 'renamable': True,
-                                    'params': [
-                {'name': 'start', 'type': 'float', 'value': 0},
-                {'name': 'pulse length', 'type': 'float', 'value': 0},
-                {'name': 'pulse number', 'type': 'int', 'value': 10},
-                {'name': 'amplitude', 'type': 'float', 'value': 0},
-                {'name': 'sum', 'type': 'float', 'value': 0},
-            ]})
-            
+            self.addChild(PulseTrainParameter())
+
+class SeqParameter(Parameter):
+    def __init__(self, **args):
+        args['params'] = [
+            {'name': 'sequence', 'type': 'list', 'value': 'off', 'values': ['off', 'range', 'list']},
+            {'name': 'start', 'type': 'float', 'value': 0, 'visible': False}, 
+            {'name': 'stop', 'type': 'float', 'value': 0, 'visible': False}, 
+            {'name': 'steps', 'type': 'int', 'value': 10, 'visible': False},
+            {'name': 'log spacing', 'type': 'bool', 'value': False, 'visible': False}, 
+            {'name': 'list', 'type': 'str', 'value': '', 'visible': False}, 
+            {'name': 'randomize', 'type': 'bool', 'value': False, 'visible': False}, 
+        ]
+        args['expanded'] = args.get('expanded', False)
+        Parameter.__init__(self, **args)
+        self.sequence.sigValueChanged.connect(self.seqChanged)
         
+    def seqChanged(self):
+        if self['sequence'] == 'off':
+            for ch in self:
+                ch.hide()
+        elif self['sequence'] == 'range':
+            for ch in self:
+                ch.show()
+            self.list.hide()
+        elif self['sequence'] == 'list':
+            for ch in self:
+                ch.hide()
+            self.list.show()
+            self.randomize.show()
+        self.sequence.show()
+        
+class PulseParameter(GroupParameter):
+    def __init__(self, **kargs):
+        GroupParameter.__init__(self, name="Pulse", autoIncrementName=True, type="pulse", removable=True, renamable=True,
+            params=[
+                SeqParameter(**{'name': 'start', 'type': 'float', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True}),
+                SeqParameter(**{'name': 'length', 'type': 'float', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True}),
+                SeqParameter(**{'name': 'amplitude', 'type': 'float', 'value': 0}),
+                SeqParameter(**{'name': 'sum', 'type': 'float', 'value': 0}),
+            ], **kargs)
+        self.length.sigValueChanged.connect(self.lenChanged)
+        self.amplitude.sigValueChanged.connect(self.ampChanged)
+        self.sum.sigValueChanged.connect(self.sumChanged)
+        
+    def lenChanged(self):
+        self.sum.setValue(self['length'] * self['amplitude'], blockSignal=self.sumChanged)
+
+    def ampChanged(self):
+        self.sum.setValue(self['length'] * self['amplitude'], blockSignal=self.sumChanged)
+
+    def sumChanged(self):
+        self.length.setValue(self['sum'] / self['amplitude'], blockSignal=self.lenChanged)
+
+
+class PulseTrainParameter(GroupParameter):
+    def __init__(self, **kargs):
+        GroupParameter.__init__(self, name="Pulse Train", autoIncrementName=True, type="pulseTrain", removable=True, renamable=True,
+        params=[
+            {'name': 'start', 'type': 'float', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True},
+            {'name': 'pulse length', 'type': 'float', 'value': 0.005, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True},
+            {'name': 'interpulse length', 'type': 'float', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True},
+            {'name': 'pulse number', 'type': 'int', 'value': 10},
+            {'name': 'amplitude', 'type': 'float', 'value': 0},
+            {'name': 'sum', 'type': 'float', 'value': 0},
+        ], **kargs)
         
         
         

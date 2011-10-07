@@ -127,4 +127,8 @@ t = ParameterTree()
 t.setParameters(p, showTop=False)
 t.show()
 t.resize(400,600)
+t2 = ParameterTree()
+t2.setParameters(p, showTop=False)
+t2.show()
+t2.resize(400,600)
     
