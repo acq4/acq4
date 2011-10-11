@@ -4,6 +4,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
+import PySideImporter
 
 from PyQt4 import QtGui, QtCore
 import numpy as np
@@ -18,8 +19,8 @@ mw.setCentralWidget(cw)
 l = QtGui.QVBoxLayout()
 cw.setLayout(l)
 
-pw = pg.PlotWidget(name='Plot1')  ## giving the plots names allows us to link their axes together
-l.addWidget(pw)
+pw1 = pg.PlotWidget(name='Plot1')  ## giving the plots names allows us to link their axes together
+l.addWidget(pw1)
 pw2 = pg.PlotWidget(name='Plot2')
 l.addWidget(pw2)
 pw3 = pg.PlotWidget()
@@ -28,13 +29,13 @@ l.addWidget(pw3)
 mw.show()
 
 ## Create an empty plot curve to be filled later, set its pen
-p1 = pw.plot()
+p1 = pw1.plot()
 p1.setPen((200,200,100))
 
 ## Add in some extra graphics
 rect = QtGui.QGraphicsRectItem(QtCore.QRectF(0, 0, 1, 1e-10))
 rect.setPen(QtGui.QPen(QtGui.QColor(100, 200, 100)))
-pw.addItem(rect)
+pw1.addItem(rect)
 
 
 def rand(n):

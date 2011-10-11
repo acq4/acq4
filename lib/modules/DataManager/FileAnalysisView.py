@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import lib.util.PySideImporter  ## Use PySide instead of PyQt
+
 from PyQt4 import QtCore, QtGui
 import database
 from AnalysisTemplate import *
@@ -6,6 +8,10 @@ import lib.Manager
 import lib.analysis.modules as analysis
 import lib.analysis.AnalysisHost as AnalysisHost
 import lib.analysis.dataModels as models
+QtCore.QString = str
+def noop(x):
+   return x
+QtCore.QVariant = noop
 
 class FileAnalysisView(QtGui.QWidget):
     
@@ -39,7 +45,8 @@ class FileAnalysisView(QtGui.QWidget):
         
 
     def openDbClicked(self):
-        fn = str(QtGui.QFileDialog.getOpenFileName(self, "Select Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)"))
+        fn = str(QtGui.QFileDialog.getOpenFileName(self, u"Select Database File", unicode(self.man.getBaseDir().name()), 
+            u"SQLite Database (*.sqlite)"))
         if fn == '':
             return
         self.ui.databaseText.setText(fn)
@@ -48,7 +55,8 @@ class FileAnalysisView(QtGui.QWidget):
         self.sigDbChanged.emit()
         
     def createDbClicked(self):
-        fn = str(QtGui.QFileDialog.getSaveFileName(self, "Create Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)", None, QtGui.QFileDialog.DontConfirmOverwrite))
+        fn = str(QtGui.QFileDialog.getSaveFileName(self, u'Create Database File', unicode(self.man.getBaseDir().name()), 
+            u"SQLite Database (*.sqlite)", u'', QtGui.QFileDialog.DontConfirmOverwrite))
         if fn is '':
             return
         self.ui.databaseText.setText(fn)

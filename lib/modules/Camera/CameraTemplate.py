@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'CameraTemplate.ui'
+# Form implementation generated from reading ui file './lib/modules/Camera/CameraTemplate.ui'
 #
-# Created: Mon Aug 08 17:28:34 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Tue Oct 11 10:46:43 2011
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName(_fromUtf8("MainWindow"))
-        MainWindow.resize(901, 521)
+        MainWindow.resize(786, 686)
         self.centralwidget = QtGui.QWidget(MainWindow)
         self.centralwidget.setObjectName(_fromUtf8("centralwidget"))
         self.horizontalLayout_3 = QtGui.QHBoxLayout(self.centralwidget)
@@ -376,20 +376,31 @@ class Ui_MainWindow(object):
         self.clearFramesBtn.setText(QtGui.QApplication.translate("MainWindow", "Clear", None, QtGui.QApplication.UnicodeUTF8))
         self.dockWidget_3.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Background Subtraction", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("MainWindow", "Collect Background:", None, QtGui.QApplication.UnicodeUTF8))
-        self.staticBgBtn.setToolTip(QtGui.QApplication.translate("MainWindow", "Collects a set of frames to use for background division.\n"
-"Using static background division is faster than continuous \n"
-"background division, but does not enhance time varying signals.\n"
-"Frames are collected for the amount of time set in Time const.", None, QtGui.QApplication.UnicodeUTF8))
+        self.staticBgBtn.setToolTip(QtGui.QApplication.translate("MainWindow", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
+"p, li { white-space: pre-wrap; }\n"
+"</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Collects a set of frames to use for background division.</span></p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Frames are collected for the amount of time set in Time const.</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
         self.staticBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Static", None, QtGui.QApplication.UnicodeUTF8))
-        self.continuousBgBtn.setToolTip(QtGui.QApplication.translate("MainWindow", "Collects frames continuously for background division.\n"
-"Slower than static collection, but enhances time-varying signals.\n"
-"Uses the time constant set below.", None, QtGui.QApplication.UnicodeUTF8))
+        self.continuousBgBtn.setToolTip(QtGui.QApplication.translate("MainWindow", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
+"p, li { white-space: pre-wrap; }\n"
+"</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Collects frames continuously for background division.</span></p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Used to enhance time-varying signals.</span></p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Uses the time constant set below.</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
         self.continuousBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Continuous", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("MainWindow", "Time const.", None, QtGui.QApplication.UnicodeUTF8))
         self.bgTimeSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Sets the approximate number of frames to be averaged for\n"
 "background division.", None, QtGui.QApplication.UnicodeUTF8))
         self.label_5.setText(QtGui.QApplication.translate("MainWindow", "Blur Bg.", None, QtGui.QApplication.UnicodeUTF8))
-        self.bgBlurSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "Blurs the background frame before dividing it from the current frame.", None, QtGui.QApplication.UnicodeUTF8))
+        self.bgBlurSpin.setToolTip(QtGui.QApplication.translate("MainWindow", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
+"p, li { white-space: pre-wrap; }\n"
+"</style></head><body style=\" font-family:\'MS Shell Dlg 2\'; font-size:8.25pt; font-weight:400; font-style:normal;\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Blurs the background frame before dividing it from the current frame.</span></p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt;\">Large blur values may cause performance to degrade.</span></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
         self.divideBgBtn.setToolTip(QtGui.QApplication.translate("MainWindow", "Enables background division. \n"
 "Either a set of static background frames need to have already by collected\n"
 "(by pressing \'Static\' above) or \'Continuous\' needs to be pressed.", None, QtGui.QApplication.UnicodeUTF8))

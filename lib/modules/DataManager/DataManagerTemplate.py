@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'DataManagerTemplate.ui'
+# Form implementation generated from reading ui file './lib/modules/DataManager/DataManagerTemplate.ui'
 #
-# Created: Tue Aug  9 11:12:24 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Tue Oct 11 10:46:43 2011
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName(_fromUtf8("MainWindow"))
-        MainWindow.resize(1000, 800)
+        MainWindow.resize(593, 590)
         self.centralwidget = QtGui.QWidget(MainWindow)
         self.centralwidget.setObjectName(_fromUtf8("centralwidget"))
         self.verticalLayout_5 = QtGui.QVBoxLayout(self.centralwidget)

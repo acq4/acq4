@@ -8,7 +8,7 @@ from math import log
 from SignalProxy import proxyConnect
 from decimal import Decimal as D  ## Use decimal to avoid accumulating floating-point errors
 from decimal import *
-import sip, weakref
+import weakref
 
 class SpinBox(QtGui.QAbstractSpinBox):
     """QSpinBox widget on steroids. Allows selection of numerical value, with extra features:
@@ -237,8 +237,8 @@ class SpinBox(QtGui.QAbstractSpinBox):
     def setProperty(self, prop, val):
         """setProperty is just for compatibility with QSpinBox"""
         if prop == 'value':
-            if type(val) is QtCore.QVariant:
-                val = val.toDouble()[0]
+            #if type(val) is QtCore.QVariant:
+                #val = val.toDouble()[0]
             self.setValue(val)
         else:
             print "Warning: SpinBox.setProperty('%s', ..) not supported." % prop

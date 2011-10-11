@@ -3,6 +3,8 @@ import sys, os
 ## Add path to library (just for examples; you do not need this)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
+import PySideImporter  ## Use PySide instead of PyQt
+
 from PyQt4 import QtGui, QtCore
 import pyqtgraph as pg
 import numpy as np
@@ -31,11 +33,12 @@ print "Generating data, this takes a few seconds..."
 ## image and just drawing that image repeatedly. (use identical=True in the constructor)
 ## (An even faster approach might be to use QPainter.drawPixmapFragments)
 
-n = 3000
-s1 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 20), identical=True)
+n = 300
+s1 = pg.ScatterPlotItem(size=10, pen=pg.mkPen('r'), brush=pg.mkBrush(255, 255, 255, 80), identical=True)
 pos = np.random.normal(size=(2,n), scale=1e-5)
 spots = [{'pos': pos[:,i], 'data': 1} for i in range(n)] + [{'pos': [0,0], 'data': 1}]
 s1.addPoints(spots)
+w1.plot(x=pos[0,:], y=pos[1,:])
 w1.addDataItem(s1)
 
 ## This plot is clickable
@@ -50,8 +53,8 @@ s1.sigClicked.connect(clicked)
 ## and memory usage since each spot generates its own pre-rendered image.
 
 s2 = pg.ScatterPlotItem(size=10, pen=pg.mkPen('w'), pxMode=True)
-pos = np.random.normal(size=(2,3000), scale=1e-5)
-spots = [{'pos': pos[:,i], 'data': 1, 'brush':pg.intColor(i, 3000)} for i in range(3000)]
+pos = np.random.normal(size=(2,n), scale=1e-5)
+spots = [{'pos': pos[:,i], 'data': 1, 'brush':pg.intColor(i, n)} for i in range(n)]
 s2.addPoints(spots)
 w2.addItem(s2)
 w2.setRange(s2.boundingRect())
@@ -75,7 +78,7 @@ s3.sigClicked.connect(clicked)
 ## Coming: use qpainter.drawpixmapfragments for scatterplots which do not require mouse interaction
 
 s4 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 20), identical=True)
-pos = np.random.normal(size=(2,10000), scale=1e-9)
+pos = np.random.normal(size=(2,3*n), scale=1e-9)
 s4.addPoints(x=pos[0], y=pos[1])
 w4.addDataItem(s4)
 

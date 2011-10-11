@@ -47,7 +47,8 @@ def comboState(w):
     
 def setComboState(w, v):
     if type(v) is int:
-        ind = w.findData(QtCore.QVariant(v))
+        #ind = w.findData(QtCore.QVariant(v))
+        ind = w.findData(v)
         if ind > -1:
             w.setCurrentIndex(ind)
             return
@@ -260,8 +261,8 @@ class WidgetGroup(QtCore.QObject):
         val = getFunc(w)
         if self.scales[w] is not None:
             val /= self.scales[w]
-        if isinstance(val, QtCore.QString):
-            val = str(val)
+        #if isinstance(val, QtCore.QString):
+            #val = str(val)
         n = self.widgetList[w]
         self.cache[n] = val
         return val

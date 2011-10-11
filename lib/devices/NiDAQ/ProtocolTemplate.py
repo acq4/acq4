@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/devices/NiDAQ/ProtocolTemplate.ui'
 #
-# Created: Wed May 18 20:44:16 2011
+# Created: Tue Oct 11 10:46:42 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

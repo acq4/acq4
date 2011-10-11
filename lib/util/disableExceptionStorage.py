@@ -13,4 +13,4 @@ def excepthook(*args):
     ret = original_excepthook(*args)
     sys.last_traceback = None           ## the important bit
 
-sys.excepthook = excepthook
+# sys.excepthook = excepthook

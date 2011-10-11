@@ -1,12 +1,15 @@
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
 ## Add path to library (just for examples; you do not need this)
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-import ptime
+
+import PySideImporter
 
 from PyQt4 import QtCore, QtGui
 import numpy as np
 import pyqtgraph as pg
+import ptime
 
 app = QtGui.QApplication([])
 

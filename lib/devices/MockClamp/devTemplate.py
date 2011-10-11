@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'devTemplate.ui'
+# Form implementation generated from reading ui file './lib/devices/MockClamp/devTemplate.ui'
 #
-# Created: Mon Jun 20 13:12:28 2011
+# Created: Tue Oct 11 10:46:41 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

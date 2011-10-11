@@ -60,7 +60,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.ctrlBtn.setText('?')
         self.autoBtn = QtGui.QToolButton()
         self.autoBtn.setText('A')
-        self.autoBtn.hide()
+        #self.autoBtn.hide()
         self.proxies = []
         for b in [self.ctrlBtn, self.autoBtn]:
             proxy = QtGui.QGraphicsProxyWidget(self)
@@ -675,7 +675,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.avgCurves = {}
         
     
-    def plot(self, data=None, data2=None, x=None, y=None, clear=False, params=None, pen=None):
+    def plot(self, data=None, data2=None, x=None, y=None, clear=False, params=None, pen=None, 
+        symbol=None, decimate = None):
         """Add a new plot curve. Data may be specified a few ways:
         plot(yVals)   # x vals will be integers
         plot(xVals, yVals)
@@ -686,7 +687,11 @@ class PlotItem(QtGui.QGraphicsWidget):
         if data2 is not None:
             x = data
             data = data2
-        
+        if decimate is not None and decimate > 1:
+            data = data[::decimate]
+            if x is not None:
+                x = x[::decimate]
+          #  print 'plot with decimate = %d' % (decimate)
         if clear:
             self.clear()
         if params is None:

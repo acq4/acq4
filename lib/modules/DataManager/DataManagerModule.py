@@ -2,7 +2,7 @@
 from DataManagerTemplate import *
 from lib.modules.Module import *
 from DataManager import *
-import os, re, sys, time, sip
+import os, re, sys, time
 from debug import *
 import FileAnalysisView
 
@@ -45,29 +45,18 @@ class DataManager(Module):
         
         ## Make all connections needed
         #QtCore.QObject.connect(self.dm, QtCore.SIGNAL("baseDirChanged()"), self.baseDirChanged)
-        #QtCore.QObject.connect(self.ui.selectDirBtn, QtCore.SIGNAL("clicked()"), self.showFileDialog)
         self.ui.selectDirBtn.clicked.connect(self.showFileDialog)
-        #QtCore.QObject.connect(self.ui.setCurrentDirBtn, QtCore.SIGNAL("clicked()"), self.setCurrentClicked)
         self.ui.setCurrentDirBtn.clicked.connect(self.setCurrentClicked)
         #QtCore.QObject.connect(self.ui.storageDirText, QtCore.SIGNAL('textEdited(const QString)'), self.selectDir)
-        #QtCore.QObject.connect(self.dialog, QtCore.SIGNAL('filesSelected(const QStringList)'), self.setBaseDir)
         self.dialog.filesSelected.connect(self.setBaseDir)
-        #QtCore.QObject.connect(self.manager, QtCore.SIGNAL('baseDirChanged'), self.baseDirChanged)
         self.manager.sigBaseDirChanged.connect(self.baseDirChanged)
-        #QtCore.QObject.connect(self.manager, QtCore.SIGNAL('currentDirChanged'), self.currentDirChanged)
         self.manager.sigCurrentDirChanged.connect(self.currentDirChanged)
-        #QtCore.QObject.connect(self.manager, QtCore.SIGNAL('configChanged'), self.updateNewFolderList)
         self.manager.sigConfigChanged.connect(self.updateNewFolderList)
-        #QtCore.QObject.connect(self.ui.newFolderList, QtCore.SIGNAL('currentIndexChanged(int)'), self.newFolder)
         self.ui.newFolderList.currentIndexChanged.connect(self.newFolder)
         #QtCore.QObject.connect(self.ui.fileTreeWidget.selectionModel(), QtCore.SIGNAL('selectionChanged(const QItemSelection&, const QItemSelection&)'), self.fileSelectionChanged)
-        #QtCore.QObject.connect(self.ui.fileTreeWidget, QtCore.SIGNAL('itemSelectionChanged()'), self.fileSelectionChanged)
         self.ui.fileTreeWidget.itemSelectionChanged.connect(self.fileSelectionChanged)
-        #QtCore.QObject.connect(self.ui.logEntryText, QtCore.SIGNAL('returnPressed()'), self.logEntry)
         self.ui.logEntryText.returnPressed.connect(self.logEntry)
-        #QtCore.QObject.connect(self.ui.fileDisplayTabs, QtCore.SIGNAL('currentChanged(int)'), self.tabChanged)
         self.ui.fileDisplayTabs.currentChanged.connect(self.tabChanged)
-        #QtCore.QObject.connect(self.win, QtCore.SIGNAL('closed'), self.quit)
         self.win.sigClosed.connect(self.quit)
         self.ui.analysisWidget.sigDbChanged.connect(self.analysisDbChanged)
         self.win.show()
@@ -85,7 +74,8 @@ class DataManager(Module):
     def baseDirChanged(self):
         dh = self.manager.getBaseDir()
         self.baseDir = dh
-        self.ui.baseDirText.setText(QtCore.QString(dh.name()))
+        #self.ui.baseDirText.setText(QtCore.QString(dh.name()))
+        self.ui.baseDirText.setText(dh.name())
         self.ui.fileTreeWidget.setBaseDirHandle(dh)
         #self.currentDirChanged()
 
@@ -104,8 +94,10 @@ class DataManager(Module):
         if change in [None, 'moved', 'renamed', 'parent']:
             newDir = self.manager.getCurrentDir()
             dirName = newDir.name(relativeTo=self.baseDir)
-            self.ui.currentDirText.setText(QtCore.QString(dirName))
-            self.ui.logDock.setWindowTitle(QtCore.QString('Current Log - ' + dirName))
+            #self.ui.currentDirText.setText(QtCore.QString(dirName))
+            #self.ui.logDock.setWindowTitle(QtCore.QString('Current Log - ' + dirName))
+            self.ui.currentDirText.setText(dirName)
+            self.ui.logDock.setWindowTitle('Current Log - ' + dirName)
             self.ui.fileTreeWidget.setCurrentDir(newDir)
             #dirIndex = self.ui.fileTreeWidget.handleIndex(newDir)
             #self.ui.fileTreeWidget.setExpanded(dirIndex, True)
@@ -127,12 +119,13 @@ class DataManager(Module):
         self.dialog.show()
 
     def setBaseDir(self, dirName):
-        #if dirName is None:
-            #dirName = QtGui.QFileDialog.getExistingDirectory()
-        if type(dirName) is QtCore.QStringList:
+        if isinstance(dirName, list):
             dirName = str(dirName[0])
-        elif type(dirName) is QtCore.QString:
-            dirName = str(dirName)
+            #raise Exception("Caught. Please to be examined.")
+        #if type(dirName) is QtCore.QStringList:
+            #dirName = str(dirName[0])
+        #elif type(dirName) is QtCore.QString:
+            #dirName = str(dirName)
         if dirName is None:
             return
         if os.path.isdir(dirName):

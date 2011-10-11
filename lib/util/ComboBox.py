@@ -50,7 +50,8 @@ class ComboBox(QtGui.QComboBox):
         
     def restoreState(w, v):
         if type(v) is int:
-            ind = self.findData(QtCore.QVariant(v))
+            #ind = self.findData(QtCore.QVariant(v))
+            ind = self.findData(v)
             if ind > -1:
                 self.setCurrentIndex(ind)
                 return

@@ -4,6 +4,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
+import PySideImporter
 
 from PyQt4 import QtCore, QtGui
 import numpy as np

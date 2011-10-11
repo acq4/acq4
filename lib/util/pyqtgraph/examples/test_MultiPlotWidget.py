@@ -4,7 +4,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-
+import PySideImporter
 from scipy import random
 from numpy import linspace
 from PyQt4 import QtGui, QtCore
@@ -23,8 +23,11 @@ pw = MultiPlotWidget()
 mw.setCentralWidget(pw)
 mw.show()
 
-ma = MetaArray(random.random((3, 1000)), info=[{'name': 'Signal', 'cols': [{'name': 'Col1'}, {'name': 'Col2'}, {'name': 'Col3'}]}, {'name': 'Time', 'vals': linspace(0., 1., 1000)}])
+ma = MetaArray(random.random((5, 1000)), info=[{'name': 'Signal', 'cols': [{'name': 'Col1'}, {'name': 'Col2'}, {'name': 'Col3'}
+, {'name': 'Col3'}, {'name': 'Col3'}]}, {'name': 'Time', 'vals': linspace(0., 1., 1000)}])
+print ma
 pw.plot(ma)
+print dir(pw.children()[0])
 
 ## Start Qt event loop unless running in interactive mode.
 if sys.flags.interactive != 1:

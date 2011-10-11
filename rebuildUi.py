@@ -10,5 +10,7 @@ for path, sd, files in os.walk('.'):
             continue
         ui = os.path.join(path, f)
         py = os.path.join(path, base + '.py')
+        #cmd = '%s %s > %s' % (uic, ui, py)
+        #print cmd
         os.system('%s %s > %s' % (uic, ui, py))
         print py

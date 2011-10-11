@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'builderTemplate.ui'
+# Form implementation generated from reading ui file './lib/analysis/atlas/builderTemplate.ui'
 #
-# Created: Sun Jun 12 18:22:05 2011
+# Created: Tue Oct 11 10:46:38 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -114,7 +114,6 @@ class Ui_Form(object):
         self.labelTree = TreeWidget(self.groupBox_2)
         self.labelTree.setRootIsDecorated(False)
         self.labelTree.setItemsExpandable(False)
-        self.labelTree.setHeaderHidden(False)
         self.labelTree.setExpandsOnDoubleClick(False)
         self.labelTree.setObjectName(_fromUtf8("labelTree"))
         self.labelTree.headerItem().setText(1, _fromUtf8("name"))

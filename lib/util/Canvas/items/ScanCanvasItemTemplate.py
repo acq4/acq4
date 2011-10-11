@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'ScanCanvasItemTemplate.ui'
+# Form implementation generated from reading ui file './lib/util/Canvas/items/ScanCanvasItemTemplate.ui'
 #
-# Created: Mon Aug 08 18:07:51 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Tue Oct 11 10:46:44 2011
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
