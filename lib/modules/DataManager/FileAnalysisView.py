@@ -39,13 +39,13 @@ class FileAnalysisView(QtGui.QWidget):
         self.ui.dataModelCombo.currentIndexChanged.connect(self.loadModel)
         
 
-    def openDbClicked(self, fileName=None):
-        if fileName is None:
-            self.fileDialog = FileDialog(self, "Select Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)")
-            #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
-            self.fileDialog.show()
-            self.fileDialog.fileSelected.connect(self.openDbClicked)
-            return
+    def openDbClicked(self):
+        self.fileDialog = FileDialog(self, "Select Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)")
+        #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+        self.fileDialog.show()
+        self.fileDialog.fileSelected.connect(self.openDb)
+            
+    def openDb(self, fileName):
         #fn = str(QtGui.QFileDialog.getOpenFileName(self, "Select Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)"))
         fileName = str(fileName)
         if fileName == '':
@@ -55,15 +55,15 @@ class FileAnalysisView(QtGui.QWidget):
         self.db = database.AnalysisDatabase(self.dbFile)
         self.sigDbChanged.emit()
         
-    def createDbClicked(self, fileName=None):
-        if fileName is None:
-            self.fileDialog = FileDialog(self, "Create Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)")
-            #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
-            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
-            self.fileDialog.setOption(QtGui.QFileDialog.DontConfirmOverwrite)
-            self.fileDialog.show()
-            self.fileDialog.fileSelected.connect(self.createDbClicked)
-            return
+    def createDbClicked(self):
+        self.fileDialog = FileDialog(self, "Create Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)")
+        #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+        self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
+        self.fileDialog.setOption(QtGui.QFileDialog.DontConfirmOverwrite)
+        self.fileDialog.show()
+        self.fileDialog.fileSelected.connect(self.createDb)
+        
+    def createDb(self, fileName):
         #fn = str(QtGui.QFileDialog.getSaveFileName(self, "Create Database File", self.man.getBaseDir().name(), "SQLite Database (*.sqlite)", None, QtGui.QFileDialog.DontConfirmOverwrite))
         fileName = str(fileName)
         if fileName is '':
