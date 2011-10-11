@@ -48,13 +48,13 @@ class ROI(QtGui.QGraphicsObject):
     sigRegionChangeStarted = QtCore.Signal(object)
     sigRegionChanged = QtCore.Signal(object)
     
-    def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None):
+    def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None, movable=True):
         #QObjectWorkaround.__init__(self)
         QtGui.QGraphicsObject.__init__(self, parent)
         pos = Point(pos)
         size = Point(size)
         self.aspectLocked = False
-        self.translatable = True
+        self.translatable = movable
         self.rotateAllowed = True
         
         if pen is None:
@@ -237,6 +237,8 @@ class ROI(QtGui.QGraphicsObject):
                 #self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
                 self.sigRegionChangeStarted.emit(self)
                 ev.accept()
+            else:
+                ev.ignore()
         elif ev.button() == QtCore.Qt.RightButton:
             if self.isMoving:
                 ev.accept()

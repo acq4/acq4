@@ -22,9 +22,11 @@ from debug import *
 from metaarray import *
 import sip
 from SignalProxy import proxyConnect
-from lib.Manager import getManager
+#from lib.Manager import getManager
+import lib.Manager as Manager
 import numpy as np
 from RecordThread import RecordThread
+from lib.LogWindow import LogButton
 
 traceDepth = 0
 def trace(func):
@@ -92,7 +94,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.setupUi(self)
         
         self.stateFile = os.path.join('modules', self.module.name + '_ui.cfg')
-        uiState = getManager().readConfigFile(self.stateFile)
+        uiState = module.manager.readConfigFile(self.stateFile)
         if 'geometry' in uiState:
             geom = QtCore.QRect(*uiState['geometry'])
             self.setGeometry(geom)
@@ -196,12 +198,15 @@ class CameraWindow(QtGui.QMainWindow):
         self.fpsLabel.setFont(font)
         self.fpsLabel.setFixedWidth(50)
         self.vLabel.setFixedWidth(50)
+        self.logBtn = LogButton('Log')
         self.statusBar().addPermanentWidget(self.recLabel)
         self.statusBar().addPermanentWidget(self.xyLabel)
         self.statusBar().addPermanentWidget(self.rgnLabel)
         self.statusBar().addPermanentWidget(self.tLabel)
         self.statusBar().addPermanentWidget(self.vLabel)
         self.statusBar().addPermanentWidget(self.fpsLabel)
+        self.statusBar().addPermanentWidget(self.logBtn)
+        self.logBtn.clicked.connect(module.manager.showLogWindow)
         
         self.show()
         self.openCamera()
@@ -260,6 +265,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.btnFullFrame.clicked.connect(lambda: self.setRegion())
         self.ui.scaleToImageBtn.clicked.connect(self.scaleToImage)
         
+        
         ## Use delayed connection for these two widgets
         self.proxy1 = proxyConnect(self.ui.binningCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.setBinning)
         self.ui.spinExposure.valueChanged.connect(self.setExposure)  ## note that this signal (from lib.util.SpinBox) is delayed.
@@ -304,7 +310,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.frameTimer.start(10)
         #QtCore.QTimer.singleShot(1, self.drawFrame)
         ## avoiding possible singleShot-induced crashes
-
+        
     #@trace
     def updateBorders(self):
         """Draw the camera boundaries for each objective"""
@@ -490,7 +496,7 @@ class CameraWindow(QtGui.QMainWindow):
         #self.frameTimer.stop()
         geom = self.geometry()
         uiState = {'window': str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
-        getManager().writeConfigFile(uiState, self.stateFile)
+        Manager.getManager().writeConfigFile(uiState, self.stateFile)
         
         
         
@@ -732,6 +738,7 @@ class CameraWindow(QtGui.QMainWindow):
                 self.setExposure(autoRestart=False)
                 self.updateRegion(autoRestart=False)
                 self.cam.start()
+                Manager.logMsg("Camera started aquisition.")
             except:
                 self.ui.btnAcquire.setChecked(False)
                 printExc("Error starting camera:")
@@ -740,6 +747,7 @@ class CameraWindow(QtGui.QMainWindow):
             #print "ACQ untoggled, stop record"
             self.toggleRecord(False)
             self.cam.stop()
+            Manager.logMsg("Camera stopped acquisition.")
             
     #@trace
     def addPlotFrame(self, frame):

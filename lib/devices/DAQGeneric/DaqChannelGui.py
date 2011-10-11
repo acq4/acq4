@@ -11,6 +11,8 @@ import sip
 from functions import siFormat
 from SpinBox import *
 
+###### For protocol GUIs
+
 class DaqChannelGui(QtGui.QWidget):
     def __init__(self, parent, name, config, plot, dev, prot):
         QtGui.QWidget.__init__(self, parent)
@@ -18,7 +20,7 @@ class DaqChannelGui(QtGui.QWidget):
         ## Name of this channel
         self.name = name
         
-        ## PArent protoGui object
+        ## Parent protoGui object
         self.protoGui = weakref.ref(parent)
         
         ## Configuration for this channel defined in the device configuration file

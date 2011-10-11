@@ -3,9 +3,10 @@ from PyQt4 import QtCore, QtGui
 class FeedbackButton(QtGui.QPushButton):
     
     ### For thread-safetyness
-    sigCallSuccess = QtCore.Signal(object, object)
-    sigCallFailure = QtCore.Signal(object, object)
+    sigCallSuccess = QtCore.Signal(object, object, object)
+    sigCallFailure = QtCore.Signal(object, object, object)
     sigCallProcess = QtCore.Signal(object, object, object)
+    sigReset = QtCore.Signal()
     
     def __init__(self, *args):
         QtGui.QPushButton.__init__(self, *args)
@@ -13,6 +14,7 @@ class FeedbackButton(QtGui.QPushButton):
         self.origText = self.text()
         self.origStyle = self.styleSheet()
         self.origTip = self.toolTip()
+        self.limitedTime = True
         
         #self.textTimer = QtCore.QTimer()
         #self.tipTimer = QtCore.QTimer()
@@ -22,34 +24,35 @@ class FeedbackButton(QtGui.QPushButton):
         self.sigCallSuccess.connect(self.success)
         self.sigCallFailure.connect(self.failure)
         self.sigCallProcess.connect(self.processing)
+        self.sigReset.connect(self.reset)
         
 
-    def feedback(self, success, message=None, tip=""):
-        """Calls success() or failure(). Threadsafe."""
+    def feedback(self, success, message=None, tip="", limitedTime=True):
+        """Calls success() or failure(). If you want the message to be displayed until the user takes an action, set limitedTime to False. Then call self.reset() after the desired action.Threadsafe."""
         if success:
-            self.success(message, tip)
+            self.success(message, tip, limitedTime=limitedTime)
         else:
-            self.failure(message, tip)
+            self.failure(message, tip, limitedTime=limitedTime)
     
-    def success(self, message=None, tip=""):
-        """Displays specified message on button and flashes button green to let user know action was successful. Threadsafe. """
+    def success(self, message=None, tip="", limitedTime=True):
+        """Displays specified message on button and flashes button green to let user know action was successful. If you want the success to be displayed until the user takes an action, set limitedTime to False. Then call self.reset() after the desired action. Threadsafe."""
         isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
         if isGuiThread:
             self.setEnabled(True)
             #print "success"
-            self.startBlink("#0F0", message, tip)
+            self.startBlink("#0F0", message, tip, limitedTime=limitedTime)
         else:
-            self.sigCallSuccess.emit(message, tip)
+            self.sigCallSuccess.emit(message, tip, limitedTime)
             
-    def failure(self, message=None, tip=""):
-        """Displays specified message on button and flashes button red to let user know there was an error. Threadsafe. """
+    def failure(self, message=None, tip="", limitedTime=True):
+        """Displays specified message on button and flashes button red to let user know there was an error. If you want the error to be displayed until the user takes an action, set limitedTime to False. Then call self.reset() after the desired action. Threadsafe. """
         isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
         if isGuiThread:
             self.setEnabled(True)
             #print "fail"
-            self.startBlink("#F00", message, tip)
+            self.startBlink("#F00", message, tip, limitedTime=limitedTime)
         else:
-            self.sigCallFailure.emit(message, tip)
+            self.sigCallFailure.emit(message, tip, limitedTime)
 
     def processing(self, message="Processing..", tip="", processEvents=True):
         """Displays specified message on button to let user know the action is in progress. Threadsafe. """
@@ -62,8 +65,20 @@ class FeedbackButton(QtGui.QPushButton):
                 QtGui.QApplication.processEvents()
         else:
             self.sigCallProcess.emit(message, tip, processEvents)
+           
+                
+    def reset(self):
+        """Resets the button to its original text and style. Threadsafe."""
+        isGuiThread = QtCore.QThread.currentThread() == QtCore.QCoreApplication.instance().thread()
+        if isGuiThread:
+            self.limitedTime = True
+            self.setText()
+            self.setToolTip()
+            self.setStyleSheet()
+        else:
+            self.sigReset.emit()
         
-    def startBlink(self, color, message=None, tip=""):
+    def startBlink(self, color, message=None, tip="", limitedTime=True):
         #if self.origStyle is None:
             #self.origStyle = self.styleSheet()
             #self.origText = self.text()
@@ -73,21 +88,27 @@ class FeedbackButton(QtGui.QPushButton):
         self.count = 0
         #self.indStyle = "QPushButton {border: 2px solid %s; border-radius: 5px}" % color
         self.indStyle = "QPushButton {background-color: %s}" % color
+        self.limitedTime = limitedTime
         self.borderOn()
-        QtCore.QTimer.singleShot(2000, self.setText)
-        QtCore.QTimer.singleShot(10000, self.setToolTip)
+        if limitedTime:
+            QtCore.QTimer.singleShot(2000, self.setText)
+            QtCore.QTimer.singleShot(10000, self.setToolTip)
 
     def borderOn(self):
         self.setStyleSheet(self.indStyle, temporary=True)
-        QtCore.QTimer.singleShot(100, self.borderOff)
+        if self.limitedTime or self.count <=2:
+            QtCore.QTimer.singleShot(100, self.borderOff)
         
+            
     def borderOff(self):
         self.setStyleSheet()
         self.count += 1
         if self.count >= 2:
-            return
+            if self.limitedTime:
+                return
         QtCore.QTimer.singleShot(30, self.borderOn)
-    
+        
+            
     def setText(self, text=None, temporary=False):
         if text is None:
             text = self.origText

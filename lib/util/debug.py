@@ -9,6 +9,11 @@ import sys, traceback, time, gc, re, types, weakref, inspect, os, cProfile
 import ptime
 from numpy import ndarray
 from PyQt4 import QtCore, QtGui
+try:
+    import lib.Manager
+    HAVE_MANAGER = True
+except:
+    HAVE_MANAGER = False
 
 __ftraceDepth = 0
 def ftrace(func):
@@ -28,21 +33,31 @@ def ftrace(func):
         return rv
     return w
 
-def getExc(indent=4, prefix='|  '):
-    tb = traceback.format_exc()
-    lines = []
-    for l in tb.split('\n'):        
-        lines.append(" "*indent + prefix + l)
-    return '\n'.join(lines)
+def getExc(indent=4, prefix='|  ', skip=1):
 
-def printExc(msg='', indent=4, prefix='|'):
+    lines = (traceback.format_stack()[:-skip] 
+            + ["  ---- exception caught ---->\n"] 
+            + traceback.format_tb(sys.exc_info()[2])
+            + traceback.format_exception_only(*sys.exc_info()[:2]))
+    #lines = [" "*indent + prefix+l for l in lines]
+    lines2 = []
+    for l in lines:
+        lines2.extend(l.strip('\n').split('\n'))
+        #lines.append(" "*indent + prefix + l)
+    lines3 = [" "*indent + prefix + l for l in lines2]
+    return '\n'.join(lines3)
+
+def printExc(msg='', indent=4, prefix='|', msgType='error'):
     """Print an error message followed by an indented exception backtrace
     (This function is intended to be called within except: blocks)"""
-    exc = getExc(indent, prefix + '  ')
+    if HAVE_MANAGER:
+        lib.Manager.logExc(msg=msg, msgType=msgType)
+    exc = getExc(indent, prefix + '  ', skip=2)
     print "[%s]  %s\n" % (time.strftime("%H:%M:%S"), msg)
     print " "*indent + prefix + '='*30 + '>>'
     print exc
     print " "*indent + prefix + '='*30 + '<<'
+    #lib.Manager.logExc(msg=msg, msgType=msgType)
     
 def printTrace(msg='', indent=4, prefix='|'):
     """Print an error message followed by an indented stack trace"""

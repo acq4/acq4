@@ -2,7 +2,7 @@
 if __name__ == '__main__':
     import sys, os
     md = os.path.dirname(os.path.abspath(__file__))
-    sys.path = [os.path.dirname(md)] + sys.path
+    sys.path = [os.path.dirname(md), os.path.join(md, '..', '..', '..')] + sys.path
     #print md
     
 from CanvasTemplate import *
@@ -54,6 +54,7 @@ class Canvas(QtGui.QWidget):
         self.hideBtn.setFixedWidth(20)
         self.hideBtn.setFixedHeight(20)
         self.ctrlSize = 200
+        self.sizeApplied = False
         self.hideBtn.clicked.connect(self.hideBtnClicked)
         self.ui.splitter.splitterMoved.connect(self.splitterMoved)
         
@@ -82,7 +83,7 @@ class Canvas(QtGui.QWidget):
         self.ui.view.writeSvg()
 
     def storePng(self):
-        self.ui.view.writePng()
+        self.ui.view.writeImage()
 
     def splitterMoved(self):
         self.resizeEvent()
@@ -122,6 +123,12 @@ class Canvas(QtGui.QWidget):
         if ev is not None:
             QtGui.QWidget.resizeEvent(self, ev)
         self.hideBtn.move(self.view.size().width() - self.hideBtn.width(), 0)
+        
+        if not self.sizeApplied:
+            self.sizeApplied = True
+            s = min(self.width(), max(100, min(200, self.width()*0.25)))
+            s2 = self.width()-s
+            self.ui.splitter.setSizes([s2, s])
 
     
     def updateRedirect(self, *args):

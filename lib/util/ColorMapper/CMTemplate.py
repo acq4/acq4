@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/util/ColorMapper/CMTemplate.ui'
 #
-# Created: Tue Oct 11 10:46:44 2011
+# Created: Wed May 18 20:44:18 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

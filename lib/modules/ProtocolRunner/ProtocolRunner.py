@@ -10,13 +10,17 @@ from advancedTypes import OrderedDict
 from SequenceRunner import *
 from WidgetGroup import *
 from Mutex import Mutex, MutexLocker
-from lib.Manager import getManager
+from lib.Manager import getManager, logMsg
 from debug import *
 import ptime
 import analysisModules
 import time, gc
 import sip
+import sys
+from HelpfulException import HelpfulException
 from ProgressDialog import ProgressDialog
+from lib.LogWindow import LogButton
+
 #import pdb
 
 class Window(QtGui.QMainWindow):
@@ -93,6 +97,9 @@ class ProtocolRunner(Module):
         #print "  5"; sys.stdout.flush()
         self.win.setGeometry(g)
         #print "  6"; sys.stdout.flush()
+        
+        self.logBtn = LogButton("Log")
+        self.win.statusBar().addPermanentWidget(self.logBtn)
         
         self.ui.protoDurationSpin.setOpts(dec=True, bounds=[1e-3,None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
         self.ui.protoLeadTimeSpin.setOpts(dec=True, bounds=[0,None], step=1, minStep=10e-3, suffix='s', siPrefix=True)
@@ -778,11 +785,11 @@ class ProtocolRunner(Module):
             self.taskThread.startProtocol(prot)
             #print "runSingle: taskThreadStarted"
         except:
+            exc = sys.exc_info()
             self.enableStartBtns(True)
             self.loopEnabled = False
             print "Error starting protocol. "
-            raise
-        
+            raise HelpfulException("Error starting protocol:", exc=exc)      
    
     def runSequenceClicked(self):
         self.runSequence(store=True)
@@ -883,6 +890,17 @@ class ProtocolRunner(Module):
                 ## select out just the parameters needed for this device
                 p = dict([(i[1], params[i]) for i in params.keys() if i[0] == d])
                 ## Ask the device to generate its protocol command
+                if d not in self.docks:
+                    raise HelpfulException("The device '%s' currently has no dock loaded." % d,
+                                           reasons=[
+                                               "This device name does not exist in the system's configuration",
+                                               "There was an error when creating the device at program startup",
+                                               ],
+                                           tags={},
+                                           importance=8,
+                                           addImportance=3,
+                                           docSections=['userGuide/modules/ProtocolRunner/loadingNonexistentDevices']
+                                           )
                 prot[d] = self.docks[d].widget().generateProtocol(p)
                 #prof.mark("get protocol from %s" % d)
         #print prot['protocol']['storageDir'].name()
@@ -1148,6 +1166,7 @@ class TaskThread(QtCore.QThread):
             #l.unlock()
             #print "TaskThread:startProtocol starting..", self.lock.depth()
             self.start() ### causes self.run() to be called from somewhere in C code
+            logMsg("Protocol Started.")
             #print "TaskThread:startProtocol started", self.lock.depth()
     
     def pause(self, pause):
@@ -1264,7 +1283,8 @@ class TaskThread(QtCore.QThread):
                 except:
                     pass
                 printExc("\nError starting protocol:")
-                raise
+                exc = sys.exc_info()
+                raise HelpfulException("\nError starting protocol:", exc)
             
             prof.mark('start task')
             ### Do not put code outside of these try: blocks; may cause device lockup
@@ -1286,11 +1306,11 @@ class TaskThread(QtCore.QThread):
                 result = task.getResult()
             except:
                 ## Make sure the task is fully stopped if there was a failure at any point.
-                printExc("\nError during protocol execution:")
+                #printExc("\nError during protocol execution:")
                 print "\nStopping task.."
                 task.stop(abort=True)
                 print ""
-                raise
+                raise HelpfulException("\nError during protocol execution:", sys.exc_info())
             #print "\nAFTER:\n", cmd
             prof.mark('getResult')
             

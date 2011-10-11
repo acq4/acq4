@@ -37,6 +37,9 @@ import getopt, glob
 import ptime
 from advancedTypes import OrderedDict
 from ProgressDialog import ProgressDialog
+from LogWindow import LogWindow
+
+LOG = None
 
 ### All other modules can use this function to get the manager instance
 def getManager():
@@ -47,6 +50,36 @@ def getManager():
 def __reload__(old):
     Manager.CREATED = old['Manager'].CREATED
     Manager.single = old['Manager'].single
+    
+def logMsg(msg, **kwargs):
+    """msg: the text of the log message
+       msgTypes: user, status, error, warning (status is default)
+       importance: 0-9 (0 is low importance, 9 is high, 5 is default)
+       other supported keywords:
+          exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
+          docs: a list of strings where documentation related to the message can be found
+          reasons: a list of reasons (as strings) for the message
+          traceback: a list of formatted callstack/trackback objects (formatting a traceback/callstack returns a list of strings), usually looks like [['line 1', 'line 2', 'line3'], ['line1', 'line2']]
+       Feel free to add your own keyword arguments. These will be saved in the log.txt file, but will not affect the content or way that messages are displayed.
+        """
+    global LOG
+    if LOG is not None:
+        LOG.logMsg(msg, **kwargs)
+    else:
+        print "Can't log message; no log created yet."
+        print args
+        print kwargs
+        
+    
+def logExc(msg, *args, **kwargs):
+    """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
+    global LOG
+    if LOG is not None:
+        LOG.logExc(msg, *args, **kwargs)
+    else:
+        print "Can't log error message; no log created yet."
+        print args
+        print kwargs
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
@@ -63,6 +96,7 @@ class Manager(QtCore.QObject):
     sigModuleHasQuit = QtCore.Signal(object) ## (module name)
     sigCurrentDirChanged = QtCore.Signal(object, object, object) # (file, change, args)
     sigBaseDirChanged = QtCore.Signal()
+    sigLogDirChanged = QtCore.Signal(object) #dir
     
     CREATED = False
     single = None
@@ -70,6 +104,10 @@ class Manager(QtCore.QObject):
     def __init__(self, configFile=None, argv=None):
         if Manager.CREATED:
             raise Exception("Manager object already created!")
+        
+        global LOG
+        LOG = LogWindow(self)
+        self.logWindow = LOG
         
         if argv is not None:
             try:
@@ -101,7 +139,8 @@ Valid options are:
         self.shortcuts = []
         self.disableDevs = []
         
-        self.interfaceDir = InterfaceDirectory()        
+        self.interfaceDir = InterfaceDirectory()
+
         
         ## Handle command line options
         loadModules = []
@@ -130,6 +169,7 @@ Valid options are:
         self.configDir = os.path.dirname(configFile)
         self.readConfig(configFile)
         
+        logMsg('ACQ4 started.', importance=9)
         
         Manager.CREATED = True
         Manager.single = self
@@ -171,6 +211,7 @@ Valid options are:
         self.reloadShortcut.setContext(QtCore.Qt.ApplicationShortcut)
         self.quitShortcut.activated.connect(self.quit)
         self.reloadShortcut.activated.connect(self.reloadAll)
+    
         
         #QtCore.QObject.connect(QtGui.QApplication.instance(), QtCore.SIGNAL('lastWindowClosed()'), self.lastWindowClosed)
             
@@ -348,6 +389,16 @@ Valid options are:
         """List currently loaded modules. """
         return self.modules.keys()[:]
 
+    def getDirOfSelectedFile(self):
+        """Returns the directory that is currently selected, or the directory of the file that is currently selected in Data Manager."""
+        try:
+            f = self.getModule("Data Manager").selectedFile()
+            if not isinstance(f, DataManager.DirHandle):
+                f = f.parent()
+        except Exception:
+            f = False
+            logMsg("Can't find currently selected directory, Data Manager has not been loaded.", msgType='warning')
+        return f
 
     def getModule(self, name):
         """Return an already loaded module"""
@@ -450,7 +501,10 @@ Valid options are:
         if self.currentDir is None:
             raise Exception("CurrentDir has not been set!")
         return self.currentDir
-
+    
+    def setLogDir(self, d):
+        self.logWindow.setLogDir(d)
+        
     def setCurrentDir(self, d):
         if self.currentDir is not None:
             try:
@@ -466,6 +520,16 @@ Valid options are:
         else:
             raise Exception("Invalid argument type: ", type(d), d)
         
+        p = d
+        ## Storage directory is about to change; 
+        logDir = self.logWindow.getLogDir()
+        while not p.info().get('expUnit', False) and p != self.baseDir and p != logDir:
+            p = p.parent()
+        if p != self.baseDir and p != logDir:
+            self.setLogDir(p)
+        else:
+            if logDir is None:
+                logMsg("No log directory set. Log messages will not be stored.", msgType='warning', importance=8, docs=["UserGuide/logging"])
         #self.currentDir.sigChanged.connect(self.currentDirChanged)
         #self.sigCurrentDirChanged.emit()
         self.currentDir.sigChanged.connect(self.currentDirChanged)
@@ -520,13 +584,20 @@ Valid options are:
         """Unlock reservation system"""
         self.taskLock.unlock()
         
-    def logMsg(self, msg, tags=None):
-        if tags is None:
-            tags = {}
-        cd = self.getCurrentDir()
-        cd.logMsg(msg, tags)
-
+    #def logMsg(self, msg, tags=None):
+        #if tags is None:
+            #tags = {}
+        #cd = self.getCurrentDir()
+        #cd.logMsg(msg, tags)
         
+    #def logMsg(self, *args, **kwargs):
+        #self.logWindow.logMsg(*args, currentDir=self.currentDir, **kwargs)
+        
+    #def logExc(self, *args, **kwargs):
+        #self.logWindow.logExc(*args, currentDir=self.currentDir, **kwargs)
+        
+    def showLogWindow(self):
+        self.logWindow.show()
         
     ## These functions just wrap the functionality of an InterfaceDirectory
     def declareInterface(self, *args, **kargs):  ## args should be name, [types..], object  
@@ -573,7 +644,7 @@ Valid options are:
             ld = len(self.devices)
             with ProgressDialog("Shutting down..", 0, lm+ld, cancelText=None, wait=0) as dlg:
                 print "Requesting all modules shut down.."
-                
+                logMsg("Shutting Down.", importance=9)
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
                     m = self.modules.keys()[0]
                     print "    %s" % m
@@ -672,19 +743,27 @@ class Task:
         ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
         from debug import Profiler
         prof = Profiler('Manager.Task.execute', disabled=True)
-        
         try:
         
-            #print "execute:", self.tasks
+            #print self.id, "Task.execute:", self.tasks
             ## Reserve all hardware
             self.dm.lockReserv()
             try:
                 for devName in self.tasks:
-                    #print "  %d Reserving hardware" % self.id, devName
-                    self.tasks[devName].reserve()
+                    #print "  %d Task.execute: Reserving hardware" % self.id, devName
+                    res = self.tasks[devName].reserve(block=True)
+                    #if not res:
+                        #print "Locked from:"
+                        #for tb in self.tasks[devName].dev._lock_.tb:
+                            #print "====="
+                            #print tb
+                        #raise Exception('Damn')
                     self.lockedDevs.append(devName)
-                    #print "  %d reserved" % self.id, devName
+                    #print "  %d Task.execute: reserved" % self.id, devName
                 #self.reserved = True
+            except:
+                #print "  %d Task.execute: problem reserving hardware; will unreserve these:"%self.id, self.lockedDevs
+                raise
             finally:
                 self.dm.unlockReserv()
                 
@@ -862,7 +941,7 @@ class Task:
 
     def releaseAll(self):
         #if self.reserved:
-        #print "release hardware.."
+        #print self.id,"Task.releaseAll:"
         for t in self.lockedDevs[:]:
             #print "  %d releasing" % self.id, t
             try:

@@ -30,11 +30,12 @@ class SpinBox(QtGui.QAbstractSpinBox):
     
     valueChanged = QtCore.Signal(object)     # (value)  for compatibility with QSpinBox
     sigValueChanged = QtCore.Signal(object)  # (self)
-    sigValueChanging = QtCore.Signal(object)  # (value)
+    sigValueChanging = QtCore.Signal(object)  # (value)  sent immediately; no delay.
     
     def __init__(self, parent=None, value=0.0, **kwargs):
         QtGui.QAbstractSpinBox.__init__(self, parent)
         self.lastValEmitted = None
+        self.lastText = ''
         self.setMinimumWidth(0)
         self.setMaximumHeight(20)
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Preferred)
@@ -261,11 +262,13 @@ class SpinBox(QtGui.QAbstractSpinBox):
         if self.opts['siPrefix']:
             if self.val == 0 and prev is not None:
                 (s, p) = fn.siScale(prev)
-                self.lineEdit().setText("0.0 %s%s" % (p, self.opts['suffix']))
+                txt = "0.0 %s%s" % (p, self.opts['suffix'])
             else:
-                self.lineEdit().setText(fn.siFormat(float(self.val), suffix=self.opts['suffix']))
+                txt = fn.siFormat(float(self.val), suffix=self.opts['suffix'])
         else:
-            self.lineEdit().setText('%g%s' % (self.val , self.opts['suffix']))
+            txt = '%g%s' % (self.val , self.opts['suffix'])
+        self.lineEdit().setText(txt)
+        self.lastText = txt
         self.skipValidate = False
         
     def validate(self, strn, pos):
@@ -304,7 +307,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         try:
             val = fn.siEval(strn)
         except:
-            print "invalid"
+            #print "invalid"
             return False
         #print val
         return val
@@ -321,8 +324,10 @@ class SpinBox(QtGui.QAbstractSpinBox):
         """Edit has finished; set value."""
         #print "Edit finished."
         try:
+            if str(self.lineEdit().text()) == self.lastText:
+                return
             val = self.interpret()
-            if val is False:
+            if val is False or val == self.val:
                 return
             self.setValue(val)  ## allow text update so that values are reformatted pretty-like
         except:
@@ -350,9 +355,9 @@ class SpinBox(QtGui.QAbstractSpinBox):
 if __name__ == '__main__':
     app = QtGui.QApplication([])
     
-    def valueChanged():
-        sb = QtCore.QObject.sender()
-        str(sb) + " valueChanged: %s\n" % str(sb.value())
+    def valueChanged(sb):
+        #sb = QtCore.QObject.sender()
+        print str(sb) + " valueChanged: %s" % str(sb.value())
     
     def mkWin():
         win = QtGui.QMainWindow()
@@ -380,10 +385,10 @@ if __name__ == '__main__':
             
             #QtCore.QObject.connect(sb, QtCore.SIGNAL('valueChanged(double)'), lambda v: sys.stdout.write(str(sb) + " valueChanged\n"))
             #QtCore.QObject.connect(sb, QtCore.SIGNAL('editingFinished()'), lambda: sys.stdout.write(str(sb) + " editingFinished\n"))
-            sb.valueChanged.connect(valueChanged)
+            sb.sigValueChanged.connect(valueChanged)
             sb.editingFinished.connect(lambda: sys.stdout.write(str(sb) + " editingFinished\n"))
         return win, w, [s1, s2, s3, s4]
-    a= mkWin()
+    a = mkWin()
     
         
     def test(n=100):

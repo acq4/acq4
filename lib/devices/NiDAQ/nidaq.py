@@ -2,14 +2,15 @@
 from debug import *
     
 from lib.devices.Device import *
-import threading, time, traceback, sys
+import time, traceback, sys
 from protoGUI import *
 #from numpy import byte
 import numpy
 #from scipy.signal import resample, bessel, lfilter
 import scipy.signal, scipy.ndimage
-
+import advancedTypes
 from debug import *
+import Mutex
 
 class NiDAQ(Device):
     def __init__(self, dm, config, name):
@@ -22,14 +23,33 @@ class NiDAQ(Device):
             from lib.drivers.nidaq.nidaq import NIDAQ
             self.n = NIDAQ
         print "Created NiDAQ handle, devices are %s" % repr(self.n.listDevices())
-        self.lock = threading.RLock()
+        self.delayedSet = Mutex.threadsafe({})
     
     def createTask(self, cmd):
         return Task(self, cmd)
         
-    def setChannelValue(self, chan, value, block=False):
-        self.reserve(block=block)
+    def setChannelValue(self, chan, value, block=False, delaySetIfBusy=False, ignoreLock=False):
+        """Set a channel on this DAQ. 
+        Arguments:
+            block: bool. If True, wait until the device is available. 
+                   If False, return immediately if the device is not available.
+            delaySetIfBusy: If True and the hardware is currently reserved, then
+                            schedule the set to occur immediately when the hardware becomes available again.
+            ignoreLock: attempt to set the channel value even if the device is reserved.
+        Returns True if the channel was set, False otherwise.
+        """
         #print "Setting channel %s to %f" % (chan, value)
+        if ignoreLock:
+            res = True
+        else:
+            res = self.reserve(block=block)
+            
+        if not block and not res:
+            if delaySetIfBusy:
+                #print "  busy, schedule for later."
+                self.delayedSet[chan] = value
+            return False
+        
         try:
             if 'ao' in chan:
                 self.n.writeAnalogSample(chan, value)
@@ -41,11 +61,28 @@ class NiDAQ(Device):
                 self.n.writeDigitalSample(chan, value)
         except:
             printExc("Error while setting channel %s to %s:" % (chan, str(value)))
+            raise
         finally:
-            self.release()
+            if not ignoreLock:
+                self.release()
+        return True
         
-    def getChannelValue(self, chan, mode=None):
-        self.reserve(block=True)
+    def release(self):
+        ## take care of any channel-value-set requests that arrived while the device was locked
+        try:
+            self.delayedSet.lock()
+            for chan, val in self.delayedSet.iteritems():
+                #print "Set delayed:", chan, val
+                self.setChannelValue(chan, val, ignoreLock=True)
+            self.delayedSet.clear()
+        finally:
+            self.delayedSet.unlock()
+        return Device.release(self)
+
+    def getChannelValue(self, chan, mode=None, block=True):
+        res = self.reserve(block=block)
+        if not res:  ## False means non-blocking lock attempt failed.
+            return False
         #print "Setting channel %s to %f" % (chan, value)
         try:
             if 'ai' in chan:
@@ -170,7 +207,6 @@ class NiDAQ(Device):
         d6[:radius] = data[:radius]
         d6[-radius:] = data[-radius:]
         return d6
-
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd):

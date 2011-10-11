@@ -1348,7 +1348,8 @@ class ScatterPlotItem(GraphicsObject):
         Arguments:
             spots: list of dicts. Each dict specifies parameters for a single spot.
             x,y: array of x,y values. Alternatively, specify spots['pos'] = (x,y)
-            pxMode: If True, spots are always the same size regardless of scaling
+            pxMode: If True, spots are always the same size regardless of scaling, and size is given in px.
+                    Otherwise, size is in scene coordinates and the spots scale with the view.
             identical: If True, all spots are forced to look identical. 
                        This can result in performance enhancement."""
         GraphicsObject.__init__(self)
@@ -1498,7 +1499,7 @@ class ScatterPlotItem(GraphicsObject):
         if xmn is None or xmx is None or ymn is None or ymx is None:
             return QtCore.QRectF()
         return QtCore.QRectF(xmn, ymn, xmx-xmn, ymx-ymn)
-        return QtCore.QRectF(xmn-1, ymn-1, xmx-xmn+2, ymx-ymn+2)
+        #return QtCore.QRectF(xmn-1, ymn-1, xmx-xmn+2, ymx-ymn+2)
         
     #def pointClicked(self, point):
         #self.sigPointClicked.emit(self, point)
@@ -3065,10 +3066,15 @@ class LinearRegionItem(GraphicsObject):
         return (min(r), max(r))
 
     def setRegion(self, rgn):
+        if self.lines[0].value() == rgn[0] and self.lines[1].value() == rgn[1]:
+            return
         self.blockLineSignal = True
         self.lines[0].setValue(rgn[0])
         self.blockLineSignal = False
         self.lines[1].setValue(rgn[1])
+        self.blockLineSignal = False
+        self.lineMoved()
+        self.lineMoveFinished()
 
 
 class VTickGroup(QtGui.QGraphicsPathItem):

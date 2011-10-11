@@ -46,8 +46,8 @@
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>626</width>
-        <height>209</height>
+        <width>622</width>
+        <height>204</height>
        </rect>
       </property>
       <layout class="QFormLayout" name="formLayout_2">

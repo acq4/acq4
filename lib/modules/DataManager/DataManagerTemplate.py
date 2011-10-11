@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/modules/DataManager/DataManagerTemplate.ui'
+# Form implementation generated from reading ui file 'lib/modules/DataManager/DataManagerTemplate.ui'
 #
-# Created: Tue Oct 11 10:46:43 2011
+# Created: Tue Oct 11 13:24:57 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName(_fromUtf8("MainWindow"))
-        MainWindow.resize(593, 590)
+        MainWindow.resize(640, 590)
         self.centralwidget = QtGui.QWidget(MainWindow)
         self.centralwidget.setObjectName(_fromUtf8("centralwidget"))
         self.verticalLayout_5 = QtGui.QVBoxLayout(self.centralwidget)
@@ -44,6 +44,15 @@ class Ui_MainWindow(object):
         self.setCurrentDirBtn = QtGui.QPushButton(self.centralwidget)
         self.setCurrentDirBtn.setObjectName(_fromUtf8("setCurrentDirBtn"))
         self.gridLayout.addWidget(self.setCurrentDirBtn, 1, 2, 1, 1)
+        self.logDirText = QtGui.QLineEdit(self.centralwidget)
+        self.logDirText.setObjectName(_fromUtf8("logDirText"))
+        self.gridLayout.addWidget(self.logDirText, 2, 1, 1, 1)
+        self.label_3 = QtGui.QLabel(self.centralwidget)
+        self.label_3.setObjectName(_fromUtf8("label_3"))
+        self.gridLayout.addWidget(self.label_3, 2, 0, 1, 1)
+        self.setLogDirBtn = QtGui.QPushButton(self.centralwidget)
+        self.setLogDirBtn.setObjectName(_fromUtf8("setLogDirBtn"))
+        self.gridLayout.addWidget(self.setLogDirBtn, 2, 2, 1, 1)
         self.verticalLayout_5.addLayout(self.gridLayout)
         self.splitter = QtGui.QSplitter(self.centralwidget)
         self.splitter.setOrientation(QtCore.Qt.Horizontal)
@@ -107,17 +116,13 @@ class Ui_MainWindow(object):
         self.fileInfo.setObjectName(_fromUtf8("fileInfo"))
         self.verticalLayout_3.addWidget(self.fileInfo)
         self.fileDisplayTabs.addTab(self.tab, _fromUtf8(""))
-        self.tab_4 = QtGui.QWidget()
-        self.tab_4.setObjectName(_fromUtf8("tab_4"))
-        self.verticalLayout_6 = QtGui.QVBoxLayout(self.tab_4)
+        self.logTab = QtGui.QWidget()
+        self.logTab.setObjectName(_fromUtf8("logTab"))
+        self.verticalLayout_6 = QtGui.QVBoxLayout(self.logTab)
         self.verticalLayout_6.setSpacing(0)
         self.verticalLayout_6.setMargin(0)
         self.verticalLayout_6.setObjectName(_fromUtf8("verticalLayout_6"))
-        self.selectedLogView = QtGui.QTextEdit(self.tab_4)
-        self.selectedLogView.setReadOnly(True)
-        self.selectedLogView.setObjectName(_fromUtf8("selectedLogView"))
-        self.verticalLayout_6.addWidget(self.selectedLogView)
-        self.fileDisplayTabs.addTab(self.tab_4, _fromUtf8(""))
+        self.fileDisplayTabs.addTab(self.logTab, _fromUtf8(""))
         self.tab_3 = QtGui.QWidget()
         self.tab_3.setObjectName(_fromUtf8("tab_3"))
         self.verticalLayout_7 = QtGui.QVBoxLayout(self.tab_3)
@@ -156,7 +161,7 @@ class Ui_MainWindow(object):
         MainWindow.addDockWidget(QtCore.Qt.DockWidgetArea(8), self.logDock)
 
         self.retranslateUi(MainWindow)
-        self.fileDisplayTabs.setCurrentIndex(0)
+        self.fileDisplayTabs.setCurrentIndex(1)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -165,8 +170,10 @@ class Ui_MainWindow(object):
         self.selectDirBtn.setText(QtGui.QApplication.translate("MainWindow", "...", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("MainWindow", "Storage Directory:", None, QtGui.QApplication.UnicodeUTF8))
         self.setCurrentDirBtn.setText(QtGui.QApplication.translate("MainWindow", "Set", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_3.setText(QtGui.QApplication.translate("MainWindow", "Log Directory:", None, QtGui.QApplication.UnicodeUTF8))
+        self.setLogDirBtn.setText(QtGui.QApplication.translate("MainWindow", "Set", None, QtGui.QApplication.UnicodeUTF8))
         self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab), QtGui.QApplication.translate("MainWindow", "Info", None, QtGui.QApplication.UnicodeUTF8))
-        self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab_4), QtGui.QApplication.translate("MainWindow", "Log", None, QtGui.QApplication.UnicodeUTF8))
+        self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.logTab), QtGui.QApplication.translate("MainWindow", "Log", None, QtGui.QApplication.UnicodeUTF8))
         self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.tab_3), QtGui.QApplication.translate("MainWindow", "Data", None, QtGui.QApplication.UnicodeUTF8))
         self.fileDisplayTabs.setTabText(self.fileDisplayTabs.indexOf(self.analysisTab), QtGui.QApplication.translate("MainWindow", "Analysis", None, QtGui.QApplication.UnicodeUTF8))
         self.logDock.setWindowTitle(QtGui.QApplication.translate("MainWindow", "Current Log", None, QtGui.QApplication.UnicodeUTF8))

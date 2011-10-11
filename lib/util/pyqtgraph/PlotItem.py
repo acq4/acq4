@@ -21,6 +21,7 @@ from graphicsItems import *
 from plotConfigTemplate import *
 from PyQt4 import QtGui, QtCore, QtSvg
 from functions import *
+from FileDialog import FileDialog
 #from ObjectWorkaround import *
 #tryWorkaround(QtCore, QtGui)
 import weakref
@@ -814,9 +815,18 @@ class PlotItem(QtGui.QGraphicsWidget):
     ## This is bullshit.
     def writeSvg(self, fileName=None):
         if fileName is None:
-            fileName = QtGui.QFileDialog.getSaveFileName()
-            if isinstance(fileName, tuple):
-                raise Exception("Not implemented yet..")
+            self.fileDialog = FileDialog()
+            if PlotItem.lastFileDir is not None:
+                self.fileDialog.setDirectory(PlotItem.lastFileDir)
+            self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
+            self.fileDialog.show()
+            self.fileDialog.fileSelected.connect(self.writeSvg)
+            return
+        #if fileName is None:
+            #fileName = QtGui.QFileDialog.getSaveFileName()
+        if isinstance(fileName, tuple):
+            raise Exception("Not implemented yet..")
         fileName = str(fileName)
         PlotItem.lastFileDir = os.path.dirname(fileName)
         
@@ -942,9 +952,18 @@ class PlotItem(QtGui.QGraphicsWidget):
         
     def writeImage(self, fileName=None):
         if fileName is None:
-            fileName = QtGui.QFileDialog.getSaveFileName()
-            if isinstance(fileName, tuple):
-                raise Exception("Not implemented yet..")
+            self.fileDialog = FileDialog()
+            if PlotItem.lastFileDir is not None:
+                self.fileDialog.setDirectory(PlotItem.lastFileDir)
+            self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
+            self.fileDialog.show()
+            self.fileDialog.fileSelected.connect(self.writeImage)
+            return
+        #if fileName is None:
+            #fileName = QtGui.QFileDialog.getSaveFileName()
+        if isinstance(fileName, tuple):
+            raise Exception("Not implemented yet..")
         fileName = str(fileName)
         PlotItem.lastFileDir = os.path.dirname(fileName)
         self.png = QtGui.QImage(int(self.size().width()), int(self.size().height()), QtGui.QImage.Format_ARGB32)
@@ -956,7 +975,16 @@ class PlotItem(QtGui.QGraphicsWidget):
         
     def writeCsv(self, fileName=None):
         if fileName is None:
-            fileName = QtGui.QFileDialog.getSaveFileName()
+            self.fileDialog = FileDialog()
+            if PlotItem.lastFileDir is not None:
+                self.fileDialog.setDirectory(PlotItem.lastFileDir)
+            self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
+            self.fileDialog.show()
+            self.fileDialog.fileSelected.connect(self.writeCsv)
+            return
+        #if fileName is None:
+            #fileName = QtGui.QFileDialog.getSaveFileName()
         fileName = str(fileName)
         PlotItem.lastFileDir = os.path.dirname(fileName)
         
@@ -1182,11 +1210,12 @@ class PlotItem(QtGui.QGraphicsWidget):
         return c
 
     def saveSvgClicked(self):
-        fileName = QtGui.QFileDialog.getSaveFileName()        
-        self.writeSvg(fileName)
+        self.writeSvg()
+        #fileName = QtGui.QFileDialog.getSaveFileName()        
+        #self.writeSvg(fileName)
 
-        ## QFileDialog seems to be broken under OSX
-        #self.fileDialog = QtGui.QFileDialog()
+        # QFileDialog seems to be broken under OSX
+        #self.fileDialog = FileDialog()
         ##if PlotItem.lastFileDir is not None:
             ##self.fileDialog.setDirectory(PlotItem.lastFileDir)
         #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
@@ -1203,28 +1232,30 @@ class PlotItem(QtGui.QGraphicsWidget):
         #self.writeSvg(str(fileName))
 
     def saveImgClicked(self):
-        self.fileDialog = QtGui.QFileDialog()
+        self.writeImage()
+        #self.fileDialog = FileDialog()
+        ##if PlotItem.lastFileDir is not None:
+            ##self.fileDialog.setDirectory(PlotItem.lastFileDir)
         #if PlotItem.lastFileDir is not None:
             #self.fileDialog.setDirectory(PlotItem.lastFileDir)
-        if PlotItem.lastFileDir is not None:
-            self.fileDialog.setDirectory(PlotItem.lastFileDir)
-        self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
-        self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
-        self.fileDialog.show()
-        #QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.writeImage)
-        self.fileDialog.fileSelected.connect(self.writeImage)
+        #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+        #self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+        #self.fileDialog.show()
+        ##QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.writeImage)
+        #self.fileDialog.fileSelected.connect(self.writeImage)
             
     def saveCsvClicked(self):
-        self.fileDialog = QtGui.QFileDialog()
+        self.writeCsv()
+        #self.fileDialog = FileDialog()
+        ##if PlotItem.lastFileDir is not None:
+            ##self.fileDialog.setDirectory(PlotItem.lastFileDir)
         #if PlotItem.lastFileDir is not None:
             #self.fileDialog.setDirectory(PlotItem.lastFileDir)
-        if PlotItem.lastFileDir is not None:
-            self.fileDialog.setDirectory(PlotItem.lastFileDir)
-        self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
-        self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
-        self.fileDialog.show()
-        #QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.writeCsv)
-        self.fileDialog.fileSelected.connect(self.writeCsv)
+        #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+        #self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+        #self.fileDialog.show()
+        ##QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.writeCsv)
+        #self.fileDialog.fileSelected.connect(self.writeCsv)
     #def imgFileSelected(self, fileName):
         ##PlotWidget.lastFileDir = os.path.split(fileName)[0]
         #self.writeImage(str(fileName))

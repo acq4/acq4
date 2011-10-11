@@ -76,7 +76,21 @@
            </property>
           </widget>
          </item>
+         <item>
+          <widget class="QPushButton" name="logBtn">
+           <property name="text">
+            <string>Log</string>
+           </property>
+          </widget>
+         </item>
         </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="LogButton" name="logBtn">
+        <property name="text">
+         <string>Log</string>
+        </property>
        </widget>
       </item>
       <item>
@@ -112,6 +126,13 @@
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>LogButton</class>
+   <extends>QPushButton</extends>
+   <header>lib.LogWindow</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

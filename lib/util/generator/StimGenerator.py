@@ -19,11 +19,7 @@ from functions import logSpace
 from GeneratorTemplate import *
 import waveforms
 from debug import *
-
-#import PyQt4.Qwt5 as Qwt
-#from PyQt4.Qwt5.anynumpy import *
-#from Stim_Form import Ui_Form
-#import MPlot # our graphics support...
+from ParameterTree import Parameter, GroupParameter
 
 
 class StimGenerator(QtGui.QWidget):
@@ -33,12 +29,7 @@ class StimGenerator(QtGui.QWidget):
     sigParametersChanged = QtCore.Signal()
     sigFunctionChanged = QtCore.Signal()
     
-    """ PyStim creates an object with multiple stimulus channels
-    and handles the GUI interface. 
-    """
     def __init__(self, parent=None):
-        """ PyStim.__init__ defines standard variables, and initialzes the GUI interface
-        """
         QtGui.QWidget.__init__(self, parent)
         self.timeScale = 1.0
         self.scale = 1.0
@@ -52,39 +43,78 @@ class StimGenerator(QtGui.QWidget):
         self.cache = {}
         self.cacheRate = None
         self.cacheNPts = None
-        #QtCore.QObject.connect(self.ui.functionText, QtCore.SIGNAL('textChanged()'), self.funcChanged)
+        
+        self.advancedGroup = [
+            self.ui.functionText,
+            self.ui.paramText,
+            self.ui.errorBtn,
+            self.ui.helpBtn,
+        ]
+        self.updateWidgets()
+        
+        self.meta = {  ## holds some extra information about signals (units, expected scale and range, etc)
+                       ## mostly information useful in configuring SpinBoxes
+            'x': {},
+            'y': {},
+            'xy': {}  ## values that are the product of x and y values
+        }
+        
+        self.stimParams = StimParameter()
+        self.stimParams.monitorChildren()
+        self.ui.paramTree.setParameters(self.stimParams)
+        self.stimParams.sigStateChanged.connect(self.stimParamsChanged)
+        
         self.ui.functionText.textChanged.connect(self.funcChanged)
-        #QtCore.QObject.connect(self.ui.paramText, QtCore.SIGNAL('textChanged()'), self.paramChanged)
         self.ui.paramText.textChanged.connect(self.paramChanged)
-        #QtCore.QObject.connect(self.ui.updateBtn, QtCore.SIGNAL('clicked()'), self.update)
         self.ui.updateBtn.clicked.connect(self.update)
-        #QtCore.QObject.connect(self.ui.autoUpdateCheck, QtCore.SIGNAL('clicked()'), self.autoUpdateClicked)
         self.ui.autoUpdateCheck.clicked.connect(self.autoUpdateClicked)
-        #QtCore.QObject.connect(self.ui.errorBtn, QtCore.SIGNAL('clicked()'), self.errorBtnClicked)
-        self.ui.errorBtn.clicked.connect(self.errorBtnClicked)
-        #QtCore.QObject.connect(self.ui.helpBtn, QtCore.SIGNAL('clicked()'), self.helpBtnClicked)
-        self.ui.helpBtn.clicked.connect(self.helpBtnClicked)
+        self.ui.errorBtn.clicked.connect(self.updateWidgets)
+        self.ui.helpBtn.clicked.connect(self.updateWidgets)
+        self.ui.advancedBtn.toggled.connect(self.updateWidgets)
 
     def widgetGroupInterface(self):
         return (self.sigStateChanged, StimGenerator.saveState, StimGenerator.loadState)
 
     def setTimeScale(self, s):
+        """Set the scale factor for X axis. See setScale for description."""
         if self.timeScale != s:
             self.timeScale = s
             self.clearCache()
             self.autoUpdate()
 
     def setScale(self, s):
+        """Set the scale factor to be applied to all generated data.
+        This allows, for example, to write waveform functions with values
+        in units of mV and have the resulting data come out in units of V.
+           pulse(10, 10, 100) => gives pulse 100 units tall, but a scale
+                                 factor of 1e-3 converts it to 0.1 units
+        This should become obsolete--instead we would write the function like
+           pulse(10*ms, 10*ms, 100*mV)
+        This is more verbose but far less ambiguous.
+        """
         if self.scale != s:
             self.scale = s
             self.clearCache()
             self.autoUpdate()
 
     def setOffset(self, o):
+        """Set the offset to be added to all generated data.
+        This allows, for example, writing a pulse waveform such that 0 is 
+        always assumed to mean the current holding value."""
         if self.offset != o:
             self.offset = o
             self.clearCache()
             self.autoUpdate()
+            
+    def setMeta(self, axis, **args):
+        """Set meta data for X, Y, and XY axes. This is used primarily to configure
+        SpinBoxes to display the correct units, limits, step sizes, etc.
+        Suggested args are:
+            suffix='units', dec=True, minStep=1e-3, step=1, limits=(min, max)        
+        """
+        self.meta[axis].update(args)
+        self.stimParams.setMeta(axis, args)
+        
 
     def clearCache(self):
         self.cache = {}
@@ -102,17 +132,30 @@ class StimGenerator(QtGui.QWidget):
         self.autoUpdate()
         #self.emit(QtCore.SIGNAL('stateChanged'))        
         self.sigStateChanged.emit()        
-        
-    def errorBtnClicked(self):
-        self.ui.errorText.setVisible(self.ui.errorBtn.isChecked())
-        
-    def helpBtnClicked(self):
-        if self.ui.helpBtn.isChecked():
-            self.ui.stack.setCurrentIndex(1)
+
+    def updateWidgets(self):
+        ## show/hide widgets depending on the current mode.
+        if self.ui.advancedBtn.isChecked():
+            for w in self.advancedGroup:
+                w.show()
+            self.ui.paramTree.hide()
+            self.ui.errorText.setVisible(self.ui.errorBtn.isChecked())
+            if self.ui.helpBtn.isChecked():
+                self.ui.stack.setCurrentIndex(1)
+            else:
+                self.ui.stack.setCurrentIndex(0)
         else:
             self.ui.stack.setCurrentIndex(0)
+            for w in self.advancedGroup:
+                w.hide()
+            self.ui.paramTree.show()
+            self.ui.errorText.hide()
+            
+
+
 
     def funcChanged(self):
+        ## called when the function string changes
         # test function. If ok, auto-update
         self.clearCache()
         if self.test():
@@ -124,6 +167,7 @@ class StimGenerator(QtGui.QWidget):
         
         
     def paramChanged(self):
+        ## called when the param string changes
         # test params. If ok, auto-update
         self.clearCache()
         self.cacheOk = False
@@ -133,7 +177,13 @@ class StimGenerator(QtGui.QWidget):
         self.sigParametersChanged.emit()
         #self.emit(QtCore.SIGNAL('stateChanged'))
         self.sigStateChanged.emit()
-        
+
+    def stimParamsChanged(self):
+        ## called when the simple stim generator tree changes
+        func, params = self.stimParams.compile()
+        self.ui.functionText.setPlainText(func)
+        self.ui.paramText.setPlainText('\n'.join(params))
+
     def functionString(self):
         return str(self.ui.functionText.toPlainText())
         
@@ -321,3 +371,125 @@ def seqParse(seqStr):
     if 'r' in opts:
         random.shuffle(seq)
     return (name, single, seq)
+
+
+
+        
+class StimParameter(GroupParameter):
+    def __init__(self):
+        GroupParameter.__init__(self, name='Stimuli', type='group',
+                           addText='Add Stimulus..', addList=['Pulse', 'Pulse Train'])
+        self.monitorChildren()  ## watch for changes throughout tree
+        
+    def addNew(self, type):
+        if type == 'Pulse':
+            self.addChild(PulseParameter())
+        elif type == 'Pulse Train':
+            self.addChild(PulseTrainParameter())
+
+    def setMeta(self, axis, opts, root=None):  ## set units, limits, etc.
+        if root is None:
+            root = self
+        for ch in root:
+            if ch.opts.get('axis', None) == axis:   ## set options on any parameter that matches axis
+                ch.setOpts(**opts)
+            self.setMeta(axis, opts, root=ch)
+            
+    def compile(self):
+        fns = []
+        params = []
+        for ch in self:
+            fn, par = ch.compile()
+            fns.append(fn)
+            params.extend(par)
+        return ' + \n'.join(fns), params
+
+class SeqParameter(Parameter):
+    def __init__(self, **args):
+        axis = args.get('axis', None)
+        args['params'] = [
+            {'name': 'sequence', 'type': 'list', 'value': 'off', 'values': ['off', 'range', 'list']},
+            {'name': 'start', 'type': 'float', 'axis': axis, 'value': 0, 'visible': False}, 
+            {'name': 'stop', 'type': 'float', 'axis': axis, 'value': 0, 'visible': False}, 
+            {'name': 'steps', 'type': 'int', 'value': 10, 'visible': False},
+            {'name': 'log spacing', 'type': 'bool', 'value': False, 'visible': False}, 
+            {'name': 'list', 'type': 'str', 'value': '', 'visible': False}, 
+            {'name': 'randomize', 'type': 'bool', 'value': False, 'visible': False}, 
+        ]
+        args['expanded'] = args.get('expanded', False)
+        Parameter.__init__(self, **args)
+        self.sequence.sigValueChanged.connect(self.seqChanged)
+        
+    def seqChanged(self):
+        if self['sequence'] == 'off':
+            for ch in self:
+                ch.hide()
+        elif self['sequence'] == 'range':
+            for ch in self:
+                ch.show()
+            self.list.hide()
+        elif self['sequence'] == 'list':
+            for ch in self:
+                ch.hide()
+            self.list.show()
+            self.randomize.show()
+        self.sequence.show()
+        
+    def compile(self):
+        if self['sequence'] == 'off':
+            return "%f"%self.value(), None
+        else:
+            name = "%s_%s" % (self.parent().name(), self.name())
+            seq = "%s = %f; " % (name, self.value())
+            if self['sequence'] == 'range':
+                seq = seq + "%f:%f/%d" % (self['start'], self['stop'], self['steps'])
+            elif self['sequence'] == 'list':
+                seq = seq + str(self['list'])
+        return name, seq
+        
+        
+class PulseParameter(GroupParameter):
+    def __init__(self, **kargs):
+        GroupParameter.__init__(self, name="Pulse", autoIncrementName=True, type="pulse", removable=True, renamable=True,
+            params=[
+                SeqParameter(**{'name': 'start', 'type': 'float', 'axis': 'x', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True}),
+                SeqParameter(**{'name': 'length', 'type': 'float', 'axis': 'x', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True}),
+                SeqParameter(**{'name': 'amplitude', 'type': 'float', 'axis': 'y', 'value': 0}),
+                SeqParameter(**{'name': 'sum', 'type': 'float', 'axis': 'xy', 'value': 0}),
+            ], **kargs)
+        self.length.sigValueChanged.connect(self.lenChanged)
+        self.amplitude.sigValueChanged.connect(self.ampChanged)
+        self.sum.sigValueChanged.connect(self.sumChanged)
+        
+    def lenChanged(self):
+        self.sum.setValue(self['length'] * self['amplitude'], blockSignal=self.sumChanged)
+
+    def ampChanged(self):
+        self.sum.setValue(self['length'] * self['amplitude'], blockSignal=self.sumChanged)
+
+    def sumChanged(self):
+        self.length.setValue(self['sum'] / self['amplitude'], blockSignal=self.lenChanged)
+
+    def compile(self):
+        (start, seq1) = self.start.compile()
+        (length, seq2) = self.length.compile()
+        (amp, seq3) = self.amplitude.compile()
+        fnStr = "pulse(%s, %s, %s)" % (start, length, amp)
+        seq = [x for x in [seq1, seq2, seq3] if x is not None]
+        return fnStr, seq
+        
+
+class PulseTrainParameter(GroupParameter):
+    def __init__(self, **kargs):
+        GroupParameter.__init__(self, name="Pulse Train", autoIncrementName=True, type="pulseTrain", removable=True, renamable=True,
+        params=[
+            {'name': 'start', 'type': 'float', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True},
+            {'name': 'pulse length', 'type': 'float', 'value': 0.005, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True},
+            {'name': 'interpulse length', 'type': 'float', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True},
+            {'name': 'pulse number', 'type': 'int', 'value': 10},
+            {'name': 'amplitude', 'type': 'float', 'value': 0},
+            {'name': 'sum', 'type': 'float', 'value': 0},
+        ], **kargs)
+        
+        
+        

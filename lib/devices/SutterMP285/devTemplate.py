@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/devices/SutterMP285/devTemplate.ui'
+# Form implementation generated from reading ui file 'devTemplate.ui'
 #
-# Created: Tue Oct 11 10:46:42 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Mon Aug 08 20:47:55 2011
+#      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
 
