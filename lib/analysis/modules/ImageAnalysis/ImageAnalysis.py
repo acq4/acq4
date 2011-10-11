@@ -176,6 +176,7 @@ class ImageAnalysis(AnalysisModule):
                 
         self.rawData = []
         self.data = []
+        #print "len images: %d " % (len(images))
         while len(images) > 0:
             imgs = images.pop(0)
             img = np.concatenate([i[np.newaxis,:minFrames,...] for i in imgs], axis=0)

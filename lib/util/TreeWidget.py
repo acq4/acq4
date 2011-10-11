@@ -46,7 +46,7 @@ class TreeWidget(QtGui.QTreeWidget):
         while True:
             if p is None:
                 break
-            if p == item:
+            if p is item:
                 return False
                 #raise Exception("Can not move item into itself.")
             p = p.parent()
@@ -60,7 +60,7 @@ class TreeWidget(QtGui.QTreeWidget):
         if parent is None:
             parent = self.invisibleRootItem()
             
-        if currentParent == parent and index > parent.indexOfChild(item):
+        if currentParent is parent and index > parent.indexOfChild(item):
             index -= 1
             
         self.prepareMove(item)

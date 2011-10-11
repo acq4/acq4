@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager
-        
+
+### TODO: inherit from util/ComboBox instead.
+
 class InterfaceCombo(QtGui.QComboBox):
     def __init__(self, parent=None):
         self.dir = getManager().interfaceDir

@@ -238,7 +238,10 @@ class ScannerProtoGui(ProtocolGui):
     def pointSize(self):
         #packing = self.ui.packingSpin.value()
         try:
-            cam = self.cameraModule().config['camDev']
+            camMod = self.cameraModule()
+            if camMod is None:
+                return (1,1)
+            cam = cammod.config['camDev']
             laser = str(self.ui.laserCombo.currentText())
             cal = self.dev.getCalibration(cam, laser)
             ss = cal['spot'][1]
@@ -436,7 +439,7 @@ class ScannerProtoGui(ProtocolGui):
         self.items[name] = item
         #if isinstance(item, TargetOcclusion):
             #self.occlusions[name] = item
-        item.treeItem = QtGui.QTreeWidgetItem(QtCore.QStringList(name))
+        item.treeItem = QtGui.QTreeWidgetItem([name])
         
         item.treeItem.setCheckState(0, QtCore.Qt.Checked)
         self.ui.itemTree.addTopLevelItem(item.treeItem)
@@ -513,7 +516,7 @@ class ScannerProtoGui(ProtocolGui):
         self.sequenceChanged()
         
     def treeItemMoved(self, item, parent, index):
-        if parent != self.ui.itemTree.invisibleRootItem():
+        if parent is not self.ui.itemTree.invisibleRootItem():
             g = item.graphicsItem
             newPos = parent.graphicsItem.mapFromScene(g.scenePos())
             g.setParentItem(parent.graphicsItem)

@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+#import lib.util.PySideImporter  ## Use PySide instead of PyQt
+
 from PyQt4 import QtCore, QtGui
 import database
 from AnalysisTemplate import *
@@ -6,6 +8,10 @@ import lib.Manager
 import lib.analysis.modules as analysis
 import lib.analysis.AnalysisHost as AnalysisHost
 import lib.analysis.dataModels as models
+#QtCore.QString = str
+#def noop(x):
+#   return x
+#QtCore.QVariant = noop
 from lib.util.pyqtgraph.FileDialog import FileDialog
 
 class FileAnalysisView(QtGui.QWidget):

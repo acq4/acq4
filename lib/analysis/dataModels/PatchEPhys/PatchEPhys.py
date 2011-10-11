@@ -15,7 +15,7 @@ protocolNames = {
 deviceNames = {
     'Clamp': ('Clamp1', 'Clamp2', 'AxoPatch200', 'AxoProbe'),
     'Camera': ('Camera'),
-    'Laser': ('Laser-UV', 'Laser-Blue')
+    'Laser': ('Laser-UV', 'Laser-Blue', 'Laser-2P')
 }
 
 
@@ -81,6 +81,13 @@ def listSequenceParams(dh):
         return dh.info()['sequenceParams']
     except KeyError:
         raise Exception("Directory '%s' does not appear to be a protocol sequence." % dh.name())
+
+## what's this for?
+#def listWaveGenerator(dh):
+#    try:
+#        return dh.info()['waveGeneratorWidget']
+#    except KeyError:
+#        raise Exception("Directory '%s' does not appear to be have a wave Generator." % dh.name())
 
 def buildSequenceArray(*args, **kargs):
     """Builds a MetaArray of data compiled across a sequence. 
@@ -202,7 +209,8 @@ def isClampFile(fh):
         return False
     else:
         return True
-    
+        
+def getClampCommand(data):    
     """Returns the command data from a clamp MetaArray.
     If there was no command specified, the function will optionally return all zeros."""
     if data.hasColumn('Channel', 'Command'):
