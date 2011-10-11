@@ -151,42 +151,42 @@ registerParameterType('list', ListParameter)
 
 
 
-class ParameterSet(GroupParameter):
-    """Parameter that keeps track of every item in its tree, emitting signals when anything changes."""
-    sigStateChanged = QtCore.Signal(object, object, object)  # self, param, value
+#class ParameterSet(GroupParameter):
+    #"""Parameter that keeps track of every item in its tree, emitting signals when anything changes."""
+    #sigStateChanged = QtCore.Signal(object, object, object)  # self, param, value
     
-    def __init__(self, name, params):
-        GroupParameter.__init__(self, name=name, type='group')
-        self.watchParam(self)
-        for ch in params:
-            self.addChild(ch)
+    #def __init__(self, name, params):
+        #GroupParameter.__init__(self, name=name, type='group')
+        #self.watchParam(self)
+        #for ch in params:
+            #self.addChild(ch)
 
-    def watchParam(self, param):
-        param.sigChildAdded.connect(self.grandchildAdded)
-        param.sigChildRemoved.connect(self.grandchildRemoved)
-        param.sigValueChanged.connect(self.childValueChanged)
-        for ch in param:
-            self.watchParam(ch)
+    #def watchParam(self, param):
+        #param.sigChildAdded.connect(self.grandchildAdded)
+        #param.sigChildRemoved.connect(self.grandchildRemoved)
+        #param.sigValueChanged.connect(self.childValueChanged)
+        #for ch in param:
+            #self.watchParam(ch)
 
-    def unwatchParam(self, param):
-        param.sigChildAdded.disconnect(self.grandchildAdded)
-        param.sigChildRemoved.disconnect(self.grandchildRemoved)
-        param.sigValueChanged.disconnect(self.childValueChanged)
-        for ch in param:
-            self.unwatchParam(ch)
+    #def unwatchParam(self, param):
+        #param.sigChildAdded.disconnect(self.grandchildAdded)
+        #param.sigChildRemoved.disconnect(self.grandchildRemoved)
+        #param.sigValueChanged.disconnect(self.childValueChanged)
+        #for ch in param:
+            #self.unwatchParam(ch)
 
-    def grandchildAdded(self, parent, child):
-        self.watchParam(child)
+    #def grandchildAdded(self, parent, child):
+        #self.watchParam(child)
         
-    def grandchildRemoved(self, parent, child):
-        self.unwatchParam(child)
+    #def grandchildRemoved(self, parent, child):
+        #self.unwatchParam(child)
         
-    def childValueChanged(self, val, param):
-        self.sigStateChanged.emit(self, param, val)
+    #def childValueChanged(self, val, param):
+        #self.sigStateChanged.emit(self, param, val)
         
-    def childPath(self, child):
-        path = []
-        while child is not self:
-            path.insert(0, child.name())
-            child = child.parent()
-        return path
+    #def childPath(self, child):
+        #path = []
+        #while child is not self:
+            #path.insert(0, child.name())
+            #child = child.parent()
+        #return path

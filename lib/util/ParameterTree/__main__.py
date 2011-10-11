@@ -117,7 +117,9 @@ params = [
     {'name': 'TextParam', 'type': 'text', 'value': 'Some text...'},
 ]
 
-p = pTypes.ParameterSet("params", params)
+#p = pTypes.ParameterSet("params", params)
+p = Parameter(name='params', type='group', params=params)
+p.monitorChildren()
 def change(*args):
     print "change:", args
 p.sigStateChanged.connect(change)

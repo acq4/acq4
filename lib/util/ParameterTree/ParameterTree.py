@@ -22,13 +22,22 @@ class Parameter(QtCore.QObject):
     ## name, type, limits, etc.
     ## can also carry UI hints (slider vs spinbox, etc.)
     
-    sigValueChanged = QtCore.Signal(object, object)  ## value, self
+    sigValueChanged = QtCore.Signal(object, object)  ## self, value
     sigChildAdded = QtCore.Signal(object, object, object)  ## self, child, index
     sigChildRemoved = QtCore.Signal(object, object)  ## self, child
     sigParentChanged = QtCore.Signal(object, object)  ## self, parent
     sigLimitsChanged = QtCore.Signal(object, object)  ## self, limits
     sigNameChanged = QtCore.Signal(object, object)  ## self, name
     sigOptionsChanged = QtCore.Signal(object, object)  ## self, {opt:val, ...}
+    
+    ## Emitted when anything changes about this parameter at all.
+    ## The second argument is a string indicating what changed
+    ## The third argument can be any extra information about the change
+    sigStateChanged = QtCore.Signal(object, object, object) ## self, change ('value', 'childAdded', etc..), info
+    
+    ## emitted when any child in the tree changes state
+    ## (but only if monitorChildren() is called)
+    sigTreeStateChanged = QtCore.Signal(object, object, object)  # self, param, value
     
     
     def __new__(cls, *args, **opts):
@@ -73,6 +82,7 @@ class Parameter(QtCore.QObject):
         if self.opts['name'] != name:
             self.opts['name'] = name
             self.sigNameChanged.emit(self, name)
+            self.sigStateChanged.emit(self, 'name', name)
         return name
     
     def setValue(self, value, blockSignal=None):
@@ -85,7 +95,8 @@ class Parameter(QtCore.QObject):
             if self.opts['value'] == value:
                 return value
             self.opts['value'] = value
-            self.sigValueChanged.emit(value, self)
+            self.sigValueChanged.emit(self, value)
+            self.sigStateChanged.emit(self, 'value', value)
         finally:
             if blockSignal is not None:
                 self.sigValueChanged.connect(blockSignal)
@@ -267,9 +278,9 @@ class Parameter(QtCore.QObject):
         return "<%s '%s' at 0x%x>" % (self.__class__.__name__, self.name(), id(self))
        
     def __getattr__(self, attr):
-        try:
+        if attr in self.names:
             return self.param(attr)
-        except KeyError:
+        else:
             raise AttributeError(attr)
        
     def _renameChild(self, child, name):
@@ -290,6 +301,39 @@ class Parameter(QtCore.QObject):
         self.opts['visible'] = s
         self.sigOptionsChanged.emit(self, {'visible': s})
 
+
+    def monitorChildren(self):
+        self.watchParam(self)
+
+    def watchParam(self, param):
+        param.sigChildAdded.connect(self.grandchildAdded)
+        param.sigChildRemoved.connect(self.grandchildRemoved)
+        param.sigValueChanged.connect(self.childValueChanged)
+        for ch in param:
+            self.watchParam(ch)
+
+    def unwatchParam(self, param):
+        param.sigChildAdded.disconnect(self.grandchildAdded)
+        param.sigChildRemoved.disconnect(self.grandchildRemoved)
+        param.sigValueChanged.disconnect(self.childValueChanged)
+        for ch in param:
+            self.unwatchParam(ch)
+
+    def grandchildAdded(self, parent, child):
+        self.watchParam(child)
+        
+    def grandchildRemoved(self, parent, child):
+        self.unwatchParam(child)
+        
+    def childValueChanged(self, val, param):
+        self.sigStateChanged.emit(self, param, val)
+        
+    def childPath(self, child):
+        path = []
+        while child is not self:
+            path.insert(0, child.name())
+            child = child.parent()
+        return path
             
 
 class ParameterTree(TreeWidget):
@@ -433,7 +477,7 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         if w.sigChanged is not None:
             w.sigChanged.connect(self.widgetValueChanged)
             
-        self.valueChanged(opts['value'], force=True)
+        self.valueChanged(self, opts['value'], force=True)
             
 
     def makeWidget(self):
@@ -492,7 +536,7 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         newVal = self.param.setValue(val)
         self.defaultBtn.setEnabled(not self.param.valueIsDefault())
             
-    def valueChanged(self, val, force=False):
+    def valueChanged(self, param, val, force=False):
         ## called when the parameter's value has changed
         self.widget.sigChanged.disconnect(self.widgetValueChanged)
         try:

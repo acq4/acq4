@@ -52,9 +52,17 @@ class StimGenerator(QtGui.QWidget):
         ]
         self.updateWidgets()
         
+        self.meta = {  ## holds some extra information about signals (units, expected scale and range, etc)
+                       ## mostly information useful in configuring SpinBoxes
+            'x': {},
+            'y': {},
+            'xy': {}  ## values that are the product of x and y values
+        }
         
         self.stimParams = StimParameter()
+        self.stimParams.monitorChildren()
         self.ui.paramTree.setParameters(self.stimParams)
+        self.stimParams.sigStateChanged.connect(self.stimParamsChanged)
         
         self.ui.functionText.textChanged.connect(self.funcChanged)
         self.ui.paramText.textChanged.connect(self.paramChanged)
@@ -68,22 +76,45 @@ class StimGenerator(QtGui.QWidget):
         return (self.sigStateChanged, StimGenerator.saveState, StimGenerator.loadState)
 
     def setTimeScale(self, s):
+        """Set the scale factor for X axis. See setScale for description."""
         if self.timeScale != s:
             self.timeScale = s
             self.clearCache()
             self.autoUpdate()
 
     def setScale(self, s):
+        """Set the scale factor to be applied to all generated data.
+        This allows, for example, to write waveform functions with values
+        in units of mV and have the resulting data come out in units of V.
+           pulse(10, 10, 100) => gives pulse 100 units tall, but a scale
+                                 factor of 1e-3 converts it to 0.1 units
+        This should become obsolete--instead we would write the function like
+           pulse(10*ms, 10*ms, 100*mV)
+        This is more verbose but far less ambiguous.
+        """
         if self.scale != s:
             self.scale = s
             self.clearCache()
             self.autoUpdate()
 
     def setOffset(self, o):
+        """Set the offset to be added to all generated data.
+        This allows, for example, writing a pulse waveform such that 0 is 
+        always assumed to mean the current holding value."""
         if self.offset != o:
             self.offset = o
             self.clearCache()
             self.autoUpdate()
+            
+    def setMeta(self, axis, **args):
+        """Set meta data for X, Y, and XY axes. This is used primarily to configure
+        SpinBoxes to display the correct units, limits, step sizes, etc.
+        Suggested args are:
+            suffix='units', dec=True, minStep=1e-3, step=1, limits=(min, max)        
+        """
+        self.meta[axis].update(args)
+        self.stimParams.setMeta(axis, args)
+        
 
     def clearCache(self):
         self.cache = {}
@@ -124,6 +155,7 @@ class StimGenerator(QtGui.QWidget):
 
 
     def funcChanged(self):
+        ## called when the function string changes
         # test function. If ok, auto-update
         self.clearCache()
         if self.test():
@@ -135,6 +167,7 @@ class StimGenerator(QtGui.QWidget):
         
         
     def paramChanged(self):
+        ## called when the param string changes
         # test params. If ok, auto-update
         self.clearCache()
         self.cacheOk = False
@@ -144,7 +177,13 @@ class StimGenerator(QtGui.QWidget):
         self.sigParametersChanged.emit()
         #self.emit(QtCore.SIGNAL('stateChanged'))
         self.sigStateChanged.emit()
-        
+
+    def stimParamsChanged(self):
+        ## called when the simple stim generator tree changes
+        func, params = self.stimParams.compile()
+        self.ui.functionText.setPlainText(func)
+        self.ui.paramText.setPlainText('\n'.join(params))
+
     def functionString(self):
         return str(self.ui.functionText.toPlainText())
         
@@ -340,6 +379,7 @@ class StimParameter(GroupParameter):
     def __init__(self):
         GroupParameter.__init__(self, name='Stimuli', type='group',
                            addText='Add Stimulus..', addList=['Pulse', 'Pulse Train'])
+        self.monitorChildren()  ## watch for changes throughout tree
         
     def addNew(self, type):
         if type == 'Pulse':
@@ -347,12 +387,30 @@ class StimParameter(GroupParameter):
         elif type == 'Pulse Train':
             self.addChild(PulseTrainParameter())
 
+    def setMeta(self, axis, opts, root=None):  ## set units, limits, etc.
+        if root is None:
+            root = self
+        for ch in root:
+            if ch.opts.get('axis', None) == axis:   ## set options on any parameter that matches axis
+                ch.setOpts(**opts)
+            self.setMeta(axis, opts, root=ch)
+            
+    def compile(self):
+        fns = []
+        params = []
+        for ch in self:
+            fn, par = ch.compile()
+            fns.append(fn)
+            params.extend(par)
+        return ' + \n'.join(fns), params
+
 class SeqParameter(Parameter):
     def __init__(self, **args):
+        axis = args.get('axis', None)
         args['params'] = [
             {'name': 'sequence', 'type': 'list', 'value': 'off', 'values': ['off', 'range', 'list']},
-            {'name': 'start', 'type': 'float', 'value': 0, 'visible': False}, 
-            {'name': 'stop', 'type': 'float', 'value': 0, 'visible': False}, 
+            {'name': 'start', 'type': 'float', 'axis': axis, 'value': 0, 'visible': False}, 
+            {'name': 'stop', 'type': 'float', 'axis': axis, 'value': 0, 'visible': False}, 
             {'name': 'steps', 'type': 'int', 'value': 10, 'visible': False},
             {'name': 'log spacing', 'type': 'bool', 'value': False, 'visible': False}, 
             {'name': 'list', 'type': 'str', 'value': '', 'visible': False}, 
@@ -377,14 +435,27 @@ class SeqParameter(Parameter):
             self.randomize.show()
         self.sequence.show()
         
+    def compile(self):
+        if self['sequence'] == 'off':
+            return "%f"%self.value(), None
+        else:
+            name = "%s_%s" % (self.parent().name(), self.name())
+            seq = "%s = %f; " % (name, self.value())
+            if self['sequence'] == 'range':
+                seq = seq + "%f:%f/%d" % (self['start'], self['stop'], self['steps'])
+            elif self['sequence'] == 'list':
+                seq = seq + str(self['list'])
+        return name, seq
+        
+        
 class PulseParameter(GroupParameter):
     def __init__(self, **kargs):
         GroupParameter.__init__(self, name="Pulse", autoIncrementName=True, type="pulse", removable=True, renamable=True,
             params=[
-                SeqParameter(**{'name': 'start', 'type': 'float', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True}),
-                SeqParameter(**{'name': 'length', 'type': 'float', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True}),
-                SeqParameter(**{'name': 'amplitude', 'type': 'float', 'value': 0}),
-                SeqParameter(**{'name': 'sum', 'type': 'float', 'value': 0}),
+                SeqParameter(**{'name': 'start', 'type': 'float', 'axis': 'x', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True}),
+                SeqParameter(**{'name': 'length', 'type': 'float', 'axis': 'x', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True}),
+                SeqParameter(**{'name': 'amplitude', 'type': 'float', 'axis': 'y', 'value': 0}),
+                SeqParameter(**{'name': 'sum', 'type': 'float', 'axis': 'xy', 'value': 0}),
             ], **kargs)
         self.length.sigValueChanged.connect(self.lenChanged)
         self.amplitude.sigValueChanged.connect(self.ampChanged)
@@ -399,6 +470,14 @@ class PulseParameter(GroupParameter):
     def sumChanged(self):
         self.length.setValue(self['sum'] / self['amplitude'], blockSignal=self.lenChanged)
 
+    def compile(self):
+        (start, seq1) = self.start.compile()
+        (length, seq2) = self.length.compile()
+        (amp, seq3) = self.amplitude.compile()
+        fnStr = "pulse(%s, %s, %s)" % (start, length, amp)
+        seq = [x for x in [seq1, seq2, seq3] if x is not None]
+        return fnStr, seq
+        
 
 class PulseTrainParameter(GroupParameter):
     def __init__(self, **kargs):
