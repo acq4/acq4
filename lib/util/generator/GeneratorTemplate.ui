@@ -262,7 +262,7 @@ p, li { white-space: pre-wrap; }
   <customwidget>
    <class>ParameterTree</class>
    <extends>QTreeWidget</extends>
-   <header>ParameterTree</header>
+   <header>pyqtgraph.parametertree</header>
   </customwidget>
  </customwidgets>
  <resources/>

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'GeneratorTemplate.ui'
 #
-# Created: Tue Oct  4 10:44:52 2011
+# Created: Sat Oct 15 21:51:02 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -168,4 +168,4 @@ class Ui_Form(object):
         self.updateBtn.setText(QtGui.QApplication.translate("Form", "Update", None, QtGui.QApplication.UnicodeUTF8))
         self.autoUpdateCheck.setText(QtGui.QApplication.translate("Form", "Auto", None, QtGui.QApplication.UnicodeUTF8))
 
-from ParameterTree import ParameterTree
+from pyqtgraph.parametertree import ParameterTree

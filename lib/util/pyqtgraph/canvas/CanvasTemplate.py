@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/util/Canvas/CanvasTemplate.ui'
+# Form implementation generated from reading ui file 'CanvasTemplate.ui'
 #
-# Created: Wed May 18 20:44:17 2011
+# Created: Sat Oct 15 22:06:51 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -92,5 +92,5 @@ class Ui_Form(object):
         self.resetTransformsBtn.setText(QtGui.QApplication.translate("Form", "Reset Transforms", None, QtGui.QApplication.UnicodeUTF8))
 
 from CanvasManager import CanvasCombo
-from TreeWidget import TreeWidget
+from .. TreeWidget import TreeWidget
 from pyqtgraph.GraphicsView import GraphicsView

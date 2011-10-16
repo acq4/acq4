@@ -19,8 +19,8 @@ from functions import logSpace
 from GeneratorTemplate import *
 import waveforms
 from debug import *
-from ParameterTree import Parameter, GroupParameter
-
+from pyqtgraph.parametertree import Parameter, GroupParameter
+import units
 
 class StimGenerator(QtGui.QWidget):
     
@@ -59,6 +59,9 @@ class StimGenerator(QtGui.QWidget):
             'xy': {}  ## values that are the product of x and y values
         }
         
+        ## variables that are added into the function evaluation namespace.
+        self.extraParams = {}
+        
         self.stimParams = StimParameter()
         self.stimParams.monitorChildren()
         self.ui.paramTree.setParameters(self.stimParams)
@@ -71,6 +74,17 @@ class StimGenerator(QtGui.QWidget):
         self.ui.errorBtn.clicked.connect(self.updateWidgets)
         self.ui.helpBtn.clicked.connect(self.updateWidgets)
         self.ui.advancedBtn.toggled.connect(self.updateWidgets)
+
+    def setEvalNames(self, **kargs):
+        """Make variables accessible for use by evaluated functions."""
+        self.extraParams.update(kargs)
+        self.clearCache()
+        self.autoUpdate()
+        
+    def delEvalName(self, name):
+        del self.extraParams[name]
+        self.clearCache()
+        self.autoUpdate()
 
     def widgetGroupInterface(self):
         return (self.sigStateChanged, StimGenerator.saveState, StimGenerator.loadState)
@@ -263,15 +277,18 @@ class StimGenerator(QtGui.QWidget):
         self.cacheRate = rate
         self.cacheNPts = nPts
             
-        ## create namespace with generator functions
+        ## create namespace with generator functions. 
+        ##   - iterates over all functions provided in waveforms module
+        ##   - wrap each function to automatically provide rate and nPts arguments
         ns = {}
         arg = {'rate': rate * self.timeScale, 'nPts': nPts}
+        ns.update(arg)  ## copy rate and nPts to eval namespace
         for i in dir(waveforms):
             obj = getattr(waveforms, i)
             if type(obj) is types.FunctionType:
                 ns[i] = self.makeWaveFunction(i, arg)
         
-        ## add parameter values into namespace
+        ## add current sequence parameter values into namespace
         seq = self.paramSpace()
         for k in seq:
             if k in params:  ## select correct value from sequence list
@@ -282,7 +299,13 @@ class StimGenerator(QtGui.QWidget):
                     raise
             else:  ## just use single value
                 ns[k] = float(seq[k][0])
+
+        ## add units into namespace
+        ns.update(units.allUnits)
         
+        ## add extra parameters to namespace
+        ns.update(self.extraParams)
+
         ## evaluate and return
         fn = self.functionString().replace('\n', '')
         ret = eval(fn, globals(), ns)
@@ -380,16 +403,23 @@ class StimParameter(GroupParameter):
         GroupParameter.__init__(self, name='Stimuli', type='group',
                            addText='Add Stimulus..', addList=['Pulse', 'Pulse Train'])
         self.monitorChildren()  ## watch for changes throughout tree
+        self.meta = {}
         
     def addNew(self, type):
         if type == 'Pulse':
-            self.addChild(PulseParameter())
+            ch = self.addChild(PulseParameter())
         elif type == 'Pulse Train':
-            self.addChild(PulseTrainParameter())
+            ch = self.addChild(PulseTrainParameter())
+        else:
+            raise Exception('Unknown type %s' % type)
+        
+        for ax in self.meta:
+            self.setMeta(ax, self.meta[ax], ch)
 
     def setMeta(self, axis, opts, root=None):  ## set units, limits, etc.
         if root is None:
             root = self
+            self.meta[axis] = opts
         for ch in root:
             if ch.opts.get('axis', None) == axis:   ## set options on any parameter that matches axis
                 ch.setOpts(**opts)
@@ -455,20 +485,21 @@ class PulseParameter(GroupParameter):
                 SeqParameter(**{'name': 'start', 'type': 'float', 'axis': 'x', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True}),
                 SeqParameter(**{'name': 'length', 'type': 'float', 'axis': 'x', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True}),
                 SeqParameter(**{'name': 'amplitude', 'type': 'float', 'axis': 'y', 'value': 0}),
-                SeqParameter(**{'name': 'sum', 'type': 'float', 'axis': 'xy', 'value': 0}),
+                SeqParameter(**{'name': 'sum', 'type': 'float', 'axis': 'xy', 'value': 0, 'limits': (0, None)}),
             ], **kargs)
         self.length.sigValueChanged.connect(self.lenChanged)
         self.amplitude.sigValueChanged.connect(self.ampChanged)
         self.sum.sigValueChanged.connect(self.sumChanged)
         
     def lenChanged(self):
-        self.sum.setValue(self['length'] * self['amplitude'], blockSignal=self.sumChanged)
+        self.sum.setValue(abs(self['length']) * self['amplitude'], blockSignal=self.sumChanged)
 
     def ampChanged(self):
-        self.sum.setValue(self['length'] * self['amplitude'], blockSignal=self.sumChanged)
+        self.sum.setValue(abs(self['length']) * self['amplitude'], blockSignal=self.sumChanged)
 
     def sumChanged(self):
-        self.length.setValue(self['sum'] / self['amplitude'], blockSignal=self.lenChanged)
+        sign = 1 if self['length'] >= 0 else -1
+        self.length.setValue(sign * self['sum'] / self['amplitude'], blockSignal=self.lenChanged)
 
     def compile(self):
         (start, seq1) = self.start.compile()

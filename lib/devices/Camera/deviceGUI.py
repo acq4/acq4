@@ -3,7 +3,7 @@
 from PyQt4 import QtCore, QtGui
 from WidgetGroup import WidgetGroup
 from SpinBox import *
-from ParameterTree import * 
+from pyqtgraph.parametertree import * 
 #import pdb
 
 class CameraDeviceGui(QtGui.QWidget):
@@ -66,7 +66,8 @@ class CameraDeviceGui(QtGui.QWidget):
             #self.ui.formLayout_2.addRow(k, w)
         #self.stateGroup.sigChanged.connect(self.stateChanged)
         
-        self.paramSet = ParameterSet('cameraParams', params)
+        self.paramSet = Parameter(name='cameraParams', type='group', params=params)
+        self.paramSet.monitorChildren()
         self.paramWidget = ParameterTree()
         self.paramWidget.setParameters(self.paramSet)
         self.layout.addWidget(self.paramWidget)

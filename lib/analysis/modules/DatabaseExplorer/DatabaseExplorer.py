@@ -10,7 +10,7 @@ from advancedTypes import OrderedDict
 import debug
 import ColorMapper
 import pyqtgraph as pg
-import TreeWidget
+import pyqtgraph.TreeWidget as TreeWidget
 
 
 class DatabaseExplorer(AnalysisModule):

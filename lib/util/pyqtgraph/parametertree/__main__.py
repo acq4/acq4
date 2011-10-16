@@ -60,27 +60,25 @@ class ScalableGroup(pTypes.GroupParameter):
         self.addChild(dict(name="ScalableParam %d" % (len(self.childs)+1), type=typ, value=val, removable=True, renamable=True))
 
 
-## test column spanning
-
+## test column spanning (widget sub-item that spans all columns)
 class TextParameterItem(ParameterItem):
     def __init__(self, param, depth):
         ParameterItem.__init__(self, param, depth)
-        self.subItem = QtGui.QTreeWidgetItem()
-        self.addChild(self.subItem)
         
-    def updateWidgets(self):
-        self.treeWidget().setFirstItemColumnSpanned(self.subItem, True)
-        self.treeWidget().setItemWidget(self.subItem, 0, self.textBox)
-        self.setExpanded(True)
-        
-    def makeWidget(self):
         self.textBox = QtGui.QTextEdit()
         self.textBox.setMaximumHeight(100)
         self.textBox.value = lambda: str(self.textBox.toPlainText())
         self.textBox.setValue = self.textBox.setPlainText
         self.textBox.sigChanged = self.textBox.textChanged
-        return self.textBox
+        
+        self.subItem = QtGui.QTreeWidgetItem()
+        self.addChild(self.subItem)
 
+    def treeChanged(self):
+        self.treeWidget().setFirstItemColumnSpanned(self.subItem, True)
+        self.treeWidget().setItemWidget(self.subItem, 0, self.textBox)
+        self.setExpanded(True)
+        
 class TextParameter(Parameter):
     type = 'text'
     itemClass = TextParameterItem
@@ -121,8 +119,8 @@ params = [
 p = Parameter(name='params', type='group', params=params)
 p.monitorChildren()
 def change(*args):
-    print "change:", args
-p.sigStateChanged.connect(change)
+    print "tree change:", args
+p.sigTreeStateChanged.connect(change)
 
 
 t = ParameterTree()

@@ -4,7 +4,7 @@ from PyQt4 import QtGui, QtCore
 from metaarray import *
 from debug import *
 import ptime
-from TreeWidget import *
+from pyqtgraph.TreeWidget import TreeWidget
 
 #class TreeWidget(QtGui.QTreeWidget):
     #"""Extends QTreeWidget to allow internal drag/drop with widgets in the tree.

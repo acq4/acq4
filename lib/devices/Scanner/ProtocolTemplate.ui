@@ -498,7 +498,7 @@ p, li { white-space: pre-wrap; }
   <customwidget>
    <class>TreeWidget</class>
    <extends>QTreeWidget</extends>
-   <header location="global">TreeWidget</header>
+   <header location="global">pyqtgraph.TreeWidget</header>
   </customwidget>
  </customwidgets>
  <resources/>

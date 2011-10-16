@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Fri Sep 23 16:43:51 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Sat Oct 15 21:31:41 2011
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -24,7 +24,7 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(Form.sizePolicy().hasHeightForWidth())
         Form.setSizePolicy(sizePolicy)
         self.gridLayout_4 = QtGui.QGridLayout(Form)
-        self.gridLayout_4.setMargin(0)
+        self.gridLayout_4.setMargin(3)
         self.gridLayout_4.setObjectName(_fromUtf8("gridLayout_4"))
         self.gridLayout = QtGui.QGridLayout()
         self.gridLayout.setSizeConstraint(QtGui.QLayout.SetMaximumSize)
@@ -142,7 +142,7 @@ class Ui_Form(object):
         self.label_8 = QtGui.QLabel(Form)
         self.label_8.setObjectName(_fromUtf8("label_8"))
         self.gridLayout_4.addWidget(self.label_8, 0, 3, 1, 1)
-        spacerItem1 = QtGui.QSpacerItem(253, 541, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        spacerItem1 = QtGui.QSpacerItem(253, 535, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.gridLayout_4.addItem(spacerItem1, 0, 5, 3, 1)
         self.itemTree = TreeWidget(Form)
         self.itemTree.setObjectName(_fromUtf8("itemTree"))
@@ -261,5 +261,5 @@ class Ui_Form(object):
         self.hideCheck.setText(QtGui.QApplication.translate("Form", "Hide items", None, QtGui.QApplication.UnicodeUTF8))
         self.hideMarkerBtn.setText(QtGui.QApplication.translate("Form", "Hide Spot Marker", None, QtGui.QApplication.UnicodeUTF8))
 
+from pyqtgraph.TreeWidget import TreeWidget
 from SpinBox import SpinBox
-from TreeWidget import TreeWidget
