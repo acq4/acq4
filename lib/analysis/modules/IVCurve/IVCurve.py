@@ -102,7 +102,7 @@ class IVCurve(AnalysisModule):
                 pass
                 # store primary channel data and read command amplitude
             traces.append(data)
-            self.data_plot.plot(data, pen=pg.intColor(c, len(dirs), maxValue=200), decimate=decimate_factor)
+            self.data_plot.plot(data, pen=pg.intColor(c, len(dirs), maxValue=200)) # , decimate=decimate_factor)
             self.values.append(cmd[len(cmd)/2])
             #c += 1.0 / len(dirs)
             c += 1

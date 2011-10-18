@@ -8,7 +8,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 print "Loading ACQ4..."
 
 import sip
-sip.setapi('QString', 2)
+#sip.setapi('QString', 2)
 #sip.setapi('QVariant', 2)
 
 ## PyQt bug: make sure qt.conf was installed correctly
