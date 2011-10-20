@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'devTemplate.ui'
 #
-# Created: Fri Oct 07 13:20:38 2011
+# Created: Thu Oct 20 13:03:02 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -72,6 +72,7 @@ class Ui_Form(object):
         font.setWeight(75)
         font.setBold(True)
         self.outputPowerLabel.setFont(font)
+        self.outputPowerLabel.setText(_fromUtf8(""))
         self.outputPowerLabel.setObjectName(_fromUtf8("outputPowerLabel"))
         self.gridLayout_4.addWidget(self.outputPowerLabel, 0, 1, 1, 1)
         self.samplePowerLabel = QtGui.QLabel(self.powerGroup)
@@ -80,6 +81,7 @@ class Ui_Form(object):
         font.setWeight(50)
         font.setBold(False)
         self.samplePowerLabel.setFont(font)
+        self.samplePowerLabel.setText(_fromUtf8(""))
         self.samplePowerLabel.setObjectName(_fromUtf8("samplePowerLabel"))
         self.gridLayout_4.addWidget(self.samplePowerLabel, 1, 1, 1, 1)
         self.label_8 = QtGui.QLabel(self.powerGroup)
@@ -239,8 +241,6 @@ class Ui_Form(object):
         self.currentPowerRadio.setText(QtGui.QApplication.translate("Form", "Current Power", None, QtGui.QApplication.UnicodeUTF8))
         self.expectedPowerRadio.setText(QtGui.QApplication.translate("Form", "Expected Power", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("Form", "Current Output Power:", None, QtGui.QApplication.UnicodeUTF8))
-        self.outputPowerLabel.setText(QtGui.QApplication.translate("Form", "100 mW", None, QtGui.QApplication.UnicodeUTF8))
-        self.samplePowerLabel.setText(QtGui.QApplication.translate("Form", "35 mW", None, QtGui.QApplication.UnicodeUTF8))
         self.label_8.setText(QtGui.QApplication.translate("Form", "Power at sample (calc.):", None, QtGui.QApplication.UnicodeUTF8))
         self.label_7.setText(QtGui.QApplication.translate("Form", "Current Wavelength: ", None, QtGui.QApplication.UnicodeUTF8))
         self.wavelengthCombo.setItemText(0, QtGui.QApplication.translate("Form", "Set wavelength for:", None, QtGui.QApplication.UnicodeUTF8))

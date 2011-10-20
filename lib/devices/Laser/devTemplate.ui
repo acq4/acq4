@@ -130,7 +130,7 @@
          </font>
         </property>
         <property name="text">
-         <string>100 mW</string>
+         <string/>
         </property>
        </widget>
       </item>
@@ -144,7 +144,7 @@
          </font>
         </property>
         <property name="text">
-         <string>35 mW</string>
+         <string/>
         </property>
        </widget>
       </item>

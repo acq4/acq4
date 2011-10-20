@@ -356,7 +356,7 @@ class LaserTask(DAQGenericTask):
         cmd['daqProtocol'] = {}
         if 'shutter' in dev.config:
             cmd['daqProtocol']['shutter'] = None
-        if 'qswitch' in dev.config:
+        if 'qSwitch' in dev.config:
             cmd['daqProtocol']['qSwitch'] = None
         if 'pCell' in dev.config:
             cmd['daqProtocol']['pCell'] = None
@@ -369,11 +369,13 @@ class LaserTask(DAQGenericTask):
         nPts = len(waveform)
         daqCmd = {}
         
-        if self.dev.config.get('pCell', None) is not None:
+        #if self.dev.config.get('pCell', None) is not None:
+        if self.dev.hasPCell:
             ## convert power values using calibration data
             daqCmd['pCell'] = self.dev.getPCellWaveform(waveform)
             
-        if self.dev.config.get('qSwitch', None) is not None:
+        if self.dev.hasQSwitch:
+        #if self.dev.config.get('qSwitch', None) is not None:
             qswitchCmd = np.zeros(nPts, dtype=np.byte)
             qswitchCmd[waveform != 0] = 1
             daqCmd['qSwitch'] = qswitchCmd
@@ -382,7 +384,17 @@ class LaserTask(DAQGenericTask):
         
     def configure(self, tasks, startOrder):
         ## need to generate shutter, qswitch and pcell waveforms that get passed into DaqGenericTask
-        daqName = self.dev.getDAQName('shutter')
+        
+        ## make finding the name of the daq a little more robust
+        if self.dev.hasTriggerableShutter:
+            daqName = self.dev.getDAQName('shutter')
+        elif self.dev.hasPCell:
+            daqName = self.dev.getDAQName('pCell')
+        elif self.dev.hasQSwitch:
+            daqName = self.dev.getDAQName('qSwitch')
+        else:
+            raise HelpfulException("LaserTask can't find name of DAQ device to use for this protocol.")
+        
         daqTask = tasks[daqName]
         rate = daqTask.getChanSampleRate(self.dev.config['shutter']['channel'][1])
         
