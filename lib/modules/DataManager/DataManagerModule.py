@@ -84,7 +84,8 @@ class DataManager(Module):
     def baseDirChanged(self):
         dh = self.manager.getBaseDir()
         self.baseDir = dh
-        self.ui.baseDirText.setText(QtCore.QString(dh.name()))
+        #self.ui.baseDirText.setText(QtCore.QString(dh.name()))
+        self.ui.baseDirText.setText(dh.name())
         self.ui.fileTreeWidget.setBaseDirHandle(dh)
         #self.currentDirChanged()
         
@@ -145,10 +146,13 @@ class DataManager(Module):
                 raise Exception("Caught. Please to be examined: %s" % str(dirName))
         #if dirName is None:
             #dirName = QtGui.QFileDialog.getExistingDirectory()
-        if type(dirName) is QtCore.QStringList:
-            dirName = str(dirName[0])
-        elif type(dirName) is QtCore.QString:
-            dirName = str(dirName)
+        #if type(dirName) is QtCore.QStringList:
+        #    dirName = str(dirName[0])
+            #raise Exception("Caught. Please to be examined.")
+        #if type(dirName) is QtCore.QStringList:
+            #dirName = str(dirName[0])
+        #elif type(dirName) is QtCore.QString:
+            #dirName = str(dirName)
         if dirName is None:
             return
         if os.path.isdir(dirName):

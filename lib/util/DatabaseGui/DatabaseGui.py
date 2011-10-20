@@ -42,8 +42,8 @@ class DatabaseGui(QtGui.QWidget):
         
     def generateTableLists(self):
         for l, c in self.tableWidgets.itervalues():
-            self.tableArea.layout().removeWidget(l)
-            self.tableArea.layout().removeWidget(c)
+            self.ui.tableArea.layout().removeWidget(l)
+            self.ui.tableArea.layout().removeWidget(c)
         self.tableWidgets = {}
             
         for ident, default in self.tables.iteritems():

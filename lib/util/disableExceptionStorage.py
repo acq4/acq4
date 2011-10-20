@@ -18,6 +18,5 @@ def excepthook(*args):
     #getManager().logExc(*args)
     logMsg("Unhandled exception: ", exception=args, msgType='error')
     sys.last_traceback = None           ## the important bit
-    
-    
+
 sys.excepthook = excepthook

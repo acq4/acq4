@@ -202,16 +202,12 @@ class ScopeGUI(QtGui.QWidget):
             self.objWidgets[i] = widgets
             
             for o in self.objList[i]:
-                c.addItem(self.objList[i][o]['name'], QtCore.QVariant(QtCore.QString(o)))
-            #QtCore.QObject.connect(r, QtCore.SIGNAL('clicked()'), self.objRadioClicked)
+                #c.addItem(self.objList[i][o]['name'], QtCore.QVariant(QtCore.QString(o)))
+                c.addItem(self.objList[i][o]['name'], o)
             r.clicked.connect(self.objRadioClicked)
-            #QtCore.QObject.connect(c, QtCore.SIGNAL('currentIndexChanged(int)'), self.objComboChanged)
             c.currentIndexChanged.connect(self.objComboChanged)
-            #QtCore.QObject.connect(xs, QtCore.SIGNAL('valueChanged'), self.xSpinChanged)
             xs.sigValueChanged.connect(self.xSpinChanged)
-            #QtCore.QObject.connect(ys, QtCore.SIGNAL('valueChanged'), self.ySpinChanged)
             ys.sigValueChanged.connect(self.ySpinChanged)
-            #QtCore.QObject.connect(ss, QtCore.SIGNAL('valueChanged'), self.sSpinChanged)
             ss.sigValueChanged.connect(self.sSpinChanged)
             row += 1
         
@@ -263,5 +259,6 @@ class ScopeGUI(QtGui.QWidget):
             
     def selectedObj(self, i):
         c = self.objWidgets[i][1]
-        return str(c.itemData(c.currentIndex()).toString())
+        #return str(c.itemData(c.currentIndex()).toString())
+        return c.itemData(c.currentIndex())
         

@@ -2,7 +2,8 @@ from PyQt4 import QtCore, QtGui
 from TreeWidget import TreeWidget
 from SpinBox import SpinBox
 from pyqtgraph.ColorButton import ColorButton
-import collections, os, weakref
+import collections, os, weakref, re
+#import functions as fn
 
 PARAM_TYPES = {}
 
@@ -12,15 +13,31 @@ def registerParameterType(name, cls):
     PARAM_TYPES[name] = cls
 
 class Parameter(QtCore.QObject):
+    """Tree of name=value pairs (modifiable or not)
+       - Value may be integer, float, string, bool, color, or list selection
+       - Optionally, a custom widget may be specified for a property
+       - Any number of extra columns may be added for other purposes
+       - Any values may be reset to a default value
+       - Parameters may be grouped / nested"""
     ## name, type, limits, etc.
     ## can also carry UI hints (slider vs spinbox, etc.)
     
-    sigValueChanged = QtCore.Signal(object, object)  ## value, self
+    sigValueChanged = QtCore.Signal(object, object)  ## self, value
     sigChildAdded = QtCore.Signal(object, object, object)  ## self, child, index
     sigChildRemoved = QtCore.Signal(object, object)  ## self, child
     sigParentChanged = QtCore.Signal(object, object)  ## self, parent
     sigLimitsChanged = QtCore.Signal(object, object)  ## self, limits
     sigNameChanged = QtCore.Signal(object, object)  ## self, name
+    sigOptionsChanged = QtCore.Signal(object, object)  ## self, {opt:val, ...}
+    
+    ## Emitted when anything changes about this parameter at all.
+    ## The second argument is a string indicating what changed
+    ## The third argument can be any extra information about the change
+    sigStateChanged = QtCore.Signal(object, object, object) ## self, change ('value', 'childAdded', etc..), info
+    
+    ## emitted when any child in the tree changes state
+    ## (but only if monitorChildren() is called)
+    sigTreeStateChanged = QtCore.Signal(object, object, object)  # self, param, value
     
     
     def __new__(cls, *args, **opts):
@@ -53,8 +70,6 @@ class Parameter(QtCore.QObject):
             opts['default'] = opts['value']
             
         
-            
-        
     def name(self):
         return self.opts['name']
     
@@ -67,16 +82,25 @@ class Parameter(QtCore.QObject):
         if self.opts['name'] != name:
             self.opts['name'] = name
             self.sigNameChanged.emit(self, name)
+            self.sigStateChanged.emit(self, 'name', name)
         return name
     
-    def setValue(self, value):
+    def setValue(self, value, blockSignal=None):
         ## return the actual value that was set
         ## (this may be different from the value that was requested)
         #print self, "Set value:", value, self.opts['value'], self.opts['value'] == value
-        if self.opts['value'] == value:
-            return value
-        self.opts['value'] = value
-        self.sigValueChanged.emit(value, self)
+        try:
+            if blockSignal is not None:
+                self.sigValueChanged.disconnect(blockSignal)
+            if self.opts['value'] == value:
+                return value
+            self.opts['value'] = value
+            self.sigValueChanged.emit(self, value)
+            self.sigStateChanged.emit(self, 'value', value)
+        finally:
+            if blockSignal is not None:
+                self.sigValueChanged.connect(blockSignal)
+            
         return value
 
     def value(self):
@@ -119,6 +143,27 @@ class Parameter(QtCore.QObject):
         self.sigLimitsChanged.emit(self, limits)
         return limits
 
+
+    def setOpts(self, **opts):
+        """For setting any arbitrary options."""
+        changed = collections.OrderedDict()
+        for k in opts:
+            if k == 'value':
+                self.setValue(opts[k])
+            elif k == 'name':
+                self.setName(opts[k])
+            elif k == 'limits':
+                self.setLimits(opts[k])
+            elif k == 'default':
+                self.setDefault(opts[k])
+            elif k not in self.opts or self.opts[k] != opts[k]:
+                self.opts[k] = opts[k]
+                changed[k] = opts[k]
+                
+        if len(changed) > 0:
+            self.sigOptionsChanged.emit(self, changed)
+        
+
     def makeTreeItem(self, depth):
         """Return a TreeWidgetItem suitable for displaying/controlling the content of this parameter.
         Most subclasses will want to override this function.
@@ -144,7 +189,11 @@ class Parameter(QtCore.QObject):
         
         name = child.name()
         if name in self.names:
-            raise Exception("Already have child named %s" % str(name))
+            if child.opts.get('autoIncrementName', False):
+                name = self.incrementName(name)
+                child.setName(name)
+            else:
+                raise Exception("Already have child named %s" % str(name))
         if isinstance(pos, Parameter):
             pos = self.childs.index(pos)
             
@@ -156,6 +205,8 @@ class Parameter(QtCore.QObject):
         
         child.parentChanged(self)
         self.sigChildAdded.emit(self, child, pos)
+        
+        return child
         
     def removeChild(self, child):
         name = child.name()
@@ -180,7 +231,21 @@ class Parameter(QtCore.QObject):
         if parent is None:
             raise Exception("Cannot remove; no parent.")
         parent.removeChild(self)
-        
+
+    def incrementName(self, name):
+        ## return an unused name by adding a number to the name given
+        base, num = re.match('(.*)(\d*)', name).groups()
+        numLen = len(num)
+        if numLen == 0:
+            num = 2
+            numLen = 1
+        else:
+            num = int(num)
+        while True:
+            newName = base + ("%%0%dd"%numLen) % num
+            if newName not in self.childs:
+                return newName
+            num += 1
 
     def __iter__(self):
         for ch in self.childs:
@@ -212,6 +277,12 @@ class Parameter(QtCore.QObject):
     def __repr__(self):
         return "<%s '%s' at 0x%x>" % (self.__class__.__name__, self.name(), id(self))
        
+    def __getattr__(self, attr):
+        if attr in self.names:
+            return self.param(attr)
+        else:
+            raise AttributeError(attr)
+       
     def _renameChild(self, child, name):
         ## Only to be called from Parameter.rename
         if name in self.names:
@@ -223,23 +294,16 @@ class Parameter(QtCore.QObject):
     def registerItem(self, item):
         self.items[item] = None
         
-       
+    def hide(self):
+        self.show(False)
+        
+    def show(self, s=True):
+        self.opts['visible'] = s
+        self.sigOptionsChanged.emit(self, {'visible': s})
 
-class ParameterSet(Parameter):
-    """Tree of name=value pairs (modifiable or not)
-       - Value may be integer, float, string, bool, color, or list selection
-       - Optionally, a custom widget may be specified for a property
-       - Any number of extra columns may be added for other purposes
-       - Any values may be reset to a default value
-       - Parameters may be grouped / nested"""
-       
-    sigStateChanged = QtCore.Signal(object, object, object)  # self, param, value
-    
-    def __init__(self, name, params):
-        Parameter.__init__(self, name=name, type='group')
+
+    def monitorChildren(self):
         self.watchParam(self)
-        for ch in params:
-            self.addChild(ch)
 
     def watchParam(self, param):
         param.sigChildAdded.connect(self.grandchildAdded)
@@ -285,20 +349,31 @@ class ParameterTree(TreeWidget):
         self.paramSet = None
         self.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
         self.itemChanged.connect(self.itemChangedEvent)
+        self.lastSel = None
+        self.setRootIsDecorated(False)
         
-    def setParameters(self, paramSet, root=None, depth=0):
+    def setParameters(self, param, root=None, depth=0, showTop=True):
+        item = param.makeTreeItem(depth=depth)
         if root is None:
             root = self.invisibleRootItem()
+            ## Hide top-level item
+            if not showTop:
+                item.setSizeHint(0, QtCore.QSize(0,0))
+                item.setSizeHint(1, QtCore.QSize(0,0))
+                depth -= 1
+        root.addChild(item)
+        item.updateWidgets()
+            
         #expand = False
-        for param in paramSet:
-            item = param.makeTreeItem(depth=depth)
-            root.addChild(item)
-            item.updateWidgets()
-            self.setParameters(param, root=item, depth=depth+1)
+        for ch in param:
+            #item = param.makeTreeItem(depth=depth)
+            #root.addChild(item)
+            #item.updateWidgets()
+            self.setParameters(ch, root=item, depth=depth+1)
             #expand = True
         #root.setExpanded(expand)
         
-        self.paramSet = paramSet
+        #self.paramSet = param
         
     #def resizeEvent(self):
         #for col in range(self.columnCount()):
@@ -313,13 +388,29 @@ class ParameterTree(TreeWidget):
     def itemChangedEvent(self, item, col):
         if hasattr(item, 'columnChangedEvent'):
             item.columnChangedEvent(col)
+            
+    def selectionChanged(self, *args):
+        sel = self.selectedItems()
+        if len(sel) != 1:
+            sel = None
+        if self.lastSel is not None:
+            self.lastSel.selected(False)
+        if sel is None:
+            self.lastSel = None
+            return
+        self.lastSel = sel[0]
+        if hasattr(sel[0], 'selected'):
+            sel[0].selected(True)
+        return TreeWidget.selectionChanged(self, *args)
+        
 
 
 class ParameterItem(QtGui.QTreeWidgetItem):
     def __init__(self, param, depth=0):
         self.param = param
-        self.param.registerItem(self)  ## let parameter know this item is connected to it
+        self.param.registerItem(self)  ## let parameter know this item is connected to it (for debugging)
         self.depth = depth
+        self.hideWidget = True  ## hide edit widget, replace with label when not selected
         name = param.name()
         QtGui.QTreeWidgetItem.__init__(self, [name, ''])
         
@@ -329,6 +420,7 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         param.sigChildRemoved.connect(self.childRemoved)
         param.sigNameChanged.connect(self.nameChanged)
         param.sigLimitsChanged.connect(self.limitsChanged)
+        param.sigOptionsChanged.connect(self.optsChanged)
         self.ignoreNameColumnChange = False
         
         
@@ -348,13 +440,13 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         if opts.get('dropEnabled', False):
             flags |= QtCore.Qt.ItemIsDropEnabled
         self.setFlags(flags)
-        
+
+
         ## If this item type provides a widget, build it into column 1 with a default button.
         w = self.makeWidget()  
+        self.widget = w
         if w is None:
             return
-
-        w.setValue(opts['value'])
 
         if 'tip' in opts:
             w.setToolTip(opts['tip'])
@@ -363,31 +455,29 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         if opts.get('readonly', False):
             w.setEnabled(False)
         
-        layout = QtGui.QHBoxLayout()
-        layout.setContentsMargins(0,0,0,0)
-        layout.setSpacing(2)
-        layout.addWidget(w)
-
         self.defaultBtn = QtGui.QPushButton()
         self.defaultBtn.setFixedWidth(20)
         self.defaultBtn.setFixedHeight(20)
-        #sp = self.defaultBtn.sizePolicy()
-        #sp.setHorizontalPolicy(QtGui.QSizePolicy.Fixed)
-        #self.defaultBtn.setSizePolicy(sp)
-        #self.defaultBtn.setSizeHint(16, 16)
         modDir = os.path.dirname(__file__)
         self.defaultBtn.setIcon(QtGui.QIcon(os.path.join(modDir, 'default.png')))
-        layout.addWidget(self.defaultBtn)
         self.defaultBtn.clicked.connect(self.defaultClicked)
         self.defaultBtn.setEnabled(not self.param.valueIsDefault())
 
+        self.displayLabel = QtGui.QLabel()
+
+        layout = QtGui.QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        layout.addWidget(w)
+        layout.addWidget(self.displayLabel)
+        layout.addWidget(self.defaultBtn)
         self.layoutWidget = QtGui.QWidget()
         self.layoutWidget.setLayout(layout)
         
-        self.widget = w
         if w.sigChanged is not None:
             w.sigChanged.connect(self.widgetValueChanged)
             
+        self.valueChanged(self, opts['value'], force=True)
             
 
     def makeWidget(self):
@@ -408,15 +498,7 @@ class ParameterItem(QtGui.QTreeWidgetItem):
                 defs['bounds'] = opts['limits']
             w = SpinBox()
             w.setOpts(**defs)
-            w.sigChanged = w.valueChanged
-            #w = SpinBox()
-            #if 'max' in opts:
-                #w.setMaximum(opts['max'])
-            #if 'min' in opts:
-                #w.setMinimum(opts['min'])
-            #if 'value' in opts:
-                #w.setValue(opts['value'])
-            #w.sigChanged = w.valueChanged
+            w.sigChanged = w.sigValueChanging
         elif t == 'float':
             defs = {'value': 0, 'min': None, 'max': None, 'step': 1.0, 'dec': False, 'siPrefix': False, 'suffix': ''}
             defs.update(opts)
@@ -424,36 +506,25 @@ class ParameterItem(QtGui.QTreeWidgetItem):
                 defs['bounds'] = opts['limits']
             w = SpinBox()
             w.setOpts(**defs)
-            w.sigChanged = w.valueChanged
+            w.sigChanged = w.sigValueChanging
         elif t == 'bool':
             w = QtGui.QCheckBox()
-            #w.setChecked(opts.get('value', False))
             w.sigChanged = w.toggled
             w.value = w.isChecked
             w.setValue = w.setChecked
+            self.hideWidget = False
         elif t == 'str':
             w = QtGui.QLineEdit()
-            #w.setText(opts['value'])
             w.sigChanged = w.editingFinished
             w.value = lambda: str(w.text())
             w.setValue = lambda v: w.setText(str(v))
-        #elif t == 'list':
-            #w = QtGui.QComboBox()
-            #w.setEditable(False)
-            #for i in opts['values']:
-                #w.addItem(str(i))
-            #w.sigChanged = w.currentIndexChanged
-            #w.value = w.currentIndex
-            #w.setValue = w.setCurrentIndex
-        #elif t == 'colormap':
-            #w = ColorMapper()
         elif t == 'color':
             w = ColorButton()
-            #if 'value' in opts:
-                #w.setColor(opts['value'])
             w.sigChanged = w.sigColorChanged
             w.value = w.color
             w.setValue = w.setColor
+            self.hideWidget = False
+            w.setFlat(True)
         else:
             raise Exception("Unknown type '%s'" % str(t))
         return w
@@ -463,32 +534,48 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         ## called when the widget's value has been changed by the user
         val = self.widget.value()
         newVal = self.param.setValue(val)
-        #if val != newVal:
-            #self.valueChanged(newVal)  ## should be handled automatically.
         self.defaultBtn.setEnabled(not self.param.valueIsDefault())
             
-    def valueChanged(self, val):
+    def valueChanged(self, param, val, force=False):
         ## called when the parameter's value has changed
         self.widget.sigChanged.disconnect(self.widgetValueChanged)
         try:
-            if val != self.widget.value():
+            if force or val != self.widget.value():
                 self.widget.setValue(val)
+                self.updateDisplayLabel(val)
         finally:
             self.widget.sigChanged.connect(self.widgetValueChanged)
         self.defaultBtn.setEnabled(not self.param.valueIsDefault())
-        
+
+    def updateDisplayLabel(self, value=None):
+        if value is None:
+            value = self.param.value()
+        opts = self.param.opts
+        if isinstance(self.widget, QtGui.QAbstractSpinBox):
+            text = unicode(self.widget.lineEdit().text())
+        elif isinstance(self.widget, QtGui.QComboBox):
+            text = self.widget.currentText()
+        else:
+            text = str(value)
+        self.displayLabel.setText(text)
+
     def updateWidgets(self):
         ## add all widgets for this item into the tree
-        if hasattr(self, 'widget'):
+        if self.widget is not None:
             tree = self.treeWidget()
             tree.setItemWidget(self, 1, self.layoutWidget)
+            self.displayLabel.hide()
+            self.selected(False)            
+        self.setHidden(not self.param.opts.get('visible', True))
         self.setExpanded(self.param.opts.get('expanded', True))
-
+        
     def childAdded(self, param, child, pos):
         item = child.makeTreeItem(depth=self.depth+1)
-        #print "param:", param, "param item:", self, "add child:", child, "item:", item
         self.insertChild(pos, item)
         item.updateWidgets()
+        
+        for i, ch in enumerate(child):
+            item.childAdded(child, ch, i)
         
     def childRemoved(self, param, child):
         for i in range(self.childCount()):
@@ -528,6 +615,32 @@ class ParameterItem(QtGui.QTreeWidgetItem):
             self.widget.setOpts(bounds=limits)
         else:
             return  ## don't know what to do with any other types..
-            
+
+    def optsChanged(self, param, opts):
+        ## called when any options are changed that are not
+        ## name, value, default, or limits
+        #print opts
+        if 'visible' in opts:
+            self.setHidden(not opts['visible'])
+        
+        
+        if isinstance(self.widget, SpinBox):
+            self.widget.setOpts(**opts)
+            self.updateDisplayLabel()
+
     def editName(self):
         self.treeWidget().editItem(self, 0)
+        
+    def selected(self, sel):
+        if self.widget is None:
+            return
+        if sel:
+            self.widget.show()
+            self.displayLabel.hide()
+        elif self.hideWidget:
+            self.widget.hide()
+            self.displayLabel.show()
+
+
+
+

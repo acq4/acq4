@@ -32,3 +32,33 @@ for p in SI_PREFIXES:
     addUnit(p, n)
 
 cm = 0.01
+
+
+
+
+
+
+def evalUnits(unitStr):
+    """
+    Evaluate a unit string into ([numerators,...], [denominators,...])
+    Examples:
+        N m/s^2   =>  ([N, m], [s, s])
+        A*s / V   =>  ([A, s], [V,])
+    """
+    pass
+    
+def formatUnits(units):
+    """
+    Format a unit specification ([numerators,...], [denominators,...])
+    into a string (this is the inverse of evalUnits)
+    """
+    pass
+    
+def simplify(units):
+    """
+    Cancel units that appear in both numerator and denominator, then attempt to replace 
+    groups of units with single units where possible (ie, J/s => W)
+    """
+    pass
+    
+    

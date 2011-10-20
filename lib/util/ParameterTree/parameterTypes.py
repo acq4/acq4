@@ -36,6 +36,7 @@ class GroupParameterItem(ParameterItem):
                 self.addWidget = QtGui.QPushButton(addText)
                 self.addWidget.clicked.connect(self.addClicked)
             self.addItem = QtGui.QTreeWidgetItem([])
+            self.addItem.setFlags(QtCore.Qt.ItemIsEnabled)
             ParameterItem.addChild(self, self.addItem)
             
     def addClicked(self):
@@ -65,6 +66,8 @@ class GroupParameterItem(ParameterItem):
         else:
             ParameterItem.addChild(self, child)
 
+    def valueChanged(self, val):
+        pass  ## override default behavior to avoid setting text in column 1
 
 class GroupParameter(Parameter):
     type = 'group'
@@ -87,6 +90,7 @@ class ListParameterItem(ParameterItem):
         opts = self.param.opts
         t = opts['type']
         w = QtGui.QComboBox()
+        w.setMaximumHeight(20)  ## set to match height of spin box and line edit
         for k in opts['limits']:
             w.addItem(str(k))
         w.sigChanged = w.currentIndexChanged
@@ -145,3 +149,44 @@ class ListParameter(Parameter):
 registerParameterType('list', ListParameter)
         
 
+
+
+#class ParameterSet(GroupParameter):
+    #"""Parameter that keeps track of every item in its tree, emitting signals when anything changes."""
+    #sigStateChanged = QtCore.Signal(object, object, object)  # self, param, value
+    
+    #def __init__(self, name, params):
+        #GroupParameter.__init__(self, name=name, type='group')
+        #self.watchParam(self)
+        #for ch in params:
+            #self.addChild(ch)
+
+    #def watchParam(self, param):
+        #param.sigChildAdded.connect(self.grandchildAdded)
+        #param.sigChildRemoved.connect(self.grandchildRemoved)
+        #param.sigValueChanged.connect(self.childValueChanged)
+        #for ch in param:
+            #self.watchParam(ch)
+
+    #def unwatchParam(self, param):
+        #param.sigChildAdded.disconnect(self.grandchildAdded)
+        #param.sigChildRemoved.disconnect(self.grandchildRemoved)
+        #param.sigValueChanged.disconnect(self.childValueChanged)
+        #for ch in param:
+            #self.unwatchParam(ch)
+
+    #def grandchildAdded(self, parent, child):
+        #self.watchParam(child)
+        
+    #def grandchildRemoved(self, parent, child):
+        #self.unwatchParam(child)
+        
+    #def childValueChanged(self, val, param):
+        #self.sigStateChanged.emit(self, param, val)
+        
+    #def childPath(self, child):
+        #path = []
+        #while child is not self:
+            #path.insert(0, child.name())
+            #child = child.parent()
+        #return path
