@@ -85,7 +85,7 @@
   <customwidget>
    <class>DataTreeWidget</class>
    <extends>QTreeWidget</extends>
-   <header>DataTreeWidget</header>
+   <header>.. DataTreeWidget</header>
   </customwidget>
   <customwidget>
    <class>FlowchartGraphicsView</class>

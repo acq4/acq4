@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'DeviceTemplate.ui'
 #
-# Created: Thu Sep 15 16:12:48 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Wed Oct 19 11:32:52 2011
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -104,4 +104,4 @@ class Ui_Form(object):
         self.offsetDefaultBtn.setText(QtGui.QApplication.translate("Form", "Default", None, QtGui.QApplication.UnicodeUTF8))
         self.invertCheck.setText(QtGui.QApplication.translate("Form", "Invert", None, QtGui.QApplication.UnicodeUTF8))
 
-from lib.util.SpinBox import SpinBox
+from pyqtgraph.SpinBox import SpinBox

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtGui, QtCore
+from Qt import QtGui, QtCore
 if not hasattr(QtCore, 'Signal'):
     QtCore.Signal = QtCore.pyqtSignal
 
@@ -12,13 +12,10 @@ import weakref
 
 class SpinBox(QtGui.QAbstractSpinBox):
     """QSpinBox widget on steroids. Allows selection of numerical value, with extra features:
-      - float values with linear and decimal stepping (1-9,10-90,100-900,etc.)
-      - Option for unbounded values
       - SI prefix notation
-      - delayed signals (allows multiple rapid changes with only one change signal)
-      - Sparse tables--list of acceptable values
-      - Support for sequence variables (for ProtocolRunner)
-      
+      - Float values with linear and decimal stepping (1-9, 10-90, 100-900, etc.)
+      - Option for unbounded values
+      - Delayed signals (allows multiple rapid changes with only one change signal)
     """
     
     ## There's a PyQt bug that leaks a reference to the 
@@ -58,6 +55,8 @@ class SpinBox(QtGui.QAbstractSpinBox):
             'step': D('0.01'),
             'log': False,
             'dec': False,
+            
+            'int': False, ## Set True to force value to be integer
             
             'suffix': '',
             'siPrefix': False,   ## Set to True to display numbers with SI prefix (ie, 100pA instead of 1e-10A)
@@ -202,6 +201,8 @@ class SpinBox(QtGui.QAbstractSpinBox):
         #if value == 0.0:
             #import traceback
             #traceback.print_stack()
+        if self.opts['int']:
+            value = int(value)
         value = D(str(value))
         if value == self.val:
             #print "  value not changed; ignore."
@@ -254,7 +255,10 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.setOpts(decimals=decimals)
 
     def value(self):
-        return float(self.val)
+        if self.opts['int']:
+            return int(self.val)
+        else:
+            return float(self.val)
 
     def updateText(self, prev=None):
         #print "Update text."
@@ -353,6 +357,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
     
         
 if __name__ == '__main__':
+    import sys
     app = QtGui.QApplication([])
     
     def valueChanged(sb):
@@ -368,10 +373,10 @@ if __name__ == '__main__':
         s1 = SpinBox(value=5, step=0.1, bounds=[-1.5, None], suffix='units')
         t1 = QtGui.QLineEdit()
         g.addRow(s1, t1)
-        s2 = SpinBox(dec=True, step=0.1, minStep=1e-6, suffix='A', siPrefix=True)
+        s2 = SpinBox(value=10e-6, dec=True, step=0.1, minStep=1e-6, suffix='A', siPrefix=True)
         t2 = QtGui.QLineEdit()
         g.addRow(s2, t2)
-        s3 = SpinBox(dec=True, step=0.5, minStep=1e-6, bounds=[0, 10])
+        s3 = SpinBox(value=1000, dec=True, step=0.5, minStep=1e-6, bounds=[1, 1e9], suffix='Hz', siPrefix=True)
         t3 = QtGui.QLineEdit()
         g.addRow(s3, t3)
         s4 = SpinBox(dec=True, step=1, minStep=1e-6, bounds=[-10, 1000])
@@ -400,4 +405,6 @@ if __name__ == '__main__':
                 s.valueChanged.disconnect()
                 s.editingFinished.disconnect()
                 
-                
+    ## Start Qt event loop unless running in interactive mode.
+    if sys.flags.interactive != 1:
+        app.exec_()

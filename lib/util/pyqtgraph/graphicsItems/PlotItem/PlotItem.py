@@ -17,22 +17,26 @@ This class is very heavily featured:
     display, power spectrum, svg/png export, plot linking, and more.
 """
 
-from graphicsItems import *
+#from graphicsItems import *
 from plotConfigTemplate import *
 from PyQt4 import QtGui, QtCore, QtSvg
-from functions import *
-from FileDialog import FileDialog
-#from ObjectWorkaround import *
-#tryWorkaround(QtCore, QtGui)
+import pyqtgraph.functions as fn
+from pyqtgraph.FileDialog import FileDialog
 import weakref
 import numpy as np
-#import debug
+from .. PlotCurveItem import PlotCurveItem
+from .. ViewBox import ViewBox
+from .. AxisItem import AxisItem
+from .. LabelItem import LabelItem
+from pyqtgraph.WidgetGroup import WidgetGroup
 
-try:
-    from WidgetGroup import *
-    HAVE_WIDGETGROUP = True
-except:
-    HAVE_WIDGETGROUP = False
+__all__ = ['PlotItem']
+
+#try:
+    #from WidgetGroup import *
+    #HAVE_WIDGETGROUP = True
+#except:
+    #HAVE_WIDGETGROUP = False
     
 try:
     from metaarray import *
@@ -101,10 +105,10 @@ class PlotItem(QtGui.QGraphicsWidget):
          
         ## Create and place scale items
         self.scales = {
-            'top':    {'item': ScaleItem(orientation='top',    linkView=self.vb), 'pos': (1, 1)}, 
-            'bottom': {'item': ScaleItem(orientation='bottom', linkView=self.vb), 'pos': (3, 1)}, 
-            'left':   {'item': ScaleItem(orientation='left',   linkView=self.vb), 'pos': (2, 0)}, 
-            'right':  {'item': ScaleItem(orientation='right',  linkView=self.vb), 'pos': (2, 2)}
+            'top':    {'item': AxisItem(orientation='top',    linkView=self.vb), 'pos': (1, 1)}, 
+            'bottom': {'item': AxisItem(orientation='bottom', linkView=self.vb), 'pos': (3, 1)}, 
+            'left':   {'item': AxisItem(orientation='left',   linkView=self.vb), 'pos': (2, 0)}, 
+            'right':  {'item': AxisItem(orientation='right',  linkView=self.vb), 'pos': (2, 2)}
         }
         for k in self.scales:
             self.layout.addItem(self.scales[k]['item'], *self.scales[k]['pos'])
@@ -162,8 +166,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.menuAction.setDefaultWidget(w)
         self.ctrlMenu.addAction(self.menuAction)
         
-        if HAVE_WIDGETGROUP:
-            self.stateGroup = WidgetGroup(self.ctrlMenu)
+        #if HAVE_WIDGETGROUP:
+        self.stateGroup = WidgetGroup(self.ctrlMenu)
         
         self.fileDialog = None
         
@@ -477,7 +481,6 @@ class PlotItem(QtGui.QGraphicsWidget):
             return
         for k in self.avgCurves:
             self.removeItem(self.avgCurves[k][1])
-            #Qwt.QwtPlotCurve.detach(self.avgCurves[k][1])
         self.avgCurves = {}
         for c in self.curves:
             self.addAvgCurve(c)
@@ -518,12 +521,11 @@ class PlotItem(QtGui.QGraphicsWidget):
         ### Create a new curve if needed
         if key not in self.avgCurves:
             plot = PlotCurveItem()
-            plot.setPen(mkPen([0, 200, 0]))
-            plot.setShadowPen(mkPen([0, 0, 0, 100], width=3))
+            plot.setPen(fn.mkPen([0, 200, 0]))
+            plot.setShadowPen(fn.mkPen([0, 0, 0, 100], width=3))
             plot.setAlpha(1.0, False)
             plot.setZValue(100)
             self.addItem(plot)
-            #Qwt.QwtPlotCurve.attach(plot, self)
             self.avgCurves[key] = [0, plot]
         self.avgCurves[key][0] += 1
         (n, plot) = self.avgCurves[key]
@@ -549,7 +551,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         
         ## automatically change unit scale
         maxVal = max(abs(range[0]), abs(range[1]))
-        (scale, prefix) = siScale(maxVal)
+        (scale, prefix) = fn.siScale(maxVal)
         #for l in ['top', 'bottom']:
             #if self.getLabel(l).isVisible():
                 #self.setLabel(l, unitPrefix=prefix)
@@ -569,7 +571,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         
         ## automatically change unit scale
         maxVal = max(abs(range[0]), abs(range[1]))
-        (scale, prefix) = siScale(maxVal)
+        (scale, prefix) = fn.siScale(maxVal)
         #for l in ['left', 'right']:
             #if self.getLabel(l).isVisible():
                 #self.setLabel(l, unitPrefix=prefix)
@@ -713,7 +715,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         #print data, curve
         self.addCurve(curve, params)
         if pen is not None:
-            curve.setPen(mkPen(pen))
+            curve.setPen(fn.mkPen(pen))
         
         return curve
 
@@ -732,7 +734,6 @@ class PlotItem(QtGui.QGraphicsWidget):
             params = {}
         c.setMeta(params)
         self.curves.append(c)
-        #Qwt.QwtPlotCurve.attach(c, self)
         self.addItem(c)
         
         ## configure curve for this plot
@@ -856,7 +857,7 @@ class PlotItem(QtGui.QGraphicsWidget):
 
         for item in self.curves:
             if isinstance(item, PlotCurveItem):
-                color = colorStr(item.pen.color())
+                color = fn.colorStr(item.pen.color())
                 opacity = item.pen.color().alpha() / 255.
                 color = color[:6]
                 x, y = item.getData()
@@ -887,7 +888,7 @@ class PlotItem(QtGui.QGraphicsWidget):
                     pos = point.pos()
                     if not rect.contains(pos):
                         continue
-                    color = colorStr(point.brush.color())
+                    color = fn.colorStr(point.brush.color())
                     opacity = point.brush.color().alpha() / 255.
                     color = color[:6]
                     x = pos.x() * sx
@@ -1007,8 +1008,8 @@ class PlotItem(QtGui.QGraphicsWidget):
 
 
     def saveState(self):
-        if not HAVE_WIDGETGROUP:
-            raise Exception("State save/restore requires WidgetGroup class.")
+        #if not HAVE_WIDGETGROUP:
+            #raise Exception("State save/restore requires WidgetGroup class.")
         state = self.stateGroup.state()
         state['paramList'] = self.paramList.copy()
         #print "\nSAVE %s:\n" % str(self.name), state
@@ -1016,8 +1017,8 @@ class PlotItem(QtGui.QGraphicsWidget):
         return state
         
     def restoreState(self, state):
-        if not HAVE_WIDGETGROUP:
-            raise Exception("State save/restore requires WidgetGroup class.")
+        #if not HAVE_WIDGETGROUP:
+            #raise Exception("State save/restore requires WidgetGroup class.")
         if 'paramList' in state:
             self.paramList = state['paramList'].copy()
             

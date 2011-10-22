@@ -4,8 +4,8 @@ from PyQt4 import QtCore, QtGui
 from Node import *
 #import functions
 from advancedTypes import OrderedDict
-from TreeWidget import *
-from DataTreeWidget import *
+from .. TreeWidget import *
+#from .. DataTreeWidget import *
 import FlowchartTemplate
 import FlowchartCtrlTemplate
 from Terminal import Terminal
@@ -14,7 +14,7 @@ import library
 from debug import printExc
 import configfile
 import DockArea
-import DataTreeWidget
+from .. import DataTreeWidget
 import FlowchartGraphicsView
 from lib.util.pyqtgraph.FileDialog import FileDialog
 

@@ -8,7 +8,7 @@ import DirTreeWidget
 from configfile import *
 from advancedTypes import OrderedDict
 from SequenceRunner import *
-from WidgetGroup import *
+from pyqtgraph.WidgetGroup import WidgetGroup
 from Mutex import Mutex, MutexLocker
 from lib.Manager import getManager, logMsg
 from debug import *

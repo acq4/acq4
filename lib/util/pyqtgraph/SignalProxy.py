@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore
+from Qt import QtCore
 from ptime import time
 
 class SignalProxy(QtCore.QObject):
@@ -63,7 +63,7 @@ def proxyConnect(source, signal, slot, delay=0.3):
     
     
 if __name__ == '__main__':
-    from PyQt4 import QtGui
+    from Qt import QtGui
     app = QtGui.QApplication([])
     win = QtGui.QMainWindow()
     spin = QtGui.QSpinBox()

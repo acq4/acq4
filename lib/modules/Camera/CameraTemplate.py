@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'CameraTemplate.ui'
 #
-# Created: Thu Aug 18 15:55:09 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Wed Oct 19 11:38:16 2011
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -406,8 +406,8 @@ class Ui_MainWindow(object):
 "(by pressing \'Static\' above) or \'Continuous\' needs to be pressed.", None, QtGui.QApplication.UnicodeUTF8))
         self.divideBgBtn.setText(QtGui.QApplication.translate("MainWindow", "Divide Background", None, QtGui.QApplication.UnicodeUTF8))
 
-from SpinBox import SpinBox
+from pyqtgraph.PlotWidget import PlotWidget
+from pyqtgraph.SpinBox import SpinBox
 from FeedbackButton import FeedbackButton
 from pyqtgraph.GradientWidget import GradientWidget
 from pyqtgraph.GraphicsView import GraphicsView
-from pyqtgraph.PlotWidget import PlotWidget

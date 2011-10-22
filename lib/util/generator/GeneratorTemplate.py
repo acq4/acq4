@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'GeneratorTemplate.ui'
 #
-# Created: Sat Oct 15 21:51:02 2011
+# Created: Sat Oct 22 14:33:29 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(437, 376)
+        Form.resize(480, 395)
         Form.setMinimumSize(QtCore.QSize(0, 100))
         self.verticalLayout_4 = QtGui.QVBoxLayout(Form)
         self.verticalLayout_4.setSpacing(0)
@@ -36,30 +36,28 @@ class Ui_Form(object):
         self.page = QtGui.QWidget()
         self.page.setObjectName(_fromUtf8("page"))
         self.verticalLayout_3 = QtGui.QVBoxLayout(self.page)
-        self.verticalLayout_3.setMargin(0)
+        self.verticalLayout_3.setSpacing(0)
         self.verticalLayout_3.setObjectName(_fromUtf8("verticalLayout_3"))
-        self.paramTree = ParameterTree(self.page)
-        self.paramTree.setHeaderHidden(True)
-        self.paramTree.setObjectName(_fromUtf8("paramTree"))
-        self.paramTree.headerItem().setText(0, _fromUtf8("1"))
-        self.verticalLayout_3.addWidget(self.paramTree)
-        self.functionText = QtGui.QTextEdit(self.page)
+        self.stimulusTree = ParameterTree(self.page)
+        self.stimulusTree.setHeaderHidden(True)
+        self.stimulusTree.setObjectName(_fromUtf8("stimulusTree"))
+        self.stimulusTree.headerItem().setText(0, _fromUtf8("1"))
+        self.verticalLayout_3.addWidget(self.stimulusTree)
+        self.advSplitter = QtGui.QSplitter(self.page)
+        self.advSplitter.setOrientation(QtCore.Qt.Vertical)
+        self.advSplitter.setChildrenCollapsible(False)
+        self.advSplitter.setObjectName(_fromUtf8("advSplitter"))
+        self.functionText = QtGui.QTextEdit(self.advSplitter)
         self.functionText.setMinimumSize(QtCore.QSize(0, 15))
         self.functionText.setObjectName(_fromUtf8("functionText"))
-        self.verticalLayout_3.addWidget(self.functionText)
-        self.paramText = QtGui.QTextEdit(self.page)
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.paramText.sizePolicy().hasHeightForWidth())
-        self.paramText.setSizePolicy(sizePolicy)
-        self.paramText.setMinimumSize(QtCore.QSize(0, 15))
-        self.paramText.setObjectName(_fromUtf8("paramText"))
-        self.verticalLayout_3.addWidget(self.paramText)
-        self.errorText = QtGui.QTextBrowser(self.page)
+        self.seqTree = ParameterTree(self.advSplitter)
+        self.seqTree.setObjectName(_fromUtf8("seqTree"))
+        self.seqTree.headerItem().setText(0, _fromUtf8("1"))
+        self.seqTree.header().setVisible(False)
+        self.errorText = QtGui.QTextBrowser(self.advSplitter)
         self.errorText.setMinimumSize(QtCore.QSize(0, 15))
         self.errorText.setObjectName(_fromUtf8("errorText"))
-        self.verticalLayout_3.addWidget(self.errorText)
+        self.verticalLayout_3.addWidget(self.advSplitter)
         self.stack.addWidget(self.page)
         self.page_2 = QtGui.QWidget()
         self.page_2.setObjectName(_fromUtf8("page_2"))
@@ -125,11 +123,6 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         Form.setWindowTitle(QtGui.QApplication.translate("Form", "Form", None, QtGui.QApplication.UnicodeUTF8))
         self.functionText.setHtml(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
-"<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
-"p, li { white-space: pre-wrap; }\n"
-"</style></head><body style=\" font-family:\'Ubuntu\'; font-size:9pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:\'Sans Serif\'; font-size:7pt;\"></p></body></html>", None, QtGui.QApplication.UnicodeUTF8))
-        self.paramText.setHtml(QtGui.QApplication.translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Ubuntu\'; font-size:9pt; font-weight:400; font-style:normal;\">\n"

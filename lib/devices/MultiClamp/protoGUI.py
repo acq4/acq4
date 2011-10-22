@@ -3,7 +3,7 @@ from PyQt4 import QtCore, QtGui
 import sys
 from lib.devices.Device import ProtocolGui
 from SequenceRunner import *
-from WidgetGroup import *
+from pyqtgraph.WidgetGroup import WidgetGroup
 import numpy
 from ProtocolTemplate import *
 from debug import *

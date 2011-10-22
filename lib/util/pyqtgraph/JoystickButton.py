@@ -1,4 +1,4 @@
-from PyQt4 import QtGui, QtCore
+from Qt import QtGui, QtCore
 if hasattr(QtCore, 'pyqtSignal'):
     QtCore.Signal = QtCore.pyqtSignal
 
@@ -75,10 +75,14 @@ if __name__ == '__main__':
     b = JoystickButton()
     w.setCentralWidget(b)
     w.show()
+    w.resize(100, 100)
     
     def fn(b, s):
         print "state changed:", s
         
     b.sigStateChanged.connect(fn)
         
+    ## Start Qt event loop unless running in interactive mode.
+    if sys.flags.interactive != 1:
+        app.exec_()
         

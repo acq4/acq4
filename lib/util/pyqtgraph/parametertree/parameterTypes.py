@@ -1,6 +1,7 @@
 from PyQt4 import QtCore, QtGui
-from ParameterTree import Parameter, ParameterItem, registerParameterType
-from SpinBox import SpinBox
+from Parameter import Parameter, registerParameterType
+from ParameterItem import ParameterItem
+from pyqtgraph.SpinBox import SpinBox
 from pyqtgraph.ColorButton import ColorButton
 import os
 
@@ -71,7 +72,11 @@ class WidgetParameterItem(ParameterItem):
         opts = self.param.opts
         t = opts['type']
         if t == 'int':
-            defs = {'value': 0, 'min': None, 'max': None, 'step': 1.0, 'minStep': 1.0, 'dec': False, 'siPrefix': False, 'suffix': ''}
+            defs = {
+                'value': 0, 'min': None, 'max': None, 'int': True, 
+                'step': 1.0, 'minStep': 1.0, 'dec': False, 
+                'siPrefix': False, 'suffix': ''
+            } 
             defs.update(opts)
             if 'limits' in opts:
                 defs['bounds'] = opts['limits']
@@ -79,7 +84,11 @@ class WidgetParameterItem(ParameterItem):
             w.setOpts(**defs)
             w.sigChanged = w.sigValueChanging
         elif t == 'float':
-            defs = {'value': 0, 'min': None, 'max': None, 'step': 1.0, 'dec': False, 'siPrefix': False, 'suffix': ''}
+            defs = {
+                'value': 0, 'min': None, 'max': None, 
+                'step': 1.0, 'dec': False, 
+                'siPrefix': False, 'suffix': ''
+            }
             defs.update(opts)
             if 'limits' in opts:
                 defs['bounds'] = opts['limits']
@@ -181,10 +190,12 @@ class WidgetParameterItem(ParameterItem):
     def optsChanged(self, param, opts):
         """Called when any options are changed that are not
         name, value, default, or limits"""
-        ParameterItem.optsChanged(self. param, opts)
+        ParameterItem.optsChanged(self, param, opts)
         
         ## If widget is a SpinBox, pass options straight through
         if isinstance(self.widget, SpinBox):
+            if 'units' in opts and 'suffix' not in opts:
+                opts['suffix'] = opts['units']
             self.widget.setOpts(**opts)
             self.updateDisplayLabel()
 

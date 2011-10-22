@@ -6,8 +6,7 @@ from Mutex import Mutex
 from numpy import *
 from protoGUI import *
 from debug import *
-from SpinBox import *
-from functions import siFormat
+from pyqtgraph import siFormat
 import DeviceTemplate
 
 
@@ -426,23 +425,6 @@ class DAQDevGui(QtGui.QWidget):
         #self.uis = {}
         self.defaults = {}
         row = 0
-        #for ch in chans:
-            #l = QtGui.QLabel("%s (%s)" % (ch, chans[ch]['channel'][1]))
-            #if chans[ch]['type'] == 'ao':
-                #hw = SpinBox(value=self.dev.getChanHolding(ch))
-                ##QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
-                #hw.sigValueChanged.connect(self.spinChanged)
-            #elif chans[ch]['type'] == 'do':
-                #hw = SpinBox(value=self.dev.getChanHolding(ch), step=1, bounds=(0,1))
-                ##QtCore.QObject.connect(hw, QtCore.SIGNAL('valueChanged'), self.spinChanged)
-                #hw.sigValueChanged.connect(self.spinChanged)
-            #else:
-                #hw = QtGui.QWidget()
-            #hw.channel = ch
-            #self.widgets[ch] = (l, hw)
-            #self.layout.addWidget(l, row, 0)
-            #self.layout.addWidget(hw, row, 1)
-            #row += 1
         for ch in chans:
             wid = QtGui.QWidget()
             ui = DeviceTemplate.Ui_Form()

@@ -66,9 +66,9 @@ l.addItem(vb, 0, 1)
 gv.centralWidget.setLayout(l)
 
 
-xScale = pg.ScaleItem(orientation='bottom', linkView=vb)
+xScale = pg.AxisItem(orientation='bottom', linkView=vb)
 l.addItem(xScale, 1, 1)
-yScale = pg.ScaleItem(orientation='left', linkView=vb)
+yScale = pg.AxisItem(orientation='left', linkView=vb)
 l.addItem(yScale, 0, 0)
 
 xScale.setLabel(text=u"<span style='color: #ff0000; font-weight: bold'>X</span> <i>Axis</i>", units="s")

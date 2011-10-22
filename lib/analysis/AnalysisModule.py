@@ -2,7 +2,7 @@
 from PyQt4 import QtCore, QtGui
 import pyqtgraph as pg
 import Canvas, FileLoader, DatabaseGui, TableWidget
-from pyqtgraph.DataTreeWidget import DataTreeWidget
+import pyqtgraph.DataTreeWidget as DataTreeWidget
 from advancedTypes import OrderedDict
 
 class AnalysisModule(QtCore.QObject):

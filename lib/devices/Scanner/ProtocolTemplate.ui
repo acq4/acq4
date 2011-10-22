@@ -493,7 +493,7 @@ p, li { white-space: pre-wrap; }
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>SpinBox</header>
+   <header>pyqtgraph.SpinBox</header>
   </customwidget>
   <customwidget>
    <class>TreeWidget</class>

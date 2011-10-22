@@ -1,15 +1,15 @@
 ## tests for ParameterTree
 
-## make sure util is available
+## make sure pyqtgraph is in path
 import sys,os
-md = os.path.dirname(__file__)
-sys.path.append(os.path.abspath(os.path.join(md, '..')))
+md = os.path.abspath(os.path.dirname(__file__))
+sys.path.append(os.path.join(md, '..', '..'))
 
 from PyQt4 import QtCore, QtGui
 import collections, user
 app = QtGui.QApplication([])
-import parameterTypes as pTypes
-from ParameterTree import *
+import pyqtgraph.parametertree.parameterTypes as pTypes
+from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 
 
 ## test subclassing parameters

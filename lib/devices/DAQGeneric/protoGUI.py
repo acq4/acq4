@@ -5,7 +5,7 @@ from ProtocolTemplate import *
 from DaqChannelGui import *
 from lib.devices.Device import ProtocolGui
 from SequenceRunner import *
-from WidgetGroup import *
+from pyqtgraph.WidgetGroup import WidgetGroup
 #from PyQt4 import Qwt5 as Qwt
 from pyqtgraph.PlotWidget import PlotWidget
 import numpy
@@ -38,32 +38,8 @@ class DAQGenericProtoGui(ProtocolGui):
             self.stateGroup = None
         
     def createChannelWidgets(self, ctrlParent, plotParent):
-        
         ## Create plots and control widgets
         for ch in self.dev._DGConfig:
-            #conf = self.dev.config[ch]
-            #p = PlotWidget(plotParent)
-            #
-            #units = ''
-            #if 'units' in conf:
-            #    units = ' (%s)' % conf['units']
-            #    
-            ##p.setAxisTitle(PlotWidget.yLeft, ch+units)
-            #p.setLabel('left', title=ch, units=units)
-            #self.plots[ch] = p
-            #
-            #p.registerPlot(self.dev.name + '.' + ch)
-            #
-            #if conf['type'] in ['ao', 'do']:
-            #    w = OutputChannelGui(ctrlParent, ch, conf, p, self.dev, self.prot)
-            #    QtCore.QObject.connect(w, QtCore.SIGNAL('sequenceChanged'), self.sequenceChanged)
-            #elif conf['type'] in ['ai', 'di']:
-            #    w = InputChannelGui(ctrlParent, ch, conf, p, self.dev, self.prot)
-            #else:
-            #    raise Exception("Unrecognized device type '%s'" % conf['type'])
-            #w.ui.groupBox.setTitle(ch + units)
-            #self.channels[ch] = w
-            
             (w, p) = self.createChannelWidget(ch)
             plotParent.addWidget(p)
             ctrlParent.addWidget(w)

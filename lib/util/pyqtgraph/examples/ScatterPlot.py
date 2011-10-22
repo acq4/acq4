@@ -51,7 +51,7 @@ s1.sigClicked.connect(clicked)
 
 s2 = pg.ScatterPlotItem(size=10, pen=pg.mkPen('w'), pxMode=True)
 pos = np.random.normal(size=(2,n), scale=1e-5)
-spots = [{'pos': pos[:,i], 'data': 1, 'brush':pg.intColor(i, n), 'style': i%5} for i in xrange(n)]
+spots = [{'pos': pos[:,i], 'data': 1, 'brush':pg.intColor(i, n), 'style': i%5, 'size': 5+i/10.} for i in xrange(n)]
 s2.addPoints(spots)
 w2.addItem(s2)
 w2.setRange(s2.boundingRect())
@@ -75,7 +75,7 @@ s3.sigClicked.connect(clicked)
 ## Coming: use qpainter.drawpixmapfragments for scatterplots which do not require mouse interaction
 
 s4 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 20), identical=True)
-pos = np.random.normal(size=(2,1000), scale=1e-9)
+pos = np.random.normal(size=(2,10000), scale=1e-9)
 s4.addPoints(x=pos[0], y=pos[1])
 w4.addDataItem(s4)
 

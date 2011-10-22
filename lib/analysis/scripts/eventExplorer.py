@@ -252,11 +252,11 @@ def showCell():
         "%s -- %s --- <span style='color: #99F;'>ex:</span> %s %s %0.1fHz --- <span style='color: #F99;'>in:</span> %s %s" % (
         dh.name(relativeTo=dh.parent().parent().parent()), 
         typ,
-        fn.siFormat(np.median(ev2['fitDecayTau']), space=False, suffix='s'),
-        fn.siFormat(np.median(ev2['fitAmplitude']), space=False, suffix='A'),
+        pg.siFormat(np.median(ev2['fitDecayTau']), space=False, suffix='s'),
+        pg.siFormat(np.median(ev2['fitAmplitude']), space=False, suffix='A'),
         sr,
-        fn.siFormat(np.median(ev3['fitDecayTau']), space=False, suffix='s'),
-        fn.siFormat(np.median(ev3['fitAmplitude']), space=False, suffix='A'),
+        pg.siFormat(np.median(ev3['fitDecayTau']), space=False, suffix='s'),
+        pg.siFormat(np.median(ev3['fitAmplitude']), space=False, suffix='A'),
     ))
 
 def spontRate(ev):

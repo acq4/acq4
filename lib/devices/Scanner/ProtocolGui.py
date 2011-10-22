@@ -3,7 +3,7 @@ from ProtocolTemplate import Ui_Form
 from lib.devices.Device import ProtocolGui
 from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager, logMsg, logExc
-from WidgetGroup import WidgetGroup
+from pyqtgraph.WidgetGroup import WidgetGroup
 import pyqtgraph.widgets as widgets
 #from pyqtgraph.widgets import *
 import random
@@ -12,7 +12,7 @@ from debug import Profiler
 import optimize ## for determining random scan patterns
 import ForkedIterator, ProgressDialog
 import sys
-from SpinBox import SpinBox
+from pyqtgraph.SpinBox import SpinBox
 from pyqtgraph.Point import *
 from pyqtgraph.functions import mkPen
 

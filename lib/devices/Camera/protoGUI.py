@@ -3,7 +3,7 @@ from PyQt4 import QtCore, QtGui
 from ProtocolTemplate import *
 from lib.devices.DAQGeneric.protoGUI import DAQGenericProtoGui
 from lib.devices.Device import ProtocolGui
-from WidgetGroup import *
+from pyqtgraph.WidgetGroup import WidgetGroup
 from numpy import ndarray
 from pyqtgraph.graphicsItems import InfiniteLine, VTickGroup
 #from PyQt4 import Qwt5 as Qwt

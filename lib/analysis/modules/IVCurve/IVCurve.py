@@ -64,7 +64,7 @@ class IVCurve(AnalysisModule):
 
         # Add a color scale
         # removed for now--seems to be causing crashes :(
-        self.colorScale = pg.ColorScaleBar(self.data_plot, (20, 150), (-10, -10))
+        self.colorScale = pg.GradientLegend(self.data_plot, (20, 150), (-10, -10))
         self.data_plot.scene().addItem(self.colorScale)
 
         # Plots are updated when the selected region changes

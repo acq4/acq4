@@ -16,7 +16,7 @@ Widget used for displaying 2D or 3D data. Features:
 from ImageViewTemplate import *
 from graphicsItems import *
 from widgets import ROI
-from PyQt4 import QtCore, QtGui
+from Qt import QtCore, QtGui
 import sys
 #from numpy import ndarray
 import ptime
@@ -46,6 +46,7 @@ class ImageView(QtGui.QWidget):
         self.imageDisp = None
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        print self.ui
         self.scene = self.ui.graphicsView.sceneObj
         
         self.ignoreTimeLine = False
@@ -141,6 +142,7 @@ class ImageView(QtGui.QWidget):
         self.setParent(None)
         
     def keyPressEvent(self, ev):
+        #print ev.key()
         if ev.key() == QtCore.Qt.Key_Space:
             if self.playRate == 0:
                 fps = (self.getProcessedImage().shape[0]-1) / (self.tVals[-1] - self.tVals[0])
@@ -232,7 +234,7 @@ class ImageView(QtGui.QWidget):
             self.jumpFrames(n)
         
     def setCurrentIndex(self, ind):
-        self.currentIndex = clip(ind, 0, self.getProcessedImage().shape[0]-1)
+        self.currentIndex = np.clip(ind, 0, self.getProcessedImage().shape[0]-1)
         self.updateImage()
         self.ignoreTimeLine = True
         self.timeLine.setValue(self.tVals[self.currentIndex])
@@ -572,3 +574,4 @@ class ImageView(QtGui.QWidget):
         return self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[0])
         #return self.levelMin + ((self.levelMax-self.levelMin) / self.ui.blackSlider.maximum()) * self.ui.blackSlider.value()
         
+    

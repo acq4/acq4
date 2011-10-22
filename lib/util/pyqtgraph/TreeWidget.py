@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtGui, QtCore
+from Qt import QtGui, QtCore
 if not hasattr(QtCore, 'Signal'):
     QtCore.Signal = QtCore.pyqtSignal
 from weakref import *

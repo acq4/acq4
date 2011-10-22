@@ -8,7 +8,7 @@ This class addresses the problem of having to save and restore the state
 of a large group of widgets. 
 """
 
-from PyQt4 import QtCore, QtGui
+from Qt import QtCore, QtGui
 import weakref, inspect
 
 def splitterState(w):
@@ -92,14 +92,6 @@ class WidgetGroup(QtCore.QObject):
             QtGui.QGroupBox.isChecked,
             QtGui.QGroupBox.setChecked,
             True),
-        #StimGenerator:
-            #('changed',
-            #StimGenerator.saveState,
-            #StimGenerator.loadState),
-        #PlotWidget:
-            #(None,
-            #PlotWidget.saveState,
-            #PlotWidget.restoreState),
         QtGui.QLineEdit:
             (lambda w: w.editingFinished,
             lambda w: str(w.text()),

@@ -6,7 +6,7 @@ import numpy as np
 import metaarray
 from common import *
 from pyqtgraph import graphicsItems, Transform, Point
-import TreeWidget
+from pyqtgraph import TreeWidget
 import functions
 
 class SubtreeNode(Node):

@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 #from DevTemplate import Ui_Form
 from PyQt4 import QtCore, QtGui
-from WidgetGroup import WidgetGroup
-from SpinBox import *
+from pyqtgraph.WidgetGroup import WidgetGroup
 from pyqtgraph.parametertree import * 
-#import pdb
 
 class CameraDeviceGui(QtGui.QWidget):
     def __init__(self, dev, win):

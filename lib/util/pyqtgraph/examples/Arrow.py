@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
-## Add path to library (just for examples; you do not need this)
+## Add path to library (just for examples; you do not need this)                                                                           
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-
 
 import numpy as np
 from PyQt4 import QtGui, QtCore
@@ -15,7 +14,7 @@ mw.resize(800,800)
 
 p = pg.PlotWidget()
 mw.setCentralWidget(p)
-c = p.plot(x=np.sin(np.linspace(0, 2*np.pi, 100)), y=np.cos(np.linspace(0, 2*np.pi, 100)))
+c = p.plot(x=np.sin(np.linspace(0, 2*np.pi, 1000)), y=np.cos(np.linspace(0, 6*np.pi, 1000)))
 a = pg.CurveArrow(c)
 p.addItem(a)
 

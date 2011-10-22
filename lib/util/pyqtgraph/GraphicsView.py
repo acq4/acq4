@@ -5,7 +5,7 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
+from Qt import QtCore, QtGui, QtOpenGL, QtSvg
 #from numpy import vstack
 #import time
 from Point import *
@@ -104,8 +104,9 @@ class GraphicsView(QtGui.QGraphicsView):
         #v.setStyleSheet("background-color: #000000;")
         self.setViewport(v)
             
-    def keyPressEvent(self, ev):
-        ev.ignore()
+    #def keyPressEvent(self, ev):
+        #QtGui.QGraphicsView.keyPressEvent(self, ev)
+        #ev.ignore()
         
     def setCentralItem(self, item):
         """Sets a QGraphicsWidget to automatically fill the entire view."""
