@@ -104,8 +104,8 @@ class WidgetParameterItem(ParameterItem):
         elif t == 'str':
             w = QtGui.QLineEdit()
             w.sigChanged = w.editingFinished
-            w.value = lambda: str(w.text())
-            w.setValue = lambda v: w.setText(str(v))
+            w.value = lambda: unicode(w.text())
+            w.setValue = lambda v: w.setText(unicode(v))
         elif t == 'color':
             w = ColorButton()
             w.sigChanged = w.sigColorChanged
@@ -114,7 +114,7 @@ class WidgetParameterItem(ParameterItem):
             self.hideWidget = False
             w.setFlat(True)
         else:
-            raise Exception("Unknown type '%s'" % str(t))
+            raise Exception("Unknown type '%s'" % unicode(t))
         return w
 
     def valueChanged(self, param, val, force=False):
@@ -140,7 +140,7 @@ class WidgetParameterItem(ParameterItem):
         elif isinstance(self.widget, QtGui.QComboBox):
             text = self.widget.currentText()
         else:
-            text = str(value)
+            text = unicode(value)
         self.displayLabel.setText(text)
 
     def widgetValueChanged(self):
@@ -265,7 +265,7 @@ class GroupParameterItem(ParameterItem):
         """
         if self.addWidget.currentIndex() == 0:
             return
-        typ = str(self.addWidget.currentText())
+        typ = unicode(self.addWidget.currentText())
         self.param.addNew(typ)
         self.addWidget.setCurrentIndex(0)
 
@@ -312,7 +312,7 @@ class ListParameterItem(WidgetParameterItem):
         w = QtGui.QComboBox()
         w.setMaximumHeight(20)  ## set to match height of spin box and line edit
         for k in opts['limits']:
-            w.addItem(str(k))
+            w.addItem(unicode(k))
         w.sigChanged = w.currentIndexChanged
         w.value = self.value
         w.setValue = self.setValue
@@ -322,7 +322,7 @@ class ListParameterItem(WidgetParameterItem):
         
     def value(self):
         vals = self.param.opts['limits']
-        key = str(self.widget.currentText())
+        key = unicode(self.widget.currentText())
         if isinstance(vals, dict):
             return vals[key]
         else:
@@ -338,18 +338,18 @@ class ListParameterItem(WidgetParameterItem):
             if key is None:
                 raise Exception("Value '%s' not allowed." % val)
         else:
-            key = str(val)
+            key = unicode(val)
         ind = self.widget.findText(key)
         self.widget.setCurrentIndex(ind)
 
     def limitsChanged(self, param, limits):
         try:
             self.widget.blockSignals(True)
-            val = str(self.widget.currentText())
+            val = unicode(self.widget.currentText())
             self.widget.clear()
             for k in self.param.opts['limits']:
-                self.widget.addItem(str(k))
-                if str(k) == val:
+                self.widget.addItem(unicode(k))
+                if unicode(k) == val:
                     self.widget.setCurrentIndex(self.widget.count()-1)
             
         finally:

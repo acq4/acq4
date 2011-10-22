@@ -261,6 +261,10 @@ class Parameter(QtCore.QObject):
         self.sigChildRemoved.emit(self, child)
         child.sigTreeStateChanged.disconnect(self.emitTreeChange)
 
+    def clearChildren(self):
+        for ch in self:
+            self.removeChild(ch)
+
     def parentChanged(self, parent):
         self._parent = parent
         self.sigParentChanged.emit(self, parent)

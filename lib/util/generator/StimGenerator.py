@@ -35,8 +35,8 @@ class StimGenerator(QtGui.QWidget):
     
     def __init__(self, parent=None):
         QtGui.QWidget.__init__(self, parent)
-        self.timeScale = 1.0
-        self.scale = 1.0
+        #self.timeScale = 1.0
+        #self.scale = 1.0
         self.offset = 0.0
         self.ui = Ui_Form()
         self.ui.setupUi(self)
@@ -237,10 +237,10 @@ class StimGenerator(QtGui.QWidget):
     def stimParamsChanged(self, param, changes):
         ## called when the simple stim generator tree changes
         #print "PARAM CHANGES:", changes
-        func, params = self.stimParams.compile()
-        self.ui.functionText.setPlainText(func)
+        funcStr, params = self.stimParams.compile()
+        self.ui.functionText.setPlainText(funcStr)
         #self.ui.paramText.setPlainText('\n'.join(params))
-        self.ui.seqTree.setState(params)
+        self.seqParams.setState(params)
 
     def functionString(self):
         return str(self.ui.functionText.toPlainText())
@@ -267,7 +267,7 @@ class StimGenerator(QtGui.QWidget):
     def saveState(self):
         """ Return a dict structure with the state of the widget """
         #print "Saving state:", self.functionString()
-        return ({'function': self.functionString(), 'params': self.paramString(), 'autoUpdate': self.ui.autoUpdateCheck.isChecked()})
+        return ({'function': self.functionString(), 'params': self.seqParams.getState(), 'autoUpdate': self.ui.autoUpdateCheck.isChecked()})
     
     def loadState(self, state):
         """set the parameters with the new state"""
@@ -275,7 +275,7 @@ class StimGenerator(QtGui.QWidget):
             self.ui.functionText.setPlainText(state['function'])
         if 'params' in state:
             #self.ui.paramText.setPlainText(state['params'])
-            self.ui.seqTree.setState(state['params'])
+            self.seqParams.setState(state['params'])
         if 'autoUpdate' in state:
             self.ui.autoUpdateCheck.setChecked(state['autoUpdate'])
 
@@ -299,7 +299,8 @@ class StimGenerator(QtGui.QWidget):
         of the axes returned by get Sequence"""
         ps = self.paramSpace()
         
-        l = [(k, (ps[k][1]*self.scale)+self.offset) for k in ps.keys() if ps[k][1] != None]
+        #l = [(k, (ps[k][1]*self.scale)+self.offset) for k in ps.keys() if ps[k][1] != None]
+        l = [(k, ps[k][1]) for k in ps.keys() if ps[k][1] != None]
         d = OrderedDict(l)
         
         ## d should look like: { 'param1': [val1, val2, ...],  ...  }
@@ -322,6 +323,10 @@ class StimGenerator(QtGui.QWidget):
             
         
     def getSingle(self, rate, nPts, params=None):
+        """
+        Return a single generated waveform (possibly cached) with the given sample rate
+        number of samples, and sequence parameters.        
+        """
         if params is None:
             params = {}
         if not re.search(r'\w', self.functionString()):
@@ -341,7 +346,8 @@ class StimGenerator(QtGui.QWidget):
         ##   - iterates over all functions provided in waveforms module
         ##   - wrap each function to automatically provide rate and nPts arguments
         ns = {}
-        arg = {'rate': rate * self.timeScale, 'nPts': nPts}
+        #arg = {'rate': rate * self.timeScale, 'nPts': nPts}
+        arg = {'rate': rate, 'nPts': nPts}
         ns.update(arg)  ## copy rate and nPts to eval namespace
         for i in dir(waveforms):
             obj = getattr(waveforms, i)
@@ -370,7 +376,7 @@ class StimGenerator(QtGui.QWidget):
         fn = self.functionString().replace('\n', '')
         ret = eval(fn, globals(), ns)
         if isinstance(ret, ndarray):
-            ret *= self.scale
+            #ret *= self.scale
             ret += self.offset
             #print "===eval===", ret.min(), ret.max(), self.scale
         if 'message' in arg:

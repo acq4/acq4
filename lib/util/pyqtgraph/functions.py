@@ -17,6 +17,7 @@ colorAbbrev = {
 }
 
 SI_PREFIXES = u'yzafpnµm kMGTPEZY'
+SI_PREFIXES_ASCII = 'yzafpnum kMGTPEZY'
 
 
 from Qt import QtGui, QtCore
@@ -24,7 +25,7 @@ import numpy as np
 import scipy.ndimage
 import decimal
 
-def siScale(x, minVal=1e-25):
+def siScale(x, minVal=1e-25, allowUnicode=True):
     """
     Return the recommended scale factor and SI prefix string for x.
     Example:
@@ -52,12 +53,15 @@ def siScale(x, minVal=1e-25):
     elif m < -8 or m > 8:
         pref = 'e%d' % (m*3)
     else:
-        pref = SI_PREFIXES[m+8]
+        if allowUnicode:
+            pref = SI_PREFIXES[m+8]
+        else:
+            pref = SI_PREFIXES_ASCII[m+8]
     p = .001**m
     
     return (p, pref)    
 
-def siFormat(x, precision=3, suffix='', space=True, error=None, minVal=1e-25):
+def siFormat(x, precision=3, suffix='', space=True, error=None, minVal=1e-25, allowUnicode=True):
     """
     Return the number x formatted in engineering notation with SI prefix.
     Example:
@@ -70,7 +74,7 @@ def siFormat(x, precision=3, suffix='', space=True, error=None, minVal=1e-25):
         space = ''
         
     
-    (p, pref) = siScale(x, minVal)
+    (p, pref) = siScale(x, minVal, allowUnicode)
     if not (len(pref) > 0 and pref[0] == 'e'):
         pref = space + pref
     
