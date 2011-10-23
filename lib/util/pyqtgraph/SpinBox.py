@@ -76,25 +76,9 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.setKeyboardTracking(False)
         self.setOpts(**kwargs)
         
-        #QtCore.QObject.connect(self, QtCore.SIGNAL('editingFinished()'), self.editingFinished)
         self.editingFinished.connect(self.editingFinishedEvent)
-        #self.proxy = proxyConnect(self, QtCore.SIGNAL('valueChanging'), self.delayedChange)
         self.proxy = proxyConnect(None, self.sigValueChanging, self.delayedChange)
         
-        #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('returnPressed()'), self.editingFinished)
-        #QtCore.QObject.connect(self.lineEdit(), QtCore.SIGNAL('textChanged()'), self.textChanged)
-        
-        #self.lineEditCache = weakref.ref(self.lineEdit())  ## Need this so se can work around a pyqt bug in __del__
-        #self.lineEdit().__dtor__ = lambda x: sip.setdeleted(x)
-        
-    #def __dtor__(self):  ## called when SIP destroys the underlying Qt object.
-        #lec = self.lineEditCache()
-        #if lec is not None:
-            #print "SETDELETED:", id(lec)
-            #sip.setdeleted(lec)  ## PyQt should handle this, but does not. Potentially leads to crashes.
-        #else:
-            #print "ALREADY DELETED"
-
     ##lots of config options, just gonna stuff 'em all in here rather than do the get/set crap.
     def setOpts(self, **opts):
         for k in opts:
@@ -116,34 +100,13 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.updateText()
             
             
-    ## Note: can't rely on __del__ since it may not be called for a long time
-    #def __del__(self):
-        #print "deleted"
-        #QtCore.QObject.disconnect(self.proxy, QtCore.SIGNAL('valueChanged(double)'), self.delayedChange)
-        #QtCore.QObject.disconnect(self, QtCore.SIGNAL('editingFinished()'), self.editingFinished)
-        #del self.proxy
-        #del self.opts
-        #del self.decOpts
-        #del self.val
-        
-        #lec = self.lineEditCache()
-        #if lec is not None:
-            ##### NOTE!! This approach causes memory corruption and random crashes.
-            #sip.setdeleted(lec)  ## PyQt should handle this, but does not. Potentially leads to crashes.
-        #del self.lineEditCache
-        
     def emitChanged(self):
         self.lastValEmitted = self.val
-        #self.emit(QtCore.SIGNAL('valueChanged(double)'), float(self.val))
-        #self.emit(QtCore.SIGNAL('valueChanged'), self)
         self.valueChanged.emit(float(self.val))
         self.sigValueChanged.emit(self)
         
     def delayedChange(self):
-        #print "delayedChange", self
-        #print "emit delayed change"
         try:
-            #self.emit(QtCore.SIGNAL('delayedChange'), self.value())
             if self.val != self.lastValEmitted:
                 self.emitChanged()
         except RuntimeError:
@@ -311,6 +274,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         try:
             val = fn.siEval(strn)
         except:
+            sys.excepthook(*sys.exc_info())
             #print "invalid"
             return False
         #print val
@@ -329,11 +293,16 @@ class SpinBox(QtGui.QAbstractSpinBox):
         #print "Edit finished."
         try:
             if str(self.lineEdit().text()) == self.lastText:
+                #print "no text change."
                 return
             val = self.interpret()
-            if val is False or val == self.val:
+            if val is False:
+                #print "value invalid:", str(self.lineEdit().text())
                 return
-            self.setValue(val)  ## allow text update so that values are reformatted pretty-like
+            if val == self.val:
+                #print "no value change:", val, self.val
+                return
+            self.setValue(val, delaySignal=False)  ## allow text update so that values are reformatted pretty-like
         except:
             pass
         

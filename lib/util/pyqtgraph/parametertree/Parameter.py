@@ -202,9 +202,13 @@ class Parameter(QtCore.QObject):
         if len(changed) > 0:
             self.sigOptionsChanged.emit(self, changed)
         
-    def emitStateChanged(self, name, data):
-        self.sigStateChanged.emit(self, name, data)
-        self.emitTreeChange(self, name, data)
+    def emitStateChanged(self, changeDesc, data):
+        ## Emits stateChanged signal and 
+        ## requests emission of new treeStateChanged signal
+        self.sigStateChanged.emit(self, changeDesc, data)
+        #self.treeStateChanged(self, changeDesc, data)
+        self.treeStateChanges.append((self, changeDesc, data))
+        self.emitTreeChanges()
 
     def makeTreeItem(self, depth):
         """Return a TreeWidgetItem suitable for displaying/controlling the content of this parameter.
@@ -247,7 +251,7 @@ class Parameter(QtCore.QObject):
         
         child.parentChanged(self)
         self.sigChildAdded.emit(self, child, pos)
-        child.sigTreeStateChanged.connect(self.emitTreeChange)
+        child.sigTreeStateChanged.connect(self.treeStateChanged)
         return child
         
     def removeChild(self, child):
@@ -259,10 +263,10 @@ class Parameter(QtCore.QObject):
         self.childs.pop(self.childs.index(child))
         child.parentChanged(None)
         self.sigChildRemoved.emit(self, child)
-        child.sigTreeStateChanged.disconnect(self.emitTreeChange)
+        child.sigTreeStateChanged.disconnect(self.treeStateChanged)
 
     def clearChildren(self):
-        for ch in self:
+        for ch in self.childs[:]:
             self.removeChild(ch)
 
     def parentChanged(self, parent):
@@ -405,23 +409,28 @@ class Parameter(QtCore.QObject):
     def unblockTreeChangeSignal(self):
         """Unblocks enission of sigTreeStateChanged and flushes the changes out through a single signal."""
         self.blockTreeChangeEmit -= 1
-        self.emitTreeChange()
+        self.emitTreeChanges()
         
-    def emitTreeChange(self, *args):
-        ## adds a new set of changes to the cache and/or emits the entire 
-        ## set of cached changes in a signal
-        #print "emit tree change? ", self, args
-        if len(args) > 0:
-            if type(args[1]) is list:
-                self.treeStateChanges.extend(args[1])
-            else:
-                self.treeStateChanges.append(args)
+        
+    def treeStateChanged(self, param, changes):
+        """
+        Called when the state of any sub-parameter has changed. 
+        Arguments:
+            param: the immediate child whose tree state has changed.
+                   note that the change may have originated from a grandchild.
+            changes: list of tuples describing all changes that have been made
+                     in this event: (param, changeDescr, data)
+                     
+        This function can be extended to react to tree state changes.
+        """
+        self.treeStateChanges.extend(changes)
+        self.emitTreeChanges()
+    
+    def emitTreeChanges(self):
         if self.blockTreeChangeEmit == 0:
-            #print "  flush", len(self.treeStateChanges)
-            self.sigTreeStateChanged.emit(self, self.treeStateChanges)
+            changes = self.treeStateChanges
             self.treeStateChanges = []
-        #else:
-            #print "  hold"
+            self.sigTreeStateChanged.emit(self, changes)
 
 
 class SignalBlocker:

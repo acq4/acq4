@@ -240,6 +240,9 @@ class StimGenerator(QtGui.QWidget):
         funcStr, params = self.stimParams.compile()
         self.ui.functionText.setPlainText(funcStr)
         #self.ui.paramText.setPlainText('\n'.join(params))
+        #print "set seq state:", params
+        #import traceback
+        #traceback.print_stack()
         self.seqParams.setState(params)
 
     def functionString(self):
@@ -374,6 +377,7 @@ class StimGenerator(QtGui.QWidget):
 
         ## evaluate and return
         fn = self.functionString().replace('\n', '')
+        
         ret = eval(fn, globals(), ns)
         if isinstance(ret, ndarray):
             #ret *= self.scale

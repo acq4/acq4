@@ -23,7 +23,7 @@ SI_PREFIXES_ASCII = 'yzafpnum kMGTPEZY'
 from Qt import QtGui, QtCore
 import numpy as np
 import scipy.ndimage
-import decimal
+import decimal, re
 
 def siScale(x, minVal=1e-25, allowUnicode=True):
     """

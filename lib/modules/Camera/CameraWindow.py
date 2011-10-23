@@ -21,7 +21,7 @@ from pyqtgraph.functions import intColor
 from debug import *
 from metaarray import *
 import sip
-from SignalProxy import proxyConnect
+from pyqtgraph.SignalProxy import SignalProxy
 #from lib.Manager import getManager
 import lib.Manager as Manager
 import numpy as np
@@ -267,7 +267,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         
         ## Use delayed connection for these two widgets
-        self.proxy1 = proxyConnect(self.ui.binningCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.setBinning)
+        self.proxy1 = SignalProxy(self.ui.binningCombo.currentIndexChanged, slot=self.binningComboChanged)
         self.ui.spinExposure.valueChanged.connect(self.setExposure)  ## note that this signal (from lib.util.SpinBox) is delayed.
         
         
@@ -590,6 +590,9 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.btnAcquire.setChecked(True)
         self.ui.btnAcquire.setEnabled(True)
 
+    def binningComboChanged(self, args):
+        self.setBinning(*args)
+        
     #@trace
     def setBinning(self, ind=None, autoRestart=True):
         """Set camera's binning value. If ind is specified, it is the index from binningCombo from which to grab the new binning value."""
