@@ -12,7 +12,7 @@ The ROI class is meant to serve as the base for more specific types; see several
 of how to build an ROI at the bottom of the file.
 """
 
-from PyQt4 import QtCore, QtGui
+from Qt import QtCore, QtGui
 if not hasattr(QtCore, 'Signal'):
     QtCore.Signal = QtCore.pyqtSignal
 #from numpy import array, arccos, dot, pi, zeros, vstack, ubyte, fromfunction, ceil, floor, arctan2

@@ -5,7 +5,7 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
+from Qt import QtCore, QtGui, QtOpenGL, QtSvg
 #from numpy import vstack
 #import time
 from Point import *
@@ -104,8 +104,9 @@ class GraphicsView(QtGui.QGraphicsView):
         #v.setStyleSheet("background-color: #000000;")
         self.setViewport(v)
             
-    def keyPressEvent(self, ev):
-        ev.ignore()
+    #def keyPressEvent(self, ev):
+        #QtGui.QGraphicsView.keyPressEvent(self, ev)
+        #ev.ignore()
         
     def setCentralItem(self, item):
         """Sets a QGraphicsWidget to automatically fill the entire view."""
@@ -495,54 +496,3 @@ class GraphicsView(QtGui.QGraphicsView):
         #return fl[-1]
     
 
-#class GraphicsSceneMouseEvent(QtGui.QGraphicsSceneMouseEvent):
-    #"""Stand-in class for QGraphicsSceneMouseEvent"""
-    #def __init__(self):
-        #QtGui.QGraphicsSceneMouseEvent.__init__(self)
-            
-    #def setPos(self, p):
-        #self.vpos = p
-    #def setButtons(self, p):
-        #self.vbuttons = p
-    #def setButton(self, p):
-        #self.vbutton = p
-    #def setModifiers(self, p):
-        #self.vmodifiers = p
-    #def setScenePos(self, p):
-        #self.vscenePos = p
-    #def setLastPos(self, p):
-        #self.vlastPos = p
-    #def setLastScenePos(self, p):
-        #self.vlastScenePos = p
-    #def setLastScreenPos(self, p):
-        #self.vlastScreenPos = p
-    #def setButtonDownPos(self, p):
-        #self.vbuttonDownPos = p
-    #def setButtonDownScenePos(self, p):
-        #self.vbuttonDownScenePos = p
-    #def setButtonDownScreenPos(self, p):
-        #self.vbuttonDownScreenPos = p
-    
-    #def pos(self):
-        #return self.vpos
-    #def buttons(self):
-        #return self.vbuttons
-    #def button(self):
-        #return self.vbutton
-    #def modifiers(self):
-        #return self.vmodifiers
-    #def scenePos(self):
-        #return self.vscenePos
-    #def lastPos(self):
-        #return self.vlastPos
-    #def lastScenePos(self):
-        #return self.vlastScenePos
-    #def lastScreenPos(self):
-        #return self.vlastScreenPos
-    #def buttonDownPos(self):
-        #return self.vbuttonDownPos
-    #def buttonDownScenePos(self):
-        #return self.vbuttonDownScenePos
-    #def buttonDownScreenPos(self):
-        #return self.vbuttonDownScreenPos
-    

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/devices/AxoPatch200/devGuiTemplate.ui'
+# Form implementation generated from reading ui file 'devGuiTemplate.ui'
 #
-# Created: Wed May 18 20:44:14 2011
+# Created: Wed Oct 19 11:34:10 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -58,4 +58,4 @@ class Ui_devGui(object):
         self.label.setText(QtGui.QApplication.translate("devGui", "VC Holding", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("devGui", "IC Holding", None, QtGui.QApplication.UnicodeUTF8))
 
-from SpinBox import SpinBox
+from pyqtgraph.SpinBox import SpinBox

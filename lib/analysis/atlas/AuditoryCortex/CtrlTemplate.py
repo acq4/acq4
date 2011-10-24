@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/analysis/atlas/AuditoryCortex/CtrlTemplate.ui'
+# Form implementation generated from reading ui file 'CtrlTemplate.ui'
 #
-# Created: Wed May 18 20:44:11 2011
+# Created: Wed Oct 19 11:31:23 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -85,4 +85,4 @@ class Ui_Form(object):
         self.flipCheck.setText(QtGui.QApplication.translate("Form", "Flip", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("Form", "Thickness", None, QtGui.QApplication.UnicodeUTF8))
 
-from SpinBox import SpinBox
+from pyqtgraph.SpinBox import SpinBox

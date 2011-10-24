@@ -8,7 +8,8 @@ from Mutex import Mutex
 import debug
 #import pdb
 import devTemplate
-import functions as fn
+#import functions as fn
+import pyqtgraph as pg
 import numpy as np
 from copy import deepcopy
 
@@ -135,8 +136,8 @@ class SMP285Interface(QtGui.QWidget):
                 self.limitBtns[axis][limit].clicked.connect(mkLimitCallback(self.updateLimit, axis, limit))
                 self.limitChecks[axis][limit].toggled.connect(mkLimitCallback(self.enableLimit, axis, limit))
                 pos, enabled = self.dev.limits[axis][limit]
-                #self.limitLabels[axis][limit].setText(fn.siFormat(pos, suffix='m', precision=5))
-                self.limitBtns[axis][limit].setText(fn.siFormat(pos, suffix='m', precision=5))
+                #self.limitLabels[axis][limit].setText(pg.siFormat(pos, suffix='m', precision=5))
+                self.limitBtns[axis][limit].setText(pg.siFormat(pos, suffix='m', precision=5))
                 self.limitChecks[axis][limit].setChecked(enabled)
         
         self.ui.maxSpeedSpin.setOpts(value=self.dev.maxSpeed, siPrefix=True, dec=True, suffix='m/s', step=0.1, minStep=1e-6)
@@ -150,7 +151,7 @@ class SMP285Interface(QtGui.QWidget):
     def updateLimit(self, axis, limit):
         ## called when the limit buttons are pressed in the GUI
         pos = self.dev.getPosition()[axis]
-        self.limitBtns[axis][limit].setText(fn.siFormat(pos, suffix='m', precision=5))
+        self.limitBtns[axis][limit].setText(pg.siFormat(pos, suffix='m', precision=5))
         self.dev.setLimit(axis, limit, val=pos)
         self.limitChecks[axis][limit].setChecked(True)
         
@@ -172,7 +173,7 @@ class SMP285Interface(QtGui.QWidget):
         #for i in [0,1,2]:
             #if pos[i] < self.limit
 
-        text = [fn.siFormat(x, suffix='m', precision=5) for x in pos]
+        text = [pg.siFormat(x, suffix='m', precision=5) for x in pos]
         self.ui.xPosLabel.setText(text[0])
         self.ui.yPosLabel.setText(text[1])
         self.ui.zPosLabel.setText(text[2])

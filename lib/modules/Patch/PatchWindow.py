@@ -3,7 +3,7 @@ from __future__ import with_statement
 from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
 #from PyQt4 import Qwt5 as Qwt
-from WidgetGroup import WidgetGroup
+from pyqtgraph.WidgetGroup import WidgetGroup
 from pyqtgraph.PlotWidget import PlotWidget
 from metaarray import *
 from Mutex import Mutex, MutexLocker
@@ -11,7 +11,7 @@ import traceback, sys, time
 from numpy import *
 import scipy.optimize
 from debug import *
-from functions import siFormat
+from pyqtgraph import siFormat
 import lib.Manager as Manager
 import ptime
 from lib.LogWindow import LogButton

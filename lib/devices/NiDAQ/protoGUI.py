@@ -3,7 +3,7 @@ from PyQt4 import QtCore, QtGui
 from ProtocolTemplate import *
 from lib.devices.Device import ProtocolGui
 from debug import *
-from WidgetGroup import *
+from pyqtgraph.WidgetGroup import WidgetGroup
 import sys
 
 class NiDAQProto(ProtocolGui):

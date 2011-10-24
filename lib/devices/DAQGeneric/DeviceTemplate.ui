@@ -178,7 +178,7 @@
   <customwidget>
    <class>SpinBox</class>
    <extends>QSpinBox</extends>
-   <header>lib.util.SpinBox</header>
+   <header>pyqtgraph.SpinBox</header>
   </customwidget>
  </customwidgets>
  <resources/>

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import with_statement
 from lib.devices.Device import *
-from SignalProxy import *
+from pyqtgraph.SignalProxy import SignalProxy
 import serial, os, time
 from Mutex import Mutex, MutexLocker
 #import pdb
@@ -28,12 +28,13 @@ class SerialMouse(Device):
             self.buttons = state['buttons']
         
         self.mThread = MouseThread(self, {'pos': self.pos[:], 'btns': self.buttons[:]})
-        #QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('positionChanged'), self.posChanged)
         self.mThread.sigPositionChanged.connect(self.posChanged)
-        #QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('buttonChanged'), self.btnChanged)
         self.mThread.sigButtonChanged.connect(self.btnChanged)
-        self.proxy1 = proxyConnect(None, self.sigPositionChanged, self.storeState, 3.0) ## wait 3 seconds before writing changes 
-        self.proxy2 = proxyConnect(None, self.sigSwitchChanged, self.storeState, 3.0) 
+        #self.proxy1 = proxyConnect(None, self.sigPositionChanged, self.storeState, 3.0) ## wait 3 seconds before writing changes 
+        #self.proxy2 = proxyConnect(None, self.sigSwitchChanged, self.storeState, 3.0) 
+        self.proxy1 = SignalProxy(self.sigPositionChanged, slot=self.storeState, delay=3.0)
+        self.proxy2 = SignalProxy(self.sigSwitchChanged, slot=self.storeState, delay=3.0)
+        
         self.mThread.start()
         
     def quit(self):

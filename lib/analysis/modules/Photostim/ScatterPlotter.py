@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 import pyqtgraph as pg
-import TreeWidget
-import flowchart.library.EventDetection as FCEventDetection
+import pyqtgraph.TreeWidget as TreeWidget
+import pyqtgraph.flowchart.library.EventDetection as FCEventDetection
 import debug
 
 class ScatterPlotter(QtGui.QSplitter):

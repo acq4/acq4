@@ -5,8 +5,8 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-from GraphicsView import *
-from MultiPlotItem import *
+from GraphicsView import GraphicsView
+from graphicsItems import MultiPlotItem
 import exceptions
 
 class MultiPlotWidget(GraphicsView):

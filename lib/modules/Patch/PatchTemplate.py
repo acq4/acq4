@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/modules/Patch/PatchTemplate.ui'
+# Form implementation generated from reading ui file 'PatchTemplate.ui'
 #
-# Created: Wed May 18 20:44:22 2011
+# Created: Wed Oct 19 11:38:59 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -322,4 +322,4 @@ class Ui_Form(object):
         self.drawFitCheck.setText(QtGui.QApplication.translate("Form", "Draw Fit", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph.PlotWidget import PlotWidget
-from SpinBox import SpinBox
+from pyqtgraph.SpinBox import SpinBox

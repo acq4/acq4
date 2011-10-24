@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtGui, QtCore
-if not hasattr(QtCore, 'Signal'):
-    QtCore.Signal = QtCore.pyqtSignal
+from Qt import QtGui, QtCore
 import functions
 
 class ColorButton(QtGui.QPushButton):
@@ -28,7 +26,7 @@ class ColorButton(QtGui.QPushButton):
         QtGui.QPushButton.paintEvent(self, ev)
         p = QtGui.QPainter(self)
         p.setBrush(functions.mkBrush(self._color))
-        p.drawRect(self.rect().adjusted(5, 5, -5, -5))
+        p.drawRect(self.rect().adjusted(6, 6, -6, -6))
         p.end()
     
     def setColor(self, color, finished=True):
@@ -81,3 +79,7 @@ if __name__ == '__main__':
     btn.sigColorChanging.connect(change)
     btn.sigColorChanged.connect(done)
     
+    ## Start Qt event loop unless running in interactive mode.
+    import sys
+    if sys.flags.interactive != 1:
+        app.exec_()

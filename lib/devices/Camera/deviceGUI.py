@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 #from DevTemplate import Ui_Form
 from PyQt4 import QtCore, QtGui
-from WidgetGroup import WidgetGroup
-from SpinBox import *
-from ParameterTree import * 
-#import pdb
+from pyqtgraph.WidgetGroup import WidgetGroup
+from pyqtgraph.parametertree import * 
+import collections
 
 class CameraDeviceGui(QtGui.QWidget):
     def __init__(self, dev, win):
@@ -54,7 +53,7 @@ class CameraDeviceGui(QtGui.QWidget):
                             params[-1]['minStep'] = 1e-6
                 elif type(p[0]) is list:
                     #print k, val, p
-                    params.append({'name': k, 'type': 'list', 'value': val, 'values': map(str, p[0])})
+                    params.append({'name': k, 'type': 'list', 'value': val, 'values': p[0]})
                 #elif 'BOOL' in typ:
                 #    w = QtGui.QCheckBox()
                 #    w.setChecked(val)
@@ -66,12 +65,12 @@ class CameraDeviceGui(QtGui.QWidget):
             #self.ui.formLayout_2.addRow(k, w)
         #self.stateGroup.sigChanged.connect(self.stateChanged)
         
-        self.paramSet = ParameterSet('cameraParams', params)
+        self.paramSet = Parameter(name='cameraParams', type='group', params=params)
         self.paramWidget = ParameterTree()
         self.paramWidget.setParameters(self.paramSet)
         self.layout.addWidget(self.paramWidget)
         
-        self.paramSet.sigStateChanged.connect(self.stateChanged)
+        self.paramSet.sigTreeStateChanged.connect(self.stateChanged)
         #self.ui.reconnectBtn.clicked.connect(self.reconnect)
         self.dev.sigParamsChanged.connect(self.paramsChanged)
         
@@ -140,21 +139,35 @@ class CameraDeviceGui(QtGui.QWidget):
         #self.dev.sigParamsChanged.connect(self.paramsChanged)
         ##print "Done with UI"
             
-    def stateChanged(self, pset, param, val):
-        #print p, val
-        self.dev.setParam(param.name(), val)    
+    def stateChanged(self, param, changes):
+        #print "tree state changed:"
+        ## called when state is changed by user
+        vals = collections.OrderedDict()
+        for param, change, data in changes:
+            if change == 'value':
+                print param.name(), param.value()
+                vals[param.name()] = param.value()
+        
+        self.dev.setParams(vals)    
         
     def paramsChanged(self, params):
+        #print "Camera param changed:", params
+        ## Called when state of camera has changed
         for p in params.keys()[:]:  ## flatten out nested dicts
             if isinstance(params[p], dict):
                 for k in params[p]:
                     params[k] = params[p][k]
         
-        for k, v in params.iteritems():
-            self.paramSet[k] = v
-            for p2 in self.params[k][3]:    ## Update bounds if needed
-                newBounds = self.dev.listParams([p2])[p2][0]
-                self.paramSet.param(p2).setLimits(newBounds)
+        try:   ## need to ignore tree-change signals while updating it.
+            self.paramSet.sigTreeStateChanged.disconnect(self.stateChanged)
+            for k, v in params.iteritems():
+                self.paramSet[k] = v
+                for p2 in self.params[k][3]:    ## Update bounds if needed
+                    newBounds = self.dev.listParams([p2])[p2][0]
+                    self.paramSet.param(p2).setLimits(newBounds)
+        finally:
+            self.paramSet.sigTreeStateChanged.connect(self.stateChanged)
+            
         
         #self.stateGroup.blockSignals(True)
         #self.stateGroup.setState(params)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import CtrlTemplate
-import WidgetGroup
+import pyqtgraph.WidgetGroup
 import advancedTypes
 import lib.analysis.atlas.Atlas as Atlas
 #import DataManager

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Fri Oct 07 16:09:47 2011
+# Created: Mon Oct 24 16:19:44 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -25,6 +25,7 @@ class Ui_Form(object):
         Form.setSizePolicy(sizePolicy)
         self.gridLayout_4 = QtGui.QGridLayout(Form)
         self.gridLayout_4.setMargin(3)
+        self.gridLayout_4.setSpacing(3)
         self.gridLayout_4.setObjectName(_fromUtf8("gridLayout_4"))
         self.gridLayout = QtGui.QGridLayout()
         self.gridLayout.setSizeConstraint(QtGui.QLayout.SetMaximumSize)
@@ -156,8 +157,6 @@ class Ui_Form(object):
         self.label_8 = QtGui.QLabel(Form)
         self.label_8.setObjectName(_fromUtf8("label_8"))
         self.gridLayout_4.addWidget(self.label_8, 0, 3, 1, 1)
-        spacerItem1 = QtGui.QSpacerItem(253, 535, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.gridLayout_4.addItem(spacerItem1, 0, 5, 3, 1)
         self.itemTree = TreeWidget(Form)
         self.itemTree.setObjectName(_fromUtf8("itemTree"))
         self.gridLayout_4.addWidget(self.itemTree, 1, 1, 1, 2)
@@ -180,8 +179,8 @@ class Ui_Form(object):
         self.deleteStepBtn.setEnabled(False)
         self.deleteStepBtn.setObjectName(_fromUtf8("deleteStepBtn"))
         self.verticalLayout.addWidget(self.deleteStepBtn)
-        spacerItem2 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.verticalLayout.addItem(spacerItem2)
+        spacerItem1 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.verticalLayout.addItem(spacerItem1)
         self.previewBtn = QtGui.QPushButton(Form)
         self.previewBtn.setEnabled(False)
         self.previewBtn.setObjectName(_fromUtf8("previewBtn"))
@@ -208,13 +207,10 @@ class Ui_Form(object):
         self.hideMarkerBtn.setObjectName(_fromUtf8("hideMarkerBtn"))
         self.horizontalLayout_5.addWidget(self.hideMarkerBtn)
         self.gridLayout_4.addLayout(self.horizontalLayout_5, 2, 1, 1, 2)
-        spacerItem3 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.gridLayout_4.addItem(spacerItem3, 2, 3, 1, 1)
+        spacerItem2 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.gridLayout_4.addItem(spacerItem2, 2, 3, 1, 1)
         self.gridLayout_4.setColumnStretch(0, 1)
         self.gridLayout_4.setColumnStretch(1, 4)
-        self.gridLayout_4.setColumnStretch(2, 1)
-        self.gridLayout_4.setColumnStretch(3, 2)
-        self.gridLayout_4.setColumnStretch(4, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
@@ -275,6 +271,6 @@ class Ui_Form(object):
         self.hideCheck.setText(QtGui.QApplication.translate("Form", "Hide items", None, QtGui.QApplication.UnicodeUTF8))
         self.hideMarkerBtn.setText(QtGui.QApplication.translate("Form", "Hide Spot Marker", None, QtGui.QApplication.UnicodeUTF8))
 
-from pyqtgraph.PlotWidget import PlotWidget
-from SpinBox import SpinBox
-from TreeWidget import TreeWidget
+from pyqtgraph.TreeWidget import TreeWidget
+from pyqtgraph.SpinBox import SpinBox
+from plotwidget import PlotWidget

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/devices/NiDAQ/ProtocolTemplate.ui'
+# Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Wed May 18 20:44:16 2011
+# Created: Wed Oct 19 11:36:51 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -231,4 +231,4 @@ class Ui_Form(object):
         self.label_4.setText(QtGui.QApplication.translate("Form", "Period", None, QtGui.QApplication.UnicodeUTF8))
         self.periodSpin.setSuffix(QtGui.QApplication.translate("Form", " μs", None, QtGui.QApplication.UnicodeUTF8))
 
-from SpinBox import SpinBox
+from pyqtgraph.SpinBox import SpinBox

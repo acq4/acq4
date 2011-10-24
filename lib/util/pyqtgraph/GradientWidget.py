@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtGui, QtCore
+from Qt import QtGui, QtCore
 import weakref
 
 class TickSlider(QtGui.QGraphicsView):
@@ -442,11 +442,23 @@ if __name__ == '__main__':
     w2.setTickColor(1, QtGui.QColor(255,255,255))
     w3 = GradientWidget(orientation='bottom')
     w4 = TickSlider(orientation='left')
+    label = QtGui.QLabel("""
+    - Click a triangle to change its color
+    - Drag triangles to move
+    - Click in an empty area to add a new color
+      (adding is disabled for the right-side widget)
+    - Right click a triangle to remove
+    """)
 
     l.addWidget(w1, 0, 1)
     l.addWidget(w2, 1, 2)
     l.addWidget(w3, 2, 1)
     l.addWidget(w4, 1, 0)
+    l.addWidget(label, 1, 1)
     
+    ## Start Qt event loop unless running in interactive mode.
+    import sys
+    if sys.flags.interactive != 1:
+        app.exec_()
     
     

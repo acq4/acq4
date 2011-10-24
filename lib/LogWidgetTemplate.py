@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'LogWidgetTemplate.ui'
 #
-# Created: Fri Sep 16 09:48:42 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Sat Oct 15 21:31:13 2011
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -158,4 +158,4 @@ class Ui_Form(object):
         self.label.setText(QtGui.QApplication.translate("Form", "Importance Filter:", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("Form", "High", None, QtGui.QApplication.UnicodeUTF8))
 
-from TreeWidget import TreeWidget
+from pyqtgraph.TreeWidget import TreeWidget

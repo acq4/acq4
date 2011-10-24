@@ -19,8 +19,11 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout_4" columnstretch="1,4,1,2,1,0">
+  <layout class="QGridLayout" name="gridLayout_4" columnstretch="1,4,0,0,0">
    <property name="margin">
+    <number>3</number>
+   </property>
+   <property name="spacing">
     <number>3</number>
    </property>
    <item row="0" column="0" rowspan="3">
@@ -346,19 +349,6 @@ p, li { white-space: pre-wrap; }
      </property>
     </widget>
    </item>
-   <item row="0" column="5" rowspan="3">
-    <spacer name="horizontalSpacer">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>253</width>
-       <height>535</height>
-      </size>
-     </property>
-    </spacer>
-   </item>
    <item row="1" column="1" colspan="2">
     <widget class="TreeWidget" name="itemTree">
      <column>
@@ -515,18 +505,17 @@ p, li { white-space: pre-wrap; }
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>SpinBox</header>
+   <header>pyqtgraph.SpinBox</header>
   </customwidget>
   <customwidget>
    <class>TreeWidget</class>
    <extends>QTreeWidget</extends>
-   <header>TreeWidget</header>
+   <header location="global">pyqtgraph.TreeWidget</header>
   </customwidget>
   <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
-   <header>pyqtgraph.PlotWidget</header>
-   <container>1</container>
+   <header>plotwidget.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

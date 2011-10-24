@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/devices/DAQGeneric/ProtocolTemplate.ui'
+# Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Wed May 18 20:44:12 2011
+# Created: Wed Oct 19 11:32:51 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

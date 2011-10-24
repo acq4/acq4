@@ -6,7 +6,7 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
 from GraphicsView import *
-from PlotItem import *
+from graphicsItems.PlotItem import *
 import exceptions
 
 class PlotWidget(GraphicsView):

@@ -2,7 +2,7 @@
 from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
 import lib.analysis.modules.EventDetector as EventDetector
-from flowchart import *
+from pyqtgraph.flowchart import *
 import os
 from advancedTypes import OrderedDict
 import debug
@@ -13,7 +13,8 @@ import ProgressDialog
 from Scan import Scan
 from DBCtrl import DBCtrl
 from ScatterPlotter import ScatterPlotter
-import Canvas.items
+from Canvas import items
+import Canvas
 
 class Photostim(AnalysisModule):
     def __init__(self, host):
@@ -204,7 +205,7 @@ class Photostim(AnalysisModule):
             else:
                 name = fh.shortName()
                 sname = name
-            canvasItem = Canvas.items.ScanCanvasItem(handle=fh, subDirs=subDirs, name=name, parent=parent)
+            canvasItem = Canvas.ScanCanvasItem(handle=fh, subDirs=subDirs, name=name, parent=parent)
             canvas.addItem(canvasItem)
             canvasItem.graphicsItem().sigClicked.connect(self.scanPointClicked)
             scan = Scan(self, fh, canvasItem, name=sname)

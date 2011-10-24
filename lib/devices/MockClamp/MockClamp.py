@@ -7,7 +7,7 @@ from Mutex import Mutex, MutexLocker
 from PyQt4 import QtCore, QtGui
 import time
 import numpy as np
-from WidgetGroup import *
+from pyqtgraph.WidgetGroup import WidgetGroup
 from advancedTypes import OrderedDict
 from debug import printExc
 from devTemplate import *
