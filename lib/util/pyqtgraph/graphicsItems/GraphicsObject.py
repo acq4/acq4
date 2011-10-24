@@ -161,3 +161,5 @@ class GraphicsObject(QtGui.QGraphicsObject):
             return None
         vt = vt.inverted()[0]
         return vt.mapRect(obj)
+
+from ViewBox import ViewBox

@@ -5,7 +5,7 @@ if not hasattr(QtCore, 'Signal'):
 
 import functions as fn
 from math import log
-from SignalProxy import proxyConnect
+from SignalProxy import SignalProxy
 from decimal import Decimal as D  ## Use decimal to avoid accumulating floating-point errors
 from decimal import *
 import weakref
@@ -77,7 +77,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.setOpts(**kwargs)
         
         self.editingFinished.connect(self.editingFinishedEvent)
-        self.proxy = proxyConnect(None, self.sigValueChanging, self.delayedChange)
+        self.proxy = SignalProxy(self.sigValueChanging, slot=self.delayedChange)
         
     ##lots of config options, just gonna stuff 'em all in here rather than do the get/set crap.
     def setOpts(self, **opts):

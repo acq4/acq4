@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 from pyqtgraph.SpinBox import SpinBox
-from pyqtgraph.SignalProxy import *
+#from pyqtgraph.SignalProxy import SignalProxy
 from pyqtgraph.WidgetGroup import WidgetGroup
 from ColorMapper import ColorMapper
 from ..Node import Node

@@ -23,7 +23,7 @@ import ptime
 import numpy as np
 import debug
 
-from SignalProxy import proxyConnect
+from SignalProxy import SignalProxy
 
 class PlotROI(ROI):
     def __init__(self, size):
@@ -125,7 +125,7 @@ class ImageView(QtGui.QWidget):
         self.ui.normTimeRangeCheck.clicked.connect(self.updateNorm)
         self.playTimer.timeout.connect(self.timeout)
         
-        self.normProxy = proxyConnect(None, self.normRgn.sigRegionChanged, self.updateNorm)
+        self.normProxy = SignalProxy(self.normRgn.sigRegionChanged, slot=self.updateNorm)
         self.normRoi.sigRegionChangeFinished.connect(self.updateNorm)
         
         self.ui.roiPlot.registerPlot(self.name + '_ROI')

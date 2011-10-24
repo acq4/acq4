@@ -302,8 +302,10 @@ class Parameter(QtCore.QObject):
         for ch in self.childs:
             yield ch
 
-    def __getitem__(self, *names):
+    def __getitem__(self, names):
         """Get the value of a child parameter"""
+        if not isinstance(names, tuple):
+            names = (names,)
         return self.param(*names).value()
 
     def __setitem__(self, names, value):

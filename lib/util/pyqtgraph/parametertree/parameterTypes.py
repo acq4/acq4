@@ -3,7 +3,7 @@ from Parameter import Parameter, registerParameterType
 from ParameterItem import ParameterItem
 from pyqtgraph.SpinBox import SpinBox
 from pyqtgraph.ColorButton import ColorButton
-import os
+import os, collections
 
 class WidgetParameterItem(ParameterItem):
     """
@@ -56,6 +56,9 @@ class WidgetParameterItem(ParameterItem):
         if w.sigChanged is not None:
             w.sigChanged.connect(self.widgetValueChanged)
             
+        if hasattr(w, 'sigChanging'):
+            w.sigChanging.connect(self.widgetValueChanging)
+            
         ## update value shown in widget. 
         self.valueChanged(self, opts['value'], force=True)
 
@@ -82,7 +85,8 @@ class WidgetParameterItem(ParameterItem):
                 defs['bounds'] = opts['limits']
             w = SpinBox()
             w.setOpts(**defs)
-            w.sigChanged = w.sigValueChanging
+            w.sigChanged = w.sigValueChanged
+            w.sigChanging = w.sigValueChanging
         elif t == 'float':
             defs = {
                 'value': 0, 'min': None, 'max': None, 
@@ -94,7 +98,8 @@ class WidgetParameterItem(ParameterItem):
                 defs['bounds'] = opts['limits']
             w = SpinBox()
             w.setOpts(**defs)
-            w.sigChanged = w.sigValueChanging
+            w.sigChanged = w.sigValueChanged
+            w.sigChanging = w.sigValueChanging
         elif t == 'bool':
             w = QtGui.QCheckBox()
             w.sigChanged = w.toggled
@@ -106,9 +111,11 @@ class WidgetParameterItem(ParameterItem):
             w.sigChanged = w.editingFinished
             w.value = lambda: unicode(w.text())
             w.setValue = lambda v: w.setText(unicode(v))
+            w.sigChanging = w.textChanged
         elif t == 'color':
             w = ColorButton()
             w.sigChanged = w.sigColorChanged
+            w.sigChanging = w.sigColorChanging
             w.value = w.color
             w.setValue = w.setColor
             self.hideWidget = False
@@ -147,9 +154,14 @@ class WidgetParameterItem(ParameterItem):
         ## called when the widget's value has been changed by the user
         val = self.widget.value()
         newVal = self.param.setValue(val)
-        ## do we need this?
-        #self.defaultBtn.setEnabled(not self.param.valueIsDefault() and self.param.writable())
-    
+
+    def widgetValueChanging(self):
+        """
+        Called when the widget's value is changing, but not finalized.
+        For example: editing text before pressing enter or changing focus.
+        """
+        pass
+        
     def selected(self, sel):
         """Called when this item has been selected (sel=True) OR deselected (sel=False)"""
         ParameterItem.selected(self, sel)
@@ -173,9 +185,9 @@ class WidgetParameterItem(ParameterItem):
         else:
             return  ## don't know what to do with any other types..
 
-    def treeChanged(self):
+    def treeWidgetChanged(self):
         """Called when this item is added or removed from a tree."""
-        ParameterItem.treeChanged(self)
+        ParameterItem.treeWidgetChanged(self)
         
         ## add all widgets for this item into the tree
         if self.widget is not None:
@@ -269,8 +281,8 @@ class GroupParameterItem(ParameterItem):
         self.param.addNew(typ)
         self.addWidget.setCurrentIndex(0)
 
-    def treeChanged(self):
-        ParameterItem.treeChanged(self)
+    def treeWidgetChanged(self):
+        ParameterItem.treeWidgetChanged(self)
         if self.addItem is not None:
             self.treeWidget().setItemWidget(self.addItem, 0, self.addWidget)
         
@@ -311,45 +323,59 @@ class ListParameterItem(WidgetParameterItem):
         t = opts['type']
         w = QtGui.QComboBox()
         w.setMaximumHeight(20)  ## set to match height of spin box and line edit
-        for k in opts['limits']:
-            w.addItem(unicode(k))
         w.sigChanged = w.currentIndexChanged
         w.value = self.value
         w.setValue = self.setValue
         self.widget = w
+        self.limitsChanged(self.param, self.param.opts['limits'])
         self.setValue(self.param.value())
         return w
         
     def value(self):
-        vals = self.param.opts['limits']
+        #vals = self.param.opts['limits']
         key = unicode(self.widget.currentText())
-        if isinstance(vals, dict):
-            return vals[key]
-        else:
-            return key
+        #if isinstance(vals, dict):
+            #return vals[key]
+        #else:
+            #return key
+        return self.forward[key]
             
     def setValue(self, val):
-        vals = self.param.opts['limits']
-        if isinstance(vals, dict):
-            key = None
-            for k,v in vals.iteritems():
-                if v == val:
-                    key = k
-            if key is None:
-                raise Exception("Value '%s' not allowed." % val)
-        else:
-            key = unicode(val)
+        #vals = self.param.opts['limits']
+        #if isinstance(vals, dict):
+            #key = None
+            #for k,v in vals.iteritems():
+                #if v == val:
+                    #key = k
+            #if key is None:
+                #raise Exception("Value '%s' not allowed." % val)
+        #else:
+            #key = unicode(val)
+        key = self.reverse[val]
         ind = self.widget.findText(key)
         self.widget.setCurrentIndex(ind)
 
     def limitsChanged(self, param, limits):
+        # set up forward / reverse mappings for name:value
+        self.forward = collections.OrderedDict()  ## name: value
+        self.reverse = collections.OrderedDict()  ## value: name
+        if isinstance(limits, dict):
+            for k, v in limits.iteritems():
+                self.forward[k] = v
+                self.reverse[v] = k
+        else:
+            for v in limits:
+                n = unicode(v)
+                self.forward[n] = v
+                self.reverse[v] = n
+        
         try:
             self.widget.blockSignals(True)
             val = unicode(self.widget.currentText())
             self.widget.clear()
-            for k in self.param.opts['limits']:
-                self.widget.addItem(unicode(k))
-                if unicode(k) == val:
+            for k in self.forward:
+                self.widget.addItem(k)
+                if k == val:
                     self.widget.setCurrentIndex(self.widget.count()-1)
             
         finally:
@@ -367,6 +393,5 @@ class ListParameter(Parameter):
         Parameter.__init__(self, **opts)
 
 registerParameterType('list', ListParameter)
-        
 
 

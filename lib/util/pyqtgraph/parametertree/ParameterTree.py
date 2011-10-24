@@ -31,23 +31,10 @@ class ParameterTree(TreeWidget):
                 item.setSizeHint(1, QtCore.QSize(0,0))
                 depth -= 1
         root.addChild(item)
-        item.treeChanged()
+        item.treeWidgetChanged()
             
-        #expand = False
         for ch in param:
-            #item = param.makeTreeItem(depth=depth)
-            #root.addChild(item)
-            #item.treeChanged()
             self.setParameters(ch, root=item, depth=depth+1)
-            #expand = True
-        #root.setExpanded(expand)
-        
-        #self.paramSet = param
-        
-    #def resizeEvent(self):
-        #for col in range(self.columnCount()):
-            #if self.columnWidth(col) < self.sizeHintForColumn(col):
-                #self.resizeColumnToContents(0)
 
     def contextMenuEvent(self, ev):
         item = self.currentItem()

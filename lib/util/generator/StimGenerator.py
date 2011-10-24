@@ -28,10 +28,10 @@ import units
 
 class StimGenerator(QtGui.QWidget):
     
-    sigDataChanged = QtCore.Signal()
-    sigStateChanged = QtCore.Signal()
-    sigParametersChanged = QtCore.Signal()
-    sigFunctionChanged = QtCore.Signal()
+    sigDataChanged = QtCore.Signal()        ## Emitted when the output of getSingle() is expected to have changed
+    sigStateChanged = QtCore.Signal()       ## Emitted when the output of saveState() is expected to have changed
+    sigParametersChanged = QtCore.Signal()  ## Emitted when the sequence parameter space has changed
+    sigFunctionChanged = QtCore.Signal()    ## Emitted when the waveform-generating function has changed
     
     def __init__(self, parent=None):
         QtGui.QWidget.__init__(self, parent)
@@ -44,19 +44,22 @@ class StimGenerator(QtGui.QWidget):
         #self.ui.paramText.setFontFamily('Courier')
         self.ui.errorText.setVisible(False)
         
+        self.simpleMode = True  ## if True, then the current state was generated from 
+                                ## the simple tree. Otherwise, it was generated in advanced mode.
+        
         self.pSpace = None    ## cached sequence parameter space
         
         self.cache = {}       ## cached waveforms
         self.cacheRate = None
         self.cacheNPts = None
         
-        self.advancedGroup = [
-            self.ui.advSplitter,
-            #self.ui.functionText,
-            #self.ui.seqTree,
-            self.ui.errorBtn,
-            self.ui.helpBtn,
-        ]
+        #self.advancedGroup = [
+            #self.ui.advSplitter,
+            ##self.ui.functionText,
+            ##self.ui.seqTree,
+            #self.ui.errorBtn,
+            #self.ui.helpBtn,
+        #]
         self.updateWidgets()
         
         self.meta = {  ## holds some extra information about signals (units, expected scale and range, etc)
@@ -78,16 +81,15 @@ class StimGenerator(QtGui.QWidget):
         self.seqParams = SequenceParamSet()
         self.ui.seqTree.setParameters(self.seqParams)
         self.seqParams.sigTreeStateChanged.connect(self.seqParamsChanged)
-        
-        
-        
         self.ui.functionText.textChanged.connect(self.funcChanged)
-        #self.ui.paramText.textChanged.connect(self.paramChanged)
+        
         self.ui.updateBtn.clicked.connect(self.update)
         self.ui.autoUpdateCheck.clicked.connect(self.autoUpdateClicked)
-        self.ui.errorBtn.clicked.connect(self.errorBtnClicked)
+        self.ui.errorBtn.clicked.connect(self.updateWidgets)
         self.ui.helpBtn.clicked.connect(self.updateWidgets)
         self.ui.advancedBtn.toggled.connect(self.updateWidgets)
+        self.ui.forceAdvancedBtn.clicked.connect(self.forceAdvancedClicked)
+        self.ui.forceSimpleBtn.clicked.connect(self.forceSimpleClicked)
 
     def setEvalNames(self, **kargs):
         """Make variables accessible for use by evaluated functions."""
@@ -142,114 +144,110 @@ class StimGenerator(QtGui.QWidget):
         """
         self.meta[axis].update(args)
         self.stimParams.setMeta(axis, args)
-        
 
     def clearCache(self):
         self.cache = {}
-
+    
+    def functionString(self):
+        return str(self.ui.functionText.toPlainText())
+    
     def update(self):
+        ## Let others know that waveform generation has changed.
+        ## Note: it's generally better to call autoUpdate instead.
         if self.test():
-            #self.emit(QtCore.SIGNAL('dataChanged'))
             self.sigDataChanged.emit()
-        
+    
     def autoUpdate(self):
         if self.ui.autoUpdateCheck.isChecked():
             self.update()
-            
+    
     def autoUpdateClicked(self):
         self.autoUpdate()
-        #self.emit(QtCore.SIGNAL('stateChanged'))        
         self.sigStateChanged.emit()        
 
-    def errorBtnClicked(self, b):
-        self.updateWidgets()
-        if b:  ## resize error text box if it is too small
-            height = self.ui.advSplitter.height()
-            sizes = self.ui.advSplitter.sizes()
-            if sizes[2] < height/3.:
-                diff = (height/3.) - sizes[2]
-                sizes[2] = height/3.
-                r = float(sizes[0]) / (sizes[0]+sizes[1])
-                sizes[0] -= diff * r 
-                sizes[1] -= diff * (1-r)
-                self.ui.advSplitter.setSizes(sizes)
+    #def errorBtnClicked(self, b):
+        #self.updateWidgets()
+        ##if b:  ## resize error text box if it is too small
+            ##height = self.ui.advSplitter.height()
+            ##sizes = self.ui.advSplitter.sizes()
+            ##if sizes[2] < height/3.:
+                ##diff = (height/3.) - sizes[2]
+                ##sizes[2] = height/3.
+                ##r = float(sizes[0]) / (sizes[0]+sizes[1])
+                ##sizes[0] -= diff * r 
+                ##sizes[1] -= diff * (1-r)
+                ##self.ui.advSplitter.setSizes(sizes)
+
+    def forceSimpleClicked(self):
+        self.ui.advancedBtn.setChecked(False)
+        self.setSimpleMode(True)
+
+    def forceAdvancedClicked(self):
+        self.ui.advancedBtn.setChecked(True)
+        self.setSimpleMode(False)
 
     def updateWidgets(self):
         ## show/hide widgets depending on the current mode.
         if self.ui.advancedBtn.isChecked():
-            for w in self.advancedGroup:
-                w.show()
-            self.ui.stimulusTree.hide()
             self.ui.errorText.setVisible(self.ui.errorBtn.isChecked())
+            #for w in self.advancedGroup:
+                #w.show()
+            #self.ui.stimulusTree.hide()
             if self.ui.helpBtn.isChecked():
-                self.ui.stack.setCurrentIndex(1)
+                self.ui.stack.setCurrentIndex(3)
             else:
-                self.ui.stack.setCurrentIndex(0)
+                self.ui.stack.setCurrentIndex(2)
         else:
-            self.ui.stack.setCurrentIndex(0)
-            for w in self.advancedGroup:
-                w.hide()
-            self.ui.stimulusTree.show()
+            if self.simpleMode:
+                self.ui.stack.setCurrentIndex(0)
+            else:
+                self.ui.stack.setCurrentIndex(1)
+            #for w in self.advancedGroup:
+                #w.hide()
+            #self.ui.stimulusTree.show()
             self.ui.errorText.hide()
-            
 
-
+    def setSimpleMode(self, simple):
+        self.simpleMode = simple
+        self.updateWidgets()
 
     def funcChanged(self):
         ## called when the function string changes
-        # test function. If ok, auto-update
         self.clearCache()
-        if self.test():
-            self.autoUpdate()
-            #self.emit(QtCore.SIGNAL('functionChanged'))
-            self.sigFunctionChanged.emit()
-        #self.emit(QtCore.SIGNAL('stateChanged'))
-        self.sigStateChanged.emit()
+        self.setSimpleMode(False)
         
+        if self.test(): # test function. If ok, auto-update
+            self.autoUpdate()
+            self.sigFunctionChanged.emit()
+        self.sigStateChanged.emit()
 
     def seqParamsChanged(self, *args):
         ## called when advanced sequence parameter tree has changed
         
         ## need to filter out some uninteresting events here..
         
+        self.setSimpleMode(False)
         self.clearCache()
         self.pSpace = None
         if self.test():
             self.autoUpdate()
-        #self.emit(QtCore.SIGNAL('parametersChanged'))
         self.sigParametersChanged.emit()
-        #self.emit(QtCore.SIGNAL('stateChanged'))
         self.sigStateChanged.emit()
-        
-
-    #def paramChanged(self):
-        ### called when the param string changes
-        ## test params. If ok, auto-update
-        #self.clearCache()
-        #self.pSpace = None
-        #if self.test():
-            #self.autoUpdate()
-        ##self.emit(QtCore.SIGNAL('parametersChanged'))
-        #self.sigParametersChanged.emit()
-        ##self.emit(QtCore.SIGNAL('stateChanged'))
-        #self.sigStateChanged.emit()
-
+    
     def stimParamsChanged(self, param, changes):
         ## called when the simple stim generator tree changes
-        #print "PARAM CHANGES:", changes
         funcStr, params = self.stimParams.compile()
-        self.ui.functionText.setPlainText(funcStr)
-        #self.ui.paramText.setPlainText('\n'.join(params))
-        #print "set seq state:", params
-        #import traceback
-        #traceback.print_stack()
-        self.seqParams.setState(params)
-
-    def functionString(self):
-        return str(self.ui.functionText.toPlainText())
         
-    #def paramString(self):
-        #return str(self.ui.paramText.toPlainText())
+        self.blockSignals(True) ## avoid emitting dataChanged signals twice
+        try:
+            self.seqParams.setState(params)
+        finally:
+            self.blockSignals(False)
+        self.sigParametersChanged.emit()
+        
+        self.ui.functionText.setPlainText(funcStr)
+        self.setSimpleMode(True)
+
     
     
     def test(self):
@@ -275,12 +273,18 @@ class StimGenerator(QtGui.QWidget):
     def loadState(self, state):
         """set the parameters with the new state"""
         if 'function' in state:
+            self.ui.advancedBtn.setChecked(True)
             self.ui.functionText.setPlainText(state['function'])
+            
         if 'params' in state:
+            self.ui.advancedBtn.setChecked(True)
             #self.ui.paramText.setPlainText(state['params'])
             self.seqParams.setState(state['params'])
+            self.setSimpleMode(False)
         if 'autoUpdate' in state:
+            self.ui.advancedBtn.setChecked(False)
             self.ui.autoUpdateCheck.setChecked(state['autoUpdate'])
+            self.setSimpleMode(True)
 
     def paramSpace(self):
         """Return an ordered dict describing the parameter space"""

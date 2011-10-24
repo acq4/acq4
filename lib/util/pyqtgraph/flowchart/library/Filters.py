@@ -3,7 +3,7 @@ from PyQt4 import QtCore, QtGui
 from ..Node import Node
 from scipy.signal import detrend
 from scipy.ndimage import median_filter, gaussian_filter
-from SignalProxy import *
+#from pyqtgraph.SignalProxy import SignalProxy
 from metaarray import *
 import functions
 from common import *

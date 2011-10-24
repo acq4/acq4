@@ -53,7 +53,7 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         ## called when the parameter's value has changed
         pass
     
-    def treeChanged(self):
+    def treeWidgetChanged(self):
         """Called when this item is added or removed from a tree.
         Expansion, visibility, and column widgets must all be configured AFTER 
         the item is added to a tree, not during __init__.
@@ -64,7 +64,7 @@ class ParameterItem(QtGui.QTreeWidgetItem):
     def childAdded(self, param, child, pos):
         item = child.makeTreeItem(depth=self.depth+1)
         self.insertChild(pos, item)
-        item.treeChanged()
+        item.treeWidgetChanged()
         
         for i, ch in enumerate(child):
             item.childAdded(child, ch, i)
