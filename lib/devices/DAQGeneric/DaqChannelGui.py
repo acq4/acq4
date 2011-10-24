@@ -145,6 +145,7 @@ class DaqChannelGui(QtGui.QWidget):
 class OutputChannelGui(DaqChannelGui):
     
     sigSequenceChanged = QtCore.Signal(object)
+    sigDataChanged = QtCore.Signal(object)
     
     def __init__(self, *args):
         DaqChannelGui.__init__(self, *args)
@@ -253,7 +254,7 @@ class OutputChannelGui(DaqChannelGui):
         for k in ps:
             params[k] = range(len(ps[k]))
         waves = []
-        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys())
+        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys()) ## appends waveforms for the entire parameter space to waves
         for w in waves:
             if w is not None:
                 self.ui.functionCheck.setChecked(True)
@@ -266,6 +267,7 @@ class OutputChannelGui(DaqChannelGui):
             self.plotCurve(single, color=QtGui.QColor(200, 100, 100))
             #print "===single==", single.min(), single.max()
         #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        self.sigDataChanged.emit(self)
         
     def taskStarted(self, params):
         ## Draw green trace for current command waveform

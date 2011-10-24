@@ -117,6 +117,7 @@ class Laser(DAQGeneric):
             daqConfig['pCell'] = {'channel': config['pCell']['channel'], 'type': 'ao'}
             self.hasPCell = True
                         
+        daqConfig['power'] = {'type': 'ao', 'units': 'W'}
         DAQGeneric.__init__(self, manager, daqConfig, name)
         
        
@@ -285,7 +286,57 @@ class Laser(DAQGeneric):
         
     def getPCellWaveform(self, powerCmd):
         ### return a waveform of pCell voltages to give the power in powerCmd
-        pass
+        raise Exception("Support for pockel cells is not yet implemented.")
+    
+
+    def getChannelCmds(self, cmd, rate):
+        ### cmd is a dict and can contain 'powerWaveform' or 'switchWaveform' keys with the array as a value
+        nPts = len(powerCmd)
+        daqCmd = {}
+        
+        if 'switchWaveform' in cmd:
+            with self.variableLock:
+                if self.params['useExpectedPower']:
+                    power = self.params['expectedPower']
+                else:
+                    power = self.params['currentPower']
+                transmission = self.params['scopeTransmission']
+                #transmission = 0.1
+            powerCmd = cmd['switchWaveform']*power*transmission
+            vals = unique(cmd['switchWaveform'])
+            if not self.hasPCell and (1 or 1.0) not in vals: ## check to make sure we can give the specified power.
+                raise Exception('An analog power modulator is neccessary to get power values other than zero and one (full power). The following values (as percentages of full power) were requested: %s. This %s device does not have an analog power modulator.' %(str(vals), self.name)
+        elif 'powerWaveform' in cmd:
+            powerCmd = cmd['powerWaveform']
+        else:
+            raise Exception('Not sure how to generate channel commands for %s' %str(cmd))
+        
+        #if self.dev.config.get('pCell', None) is not None:
+        if self.hasPCell:
+            ## convert power values using calibration data
+            daqCmd['pCell'] = self.getPCellWaveform(powerCmd)
+        else:
+            if len(unique(powerCmd)) > 2: ## check to make sure command doesn't specify powers we can't do
+                raise Exception("%s device does not have an analog power modulator, so can only have a binary power command." %str(self.name))
+            
+        if self.hasQSwitch:
+        #if self.dev.config.get('qSwitch', None) is not None:
+            qswitchCmd = np.zeros(nPts, dtype=np.byte)
+            qswitchCmd[powerCmd < 1e-5] = 1
+            daqCmd['qSwitch'] = qswitchCmd
+            
+        if self.hasTriggerableShutter:
+            shutterCmd = np.zeros(nPts, dtype=np.byte)
+            delay = self.config['shutter'].get('delay', 0.0) 
+            shutterCmd[powerCmd != 0] = 1 ## open shutter when we expect power
+            ## open shutter a little before we expect power because it has a delay
+            delayPts = int(delay*rate) 
+            a = np.argwhere(shutterCmd[1:]-shutterCmd[:-1] == 1)
+            for i,x in enumerate(a):
+                shutterCmd[a[i]-delayPts:a[i]+1] = 1
+            daqCmd['shutter'] = shutterCmd
+            
+        return daqCmd
 
             
     def testProtocol(self):
@@ -334,17 +385,22 @@ class LaserTask(DAQGenericTask):
                                        ## the device will generate its own command structure with the requested pulse energies.
                                        ## duration may only be specified if a modulator is available.
                                        
-                                       #### shutterWaveform and shutterMode are exclusive; if shutterWaveform is specified shutterMode will be ignored
-        'shutterWaveform': array(...)  ## array of 0/1 values that specify whether shutter is open (1) or closed (0)
+                                       
+                                       #####   Specifically specifying the waveform for the qSwitch, pCell or shutter gets precedent over waveforms that might be calculated from a 'powerWaveform', 'switchWaveform', or 'pulses' cmd
+        'pCell': array(....),          ## array of voltages to pass through to pCell
+        'qSwitch: array(....),         ## array of 0/1 values that specify whether qSwitch is off (0) or on (1)           
+        'shutter': array(...),         ## array of 0/1 values that specify whether shutter is open (1) or closed (0)
+        
+                                       #### 'shutter' and 'shutterMode' are exclusive; if 'shutter' is specified shutterMode will be ignored
         'shutterMode': 'auto',         ## specifies how the shutter should be used:
                                        ##   auto -- the shutter is opened immediately (with small delay) before laser output is needed
-                                       ##           and closed immediately (with no delay) after.
+                                       ##           and closed immediately (with no delay) after. Default.
                                        ##   open -- the shutter is opened for the whole protocol and returned to its holding state afterward
                                        ##   closed -- the shutter is kept closed for the protocol and returned to its holding state afterward
                                        
         'wavelength': x,               ## sets the wavelength before executing the protocol
         'checkPower': True,            ## If true, the laser will check its output power before executing the protocol. 
-        'pCellRaw': array(....),       ## array of voltages to pass through to pCell, overrides any other waveforms that would use the pCell
+        
     }
     
     """
@@ -364,99 +420,67 @@ class LaserTask(DAQGenericTask):
 
         DAQGenericTask.__init__(self, dev, cmd['daqProtocol'])
         
-    def generateDaqProtocol(self, waveform):
-        ### waveform should be in units of power
-        nPts = len(waveform)
-        daqCmd = {}
-        
-        #if self.dev.config.get('pCell', None) is not None:
-        if self.dev.hasPCell:
-            ## convert power values using calibration data
-            daqCmd['pCell'] = self.dev.getPCellWaveform(waveform)
-            
-        if self.dev.hasQSwitch:
-        #if self.dev.config.get('qSwitch', None) is not None:
-            qswitchCmd = np.zeros(nPts, dtype=np.byte)
-            qswitchCmd[waveform != 0] = 1
-            daqCmd['qSwitch'] = qswitchCmd
-            
-        return daqCmd
-        
     def configure(self, tasks, startOrder):
-        ## need to generate shutter, qswitch and pcell waveforms that get passed into DaqGenericTask
-        
-        ## make finding the name of the daq a little more robust
+        ##  Get rate: first get name of DAQ, then ask the DAQ task for its rate
         if self.dev.hasTriggerableShutter:
+            ch = 'shutter'
             daqName = self.dev.getDAQName('shutter')
         elif self.dev.hasPCell:
+            ch = 'pCell'
             daqName = self.dev.getDAQName('pCell')
         elif self.dev.hasQSwitch:
+            ch = 'qSwitch'
             daqName = self.dev.getDAQName('qSwitch')
         else:
             raise HelpfulException("LaserTask can't find name of DAQ device to use for this protocol.")
-        
         daqTask = tasks[daqName]
-        rate = daqTask.getChanSampleRate(self.dev.config['shutter']['channel'][1])
+        rate = daqTask.getChanSampleRate(self.dev.config[ch]['channel'][1])
         
-        ### generate power waveforms
+        ### do a power check if requested
         if self.cmd.get('checkPower', False):
             self.dev.outputPower()
-        if 'powerWaveform' in self.cmd:
-            if self.dev.config.get('pCell', None) is None:
-                raise Exception("%s device does not have a pockelCell, so cannot have an analog power command." %str(self.dev.name))
-            self.cmd['daqProtocol'] = self.generateDaqProtocol(self.cmd['powerWaveform'])
-           
             
-            
-        elif 'switchWaveform' in self.cmd:
-            ## convert range 0-1 to full voltage range of device
-            
-            ## make function in dev instead
-            with self.dev.variableLock:
-                if self.dev.params['useExpectedPower']:
-                    power = self.dev.params['expectedPower']
-                else:
-                    power = self.dev.params['currentPower']
-                transmission = self.dev.params['scopeTransmission']
-                transmission = 0.1
-            powerCmd = self.cmd['switchWaveform']*power*transmission
-            self.cmd['daqProtocol'] = self.generateDaqProtocol(powerCmd)
-           
-            
-                       
-        elif 'pulse' in self.cmd:
-            pass  ## generate pulse waveform
-        
-        ### set up shutter
-        if 'shutterWaveform' in self.cmd:
-            self.cmd['daqProtocol']['shutter'] = self.cmd['shutterWaveform']
-        elif 'shutterMode' in self.cmd:
-            print self.cmd
-            waveform = self.cmd['daqProtocol'].get('qSwitch', self.cmd['daqProtocol'].get('pCell', None))
-            nPts = self.cmd[daqName]['numPts']
-            shutterCmd = np.zeros(nPts, dtype=np.byte)
-            if self.cmd['shutterMode'] is 'auto':  
-                delay = self.dev.config['shutter'].get('delay', 0.0) 
-                shutterCmd[waveform != 0] = 1 ## open shutter when we expect power
-                ## open shutter a little before we expect power because it has a delay
-                delayPts = int(delay*rate)
-                a = np.argwhere(shutterCmd[1:]-shutterCmd[:-1] == 1)
-                for i in range(len(a)):
-                    shutterCmd[a[i]-delayPts:a[i]+1] = 1
-            elif self.cmd['shutterMode'] is 'closed':
-                pass
-            elif self.cmd['shutterMode'] is 'open':
-                shutterCmd[:] = 1
-            self.cmd['daqProtocol']['shutter'] = shutterCmd
-            
+        ### set wavelength
         if 'wavelength' in self.cmd:
             self.dev.setWavelength(self.cmd['wavelength'])
-        if 'pCellRaw' in self.cmd:
-            self.cmd['daqProtocol']['pCell'] = self.cmd['pCellRaw']
+            
+            
+        ### send power/switch waveforms to device for pCell/qSwitch/shutter cmd calculation
+        if 'powerWaveform' in self.cmd:
+            calcCmds = self.dev.getChannelCmds({'powerWaveform':self.cmd['powerWaveform']}, rate)
+        elif 'switchWaveform' in self.cmd:
+            calcCmds = self.dev.getChannelCmds({'switchWaveform':self.cmd['switchWaveform']}, rate)
+        elif 'pulse' in self.cmd:
+            raise Exception('Support for (pulseTime/energy) pair commands is not yet implemented.')
+
+        
+        ### set up shutter, qSwitch and pCell
+        if 'shutter' in self.cmd:
+            self.cmd['daqProtocol']['shutter'] = self.cmd['shutter']
+        elif 'shutterMode' in self.cmd:
+            if self.cmd['shutterMode'] is 'auto':
+                self.cmd['daqProtocol']['shutter'] = calcCmds['shutter']
+            elif self.cmd['shutterMode'] is 'closed':
+                self.cmd['daqProtocol']['shutter'] = np.zeros(len(calcCmds['shutter']), dtype=np.byte)
+            elif self.cmd['shutterMode'] is 'open':
+                self.cmd['daqProtocol']['shutter'] = np.ones(len(calcCmds['shutter']), dtype=np.byte)
+            
+        if 'pCell' in self.cmd:
+            self.cmd['daqProtocol']['pCell'] = self.cmd['pCell']
+        elif 'pCell' in calcCmds:
+            self.cmd['daqProtocol']['pCell'] = calcCmds['pCell']
+            
+        if 'qSwitch' in self.cmd:
+            self.cmd['daqProtocol']['qSwitch'] = self.cmd['qSwitch']
+        elif 'qSwitch' in calcCmds:
+            self.cmd['daqProtocol']['qSwitch'] = calcCmds['qSwitch']
+            
+            
         self._DAQCmd = self.cmd['daqProtocol']
         
         DAQGenericTask.configure(self, tasks, startOrder)
 
+        
     def getResult(self):
         ## getResult from DAQGeneric, then add in command waveform
         pass

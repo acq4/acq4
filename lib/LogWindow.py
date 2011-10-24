@@ -279,7 +279,7 @@ class LogWidget(QtGui.QWidget):
         
         
     def loadFile(self, f):
-        """Loads the file, f. f must be able to be read by configfile.py"""
+        """Load the file, f. f must be able to be read by configfile.py"""
         log = configfile.readConfigFile(f)
         self.entries = []
         self.entryArray = np.zeros(len(log),dtype=[
@@ -484,7 +484,7 @@ class LogWidget(QtGui.QWidget):
             msg = msg[:-1]     
         msg = '<br />'.join(msg.split('\n'))
         if timeStamp is not None:
-            strn = '<b style="color:black"> %s </b> <span style="color:%s"> %s </span>' % (timeStamp, colorStr, msg)
+            strn = '<b style="color:black"> %s </b> <span style="color:%s"> %s </span>' % (timeStamp, colorStr, msg) 
         else:
             strn = '<span style="color:%s"> %s </span>' % (colorStr, msg)
         #self.ui.output.appendHtml(strn)
