@@ -41,11 +41,11 @@ class StimGenerator(QtGui.QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.ui.functionText.setFontFamily('Courier')
-        #self.ui.paramText.setFontFamily('Courier')
         self.ui.errorText.setVisible(False)
         
         self.simpleMode = True  ## if True, then the current state was generated from 
                                 ## the simple tree. Otherwise, it was generated in advanced mode.
+        self.lockMode = False   ## used to temporarily block changes to simpleMode
         
         self.pSpace = None    ## cached sequence parameter space
         
@@ -53,13 +53,7 @@ class StimGenerator(QtGui.QWidget):
         self.cacheRate = None
         self.cacheNPts = None
         
-        #self.advancedGroup = [
-            #self.ui.advSplitter,
-            ##self.ui.functionText,
-            ##self.ui.seqTree,
-            #self.ui.errorBtn,
-            #self.ui.helpBtn,
-        #]
+        self.setError()
         self.updateWidgets()
         
         self.meta = {  ## holds some extra information about signals (units, expected scale and range, etc)
@@ -188,26 +182,30 @@ class StimGenerator(QtGui.QWidget):
 
     def updateWidgets(self):
         ## show/hide widgets depending on the current mode.
+        errVis = self.ui.errorBtn.isChecked()
+        self.ui.errorText.setVisible(errVis)
+        if errVis or str(self.ui.errorText.toPlainText()) != '':
+            self.ui.errorBtn.show()
+        else:
+            self.ui.errorBtn.hide()
+        
+        if self.ui.helpBtn.isChecked():
+            self.ui.stack.setCurrentIndex(3)
+            return
         if self.ui.advancedBtn.isChecked():
-            self.ui.errorText.setVisible(self.ui.errorBtn.isChecked())
-            #for w in self.advancedGroup:
-                #w.show()
-            #self.ui.stimulusTree.hide()
-            if self.ui.helpBtn.isChecked():
-                self.ui.stack.setCurrentIndex(3)
-            else:
-                self.ui.stack.setCurrentIndex(2)
+            self.ui.stack.setCurrentIndex(2)
         else:
             if self.simpleMode:
                 self.ui.stack.setCurrentIndex(0)
             else:
                 self.ui.stack.setCurrentIndex(1)
-            #for w in self.advancedGroup:
-                #w.hide()
-            #self.ui.stimulusTree.show()
-            self.ui.errorText.hide()
+
 
     def setSimpleMode(self, simple):
+        if self.lockMode or self.simpleMode == simple:
+            return
+        if simple:
+            self.stimParamsChanged()  ## to clear out advanced-mode settings
         self.simpleMode = simple
         self.updateWidgets()
 
@@ -234,19 +232,23 @@ class StimGenerator(QtGui.QWidget):
         self.sigParametersChanged.emit()
         self.sigStateChanged.emit()
     
-    def stimParamsChanged(self, param, changes):
+    def stimParamsChanged(self, param=None, changes=None):
         ## called when the simple stim generator tree changes
         funcStr, params = self.stimParams.compile()
         
-        self.blockSignals(True) ## avoid emitting dataChanged signals twice
         try:
-            self.seqParams.setState(params)
+            self.lockMode = True
+            self.blockSignals(True) ## avoid emitting dataChanged signals twice
+            try:
+                self.seqParams.setState(params)
+            finally:
+                self.blockSignals(False)
+            self.sigParametersChanged.emit()
+            
+            self.ui.functionText.setPlainText(funcStr)
         finally:
-            self.blockSignals(False)
-        self.sigParametersChanged.emit()
-        
-        self.ui.functionText.setPlainText(funcStr)
-        self.setSimpleMode(True)
+            self.lockMode = False
+        #self.setSimpleMode(True)
 
     
     
@@ -275,12 +277,16 @@ class StimGenerator(QtGui.QWidget):
         if 'function' in state:
             self.ui.advancedBtn.setChecked(True)
             self.ui.functionText.setPlainText(state['function'])
-            
+            self.setSimpleMode(False)
         if 'params' in state:
             self.ui.advancedBtn.setChecked(True)
             #self.ui.paramText.setPlainText(state['params'])
             self.seqParams.setState(state['params'])
             self.setSimpleMode(False)
+        if 'stimuli' in state:
+            self.stimParams.setState(state['stimuli'])
+            self.setSimpleMode(True)
+            
         if 'autoUpdate' in state:
             self.ui.advancedBtn.setChecked(False)
             self.ui.autoUpdateCheck.setChecked(state['autoUpdate'])
@@ -324,9 +330,12 @@ class StimGenerator(QtGui.QWidget):
         if msg is None or msg == '':
             self.ui.errorText.setText('')
             self.ui.errorBtn.setStyleSheet('')
+            #self.ui.errorBtn.hide()
         else:
             self.ui.errorText.setText(msg)
             self.ui.errorBtn.setStyleSheet('QToolButton {border: 2px solid #F00; border-radius: 3px}')
+            #self.ui.errorBtn.show()
+        self.updateWidgets()
             
         
     def getSingle(self, rate, nPts, params=None):

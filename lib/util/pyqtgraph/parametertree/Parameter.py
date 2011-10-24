@@ -33,6 +33,7 @@ class Parameter(QtCore.QObject):
     sigChildRemoved = QtCore.Signal(object, object)  ## self, child
     sigParentChanged = QtCore.Signal(object, object)  ## self, parent
     sigLimitsChanged = QtCore.Signal(object, object)  ## self, limits
+    sigDefaultChanged = QtCore.Signal(object, object)  ## self, default
     sigNameChanged = QtCore.Signal(object, object)  ## self, name
     sigOptionsChanged = QtCore.Signal(object, object)  ## self, {opt:val, ...}
     
@@ -96,6 +97,7 @@ class Parameter(QtCore.QObject):
         self.sigChildRemoved.connect(lambda param, data: self.emitStateChanged('childRemoved', data))
         self.sigParentChanged.connect(lambda param, data: self.emitStateChanged('parent', data))
         self.sigLimitsChanged.connect(lambda param, data: self.emitStateChanged('limits', data))
+        self.sigDefaultChanged.connect(lambda param, data: self.emitStateChanged('default', data))
         self.sigNameChanged.connect(lambda param, data: self.emitStateChanged('name', data))
         self.sigOptionsChanged.connect(lambda param, data: self.emitStateChanged('options', data))
         
@@ -162,6 +164,7 @@ class Parameter(QtCore.QObject):
         
     def setDefault(self, val):
         self.opts['default'] = val
+        self.sigDefaultChanged.emit(self, val)
 
     def setToDefault(self):
         if self.hasDefault():

@@ -24,7 +24,9 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         param.sigChildRemoved.connect(self.childRemoved)
         param.sigNameChanged.connect(self.nameChanged)
         param.sigLimitsChanged.connect(self.limitsChanged)
+        param.sigDefaultChanged.connect(self.defaultChanged)
         param.sigOptionsChanged.connect(self.optsChanged)
+        
         
         opts = param.opts
         
@@ -102,6 +104,10 @@ class ParameterItem(QtGui.QTreeWidgetItem):
 
     def limitsChanged(self, param, limits):
         """Called when the parameter's limits have changed"""
+        pass
+    
+    def defaultChanged(self, param, default):
+        """Called when the parameter's default value has changed"""
         pass
 
     def optsChanged(self, param, opts):

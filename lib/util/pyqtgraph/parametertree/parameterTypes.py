@@ -28,11 +28,6 @@ class WidgetParameterItem(ParameterItem):
         opts = self.param.opts
         if 'tip' in opts:
             w.setToolTip(opts['tip'])
-        #w.setObjectName(name)
-        
-        ## now we just avoid displaying the widget
-        #if opts.get('readonly', False):
-            #w.setEnabled(False)
         
         self.defaultBtn = QtGui.QPushButton()
         self.defaultBtn.setFixedWidth(20)
@@ -40,7 +35,6 @@ class WidgetParameterItem(ParameterItem):
         modDir = os.path.dirname(__file__)
         self.defaultBtn.setIcon(QtGui.QIcon(os.path.join(modDir, 'default.png')))
         self.defaultBtn.clicked.connect(self.defaultClicked)
-        #self.defaultBtn.setEnabled(not self.param.valueIsDefault() )  ## handled in setValue
 
         self.displayLabel = QtGui.QLabel()
 
@@ -135,7 +129,11 @@ class WidgetParameterItem(ParameterItem):
             self.updateDisplayLabel(val)  ## always make sure label is updated, even if values match!
         finally:
             self.widget.sigChanged.connect(self.widgetValueChanged)
-        self.defaultBtn.setEnabled(not self.param.valueIsDefault() and self.param.writable())
+        self.updateDefaultBtn()
+        
+    def updateDefaultBtn(self):
+        ## enable/disable default btn 
+        self.defaultBtn.setEnabled(not self.param.valueIsDefault() and self.param.writable())        
 
     def updateDisplayLabel(self, value=None):
         """Update the display label to reflect the value of the parameter."""
@@ -177,13 +175,16 @@ class WidgetParameterItem(ParameterItem):
 
     def limitsChanged(self, param, limits):
         """Called when the parameter's limits have changed"""
-        ParameterTree.limitsChanged(self, param, limits)
+        WidgetParameterItem.limitsChanged(self, param, limits)
         
         t = self.param.opts['type']
         if t == 'int' or t == 'float':
             self.widget.setOpts(bounds=limits)
         else:
             return  ## don't know what to do with any other types..
+
+    def defaultChanged(self, param, value):
+        self.updateDefaultBtn()
 
     def treeWidgetChanged(self):
         """Called when this item is added or removed from a tree."""
