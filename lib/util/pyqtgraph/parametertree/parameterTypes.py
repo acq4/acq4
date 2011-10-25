@@ -169,6 +169,7 @@ class WidgetParameterItem(ParameterItem):
         if sel and self.param.writable():
             self.widget.show()
             self.displayLabel.hide()
+            self.widget.setFocus(QtCore.Qt.OtherFocusReason)
         elif self.hideWidget:
             self.widget.hide()
             self.displayLabel.show()
@@ -203,7 +204,11 @@ class WidgetParameterItem(ParameterItem):
     def optsChanged(self, param, opts):
         """Called when any options are changed that are not
         name, value, default, or limits"""
+        #print "opts changed:", opts
         ParameterItem.optsChanged(self, param, opts)
+        
+        if 'readonly' in opts:
+            self.updateDefaultBtn()
         
         ## If widget is a SpinBox, pass options straight through
         if isinstance(self.widget, SpinBox):
@@ -211,6 +216,7 @@ class WidgetParameterItem(ParameterItem):
                 opts['suffix'] = opts['units']
             self.widget.setOpts(**opts)
             self.updateDisplayLabel()
+            
 
 class SimpleParameter(Parameter):
     itemClass = WidgetParameterItem

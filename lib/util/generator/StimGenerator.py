@@ -206,6 +206,8 @@ class StimGenerator(QtGui.QWidget):
     def setSimpleMode(self, simple):
         if self.lockMode or self.simpleMode == simple:
             return
+        self.ui.advancedBtn.setChecked(not simple)
+
         if simple:
             self.stimParamsChanged()  ## to clear out advanced-mode settings
         self.simpleMode = simple
@@ -224,7 +226,8 @@ class StimGenerator(QtGui.QWidget):
     def seqParamsChanged(self, *args):
         ## called when advanced sequence parameter tree has changed
         
-        ## need to filter out some uninteresting events here..
+        #print "seqParamsChanged:", args, "\n"
+        ## should filter out some uninteresting events here..
         
         self.setSimpleMode(False)
         self.clearCache()
@@ -238,8 +241,9 @@ class StimGenerator(QtGui.QWidget):
         ## called when the simple stim generator tree changes
         funcStr, params = self.stimParams.compile()
         
+        #print "stimParamsChanged:", changes, "\n"
         try:
-            self.lockMode = True
+            self.lockMode = True    ## don't let anyone change the mode until we're done
             self.blockSignals(True) ## avoid emitting dataChanged signals twice
             try:
                 self.seqParams.setState(params)
@@ -259,7 +263,7 @@ class StimGenerator(QtGui.QWidget):
             self.paramSpace()
             self.setError()
         except:
-            self.setError("Error parsing parameters:\n" + str(sys.exc_info()[1]))
+            self.setError("Error in parameter list:\n" + str(sys.exc_info()[1]))
             return False
         try:
             self.getSingle(1, 1, params={'test': True})
@@ -272,27 +276,37 @@ class StimGenerator(QtGui.QWidget):
     def saveState(self):
         """ Return a dict structure with the state of the widget """
         #print "Saving state:", self.functionString()
-        return ({'function': self.functionString(), 'params': self.seqParams.getState(), 'autoUpdate': self.ui.autoUpdateCheck.isChecked()})
+        state = {
+            'function': self.functionString(), 
+            'params': self.seqParams.getState(), 
+            'autoUpdate': self.ui.autoUpdateCheck.isChecked(),
+            'simpleMode': self.simpleMode,
+        }
+        if self.simpleMode:
+            state['stimuli'] = self.stimParams.getState()
+        return state
     
     def loadState(self, state):
         """set the parameters with the new state"""
         if 'function' in state:
-            self.ui.advancedBtn.setChecked(True)
+            #self.ui.advancedBtn.setChecked(True)
             self.ui.functionText.setPlainText(state['function'])
-            self.setSimpleMode(False)
+            #self.setSimpleMode(False)
         if 'params' in state:
-            self.ui.advancedBtn.setChecked(True)
+            if isinstance(state['params'], basestring):
+                raise Exception("This is an old function generator save format :(")
+            #self.ui.advancedBtn.setChecked(True)
             #self.ui.paramText.setPlainText(state['params'])
             self.seqParams.setState(state['params'])
-            self.setSimpleMode(False)
+            #self.setSimpleMode(False)
         if 'stimuli' in state:
             self.stimParams.setState(state['stimuli'])
-            self.setSimpleMode(True)
-            
+            #self.setSimpleMode(True)
         if 'autoUpdate' in state:
-            self.ui.advancedBtn.setChecked(False)
+            #self.ui.advancedBtn.setChecked(False)
             self.ui.autoUpdateCheck.setChecked(state['autoUpdate'])
-            self.setSimpleMode(True)
+        if 'simpleMode' in state:
+            self.setSimpleMode(state['simpleMode'])
 
     def paramSpace(self):
         """Return an ordered dict describing the parameter space"""
