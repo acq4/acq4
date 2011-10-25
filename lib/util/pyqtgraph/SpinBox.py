@@ -69,7 +69,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         
         self.decOpts = ['step', 'minStep']
         
-        self.val = D(str(value))  ## Value is precise decimal. Ordinary math not allowed.
+        self.val = D(unicode(value))  ## Value is precise decimal. Ordinary math not allowed.
         self.updateText()
         self.skipValidate = False
         self.setCorrectionMode(self.CorrectToPreviousValue)
@@ -88,9 +88,9 @@ class SpinBox(QtGui.QAbstractSpinBox):
                     if opts[k][i] is None:
                         self.opts[k][i] = None
                     else:
-                        self.opts[k][i] = D(str(opts[k][i]))
+                        self.opts[k][i] = D(unicode(opts[k][i]))
             elif k in ['step', 'minStep']:
-                self.opts[k] = D(str(opts[k]))
+                self.opts[k] = D(unicode(opts[k]))
             elif k == 'value':
                 pass   ## don't set value until bounds have been set
             else:
@@ -166,7 +166,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
             #traceback.print_stack()
         if self.opts['int']:
             value = int(value)
-        value = D(str(value))
+        value = D(unicode(value))
         if value == self.val:
             #print "  value not changed; ignore."
             return
@@ -188,10 +188,10 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.lineEdit().setStyleSheet('border: 0px;')
 
     def setMaximum(self, m):
-        self.opts['bounds'][1] = D(str(m))
+        self.opts['bounds'][1] = D(unicode(m))
     
     def setMinimum(self, m):
-        self.opts['bounds'][0] = D(str(m))
+        self.opts['bounds'][0] = D(unicode(m))
         
     def setPrefix(self, p):
         self.setOpts(prefix=p)
@@ -291,20 +291,21 @@ class SpinBox(QtGui.QAbstractSpinBox):
     def editingFinishedEvent(self):
         """Edit has finished; set value."""
         #print "Edit finished."
+        if unicode(self.lineEdit().text()) == self.lastText:
+            #print "no text change."
+            return
         try:
-            if str(self.lineEdit().text()) == self.lastText:
-                #print "no text change."
-                return
             val = self.interpret()
-            if val is False:
-                #print "value invalid:", str(self.lineEdit().text())
-                return
-            if val == self.val:
-                #print "no value change:", val, self.val
-                return
-            self.setValue(val, delaySignal=False)  ## allow text update so that values are reformatted pretty-like
         except:
-            pass
+            return
+        
+        if val is False:
+            #print "value invalid:", str(self.lineEdit().text())
+            return
+        if val == self.val:
+            #print "no value change:", val, self.val
+            return
+        self.setValue(val, delaySignal=False)  ## allow text update so that values are reformatted pretty-like
         
     #def textChanged(self):
         #print "Text changed."

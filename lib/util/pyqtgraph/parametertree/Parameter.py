@@ -69,7 +69,15 @@ class Parameter(QtCore.QObject):
     def __init__(self, **opts):
         QtCore.QObject.__init__(self)
         
-        self.opts = opts
+        self.opts = {
+            'readonly': False,
+            'visible': True,
+            'enabled': True,
+            'renamable': False,
+            'removable': False,
+        }
+        self.opts.update(opts)
+        
         self.childs = []
         self.names = {}
         self.items = weakref.WeakKeyDictionary()
@@ -78,18 +86,18 @@ class Parameter(QtCore.QObject):
         self.blockTreeChangeEmit = 0
         #self.monitoringChildren = False  ## prevent calling monitorChildren more than once
         
-        if 'value' not in opts:
-            opts['value'] = None
+        if 'value' not in self.opts:
+            self.opts['value'] = None
         
-        if 'name' not in opts or not isinstance(opts['name'], basestring):
+        if 'name' not in self.opts or not isinstance(self.opts['name'], basestring):
             raise Exception("Parameter must have a string name specified in opts.")
         
-        for chOpts in opts.get('params', []):
+        for chOpts in self.opts.get('params', []):
             #print self, "Add child:", type(chOpts), id(chOpts)
             self.addChild(chOpts)
             
-        if 'value' in opts and 'default' not in opts:
-            opts['default'] = opts['value']
+        if 'value' in self.opts and 'default' not in self.opts:
+            self.opts['default'] = self.opts['value']
     
         ## Connect all state changed signals to the general sigStateChanged
         self.sigValueChanged.connect(lambda param, data: self.emitStateChanged('value', data))
@@ -157,7 +165,6 @@ class Parameter(QtCore.QObject):
         state = self.opts.copy()
         state['params'] = {ch.name(): ch.saveState() for ch in self}
         return state
-
 
     def defaultValue(self):
         return self.opts['default']
