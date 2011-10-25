@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Mon Oct 24 16:19:44 2011
+# Created: Tue Oct 25 09:54:36 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -272,5 +272,5 @@ class Ui_Form(object):
         self.hideMarkerBtn.setText(QtGui.QApplication.translate("Form", "Hide Spot Marker", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph.TreeWidget import TreeWidget
+from pyqtgraph.PlotWidget import PlotWidget
 from pyqtgraph.SpinBox import SpinBox
-from plotwidget import PlotWidget

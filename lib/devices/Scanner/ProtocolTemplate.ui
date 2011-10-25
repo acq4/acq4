@@ -515,7 +515,8 @@ p, li { white-space: pre-wrap; }
   <customwidget>
    <class>PlotWidget</class>
    <extends>QWidget</extends>
-   <header>plotwidget.h</header>
+   <header>pyqtgraph.PlotWidget</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources/>

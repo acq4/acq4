@@ -305,7 +305,7 @@ class Laser(DAQGeneric):
             powerCmd = cmd['switchWaveform']*power*transmission
             vals = unique(cmd['switchWaveform'])
             if not self.hasPCell and (1 or 1.0) not in vals: ## check to make sure we can give the specified power.
-                raise Exception('An analog power modulator is neccessary to get power values other than zero and one (full power). The following values (as percentages of full power) were requested: %s. This %s device does not have an analog power modulator.' %(str(vals), self.name)
+                raise Exception('An analog power modulator is neccessary to get power values other than zero and one (full power). The following values (as percentages of full power) were requested: %s. This %s device does not have an analog power modulator.' %(str(vals), self.name))
         elif 'powerWaveform' in cmd:
             powerCmd = cmd['powerWaveform']
         else:
