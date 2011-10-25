@@ -176,7 +176,7 @@ class WidgetParameterItem(ParameterItem):
 
     def limitsChanged(self, param, limits):
         """Called when the parameter's limits have changed"""
-        WidgetParameterItem.limitsChanged(self, param, limits)
+        ParameterItem.limitsChanged(self, param, limits)
         
         t = self.param.opts['type']
         if t == 'int' or t == 'float':

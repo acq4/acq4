@@ -44,7 +44,7 @@ def fileDialog():
 def logSpace(start, stop, num):
     num = int(num)
     d = (stop / start) ** (1./num)
-    return start * (d ** arange(0, num+1))
+    return start * (d ** np.arange(0, num+1))
 
 def linSpace(start, stop, num):
     return np.linspace(start, stop, num)
@@ -1787,7 +1787,7 @@ def tauiness(data, win, step=10):
     result = np.empty((len(ivals), 4), dtype=float)
     for i in range(len(ivals)):
         j = ivals[i]
-        v = fitExpDecay(arange(win), data[j:j+win], measureError=True)
+        v = fitExpDecay(np.arange(win), data[j:j+win], measureError=True)
         result[i] = np.array(list(v[0]) + [sum(abs(v[3]))])
         #result[i][0] = xvals[j]
         #result[i][1] = j

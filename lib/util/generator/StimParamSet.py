@@ -22,6 +22,11 @@ class StimParamSet(GroupParameter):
             for ax in self.meta:
                 self.setMeta(ax, self.meta[ax], ch)
 
+    def addChild(self, ch):
+        GroupParameter.addChild(self, ch)
+        for ax in self.meta:
+            self.setMeta(ax, self.meta[ax], ch)
+
     def setMeta(self, axis, opts=None, root=None, **kargs):  ## set units, limits, etc.
         ## Set meta-properties (units, limits, readonly, etc.) for specific sets of values
         ## axis should be 'x', 'y', or 'xy'
@@ -136,6 +141,7 @@ class SeqParameter(SimpleParameter):
                 #seq = seq + "%s : %s / %d" % (self.valueString(self.start), self.valueString(self.stop), self['steps'])
             elif self['sequence'] == 'list':
                 seqData['list'] = self['list']
+                seqData['randomize'] = self['randomize']
                 #seq = seq + str(self['list'])
             return name, seqData
         
@@ -181,10 +187,11 @@ class PulseParameter(GroupParameter):
         if 'name' not in kargs:
             kargs['name'] = 'Pulse'
             kargs['autoIncrementName'] = True
+        kargs['strictNaming'] = True
         GroupParameter.__init__(self, type="pulse", removable=True, renamable=True,
             params=[
-                SeqParameter(**{'name': 'start', 'type': 'float', 'axis': 'x', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True}),
-                SeqParameter(**{'name': 'length', 'type': 'float', 'axis': 'x', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True}),
+                SeqParameter(**{'name': 'start', 'type': 'float', 'axis': 'x', 'value': 0.01,}),
+                SeqParameter(**{'name': 'length', 'type': 'float', 'axis': 'x', 'value': 0.01}),
                 SeqParameter(**{'name': 'amplitude', 'type': 'float', 'axis': 'y', 'value': 0}),
                 SeqParameter(**{'name': 'sum', 'type': 'float', 'axis': 'xy', 'value': 0, 'limits': (0, None),
                     'params': [{'name': 'affect', 'type': 'list', 'values': ['length', 'amplitude'], 'value': 'length'}]
@@ -224,10 +231,14 @@ class PulseParameter(GroupParameter):
         (sumName, sumSeq) = self.sum.compile()
         if sumSeq is not None:
             if self.sum['affect'] == 'length':
+                if not self.length.writable():
+                    raise Exception("%s: Can not sequence over length; it is a read-only parameter." % self.name())
                 if lenSeq is not None:
                     raise Exception("%s: Can not sequence over length and sum simultaneously." % self.name())
                 length = "%s / (%s)" % (sumName, amp)
             else:
+                if not self.amplitude.writable():
+                    raise Exception("%s: Can not sequence over amplitude; it is a read-only parameter." % self.name())
                 if ampSeq is not None:
                     raise Exception("%s: Can not sequence over amplitude and sum simultaneously." % self.name())
                 amp = "%s / (%s)" % (sumName, length)
@@ -252,7 +263,11 @@ class PulseParameter(GroupParameter):
 
 class PulseTrainParameter(GroupParameter):
     def __init__(self, **kargs):
-        GroupParameter.__init__(self, name="Pulse Train", autoIncrementName=True, type="pulseTrain", removable=True, renamable=True,
+        if 'name' not in kargs:
+            kargs['name'] = 'PulseTrain'
+            kargs['autoIncrementName'] = True
+        kargs['strictNaming'] = True
+        GroupParameter.__init__(self, type="pulseTrain", removable=True, renamable=True,
         params=[
             {'name': 'start', 'type': 'float', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True},
             {'name': 'pulse length', 'type': 'float', 'value': 0.005, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True},

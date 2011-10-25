@@ -1,6 +1,6 @@
 import os, sys, user
 md = os.path.abspath(os.path.dirname(__file__))
-sys.path.append(os.path.join(md, '..'))
+sys.path.insert(0, os.path.join(md, '..'))
 
 import pyqtgraph as pg
 import SequenceRunner
@@ -45,7 +45,7 @@ sg.sigDataChanged.connect(plotData)
 
 
 sg.loadState({
-    'simpleMode': False,
+    'advancedMode': True,
     'function': 'pulse(30*ms, 15*ms, amp)',
     'params': {
         'amp':  {
@@ -60,12 +60,12 @@ sg.loadState({
 state1 = sg.saveState()
 
 sg.loadState({
-    'simpleMode': True,
+    'advancedMode': False,
     'stimuli': {
-        'pulse 1': {
+        'pulse': {
             'type': 'pulse',
             'start': {
-                'value': 0.1,
+                'value': 0.03,
                 'sequence': 'off'},
             'length': {
                 'value': 0.01,

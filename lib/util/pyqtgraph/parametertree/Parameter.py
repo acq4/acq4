@@ -75,12 +75,13 @@ class Parameter(QtCore.QObject):
             'enabled': True,
             'renamable': False,
             'removable': False,
+            'strictNaming': False,  # forces name to be usable as a python variable
         }
         self.opts.update(opts)
         
         self.childs = []
-        self.names = {}
-        self.items = weakref.WeakKeyDictionary()
+        self.names = {}   ## map name:child
+        self.items = weakref.WeakKeyDictionary()  ## keeps track of tree items representing this parameter
         self._parent = None
         self.treeStateChanges = []  ## cache of tree state changes to be delivered on next emit
         self.blockTreeChangeEmit = 0
@@ -91,6 +92,7 @@ class Parameter(QtCore.QObject):
         
         if 'name' not in self.opts or not isinstance(self.opts['name'], basestring):
             raise Exception("Parameter must have a string name specified in opts.")
+        self.setName(opts['name'])
         
         for chOpts in self.opts.get('params', []):
             #print self, "Add child:", type(chOpts), id(chOpts)
@@ -117,6 +119,9 @@ class Parameter(QtCore.QObject):
     def setName(self, name):
         """Attempt to change the name of this parameter; return the actual name. 
         (The parameter may reject the name change or automatically pick a different name)"""
+        if self.opts['strictNaming']:
+            if len(name) < 1 or re.search(r'\W', name) or re.match(r'\d', name[0]):
+                raise Exception("Parameter name '%s' is invalid. (Must contain only alphanumeric and underscore characters and may not start with a number)" % name)
         parent = self.parent()
         if parent is not None:
             name = parent._renameChild(self, name)  ## first ask parent if it's ok to rename
