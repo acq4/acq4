@@ -45,16 +45,20 @@ class SpinBox(QtGui.QAbstractSpinBox):
             #'log': True,
             #'dec': False,
             
-            ## decimal scaling option
-            #'step': 0.1,    ## 
-            #'minStep': -2,
+            ## decimal scaling option - example
+            #'step': 0.1,    
+            #'minStep': .001,    
             #'log': False,
             #'dec': True,
            
             ## normal arithmetic step
-            'step': D('0.01'),
+            'step': D('0.01'),  ## if 'dec' is false, the spinBox steps by 'step' every time
+                                ## if 'dec' is True, the step size is relative to the value
+                                ## 'step' needs to be an integral divisor of ten, ie 'step'*n=10 for some integer value of n (but only if dec is True)
             'log': False,
-            'dec': False,
+            'dec': False,   ## if true, does decimal stepping. ie from 1-10 it steps by 'step', from 10 to 100 it steps by 10*'step', etc. 
+                            ## if true, minStep must be set in order to cross zero.
+            
             
             'int': False, ## Set True to force value to be integer
             

@@ -898,7 +898,7 @@ class ProtocolRunner(Module):
                                                ],
                                            tags={},
                                            importance=8,
-                                           addImportance=3,
+
                                            docSections=['userGuide/modules/ProtocolRunner/loadingNonexistentDevices']
                                            )
                 prot[d] = self.docks[d].widget().generateProtocol(p)

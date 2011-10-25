@@ -9,7 +9,8 @@ import os
 import time
 import numpy as np
 from scipy import stats
-from functions import siFormat
+from pyqtgraph.functions import siFormat
+from HelpfulException import HelpfulException
 
 
 
@@ -216,6 +217,23 @@ class Laser(DAQGeneric):
         
     def deviceInterface(self, win):
         return LaserDevGui(self)
+    
+    def getDAQName(self, channel=None):
+        if channel is None:
+            if self.hasTriggerableShutter:
+                ch = 'shutter'
+                daqName = DAQGeneric.getDAQName(self, 'shutter')
+            elif self.hasPCell:
+                ch = 'pCell'
+                daqName = DAQGeneric.getDAQName(self, 'pCell')
+            elif self.hasQSwitch:
+                ch = 'qSwitch'
+                daqName = DAQGeneric.getDAQName(self, 'qSwitch')
+            else:
+                raise HelpfulException("LaserTask can't find name of DAQ device to use for this protocol.")
+            return (daqName, ch)
+        else:
+            return DAQGeneric.getDAQName(self, channel)
         
     def outputPower(self):
         """Return the current output power of the laser (excluding the effect of pockel cell, shutter, etc.)
@@ -275,6 +293,7 @@ class Laser(DAQGeneric):
                     pmax = self.params['expectedPower'] + self.params['expectedPower']*self.params['tolerance']
                 if powerOn < pmin or powerOn > pmax:
                     raise HelpfulException("Power is outside expected range. Please adjust expected value or adjust the tuning of your laser.")
+                
                 return powerOn
             
             else:
@@ -291,8 +310,7 @@ class Laser(DAQGeneric):
 
     def getChannelCmds(self, cmd, rate):
         ### cmd is a dict and can contain 'powerWaveform' or 'switchWaveform' keys with the array as a value
-        nPts = len(powerCmd)
-        daqCmd = {}
+        
         
         if 'switchWaveform' in cmd:
             with self.variableLock:
@@ -303,7 +321,7 @@ class Laser(DAQGeneric):
                 transmission = self.params['scopeTransmission']
                 #transmission = 0.1
             powerCmd = cmd['switchWaveform']*power*transmission
-            vals = unique(cmd['switchWaveform'])
+            vals = np.unique(cmd['switchWaveform'])
             if not self.hasPCell and (1 or 1.0) not in vals: ## check to make sure we can give the specified power.
                 raise Exception('An analog power modulator is neccessary to get power values other than zero and one (full power). The following values (as percentages of full power) were requested: %s. This %s device does not have an analog power modulator.' %(str(vals), self.name))
         elif 'powerWaveform' in cmd:
@@ -311,18 +329,20 @@ class Laser(DAQGeneric):
         else:
             raise Exception('Not sure how to generate channel commands for %s' %str(cmd))
         
+        nPts = len(powerCmd)
+        daqCmd = {}
         #if self.dev.config.get('pCell', None) is not None:
         if self.hasPCell:
             ## convert power values using calibration data
             daqCmd['pCell'] = self.getPCellWaveform(powerCmd)
         else:
-            if len(unique(powerCmd)) > 2: ## check to make sure command doesn't specify powers we can't do
+            if len(np.unique(powerCmd)) > 2: ## check to make sure command doesn't specify powers we can't do
                 raise Exception("%s device does not have an analog power modulator, so can only have a binary power command." %str(self.name))
             
         if self.hasQSwitch:
         #if self.dev.config.get('qSwitch', None) is not None:
             qswitchCmd = np.zeros(nPts, dtype=np.byte)
-            qswitchCmd[powerCmd < 1e-5] = 1
+            qswitchCmd[powerCmd > 1e-5] = 1
             daqCmd['qSwitch'] = qswitchCmd
             
         if self.hasTriggerableShutter:
@@ -332,6 +352,8 @@ class Laser(DAQGeneric):
             ## open shutter a little before we expect power because it has a delay
             delayPts = int(delay*rate) 
             a = np.argwhere(shutterCmd[1:]-shutterCmd[:-1] == 1)
+            if delayPts > a[0]:
+                raise HelpfulException("Shutter takes %g seconds to open. Power pulse cannot be started before then." %delay)
             for i,x in enumerate(a):
                 shutterCmd[a[i]-delayPts:a[i]+1] = 1
             daqCmd['shutter'] = shutterCmd
@@ -422,17 +444,7 @@ class LaserTask(DAQGenericTask):
         
     def configure(self, tasks, startOrder):
         ##  Get rate: first get name of DAQ, then ask the DAQ task for its rate
-        if self.dev.hasTriggerableShutter:
-            ch = 'shutter'
-            daqName = self.dev.getDAQName('shutter')
-        elif self.dev.hasPCell:
-            ch = 'pCell'
-            daqName = self.dev.getDAQName('pCell')
-        elif self.dev.hasQSwitch:
-            ch = 'qSwitch'
-            daqName = self.dev.getDAQName('qSwitch')
-        else:
-            raise HelpfulException("LaserTask can't find name of DAQ device to use for this protocol.")
+        daqName, ch = self.dev.getDAQName()
         daqTask = tasks[daqName]
         rate = daqTask.getChanSampleRate(self.dev.config[ch]['channel'][1])
         
@@ -452,6 +464,8 @@ class LaserTask(DAQGenericTask):
             calcCmds = self.dev.getChannelCmds({'switchWaveform':self.cmd['switchWaveform']}, rate)
         elif 'pulse' in self.cmd:
             raise Exception('Support for (pulseTime/energy) pair commands is not yet implemented.')
+        else:
+            calcCmds = {}
 
         
         ### set up shutter, qSwitch and pCell

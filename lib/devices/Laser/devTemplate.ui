@@ -499,7 +499,7 @@
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>SpinBox</header>
+   <header>pyqtgraph.SpinBox</header>
   </customwidget>
  </customwidgets>
  <resources/>

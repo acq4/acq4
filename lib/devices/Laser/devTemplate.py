@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'devTemplate.ui'
 #
-# Created: Thu Oct 20 13:03:02 2011
+# Created: Tue Oct 25 10:04:47 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(579, 388)
+        Form.resize(695, 486)
         self.gridLayout = QtGui.QGridLayout(Form)
         self.gridLayout.setMargin(6)
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
@@ -26,7 +26,6 @@ class Ui_Form(object):
         self.powerGroup.setObjectName(_fromUtf8("powerGroup"))
         self.gridLayout_4 = QtGui.QGridLayout(self.powerGroup)
         self.gridLayout_4.setMargin(6)
-        self.gridLayout_4.setSpacing(6)
         self.gridLayout_4.setObjectName(_fromUtf8("gridLayout_4"))
         self.label_5 = QtGui.QLabel(self.powerGroup)
         self.label_5.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
@@ -72,7 +71,6 @@ class Ui_Form(object):
         font.setWeight(75)
         font.setBold(True)
         self.outputPowerLabel.setFont(font)
-        self.outputPowerLabel.setText(_fromUtf8(""))
         self.outputPowerLabel.setObjectName(_fromUtf8("outputPowerLabel"))
         self.gridLayout_4.addWidget(self.outputPowerLabel, 0, 1, 1, 1)
         self.samplePowerLabel = QtGui.QLabel(self.powerGroup)
@@ -81,7 +79,6 @@ class Ui_Form(object):
         font.setWeight(50)
         font.setBold(False)
         self.samplePowerLabel.setFont(font)
-        self.samplePowerLabel.setText(_fromUtf8(""))
         self.samplePowerLabel.setObjectName(_fromUtf8("samplePowerLabel"))
         self.gridLayout_4.addWidget(self.samplePowerLabel, 1, 1, 1, 1)
         self.label_8 = QtGui.QLabel(self.powerGroup)
@@ -93,7 +90,6 @@ class Ui_Form(object):
         self.wavelengthGroup.setObjectName(_fromUtf8("wavelengthGroup"))
         self.gridLayout_5 = QtGui.QGridLayout(self.wavelengthGroup)
         self.gridLayout_5.setMargin(6)
-        self.gridLayout_5.setSpacing(6)
         self.gridLayout_5.setObjectName(_fromUtf8("gridLayout_5"))
         self.label_7 = QtGui.QLabel(self.wavelengthGroup)
         self.label_7.setObjectName(_fromUtf8("label_7"))
@@ -137,7 +133,6 @@ class Ui_Form(object):
         self.groupBox.setObjectName(_fromUtf8("groupBox"))
         self.gridLayout_3 = QtGui.QGridLayout(self.groupBox)
         self.gridLayout_3.setMargin(6)
-        self.gridLayout_3.setSpacing(6)
         self.gridLayout_3.setObjectName(_fromUtf8("gridLayout_3"))
         self.gridLayout_2 = QtGui.QGridLayout()
         self.gridLayout_2.setHorizontalSpacing(6)
@@ -241,6 +236,8 @@ class Ui_Form(object):
         self.currentPowerRadio.setText(QtGui.QApplication.translate("Form", "Current Power", None, QtGui.QApplication.UnicodeUTF8))
         self.expectedPowerRadio.setText(QtGui.QApplication.translate("Form", "Expected Power", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("Form", "Current Output Power:", None, QtGui.QApplication.UnicodeUTF8))
+        self.outputPowerLabel.setText(QtGui.QApplication.translate("Form", "100 mW", None, QtGui.QApplication.UnicodeUTF8))
+        self.samplePowerLabel.setText(QtGui.QApplication.translate("Form", "35 mW", None, QtGui.QApplication.UnicodeUTF8))
         self.label_8.setText(QtGui.QApplication.translate("Form", "Power at sample (calc.):", None, QtGui.QApplication.UnicodeUTF8))
         self.label_7.setText(QtGui.QApplication.translate("Form", "Current Wavelength: ", None, QtGui.QApplication.UnicodeUTF8))
         self.wavelengthCombo.setItemText(0, QtGui.QApplication.translate("Form", "Set wavelength for:", None, QtGui.QApplication.UnicodeUTF8))
@@ -270,4 +267,4 @@ class Ui_Form(object):
         self.qSwitchBtn.setText(QtGui.QApplication.translate("Form", "Turn On QSwitch", None, QtGui.QApplication.UnicodeUTF8))
         self.shutterBtn.setText(QtGui.QApplication.translate("Form", "Open Shutter", None, QtGui.QApplication.UnicodeUTF8))
 
-from SpinBox import SpinBox
+from pyqtgraph.SpinBox import SpinBox

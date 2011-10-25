@@ -3,7 +3,7 @@ from lib.Manager import getManager, logExc, logMsg
 from devTemplate import Ui_Form
 import numpy as np
 from scipy import stats
-from functions import siFormat
+from pyqtgraph.functions import siFormat
 import time
 
 
