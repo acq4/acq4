@@ -232,7 +232,7 @@ class LaserDevGui(QtGui.QWidget):
         self.dev.writeCalibrationIndex(index)
         self.updateCalibrationList()
     
-    
+
             
         
        
