@@ -221,11 +221,11 @@ class WidgetParameterItem(ParameterItem):
 class SimpleParameter(Parameter):
     itemClass = WidgetParameterItem
     
-registerParameterType('int', SimpleParameter)
-registerParameterType('float', SimpleParameter)
-registerParameterType('bool', SimpleParameter)
-registerParameterType('str', SimpleParameter)
-registerParameterType('color', SimpleParameter)
+registerParameterType('int', SimpleParameter, override=True)
+registerParameterType('float', SimpleParameter, override=True)
+registerParameterType('bool', SimpleParameter, override=True)
+registerParameterType('str', SimpleParameter, override=True)
+registerParameterType('color', SimpleParameter, override=True)
 
 
 
@@ -268,6 +268,13 @@ class GroupParameterItem(ParameterItem):
             else:
                 self.addWidget = QtGui.QPushButton(addText)
                 self.addWidget.clicked.connect(self.addClicked)
+            #w = QtGui.QWidget()
+            #l = QtGui.QHBoxLayout()
+            #l.setContentsMargins(0,0,0,0)
+            #w.setLayout(l)
+            #l.addWidget(self.addWidget)
+            #l.addItem(QtGui.QSpacerItem(1000,10))
+            #self.addWidget = w
             self.addItem = QtGui.QTreeWidgetItem([])
             self.addItem.setFlags(QtCore.Qt.ItemIsEnabled)
             ParameterItem.addChild(self, self.addItem)
@@ -292,6 +299,7 @@ class GroupParameterItem(ParameterItem):
         ParameterItem.treeWidgetChanged(self)
         if self.addItem is not None:
             self.treeWidget().setItemWidget(self.addItem, 0, self.addWidget)
+            self.treeWidget().setFirstItemColumnSpanned(self.addItem, True)
         
     def addChild(self, child):  ## make sure added childs are actually inserted before add btn
         if self.addItem is not None:
@@ -311,7 +319,7 @@ class GroupParameter(Parameter):
     def addNew(self, typ=None):
         raise Exception("Must override this function in subclass.")
 
-registerParameterType('group', GroupParameter)
+registerParameterType('group', GroupParameter, override=True)
 
 
 
@@ -399,6 +407,6 @@ class ListParameter(Parameter):
             opts['limits'] = opts['values']
         Parameter.__init__(self, **opts)
 
-registerParameterType('list', ListParameter)
+registerParameterType('list', ListParameter, override=True)
 
 

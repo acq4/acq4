@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/devices/MultiClamp/ProtocolTemplate.ui'
+# Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Wed May 18 20:44:14 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Wed Oct 26 11:24:47 2011
+#      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -59,7 +59,7 @@ class Ui_Form(object):
         self.holdingCheck = QtGui.QCheckBox(self.frame_2)
         self.holdingCheck.setObjectName(_fromUtf8("holdingCheck"))
         self.horizontalLayout_6.addWidget(self.holdingCheck)
-        self.holdingSpin = QtGui.QDoubleSpinBox(self.frame_2)
+        self.holdingSpin = SpinBox(self.frame_2)
         self.holdingSpin.setEnabled(False)
         self.holdingSpin.setMinimum(-1000000.0)
         self.holdingSpin.setMaximum(1000000.0)
@@ -161,14 +161,15 @@ class Ui_Form(object):
         self.icModeRadio.setText(QtGui.QApplication.translate("Form", "IC", None, QtGui.QApplication.UnicodeUTF8))
         self.i0ModeRadio.setText(QtGui.QApplication.translate("Form", "I=0", None, QtGui.QApplication.UnicodeUTF8))
         self.vcModeRadio.setText(QtGui.QApplication.translate("Form", "VC", None, QtGui.QApplication.UnicodeUTF8))
-        self.holdingCheck.setText(QtGui.QApplication.translate("Form", "Holding (pA)", None, QtGui.QApplication.UnicodeUTF8))
+        self.holdingCheck.setText(QtGui.QApplication.translate("Form", "Holding", None, QtGui.QApplication.UnicodeUTF8))
         self.primarySignalCheck.setText(QtGui.QApplication.translate("Form", "Primary:", None, QtGui.QApplication.UnicodeUTF8))
         self.secondarySignalCheck.setText(QtGui.QApplication.translate("Form", "Secondary:", None, QtGui.QApplication.UnicodeUTF8))
         self.primarySignalCombo.setItemText(0, QtGui.QApplication.translate("Form", "MembranePotential", None, QtGui.QApplication.UnicodeUTF8))
         self.secondarySignalCombo.setItemText(0, QtGui.QApplication.translate("Form", "MembraneCurrent", None, QtGui.QApplication.UnicodeUTF8))
         self.secondaryGainCheck.setText(QtGui.QApplication.translate("Form", "Set Gain", None, QtGui.QApplication.UnicodeUTF8))
         self.primaryGainCheck.setText(QtGui.QApplication.translate("Form", "Set Gain", None, QtGui.QApplication.UnicodeUTF8))
-        self.waveGeneratorLabel.setText(QtGui.QApplication.translate("Form", "Function (values in pA)", None, QtGui.QApplication.UnicodeUTF8))
+        self.waveGeneratorLabel.setText(QtGui.QApplication.translate("Form", "Command Function (A)", None, QtGui.QApplication.UnicodeUTF8))
 
 from generator.StimGenerator import StimGenerator
 from pyqtgraph.PlotWidget import PlotWidget
+from pyqtgraph.SpinBox import SpinBox

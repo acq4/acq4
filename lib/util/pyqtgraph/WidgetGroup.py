@@ -41,7 +41,7 @@ def comboState(w):
         except AttributeError:
             pass
     if data is None:
-        return w.itemText(ind)
+        return unicode(w.itemText(ind))
     else:
         return data
     

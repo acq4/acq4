@@ -42,7 +42,7 @@ class StimGenerator(QtGui.QWidget):
         self.ui.functionText.setFontFamily('Courier')
         self.ui.errorText.setVisible(False)
         
-        self.advancedMode = True  ## if True, then the current state was generated in advanced
+        self.advancedMode = False  ## if True, then the current state was generated in advanced
                                   ## mode. Otherwise, it was generated from the simploe stim tree.
         self.lockMode = False     ## used to temporarily block changes to self.advancedMode
         
@@ -52,6 +52,7 @@ class StimGenerator(QtGui.QWidget):
         self.cacheRate = None
         self.cacheNPts = None
 
+        self.setAdvancedMode(True)
         self.setError()
 
         self.updateWidgets()

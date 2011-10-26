@@ -275,6 +275,7 @@ class MultiClampTask(DeviceTask):
     
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
+        self.cmd = cmd
         with MutexLocker(self.dev.lock):
             self.usedChannels = None
             self.daqTasks = {}

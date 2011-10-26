@@ -138,9 +138,18 @@ class ProtocolGui(QtGui.QWidget):
             #QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)
             #QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('taskStarted'), self.taskStarted)
             #QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolFinished'), self.protocolFinished)
-            self.prot.sigProtocolStarted.disconnect(self.protocolStarted)
-            self.prot.sigTaskStarted.disconnect(self.taskStarted)
-            self.prot.sigProtocolFinished.disconnect(self.protocolFinished)
+            try:
+                self.prot.sigProtocolStarted.disconnect(self.protocolStarted)
+            except TypeError:
+                pass
+            try:
+                self.prot.sigTaskStarted.disconnect(self.taskStarted)
+            except TypeError:
+                pass
+            try:
+                self.prot.sigProtocolFinished.disconnect(self.protocolFinished)
+            except TypeError:
+                pass
             self._PGConnected = False
         
     def saveState(self):
