@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ProtocolTemplate.ui'
 #
-# Created: Wed Oct 19 11:36:16 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Tue Oct 25 09:54:36 2011
+#      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(1220, 544)
+        Form.resize(918, 541)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(4)
         sizePolicy.setVerticalStretch(1)
@@ -25,6 +25,7 @@ class Ui_Form(object):
         Form.setSizePolicy(sizePolicy)
         self.gridLayout_4 = QtGui.QGridLayout(Form)
         self.gridLayout_4.setMargin(3)
+        self.gridLayout_4.setSpacing(3)
         self.gridLayout_4.setObjectName(_fromUtf8("gridLayout_4"))
         self.gridLayout = QtGui.QGridLayout()
         self.gridLayout.setSizeConstraint(QtGui.QLayout.SetMaximumSize)
@@ -101,6 +102,12 @@ class Ui_Form(object):
         spacerItem = QtGui.QSpacerItem(83, 59, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.gridLayout.addItem(spacerItem, 5, 1, 1, 1)
         self.groupBox = QtGui.QGroupBox(Form)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.groupBox.sizePolicy().hasHeightForWidth())
+        self.groupBox.setSizePolicy(sizePolicy)
+        self.groupBox.setMinimumSize(QtCore.QSize(190, 210))
         self.groupBox.setObjectName(_fromUtf8("groupBox"))
         self.gridLayout_3 = QtGui.QGridLayout(self.groupBox)
         self.gridLayout_3.setMargin(3)
@@ -108,28 +115,36 @@ class Ui_Form(object):
         self.gridLayout_3.setObjectName(_fromUtf8("gridLayout_3"))
         self.label_3 = QtGui.QLabel(self.groupBox)
         self.label_3.setObjectName(_fromUtf8("label_3"))
-        self.gridLayout_3.addWidget(self.label_3, 0, 0, 1, 1)
+        self.gridLayout_3.addWidget(self.label_3, 1, 0, 1, 1)
         self.minTimeSpin = SpinBox(self.groupBox)
         self.minTimeSpin.setSuffix(_fromUtf8(""))
         self.minTimeSpin.setDecimals(2)
         self.minTimeSpin.setMaximum(1000000.0)
         self.minTimeSpin.setObjectName(_fromUtf8("minTimeSpin"))
-        self.gridLayout_3.addWidget(self.minTimeSpin, 0, 1, 1, 1)
+        self.gridLayout_3.addWidget(self.minTimeSpin, 1, 1, 1, 1)
         self.label_4 = QtGui.QLabel(self.groupBox)
         self.label_4.setObjectName(_fromUtf8("label_4"))
-        self.gridLayout_3.addWidget(self.label_4, 1, 0, 1, 1)
+        self.gridLayout_3.addWidget(self.label_4, 2, 0, 1, 1)
         self.minDistSpin = SpinBox(self.groupBox)
         self.minDistSpin.setSuffix(_fromUtf8(""))
         self.minDistSpin.setMaximum(1000000.0)
         self.minDistSpin.setObjectName(_fromUtf8("minDistSpin"))
-        self.gridLayout_3.addWidget(self.minDistSpin, 1, 1, 1, 1)
+        self.gridLayout_3.addWidget(self.minDistSpin, 2, 1, 1, 1)
         self.recomputeBtn = QtGui.QPushButton(self.groupBox)
         self.recomputeBtn.setObjectName(_fromUtf8("recomputeBtn"))
-        self.gridLayout_3.addWidget(self.recomputeBtn, 2, 0, 1, 1)
+        self.gridLayout_3.addWidget(self.recomputeBtn, 3, 0, 1, 1)
         self.autoRecomputeCheck = QtGui.QCheckBox(self.groupBox)
         self.autoRecomputeCheck.setEnabled(False)
         self.autoRecomputeCheck.setObjectName(_fromUtf8("autoRecomputeCheck"))
-        self.gridLayout_3.addWidget(self.autoRecomputeCheck, 2, 1, 1, 1)
+        self.gridLayout_3.addWidget(self.autoRecomputeCheck, 3, 1, 1, 1)
+        self.tdPlotWidget = PlotWidget(self.groupBox)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.tdPlotWidget.sizePolicy().hasHeightForWidth())
+        self.tdPlotWidget.setSizePolicy(sizePolicy)
+        self.tdPlotWidget.setObjectName(_fromUtf8("tdPlotWidget"))
+        self.gridLayout_3.addWidget(self.tdPlotWidget, 0, 0, 1, 2)
         self.gridLayout.addWidget(self.groupBox, 6, 0, 1, 2)
         self.timeLabel = QtGui.QLabel(Form)
         self.timeLabel.setObjectName(_fromUtf8("timeLabel"))
@@ -142,8 +157,6 @@ class Ui_Form(object):
         self.label_8 = QtGui.QLabel(Form)
         self.label_8.setObjectName(_fromUtf8("label_8"))
         self.gridLayout_4.addWidget(self.label_8, 0, 3, 1, 1)
-        spacerItem1 = QtGui.QSpacerItem(253, 535, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.gridLayout_4.addItem(spacerItem1, 0, 5, 3, 1)
         self.itemTree = TreeWidget(Form)
         self.itemTree.setObjectName(_fromUtf8("itemTree"))
         self.gridLayout_4.addWidget(self.itemTree, 1, 1, 1, 2)
@@ -166,8 +179,8 @@ class Ui_Form(object):
         self.deleteStepBtn.setEnabled(False)
         self.deleteStepBtn.setObjectName(_fromUtf8("deleteStepBtn"))
         self.verticalLayout.addWidget(self.deleteStepBtn)
-        spacerItem2 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        self.verticalLayout.addItem(spacerItem2)
+        spacerItem1 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.verticalLayout.addItem(spacerItem1)
         self.previewBtn = QtGui.QPushButton(Form)
         self.previewBtn.setEnabled(False)
         self.previewBtn.setObjectName(_fromUtf8("previewBtn"))
@@ -194,13 +207,10 @@ class Ui_Form(object):
         self.hideMarkerBtn.setObjectName(_fromUtf8("hideMarkerBtn"))
         self.horizontalLayout_5.addWidget(self.hideMarkerBtn)
         self.gridLayout_4.addLayout(self.horizontalLayout_5, 2, 1, 1, 2)
-        spacerItem3 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.gridLayout_4.addItem(spacerItem3, 2, 3, 1, 1)
+        spacerItem2 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.gridLayout_4.addItem(spacerItem2, 2, 3, 1, 1)
         self.gridLayout_4.setColumnStretch(0, 1)
         self.gridLayout_4.setColumnStretch(1, 4)
-        self.gridLayout_4.setColumnStretch(2, 1)
-        self.gridLayout_4.setColumnStretch(3, 2)
-        self.gridLayout_4.setColumnStretch(4, 1)
 
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
@@ -262,4 +272,5 @@ class Ui_Form(object):
         self.hideMarkerBtn.setText(QtGui.QApplication.translate("Form", "Hide Spot Marker", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph.TreeWidget import TreeWidget
+from pyqtgraph.PlotWidget import PlotWidget
 from pyqtgraph.SpinBox import SpinBox

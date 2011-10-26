@@ -15,6 +15,7 @@ import Mutex
 class NiDAQ(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.config = config
         ## make local copy of device handle
         if config is not None and config.get('mock', False):
             from lib.drivers.nidaq.mock import NIDAQ
@@ -211,6 +212,7 @@ class NiDAQ(Device):
 class Task(DeviceTask):
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
+        self.cmd = cmd
         
         ## get DAQ device
         #daq = self.devm.getDevice(...)
@@ -218,6 +220,12 @@ class Task(DeviceTask):
         
         ## Create supertask from nidaq driver
         self.st = self.dev.n.createSuperTask()
+
+    def getChanSampleRate(self, ch):
+        """Return the sample rate that will be used for ch"""
+        
+        return self.cmd['rate']  ## currently, all channels use the same rate
+
         
     def configure(self, tasks, startOrder):
         #print "daq configure", tasks

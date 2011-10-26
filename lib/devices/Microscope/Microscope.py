@@ -21,6 +21,7 @@ class Microscope(Device):
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.posDev = None
         self.objDev = None
@@ -49,7 +50,7 @@ class Microscope(Device):
         else:
             self.position = [0.0, 0.0, 0.0]
         
-        self.allObjectives = self.config['objectives']  ## all available objectives
+        self.allObjectives = config['objectives']  ## all available objectives
         for l in self.allObjectives.itervalues():  ## Set default values for each objective
             for o in l:
                 if 'offset' not in l[o]:

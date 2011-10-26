@@ -13,7 +13,7 @@ class Device(QtCore.QObject):
         self._lock_ = Mutex(QtCore.QMutex.Recursive)  ## no, good idea
         self._lock_tb_ = None
         self.dm = deviceManager
-        self.config = config
+        #self.config = config
         self.name = name
     
     def createTask(self, cmd):
@@ -72,7 +72,7 @@ class Device(QtCore.QObject):
 class DeviceTask:
     def __init__(self, dev, cmd):
         self.dev = dev
-        self.cmd = cmd
+        #self.cmd = cmd
     
     def getConfigOrder(self):
         """return lists of devices that should be configured (before, after) this device"""

@@ -51,8 +51,9 @@ class StimGenerator(QtGui.QWidget):
         self.cache = {}       ## cached waveforms
         self.cacheRate = None
         self.cacheNPts = None
-        
+
         self.setError()
+
         self.updateWidgets()
         
         self.meta = {  ## holds some extra information about signals (units, expected scale and range, etc)
@@ -78,6 +79,7 @@ class StimGenerator(QtGui.QWidget):
         
         self.ui.updateBtn.clicked.connect(self.update)
         self.ui.autoUpdateCheck.clicked.connect(self.autoUpdateClicked)
+
         self.ui.errorBtn.clicked.connect(self.updateWidgets)
         self.ui.helpBtn.clicked.connect(self.updateWidgets)
         self.ui.advancedBtn.toggled.connect(self.updateWidgets)

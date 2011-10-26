@@ -1147,6 +1147,7 @@ class PlotItem(QtGui.QGraphicsWidget):
         return self.scales[key]['item']
         
     def setLabel(self, key, text=None, units=None, unitPrefix=None, **args):
+        """Key is one of: 'left', 'right', 'top', 'bottom'"""
         self.getScale(key).setLabel(text=text, units=units, unitPrefix=unitPrefix, **args)
         
     def showLabel(self, key, show=True):

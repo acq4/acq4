@@ -51,6 +51,7 @@ class DAQGeneric(Device):
         self._DGLock = Mutex(QtCore.QMutex.Recursive)
         ## Do some sanity checks here on the configuration
         self._DGConfig = config
+        self.config = config
         self._DGHolding = {}
         for ch in config:
             if config[ch]['type'][0] != 'a' and ('scale' in config[ch] or 'offset' in config[ch]):
@@ -300,6 +301,7 @@ class DAQGenericTask(DeviceTask):
                     self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                 #print "  done: ", self.daqTasks.keys()
         
+        
     #def getChanScale(self, chan):
         #if 'scale' in self._DAQCmd[chan]:
             #return self._DAQCmd[chan]['scale']
@@ -410,7 +412,8 @@ class DAQGenericTask(DeviceTask):
     def storeResult(self, dirHandle):
         DeviceTask.storeResult(self, dirHandle)
         for ch in self._DAQCmd:
-            if 'recordInit' in self._DAQCmd[ch] and self._DAQCmd[ch]['recordInit']:
+            if self._DAQCmd[ch].get('recordInit', False):
+            #if 'recordInit' in self._DAQCmd[ch] and self._DAQCmd[ch]['recordInit']:
                 dirHandle.setInfo({(self.dev.name, ch): self.initialState[ch]})
            
                 

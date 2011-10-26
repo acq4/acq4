@@ -11,6 +11,7 @@ class DIOSwitch(Device):
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.config = config
         self.lock = Mutex.Mutex()
         self.daqs = {}
         for name, conf in config['channels'].iteritems():

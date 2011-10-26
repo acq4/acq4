@@ -38,12 +38,14 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         
         ## Populate Device lists
-        defCam = None
-        if 'defaultCamera' in self.dev.config:
-            defCam = self.dev.config['defaultCamera']
-        defLaser = None
-        if 'defaultLaser' in self.dev.config:
-            defLaser = self.dev.config['defaultLaser']
+        #defCam = None
+        #if 'defaultCamera' in self.dev.config:
+            #defCam = self.dev.config['defaultCamera']
+        defCam = self.dev.config.get('defaultCamera', None)
+        #defLaser = None
+        #if 'defaultLaser' in self.dev.config:
+            #defLaser = self.dev.config['defaultLaser']
+        defLaser = self.dev.config.get('defaultLaser', None)
 
         devs = self.dev.dm.listDevices()
         for d in devs:

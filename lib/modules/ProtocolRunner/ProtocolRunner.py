@@ -10,7 +10,7 @@ from advancedTypes import OrderedDict
 from SequenceRunner import *
 from pyqtgraph.WidgetGroup import WidgetGroup
 from Mutex import Mutex, MutexLocker
-from lib.Manager import getManager, logMsg
+from lib.Manager import getManager, logMsg, logExc
 from debug import *
 import ptime
 import analysisModules
@@ -778,7 +778,7 @@ class ProtocolRunner(Module):
             
             ## Generate executable conf from protocol object
             prot = self.generateProtocol(dh)
-            
+            #print prot
             #self.emit(QtCore.SIGNAL('protocolStarted'), {})
             self.sigProtocolStarted.emit({})
             #print "runSingle: Starting taskThread.."
@@ -898,7 +898,7 @@ class ProtocolRunner(Module):
                                                ],
                                            tags={},
                                            importance=8,
-                                           addImportance=3,
+
                                            docSections=['userGuide/modules/ProtocolRunner/loadingNonexistentDevices']
                                            )
                 prot[d] = self.docks[d].widget().generateProtocol(p)

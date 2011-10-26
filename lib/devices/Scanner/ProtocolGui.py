@@ -15,6 +15,7 @@ import sys
 from pyqtgraph.SpinBox import SpinBox
 from pyqtgraph.Point import *
 from pyqtgraph.functions import mkPen
+from HelpfulException import HelpfulException
 
 class ScannerProtoGui(ProtocolGui):
     
@@ -63,6 +64,9 @@ class ScannerProtoGui(ProtocolGui):
 #            (self.ui.packingSpin, 'packingDensity')  ## packing density should be suggested by device rather than loaded with protocol (I think..)
         ])
         self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6, 'sizeSpin':100e-6})
+        self.tdPlot = self.ui.tdPlotWidget.plotItem
+        self.tdPlot.setLabel('bottom', text="Distance", units='m')
+        self.tdPlot.setLabel('left', text="Wait time", units='s')
 
         ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
         
@@ -110,6 +114,7 @@ class ScannerProtoGui(ProtocolGui):
         self.currentScope = None
         self.currentCamMod = None
         self.camModChanged()
+        self.updateTDPlot()
 
         
         ## load target list from device, allowing targets to persist across protocols
@@ -191,11 +196,11 @@ class ScannerProtoGui(ProtocolGui):
             self.currentObjective = obj
             self.updateSpotSizes()
             for i in self.items.values():
-                li = self.listItem(i.name)
+                li = self.listItem(i.name) ## actually a tree item
                 if i.objective == obj:
-                    li.setCheckState(QtCore.Qt.Checked)
+                    li.setCheckState(0, QtCore.Qt.Checked)
                 else:
-                    li.setCheckState(QtCore.Qt.Unchecked)
+                    li.setCheckState(0, QtCore.Qt.Unchecked)
                 self.itemToggled(li)
             #self.testTarget.setPointSize(self.pointSize()[0])
             self.testTarget.setPointSize()
@@ -249,9 +254,8 @@ class ScannerProtoGui(ProtocolGui):
         except:
             print "Could not find spot size from calibration."
             #logMsg("Could not find spot size from calibration.", msgType='error') ### This should turn into a HelpfulException.
-            if isinstance(e[1], HelpfulException):
-                exc = sys.exc_info()
-                raise HelpfulException("Could not find spot size from calibration. ", exc=exc, reasons=["Correct camera and/or laser device are not selected.", "There is no calibration file for selected camera and laser."])
+            exc = sys.exc_info()
+            raise HelpfulException("Could not find spot size from calibration. ", exc=exc, reasons=["Correct camera and/or laser device are not selected.", "There is no calibration file for selected camera and laser."])
             
         if self.ui.sizeFromCalibrationRadio.isChecked():
             displaySize = ss
@@ -259,7 +263,7 @@ class ScannerProtoGui(ProtocolGui):
             try:
                 self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
             except TypeError:
-                logExc("An exception was caught in ScannerProtoGui.pointSize(). It was probably caused by a reload.", msgType='status', importance=0)
+                logExc("A TypeError was caught in ScannerProtoGui.pointSize(). It was probably caused by a reload.", msgType='status', importance=0)
             self.stateGroup.setState({'spotSize':ss})
             self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
         elif self.ui.sizeCustomRadio.isChecked():
@@ -617,6 +621,26 @@ class ScannerProtoGui(ProtocolGui):
         self.targets = None
         #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
         self.sigSequenceChanged.emit(self.dev.name)
+        self.updateTDPlot()
+        
+    def updateTDPlot(self):
+        self.tdPlot.clear()
+        state = self.stateGroup.state()
+        minTime = state['minTime']
+        minDist = state['minDist']
+        
+        #print 'minDist:', minDist, '   minTime:', minTime
+        
+        dist = np.arange(0, 0.001, 0.00002)
+        cost = optimize.costFn(dist, minTime, minDist)
+
+        #print 'dist:', dist
+        #print 'cost:', cost
+        
+        self.tdPlot.plot(dist, cost)
+        
+        
+    
 
     def recomputeClicked(self):
         try:

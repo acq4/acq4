@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from lib.devices.Device import *
+from lib.Manager import logMsg, logExc
 from Mutex import Mutex, MutexLocker
 from DeviceGui import ScannerDeviceGui
 from ProtocolGui import ScannerProtoGui
@@ -14,6 +15,7 @@ class Scanner(Device):
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.devGui = None
         self.lastRunTime = None
@@ -41,7 +43,7 @@ class Scanner(Device):
     def setCommand(self, vals):
         """Requests to set the command output to the mirrors.
         (The request is denied if the virtual shutter is closed)"""
-        with MutexLocker(self.lock):
+        with self.lock:
             self.currentCommand = vals
             if self.getShutterOpen():
                 ## make sure we have not requested a command outside the allowed limits
@@ -197,18 +199,21 @@ class Scanner(Device):
             index1 = index[camera]
         else:
             print "Warning: No calibration found for camera %s" % camera
+            logMsg("Warning:No calibration found for camera %s" % camera, msgType='warning')
             return None
             
         if laser in index1:
             index2 = index1[laser]
         else:
             print "Warning: No calibration found for laser %s" % laser
+            logMsg("Warning:No calibration found for laser %s" % laser, msgType='warning')
             return None
             
         if objective in index2:
             index3 = index2[objective]
         else:
             print "Warning: No calibration found for objective %s" % objective
+            logMsg("Warning:No calibration found for objective %s" % objective, msgType='warning')
             return None
         
         #calFile = os.path.join(calDir, index3['fileName'])
@@ -281,6 +286,7 @@ class Scanner(Device):
 class ScannerTask(DeviceTask):
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
+        self.cmd = cmd
         self.daqTasks = []
         self.spotSize = None
         #print "Scanner task:", cmd
@@ -322,7 +328,7 @@ class ScannerTask(DeviceTask):
         laser = laserTask.cmd['QSwitch']['command']
         offPos = self.dev.getShutterVals()
         
-        if 'xCommand' not in self.cmd:   ## If no command was specified, then we just use the current command values whenever tyhe shutter is open
+        if 'xCommand' not in self.cmd:   ## If no command was specified, then we just use the current command values whenever the shutter is open
             x, y = self.dev.getCommand()
             self.cmd['xCommand'] = np.empty(len(laser), dtype=float)
             self.cmd['yCommand'] = np.empty(len(laser), dtype=float)

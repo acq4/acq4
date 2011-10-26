@@ -67,7 +67,6 @@ def opt2(locs, minTime, minDist, deadTime, greed=1.0, seed=None, compMethod='rms
         
     
 def costFn(dist, minTime, minDist):
-    ### Takes distance^2 as argument!
     #state = self.stateGroup.state()
     #minTime = state['minTime']
     #minDist = state['minDist']

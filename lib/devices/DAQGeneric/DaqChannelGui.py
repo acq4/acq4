@@ -7,14 +7,15 @@ from SequenceRunner import *
 from pyqtgraph.WidgetGroup import WidgetGroup
 #from pyqtgraph.PlotWidget import PlotCurveItem
 import numpy
-import sip
+#import sip
+import weakref
 from pyqtgraph import siFormat
 from pyqtgraph.SpinBox import SpinBox
 
 ###### For protocol GUIs
 
 class DaqChannelGui(QtGui.QWidget):
-    def __init__(self, parent, name, config, plot, dev, prot):
+    def __init__(self, parent, name, config, plot, dev, prot, daqName=None):
         QtGui.QWidget.__init__(self, parent)
         
         ## Name of this channel
@@ -36,7 +37,10 @@ class DaqChannelGui(QtGui.QWidget):
         self.prot = weakref.ref(prot)
         
         ## Make sure protocol interface includes our DAQ device
-        self.daqDev = self.dev.getDAQName(self.name)
+        if daqName is None:
+            self.daqDev = self.dev.getDAQName(self.name)
+        else:
+            self.daqDev = daqName
         self.daqUI = self.prot().getDevice(self.daqDev)
         
         ## plot widget
@@ -61,10 +65,10 @@ class DaqChannelGui(QtGui.QWidget):
         #QtCore.QObject.connect(self.ui.groupBox, QtCore.SIGNAL('toggled(bool)'), self.groupBoxClicked)
         self.ui.groupBox.toggled.connect(self.groupBoxClicked)
         
-        if 'userScale' in self.config:
-            self.setScale(self.config['userScale'])
-        else:
-            self.setScale(1.0)
+        #if 'userScale' in self.config:
+            #self.setScale(self.config['userScale'])
+        #else:
+            #self.setScale(1.0)
         
         if 'units' in self.config:
             self.setUnits(self.config['units'])
@@ -77,9 +81,10 @@ class DaqChannelGui(QtGui.QWidget):
         else:
             plus = "[+] "
         
-        units = " (x%s)" % siFormat(self.scale, suffix=self.units)
+        #units = " (x%s)" % siFormat(self.scale, suffix=self.units)
         
-        self.ui.groupBox.setTitle(plus + self.name + units)
+        
+        self.ui.groupBox.setTitle(plus + self.name + " (%s)" %self.units)
     
     def setUnits(self, units):
         self.units = units
@@ -91,10 +96,10 @@ class DaqChannelGui(QtGui.QWidget):
     def getSpins(self):
         return []
 
-    def setScale(self, scale):
-        self.scale = scale
-        self.updateTitle()
-        
+    #def setScale(self, scale):
+        #self.scale = scale
+        #self.updateTitle()
+	        
     def groupBoxClicked(self, b):
         self.setChildrenVisible(self.ui.groupBox, b)
         self.updateTitle()
@@ -145,6 +150,7 @@ class DaqChannelGui(QtGui.QWidget):
 class OutputChannelGui(DaqChannelGui):
     
     sigSequenceChanged = QtCore.Signal(object)
+    sigDataChanged = QtCore.Signal(object)
     
     def __init__(self, *args):
         DaqChannelGui.__init__(self, *args)
@@ -159,7 +165,7 @@ class OutputChannelGui(DaqChannelGui):
         #pdb.set_trace()
         self.ui.setupUi(self)
         self.postUiInit()
-        self.ui.waveGeneratorWidget.setTimeScale(1e-3)
+        #self.ui.waveGeneratorWidget.setTimeScale(1e-3)
         
         self.daqChanged(self.daqUI.currentState())
         
@@ -167,13 +173,6 @@ class OutputChannelGui(DaqChannelGui):
             for s in self.getSpins():
                 s.setOpts(dec=True, range=[None, None], step=1.0, minStep=1e-12, siPrefix=True)
 
-        #QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
-        #QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('dataChanged'), self.updateWaves)
-        #QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('functionChanged'), self.waveFunctionChanged)
-        #QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
-        #QtCore.QObject.connect(self.ui.holdingCheck, QtCore.SIGNAL('stateChanged(int)'), self.holdingCheckChanged)
-        #QtCore.QObject.connect(self.ui.holdingSpin, QtCore.SIGNAL('valueChanged(double)'), self.holdingSpinChanged)
-        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('holdingChanged'), self.updateHolding)
         self.daqUI.sigChanged.connect(self.daqChanged)
         self.ui.waveGeneratorWidget.sigDataChanged.connect(self.updateWaves)
         self.ui.waveGeneratorWidget.sigFunctionChanged.connect(self.waveFunctionChanged)
@@ -186,11 +185,19 @@ class OutputChannelGui(DaqChannelGui):
 
     def getSpins(self):
         return (self.ui.preSetSpin, self.ui.holdingSpin)
+    
+    def setMeta(self, key, **kwargs):
+        ## key is 'x' (time), 'y' (amp), or 'xy' (sum)
+        self.ui.waveGeneratorWidget.setMeta(key, **kwargs)
         
-    def setScale(self, scale):
-        self.ui.waveGeneratorWidget.setScale(scale)
-        self.scale = scale
-        self.updateTitle()
+    #def setScale(self, scale):
+        #self.ui.waveGeneratorWidget.setScale(scale)
+        #self.scale = scale
+        #self.updateTitle()
+        
+    def setUnits(self, units, **kwargs):
+        DaqChannelGui.setUnits(self, units)
+        self.ui.waveGeneratorWidget.setMeta('y', units=units, siPrefix=True, **kwargs)
         
     def quit(self):
         DaqChannelGui.quit(self)
@@ -253,7 +260,7 @@ class OutputChannelGui(DaqChannelGui):
         for k in ps:
             params[k] = range(len(ps[k]))
         waves = []
-        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys())
+        runSequence(lambda p: waves.append(self.getSingleWave(p)), params, params.keys()) ## appends waveforms for the entire parameter space to waves
         for w in waves:
             if w is not None:
                 self.ui.functionCheck.setChecked(True)
@@ -266,6 +273,7 @@ class OutputChannelGui(DaqChannelGui):
             self.plotCurve(single, color=QtGui.QColor(200, 100, 100))
             #print "===single==", single.min(), single.max()
         #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
+        self.sigDataChanged.emit(self)
         
     def taskStarted(self, params):
         ## Draw green trace for current command waveform
