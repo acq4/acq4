@@ -63,17 +63,29 @@ sg.loadState({
     'advancedMode': False,
     'stimuli': {
         'pulse': {
-            'type': 'pulse',
+            'type': 'pulseTrain',
             'start': {
-                'value': 0.03,
+                'value': 0.0,
                 'sequence': 'off'},
             'length': {
-                'value': 0.01,
+                'value': 0.002,
                 'sequence': 'off'},
             'amplitude': {
                 'value': 0.1,
                 'sequence': 'off'},
+            'interpulse_length': {
+                'value': 0.01,
+                'sequence': 'off',
+                },
+            'pulse_number': {
+                'value': 3,
+                'sequence': 'range',
+                'start': 3,
+                'stop': 8,
+                'steps': 6
+                }
             }
+            
         }
     }
 )

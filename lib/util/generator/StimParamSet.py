@@ -187,14 +187,16 @@ class PulseParameter(GroupParameter):
         if 'name' not in kargs:
             kargs['name'] = 'Pulse'
             kargs['autoIncrementName'] = True
+        if 'type' not in kargs:
+            kargs['type'] = 'pulse'
         kargs['strictNaming'] = True
-        GroupParameter.__init__(self, type="pulse", removable=True, renamable=True,
-            params=[
+        GroupParameter.__init__(self, removable=True, renamable=True,
+            children=[
                 SeqParameter(**{'name': 'start', 'type': 'float', 'axis': 'x', 'value': 0.01,}),
                 SeqParameter(**{'name': 'length', 'type': 'float', 'axis': 'x', 'value': 0.01}),
                 SeqParameter(**{'name': 'amplitude', 'type': 'float', 'axis': 'y', 'value': 0}),
                 SeqParameter(**{'name': 'sum', 'type': 'float', 'axis': 'xy', 'value': 0, 'limits': (0, None),
-                    'params': [{'name': 'affect', 'type': 'list', 'values': ['length', 'amplitude'], 'value': 'length'}]
+                    'children': [{'name': 'affect', 'type': 'list', 'values': ['length', 'amplitude'], 'value': 'length'}]
                     }),
             ], **kargs)
         self.length.sigValueChanged.connect(self.lenChanged)
@@ -220,13 +222,14 @@ class PulseParameter(GroupParameter):
         name.replace(' ', '_')
         return name
 
-    def compile(self):
+    def preCompile(self):
+        ## prepare data for compile
         seqParams = [self.start.compile(), self.length.compile(), self.amplitude.compile()] 
         (start, startSeq) = seqParams[0]
         (length, lenSeq) = seqParams[1]
         (amp, ampSeq) = seqParams[2]
         seq = {name:seq for name, seq in seqParams if seq is not None}
-        
+
         ## If sequence is specified over sum, interpret that a bit differently.
         (sumName, sumSeq) = self.sum.compile()
         if sumSeq is not None:
@@ -244,6 +247,10 @@ class PulseParameter(GroupParameter):
                 amp = "%s / (%s)" % (sumName, length)
             seq[sumName] = sumSeq
         
+        return start, length, amp, seq
+    
+    def compile(self):
+        start, length, amp, seq = self.preCompile()
         fnStr = "pulse(%s, %s, %s)" % (start, length, amp)
         return fnStr, seq
         
@@ -261,20 +268,37 @@ class PulseParameter(GroupParameter):
         return state
         
 
-class PulseTrainParameter(GroupParameter):
+class PulseTrainParameter(PulseParameter):
     def __init__(self, **kargs):
+        kargs['type'] = 'pulseTrain'
         if 'name' not in kargs:
             kargs['name'] = 'PulseTrain'
             kargs['autoIncrementName'] = True
-        kargs['strictNaming'] = True
-        GroupParameter.__init__(self, type="pulseTrain", removable=True, renamable=True,
-        params=[
-            {'name': 'start', 'type': 'float', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True},
-            {'name': 'pulse length', 'type': 'float', 'value': 0.005, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True},
-            {'name': 'interpulse length', 'type': 'float', 'value': 0.01, 'suffix': 's', 'siPrefix': True, 'minStep': 1e-6, 'dec': True},
-            {'name': 'pulse number', 'type': 'int', 'value': 10},
-            {'name': 'amplitude', 'type': 'float', 'value': 0},
-            {'name': 'sum', 'type': 'float', 'value': 0},
-        ], **kargs)
+        
+        PulseParameter.__init__(self, **kargs)
+        
+        params = [
+            SeqParameter(**{'name': 'interpulse_length', 'type': 'float', 'value': 0.01, 'axis': 'x'}),
+            SeqParameter(**{'name': 'pulse_number', 'type': 'int', 'value': 10}),
+        ]
+        for p in params:
+            self.addChild(p)
+        
+    def preCompile(self):
+        start, length, amp, seq = PulseParameter.preCompile(self)
+        
+        seqParams = [self.interpulse_length.compile(), self.pulse_number.compile()] 
+        (interval, intSeq) = seqParams[0]
+        (number, numSeq) = seqParams[1]
+        seq.update({name:seq for name, seq in seqParams if seq is not None})
+        
+        start = "%s + linspace(0, %s * (%s-1), %s)" % (start, interval, number, number)
+        return start, length, amp, seq
+        
+    def compile(self):
+        start, length, amp, seq = self.preCompile()
+        fnStr = "pulse(\n  times=%s,\n  widths=%s,\n  values=%s\n)" % (start, length, amp)
+        return fnStr, seq
+        
         
         

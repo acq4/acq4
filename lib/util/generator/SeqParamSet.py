@@ -75,7 +75,7 @@ class SeqParameter(GroupParameter):
         args['autoIncrementName'] = True
         args['strictNaming'] = True
         
-        args['params'] = [
+        args['children'] = [
             {'name': 'default', 'type': 'str', 'value': '0'},
             {'name': 'sequence', 'type': 'list', 'value': 'off', 'values': ['off', 'range', 'list', 'eval']},
             {'name': 'start', 'type': 'str', 'value': '0', 'visible': False}, 

@@ -94,7 +94,7 @@ class Parameter(QtCore.QObject):
             raise Exception("Parameter must have a string name specified in opts.")
         self.setName(opts['name'])
         
-        for chOpts in self.opts.get('params', []):
+        for chOpts in self.opts.get('children', []):
             #print self, "Add child:", type(chOpts), id(chOpts)
             self.addChild(chOpts)
             
@@ -168,7 +168,7 @@ class Parameter(QtCore.QObject):
     def saveState(self):
         """Return a structure representing the entire state of the parameter tree."""
         state = self.opts.copy()
-        state['params'] = {ch.name(): ch.saveState() for ch in self}
+        state['children'] = {ch.name(): ch.saveState() for ch in self}
         return state
 
     def defaultValue(self):
