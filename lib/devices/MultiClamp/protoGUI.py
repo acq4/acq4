@@ -32,7 +32,8 @@ class MultiClampProtoGui(ProtocolGui):
         self.ui.splitter.setStretchFactor(1, 1)
         
         self.stateGroup = WidgetGroup(self)
-        self.ui.waveGeneratorWidget.setTimeScale(1e-3)
+        #self.ui.waveGeneratorWidget.setTimeScale(1e-3)
+        self.ui.waveGeneratorWidget.setMeta('x', units='s', siPrefix=True, dec=True, step=0.5, minStep=1e-6)
         self.unitLabels = [self.ui.waveGeneratorLabel, self.ui.holdingCheck]
         #self.modeSignalList = self.dev.listModeSignals()
         self.mode = None
@@ -42,18 +43,10 @@ class MultiClampProtoGui(ProtocolGui):
         self.ui.bottomPlotWidget.registerPlot(self.dev.name + '.Command')
 
         self.daqChanged(self.daqUI.currentState())
-        #QtCore.QObject.connect(self.daqUI, QtCore.SIGNAL('changed'), self.daqChanged)
         self.daqUI.sigChanged.connect(self.daqChanged)
-        #QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('dataChanged'), self.updateWaves)
         self.ui.waveGeneratorWidget.sigDataChanged.connect(self.updateWaves)
-        #QtCore.QObject.connect(self.ui.waveGeneratorWidget, QtCore.SIGNAL('parametersChanged'), self.sequenceChanged)
         self.ui.waveGeneratorWidget.sigParametersChanged.connect(self.sequenceChanged)
-        #QtCore.QObject.connect(self.ui.vcModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
-        #QtCore.QObject.connect(self.ui.icModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
-        #QtCore.QObject.connect(self.ui.i0ModeRadio, QtCore.SIGNAL('clicked()'), self.setMode)
-        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.uiStateChanged)
         self.stateGroup.sigChanged.connect(self.uiStateChanged)
-        #QtCore.QObject.connect(self.dev, QtCore.SIGNAL('stateChanged'), self.devStateChanged)
         self.dev.sigStateChanged.connect(self.devStateChanged)
         self.devStateChanged()
         
@@ -93,7 +86,7 @@ class MultiClampProtoGui(ProtocolGui):
         state = self.dev.getLastState(mode)
         
         if not self.ui.holdingSpin.isEnabled():
-            self.ui.holdingSpin.setValue(state['holding'] / self.cmdScale)
+            self.ui.holdingSpin.setValue(state['holding'])
         if not self.ui.primaryGainSpin.isEnabled():
             self.ui.primaryGainSpin.setValue(state['primaryGain'])
         if not self.ui.secondaryGainSpin.isEnabled():
@@ -230,7 +223,7 @@ class MultiClampProtoGui(ProtocolGui):
         #else:
             #h = 0.0
         self.ui.waveGeneratorWidget.setOffset(h)
-        self.ui.waveGeneratorWidget.setScale(self.cmdScale)
+        #self.ui.waveGeneratorWidget.setScale(self.cmdScale)
         ## waveGenerator generates values in V or A
         wave = self.ui.waveGeneratorWidget.getSingle(self.rate, self.numPts, params)
         
@@ -293,22 +286,29 @@ class MultiClampProtoGui(ProtocolGui):
             
             # update unit labels and scaling
             if mode == 'VC':
-                newUnit = 'mV'
-                oldUnit = 'pA'
-                self.cmdScale = 1e-3
-                self.inpScale = 1e-12
+                newUnit = 'V'
+                oldUnit = 'A'
+                #self.cmdScale = 1e-3
+                #self.inpScale = 1e-12
+                spinOpts = dict(units='V', siPrefix=True, dec=True, step=0.5, minStep=1e-3)
+                self.ui.waveGeneratorWidget.setMeta('y', **spinOpts)
+                self.ui.waveGeneratorWidget.setMeta('xy', units='V*s', siPrefix=True, dec=True, step=0.5, minStep=1e-6)
             else:
-                newUnit = 'pA'
-                oldUnit = 'mV'
-                self.cmdScale = 1e-12
-                self.inpScale = 1e-3
-            self.stateGroup.setScale(self.ui.holdingSpin, 1./self.cmdScale)
+                newUnit = 'A'
+                oldUnit = 'V'
+                #self.cmdScale = 1e-12
+                #self.inpScale = 1e-3
+                spinOpts = dict(units='A', siPrefix=True, dec=True, step=0.5, minStep=1e-12)
+                self.ui.waveGeneratorWidget.setMeta('y', **spinOpts)
+                self.ui.waveGeneratorWidget.setMeta('xy', units='C', siPrefix=True, dec=True, step=0.5, minStep=1e-15)
+            #self.stateGroup.setScale(self.ui.holdingSpin, 1./self.cmdScale)
+            self.ui.holdingSpin.setOpts(**spinOpts)
             #self.ui.waveGeneratorWidget.setScale(self.cmdScale)
             for l in self.unitLabels:
                 text = str(l.text())
                 l.setText(text.replace(oldUnit, newUnit))
-            self.ui.topPlotWidget.setLabel('left', units=oldUnit[1])
-            self.ui.bottomPlotWidget.setLabel('left', units=newUnit[1])
+            self.ui.topPlotWidget.setLabel('left', units=oldUnit)
+            self.ui.bottomPlotWidget.setLabel('left', units=newUnit)
                 
             ## Hide stim plot for I=0 mode
             if mode == 'I=0':

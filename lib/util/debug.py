@@ -33,6 +33,33 @@ def ftrace(func):
         return rv
     return w
 
+def pretty(data, indent=''):
+    """Format nested dict/list/tuple structures into a more human-readable string"""
+    ret = ""
+    ind2 = indent + "    "
+    if isinstance(data, dict):
+        ret = indent+"{\n"
+        for k, v in data.iteritems():
+            ret += ind2 + repr(k) + ":  " + pretty(v, ind2).strip() + "\n"
+        ret += indent+"}\n"
+    elif isinstance(data, list) or isinstance(data, tuple):
+        s = repr(data)
+        if len(s) < 40:
+            ret += indent + s
+        else:
+            if isinstance(data, list):
+                d = '[]'
+            else:
+                d = '()'
+            ret = indent+d[0]+"\n"
+            for i, v in enumerate(data):
+                ret += ind2 + str(i) + ":  " + pretty(v, ind2).strip() + "\n"
+            ret += indent+d[1]+"\n"
+    else:
+        ret += indent + repr(data)
+    return ret
+
+
 def getExc(indent=4, prefix='|  ', skip=1):
 
     lines = (traceback.format_stack()[:-skip] 

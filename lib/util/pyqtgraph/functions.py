@@ -84,7 +84,7 @@ def siFormat(x, precision=3, suffix='', space=True, error=None, minVal=1e-25, al
     else:
         plusminus = space + u"±" + space
         fmt = "%." + str(precision) + u"g%s%s%s%s"
-        return fmt % (x*p, pref, suffix, plusminus, siFormat(error, precision, space, minVal=minVal, suffix=suffix))
+        return fmt % (x*p, pref, suffix, plusminus, siFormat(error, precision=precision, suffix=suffix, space=space, minVal=minVal))
     
 def siEval(s):
     """

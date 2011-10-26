@@ -2,6 +2,7 @@ import units
 from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
 import pyqtgraph as pg
 import numpy as np
+import functions as fn
 import sys, collections
 
 
@@ -65,14 +66,16 @@ class SeqEvalError(Exception):  ## raised when a sequence parameter field fails 
 class SeqParameter(GroupParameter):
     def __init__(self, **args):
         
-        self.evalLocals = units.allUnits
+        self.evalLocals = units.allUnits.copy()
+        exec('from numpy import *', self.evalLocals)  ## import all of numpy into the eval namespace
         
         args['renamable'] = True
         args['removable'] = True
         args['name'] = args.get('name', 'Param')
         args['autoIncrementName'] = True
+        args['strictNaming'] = True
         
-        args['params'] = [
+        args['children'] = [
             {'name': 'default', 'type': 'str', 'value': '0'},
             {'name': 'sequence', 'type': 'list', 'value': 'off', 'values': ['off', 'range', 'list', 'eval']},
             {'name': 'start', 'type': 'str', 'value': '0', 'visible': False}, 
@@ -133,13 +136,19 @@ class SeqParameter(GroupParameter):
             start = self.evalStr('start')
             stop = self.evalStr('stop')
             nPts = self['steps']
-            seq = np.linspace(start, stop, nPts)
+            if self['log spacing']:
+                seq = fn.logSpace(start, stop, nPts)
+            else:
+                seq = np.linspace(start, stop, nPts)
         elif mode == 'list':
             seq = list(self.evalStr('list'))
         elif mode == 'eval':
             seq = self.evalStr('expression')
         else:
             raise Exception('Unknown sequence mode %s' % mode)
+        
+        if self['randomize']:
+            np.random.shuffle(seq)
         
         ## sanity check
         try:

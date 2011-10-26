@@ -11,11 +11,10 @@ for evaluation are provided in waveforms.py.
 """
 
 import sys, types, re
-from numpy import *
-import numpy
+import numpy as np
 from PyQt4 import QtCore, QtGui
 from advancedTypes import OrderedDict
-from functions import logSpace
+import functions as fn
 from GeneratorTemplate import *
 import waveforms
 from debug import *
@@ -43,9 +42,9 @@ class StimGenerator(QtGui.QWidget):
         self.ui.functionText.setFontFamily('Courier')
         self.ui.errorText.setVisible(False)
         
-        self.simpleMode = True  ## if True, then the current state was generated from 
-                                ## the simple tree. Otherwise, it was generated in advanced mode.
-        self.lockMode = False   ## used to temporarily block changes to simpleMode
+        self.advancedMode = None  ## if True, then the current state was generated in advanced
+                                  ## mode. Otherwise, it was generated from the simple stim tree.
+        self.lockMode = False     ## used to temporarily block changes to self.advancedMode
         
         self.pSpace = None    ## cached sequence parameter space
         
@@ -53,9 +52,7 @@ class StimGenerator(QtGui.QWidget):
         self.cacheRate = None
         self.cacheNPts = None
 
-        self.setError()
-
-        self.updateWidgets()
+        
         
         self.meta = {  ## holds some extra information about signals (units, expected scale and range, etc)
                        ## mostly information useful in configuring SpinBoxes
@@ -75,6 +72,12 @@ class StimGenerator(QtGui.QWidget):
         ## advanced stim generator
         self.seqParams = SequenceParamSet()
         self.ui.seqTree.setParameters(self.seqParams)
+        
+        self.setAdvancedMode(False)
+        self.setError()
+
+        self.updateWidgets()
+        
         self.seqParams.sigTreeStateChanged.connect(self.seqParamsChanged)
         self.ui.functionText.textChanged.connect(self.funcChanged)
         
@@ -176,11 +179,11 @@ class StimGenerator(QtGui.QWidget):
 
     def forceSimpleClicked(self):
         self.ui.advancedBtn.setChecked(False)
-        self.setSimpleMode(True)
+        self.setAdvancedMode(False)
 
     def forceAdvancedClicked(self):
         self.ui.advancedBtn.setChecked(True)
-        self.setSimpleMode(False)
+        self.setAdvancedMode(True)
 
     def updateWidgets(self):
         ## show/hide widgets depending on the current mode.
@@ -197,26 +200,26 @@ class StimGenerator(QtGui.QWidget):
         if self.ui.advancedBtn.isChecked():
             self.ui.stack.setCurrentIndex(2)
         else:
-            if self.simpleMode:
-                self.ui.stack.setCurrentIndex(0)
-            else:
+            if self.advancedMode:
                 self.ui.stack.setCurrentIndex(1)
+            else:
+                self.ui.stack.setCurrentIndex(0)
 
 
-    def setSimpleMode(self, simple):
-        if self.lockMode or self.simpleMode == simple:
+    def setAdvancedMode(self, adv):
+        if self.lockMode or self.advancedMode == adv:
             return
-        self.ui.advancedBtn.setChecked(not simple)
+        self.ui.advancedBtn.setChecked(adv)
 
-        if simple:
+        if not adv:
             self.stimParamsChanged()  ## to clear out advanced-mode settings
-        self.simpleMode = simple
+        self.advancedMode = adv
         self.updateWidgets()
 
     def funcChanged(self):
         ## called when the function string changes
         self.clearCache()
-        self.setSimpleMode(False)
+        self.setAdvancedMode(True)
         
         if self.test(): # test function. If ok, auto-update
             self.autoUpdate()
@@ -229,7 +232,7 @@ class StimGenerator(QtGui.QWidget):
         #print "seqParamsChanged:", args, "\n"
         ## should filter out some uninteresting events here..
         
-        self.setSimpleMode(False)
+        self.setAdvancedMode(True)
         self.clearCache()
         self.pSpace = None
         if self.test():
@@ -239,9 +242,14 @@ class StimGenerator(QtGui.QWidget):
     
     def stimParamsChanged(self, param=None, changes=None):
         ## called when the simple stim generator tree changes
-        funcStr, params = self.stimParams.compile()
+        try:
+            funcStr, params = self.stimParams.compile()
+        except:
+            self.setError(str(sys.exc_info()[1]))
+            raise
         
         #print "stimParamsChanged:", changes, "\n"
+        ## Update advanced-mode widgets to reflect (and ultimately enact) changes
         try:
             self.lockMode = True    ## don't let anyone change the mode until we're done
             self.blockSignals(True) ## avoid emitting dataChanged signals twice
@@ -254,7 +262,6 @@ class StimGenerator(QtGui.QWidget):
             self.ui.functionText.setPlainText(funcStr)
         finally:
             self.lockMode = False
-        #self.setSimpleMode(True)
 
     
     
@@ -280,33 +287,38 @@ class StimGenerator(QtGui.QWidget):
             'function': self.functionString(), 
             'params': self.seqParams.getState(), 
             'autoUpdate': self.ui.autoUpdateCheck.isChecked(),
-            'simpleMode': self.simpleMode,
+            'advancedMode': self.advancedMode,
         }
-        if self.simpleMode:
+        if not self.advancedMode:
             state['stimuli'] = self.stimParams.getState()
         return state
     
     def loadState(self, state):
         """set the parameters with the new state"""
-        if 'function' in state:
-            #self.ui.advancedBtn.setChecked(True)
-            self.ui.functionText.setPlainText(state['function'])
-            #self.setSimpleMode(False)
-        if 'params' in state:
-            if isinstance(state['params'], basestring):
-                raise Exception("This is an old function generator save format :(")
-            #self.ui.advancedBtn.setChecked(True)
-            #self.ui.paramText.setPlainText(state['params'])
-            self.seqParams.setState(state['params'])
-            #self.setSimpleMode(False)
-        if 'stimuli' in state:
-            self.stimParams.setState(state['stimuli'])
-            #self.setSimpleMode(True)
-        if 'autoUpdate' in state:
-            #self.ui.advancedBtn.setChecked(False)
-            self.ui.autoUpdateCheck.setChecked(state['autoUpdate'])
-        if 'simpleMode' in state:
-            self.setSimpleMode(state['simpleMode'])
+        try:
+            self.blockSignals(True)  ## avoid emitting multiple signals
+            if 'function' in state:
+                #self.ui.advancedBtn.setChecked(True)
+                self.ui.functionText.setPlainText(state['function'])
+            if 'params' in state:
+                if isinstance(state['params'], basestring):  ## for backward compatibility
+                    state['params'] = seqListParse(state['params'])
+                #self.ui.advancedBtn.setChecked(True)
+                #self.ui.paramText.setPlainText(state['params'])
+                self.seqParams.setState(state['params'])
+            if 'stimuli' in state:
+                self.stimParams.setState(state['stimuli'])
+            if 'autoUpdate' in state:
+                #self.ui.advancedBtn.setChecked(False)
+                self.ui.autoUpdateCheck.setChecked(state['autoUpdate'])
+            if 'advancedMode' in state:
+                self.setAdvancedMode(state['advancedMode'])
+        finally:
+            self.blockSignals(False)
+            self.sigDataChanged.emit()
+            self.sigStateChanged.emit()
+            self.sigParametersChanged.emit()
+            self.sigFunctionChanged.emit()
 
     def paramSpace(self):
         """Return an ordered dict describing the parameter space"""
@@ -407,7 +419,11 @@ class StimGenerator(QtGui.QWidget):
         ## evaluate and return
         fn = self.functionString().replace('\n', '')
         
-        ret = eval(fn, globals(), ns)
+        ## build global namespace with numpy imported
+        gns = {}
+        exec('from numpy import *', gns)
+        
+        ret = eval(fn, gns, ns)
         if isinstance(ret, ndarray):
             #ret *= self.scale
             ret += self.offset
@@ -428,61 +444,72 @@ class StimGenerator(QtGui.QWidget):
         
 
 
-#def seqListParse(text):
-    #s = OrderedDict()
-    #for l in text.split('\n'):
-        #if re.match(r'\w', l):
-            #(name, single, seq) = seqParse(l)
-            #s[name] = (single, seq)
-    #return s
+
+## Old sequence parsing functions for backward compatibility:
+##############################################################
+
+def seqListParse(text):
+    s = OrderedDict()
+    for l in text.split('\n'):
+        if re.match(r'\w', l):
+            seq = seqParse(l)
+            name = seq['name']
+            del seq['name']
+            s[name] = seq
+    return s
     
 
-#def seqParse(seqStr):
-    #seqStr = re.sub(r'\s', '', seqStr)
+def seqParse(seqStr):
+    seqStr = re.sub(r'\s', '', seqStr)
     
-    ### Match like this: "varName=singleValue;sequenceString"
-    #valRegex = r'(([\deE\-\.]+)\s*(\*\s*(\w+))?)'  ## matches -1.03e-3.8 * mV
-    #m = re.match(r'(\w+)='+valRegex+r'(;$|;(.*))?$', seqStr)
-    #if m is None:
-        #raise Exception("Syntax error in variable definition '%s'" % seqStr)
-    #(name, single, junk, seqStr) = m.groups()
-    #if seqStr is None:  ## no sequence specified, return now
-        #return (name, single, None)
+    ## Match like this: "varName=singleValue;sequenceString"
+    m = re.match(r'(\w+)=([\deE\-\.]+)(;$|;(.*))?$', seqStr)
+    if m is None:
+        raise Exception("Syntax error in variable definition '%s'" % seqStr)
+    (name, single, junk, seqStr) = m.groups()
+    if seqStr is None:  ## no sequence specified, return now
+        return {'name': name, 'default': single, 'sequence': 'off'}
     
-    ### Match list format: "[val1,val2,...]"
-    #m = re.match(r'\[[\deE\-\.,]+\]$', seqStr)
-    #if m is not None:
-        #seq = array(eval(seqStr))
-        #return (name, single, seq)
+    ## Match list format: "[val1,val2,...]"
+    m = re.match(r'\[[\deE\-\.,]+\]$', seqStr)
+    if m is not None:
+        seq = seqStr.strip(' []')
+        #seq = np.array(eval(seqStr))
+        return {'name': name, 'default': single, 'sequence': 'list', 'list': seq}
     
-    ### Match like this: "start:stop/length:opts" or "start:stop:step:opts"
-    #m = re.match(r'([\deE\-\.]+):([\deE\-\.]+)(/|:)([\deE\-\.]+)(:(\w+))?$', seqStr)
-    #if m is None:
-        #raise Exception("Syntax error in sequence string '%s'" % seqStr)
+    ## Match like this: "start:stop/length:opts" or "start:stop:step:opts"
+    m = re.match(r'([\deE\-\.]+):([\deE\-\.]+)(/|:)([\deE\-\.]+)(:(\w+))?$', seqStr)
+    if m is None:
+        raise Exception("Syntax error in sequence string '%s'" % seqStr)
     
-    #(v1, v2, stepChar, v3, junk, opts) = m.groups()
+    (v1, v2, stepChar, v3, junk, opts) = m.groups()
     #v1 = float(v1)
     #v2 = float(v2)
     #v3 = float(v3)
-    #if opts is None:
-        #opts = ''
-    
+    if opts is None:
+        opts = ''
+
+    if stepChar == ':':  ## convert stepSize -> nSteps
+        seq = np.arange(float(v1), float(v2), float(v3))
+        v2 = str(seq[-1])
+        v3 = str(len(seq))
+        
+
     #if stepChar == '/':
         #if 'l' in opts:
-            #seq = logSpace(v1, v2, v3)
+            #seq = fn.logSpace(v1, v2, v3)
         #else:
-            #seq = linspace(v1, v2, v3)
+            #seq = np.linspace(v1, v2, v3)
     #else:
         #if 'l' in opts:
-            #n = (log(v2/v1) / log(v3)) + 1
-            #seq = logSpace(v1, v2, n)
+            #n = (np.log(v2/v1) / np.log(v3)) + 1
+            #seq = fn.logSpace(v1, v2, n)
         #else:
-            #seq = arange(v1, v2, v3)
+            #seq = np.arange(v1, v2, v3)
     #if 'r' in opts:
-        #random.shuffle(seq)
+        #np.random.shuffle(seq)
+    return {'name': name, 'default': single, 'sequence': 'range', 
+        'start': v1, 'stop': v2, 'steps': v3,
+        'log spacing': 'l' in opts, 'randomize': 'r' in opts
+    }
     #return (name, single, seq)
-
-
-
-        
-        

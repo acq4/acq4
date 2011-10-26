@@ -90,14 +90,14 @@ registerParameterType('text', TextParameter)
 
 
 params = [
-    {'name': 'Group 0', 'type': 'group', 'params': [
+    {'name': 'Group 0', 'type': 'group', 'children': [
         {'name': 'Param 1', 'type': 'int', 'value': 10},
         {'name': 'Param 2', 'type': 'float', 'value': 10},
     ]},
-    {'name': 'Group 1', 'type': 'group', 'params': [
+    {'name': 'Group 1', 'type': 'group', 'children': [
         {'name': 'Param 1.1', 'type': 'float', 'value': 1.2e-6, 'dec': True, 'siPrefix': True, 'suffix': 'V'},
         {'name': 'Param 1.2', 'type': 'float', 'value': 1.2e6, 'dec': True, 'siPrefix': True, 'suffix': 'Hz'},
-        {'name': 'Group 1.3', 'type': 'group', 'params': [
+        {'name': 'Group 1.3', 'type': 'group', 'children': [
             {'name': 'Param 1.3.1', 'type': 'int', 'value': 11, 'limits': (-7, 15), 'default': -6},
             {'name': 'Param 1.3.2', 'type': 'float', 'value': 1.2e6, 'dec': True, 'siPrefix': True, 'suffix': 'Hz', 'readonly': True},
         ]},
@@ -105,7 +105,7 @@ params = [
         {'name': 'Param 1.5', 'type': 'list', 'values': [1,2,3], 'value': 2},
         {'name': 'Param 1.6', 'type': 'list', 'values': {"one": 1, "two": 2, "three": 3}, 'value': 2},
         ComplexParameter(name='ComplexParam'),
-        ScalableGroup(name="ScalableGroup", params=[
+        ScalableGroup(name="ScalableGroup", children=[
             {'name': 'ScalableParam 1', 'type': 'str', 'value': "hi"},
             {'name': 'ScalableParam 2', 'type': 'str', 'value': "hi"},
             
@@ -117,7 +117,7 @@ params = [
 ]
 
 #p = pTypes.ParameterSet("params", params)
-p = Parameter(name='params', type='group', params=params)
+p = Parameter(name='params', type='group', children=params)
 def change(param, changes):
     print "tree changes:"
     for param, change, data in changes:
