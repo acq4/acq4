@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'devTemplate.ui'
 #
-# Created: Tue Oct 25 10:04:47 2011
+# Created: Wed Oct 26 17:18:55 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -107,9 +107,6 @@ class Ui_Form(object):
         self.groupBox_2.setAlignment(QtCore.Qt.AlignCenter)
         self.groupBox_2.setObjectName(_fromUtf8("groupBox_2"))
         self.gridLayout_6 = QtGui.QGridLayout(self.groupBox_2)
-        self.gridLayout_6.setMargin(6)
-        self.gridLayout_6.setHorizontalSpacing(6)
-        self.gridLayout_6.setVerticalSpacing(4)
         self.gridLayout_6.setObjectName(_fromUtf8("gridLayout_6"))
         self.calibrationList = QtGui.QTreeWidget(self.groupBox_2)
         font = QtGui.QFont()
@@ -121,13 +118,24 @@ class Ui_Form(object):
         self.calibrationList.setItemsExpandable(False)
         self.calibrationList.setObjectName(_fromUtf8("calibrationList"))
         self.calibrationList.header().setStretchLastSection(True)
-        self.gridLayout_6.addWidget(self.calibrationList, 0, 0, 1, 4)
+        self.gridLayout_6.addWidget(self.calibrationList, 0, 0, 1, 5)
+        self.checkPowerBtn = QtGui.QPushButton(self.groupBox_2)
+        self.checkPowerBtn.setObjectName(_fromUtf8("checkPowerBtn"))
+        self.gridLayout_6.addWidget(self.checkPowerBtn, 1, 0, 1, 1)
         self.calibrateBtn = QtGui.QPushButton(self.groupBox_2)
         self.calibrateBtn.setObjectName(_fromUtf8("calibrateBtn"))
-        self.gridLayout_6.addWidget(self.calibrateBtn, 1, 0, 1, 1)
+        self.gridLayout_6.addWidget(self.calibrateBtn, 1, 1, 1, 1)
         self.deleteBtn = QtGui.QPushButton(self.groupBox_2)
         self.deleteBtn.setObjectName(_fromUtf8("deleteBtn"))
-        self.gridLayout_6.addWidget(self.deleteBtn, 1, 1, 1, 1)
+        self.gridLayout_6.addWidget(self.deleteBtn, 1, 2, 1, 1)
+        self.shutterBtn = QtGui.QPushButton(self.groupBox_2)
+        self.shutterBtn.setCheckable(True)
+        self.shutterBtn.setObjectName(_fromUtf8("shutterBtn"))
+        self.gridLayout_6.addWidget(self.shutterBtn, 1, 3, 1, 1)
+        self.qSwitchBtn = QtGui.QPushButton(self.groupBox_2)
+        self.qSwitchBtn.setCheckable(True)
+        self.qSwitchBtn.setObjectName(_fromUtf8("qSwitchBtn"))
+        self.gridLayout_6.addWidget(self.qSwitchBtn, 1, 4, 1, 1)
         self.groupBox = QtGui.QGroupBox(self.groupBox_2)
         self.groupBox.setAlignment(QtCore.Qt.AlignCenter)
         self.groupBox.setObjectName(_fromUtf8("groupBox"))
@@ -214,15 +222,7 @@ class Ui_Form(object):
         self.gridLayout_7.addWidget(self.recalibratePCellCheck, 2, 3, 1, 1)
         self.gridLayout_8.addLayout(self.gridLayout_7, 0, 0, 1, 1)
         self.gridLayout_3.addWidget(self.pCellGroup, 1, 0, 1, 1)
-        self.gridLayout_6.addWidget(self.groupBox, 2, 0, 1, 4)
-        self.qSwitchBtn = QtGui.QPushButton(self.groupBox_2)
-        self.qSwitchBtn.setCheckable(True)
-        self.qSwitchBtn.setObjectName(_fromUtf8("qSwitchBtn"))
-        self.gridLayout_6.addWidget(self.qSwitchBtn, 1, 3, 1, 1)
-        self.shutterBtn = QtGui.QPushButton(self.groupBox_2)
-        self.shutterBtn.setCheckable(True)
-        self.shutterBtn.setObjectName(_fromUtf8("shutterBtn"))
-        self.gridLayout_6.addWidget(self.shutterBtn, 1, 2, 1, 1)
+        self.gridLayout_6.addWidget(self.groupBox, 2, 0, 1, 5)
         self.gridLayout.addWidget(self.groupBox_2, 2, 0, 1, 1)
 
         self.retranslateUi(Form)
@@ -248,8 +248,11 @@ class Ui_Form(object):
         self.calibrationList.headerItem().setText(3, QtGui.QApplication.translate("Form", "Transmission", None, QtGui.QApplication.UnicodeUTF8))
         self.calibrationList.headerItem().setText(4, QtGui.QApplication.translate("Form", "Power at Sample", None, QtGui.QApplication.UnicodeUTF8))
         self.calibrationList.headerItem().setText(5, QtGui.QApplication.translate("Form", "Date", None, QtGui.QApplication.UnicodeUTF8))
+        self.checkPowerBtn.setText(QtGui.QApplication.translate("Form", "Check Power", None, QtGui.QApplication.UnicodeUTF8))
         self.calibrateBtn.setText(QtGui.QApplication.translate("Form", "Calibrate", None, QtGui.QApplication.UnicodeUTF8))
         self.deleteBtn.setText(QtGui.QApplication.translate("Form", "Delete", None, QtGui.QApplication.UnicodeUTF8))
+        self.shutterBtn.setText(QtGui.QApplication.translate("Form", "Open Shutter", None, QtGui.QApplication.UnicodeUTF8))
+        self.qSwitchBtn.setText(QtGui.QApplication.translate("Form", "Turn On QSwitch", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox.setTitle(QtGui.QApplication.translate("Form", "Calibration Parameters", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("Form", "Microscope:", None, QtGui.QApplication.UnicodeUTF8))
         self.scanLabel.setText(QtGui.QApplication.translate("Form", "Measurement Duration", None, QtGui.QApplication.UnicodeUTF8))
@@ -264,7 +267,5 @@ class Ui_Form(object):
         self.label_10.setText(QtGui.QApplication.translate("Form", "Maximum Voltage:", None, QtGui.QApplication.UnicodeUTF8))
         self.maxVSpin.setSuffix(QtGui.QApplication.translate("Form", "V", None, QtGui.QApplication.UnicodeUTF8))
         self.recalibratePCellCheck.setText(QtGui.QApplication.translate("Form", "Re-Calibrate Pockel Cell", None, QtGui.QApplication.UnicodeUTF8))
-        self.qSwitchBtn.setText(QtGui.QApplication.translate("Form", "Turn On QSwitch", None, QtGui.QApplication.UnicodeUTF8))
-        self.shutterBtn.setText(QtGui.QApplication.translate("Form", "Open Shutter", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph.SpinBox import SpinBox

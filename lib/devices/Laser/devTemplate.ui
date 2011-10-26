@@ -199,16 +199,7 @@
       <set>Qt::AlignCenter</set>
      </property>
      <layout class="QGridLayout" name="gridLayout_6">
-      <property name="horizontalSpacing">
-       <number>6</number>
-      </property>
-      <property name="verticalSpacing">
-       <number>4</number>
-      </property>
-      <property name="margin">
-       <number>6</number>
-      </property>
-      <item row="0" column="0" colspan="4">
+      <item row="0" column="0" colspan="5">
        <widget class="QTreeWidget" name="calibrationList">
         <property name="font">
          <font>
@@ -259,20 +250,47 @@
        </widget>
       </item>
       <item row="1" column="0">
+       <widget class="QPushButton" name="checkPowerBtn">
+        <property name="text">
+         <string>Check Power</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
        <widget class="QPushButton" name="calibrateBtn">
         <property name="text">
          <string>Calibrate</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="1">
+      <item row="1" column="2">
        <widget class="QPushButton" name="deleteBtn">
         <property name="text">
          <string>Delete</string>
         </property>
        </widget>
       </item>
-      <item row="2" column="0" colspan="4">
+      <item row="1" column="3">
+       <widget class="QPushButton" name="shutterBtn">
+        <property name="text">
+         <string>Open Shutter</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="4">
+       <widget class="QPushButton" name="qSwitchBtn">
+        <property name="text">
+         <string>Turn On QSwitch</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0" colspan="5">
        <widget class="QGroupBox" name="groupBox">
         <property name="title">
          <string>Calibration Parameters</string>
@@ -468,26 +486,6 @@
           </widget>
          </item>
         </layout>
-       </widget>
-      </item>
-      <item row="1" column="3">
-       <widget class="QPushButton" name="qSwitchBtn">
-        <property name="text">
-         <string>Turn On QSwitch</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="2">
-       <widget class="QPushButton" name="shutterBtn">
-        <property name="text">
-         <string>Open Shutter</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
-        </property>
        </widget>
       </item>
      </layout>

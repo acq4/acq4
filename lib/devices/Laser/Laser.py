@@ -98,7 +98,7 @@ class Laser(DAQGeneric):
             'expectedPower': config.get('power', None), ## Expected output
             'currentPower': None, ## Last measured output power
             'scopeTransmission': None, ## percentage of output power that is transmitted to slice
-            'tolerance': None,
+            'tolerance': 5.0, ## in %
             'useExpectedPower': True
             }
         
@@ -134,7 +134,6 @@ class Laser(DAQGeneric):
         return self._configDir
     
     def setParam(self, **kwargs):
-        """Set the self.calcPower variable. setting can be 'expected' or 'current'"""
         with self.variableLock:
             for k in kwargs:
                 self.params[k] = kwargs[k]
@@ -236,7 +235,7 @@ class Laser(DAQGeneric):
             return DAQGeneric.getDAQName(self, channel)
         
     def runCalibration(self, powerMeter=None, measureTime=0.1, settleTime=0.005, pCellVoltage=None, rate = 100000):
-        daqName = self.getDAQName()
+        daqName = self.getDAQName()[0]
         duration = measureTime + settleTime
         nPts = int(rate * duration)
         
@@ -246,23 +245,26 @@ class Laser(DAQGeneric):
                 daqName: {'numPts': nPts, 'rate':rate}
                 }
         
-        if self.dev.hasPowerIndicator:
-            powerInd = self.dev.config['powerIndicator']['channel']
+        if self.hasPowerIndicator:
+            powerInd = self.config['powerIndicator']['channel']
             cmdOff[powerInd[0]] = {powerInd[1]: {'record':True, 'recordInit':False}}
             
         if pCellVoltage is not None:
-            if self.dev.hasPCell:
+            if self.hasPCell:
                 a = np.zeros(nPts, dtype=float)
                 a[:] = pCellVoltage
-                cmdOff[self.dev.name]['pCell'] = a
+                cmdOff[self.name]['pCell'] = a
             else:
                 raise Exception("Laser device %s does not have a pCell, therefore no pCell voltage can be set." %self.dev.name)
             
-        cmdOn = cmdOff
+        cmdOn = cmdOff.copy()
         wave = np.ones(nPts, dtype=np.byte)
         wave[-1] = 0
-        cmdOn[self.dev.name]={'shutterMode':'open', 'switchWaveform':wave}
+        shutterDelay = self.config.get('shutter', {}).get('delay', 0)
+        wave[:shutterDelay*rate] = 0
+        cmdOn[self.name]={'shutterMode':'open', 'switchWaveform':wave}
         
+        print "cmdOff: ", cmdOff
         taskOff = getManager().createTask(cmdOff)
         taskOff.execute()
         resultOff = taskOff.getResult()
@@ -272,16 +274,16 @@ class Laser(DAQGeneric):
         resultOn = taskOn.getResult()
             
             
-        if self.dev.hasPowerIndicator:
+        if self.hasPowerIndicator:
             powerOutOn = resultOn[powerInd[0]][0][settleTime*rate:].mean()
         else:
             powerOutOn = self.outputPower()
             
-        laserOff = resultOff[powerMeter][0][settleTime*rate:]
-        laserOn = resultOn[powerMeter[0]][settleTime*rate:]
+        laserOff = resultOff[powerMeter][0][(shutterDelay+settleTime)*rate:]
+        laserOn = resultOn[powerMeter][0][(shutterDelay+settleTime)*rate:]
                           
         t, prob = stats.ttest_ind(laserOn, laserOff)
-        if prob < 0.01:
+        if prob > 0.001:
             raise Exception("Power meter device %s could not detect laser." %powerMeter)
         else:
             powerSampleOn = laserOn.mean()
@@ -335,7 +337,7 @@ class Laser(DAQGeneric):
             laserOff = result[powerInd[0]][0][offMask==True]
             
             t, prob = stats.ttest_ind(laserOn, laserOff)
-            if prob < 0.01: ### if powerOn is statistically different from powerOff
+            if prob < 0.05: ### if powerOn is statistically different from powerOff
                 powerOn = laserOn.mean()
                 powerOff = laserOff.mean()
                 #self.devGui.ui.outputPowerLabel.setText(siFormat(powerOn, suffix='W')) ## NO! device does not talk to GUI!
@@ -343,8 +345,8 @@ class Laser(DAQGeneric):
                 with self.variableLock:
                     self.params['currentPower'] = powerOn
                     #self.devGui.ui.samplePowerLabel.setText(siFormat(powerOn*self.scopeTransmission, suffix='W'))
-                    pmin = self.params['expectedPower'] - self.params['expectedPower']*self.params['tolerance']
-                    pmax = self.params['expectedPower'] + self.params['expectedPower']*self.params['tolerance']
+                    pmin = self.params['expectedPower'] - self.params['expectedPower']*self.params['tolerance']/100.0
+                    pmax = self.params['expectedPower'] + self.params['expectedPower']*self.params['tolerance']/100.0
                 if powerOn < pmin or powerOn > pmax:
                     raise HelpfulException("Power is outside expected range. Please adjust expected value or adjust the tuning of your laser.")
                 
@@ -367,46 +369,51 @@ class Laser(DAQGeneric):
         
         
         if 'switchWaveform' in cmd:
-            with self.variableLock:
-                if self.params['useExpectedPower']:
-                    power = self.params['expectedPower']
-                else:
-                    power = self.params['currentPower']
-                transmission = self.params['scopeTransmission']
-                #transmission = 0.1
-            powerCmd = cmd['switchWaveform']*power*transmission
+            cmdWaveform = cmd['switchWaveform']
             vals = np.unique(cmd['switchWaveform'])
-            if not self.hasPCell and (1 or 1.0) not in vals: ## check to make sure we can give the specified power.
+            if not self.hasPCell and len(vals)==2 and (1 or 1.0) not in vals: ## check to make sure we can give the specified power.
                 raise Exception('An analog power modulator is neccessary to get power values other than zero and one (full power). The following values (as percentages of full power) were requested: %s. This %s device does not have an analog power modulator.' %(str(vals), self.name))
         elif 'powerWaveform' in cmd:
-            powerCmd = cmd['powerWaveform']
+            cmdWaveform = cmd['powerWaveform']
         else:
             raise Exception('Not sure how to generate channel commands for %s' %str(cmd))
         
-        nPts = len(powerCmd)
+        nPts = len(cmdWaveform)
         daqCmd = {}
         #if self.dev.config.get('pCell', None) is not None:
         if self.hasPCell:
             ## convert power values using calibration data
+            if 'switchWaveform' in cmd:
+                with self.variableLock:
+                    if self.params['useExpectedPower']:
+                        power = self.params['expectedPower']
+                    else:
+                        power = self.params['currentPower']
+                    transmission = self.params['scopeTransmission']
+                    #transmission = 0.1
+                powerCmd = cmd['switchWaveform']*power*transmission
+            else:
+                powerCmd = cmd['powerWaveform']
             daqCmd['pCell'] = self.getPCellWaveform(powerCmd)
         else:
-            if len(np.unique(powerCmd)) > 2: ## check to make sure command doesn't specify powers we can't do
+            if len(np.unique(cmdWaveform)) > 2: ## check to make sure command doesn't specify powers we can't do
                 raise Exception("%s device does not have an analog power modulator, so can only have a binary power command." %str(self.name))
             
         if self.hasQSwitch:
         #if self.dev.config.get('qSwitch', None) is not None:
             qswitchCmd = np.zeros(nPts, dtype=np.byte)
-            qswitchCmd[powerCmd > 1e-5] = 1
+            qswitchCmd[cmdWaveform > 1e-5] = 1
             daqCmd['qSwitch'] = qswitchCmd
             
         if self.hasTriggerableShutter:
             shutterCmd = np.zeros(nPts, dtype=np.byte)
             delay = self.config['shutter'].get('delay', 0.0) 
-            shutterCmd[powerCmd != 0] = 1 ## open shutter when we expect power
+            shutterCmd[cmdWaveform != 0] = 1 ## open shutter when we expect power
             ## open shutter a little before we expect power because it has a delay
             delayPts = int(delay*rate) 
             a = np.argwhere(shutterCmd[1:]-shutterCmd[:-1] == 1)
-            if delayPts > a[0]:
+            
+            if 1 in shutterCmd[:delayPts]:
                 raise HelpfulException("Shutter takes %g seconds to open. Power pulse cannot be started before then." %delay)
             for i,x in enumerate(a):
                 shutterCmd[a[i]-delayPts:a[i]+1] = 1
@@ -484,14 +491,14 @@ class LaserTask(DAQGenericTask):
         self.cmd = cmd
         self.dev = dev ## this happens in DAQGeneric initialization, but we need it here too since it is used in making the waveforms that go into DaqGeneric.__init__
         
-        ## create protocol structure to pass to daqGeneric; protocols will get filled in when self.configure() gets called
+        ## create protocol structure to pass to daqGeneric, and retain a pointer to it here; DAQGeneric protocols will get filled in from LaserTask when self.configure() gets called
         cmd['daqProtocol'] = {}
         if 'shutter' in dev.config:
-            cmd['daqProtocol']['shutter'] = None
+            cmd['daqProtocol']['shutter'] = {}
         if 'qSwitch' in dev.config:
-            cmd['daqProtocol']['qSwitch'] = None
+            cmd['daqProtocol']['qSwitch'] = {}
         if 'pCell' in dev.config:
-            cmd['daqProtocol']['pCell'] = None
+            cmd['daqProtocol']['pCell'] = {}
             
 
         DAQGenericTask.__init__(self, dev, cmd['daqProtocol'])
@@ -522,31 +529,33 @@ class LaserTask(DAQGenericTask):
             calcCmds = {}
 
         
-        ### set up shutter, qSwitch and pCell
+        ### set up shutter, qSwitch and pCell -- self.cmd['daqProtocol'] points to the command structure that the DAQGeneric will use, don't set self.cmd['daqProtocol'] equal to something else!
         if 'shutter' in self.cmd:
             self.cmd['daqProtocol']['shutter'] = self.cmd['shutter']
+            self.cmd['daqProtocol']['shutter']['command'][-1] = 0
         elif 'shutterMode' in self.cmd:
             if self.cmd['shutterMode'] is 'auto':
-                self.cmd['daqProtocol']['shutter'] = calcCmds['shutter']
+                self.cmd['daqProtocol']['shutter']['command']= calcCmds['shutter']
             elif self.cmd['shutterMode'] is 'closed':
-                self.cmd['daqProtocol']['shutter'] = np.zeros(len(calcCmds['shutter']), dtype=np.byte)
+                self.cmd['daqProtocol']['shutter']['command'] = np.zeros(len(calcCmds['shutter']), dtype=np.byte)
             elif self.cmd['shutterMode'] is 'open':
-                self.cmd['daqProtocol']['shutter'] = np.ones(len(calcCmds['shutter']), dtype=np.byte)
+                self.cmd['daqProtocol']['shutter']['command'] = np.ones(len(calcCmds['shutter']), dtype=np.byte)
+            self.cmd['daqProtocol']['shutter']['command'][-1] = 0
             
         if 'pCell' in self.cmd:
-            self.cmd['daqProtocol']['pCell'] = self.cmd['pCell']
+            self.cmd['daqProtocol']['pCell']['command'] = self.cmd['pCell']
         elif 'pCell' in calcCmds:
-            self.cmd['daqProtocol']['pCell'] = calcCmds['pCell']
+            self.cmd['daqProtocol']['pCell']['command'] = calcCmds['pCell']
             
         if 'qSwitch' in self.cmd:
-            self.cmd['daqProtocol']['qSwitch'] = self.cmd['qSwitch']
+            self.cmd['daqProtocol']['qSwitch']['command'] = self.cmd['qSwitch']
+            self.cmd['daqProtocol']['qSwitch']['command'][-1] = 0
         elif 'qSwitch' in calcCmds:
-            self.cmd['daqProtocol']['qSwitch'] = calcCmds['qSwitch']
-            
-            
-        self._DAQCmd = self.cmd['daqProtocol']
+            self.cmd['daqProtocol']['qSwitch']['command'] = calcCmds['qSwitch']
+            self.cmd['daqProtocol']['qSwitch']['command'][-1] = 0
         
-        DAQGenericTask.configure(self, tasks, startOrder)
+        
+        DAQGenericTask.configure(self, tasks, startOrder) ## DAQGenericTask will use self.cmd['daqProtocol']
 
         
     def getResult(self):

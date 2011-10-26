@@ -37,7 +37,8 @@ class LaserDevGui(QtGui.QWidget):
         self.ui.settlingSpin.setOpts(suffix='s', siPrefix=True, value=0.1, dec=True, step=1, minStep=0.01)
         with self.dev.variableLock:
             self.ui.expectedPowerSpin.setOpts(suffix='W', siPrefix=True, bounds=[0.0, None], value=self.dev.params['expectedPower'], dec=True, step=0.1, minStep=0.01)
-        self.ui.toleranceSpin.setOpts(step=0.1, suffix='%', bounds=[0.1, 100.0], value=5.0)
+        self.ui.toleranceSpin.setOpts(step=0.1, suffix='%', bounds=[0.1, 100.0], value=self.dev.params['tolerance'])
+        
         
         if not self.dev.hasShutter:
             self.ui.shutterBtn.setEnabled(False)
@@ -60,8 +61,23 @@ class LaserDevGui(QtGui.QWidget):
             if d == defPowerMeter:
                 self.ui.meterCombo.setCurrentIndex(self.ui.meterCombo.count()-1)
          
+        ## get scope device to connect objective changed signal
+        self.scope = getManager().getDevice(self.dev.config['scope'])
+        self.scope.sigObjectiveChanged.connect(self.objectiveChanged)
+        
         ## Populate list of calibrations
+        #self.microscopes = []
         self.updateCalibrationList()
+        
+        ## get scope device to connect objective changed signal
+        #self.scope = None
+        #while self.scope == None:
+            #for m in self.microscopes:
+                #try:
+                    #self.scope = getManager().getDevice(m)
+                #except:
+                    #pass
+        
 
         ## make connections
         self.ui.calibrateBtn.clicked.connect(self.calibrateClicked)
@@ -78,6 +94,7 @@ class LaserDevGui(QtGui.QWidget):
         #self.ui.settlingSpin.valueChanged.connect(self.settlingSpinChanged)
         self.ui.shutterBtn.toggled.connect(self.shutterToggled)
         self.ui.qSwitchBtn.toggled.connect(self.qSwitchToggled)
+        self.ui.checkPowerBtn.clicked.connect(self.dev.outputPower)
         
         self.dev.sigPowerChanged.connect(self.updatePowerLabels)
         
@@ -131,7 +148,14 @@ class LaserDevGui(QtGui.QWidget):
         #pass
     
     def powerMeterChanged(self):
-        sTime = getManager().getDevice(self.ui.meterCombo.currentText()).config.get('settlingTime', None)
+        powerDev = getManager().getDevice(self.ui.meterCombo.currentText())
+        if hasattr(powerDev, 'config'):
+            sTime = powerDev.config.get('settlingTime', None)
+        elif hasattr(powerDev, 'getConfigParam'):
+            sTime = powerDev.getConfigParam('settlingTime')
+        else:
+            sTime = None
+            
         if sTime is not None:
             self.ui.settlingSpin.setValue(sTime)
             
@@ -141,27 +165,51 @@ class LaserDevGui(QtGui.QWidget):
     
     #def settlingSpinChanged(self, value):
         #pass
+        
+    def objectiveChanged(self):
+        ## look up transmission value for this objective in calibration list
+        index = self.dev.getCalibrationIndex()
+        obj = self.scope.getObjective()['name'] 
+        vals = index[self.scope.name].get(obj, None)
+        if vals is None:
+            raise Exception("No laser calibration for %s objective on %s." %(obj, self.scope.name))
+        wl = str(siFormat(self.dev.getWavelength()))
+        vals = vals.get(wl, None)
+        if vals is None:
+            raise Exception("No laser calibration for %s wavelenth with %s objective on %s." %(wl, obj, self.scope.name))
+        
+        ## set that transmisson value in dev.params
+        self.dev.setParam(scopeTransmission=vals['transmission'])
+        
+        ## update labels
+        with self.dev.variableLock:
+            power = self.dev.params['currentPower']
+        self.updatePowerLabels(power)
     
     def updatePowerLabels(self, power):
-        self.ui.outputPowerLabel.setText(str(siFormat(power)))
-        self.ui.samplePowerLabel.setText(str(siFormat(power*self.dev.params['scopeTransmission'])))
+        self.ui.outputPowerLabel.setText(str(siFormat(power, suffix='W')))
+        self.ui.samplePowerLabel.setText(str(siFormat(power*self.dev.params['scopeTransmission'], suffix='W')))
 
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
-        
         ## Populate calibration lists
         index = self.dev.getCalibrationIndex()
         if index.has_key('pCellCalibration'):
             index.pop('pCellCalibration')
         for scope in index:
+            #self.microscopes.append(scope)
             for obj in index[scope]:
                 for wavelength in index[scope][obj]:
                     cal = index[scope][obj][wavelength]
                     power = cal['power']
-                    scale = cal['transmission']
+                    trans = cal['transmission']
                     date = cal['date']
-                    item = QtGui.QTreeWidgetItem([scope, obj, wavelength, '%.2f' %(scale*100) + '%', siFormat(power, suffix='W'), date])
+                    item = QtGui.QTreeWidgetItem([scope, obj, wavelength, '%.2f' %(trans*100) + '%', siFormat(power, suffix='W'), date])
                     self.ui.calibrationList.addTopLevelItem(item)
+        ## set current scopeTransmission
+        trans = index.get(self.scope.name, {}).get(self.scope.getObjective()['name'], {}).get(str(siFormat(self.dev.getWavelength())), {}).get('transmission', None)
+        if trans is not None:
+            self.dev.setParam(scopeTransmission=trans)
     
     def calibrateClicked(self):
         scope = str(self.ui.microscopeCombo.currentText())
@@ -177,7 +225,7 @@ class LaserDevGui(QtGui.QWidget):
         ## Run calibration
         if not self.dev.hasPCell:
             power, transmission = self.dev.runCalibration(powerMeter=powerMeter, measureTime=mTime, settleTime=sTime)
-        
+            self.dev.setParam(currentPower=power, scopeTransmission=transmission)
         else:
             raise Exception("Pockel Cell calibration is not yet implented.")
             #if index.has_key('pCellCalibration') and not self.ui.recalibratePCellCheck.isChecked():
@@ -218,7 +266,7 @@ class LaserDevGui(QtGui.QWidget):
         self.updateCalibrationList()
     
     def deleteClicked(self):
-        self.dev.outputPower()
+        #self.dev.outputPower()
         cur = self.ui.calibrationList.currentItem()
         if cur is None:
             return
