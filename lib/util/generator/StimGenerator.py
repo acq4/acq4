@@ -42,8 +42,8 @@ class StimGenerator(QtGui.QWidget):
         self.ui.functionText.setFontFamily('Courier')
         self.ui.errorText.setVisible(False)
         
-        self.advancedMode = False  ## if True, then the current state was generated in advanced
-                                  ## mode. Otherwise, it was generated from the simploe stim tree.
+        self.advancedMode = None  ## if True, then the current state was generated in advanced
+                                  ## mode. Otherwise, it was generated from the simple stim tree.
         self.lockMode = False     ## used to temporarily block changes to self.advancedMode
         
         self.pSpace = None    ## cached sequence parameter space
@@ -52,10 +52,7 @@ class StimGenerator(QtGui.QWidget):
         self.cacheRate = None
         self.cacheNPts = None
 
-        self.setAdvancedMode(True)
-        self.setError()
-
-        self.updateWidgets()
+        
         
         self.meta = {  ## holds some extra information about signals (units, expected scale and range, etc)
                        ## mostly information useful in configuring SpinBoxes
@@ -75,6 +72,12 @@ class StimGenerator(QtGui.QWidget):
         ## advanced stim generator
         self.seqParams = SequenceParamSet()
         self.ui.seqTree.setParameters(self.seqParams)
+        
+        self.setAdvancedMode(False)
+        self.setError()
+
+        self.updateWidgets()
+        
         self.seqParams.sigTreeStateChanged.connect(self.seqParamsChanged)
         self.ui.functionText.textChanged.connect(self.funcChanged)
         
