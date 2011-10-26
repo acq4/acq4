@@ -235,6 +235,60 @@ class Laser(DAQGeneric):
         else:
             return DAQGeneric.getDAQName(self, channel)
         
+    def runCalibration(self, powerMeter=None, measureTime=0.1, settleTime=0.005, pCellVoltage=None, rate = 100000):
+        daqName = self.getDAQName()
+        duration = measureTime + settleTime
+        nPts = int(rate * duration)
+        
+        cmdOff = {'protocol': {'duration': duration, 'timeout': duration+5.0},
+                self.name: {'shutterMode':'closed', 'switchWaveform':np.zeros(nPts, dtype=np.byte)},
+                powerMeter: {x: {'record':True, 'recordInit':False} for x in getManager().getDevice(powerMeter).listChannels()},
+                daqName: {'numPts': nPts, 'rate':rate}
+                }
+        
+        if self.dev.hasPowerIndicator:
+            powerInd = self.dev.config['powerIndicator']['channel']
+            cmdOff[powerInd[0]] = {powerInd[1]: {'record':True, 'recordInit':False}}
+            
+        if pCellVoltage is not None:
+            if self.dev.hasPCell:
+                a = np.zeros(nPts, dtype=float)
+                a[:] = pCellVoltage
+                cmdOff[self.dev.name]['pCell'] = a
+            else:
+                raise Exception("Laser device %s does not have a pCell, therefore no pCell voltage can be set." %self.dev.name)
+            
+        cmdOn = cmdOff
+        wave = np.ones(nPts, dtype=np.byte)
+        wave[-1] = 0
+        cmdOn[self.dev.name]={'shutterMode':'open', 'switchWaveform':wave}
+        
+        taskOff = getManager().createTask(cmdOff)
+        taskOff.execute()
+        resultOff = taskOff.getResult()
+        
+        taskOn = getManager().createTask(cmdOn)
+        taskOn.execute()
+        resultOn = taskOn.getResult()
+            
+            
+        if self.dev.hasPowerIndicator:
+            powerOutOn = resultOn[powerInd[0]][0][settleTime*rate:].mean()
+        else:
+            powerOutOn = self.outputPower()
+            
+        laserOff = resultOff[powerMeter][0][settleTime*rate:]
+        laserOn = resultOn[powerMeter[0]][settleTime*rate:]
+                          
+        t, prob = stats.ttest_ind(laserOn, laserOff)
+        if prob < 0.01:
+            raise Exception("Power meter device %s could not detect laser." %powerMeter)
+        else:
+            powerSampleOn = laserOn.mean()
+            transmission = powerSampleOn/powerOutOn
+            return (powerSampleOn, transmission)
+       
+        
     def outputPower(self):
         """Return the current output power of the laser (excluding the effect of pockel cell, shutter, etc.)
         This information is determined in one of a few ways:
