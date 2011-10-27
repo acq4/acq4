@@ -27,14 +27,18 @@ class LaserProtoGui(DAQGenericProtoGui):
         hLayout = QtGui.QHBoxLayout()
         wid.setLayout(hLayout)
         self.ctrlSplitter.addWidget(wid)
-        label = QtGui.QLabel("Current Power: ")
-        self.powerLabel = QtGui.QLabel("100 mW")
+        label = QtGui.QLabel("Current Power at Sample: ")
+        self.powerLabel = QtGui.QLabel("")
+        self.powerLabel.font().setBold(True)
+        self.powerLabel.font().setPointSize(12)
         self.checkPowerBtn = QtGui.QPushButton("Check Power")
+        if not self.dev.hasPowerIndicator:
+            self.checkPowerBtn.setEnabled(False)
         hLayout.addWidget(label)
         hLayout.addWidget(self.powerLabel)
         hLayout.addWidget(self.checkPowerBtn)
         
-        ## do stuff, then:
+        
         self.powerWidget, self.powerPlot = self.createChannelWidget('power', daqName=self.dev.getDAQName()[0])
         self.ctrlSplitter.addWidget(self.powerWidget)
         self.plotSplitter.addWidget(self.powerPlot)
@@ -67,9 +71,11 @@ class LaserProtoGui(DAQGenericProtoGui):
         self.checkPowerBtn.clicked.connect(self.dev.outputPower)
         self.dev.sigPowerChanged.connect(self.updatePowerLabel)
         
+        self.dev.outputPower()
+        
         
     def updatePowerLabel(self, power):
-        self.powerLabel.setText(str(siFormat(power)))
+        self.powerLabel.setText(str(siFormat(power*self.dev.params['scopeTransmission'], suffix='W')))
     
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
@@ -87,7 +93,14 @@ class LaserProtoGui(DAQGenericProtoGui):
         rate = self.powerWidget.rate
         wave = self.powerWidget.getSingleWave(params)
         rawCmds = self.cache.get(id(wave), self.dev.getChannelCmds({'powerWaveform':wave}, rate)) ## returns {'shutter': array(...), 'qSwitch':array(..), 'pCell':array(...)}
-        return rawCmds
+        
+        ### structure protocol in DAQGeneric-compatible way
+        cmd = {}
+        for k in rawCmds:
+            cmd[k] = {}
+            cmd[k]['command'] = rawCmds[k]
+            
+        return  cmd
     
     def powerCmdChanged(self):
         self.clearRawPlots()

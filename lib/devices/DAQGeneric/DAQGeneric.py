@@ -73,7 +73,6 @@ class DAQGeneric(Device):
         self._DGLock = Mutex(QtCore.QMutex.Recursive)
         ## Do some sanity checks here on the configuration
         self._DGConfig = config
-        self.config = config
         self._DGHolding = {}
         for ch in config:
             if config[ch]['type'][0] != 'a' and ('scale' in config[ch] or 'offset' in config[ch]):
@@ -107,6 +106,9 @@ class DAQGeneric(Device):
             
     def createTask(self, cmd):
         return DAQGenericTask(self, cmd)
+    
+    def getConfigParam(self, param):
+        return self._DGConfig.get(param, None)
     
         
     def setChanHolding(self, channel, level=None, block=True):

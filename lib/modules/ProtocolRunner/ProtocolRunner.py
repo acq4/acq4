@@ -846,7 +846,10 @@ class ProtocolRunner(Module):
             #print prot
             #self.emit(QtCore.SIGNAL('protocolStarted'), {})
             self.sigProtocolStarted.emit({})
+            logMsg('Started %s protocol sequence of length %i' %(self.currentProtocol.name(),pLen), importance=6)
+            #print 'PR protocol positions:
             self.taskThread.startProtocol(prot, paramInds)
+            
         except:
             self.enableStartBtns(True)
 
@@ -1166,7 +1169,7 @@ class TaskThread(QtCore.QThread):
             #l.unlock()
             #print "TaskThread:startProtocol starting..", self.lock.depth()
             self.start() ### causes self.run() to be called from somewhere in C code
-            logMsg("Protocol Started.")
+            logMsg("Protocol Started.", importance=1)
             #print "TaskThread:startProtocol started", self.lock.depth()
     
     def pause(self, pause):

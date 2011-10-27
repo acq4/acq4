@@ -67,7 +67,7 @@ def logMsg(msg, **kwargs):
         LOG.logMsg(msg, **kwargs)
     else:
         print "Can't log message; no log created yet."
-        print args
+        #print args
         print kwargs
         
     
@@ -727,6 +727,7 @@ class Task:
         
         ## Create task objects. Each task object is a handle to the device which is unique for this protocol run.
         self.tasks = {}
+        #print "devNames: ", self.devNames
         for devName in self.devNames:
             dev = self.dm.getDevice(devName)
             task = dev.createTask(self.command[devName])
