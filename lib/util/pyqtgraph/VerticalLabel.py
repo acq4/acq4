@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from Qt import QtCore, QtGui
 
 #class VerticalLabel(QtGui.QLabel):
     #def paintEvent(self, ev):

@@ -15,10 +15,10 @@ class DIOSwitch(Device):
         self.lock = Mutex.Mutex()
         self.daqs = {}
         for name, conf in config['channels'].iteritems():
-            daq = conf[0]
-            chan = conf[1]
-            dev = dm.getDevice(daq)
-            self.daqs[name] = (dev, chan)
+            #daq = conf[0]
+            #chan = conf[1]
+            dev = dm.getDevice(conf['device'])
+            self.daqs[name] = (dev, conf['channel'])
         self.state = {}
         
         self.poll()

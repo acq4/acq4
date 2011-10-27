@@ -13,6 +13,10 @@ from debug import *
 import Mutex
 
 class NiDAQ(Device):
+    """
+    Config options:
+        defaultAIMode: 'mode'  # mode to use for ai channels by default ('rse', 'nrse', or 'diff')
+    """
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.config = config
@@ -229,11 +233,13 @@ class Task(DeviceTask):
         
     def configure(self, tasks, startOrder):
         #print "daq configure", tasks
+        defaultAIMode = self.dev.config.get('defaultAIMode', None)
+        
         ## Request to all devices that they create the channels they use on this task
         for dName in tasks:
             #print "Requesting %s create channels" % dName
             if hasattr(tasks[dName], 'createChannels'):
-                tasks[dName].createChannels(self)
+                tasks[dName].createChannels(self, defaultAIMode=defaultAIMode)
         
         ## If no devices requested buffered operations, then do not configure clock.
         ## This might eventually cause some triggering issues..

@@ -431,7 +431,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         cmd = {
             'protocol': {'duration': 0.0, 'timeout': 5.0},
             camera: {'record': True, 'minFrames': 10, 'params': camParams, 'pushState': 'scanProt'}, 
-            laser: {'Shutter': {'preset': 0, 'holding': 0}}
+            #laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
         #print "\n\n====> Record background\n"
         task = lib.Manager.getManager().createTask(cmd)
@@ -450,7 +450,7 @@ class ScannerDeviceGui(QtGui.QWidget):
                 },
                 #'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3, 
                 'popState': 'scanProt'},
-            laser: {'Shutter': {'preset': 0, 'holding': 0, 'command': np.ones(len(xCommand), dtype=byte)}},
+            laser: {'shutter': {'preset': 0, 'holding': 0, 'command': np.ones(len(xCommand), dtype=byte)}},
             #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
             self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},
             daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}

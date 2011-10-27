@@ -1,11 +1,50 @@
 # -*- coding: utf-8 -*-
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 import os, types
-from debug import printExc
+from pyqtgraph.debug import printExc
 from ..Node import Node
 import reload
 
-dn = os.path.dirname(os.path.abspath(__file__))
+
+NODE_LIST = OrderedDict()  ## maps name:class for all registered Node subclasses
+NODE_TREE = OrderedDict()  ## categorized tree of Node subclasses
+
+def getNodeType(name):
+    try:
+        return NODE_LIST[name]
+    except KeyError:
+        raise Exception("No node type called '%s'" % name)
+
+def getNodeTree():
+    return NODE_TREE
+
+def registerNodeType(cls, paths, override=False):
+    """
+    Register a new node type. If the type's name is already in use,
+    an exception will be raised (unless override=True).
+    
+    Arguments:
+        cls - a subclass of Node (must have typ.nodeName)
+        paths - list of tuples specifying the location(s) this 
+                type will appear in the library tree.
+        override - if True, overwrite any class having the same name
+    """
+    if not isNodeClass(cls):
+        raise Exception("Object %s is not a Node subclass" % str(cls))
+    
+    name = cls.nodeName
+    if not override and name in NODE_LIST:
+        raise Exception("Node type name '%s' is already registered." % name)
+    
+    NODE_LIST[name] = cls
+    for path in paths:
+        root = NODE_TREE
+        for n in path:
+            if n not in root:
+                root[n] = OrderedDict()
+            root = root[n]
+        root[name] = cls
+
 
 
 def isNodeClass(cls):
@@ -16,34 +55,41 @@ def isNodeClass(cls):
         return False
     return hasattr(cls, 'nodeName')
 
-def loadLibrary(reloadLibs=False):
+def loadLibrary(reloadLibs=False, libPath=None):
+    """Import all Node subclasses found within files in the library module."""
+    import traceback
+    traceback.print_stack()
+
     global NODE_LIST, NODE_TREE
-    NODE_LIST = []
-    NODE_TREE = OrderedDict()
+    if libPath is None:
+        libPath = os.path.dirname(os.path.abspath(__file__))
+    print "loadLibrary", libPath
     
     if reloadLibs:
-        reload.reloadAll(dn)
+        reload.reloadAll(libPath)
     
-    for f in os.listdir(dn):
-        name, ext = os.path.splitext(f)
-        if ext != '.py':
+    for f in os.listdir(libPath):
+        pathName, ext = os.path.splitext(f)
+        if ext != '.py' or '__init__' in pathName:
             continue
         try:
-            mod = __import__(name, globals(), locals())
-            #if reloadLibs:
-                #reload(mod)
+            print "importing from", f
+            mod = __import__(pathName, globals(), locals())
         except:
-            printExc("Error loading flowchart library %s:" % name)
+            printExc("Error loading flowchart library %s:" % pathName)
             continue
+        
         nodes = []
         for n in dir(mod):
             o = getattr(mod, n)
             if isNodeClass(o):
-                nodes.append((o.nodeName, o))
-        if len(nodes) > 0:
-            NODE_TREE[name] = OrderedDict(nodes)
-            NODE_LIST.extend(nodes)
-    NODE_LIST = OrderedDict(NODE_LIST)
+                print "  ", str(o)
+                registerNodeType(o, [(pathName,)], override=reloadLibs)
+                #nodes.append((o.nodeName, o))
+        #if len(nodes) > 0:
+            #NODE_TREE[name] = OrderedDict(nodes)
+            #NODE_LIST.extend(nodes)
+    #NODE_LIST = OrderedDict(NODE_LIST)
     
 def reloadLibrary():
     loadLibrary(reloadLibs=True)
