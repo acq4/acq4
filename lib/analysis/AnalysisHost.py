@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import modules
-import DockArea
+import pyqtgraph.dockarea as dockarea
 import lib.Manager
 
 class AnalysisHost(QtGui.QMainWindow):
@@ -18,7 +18,7 @@ class AnalysisHost(QtGui.QMainWindow):
         self.dm = dataManager
         self.dataModel = dataModel
         self.mod = None
-        self.dockArea = DockArea.DockArea()
+        self.dockArea = dockarea.DockArea()
         self.setCentralWidget(self.dockArea)
         if module is not None:
             self.loadModule(module)
@@ -35,7 +35,7 @@ class AnalysisHost(QtGui.QMainWindow):
         elems = self.mod.listElements()
         for name, el in elems.iteritems():
             w = self.mod.getElement(name, create=True)
-            d = DockArea.Dock(name=name, size=el.size())
+            d = dockarea.Dock(name=name, size=el.size())
             if w is not None:
                 d.addWidget(w)
             pos = el.pos()

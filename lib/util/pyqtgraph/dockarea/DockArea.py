@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 from Container import *
 from DockDrop import *
-import debug
+import pyqtgraph.debug as debug
 import weakref
 
 ## TODO:

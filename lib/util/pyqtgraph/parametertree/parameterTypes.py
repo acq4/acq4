@@ -274,7 +274,7 @@ class GroupParameterItem(ParameterItem):
             w.setLayout(l)
             l.addWidget(self.addWidget)
             l.addItem(QtGui.QSpacerItem(200, 10, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-            self.addWidget = w
+            self.addWidgetBox = w
             self.addItem = QtGui.QTreeWidgetItem([])
             self.addItem.setFlags(QtCore.Qt.ItemIsEnabled)
             ParameterItem.addChild(self, self.addItem)
@@ -298,7 +298,7 @@ class GroupParameterItem(ParameterItem):
     def treeWidgetChanged(self):
         ParameterItem.treeWidgetChanged(self)
         if self.addItem is not None:
-            self.treeWidget().setItemWidget(self.addItem, 0, self.addWidget)
+            self.treeWidget().setItemWidget(self.addItem, 0, self.addWidgetBox)
             self.treeWidget().setFirstItemColumnSpanned(self.addItem, True)
         
     def addChild(self, child):  ## make sure added childs are actually inserted before add btn

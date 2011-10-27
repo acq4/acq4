@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 from ..Node import Node
 from scipy.signal import detrend
 from scipy.ndimage import median_filter, gaussian_filter
 #from pyqtgraph.SignalProxy import SignalProxy
-from metaarray import *
 import functions
 from common import *
 import numpy as np
+
+try:
+    import metaarray
+    HAVE_METAARRAY = True
+except:
+    HAVE_METAARRAY = False
 
 
 class Downsample(CtrlNode):
@@ -140,7 +145,7 @@ class Derivative(CtrlNode):
     nodeName = 'DerivativeFilter'
     
     def processData(self, data):
-        if isinstance(data, MetaArray):
+        if HAVE_METAARRAY and isinstance(data, metaarray.MetaArray):
             info = data.infoCopy()
             if 'values' in info[0]:
                 info[0]['values'] = info[0]['values'][:-1]

@@ -1,7 +1,7 @@
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 
 from DockDrop import *
-from VerticalLabel import *
+from pyqtgraph.VerticalLabel import *
 
 class Dock(QtGui.QWidget, DockDrop):
     

@@ -1,9 +1,11 @@
 import sys
-sys.path.append('..')
-from PyQt4 import QtCore, QtGui
-if not hasattr(QtCore, 'Signal'):
-    QtCore.Signal = QtCore.pyqtSignal
-    QtCore.Slot = QtCore.pyqtSlot
+
+## Make sure pyqtgraph is importable
+p = os.path.dirname(os.path.abspath(__file__))
+p = os.path.join(p, '..', '..')
+sys.path.insert(0, p)
+
+from pyqtgraph.Qt import QtCore, QtGui
 
 from DockArea import *
 from Dock import *

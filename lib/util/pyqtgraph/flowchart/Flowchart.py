@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 #from PySide import QtCore, QtGui
 from Node import *
 #import functions
@@ -13,10 +13,10 @@ from numpy import ndarray
 import library
 from debug import printExc
 import configfile
-import DockArea
+import pyqtgraph.dockarea as dockarea
 from .. import DataTreeWidget
 import FlowchartGraphicsView
-from lib.util.pyqtgraph.FileDialog import FileDialog
+from pyqtgraph.FileDialog import FileDialog
 
 def strDict(d):
     return dict([(str(k), v) for k, v in d.iteritems()])
@@ -154,7 +154,7 @@ class Flowchart(Node):
                     break
                 n += 1
                 
-        node = library.NODE_LIST[nodeType](name)
+        node = library.getNodeType(nodeType)(name)
         self.addNode(node, name, pos)
         return node
         
@@ -684,11 +684,11 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         item = self.items[node]
         self.ui.ctrlList.setCurrentItem(item)
 
-class FlowchartWidget(DockArea.DockArea):
+class FlowchartWidget(dockarea.DockArea):
     """Includes the actual graphical flowchart and debugging interface"""
     def __init__(self, chart, ctrl):
         #QtGui.QWidget.__init__(self)
-        DockArea.DockArea.__init__(self)
+        dockarea.DockArea.__init__(self)
         self.chart = chart
         self.ctrl = ctrl
         self.hoverItem = None
@@ -700,7 +700,7 @@ class FlowchartWidget(DockArea.DockArea):
         
         ## build user interface (it was easier to do it here than via developer)
         self.view = FlowchartGraphicsView.FlowchartGraphicsView()
-        self.viewDock = DockArea.Dock('view', size=(1000,600))
+        self.viewDock = dockarea.Dock('view', size=(1000,600))
         self.viewDock.addWidget(self.view)
         self.viewDock.hideTitleBar()
         self.addDock(self.viewDock)
@@ -708,7 +708,7 @@ class FlowchartWidget(DockArea.DockArea):
 
         self.hoverText = QtGui.QTextEdit()
         self.hoverText.setReadOnly(True)
-        self.hoverDock = DockArea.Dock('Hover Info', size=(1000,20))
+        self.hoverDock = dockarea.Dock('Hover Info', size=(1000,20))
         self.hoverDock.addWidget(self.hoverText)
         self.addDock(self.hoverDock, 'bottom')
 
@@ -723,7 +723,7 @@ class FlowchartWidget(DockArea.DockArea):
         #self.selInfoLayout.addWidget(self.selNameLabel)
         self.selInfoLayout.addWidget(self.selDescLabel)
         self.selInfoLayout.addWidget(self.selectedTree)
-        self.selDock = DockArea.Dock('Selected Node', size=(1000,200))
+        self.selDock = dockarea.Dock('Selected Node', size=(1000,200))
         self.selDock.addWidget(self.selInfo)
         self.addDock(self.selDock, 'bottom')
         
@@ -749,7 +749,7 @@ class FlowchartWidget(DockArea.DockArea):
     def buildMenu(self):
         self.nodeMenu = QtGui.QMenu()
         self.subMenus = []
-        for section, nodes in library.NODE_TREE.iteritems():
+        for section, nodes in library.getNodeTree().iteritems():
             menu = QtGui.QMenu(section)
             self.nodeMenu.addMenu(menu)
             for name in nodes:

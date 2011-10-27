@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 
 class DockDrop(object):
     """Provides dock-dropping methods"""
