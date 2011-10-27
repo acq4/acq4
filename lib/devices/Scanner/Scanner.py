@@ -424,12 +424,13 @@ class ScannerTask(DeviceTask):
                 if cmdName not in self.cmd:
                     continue
                 chConf = self.dev.config[channel]
-                if chConf[0] != daqTask.devName():
+                #if chConf[0] != daqTask.devName():
+                if chConf['device'] != daqTask.devName():
                     continue
                 
-                daqTask.addChannel(chConf[1], 'ao')
+                daqTask.addChannel(chConf['channel'], 'ao')
                 self.daqTasks.append(daqTask)  ## remember task so we can stop it later on
-                daqTask.setWaveform(chConf[1], self.cmd[cmdName])
+                daqTask.setWaveform(chConf['channel'], self.cmd[cmdName])
 
     def stop(self, abort=False):
         with MutexLocker(self.dev.lock):

@@ -268,13 +268,13 @@ class GroupParameterItem(ParameterItem):
             else:
                 self.addWidget = QtGui.QPushButton(addText)
                 self.addWidget.clicked.connect(self.addClicked)
-            #w = QtGui.QWidget()
-            #l = QtGui.QHBoxLayout()
-            #l.setContentsMargins(0,0,0,0)
-            #w.setLayout(l)
-            #l.addWidget(self.addWidget)
-            #l.addItem(QtGui.QSpacerItem(1000,10))
-            #self.addWidget = w
+            w = QtGui.QWidget()
+            l = QtGui.QHBoxLayout()
+            l.setContentsMargins(0,0,0,0)
+            w.setLayout(l)
+            l.addWidget(self.addWidget)
+            l.addItem(QtGui.QSpacerItem(200, 10, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
+            self.addWidget = w
             self.addItem = QtGui.QTreeWidgetItem([])
             self.addItem.setFlags(QtCore.Qt.ItemIsEnabled)
             ParameterItem.addChild(self, self.addItem)

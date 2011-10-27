@@ -43,7 +43,29 @@ class DataMapping:
             
 
 class DAQGeneric(Device):
+    """
+    Config format:
     
+        ChannelName1:
+            device: 'DaqDeviceName'
+            channel: '/Dev1/ao0'
+            type: 'ao'
+            units: 'A'
+            scale: 200 * mV / nA
+        ChannelName2:
+            device: 'DaqDeviceName'
+            channel: '/Dev1/ai3'
+            type: 'ai'
+            mode: 'nrse'
+            units: 'A'
+            scale: 200 * nA / mV
+        ChannelName3:
+            device: 'DaqDeviceName'
+            channel: '/Dev1/line7'
+            type: 'di'
+            invert: True
+        
+    """
     sigHoldingChanged = QtCore.Signal(object, object)
     
     def __init__(self, dm, config, name):
@@ -102,7 +124,9 @@ class DAQGeneric(Device):
             else:
                 self._DGHolding[channel] = level
                 
-            daq, chan = self._DGConfig[channel]['channel']
+            #daq, chan = self._DGConfig[channel]['channel']
+            daq = self._DGConfig[channel]['device']
+            chan = self._DGConfig[channel]['channel']
             daqDev = self.dm.getDevice(daq)
             #if scale is None:
                 #scale = self.getChanScale(channel)
@@ -122,11 +146,14 @@ class DAQGeneric(Device):
         
     def getChannelValue(self, channel, block=True):
         with self._DGLock:
-            chConf = self._DGConfig[channel]['channel']
-            daq, chan = chConf[:2]
-            mode = None
-            if len(chConf) > 2:
-                mode = chConf[2]
+            #chConf = self._DGConfig[channel]['channel']
+            #daq, chan = chConf[:2]
+            daq = self._DGConfig[channel]['device']
+            chan = self._DGConfig[channel]['channel']
+            mode = self._DGConfig[channel].get('mode', None)
+            #mode = None
+            #if len(chConf) > 2:
+                #mode = chConf[2]
     
             daqDev = self.dm.getDevice(daq)
             #if 'scale' in self._DGConfig[channel]:
@@ -149,7 +176,8 @@ class DAQGeneric(Device):
         return DAQGenericProtoGui(self, prot)
 
     def getDAQName(self, channel):
-        return self._DGConfig[channel]['channel'][0]
+        #return self._DGConfig[channel]['channel'][0]
+        return self._DGConfig[channel]['device']
 
     def quit(self):
         pass
@@ -221,10 +249,12 @@ class DAQGenericTask(DeviceTask):
             self.initialState = {}
             self.holdingVals = {}
             for ch in self._DAQCmd:
-                dev = self.dev.dm.getDevice(self.dev._DGConfig[ch]['channel'][0])
+                #dev = self.dev.dm.getDevice(self.dev._DGConfig[ch]['channel'][0])
+                dev = self.dev.dm.getDevice(self.dev.getDAQName(ch))
                 prof.mark(ch+' get dev')
                 if 'preset' in self._DAQCmd[ch]:
-                    dev.setChannelValue(self.dev._DGConfig[ch]['channel'][1], self._DAQCmd[ch]['preset'])
+                    #dev.setChannelValue(self.dev._DGConfig[ch]['channel'][1], self._DAQCmd[ch]['preset'])
+                    dev.setChannelValue(self.dev._DGConfig[ch]['channel'], self._DAQCmd[ch]['preset'])
                     prof.mark(ch+' preset')
                 elif 'holding' in self._DAQCmd[ch]:
                     self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
@@ -239,7 +269,7 @@ class DAQGenericTask(DeviceTask):
                     prof.mark(ch+' record holding')
             prof.finish()
                 
-    def createChannels(self, daqTask):
+    def createChannels(self, daqTask, defaultAIMode=None):
         self.daqTasks = {}
         #print "createChannels"
         with self.dev._DGLock:
@@ -253,7 +283,7 @@ class DAQGenericTask(DeviceTask):
                     #print "    ignoring channel", ch, "not in command"
                     continue
                 chConf = self.dev._DGConfig[ch]
-                if chConf['channel'][0] != daqTask.devName():
+                if chConf['device'] != daqTask.devName():
                     #print "    ignoring channel", ch, "wrong device"
                     continue
                 
@@ -289,15 +319,15 @@ class DAQGenericTask(DeviceTask):
                     
                     #print "channel", self._DAQCmd[ch]
                     #print "LOW LEVEL:", self._DAQCmd[ch].get('lowLevelConf', {})
-                    daqTask.addChannel(chConf['channel'][1], chConf['type'], **self._DAQCmd[ch].get('lowLevelConf', {}))
+                    daqTask.addChannel(chConf['channel'], chConf['type'], **self._DAQCmd[ch].get('lowLevelConf', {}))
                     self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
-                    daqTask.setWaveform(chConf['channel'][1], cmdData)
+                    daqTask.setWaveform(chConf['channel'], cmdData)
                 else:
-                    mode = None
-                    if len(chConf['channel']) > 2:
-                        mode = chConf['channel'][2]
+                    mode = chConf.get('mode', defaultAIMode)
+                    #if len(chConf['channel']) > 2:
+                        #mode = chConf['channel'][2]
                     #print "Adding channel %s to DAQ task" % chConf['channel'][1]
-                    daqTask.addChannel(chConf['channel'][1], chConf['type'], mode=mode, **self._DAQCmd[ch].get('lowLevelConf', {}))
+                    daqTask.addChannel(chConf['channel'], chConf['type'], mode=mode, **self._DAQCmd[ch].get('lowLevelConf', {}))
                     self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                 #print "  done: ", self.daqTasks.keys()
         
@@ -347,7 +377,7 @@ class DAQGenericTask(DeviceTask):
         #print "buffered channels:", self.bufferedChannels
         for ch in self.bufferedChannels:
             #result[ch] = _DAQCmd[ch]['task'].getData(self.dev.config[ch]['channel'][1])
-            result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'][1])
+            result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'])
             #prof.mark("get data for channel "+str(ch))
             #print "get data", ch, self.getChanScale(ch), result[ch]['data'].max()
             #scale = self.getChanScale(ch)
@@ -442,7 +472,7 @@ class DAQDevGui(QtGui.QWidget):
                 
             self.widgets[ch] = ui
             ui.nameLabel.setText(str(ch))
-            ui.channelCombo.addItem("%s (%s)" % (ch, chans[ch]['channel'][1]))
+            ui.channelCombo.addItem("%s (%s)" % (ch, chans[ch]['channel']))
             
             holding = chans[ch].get('holding', 0)
             

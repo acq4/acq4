@@ -146,8 +146,9 @@ class SeqParameter(SimpleParameter):
             return name, seqData
         
     def valueString(self, param):
-        if 'units' in param.opts:
-            val = pg.siFormat(param.value(), suffix=param.opts['units'], space='*', precision=5, allowUnicode=False)
+        units = param.opts.get('units', None)
+        if isinstance(units, basestring) and len(units) > 0:
+            val = pg.siFormat(param.value(), suffix=units, space='*', precision=5, allowUnicode=False)
         else:
             val = '%0.5g' % param.value()
         return val
