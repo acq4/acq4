@@ -664,7 +664,7 @@ class CameraTask(DAQGenericTask):
         if expose is not None and marr is not None: 
         
             ## Extract times from trace
-            ex = expose.view(ndarray)
+            ex = expose.view(ndarray).astype(int32)
             exd = ex[1:] - ex[:-1]
 
             

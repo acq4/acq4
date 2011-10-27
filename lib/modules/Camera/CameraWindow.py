@@ -741,7 +741,7 @@ class CameraWindow(QtGui.QMainWindow):
                 self.setExposure(autoRestart=False)
                 self.updateRegion(autoRestart=False)
                 self.cam.start()
-                Manager.logMsg("Camera started aquisition.")
+                Manager.logMsg("Camera started aquisition.", importance=0)
             except:
                 self.ui.btnAcquire.setChecked(False)
                 printExc("Error starting camera:")
@@ -750,7 +750,7 @@ class CameraWindow(QtGui.QMainWindow):
             #print "ACQ untoggled, stop record"
             self.toggleRecord(False)
             self.cam.stop()
-            Manager.logMsg("Camera stopped acquisition.")
+            Manager.logMsg("Camera stopped acquisition.", importance=0)
             
     #@trace
     def addPlotFrame(self, frame):

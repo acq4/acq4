@@ -352,6 +352,12 @@ class ScannerDeviceGui(QtGui.QWidget):
           Cmd.Y  =  F  +  G * Loc.X  +  H * Loc.Y  +  I * Loc.X^2  +  J * Loc.Y^2
         Returns [[A, B, C, D, E], [F, G, H, I, J]]
         """
+#        print "==========="
+#        print loc
+#        print "============"
+#        print cmd
+        #for i in range(loc.shape[0]):
+            #print tuple(loc[i]),  tuple(cmd[i])
         
         ## do a two-stage fit, using only linear parameters first.
         ## this is to make sure the second-order parameters do no interfere with the first-order fit.
@@ -381,6 +387,11 @@ class ScannerDeviceGui(QtGui.QWidget):
         #xFit = list(xFit)+[0,0]
         #yFit = list(yFit)+[0,0]
         
+        ## compute fit error
+        errx = abs(erf2(xFit,  loc,  cmd[:, 0])).mean()
+        erry = abs(erf2(yFit,  loc,  cmd[:, 1])).mean()
+        print "Fit error:",  errx,  erry
+        self.dev.lastCalData = (loc,  cmd)
         return (list(xFit), list(yFit))
 
     def spotSize(self, frame):
@@ -431,7 +442,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         cmd = {
             'protocol': {'duration': 0.0, 'timeout': 5.0},
             camera: {'record': True, 'minFrames': 10, 'params': camParams, 'pushState': 'scanProt'}, 
-            laser: {'Shutter': {'preset': 0, 'holding': 0}}
+            #laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
         #print "\n\n====> Record background\n"
         task = lib.Manager.getManager().createTask(cmd)
@@ -450,7 +461,7 @@ class ScannerDeviceGui(QtGui.QWidget):
                 },
                 #'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3, 
                 'popState': 'scanProt'},
-            laser: {'Shutter': {'preset': 0, 'holding': 0, 'command': np.ones(len(xCommand), dtype=byte)}},
+            laser: {'shutter': {'preset': 0, 'holding': 0, 'command': np.ones(len(xCommand), dtype=byte)}},
             #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
             self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},
             daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}

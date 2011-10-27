@@ -12,9 +12,11 @@ class LaserDevGui(QtGui.QWidget):
     def __init__(self, dev):
         QtGui.QWidget.__init__(self)
         self.dev = dev
-        #self.dev.devGui = self  ## make this gui accessible from LaserDevice, so device can change power values. NO, BAD FORM
+        #self.dev.devGui = self  ## make this gui accessible from LaserDevice, so device can change power values. NO, BAD FORM (device is not allowed to talk to guis, it can only send signals)
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        self.calibrateWarning = self.dev.config.get('calibrationWarning', None)
+        self.calibrateBtnState = 0
         
         ### configure gui
         self.ui.wavelengthSpin.setOpts(suffix='m', siPrefix=True)
@@ -80,6 +82,8 @@ class LaserDevGui(QtGui.QWidget):
         
 
         ## make connections
+        self.ui.calibrateBtn.focusOutEvent = self.calBtnLostFocus
+        
         self.ui.calibrateBtn.clicked.connect(self.calibrateClicked)
         self.ui.deleteBtn.clicked.connect(self.deleteClicked)
         self.ui.currentPowerRadio.toggled.connect(self.currentPowerToggled)
@@ -90,6 +94,7 @@ class LaserDevGui(QtGui.QWidget):
         self.ui.wavelengthCombo.currentIndexChanged.connect(self.wavelengthComboChanged)
         #self.ui.microscopeCombo.currentIndexChanged.connect(self.microscopeChanged)
         self.ui.meterCombo.currentIndexChanged.connect(self.powerMeterChanged)
+        self.ui.channelCombo.currentIndexChanged.connect(self.channelChanged)
         #self.ui.measurementSpin.valueChanged.connect(self.measurmentSpinChanged)
         #self.ui.settlingSpin.valueChanged.connect(self.settlingSpinChanged)
         self.ui.shutterBtn.toggled.connect(self.shutterToggled)
@@ -149,15 +154,26 @@ class LaserDevGui(QtGui.QWidget):
     
     def powerMeterChanged(self):
         powerDev = getManager().getDevice(self.ui.meterCombo.currentText())
-        if hasattr(powerDev, 'config'):
-            sTime = powerDev.config.get('settlingTime', None)
-        elif hasattr(powerDev, 'getConfigParam'):
-            sTime = powerDev.getConfigParam('settlingTime')
+        channels = powerDev.listChannels()
+        self.ui.channelCombo.clear()
+        for k in channels.keys():
+            self.ui.channelCombo.addItem(k)
+        self.channelChanged()
+            
+    def channelChanged(self):   
+        powerDev = getManager().getDevice(self.ui.meterCombo.currentText())
+        channels = powerDev.listChannels()
+        text = str(self.ui.channelCombo.currentText())
+        if text is not '':
+            sTime = channels[text].get('settlingTime', None)
+            mTime = channels[text].get('measurementTime', None)
         else:
-            sTime = None
+            return
             
         if sTime is not None:
             self.ui.settlingSpin.setValue(sTime)
+        if mTime is not None:
+            self.ui.measurementSpin.setValue(mTime)
             
     
     #def measurementSpinChanged(self, value):
@@ -210,8 +226,31 @@ class LaserDevGui(QtGui.QWidget):
         trans = index.get(self.scope.name, {}).get(self.scope.getObjective()['name'], {}).get(str(siFormat(self.dev.getWavelength())), {}).get('transmission', None)
         if trans is not None:
             self.dev.setParam(scopeTransmission=trans)
-    
+            
     def calibrateClicked(self):
+        ## Delete button must be clicked twice.
+        if self.calibrateBtnState == 0 and self.calibrateWarning is not None:
+            self.ui.calibrateBtn.setText(self.calibrateWarning)
+            self.calibrateBtnState = 1
+        elif self.calibrateBtnState == 1 or self.calibrateWarning is None:
+            self.ui.calibrateBtn.setEnabled(False)
+            try:
+                self.ui.calibrateBtn.setText('Calibrating...')
+                self.calibrate()
+            except:
+                raise
+            finally:
+                self.resetCalibrateBtnState()
+                
+    def resetCalibrateBtnState(self):
+        self.calibrateBtnState = 0
+        self.ui.calibrateBtn.setEnabled(True)
+        self.ui.calibrateBtn.setText('Calibrate')
+        
+    def calBtnLostFocus(self, ev):
+        self.resetCalibrateBtnState()
+    
+    def calibrate(self):
         scope = str(self.ui.microscopeCombo.currentText())
         #meter = str(self.ui.meterCombo.currentText())
         obj = getManager().getDevice(scope).getObjective()['name']

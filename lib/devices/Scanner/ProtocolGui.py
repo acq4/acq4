@@ -246,7 +246,7 @@ class ScannerProtoGui(ProtocolGui):
             camMod = self.cameraModule()
             if camMod is None:
                 return (1,1)
-            cam = cammod.config['camDev']
+            cam = camMod.config['camDev']
             laser = str(self.ui.laserCombo.currentText())
             cal = self.dev.getCalibration(cam, laser)
             ss = cal['spot'][1]

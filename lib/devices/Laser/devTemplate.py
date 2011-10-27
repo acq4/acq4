@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'devTemplate.ui'
 #
-# Created: Wed Oct 26 17:18:55 2011
+# Created: Thu Oct 27 13:13:59 2011
 #      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -177,6 +177,13 @@ class Ui_Form(object):
         self.settlingSpin = SpinBox(self.groupBox)
         self.settlingSpin.setObjectName(_fromUtf8("settlingSpin"))
         self.gridLayout_2.addWidget(self.settlingSpin, 2, 4, 1, 1)
+        self.channelCombo = QtGui.QComboBox(self.groupBox)
+        self.channelCombo.setObjectName(_fromUtf8("channelCombo"))
+        self.gridLayout_2.addWidget(self.channelCombo, 3, 1, 1, 1)
+        self.label_12 = QtGui.QLabel(self.groupBox)
+        self.label_12.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.label_12.setObjectName(_fromUtf8("label_12"))
+        self.gridLayout_2.addWidget(self.label_12, 3, 0, 1, 1)
         self.gridLayout_3.addLayout(self.gridLayout_2, 0, 0, 1, 1)
         self.pCellGroup = QtGui.QGroupBox(self.groupBox)
         self.pCellGroup.setAlignment(QtCore.Qt.AlignCenter)
@@ -260,6 +267,7 @@ class Ui_Form(object):
         self.label_3.setText(QtGui.QApplication.translate("Form", "Power Meter:", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("Form", "Settling Duration:", None, QtGui.QApplication.UnicodeUTF8))
         self.settlingSpin.setToolTip(QtGui.QApplication.translate("Form", "Specify the time it takes for the selected power meter to settle on a value.", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_12.setText(QtGui.QApplication.translate("Form", "Channel:", None, QtGui.QApplication.UnicodeUTF8))
         self.pCellGroup.setTitle(QtGui.QApplication.translate("Form", "Pockel Cell Parameters", None, QtGui.QApplication.UnicodeUTF8))
         self.label_9.setText(QtGui.QApplication.translate("Form", "Minimum Voltage:", None, QtGui.QApplication.UnicodeUTF8))
         self.minVSpin.setSuffix(QtGui.QApplication.translate("Form", "V", None, QtGui.QApplication.UnicodeUTF8))

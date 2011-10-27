@@ -11,6 +11,7 @@ import numpy as np
 from scipy import stats
 from pyqtgraph.functions import siFormat
 from HelpfulException import HelpfulException
+import pyqtgraph as pg
 
 
 
@@ -273,14 +274,15 @@ class Laser(DAQGeneric):
         taskOn.execute()
         resultOn = taskOn.getResult()
             
+        measurementStart = (shutterDelay+settleTime)*rate
             
         if self.hasPowerIndicator:
-            powerOutOn = resultOn[powerInd[0]][0][settleTime*rate:].mean()
+            powerOutOn = resultOn[powerInd[0]][0][measurementStart:].mean()
         else:
             powerOutOn = self.outputPower()
             
-        laserOff = resultOff[powerMeter][0][(shutterDelay+settleTime)*rate:]
-        laserOn = resultOn[powerMeter][0][(shutterDelay+settleTime)*rate:]
+        laserOff = resultOff[powerMeter][0][measurementStart:]
+        laserOn = resultOn[powerMeter][0][measurementStart:]
                           
         t, prob = stats.ttest_ind(laserOn, laserOff)
         if prob > 0.001:
@@ -304,17 +306,22 @@ class Laser(DAQGeneric):
             daqName =  self.getDAQName('shutter')
             powerInd = self.config['powerIndicator']['channel']
             rate = self.config['powerIndicator']['rate']
-            sTime = self.config['powerIndicator']['settlingTime']
-            mTime = self.config['powerIndicator']['measurementTime']
             
-            reps = 10
-            dur = 0.1 + reps*0.1+(sTime+mTime)
+            pConfig = getManager().getDevice(self.config['powerIndicator']['channel'][0]).listChannels()[self.config['powerIndicator']['channel'][1]]
+            sTime = pConfig.get('settlingTime', None)
+            mTime = pConfig.get('measurementTime', None)
+            
+            if mTime is None or sTime is None:
+                raise Exception("The power indicator (%s) specified for %s needs to be configured with both a 'settlingTime' value and a 'measurementTime' value." %(self.config['powerIndicator']['channel'], self.name))
+            
+            dur = 0.1 + (sTime+mTime)
             nPts = int(dur*rate)
             
             ### create a waveform that flashes the QSwitch(or other way of turning on) the number specified by reps
             waveform = np.zeros(nPts, dtype=np.byte)
-            for i in range(reps):
-                waveform[(i+1)/10.*rate:((i+1)/10.+sTime+mTime)*rate] = 1 ## divide i+1 by 10 to increment by hundreds of milliseconds
+            #for i in range(reps):
+                #waveform[(i+1)/10.*rate:((i+1)/10.+sTime+mTime)*rate] = 1 ## divide i+1 by 10 to increment by hundreds of milliseconds
+            waveform[0.1*rate:-2] = 1
             
             cmd = {
                 'protocol': {'duration': dur},
@@ -328,16 +335,16 @@ class Laser(DAQGeneric):
             result = task.getResult()
             
             ## pull out time that laser was on and off so that power can be measured in each state -- discard the settlingTime around each state change
-            onMask = np.zeros(nPts, dtype=np.byte)
-            offMask = np.zeros(nPts, dtype=np.byte)
-            for i in range(reps):
-                onMask[((i+1)/10+sTime)*rate:((i+1)/10+sTime+mTime)*rate] = 1
-                offMask[(i/10.+2*sTime+mTime)*rate:(i+1/10.)*rate] = 1
-            laserOn = result[powerInd[0]][0][onMask==True]
-            laserOff = result[powerInd[0]][0][offMask==True]
+            #onMask = np.zeros(nPts, dtype=np.byte)
+            #offMask = np.zeros(nPts, dtype=np.byte)
+            #for i in range(reps):
+                #onMask[((i+1)/10+sTime)*rate:((i+1)/10+sTime+mTime)*rate] = 1
+                #offMask[(i/10.+2*sTime+mTime)*rate:(i+1/10.)*rate] = 1
+            laserOn = result[powerInd[0]][0][0.1*rate:-2]
+            laserOff = result[powerInd[0]][0][:0.1*rate]
             
             t, prob = stats.ttest_ind(laserOn, laserOff)
-            if prob < 0.05: ### if powerOn is statistically different from powerOff
+            if prob < 0.01: ### if powerOn is statistically different from powerOff
                 powerOn = laserOn.mean()
                 powerOff = laserOff.mean()
                 #self.devGui.ui.outputPowerLabel.setText(siFormat(powerOn, suffix='W')) ## NO! device does not talk to GUI!
@@ -348,7 +355,7 @@ class Laser(DAQGeneric):
                     pmin = self.params['expectedPower'] - self.params['expectedPower']*self.params['tolerance']/100.0
                     pmax = self.params['expectedPower'] + self.params['expectedPower']*self.params['tolerance']/100.0
                 if powerOn < pmin or powerOn > pmax:
-                    raise HelpfulException("Power is outside expected range. Please adjust expected value or adjust the tuning of your laser.")
+                    logMsg("%s power is outside expected range. Please adjust expected value or adjust the tuning of the laser." %self.name, msgType='error')
                 
                 return powerOn
             
@@ -469,10 +476,12 @@ class LaserTask(DAQGenericTask):
                                        ## duration may only be specified if a modulator is available.
                                        
                                        
-                                       #####   Specifically specifying the waveform for the qSwitch, pCell or shutter gets precedent over waveforms that might be calculated from a 'powerWaveform', 'switchWaveform', or 'pulses' cmd
-        'pCell': array(....),          ## array of voltages to pass through to pCell
-        'qSwitch: array(....),         ## array of 0/1 values that specify whether qSwitch is off (0) or on (1)           
-        'shutter': array(...),         ## array of 0/1 values that specify whether shutter is open (1) or closed (0)
+                                       #####   Specifically specifying the daqGeneric cmd for the qSwitch, pCell or shutter gets precedent over waveforms that might be calculated from a 'powerWaveform', 'switchWaveform', or 'pulses' cmd
+        'pCell': {'command':array(....),               ## daqGeneric command that gets passed straight through
+                  'preset': value
+                  'holding': value}
+        'qSwitch: {'command':array(....), etc}         ## array of 0/1 values that specify whether qSwitch is off (0) or on (1)           
+        'shutter': {'command':array(....), etc}          ## array of 0/1 values that specify whether shutter is open (1) or closed (0)
         
                                        #### 'shutter' and 'shutterMode' are exclusive; if 'shutter' is specified shutterMode will be ignored
         'shutterMode': 'auto',         ## specifies how the shutter should be used:
@@ -543,12 +552,12 @@ class LaserTask(DAQGenericTask):
             self.cmd['daqProtocol']['shutter']['command'][-1] = 0
             
         if 'pCell' in self.cmd:
-            self.cmd['daqProtocol']['pCell']['command'] = self.cmd['pCell']
+            self.cmd['daqProtocol']['pCell'] = self.cmd['pCell']
         elif 'pCell' in calcCmds:
             self.cmd['daqProtocol']['pCell']['command'] = calcCmds['pCell']
             
         if 'qSwitch' in self.cmd:
-            self.cmd['daqProtocol']['qSwitch']['command'] = self.cmd['qSwitch']
+            self.cmd['daqProtocol']['qSwitch'] = self.cmd['qSwitch']
             self.cmd['daqProtocol']['qSwitch']['command'][-1] = 0
         elif 'qSwitch' in calcCmds:
             self.cmd['daqProtocol']['qSwitch']['command'] = calcCmds['qSwitch']
@@ -560,6 +569,8 @@ class LaserTask(DAQGenericTask):
         
     def getResult(self):
         ## getResult from DAQGeneric, then add in command waveform
+        result = DAQGenericTask.getResult(self)
+        ## NEED TO: add powerWaveform or switchWaveform to result(which is a mArray)
         pass
     
     #def storeResult(self, dirHandle):
