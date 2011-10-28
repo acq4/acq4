@@ -5,6 +5,7 @@ import scipy.stats
 from GraphicsObject import GraphicsObject
 import pyqtgraph.functions as fn
 from pyqtgraph import debug
+from pyqtgraph.Point import Point
 import struct
 
 class PlotCurveItem(GraphicsObject):
@@ -12,6 +13,7 @@ class PlotCurveItem(GraphicsObject):
     sigPlotChanged = QtCore.Signal(object)
     
     """Class representing a single plot curve. Provides:
+        - Fast data update
         - FFT display mode
         - shadow pen
         - mouse interaction
@@ -306,6 +308,8 @@ class PlotCurveItem(GraphicsObject):
             
         
         pixels = self.pixelVectors()
+        if pixels is None:
+            pixels = [Point(0,0), Point(0,0)]
         xmin = x.min() - pixels[0].x() * lineWidth
         xmax = x.max() + pixels[0].x() * lineWidth
         ymin = y.min() - abs(pixels[1].y()) * lineWidth

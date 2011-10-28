@@ -99,7 +99,7 @@ class NiDAQ(Device):
                 else:
                     val = 1
         except:
-            printExc("Error while getting channel value %s:" % (chan))
+            printExc("Error while getting channel value %s:" % str(chan))
             raise
         finally:
             self.release()
@@ -233,13 +233,13 @@ class Task(DeviceTask):
         
     def configure(self, tasks, startOrder):
         #print "daq configure", tasks
-        defaultAIMode = self.dev.config.get('defaultAIMode', None)
+        #defaultAIMode = self.dev.config.get('defaultAIMode', None)
         
         ## Request to all devices that they create the channels they use on this task
         for dName in tasks:
             #print "Requesting %s create channels" % dName
             if hasattr(tasks[dName], 'createChannels'):
-                tasks[dName].createChannels(self, defaultAIMode=defaultAIMode)
+                tasks[dName].createChannels(self)
         
         ## If no devices requested buffered operations, then do not configure clock.
         ## This might eventually cause some triggering issues..
@@ -269,9 +269,12 @@ class Task(DeviceTask):
             
         #print "daq configure complete"
         
-    def addChannel(self, *args, **kwargs):
+    def addChannel(self, channel, type, mode=None, **kwargs):
         #print "Adding channel:", args, kwargs
-        return self.st.addChannel(*args, **kwargs)
+        ## set default channel mode before adding
+        if type == 'ai' and mode is None:
+            mode = self.dev.config.get('defaultAIMode', None)
+        return self.st.addChannel(channel, type, mode, **kwargs)
         
     def setWaveform(self, *args, **kwargs):
         return self.st.setWaveform(*args, **kwargs)

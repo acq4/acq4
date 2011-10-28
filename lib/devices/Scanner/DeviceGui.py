@@ -435,7 +435,7 @@ class ScannerDeviceGui(QtGui.QWidget):
             yCommand[start:stop] = yRange[0] + yDiff * (float(i)/(sweeps-1))
             start = stop
         yCommand[-1] = 0.0
-        daqName = self.dev.config['XAxis'][0]
+        daqName = self.dev.config['XAxis']['device']
 
         ## Record 10 camera frames with the shutter closed 
         #print "parameters:", camParams

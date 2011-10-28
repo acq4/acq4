@@ -266,9 +266,9 @@ class Camera(DAQGeneric):
         with MutexLocker(self.lock):
             if not 'triggerOutChannel' in self.camConfig:
                 return None
-            if self.camConfig['triggerOutChannel'][0] != daq:
+            if self.camConfig['triggerOutChannel']['device'] != daq:
                 return None
-            return self.camConfig['triggerOutChannel'][1]
+            return self.camConfig['triggerOutChannel']['channel']
         
 
     def isRunning(self):
@@ -490,7 +490,7 @@ class CameraTask(DAQGenericTask):
         if self.camCmd.get('triggerProtocol', False):
             #print "Camera triggering protocol; restart needed"
             restart = True
-            daqName = self.dev.camConfig['triggerOutChannel'][0]
+            daqName = self.dev.camConfig['triggerOutChannel']['device']
             startOrder.remove(name)
             startOrder.insert(startOrder.index(daqName)+1, name)
             prof.mark('conf 1')

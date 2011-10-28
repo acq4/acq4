@@ -109,17 +109,17 @@ class Laser(DAQGeneric):
             #### name of powerIndicator is config['powerIndicator']['channel'][0]
             #daqConfig['powerInd'] = {'channel': config['powerIndicator']['channel'], 'type': 'ai'}
         if 'shutter' in config:
-            daqConfig['shutter'] = {'channel': config['shutter']['channel'], 'type': 'do'}
+            daqConfig['shutter'] = config['shutter']
             self.hasTriggerableShutter = True
             self.hasShutter = True
         if 'qSwitch' in config:
-            daqConfig['qSwitch'] = {'channel': config['qSwitch']['channel'], 'type': 'do'}
+            daqConfig['qSwitch'] = config['qSwitch']
             self.hasQSwitch = True
         if 'pCell' in config:
-            daqConfig['pCell'] = {'channel': config['pCell']['channel'], 'type': 'ao'}
+            daqConfig['pCell'] = config['pCell']
             self.hasPCell = True
                         
-        daqConfig['power'] = {'type': 'ao', 'units': 'W'}
+        daqConfig['power'] = {'type': 'ao', 'units': 'W'}  ## virtual channel used for creating control widgets
         DAQGeneric.__init__(self, manager, daqConfig, name)
         
        

@@ -69,7 +69,10 @@ class Scanner(Device):
         if o:
             self.setVoltage(self.getCommand())
         else:
-            self.setVoltage(self.getShutterVals())
+            shVals = self.getShutterVals()
+            if shVals is None:
+                raise Exception("Scan mirrors are not configured for virtual shuttering; can not open.")
+            self.setVoltage(shVals)
         self.sigShutterChanged.emit()
         
     def getShutterOpen(self):
@@ -101,7 +104,8 @@ class Scanner(Device):
         with MutexLocker(self.lock):
             for i in [0,1]:
                 x = ['XAxis', 'YAxis'][i]
-                (daq, chan) = self.config[x]
+                daq = self.config[x]['device']
+                chan = self.config[x]['channel']
                 dev = self.dm.getDevice(daq)
                 dev.setChannelValue(chan, vals[i], block=True)
     
