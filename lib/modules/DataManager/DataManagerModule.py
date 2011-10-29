@@ -116,7 +116,7 @@ class DataManager(Module):
         if change in [None, 'moved', 'renamed', 'parent']:
             newDir = self.manager.getCurrentDir()
             dirName = newDir.name(relativeTo=self.baseDir)
-            self.ui.currentDirText.setText(QtCore.QString(dirName))
+            self.ui.currentDirText.setText(str(dirName))
             #self.ui.logDock.setWindowTitle(QtCore.QString('Current Log - ' + dirName))
             self.ui.fileTreeWidget.setCurrentDir(newDir)
             #dirIndex = self.ui.fileTreeWidget.handleIndex(newDir)

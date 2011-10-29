@@ -244,13 +244,13 @@ class SpinBox(QtGui.QAbstractSpinBox):
         
     def validate(self, strn, pos):
         if self.skipValidate:
-            return (QtGui.QValidator.Acceptable, pos)
+            return (QtGui.QValidator.Acceptable, strn, pos)
         #print "Validate:", strn, pos
         try:
             val = self.interpret()
             if val is False:
                 self.lineEdit().setStyleSheet('border: 2px solid #C55;')
-                return (QtGui.QValidator.Intermediate, pos)
+                return (QtGui.QValidator.Intermediate, strn, pos)
                 #return (QtGui.QValidator.Invalid, pos)
                 
             if not self.opts['delayUntilEditFinished']:
@@ -258,13 +258,13 @@ class SpinBox(QtGui.QAbstractSpinBox):
             #print "  OK:", self.val
             self.lineEdit().setStyleSheet('border: 0px;')
             
-            return (QtGui.QValidator.Acceptable, pos)
+            return (QtGui.QValidator.Acceptable, strn, pos)
         except:
             #print "  BAD"
             #import sys
             #sys.excepthook(*sys.exc_info())
             self.lineEdit().setStyleSheet('border: 2px solid #C55;')
-            return (QtGui.QValidator.Intermediate, pos)
+            return (QtGui.QValidator.Intermediate, strn, pos)
         
     def interpret(self):
         """Return value of text. Return False if text is invalid, raise exception if text is intermediate"""

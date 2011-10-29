@@ -203,8 +203,12 @@ class LaserDevGui(QtGui.QWidget):
         self.updatePowerLabels(power)
     
     def updatePowerLabels(self, power):
-        self.ui.outputPowerLabel.setText(str(siFormat(power, suffix='W')))
-        self.ui.samplePowerLabel.setText(str(siFormat(power*self.dev.params['scopeTransmission'], suffix='W')))
+        if power is None:
+            self.ui.outputPowerLabel.setText("")
+            self.ui.samplePowerLabel.setText("")
+        else:
+            self.ui.outputPowerLabel.setText(str(siFormat(power, suffix='W')))
+            self.ui.samplePowerLabel.setText(str(siFormat(power*self.dev.params['scopeTransmission'], suffix='W')))
 
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()

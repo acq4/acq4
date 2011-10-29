@@ -12,6 +12,7 @@ from scipy import stats
 from pyqtgraph.functions import siFormat
 from HelpfulException import HelpfulException
 import pyqtgraph as pg
+import metaarray
 
 
 
@@ -138,6 +139,10 @@ class Laser(DAQGeneric):
         with self.variableLock:
             for k in kwargs:
                 self.params[k] = kwargs[k]
+                
+    def getParam(self, arg):
+        with self.variableLock:
+            return self.params[arg]
     
     def getCalibrationIndex(self):
         with self.lock:
@@ -360,7 +365,7 @@ class Laser(DAQGeneric):
                 return powerOn
             
             else:
-                raise Exception("No QSwitch (or other way of turning on) detected while measuring Laser.outputPower()")
+                raise Exception("No laser pulse detected by power indicator '%s' while measuring Laser.outputPower()" % powerInd[0])
             
         ## return the power specified in the config file if there's no powerIndicator
         else:
@@ -499,7 +504,9 @@ class LaserTask(DAQGenericTask):
     def __init__(self, dev, cmd):
         self.cmd = cmd
         self.dev = dev ## this happens in DAQGeneric initialization, but we need it here too since it is used in making the waveforms that go into DaqGeneric.__init__
-        
+        if 'shutterMode' not in cmd:
+            cmd['shutterMode'] = 'auto'
+            
         ## create protocol structure to pass to daqGeneric, and retain a pointer to it here; DAQGeneric protocols will get filled in from LaserTask when self.configure() gets called
         cmd['daqProtocol'] = {}
         if 'shutter' in dev.config:
@@ -528,7 +535,8 @@ class LaserTask(DAQGenericTask):
             
             
         ### send power/switch waveforms to device for pCell/qSwitch/shutter cmd calculation
-        if 'powerWaveform' in self.cmd:
+        print "Cmd:", self.cmd
+        if 'powerWaveform' in self.cmd and not self.cmd.get('ignorePowerWaveform', False):
             calcCmds = self.dev.getChannelCmds({'powerWaveform':self.cmd['powerWaveform']}, rate)
         elif 'switchWaveform' in self.cmd:
             calcCmds = self.dev.getChannelCmds({'switchWaveform':self.cmd['switchWaveform']}, rate)
@@ -564,14 +572,42 @@ class LaserTask(DAQGenericTask):
             self.cmd['daqProtocol']['qSwitch']['command'][-1] = 0
         
         
+        self.currentPower = self.dev.getParam('currentPower')
+        self.expectedPower = self.dev.getParam('expectedPower')
+        
         DAQGenericTask.configure(self, tasks, startOrder) ## DAQGenericTask will use self.cmd['daqProtocol']
 
         
     def getResult(self):
         ## getResult from DAQGeneric, then add in command waveform
         result = DAQGenericTask.getResult(self)
-        ## NEED TO: add powerWaveform or switchWaveform to result(which is a mArray)
-        pass
+        arr = result.view(np.ndarray)
+        
+        #if 'powerWaveform' in self.cmd:
+            #arr = np.append(arr, self.cmd['powerWaveform'][np.newaxis, :], axis=0)
+            ##result = np.append(result, self.cmd['powerWaveform'][np.newaxis, :], axis=0)
+            #result._info[0]['cols'].append({'name': 'power', 'units': 'W'})
+        #elif 'switchWaveform' in self.cmd:
+            #arr = np.append(arr, self.cmd['switchWaveform'][np.newaxis, :], axis=0)
+            ##result = np.append(result, self.cmd['switchWaveform'][np.newaxis, :], axis=0)
+            #result._info[0]['cols'].append({'name': 'switch'})
+            
+        info = {'currentPower': self.currentPower, 
+                'expectedPower': self.expectedPower, 
+                'requestedWavelength':self.cmd.get('wavelength', None), 
+                'shutterMode':self.cmd['shutterMode'],
+                'powerCheckRequested':self.cmd.get('checkPower', False),
+                'pulsesCmd': self.cmd.get('pulses', None)
+                }
+              
+        
+        result._info[-1]['Laser'] = info
+        
+        result = metaarray.MetaArray(arr, info=result._info)
+        
+        self.dev.lastResult = result
+       
+        return result
     
     #def storeResult(self, dirHandle):
         #pass

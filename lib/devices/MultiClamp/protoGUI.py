@@ -75,6 +75,7 @@ class MultiClampProtoGui(ProtocolGui):
             'secondaryGainCheck': self.ui.secondaryGainSpin,
         }
         
+        ## For each check box, enable its corresponding control
         if name in checkMap:
             checkMap[name].setEnabled(value)
             self.devStateChanged()
@@ -290,7 +291,7 @@ class MultiClampProtoGui(ProtocolGui):
                 oldUnit = 'A'
                 #self.cmdScale = 1e-3
                 #self.inpScale = 1e-12
-                spinOpts = dict(units='V', siPrefix=True, dec=True, step=0.5, minStep=1e-3)
+                spinOpts = dict(suffix='V', siPrefix=True, dec=True, step=0.5, minStep=1e-3)
                 self.ui.waveGeneratorWidget.setMeta('y', **spinOpts)
                 self.ui.waveGeneratorWidget.setMeta('xy', units='V*s', siPrefix=True, dec=True, step=0.5, minStep=1e-6)
             else:
@@ -298,7 +299,7 @@ class MultiClampProtoGui(ProtocolGui):
                 oldUnit = 'V'
                 #self.cmdScale = 1e-12
                 #self.inpScale = 1e-3
-                spinOpts = dict(units='A', siPrefix=True, dec=True, step=0.5, minStep=1e-12)
+                spinOpts = dict(suffix='A', siPrefix=True, dec=True, step=0.5, minStep=1e-12)
                 self.ui.waveGeneratorWidget.setMeta('y', **spinOpts)
                 self.ui.waveGeneratorWidget.setMeta('xy', units='C', siPrefix=True, dec=True, step=0.5, minStep=1e-15)
             #self.stateGroup.setScale(self.ui.holdingSpin, 1./self.cmdScale)

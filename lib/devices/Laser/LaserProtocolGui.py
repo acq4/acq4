@@ -9,6 +9,8 @@ class LaserProtoGui(DAQGenericProtoGui):
     def __init__(self, dev, prot):
         DAQGenericProtoGui.__init__(self, dev, prot, ownUi=False)
         
+        self.cache = {}
+        
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0,0,0,0)
         self.setLayout(self.layout)
@@ -87,6 +89,12 @@ class LaserProtoGui(DAQGenericProtoGui):
         """Restore the state of the widget from a dictionary previously generated using saveState"""
         return DAQGenericProtoGui.restoreState(self, state['daqState'])
     
+    def describe(self, params=None):
+        state = self.saveState()
+        ps = state['daqState']['channels']['power']
+        desc = {'mode': 'power', 'command': ps['waveGeneratorWidget']}
+        return desc
+    
     def generateProtocol(self, params=None):
         """Return a cmd dictionary suitable for passing to LaserTask."""
         ## Params looks like: {'amp': 7} where 'amp' is the name of a sequence parameter, and 7 is the 7th value in the list of 'amp'
@@ -100,6 +108,8 @@ class LaserProtoGui(DAQGenericProtoGui):
             cmd[k] = {}
             cmd[k]['command'] = rawCmds[k]
             
+        cmd['powerWaveform'] = wave  ## just to allow the device task to store this data
+        cmd['ignorePowerWaveform'] = True
         return  cmd
     
     def powerCmdChanged(self):

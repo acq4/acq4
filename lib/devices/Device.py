@@ -161,6 +161,11 @@ class ProtocolGui(QtGui.QWidget):
         """Restore the state of the widget from a dictionary previously generated using saveState"""
         pass
         
+    def describe(self, params=None):
+        """Return a nested-dict structure that describes what the device will do during a protocol.
+        This data will be stored along with results from a protocol run."""
+        return self.saveState()  ## lazy; implement something nicer for your devices!
+        
     def listSequence(self):
         """Return an OrderedDict of sequence parameter names and lengths {name: length}"""
         return {}
