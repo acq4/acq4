@@ -158,7 +158,7 @@ class SeqParameter(SimpleParameter):
         if 'readonly' in opts:  ## if this param is set to readonly, then disable sequencing.
             if opts['readonly'] is False:
                 self['sequence'] = 'off'
-            self.sequence.setOpts(readonly=opts['readonly'])
+            self.sequence.setOpts(readonly=opts['readonly'], visible=False)
     
     def setState(self, state):
         self.setValue(state['value'])

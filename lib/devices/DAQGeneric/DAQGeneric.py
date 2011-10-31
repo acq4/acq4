@@ -302,7 +302,8 @@ class DAQGenericTask(DeviceTask):
                 
                 ## Input channels are only used if the command has record: True
                 if chConf['type'] in ['ai', 'di']:
-                    if ('record' not in self._DAQCmd[ch]) or (not self._DAQCmd[ch]['record']):
+                    #if ('record' not in self._DAQCmd[ch]) or (not self._DAQCmd[ch]['record']):
+                    if not self._DAQCmd[ch].get('record', False):
                         #print "    ignoring channel", ch, "recording disabled"
                         continue
                     

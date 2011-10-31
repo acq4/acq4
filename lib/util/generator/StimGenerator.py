@@ -66,12 +66,12 @@ class StimGenerator(QtGui.QWidget):
         
         ## Simple stim generator
         self.stimParams = StimParamSet()
-        self.ui.stimulusTree.setParameters(self.stimParams)
+        self.ui.stimulusTree.setParameters(self.stimParams, showTop=False)
         self.stimParams.sigTreeStateChanged.connect(self.stimParamsChanged)
         
         ## advanced stim generator
         self.seqParams = SequenceParamSet()
-        self.ui.seqTree.setParameters(self.seqParams)
+        self.ui.seqTree.setParameters(self.seqParams, showTop=False)
         
         self.setAdvancedMode(False)
         self.setError()
@@ -138,11 +138,14 @@ class StimGenerator(QtGui.QWidget):
     def setMeta(self, axis, **args):
         """Set meta data for X, Y, and XY axes. This is used primarily to configure
         SpinBoxes to display the correct units, limits, step sizes, etc.
+        Meta data is _updated_, not replaced. Any previously specified keys will 
+        still be present.
+        
         Suggested args are:
             suffix='units', dec=True, minStep=1e-3, step=1, limits=(min, max)        
         """
         self.meta[axis].update(args)
-        self.stimParams.setMeta(axis, args)
+        self.stimParams.setMeta(axis, self.meta[axis])
 
     def clearCache(self):
         self.cache = {}

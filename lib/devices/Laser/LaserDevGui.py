@@ -19,6 +19,8 @@ class LaserDevGui(QtGui.QWidget):
         self.calibrateBtnState = 0
         
         ### configure gui
+        self.ui.energyCalcGroup.hide()  ## not using this for now
+        
         self.ui.wavelengthSpin.setOpts(suffix='m', siPrefix=True)
         if not self.dev.hasTunableWavelength:
             self.ui.wavelengthGroup.setDisabled(True)
@@ -37,9 +39,8 @@ class LaserDevGui(QtGui.QWidget):
             
         self.ui.measurementSpin.setOpts(suffix='s', siPrefix=True, bounds=[0.0, 5.0], dec=True, step=1, minStep=0.01)
         self.ui.settlingSpin.setOpts(suffix='s', siPrefix=True, value=0.1, dec=True, step=1, minStep=0.01)
-        with self.dev.variableLock:
-            self.ui.expectedPowerSpin.setOpts(suffix='W', siPrefix=True, bounds=[0.0, None], value=self.dev.params['expectedPower'], dec=True, step=0.1, minStep=0.01)
-        self.ui.toleranceSpin.setOpts(step=0.1, suffix='%', bounds=[0.1, 100.0], value=self.dev.params['tolerance'])
+        self.ui.expectedPowerSpin.setOpts(suffix='W', siPrefix=True, bounds=[0.0, None], value=self.dev.getParam('expectedPower'), dec=True, step=0.1, minStep=0.01)
+        self.ui.toleranceSpin.setOpts(step=1, suffix='%', bounds=[0.1, 100.0], value=self.dev.getParam('tolerance'))
         
         
         if not self.dev.hasShutter:
@@ -100,8 +101,11 @@ class LaserDevGui(QtGui.QWidget):
         self.ui.shutterBtn.toggled.connect(self.shutterToggled)
         self.ui.qSwitchBtn.toggled.connect(self.qSwitchToggled)
         self.ui.checkPowerBtn.clicked.connect(self.dev.outputPower)
+        self.ui.powerAlertCheck.toggled.connect(self.powerAlertToggled)
         
         self.dev.sigPowerChanged.connect(self.updatePowerLabels)
+        
+        self.dev.outputPower()  ## check laser power
         
     def currentPowerToggled(self, b):
         if b:
@@ -110,6 +114,12 @@ class LaserDevGui(QtGui.QWidget):
     def expectedPowerToggled(self, b):
         if b:
             self.dev.setParam(useExpectedPower=True)
+            
+    def powerAlertToggled(self, b):
+        if b:
+            self.dev.setParam(powerAlert=True)
+        else:
+            self.dev.setParam(powerAlert=False)
             
     def shutterToggled(self, b):
         if b:
@@ -199,16 +209,21 @@ class LaserDevGui(QtGui.QWidget):
         
         ## update labels
         with self.dev.variableLock:
-            power = self.dev.params['currentPower']
+            power = self.dev.getParam('currentPower')
         self.updatePowerLabels(power)
     
-    def updatePowerLabels(self, power):
-        if power is None:
-            self.ui.outputPowerLabel.setText("")
-            self.ui.samplePowerLabel.setText("")
+    def updatePowerLabels(self, power, valid):
+        #if power is None:
+            #self.ui.outputPowerLabel.setText("")
+            #self.ui.samplePowerLabel.setText("")
+        #else:
+        self.ui.outputPowerLabel.setText(str(siFormat(power, suffix='W')))
+        self.ui.samplePowerLabel.setText(str(siFormat(power*self.dev.getParam('scopeTransmission'), suffix='W')))
+        if not valid:
+            print "power invalid"
+            self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #B00}")
         else:
-            self.ui.outputPowerLabel.setText(str(siFormat(power, suffix='W')))
-            self.ui.samplePowerLabel.setText(str(siFormat(power*self.dev.params['scopeTransmission'], suffix='W')))
+            self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #000}")
 
 
     def updateCalibrationList(self):
