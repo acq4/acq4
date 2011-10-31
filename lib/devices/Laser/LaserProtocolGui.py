@@ -17,16 +17,18 @@ class LaserProtoGui(DAQGenericProtoGui):
         self.splitter1.setOrientation(QtCore.Qt.Horizontal)
         self.layout.addWidget(self.splitter1)
         
-        self.ctrlSplitter = QtGui.QSplitter()
-        self.ctrlSplitter.setOrientation(QtCore.Qt.Vertical)
+        self.ctrlLayout = QtGui.QVBoxLayout()
+        wid1 = QtGui.QWidget()
+        wid1.setLayout(self.ctrlLayout)
         self.plotSplitter = QtGui.QSplitter()
         self.plotSplitter.setOrientation(QtCore.Qt.Vertical)
-        self.splitter1.addWidget(self.ctrlSplitter)
+        self.splitter1.addWidget(wid1)
         self.splitter1.addWidget(self.plotSplitter)
-        wid = QtGui.QWidget()
+        #wid = QtGui.QWidget()
         hLayout = QtGui.QHBoxLayout()
-        wid.setLayout(hLayout)
-        self.ctrlSplitter.addWidget(wid)
+        #wid.setLayout(hLayout)
+        self.ctrlLayout.addLayout(hLayout)
+
         label = QtGui.QLabel("Current Power at Sample: ")
         self.powerLabel = QtGui.QLabel("")
         self.powerLabel.font().setBold(True)
@@ -40,7 +42,7 @@ class LaserProtoGui(DAQGenericProtoGui):
         
         
         self.powerWidget, self.powerPlot = self.createChannelWidget('power', daqName=self.dev.getDAQName()[0])
-        self.ctrlSplitter.addWidget(self.powerWidget)
+        self.ctrlLayout.addWidget(self.powerWidget)
         self.plotSplitter.addWidget(self.powerPlot)
         self.powerWidget.setMeta('y', units='W', siPrefix=True, dec=True, step=0.5, minStep=1e-3, limits=(0, None))
         self.powerWidget.setMeta('xy', units='J', siPrefix=True, dec=True, step=0.5, minStep=1e-6, limits=(0, None))
@@ -75,6 +77,8 @@ class LaserProtoGui(DAQGenericProtoGui):
         
         
     def updatePowerLabel(self, power):
+        if power is None:
+            return
         self.powerLabel.setText(str(siFormat(power*self.dev.params['scopeTransmission'], suffix='W')))
     
     def saveState(self):

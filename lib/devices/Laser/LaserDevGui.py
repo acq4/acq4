@@ -203,6 +203,8 @@ class LaserDevGui(QtGui.QWidget):
         self.updatePowerLabels(power)
     
     def updatePowerLabels(self, power):
+        if power is None:
+            return
         self.ui.outputPowerLabel.setText(str(siFormat(power, suffix='W')))
         self.ui.samplePowerLabel.setText(str(siFormat(power*self.dev.params['scopeTransmission'], suffix='W')))
 
