@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.SpinBox import SpinBox
 #from pyqtgraph.SignalProxy import SignalProxy
 from pyqtgraph.WidgetGroup import WidgetGroup
-from ColorMapper import ColorMapper
+#from ColorMapper import ColorMapper
 from ..Node import Node
-import metaarray
 import numpy as np
 from pyqtgraph.ColorButton import ColorButton
+try:
+    import metaarray
+    HAVE_METAARRAY = True
+except:
+    HAVE_METAARRAY = False
+
 
 def generateUi(opts):
     """Convenience function for generating common UI types"""
@@ -52,8 +57,8 @@ def generateUi(opts):
             w = QtGui.QComboBox()
             for i in o['values']:
                 w.addItem(i)
-        elif t == 'colormap':
-            w = ColorMapper()
+        #elif t == 'colormap':
+            #w = ColorMapper()
         elif t == 'color':
             w = ColorButton()
         else:
@@ -73,15 +78,6 @@ def generateUi(opts):
     group = WidgetGroup(widget)
     return widget, group, ctrls
 
-#class TerminalEditor(QtGui.QWidget):
-    #def __init__(self, node):
-        #QtGui.QWidget.__init__(self)
-        
-        #self.node = node
-        
-    
-        
-
 
 class CtrlNode(Node):
     """Abstract class for nodes with auto-generated control UI"""
@@ -99,7 +95,6 @@ class CtrlNode(Node):
         Node.__init__(self, name=name, terminals=terminals)
         
         self.ui, self.stateGroup, self.ctrls = generateUi(ui)
-        #QtCore.QObject.connect(self.stateGroup, QtCore.SIGNAL('changed'), self.changed)
         self.stateGroup.sigChanged.connect(self.changed)
        
     def ctrlWidget(self):
@@ -125,55 +120,21 @@ class CtrlNode(Node):
             
     def hideRow(self, name):
         w = self.ctrls[name]
-        #row = w.rowNum
-        #l = self.ui.layout().itemAt(row, QtGui.QFormLayout.LabelRole)
         l = self.ui.layout().labelForField(w)
         w.hide()
         l.hide()
         
     def showRow(self, name):
         w = self.ctrls[name]
-        #row = w.rowNum
-        #l = self.ui.layout().itemAt(row, QtGui.QFormLayout.LabelRole)
         l = self.ui.layout().labelForField(w)
         w.show()
         l.show()
 
-#class Filter(Node):
-    #"""Abstract node for waveform filters having a single input and output"""
-    #def __init__(self, name):
-        #Node.__init__(self, name=name, terminals={'In': {'io': 'in'}, 'Out': {'io': 'out'}})
-        #self.ui = None           ## override these two parameters if you want to use the default implementations
-        #self.stateGroup = None   ## of ctrlWidget, saveState, and restoreState.
-        #self.proxy = proxyConnect(self, QtCore.SIGNAL('changed'), self.delayedChange)  ## automatically generate delayedChange signal
-    
-    #def ctrlWidget(self):
-        #return self.ui
-    
-    #def process(self, In):
-        #return {'Out': self.processData(In)}
-    
-    #def saveState(self):
-        #state = Node.saveState(self)
-        #state['ctrl'] = self.stateGroup.state()
-        #return state
-    
-    #def restoreState(self, state):
-        #Node.restoreState(self, state)
-        #if self.stateGroup is not None:
-            #self.stateGroup.setState(state.get('ctrl', {}))
-        
-    #def changed(self):
-        #self.emit(QtCore.SIGNAL('changed'), self)
-        #self.update()
-        
-    #def delayedChange(self):
-        #self.emit(QtCore.SIGNAL('delayedChange'), self)
-        
+
 
 def metaArrayWrapper(fn):
     def newFn(self, data, *args, **kargs):
-        if isinstance(data, metaarray.MetaArray):
+        if HAVE_METAARRAY and isinstance(data, metaarray.MetaArray):
             d1 = fn(self, data.view(np.ndarray), *args, **kargs)
             info = data.infoCopy()
             if d1.shape != data.shape:

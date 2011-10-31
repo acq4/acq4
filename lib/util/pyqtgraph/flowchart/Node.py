@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 #from PySide import QtCore, QtGui
 from Terminal import *
 from advancedTypes import OrderedDict

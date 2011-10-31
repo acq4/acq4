@@ -52,17 +52,29 @@ class AxoPatch200(DAQGeneric):
         #if 'LPFChannel' in config:
         #    daqConfig['LPF'] = {'type': 'ai', 'channel': config['LPFChannel'], 'units': 'Hz'}
         if 'ScaledSignal' in config:
-            daqConfig['primary'] = {'type': 'ai', 'channel': config['ScaledSignal']}
+            #daqConfig['primary'] = {'type': 'ai', 'channel': config['ScaledSignal']}
+            daqConfig['primary'] = config['ScaledSignal']
+            if config['ScaledSignal'].get('type', None) != 'ai':
+                raise Exception("AxoPatch200: ScaledSignal configuration must have type:'ai'")
         if 'Command' in config:
-            daqConfig['command'] = {'type': 'ao', 'channel': config['Command']}
+            #daqConfig['command'] = {'type': 'ao', 'channel': config['Command']}
+            daqConfig['command'] = config['Command']
+            if config['Command'].get('type', None) != 'ao':
+                raise Exception("AxoPatch200: ScaledSignal configuration must have type:'ao'")
             
         ## Note that both of these channels can be present, but we will only ever record from one at a time.
         ## Usually, we'll record from "I OUTPUT" in current clamp and "10 Vm OUTPUT" in voltage clamp.
         self.hasSecondaryChannel = True
         if 'SecondaryVCSignal' in config: 
-            daqConfig['secondary'] = {'type': 'ai', 'channel': config['SecondaryVCSignal']}
+            #daqConfig['secondary'] = {'type': 'ai', 'channel': config['SecondaryVCSignal']}
+            daqConfig['secondary'] = config['SecondaryVCSignal']
+            if config['SecondaryVCSignal'].get('type', None) != 'ai':
+                raise Exception("AxoPatch200: SecondaryVCSignal configuration must have type:'ai'")
         elif 'SecondaryICSignal' in config:
-            daqConfig['secondary'] = {'type': 'ai', 'channel': config['SecondaryICSignal']}
+            #daqConfig['secondary'] = {'type': 'ai', 'channel': config['SecondaryICSignal']}
+            daqConfig['secondary'] = config['SecondaryICSignal']
+            if config['SecondaryICSignal'].get('type', None) != 'ai':
+                raise Exception("AxoPatch200: SecondaryICSignal configuration must have type:'ai'")
         else:
             self.hasSecondaryChannel = False
             
@@ -294,14 +306,15 @@ class AxoPatch200(DAQGeneric):
     def readChannel(self, ch):
         if ch in self.config:
             chOpts = self.config[ch]
-            dev = chOpts[0]
-            chan = chOpts[1]
-            if len(chOpts) > 2:
-                mode = chOpts[2]
-            else:
-                mode = None
-            dev = self.dm.getDevice(dev)
-            return dev.getChannelValue(chan, mode)
+            #dev = chOpts[0]
+            #chan = chOpts[1]
+            #if len(chOpts) > 2:
+                #mode = chOpts[2]
+            #else:
+                #mode = None
+                
+            dev = self.dm.getDevice(chOpts['device'])
+            return dev.getChannelValue(chOpts['channel'], chOpts.get('mode', None))
         else:
             return None
         

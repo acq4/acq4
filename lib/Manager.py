@@ -824,7 +824,10 @@ class Task:
             #print "Starting tasks.."
             for devName in self.startOrder:
                 #print "  ", devName
-                self.tasks[devName].start()
+                try:
+                    self.tasks[devName].start()
+                except:
+                    printExc("Error starting device '%s':" % devName)
                 self.startedDevs.append(devName)
                 prof.mark('start %s' % devName)
             self.startTime = ptime.time()

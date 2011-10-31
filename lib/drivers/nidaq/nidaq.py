@@ -136,16 +136,17 @@ class _NIDAQ:
         errCode = ret()
         
         if errCode < 0:
-            print "NiDAQ Error while running function '%s%s'" % (func, str(args))
+            #print "NiDAQ Error while running function '%s%s'" % (func, str(args))
             #for s in self.error(errCode):
                 #print s
-            print self.error(errCode)[1]
-            raise NIDAQError(errCode)
+            #print self.error(errCode)[1]
+            msg = "NiDAQ Error while running function '%s%s':\n%s" % (func, str(args), self.error(errCode))
+            raise NIDAQError(errCode, msg)
             #raise NIDAQError(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         elif errCode > 0:
             print "NiDAQ Warning while running function '%s%s'" % (func, str(args))
             print self.error(errCode)
-            debug.printTrace("Traceback:")
+            #debug.printTrace("Traceback:")
             #raise NIDAQWarning(errCode, "Function '%s%s'" % (func, str(args)), *self.error(errCode))
         
             

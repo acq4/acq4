@@ -43,7 +43,29 @@ class DataMapping:
             
 
 class DAQGeneric(Device):
+    """
+    Config format:
     
+        ChannelName1:
+            device: 'DaqDeviceName'
+            channel: '/Dev1/ao0'
+            type: 'ao'
+            units: 'A'
+            scale: 200 * mV / nA
+        ChannelName2:
+            device: 'DaqDeviceName'
+            channel: '/Dev1/ai3'
+            type: 'ai'
+            mode: 'nrse'
+            units: 'A'
+            scale: 200 * nA / mV
+        ChannelName3:
+            device: 'DaqDeviceName'
+            channel: '/Dev1/line7'
+            type: 'di'
+            invert: True
+        
+    """
     sigHoldingChanged = QtCore.Signal(object, object)
     
     def __init__(self, dm, config, name):
@@ -64,12 +86,21 @@ class DAQGeneric(Device):
                 if config[ch]['type'][0] != 'd':
                     raise Exception("Inversion only allowed for digital channels. (%s.%s)" % (name, ch))
                 config[ch]['scale'] = -1
-                config[ch]['offset'] = 1
+                config[ch]['offset'] = -1
                 
             #print "chan %s scale %f" % (ch, config[ch]['scale'])
             if 'holding' not in config[ch]:
                 config[ch]['holding'] = 0.0
-            self._DGHolding[ch] = config[ch]['holding']
+                
+            ## It is possible to create virtual channels with no real hardware connection
+            if 'device' not in config[ch]:
+                #print "Assuming channel %s is virtual:" % ch, config[ch]
+                config[ch]['virtual'] = True
+                
+            ## set holding value for all output channels now
+            if config[ch]['type'][1] == 'o':
+                self.setChanHolding(ch, config[ch]['holding'])
+            #self._DGHolding[ch] = config[ch]['holding']
         
     def mapToDAQ(self, channel, data):
         mapping = self.getMapping(chans=[channel])
@@ -104,18 +135,21 @@ class DAQGeneric(Device):
             else:
                 self._DGHolding[channel] = level
                 
-            daq, chan = self._DGConfig[channel]['channel']
-            daqDev = self.dm.getDevice(daq)
-            #if scale is None:
-                #scale = self.getChanScale(channel)
-            #print "set", chan, self._DGHolding[channel]*scale
-            #val = self._DGHolding[channel]*scale
             val = self.mapToDAQ(channel, self._DGHolding[channel])
-            if block:
-                daqDev.setChannelValue(chan, val, block=True)
-            else:
-                daqDev.setChannelValue(chan, val, block=False, delaySetIfBusy=True)  ## Note: If a protocol is running, this will not be set until it completes.
-            #self.emit(QtCore.SIGNAL('holdingChanged'), channel, val)
+            #print "Set holding for channel %s: %f => %f" % (channel, self._DGHolding[channel], val)
+            
+            if not self._DGConfig[channel].get('virtual', False):
+                daq = self._DGConfig[channel]['device']
+                chan = self._DGConfig[channel]['channel']
+                daqDev = self.dm.getDevice(daq)
+                #if scale is None:
+                    #scale = self.getChanScale(channel)
+                #print "set", chan, self._DGHolding[channel]*scale
+                #val = self._DGHolding[channel]*scale
+                if block:
+                    daqDev.setChannelValue(chan, val, block=True)
+                else:
+                    daqDev.setChannelValue(chan, val, block=False, delaySetIfBusy=True)  ## Note: If a protocol is running, this will not be set until it completes.
             self.sigHoldingChanged.emit(channel, val)
         
     def getChanHolding(self, chan):
@@ -124,11 +158,14 @@ class DAQGeneric(Device):
         
     def getChannelValue(self, channel, block=True):
         with self._DGLock:
-            chConf = self._DGConfig[channel]['channel']
-            daq, chan = chConf[:2]
-            mode = None
-            if len(chConf) > 2:
-                mode = chConf[2]
+            #chConf = self._DGConfig[channel]['channel']
+            #daq, chan = chConf[:2]
+            daq = self._DGConfig[channel]['device']
+            chan = self._DGConfig[channel]['channel']
+            mode = self._DGConfig[channel].get('mode', None)
+            #mode = None
+            #if len(chConf) > 2:
+                #mode = chConf[2]
     
             daqDev = self.dm.getDevice(daq)
             #if 'scale' in self._DGConfig[channel]:
@@ -151,7 +188,8 @@ class DAQGeneric(Device):
         return DAQGenericProtoGui(self, prot)
 
     def getDAQName(self, channel):
-        return self._DGConfig[channel]['channel'][0]
+        #return self._DGConfig[channel]['channel'][0]
+        return self._DGConfig[channel]['device']
 
     def quit(self):
         pass
@@ -223,10 +261,13 @@ class DAQGenericTask(DeviceTask):
             self.initialState = {}
             self.holdingVals = {}
             for ch in self._DAQCmd:
-                dev = self.dev.dm.getDevice(self.dev._DGConfig[ch]['channel'][0])
+                #dev = self.dev.dm.getDevice(self.dev._DGConfig[ch]['channel'][0])
+                dev = self.dev.dm.getDevice(self.dev.getDAQName(ch))
                 prof.mark(ch+' get dev')
                 if 'preset' in self._DAQCmd[ch]:
-                    dev.setChannelValue(self.dev._DGConfig[ch]['channel'][1], self._DAQCmd[ch]['preset'])
+                    #dev.setChannelValue(self.dev._DGConfig[ch]['channel'][1], self._DAQCmd[ch]['preset'])
+                    preVal = self.mapping.mapToDaq(ch, self._DAQCmd[ch]['preset'])
+                    dev.setChannelValue(self.dev._DGConfig[ch]['channel'], preVal)
                     prof.mark(ch+' preset')
                 elif 'holding' in self._DAQCmd[ch]:
                     self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
@@ -255,7 +296,7 @@ class DAQGenericTask(DeviceTask):
                     #print "    ignoring channel", ch, "not in command"
                     continue
                 chConf = self.dev._DGConfig[ch]
-                if chConf['channel'][0] != daqTask.devName():
+                if chConf['device'] != daqTask.devName():
                     #print "    ignoring channel", ch, "wrong device"
                     continue
                 
@@ -280,27 +321,33 @@ class DAQGenericTask(DeviceTask):
                         #print "No command for channel %s, skipping." % ch
                         continue
                     #cmdData = cmdData * scale
+                        
+                    ## apply scale, offset or inversion for output lines
+                    cmdData = self.mapping.mapToDaq(ch, cmdData)
+                    #print "channel", chConf['channel'][1], cmdData
+                    
                     if chConf['type'] == 'do':
                         cmdData = cmdData.astype(uint32)
                         cmdData[cmdData<=0] = 0
                         cmdData[cmdData>0] = 0xFFFFFFFF
-                        
-                    ## apply scale, offset or inversion for output lines
-                    cmdData = self.mapping.mapToDaq(ch, cmdData) 
-                    #print "channel", chConf['channel'][1], cmdData
                     
                     #print "channel", self._DAQCmd[ch]
                     #print "LOW LEVEL:", self._DAQCmd[ch].get('lowLevelConf', {})
-                    daqTask.addChannel(chConf['channel'][1], chConf['type'], **self._DAQCmd[ch].get('lowLevelConf', {}))
+                    daqTask.addChannel(chConf['channel'], chConf['type'], **self._DAQCmd[ch].get('lowLevelConf', {}))
                     self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
-                    daqTask.setWaveform(chConf['channel'][1], cmdData)
-                else:
-                    mode = None
-                    if len(chConf['channel']) > 2:
-                        mode = chConf['channel'][2]
+                    daqTask.setWaveform(chConf['channel'], cmdData)
+                    #print "DO task %s has type" % ch, cmdData.dtype
+                elif chConf['type'] == 'ai':
+                    mode = chConf.get('mode', None)
+                    #if len(chConf['channel']) > 2:
+                        #mode = chConf['channel'][2]
                     #print "Adding channel %s to DAQ task" % chConf['channel'][1]
-                    daqTask.addChannel(chConf['channel'][1], chConf['type'], mode=mode, **self._DAQCmd[ch].get('lowLevelConf', {}))
+                    daqTask.addChannel(chConf['channel'], chConf['type'], mode=mode, **self._DAQCmd[ch].get('lowLevelConf', {}))
                     self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
+                elif chConf['type'] == 'di':
+                    daqTask.addChannel(chConf['channel'], chConf['type'], **self._DAQCmd[ch].get('lowLevelConf', {}))
+                    self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
+                    
                 #print "  done: ", self.daqTasks.keys()
         
         
@@ -349,7 +396,7 @@ class DAQGenericTask(DeviceTask):
         #print "buffered channels:", self.bufferedChannels
         for ch in self.bufferedChannels:
             #result[ch] = _DAQCmd[ch]['task'].getData(self.dev.config[ch]['channel'][1])
-            result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'][1])
+            result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'])
             #prof.mark("get data for channel "+str(ch))
             #print "get data", ch, self.getChanScale(ch), result[ch]['data'].max()
             #scale = self.getChanScale(ch)
@@ -444,7 +491,7 @@ class DAQDevGui(QtGui.QWidget):
                 
             self.widgets[ch] = ui
             ui.nameLabel.setText(str(ch))
-            ui.channelCombo.addItem("%s (%s)" % (ch, chans[ch]['channel'][1]))
+            ui.channelCombo.addItem("%s (%s)" % (ch, chans[ch]['channel']))
             
             holding = chans[ch].get('holding', 0)
             
