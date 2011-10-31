@@ -334,7 +334,7 @@ class Laser(DAQGeneric):
                 powerInd[0]: {powerInd[1]: {'record':True, 'recordInit':False}},
                 daqName: {'numPts': nPts, 'rate': rate}
             }
-            print "outputPowerCmd: ", cmd
+            #print "outputPowerCmd: ", cmd
             task = getManager().createTask(cmd)
             task.execute()
             result = task.getResult()
@@ -535,7 +535,7 @@ class LaserTask(DAQGenericTask):
             
             
         ### send power/switch waveforms to device for pCell/qSwitch/shutter cmd calculation
-        print "Cmd:", self.cmd
+        #print "Cmd:", self.cmd
         if 'powerWaveform' in self.cmd and not self.cmd.get('ignorePowerWaveform', False):
             calcCmds = self.dev.getChannelCmds({'powerWaveform':self.cmd['powerWaveform']}, rate)
         elif 'switchWaveform' in self.cmd:
@@ -583,14 +583,14 @@ class LaserTask(DAQGenericTask):
         result = DAQGenericTask.getResult(self)
         arr = result.view(np.ndarray)
         
-        #if 'powerWaveform' in self.cmd:
-            #arr = np.append(arr, self.cmd['powerWaveform'][np.newaxis, :], axis=0)
-            ##result = np.append(result, self.cmd['powerWaveform'][np.newaxis, :], axis=0)
-            #result._info[0]['cols'].append({'name': 'power', 'units': 'W'})
-        #elif 'switchWaveform' in self.cmd:
-            #arr = np.append(arr, self.cmd['switchWaveform'][np.newaxis, :], axis=0)
-            ##result = np.append(result, self.cmd['switchWaveform'][np.newaxis, :], axis=0)
-            #result._info[0]['cols'].append({'name': 'switch'})
+        if 'powerWaveform' in self.cmd:
+            arr = np.append(arr, self.cmd['powerWaveform'][np.newaxis, :], axis=0)
+            #result = np.append(result, self.cmd['powerWaveform'][np.newaxis, :], axis=0)
+            result._info[0]['cols'].append({'name': 'power', 'units': 'W'})
+        elif 'switchWaveform' in self.cmd:
+            arr = np.append(arr, self.cmd['switchWaveform'][np.newaxis, :], axis=0)
+            #result = np.append(result, self.cmd['switchWaveform'][np.newaxis, :], axis=0)
+            result._info[0]['cols'].append({'name': 'switch'})
             
         info = {'currentPower': self.currentPower, 
                 'expectedPower': self.expectedPower, 
