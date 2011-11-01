@@ -7,7 +7,7 @@ import lib.Manager
 from imageAnalysis import *
 from debug import *
 import numpy as np
-import WidgetGroup
+import pyqtgraph.WidgetGroup as WidgetGroup
 from ProgressDialog import ProgressDialog
 
 class ScannerDeviceGui(QtGui.QWidget):
@@ -38,12 +38,14 @@ class ScannerDeviceGui(QtGui.QWidget):
         
         
         ## Populate Device lists
-        defCam = None
-        if 'defaultCamera' in self.dev.config:
-            defCam = self.dev.config['defaultCamera']
-        defLaser = None
-        if 'defaultLaser' in self.dev.config:
-            defLaser = self.dev.config['defaultLaser']
+        #defCam = None
+        #if 'defaultCamera' in self.dev.config:
+            #defCam = self.dev.config['defaultCamera']
+        defCam = self.dev.config.get('defaultCamera', None)
+        #defLaser = None
+        #if 'defaultLaser' in self.dev.config:
+            #defLaser = self.dev.config['defaultLaser']
+        defLaser = self.dev.config.get('defaultLaser', None)
 
         devs = self.dev.dm.listDevices()
         for d in devs:
@@ -350,6 +352,12 @@ class ScannerDeviceGui(QtGui.QWidget):
           Cmd.Y  =  F  +  G * Loc.X  +  H * Loc.Y  +  I * Loc.X^2  +  J * Loc.Y^2
         Returns [[A, B, C, D, E], [F, G, H, I, J]]
         """
+#        print "==========="
+#        print loc
+#        print "============"
+#        print cmd
+        #for i in range(loc.shape[0]):
+            #print tuple(loc[i]),  tuple(cmd[i])
         
         ## do a two-stage fit, using only linear parameters first.
         ## this is to make sure the second-order parameters do no interfere with the first-order fit.
@@ -379,6 +387,11 @@ class ScannerDeviceGui(QtGui.QWidget):
         #xFit = list(xFit)+[0,0]
         #yFit = list(yFit)+[0,0]
         
+        ## compute fit error
+        errx = abs(erf2(xFit,  loc,  cmd[:, 0])).mean()
+        erry = abs(erf2(yFit,  loc,  cmd[:, 1])).mean()
+        print "Fit error:",  errx,  erry
+        self.dev.lastCalData = (loc,  cmd)
         return (list(xFit), list(yFit))
 
     def spotSize(self, frame):
@@ -422,14 +435,14 @@ class ScannerDeviceGui(QtGui.QWidget):
             yCommand[start:stop] = yRange[0] + yDiff * (float(i)/(sweeps-1))
             start = stop
         yCommand[-1] = 0.0
-        daqName = self.dev.config['XAxis'][0]
+        daqName = self.dev.config['XAxis']['device']
 
         ## Record 10 camera frames with the shutter closed 
         #print "parameters:", camParams
         cmd = {
             'protocol': {'duration': 0.0, 'timeout': 5.0},
             camera: {'record': True, 'minFrames': 10, 'params': camParams, 'pushState': 'scanProt'}, 
-            laser: {'Shutter': {'preset': 0, 'holding': 0}}
+            #laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
         #print "\n\n====> Record background\n"
         task = lib.Manager.getManager().createTask(cmd)
@@ -448,7 +461,7 @@ class ScannerDeviceGui(QtGui.QWidget):
                 },
                 #'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3, 
                 'popState': 'scanProt'},
-            laser: {'Shutter': {'preset': 0, 'holding': 0, 'command': np.ones(len(xCommand), dtype=byte)}},
+            laser: {'shutter': {'preset': 0, 'holding': 0, 'command': np.ones(len(xCommand), dtype=byte)}},
             #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
             self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},
             daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}

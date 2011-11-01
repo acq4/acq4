@@ -17,6 +17,7 @@ class MultiClamp(Device):
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.config = config
         self.lock = Mutex(Mutex.Recursive)
         self.index = None
         self.devRackGui = None
@@ -74,7 +75,7 @@ class MultiClamp(Device):
     def listChannels(self):
         chans = {}
         for ch in ['commandChannel', 'primaryChannel', 'secondaryChannel']:
-            chans[ch] = {'channel': self.config[ch]}
+            chans[ch] = self.config[ch].copy()
         return chans
 
     def quit(self):
@@ -194,7 +195,9 @@ class MultiClamp(Device):
                 return
             
             holding = self.holding[mode]
-            daq, chan = self.config['commandChannel'][:2]
+            daq = self.config['commandChannel']['device']
+            chan = self.config['commandChannel']['channel']
+            #daq, chan = self.config['commandChannel'][:2]
             daqDev = self.dm.getDevice(daq)
             s = self.extCmdScale(mode)  ## use the scale for the last remembered state from this mode
             if s == 0:
@@ -263,8 +266,7 @@ class MultiClamp(Device):
     def getDAQName(self):
         """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
         with MutexLocker(self.lock):
-            daq, chan = self.config['commandChannel'][:2]
-            return daq
+            return self.config['commandChannel']['device']
 
 
 class MultiClampTask(DeviceTask):
@@ -274,6 +276,7 @@ class MultiClampTask(DeviceTask):
     
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
+        self.cmd = cmd
         with MutexLocker(self.dev.lock):
             self.usedChannels = None
             self.daqTasks = {}
@@ -387,21 +390,18 @@ class MultiClampTask(DeviceTask):
             for ch in self.getUsedChannels():
                 chConf = self.dev.config[ch+'Channel']
                     
-                if chConf[0] == daqTask.devName():
+                if chConf['device'] == daqTask.devName():
                     if ch == 'command':
-                        daqTask.addChannel(chConf[1], 'ao')
+                        daqTask.addChannel(chConf['channel'], chConf['type'])
                         scale = self.state['extCmdScale']
                         #scale = self.dev.config['cmdScale'][self.cmd['mode']]
                         if scale == 0.:
                             raise Exception('Can not execute command--external command sensitivity is disabled by MultiClamp commander!', 'ExtCmdSensOff')  ## The second string is a hint for modules that don't care when this happens.
                         cmdData = self.cmd['command'] / scale
-                        daqTask.setWaveform(chConf[1], cmdData)
+                        daqTask.setWaveform(chConf['channel'], cmdData)
                     else:
-                        if len(chConf) < 3:
-                            mode = 'RSE'
-                        else:
-                            mode = chConf[2]
-                        daqTask.addChannel(chConf[1], 'ai', mode)
+                        mode = chConf.get('mode', None)
+                        daqTask.addChannel(chConf['channel'], chConf['type'], mode)
                     self.daqTasks[ch] = daqTask
         
     def start(self):
@@ -423,7 +423,7 @@ class MultiClampTask(DeviceTask):
             #result['info'] = self.state
             for ch in channels:
                 chConf = self.dev.config[ch+'Channel']
-                result[ch] = self.daqTasks[ch].getData(chConf[1])
+                result[ch] = self.daqTasks[ch].getData(chConf['channel'])
                 # print result[ch]
                 nPts = result[ch]['info']['numPts']
                 rate = result[ch]['info']['rate']

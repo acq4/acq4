@@ -2,8 +2,8 @@
 from ProtocolTemplate import Ui_Form
 from lib.devices.Device import ProtocolGui
 from PyQt4 import QtCore, QtGui
-from lib.Manager import getManager
-from WidgetGroup import WidgetGroup
+from lib.Manager import getManager, logMsg, logExc
+from pyqtgraph.WidgetGroup import WidgetGroup
 import pyqtgraph.widgets as widgets
 #from pyqtgraph.widgets import *
 import random
@@ -11,9 +11,11 @@ import numpy as np
 from debug import Profiler
 import optimize ## for determining random scan patterns
 import ForkedIterator, ProgressDialog
-from SpinBox import SpinBox
+import sys
+from pyqtgraph.SpinBox import SpinBox
 from pyqtgraph.Point import *
 from pyqtgraph.functions import mkPen
+from HelpfulException import HelpfulException
 
 class ScannerProtoGui(ProtocolGui):
     
@@ -62,6 +64,9 @@ class ScannerProtoGui(ProtocolGui):
 #            (self.ui.packingSpin, 'packingDensity')  ## packing density should be suggested by device rather than loaded with protocol (I think..)
         ])
         self.stateGroup.setState({'minTime': 10, 'minDist': 500e-6, 'sizeSpin':100e-6})
+        self.tdPlot = self.ui.tdPlotWidget.plotItem
+        self.tdPlot.setLabel('bottom', text="Distance", units='m')
+        self.tdPlot.setLabel('left', text="Wait time", units='s')
 
         ## Note we use lambda functions for all these clicks to strip out the arg sent with the signal
         
@@ -77,6 +82,7 @@ class ScannerProtoGui(ProtocolGui):
         self.ui.itemTree.currentItemChanged.connect(self.itemSelected)
         self.ui.itemTree.sigItemMoved.connect(self.treeItemMoved)
         self.ui.hideCheck.toggled.connect(self.showInterface)
+        self.ui.hideMarkerBtn.clicked.connect(self.hideSpotMarker)
         self.ui.cameraCombo.currentIndexChanged.connect(self.camModChanged)
         #self.ui.packingSpin.valueChanged.connect(self.packingSpinChanged)
         self.ui.sizeFromCalibrationRadio.toggled.connect(self.updateSpotSizes)
@@ -97,7 +103,7 @@ class ScannerProtoGui(ProtocolGui):
         
         self.testTarget = TargetPoint([0,0], 100e-6, host=self)
         self.testTarget.setPen(QtGui.QPen(QtGui.QColor(255, 200, 200)))
-        self.spotMarker = TargetPoint([0,0], 100e-6, host=self)
+        self.spotMarker = TargetPoint([0,0], 100e-6, host=self, movable=False)
         self.spotMarker.setPen(mkPen(color=(255,255,255), width = 2))
         self.updateSpotSizes()
         self.spotMarker.hide()
@@ -108,6 +114,7 @@ class ScannerProtoGui(ProtocolGui):
         self.currentScope = None
         self.currentCamMod = None
         self.camModChanged()
+        self.updateTDPlot()
 
         
         ## load target list from device, allowing targets to persist across protocols
@@ -189,11 +196,11 @@ class ScannerProtoGui(ProtocolGui):
             self.currentObjective = obj
             self.updateSpotSizes()
             for i in self.items.values():
-                li = self.listItem(i.name)
+                li = self.listItem(i.name) ## actually a tree item
                 if i.objective == obj:
-                    li.setCheckState(QtCore.Qt.Checked)
+                    li.setCheckState(0, QtCore.Qt.Checked)
                 else:
-                    li.setCheckState(QtCore.Qt.Unchecked)
+                    li.setCheckState(0, QtCore.Qt.Unchecked)
                 self.itemToggled(li)
             #self.testTarget.setPointSize(self.pointSize()[0])
             self.testTarget.setPointSize()
@@ -236,19 +243,27 @@ class ScannerProtoGui(ProtocolGui):
     def pointSize(self):
         #packing = self.ui.packingSpin.value()
         try:
-            cam = self.cameraModule().config['camDev']
+            camMod = self.cameraModule()
+            if camMod is None:
+                return (1,1)
+            cam = camMod.config['camDev']
             laser = str(self.ui.laserCombo.currentText())
             cal = self.dev.getCalibration(cam, laser)
             ss = cal['spot'][1]
            
         except:
             print "Could not find spot size from calibration."
-            logMsg("Could not find spot size from calibration.", msgType='error') ### This should turn into a HelpfulException.
-            raise   
+            #logMsg("Could not find spot size from calibration.", msgType='error') ### This should turn into a HelpfulException.
+            exc = sys.exc_info()
+            raise HelpfulException("Could not find spot size from calibration. ", exc=exc, reasons=["Correct camera and/or laser device are not selected.", "There is no calibration file for selected camera and laser."])
+            
         if self.ui.sizeFromCalibrationRadio.isChecked():
             displaySize = ss
-            self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited) ## get around a reload error
-            self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
+            ## reconnecting before this to get around reload errors, breaks the disconnect
+            try:
+                self.ui.sizeSpin.valueChanged.disconnect(self.sizeSpinEdited)
+            except TypeError:
+                logExc("A TypeError was caught in ScannerProtoGui.pointSize(). It was probably caused by a reload.", msgType='status', importance=0)
             self.stateGroup.setState({'spotSize':ss})
             self.ui.sizeSpin.valueChanged.connect(self.sizeSpinEdited)
         elif self.ui.sizeCustomRadio.isChecked():
@@ -314,7 +329,9 @@ class ScannerProtoGui(ProtocolGui):
             'duration': self.prot.getParam('duration')
         }
         return prot
-        
+    
+    def hideSpotMarker(self):
+        self.spotMarker.hide()
         
         
     def handleResult(self, result, params):
@@ -354,7 +371,7 @@ class ScannerProtoGui(ProtocolGui):
         self.addItem(pt, name,  autoPos,  autoName)
         return pt
         
-    def addGrid(self, pos=None, size=None, angle=0,  name=None, rebuildOpts = None):
+    def addGrid(self, pos=None, size=None, angle=0,  name=None, rebuildOpts = {}):
         autoName = False
         if name is None:
             name = 'Grid'
@@ -426,7 +443,7 @@ class ScannerProtoGui(ProtocolGui):
         self.items[name] = item
         #if isinstance(item, TargetOcclusion):
             #self.occlusions[name] = item
-        item.treeItem = QtGui.QTreeWidgetItem(QtCore.QStringList(name))
+        item.treeItem = QtGui.QTreeWidgetItem([name])
         
         item.treeItem.setCheckState(0, QtCore.Qt.Checked)
         self.ui.itemTree.addTopLevelItem(item.treeItem)
@@ -456,6 +473,9 @@ class ScannerProtoGui(ProtocolGui):
     
     def delete(self):
         item = self.ui.itemTree.currentItem()
+        if item is None:
+            logMsg("No item is selected, nothing was deleted.", msgType='error')
+            return
         parent = item.parent()
         if item.childCount() > 0:
             for i in range(item.childCount()):
@@ -500,7 +520,7 @@ class ScannerProtoGui(ProtocolGui):
         self.sequenceChanged()
         
     def treeItemMoved(self, item, parent, index):
-        if parent != self.ui.itemTree.invisibleRootItem():
+        if parent is not self.ui.itemTree.invisibleRootItem():
             g = item.graphicsItem
             newPos = parent.graphicsItem.mapFromScene(g.scenePos())
             g.setParentItem(parent.graphicsItem)
@@ -601,6 +621,26 @@ class ScannerProtoGui(ProtocolGui):
         self.targets = None
         #self.emit(QtCore.SIGNAL('sequenceChanged'), self.dev.name)
         self.sigSequenceChanged.emit(self.dev.name)
+        self.updateTDPlot()
+        
+    def updateTDPlot(self):
+        self.tdPlot.clear()
+        state = self.stateGroup.state()
+        minTime = state['minTime']
+        minDist = state['minDist']
+        
+        #print 'minDist:', minDist, '   minTime:', minTime
+        
+        dist = np.arange(0, 0.001, 0.00002)
+        cost = optimize.costFn(dist, minTime, minDist)
+
+        #print 'dist:', dist
+        #print 'cost:', cost
+        
+        self.tdPlot.plot(dist, cost)
+        
+        
+    
 
     def recomputeClicked(self):
         try:
@@ -746,6 +786,7 @@ class TargetPoint(widgets.EllipseROI):
         self.treeItem = None
         self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         #self.host = args.get('host', None)
+        self.rebuildOpts = args.get('rebuildOpts', {})
         
         
     def updateInit(self, host):
@@ -755,6 +796,18 @@ class TargetPoint(widgets.EllipseROI):
         
     def updateFamily(self):
         pass
+    
+    def resetParents(self):
+        """For use when rebuilding scanner targets from the deviceTargetList"""
+        if self.rebuildOpts.get('parentName', None) is not None:
+            tw = self.treeItem.treeWidget()
+            parent = tw.findItems(self.rebuildOpts['parentName'], QtCore.Qt.MatchRecursive)[0]
+            tw.prepareMove(self.treeItem)
+            tw.invisibleRootItem().removeChild(self.treeItem)
+            parent.insertChild(0, self.treeItem)
+            tw.recoverMove(self.treeItem)
+            parent.setExpanded(True)
+            self.host.treeItemMoved(self.treeItem, parent, 0)
         
     def setPointSize(self):
         size, displaySize = self.host.pointSize()
@@ -783,13 +836,16 @@ class TargetPoint(widgets.EllipseROI):
         sc = widgets.ROI.stateCopy(self)
         #sc['displaySize'] = self.displaySize
         return sc
+    
+    def resetParents(self):
+        pass
         
 
 class TargetGrid(widgets.ROI):
     
     sigPointsChanged = QtCore.Signal(object)
     
-    def __init__(self, pos, size, ptSize, pd, angle, rebuildOpts = None):
+    def __init__(self, pos, size, ptSize, pd, angle, rebuildOpts = {}):
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
         self.gridSpacingSpin = SpinBox(step=0.1)
         self.gridSpacingSpin.setValue(pd)
@@ -812,6 +868,7 @@ class TargetGrid(widgets.ROI):
         self.pens = []
         self.pointSize = ptSize
         self.pointDisplaySize = self.pointSize
+        self.oldDisplaySize = self.pointSize
         self.setFlag(QtGui.QGraphicsItem.ItemIgnoresParentOpacity, True)
         
         
@@ -827,7 +884,7 @@ class TargetGrid(widgets.ROI):
         self.treeItem.setText(3, "14")
         self.host = host
         self.pointSize, self.pointDisplaySize = self.host.pointSize()
-        if self.rebuildOpts is not None:
+        if len(self.rebuildOpts) > 0:
             self.gridSpacingSpin.setValue(self.rebuildOpts.get('gridPacking', self.gridPacking))
             layout = self.rebuildOpts.get('gridLayout', "Hexagonal")
             if layout == "Hexagonal":
@@ -838,7 +895,7 @@ class TargetGrid(widgets.ROI):
     
     def resetParents(self):
         """For use when rebuilding scanner targets from the deviceTargetList"""
-        if self.rebuildOpts['parentName'] is not None:
+        if self.rebuildOpts.get('parentName', None) is not None:
             tw = self.treeItem.treeWidget()
             parent = tw.findItems(self.rebuildOpts['parentName'], QtCore.Qt.MatchRecursive)[0]
             tw.prepareMove(self.treeItem)
@@ -981,9 +1038,28 @@ class TargetGrid(widgets.ROI):
                 y += sep[1]
             x += sep[0]
         
+    def boundingRect(self):
+        displaySize = max([self.oldDisplaySize, self.pointDisplaySize])
+        a = displaySize-self.pointSize
+        if a <= 0:
+            a = 0
+        self.oldDisplaySize = self.pointDisplaySize
+        return QtCore.QRectF(0, 0, self.state['size'][0], self.state['size'][1]).adjusted(-a, -a, a, a)
+
 
     def paint(self, p, opt, widget):
-        widgets.ROI.paint(self, p, opt, widget)
+        #widgets.ROI.paint(self, p, opt, widget)
+        ##draw rectangle
+        p.save()
+        r = QtCore.QRectF(0,0, self.state['size'][0], self.state['size'][1])
+        p.setRenderHint(QtGui.QPainter.Antialiasing)
+        p.setPen(self.pen)
+        p.translate(r.left(), r.top())
+        p.scale(r.width(), r.height())
+        p.drawRect(0, 0, 1, 1)
+        p.restore()
+        
+        ## draw circles
         ps2 = self.pointSize * 0.5
         radius = self.pointDisplaySize*0.5
         #ps2 = self.pointSize * 0.5 * self.gridPacking
@@ -1024,6 +1100,9 @@ class TargetOcclusion(widgets.PolygonROI):
         self.host = host
         
     def setPointSize(self):
+        pass
+    
+    def resetParents(self):
         pass
     
 class TargetProgram(QtCore.QObject):

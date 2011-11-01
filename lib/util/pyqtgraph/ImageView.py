@@ -16,19 +16,20 @@ Widget used for displaying 2D or 3D data. Features:
 from ImageViewTemplate import *
 from graphicsItems import *
 from widgets import ROI
-from PyQt4 import QtCore, QtGui
+from Qt import QtCore, QtGui
 import sys
 #from numpy import ndarray
 import ptime
 import numpy as np
 import debug
 
-from SignalProxy import proxyConnect
+from SignalProxy import SignalProxy
 
 class PlotROI(ROI):
     def __init__(self, size):
         ROI.__init__(self, pos=[0,0], size=size, scaleSnap=True, translateSnap=True)
         self.addScaleHandle([1, 1], [0, 0])
+        self.addRotateHandle([0, 0], [0.5, 0.5])
 
 
 class ImageView(QtGui.QWidget):
@@ -45,6 +46,7 @@ class ImageView(QtGui.QWidget):
         self.imageDisp = None
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        print self.ui
         self.scene = self.ui.graphicsView.sceneObj
         
         self.ignoreTimeLine = False
@@ -123,7 +125,7 @@ class ImageView(QtGui.QWidget):
         self.ui.normTimeRangeCheck.clicked.connect(self.updateNorm)
         self.playTimer.timeout.connect(self.timeout)
         
-        self.normProxy = proxyConnect(None, self.normRgn.sigRegionChanged, self.updateNorm)
+        self.normProxy = SignalProxy(self.normRgn.sigRegionChanged, slot=self.updateNorm)
         self.normRoi.sigRegionChangeFinished.connect(self.updateNorm)
         
         self.ui.roiPlot.registerPlot(self.name + '_ROI')
@@ -140,6 +142,7 @@ class ImageView(QtGui.QWidget):
         self.setParent(None)
         
     def keyPressEvent(self, ev):
+        #print ev.key()
         if ev.key() == QtCore.Qt.Key_Space:
             if self.playRate == 0:
                 fps = (self.getProcessedImage().shape[0]-1) / (self.tVals[-1] - self.tVals[0])
@@ -231,7 +234,7 @@ class ImageView(QtGui.QWidget):
             self.jumpFrames(n)
         
     def setCurrentIndex(self, ind):
-        self.currentIndex = clip(ind, 0, self.getProcessedImage().shape[0]-1)
+        self.currentIndex = np.clip(ind, 0, self.getProcessedImage().shape[0]-1)
         self.updateImage()
         self.ignoreTimeLine = True
         self.timeLine.setValue(self.tVals[self.currentIndex])
@@ -314,7 +317,11 @@ class ImageView(QtGui.QWidget):
         if data is not None:
             while data.ndim > 1:
                 data = data.mean(axis=1)
-            self.roiCurve.setData(y=data, x=self.tVals)
+            if image.ndim == 3:
+                self.roiCurve.setData(y=data, x=self.tVals)
+            else:
+                self.roiCurve.setData(y=data, x=range(len(data)))
+                
             #self.ui.roiPlot.replot()
 
     def setImage(self, img, autoRange=True, autoLevels=True, levels=None, axes=None, xvals=None, pos=None, scale=None):
@@ -522,10 +529,10 @@ class ImageView(QtGui.QWidget):
         if self.axes['t'] is None:
             #self.ui.timeSlider.hide()
             self.imageItem.updateImage(image, white=self.whiteLevel(), black=self.blackLevel())
-            self.ui.roiPlot.hide()
-            self.ui.roiBtn.hide()
+            #self.ui.roiPlot.hide()
+            #self.ui.roiBtn.hide()
         else:
-            self.ui.roiBtn.show()
+            #self.ui.roiBtn.show()
             self.ui.roiPlot.show()
             #self.ui.timeSlider.show()
             self.imageItem.updateImage(image[self.currentIndex], white=self.whiteLevel(), black=self.blackLevel())
@@ -567,3 +574,4 @@ class ImageView(QtGui.QWidget):
         return self.levelMin + (self.levelMax-self.levelMin) * self.ui.gradientWidget.tickValue(self.ticks[0])
         #return self.levelMin + ((self.levelMax-self.levelMin) / self.ui.blackSlider.maximum()) * self.ui.blackSlider.value()
         
+    

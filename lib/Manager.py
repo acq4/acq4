@@ -39,6 +39,8 @@ from advancedTypes import OrderedDict
 from ProgressDialog import ProgressDialog
 from LogWindow import LogWindow
 
+LOG = None
+
 ### All other modules can use this function to get the manager instance
 def getManager():
     if Manager.single is None:
@@ -48,6 +50,36 @@ def getManager():
 def __reload__(old):
     Manager.CREATED = old['Manager'].CREATED
     Manager.single = old['Manager'].single
+    
+def logMsg(msg, **kwargs):
+    """msg: the text of the log message
+       msgTypes: user, status, error, warning (status is default)
+       importance: 0-9 (0 is low importance, 9 is high, 5 is default)
+       other supported keywords:
+          exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
+          docs: a list of strings where documentation related to the message can be found
+          reasons: a list of reasons (as strings) for the message
+          traceback: a list of formatted callstack/trackback objects (formatting a traceback/callstack returns a list of strings), usually looks like [['line 1', 'line 2', 'line3'], ['line1', 'line2']]
+       Feel free to add your own keyword arguments. These will be saved in the log.txt file, but will not affect the content or way that messages are displayed.
+        """
+    global LOG
+    if LOG is not None:
+        LOG.logMsg(msg, **kwargs)
+    else:
+        print "Can't log message; no log created yet."
+        #print args
+        print kwargs
+        
+    
+def logExc(msg, *args, **kwargs):
+    """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
+    global LOG
+    if LOG is not None:
+        LOG.logExc(msg, *args, **kwargs)
+    else:
+        print "Can't log error message; no log created yet."
+        print args
+        print kwargs
 
 class Manager(QtCore.QObject):
     """Manager class is responsible for:
@@ -72,6 +104,10 @@ class Manager(QtCore.QObject):
     def __init__(self, configFile=None, argv=None):
         if Manager.CREATED:
             raise Exception("Manager object already created!")
+        
+        global LOG
+        LOG = LogWindow(self)
+        self.logWindow = LOG
         
         if argv is not None:
             try:
@@ -133,8 +169,7 @@ Valid options are:
         self.configDir = os.path.dirname(configFile)
         self.readConfig(configFile)
         
-        self.logWindow = LogWindow(self)
-        self.logMsg('ACQ4 started.', importance=9)
+        logMsg('ACQ4 started.', importance=9)
         
         Manager.CREATED = True
         Manager.single = self
@@ -288,6 +323,14 @@ Valid options are:
         if not os.path.exists(dirName):
             os.makedirs(dirName)
         return configfile.writeConfigFile(data, fileName)
+    
+    def appendConfigFile(self, data, fileName):
+        fileName = self.configFileName(fileName)
+        if os.path.exists(fileName):
+            return configfile.appendConfigFile(data, fileName)
+        else:
+            raise Exception("Could not find file %s" % fileName)
+        
         
     def configFileName(self, name):
         return os.path.join(self.configDir, name)
@@ -354,6 +397,16 @@ Valid options are:
         """List currently loaded modules. """
         return self.modules.keys()[:]
 
+    def getDirOfSelectedFile(self):
+        """Returns the directory that is currently selected, or the directory of the file that is currently selected in Data Manager."""
+        try:
+            f = self.getModule("Data Manager").selectedFile()
+            if not isinstance(f, DataManager.DirHandle):
+                f = f.parent()
+        except Exception:
+            f = False
+            logMsg("Can't find currently selected directory, Data Manager has not been loaded.", msgType='warning')
+        return f
 
     def getModule(self, name):
         """Return an already loaded module"""
@@ -425,6 +478,7 @@ Valid options are:
         print "\n---- Reloading all libraries under %s ----" % path
         reload.reloadAll(prefix=path, debug=True)
         print "Done reloading.\n"
+        logMsg("Reloaded all libraries under %s." %path, msgType='status')
         
 
     def createWindowShortcut(self, keys, win):
@@ -458,15 +512,8 @@ Valid options are:
         return self.currentDir
     
     def setLogDir(self, d):
-        p = d
-        while not p.info().get('expUnit', False) and p != self.baseDir:  
-            p = p.parent()
-        if p != self.baseDir:
-            self.logWindow.setLogDir(p)
-        
-    def sudoSetLogDir(self, d):
         self.logWindow.setLogDir(d)
-
+        
     def setCurrentDir(self, d):
         if self.currentDir is not None:
             try:
@@ -482,8 +529,16 @@ Valid options are:
         else:
             raise Exception("Invalid argument type: ", type(d), d)
         
-        
-        self.setLogDir(d)
+        p = d
+        ## Storage directory is about to change; 
+        logDir = self.logWindow.getLogDir()
+        while not p.info().get('expUnit', False) and p != self.baseDir and p != logDir:
+            p = p.parent()
+        if p != self.baseDir and p != logDir:
+            self.setLogDir(p)
+        else:
+            if logDir is None:
+                logMsg("No log directory set. Log messages will not be stored.", msgType='warning', importance=8, docs=["UserGuide/logging"])
         #self.currentDir.sigChanged.connect(self.currentDirChanged)
         #self.sigCurrentDirChanged.emit()
         self.currentDir.sigChanged.connect(self.currentDirChanged)
@@ -544,11 +599,14 @@ Valid options are:
         #cd = self.getCurrentDir()
         #cd.logMsg(msg, tags)
         
-    def logMsg(self, *args, **kwargs):
-        self.logWindow.logMsg(*args, currentDir=self.currentDir, **kwargs)
+    #def logMsg(self, *args, **kwargs):
+        #self.logWindow.logMsg(*args, currentDir=self.currentDir, **kwargs)
         
-    def logExc(self, *args, **kwargs):
-        self.logWindow.logExc(*args, currentDir=self.currentDir, **kwargs)
+    #def logExc(self, *args, **kwargs):
+        #self.logWindow.logExc(*args, currentDir=self.currentDir, **kwargs)
+        
+    def showLogWindow(self):
+        self.logWindow.show()
         
     ## These functions just wrap the functionality of an InterfaceDirectory
     def declareInterface(self, *args, **kargs):  ## args should be name, [types..], object  
@@ -595,7 +653,7 @@ Valid options are:
             ld = len(self.devices)
             with ProgressDialog("Shutting down..", 0, lm+ld, cancelText=None, wait=0) as dlg:
                 print "Requesting all modules shut down.."
-                self.logMsg("Shutting Down.", importance=9)
+                logMsg("Shutting Down.", importance=9)
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
                     m = self.modules.keys()[0]
                     print "    %s" % m
@@ -669,6 +727,7 @@ class Task:
         
         ## Create task objects. Each task object is a handle to the device which is unique for this protocol run.
         self.tasks = {}
+        #print "devNames: ", self.devNames
         for devName in self.devNames:
             dev = self.dm.getDevice(devName)
             task = dev.createTask(self.command[devName])
@@ -694,19 +753,27 @@ class Task:
         ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
         from debug import Profiler
         prof = Profiler('Manager.Task.execute', disabled=True)
-        
         try:
         
-            #print "execute:", self.tasks
+            #print self.id, "Task.execute:", self.tasks
             ## Reserve all hardware
             self.dm.lockReserv()
             try:
                 for devName in self.tasks:
-                    #print "  %d Reserving hardware" % self.id, devName
-                    self.tasks[devName].reserve()
+                    #print "  %d Task.execute: Reserving hardware" % self.id, devName
+                    res = self.tasks[devName].reserve(block=True)
+                    #if not res:
+                        #print "Locked from:"
+                        #for tb in self.tasks[devName].dev._lock_.tb:
+                            #print "====="
+                            #print tb
+                        #raise Exception('Damn')
                     self.lockedDevs.append(devName)
-                    #print "  %d reserved" % self.id, devName
+                    #print "  %d Task.execute: reserved" % self.id, devName
                 #self.reserved = True
+            except:
+                #print "  %d Task.execute: problem reserving hardware; will unreserve these:"%self.id, self.lockedDevs
+                raise
             finally:
                 self.dm.unlockReserv()
                 
@@ -757,7 +824,10 @@ class Task:
             #print "Starting tasks.."
             for devName in self.startOrder:
                 #print "  ", devName
-                self.tasks[devName].start()
+                try:
+                    self.tasks[devName].start()
+                except:
+                    printExc("Error starting device '%s':" % devName)
                 self.startedDevs.append(devName)
                 prof.mark('start %s' % devName)
             self.startTime = ptime.time()
@@ -884,7 +954,7 @@ class Task:
 
     def releaseAll(self):
         #if self.reserved:
-        #print "release hardware.."
+        #print self.id,"Task.releaseAll:"
         for t in self.lockedDevs[:]:
             #print "  %d releasing" % self.id, t
             try:

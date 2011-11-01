@@ -11,135 +11,261 @@ for evaluation are provided in waveforms.py.
 """
 
 import sys, types, re
-from numpy import *
-import numpy
+import numpy as np
 from PyQt4 import QtCore, QtGui
 from advancedTypes import OrderedDict
-from functions import logSpace
+import functions as fn
 from GeneratorTemplate import *
 import waveforms
 from debug import *
 
-#import PyQt4.Qwt5 as Qwt
-#from PyQt4.Qwt5.anynumpy import *
-#from Stim_Form import Ui_Form
-#import MPlot # our graphics support...
+#from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter
+from StimParamSet import StimParamSet
+from SeqParamSet import SequenceParamSet
 
+import units
 
 class StimGenerator(QtGui.QWidget):
     
-    sigDataChanged = QtCore.Signal()
-    sigStateChanged = QtCore.Signal()
-    sigParametersChanged = QtCore.Signal()
-    sigFunctionChanged = QtCore.Signal()
+    sigDataChanged = QtCore.Signal()        ## Emitted when the output of getSingle() is expected to have changed
+    sigStateChanged = QtCore.Signal()       ## Emitted when the output of saveState() is expected to have changed
+    sigParametersChanged = QtCore.Signal()  ## Emitted when the sequence parameter space has changed
+    sigFunctionChanged = QtCore.Signal()    ## Emitted when the waveform-generating function has changed
     
-    """ PyStim creates an object with multiple stimulus channels
-    and handles the GUI interface. 
-    """
     def __init__(self, parent=None):
-        """ PyStim.__init__ defines standard variables, and initialzes the GUI interface
-        """
         QtGui.QWidget.__init__(self, parent)
-        self.timeScale = 1.0
-        self.scale = 1.0
+        #self.timeScale = 1.0
+        #self.scale = 1.0
         self.offset = 0.0
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.ui.functionText.setFontFamily('Courier')
-        self.ui.paramText.setFontFamily('Courier')
         self.ui.errorText.setVisible(False)
-        self.cacheOk = False
-        self.cache = {}
+        
+        self.advancedMode = None  ## if True, then the current state was generated in advanced
+                                  ## mode. Otherwise, it was generated from the simple stim tree.
+        self.lockMode = False     ## used to temporarily block changes to self.advancedMode
+        
+        self.pSpace = None    ## cached sequence parameter space
+        
+        self.cache = {}       ## cached waveforms
         self.cacheRate = None
         self.cacheNPts = None
-        #QtCore.QObject.connect(self.ui.functionText, QtCore.SIGNAL('textChanged()'), self.funcChanged)
+
+        
+        
+        self.meta = {  ## holds some extra information about signals (units, expected scale and range, etc)
+                       ## mostly information useful in configuring SpinBoxes
+            'x': {},
+            'y': {},
+            'xy': {}  ## values that are the product of x and y values
+        }
+        
+        ## variables that are added into the function evaluation namespace.
+        self.extraParams = {}
+        
+        ## Simple stim generator
+        self.stimParams = StimParamSet()
+        self.ui.stimulusTree.setParameters(self.stimParams, showTop=False)
+        self.stimParams.sigTreeStateChanged.connect(self.stimParamsChanged)
+        
+        ## advanced stim generator
+        self.seqParams = SequenceParamSet()
+        self.ui.seqTree.setParameters(self.seqParams, showTop=False)
+        
+        self.setAdvancedMode(False)
+        self.setError()
+
+        self.updateWidgets()
+        
+        self.seqParams.sigTreeStateChanged.connect(self.seqParamsChanged)
         self.ui.functionText.textChanged.connect(self.funcChanged)
-        #QtCore.QObject.connect(self.ui.paramText, QtCore.SIGNAL('textChanged()'), self.paramChanged)
-        self.ui.paramText.textChanged.connect(self.paramChanged)
-        #QtCore.QObject.connect(self.ui.updateBtn, QtCore.SIGNAL('clicked()'), self.update)
+        
         self.ui.updateBtn.clicked.connect(self.update)
-        #QtCore.QObject.connect(self.ui.autoUpdateCheck, QtCore.SIGNAL('clicked()'), self.autoUpdateClicked)
         self.ui.autoUpdateCheck.clicked.connect(self.autoUpdateClicked)
-        #QtCore.QObject.connect(self.ui.errorBtn, QtCore.SIGNAL('clicked()'), self.errorBtnClicked)
-        self.ui.errorBtn.clicked.connect(self.errorBtnClicked)
-        #QtCore.QObject.connect(self.ui.helpBtn, QtCore.SIGNAL('clicked()'), self.helpBtnClicked)
-        self.ui.helpBtn.clicked.connect(self.helpBtnClicked)
+
+        self.ui.errorBtn.clicked.connect(self.updateWidgets)
+        self.ui.helpBtn.clicked.connect(self.updateWidgets)
+        self.ui.advancedBtn.toggled.connect(self.updateWidgets)
+        self.ui.forceAdvancedBtn.clicked.connect(self.forceAdvancedClicked)
+        self.ui.forceSimpleBtn.clicked.connect(self.forceSimpleClicked)
+
+    def setEvalNames(self, **kargs):
+        """Make variables accessible for use by evaluated functions."""
+        self.extraParams.update(kargs)
+        self.clearCache()
+        self.autoUpdate()
+        
+    def delEvalName(self, name):
+        del self.extraParams[name]
+        self.clearCache()
+        self.autoUpdate()
 
     def widgetGroupInterface(self):
         return (self.sigStateChanged, StimGenerator.saveState, StimGenerator.loadState)
 
-    def setTimeScale(self, s):
-        if self.timeScale != s:
-            self.timeScale = s
-            self.clearCache()
-            self.autoUpdate()
+    #def setTimeScale(self, s):
+        #"""Set the scale factor for X axis. See setScale for description."""
+        #if self.timeScale != s:
+            #self.timeScale = s
+            #self.clearCache()
+            #self.autoUpdate()
 
-    def setScale(self, s):
-        if self.scale != s:
-            self.scale = s
-            self.clearCache()
-            self.autoUpdate()
+    #def setScale(self, s):
+        #"""Set the scale factor to be applied to all generated data.
+        #This allows, for example, to write waveform functions with values
+        #in units of mV and have the resulting data come out in units of V.
+           #pulse(10, 10, 100) => gives pulse 100 units tall, but a scale
+                                 #factor of 1e-3 converts it to 0.1 units
+        #This should become obsolete--instead we would write the function like
+           #pulse(10*ms, 10*ms, 100*mV)
+        #This is more verbose but far less ambiguous.
+        #"""
+        #if self.scale != s:
+            #self.scale = s
+            #self.clearCache()
+            #self.autoUpdate()
 
     def setOffset(self, o):
+        """Set the offset to be added to all generated data.
+        This allows, for example, writing a pulse waveform such that 0 is 
+        always assumed to mean the current holding value."""
         if self.offset != o:
             self.offset = o
             self.clearCache()
             self.autoUpdate()
+            
+    def setMeta(self, axis, **args):
+        """Set meta data for X, Y, and XY axes. This is used primarily to configure
+        SpinBoxes to display the correct units, limits, step sizes, etc.
+        Meta data is _updated_, not replaced. Any previously specified keys will 
+        still be present.
+        
+        Suggested args are:
+            suffix='units', dec=True, minStep=1e-3, step=1, limits=(min, max)        
+        """
+        self.meta[axis].update(args)
+        self.stimParams.setMeta(axis, self.meta[axis])
 
     def clearCache(self):
         self.cache = {}
-
+    
+    def functionString(self):
+        return str(self.ui.functionText.toPlainText())
+    
     def update(self):
+        ## Let others know that waveform generation has changed.
+        ## Note: it's generally better to call autoUpdate instead.
         if self.test():
-            #self.emit(QtCore.SIGNAL('dataChanged'))
             self.sigDataChanged.emit()
-        
+    
     def autoUpdate(self):
         if self.ui.autoUpdateCheck.isChecked():
             self.update()
-            
+    
     def autoUpdateClicked(self):
         self.autoUpdate()
-        #self.emit(QtCore.SIGNAL('stateChanged'))        
         self.sigStateChanged.emit()        
-        
-    def errorBtnClicked(self):
-        self.ui.errorText.setVisible(self.ui.errorBtn.isChecked())
-        
-    def helpBtnClicked(self):
-        if self.ui.helpBtn.isChecked():
-            self.ui.stack.setCurrentIndex(1)
+
+    #def errorBtnClicked(self, b):
+        #self.updateWidgets()
+        ##if b:  ## resize error text box if it is too small
+            ##height = self.ui.advSplitter.height()
+            ##sizes = self.ui.advSplitter.sizes()
+            ##if sizes[2] < height/3.:
+                ##diff = (height/3.) - sizes[2]
+                ##sizes[2] = height/3.
+                ##r = float(sizes[0]) / (sizes[0]+sizes[1])
+                ##sizes[0] -= diff * r 
+                ##sizes[1] -= diff * (1-r)
+                ##self.ui.advSplitter.setSizes(sizes)
+
+    def forceSimpleClicked(self):
+        self.ui.advancedBtn.setChecked(False)
+        self.setAdvancedMode(False)
+
+    def forceAdvancedClicked(self):
+        self.ui.advancedBtn.setChecked(True)
+        self.setAdvancedMode(True)
+
+    def updateWidgets(self):
+        ## show/hide widgets depending on the current mode.
+        errVis = self.ui.errorBtn.isChecked()
+        self.ui.errorText.setVisible(errVis)
+        if errVis or str(self.ui.errorText.toPlainText()) != '':
+            self.ui.errorBtn.show()
         else:
-            self.ui.stack.setCurrentIndex(0)
+            self.ui.errorBtn.hide()
+        
+        if self.ui.helpBtn.isChecked():
+            self.ui.stack.setCurrentIndex(3)
+            return
+        if self.ui.advancedBtn.isChecked():
+            self.ui.stack.setCurrentIndex(2)
+        else:
+            if self.advancedMode:
+                self.ui.stack.setCurrentIndex(1)
+            else:
+                self.ui.stack.setCurrentIndex(0)
+
+
+    def setAdvancedMode(self, adv):
+        if self.lockMode or self.advancedMode == adv:
+            return
+        self.ui.advancedBtn.setChecked(adv)
+
+        if not adv:
+            self.stimParamsChanged()  ## to clear out advanced-mode settings
+        self.advancedMode = adv
+        self.updateWidgets()
 
     def funcChanged(self):
-        # test function. If ok, auto-update
+        ## called when the function string changes
         self.clearCache()
-        if self.test():
+        self.setAdvancedMode(True)
+        
+        if self.test(): # test function. If ok, auto-update
             self.autoUpdate()
-            #self.emit(QtCore.SIGNAL('functionChanged'))
             self.sigFunctionChanged.emit()
-        #self.emit(QtCore.SIGNAL('stateChanged'))
         self.sigStateChanged.emit()
+
+    def seqParamsChanged(self, *args):
+        ## called when advanced sequence parameter tree has changed
         
+        #print "seqParamsChanged:", args, "\n"
+        ## should filter out some uninteresting events here..
         
-    def paramChanged(self):
-        # test params. If ok, auto-update
+        self.setAdvancedMode(True)
         self.clearCache()
-        self.cacheOk = False
+        self.pSpace = None
         if self.test():
             self.autoUpdate()
-        #self.emit(QtCore.SIGNAL('parametersChanged'))
         self.sigParametersChanged.emit()
-        #self.emit(QtCore.SIGNAL('stateChanged'))
         self.sigStateChanged.emit()
-        
-    def functionString(self):
-        return str(self.ui.functionText.toPlainText())
-        
-    def paramString(self):
-        return str(self.ui.paramText.toPlainText())
     
+    def stimParamsChanged(self, param=None, changes=None):
+        ## called when the simple stim generator tree changes
+        try:
+            funcStr, params = self.stimParams.compile()
+        except:
+            self.setError(str(sys.exc_info()[1]))
+            raise
+        
+        #print "stimParamsChanged:", changes, "\n"
+        ## Update advanced-mode widgets to reflect (and ultimately enact) changes
+        try:
+            self.lockMode = True    ## don't let anyone change the mode until we're done
+            self.blockSignals(True) ## avoid emitting dataChanged signals twice
+            try:
+                self.seqParams.setState(params)
+            finally:
+                self.blockSignals(False)
+            self.sigParametersChanged.emit()
+            
+            self.ui.functionText.setPlainText(funcStr)
+        finally:
+            self.lockMode = False
+
     
     
     def test(self):
@@ -147,7 +273,7 @@ class StimGenerator(QtGui.QWidget):
             self.paramSpace()
             self.setError()
         except:
-            self.setError("Error parsing parameters:\n" + str(sys.exc_info()[1]))
+            self.setError("Error in parameter list:\n" + str(sys.exc_info()[1]))
             return False
         try:
             self.getSingle(1, 1, params={'test': True})
@@ -160,22 +286,65 @@ class StimGenerator(QtGui.QWidget):
     def saveState(self):
         """ Return a dict structure with the state of the widget """
         #print "Saving state:", self.functionString()
-        return ({'function': self.functionString(), 'params': self.paramString(), 'autoUpdate': self.ui.autoUpdateCheck.isChecked()})
+        state = {
+            'function': self.functionString(), 
+            'params': self.seqParams.getState(), 
+            'autoUpdate': self.ui.autoUpdateCheck.isChecked(),
+            'advancedMode': self.advancedMode,
+        }
+        if not self.advancedMode:
+            state['stimuli'] = self.stimParams.getState()
+        return state
     
     def loadState(self, state):
         """set the parameters with the new state"""
-        if 'function' in state:
-            self.ui.functionText.setPlainText(state['function'])
-        if 'params' in state:
-            self.ui.paramText.setPlainText(state['params'])            
-        if 'autoUpdate' in state:
-            self.ui.autoUpdateCheck.setChecked(state['autoUpdate'])
-    
+        try:
+            self.blockSignals(True)  ## avoid emitting multiple signals
+            if 'function' in state:
+                #self.ui.advancedBtn.setChecked(True)
+                self.ui.functionText.setPlainText(state['function'])
+            if 'params' in state:
+                if isinstance(state['params'], basestring):  ## for backward compatibility
+                    state['params'] = seqListParse(state['params'])
+                #self.ui.advancedBtn.setChecked(True)
+                #self.ui.paramText.setPlainText(state['params'])
+                self.seqParams.setState(state['params'])
+            if 'stimuli' in state:
+                self.stimParams.setState(state['stimuli'])
+            if 'autoUpdate' in state:
+                #self.ui.advancedBtn.setChecked(False)
+                self.ui.autoUpdateCheck.setChecked(state['autoUpdate'])
+            if 'advancedMode' in state:
+                self.setAdvancedMode(state['advancedMode'])
+        finally:
+            self.blockSignals(False)
+            self.sigDataChanged.emit()
+            self.sigStateChanged.emit()
+            self.sigParametersChanged.emit()
+            self.sigFunctionChanged.emit()
+
+    def paramSpace(self):
+        """Return an ordered dict describing the parameter space"""
+        ## return looks like:
+        ## {
+        ##   'param1': (singleVal, [sequence]),
+        ##   'param2': (singleVal, [sequence]),
+        ##   ...
+        ## }
+        
+        if self.pSpace is None:
+            #self.pSpace = seqListParse(self.paramString()) # get the sequence(s) and the targets
+            self.pSpace = self.seqParams.compile()
+        return self.pSpace
+
+
     def listSequences(self):
         """ return an ordered dict of the sequence parameter names and values in the same order as that
         of the axes returned by get Sequence"""
         ps = self.paramSpace()
-        l = [(k, (ps[k][1]*self.scale)+self.offset) for k in ps.keys() if ps[k][1] != None]
+        
+        #l = [(k, (ps[k][1]*self.scale)+self.offset) for k in ps.keys() if ps[k][1] != None]
+        l = [(k, ps[k][1]) for k in ps.keys() if ps[k][1] != None]
         d = OrderedDict(l)
         
         ## d should look like: { 'param1': [val1, val2, ...],  ...  }
@@ -192,12 +361,19 @@ class StimGenerator(QtGui.QWidget):
         if msg is None or msg == '':
             self.ui.errorText.setText('')
             self.ui.errorBtn.setStyleSheet('')
+            #self.ui.errorBtn.hide()
         else:
             self.ui.errorText.setText(msg)
             self.ui.errorBtn.setStyleSheet('QToolButton {border: 2px solid #F00; border-radius: 3px}')
+            #self.ui.errorBtn.show()
+        self.updateWidgets()
             
         
     def getSingle(self, rate, nPts, params=None):
+        """
+        Return a single generated waveform (possibly cached) with the given sample rate
+        number of samples, and sequence parameters.        
+        """
         if params is None:
             params = {}
         if not re.search(r'\w', self.functionString()):
@@ -213,15 +389,19 @@ class StimGenerator(QtGui.QWidget):
         self.cacheRate = rate
         self.cacheNPts = nPts
             
-        ## create namespace with generator functions
+        ## create namespace with generator functions. 
+        ##   - iterates over all functions provided in waveforms module
+        ##   - wrap each function to automatically provide rate and nPts arguments
         ns = {}
-        arg = {'rate': rate * self.timeScale, 'nPts': nPts}
+        #arg = {'rate': rate * self.timeScale, 'nPts': nPts}
+        arg = {'rate': rate, 'nPts': nPts}
+        ns.update(arg)  ## copy rate and nPts to eval namespace
         for i in dir(waveforms):
             obj = getattr(waveforms, i)
             if type(obj) is types.FunctionType:
                 ns[i] = self.makeWaveFunction(i, arg)
         
-        ## add parameter values into namespace
+        ## add current sequence parameter values into namespace
         seq = self.paramSpace()
         for k in seq:
             if k in params:  ## select correct value from sequence list
@@ -232,12 +412,23 @@ class StimGenerator(QtGui.QWidget):
                     raise
             else:  ## just use single value
                 ns[k] = float(seq[k][0])
+
+        ## add units into namespace
+        ns.update(units.allUnits)
         
+        ## add extra parameters to namespace
+        ns.update(self.extraParams)
+
         ## evaluate and return
         fn = self.functionString().replace('\n', '')
-        ret = eval(fn, globals(), ns)
+        
+        ## build global namespace with numpy imported
+        gns = {}
+        exec('from numpy import *', gns)
+        
+        ret = eval(fn, gns, ns)
         if isinstance(ret, ndarray):
-            ret *= self.scale
+            #ret *= self.scale
             ret += self.offset
             #print "===eval===", ret.min(), ret.max(), self.scale
         if 'message' in arg:
@@ -254,27 +445,20 @@ class StimGenerator(QtGui.QWidget):
         obj = getattr(waveforms, name)
         return lambda *args, **kwargs: obj(arg, *args, **kwargs)
         
-    def paramSpace(self):
-        """Return an ordered dict describing the parameter space"""
-        ## return looks like:
-        ## {
-        ##   'param1': (singleVal, [sequence]),
-        ##   'param2': (singleVal, [sequence]),
-        ##   ...
-        ## }
-        
-        if not self.cacheOk:
-            self.pSpace = seqListParse(self.paramString()) # get the sequence(s) and the targets
-            self.cacheOk = True
-        return self.pSpace
 
+
+
+## Old sequence parsing functions for backward compatibility:
+##############################################################
 
 def seqListParse(text):
     s = OrderedDict()
     for l in text.split('\n'):
         if re.match(r'\w', l):
-            (name, single, seq) = seqParse(l)
-            s[name] = (single, seq)
+            seq = seqParse(l)
+            name = seq['name']
+            del seq['name']
+            s[name] = seq
     return s
     
 
@@ -287,13 +471,14 @@ def seqParse(seqStr):
         raise Exception("Syntax error in variable definition '%s'" % seqStr)
     (name, single, junk, seqStr) = m.groups()
     if seqStr is None:  ## no sequence specified, return now
-        return (name, single, None)
+        return {'name': name, 'default': single, 'sequence': 'off'}
     
     ## Match list format: "[val1,val2,...]"
     m = re.match(r'\[[\deE\-\.,]+\]$', seqStr)
     if m is not None:
-        seq = array(eval(seqStr))
-        return (name, single, seq)
+        seq = seqStr.strip(' []')
+        #seq = np.array(eval(seqStr))
+        return {'name': name, 'default': single, 'sequence': 'list', 'list': seq}
     
     ## Match like this: "start:stop/length:opts" or "start:stop:step:opts"
     m = re.match(r'([\deE\-\.]+):([\deE\-\.]+)(/|:)([\deE\-\.]+)(:(\w+))?$', seqStr)
@@ -301,23 +486,33 @@ def seqParse(seqStr):
         raise Exception("Syntax error in sequence string '%s'" % seqStr)
     
     (v1, v2, stepChar, v3, junk, opts) = m.groups()
-    v1 = float(v1)
-    v2 = float(v2)
-    v3 = float(v3)
+    #v1 = float(v1)
+    #v2 = float(v2)
+    #v3 = float(v3)
     if opts is None:
         opts = ''
-    
-    if stepChar == '/':
-        if 'l' in opts:
-            seq = logSpace(v1, v2, v3)
-        else:
-            seq = linspace(v1, v2, v3)
-    else:
-        if 'l' in opts:
-            n = (log(v2/v1) / log(v3)) + 1
-            seq = logSpace(v1, v2, n)
-        else:
-            seq = arange(v1, v2, v3)
-    if 'r' in opts:
-        random.shuffle(seq)
-    return (name, single, seq)
+
+    if stepChar == ':':  ## convert stepSize -> nSteps
+        seq = np.arange(float(v1), float(v2), float(v3))
+        v2 = str(seq[-1])
+        v3 = str(len(seq))
+        
+
+    #if stepChar == '/':
+        #if 'l' in opts:
+            #seq = fn.logSpace(v1, v2, v3)
+        #else:
+            #seq = np.linspace(v1, v2, v3)
+    #else:
+        #if 'l' in opts:
+            #n = (np.log(v2/v1) / np.log(v3)) + 1
+            #seq = fn.logSpace(v1, v2, n)
+        #else:
+            #seq = np.arange(v1, v2, v3)
+    #if 'r' in opts:
+        #np.random.shuffle(seq)
+    return {'name': name, 'default': single, 'sequence': 'range', 
+        'start': v1, 'stop': v2, 'steps': v3,
+        'log spacing': 'l' in opts, 'randomize': 'r' in opts
+    }
+    #return (name, single, seq)

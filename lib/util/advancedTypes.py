@@ -174,7 +174,14 @@ class ThreadsafeDict(dict):
         finally:
             self.unlock()
         return val
-        
+
+    def clear(self):
+        self.lock()
+        try:
+            dict.clear(self)
+        finally:
+            self.unlock()
+
     def lock(self):
         self.mutex.acquire()
         

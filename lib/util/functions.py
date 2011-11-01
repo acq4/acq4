@@ -28,80 +28,7 @@ try:
     import scipy.weave as weave
     from scipy.weave import converters
 except:
-    pass
-
-
-## Number <==> string conversion functions
-
-SI_PREFIXES = u'yzafpnµm kMGTPEZY'
-
-def siScale(x, minVal=1e-25):
-    """Return the recommended scale factor and SI prefix string for x."""
-    if isinstance(x, decimal.Decimal):
-        x = float(x)
-        
-    try:
-        if np.isnan(x) or np.isinf(x):
-            return(1, '')
-    except:
-        print x, type(x)
-        raise
-    if abs(x) < minVal:
-        m = 0
-        x = 0
-    else:
-        m = int(np.clip(np.floor(np.log(abs(x))/np.log(1000)), -9.0, 9.0))
-    
-    if m == 0:
-        pref = ''
-    elif m < -8 or m > 8:
-        pref = 'e%d' % (m*3)
-    else:
-        pref = SI_PREFIXES[m+8]
-    p = .001**m
-    
-    return (p, pref)
-    
-
-def siFormat(x, precision=3, space=True, error=None, minVal=1e-25, suffix=''):
-    """Return the number x formatted in engineering notation with SI prefix."""
-    if space is True:
-        space = ' '
-    if space is False:
-        space = ''
-        
-    (p, pref) = siScale(x, minVal)
-    if not (len(pref) > 0 and pref[0] == 'e'):
-        pref = space + pref
-    
-    if error is None:
-        fmt = "%." + str(precision) + "g%s%s"
-        return fmt % (x*p, pref, suffix)
-    else:
-        plusminus = space + u"±" + space
-        fmt = "%." + str(precision) + u"g%s%s%s%s"
-        return fmt % (x*p, pref, suffix, plusminus, siFormat(error, precision, space, minVal=minVal, suffix=suffix))
-    
-def siEval(s):
-    """Convert a value written in SI notation to its equivalent prefixless value"""
-    s = unicode(s)
-    m = re.match(r'(-?((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?)\s*([u' + SI_PREFIXES + r']?)$', s)
-    if m is None:
-        raise Exception("Can't convert string '%s' to number." % s)
-    v = float(m.groups()[0])
-    p = m.groups()[6]
-    #if p not in SI_PREFIXES:
-        #raise Exception("Can't convert string '%s' to number--unknown prefix." % s)
-    if p ==  '':
-        n = 0
-    elif p == 'u':
-        n = -2
-    else:
-        n = SI_PREFIXES.index(p) - 8
-    return v * 1000**n
-    
-
-
+    pass    
 
 
 def dirDialog(startDir='', title="Select Directory"):
@@ -117,7 +44,7 @@ def fileDialog():
 def logSpace(start, stop, num):
     num = int(num)
     d = (stop / start) ** (1./num)
-    return start * (d ** arange(0, num+1))
+    return start * (d ** np.arange(0, num+1))
 
 def linSpace(start, stop, num):
     return np.linspace(start, stop, num)
@@ -255,7 +182,7 @@ def downsamplend(data, div):
     shape = [float(data.shape[i]) / div[i] for i in range(0, data.ndim)]
     res = np.empty(tuple(shape), dtype=float)
     
-    for ind, i in ndenumerate(res):
+    for ind, i in np.ndenumerate(res):
         sl = [slice(ind[j]*div[j], (ind[j]+1)*div[j]) for j in range(0, data.ndim)]
         res[tuple(ind)] = data[tuple(sl)].mean()
     
@@ -282,7 +209,7 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
     imScale[-1] = [im1, im2]
     time2 = time.clock()
     for i in range(nit-2,-1,-1):
-        imScale[i] = [ndimage.zoom(imScale[i+1][0], 1.0/spow, order=1), ndimage.zoom(imScale[i+1][1], 1.0/spow, order=1)]
+        imScale[i] = [scipy.ndimage.zoom(imScale[i+1][0], 1.0/spow, order=1), scipy.ndimage.zoom(imScale[i+1][1], 1.0/spow, order=1)]
     print scales
 
     time3 = time.clock()
@@ -306,7 +233,8 @@ def recursiveRegisterImages(i1, i2, hint=(0,0), maxDist=None, objSize=None):
         ## get prediction
         #print "Scale %f: start: %s  end: %s" % (sf, str(start), str(end))
         if any(start != end):
-            center = registerImages(im1s, im2s, start, end)
+            print "register:", start, end
+            center = registerImages(im1s, im2s, (start, end))
         #print "   center = %s" % str(center/sf)
         
         
@@ -321,10 +249,16 @@ def xcMax(xc):
     return mi
 
 def registerImages(im1, im2, searchRange):
+    """
+    searchRange is [[xmin, ymin], [xmax, ymax]]
+    """
     #print "Registering images %s and %s, %s-%s" % (str(im1.shape), str(im2.shape), str(start), str(end))
-    (sx, sy) = searchRange
-    start=[sx[0], sy[0]]
-    end = [sx[1], sy[1]]
+    #(sx, sy) = searchRange
+    #start=[sx[0], sy[0]]
+    #end = [sx[1], sy[1]]
+    start, end = searchRange
+    print "start:",start,"end:",end
+    
     if end == None:
         mode='full'
         im1c = im1
@@ -336,13 +270,13 @@ def registerImages(im1, im2, searchRange):
         s1y = max(0, start[1])
         e1x = min(im1.shape[0], im2.shape[0]+end[0])
         e1y = min(im1.shape[1], im2.shape[1]+end[1])
-        #print "%d,%d - %d,%d" % (s1x, s1y, e1x, e1y)
+        print "%d,%d - %d,%d" % (s1x, s1y, e1x, e1y)
         
         s2x = max(0, -start[0])
         s2y = max(0, -start[1])
         e2x = min(im2.shape[0], im1.shape[0]-end[0])
         e2y = min(im2.shape[1], im1.shape[1]-end[1])
-        #print "%d,%d - %d,%d" % (s2x, s2y, e2x, e2y)
+        print "%d,%d - %d,%d" % (s2x, s2y, e2x, e2y)
         
         ## Crop images
         im1c = im1[s1x:e1x, s1y:e1y]
@@ -358,8 +292,13 @@ def registerImages(im1, im2, searchRange):
     #turns out cross-correlation is a really lousy way to register images.
     #xc = scipy.signal.signaltools.correlate2d(im1c, im2c, boundary='fill', fillvalue=im1c.mean(), mode=mode)
     def err(img):
-        img.shape = im2c.shape
+        try:
+            img.shape = im2c.shape
+        except:
+            print img.shape, im2c.shape
+            raise
         return abs(im2c - img).sum()
+    print im1c.shape, im2c.shape
     xc = scipy.ndimage.generic_filter(im1c, err, footprint=im2c) 
     print xc.min(), xc.max()
     #xcb = ndimage.filters.gaussian_filter(xc, 20)
@@ -1102,7 +1041,7 @@ def stdFilter(data, kernShape):
     if len(kernShape) != data.ndim:
         raise Exception("Kernel shape must have length = data.ndim")
     res = np.empty(tuple(shape), dtype=float)
-    for ind, i in ndenumerate(res):
+    for ind, i in np.ndenumerate(res):
         sl = [slice(max(0, ind[j]-kernShape[j]/2), min(shape[j], ind[j]+(kernShape[j]/2))) for j in range(0, data.ndim)]
         res[tuple(ind)] = std(data[tuple(sl)])
     return res
@@ -1848,7 +1787,7 @@ def tauiness(data, win, step=10):
     result = np.empty((len(ivals), 4), dtype=float)
     for i in range(len(ivals)):
         j = ivals[i]
-        v = fitExpDecay(arange(win), data[j:j+win], measureError=True)
+        v = fitExpDecay(np.arange(win), data[j:j+win], measureError=True)
         result[i] = np.array(list(v[0]) + [sum(abs(v[3]))])
         #result[i][0] = xvals[j]
         #result[i][1] = j

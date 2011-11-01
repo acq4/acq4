@@ -116,7 +116,7 @@
   <customwidget>
    <class>TreeWidget</class>
    <extends>QTreeWidget</extends>
-   <header>TreeWidget</header>
+   <header>pyqtgraph.TreeWidget</header>
   </customwidget>
  </customwidgets>
  <resources/>

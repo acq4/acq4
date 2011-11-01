@@ -5,13 +5,14 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-from PyQt4 import QtCore, QtGui, QtOpenGL, QtSvg
+from Qt import QtCore, QtGui, QtOpenGL, QtSvg
 #from numpy import vstack
 #import time
 from Point import *
 #from vector import *
 import sys, os
 import debug    
+from FileDialog import FileDialog
         
 class GraphicsView(QtGui.QGraphicsView):
     
@@ -103,8 +104,9 @@ class GraphicsView(QtGui.QGraphicsView):
         #v.setStyleSheet("background-color: #000000;")
         self.setViewport(v)
             
-    def keyPressEvent(self, ev):
-        ev.ignore()
+    #def keyPressEvent(self, ev):
+        #QtGui.QGraphicsView.keyPressEvent(self, ev)
+        #ev.ignore()
         
     def setCentralItem(self, item):
         """Sets a QGraphicsWidget to automatically fill the entire view."""
@@ -420,7 +422,7 @@ class GraphicsView(QtGui.QGraphicsView):
         
     def writeSvg(self, fileName=None):
         if fileName is None:
-            self.fileDialog = QtGui.QFileDialog()
+            self.fileDialog = FileDialog()
             self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
             self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
             if GraphicsView.lastFileDir is not None:
@@ -439,9 +441,9 @@ class GraphicsView(QtGui.QGraphicsView):
         
     def writeImage(self, fileName=None):
         if fileName is None:
-            self.fileDialog = QtGui.QFileDialog()
+            self.fileDialog = FileDialog()
             self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
-            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
+            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) ## this is the line that makes the fileDialog not show on mac
             if GraphicsView.lastFileDir is not None:
                 self.fileDialog.setDirectory(GraphicsView.lastFileDir)
             self.fileDialog.show()
@@ -459,7 +461,14 @@ class GraphicsView(QtGui.QGraphicsView):
         
     def writePs(self, fileName=None):
         if fileName is None:
-            fileName = str(QtGui.QFileDialog.getSaveFileName())
+            self.fileDialog = FileDialog()
+            self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
+            self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave) 
+            self.fileDialog.show()
+            self.fileDialog.fileSelected.connect(self.writePs)
+            return
+        #if fileName is None:
+        #    fileName = str(QtGui.QFileDialog.getSaveFileName())
         printer = QtGui.QPrinter(QtGui.QPrinter.HighResolution)
         printer.setOutputFileName(fileName)
         painter = QtGui.QPainter(printer)
@@ -487,54 +496,3 @@ class GraphicsView(QtGui.QGraphicsView):
         #return fl[-1]
     
 
-#class GraphicsSceneMouseEvent(QtGui.QGraphicsSceneMouseEvent):
-    #"""Stand-in class for QGraphicsSceneMouseEvent"""
-    #def __init__(self):
-        #QtGui.QGraphicsSceneMouseEvent.__init__(self)
-            
-    #def setPos(self, p):
-        #self.vpos = p
-    #def setButtons(self, p):
-        #self.vbuttons = p
-    #def setButton(self, p):
-        #self.vbutton = p
-    #def setModifiers(self, p):
-        #self.vmodifiers = p
-    #def setScenePos(self, p):
-        #self.vscenePos = p
-    #def setLastPos(self, p):
-        #self.vlastPos = p
-    #def setLastScenePos(self, p):
-        #self.vlastScenePos = p
-    #def setLastScreenPos(self, p):
-        #self.vlastScreenPos = p
-    #def setButtonDownPos(self, p):
-        #self.vbuttonDownPos = p
-    #def setButtonDownScenePos(self, p):
-        #self.vbuttonDownScenePos = p
-    #def setButtonDownScreenPos(self, p):
-        #self.vbuttonDownScreenPos = p
-    
-    #def pos(self):
-        #return self.vpos
-    #def buttons(self):
-        #return self.vbuttons
-    #def button(self):
-        #return self.vbutton
-    #def modifiers(self):
-        #return self.vmodifiers
-    #def scenePos(self):
-        #return self.vscenePos
-    #def lastPos(self):
-        #return self.vlastPos
-    #def lastScenePos(self):
-        #return self.vlastScenePos
-    #def lastScreenPos(self):
-        #return self.vlastScreenPos
-    #def buttonDownPos(self):
-        #return self.vbuttonDownPos
-    #def buttonDownScenePos(self):
-        #return self.vbuttonDownScenePos
-    #def buttonDownScreenPos(self):
-        #return self.vbuttonDownScreenPos
-    

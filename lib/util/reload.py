@@ -229,14 +229,18 @@ def safeStr(obj):
 if __name__ == '__main__':
     doQtTest = True
     try:
-        from PySide import QtCore, QtGui
-        app = QtGui.QApplication([])
+        from PyQt4 import QtCore
+        if not hasattr(QtCore, 'Signal'):
+            QtCore.Signal = QtCore.pyqtSignal
+        #app = QtGui.QApplication([])
         class Btn(QtCore.QObject):
             sig = QtCore.Signal()
             def emit(self):
-                QtCore.QObject.emit(self, QtCore.SIGNAL('signal'))
+                self.sig.emit()
         btn = Btn()
     except:
+        raise
+        print "Error; skipping Qt tests"
         doQtTest = False
 
 
@@ -301,11 +305,11 @@ def fn():
     
     if doQtTest:
         print "Button test before:"
-        QtCore.QObject.connect(btn, QtCore.SIGNAL('signal'), fn)
-        QtCore.QObject.connect(btn, QtCore.SIGNAL('signal'), a1.fn)
+        btn.sig.connect(fn)
         btn.sig.connect(a1.fn)
         btn.emit()
         #btn.sig.emit()
+        print ""
     
     #print "a1.fn referrers:", sys.getrefcount(a1.fn.im_func), gc.get_referrers(a1.fn.im_func)
     

@@ -724,7 +724,7 @@ Either a set of static background frames need to have already by collected
   <customwidget>
    <class>SpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>SpinBox</header>
+   <header>pyqtgraph.SpinBox</header>
   </customwidget>
   <customwidget>
    <class>GraphicsView</class>

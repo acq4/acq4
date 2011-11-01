@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from Qt import QtCore, QtGui
 from Point import Point
 import numpy as np
 

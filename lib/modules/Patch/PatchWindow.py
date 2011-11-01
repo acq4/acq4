@@ -3,7 +3,7 @@ from __future__ import with_statement
 from PatchTemplate import *
 from PyQt4 import QtGui, QtCore
 #from PyQt4 import Qwt5 as Qwt
-from WidgetGroup import WidgetGroup
+from pyqtgraph.WidgetGroup import WidgetGroup
 from pyqtgraph.PlotWidget import PlotWidget
 from metaarray import *
 from Mutex import Mutex, MutexLocker
@@ -11,8 +11,8 @@ import traceback, sys, time
 from numpy import *
 import scipy.optimize
 from debug import *
-from functions import siFormat
-from lib.Manager import getManager
+from pyqtgraph import siFormat
+import lib.Manager as Manager
 import ptime
 from lib.LogWindow import LogButton
 
@@ -67,7 +67,7 @@ class PatchWindow(QtGui.QMainWindow):
         self.statusBar().addPermanentWidget(self.logBtn)
 
         self.stateFile = os.path.join('modules', self.clampName + '_ui.cfg')
-        uiState = getManager().readConfigFile(self.stateFile)
+        uiState = Manager.getManager().readConfigFile(self.stateFile)
         if 'geometry' in uiState:
             geom = QtCore.QRect(*uiState['geometry'])
             self.setGeometry(geom)
@@ -184,7 +184,7 @@ class PatchWindow(QtGui.QMainWindow):
         #print "Stopping patch thread.."
         geom = self.geometry()
         uiState = {'window': str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
-        getManager().writeConfigFile(uiState, self.stateFile)
+        Manager.getManager().writeConfigFile(uiState, self.stateFile)
         
         self.thread.stop(block=True)
         #print "Patch thread exited; module quitting."
@@ -407,15 +407,12 @@ class PatchWindow(QtGui.QMainWindow):
         if self.ui.startBtn.isChecked():
             if not self.thread.isRunning():
                 self.thread.start()
-                self.writeToLog("Patch window started."
+                Manager.logMsg("Patch module started.")
             self.ui.startBtn.setText('Stop')
         else:
             self.ui.startBtn.setEnabled(False)
             self.thread.stop()
-            self.writeToLog("Patch window stopped.")
-            
-    def writeToLog(self, msg):
-        self.manager.logMsg(msg)
+            Manager.logMsg("Patch module stopped.")
             
     def threadStopped(self):
         self.ui.startBtn.setText('Start')
@@ -446,7 +443,7 @@ class PatchThread(QtCore.QThread):
             with MutexLocker(self.lock) as l:
                 self.stopThread = False
                 clamp = self.manager.getDevice(self.clampName)
-                daqName = clamp.listChannels().values()[0]['channel'][0]  ## Just guess the DAQ by checking one of the clamp's channels
+                daqName = clamp.listChannels().values()[0]['device']  ## Just guess the DAQ by checking one of the clamp's channels
                 clampName = self.clampName
                 self.paramsUpdated = True
                 l.unlock()

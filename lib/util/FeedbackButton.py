@@ -42,7 +42,7 @@ class FeedbackButton(QtGui.QPushButton):
             #print "success"
             self.startBlink("#0F0", message, tip, limitedTime=limitedTime)
         else:
-            self.sigCallSuccess.emit(message, tip, limitedTime=limitedTime)
+            self.sigCallSuccess.emit(message, tip, limitedTime)
             
     def failure(self, message=None, tip="", limitedTime=True):
         """Displays specified message on button and flashes button red to let user know there was an error. If you want the error to be displayed until the user takes an action, set limitedTime to False. Then call self.reset() after the desired action. Threadsafe. """
@@ -52,7 +52,7 @@ class FeedbackButton(QtGui.QPushButton):
             #print "fail"
             self.startBlink("#F00", message, tip, limitedTime=limitedTime)
         else:
-            self.sigCallFailure.emit(message, tip, limitedTime=limitedTime)
+            self.sigCallFailure.emit(message, tip, limitedTime)
 
     def processing(self, message="Processing..", tip="", processEvents=True):
         """Displays specified message on button to let user know the action is in progress. Threadsafe. """

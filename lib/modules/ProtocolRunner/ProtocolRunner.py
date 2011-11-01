@@ -8,14 +8,16 @@ import DirTreeWidget
 from configfile import *
 from advancedTypes import OrderedDict
 from SequenceRunner import *
-from WidgetGroup import *
+from pyqtgraph.WidgetGroup import WidgetGroup
 from Mutex import Mutex, MutexLocker
-from lib.Manager import getManager
+from lib.Manager import getManager, logMsg, logExc
 from debug import *
 import ptime
 import analysisModules
 import time, gc
 import sip
+import sys
+from HelpfulException import HelpfulException
 from ProgressDialog import ProgressDialog
 from lib.LogWindow import LogButton
 
@@ -67,8 +69,8 @@ class ProtocolRunner(Module):
     sigProtocolPaused = QtCore.Signal()
     sigProtocolFinished = QtCore.Signal()
     sigNewFrame = QtCore.Signal(object)
-    sigProtocolStarted = QtCore.Signal(object)
-    sigTaskStarted = QtCore.Signal(object)
+    sigProtocolStarted = QtCore.Signal(object)  ## called whenever single protocol OR protocol sequence has started
+    sigTaskStarted = QtCore.Signal(object)      ## called at start of EVERY protocol, including within sequences
     sigProtocolChanged = QtCore.Signal(object, object)
     
     def __init__(self, manager, name, config):
@@ -251,7 +253,8 @@ class ProtocolRunner(Module):
         for d in devList:
             if d not in self.devListItems:
                 self.devListItems[d] = QtGui.QListWidgetItem(d, self.ui.deviceList)
-                self.devListItems[d].setData(32, QtCore.QVariant(d))
+                #self.devListItems[d].setData(32, QtCore.QVariant(d))
+                self.devListItems[d].setData(32, d)
             self.devListItems[d].setForeground(QtGui.QBrush(QtGui.QColor(0,0,0)))
             
             
@@ -519,7 +522,7 @@ class ProtocolRunner(Module):
 
         self.ui.sequenceParamList.clear()
         
-        ## now's a good time to gree up some memory.
+        ## now's a good time to free up some memory.
         QtGui.QApplication.instance().processEvents()
         gc.collect()
                 
@@ -683,59 +686,6 @@ class ProtocolRunner(Module):
     def saveProtocol(self, fileHandle=None):
         ## Write protocol config to file
         self.currentProtocol.write(fileHandle.name())
-        
-        ## refresh protocol list
-        #self.protocolList.clearCache()
-    
-    #def saveProtocolAs(self):
-        ### Decide on new file name
-        #if self.currentProtocol.fileName is not None:
-            #baseFile = self.currentProtocol.fileName
-        #else:
-            #baseFile = os.path.join(self.protocolList.baseDir, 'protocol')
-            
-        #c = 2
-        #newFile = None
-        #while True:
-            #newFile = baseFile + '_%02d' % c
-            #if not os.path.exists(newFile):
-                #break
-            #c += 1
-            
-        ### write
-        #self.saveProtocol(newFile)
-        
-        
-        ### Start editing new file name
-        #index = self.protocolList.findIndex(newFile)
-        ##self.ui.protocolList.update(index)
-        #self.ui.protocolList.scrollTo(index)
-        #self.ui.protocolList.edit(index)
-        
-        #pn = newFile.replace(self.protocolList.baseDir, '')
-        #self.ui.currentProtocolLabel.setText(pn)
-        #self.ui.saveProtocolBtn.setEnabled(True)
-        ##self.currentIsModified(False)
-    
-    #def deleteProtocol(self):
-        ### Delete button must be clicked twice.
-        #if self.deleteState == 0:
-            #self.ui.deleteProtocolBtn.setText('Really?')
-            #self.deleteState = 1
-        #elif self.deleteState == 1:
-            #try:
-                #fn = self.getSelectedFileName()
-                #os.remove(fn)
-                #self.protocolList.clearCache()
-            #except:
-                #printExc('Error while deleting protocol file:')
-                #return
-            #finally:
-                #self.resetDeleteState()
-    
-    #def resetDeleteState(self):
-        #self.deleteState = 0
-        #self.ui.deleteProtocolBtn.setText('Delete')
 
     def testSingleClicked(self):
         self.testSingle()
@@ -769,24 +719,30 @@ class ProtocolRunner(Module):
                     name = 'protocol'
                 info = self.protocolInfo()
                 info['dirType'] = 'Protocol'
+                ## Create storage directory with all information about the protocol to be executed
                 dh = self.currentDir.mkdir(name, autoIncrement=True, info=info)
             else:
                 dh = None
+
+            ## Tell devices to prepare for protocol start.
+            for d in self.currentProtocol.devices:
+                if self.currentProtocol.deviceEnabled(d):
+                    self.docks[d].widget().prepareProtocolStart()
             
             ## Generate executable conf from protocol object
             prot = self.generateProtocol(dh)
-            
+            #print prot
             #self.emit(QtCore.SIGNAL('protocolStarted'), {})
             self.sigProtocolStarted.emit({})
             #print "runSingle: Starting taskThread.."
             self.taskThread.startProtocol(prot)
             #print "runSingle: taskThreadStarted"
         except:
+            exc = sys.exc_info()
             self.enableStartBtns(True)
             self.loopEnabled = False
-            print "Error starting protocol. "
-            raise
-        
+            #print "Error starting protocol. "
+            raise HelpfulException("Error starting protocol:", exc=exc)      
    
     def runSequenceClicked(self):
         self.runSequence(store=True)
@@ -830,7 +786,12 @@ class ProtocolRunner(Module):
                 dh = self.currentDir.mkdir(name, autoIncrement=True, info=info)
             else:
                 dh = None
-            
+                
+            ## Tell devices to prepare for protocol start.
+            for d in self.currentProtocol.devices:
+                if self.currentProtocol.deviceEnabled(d):
+                    self.docks[d].widget().prepareProtocolStart()
+                    
             #print params, linkedParams
             ## Generate the complete array of command structures. This can take a long time, so we start a progress dialog.
             with ProgressDialog("Generating protocol commands..", 0, pLen) as progressDlg:
@@ -843,7 +804,10 @@ class ProtocolRunner(Module):
             #print prot
             #self.emit(QtCore.SIGNAL('protocolStarted'), {})
             self.sigProtocolStarted.emit({})
+            logMsg('Started %s protocol sequence of length %i' %(self.currentProtocol.name(),pLen), importance=6)
+            #print 'PR protocol positions:
             self.taskThread.startProtocol(prot, paramInds)
+            
         except:
             self.enableStartBtns(True)
 
@@ -887,6 +851,17 @@ class ProtocolRunner(Module):
                 ## select out just the parameters needed for this device
                 p = dict([(i[1], params[i]) for i in params.keys() if i[0] == d])
                 ## Ask the device to generate its protocol command
+                if d not in self.docks:
+                    raise HelpfulException("The device '%s' currently has no dock loaded." % d,
+                                           reasons=[
+                                               "This device name does not exist in the system's configuration",
+                                               "There was an error when creating the device at program startup",
+                                               ],
+                                           tags={},
+                                           importance=8,
+
+                                           docSections=['userGuide/modules/ProtocolRunner/loadingNonexistentDevices']
+                                           )
                 prot[d] = self.docks[d].widget().generateProtocol(p)
                 #prof.mark("get protocol from %s" % d)
         #print prot['protocol']['storageDir'].name()
@@ -904,14 +879,31 @@ class ProtocolRunner(Module):
         return prot
     
     def protocolInfo(self, params=None):
-        """Generate a complete description of the protocol."""
-        info = self.currentProtocol.describe()
-        del info['protocol']['windowState']
-        del info['protocol']['params']
-        info['protocol']['params'] = self.ui.sequenceParamList.listParams()
+        """
+        Generate a complete description of the protocol.
+        This data is stored with the results of each protocol run.
+        """
+        conf = self.saveState()
+        del conf['windowState']
+        #del conf['params']
+        conf['params'] = self.ui.sequenceParamList.listParams()
+        
+        devs = {}
+        ## store individual dock states
+        for d in self.docks:
+            if self.currentProtocol.deviceEnabled(d):
+                devs[d] = self.docks[d].widget().describe(params=params)
+        
+        ## Remove unused devices before writing
+        #rem = [d for d in devs if not self.deviceEnabled(d)]
+        #for d in rem:
+            #del devs[d]
+        desc = {'protocol': conf, 'devices': devs}  #, 'winState': self.winState}
+
         if params is not None:
-            info['sequenceParams'] = params
-        return info
+            desc['sequenceParams'] = params
+        return desc
+    
     
     def enableStartBtns(self, v):
         btns = [self.ui.testSingleBtn, self.ui.runProtocolBtn, self.ui.testSequenceBtn, self.ui.runSequenceBtn]
@@ -996,6 +988,7 @@ class ProtocolRunner(Module):
             self.testSingle()
 
     def saveState(self):
+        ## Returns a description of the current window state -- dock positions, parameter list order, and analysis dock states.
         conf = self.protoStateGroup.state()
         
         ## store window state
@@ -1057,7 +1050,8 @@ class Protocol:
         
         
     def write(self, fileName=None):
-        info = self.describe()
+        ## Write this protocol to a file. Called by ProtocolRunner.saveProtocol()
+        info = self.saveState()
                 
         if fileName is None:
             if self.fileName is None:
@@ -1071,7 +1065,10 @@ class Protocol:
             return None
         return os.path.split(self.fileName)[1]
     
-    def describe(self):
+    def saveState(self):
+        ## Generate a description of this protocol. The description 
+        ## can be used to save/reload the protocol (calls saveState on all devices). 
+        
         self.conf = self.ui.saveState()
         
         ## store window state
@@ -1092,6 +1089,7 @@ class Protocol:
         for d in rem:
             del devs[d]
         return {'protocol': conf, 'devices': devs}  #, 'winState': self.winState}
+
         
     
     def enabledDevices(self):
@@ -1152,6 +1150,7 @@ class TaskThread(QtCore.QThread):
             #l.unlock()
             #print "TaskThread:startProtocol starting..", self.lock.depth()
             self.start() ### causes self.run() to be called from somewhere in C code
+            logMsg("Protocol Started.", importance=1)
             #print "TaskThread:startProtocol started", self.lock.depth()
     
     def pause(self, pause):
@@ -1268,7 +1267,8 @@ class TaskThread(QtCore.QThread):
                 except:
                     pass
                 printExc("\nError starting protocol:")
-                raise
+                exc = sys.exc_info()
+                raise HelpfulException("\nError starting protocol:", exc)
             
             prof.mark('start task')
             ### Do not put code outside of these try: blocks; may cause device lockup
@@ -1290,11 +1290,11 @@ class TaskThread(QtCore.QThread):
                 result = task.getResult()
             except:
                 ## Make sure the task is fully stopped if there was a failure at any point.
-                printExc("\nError during protocol execution:")
+                #printExc("\nError during protocol execution:")
                 print "\nStopping task.."
                 task.stop(abort=True)
                 print ""
-                raise
+                raise HelpfulException("\nError during protocol execution:", sys.exc_info())
             #print "\nAFTER:\n", cmd
             prof.mark('getResult')
             

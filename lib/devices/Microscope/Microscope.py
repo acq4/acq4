@@ -3,7 +3,7 @@ from __future__ import with_statement
 from lib.devices.Device import *
 from deviceTemplate import Ui_Form
 from Mutex import Mutex
-from SpinBox import *
+from pyqtgraph.SpinBox import *
 
 def ftrace(func):
     def w(*args, **kargs):
@@ -21,6 +21,7 @@ class Microscope(Device):
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.config = config
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.posDev = None
         self.objDev = None
@@ -49,7 +50,7 @@ class Microscope(Device):
         else:
             self.position = [0.0, 0.0, 0.0]
         
-        self.allObjectives = self.config['objectives']  ## all available objectives
+        self.allObjectives = config['objectives']  ## all available objectives
         for l in self.allObjectives.itervalues():  ## Set default values for each objective
             for o in l:
                 if 'offset' not in l[o]:
@@ -201,16 +202,12 @@ class ScopeGUI(QtGui.QWidget):
             self.objWidgets[i] = widgets
             
             for o in self.objList[i]:
-                c.addItem(self.objList[i][o]['name'], QtCore.QVariant(QtCore.QString(o)))
-            #QtCore.QObject.connect(r, QtCore.SIGNAL('clicked()'), self.objRadioClicked)
+                #c.addItem(self.objList[i][o]['name'], QtCore.QVariant(QtCore.QString(o)))
+                c.addItem(self.objList[i][o]['name'], o)
             r.clicked.connect(self.objRadioClicked)
-            #QtCore.QObject.connect(c, QtCore.SIGNAL('currentIndexChanged(int)'), self.objComboChanged)
             c.currentIndexChanged.connect(self.objComboChanged)
-            #QtCore.QObject.connect(xs, QtCore.SIGNAL('valueChanged'), self.xSpinChanged)
             xs.sigValueChanged.connect(self.xSpinChanged)
-            #QtCore.QObject.connect(ys, QtCore.SIGNAL('valueChanged'), self.ySpinChanged)
             ys.sigValueChanged.connect(self.ySpinChanged)
-            #QtCore.QObject.connect(ss, QtCore.SIGNAL('valueChanged'), self.sSpinChanged)
             ss.sigValueChanged.connect(self.sSpinChanged)
             row += 1
         
@@ -262,5 +259,6 @@ class ScopeGUI(QtGui.QWidget):
             
     def selectedObj(self, i):
         c = self.objWidgets[i][1]
-        return str(c.itemData(c.currentIndex()).toString())
+        #return str(c.itemData(c.currentIndex()).toString())
+        return c.itemData(c.currentIndex())
         

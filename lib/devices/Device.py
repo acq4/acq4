@@ -9,11 +9,11 @@ class Device(QtCore.QObject):
     def __init__(self, deviceManager, config, name):
         QtCore.QObject.__init__(self)
         #self._lock_ = threading.Lock()
-        self._lock_ = Mutex(QtCore.QMutex.Recursive)
+        #self._lock_ = Mutex(QtCore.QMutex.Recursive)  ## bad idea.
+        self._lock_ = Mutex(QtCore.QMutex.Recursive)  ## no, good idea
         self._lock_tb_ = None
-        #self._lock_ = Mutex()
         self.dm = deviceManager
-        self.config = config
+        #self.config = config
         self.name = name
     
     def createTask(self, cmd):
@@ -37,6 +37,7 @@ class Device(QtCore.QObject):
         
 
     def reserve(self, block=True, timeout=20):
+        #print "Device %s attempting lock.." % self.name
         if block:
             l = self._lock_.tryLock(int(timeout*1000))
             if not l:
@@ -47,10 +48,13 @@ class Device(QtCore.QObject):
         else:
             l = self._lock_.tryLock()
             if not l:
-                print "  Device is currently locked from:"
-                print self._lock_tb_
-                raise Exception("Could not acquire lock")
+                #print "Device %s lock failed." % self.name
+                return False
+                #print "  Device is currently locked from:"
+                #print self._lock_tb_
+                #raise Exception("Could not acquire lock", 1)  ## 1 indicates failed non-blocking attempt
         self._lock_tb_ = ''.join(traceback.format_stack()[:-1])
+        #print "Device %s lock ok" % self.name
         return True
         
     def release(self):
@@ -68,7 +72,7 @@ class Device(QtCore.QObject):
 class DeviceTask:
     def __init__(self, dev, cmd):
         self.dev = dev
-        self.cmd = cmd
+        #self.cmd = cmd
     
     def getConfigOrder(self):
         """return lists of devices that should be configured (before, after) this device"""
@@ -78,7 +82,7 @@ class DeviceTask:
         pass
     
     def reserve(self, block=True, timeout=20):
-        self.dev.reserve(block=block, timeout=timeout)
+        return self.dev.reserve(block=block, timeout=timeout)
     
     def start(self):
         pass
@@ -134,10 +138,23 @@ class ProtocolGui(QtGui.QWidget):
             #QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolStarted'), self.protocolStarted)
             #QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('taskStarted'), self.taskStarted)
             #QtCore.QObject.disconnect(self.prot, QtCore.SIGNAL('protocolFinished'), self.protocolFinished)
-            self.prot.sigProtocolStarted.disconnect(self.protocolStarted)
-            self.prot.sigTaskStarted.disconnect(self.taskStarted)
-            self.prot.sigProtocolFinished.disconnect(self.protocolFinished)
+            try:
+                self.prot.sigProtocolStarted.disconnect(self.protocolStarted)
+            except TypeError:
+                pass
+            try:
+                self.prot.sigTaskStarted.disconnect(self.taskStarted)
+            except TypeError:
+                pass
+            try:
+                self.prot.sigProtocolFinished.disconnect(self.protocolFinished)
+            except TypeError:
+                pass
             self._PGConnected = False
+        
+    def prepareProtocolStart(self):
+        """Called once before the start of each protocol or protocol sequence. Allows the device to execute any one-time preparations it needs."""
+        pass
         
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
@@ -147,6 +164,11 @@ class ProtocolGui(QtGui.QWidget):
     def restoreState(self, state):
         """Restore the state of the widget from a dictionary previously generated using saveState"""
         pass
+        
+    def describe(self, params=None):
+        """Return a nested-dict structure that describes what the device will do during a protocol.
+        This data will be stored along with results from a protocol run."""
+        return self.saveState()  ## lazy; implement something nicer for your devices!
         
     def listSequence(self):
         """Return an OrderedDict of sequence parameter names and lengths {name: length}"""
@@ -163,11 +185,14 @@ class ProtocolGui(QtGui.QWidget):
         pass
 
     def protocolStarted(self):
-        """Automatically invoked before a protocol or sequence is started"""
+        """Automatically invoked before a protocol or sequence is started.
+        Note: this signal is emitted AFTER generateProtocol() has been run for all devices,
+        and before the protocol is started.
+        """
         pass
 
     def taskStarted(self, params):
-        """Automatically invoked before a single protocol task is started"""
+        """Automatically invoked before a single protocol task is started, including each task within a sequence."""
         pass
         
     def protocolFinished(self):

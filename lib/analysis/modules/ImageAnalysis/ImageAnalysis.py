@@ -52,7 +52,7 @@ class ImageAnalysis(AnalysisModule):
         
         ## Add a color scale
         ## removed for now--seems to be causing crashes :(
-        #self.colorScale = pg.ColorScaleBar(self.plot1, (20, 150), (-10, -10))
+        #self.colorScale = pg.GradientLegend(self.plot1, (20, 150), (-10, -10))
         #self.plot1.scene().addItem(self.colorScale)
         
         ## Plots are updated when the selected region changes
@@ -176,6 +176,7 @@ class ImageAnalysis(AnalysisModule):
                 
         self.rawData = []
         self.data = []
+        #print "len images: %d " % (len(images))
         while len(images) > 0:
             imgs = images.pop(0)
             img = np.concatenate([i[np.newaxis,:minFrames,...] for i in imgs], axis=0)

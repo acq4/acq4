@@ -136,7 +136,11 @@ class SuperTask:
             if self.tasks[k].isOutputTask() and not self.taskInfo[k]['dataWritten']:
                 d = self.getTaskData(k)
                 #print "  Writing %s to task %s" % (d.shape, str(k))
-                self.tasks[k].write(d)
+                try:
+                    self.tasks[k].write(d)
+                except:
+                    print "Error while writing data to task '%s':" % str(k)
+                    raise
                 self.taskInfo[k]['dataWritten'] = True
         
     def hasTasks(self):

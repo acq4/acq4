@@ -5,7 +5,7 @@ Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 
-from PyQt4 import QtCore, QtGui
+from Qt import QtCore, QtGui
 from PlotWidget import *
 from ImageView import *
 from graphicsItems import GraphicsLayout
@@ -62,7 +62,7 @@ class GraphicsWindow(GraphicsLayoutView):
     def __init__(self, title=None, size=(800,600), **kargs):
         mkQApp()
         self.win = QtGui.QMainWindow()
-        GraphicsLayoutWidget.__init__(self, **kargs)
+        GraphicsLayoutView.__init__(self, **kargs)
         self.win.setCentralWidget(self)
         self.win.resize(*size)
         if title is not None:

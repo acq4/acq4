@@ -17,7 +17,7 @@ from configfile import *
 from metaarray import MetaArray
 import time
 from Mutex import Mutex, MutexLocker
-from SignalProxy import proxyConnect
+from pyqtgraph.SignalProxy import SignalProxy
 from PyQt4 import QtCore, QtGui
 if not hasattr(QtCore, 'Signal'):
     QtCore.Signal = QtCore.pyqtSignal
@@ -193,7 +193,7 @@ class FileHandle(QtCore.QObject):
         self.parentDir = None
         #self.lock = threading.RLock()
         self.lock = Mutex(QtCore.QMutex.Recursive)
-        self.sigproxy = proxyConnect(None, self.sigChanged, self.delayedChange)
+        self.sigproxy = SignalProxy(self.sigChanged, slot=self.delayedChange)
         
         
     def __repr__(self):
@@ -368,7 +368,7 @@ class FileHandle(QtCore.QObject):
         self.delayedChanges.append(change)
         self.sigChanged.emit(self, change, args)
 
-    def delayedChange(self, *args):
+    def delayedChange(self, args):
         changes = list(set(self.delayedChanges))
         self.delayedChanges = []
         #self.emit(QtCore.SIGNAL('delayedChange'), self, changes)
@@ -513,6 +513,7 @@ class DirHandle(FileHandle):
             return log
         
     def subDirs(self):
+        """Return a list of string names for all sub-directories."""
         with self.lock:
             ls = self.ls()
             subdirs = filter(lambda d: os.path.isdir(os.path.join(self.name(), d)), ls)
@@ -884,6 +885,7 @@ class DirHandle(FileHandle):
         
 
     def exists(self, name):
+        """Returns True if the file 'name' exists in this directory, False otherwise."""
         with self.lock:
             try:
                 fn = os.path.abspath(os.path.join(self.path, name))

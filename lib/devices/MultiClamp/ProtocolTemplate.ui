@@ -85,12 +85,12 @@
               <item>
                <widget class="QCheckBox" name="holdingCheck">
                 <property name="text">
-                 <string>Holding (pA)</string>
+                 <string>Holding</string>
                 </property>
                </widget>
               </item>
               <item>
-               <widget class="QDoubleSpinBox" name="holdingSpin">
+               <widget class="SpinBox" name="holdingSpin">
                 <property name="enabled">
                  <bool>false</bool>
                 </property>
@@ -244,7 +244,7 @@
              </sizepolicy>
             </property>
             <property name="text">
-             <string>Function (values in pA)</string>
+             <string>Command Function (A)</string>
             </property>
            </widget>
           </item>
@@ -286,6 +286,11 @@
    <extends>QWidget</extends>
    <header>pyqtgraph.PlotWidget</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>SpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>pyqtgraph.SpinBox</header>
   </customwidget>
  </customwidgets>
  <resources/>

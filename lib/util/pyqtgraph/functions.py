@@ -16,28 +16,101 @@ colorAbbrev = {
     'w': (255,255,255,255),
 }
 
+SI_PREFIXES = u'yzafpnµm kMGTPEZY'
+SI_PREFIXES_ASCII = 'yzafpnum kMGTPEZY'
 
-from PyQt4 import QtGui, QtCore
+
+from Qt import QtGui, QtCore
 import numpy as np
 import scipy.ndimage
+import decimal, re
 
-## Copied from acq4/lib/util/functions
-SI_PREFIXES = u'yzafpnµm kMGTPEZY'
-def siScale(x, minVal=1e-25):
-    """Return the recommended scale factor and SI prefix string for x."""
+def siScale(x, minVal=1e-25, allowUnicode=True):
+    """
+    Return the recommended scale factor and SI prefix string for x.
+    Example:
+        siScale(0.0001)   =>   (1e6, 'μ')
+        This indicates that the number 0.0001 is best represented as 0.0001 * 1e6 = 100 μUnits
+    """
+    
+    if isinstance(x, decimal.Decimal):
+        x = float(x)
+        
+    try:
+        if np.isnan(x) or np.isinf(x):
+            return(1, '')
+    except:
+        print x, type(x)
+        raise
     if abs(x) < minVal:
         m = 0
         x = 0
     else:
         m = int(np.clip(np.floor(np.log(abs(x))/np.log(1000)), -9.0, 9.0))
+    
     if m == 0:
         pref = ''
     elif m < -8 or m > 8:
         pref = 'e%d' % (m*3)
     else:
-        pref = SI_PREFIXES[m+8]
+        if allowUnicode:
+            pref = SI_PREFIXES[m+8]
+        else:
+            pref = SI_PREFIXES_ASCII[m+8]
     p = .001**m
-    return (p, pref)
+    
+    return (p, pref)    
+
+def siFormat(x, precision=3, suffix='', space=True, error=None, minVal=1e-25, allowUnicode=True):
+    """
+    Return the number x formatted in engineering notation with SI prefix.
+    Example:
+        siFormat(0.0001, suffix='V')  =>  "100 μV"
+    """
+    
+    if space is True:
+        space = ' '
+    if space is False:
+        space = ''
+        
+    
+    (p, pref) = siScale(x, minVal, allowUnicode)
+    if not (len(pref) > 0 and pref[0] == 'e'):
+        pref = space + pref
+    
+    if error is None:
+        fmt = "%." + str(precision) + "g%s%s"
+        return fmt % (x*p, pref, suffix)
+    else:
+        plusminus = space + u"±" + space
+        fmt = "%." + str(precision) + u"g%s%s%s%s"
+        return fmt % (x*p, pref, suffix, plusminus, siFormat(error, precision=precision, suffix=suffix, space=space, minVal=minVal))
+    
+def siEval(s):
+    """
+    Convert a value written in SI notation to its equivalent prefixless value
+    Example:
+        siEval("100 μV")  =>  0.0001
+    """
+    
+    s = unicode(s)
+    m = re.match(r'(-?((\d+(\.\d*)?)|(\.\d+))([eE]-?\d+)?)\s*([u' + SI_PREFIXES + r']?)$', s)
+    if m is None:
+        raise Exception("Can't convert string '%s' to number." % s)
+    v = float(m.groups()[0])
+    p = m.groups()[6]
+    #if p not in SI_PREFIXES:
+        #raise Exception("Can't convert string '%s' to number--unknown prefix." % s)
+    if p ==  '':
+        n = 0
+    elif p == 'u':
+        n = -2
+    else:
+        n = SI_PREFIXES.index(p) - 8
+    return v * 1000**n
+    
+
+
 
 def mkBrush(*args):
     if len(args) == 1:

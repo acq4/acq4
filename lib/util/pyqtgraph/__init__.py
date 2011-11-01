@@ -6,9 +6,14 @@ from graphicsItems import *
 from graphicsWindows import *
 #import PlotWidget
 #import ImageView
-from PyQt4 import QtGui
+from Qt import QtGui
 from Point import Point
 from Transform import Transform
+
+if not hasattr(QtCore, 'Signal'):  ## for pyside compatibility
+    QtCore.Signal = QtCore.pyqtSignal
+    QtCore.Slot = QtCore.pyqtSlot
+
 
 plots = []
 images = []

@@ -11,13 +11,14 @@ class DIOSwitch(Device):
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.config = config
         self.lock = Mutex.Mutex()
         self.daqs = {}
         for name, conf in config['channels'].iteritems():
-            daq = conf[0]
-            chan = conf[1]
-            dev = dm.getDevice(daq)
-            self.daqs[name] = (dev, chan)
+            #daq = conf[0]
+            #chan = conf[1]
+            dev = dm.getDevice(conf['device'])
+            self.daqs[name] = (dev, conf['channel'])
         self.state = {}
         
         self.poll()
@@ -36,7 +37,11 @@ class DIOSwitch(Device):
             change = {}
             for name, conf in self.daqs.iteritems():
                 daq, chan = conf
-                val = daq.getChannelValue(chan)
+                val = daq.getChannelValue(chan, block=False)
+                if val is False: ## device is busy; try again later
+                    return
+                        
+                #print name, val
                 if self.state.get(name, None) != val:
                     change[name] = val
                 self.state[name] = val

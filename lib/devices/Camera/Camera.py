@@ -48,13 +48,14 @@ class Camera(DAQGeneric):
 
     def __init__(self, dm, config, name):
         self.lock = Mutex(Mutex.Recursive)
-
+        
+        
         # Generate config to use for DAQ 
         daqConfig = {}
         if 'exposeChannel' in config:
-            daqConfig['exposure'] = {'type': 'di', 'channel': config['exposeChannel']}
+            daqConfig['exposure'] = config['exposeChannel']
         if 'triggerInChannel' in config:
-            daqConfig['trigger'] = {'type': 'do', 'channel': config['triggerInChannel']}
+            daqConfig['trigger'] = config['triggerInChannel']
         DAQGeneric.__init__(self, dm, daqConfig, name)
         
         self.camConfig = config
@@ -79,8 +80,6 @@ class Camera(DAQGeneric):
         
         if 'scopeDevice' in config:
             self.scopeDev = self.dm.getDevice(config['scopeDevice'])
-            #QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('positionChanged'), self.positionChanged)
-            #QtCore.QObject.connect(self.scopeDev, QtCore.SIGNAL('objectiveChanged'), self.objectiveChanged)
             self.scopeDev.sigPositionChanged.connect(self.positionChanged)
             self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
             ## Cache microscope state for fast access later
@@ -88,18 +87,14 @@ class Camera(DAQGeneric):
             self.positionChanged()
         else:
             self.scopeDev = None
-            
-            
+        
+        
         self.setupCamera() 
         #print "Camera: setupCamera returned, about to create acqThread"
         self.sensorSize = self.getParam('sensorSize')
         
         self.acqThread = AcquireThread(self)
         #print "Camera: acqThread created, about to connect signals."
-        #QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('finished()'), self.acqThreadFinished)
-        #QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('started()'), self.acqThreadStarted)
-        #QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('showMessage'), self.showMessage)
-        #QtCore.QObject.connect(self.acqThread, QtCore.SIGNAL('newFrame'), self.newFrame)
         self.acqThread.finished.connect(self.acqThreadFinished)
         self.acqThread.started.connect(self.acqThreadStarted)
         self.acqThread.sigShowMessage.connect(self.showMessage)
@@ -113,11 +108,11 @@ class Camera(DAQGeneric):
             except:
                 printExc("Error default setting camera parameters:")
         #print "Camera: no config params to set."
-            
+    
     def setupCamera(self):
         """Prepare the camera at least so that get/setParams will function correctly"""
         raise Exception("Function must be reimplemented in subclass.")
-
+    
     def listParams(self, params=None):
         """Return a dictionary of parameter descriptions. By default, all parameters are listed.
         Each description is a tuple or list: (values, isWritable, isReadable, dependencies)
@@ -271,9 +266,9 @@ class Camera(DAQGeneric):
         with MutexLocker(self.lock):
             if not 'triggerOutChannel' in self.camConfig:
                 return None
-            if self.camConfig['triggerOutChannel'][0] != daq:
+            if self.camConfig['triggerOutChannel']['device'] != daq:
                 return None
-            return self.camConfig['triggerOutChannel'][1]
+            return self.camConfig['triggerOutChannel']['channel']
         
 
     def isRunning(self):
@@ -495,7 +490,7 @@ class CameraTask(DAQGenericTask):
         if self.camCmd.get('triggerProtocol', False):
             #print "Camera triggering protocol; restart needed"
             restart = True
-            daqName = self.dev.camConfig['triggerOutChannel'][0]
+            daqName = self.dev.camConfig['triggerOutChannel']['device']
             startOrder.remove(name)
             startOrder.insert(startOrder.index(daqName)+1, name)
             prof.mark('conf 1')
@@ -663,7 +658,7 @@ class CameraTask(DAQGenericTask):
         if expose is not None and marr is not None: 
         
             ## Extract times from trace
-            ex = expose.view(ndarray)
+            ex = expose.view(ndarray).astype(int32)
             exd = ex[1:] - ex[:-1]
 
             

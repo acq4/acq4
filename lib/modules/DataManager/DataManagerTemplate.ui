@@ -153,7 +153,7 @@
            </sizepolicy>
           </property>
           <property name="currentIndex">
-           <number>0</number>
+           <number>1</number>
           </property>
           <widget class="QWidget" name="tab">
            <attribute name="title">
@@ -171,7 +171,7 @@
             </item>
            </layout>
           </widget>
-          <widget class="QWidget" name="tab_4">
+          <widget class="QWidget" name="logTab">
            <attribute name="title">
             <string>Log</string>
            </attribute>
@@ -182,13 +182,6 @@
             <property name="margin">
              <number>0</number>
             </property>
-            <item>
-             <widget class="QTextEdit" name="selectedLogView">
-              <property name="readOnly">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
            </layout>
           </widget>
           <widget class="QWidget" name="tab_3">
