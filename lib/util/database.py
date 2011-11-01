@@ -3,8 +3,9 @@ from PyQt4 import QtSql, QtCore
 import numpy as np
 import pickle, re, os
 import DataManager, lib.Manager
-import advancedTypes
+import collections
 import functions
+import advancedTypes
 
 def quoteList(strns):
     """Given a list of strings, return a single string like '"string1", "string2",...'
@@ -214,9 +215,9 @@ class SqliteDatabase:
             newRec = {}
             for k in rec:
                 if removeUnknownColumns and (k not in schema):
-                    print "skip column", k
+                    #print "skip column", k
                     continue
-                print "include column", k
+                #print "include column", k
                 
                 try:
                     newRec[k] = funcs[k](rec[k])
@@ -227,7 +228,7 @@ class SqliteDatabase:
                             raise Exception("Field '%s' not present in table '%s'" % (k, table))
                         print "Warning: Setting %s field %s.%s with type %s" % (schema[k], table, k, str(type(rec[k])))
             newData.append(newRec)
-        print "new data:", newData
+        #print "new data:", newData
         return newData
 
     def _queryToDict(self, q):
@@ -253,23 +254,24 @@ class SqliteDatabase:
 
 
     def _readRecord(self, rec):
-        data = advancedTypes.OrderedDict()
+        data = collections.OrderedDict()
         for i in range(rec.count()):
             f = rec.field(i)
             n = str(f.name())
             if rec.isNull(i):
                 val = None
             else:
-                v = rec.value(i)
-                t = v.type()
-                if t in [QtCore.QVariant.Int, QtCore.QVariant.LongLong]:
-                    val = v.toInt()[0]
-                if t in [QtCore.QVariant.Double]:
-                    val = v.toDouble()[0]
-                elif t == QtCore.QVariant.String:
-                    val = str(v.toString())
-                elif t == QtCore.QVariant.ByteArray:
-                    val = pickle.loads(str(v.toByteArray()))
+                val = rec.value(i)
+                #v = rec.value(i)   ## required when not using V2 API for QVariant
+                #t = v.type()
+                #if t in [QtCore.QVariant.Int, QtCore.QVariant.LongLong]:
+                    #val = v.toInt()[0]
+                #if t in [QtCore.QVariant.Double]:
+                    #val = v.toDouble()[0]
+                #elif t == QtCore.QVariant.String:
+                    #val = str(v.toString())
+                #elif t == QtCore.QVariant.ByteArray:
+                    #val = pickle.loads(str(v.toByteArray()))
             data[n] = val
         return data
 
@@ -479,7 +481,7 @@ class AnalysisDatabase(SqliteDatabase):
 
     def describeData(self, data):
         """Given a dict or record array, return a table description suitable for creating / checking tables."""
-        fields = advancedTypes.OrderedDict()
+        fields = collections.OrderedDict()
         if isinstance(data, list):  ## list of dicts is ok
             data = data[0]
             

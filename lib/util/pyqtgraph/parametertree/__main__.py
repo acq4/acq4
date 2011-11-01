@@ -5,7 +5,7 @@ import sys,os
 md = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(os.path.join(md, '..', '..'))
 
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 import collections, user
 app = QtGui.QApplication([])
 import pyqtgraph.parametertree.parameterTypes as pTypes

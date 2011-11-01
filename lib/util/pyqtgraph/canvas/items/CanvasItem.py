@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtGui, QtCore, QtSvg
+from pyqtgraph.Qt import QtGui, QtCore, QtSvg
 from pyqtgraph import widgets
 import pyqtgraph as pg
 import TransformGuiTemplate

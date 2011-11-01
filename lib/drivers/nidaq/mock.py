@@ -269,6 +269,10 @@ class Task:
 
     def WriteAnalogScalarF64(self, a, timeout, val, b):
         pass
+    
+    def WriteDigitalScalarU32(self, a, timeout, val, b):
+        pass
+    
 
 #class SuperTask:
     #def __init__(self, nd):
