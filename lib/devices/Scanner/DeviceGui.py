@@ -333,7 +333,7 @@ class ScannerDeviceGui(QtGui.QWidget):
             #self.addSpot(sl, spotWidth)
             self.addSpot(sl, fit[3]*binning[0])
         
-        if len(spotFrames) <= 10:
+        if len(spotFrames) < 10:
             raise Exception('Calibration detected only %d frames with laser spot; need minimum of 10.' % len(spotFrames))
 
         self.updatePrgDlg(90, "Calibrating scanner: Doing linear regression..")
@@ -457,12 +457,10 @@ class ScannerDeviceGui(QtGui.QWidget):
             'protocol': {'duration': duration, 'timeout': duration+5.0},
             camera: {'record': True, 'triggerProtocol': True, 'params': camParams, 'channels': {
                 'exposure': {'record': True}, 
-                #'trigger': {'preset': 0, 'command': cameraTrigger}
                 },
-                #'binning': binning, 'exposure': exposure, 'CLEAR_MODE': 'Clear Pre-Exposure', 'GAIN_INDEX': 3, 
                 'popState': 'scanProt'},
-            laser: {'shutter': {'preset': 0, 'holding': 0, 'command': np.ones(len(xCommand), dtype=byte)}},
-            #'CameraTrigger': {'Command': {'preset': 0, 'command': cameraTrigger, 'holding': 0}},
+            #laser: {'shutter': {'preset': 0, 'holding': 0, 'command': np.ones(len(xCommand), dtype=byte)}},
+            laser: {'alignMode': True},
             self.dev.name: {'xCommand': xCommand, 'yCommand': yCommand},
             daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}
         }

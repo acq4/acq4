@@ -302,7 +302,8 @@ class DAQGenericTask(DeviceTask):
                 
                 ## Input channels are only used if the command has record: True
                 if chConf['type'] in ['ai', 'di']:
-                    if ('record' not in self._DAQCmd[ch]) or (not self._DAQCmd[ch]['record']):
+                    #if ('record' not in self._DAQCmd[ch]) or (not self._DAQCmd[ch]['record']):
+                    if not self._DAQCmd[ch].get('record', False):
                         #print "    ignoring channel", ch, "recording disabled"
                         continue
                     
@@ -384,6 +385,8 @@ class DAQGenericTask(DeviceTask):
             for ch in self._DAQCmd:
                 if 'holding' in self._DAQCmd[ch]:
                     self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
+                elif self.dev._DGConfig[ch]['type'][1] == 'o':  ## return all output channels to holding value
+                    self.dev.setChanHolding(ch)
         
     def getResult(self):
         ## Access data recorded from DAQ task

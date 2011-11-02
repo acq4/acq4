@@ -19,14 +19,16 @@ class LaserDevGui(QtGui.QWidget):
         self.calibrateBtnState = 0
         
         ### configure gui
-        self.ui.wavelengthSpin.setOpts(suffix='m', siPrefix=True)
+        self.ui.energyCalcGroup.hide()  ## not using this for now
+        
+        self.ui.wavelengthSpin.setOpts(suffix='m', siPrefix=True, dec=False, step=5e-9)
+        self.ui.wavelengthSpin.setValue(self.dev.getWavelength())
         if not self.dev.hasTunableWavelength:
             self.ui.wavelengthGroup.setDisabled(True)
-            self.ui.wavelengthSpin.setValue(self.dev.config.get('wavelength', None))
         else:
-            self.ui.wavelengthSpin.setValue(self.dev.getWavelength())
             for x in self.dev.config.get('namedWavelengths', {}).keys():
                 self.ui.wavelengthCombo.addItem(x)
+            self.ui.wavelengthSpin.setOpts(bounds=self.dev.getWavelengthRange())
                 
         if not self.dev.hasPCell:
             self.ui.pCellGroup.hide()
@@ -37,9 +39,8 @@ class LaserDevGui(QtGui.QWidget):
             
         self.ui.measurementSpin.setOpts(suffix='s', siPrefix=True, bounds=[0.0, 5.0], dec=True, step=1, minStep=0.01)
         self.ui.settlingSpin.setOpts(suffix='s', siPrefix=True, value=0.1, dec=True, step=1, minStep=0.01)
-        with self.dev.variableLock:
-            self.ui.expectedPowerSpin.setOpts(suffix='W', siPrefix=True, bounds=[0.0, None], value=self.dev.params['expectedPower'], dec=True, step=0.1, minStep=0.01)
-        self.ui.toleranceSpin.setOpts(step=0.1, suffix='%', bounds=[0.1, 100.0], value=self.dev.params['tolerance'])
+        self.ui.expectedPowerSpin.setOpts(suffix='W', siPrefix=True, bounds=[0.0, None], value=self.dev.getParam('expectedPower'), dec=True, step=0.1, minStep=0.01)
+        self.ui.toleranceSpin.setOpts(step=1, suffix='%', bounds=[0.1, 100.0], value=self.dev.getParam('tolerance'))
         
         
         if not self.dev.hasShutter:
@@ -100,8 +101,14 @@ class LaserDevGui(QtGui.QWidget):
         self.ui.shutterBtn.toggled.connect(self.shutterToggled)
         self.ui.qSwitchBtn.toggled.connect(self.qSwitchToggled)
         self.ui.checkPowerBtn.clicked.connect(self.dev.outputPower)
+        self.ui.powerAlertCheck.toggled.connect(self.powerAlertToggled)
         
         self.dev.sigPowerChanged.connect(self.updatePowerLabels)
+        
+        try:
+            self.dev.outputPower()  ## check laser power
+        except:
+            pass
         
     def currentPowerToggled(self, b):
         if b:
@@ -110,6 +117,12 @@ class LaserDevGui(QtGui.QWidget):
     def expectedPowerToggled(self, b):
         if b:
             self.dev.setParam(useExpectedPower=True)
+            
+    def powerAlertToggled(self, b):
+        if b:
+            self.dev.setParam(powerAlert=True)
+        else:
+            self.dev.setParam(powerAlert=False)
             
     def shutterToggled(self, b):
         if b:
@@ -144,7 +157,7 @@ class LaserDevGui(QtGui.QWidget):
     def wavelengthComboChanged(self):
         if self.ui.wavelengthCombo.currentIndex() == 0:
             return
-        text = str(self.ui.wavelengthCombo.currentText())
+        text = unicode(self.ui.wavelengthCombo.currentText())
         wl = self.dev.config.get('namedWavelengths', {}).get(text, None)
         if wl is not None:
             self.ui.wavelengthSpin.setValue(wl)
@@ -186,10 +199,10 @@ class LaserDevGui(QtGui.QWidget):
         ## look up transmission value for this objective in calibration list
         index = self.dev.getCalibrationIndex()
         obj = self.scope.getObjective()['name'] 
-        vals = index[self.scope.name].get(obj, None)
+        vals = index.get(self.scope.name, {}).get(obj, None)
         if vals is None:
             raise Exception("No laser calibration for %s objective on %s." %(obj, self.scope.name))
-        wl = str(siFormat(self.dev.getWavelength()))
+        wl = siFormat(self.dev.getWavelength())
         vals = vals.get(wl, None)
         if vals is None:
             raise Exception("No laser calibration for %s wavelenth with %s objective on %s." %(wl, obj, self.scope.name))
@@ -199,16 +212,29 @@ class LaserDevGui(QtGui.QWidget):
         
         ## update labels
         with self.dev.variableLock:
-            power = self.dev.params['currentPower']
+            power = self.dev.getParam('currentPower')
         self.updatePowerLabels(power)
     
-    def updatePowerLabels(self, power):
-        if power is None:
-            self.ui.outputPowerLabel.setText("")
-            self.ui.samplePowerLabel.setText("")
+    def updatePowerLabels(self, power, valid=None):
+        #if power is None:
+            #self.ui.outputPowerLabel.setText("")
+            #self.ui.samplePowerLabel.setText("")
+        #else:
+        if valid is None:
+            valid = self.dev.checkPowerValidity(power)
+        
+        self.ui.outputPowerLabel.setText(siFormat(power, suffix='W'))
+        samplePower = self.dev.samplePower(power)
+        if samplePower is None:
+            self.ui.samplePowerLabel.setText("?")
         else:
-            self.ui.outputPowerLabel.setText(str(siFormat(power, suffix='W')))
-            self.ui.samplePowerLabel.setText(str(siFormat(power*self.dev.params['scopeTransmission'], suffix='W')))
+            self.ui.samplePowerLabel.setText(siFormat(samplePower, suffix='W'))
+            
+        if not valid:
+            self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #B00}")
+        else:
+            self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #000}")
+
 
     def updateCalibrationList(self):
         self.ui.calibrationList.clear()
@@ -227,7 +253,7 @@ class LaserDevGui(QtGui.QWidget):
                     item = QtGui.QTreeWidgetItem([scope, obj, wavelength, '%.2f' %(trans*100) + '%', siFormat(power, suffix='W'), date])
                     self.ui.calibrationList.addTopLevelItem(item)
         ## set current scopeTransmission
-        trans = index.get(self.scope.name, {}).get(self.scope.getObjective()['name'], {}).get(str(siFormat(self.dev.getWavelength())), {}).get('transmission', None)
+        trans = index.get(self.scope.name, {}).get(self.scope.getObjective()['name'], {}).get(siFormat(self.dev.getWavelength()), {}).get('transmission', None)
         if trans is not None:
             self.dev.setParam(scopeTransmission=trans)
             
@@ -258,10 +284,10 @@ class LaserDevGui(QtGui.QWidget):
         scope = str(self.ui.microscopeCombo.currentText())
         #meter = str(self.ui.meterCombo.currentText())
         obj = getManager().getDevice(scope).getObjective()['name']
-        wavelength = str(siFormat(self.dev.getWavelength()))
+        wavelength = siFormat(self.dev.getWavelength())
         date = time.strftime('%Y.%m.%d %H:%M', time.localtime())
         index = self.dev.getCalibrationIndex()
-        powerMeter = str(self.ui.meterCombo.currentText())
+        powerMeter = unicode(self.ui.meterCombo.currentText())
         mTime = self.ui.measurementSpin.value()
         sTime = self.ui.settlingSpin.value()
         

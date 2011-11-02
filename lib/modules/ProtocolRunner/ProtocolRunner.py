@@ -69,8 +69,8 @@ class ProtocolRunner(Module):
     sigProtocolPaused = QtCore.Signal()
     sigProtocolFinished = QtCore.Signal()
     sigNewFrame = QtCore.Signal(object)
-    sigProtocolStarted = QtCore.Signal(object)
-    sigTaskStarted = QtCore.Signal(object)
+    sigProtocolStarted = QtCore.Signal(object)  ## called whenever single protocol OR protocol sequence has started
+    sigTaskStarted = QtCore.Signal(object)      ## called at start of EVERY protocol, including within sequences
     sigProtocolChanged = QtCore.Signal(object, object)
     
     def __init__(self, manager, name, config):
@@ -522,7 +522,7 @@ class ProtocolRunner(Module):
 
         self.ui.sequenceParamList.clear()
         
-        ## now's a good time to gree up some memory.
+        ## now's a good time to free up some memory.
         QtGui.QApplication.instance().processEvents()
         gc.collect()
                 
@@ -723,6 +723,11 @@ class ProtocolRunner(Module):
                 dh = self.currentDir.mkdir(name, autoIncrement=True, info=info)
             else:
                 dh = None
+
+            ## Tell devices to prepare for protocol start.
+            for d in self.currentProtocol.devices:
+                if self.currentProtocol.deviceEnabled(d):
+                    self.docks[d].widget().prepareProtocolStart()
             
             ## Generate executable conf from protocol object
             prot = self.generateProtocol(dh)
@@ -781,7 +786,12 @@ class ProtocolRunner(Module):
                 dh = self.currentDir.mkdir(name, autoIncrement=True, info=info)
             else:
                 dh = None
-            
+                
+            ## Tell devices to prepare for protocol start.
+            for d in self.currentProtocol.devices:
+                if self.currentProtocol.deviceEnabled(d):
+                    self.docks[d].widget().prepareProtocolStart()
+                    
             #print params, linkedParams
             ## Generate the complete array of command structures. This can take a long time, so we start a progress dialog.
             with ProgressDialog("Generating protocol commands..", 0, pLen) as progressDlg:

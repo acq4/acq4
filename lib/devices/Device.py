@@ -152,6 +152,10 @@ class ProtocolGui(QtGui.QWidget):
                 pass
             self._PGConnected = False
         
+    def prepareProtocolStart(self):
+        """Called once before the start of each protocol or protocol sequence. Allows the device to execute any one-time preparations it needs."""
+        pass
+        
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
         return {}
@@ -181,11 +185,14 @@ class ProtocolGui(QtGui.QWidget):
         pass
 
     def protocolStarted(self):
-        """Automatically invoked before a protocol or sequence is started"""
+        """Automatically invoked before a protocol or sequence is started.
+        Note: this signal is emitted AFTER generateProtocol() has been run for all devices,
+        and before the protocol is started.
+        """
         pass
 
     def taskStarted(self, params):
-        """Automatically invoked before a single protocol task is started"""
+        """Automatically invoked before a single protocol task is started, including each task within a sequence."""
         pass
         
     def protocolFinished(self):
