@@ -90,11 +90,16 @@ class LaserProtoGui(DAQGenericProtoGui):
         
         
     def laserPowerChanged(self, power, valid):
-        samplePower = power*self.dev.getParam('scopeTransmission')
+        samplePower = self.dev.samplePower(power)
+        #samplePower = power*self.dev.getParam('scopeTransmission')
+            
         
         ## update label
-        self.ui.outputPowerLabel.setText(str(siFormat(power, suffix='W')))
-        self.ui.samplePowerLabel.setText(str(siFormat(samplePower, suffix='W')))
+        self.ui.outputPowerLabel.setText(siFormat(power, suffix='W'))
+        if samplePower is None:
+            self.ui.samplePowerLabel.setText("?")
+        else:
+            self.ui.samplePowerLabel.setText(siFormat(samplePower, suffix='W'))
         if not valid:
             self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #B00}")
         else:

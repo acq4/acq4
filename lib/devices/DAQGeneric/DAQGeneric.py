@@ -385,6 +385,8 @@ class DAQGenericTask(DeviceTask):
             for ch in self._DAQCmd:
                 if 'holding' in self._DAQCmd[ch]:
                     self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
+                elif self.dev._DGConfig[ch]['type'][1] == 'o':  ## return all output channels to holding value
+                    self.dev.setChanHolding(ch)
         
     def getResult(self):
         ## Access data recorded from DAQ task
