@@ -201,19 +201,23 @@ class Laser(DAQGeneric):
         raise HelpfulException("%s device does not support wavelength tuning." %str(self.name), reasons=["Hardware doesn't support tuning.", "setWavelenth function is not reimplemented in subclass."])
     
     def getWavelength(self):
-        return self.config.get('wavelength', None)
+        return self.config.get('wavelength', 0)
         
     def openShutter(self):
-        self.setChanHolding('shutter', 1)
+        if self.hasTriggerableShutter:
+            self.setChanHolding('shutter', 1)
     
     def closeShutter(self):
-        self.setChanHolding('shutter', 0)
+        if self.hasTriggerableShutter:
+            self.setChanHolding('shutter', 0)
     
     def openQSwitch(self):
-        self.setChanHolding('qSwitch', 1)
+        if self.hasQSwitch:
+            self.setChanHolding('qSwitch', 1)
     
     def closeQSwitch(self):
-        self.setChanHolding('qSwitch', 0)
+        if self.hasQSwitch:
+            self.setChanHolding('qSwitch', 0)
     
     
     def createTask(self, cmd):
@@ -375,6 +379,19 @@ class Laser(DAQGeneric):
             else:
                 return power, self.checkPowerValidity(power)
         
+    def samplePower(self, power=None):
+        """Return the estimated power-at-sample if power is the output power of the laser"""
+        trans = self.getParam('scopeTransmission')
+        if trans is None:
+            return None
+        
+        if power is None:
+            power = self.outputPower()
+        if power is None:
+            return None
+            
+        return power * trans
+        
 
     def checkPowerValidity(self, power):
         """Return boolean indicating whether power is inside the expected power range."""
@@ -516,6 +533,7 @@ class LaserTask(DAQGenericTask):
         'checkPower': True,            ## If true, the laser will check its output power before executing the protocol. 
         'ignorePowerWaveform': False   ## If True, the power waveform is merely passed through to the task results 
                                        ## (it is assumed the command also has raw waveforms in this case)
+        'alignMode': False             ## If true, put the laser into alignment mode for the entire duration of the protocol.
         
     }
     
@@ -536,7 +554,20 @@ class LaserTask(DAQGenericTask):
             cmd['daqProtocol']['pCell'] = {}
             
         #cmd['daqProtocol']['power'] = {}
-            
+        
+        if cmd.get('alignMode', False):
+            alignConfig = self.dev.config.get('alignmentMode', None)
+            if alignConfig is None:
+                raise Exception("Laser alignment mode requested, but this laser has no 'alignmentMode' in its configuration.")
+            if 'shutter' in alignConfig:
+                cmd['daqProtocol']['shutter']['preset'] = 1 if alignConfig['shutter'] else 0
+            if 'qSwitch' in alignConfig:
+                cmd['daqProtocol']['qSwitch']['preset'] = 1 if alignConfig['qSwitch'] else 0
+            if 'pCell' in alignConfig:
+                cmd['daqProtocol']['pCell']['preset'] = alignConfig['pCell']
+            elif 'power' in alignConfig:
+                raise Exception("Alignment mode by power not implemented yet.")
+                
 
         DAQGenericTask.__init__(self, dev, cmd['daqProtocol'])
         
@@ -573,12 +604,16 @@ class LaserTask(DAQGenericTask):
             self.cmd['daqProtocol']['shutter']['command'][-1] = 0
         elif 'shutterMode' in self.cmd:
             if self.cmd['shutterMode'] is 'auto':
-                self.cmd['daqProtocol']['shutter']['command']= calcCmds['shutter']
+                if 'shutter' in calcCmds:
+                    self.cmd['daqProtocol']['shutter'] = {'command': calcCmds['shutter']}
             elif self.cmd['shutterMode'] is 'closed':
-                self.cmd['daqProtocol']['shutter']['command'] = np.zeros(len(calcCmds['shutter']), dtype=np.byte)
+                #self.cmd['daqProtocol']['shutter']['command'] = np.zeros(len(calcCmds['shutter']), dtype=np.byte)
+                self.cmd['daqProtocol']['shutter'] = {'preset': 0}
             elif self.cmd['shutterMode'] is 'open':
-                self.cmd['daqProtocol']['shutter']['command'] = np.ones(len(calcCmds['shutter']), dtype=np.byte)
-            self.cmd['daqProtocol']['shutter']['command'][-1] = 0
+                self.cmd['daqProtocol']['shutter'] = {'command': np.ones(len(calcCmds['shutter']), dtype=np.byte)}
+                
+                ## set to holding value, not 0
+                self.cmd['daqProtocol']['shutter']['command'][-1] = 0
             
         if 'pCell' in self.cmd:
             self.cmd['daqProtocol']['pCell'] = self.cmd['pCell']
@@ -604,6 +639,9 @@ class LaserTask(DAQGenericTask):
     def getResult(self):
         ## getResult from DAQGeneric, then add in command waveform
         result = DAQGenericTask.getResult(self)
+        if result is None:
+            return None
+        
         arr = result.view(np.ndarray)
         
         daqInfo = result._info[-1]['DAQ']
