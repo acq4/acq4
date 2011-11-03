@@ -59,6 +59,7 @@
 <li class="toctree-l1"><a class="reference internal" href="DataManager.html">Data Manager Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Camera.html">Camera Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Patch.html">Patch Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ProtocolRunner.html">Protocol Runner Module</a></li>
 </ul>
 </div>
 <div class="section" id="what-is-a-module">
@@ -84,20 +85,13 @@
 </pre></div>
 </div>
 </li>
-<li><dl class="first docutils">
-<dt>Define your class&#8217;s __init__ function::</dt>
-<dd><dl class="first last docutils">
-<dt>class NewModuleClass(Module):</dt>
-<dd><dl class="first last docutils">
-<dt>def __init__(self, manager, name, config):</dt>
-<dd><p class="first last">Module.__init__(self, manager, name, config)  ## call superclass __init__
-...</p>
-</dd>
-</dl>
-</dd>
-</dl>
-</dd>
-</dl>
+<li><p class="first">Define your class&#8217;s __init__ function:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">NewModuleClass</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">manager</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+        <span class="n">Module</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">manager</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>  <span class="c">## call superclass __init__</span>
+        <span class="o">...</span>
+</pre></div>
+</div>
 <p>When ACQ4 instantiates your module, it will pass in three arguments:</p>
 <ul class="simple">
 <li>manager - a reference to the Manager that created the module. This object provides lots of useful services like getDevice(), getModule(), getCurrentDir(), and createTask().</li>
@@ -109,19 +103,13 @@
 </li>
 <li><p class="first">(optionaly) create a quit() method. This will be called when ACQ4 is quitting, allowing the module to clean up if needed.</p>
 </li>
-<li><dl class="first docutils">
-<dt>Create a default configuration (or many) for loading your module. In the &#8216;modules&#8217; section of your configuration files, add a new section that looks like::</dt>
-<dd><dl class="first last docutils">
-<dt>ModuleName:</dt>
-<dd><p class="first">module: &#8216;NewModuleClass&#8217;
-config:</p>
-<blockquote class="last">
-<p>...  (data here will be passed to the config argument when instantiating the class)</p>
-</blockquote>
-</dd>
-</dl>
-</dd>
-</dl>
+<li><p class="first">Create a default configuration (or many) for loading your module. In the &#8216;modules&#8217; section of your configuration files, add a new section that looks like:</p>
+<div class="highlight-python"><pre>ModuleName:
+    module: 'NewModuleClass'
+    config:
+        ...  (data here will be passed to the config
+        ...  argument when instantiating the class)</pre>
+</div>
 <p>Each section like this that you create adds a new entry to the main Manager window, allowing users to easily access the module.
 By changing the contents of the &#8216;config&#8217; section, it is possible to allow multiple instances of the module to be loaded with different settings.</p>
 </li>

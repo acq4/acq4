@@ -34,6 +34,7 @@ How to Build a New Module
     newMod = NewModuleClass(manager, name, config)
 
 #. Define your class's __init__ function::
+    
     class NewModuleClass(Module):
         def __init__(self, manager, name, config):
             Module.__init__(self, manager, name, config)  ## call superclass __init__
@@ -47,13 +48,15 @@ How to Build a New Module
 
 #. If your module creates a Qt window, give the module a window() method which returns a reference to the window. This allows ACQ4 to assign window keyboard shortcuts.
 
-#. (optionaly) create a quit() method. This will be called when ACQ4 is quitting, allowing the module to clean up if needed.
+#. Optional: create a quit() method. This will be called when ACQ4 is quitting, allowing the module to clean up if needed.
 
 #. Create a default configuration (or many) for loading your module. In the 'modules' section of your configuration files, add a new section that looks like::
+    
     ModuleName:
         module: 'NewModuleClass'
         config:
-            ...  (data here will be passed to the config argument when instantiating the class)
+            ...  (data here will be passed to the config 
+            ...  argument when instantiating the class)
             
    Each section like this that you create adds a new entry to the main Manager window, allowing users to easily access the module.
    By changing the contents of the 'config' section, it is possible to allow multiple instances of the module to be loaded with different settings.
