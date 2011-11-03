@@ -210,15 +210,16 @@ class LaserDevGui(QtGui.QWidget):
         ## update labels
         with self.dev.variableLock:
             power = self.dev.getParam('currentPower')
-        self.updatePowerLabels(power)
+        self.updatePowerLabels(power, self.dev.checkPowerValidity(power))
     
     def updatePowerLabels(self, power, valid):
         #if power is None:
             #self.ui.outputPowerLabel.setText("")
             #self.ui.samplePowerLabel.setText("")
         #else:
-        self.ui.outputPowerLabel.setText(str(siFormat(power, suffix='W')))
-        self.ui.samplePowerLabel.setText(str(siFormat(power*self.dev.getParam('scopeTransmission'), suffix='W')))
+        #print 'power:', power*self.dev.getParam('scopeTransmission'), str(siFormat(power*self.dev.getParam('scopeTransmission'), suffix='W'))
+        self.ui.outputPowerLabel.setText(siFormat(power, suffix='W'))
+        self.ui.samplePowerLabel.setText(siFormat(power*self.dev.getParam('scopeTransmission'), suffix='W'))
         if not valid:
             print "power invalid"
             self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #B00}")
