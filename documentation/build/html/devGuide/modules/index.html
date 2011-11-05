@@ -84,6 +84,12 @@
 <span class="n">newMod</span> <span class="o">=</span> <span class="n">NewModuleClass</span><span class="p">(</span><span class="n">manager</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>When ACQ4 instantiates your module, it will pass in three arguments:</p>
+<ul class="simple">
+<li>manager - a reference to the Manager that created the module. This object provides lots of useful services like getDevice(), getModule(), getCurrentDir(), and createTask().</li>
+<li>name - the name assigned to this module. This helps to differentiate multiple instances of the same module class.</li>
+<li>config - an arbitrary and optional configuration structure (usually a dict) which provides the module any other instantiation data it needs.</li>
+</ul>
 </li>
 <li><p class="first">Define your class&#8217;s __init__ function:</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">NewModuleClass</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
@@ -92,16 +98,10 @@
         <span class="o">...</span>
 </pre></div>
 </div>
-<p>When ACQ4 instantiates your module, it will pass in three arguments:</p>
-<ul class="simple">
-<li>manager - a reference to the Manager that created the module. This object provides lots of useful services like getDevice(), getModule(), getCurrentDir(), and createTask().</li>
-<li>name - the name assigned to this module. This helps to differentiate multiple instances of the same module class.</li>
-<li>config - an arbitrary and optional configuration structure (usually a dict) which provides the module any other instantiation data it needs.</li>
-</ul>
 </li>
 <li><p class="first">If your module creates a Qt window, give the module a window() method which returns a reference to the window. This allows ACQ4 to assign window keyboard shortcuts.</p>
 </li>
-<li><p class="first">(optionaly) create a quit() method. This will be called when ACQ4 is quitting, allowing the module to clean up if needed.</p>
+<li><p class="first">Optional: create a quit() method. This will be called when ACQ4 is quitting, allowing the module to clean up if needed.</p>
 </li>
 <li><p class="first">Create a default configuration (or many) for loading your module. In the &#8216;modules&#8217; section of your configuration files, add a new section that looks like:</p>
 <div class="highlight-python"><pre>ModuleName:

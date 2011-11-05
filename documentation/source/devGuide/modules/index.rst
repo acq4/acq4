@@ -33,18 +33,19 @@ How to Build a New Module
     from lib.modules.NewModuleClass import NewModuleClass
     newMod = NewModuleClass(manager, name, config)
 
+   When ACQ4 instantiates your module, it will pass in three arguments:
+   
+   * manager - a reference to the Manager that created the module. This object provides lots of useful services like getDevice(), getModule(), getCurrentDir(), and createTask().
+   * name - the name assigned to this module. This helps to differentiate multiple instances of the same module class.
+   * config - an arbitrary and optional configuration structure (usually a dict) which provides the module any other instantiation data it needs.
+
+
 #. Define your class's __init__ function::
     
     class NewModuleClass(Module):
         def __init__(self, manager, name, config):
             Module.__init__(self, manager, name, config)  ## call superclass __init__
             ...
-            
-   When ACQ4 instantiates your module, it will pass in three arguments:
-   
-   * manager - a reference to the Manager that created the module. This object provides lots of useful services like getDevice(), getModule(), getCurrentDir(), and createTask().
-   * name - the name assigned to this module. This helps to differentiate multiple instances of the same module class.
-   * config - an arbitrary and optional configuration structure (usually a dict) which provides the module any other instantiation data it needs.
 
 #. If your module creates a Qt window, give the module a window() method which returns a reference to the window. This allows ACQ4 to assign window keyboard shortcuts.
 

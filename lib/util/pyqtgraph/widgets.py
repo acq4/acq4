@@ -104,6 +104,15 @@ class ROI(QtGui.QGraphicsObject):
         self.pen = pen
         self.update()
         
+    def size(self):
+        return self.getState()['size']
+        
+    def pos(self):
+        return self.getState()['pos']
+        
+    def angle(self):
+        return self.getState()['angle']
+        
     def setPos(self, pos, update=True):
         #print "setPos() called."
         pos = Point(pos)
@@ -695,6 +704,9 @@ class ROI(QtGui.QGraphicsObject):
 
 
     def getArrayRegion(self, data, img, axes=(0,1)):
+        """Use the position of this ROI relative to an imageItem to pull a slice from an array."""
+        
+        
         shape = self.state['size']
         
         origin = self.mapToItem(img, QtCore.QPointF(0, 0))
