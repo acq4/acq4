@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 from CanvasItem import CanvasItem
 import numpy as np
 import scipy.ndimage as ndimage

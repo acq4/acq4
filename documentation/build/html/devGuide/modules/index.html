@@ -24,7 +24,7 @@
     <script type="text/javascript" src="../../_static/doctools.js"></script>
     <link rel="top" title="ACQ4 v1.0 documentation" href="../../index.html" />
     <link rel="up" title="Developer’s Guide" href="../index.html" />
-    <link rel="next" title="Utility Libraries" href="../utilityLibraries/index.html" />
+    <link rel="next" title="Manager Module" href="Manager.html" />
     <link rel="prev" title="Devices" href="../devices/index.html" /> 
   </head>
   <body>
@@ -35,7 +35,7 @@
           <a href="../../genindex.html" title="General Index"
              accesskey="I">index</a></li>
         <li class="right" >
-          <a href="../utilityLibraries/index.html" title="Utility Libraries"
+          <a href="Manager.html" title="Manager Module"
              accesskey="N">next</a> |</li>
         <li class="right" >
           <a href="../devices/index.html" title="Devices"
@@ -54,8 +54,66 @@
 <h1>Modules<a class="headerlink" href="#modules" title="Permalink to this headline">¶</a></h1>
 <p>Contents:</p>
 <div class="toctree-wrapper compound">
-<ul class="simple">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Manager.html">Manager Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DataManager.html">Data Manager Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Camera.html">Camera Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Patch.html">Patch Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ProtocolRunner.html">Protocol Runner Module</a></li>
 </ul>
+</div>
+<div class="section" id="what-is-a-module">
+<h2>What is a Module?<a class="headerlink" href="#what-is-a-module" title="Permalink to this headline">¶</a></h2>
+<p>In short, a module is an almost-totally independent program which is launched by ACQ4 and has access to any of the services offered by ACQ4. Modules are free to do virtually anything they like&#8211;there are very few constraints on their code structure, behavior, appearance, etc. If the task you are trying to accomplish does not fit nicely into the existing modules, then it may be time to write a new one.</p>
+</div>
+<div class="section" id="how-to-build-a-new-module">
+<h2>How to Build a New Module<a class="headerlink" href="#how-to-build-a-new-module" title="Permalink to this headline">¶</a></h2>
+<ol class="arabic">
+<li><p class="first">Create a new python module under lib/modules. This can be a single file or a directory of files; it doesn&#8217;t matter.</p>
+</li>
+<li><p class="first">Create a subclass of lib.modules.Module.Module (I know, it&#8217;s an absurd name). This should look something like:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">lib.modules.Module</span> <span class="kn">import</span> <span class="n">Module</span>
+
+<span class="k">class</span> <span class="nc">NewModuleClass</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Make your subclass importable as lib.modules.NewModuleClass.NewModuleClass. When loading your module, ACQ4 will issue the following statements to import your code and instantiate a new module:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">lib.modules.NewModuleClass</span> <span class="kn">import</span> <span class="n">NewModuleClass</span>
+<span class="n">newMod</span> <span class="o">=</span> <span class="n">NewModuleClass</span><span class="p">(</span><span class="n">manager</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>When ACQ4 instantiates your module, it will pass in three arguments:</p>
+<ul class="simple">
+<li>manager - a reference to the Manager that created the module. This object provides lots of useful services like getDevice(), getModule(), getCurrentDir(), and createTask().</li>
+<li>name - the name assigned to this module. This helps to differentiate multiple instances of the same module class.</li>
+<li>config - an arbitrary and optional configuration structure (usually a dict) which provides the module any other instantiation data it needs.</li>
+</ul>
+</li>
+<li><p class="first">Define your class&#8217;s __init__ function:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">NewModuleClass</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">manager</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+        <span class="n">Module</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">manager</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>  <span class="c">## call superclass __init__</span>
+        <span class="o">...</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">If your module creates a Qt window, give the module a window() method which returns a reference to the window. This allows ACQ4 to assign window keyboard shortcuts.</p>
+</li>
+<li><p class="first">Optional: create a quit() method. This will be called when ACQ4 is quitting, allowing the module to clean up if needed.</p>
+</li>
+<li><p class="first">Create a default configuration (or many) for loading your module. In the &#8216;modules&#8217; section of your configuration files, add a new section that looks like:</p>
+<div class="highlight-python"><pre>ModuleName:
+    module: 'NewModuleClass'
+    config:
+        ...  (data here will be passed to the config
+        ...  argument when instantiating the class)</pre>
+</div>
+<p>Each section like this that you create adds a new entry to the main Manager window, allowing users to easily access the module.
+By changing the contents of the &#8216;config&#8217; section, it is possible to allow multiple instances of the module to be loaded with different settings.</p>
+</li>
+</ol>
 </div>
 </div>
 
@@ -65,12 +123,21 @@
       </div>
       <div class="sphinxsidebar">
         <div class="sphinxsidebarwrapper">
+  <h3><a href="../../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Modules</a><ul>
+<li><a class="reference internal" href="#what-is-a-module">What is a Module?</a></li>
+<li><a class="reference internal" href="#how-to-build-a-new-module">How to Build a New Module</a></li>
+</ul>
+</li>
+</ul>
+
   <h4>Previous topic</h4>
   <p class="topless"><a href="../devices/index.html"
                         title="previous chapter">Devices</a></p>
   <h4>Next topic</h4>
-  <p class="topless"><a href="../utilityLibraries/index.html"
-                        title="next chapter">Utility Libraries</a></p>
+  <p class="topless"><a href="Manager.html"
+                        title="next chapter">Manager Module</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
     <li><a href="../../_sources/devGuide/modules/index.txt"
@@ -100,7 +167,7 @@
           <a href="../../genindex.html" title="General Index"
              >index</a></li>
         <li class="right" >
-          <a href="../utilityLibraries/index.html" title="Utility Libraries"
+          <a href="Manager.html" title="Manager Module"
              >next</a> |</li>
         <li class="right" >
           <a href="../devices/index.html" title="Devices"

@@ -122,7 +122,7 @@ class EventDetector(AnalysisModule):
             ('SourceFile', 'text'),
         ])
         fields.update(db.describeData(data))
-        fields['SourceFile'] = 'text' 
+        fields['SourceFile'] = 'text'   ## SourceFile is currently a FileHandle, but will be converted to str.
         
         ## Make sure target table exists and has correct columns, links to input file
         db.checkTable(table, owner=self.dbIdentity, fields=fields, links=[('SourceDir', pTable)], create=True)
