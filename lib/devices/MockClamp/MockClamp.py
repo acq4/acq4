@@ -60,6 +60,7 @@ class MockClamp(DAQGeneric):
 
         # Generate config to use for DAQ 
         daqConfig = {}
+        self.devLock = Mutex(Mutex.Recursive)
         
         #if 'ScaledSignal' in config:
             #daqConfig['primary'] = {'type': 'ai', 'channel': config['ScaledSignal']}
@@ -82,8 +83,6 @@ class MockClamp(DAQGeneric):
         #else:
             #self.hasSecondaryChannel = False
             
-        DAQGeneric.__init__(self, dm, daqConfig, name)
-        
         self.holding = {
             'vc': config.get('vcHolding', -0.05),
             'ic': config.get('icHolding', 0.0)
@@ -92,8 +91,10 @@ class MockClamp(DAQGeneric):
         self.mode = 'i=0'
         
         self.config = config
+        
+        DAQGeneric.__init__(self, dm, daqConfig, name)
+        
         #self.modeLock = Mutex(Mutex.Recursive)
-        self.devLock = Mutex(Mutex.Recursive)
         #self.mdCanceled = False
         
         #self.modeDialog = QtGui.QMessageBox()

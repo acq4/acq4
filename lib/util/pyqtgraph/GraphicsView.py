@@ -108,7 +108,11 @@ class GraphicsView(QtGui.QGraphicsView):
         #QtGui.QGraphicsView.keyPressEvent(self, ev)
         #ev.ignore()
         
+        
     def setCentralItem(self, item):
+        return self.setCentralWidget(item)
+        
+    def setCentralWidget(self, item):
         """Sets a QGraphicsWidget to automatically fill the entire view."""
         if self.centralWidget is not None:
             self.scene().removeItem(self.centralWidget)

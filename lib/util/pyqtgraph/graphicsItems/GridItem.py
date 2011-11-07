@@ -40,7 +40,7 @@ class GridItem(UIGraphicsItem):
         p.begin(self.picture)
         
         dt = self.viewTransform().inverted()[0]
-        vr = self.viewRect()
+        vr = self.getViewWidget().rect()
         unit = self.pixelWidth(), self.pixelHeight()
         dim = [vr.width(), vr.height()]
         lvr = self.boundingRect()
@@ -53,8 +53,7 @@ class GridItem(UIGraphicsItem):
             x = ul[1]
             ul[1] = br[1]
             br[1] = x
-        for i in range(2, -1, -1):   ## Draw three different scales of grid
-            
+        for i in [2,1,0]:   ## Draw three different scales of grid
             dist = br-ul
             nlTarget = 10.**i
             d = 10. ** np.floor(np.log10(abs(dist/nlTarget))+0.5)
@@ -62,6 +61,11 @@ class GridItem(UIGraphicsItem):
             br1 = np.ceil(br / d) * d
             dist = br1-ul1
             nl = (dist / d) + 0.5
+            #print "level", i
+            #print "  dim", dim
+            #print "  dist", dist
+            #print "  d", d
+            #print "  nl", nl
             for ax in range(0,2):  ## Draw grid for both axes
                 ppl = dim[ax] / nl[ax]
                 c = np.clip(3.*(ppl-3), 0., 30.)

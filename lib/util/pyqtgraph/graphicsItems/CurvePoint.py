@@ -42,7 +42,9 @@ class CurvePoint(QtGui.QGraphicsObject):
             return False
             
         if ev.propertyName() == 'index':
-            index = self.property('index').toInt()[0]
+            index = self.property('index')
+            if 'QVariant' in repr(index):
+                index = index.toInt()[0]
         elif ev.propertyName() == 'position':
             index = None
         else:
@@ -51,7 +53,10 @@ class CurvePoint(QtGui.QGraphicsObject):
         (x, y) = self.curve().getData()
         if index is None:
             #print ev.propertyName(), self.property('position').toDouble()[0], self.property('position').typeName()
-            index = (len(x)-1) * np.clip(self.property('position').toDouble()[0], 0.0, 1.0)
+            pos = self.property('position')
+            if 'QVariant' in repr(pos):   ## need to support 2 APIs  :(
+                pos = pos.toDouble()[0]
+            index = (len(x)-1) * np.clip(pos, 0.0, 1.0)
             
         if index != int(index):  ## interpolate floating-point values
             i1 = int(index)

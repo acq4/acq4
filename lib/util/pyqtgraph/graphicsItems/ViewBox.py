@@ -15,7 +15,7 @@ class ViewBox(QtGui.QGraphicsWidget):
     sigRangeChangedManually = QtCore.Signal(object)
     sigRangeChanged = QtCore.Signal(object, object)
     
-    def __init__(self, parent=None, border=None):
+    def __init__(self, parent=None, border=None, lockAspect=False, enableMouse=True, invertY=False):
         QtGui.QGraphicsWidget.__init__(self, parent)
         #self.gView = view
         #self.showGrid = showGrid
@@ -47,13 +47,14 @@ class ViewBox(QtGui.QGraphicsWidget):
         self.axHistory = [] # maintain a history of zoom locations
         self.axHistoryPointer = -1 # pointer into the history. Allows forward/backward movement, not just "undo"
         
-        self.yInverted = False
+        self.yInverted = invertY
         self.setZValue(-100)
         self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding))
         
         self.border = border
         
-        self.mouseEnabled = [True, True]
+        self.mouseEnabled = [enableMouse, enableMouse]
+        self.setAspectLocked(lockAspect)
 
     def keyPressEvent(self, ev):
         """

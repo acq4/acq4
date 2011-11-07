@@ -57,13 +57,10 @@ def isNodeClass(cls):
 
 def loadLibrary(reloadLibs=False, libPath=None):
     """Import all Node subclasses found within files in the library module."""
-    import traceback
-    traceback.print_stack()
 
     global NODE_LIST, NODE_TREE
     if libPath is None:
         libPath = os.path.dirname(os.path.abspath(__file__))
-    print "loadLibrary", libPath
     
     if reloadLibs:
         reload.reloadAll(libPath)
@@ -73,7 +70,7 @@ def loadLibrary(reloadLibs=False, libPath=None):
         if ext != '.py' or '__init__' in pathName:
             continue
         try:
-            print "importing from", f
+            #print "importing from", f
             mod = __import__(pathName, globals(), locals())
         except:
             printExc("Error loading flowchart library %s:" % pathName)
@@ -83,7 +80,7 @@ def loadLibrary(reloadLibs=False, libPath=None):
         for n in dir(mod):
             o = getattr(mod, n)
             if isNodeClass(o):
-                print "  ", str(o)
+                #print "  ", str(o)
                 registerNodeType(o, [(pathName,)], override=reloadLibs)
                 #nodes.append((o.nodeName, o))
         #if len(nodes) > 0:

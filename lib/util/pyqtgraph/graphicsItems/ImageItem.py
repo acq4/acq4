@@ -92,7 +92,16 @@ class ImageItem(QtGui.QGraphicsObject):
     def getLevels(self):
         return self.whiteLevel, self.blackLevel
 
-    def updateImage(self, image=None, copy=True, autoRange=False, clipMask=None, white=None, black=None, axes=None):
+    def updateImage(self, *args, **kargs):
+        ## can we make any assumptions here that speed things up?
+        ## dtype, range, size are all the same?
+        defaults = {
+            'autoRange': False,
+        }
+        defaults.update(kargs)
+        return self.setImage(*args, **defaults)
+
+    def setImage(self, image=None, copy=True, autoRange=True, clipMask=None, white=None, black=None, axes=None):
         prof = debug.Profiler('ImageItem.updateImage 0x%x' %id(self), disabled=True)
         #debug.printTrace()
         if axes is None:

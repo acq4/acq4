@@ -19,7 +19,7 @@ This class is very heavily featured:
 
 #from graphicsItems import *
 from plotConfigTemplate import *
-from PyQt4 import QtGui, QtCore, QtSvg
+from pyqtgraph.Qt import QtGui, QtCore, QtSvg
 import pyqtgraph.functions as fn
 from pyqtgraph.FileDialog import FileDialog
 import weakref

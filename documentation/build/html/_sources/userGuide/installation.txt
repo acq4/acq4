@@ -56,6 +56,24 @@ Make all your windows-using friends jealous::
 OSX Installation
 ----------------
 
+#. Download Qt SDK (see code.activestate.com/pypm/pyqt4 for a link to their recommended qt version)
+#. Download ActiveState Python (free community edition)
+#. run::
+    pypm install pyqt4 pyparsing h5py numpy scipy pil
+#. If you get a complaint about 64-bit compatibility, run python in 32-bit mode (see manpage)
+
+    
+#. Optional:
+    - find uic executable by::
+        pypm files pyqt4 | grep pyuic
+    - Add correct directory PATH
+    - Edit pyuic4 to point correctly to pyuic.py
+
+
+
+OSX Alternate Installation Method
+---------------------------------
+
 These instructions are for building on MacOSX 10.5. If you're building on 10.6 or 10.7 some of these libraries will be available as binaries. 
 
 You will need to have xcode installed on your machine.
