@@ -276,7 +276,7 @@ class Laser(DAQGeneric):
         wave[:shutterDelay*rate] = 0
         cmdOn[self.name]={'shutterMode':'open', 'switchWaveform':wave}
         
-        print "cmdOff: ", cmdOff
+        #print "cmdOff: ", cmdOff
         taskOff = getManager().createTask(cmdOff)
         taskOff.execute()
         resultOff = taskOff.getResult()
