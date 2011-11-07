@@ -216,10 +216,10 @@ class LaserDevGui(QtGui.QWidget):
         self.updatePowerLabels(power, self.dev.checkPowerValidity(power))
     
     def updatePowerLabels(self, power, valid=None):
-        #if power is None:
-            #self.ui.outputPowerLabel.setText("")
-            #self.ui.samplePowerLabel.setText("")
-        #else:
+        if power is None:
+            self.ui.outputPowerLabel.setText("?")
+            self.ui.samplePowerLabel.setText("?")
+            return
 
         
         if valid is None:

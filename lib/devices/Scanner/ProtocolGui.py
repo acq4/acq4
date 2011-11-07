@@ -201,7 +201,7 @@ class ScannerProtoGui(ProtocolGui):
                     li.setCheckState(0, QtCore.Qt.Checked)
                 else:
                     li.setCheckState(0, QtCore.Qt.Unchecked)
-                self.itemToggled(li)
+                self.itemToggled(li, 0)
             #self.testTarget.setPointSize(self.pointSize()[0])
             self.testTarget.setPointSize()
             self.spotMarker.setPointSize()
