@@ -100,6 +100,40 @@ $ bzr branch lp:acq4</pre>
 </div>
 <div class="section" id="osx-installation">
 <h2>OSX Installation<a class="headerlink" href="#osx-installation" title="Permalink to this headline">¶</a></h2>
+<ol class="arabic">
+<li><p class="first">Download Qt SDK (see code.activestate.com/pypm/pyqt4 for a link to their recommended qt version)</p>
+</li>
+<li><p class="first">Download ActiveState Python (free community edition)</p>
+</li>
+<li><dl class="first docutils">
+<dt>run::</dt>
+<dd><p class="first last">pypm install pyqt4 pyparsing h5py numpy scipy pil</p>
+</dd>
+</dl>
+</li>
+<li><p class="first">If you get a complaint about 64-bit compatibility, run python in 32-bit mode (see manpage)</p>
+</li>
+<li><dl class="first docutils">
+<dt>Optional:</dt>
+<dd><ul class="first last">
+<li><dl class="first docutils">
+<dt>find uic executable by::</dt>
+<dd><p class="first last">pypm files pyqt4 | grep pyuic</p>
+</dd>
+</dl>
+</li>
+<li><p class="first">Add correct directory PATH</p>
+</li>
+<li><p class="first">Edit pyuic4 to point correctly to pyuic.py</p>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+</div>
+<div class="section" id="osx-alternate-installation-method">
+<h2>OSX Alternate Installation Method<a class="headerlink" href="#osx-alternate-installation-method" title="Permalink to this headline">¶</a></h2>
 <p>These instructions are for building on MacOSX 10.5. If you&#8217;re building on 10.6 or 10.7 some of these libraries will be available as binaries.</p>
 <p>You will need to have xcode installed on your machine.</p>
 <p>Download and install the following packages in order:</p>
@@ -204,6 +238,7 @@ $ python setup.py install</pre>
 <li><a class="reference internal" href="#windows-installation">Windows Installation</a></li>
 <li><a class="reference internal" href="#linux-installation">Linux Installation</a></li>
 <li><a class="reference internal" href="#osx-installation">OSX Installation</a></li>
+<li><a class="reference internal" href="#osx-alternate-installation-method">OSX Alternate Installation Method</a></li>
 </ul>
 </li>
 </ul>

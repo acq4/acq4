@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtCore, QtGui, QtSvg
+from pyqtgraph.Qt import QtCore, QtGui, QtSvg
 from CanvasItem import CanvasItem
 
 class SvgCanvasItem(CanvasItem):

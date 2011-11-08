@@ -10,6 +10,8 @@ class TableWidget(QtGui.QTableWidget):
         QtGui.QTableWidget.__init__(self, *args)
         self.setVerticalScrollMode(self.ScrollPerPixel)
         self.clear()
+        self.contextMenu = QtGui.QMenu()
+        self.contextMenu.addAction('copy').triggered.connect(self.copy)
         
     def clear(self):
         QtGui.QTableWidget.clear(self)
@@ -123,18 +125,27 @@ class TableWidget(QtGui.QTableWidget):
 
     def copy(self):
         """Copy selected data to clipboard."""
-        s = ''
+        s = u''
         for r in range(self.rowCount()):
             row = []
             for c in range(self.columnCount()):
-                item = t.item(r, c)
+                item = self.item(r, c)
                 if item is not None:
-                    row.append(str(item.value))
+                    row.append(unicode(item.value))
                 else:
-                    row.append('')
-            s += ('\t'.join(row) + '\n')
+                    row.append(u'')
+            s += (u'\t'.join(row) + u'\n')
         QtGui.QApplication.clipboard().setText(s)
 
+    def contextMenuEvent(self, ev):
+        self.contextMenu.popup(ev.globalPos())
+        
+    def keyPressEvent(self, ev):
+        if ev.text() == 'c' and ev.modifiers() == QtCore.Qt.ControlModifier:
+            ev.accept()
+            self.copy()
+        else:
+            ev.ignore()
 
 
 

@@ -54,7 +54,11 @@ class AnalysisModule(QtCore.QObject):
         self.dataModel = host.dataModel
 
     def initializeElements(self):
-        """Must be called sometime during the construction of the module."""
+        """Must be called sometime during the construction of the module.
+        Note: This function simply parses all of the element descriptions. 
+              It does NOT create the actual element widgets; this happens 
+              when getElement(..., create=True) is called.
+        """
         for name, el in self._elements_.iteritems():
             if isinstance(el, tuple):
                 self._elements_[name] = Element(name, args=el)
@@ -173,6 +177,13 @@ class Element(QtCore.QObject):
             obj = TableWidget.TableWidget(**args)
         elif typ == 'dataTree':
             obj = DataTreeWidget.DataTreeWidget(**args)
+        elif typ == 'parameterTree':
+            obj = pg.parametertree.ParameterTree(**args)
+        elif typ == 'graphicsView':
+            obj = pg.GraphicsView(**args)
+        elif typ == 'viewBox':
+            obj = pg.GraphicsView()
+            obj.setCentralItem(pg.ViewBox(**args))
         else:
             raise Exception("Cannot automatically create element '%s' (type=%s)" % (self.name, typ))
         #self.setObject(obj)  ## handled indirectly..

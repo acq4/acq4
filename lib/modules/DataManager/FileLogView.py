@@ -5,6 +5,7 @@ from PyQt4 import QtGui, QtCore
 import lib.Manager
 from lib.LogWindow import LogWidget
 import configfile as cf
+import debug
 
 class FileLogView(LogWidget):
     
@@ -103,8 +104,13 @@ class FileLogView(LogWidget):
 
     def setCurrentLog(self, dh):
         if dh is not None:
-            self.loadFile(dh['log.txt'].name())
-            self.ui.dirLabel.setText("Currently displaying " + self.currentLogDir.name(relativeTo=self.manager.baseDir)+'/log.txt')    
+            try:
+                self.loadFile(dh['log.txt'].name())
+                self.ui.dirLabel.setText("Currently displaying " + self.currentLogDir.name(relativeTo=self.manager.baseDir)+'/log.txt')    
+            except:
+                debug.printExc("Error loading log file:")
+                self.clear()
+                self.ui.dirLabel.setText("")
         else:
             self.clear()
             self.ui.dirLabel.setText("")

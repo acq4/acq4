@@ -1,4 +1,4 @@
-from PyQt4 import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtGui
 from Parameter import Parameter, registerParameterType
 from ParameterItem import ParameterItem
 from pyqtgraph.SpinBox import SpinBox
@@ -19,12 +19,12 @@ class WidgetParameterItem(ParameterItem):
         
         self.hideWidget = True  ## hide edit widget, replace with label when not selected
                                 ## set this to False to keep the editor widget always visible
-
-
+        
+        
         ## build widget into column 1 with a display label and default button.
         w = self.makeWidget()  
         self.widget = w
-
+        
         opts = self.param.opts
         if 'tip' in opts:
             w.setToolTip(opts['tip'])
@@ -35,9 +35,9 @@ class WidgetParameterItem(ParameterItem):
         modDir = os.path.dirname(__file__)
         self.defaultBtn.setIcon(QtGui.QIcon(os.path.join(modDir, 'default.png')))
         self.defaultBtn.clicked.connect(self.defaultClicked)
-
+        
         self.displayLabel = QtGui.QLabel()
-
+        
         layout = QtGui.QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
