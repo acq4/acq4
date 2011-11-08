@@ -14,8 +14,11 @@ class Coherent(object):
         self.baud = baud
         self.sp = serial.Serial(int(self.port), baudrate=self.baud, bytesize=serial.EIGHTBITS)
         time.sleep(0.3)  ## Give devices a moment to chill after opening the serial line.
-        self.read()
-        self.write("ECHO=0;PROMPT=0;HEARTBEAT=0\r\n")
+        self.write("PROMPT=0\r\n")
+        self.readPacket()
+        self.write("ECHO=0\r\n")
+        self.readPacket()
+        self.write("HEARTBEAT=0\r\n")
         self.readPacket()
 
     def getPower(self):

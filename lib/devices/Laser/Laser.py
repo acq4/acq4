@@ -132,6 +132,8 @@ class Laser(DAQGeneric):
         self.pCellCalibration = None
         self.getPowerHistory()
         
+        manager.declareInterface(name, ['laser'], self)
+        
         
     def configDir(self):
         """Return the name of the directory where configuration/calibration data should be stored"""
@@ -202,6 +204,9 @@ class Laser(DAQGeneric):
     
     def getWavelength(self):
         return self.config.get('wavelength', 0)
+    
+    def getWavelengthRange(self):
+        pass
         
     def openShutter(self):
         if self.hasTriggerableShutter:

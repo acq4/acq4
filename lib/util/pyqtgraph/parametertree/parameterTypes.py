@@ -194,6 +194,8 @@ class WidgetParameterItem(ParameterItem):
         ## add all widgets for this item into the tree
         if self.widget is not None:
             tree = self.treeWidget()
+            if tree is None:
+                return
             tree.setItemWidget(self, 1, self.layoutWidget)
             self.displayLabel.hide()
             self.selected(False)            
@@ -343,7 +345,9 @@ class ListParameterItem(WidgetParameterItem):
         w.setValue = self.setValue
         self.widget = w
         self.limitsChanged(self.param, self.param.opts['limits'])
-        self.setValue(self.param.value())
+        if len(self.forward) > 0:
+            print self.forward
+            self.setValue(self.param.value())
         return w
         
     def value(self):
@@ -366,9 +370,12 @@ class ListParameterItem(WidgetParameterItem):
                 #raise Exception("Value '%s' not allowed." % val)
         #else:
             #key = unicode(val)
-        key = self.reverse[val]
-        ind = self.widget.findText(key)
-        self.widget.setCurrentIndex(ind)
+        if val not in self.reverse:
+            self.widget.setCurrentIndex(0)
+        else:
+            key = self.reverse[val]
+            ind = self.widget.findText(key)
+            self.widget.setCurrentIndex(ind)
 
     def limitsChanged(self, param, limits):
         # set up forward / reverse mappings for name:value

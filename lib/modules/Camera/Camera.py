@@ -8,6 +8,7 @@ class Camera(Module):
         camDev = self.config['camDev']
         self.cam = self.manager.getDevice(camDev)
         self.ui = CameraWindow(self)
+        manager.declareInterface(name, ['cameraModule'], self)
         
     def window(self):
         return self.ui

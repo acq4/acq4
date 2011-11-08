@@ -42,6 +42,12 @@ class DataMapping:
         return (data + offset) * scale
             
 
+class ChannelHandle(object):
+    def __init__(self, dev, channel):
+        self.dev = dev
+        self.channel = channel
+        
+
 class DAQGeneric(Device):
     """
     Config format:
@@ -101,6 +107,12 @@ class DAQGeneric(Device):
             if config[ch]['type'][1] == 'o':
                 self.setChanHolding(ch, config[ch]['holding'])
             #self._DGHolding[ch] = config[ch]['holding']
+            
+        dm.declareInterface(name, ['daqChannelGroup'], self)
+        for ch in config:
+            dm.declareInterface(name+"."+ch, ['daqChannel'], ChannelHandle(self, ch))
+                            
+                            
         
     def mapToDAQ(self, channel, data):
         mapping = self.getMapping(chans=[channel])
