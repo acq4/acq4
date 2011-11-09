@@ -224,7 +224,7 @@ class LogWindow(QtGui.QMainWindow):
             newTemp = {}
             for v in temp.values():
                 self.msgCount += 1
-                newTemp['LogEntry_'+str(self.msgCount)] = v
+                newTemp['LogEntry_'+str(count)] = v
             self.saveEntry(newTemp)
         else:
             self.logFile = dh.createFile('log.txt')

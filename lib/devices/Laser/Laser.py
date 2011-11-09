@@ -276,7 +276,7 @@ class Laser(DAQGeneric):
         wave[:shutterDelay*rate] = 0
         cmdOn[self.name]={'shutterMode':'open', 'switchWaveform':wave}
         
-        #print "cmdOff: ", cmdOff
+        print "cmdOff: ", cmdOff
         taskOff = getManager().createTask(cmdOff)
         taskOff.execute()
         resultOff = taskOff.getResult()
@@ -369,7 +369,7 @@ class Laser(DAQGeneric):
                 self.sigPowerChanged.emit(powerOn, powerOk)
                 return powerOn, powerOk
             else:
-                logMsg("No laser pulse detected by power indicator '%s' while measuring Laser.outputPower()" % powerInd[0], msgType='error')
+                raise Exception("No laser pulse detected by power indicator '%s' while measuring Laser.outputPower()" % powerInd[0])
             
         ## return the power specified in the config file if there's no powerIndicator
         else:
@@ -395,8 +395,6 @@ class Laser(DAQGeneric):
 
     def checkPowerValidity(self, power):
         """Return boolean indicating whether power is inside the expected power range."""
-        if power is None:
-            return False
         with self.variableLock:
             diff = self.params['expectedPower']*self.params['tolerance']/100.0
             expected = self.params['expectedPower']
