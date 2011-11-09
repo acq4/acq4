@@ -346,7 +346,6 @@ class ListParameterItem(WidgetParameterItem):
         self.widget = w
         self.limitsChanged(self.param, self.param.opts['limits'])
         if len(self.forward) > 0:
-            print self.forward
             self.setValue(self.param.value())
         return w
         
