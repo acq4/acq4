@@ -390,7 +390,7 @@ class ScannerDeviceGui(QtGui.QWidget):
         ## compute fit error
         errx = abs(erf2(xFit,  loc,  cmd[:, 0])).mean()
         erry = abs(erf2(yFit,  loc,  cmd[:, 1])).mean()
-        print "Fit error:",  errx,  erry
+        #print "Fit error:",  errx,  erry
         self.dev.lastCalData = (loc,  cmd)
         return (list(xFit), list(yFit))
 
