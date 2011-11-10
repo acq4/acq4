@@ -46,7 +46,6 @@ class ImageView(QtGui.QWidget):
         self.imageDisp = None
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        print self.ui
         self.scene = self.ui.graphicsView.sceneObj
         
         self.ignoreTimeLine = False
