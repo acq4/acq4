@@ -180,80 +180,44 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.setAcceptHoverEvents(True)
         
         ## Connect control widgets
-        #QtCore.QObject.connect(c.xMinText, QtCore.SIGNAL('editingFinished()'), self.setManualXScale)
         c.xMinText.editingFinished.connect(self.setManualXScale)
-        #QtCore.QObject.connect(c.xMaxText, QtCore.SIGNAL('editingFinished()'), self.setManualXScale)
         c.xMaxText.editingFinished.connect(self.setManualXScale)
-        #QtCore.QObject.connect(c.yMinText, QtCore.SIGNAL('editingFinished()'), self.setManualYScale)
         c.yMinText.editingFinished.connect(self.setManualYScale)
-        #QtCore.QObject.connect(c.yMaxText, QtCore.SIGNAL('editingFinished()'), self.setManualYScale)
         c.yMaxText.editingFinished.connect(self.setManualYScale)
         
-        #QtCore.QObject.connect(c.xManualRadio, QtCore.SIGNAL('clicked()'), self.updateXScale)
         c.xManualRadio.clicked.connect(lambda: self.updateXScale())
-        #QtCore.QObject.connect(c.yManualRadio, QtCore.SIGNAL('clicked()'), self.updateYScale)
         c.yManualRadio.clicked.connect(lambda: self.updateYScale())
         
-        #QtCore.QObject.connect(c.xAutoRadio, QtCore.SIGNAL('clicked()'), self.updateXScale)
         c.xAutoRadio.clicked.connect(self.updateXScale)
-        #QtCore.QObject.connect(c.yAutoRadio, QtCore.SIGNAL('clicked()'), self.updateYScale)
         c.yAutoRadio.clicked.connect(self.updateYScale)
 
-        #QtCore.QObject.connect(c.xAutoPercentSpin, QtCore.SIGNAL('valueChanged(int)'), self.replot)
         c.xAutoPercentSpin.valueChanged.connect(self.replot)
-        #QtCore.QObject.connect(c.yAutoPercentSpin, QtCore.SIGNAL('valueChanged(int)'), self.replot)
         c.yAutoPercentSpin.valueChanged.connect(self.replot)
         
-        #QtCore.QObject.connect(c.xLogCheck, QtCore.SIGNAL('toggled(bool)'), self.setXLog)
-        #QtCore.QObject.connect(c.yLogCheck, QtCore.SIGNAL('toggled(bool)'), self.setYLog)
-
-        #QtCore.QObject.connect(c.alphaGroup, QtCore.SIGNAL('toggled(bool)'), self.updateAlpha)
         c.alphaGroup.toggled.connect(self.updateAlpha)
-        #QtCore.QObject.connect(c.alphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateAlpha)
         c.alphaSlider.valueChanged.connect(self.updateAlpha)
-        #QtCore.QObject.connect(c.autoAlphaCheck, QtCore.SIGNAL('toggled(bool)'), self.updateAlpha)
         c.autoAlphaCheck.toggled.connect(self.updateAlpha)
 
-        #QtCore.QObject.connect(c.gridGroup, QtCore.SIGNAL('toggled(bool)'), self.updateGrid)
         c.gridGroup.toggled.connect(self.updateGrid)
-        #QtCore.QObject.connect(c.gridAlphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateGrid)
         c.gridAlphaSlider.valueChanged.connect(self.updateGrid)
 
-        #QtCore.QObject.connect(c.powerSpectrumGroup, QtCore.SIGNAL('toggled(bool)'), self.updateSpectrumMode)
         c.powerSpectrumGroup.toggled.connect(self.updateSpectrumMode)
-        #QtCore.QObject.connect(c.saveSvgBtn, QtCore.SIGNAL('clicked()'), self.saveSvgClicked)
         c.saveSvgBtn.clicked.connect(self.saveSvgClicked)
-        #QtCore.QObject.connect(c.saveImgBtn, QtCore.SIGNAL('clicked()'), self.saveImgClicked)
+        c.saveSvgCurvesBtn.clicked.connect(self.saveSvgCurvesClicked)
         c.saveImgBtn.clicked.connect(self.saveImgClicked)
-        #QtCore.QObject.connect(c.saveCsvBtn, QtCore.SIGNAL('clicked()'), self.saveCsvClicked)
         c.saveCsvBtn.clicked.connect(self.saveCsvClicked)
         
-        #QtCore.QObject.connect(c.gridGroup, QtCore.SIGNAL('toggled(bool)'), self.updateGrid)
-        #QtCore.QObject.connect(c.gridAlphaSlider, QtCore.SIGNAL('valueChanged(int)'), self.updateGrid)
-        
-        #QtCore.QObject.connect(self.ctrl.xLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.xLinkComboChanged)
         self.ctrl.xLinkCombo.currentIndexChanged.connect(self.xLinkComboChanged)
-        #QtCore.QObject.connect(self.ctrl.yLinkCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.yLinkComboChanged)
         self.ctrl.yLinkCombo.currentIndexChanged.connect(self.yLinkComboChanged)
 
-        #QtCore.QObject.connect(c.downsampleSpin, QtCore.SIGNAL('valueChanged(int)'), self.updateDownsampling)
         c.downsampleSpin.valueChanged.connect(self.updateDownsampling)
 
-        #QtCore.QObject.connect(self.ctrl.avgParamList, QtCore.SIGNAL('itemClicked(QListWidgetItem*)'), self.avgParamListClicked)
         self.ctrl.avgParamList.itemClicked.connect(self.avgParamListClicked)
-        #QtCore.QObject.connect(self.ctrl.averageGroup, QtCore.SIGNAL('toggled(bool)'), self.avgToggled)
         self.ctrl.averageGroup.toggled.connect(self.avgToggled)
         
-        #QtCore.QObject.connect(self.ctrl.pointsGroup, QtCore.SIGNAL('toggled(bool)'), self.updatePointMode)
-        #QtCore.QObject.connect(self.ctrl.autoPointsCheck, QtCore.SIGNAL('toggled(bool)'), self.updatePointMode)
-        
-        #QtCore.QObject.connect(self.ctrl.maxTracesCheck, QtCore.SIGNAL('toggled(bool)'), self.updateDecimation)
         self.ctrl.maxTracesCheck.toggled.connect(self.updateDecimation)
-        #QtCore.QObject.connect(self.ctrl.maxTracesSpin, QtCore.SIGNAL('valueChanged(int)'), self.updateDecimation)
         self.ctrl.maxTracesSpin.valueChanged.connect(self.updateDecimation)
-        #QtCore.QObject.connect(c.xMouseCheck, QtCore.SIGNAL('toggled(bool)'), self.mouseCheckChanged)
         c.xMouseCheck.toggled.connect(self.mouseCheckChanged)
-        #QtCore.QObject.connect(c.yMouseCheck, QtCore.SIGNAL('toggled(bool)'), self.mouseCheckChanged)
         c.yMouseCheck.toggled.connect(self.mouseCheckChanged)
 
         self.xLinkPlot = None
@@ -261,11 +225,6 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.linksBlocked = False
         self.manager = None
         
-        #self.showLabel('right', False)
-        #self.showLabel('top', False)
-        #self.showLabel('title', False)
-        #self.showLabel('left', False)
-        #self.showLabel('bottom', False)
         self.showScale('right', False)
         self.showScale('top', False)
         self.showScale('left', True)
@@ -814,7 +773,7 @@ class PlotItem(QtGui.QGraphicsWidget):
 
 
     ## This is bullshit.
-    def writeSvg(self, fileName=None):
+    def writeSvgCurves(self, fileName=None):
         if fileName is None:
             self.fileDialog = FileDialog()
             if PlotItem.lastFileDir is not None:
@@ -908,47 +867,47 @@ class PlotItem(QtGui.QGraphicsWidget):
         
         
     
-    #def writeSvg(self, fileName=None):
-        #if fileName is None:
-            #fileName = QtGui.QFileDialog.getSaveFileName()
-        #fileName = str(fileName)
-        #PlotItem.lastFileDir = os.path.dirname(fileName)
+    def writeSvg(self, fileName=None):
+        if fileName is None:
+            fileName = QtGui.QFileDialog.getSaveFileName()
+        fileName = str(fileName)
+        PlotItem.lastFileDir = os.path.dirname(fileName)
         
-        #self.svg = QtSvg.QSvgGenerator()
-        #self.svg.setFileName(fileName)
-        #res = 120.
-        #view = self.scene().views()[0]
-        #bounds = view.viewport().rect()
-        #bounds = QtCore.QRectF(0, 0, bounds.width(), bounds.height())
+        self.svg = QtSvg.QSvgGenerator()
+        self.svg.setFileName(fileName)
+        res = 120.
+        view = self.scene().views()[0]
+        bounds = view.viewport().rect()
+        bounds = QtCore.QRectF(0, 0, bounds.width(), bounds.height())
         
-        #self.svg.setResolution(res)
-        #self.svg.setViewBox(bounds)
+        self.svg.setResolution(res)
+        self.svg.setViewBox(bounds)
         
-        #self.svg.setSize(QtCore.QSize(bounds.width(), bounds.height()))
+        self.svg.setSize(QtCore.QSize(bounds.width(), bounds.height()))
         
-        #painter = QtGui.QPainter(self.svg)
-        #view.render(painter, bounds)
+        painter = QtGui.QPainter(self.svg)
+        view.render(painter, bounds)
         
-        #painter.end()
+        painter.end()
         
-        ### Workaround to set pen widths correctly
-        #import re
-        #data = open(fileName).readlines()
-        #for i in range(len(data)):
-            #line = data[i]
-            #m = re.match(r'(<g .*)stroke-width="1"(.*transform="matrix\(([^\)]+)\)".*)', line)
-            #if m is not None:
-                ##print "Matched group:", line
-                #g = m.groups()
-                #matrix = map(float, g[2].split(','))
-                ##print "matrix:", matrix
-                #scale = max(abs(matrix[0]), abs(matrix[3]))
-                #if scale == 0 or scale == 1.0:
-                    #continue
-                #data[i] = g[0] + ' stroke-width="%0.2g" ' % (1.0/scale) + g[1] + '\n'
-                ##print "old line:", line
-                ##print "new line:", data[i]
-        #open(fileName, 'w').write(''.join(data))
+        ## Workaround to set pen widths correctly
+        import re
+        data = open(fileName).readlines()
+        for i in range(len(data)):
+            line = data[i]
+            m = re.match(r'(<g .*)stroke-width="1"(.*transform="matrix\(([^\)]+)\)".*)', line)
+            if m is not None:
+                #print "Matched group:", line
+                g = m.groups()
+                matrix = map(float, g[2].split(','))
+                #print "matrix:", matrix
+                scale = max(abs(matrix[0]), abs(matrix[3]))
+                if scale == 0 or scale == 1.0:
+                    continue
+                data[i] = g[0] + ' stroke-width="%0.2g" ' % (1.0/scale) + g[1] + '\n'
+                #print "old line:", line
+                #print "new line:", data[i]
+        open(fileName, 'w').write(''.join(data))
         
         
     def writeImage(self, fileName=None):
@@ -1132,8 +1091,12 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.mousePos = ev.pos()
         self.mouseScreenPos = ev.screenPos()
         
+        
     def ctrlBtnClicked(self):
         self.ctrlMenu.popup(self.mouseScreenPos)
+        
+    #def contextMenuEvent(self, ev):  ## only after button release!
+        #self.ctrlMenu.popup(self.mouseScreenPos)
 
     def getLabel(self, key):
         pass
@@ -1213,54 +1176,15 @@ class PlotItem(QtGui.QGraphicsWidget):
 
     def saveSvgClicked(self):
         self.writeSvg()
-        #fileName = QtGui.QFileDialog.getSaveFileName()        
-        #self.writeSvg(fileName)
-
-        # QFileDialog seems to be broken under OSX
-        #self.fileDialog = FileDialog()
-        ##if PlotItem.lastFileDir is not None:
-            ##self.fileDialog.setDirectory(PlotItem.lastFileDir)
-        #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
-        #self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
-        #if PlotItem.lastFileDir is not None:
-            #self.fileDialog.setDirectory(PlotItem.lastFileDir)
         
-        #self.fileDialog.show()
-        ##QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.writeSvg)
-        #self.fileDialog.fileSelected.connect(self.writeSvg)
-            
-    #def svgFileSelected(self, fileName):
-        ##PlotWidget.lastFileDir = os.path.split(fileName)[0]
-        #self.writeSvg(str(fileName))
-
+    def saveSvgCurvesClicked(self):
+        self.writeSvgCurves()
+        
     def saveImgClicked(self):
         self.writeImage()
-        #self.fileDialog = FileDialog()
-        ##if PlotItem.lastFileDir is not None:
-            ##self.fileDialog.setDirectory(PlotItem.lastFileDir)
-        #if PlotItem.lastFileDir is not None:
-            #self.fileDialog.setDirectory(PlotItem.lastFileDir)
-        #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
-        #self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
-        #self.fileDialog.show()
-        ##QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.writeImage)
-        #self.fileDialog.fileSelected.connect(self.writeImage)
             
     def saveCsvClicked(self):
         self.writeCsv()
-        #self.fileDialog = FileDialog()
-        ##if PlotItem.lastFileDir is not None:
-            ##self.fileDialog.setDirectory(PlotItem.lastFileDir)
-        #if PlotItem.lastFileDir is not None:
-            #self.fileDialog.setDirectory(PlotItem.lastFileDir)
-        #self.fileDialog.setFileMode(QtGui.QFileDialog.AnyFile)
-        #self.fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptSave)
-        #self.fileDialog.show()
-        ##QtCore.QObject.connect(self.fileDialog, QtCore.SIGNAL('fileSelected(const QString)'), self.writeCsv)
-        #self.fileDialog.fileSelected.connect(self.writeCsv)
-    #def imgFileSelected(self, fileName):
-        ##PlotWidget.lastFileDir = os.path.split(fileName)[0]
-        #self.writeImage(str(fileName))
       
 
 class PlotWidgetManager(QtCore.QObject):
