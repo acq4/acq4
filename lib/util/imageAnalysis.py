@@ -15,6 +15,10 @@ def gaussian2D(v, x):
     return (v[0] * exp( - ((x[0]-v[1])**2 + (x[1]-v[2])**2) / (0.25 * v[3]**2))) + v[4]
 
 def fitGaussian2D(image, guess):
+    """
+    Fit a 2D gaussian to an image. 
+    guess is [amplitude, x offset, y offset, width, Z offset]
+    """
     #func = lambda x, y: gaussian2D(guess, [x, y])
     erf = lambda v, img: (fromfunction(lambda x, y: gaussian2D(v, [x, y]), img.shape) - img).flatten()
     return leastsq(erf, guess, image)
