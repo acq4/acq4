@@ -6,18 +6,27 @@ from PyQt4 import QtGui, QtCore
 from lib.analysis.AnalysisModule import AnalysisModule
 from collections import OrderedDict
 import pyqtgraph as pg
-#from metaarray import MetaArray
+from metaarray import MetaArray
 import numpy as np
 import functions as fn
 import ProgressDialog
+import scipy.optimize
 
 class DepthProfiler(AnalysisModule):
     def __init__(self, host):
         AnalysisModule.__init__(self, host)
         
+        self.ctrl = QtGui.QWidget()
+        l = QtGui.QVBoxLayout()
+        self.ctrl.setLayout(l)
         self.analyzeBtn = QtGui.QPushButton('Analyze')
-        self.analyzeBtn.setCheckable(True)
         self.analyzeBtn.clicked.connect(self.updateProfiles)
+        self.saveBtn = QtGui.QPushButton('Save')
+        self.saveBtn.clicked.connect(self.save)
+        l.addWidget(self.analyzeBtn)
+        l.addWidget(self.saveBtn)
+        
+        
         
         # Setup basic GUI
         self._elements_ = OrderedDict([
@@ -25,19 +34,20 @@ class DepthProfiler(AnalysisModule):
             ('profiles', {'type': 'plot', 'pos': ('bottom', 'File Loader'), 'size': (300, 300)}),
             ('result table', {'type': 'table', 'pos': ('below', 'profiles')}),
             ('profile fits', {'type': 'plot', 'pos': ('below', 'result table'), 'size': (300, 300)}),
-            ('view', {'type': 'viewBox', 'pos': ('right', 'File Loader'), 'size': (300,300), 'args': {'lockAspect': True, 'invertY': True}}),
+            #('view', {'type': 'viewBox', 'pos': ('right', 'File Loader'), 'size': (300,300), 'args': {'lockAspect': True, 'invertY': True}}),
+            ('view', {'type': 'imageView', 'pos': ('right', 'File Loader'), 'size': (300,300)}),
             ('normalized', {'type': 'imageView', 'pos': ('right', 'view'), 'size': (300,300)}),
             ('total', {'type': 'plot', 'pos': ('right', 'profiles'), 'size': (300, 100)}),
             ('peak', {'type': 'plot', 'pos': ('bottom', 'total'), 'size': (300, 100)}),
             ('width', {'type': 'plot', 'pos': ('bottom', 'peak'), 'size': (300, 100)}),
-            ('ctrl', {'type': 'ctrl', 'object': self.analyzeBtn, 'pos': ('bottom', 'File Loader'), 'size': (100, 20)}),
+            ('ctrl', {'type': 'ctrl', 'object': self.ctrl, 'pos': ('bottom', 'File Loader'), 'size': (100, 20)}),
         ])
         self.initializeElements()
         
         self.image = None
-        self.imageItem = pg.ImageItem()
-        view = self.getElement('view', create=True).centralWidget
-        view.addItem(self.imageItem)
+        #self.imageItem = pg.ImageItem()
+        self.view = self.getElement('view', create=True)
+        #view.addItem(self.imageItem)
         
         self.dataRgn = pg.widgets.RectROI(pos=(120,0), size=(100,100), pen=(0,255,0))
         self.dataRgn.addRotateHandle((1,0), (0.5, 0.5))
@@ -45,13 +55,13 @@ class DepthProfiler(AnalysisModule):
         self.bgRgn.addRotateHandle((1,0), (0.5, 0.5))
         self.bgRgn.addScaleHandle((1, 0.5), (0, 0.5))
         #self.bgRgn.setParentItem(self.dataRgn)
-        view.addItem(self.bgRgn)
-        view.addItem(self.dataRgn)
+        self.view.addItem(self.bgRgn)
+        self.view.addItem(self.dataRgn)
         
         self.dataRgn.sigRegionChanged.connect(self.updateImage)
         self.bgRgn.sigRegionChanged.connect(self.updateImage)
-        self.dataRgn.sigRegionChangeFinished.connect(self.updateProfiles)
-        self.bgRgn.sigRegionChangeFinished.connect(self.updateProfiles)
+        #self.dataRgn.sigRegionChangeFinished.connect(self.updateProfiles)
+        #self.bgRgn.sigRegionChangeFinished.connect(self.updateProfiles)
         
 
     def loadFileRequested(self, dh):
@@ -63,17 +73,30 @@ class DepthProfiler(AnalysisModule):
         if not dh.isFile():
             return
             
-        
+        self.fileHandle = dh
         self.image = dh.read()
-        self.imageItem.setImage(self.image)
-        self.px = dh.info()['pixelSize']
+        self.view.setImage(self.image)
+        self.px = dh.info().get('pixelSize', (1,1))
+        
+        try:
+            f2 = dh.parent()[dh.shortName() + "_depthProfile.ma"]
+            d2 = f2.read()
+            state1 = d2._info[-1]['dataRegion']
+            state2 = d2._info[-1]['backgroundRegion']
+            self.dataRgn.setState(state1)
+            self.bgRgn.setState(state2)
+            self.showResults(d2)
+        except KeyError:
+            raise
+            pass
+        
         
     def updateImage(self):
         self.bgRgn.setSize([self.bgRgn.size()[0], self.dataRgn.size()[1]+1])
         
-        bg = self.bgRgn.getArrayRegion(self.image, self.imageItem)
+        bg = self.bgRgn.getArrayRegion(self.image, self.view.imageItem)
         bg = bg.mean(axis=0)
-        data = self.dataRgn.getArrayRegion(self.image, self.imageItem)
+        data = self.dataRgn.getArrayRegion(self.image, self.view.imageItem)
         data = data.astype(float) / bg[np.newaxis, :data.shape[1]]
         self.normData = data
         norm = self.getElement('normalized')
@@ -81,8 +104,8 @@ class DepthProfiler(AnalysisModule):
         
         
     def updateProfiles(self):
-        if not self.analyzeBtn.isChecked():
-            return
+        #if not self.analyzeBtn.isChecked():
+            #return
         plots = self.getElement('profiles'), self.getElement('profile fits')
         for plot in plots:
             plot.clear()
@@ -93,20 +116,27 @@ class DepthProfiler(AnalysisModule):
         
         def slopeGaussian(v, x):  ## gaussian + slope
             return fn.gaussian(v[:4], x) + v[4] * x
+        def gaussError(v, x, y):  ## center-weighted error functionfor sloped gaussian
+            err = abs(y-slopeGaussian(v, x))
+            v2 = [2.0, v[1], v[2]*0.3, 1.0, 0.0]
+            return err * slopeGaussian(v2, x)
         
         with ProgressDialog.ProgressDialog("Processing..", 0, height-1, cancelText=None) as dlg:
             for i in range(height):
                 row = self.normData[:, i]
-                guess = [-1.0, xVals[int(width/2)], self.px[0]*10, 1.0, 0.0]
+                guess = [row.max()-row.min(), xVals[int(width/2)], self.px[0]*3, row.max(), 0.0]
                 #fit = fn.fitGaussian(xVals=xVals, yVals=row, guess=guess)[0]
-                fit = fn.fit(slopeGaussian, xVals=xVals, yVals=row, guess=guess)[0]
+                #fit = fn.fit(slopeGaussian, xVals=xVals, yVals=row, guess=guess)[0]
+                fit = scipy.optimize.leastsq(gaussError, guess, args=(xVals, row))[0] 
                 fit[2] = abs(fit[2])
                 dist = fit[1] / (self.px[0] * width / 2.)
                 #print fit, dist
                 ## sanity check on fit
-                if dist-1 > 0.5 or fit[3] > 2.0:
-                    fit = guess[:]
-                    fit[0] = 0
+                if abs(dist-1) > 0.5 or (0.5 < fit[3]/np.median(row) > 2.0):
+                    #print "rejected:", fit, fit[3]/np.median(row), self.px[0]*width/2.
+                    #fit = guess[:]
+                    #fit[0] = 0
+                    fit = [0,0,0,0,0]
                 else:
                     # round 2: eliminate anomalous points and re-fit
                     fitCurve = slopeGaussian(fit, xVals)
@@ -115,7 +145,6 @@ class DepthProfiler(AnalysisModule):
                     mask = abs(diff) < std * 1.5
                     x2 = xVals[mask]
                     y2 = row[mask]
-                    print (1-mask).sum()
                     fit = fn.fit(slopeGaussian, xVals=x2, yVals=y2, guess=fit)[0]
                 fits.append(fit)
                 dlg += 1
@@ -124,21 +153,53 @@ class DepthProfiler(AnalysisModule):
         
         for i in range(len(fits)):  ## plot in reverse order
             pen = pg.intColor(height-i, height*1.4)
-            plots[0].plot(self.normData[:, -1-i], pen=pen)
-            plots[1].plot(slopeGaussian(fits[-1-i], xVals), pen=pen)
+            plots[0].plot(y=self.normData[:, -1-i], x=xVals, pen=pen)
+            plots[1].plot(y=slopeGaussian(fits[-1-i], xVals), x=xVals, pen=pen)
+
         
+
         yVals = np.linspace(0, self.px[0]*height, height)
+        arr = np.array(fits)
+        info = [
+                {'name': 'depth', 'units': 'm', 'values': yVals},
+                {'name': 'fitParams', 'cols': [
+                    {'name': 'Amplitude'},
+                    {'name': 'X Offset'},
+                    {'name': 'Sigma', 'units': 'm'},
+                    {'name': 'Y Offset'},
+                    {'name': 'Slope'},                    
+                    ]},
+                {
+                    'sourceImage': self.fileHandle.name(),
+                    'dataRegion': self.dataRgn.saveState(),
+                    'backgroundRegion': self.bgRgn.saveState(),
+                    'description': """
+                    The source image was normalized for background fluorescence, then each row was fit to a sloped gaussian function:
+                        v[0] * np.exp(-((x-v[1])**2) / (2 * v[2]**2)) + v[3] + v[4] * x
+                    The fit parameters v[0..4] for each image row are stored in the columns of this data set.
+                    """
+                }
+            ]
+        #print info
+        self.data = MetaArray(arr, info=info)
+        self.showResults(self.data)
+        
+    def showResults(self, data):
         plots = self.getElement('total'), self.getElement('peak'), self.getElement('width')
         for p in plots:
             p.clear()
-            p.setLabel('bottom', 'depth', units='m')
-        plots[0].plot(x=yVals, y=[f[0]*f[2] for f in fits])
+        amp = data['fitParams': 'Amplitude']
+        sig = data['fitParams': 'Sigma']
+        plots[0].plot(x=data.xvals('depth'), y=amp*sig)
         plots[0].setLabel('left', 'total')
-        plots[1].plot(x=yVals, y=[f[0] for f in fits])
-        plots[1].setLabel('left', 'amplitude')
-        plots[2].plot(x=yVals, y=[f[2] for f in fits])
-        plots[2].setLabel('left', 'width', units='m')
+        plots[1].plot(amp)
+        plots[2].plot(sig)
         table = self.getElement('result table')
-        table.setData(np.array(fits))
+        table.setData(data)
+        
+    def save(self):
+        fn = self.fileHandle.shortName() + "_depthProfile.ma"
+        self.fileHandle.parent().writeFile(self.data, fn)
+        
         
         
