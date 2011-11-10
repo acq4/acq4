@@ -34,6 +34,7 @@ class Scanner(Device):
             #fd = open(self.targetFileName)
             #self.targetList = pickle.load(fd)
             #fd.close()
+        dm.declareInterface(name, ['scanner'], self)
     
     #def quit(self):
         #Device.quit(self)

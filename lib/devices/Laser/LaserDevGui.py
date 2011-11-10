@@ -110,6 +110,8 @@ class LaserDevGui(QtGui.QWidget):
         except:
             pass
         
+        self.powerMeterChanged() ## populate channel combo for default power meter
+        
     def currentPowerToggled(self, b):
         if b:
             self.dev.setParam(useExpectedPower=False)

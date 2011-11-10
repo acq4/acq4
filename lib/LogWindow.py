@@ -535,9 +535,9 @@ class LogWidget(QtGui.QWidget):
             return
         if fileName[-5:] != '.html':
             fileName += '.html'
-        doc = self.ui.output.document().toHtml()
+        doc = self.ui.output.document().toHtml('utf-8')
         f = open(fileName, 'w')
-        f.write(doc)
+        f.write(doc.encode('utf-8'))
         f.close()
         
         

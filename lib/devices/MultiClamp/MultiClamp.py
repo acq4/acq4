@@ -71,6 +71,8 @@ class MultiClamp(Device):
             except:
                 pass
             raise
+        
+        dm.declareInterface(name, ['clamp'], self)
 
     def listChannels(self):
         chans = {}
