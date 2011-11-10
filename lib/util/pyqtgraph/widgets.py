@@ -83,6 +83,14 @@ class ROI(QtGui.QGraphicsObject):
     
     def getState(self):
         return self.state.copy()
+        
+    def saveState(self):
+        """Return the state of the widget in a format suitable for storing to disk."""
+        state = {}
+        state['pos'] = tuple(self.state['pos'])
+        state['size'] = tuple(self.state['size'])
+        state['angle'] = self.state['angle']
+        return state
     
     def setState(self, state):
         self.setPos(state['pos'], update=False)
