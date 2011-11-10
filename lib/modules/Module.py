@@ -7,6 +7,7 @@ class Module(QtCore.QObject):
         self.name = name
         self.manager = manager
         self.config = config
+        manager.declareInterface(name, ['module'], self)
 
     ## deprecated. Use interfaces instead.
     #def hasInterface(self, interface):

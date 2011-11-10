@@ -13,6 +13,7 @@ class Device(QtCore.QObject):
         self._lock_ = Mutex(QtCore.QMutex.Recursive)  ## no, good idea
         self._lock_tb_ = None
         self.dm = deviceManager
+        self.dm.declareInterface(name, ['device'], self)
         #self.config = config
         self.name = name
     

@@ -15,7 +15,7 @@ def ftrace(func):
 
 class Microscope(Device):
     
-    sigObjectiveChanged = QtCore.Signal(object)
+    sigObjectiveChanged = QtCore.Signal(object) ## (objective, index, lastObjective)
     sigObjectiveListChanged = QtCore.Signal()
     sigPositionChanged = QtCore.Signal(object)
     

@@ -108,6 +108,7 @@ class Camera(DAQGeneric):
             except:
                 printExc("Error default setting camera parameters:")
         #print "Camera: no config params to set."
+        dm.declareInterface(name, ['camera'], self)
     
     def setupCamera(self):
         """Prepare the camera at least so that get/setParams will function correctly"""
