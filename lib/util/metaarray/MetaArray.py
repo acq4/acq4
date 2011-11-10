@@ -947,7 +947,7 @@ class MetaArray(np.ndarray):
                 v[-v2.shape[0]:] = v2
             f.close()
         else:
-            f = h5py.File(fileName)
+            f = h5py.File(fileName, 'w')
             f.attrs['MetaArray'] = MetaArray.version
             #print dsOpts
             f.create_dataset('data', data=self.view(np.ndarray), **dsOpts)
