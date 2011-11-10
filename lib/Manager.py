@@ -610,7 +610,6 @@ Valid options are:
         
     ## These functions just wrap the functionality of an InterfaceDirectory
     def declareInterface(self, *args, **kargs):  ## args should be name, [types..], object  
-        print "declare:", args, kargs
         return self.interfaceDir.declareInterface(*args, **kargs)
         
     def removeInterface(self, *args, **kargs):
