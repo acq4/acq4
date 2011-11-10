@@ -84,27 +84,37 @@ class LaserProtoGui(DAQGenericProtoGui):
         ## catch self.powerWidget.sigDataChanged and connect it to functions that calculate and plot raw shutter and qswitch traces
         self.powerWidget.sigDataChanged.connect(self.powerCmdChanged)
         self.ui.checkPowerBtn.clicked.connect(self.dev.outputPower)
-        self.dev.sigPowerChanged.connect(self.laserPowerChanged)
+        self.dev.sigOutputPowerChanged.connect(self.laserPowerChanged)
+        self.dev.sigSamplePowerChanged.connect(self.samplePowerChanged)
+        
         
         self.dev.outputPower()
         
         
     def laserPowerChanged(self, power, valid):
-        samplePower = self.dev.samplePower(power)
+        #samplePower = self.dev.samplePower(power)  ## we should get another signal for this later..
         #samplePower = power*self.dev.getParam('scopeTransmission')
             
         
         ## update label
-        self.ui.outputPowerLabel.setText(siFormat(power, suffix='W'))
-        if samplePower is None:
-            self.ui.samplePowerLabel.setText("?")
+        if power is None:
+            self.ui.outputPowerLabel.setText("?")
         else:
-            self.ui.samplePowerLabel.setText(siFormat(samplePower, suffix='W'))
+            self.ui.outputPowerLabel.setText(siFormat(power, suffix='W'))
+            
         if not valid:
             self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #B00}")
         else:
             self.ui.outputPowerLabel.setStyleSheet("QLabel {color: #000}")
         
+
+    
+    def samplePowerChanged(self, power):
+        if power is None:
+            self.ui.samplePowerLabel.setText("?")
+        else:
+            self.ui.samplePowerLabel.setText(siFormat(power, suffix='W'))
+
         if self.dev.hasPCell:
             raise Exception('stub')
         else:
@@ -113,11 +123,11 @@ class LaserProtoGui(DAQGenericProtoGui):
                 en = {}
                 for param in self.powerWidget.ui.waveGeneratorWidget.stimParams:
                     en[param.name()] = param['sum']
-                self.powerWidget.setMeta('y', value=samplePower, readonly=True)
+                self.powerWidget.setMeta('y', value=power, readonly=True)
                 for param in self.powerWidget.ui.waveGeneratorWidget.stimParams:
                     param['sum'] = en[param.name()]
             else:
-                self.powerWidget.setMeta('y', value=samplePower, readonly=True)
+                self.powerWidget.setMeta('y', value=power, readonly=True)
     
     def saveState(self):
         """Return a dictionary representing the current state of the widget."""
@@ -139,6 +149,8 @@ class LaserProtoGui(DAQGenericProtoGui):
         ## check power before starting protocol.
         if self.ui.checkPowerCheck.isChecked():
             power, valid = self.dev.outputPower()  ## request current power from laser
+            if power is None:
+                raise HelpfulException("The current laser power for '%s' is unknown." % self.dev.name)
             if not valid:
                 powerStr = siFormat(power, suffix='W')
                 raise HelpfulException("The current laser power for '%s' (%s) is outside the expected range." % (self.dev.name, powerStr))

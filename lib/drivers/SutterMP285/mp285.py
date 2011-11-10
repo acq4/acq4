@@ -274,7 +274,7 @@ class SutterMP285(object):
                 errors.append((ord(err), "Unknown error code", ""))
         raise MP285Error(errors)
                     
-    def readPacket(self, expect=0, timeout=2, block=True):
+    def readPacket(self, expect=0, timeout=3, block=True):
         ## Read until a carriage return is encountered (or timeout).
         ## If expect is >0, then try to get a packet of that length, ignoring \r within that data
         ## if block is False, then return immediately if no data is available.
