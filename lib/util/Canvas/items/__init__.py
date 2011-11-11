@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os, inspect
 from CanvasItem import CanvasItem
+#import pyqtgraph.canvas.items as items
 
 def listMods():
     d = os.path.split(__file__)[0]
@@ -12,15 +13,17 @@ def listMods():
             files.append(f[:-3])
     return files
 
+#_ITEMLIST_ = items.listItems()  ## get original list of items from pyqtgraph.canvas
 _ITEMLIST_ = []
+
+## add our custom items to the list
 for i in listMods():
     mod = __import__(i, globals(), locals())
     for k in dir(mod):
         o = getattr(mod, k)
-        if inspect.isclass(o) and issubclass(o, CanvasItem):
+        if inspect.isclass(o) and issubclass(o, CanvasItem) and o not in _ITEMLIST_:
             locals()[k] = o
             _ITEMLIST_.append(o)
-            
+
 def listItems():
     return _ITEMLIST_[:]
-    

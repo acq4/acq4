@@ -139,7 +139,7 @@ class Laser(DAQGeneric):
         self.scope.sigObjectiveChanged.connect(self.objectiveChanged)
         
         
-        #manager.declareInterface(name, ['laser'], self)
+        manager.declareInterface(name, ['laser'], self)
         
         
     def configDir(self):
@@ -370,7 +370,7 @@ class Laser(DAQGeneric):
         wave[:shutterDelay*rate] = 0
         cmdOn[self.name]={'shutterMode':'open', 'switchWaveform':wave}
         
-        print "cmdOff: ", cmdOff
+        #print "cmdOff: ", cmdOff
         taskOff = getManager().createTask(cmdOff)
         taskOff.execute()
         resultOff = taskOff.getResult()

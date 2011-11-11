@@ -34,12 +34,15 @@ class SutterMP285(Device):
         ]
         self.maxSpeed = 1e-3
         self.loadConfig()
-        self.mThread = SutterMP285Thread(self, self.port, self.baud, self.scale, self.limits, self.maxSpeed)
-        #self.posxyz = [0, 0, 0];
-        #QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('positionChanged'), self.posChanged)
+        
+        self.mp285 = SutterMP285Driver(self.port, self.baud)
+        self.driverLock = Mutex(QtCore.QMutex.Recursive)
+        
+        self.mThread = SutterMP285Thread(self, self.mp285, self.driverLock, self.scale, self.limits, self.maxSpeed)
         self.mThread.sigPositionChanged.connect(self.posChanged)
-        #QtCore.QObject.connect(self.mThread, QtCore.SIGNAL('buttonChanged'), self.btnChanged)
         self.mThread.start()
+        
+        dm.declareInterface(name, ['stage'], self)
 
     def loadConfig(self):
         cfg = self.dm.readConfigFile(self.configFile)
@@ -77,28 +80,15 @@ class SutterMP285(Device):
         self.mThread.stop(block=True)
 
     def posChanged(self, data):  #potentially have to modify this
-        #QtCore.pyqtRemoveInputHook()
-        #pdb.set_trace()
-        #print "SutterMP285: posChanged"
         with self.lock:
-            #print "SutterMP285: posChanged locked"
-
             self.pos[:len(data['abs'])] = data['abs']
             rel = [0] * len(self.pos)
             rel[:len(data['rel'])] = data['rel']
-        #print "SutterMP285: posChanged emit.."
-        #print "position change:", rel, self.pos
-        #self.emit(QtCore.SIGNAL('positionChanged'), {'rel': rel, 'abs': self.pos[:]})
         self.sigPositionChanged.emit({'rel': rel, 'abs': self.pos[:]})
-        #print "SutterMP285: posChanged done"
 
     def getPosition(self):
         with self.lock:
             return self.pos[:]
-
-#    def getPositionxyz(self):
-#	with self.lock:
-#            return self.posxyz[:];
 
     def getState(self):
         with self.lock:
@@ -106,6 +96,13 @@ class SutterMP285(Device):
 
     def deviceInterface(self, win):
         return SMP285Interface(self, win)
+
+    def moveBy(self, pos):
+        """Move by the specified amounts. 
+        pos must be a sequence (dx, dy, dz) with values in meters."""
+        with self.driverLock:
+            self.mp285.moveBy([dx,dy,dz])
+
 
 class SMP285Interface(QtGui.QWidget):
     def __init__(self, dev, win):
@@ -193,10 +190,12 @@ class SutterMP285Thread(QtCore.QThread):
     sigPositionChanged = QtCore.Signal(object)
     sigError = QtCore.Signal(object)
 
-    def __init__(self, dev, port, baud, scale, limits, maxSpd):
+    def __init__(self, dev, driver, driverLock, scale, limits, maxSpd):
         QtCore.QThread.__init__(self)
         self.lock = Mutex(QtCore.QMutex.Recursive)
         self.scale = scale
+        self.mp285 = driver
+        self.driverLock = driverLock
         #self.monitor = True
         self.update = False
         self.resolution = 'fine'
@@ -210,7 +209,6 @@ class SutterMP285Thread(QtCore.QThread):
         self.maxSpeed = maxSpd
         
         #self.posxyz = [ 0, 0, 0]
-        self.mp285 = SutterMP285Driver(port, baud)
         
     def setResolution(self, res):
         with self.lock:
@@ -351,7 +349,8 @@ class SutterMP285Thread(QtCore.QThread):
 
     def readPosition(self):
         try:
-            pos = np.array(self.mp285.getPos())
+            with self.driverLock:
+                pos = np.array(self.mp285.getPos())
             return pos*self.scale
         except TimeoutError:
             self.sigError.emit("Read timeout--press reset button on MP285.")
@@ -414,61 +413,28 @@ class SutterMP285Thread(QtCore.QThread):
             for lim in [1,0]:
                 pos, en = self.limits[ax][lim]
                 limits.append(pos/self.scale[ax] if en else None)
-        self.mp285.setLimits(limits)
+        with self.driverLock:
+            self.mp285.setLimits(limits)
         
-    #def read(self):
-        #n = self.sp.inWaiting()
-        #if n > 0:
-            ##print "-- read %d bytes" % n
-            #return self.sp.read(n)
-
-        #return ''
-    
     def _setPos(self, pos, block=True):
         pos = np.array(pos) / self.scale
-        self.mp285.setPos(pos, block=block)
-        #cmd = 'm' + struct.pack('3l', int(pos[0]), int(pos[1]), int(pos[2])) + '\r'
-        #self.sp.write(cmd)
-        #while block:
-            #self.readResponse()
+        with self.driverLock:
+            self.mp285.setPos(pos, block=block)
     
     def stopMove(self):
-        self.mp285.stop()
-        #self.sp.write('\3')
-        #self.readResponse()
+        with self.driverLock:
+            self.mp285.stop()
             
     def _setSpd(self, v, fineStep=True):
         ## This should be done with a calibrated speed table instead.
         v = int(v*1e6)
-        self.mp285.setSpeed(v, fineStep)
+        with self.driverLock:
+            self.mp285.setSpeed(v, fineStep)
             
         
     def getImmediatePos(self):
-        pos = np.array(self.mp285.getImmediatePos())
+        with self.driverLock:
+            pos = np.array(self.mp285.getImmediatePos())
         return pos*self.scale
             
             
-    #def readResponse(self):
-        #start = ptime.time()
-        #while True:
-            #s = self.read()
-            #if len(s) > 0:
-                #if s != '\r' and s[0] != '=':
-                    #print "SutterMP285 Error:", s
-                ##print "return:", repr(s)
-                #break
-            #time.sleep(0.01)
-            #if ptime.time() - start > 10:
-                #raise TimeoutError("Timeout while waiting for response.")
-        
-    #def stat(self, ):
-        #self.sp.write('s\r')
-        #s = self.sp.read(33)
-        #paramNames = ['flags', 'udirx', 'udiry', 'udirz', 'roe_vari', 'uoffset', 'urange', 'pulse', 
-                      #'uspeed', 'indevice', 'flags2', 'jumpspd', 'highspd', 'watch_dog',
-                      #'step_div', 'step_mul', 'xspeed', 'version', 'res1', 'res2']
-        #vals = struct.unpack('4B5H2B7H2B', s[:32])
-        #params = collections.OrderedDict()
-        #for i,n in enumerate(paramNames):
-            #params[n] = vals[i]
-        #return params

@@ -366,7 +366,15 @@ class ViewBox(QtGui.QGraphicsWidget):
             #(self.mousePos[0]-self.pressPos[0])/vs[0], -(self.mousePos[1]-self.pressPos[1])/vs[1])
         #return(ax)
 
-    def setRange(self, ax, min=None, max=None, padding=0.02, update=True):
+    def setRange(self, ax, minimum=None, maximum=None, padding=0.02, update=True):
+        """
+        Set the visible range of the ViewBox.
+        Can be called with a QRectF:
+            setRange(QRectF(x, y, w, h))
+        Or with axis, min, max:
+            setRange(0, xMin, xMax)
+            setRange(1, yMin, yMax)
+        """
         if isinstance(ax, QtCore.QRectF):
             changes = {0: [ax.left(), ax.right()], 1: [ax.top(), ax.bottom()]}
             #if self.aspectLocked is not False:
@@ -377,7 +385,7 @@ class ViewBox(QtGui.QGraphicsWidget):
                     #chax = 1
 
         elif ax in [1,0]:
-            changes = {ax: [min,max]}
+            changes = {ax: [minimum,maximum]}
             #if self.aspectLocked is not False:
                 #ax2 = 1 - ax
                 #ratio = self.aspectLocked
@@ -392,23 +400,24 @@ class ViewBox(QtGui.QGraphicsWidget):
         
         changed = [False, False]
         for ax, range in changes.iteritems():
-            min, max = range
-            if min == max:   ## If we requested 0 range, try to preserve previous scale. Otherwise just pick an arbitrary scale.
+            mn = min(range)
+            mx = max(range)
+            if mn == mx:   ## If we requested 0 range, try to preserve previous scale. Otherwise just pick an arbitrary scale.
                 dy = self.viewRange[ax][1] - self.viewRange[ax][0]
                 if dy == 0:
                     dy = 1
-                min -= dy*0.5
-                max += dy*0.5
+                mn -= dy*0.5
+                mx += dy*0.5
                 padding = 0.0
-            if any(np.isnan([min, max])) or any(np.isinf([min, max])):
-                raise Exception("Not setting range [%s, %s]" % (str(min), str(max)))
+            if any(np.isnan([mn, mx])) or any(np.isinf([mn, mx])):
+                raise Exception("Not setting range [%s, %s]" % (str(mn), str(mx)))
                 
-            p = (max-min) * padding
-            min -= p
-            max += p
+            p = (mx-mn) * padding
+            mn -= p
+            mx += p
             
-            if self.targetRange[ax] != [min, max]:
-                self.targetRange[ax] = [min, max]
+            if self.targetRange[ax] != [mn, mx]:
+                self.targetRange[ax] = [mn, mx]
                 changed[ax] = True
             
         if update:
@@ -457,18 +466,17 @@ class ViewBox(QtGui.QGraphicsWidget):
         if vr.height() == 0 or vr.width() == 0:
             return
         scale = Point(bounds.width()/vr.width(), bounds.height()/vr.height())
-        #print "  scale:", scale
         m = QtGui.QTransform()
         
         ## First center the viewport at 0
         self.childGroup.resetTransform()
         center = self.transform().inverted()[0].map(bounds.center())
         #print "  transform to center:", center
-        if self.yInverted:
-            m.translate(center.x(), -center.y())
+        #if self.yInverted:
+            #m.translate(center.x(), -center.y())
             #print "  inverted; translate", center.x(), center.y()
-        else:
-            m.translate(center.x(), center.y())
+        #else:
+        m.translate(center.x(), center.y())
             #print "  not inverted; translate", center.x(), -center.y()
             
         ## Now scale and translate properly

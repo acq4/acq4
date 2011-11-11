@@ -499,28 +499,35 @@
          <item row="0" column="0">
           <widget class="QPushButton" name="saveSvgBtn">
            <property name="text">
-            <string>SVG</string>
+            <string>SVG - Full Plot</string>
            </property>
           </widget>
          </item>
-         <item row="1" column="0">
+         <item row="2" column="0">
           <widget class="QPushButton" name="saveImgBtn">
            <property name="text">
             <string>Image</string>
            </property>
           </widget>
          </item>
-         <item row="2" column="0">
+         <item row="3" column="0">
           <widget class="QPushButton" name="saveMaBtn">
            <property name="text">
             <string>MetaArray</string>
            </property>
           </widget>
          </item>
-         <item row="3" column="0">
+         <item row="4" column="0">
           <widget class="QPushButton" name="saveCsvBtn">
            <property name="text">
             <string>CSV</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QPushButton" name="saveSvgCurvesBtn">
+           <property name="text">
+            <string>SVG - Scaled Curves</string>
            </property>
           </widget>
          </item>

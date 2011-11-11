@@ -6,7 +6,7 @@ import weakref
 import pyqtgraph.functions as fn
 
 class AxisItem(QtGui.QGraphicsWidget):
-    def __init__(self, orientation, pen=None, linkView=None, parent=None):
+    def __init__(self, orientation, pen=None, linkView=None, parent=None, maxTickLength=-5):
         """
         GraphicsItem showing a single plot axis with ticks, values, and label.
         Can be configured to fit on any side of a plot, and can automatically synchronize its displayed scale with ViewBox items.
@@ -40,7 +40,7 @@ class AxisItem(QtGui.QGraphicsWidget):
         self.labelStyle = {'color': '#CCC'}
         
         self.textHeight = 18
-        self.tickLength = 10
+        self.tickLength = maxTickLength
         self.scale = 1.0
         self.autoScale = True
             
@@ -57,7 +57,7 @@ class AxisItem(QtGui.QGraphicsWidget):
         self.showLabel(False)
         
         self.grid = False
-        self.setCacheMode(self.DeviceCoordinateCache)
+        #self.setCacheMode(self.DeviceCoordinateCache)
             
     def close(self):
         self.scene().removeItem(self.label)
@@ -139,7 +139,7 @@ class AxisItem(QtGui.QGraphicsWidget):
         
     def setHeight(self, h=None):
         if h is None:
-            h = self.textHeight + self.tickLength
+            h = self.textHeight + max(0, self.tickLength)
             if self.label.isVisible():
                 h += self.textHeight
         self.setMaximumHeight(h)
@@ -148,7 +148,7 @@ class AxisItem(QtGui.QGraphicsWidget):
         
     def setWidth(self, w=None):
         if w is None:
-            w = self.tickLength + 40
+            w = max(0, self.tickLength) + 40
             if self.label.isVisible():
                 w += self.textHeight
         self.setMaximumWidth(w)
@@ -211,7 +211,17 @@ class AxisItem(QtGui.QGraphicsWidget):
         
     def boundingRect(self):
         if self.linkedView is None or self.linkedView() is None or self.grid is False:
-            return self.mapRectFromParent(self.geometry())
+            rect = self.mapRectFromParent(self.geometry())
+            ## extend rect if ticks go in negative direction
+            if self.orientation == 'left':
+                rect.setRight(rect.right() - min(0,self.tickLength))
+            elif self.orientation == 'right':
+                rect.setLeft(rect.left() + min(0,self.tickLength))
+            elif self.orientation == 'top':
+                rect.setBottom(rect.bottom() - min(0,self.tickLength))
+            elif self.orientation == 'bottom':
+                rect.setTop(rect.top() + min(0,self.tickLength))
+            return rect
         else:
             return self.mapRectFromParent(self.geometry()) | self.mapRectFromScene(self.linkedView().mapRectToScene(self.linkedView().boundingRect()))
         
@@ -305,7 +315,7 @@ class AxisItem(QtGui.QGraphicsWidget):
             places = max(0, 1-int(np.log10(sp*self.scale)))
         
             ## length of tick
-            h = min(self.tickLength, (self.tickLength*3 / num) - 1.)
+            h = np.clip((self.tickLength*3 / num) - 1., min(0, self.tickLength), max(0, self.tickLength))
             
             ## alpha
             a = min(255, (765. / num) - 1.)
@@ -345,16 +355,16 @@ class AxisItem(QtGui.QGraphicsWidget):
                     self.textHeight = height
                     if self.orientation == 'left':
                         textFlags = QtCore.Qt.AlignRight|QtCore.Qt.AlignVCenter
-                        rect = QtCore.QRectF(tickStop-100, x-(height/2), 100-self.tickLength, height)
+                        rect = QtCore.QRectF(tickStop-100, x-(height/2), 99-max(0,self.tickLength), height)
                     elif self.orientation == 'right':
                         textFlags = QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter
-                        rect = QtCore.QRectF(tickStop+self.tickLength, x-(height/2), 100-self.tickLength, height)
+                        rect = QtCore.QRectF(tickStop+max(0,self.tickLength)+1, x-(height/2), 100-max(0,self.tickLength), height)
                     elif self.orientation == 'top':
                         textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignBottom
-                        rect = QtCore.QRectF(x-100, tickStop-self.tickLength-height, 200, height)
+                        rect = QtCore.QRectF(x-100, tickStop-max(0,self.tickLength)-height, 200, height)
                     elif self.orientation == 'bottom':
                         textFlags = QtCore.Qt.AlignCenter|QtCore.Qt.AlignTop
-                        rect = QtCore.QRectF(x-100, tickStop+self.tickLength, 200, height)
+                        rect = QtCore.QRectF(x-100, tickStop+max(0,self.tickLength), 200, height)
                     
                     p.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100)))
                     #p.drawText(rect, textFlags, vstr)

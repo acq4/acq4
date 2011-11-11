@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/util/pyqtgraph/plotConfigTemplate.ui'
+# Form implementation generated from reading ui file 'plotConfigTemplate.ui'
 #
-# Created: Wed May 18 20:44:20 2011
+# Created: Sat Nov  5 22:48:49 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -229,13 +229,16 @@ class Ui_Form(object):
         self.gridLayout_6.addWidget(self.saveSvgBtn, 0, 0, 1, 1)
         self.saveImgBtn = QtGui.QPushButton(self.tab_4)
         self.saveImgBtn.setObjectName(_fromUtf8("saveImgBtn"))
-        self.gridLayout_6.addWidget(self.saveImgBtn, 1, 0, 1, 1)
+        self.gridLayout_6.addWidget(self.saveImgBtn, 2, 0, 1, 1)
         self.saveMaBtn = QtGui.QPushButton(self.tab_4)
         self.saveMaBtn.setObjectName(_fromUtf8("saveMaBtn"))
-        self.gridLayout_6.addWidget(self.saveMaBtn, 2, 0, 1, 1)
+        self.gridLayout_6.addWidget(self.saveMaBtn, 3, 0, 1, 1)
         self.saveCsvBtn = QtGui.QPushButton(self.tab_4)
         self.saveCsvBtn.setObjectName(_fromUtf8("saveCsvBtn"))
-        self.gridLayout_6.addWidget(self.saveCsvBtn, 3, 0, 1, 1)
+        self.gridLayout_6.addWidget(self.saveCsvBtn, 4, 0, 1, 1)
+        self.saveSvgCurvesBtn = QtGui.QPushButton(self.tab_4)
+        self.saveSvgCurvesBtn.setObjectName(_fromUtf8("saveSvgCurvesBtn"))
+        self.gridLayout_6.addWidget(self.saveSvgCurvesBtn, 1, 0, 1, 1)
         self.gridLayout_7.addLayout(self.gridLayout_6, 0, 1, 1, 1)
         spacerItem2 = QtGui.QSpacerItem(59, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.gridLayout_7.addItem(spacerItem2, 0, 2, 1, 1)
@@ -287,9 +290,10 @@ class Ui_Form(object):
         self.pointsGroup.setTitle(QtGui.QApplication.translate("Form", "Points", None, QtGui.QApplication.UnicodeUTF8))
         self.autoPointsCheck.setText(QtGui.QApplication.translate("Form", "Auto", None, QtGui.QApplication.UnicodeUTF8))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_3), QtGui.QApplication.translate("Form", "Display", None, QtGui.QApplication.UnicodeUTF8))
-        self.saveSvgBtn.setText(QtGui.QApplication.translate("Form", "SVG", None, QtGui.QApplication.UnicodeUTF8))
+        self.saveSvgBtn.setText(QtGui.QApplication.translate("Form", "SVG - Full Plot", None, QtGui.QApplication.UnicodeUTF8))
         self.saveImgBtn.setText(QtGui.QApplication.translate("Form", "Image", None, QtGui.QApplication.UnicodeUTF8))
         self.saveMaBtn.setText(QtGui.QApplication.translate("Form", "MetaArray", None, QtGui.QApplication.UnicodeUTF8))
         self.saveCsvBtn.setText(QtGui.QApplication.translate("Form", "CSV", None, QtGui.QApplication.UnicodeUTF8))
+        self.saveSvgCurvesBtn.setText(QtGui.QApplication.translate("Form", "SVG - Scaled Curves", None, QtGui.QApplication.UnicodeUTF8))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_4), QtGui.QApplication.translate("Form", "Save", None, QtGui.QApplication.UnicodeUTF8))
 

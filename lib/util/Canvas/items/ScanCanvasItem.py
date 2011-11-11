@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
-from pyqtgraph.canvas.items.CanvasItem import CanvasItem
-from pyqtgraph.canvas.items.ImageCanvasItem import ImageCanvasItem
+from CanvasItem import CanvasItem
+from ImageCanvasItem import ImageCanvasItem
 import ScanCanvasItemTemplate
 import lib.Manager
 import pyqtgraph as pg
@@ -271,4 +271,6 @@ class ScanImageCanvasItem(ImageCanvasItem):
         for fh in self.handles:
             fh.setInfo(userTransform=trans)
             
-            
+    @classmethod
+    def checkFile(self, fh):
+        return 0

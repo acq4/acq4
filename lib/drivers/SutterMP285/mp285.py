@@ -86,24 +86,34 @@ class SutterMP285(object):
             currentPos = self.getPos(scaled=False)
         pos = [(pos[i]/scale if pos[i] is not None else currentPos[i]) for i in range(3)]
             
-        #if block:
-            #st = self.stat()
-            #speed = st['speed']
-            #res = st['resolution']
-            #currentPos = self.getPos()
-            
-            
-        #pos = np.array(pos) / self.scale
-        #posv = [x/scale for x in pos]
-        #print "Set pos:  %09d  %09d  %09d" % tuple(pos)
         cmd = 'm' + struct.pack('3l', int(pos[0]), int(pos[1]), int(pos[2])) + '\r'
         self.write(cmd)
         if block:
-            #dist = ((currentPos[0]-pos[0])**2 + (currentPos[1]-pos[1])**2 + (currentPos[2]-pos[2])**2) ** 0.5
-            #guess = 2. * dist / (speed*1e-6)
-            #print "set timeout to", guess
             self.readPacket(timeout=timeout)  ## could take a long time..
+
+
+    def moveBy(self, pos, block=True, timeout=10.):
+        """Move by the specified distance. 
+        Arguments:
+            pos: tuple (dx, dy, dz) values must be given in meters.
+            block: bool, if true then the function does not return until the move is complete.
+        """
+        scale = self.scale()
+        if len(pos) < 3:
+            pos = list(pos) + [0.0] * (3-len(pos))
             
+        currentPos = self.getPos(scaled=False)
+        pos = [pos[i]/scale + currentPos[i] for i in range(3)]
+            
+        cmd = 'm' + struct.pack('3l', int(pos[0]), int(pos[1]), int(pos[2])) + '\r'
+        self.write(cmd)
+        if block:
+            self.readPacket(timeout=timeout)  ## could take a long time..
+
+
+
+
+
     def scale(self):
         ## Scale of position values in msteps/m
         ## Does this value change during operation?
