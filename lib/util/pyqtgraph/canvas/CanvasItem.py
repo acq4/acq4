@@ -30,7 +30,7 @@ class CanvasItem(QtCore.QObject):
     transformCopyBuffer = None
     
     def __init__(self, item, **opts):
-        defOpts = {'name': None, 'z': None, 'movable': True, 'scalable': False, 'handle': None, 'visible': True, 'parent':None} #'pos': [0,0], 'scale': [1,1], 'angle':0,
+        defOpts = {'name': None, 'z': None, 'movable': True, 'scalable': False, 'visible': True, 'parent':None} #'pos': [0,0], 'scale': [1,1], 'angle':0,
         defOpts.update(opts)
         self.opts = defOpts
         self.selectedAlone = False  ## whether this item is the only one selected
@@ -122,13 +122,6 @@ class CanvasItem(QtCore.QObject):
         self.resetUserTransform() 
         self.selectBoxBase = self.selectBox.getState().copy()
         
-        ## reload user transform from disk if possible
-        if self.opts['handle'] is not None:
-            trans = self.opts['handle'].info().get('userTransform', None)
-            if trans is not None:
-                self.restoreTransform(trans)
-            if self.opts['name'] is None:
-                self.opts['name'] = self.opts['handle'].shortName()
                 
         #print "Created canvas item", self
         #print "  base:", self.baseTransform
@@ -179,18 +172,6 @@ class CanvasItem(QtCore.QObject):
 
     #def name(self):
         #return self.opts['name']
-    def handle(self):
-        """Return the file handle for this item, if any exists."""
-        return self.opts['handle']
-    
-    @classmethod
-    def checkFile(cls, handle):
-        """
-        Decide whether this item type can load the file specified. 
-        If so, return an integer (the class returning the largest value wins)
-        If not, return 0
-        """
-        return 0
     
     def copyClicked(self):
         CanvasItem.transformCopyBuffer = self.saveTransform()
@@ -257,14 +238,32 @@ class CanvasItem(QtCore.QObject):
 
     def scale(self, x, y):
         self.userTransform.scale(x, y)
+        self.selectBoxFromUser()
         self.updateTransform()
         
     def rotate(self, ang):
         self.userTransform.rotate(ang)
+        self.selectBoxFromUser()
         self.updateTransform()
         
     def translate(self, x, y):
         self.userTransform.translate(x, y)
+        self.selectBoxFromUser()
+        self.updateTransform()
+        
+    def setTranslate(self, x, y):
+        self.userTransform.setTranslate(x, y)
+        self.selectBoxFromUser()
+        self.updateTransform()
+        
+    def setRotate(self, angle):
+        self.userTransform.setRotate(angle)
+        self.selectBoxFromUser()
+        self.updateTransform()
+        
+    def setScale(self, x, y):
+        self.userTransform.setScale(x, y)
+        self.selectBoxFromUser()
         self.updateTransform()
         
 
@@ -365,17 +364,6 @@ class CanvasItem(QtCore.QObject):
         #return {'trans': list(self.userTranslate), 'rot': self.userRotate}
         return self.userTransform.saveState()
         
-    def storeUserTransform(self, fh=None):
-        """Store the current user transform to disk.
-        If fh is specified, store data to that file handle.
-        Otherwise, use self.handle if it is set."""
-        if fh is None:
-            fh = self.handle
-        if fh is None:
-            raise Exception("Can not store position--no file handle for this item.", 1)
-        trans = self.saveTransform()
-        fh.setInfo(userTransform=trans)
-    
     def selectBoxFromUser(self):
         """Move the selection box to match the current userTransform"""
         ## user transform
@@ -482,3 +470,16 @@ class CanvasItem(QtCore.QObject):
 
     def isVisible(self):
         return self.opts['visible']
+
+
+class GroupCanvasItem(CanvasItem):
+    """
+    Canvas item used for grouping others
+    """
+    
+    def __init__(self, **opts):
+        defOpts = {'movable': False, 'scalable': False}
+        defOpts.update(opts)
+        item = pg.ItemGroup()
+        CanvasItem.__init__(self, item, **defOpts)
+    

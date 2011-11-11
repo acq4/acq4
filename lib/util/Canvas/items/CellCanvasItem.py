@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from pyqtgraph.canvas.items.CanvasItem import CanvasItem
+from CanvasItem import CanvasItem
 from PyQt4 import QtCore, QtGui
 import pyqtgraph as pg
 import lib.Manager

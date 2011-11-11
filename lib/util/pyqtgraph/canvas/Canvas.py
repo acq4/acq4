@@ -17,7 +17,8 @@ import debug
 import pyqtgraph as pg
 import weakref
 from CanvasManager import CanvasManager
-import items
+#import items
+from CanvasItem import CanvasItem, GroupCanvasItem
 
 class Canvas(QtGui.QWidget):
     
@@ -47,7 +48,7 @@ class Canvas(QtGui.QWidget):
         self.view.setAspectLocked(True)
         
         grid = pg.GridItem()
-        self.grid = items.CanvasItem(grid, name='Grid', movable=False)
+        self.grid = CanvasItem(grid, name='Grid', movable=False)
         self.addItem(self.grid)
         
         self.hideBtn = QtGui.QPushButton('>', self)
@@ -304,128 +305,13 @@ class Canvas(QtGui.QWidget):
         """Add a new GraphicsItem to the scene at pos.
         Common options are name, pos, scale, and z
         """
-        citem = items.CanvasItem(item, **opts)
+        citem = CanvasItem(item, **opts)
         self.addItem(citem)
         return citem
             
-    #def addImage(self, img, **opts):
-        #citem = ImageCanvasItem(self, img, **opts)
-        #self._addCanvasItem(citem)
-        #return citem
-    
-    ### Make addScan and addImage go away entirely, plox.
-    #def addScan(self, dirHandle, **opts):
-        #"""Returns a list of ScanCanvasItems."""
-        
-        #if 'sequenceParams' in dirHandle.info():
-            #dirs = [dirHandle[d] for d in dirHandle.subDirs()]
-        #else:
-            #dirs = [dirHandle]
-            
-        #if 'separateParams' not in opts:
-            #separateParams = False
-        #else:
-            #separateParams = opts['separateParams']
-            #del(opts['separateParams'])
-            
-        
-        #### check for sequence parameters (besides targets) so that we can separate them out into individual Scans
-        #paramKeys = []
-        #params = dirHandle.info()['protocol']['params']
-        #if len(params) > 1 and separateParams==True:
-            #for i in range(len(params)):
-                #k = (params[i][0], params[i][1])
-                #if k != ('Scanner', 'targets'):
-                    #paramKeys.append(k)
-            
-        #if 'name' not in opts:
-            #opts['name'] = dirHandle.shortName()
-            
-
-            
-        #if len(paramKeys) < 1:    
-            #pts = []
-            #for d in dirs: #d is a directory handle
-                ##d = dh[d]
-                #if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
-                    #pos = d.info()['Scanner']['position']
-                    #if 'spotSize' in d.info()['Scanner']:
-                        #size = d.info()['Scanner']['spotSize']
-                    #else:
-                        #size = self.defaultSize
-                    #pts.append({'pos': pos, 'size': size, 'data': d})
-            
-            #item = graphicsItems.ScatterPlotItem(pts, pxMode=False)
-            #citem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
-            #self._addCanvasItem(citem)
-            #return [citem]
-        #else:
-            #pts = {}
-            #for d in dirs:
-                #k = d.info()[paramKeys[0]]
-                #if len(pts) < k+1:
-                    #pts[k] = []
-                #if 'Scanner' in d.info() and 'position' in d.info()['Scanner']:
-                    #pos = d.info()['Scanner']['position']
-                    #if 'spotSize' in d.info()['Scanner']:
-                        #size = d.info()['Scanner']['spotSize']
-                    #else:
-                        #size = self.defaultSize
-                    #pts[k].append({'pos': pos, 'size': size, 'data': d})
-            #spots = []
-            #for k in pts.keys():
-                #spots.extend(pts[k])
-            #item = graphicsItems.ScatterPlotItem(spots=spots, pxMode=False)
-            #parentCitem = ScanCanvasItem(self, item, handle=dirHandle, **opts)
-            #self._addCanvasItem(parentCitem)
-            #scans = []
-            #for k in pts.keys():
-                #opts['name'] = paramKeys[0][0] + '_%03d' %k
-                #item = graphicsItems.ScatterPlotItem(spots=pts[k], pxMode=False)
-                #citem = ScanCanvasItem(self, item, handle = dirHandle, parent=parentCitem, **opts)
-                #self._addCanvasItem(citem)
-                ##scans[opts['name']] = citem
-                #scans.append(citem)
-            #return scans
-                
-                
-        
-    def addFile(self, fh, **opts):
-        ## automatically determine what item type to load from file. May invoke dataModel for extra help.
-        types = items.listItems()
-        
-        maxScore = 0
-        bestType = None
-        
-        for t in types:
-            score = t.checkFile(fh)
-            if score > maxScore:
-                maxScore = score
-                bestType = t
-        if bestType is None:
-            raise Exception("Don't know how to load file: '%s'" % str(fh))
-        citem = bestType(handle=fh, **opts)
-        self.addItem(citem)
-        return citem
-        #if fh.isFile():
-            #if fh.shortName()[-4:] == '.svg':
-                #return self.addSvg(fh, **opts)
-            #else:
-                #return self.addImage(fh, **opts)
-        #else:
-            #return self.addScan(fh, **opts)
-
-    #def addMarker(self, **opts):
-        #citem = MarkerCanvasItem(self, **opts)
-        #self._addCanvasItem(citem)
-        #return citem
-
-    #def addSvg(self, fh, **opts):
-        #item = QtSvg.QGraphicsSvgItem(fh.name())
-        #return self.addItem(item, handle=fh, **opts)
 
     def addGroup(self, name, **kargs):
-        group = items.GroupCanvasItem(name=name)
+        group = GroupCanvasItem(name=name)
         self.addItem(group, **kargs)
         return group
         
@@ -499,7 +385,7 @@ class Canvas(QtGui.QWidget):
                 
         node = QtGui.QTreeWidgetItem([name])
         flags = node.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsDragEnabled
-        if not isinstance(citem, items.GroupCanvasItem):
+        if not isinstance(citem, GroupCanvasItem):
             flags = flags & ~QtCore.Qt.ItemIsDropEnabled
         node.setFlags(flags)
         if citem.opts['visible']:
@@ -613,7 +499,7 @@ class Canvas(QtGui.QWidget):
                 listItem.setCheckState(0, QtCore.Qt.Unchecked)
 
     def removeItem(self, item):
-        if isinstance(item, items.CanvasItem):
+        if isinstance(item, CanvasItem):
             item.setCanvas(None)
             #self.view.scene().removeItem(item.item)
             self.itemList.removeTopLevelItem(item.listItem)
@@ -672,44 +558,4 @@ class SelectBox(widgets.ROI):
 
 
 
-
-
-if __name__ == '__main__':
-    import items
-    app = QtGui.QApplication([])
-    w1 = QtGui.QMainWindow()
-    c1 = Canvas(name="Canvas1")
-    w1.setCentralWidget(c1)
-    w1.show()
-    w1.resize(600, 600)
-    
-    w2 = QtGui.QMainWindow()
-    c2 = Canvas(name="Canvas2")
-    w2.setCentralWidget(c2)
-    w2.show()
-    w2.resize(600, 600)
-    
-
-    import numpy as np
-    
-    img1 = np.random.normal(size=(200, 200))
-    img2 = np.random.normal(size=(200, 200))
-    def fn(x, y):
-        return (x**2 + y**2)**0.5
-    img1 += np.fromfunction(fn, (200, 200))
-    img2 += np.fromfunction(lambda x,y: fn(x-100, y-100), (200, 200))
-    
-    img3 = np.random.normal(size=(200, 200, 200))
-    
-    i1 = items.ImageCanvasItem(img1, scale=[0.01, 0.01], name="Image 1", z=10)
-    c1.addItem(i1)
-    
-    gr = c1.addGroup('itemGroup')
-    i2 = items.ImageCanvasItem(img2, scale=[0.01, 0.01], pos=[-1, -1], name="Image 2", z=100, parent=gr)
-    i3 = items.ImageCanvasItem(img3, scale=[0.01, 0.01], pos=[1, -1], name="Image 3", z=-100, parent=gr)
-    c1.addItem(i2)
-    c1.addItem(i3)
-    
-    i1.setMovable(True)
-    i2.setMovable(True)
     
