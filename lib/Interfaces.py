@@ -11,28 +11,29 @@ class InterfaceDirectory(QtCore.QObject):
     def __init__(self):
         QtCore.QObject.__init__(self)
         self.lock = Mutex(Mutex.Recursive)
-        self.objList = weakref.WeakValueDictionary()
-        self.nameList = {}
-        self.typeList = {}
+        #self.objList = weakref.WeakValueDictionary() # maps objName:object
+        self.nameList = {}                           # maps objName:typeName:None
+        self.typeList = {}                           # maps typeName:objName:object
         
     def declareInterface(self, name, types, obj):
         """Declare a new interface. Types may be either a single string type or 
         a list of types. Returns False if the name is already in use."""
         with self.lock:
-            if name in self.objList and obj is not self.objList[name]:
-                return False
-            self.objList[name] = obj
+            #self.objList[name] = obj
         
             if isinstance(types, basestring):
                 types = [types]
+            for t in types:
+                if t in self.typeList and name in self.typeList[t] and obj is not self.typeList[t][name]:
+                    return False
                 
             if name not in self.nameList:
                 self.nameList[name] = {}
                 
             for t in types:
                 if t not in self.typeList:
-                    self.typeList[t] = {}
-                self.typeList[t][name] = None
+                    self.typeList[t] = weakref.WeakValueDictionary()
+                self.typeList[t][name] = obj
                 self.nameList[name][t] = None
             
             self.sigInterfaceListChanged.emit(types)
@@ -42,8 +43,8 @@ class InterfaceDirectory(QtCore.QObject):
         """Remove an interface. A list of types (or a single type) may be specified. 
         Otherwise, all types are removed for the name provided."""
         with self.lock:
-            if name not in self.objList:
-                raise Exception("Interface %s does not exist." % name)
+            #if name not in self.objList:
+                #raise Exception("Interface %s does not exist." % name)
             
             if types is None:
                 types = self.nameList[name]
@@ -54,7 +55,7 @@ class InterfaceDirectory(QtCore.QObject):
                 
             if len(self.nameList[name]) == 0:
                 del self.nameList[name]
-                del self.objList[name]
+                #del self.objList[name]
                 
             self.sigInterfaceListChanged.emit(types)
         
@@ -64,10 +65,11 @@ class InterfaceDirectory(QtCore.QObject):
                 types = [types]
             ints = []
             for t in types:
-                for n in self.typeList.get(t, []):
-                    ints.append(n)
+                ints.extend(self.typeList.get(t, {}).keys())
+                #for n in self.typeList.get(t, []):
+                    #ints.append(n)
             return ints
             
-    def getInterface(self, name):
+    def getInterface(self, type, name):
         with self.lock:
-            return self.objList[name]
+            return self.typeList[type][name]

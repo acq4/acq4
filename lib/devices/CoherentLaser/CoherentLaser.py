@@ -31,7 +31,7 @@ class CoherentLaser(Laser):
             self.coherentPower = power
             self.setParam(currentPower=power)
             powerOk = self.checkPowerValidity(power)
-            self.sigPowerChanged.emit(power, powerOk)
+            self.sigOutputPowerChanged.emit(power, powerOk)
                 
     def wavelengthChanged(self, wl):
         with self.coherentLock:

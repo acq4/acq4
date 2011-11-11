@@ -85,10 +85,13 @@ class Laser(DAQGeneric):
     { 'pulse': [(0.5*s, 100*uJ), ...] }                     ## (time, pulse energy) pairs
     """
     
-    sigPowerChanged = QtCore.Signal(object, object)  ## power, bool (power within expected range)
+    sigOutputPowerChanged = QtCore.Signal(object, object)  ## power, bool (power within expected range)
+    sigSamplePowerChanged = QtCore.Signal(object)
+    sigWavelengthChanged = QtCore.Signal(object)
     
     def __init__(self, manager, config, name):
         self.config = config
+        self.manager = manager
         self.hasPowerIndicator = False
         self.hasShutter = False
         self.hasTriggerableShutter = False
@@ -131,6 +134,12 @@ class Laser(DAQGeneric):
         self.calibrationIndex = None
         self.pCellCalibration = None
         self.getPowerHistory()
+        
+        self.scope = manager.getDevice(self.config['scope'])
+        self.scope.sigObjectiveChanged.connect(self.objectiveChanged)
+        
+        
+        #manager.declareInterface(name, ['laser'], self)
         
         
     def configDir(self):
@@ -202,6 +211,9 @@ class Laser(DAQGeneric):
     
     def getWavelength(self):
         return self.config.get('wavelength', 0)
+    
+    def getWavelengthRange(self):
+        pass
         
     def openShutter(self):
         if self.hasTriggerableShutter:
@@ -218,6 +230,38 @@ class Laser(DAQGeneric):
     def closeQSwitch(self):
         if self.hasQSwitch:
             self.setChanHolding('qSwitch', 0)
+            
+    def getCalibration(self, objective=None, wavelength=None):
+        """Return the calibrated laser transmission for the given objective and wavelength.
+        If either argument is None, then it will be replaced with the currently known value.
+        Returns None if there is no calibration."""
+        
+        if objective is None:
+            obj = self.scope.getObjective()['name']
+        else:
+            obj = objective
+            
+        if wavelength is None:
+            wl = self.getWavelength()
+        else:
+            wl = wavelength
+
+        ## look up transmission value for this objective in calibration list
+        index = self.getCalibrationIndex()
+        vals = index.get(self.scope.name, {}).get(obj, None)
+        if vals is None:
+            return None
+        wl = siFormat(wl, suffix='m')
+        vals = vals.get(wl, None)
+        if vals is None:
+            return None
+        
+        return vals['transmission']
+            
+            
+    def objectiveChanged(self, change):
+        self.updateSamplePower()
+        
     
     
     def createTask(self, cmd):
@@ -246,6 +290,56 @@ class Laser(DAQGeneric):
         else:
             return DAQGeneric.getDAQName(self, channel)
         
+    def calibrate(self, scope, powerMeter, mTime, sTime):
+        #meter = str(self.ui.meterCombo.currentText())
+        obj = self.manager.getDevice(scope).getObjective()['name']
+        wavelength = siFormat(self.getWavelength(), suffix='m')
+        date = time.strftime('%Y.%m.%d %H:%M', time.localtime())
+        index = self.getCalibrationIndex()
+        
+        ## Run calibration
+        if not self.hasPCell:
+            power, transmission = self.runCalibration(powerMeter=powerMeter, measureTime=mTime, settleTime=sTime)
+            #self.setParam(currentPower=power, scopeTransmission=transmission)  ## wrong--power is samplePower, not outputPower.
+        else:
+            raise Exception("Pockel Cell calibration is not yet implented.")
+            #if index.has_key('pCellCalibration') and not self.ui.recalibratePCellCheck.isChecked():
+                #power, transmission = self.runCalibration() ## need to tell it to run with open pCell
+            #else:
+                #minVal = self.ui.minVSpin.value()
+                #maxVal = self.ui.maxVSpin.value()
+                #steps = self.ui.stepsSpin.value()
+                #power = []
+                #arr = np.zeros(steps, dtype=[('voltage', float), ('trans', float)])
+                #for i,v in enumerate(np.linspace(minVal, maxVal, steps)):
+                    #p, t = self.runCalibration(pCellVoltage=v) ### returns power at sample(or where powermeter was), and transmission through whole system
+                    #power.append(p)
+                    #arr[i]['trans']= t
+                    #arr[i]['voltage']= v
+                #power = (min(power), max(power))
+                #transmission = (arr['trans'].min(), arr['trans'].min())
+                #arr['trans'] = arr['trans']/arr['trans'].max()
+                #minV = arr['voltage'][arr['trans']==arr['trans'].min()]
+                #maxV = arr['voltage'][arr['trans']==arr['trans'].max()]
+                #if minV < maxV:
+                    #self.dev.pCellCurve = arr[arr['voltage']>minV * arr['voltage']<maxV]
+                #else:
+                    #self.dev.pCellCurve = arr[arr['voltage']<minV * arr['voltage']>maxV]
+                    
+                #index['pCellCalibration'] = {'voltage': list(self.dev.pCellCurve['voltage']), 
+                                             #'trans': list(self.dev.pCellCurve['trans'])}
+                
+            
+              
+        if scope not in index:
+            index[scope] = {}
+        if obj not in index[scope]:
+            index[scope][obj] = {}
+        index[scope][obj][wavelength] = {'power': power, 'transmission':transmission, 'date': date}
+
+        self.writeCalibrationIndex(index)
+        self.updateSamplePower()
+        
     def runCalibration(self, powerMeter=None, measureTime=0.1, settleTime=0.005, pCellVoltage=None, rate = 100000):
         daqName = self.getDAQName()[0]
         duration = measureTime + settleTime
@@ -267,7 +361,7 @@ class Laser(DAQGeneric):
                 a[:] = pCellVoltage
                 cmdOff[self.name]['pCell'] = a
             else:
-                raise Exception("Laser device %s does not have a pCell, therefore no pCell voltage can be set." %self.dev.name)
+                raise Exception("Laser device %s does not have a pCell, therefore no pCell voltage can be set." %self.name)
             
         cmdOn = cmdOff.copy()
         wave = np.ones(nPts, dtype=np.byte)
@@ -303,6 +397,22 @@ class Laser(DAQGeneric):
             transmission = powerSampleOn/powerOutOn
             return (powerSampleOn, transmission)
        
+    def getCalibrationList(self):
+        """Return a list of available calibrations."""
+        calList = []
+        index = self.getCalibrationIndex()
+        if index.has_key('pCellCalibration'):
+            index.pop('pCellCalibration')
+        for scope in index:
+            #self.microscopes.append(scope)
+            for obj in index[scope]:
+                for wavelength in index[scope][obj]:
+                    cal = index[scope][obj][wavelength]
+                    power = cal['power']
+                    trans = cal['transmission']
+                    date = cal['date']
+                    calList.append((scope, obj, wavelength, trans, power, date))
+        return calList
         
     def outputPower(self):
         """
@@ -366,10 +476,15 @@ class Laser(DAQGeneric):
                 #self.devGui.ui.outputPowerLabel.setText(siFormat(powerOn, suffix='W')) ## NO! device does not talk to GUI!
                 self.setParam(currentPower=powerOn)
                 powerOk = self.checkPowerValidity(powerOn)
-                self.sigPowerChanged.emit(powerOn, powerOk)
+                self.sigOutputPowerChanged.emit(powerOn, powerOk)
+                self.updateSamplePower()
                 return powerOn, powerOk
             else:
-                raise Exception("No laser pulse detected by power indicator '%s' while measuring Laser.outputPower()" % powerInd[0])
+                logMsg("No laser pulse detected by power indicator '%s' while measuring Laser.outputPower()" % powerInd[0], msgType='error')
+                self.setParam(currentPower=0.0)
+                self.updateSamplePower()
+                return 0.0, False
+
             
         ## return the power specified in the config file if there's no powerIndicator
         else:
@@ -378,9 +493,25 @@ class Laser(DAQGeneric):
                 return None, None
             else:
                 return power, self.checkPowerValidity(power)
+
+    def updateSamplePower(self):
+        ## Report new sample power given the current state of the laser
+        trans = self.getCalibration()
+        if trans is None:
+            self.setParam(scopeTransmission=None)
+            self.setParam(samplePower=None)
+            self.sigSamplePowerChanged.emit(None)
+        else:
+            self.setParam(scopeTransmission=trans)
+            power = self.getParam('currentPower') * trans
+            self.setParam(samplePower=power)
+            self.sigSamplePowerChanged.emit(power)
         
     def samplePower(self, power=None):
-        """Return the estimated power-at-sample if power is the output power of the laser"""
+        """
+        Return the estimated power-at-sample for a given output power.
+        If power is None, the current output power of the laser is used instead.
+        """
         trans = self.getParam('scopeTransmission')
         if trans is None:
             return None

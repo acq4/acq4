@@ -109,6 +109,8 @@ class AxoPatch200(DAQGeneric):
             self.setHolding()
         except:
             printExc("Error while setting holding value:")
+            
+        dm.declareInterface(name, ['clamp'], self)
 
     def createTask(self, cmd):
         return AxoPatch200Task(self, cmd)
