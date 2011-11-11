@@ -170,16 +170,18 @@ class GradientWidget(TickSlider):
         self.currentTickColor = None
         self.rectSize = 15
         self.gradRect = QtGui.QGraphicsRectItem(QtCore.QRectF(0, -self.rectSize, 100, self.rectSize))
+        self.backgroundRect = QtGui.QGraphicsRectItem(QtCore.QRectF(0, -self.rectSize, 100, self.rectSize))
+        self.backgroundRect.setBrush(QtGui.QBrush(QtCore.Qt.DiagCrossPattern))
         self.colorMode = 'rgb'
         self.colorDialog = QtGui.QColorDialog()
         self.colorDialog.setOption(QtGui.QColorDialog.ShowAlphaChannel, True)
         self.colorDialog.setOption(QtGui.QColorDialog.DontUseNativeDialog, True)
-        #QtCore.QObject.connect(self.colorDialog, QtCore.SIGNAL('currentColorChanged(const QColor&)'), self.currentColorChanged)
+        
         self.colorDialog.currentColorChanged.connect(self.currentColorChanged)
-        #QtCore.QObject.connect(self.colorDialog, QtCore.SIGNAL('rejected()'), self.currentColorRejected)
         self.colorDialog.rejected.connect(self.currentColorRejected)
         
         #self.gradient = QtGui.QLinearGradient(QtCore.QPointF(0,0), QtCore.QPointF(100,0))
+        self.scene.addItem(self.backgroundRect)
         self.scene.addItem(self.gradRect)
         self.addTick(0, QtGui.QColor(0,0,0), True)
         self.addTick(1, QtGui.QColor(255,0,0), True)
@@ -197,18 +199,18 @@ class GradientWidget(TickSlider):
             
     def setColorMode(self, cm):
         if cm not in ['rgb', 'hsv']:
-            raise Exception("Unknown color mode %s" % str(cm))
+            raise Exception("Unknown color mode %s. Options are 'rgb' and 'hsv'." % str(cm))
         self.colorMode = cm
         self.updateGradient()
         
     def updateGradient(self):
         self.gradient = self.getGradient()
         self.gradRect.setBrush(QtGui.QBrush(self.gradient))
-        #self.emit(QtCore.SIGNAL('gradientChanged'), self)
         self.sigGradientChanged.emit(self)
         
     def setLength(self, newLen):
         TickSlider.setLength(self, newLen)
+        self.backgroundRect.setRect(0, -self.rectSize, newLen, self.rectSize)
         self.gradRect.setRect(0, -self.rectSize, newLen, self.rectSize)
         self.updateGradient()
         

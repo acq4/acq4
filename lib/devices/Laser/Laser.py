@@ -484,6 +484,7 @@ class Laser(DAQGeneric):
                 self.setParam(currentPower=0.0)
                 self.updateSamplePower()
                 return 0.0, False
+
             
         ## return the power specified in the config file if there's no powerIndicator
         else:
