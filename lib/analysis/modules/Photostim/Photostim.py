@@ -346,7 +346,7 @@ class Photostim(AnalysisModule):
     
     def detectorStateChanged(self):
         #print "STATE CHANGE"
-        print "Detector state changed"
+        #print "Detector state changed"
         for scan in self.scans:
             scan.forgetEvents()
         
@@ -358,7 +358,7 @@ class Photostim(AnalysisModule):
         self.flowchart.setInput(**output)
 
     def analyzerStateChanged(self):
-        print "Analyzer state changed."
+        #print "Analyzer state changed."
         for scan in self.scans:
             scan.forgetStats()
         
