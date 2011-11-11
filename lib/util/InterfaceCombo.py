@@ -73,7 +73,7 @@ class InterfaceParameter(ptypes.ListParameter):
 
     def updateList(self):
         ints = self.dir.listInterfaces(self.opts['interfaceTypes'])
-        print "set limits:", ints
+        #print "set limits:", ints
         self.setLimits(ints)
 
 

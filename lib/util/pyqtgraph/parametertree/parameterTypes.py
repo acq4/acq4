@@ -430,7 +430,7 @@ class ListParameter(Parameter):
                 self.reverse[v] = n
         
         Parameter.setLimits(self, limits)
-        print self.name(), self.value(), limits
+        #print self.name(), self.value(), limits
         if self.value() not in self.reverse:
             self.setValue(self.reverse.keys()[0])
             
