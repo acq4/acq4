@@ -224,7 +224,7 @@ class LogWindow(QtGui.QMainWindow):
             newTemp = {}
             for v in temp.values():
                 self.msgCount += 1
-                newTemp['LogEntry_'+str(count)] = v
+                newTemp['LogEntry_'+str(self.msgCount)] = v
             self.saveEntry(newTemp)
         else:
             self.logFile = dh.createFile('log.txt')
@@ -535,9 +535,9 @@ class LogWidget(QtGui.QWidget):
             return
         if fileName[-5:] != '.html':
             fileName += '.html'
-        doc = self.ui.output.document().toHtml()
+        doc = self.ui.output.document().toHtml('utf-8')
         f = open(fileName, 'w')
-        f.write(doc)
+        f.write(doc.encode('utf-8'))
         f.close()
         
         

@@ -8,6 +8,7 @@ import FileAnalysisView
 from lib.LogWindow import LogButton, LogWindow
 import FileLogView
 from lib.util.pyqtgraph.FileDialog import FileDialog
+from lib.Manager import logMsg, logExc
 
 
 
@@ -231,7 +232,7 @@ class DataManager(Module):
             self.ui.fileTreeWidget.select(nd)
             ##self.ui.fileInfo.setCurrentFile(nd)
             
-            
+        logMsg("Created new folder: %s" %nd.name(relativeTo=self.baseDir), msgType='status', importance=7)   
         self.manager.setCurrentDir(nd)
 
 

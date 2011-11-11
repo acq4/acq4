@@ -160,9 +160,35 @@ class LaserProtoGui(DAQGenericProtoGui):
         
         ## Params looks like: {'amp': 7} where 'amp' is the name of a sequence parameter, and 7 is the 7th value in the list of 'amp'
         rate = self.powerWidget.rate
-        wave = self.powerWidget.getSingleWave(params)
+        #print "params:", params
+        #wave = self.powerWidget.getSingleWave(params)
+        #print self.powerWidget
+        #print "len power is on (in laserProtogui.generateProtocol):", len(wave[wave==wave.max()])
+        
+        ### need to strip power off of power.param, like DAQGeneric:
+        chParams = {}
+        search = 'power' + '.'
+        for k in params:
+            if k[:len(search)] == search:
+                chParams[k[len(search):]] = params[k]
+        wave = self.powerWidget.getSingleWave(chParams)
         rawCmds = self.cache.get(id(wave), self.dev.getChannelCmds({'powerWaveform':wave}, rate)) ## returns {'shutter': array(...), 'qSwitch':array(..), 'pCell':array(...)}
         
+        #if params is None:
+            #params = {}
+        #p = {}
+        #for ch in self.channels:
+            ### Extract just the parameters the channel will need
+            #chParams = {}
+            #search = ch + '.'
+            #for k in params:
+                #if k[:len(search)] == search:
+                    #chParams[k[len(search):]] = params[k]
+            ### request the protocol from the channel
+            ##print "  requesting %s protocol with params:"%ch, chParams
+            #p[ch] = self.channels[ch].generateProtocol(chParams)
+        
+        rawCmds = self.cache.get(id(wave), self.dev.getChannelCmds({'powerWaveform':wave}, rate)) ## returns {'shutter': array(...), 'qSwitch':array(..), 'pCell':array(...)}
         ### structure protocol in DAQGeneric-compatible way
         cmd = {}
         for k in rawCmds:

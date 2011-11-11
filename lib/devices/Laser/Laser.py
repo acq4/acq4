@@ -139,7 +139,7 @@ class Laser(DAQGeneric):
         self.scope.sigObjectiveChanged.connect(self.objectiveChanged)
         
         
-        manager.declareInterface(name, ['laser'], self)
+        #manager.declareInterface(name, ['laser'], self)
         
         
     def configDir(self):
@@ -481,9 +481,11 @@ class Laser(DAQGeneric):
                 return powerOn, powerOk
             else:
                 logMsg("No laser pulse detected by power indicator '%s' while measuring Laser.outputPower()" % powerInd[0], msgType='error')
+
                 self.setParam(currentPower=0.0)
                 self.updateSamplePower()
                 return 0.0, False
+
             
         ## return the power specified in the config file if there's no powerIndicator
         else:
@@ -525,6 +527,8 @@ class Laser(DAQGeneric):
 
     def checkPowerValidity(self, power):
         """Return boolean indicating whether power is inside the expected power range."""
+        if power is None:
+            return False
         with self.variableLock:
             diff = self.params['expectedPower']*self.params['tolerance']/100.0
             expected = self.params['expectedPower']

@@ -52,6 +52,8 @@ class Scanner(Device):
                 v0 = max(mn, min(mx, vals[0]))
                 v1 = max(mn, min(mx, vals[1]))
                 self.setVoltage([v0, v1])
+            else:
+                logMsg("Virtual shutter closed, not setting mirror position.", msgType='warning')
 
     def setPosition(self, pos, camera, laser):
         """Set the position of the xy mirrors to a point in the image"""
@@ -78,6 +80,8 @@ class Scanner(Device):
         
     def getShutterOpen(self):
         """Return whether the virtual shutter is currently open"""
+        if 'offVoltage' not in self.config:
+            return True
         return self.shutterOpen
 
     def getShutterVals(self):
