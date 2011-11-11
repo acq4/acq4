@@ -56,23 +56,24 @@ class InterfaceCombo(QtGui.QComboBox):
         
 
 
-class InterfaceParameter(parametertree.Parameter):
+class InterfaceParameter(ptypes.ListParameter):
     type = 'interface'
     itemClass = ptypes.ListParameterItem    
     
     def __init__(self, **args):
-        parametertree.Parameter.__init__(self, **args)
+        ptypes.ListParameter.__init__(self, **args)
         self.dir = getManager().interfaceDir
         self.dir.sigInterfaceListChanged.connect(self.updateList)
         self.updateList()
 
     def setOpts(self, **args):
-        parametertree.Parameter.setOpts(self, **args)
+        ptypes.ListParameter.setOpts(self, **args)
         if 'interfaceTypes' in args:
             self.updateList()
 
     def updateList(self):
         ints = self.dir.listInterfaces(self.opts['interfaceTypes'])
+        print "set limits:", ints
         self.setLimits(ints)
 
 

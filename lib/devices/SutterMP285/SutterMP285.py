@@ -97,11 +97,15 @@ class SutterMP285(Device):
     def deviceInterface(self, win):
         return SMP285Interface(self, win)
 
-    def moveBy(self, pos):
+    def moveBy(self, pos, speed=400, fine=True, block=True):
         """Move by the specified amounts. 
-        pos must be a sequence (dx, dy, dz) with values in meters."""
+        pos must be a sequence (dx, dy, dz) with values in meters.
+        speed will be set before moving unless speed=None
+        """
         with self.driverLock:
-            self.mp285.moveBy([dx,dy,dz])
+            if speed is not None:
+                self.mp285.setSpeed(speed, fine)
+            self.mp285.moveBy(pos, block=block)
 
 
 class SMP285Interface(QtGui.QWidget):
@@ -200,9 +204,9 @@ class SutterMP285Thread(QtCore.QThread):
         self.update = False
         self.resolution = 'fine'
         self.dev = dev
-        self.port = port
+        #self.port = port
         #self.pos = [0, 0, 0]
-        self.baud = baud
+        #self.baud = baud
         self.velocity = [0,0,0]
         self.limits = deepcopy(limits)
         self.limitChanged = False

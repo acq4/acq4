@@ -59,18 +59,22 @@ class Photomultiplier(Module):
         if self.param['Z-Stack']:
             stage = self.manager.getDevice(self.param['Z-Stack', 'Stage'])
             images = []
-            for i in range(self.param['Z-Stack', 'Steps']):
+            nSteps = self.param['Z-Stack', 'Steps']
+            for i in range(nSteps):
                 img = self.takeImage()[NP.newaxis, ...]
                 images.append(img)
-                stage.moveBy(dx=0.0, dy=0.0, dz=self.param['Z-Stack', 'Step Size'], block=True)
+                if i < nSteps-1:
+                    ## speed 20 is quite slow; timeouts may occur if we go much slower than that..
+                    stage.moveBy([0.0, 0.0, self.param['Z-Stack', 'Step Size']], speed=20, block=True)  
             imgData = NP.concatenate(images, axis=0)
         else:
             imgData = self.takeImage()
 
         self.view.setImage(imgData)
-        info = self.param.getValues()
-        if not self.param['Z-Stack']:
-            info['Z-Stack'] = False
+        #info = self.param.getValues()
+        #if not self.param['Z-Stack']:
+            #info['Z-Stack'] = False
+        info = {}
         dh = self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
 
 
