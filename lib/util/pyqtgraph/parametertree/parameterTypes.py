@@ -356,6 +356,7 @@ class ListParameterItem(WidgetParameterItem):
             #return vals[key]
         #else:
             #return key
+        print key, self.forward
         return self.forward[key]
             
     def setValue(self, val):
@@ -409,9 +410,30 @@ class ListParameter(Parameter):
     itemClass = ListParameterItem
 
     def __init__(self, **opts):
+        self.forward = collections.OrderedDict()  ## name: value
+        self.reverse = collections.OrderedDict()  ## value: name
         if 'values' in opts:
             opts['limits'] = opts['values']
         Parameter.__init__(self, **opts)
+        
+    def setLimits(self, limits):
+        self.forward = collections.OrderedDict()  ## name: value
+        self.reverse = collections.OrderedDict()  ## value: name
+        if isinstance(limits, dict):
+            for k, v in limits.iteritems():
+                self.forward[k] = v
+                self.reverse[v] = k
+        else:
+            for v in limits:
+                n = unicode(v)
+                self.forward[n] = v
+                self.reverse[v] = n
+        
+        Parameter.setLimits(self, limits)
+        #print self.name(), self.value(), limits
+        if self.value() not in self.reverse:
+            self.setValue(self.reverse.keys()[0])
+            
 
 registerParameterType('list', ListParameter, override=True)
 

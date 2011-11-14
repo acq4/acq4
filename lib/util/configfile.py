@@ -10,7 +10,7 @@ as it can be converted to/from a string using repr and eval.
 """
 
 import re, os, sys
-from advancedTypes import OrderedDict
+from collections import OrderedDict
 GLOBAL_PATH = None # so not thread safe.
 import units
 
@@ -131,6 +131,7 @@ def parseString(lines, start=0):
             
             ## set up local variables to use for eval
             local = units.allUnits.copy()
+            local['OrderedDict'] = OrderedDict
             local['readConfigFile'] = readConfigFile
             if len(k) < 1:
                 raise ParseError('Missing name preceding colon', ln+1, l)

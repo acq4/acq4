@@ -39,9 +39,8 @@ class DIOSwitch(Device):
                 daq, chan = conf
                 val = daq.getChannelValue(chan, block=False)
                 if val is False: ## device is busy; try again later
-                    return
+                    continue
                         
-                #print name, val
                 if self.state.get(name, None) != val:
                     change[name] = val
                 self.state[name] = val

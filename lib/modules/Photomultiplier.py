@@ -33,6 +33,7 @@ class Photomultiplier(Module):
         self.win.resize(800, 450)
         self.param = PT.Parameter(name = 'param', children=[
             dict(name='Sample Rate', type='float', value=100000., suffix='Hz', dec = True, minStep=100., step=0.5, limits=[10000., 1000000.], siPrefix=True),
+            dict(name='Downsample', type='int', value=1, limits=[1,None]),
             dict(name='Image Width', type='int', value=256),
             dict(name='Image Height', type='int', value=256),
             dict(name='Xmin', type='float', value=-1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
@@ -59,18 +60,24 @@ class Photomultiplier(Module):
         if self.param['Z-Stack']:
             stage = self.manager.getDevice(self.param['Z-Stack', 'Stage'])
             images = []
-            for i in range(self.param['Z-Stack', 'Steps']):
+            nSteps = self.param['Z-Stack', 'Steps']
+            for i in range(nSteps):
                 img = self.takeImage()[NP.newaxis, ...]
                 images.append(img)
-                stage.moveBy(dx=0.0, dy=0.0, dz=self.param['Z-Stack', 'Step Size'], block=True)
+                self.view.setImage(img)
+                
+                if i < nSteps-1:
+                    ## speed 20 is quite slow; timeouts may occur if we go much slower than that..
+                    stage.moveBy([0.0, 0.0, self.param['Z-Stack', 'Step Size']], speed=20, block=True)  
             imgData = NP.concatenate(images, axis=0)
         else:
             imgData = self.takeImage()
 
         self.view.setImage(imgData)
-        info = self.param.getValues()
-        if not self.param['Z-Stack']:
-            info['Z-Stack'] = False
+        #info = self.param.getValues()
+        #if not self.param['Z-Stack']:
+            #info['Z-Stack'] = False
+        info = {}
         dh = self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
 
 
@@ -78,14 +85,16 @@ class Photomultiplier(Module):
         height = self.param['Image Height']
         width = self.param['Image Width']
         imagePts = height * width
-        saw1 = NP.linspace(self.param['Xmin'], self.param['Xmax'], width)
+        downsample = self.param['Downsample']
+        samples = imagePts*downsample
+        saw1 = NP.linspace(self.param['Xmin'], self.param['Xmax'], width*downsample)
         xScan = NP.tile(saw1, (1, height))[0,:]
         yvals = NP.linspace(self.param['Ymin'], self.param['Ymax'], height)
-        yScan = NP.empty(imagePts)
+        yScan = NP.empty(imagePts*downsample)
         for y in range(height):
-            yScan[y*width:(y+1)*width] = yvals[y]
-        cmd= {'protocol': {'duration': imagePts/self.param['Sample Rate']},
-              'DAQ' : {'rate': self.param['Sample Rate'], 'numPts': imagePts}, 
+            yScan[y*width*downsample:(y+1)*width*downsample] = yvals[y]
+        cmd= {'protocol': {'duration': imagePts*downsample/self.param['Sample Rate']},
+              'DAQ' : {'rate': self.param['Sample Rate'], 'numPts': imagePts*downsample, 'downsample':downsample}, 
               'Scanner-Raw': {
                   'XAxis' : {'command': xScan},
                   'YAxis' : {'command': yScan}
@@ -100,6 +109,7 @@ class Photomultiplier(Module):
         task = self.Manager.createTask(cmd)
         task.execute(block = False)
         while not task.isDone():
+            QtGui.QApplication.processEvents()
             time.sleep(0.1)
         data = task.getResult()
         imgData = data['PMT']['Input'].view(NP.ndarray)
