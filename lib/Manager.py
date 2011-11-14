@@ -318,6 +318,7 @@ Valid options are:
                 raise Exception('Config file "%s" not found.' % fileName)
             
     def writeConfigFile(self, data, fileName):
+        """Write a file into the currently used config directory."""
         fileName = self.configFileName(fileName)
         dirName = os.path.dirname(fileName)
         if not os.path.exists(dirName):
