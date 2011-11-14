@@ -57,6 +57,7 @@ def toposort(deps, nodes=None, seen=None, stack=None, depth=0):
 class Flowchart(Node):
     
     sigFileLoaded = QtCore.Signal(object)
+    sigFileSaved = QtCore.Signal(object)
     
     
     #sigOutputChanged = QtCore.Signal() ## inherited from Node
@@ -492,6 +493,7 @@ class Flowchart(Node):
             return
             #fileName = QtGui.QFileDialog.getSaveFileName(None, "Save Flowchart..", startDir, "Flowchart (*.fc)")
         configfile.writeConfigFile(self.saveState(), fileName)
+        self.sigFileSaved.emit(fileName)
 
     def clear(self):
         for n in self._nodes.values():
@@ -570,6 +572,7 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         self.ui.showChartBtn.toggled.connect(self.chartToggled)
         self.chart.sigFileLoaded.connect(self.setCurrentFile)
         self.ui.reloadBtn.clicked.connect(self.reloadClicked)
+        self.chart.sigFileSaved.connect(self.fileSaved)
         
     
         
@@ -596,13 +599,17 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         newFile = self.chart.loadFile()
         #self.setCurrentFile(newFile)
         
+    def fileSaved(self, fileName):
+        self.setCurrentFile(fileName)
+        self.ui.saveBtn.success("Saved.")
+        
     def saveClicked(self):
         if self.currentFileName is None:
             self.saveAsClicked()
         else:
             try:
                 self.chart.saveFile(self.currentFileName)
-                self.ui.saveBtn.success("Saved.")
+                #self.ui.saveBtn.success("Saved.")
             except:
                 self.ui.saveBtn.failure("Error")
                 raise
@@ -613,12 +620,13 @@ class FlowchartCtrlWidget(QtGui.QWidget):
                 newFile = self.chart.saveFile()
             else:
                 newFile = self.chart.saveFile(suggestedFileName=self.currentFileName)
-            self.ui.saveAsBtn.success("Saved.")
+            #self.ui.saveAsBtn.success("Saved.")
+            #print "Back to saveAsClicked."
         except:
             self.ui.saveBtn.failure("Error")
             raise
             
-        self.setCurrentFile(newFile)
+        #self.setCurrentFile(newFile)
             
     def setCurrentFile(self, fileName):
         self.currentFileName = fileName
