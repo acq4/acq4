@@ -972,7 +972,8 @@ class DirHandle(FileHandle):
         for f in ind:
             if not self.exists(f):
                 print "File %s is no more, removing from index." % (os.path.join(self.name(), f))
-                ind.remove(f)
+                del ind[f]
+                #ind.remove(f)
                 changed = True
         self._writeIndex(ind)
             
