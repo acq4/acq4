@@ -254,7 +254,7 @@ class SutterMP285Thread(QtCore.QThread):
             self.getImmediatePos()
             monitor = True
         except:
-            debug.printExc("Immediate position not available:")
+            debug.printExc("Sutter MP285: Cannot determine position:")
             monitor = False
         
         while True:
