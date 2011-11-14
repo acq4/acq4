@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './lib/util/Canvas/items/TransformGuiTemplate.ui'
+# Form implementation generated from reading ui file 'TransformGuiTemplate.ui'
 #
-# Created: Wed May 18 20:44:17 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Nov 11 10:09:46 2011
+#      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -17,13 +17,15 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(166, 109)
+        Form.resize(169, 82)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(Form.sizePolicy().hasHeightForWidth())
         Form.setSizePolicy(sizePolicy)
         self.verticalLayout = QtGui.QVBoxLayout(Form)
+        self.verticalLayout.setSpacing(1)
+        self.verticalLayout.setMargin(0)
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
         self.translateLabel = QtGui.QLabel(Form)
         self.translateLabel.setObjectName(_fromUtf8("translateLabel"))
