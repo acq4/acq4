@@ -201,7 +201,7 @@ class ScannerProtoGui(ProtocolGui):
                     li.setCheckState(0, QtCore.Qt.Checked)
                 else:
                     li.setCheckState(0, QtCore.Qt.Unchecked)
-                self.itemToggled(li)
+                #self.itemToggled(li)
             #self.testTarget.setPointSize(self.pointSize()[0])
             self.testTarget.setPointSize()
             self.spotMarker.setPointSize()
@@ -531,7 +531,7 @@ class ScannerProtoGui(ProtocolGui):
         #print "tree Item Moved"
         
         
-    def itemToggled(self, item, column):
+    def itemToggled(self, item, column=None):
         name = str(item.text(0))
         i = self.items[name]
         if item.checkState(0) == QtCore.Qt.Checked and not self.ui.hideCheck.isChecked():
