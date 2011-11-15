@@ -5,34 +5,7 @@ import debug
 import traceback
 import pyqtgraph as pg
 import numpy as np
-
-class CmdInput(QtGui.QLineEdit):
-    def __init__(self):
-        QtGui.QLineEdit.__init__(self)
-        self.history = [""]
-        self.ptr = 0
-        self.lastCmd = None
-    
-    def keyPressEvent(self, ev):
-        #print "press:", ev.key(), QtCore.Qt.Key_Up, QtCore.Qt.Key_Down, QtCore.Qt.Key_Enter
-        if ev.key() == QtCore.Qt.Key_Up and self.ptr < len(self.history) - 1:
-            self.ptr += 1
-            self.setText(self.history[self.ptr])
-            ev.accept()
-            return
-        elif ev.key() ==  QtCore.Qt.Key_Down and self.ptr > 0:
-            self.ptr -= 1
-            self.setText(self.history[self.ptr])
-            ev.accept()
-            return
-        elif ev.key() == QtCore.Qt.Key_Return:
-            cmd = self.text()
-            if len(self.history) == 1 or cmd != self.history[1]:
-                self.history.insert(1, cmd)
-            self.ptr = 0
-            self.lastCmd = cmd
-            self.setText("")
-        QtGui.QLineEdit.keyPressEvent(self, ev)
+import template
         
 
 class Console(Module):
@@ -53,9 +26,14 @@ class Console(Module):
         self.win.show()
         self.cw = QtGui.QWidget()
         self.win.setCentralWidget(self.cw)
-        self.layout = QtGui.QVBoxLayout()
-        self.cw.setLayout(self.layout)
-        self.output = QtGui.QPlainTextEdit()
+        
+        self.ui = template.Ui_Form()
+        self.ui.setupUi(self.cw)
+        self.output = self.ui.output
+        self.input = self.ui.input
+        #self.layout = QtGui.QVBoxLayout()
+        #self.cw.setLayout(self.layout)
+        #self.output = QtGui.QPlainTextEdit()
         self.output.setPlainText("""
         Python console built-in variables:
            man - The ACQ4 Manager object
@@ -69,16 +47,18 @@ class Console(Module):
            np - numpy library
            
         """)
-        self.output.setReadOnly(True)
-        self.layout.addWidget(self.output)
-        self.input = CmdInput()
+        #self.output.setReadOnly(True)
+        #self.layout.addWidget(self.output)
+        #self.input = CmdInput()
         if 'history' in config:
             self.input.history = config['history']
-        self.layout.addWidget(self.input)
-        self.input.returnPressed.connect(self.runCmd)
+        #self.layout.addWidget(self.input)
+        self.ui.historyList.hide()
         
-    def runCmd(self):
-        cmd = str(self.input.lastCmd)
+        self.input.sigExecuteCmd.connect(self.runCmd)
+        
+    def runCmd(self, cmd):
+        #cmd = str(self.input.lastCmd)
         stdout = sys.stdout
         stderr = sys.stderr
         encCmd = re.sub(r'>', '&gt;', re.sub(r'<', '&lt;', cmd))
