@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.Qt import QtCore, QtGui
 #from PySide import QtCore, QtGui
+#import Node as NodeMod
 from Node import *
 #import functions
 from advancedTypes import OrderedDict
@@ -57,6 +58,7 @@ def toposort(deps, nodes=None, seen=None, stack=None, depth=0):
 class Flowchart(Node):
     
     sigFileLoaded = QtCore.Signal(object)
+    sigFileSaved = QtCore.Signal(object)
     
     
     #sigOutputChanged = QtCore.Signal() ## inherited from Node
@@ -492,6 +494,7 @@ class Flowchart(Node):
             return
             #fileName = QtGui.QFileDialog.getSaveFileName(None, "Save Flowchart..", startDir, "Flowchart (*.fc)")
         configfile.writeConfigFile(self.saveState(), fileName)
+        self.sigFileSaved.emit(fileName)
 
     def clear(self):
         for n in self._nodes.values():
@@ -570,6 +573,7 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         self.ui.showChartBtn.toggled.connect(self.chartToggled)
         self.chart.sigFileLoaded.connect(self.setCurrentFile)
         self.ui.reloadBtn.clicked.connect(self.reloadClicked)
+        self.chart.sigFileSaved.connect(self.fileSaved)
         
     
         
@@ -596,13 +600,17 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         newFile = self.chart.loadFile()
         #self.setCurrentFile(newFile)
         
+    def fileSaved(self, fileName):
+        self.setCurrentFile(fileName)
+        self.ui.saveBtn.success("Saved.")
+        
     def saveClicked(self):
         if self.currentFileName is None:
             self.saveAsClicked()
         else:
             try:
                 self.chart.saveFile(self.currentFileName)
-                self.ui.saveBtn.success("Saved.")
+                #self.ui.saveBtn.success("Saved.")
             except:
                 self.ui.saveBtn.failure("Error")
                 raise
@@ -613,12 +621,13 @@ class FlowchartCtrlWidget(QtGui.QWidget):
                 newFile = self.chart.saveFile()
             else:
                 newFile = self.chart.saveFile(suggestedFileName=self.currentFileName)
-            self.ui.saveAsBtn.success("Saved.")
+            #self.ui.saveAsBtn.success("Saved.")
+            #print "Back to saveAsClicked."
         except:
             self.ui.saveBtn.failure("Error")
             raise
             
-        self.setCurrentFile(newFile)
+        #self.setCurrentFile(newFile)
             
     def setCurrentFile(self, fileName):
         self.currentFileName = fileName
@@ -728,7 +737,8 @@ class FlowchartWidget(dockarea.DockArea):
         self.addDock(self.selDock, 'bottom')
         
 
-        self._scene = QtGui.QGraphicsScene()
+        #self._scene = QtGui.QGraphicsScene()
+        self._scene = FlowchartGraphicsView.FlowchartGraphicsScene()
         self.view.setScene(self._scene)
         
         self.buildMenu()
@@ -736,7 +746,8 @@ class FlowchartWidget(dockarea.DockArea):
             
         self._scene.selectionChanged.connect(self.selectionChanged)
         self.view.sigHoverOver.connect(self.hoverOver)
-        self.view.sigClicked.connect(self.showViewMenu)
+        #self.view.sigClicked.connect(self.showViewMenu)
+        self._scene.sigContextMenuEvent.connect(self.showViewMenu)
         
     def reloadLibrary(self):
         #QtCore.QObject.disconnect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
@@ -760,10 +771,13 @@ class FlowchartWidget(dockarea.DockArea):
     
     def showViewMenu(self, ev):
         #QtGui.QPushButton.mouseReleaseEvent(self.ui.addNodeBtn, ev)
-        if ev.button() == QtCore.Qt.RightButton:
-            self.menuPos = self.view.mapToScene(ev.pos())
-            self.nodeMenu.popup(ev.globalPos())
-
+        #if ev.button() == QtCore.Qt.RightButton:
+            #self.menuPos = self.view.mapToScene(ev.pos())
+            #self.nodeMenu.popup(ev.globalPos())
+        
+        self.menuPos = ev.scenePos()
+        self.nodeMenu.popup(ev.screenPos())
+        
     def scene(self):
         return self._scene
 
