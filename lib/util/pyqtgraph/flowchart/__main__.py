@@ -6,10 +6,15 @@ p = os.path.dirname(os.path.abspath(__file__))
 p = os.path.join(p, '..', '..')
 sys.path.insert(0, p)
 
+
 from pyqtgraph.flowchart import Flowchart
 from pyqtgraph.Qt import QtGui
 
+#import pyqtgraph.flowchart as f
+
 app = QtGui.QApplication([])
+
+#TETRACYCLINE = True
 
 fc = Flowchart(terminals={
     'dataIn': {'io': 'in'},
@@ -49,5 +54,8 @@ fc.restoreState(s)
 
 fc.setInput(dataIn=3)
 
+#f.NodeMod.TETRACYCLINE = False
+
 if sys.flags.interactive == 0:
     app.exec_()
+

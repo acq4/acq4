@@ -282,6 +282,7 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
             self.label.setTextInteractionFlags(QtCore.Qt.TextEditorInteraction)
             self.label.focusOutEvent = self.labelFocusOut
             self.label.keyPressEvent = self.labelKeyPress
+            
 
     def labelFocusOut(self, ev):
         QtGui.QGraphicsTextItem.focusOutEvent(self.label, ev)
@@ -363,6 +364,7 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
                 #print "remove unused connection"
                 self.scene().removeItem(self.newConnection)
             self.newConnection = None
+        
         
     def hoverEnterEvent(self, ev):
         self.hover = True
