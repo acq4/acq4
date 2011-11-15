@@ -1,10 +1,10 @@
 from PyQt4 import QtCore, QtGui
 from lib.modules.Module import *
-import sys, debug
+import sys, re, os
+import debug
 import traceback
 import pyqtgraph as pg
 import numpy as np
-import re
 
 class CmdInput(QtGui.QLineEdit):
     def __init__(self):
@@ -38,12 +38,17 @@ class CmdInput(QtGui.QLineEdit):
 class Console(Module):
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
+        self.manager = manager
         self.locals = {
             'man': manager,
             'pg': pg,
             'np': np,
         }
+        self.configFile = os.path.join('modules', 'Console.cfg')
+        config = manager.readConfigFile(self.configFile, missingOk=True)
+        
         self.win = QtGui.QMainWindow()
+        self.win.setWindowTitle('ACQ4 Console')
         self.win.resize(800,500)
         self.win.show()
         self.cw = QtGui.QWidget()
@@ -67,6 +72,8 @@ class Console(Module):
         self.output.setReadOnly(True)
         self.layout.addWidget(self.output)
         self.input = CmdInput()
+        if 'history' in config:
+            self.input.history = config['history']
         self.layout.addWidget(self.input)
         self.input.returnPressed.connect(self.runCmd)
         
@@ -76,6 +83,9 @@ class Console(Module):
         stderr = sys.stderr
         encCmd = re.sub(r'>', '&gt;', re.sub(r'<', '&lt;', cmd))
         self.write("<b>&gt; %s</b>\n"%encCmd, html=True)
+        
+        self.manager.writeConfigFile({'history': self.input.history[:100]}, self.configFile)
+        
         try:
             sys.stdout = self
             sys.stderr = self
