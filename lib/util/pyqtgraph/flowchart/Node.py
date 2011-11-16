@@ -280,7 +280,7 @@ class Node(QtCore.QObject):
         return terms
         
     def restoreTerminals(self, state):
-        for name in self.terminals:
+        for name in self.terminals.keys():
             if name not in state:
                 self.removeTerminal(name)
         for name, opts in state.iteritems():
