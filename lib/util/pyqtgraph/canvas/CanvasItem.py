@@ -53,6 +53,7 @@ class CanvasItem(QtCore.QObject):
         self.ctrl = QtGui.QWidget()
         self.layout = QtGui.QGridLayout()
         self.layout.setSpacing(0)
+        self.layout.setContentsMargins(0,0,0,0)
         self.ctrl.setLayout(self.layout)
         
         self.alphaLabel = QtGui.QLabel("Alpha")

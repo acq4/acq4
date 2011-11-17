@@ -169,7 +169,8 @@ class Photostim(AnalysisModule):
             ## get sequence parameters
             params = self.dataModel.listSequenceParams(fh).deepcopy()  ## copy is required since this info is read-only.
             if ('Scanner', 'targets') in params:
-                params.remove(('Scanner', 'targets'))  ## removing this key enables us to process other sequence variables independently
+                #params.remove(('Scanner', 'targets'))  ## removing this key enables us to process other sequence variables independently
+                del params[('Scanner', 'targets')]
         
             ## If the scan has sequence parameters other than the spot position, 
             ## load each sub-scan separately.

@@ -6,21 +6,18 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>185</width>
-    <height>134</height>
+    <width>242</width>
+    <height>149</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <property name="horizontalSpacing">
+   <property name="margin">
     <number>0</number>
    </property>
-   <property name="verticalSpacing">
-    <number>3</number>
-   </property>
-   <property name="margin">
+   <property name="spacing">
     <number>0</number>
    </property>
    <item row="0" column="0">

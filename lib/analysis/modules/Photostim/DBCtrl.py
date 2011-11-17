@@ -4,6 +4,7 @@ from advancedTypes import OrderedDict
 from Map import Map
 import DatabaseGui
 import MapCtrlTemplate
+from lib.Manager import logMsg, logExc
 
 class DBCtrl(QtGui.QWidget):
     """GUI for reading and writing to the database."""
@@ -158,7 +159,7 @@ class DBCtrl(QtGui.QWidget):
         dbui = self.host.getElement('Database')
         db = dbui.getDb()
         if db is None:
-            raise Exception("No DB Loaded.")
+            logMsg("No database loaded in Data Manager.", msgType='error')
             
         ident = self.dbIdentity+'.maps'
         table = dbui.getTableName(ident)

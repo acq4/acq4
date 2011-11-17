@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'ScanCanvasItemTemplate.ui'
 #
-# Created: Wed Oct 19 11:37:22 2011
-#      by: PyQt4 UI code generator 4.8.3
+# Created: Fri Nov 11 09:59:56 2011
+#      by: PyQt4 UI code generator 4.8.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -17,11 +17,10 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(185, 134)
+        Form.resize(242, 149)
         self.gridLayout = QtGui.QGridLayout(Form)
         self.gridLayout.setMargin(0)
-        self.gridLayout.setHorizontalSpacing(0)
-        self.gridLayout.setVerticalSpacing(3)
+        self.gridLayout.setSpacing(0)
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
         self.spotSizeLabel = QtGui.QLabel(Form)
         self.spotSizeLabel.setObjectName(_fromUtf8("spotSizeLabel"))
