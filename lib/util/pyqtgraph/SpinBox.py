@@ -305,7 +305,12 @@ class SpinBox(QtGui.QAbstractSpinBox):
                 ret = QtGui.QValidator.Intermediate
             
         ## draw / clear border
-        self.textValid = (ret == QtGui.QValidator.Acceptable)
+        if ret == QtGui.QValidator.Intermediate:
+            self.textValid = False
+        elif ret == QtGui.QValidator.Acceptable:
+            self.textValid = True
+        ## note: if text is invalid, we don't change the textValid flag 
+        ## since the text will be forced to its previous state anyway
         self.update()
         
         ## support 2 different pyqt APIs. Bleh.
