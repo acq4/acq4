@@ -33,6 +33,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         QtGui.QAbstractSpinBox.__init__(self, parent)
         self.lastValEmitted = None
         self.lastText = ''
+        self.textValid = True  ## If false, we draw a red border
         self.setMinimumWidth(0)
         self.setMaximumHeight(20)
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Preferred)
@@ -189,7 +190,16 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.sigValueChanging.emit(self, float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
         if not delaySignal:
             self.emitChanged()
-        self.setStyleSheet('')
+        #self.setStyleSheet('')
+
+    def valueInRange(self, value):
+        bounds = self.opts['bounds']
+        if bounds[0] is not None and value < bounds[0]:
+            return False
+        if bounds[1] is not None and value > bounds[1]:
+            return False
+        return True
+        
 
     def setMaximum(self, m):
         self.opts['bounds'][1] = D(unicode(m))
@@ -245,12 +255,13 @@ class SpinBox(QtGui.QAbstractSpinBox):
     def validate(self, strn, pos):
         if self.skipValidate:
             #print "skip validate"
+            #self.textValid = False
             ret = QtGui.QValidator.Acceptable
         else:
             try:
                 ## first make sure we didn't mess with the suffix
                 suff = self.opts.get('suffix', '')
-                if unicode(strn)[-len(suff):] != suff:
+                if len(suff) > 0 and unicode(strn)[-len(suff):] != suff:
                     #print '"%s" != "%s"' % (unicode(strn)[-len(suff):], suff)
                     ret = QtGui.QValidator.Invalid
                     
@@ -259,28 +270,51 @@ class SpinBox(QtGui.QAbstractSpinBox):
                     val = self.interpret()
                     if val is False:
                         #print "can't interpret"
-                        self.setStyleSheet('SpinBox {border: 2px solid #C55;}')
+                        #self.setStyleSheet('SpinBox {border: 2px solid #C55;}')
+                        #self.textValid = False
                         ret = QtGui.QValidator.Intermediate
                     else:
-                        if not self.opts['delayUntilEditFinished']:
-                            self.setValue(val, update=False)
-                        #print "  OK:", self.val
-                        self.setStyleSheet('')
-                        ret = QtGui.QValidator.Acceptable
+                        if self.valueInRange(val):
+                            if not self.opts['delayUntilEditFinished']:
+                                self.setValue(val, update=False)
+                            #print "  OK:", self.val
+                            #self.setStyleSheet('')
+                            #self.textValid = True
+                            
+                            ret = QtGui.QValidator.Acceptable
+                        else:
+                            ret = QtGui.QValidator.Intermediate
+                        
             except:
                 #print "  BAD"
                 #import sys
                 #sys.excepthook(*sys.exc_info())
-                self.setStyleSheet('SpinBox {border: 2px solid #C55;}')
+                #self.textValid = False
+                #self.setStyleSheet('SpinBox {border: 2px solid #C55;}')
                 ret = QtGui.QValidator.Intermediate
             
+        ## draw / clear border
+        self.textValid = (ret == QtGui.QValidator.Acceptable)
+        self.update()
+        
         ## support 2 different pyqt APIs. Bleh.
         if hasattr(QtCore, 'QString'):
             return (ret, pos)
         else:
             return (ret, strn, pos)
         
+    def paintEvent(self, ev):
+        QtGui.QSpinBox.paintEvent(self, ev)
         
+        ## draw red border if text is invalid
+        if not self.textValid:
+            p = QtGui.QPainter(self)
+            p.setRenderHint(p.Antialiasing)
+            p.setPen(fn.mkPen((200,50,50), width=2))
+            p.drawRoundedRect(self.rect().adjusted(2, 2, -2, -2), 4, 4)
+            p.end()
+
+
     def interpret(self):
         """Return value of text. Return False if text is invalid, raise exception if text is intermediate"""
         strn = self.lineEdit().text()
