@@ -280,7 +280,7 @@ class Node(QtCore.QObject):
         return terms
         
     def restoreTerminals(self, state):
-        for name in self.terminals:
+        for name in self.terminals.keys():
             if name not in state:
                 self.removeTerminal(name)
         for name, opts in state.iteritems():
@@ -339,13 +339,17 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         self.nameItem = QtGui.QGraphicsTextItem(self.node.name(), self)
         self.nameItem.moveBy(bounds.width()/2. - self.nameItem.boundingRect().width()/2., 0)
         self.nameItem.setTextInteractionFlags(QtCore.Qt.TextEditorInteraction)
+        
+        
+        self.buildMenu() ## build self.menu and self.terminalMenu, which are both QMenu
         self.updateTerminals()
+        
         self.pen = QtGui.QPen(QtGui.QColor(0,0,0))
 
         self.nameItem.focusOutEvent = self.labelFocusOut
         self.nameItem.keyPressEvent = self.labelKeyPress
         
-        self.buildMenu()
+        
         
         self.node.sigTerminalRenamed.connect(self.updateActionMenu)
         
@@ -398,7 +402,7 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
             self.terminals[i] = (t, item)
             y += dy
         
-        #self.buildMenu()
+        self.updateActionMenu()
         
         
     def boundingRect(self):

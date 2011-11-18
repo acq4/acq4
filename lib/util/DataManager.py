@@ -850,7 +850,8 @@ class DirHandle(FileHandle):
             index = self._readIndex(lock=False)
             if fileName in index:
                 try:
-                    index.remove(fileName)
+                    #index.remove(fileName)
+                    del index[fileName]
                 except:
                     print type(index)
                     raise

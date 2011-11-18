@@ -1,11 +1,45 @@
+# -*- coding: utf-8 -*-
 
 from lib.modules.Module import Module
 from PyQt4 import QtGui, QtCore
 from pyqtgraph.ImageView import ImageView
+import pyqtgraph as PG
 import InterfaceCombo
 import pyqtgraph.parametertree as PT
 import numpy as NP
 import time
+
+class Black(QtGui.QWidget):
+    def paintEvent(self, event):
+        p = QtGui.QPainter(self)
+        brush = PG.mkBrush(0,0,0)
+        p.fillRect(self.rect(), brush)
+        p.end()
+    
+    
+class ScreenBlanker:
+    def __enter__(self):
+        self.widgets = []
+        d = QtGui.QApplication.desktop()
+        #print "blank:", d.screenCount()
+        for i in range(d.screenCount()):
+            w = Black()
+            self.widgets.append(w)
+            sg = d.screenGeometry(i)
+            #print "  ", sg.x(), sg.y()
+            w.move(sg.x(), sg.y())
+            w.showFullScreen()
+        QtGui.QApplication.processEvents()
+        
+    def __exit__(self, *args):
+        for w in self.widgets:
+            #w.showNormal()
+            w.hide()
+        
+        self.widgets = []
+        
+    
+
 
 class Photomultiplier(Module):
     def __init__(self, manager, name, config):
@@ -36,11 +70,14 @@ class Photomultiplier(Module):
             dict(name='Downsample', type='int', value=1, limits=[1,None]),
             dict(name='Image Width', type='int', value=256),
             dict(name='Image Height', type='int', value=256),
-            dict(name='Xmin', type='float', value=-1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
-            dict(name='Xmax', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
+            dict(name='Xmin', type='float', value=-0.5, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
+            dict(name='Xmax', type='float', value=0.5, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
             dict(name='Ymin', type='float', value=-1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
-            dict(name='Ymax', type='float', value=1.0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
-            dict(name='Pockels', type='float', value= 0.1, suffix='V', dec=True, minStep=1e-3, limits=[0, 1.5], step=0.1, siPrefix=True),
+            dict(name='Ymax', type='float', value=0, suffix='V', dec=True, minStep=1e-3, limits=[-5, 5], step=0.5, siPrefix=True),
+            dict(name='Pockels', type='float', value= 0.03, suffix='V', dec=True, minStep=1e-3, limits=[0, 1.5], step=0.1, siPrefix=True),
+            dict(name='Blank Screen', type='bool', value=True),
+            dict(name='Show Voltage', type='bool', value=False),
+            dict(name='Store', type='bool', value=True),
             dict(name='Frame Time', type='float', readonly=True, value=0.0),
             dict(name="Z-Stack", type="bool", value=False, children=[
                 dict(name='Stage', type='interface', interfaceTypes='stage'),
@@ -78,10 +115,12 @@ class Photomultiplier(Module):
         #if not self.param['Z-Stack']:
             #info['Z-Stack'] = False
         info = {}
-        dh = self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
+        if self.param['Store']:
+            dh = self.manager.getCurrentDir().writeFile(imgData, '2pImage.ma', info=info, autoIncrement=True)
 
 
     def takeImage(self):
+
         height = self.param['Image Height']
         width = self.param['Image Width']
         imagePts = height * width
@@ -107,17 +146,28 @@ class Photomultiplier(Module):
             }
         # take some data
         task = self.Manager.createTask(cmd)
-        task.execute(block = False)
-        while not task.isDone():
-            QtGui.QApplication.processEvents()
-            time.sleep(0.1)
+        if self.param['Blank Screen']:
+            with ScreenBlanker():
+                task.execute(block = False)
+                while not task.isDone():
+                    QtGui.QApplication.processEvents()
+                    time.sleep(0.1)
+        else:
+            task.execute(block = False)
+            while not task.isDone():
+                QtGui.QApplication.processEvents()
+                time.sleep(0.1)
+
         data = task.getResult()
         imgData = data['PMT']['Input'].view(NP.ndarray)
-        imgData = imgData.reshape((width, height))
+        if self.param['Show Voltage']:
+            PG.plot(y=imgData, x=NP.linspace(0,imagePts*downsample/self.param['Sample Rate'], 
+            imagePts))
+        imgData = imgData.reshape((width, height)).transpose()
         return imgData
   
     def update(self):
-        self.param['Frame Time'] = self.param['Image Width']*self.param['Image Height']/self.param['Sample Rate']
+        self.param['Frame Time'] = self.param['Image Width']*self.param['Image Height']*self.param['Downsample']/self.param['Sample Rate']
         self.param['Z-Stack', 'Depth'] = self.param['Z-Stack', 'Step Size'] * (self.param['Z-Stack', 'Steps']-1)
         
         
