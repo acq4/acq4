@@ -81,6 +81,14 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.setKeyboardTracking(False)
         self.setOpts(**kwargs)
         
+        ## sanity checks:
+        if self.opts['int']:
+            step = self.opts['step']
+            mStep = self.opts['minStep']
+            if (int(step) != step) or (self.opts['dec'] and (int(mStep) != mStep)):
+                raise Exception("Integer SpinBox may only have integer step and minStep.")
+                
+        
         self.editingFinished.connect(self.editingFinishedEvent)
         self.proxy = SignalProxy(self.sigValueChanging, slot=self.delayedChange)
         
@@ -198,6 +206,9 @@ class SpinBox(QtGui.QAbstractSpinBox):
             return False
         if bounds[1] is not None and value > bounds[1]:
             return False
+        if self.opts.get('int', False):
+            if int(value) != value:
+                return False
         return True
         
 
@@ -327,7 +338,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         try:
             val = fn.siEval(strn)
         except:
-            sys.excepthook(*sys.exc_info())
+            #sys.excepthook(*sys.exc_info())
             #print "invalid"
             return False
         #print val
@@ -406,7 +417,7 @@ if __name__ == '__main__':
         s3 = SpinBox(value=1000, dec=True, step=0.5, minStep=1e-6, bounds=[1, 1e9], suffix='Hz', siPrefix=True)
         t3 = QtGui.QLineEdit()
         g.addRow(s3, t3)
-        s4 = SpinBox(dec=True, step=1, minStep=1e-6, bounds=[-10, 1000])
+        s4 = SpinBox(int=True, dec=True, step=1, minStep=1, bounds=[-10, 1000])
         t4 = QtGui.QLineEdit()
         g.addRow(s4, t4)
 
