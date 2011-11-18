@@ -27,7 +27,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
     
     valueChanged = QtCore.Signal(object)     # (value)  for compatibility with QSpinBox
     sigValueChanged = QtCore.Signal(object)  # (self)
-    sigValueChanging = QtCore.Signal(object)  # (value)  sent immediately; no delay.
+    sigValueChanging = QtCore.Signal(object)  # (self, value)  sent immediately; no delay.
     
     def __init__(self, parent=None, value=0.0, **kwargs):
         QtGui.QAbstractSpinBox.__init__(self, parent)
@@ -244,27 +244,32 @@ class SpinBox(QtGui.QAbstractSpinBox):
         
     def validate(self, strn, pos):
         if self.skipValidate:
-            return (QtGui.QValidator.Acceptable, strn, pos)
-        #print "Validate:", strn, pos
-        try:
-            val = self.interpret()
-            if val is False:
+            ret = QtGui.QValidator.Acceptable
+        else:
+            try:
+                val = self.interpret()
+                if val is False:
+                    self.lineEdit().setStyleSheet('border: 2px solid #C55;')
+                    ret = QtGui.QValidator.Intermediate
+                else:
+                    if not self.opts['delayUntilEditFinished']:
+                        self.setValue(val, update=False)
+                    #print "  OK:", self.val
+                    self.lineEdit().setStyleSheet('border: 0px;')
+                    ret = QtGui.QValidator.Acceptable
+            except:
+                #print "  BAD"
+                #import sys
+                #sys.excepthook(*sys.exc_info())
                 self.lineEdit().setStyleSheet('border: 2px solid #C55;')
-                return (QtGui.QValidator.Intermediate, strn, pos)
-                #return (QtGui.QValidator.Invalid, pos)
-                
-            if not self.opts['delayUntilEditFinished']:
-                self.setValue(val, update=False)
-            #print "  OK:", self.val
-            self.lineEdit().setStyleSheet('border: 0px;')
+                ret = QtGui.QValidator.Intermediate
             
-            return (QtGui.QValidator.Acceptable, strn, pos)
-        except:
-            #print "  BAD"
-            #import sys
-            #sys.excepthook(*sys.exc_info())
-            self.lineEdit().setStyleSheet('border: 2px solid #C55;')
-            return (QtGui.QValidator.Intermediate, strn, pos)
+        ## support 2 different pyqt APIs. Bleh.
+        if hasattr(QtCore, 'QString'):
+            return (ret, pos)
+        else:
+            return (ret, strn, pos)
+        
         
     def interpret(self):
         """Return value of text. Return False if text is invalid, raise exception if text is intermediate"""
@@ -338,6 +343,10 @@ if __name__ == '__main__':
         #sb = QtCore.QObject.sender()
         print str(sb) + " valueChanged: %s" % str(sb.value())
     
+    def valueChanging(sb):
+        #sb = QtCore.QObject.sender()
+        print str(sb) + " valueChanging: %s" % str(sb.value())
+    
     def mkWin():
         win = QtGui.QMainWindow()
         g = QtGui.QFormLayout()
@@ -365,6 +374,7 @@ if __name__ == '__main__':
             #QtCore.QObject.connect(sb, QtCore.SIGNAL('valueChanged(double)'), lambda v: sys.stdout.write(str(sb) + " valueChanged\n"))
             #QtCore.QObject.connect(sb, QtCore.SIGNAL('editingFinished()'), lambda: sys.stdout.write(str(sb) + " editingFinished\n"))
             sb.sigValueChanged.connect(valueChanged)
+            sb.sigValueChanging.connect(valueChanging)
             sb.editingFinished.connect(lambda: sys.stdout.write(str(sb) + " editingFinished\n"))
         return win, w, [s1, s2, s3, s4]
     a = mkWin()
