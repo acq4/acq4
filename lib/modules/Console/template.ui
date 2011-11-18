@@ -25,7 +25,7 @@
      <property name="orientation">
       <enum>Qt::Vertical</enum>
      </property>
-     <widget class="QWidget" name="">
+     <widget class="QWidget" name="layoutWidget">
       <layout class="QVBoxLayout" name="verticalLayout">
        <item>
         <widget class="QPlainTextEdit" name="output">
@@ -42,36 +42,7 @@
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout">
          <item>
-          <widget class="CmdInput" name="input">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="font">
-            <font>
-             <family>Monospace</family>
-            </font>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="execBtn">
-           <property name="text">
-            <string>Exec</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QCheckBox" name="bgCheck">
-           <property name="text">
-            <string>Background</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
+          <widget class="CmdInput" name="input"/>
          </item>
          <item>
           <widget class="QPushButton" name="historyBtn">
@@ -101,7 +72,7 @@
  <customwidgets>
   <customwidget>
    <class>CmdInput</class>
-   <extends>QPlainTextEdit</extends>
+   <extends>QLineEdit</extends>
    <header>CmdInput</header>
   </customwidget>
  </customwidgets>
