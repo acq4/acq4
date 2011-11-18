@@ -81,13 +81,6 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.setKeyboardTracking(False)
         self.setOpts(**kwargs)
         
-        ## sanity checks:
-        if self.opts['int']:
-            step = self.opts['step']
-            mStep = self.opts['minStep']
-            if (int(step) != step) or (self.opts['dec'] and (int(mStep) != mStep)):
-                raise Exception("Integer SpinBox may only have integer step and minStep.")
-                
         
         self.editingFinished.connect(self.editingFinishedEvent)
         self.proxy = SignalProxy(self.sigValueChanging, slot=self.delayedChange)
@@ -97,11 +90,13 @@ class SpinBox(QtGui.QAbstractSpinBox):
         for k in opts:
             if k == 'bounds':
                 #print opts[k]
-                for i in [0,1]:
-                    if opts[k][i] is None:
-                        self.opts[k][i] = None
-                    else:
-                        self.opts[k][i] = D(unicode(opts[k][i]))
+                self.setMinimum(opts[k][0], update=False)
+                self.setMaximum(opts[k][1], update=False)
+                #for i in [0,1]:
+                    #if opts[k][i] is None:
+                        #self.opts[k][i] = None
+                    #else:
+                        #self.opts[k][i] = D(unicode(opts[k][i]))
             elif k in ['step', 'minStep']:
                 self.opts[k] = D(unicode(opts[k]))
             elif k == 'value':
@@ -110,8 +105,104 @@ class SpinBox(QtGui.QAbstractSpinBox):
                 self.opts[k] = opts[k]
         if 'value' in opts:
             self.setValue(opts['value'])
-        self.updateText()
             
+        ## If bounds have changed, update value to match
+        if 'bounds' in opts and 'value' not in opts:
+            self.setValue()   
+            
+        ## sanity checks:
+        if self.opts['int']:
+            step = self.opts['step']
+            mStep = self.opts['minStep']
+            if (int(step) != step) or (self.opts['dec'] and (int(mStep) != mStep)):
+                raise Exception("Integer SpinBox may only have integer step and minStep.")
+            
+        self.updateText()
+
+
+
+    def setMaximum(self, m, update=True):
+        if m is not None:
+            m = D(unicode(m))
+        self.opts['bounds'][1] = m
+        if update:
+            self.setValue()
+    
+    def setMinimum(self, m, update=True):
+        if m is not None:
+            m = D(unicode(m))
+        self.opts['bounds'][0] = m
+        if update:
+            self.setValue()
+        
+    def setPrefix(self, p):
+        self.setOpts(prefix=p)
+    
+    def setRange(self, r0, r1):
+        self.setOpts(bounds = [r0,r1])
+        
+    def setProperty(self, prop, val):
+        """setProperty is just for compatibility with QSpinBox"""
+        if prop == 'value':
+            #if type(val) is QtCore.QVariant:
+                #val = val.toDouble()[0]
+            self.setValue(val)
+        else:
+            print "Warning: SpinBox.setProperty('%s', ..) not supported." % prop
+
+    def setSuffix(self, suf):
+        self.setOpts(suffix=suf)
+
+    def setSingleStep(self, step):
+        self.setOpts(step=step)
+        
+    def setDecimals(self, decimals):
+        self.setOpts(decimals=decimals)
+
+    def value(self):
+        if self.opts['int']:
+            return int(self.val)
+        else:
+            return float(self.val)
+
+    def setValue(self, value=None, update=True, delaySignal=False):
+        """
+        Set the value of this spin. 
+        If the value is out of bounds, it will be moved to the nearest boundary
+        If the spin is integer type, the value will be coerced to int
+        Returns the actual value set.
+        
+        If value is None, then the current value is used (this is for resetting
+        the value after bounds, etc. have changed)
+        """
+        
+        if value is None:
+            value = self.value()
+        
+        bounds = self.opts['bounds']
+        if bounds[0] is not None and value < bounds[0]:
+            value = bounds[0]
+        if bounds[1] is not None and value > bounds[1]:
+            value = bounds[1]
+
+        if self.opts['int']:
+            value = int(value)
+
+        value = D(unicode(value))
+        if value == self.val:
+            return
+        prev = self.val
+        
+        self.val = value
+        if update:
+            self.updateText(prev=prev)
+            
+        self.sigValueChanging.emit(self, float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
+        if not delaySignal:
+            self.emitChanged()
+        
+        return value
+
             
     def emitChanged(self):
         self.lastValEmitted = self.val
@@ -172,33 +263,6 @@ class SpinBox(QtGui.QAbstractSpinBox):
                 val = D(0)
         self.setValue(val, delaySignal=True)  ## note all steps (arrow buttons, wheel, up/down keys..) emit delayed signals only.
         
-    def setValue(self, value, update=True, delaySignal=False):
-        #print "setValue:", value
-        #if value == 0.0:
-            #import traceback
-            #traceback.print_stack()
-        if self.opts['int']:
-            value = int(value)
-        value = D(unicode(value))
-        if value == self.val:
-            #print "  value not changed; ignore."
-            return
-        prev = self.val
-        
-        bounds = self.opts['bounds']
-        if bounds[0] is not None and value < bounds[0]:
-            return
-        if bounds[1] is not None and value > bounds[1]:
-            return
-        self.val = value
-        if update:
-            self.updateText(prev=prev)
-            
-        #self.emit(QtCore.SIGNAL('valueChanging'), float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
-        self.sigValueChanging.emit(self, float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
-        if not delaySignal:
-            self.emitChanged()
-        #self.setStyleSheet('')
 
     def valueInRange(self, value):
         bounds = self.opts['bounds']
@@ -211,42 +275,6 @@ class SpinBox(QtGui.QAbstractSpinBox):
                 return False
         return True
         
-
-    def setMaximum(self, m):
-        self.opts['bounds'][1] = D(unicode(m))
-    
-    def setMinimum(self, m):
-        self.opts['bounds'][0] = D(unicode(m))
-        
-    def setPrefix(self, p):
-        self.setOpts(prefix=p)
-    
-    def setRange(self, r0, r1):
-        self.setOpts(bounds = [r0,r1])
-        
-    def setProperty(self, prop, val):
-        """setProperty is just for compatibility with QSpinBox"""
-        if prop == 'value':
-            #if type(val) is QtCore.QVariant:
-                #val = val.toDouble()[0]
-            self.setValue(val)
-        else:
-            print "Warning: SpinBox.setProperty('%s', ..) not supported." % prop
-
-    def setSuffix(self, suf):
-        self.setOpts(suffix=suf)
-
-    def setSingleStep(self, step):
-        self.setOpts(step=step)
-        
-    def setDecimals(self, decimals):
-        self.setOpts(decimals=decimals)
-
-    def value(self):
-        if self.opts['int']:
-            return int(self.val)
-        else:
-            return float(self.val)
 
     def updateText(self, prev=None):
         #print "Update text."
