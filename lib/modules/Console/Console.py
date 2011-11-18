@@ -97,7 +97,7 @@ class Console(Module):
             sb = self.output.verticalScrollBar()
             sb.setValue(sb.maximum())
             sb = self.ui.historyList.verticalScrollBar()
-            sb.setValue(sb.maximum())           
+            sb.setValue(sb.maximum())
             
     def execSingle(self, cmd):
         try:
