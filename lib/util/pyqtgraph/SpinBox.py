@@ -27,7 +27,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
     
     valueChanged = QtCore.Signal(object)     # (value)  for compatibility with QSpinBox
     sigValueChanged = QtCore.Signal(object)  # (self)
-    sigValueChanging = QtCore.Signal(object)  # (self, value)  sent immediately; no delay.
+    sigValueChanging = QtCore.Signal(object, object)  # (self, value)  sent immediately; no delay.
     
     def __init__(self, parent=None, value=0.0, **kwargs):
         QtGui.QAbstractSpinBox.__init__(self, parent)
@@ -186,10 +186,10 @@ class SpinBox(QtGui.QAbstractSpinBox):
             self.updateText(prev=prev)
             
         #self.emit(QtCore.SIGNAL('valueChanging'), float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
-        self.sigValueChanging.emit(float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
+        self.sigValueChanging.emit(self, float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
         if not delaySignal:
             self.emitChanged()
-        self.lineEdit().setStyleSheet('border: 0px;')
+        self.setStyleSheet('')
 
     def setMaximum(self, m):
         self.opts['bounds'][1] = D(unicode(m))
@@ -244,24 +244,34 @@ class SpinBox(QtGui.QAbstractSpinBox):
         
     def validate(self, strn, pos):
         if self.skipValidate:
+            #print "skip validate"
             ret = QtGui.QValidator.Acceptable
         else:
             try:
-                val = self.interpret()
-                if val is False:
-                    self.lineEdit().setStyleSheet('border: 2px solid #C55;')
-                    ret = QtGui.QValidator.Intermediate
+                ## first make sure we didn't mess with the suffix
+                suff = self.opts.get('suffix', '')
+                if unicode(strn)[-len(suff):] != suff:
+                    #print '"%s" != "%s"' % (unicode(strn)[-len(suff):], suff)
+                    ret = QtGui.QValidator.Invalid
+                    
+                ## next see if we actually have an interpretable value
                 else:
-                    if not self.opts['delayUntilEditFinished']:
-                        self.setValue(val, update=False)
-                    #print "  OK:", self.val
-                    self.lineEdit().setStyleSheet('border: 0px;')
-                    ret = QtGui.QValidator.Acceptable
+                    val = self.interpret()
+                    if val is False:
+                        #print "can't interpret"
+                        self.setStyleSheet('SpinBox {border: 2px solid #C55;}')
+                        ret = QtGui.QValidator.Intermediate
+                    else:
+                        if not self.opts['delayUntilEditFinished']:
+                            self.setValue(val, update=False)
+                        #print "  OK:", self.val
+                        self.setStyleSheet('')
+                        ret = QtGui.QValidator.Acceptable
             except:
                 #print "  BAD"
                 #import sys
                 #sys.excepthook(*sys.exc_info())
-                self.lineEdit().setStyleSheet('border: 2px solid #C55;')
+                self.setStyleSheet('SpinBox {border: 2px solid #C55;}')
                 ret = QtGui.QValidator.Intermediate
             
         ## support 2 different pyqt APIs. Bleh.
@@ -343,7 +353,7 @@ if __name__ == '__main__':
         #sb = QtCore.QObject.sender()
         print str(sb) + " valueChanged: %s" % str(sb.value())
     
-    def valueChanging(sb):
+    def valueChanging(sb, value):
         #sb = QtCore.QObject.sender()
         print str(sb) + " valueChanging: %s" % str(sb.value())
     
