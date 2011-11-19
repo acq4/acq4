@@ -8,7 +8,7 @@ from advancedTypes import OrderedDict
 import debug
 import ColorMapper
 import pyqtgraph as pg
-import ProgressDialog
+import pyqtgraph.ProgressDialog as ProgressDialog
 
 from Scan import Scan
 from DBCtrl import DBCtrl
