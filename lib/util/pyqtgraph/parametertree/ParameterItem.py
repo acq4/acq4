@@ -55,6 +55,21 @@ class ParameterItem(QtGui.QTreeWidgetItem):
         ## called when the parameter's value has changed
         pass
     
+    def isFocusable(self):
+        """Return True if this item should be included in the tab-focus order"""
+        return False
+        
+    def setFocus(self):
+        """Give input focus to this item.
+        Can be reimplemented to display editor widgets, etc.
+        """
+        pass
+    
+    def focusNext(self, forward=True):
+        """Give focus to the next (or previous) focusable item in the parameter tree"""
+        self.treeWidget().focusNext(self, forward=forward)
+        
+    
     def treeWidgetChanged(self):
         """Called when this item is added or removed from a tree.
         Expansion, visibility, and column widgets must all be configured AFTER 

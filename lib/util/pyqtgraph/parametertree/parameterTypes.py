@@ -24,6 +24,7 @@ class WidgetParameterItem(ParameterItem):
         ## build widget into column 1 with a display label and default button.
         w = self.makeWidget()  
         self.widget = w
+        self.eventProxy = EventProxy(w, self.widgetEventFilter)
         
         opts = self.param.opts
         if 'tip' in opts:
@@ -117,7 +118,29 @@ class WidgetParameterItem(ParameterItem):
         else:
             raise Exception("Unknown type '%s'" % unicode(t))
         return w
-
+        
+    def widgetEventFilter(self, obj, ev):
+        ## filter widget's events
+        ## catch TAB to change focus
+        ## catch focusOut to hide editor
+        if ev.type() == ev.KeyPress:
+            if ev.key() == QtCore.Qt.Key_Tab:
+                self.focusNext(forward=True)
+                return True ## don't let anyone else see this event
+            elif ev.key() == QtCore.Qt.Key_Backtab:
+                self.focusNext(forward=False)
+                return True ## don't let anyone else see this event
+            
+        elif ev.type() == ev.FocusOut:
+            self.hideEditor()
+        return False
+        
+    def setFocus(self):
+        self.showEditor()
+        
+    def isFocusable(self):
+        return self.param.writable()        
+        
     def valueChanged(self, param, val, force=False):
         ## called when the parameter's value has changed
         ParameterItem.valueChanged(self, param, val)
@@ -167,12 +190,18 @@ class WidgetParameterItem(ParameterItem):
         if self.widget is None:
             return
         if sel and self.param.writable():
-            self.widget.show()
-            self.displayLabel.hide()
-            self.widget.setFocus(QtCore.Qt.OtherFocusReason)
+            self.showEditor()
         elif self.hideWidget:
-            self.widget.hide()
-            self.displayLabel.show()
+            self.hideEditor()
+
+    def showEditor(self):
+        self.widget.show()
+        self.displayLabel.hide()
+        self.widget.setFocus(QtCore.Qt.OtherFocusReason)
+
+    def hideEditor(self):
+        self.widget.hide()
+        self.displayLabel.show()
 
     def limitsChanged(self, param, limits):
         """Called when the parameter's limits have changed"""
@@ -219,6 +248,17 @@ class WidgetParameterItem(ParameterItem):
             self.widget.setOpts(**opts)
             self.updateDisplayLabel()
             
+class EventProxy(QtCore.QObject):
+    def __init__(self, qobj, callback):
+        QtCore.QObject.__init__(self)
+        self.callback = callback
+        qobj.installEventFilter(self)
+        
+    def eventFilter(self, obj, ev):
+        return self.callback(obj, ev)
+
+        
+
 
 class SimpleParameter(Parameter):
     itemClass = WidgetParameterItem
@@ -343,7 +383,7 @@ class ListParameterItem(WidgetParameterItem):
         w.sigChanged = w.currentIndexChanged
         w.value = self.value
         w.setValue = self.setValue
-        self.widget = w
+        self.widget = w  ## needs to be set before limits are changed
         self.limitsChanged(self.param, self.param.opts['limits'])
         if len(self.forward) > 0:
             self.setValue(self.param.value())

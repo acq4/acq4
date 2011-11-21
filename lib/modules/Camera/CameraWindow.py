@@ -357,7 +357,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.addItem(im, p, s, z)
         
     #@trace
-    def addItem(self, item, pos, scale, z):
+    def addItem(self, item, pos=(0,0), scale=(1,1), z=0):
         """Adds an item into the scene. The image will be automatically scaled and translated when the scope moves."""
         
         self.scene.addItem(item)

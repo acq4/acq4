@@ -36,7 +36,7 @@ from debug import *
 import getopt, glob
 import ptime
 from advancedTypes import OrderedDict
-from ProgressDialog import ProgressDialog
+from pyqtgraph.ProgressDialog import ProgressDialog
 from LogWindow import LogWindow
 
 LOG = None

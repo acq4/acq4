@@ -66,7 +66,7 @@ config = 'config/default.cfg'
 
 
 ## Create Manager. This configures devices and creates the main manager window.
-dm = Manager(config, sys.argv[1:])
+man = Manager(config, sys.argv[1:])
 
 
 ## for debugging with pdb

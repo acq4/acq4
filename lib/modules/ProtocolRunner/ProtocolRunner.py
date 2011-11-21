@@ -18,7 +18,7 @@ import time, gc
 import sip
 import sys
 from HelpfulException import HelpfulException
-from ProgressDialog import ProgressDialog
+from pyqtgraph.ProgressDialog import ProgressDialog
 from lib.LogWindow import LogButton
 
 #import pdb
