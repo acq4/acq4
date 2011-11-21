@@ -303,7 +303,7 @@ class LogWidget(QtGui.QWidget):
         i = 0
         for v in log.itervalues():
             self.entries.append(v)
-            self.entryArray[i] = np.array([(i, v['importance'], v['msgType'], v['currentDir'])], dtype=[('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
+            self.entryArray[i] = np.array([(i, v.get('importance', 5), v.get('msgType', 'status'), v.get('currentDir', ''))], dtype=[('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
             i += 1
             
         self.filterEntries() ## puts all entries through current filters and displays the ones that pass
