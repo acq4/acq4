@@ -3,6 +3,7 @@ from PyQt4 import QtCore, QtGui
 import modules
 import pyqtgraph.dockarea as dockarea
 import lib.Manager
+from lib.LogWindow import LogButton
 
 class AnalysisHost(QtGui.QMainWindow):
     """Window for hosting analysis widgets.
@@ -20,8 +21,13 @@ class AnalysisHost(QtGui.QMainWindow):
         self.mod = None
         self.dockArea = dockarea.DockArea()
         self.setCentralWidget(self.dockArea)
+        
+        #self.logBtn = LogButton('Log')
+        #self.statusBar().addPermanentWidget(self.logBtn)
+        
         if module is not None:
             self.loadModule(module)
+            
         self.show()
         
     def dataManager(self):
@@ -53,3 +59,4 @@ class AnalysisHost(QtGui.QMainWindow):
         for el in self.elements:
             if hasattr(el, 'close'):
                 el.close()
+        #self.logBtn.close()

@@ -25,8 +25,10 @@ class LogButton(FeedbackButton):
         global WIN
         self.clicked.connect(WIN.show)
         WIN.buttons.append(self)
-        
-        
+    
+    def close(self):
+        global WIN
+        WIN.buttons.remove(self)
 
 class LogWindow(QtGui.QMainWindow):
     
