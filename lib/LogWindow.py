@@ -311,7 +311,12 @@ class LogWidget(QtGui.QWidget):
     def addEntry(self, entry):
         self.entries.append(entry)
         i = len(self.entryArray)
-        arr = np.array([(i, entry['importance'], entry['msgType'], entry.get('currentDir', ''))], dtype = [('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
+        
+        entryDir = entry.get('currentDir', None)
+        if entryDir is None:
+            entryDir = ''
+            
+        arr = np.array([(i, entry['importance'], entry['msgType'], entryDir)], dtype = [('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
         self.entryArray.resize(i+1)
         #self.entryArray[i] = [(i, entry['importance'], entry['msgType'], entry['currentDir'])]
         self.entryArray[i] = arr
