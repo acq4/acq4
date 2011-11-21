@@ -13,6 +13,7 @@ import numpy as np
 from pyqtgraph.FileDialog import FileDialog
 from debug import printExc
 import weakref
+import re
 
 #from lib.Manager import getManager
 
@@ -93,6 +94,8 @@ class LogWindow(QtGui.QMainWindow):
             currentDir = None
         if isinstance(currentDir, DirHandle):
             kwargs['currentDir'] = currentDir.name()
+        else:
+            kwargs['currentDir'] = None
         
         now = str(time.strftime('%Y.%m.%d %H:%M:%S'))
         name = 'LogEntry_' + str(self.msgCount)
@@ -430,7 +433,7 @@ class LogWidget(QtGui.QWidget):
                     else:
                         color = 'black'
                         
-                        
+                  
                     
                         
                     if entry.has_key('exception') or entry.has_key('docs') or entry.has_key('reasons'):
@@ -442,15 +445,26 @@ class LogWidget(QtGui.QWidget):
                 else:
                     for x in self.cache[id(entry)]:
                         self.ui.output.appendHtml(x)
+                        
+    def cleanText(self, text):
+        #print " ========== "
+        #print text
+        text = re.sub(r'&', '&amp;', text)
+        #print text
+        text = re.sub(r'>','&gt;', text)
+        #print text
+        text = re.sub(r'<', '&lt;', text)
+        #print text
+        return text
                     
     def displayComplexMessage(self, entry, color='black'):
-        self.displayText(entry['message'], entry, color, timeStamp = entry['timestamp'])
+        self.displayText(entry['message'], entry, color, timeStamp = entry['timestamp'], clean=True)
         if entry.has_key('reasons'):
             reasons = self.formatReasonStrForHTML(entry['reasons'])
-            self.displayText(reasons, entry, 'black')
+            self.displayText(reasons, entry, 'black', clean=False)
         if entry.has_key('docs'):
             docs = self.formatDocsStrForHTML(entry['docs'])
-            self.displayText(docs, entry, 'black')
+            self.displayText(docs, entry, 'black', clean=False)
         if entry.get('exception', None) is not None:
             self.displayException(entry['exception'], entry, 'black', tracebacks=entry.get('traceback', None))
             
@@ -470,19 +484,20 @@ class LogWidget(QtGui.QWidget):
             
         indent = 10
         
-        if exception.has_key('oldExc'):    
-            self.displayText("&nbsp;"*indent + str(count)+'. ' + exception['message'], entry, color)
+        text = self.cleanText(exception['message'])
+        if exception.has_key('oldExc'):  
+            self.displayText("&nbsp;"*indent + str(count)+'. ' + text, entry, color, clean=False)
         else:
-            self.displayText("&nbsp;"*indent + str(count)+'. Original error: ' +exception['message'],entry, color)
+            self.displayText("&nbsp;"*indent + str(count)+'. Original error: ' + text, entry, color, clean=False)
             
         tracebacks.append(exception['traceback'])
         
         if exception.has_key('reasons'):
             reasons = self.formatReasonsStrForHTML(exception['reasons'])
-            self.displayText(reasons, entry, color)
+            self.displayText(reasons, entry, color, clean=False)
         if exception.has_key('docs'):
             docs = self.formatDocsStrForHTML(exception['docs'])
-            self.displayText(docs, entry, color)
+            self.displayText(docs, entry, color, clean=False)
         
         if exception.has_key('oldExc'):
             self.displayException(exception['oldExc'], entry, color, count=count, tracebacks=tracebacks)
@@ -495,7 +510,10 @@ class LogWidget(QtGui.QWidget):
                 self.displayTraceback(tb, entry, number=i+n)
         
         
-    def displayText(self, msg, entry, colorStr='black', timeStamp=None):
+    def displayText(self, msg, entry, colorStr='black', timeStamp=None, clean=True):
+        if clean:
+            msg = self.cleanText(msg)
+        
         if msg[-1:] == '\n':
             msg = msg[:-1]     
         msg = '<br />'.join(msg.split('\n'))
@@ -507,6 +525,7 @@ class LogWidget(QtGui.QWidget):
         self.cache[id(entry)].append(strn)
             
     def displayTraceback(self, tb, entry, color='grey', number=1):
+        tb = self.cleanText(tb)
         lines = []
         indent = 16
         prefix = ''
@@ -523,13 +542,14 @@ class LogWidget(QtGui.QWidget):
                 spaceCount -= 1
             lines.append("&nbsp;"*(indent+spaceCount*4) + prefix + l)
             prefix = ''
-        self.displayText('<br />'.join(lines), entry, color)
+        self.displayText('<br />'.join(lines), entry, color, clean=False)
         
     def formatReasonsStrForHTML(self, reasons):
         indent = 6
         letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
         reasonStr = "&nbsp;"*16 + "Possible reasons include: <br>"
         for i, r in enumerate(reasons):
+            r = self.cleanText(r)
             reasonStr += "&nbsp;"*22 + letters[i] + ". " + r + "<br>"
         return reasonStr[:-4]
     
@@ -538,6 +558,7 @@ class LogWidget(QtGui.QWidget):
         docStr = "&nbsp;"*16 + "Relevant documentation: <br>"
         letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
         for i, d in enumerate(docs):
+            d = self.cleanText(d)
             docStr += "&nbsp;"*22 + letters[i] + ". " + d + "<br>"
         return docStr[:-4]
     
