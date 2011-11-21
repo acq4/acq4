@@ -26,9 +26,9 @@ class LogButton(FeedbackButton):
         self.clicked.connect(WIN.show)
         WIN.buttons.append(self)
     
-    def close(self):
-        global WIN
-        WIN.buttons.remove(self)
+    #def close(self):
+        #global WIN
+        #WIN.buttons.remove(self)
 
 class LogWindow(QtGui.QMainWindow):
     
@@ -168,7 +168,12 @@ class LogWindow(QtGui.QMainWindow):
             
     def resetButtons(self):
         for b in self.buttons:
-            b.reset()
+            try:
+                b.reset()
+            except RuntimeError:
+                self.buttons.remove(b)
+                print "Removed a logButton from logWindow's list. button:", b
+            
         
     def makeError1(self):
         try:

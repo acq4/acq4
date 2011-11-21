@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import template
 from PyQt4 import QtCore, QtGui
+from lib.Manager import logMsg, logExc
 
 class FileLoader(QtGui.QWidget):
     """Interface for 1) displaying directory tree and 2) loading a file from the tree.
@@ -34,7 +35,11 @@ class FileLoader(QtGui.QWidget):
     def setBaseClicked(self):
         dh = self.dataManager.selectedFile()
         if dh is None:
-            raise Exception("No directory selected in data manager")
+            logMsg("Cannot set base directory because no directory is selected in Data Manager.", msgType='error')
+            return
+        if not dh.isDir():
+            dh = dh.parent()
+            
         self.ui.dirTree.setBaseDirHandle(dh)
         self.sigBaseChanged.emit(dh)
         

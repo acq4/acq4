@@ -22,8 +22,8 @@ class AnalysisHost(QtGui.QMainWindow):
         self.dockArea = dockarea.DockArea()
         self.setCentralWidget(self.dockArea)
         
-        #self.logBtn = LogButton('Log')
-        #self.statusBar().addPermanentWidget(self.logBtn)
+        self.logBtn = LogButton('Log')
+        self.statusBar().addPermanentWidget(self.logBtn)
         
         if module is not None:
             self.loadModule(module)
