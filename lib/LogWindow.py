@@ -12,6 +12,7 @@ from Mutex import Mutex
 import numpy as np
 from pyqtgraph.FileDialog import FileDialog
 from debug import printExc
+import weakref
 
 #from lib.Manager import getManager
 
@@ -24,7 +25,7 @@ class LogButton(FeedbackButton):
         #self.setMaximumHeight(30)
         global WIN
         self.clicked.connect(WIN.show)
-        WIN.buttons.append(self)
+        WIN.buttons.append(weakref.ref(self))
     
     #def close(self):
         #global WIN
@@ -59,7 +60,7 @@ class LogWindow(QtGui.QMainWindow):
         self.logCount=0
         self.logFile = None
         configfile.writeConfigFile('', self.fileName())  ## start a new temp log file, destroying anything left over from the last session.
-        self.buttons = [] ## all Log Buttons get added to this list, so it's easy to make them all do things, like flash red.
+        self.buttons = [] ## weak references to all Log Buttons get added to this list, so it's easy to make them all do things, like flash red.
         self.lock = Mutex()
         
 
@@ -164,15 +165,18 @@ class LogWindow(QtGui.QMainWindow):
         
     def flashButtons(self):
         for b in self.buttons:
-            b.failure(tip='An error occurred. Please see the log.', limitedTime = False)
+            if b() is not None:
+                b().failure(tip='An error occurred. Please see the log.', limitedTime = False)
             
     def resetButtons(self):
         for b in self.buttons:
-            try:
-                b.reset()
-            except RuntimeError:
-                self.buttons.remove(b)
-                print "Removed a logButton from logWindow's list. button:", b
+            if b() is not None:
+                b().reset()
+            #try:
+                #b.reset()
+            #except RuntimeError:
+                #self.buttons.remove(b)
+                #print "Removed a logButton from logWindow's list. button:", b
             
         
     def makeError1(self):
