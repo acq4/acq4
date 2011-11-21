@@ -1,10 +1,26 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import numpy as np
-import metaarray
+try:
+    import metaarray
+    HAVE_METAARRAY = True
+except:
+    HAVE_METAARRAY = False
 
 class TableWidget(QtGui.QTableWidget):
-    """Extends QTableWidget with some useful functions for automatic data handling."""
+    """Extends QTableWidget with some useful functions for automatic data handling.
+    Can automatically format and display:
+        numpy arrays
+        numpy record arrays 
+        metaarrays
+        list-of-lists  [[1,2,3], [4,5,6]]
+        dict-of-lists  {'x': [1,2,3], 'y': [4,5,6]}
+        list-of-dicts  [
+                         {'x': 1, 'y': 4}, 
+                         {'x': 2, 'y': 5}, 
+                         {'x': 3, 'y': 6}
+                       ]
+    """
     
     def __init__(self, *args):
         QtGui.QTableWidget.__init__(self, *args)
@@ -73,7 +89,7 @@ class TableWidget(QtGui.QTableWidget):
             return lambda d: d.__iter__(), None
         elif isinstance(data, dict):
             return lambda d: d.itervalues(), map(str, data.keys())
-        elif isinstance(data, metaarray.MetaArray):
+        elif HAVE_METAARRAY and isinstance(data, metaarray.MetaArray):
             if data.axisHasColumns(0):
                 header = [str(data.columnName(0, i)) for i in xrange(data.shape[0])]
             elif data.axisHasValues(0):
@@ -164,14 +180,15 @@ if __name__ == '__main__':
     a = np.ones((20, 5))
     ra = np.ones((20,), dtype=[('x', int), ('y', int), ('z', int)])
     
-    ma = metaarray.MetaArray(np.ones((20, 3)), info=[
-        {'values': np.linspace(1, 5, 20)}, 
-        {'cols': [
-            {'name': 'x'},
-            {'name': 'y'},
-            {'name': 'z'},
-        ]}
-    ])
+    if HAVE_METAARRAY:
+        ma = metaarray.MetaArray(np.ones((20, 3)), info=[
+            {'values': np.linspace(1, 5, 20)}, 
+            {'cols': [
+                {'name': 'x'},
+                {'name': 'y'},
+                {'name': 'z'},
+            ]}
+        ])
     
     t.setData(ll)
     

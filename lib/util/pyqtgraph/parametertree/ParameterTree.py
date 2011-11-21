@@ -35,6 +35,49 @@ class ParameterTree(TreeWidget):
             
         for ch in param:
             self.setParameters(ch, root=item, depth=depth+1)
+            
+    def focusNext(self, item, forward=True):
+        ## Give input focus to the next (or previous) item after 'item'
+        while True:
+            parent = item.parent()
+            if parent is None:
+                return
+            nextItem = self.nextFocusableChild(parent, item, forward=forward)
+            if nextItem is not None:
+                nextItem.setFocus()
+                self.setCurrentItem(nextItem)
+                return
+            item = parent
+
+    def focusPrevious(self, item):
+        self.focusNext(item, forward=False)
+
+    def nextFocusableChild(self, root, startItem=None, forward=True):
+        if startItem is None:
+            if forward:
+                index = 0
+            else:
+                index = root.childCount()-1
+        else:
+            if forward:
+                index = root.indexOfChild(startItem) + 1
+            else:
+                index = root.indexOfChild(startItem) - 1
+            
+        if forward:
+            inds = range(index, root.childCount())
+        else:
+            inds = range(index, -1, -1)
+            
+        for i in inds:
+            item = root.child(i)
+            if hasattr(item, 'isFocusable') and item.isFocusable():
+                return item
+            else:
+                item = self.nextFocusableChild(item, forward=forward)
+                if item is not None:
+                    return item
+        return None
 
     def contextMenuEvent(self, ev):
         item = self.currentItem()

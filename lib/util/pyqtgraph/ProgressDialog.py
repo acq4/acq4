@@ -51,24 +51,3 @@ class ProgressDialog(QtGui.QProgressDialog):
         self.setValue(self.value()+val)
         return self
 
-        #progressDlg = QtGui.QProgressDialog("Computing spot colors (Map %d/%d)" % (n+1,nMax), 0, len(spots))
-        ##progressDlg.setWindowModality(QtCore.Qt.WindowModal)
-        #progressDlg.setMinimumDuration(250)
-        #ops = []
-        #try:
-            #for i in range(len(spots)):
-                #spot = spots[i]
-                #fh = self.host.getClampFile(spot.data)
-                #stats = self.getStats(fh, signal=False)
-                ##print "stats:", stats
-                #color = self.host.getColor(stats)
-                #ops.append((spot, color))
-                #progressDlg.setValue(i+1)
-                #QtGui.QApplication.processEvents()
-                #if progressDlg.wasCanceled():
-                    #raise Exception("Recolor canceled by user.")
-        #except:
-            #raise
-        #finally:
-            ### close progress dialog no matter what happens
-            #progressDlg.setValue(len(spots))

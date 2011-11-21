@@ -66,7 +66,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         ctrl-- : moves backward in the zooming stack (if it exists)
          
         """
-        print ev.key()
+        #print ev.key()
         #print 'I intercepted a key press, but did not accept it'
         
         ## not implemented yet ?
