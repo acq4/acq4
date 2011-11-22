@@ -447,14 +447,9 @@ class LogWidget(QtGui.QWidget):
                         self.ui.output.appendHtml(x)
                         
     def cleanText(self, text):
-        #print " ========== "
-        #print text
         text = re.sub(r'&', '&amp;', text)
-        #print text
         text = re.sub(r'>','&gt;', text)
-        #print text
         text = re.sub(r'<', '&lt;', text)
-        #print text
         return text
                     
     def displayComplexMessage(self, entry, color='black'):
