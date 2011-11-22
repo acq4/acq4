@@ -55,6 +55,9 @@ class ViewBox(QtGui.QGraphicsWidget):
         
         self.mouseEnabled = [enableMouse, enableMouse]
         self.setAspectLocked(lockAspect)
+        
+    def implements(self, interface):
+        return interface == 'ViewBox'
 
     def keyPressEvent(self, ev):
         """
