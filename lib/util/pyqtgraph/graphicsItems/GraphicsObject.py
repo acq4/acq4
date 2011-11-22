@@ -44,7 +44,7 @@ class GraphicsObject(QtGui.QGraphicsObject):
                     else:
                         self._viewBox = weakref.ref(vb)
                         break
-                if isinstance(p, ViewBox):
+                if hasattr(p, 'implements') and p.implements('ViewBox'):
                     self._viewBox = weakref.ref(p)
                     break
                     
@@ -72,7 +72,7 @@ class GraphicsObject(QtGui.QGraphicsObject):
         view = self.getViewBox()
         if view is None:
             return None
-        if isinstance(view, ViewBox):
+        if hasattr(view, 'implements') and view.implements('ViewBox'):
             return self.itemTransform(view.innerSceneItem())[0]
         else:
             return self.sceneTransform()
@@ -161,5 +161,3 @@ class GraphicsObject(QtGui.QGraphicsObject):
             return None
         vt = vt.inverted()[0]
         return vt.mapRect(obj)
-
-from ViewBox import ViewBox
