@@ -348,7 +348,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
             return (ret, strn, pos)
         
     def paintEvent(self, ev):
-        QtGui.QSpinBox.paintEvent(self, ev)
+        QtGui.QAbstractSpinBox.paintEvent(self, ev)
         
         ## draw red border if text is invalid
         if not self.textValid:
