@@ -520,7 +520,12 @@ class LogWidget(QtGui.QWidget):
         self.cache[id(entry)].append(strn)
             
     def displayTraceback(self, tb, entry, color='grey', number=1):
-        tb = self.cleanText(tb)
+        cleanTb = []
+        for s in tb:
+            s = self.cleanText(s)
+            cleanTb.append(s)
+            
+        tb = cleanTb
         lines = []
         indent = 16
         prefix = ''

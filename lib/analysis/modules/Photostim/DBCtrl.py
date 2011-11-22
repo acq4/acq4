@@ -159,7 +159,9 @@ class DBCtrl(QtGui.QWidget):
         dbui = self.host.getElement('Database')
         db = dbui.getDb()
         if db is None:
-            logMsg("No database loaded in Data Manager.", msgType='error')
+            #logMsg("No database loaded in Data Manager.", msgType='error')
+            raise Exception("No database loaded in Data Manager")
+            
             
         ident = self.dbIdentity+'.maps'
         table = dbui.getTableName(ident)
