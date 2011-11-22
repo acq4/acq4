@@ -43,10 +43,8 @@ class ImageCanvasItem(CanvasItem):
                     opts['pos'] = self.handle.info()['imagePosition']
                 else:
                     info = self.data._info[-1]
-                    if 'imagePosition' in info:
-                        opts['pos'] = info['imagePosition']
-                    if 'pixelSize' in info:
-                        opts['scale'] = info['pixelSize']
+                    opts['scale'] = info.get('pixelSize', None)
+                    opts['pos'] = info.get('imagePosition', None)
             except:
                 pass
         
@@ -71,6 +69,7 @@ class ImageCanvasItem(CanvasItem):
         
         self.updateHistogram(autoRange=True)
         
+        # addWidget arguments: row, column, rowspan, colspan 
         self.layout.addWidget(self.histogram, self.layout.rowCount(), 0, 1, 2)
         
         if showTime:
@@ -81,9 +80,22 @@ class ImageCanvasItem(CanvasItem):
             self.timeSlider.valueChanged.connect(self.timeChanged)
             self.timeSlider.sliderPressed.connect(self.timeSliderPressed)
             self.timeSlider.sliderReleased.connect(self.timeSliderReleased)
-            self.maxBtn = QtGui.QPushButton('Max')
+            thisRow = self.layout.rowCount()
+            self.edgeBtn = QtGui.QPushButton('Edge')
+            self.edgeBtn.clicked.connect(self.edgeClicked)
+            self.layout.addWidget(self.edgeBtn, thisRow, 0, 1, 1)
+
+            self.maxBtn2 = QtGui.QPushButton('Max w/Filter')
+            self.maxBtn2.clicked.connect(self.max2Clicked)
+            self.layout.addWidget(self.maxBtn2, thisRow, 1, 1, 1)
+
+            self.meanBtn = QtGui.QPushButton('Mean')
+            self.meanBtn.clicked.connect(self.meanClicked)
+            self.layout.addWidget(self.meanBtn, thisRow+1, 0, 1, 1)
+
+            self.maxBtn = QtGui.QPushButton('Max no Filter')
             self.maxBtn.clicked.connect(self.maxClicked)
-            self.layout.addWidget(self.maxBtn, self.layout.rowCount(), 0, 1, 2)
+            self.layout.addWidget(self.maxBtn, thisRow+1, 1, 1, 1)
             
         
         #self.item.connect(self.item, QtCore.SIGNAL('imageChanged'), self.updateHistogram)
@@ -113,8 +125,7 @@ class ImageCanvasItem(CanvasItem):
     def timeSliderPressed(self):
         self.blockHistogram = True
         
-        
-    def maxClicked(self):
+    def edgeClicked(self):
         ## unsharp mask to enhance fine details
         fd = self.data.astype(float)
         blur = ndimage.gaussian_filter(fd, (0, 1, 1))
@@ -123,8 +134,27 @@ class ImageCanvasItem(CanvasItem):
         #dif[dif < 0.] = 0
         self.graphicsItem().updateImage(dif.max(axis=0))
         self.updateHistogram(autoRange=True)
-            
-        
+
+    def maxClicked(self):
+        ## just the max of a stack
+        fd = self.data.astype(float)
+        self.graphicsItem().updateImage(fd.max(axis=0))
+        self.updateHistogram(autoRange=True)
+
+    def max2Clicked(self):
+        ## just the max of a stack, after a little 3d bluring
+        fd = self.data.astype(float)
+        blur = ndimage.gaussian_filter(fd, (1, 1, 1))
+        self.graphicsItem().updateImage(blur.max(axis=0))
+        self.updateHistogram(autoRange=True)
+
+    def meanClicked(self):
+        ## just the max of a stack
+        fd = self.data.astype(float)
+        self.graphicsItem().updateImage(fd.mean(axis=0))
+        self.updateHistogram(autoRange=True)
+
+
     def timeSliderReleased(self):
         self.blockHistogram = False
         self.updateHistogram()
