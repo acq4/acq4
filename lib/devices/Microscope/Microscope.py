@@ -74,6 +74,7 @@ class Microscope(Device):
             self.objDev.sigSwitchChanged.connect(self.objectiveSwitched)
         
         self.setObjective(currentObj)
+        dm.declareInterface(name, ['microscope'], self)
 
     def quit(self):
         pass
@@ -122,7 +123,7 @@ class Microscope(Device):
         
     #@ftrace
     def getObjective(self):
-        """Return a tuple ("objective name", scale)"""
+        """Return a dict {'name': , 'scale': , 'offset': } for the current objective"""
         with self.lock:
             #print "Microscope:getObjective locked"
             if self.currentObjective not in self.objectives:
