@@ -91,11 +91,12 @@ class CanvasItem(QtCore.QObject):
             self.baseTransform = self.opts['transform']
         else:
             self.baseTransform = pg.Transform()
-            if 'pos' in self.opts:
+            self.baseTransform = pg.Transform()
+            if 'pos' in self.opts and self.opts['pos'] is not None:
                 self.baseTransform.translate(self.opts['pos'])
-            if 'angle' in self.opts:
+            if 'angle' in self.opts and self.opts['angle'] is not None:
                 self.baseTransform.rotate(self.opts['angle'])
-            if 'scale' in self.opts:
+            if 'scale' in self.opts and self.opts['scale'] is not None:
                 self.baseTransform.scale(self.opts['scale'])
 
         ## create selection box (only visible when selected)
