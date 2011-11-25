@@ -34,7 +34,10 @@ class FileLoader(QtGui.QWidget):
     def setBaseClicked(self):
         dh = self.dataManager.selectedFile()
         if dh is None:
-            raise Exception("No directory selected in data manager")
+            logMsg("No directory selected in Data Manager", msgType='error')
+            return
+        if not dh.isDir():
+            dh = dh.parent()
         self.ui.dirTree.setBaseDirHandle(dh)
         self.sigBaseChanged.emit(dh)
         

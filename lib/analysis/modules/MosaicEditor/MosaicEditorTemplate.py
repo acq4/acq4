@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/analysis/modules/MosaicEditor/MosaicEditorTemplate.ui'
 #
-# Created: Fri Nov 25 10:03:48 2011
+# Created: Fri Nov 25 10:10:00 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -51,6 +51,9 @@ class Ui_Form(object):
         self.autoRangeBtn = QtGui.QPushButton(self.groupBox_2)
         self.autoRangeBtn.setObjectName(_fromUtf8("autoRangeBtn"))
         self.verticalLayout.addWidget(self.autoRangeBtn)
+        self.averageBtn = QtGui.QPushButton(self.groupBox_2)
+        self.averageBtn.setObjectName(_fromUtf8("averageBtn"))
+        self.verticalLayout.addWidget(self.averageBtn)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem)
         self.gridLayout_3.addWidget(self.groupBox_2, 0, 1, 1, 1)
@@ -85,5 +88,6 @@ class Ui_Form(object):
         self.normalizeBtn.setText(QtGui.QApplication.translate("Form", "Normalize", None, QtGui.QApplication.UnicodeUTF8))
         self.blendBtn.setText(QtGui.QApplication.translate("Form", "Blend", None, QtGui.QApplication.UnicodeUTF8))
         self.autoRangeBtn.setText(QtGui.QApplication.translate("Form", "Auto Range", None, QtGui.QApplication.UnicodeUTF8))
+        self.averageBtn.setText(QtGui.QApplication.translate("Form", "Average", None, QtGui.QApplication.UnicodeUTF8))
         self.atlasCombo.setItemText(0, QtGui.QApplication.translate("Form", "Select Atlas...", None, QtGui.QApplication.UnicodeUTF8))
 

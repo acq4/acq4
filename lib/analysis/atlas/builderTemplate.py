@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/analysis/atlas/builderTemplate.ui'
 #
-# Created: Fri Nov 25 10:03:47 2011
+# Created: Fri Nov 25 10:09:59 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
