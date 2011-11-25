@@ -23,12 +23,6 @@ QSplitter::handle {
     background-color: #666
 }
 
-QSplitter::handle:hover {
-    background-color: #66A
-}
-
-
-
 /* Make splitter handles between dock widgets more visible */
 QMainWindow::separator {
     background-color: #666
