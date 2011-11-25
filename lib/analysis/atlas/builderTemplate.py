@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'builderTemplate.ui'
+# Form implementation generated from reading ui file './lib/analysis/atlas/builderTemplate.ui'
 #
-# Created: Sat Oct 15 21:11:35 2011
+# Created: Fri Nov 25 10:03:47 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

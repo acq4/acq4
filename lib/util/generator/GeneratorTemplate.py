@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'GeneratorTemplate.ui'
+# Form implementation generated from reading ui file './lib/util/generator/GeneratorTemplate.ui'
 #
-# Created: Wed Oct 26 11:52:11 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Fri Nov 25 10:03:57 2011
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -28,6 +28,7 @@ class Ui_Form(object):
         self.frame.setFrameShadow(QtGui.QFrame.Raised)
         self.frame.setObjectName(_fromUtf8("frame"))
         self.verticalLayout_4 = QtGui.QVBoxLayout(self.frame)
+        self.verticalLayout_4.setSpacing(0)
         self.verticalLayout_4.setMargin(0)
         self.verticalLayout_4.setObjectName(_fromUtf8("verticalLayout_4"))
         self.splitter = QtGui.QSplitter(self.frame)

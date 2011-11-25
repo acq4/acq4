@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'CameraTemplate.ui'
+# Form implementation generated from reading ui file './lib/modules/Camera/CameraTemplate.ui'
 #
-# Created: Wed Oct 19 11:38:16 2011
+# Created: Fri Nov 25 10:03:54 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

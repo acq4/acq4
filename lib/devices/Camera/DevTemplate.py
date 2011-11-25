@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/devices/Camera/DevTemplate.ui'
 #
-# Created: Wed May 18 20:44:14 2011
+# Created: Fri Nov 25 10:03:50 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -35,7 +35,7 @@ class Ui_Form(object):
         self.scrollArea.setWidgetResizable(True)
         self.scrollArea.setObjectName(_fromUtf8("scrollArea"))
         self.scrollAreaWidgetContents = QtGui.QWidget()
-        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 626, 209))
+        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 622, 204))
         self.scrollAreaWidgetContents.setObjectName(_fromUtf8("scrollAreaWidgetContents"))
         self.formLayout_2 = QtGui.QFormLayout(self.scrollAreaWidgetContents)
         self.formLayout_2.setFieldGrowthPolicy(QtGui.QFormLayout.ExpandingFieldsGrow)

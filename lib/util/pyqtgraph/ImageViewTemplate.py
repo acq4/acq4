@@ -2,12 +2,12 @@
 
 # Form implementation generated from reading ui file './lib/util/pyqtgraph/ImageViewTemplate.ui'
 #
-# Created: Wed May 18 20:44:20 2011
+# Created: Fri Nov 25 10:03:58 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 
-from Qt import QtCore, QtGui
+from PyQt4 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8

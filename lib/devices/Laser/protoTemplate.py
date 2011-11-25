@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'protoTemplate.ui'
+# Form implementation generated from reading ui file './lib/devices/Laser/protoTemplate.ui'
 #
-# Created: Mon Oct 31 14:40:50 2011
-#      by: PyQt4 UI code generator 4.8.4
+# Created: Fri Nov 25 10:03:52 2011
+#      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
 

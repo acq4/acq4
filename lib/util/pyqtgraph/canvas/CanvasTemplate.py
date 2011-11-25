@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'CanvasTemplate.ui'
+# Form implementation generated from reading ui file './lib/util/pyqtgraph/canvas/CanvasTemplate.ui'
 #
-# Created: Sat Oct 15 22:06:51 2011
+# Created: Fri Nov 25 10:03:58 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

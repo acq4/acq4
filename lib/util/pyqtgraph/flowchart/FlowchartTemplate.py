@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'FlowchartTemplate.ui'
+# Form implementation generated from reading ui file './lib/util/pyqtgraph/flowchart/FlowchartTemplate.ui'
 #
-# Created: Sun Oct 16 08:39:23 2011
+# Created: Fri Nov 25 10:03:59 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
