@@ -16,13 +16,8 @@ pycRename(modDir)
 
 
 import sip
-<<<<<<< TREE
 sip.setapi('QString', 2)
 sip.setapi('QVariant', 2)
-=======
-#sip.setapi('QString', 2)
-#sip.setapi('QVariant', 2)
->>>>>>> MERGE-SOURCE
 
 ## PyQt bug: make sure qt.conf was installed correctly
 pyDir = os.path.split(sys.executable)[0]
