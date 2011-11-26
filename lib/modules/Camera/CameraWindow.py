@@ -8,9 +8,8 @@
 from __future__ import with_statement
 
 from CameraTemplate import Ui_MainWindow
-#from pyqtgraph.GraphicsView import *
-#from pyqtgraph.graphicsItems import *
-import pyqtgraph as pg
+from pyqtgraph.GraphicsView import *
+from pyqtgraph.graphicsItems import *
 from pyqtgraph.widgets import ROI
 import ptime
 from lib.filetypes.ImageFile import *
@@ -18,9 +17,10 @@ from Mutex import Mutex, MutexLocker
 from PyQt4 import QtGui, QtCore
 import scipy.ndimage
 import time, types, os.path, re, sys
+from pyqtgraph.functions import intColor
 from debug import *
 from metaarray import *
-#import sip
+import sip
 from pyqtgraph.SignalProxy import SignalProxy
 #from lib.Manager import getManager
 import lib.Manager as Manager
@@ -106,10 +106,10 @@ class CameraWindow(QtGui.QMainWindow):
         #self.ui.histogram.invertY(False)
         self.avgLevelLine = QtGui.QGraphicsLineItem()
         self.avgLevelLine.setPen(QtGui.QPen(QtGui.QColor(200, 200, 0)))
-        self.histogramCurve = pg.PlotCurveItem()
+        self.histogramCurve = PlotCurveItem()
         self.ui.histogram.scene().addItem(self.avgLevelLine)
         self.ui.histogram.scene().addItem(self.histogramCurve)
-        #self.histogramCurve.rotate(-90)
+        self.histogramCurve.rotate(90)
         self.histogramCurve.scale(1.0, -1.0)
         self.lastHistogramUpdate = 0
         
@@ -125,6 +125,12 @@ class CameraWindow(QtGui.QMainWindow):
         self.ui.gradientWidget.setTickColor(self.ticks[1], QtGui.QColor(255,255,255))
         self.ui.gradientWidget.setOrientation('right')
         
+        ## Set up level thermo and scale widgets
+        #self.scaleEngine = Qwt.QwtLinearScaleEngine()
+        #self.ui.levelThermo.setScalePosition(Qwt.QwtThermo.NoScale)
+        #self.ui.levelScale.setAlignment(Qwt.QwtScaleDraw.LeftScale)
+        #self.ui.levelScale.setColorBarEnabled(True)
+        #self.ui.levelScale.setColorBarWidth(10)
         
         
         ## Create device configuration dock 
@@ -140,7 +146,7 @@ class CameraWindow(QtGui.QMainWindow):
         ## Set up camera graphicsView
         l = QtGui.QVBoxLayout(self.ui.graphicsWidget)
         l.setContentsMargins(0,0,0,0)
-        self.gv = pg.GraphicsView(self.ui.graphicsWidget)
+        self.gv = GraphicsView(self.ui.graphicsWidget)
         l.addWidget(self.gv)
         self.gv.enableMouse()
 
@@ -151,21 +157,21 @@ class CameraWindow(QtGui.QMainWindow):
         self.setCentralWidget(self.ui.centralwidget)
         self.scene = self.gv.scene()
         
-        self.cameraItemGroup = pg.ItemGroup()
-        self.scopeItemGroup = pg.ItemGroup()
+        self.cameraItemGroup = ItemGroup()
+        self.scopeItemGroup = ItemGroup()
         
         self.scene.addItem(self.cameraItemGroup)
         self.scene.addItem(self.scopeItemGroup)
         self.scopeItemGroup.setZValue(10)
         self.cameraItemGroup.setZValue(0)
-        self.imageItem = pg.ImageItem(parent=self.cameraItemGroup)
+        self.imageItem = ImageItem(parent=self.cameraItemGroup)
         self.scene.addItem(self.imageItem)
         self.imageItem.setParentItem(self.cameraItemGroup)
         
         #grid = Grid(self.gv)
         #self.scene.addItem(grid)
         
-        self.scaleBar = pg.ScaleBar(100e-6)
+        self.scaleBar = ScaleBar(self.gv, 100e-6)
         self.scene.addItem(self.scaleBar)
         
         #self.gv.setScene(self.scene)
@@ -357,7 +363,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.addItem(im, p, s, z)
         
     #@trace
-    def addItem(self, item, pos=(0,0), scale=(1,1), z=0):
+    def addItem(self, item, pos, scale, z):
         """Adds an item into the scene. The image will be automatically scaled and translated when the scope moves."""
         
         self.scene.addItem(item)
@@ -382,7 +388,7 @@ class CameraWindow(QtGui.QMainWindow):
 
     #@trace
     def addROI(self):
-        pen = pg.mkPen(pg.intColor(len(self.ROIs)))
+        pen = QtGui.QPen(intColor(len(self.ROIs)))
         roi = PlotROI(self.cameraCenter, self.cameraScale[0] * 10)
         roi.setZValue(4000)
         roi.setPen(pen)
@@ -618,7 +624,7 @@ class CameraWindow(QtGui.QMainWindow):
         try:
             #self.cam = self.module.cam.getCamera()
             self.bitDepth = self.cam.getParam('bitDepth')
-            self.ui.histogram.setRange(QtCore.QRectF(0, -2**self.bitDepth, 1, 2**self.bitDepth))
+            self.ui.histogram.setRange(QtCore.QRectF(0, 0, 1, 2**self.bitDepth))
             self.setLevelRange()
             self.camSize = self.cam.getParam('sensorSize')
             self.ui.statusbar.showMessage("Opened camera %s" % self.cam, 5000)
@@ -717,10 +723,10 @@ class CameraWindow(QtGui.QMainWindow):
         bl, wl = self.getLevels()
         self.setLevelRange()
         if not b and self.lastMinMax is not None:
-            #print bl, wl
+            print bl, wl
             wl = self.lastMinMax[0] + (self.lastMinMax[1]-self.lastMinMax[0]) * wl
             bl = self.lastMinMax[0] + (self.lastMinMax[1]-self.lastMinMax[0]) * bl
-            #print bl, wl, self.lastMinMax
+            print bl, wl, self.lastMinMax
             self.ui.gradientWidget.setTickValue(1, wl/float(2**self.bitDepth - 1))
             self.ui.gradientWidget.setTickValue(0, bl/float(2**self.bitDepth - 1))
             
@@ -831,7 +837,7 @@ class CameraWindow(QtGui.QMainWindow):
                     self.backgroundFrame = frame[0].astype(float)
                 else:
                     x = float(self.bgFrameCount)/(self.bgFrameCount + 1)
-                    #print "mix:", x
+                    print "mix:", x
                     self.backgroundFrame = x * self.backgroundFrame + (1-x)*frame[0].astype(float)
                 self.bgFrameCount += 1
             else:
@@ -949,7 +955,7 @@ class CameraWindow(QtGui.QMainWindow):
             #print "        AGCLastMin", self.AGCLastMin
             
             ## Update histogram plot
-            self.updateHistogram(self.currentFrame[0], wl, bl)
+            #self.updateHistogram(self.currentFrame[0], wl, bl)
             
             ## Translate and scale image based on ROI and binning
             m = QtGui.QTransform()
@@ -1008,12 +1014,10 @@ class CameraWindow(QtGui.QMainWindow):
 
     def updateHistogram(self, data, wl, bl):
         now = time.time()
-        if now > self.lastHistogramUpdate + 1.0:
+        if now > self.lastHistogramUpdate + 0.2:
             avg = data.mean()
             self.avgLevelLine.setLine(0.0, avg, 1.0, avg)
-            bins = np.linspace(0, 2**self.bitDepth, 500)
-            h = np.histogram(data, bins=bins)
-            xVals = h[0].astype(np.float32)/h[0].max()
-            self.histogramCurve.setData(x=xVals, y=bins[:-1])
+            h = histogram(data, bins=500)
+            self.histogramCurve.setData(y=h[0].astype(float32)/h[0].max(), x=h[1][:-1])
             self.lastHistogramUpdate = now
 

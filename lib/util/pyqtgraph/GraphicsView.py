@@ -104,10 +104,9 @@ class GraphicsView(QtGui.QGraphicsView):
         #v.setStyleSheet("background-color: #000000;")
         self.setViewport(v)
             
-    def keyPressEvent(self, ev):
+    #def keyPressEvent(self, ev):
         #QtGui.QGraphicsView.keyPressEvent(self, ev)
-        self.scene().keyPressEvent(ev)  ## bypass view, hand event directly to scene
-                                        ## (view likes to eat arrow key events)
+        #ev.ignore()
         
         
     def setCentralItem(self, item):

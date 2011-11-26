@@ -222,15 +222,7 @@ class Laser(DAQGeneric):
     def closeShutter(self):
         if self.hasTriggerableShutter:
             self.setChanHolding('shutter', 0)
-
-    def getShutter(self):
-        """Return True if the shutter is open."""
-        if self.hasTriggerableShutter:
-            return self.getChanHolding('shutter') > 0
-        else:
-            raise Exception("No shutter on this laser.")
-        
-   
+    
     def openQSwitch(self):
         if self.hasQSwitch:
             self.setChanHolding('qSwitch', 1)

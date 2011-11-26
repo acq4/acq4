@@ -3,7 +3,7 @@ from PyQt4 import QtGui, QtCore
 from advancedTypes import OrderedDict
 import pyqtgraph as pg
 import numpy as np
-import pyqtgraph.ProgressDialog as ProgressDialog
+import ProgressDialog
 
 class Map:
     ### A map is a group of (possibly overlapping) scans and associated meta-data. 

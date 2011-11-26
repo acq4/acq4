@@ -9,7 +9,7 @@ import pyqtgraph as pg
 from metaarray import MetaArray
 import numpy as np
 import functions as fn
-import pyqtgraph.ProgressDialog as ProgressDialog
+import ProgressDialog
 import scipy.optimize
 
 class DepthProfiler(AnalysisModule):

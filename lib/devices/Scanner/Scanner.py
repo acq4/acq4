@@ -293,23 +293,6 @@ class Scanner(Device):
 
 
 class ScannerTask(DeviceTask):
-    """
-    Options for Scanner task:
-        position:         (x,y) A calibrated position (in real physical coordinates) to set 
-                          before starting the protocol. Requires 'camera' and 'laser' are
-                          also specified.
-        command:          (x,y) Voltage values to set before starting the protocol.
-                          This option overrides 'position'.
-        xPosition:        Array of x positions. (requires yPosition)
-        yPosition:        Array of y positions. (requires xPosition)
-        xCommand:         Array of x voltages. Overrides x/yPosition.
-        xCommand:         Array of y voltages. Overrides x/yPosition.
-        camera:           The camera to use for calibrated positions
-        laser:            The laser to use for calibrated positions
-        simulateShutter:  auto-generate position commands such that the mirrors are 
-                          in 'off' position except when laser is active
-        program:          A list of high-level directives for generating position commands
-    """
     def __init__(self, dev, cmd):
         DeviceTask.__init__(self, dev, cmd)
         self.cmd = cmd
@@ -332,21 +315,16 @@ class ScannerTask(DeviceTask):
             ## Set position of mirrors now
             if 'command' in self.cmd:
                 self.dev.setCommand(self.cmd['command'])
-            elif 'position' in self.cmd:  ## 'command' overrides 'position'
+            elif 'position' in self.cmd:
                 #print " set position:", self.cmd['position']
                 self.dev.setPosition(self.cmd['position'], self.cmd['camera'], self.cmd['laser'])
-
+                
             ## record spot size from calibration data
             if 'camera' in self.cmd and 'laser' in self.cmd:
                 self.spotSize = self.dev.getCalibration(self.cmd['camera'], self.cmd['laser'])['spot'][1]
-            
-            ## If position arrays are given, translate into voltages
-            if 'xPosition' in self.cmd or 'yPosition' in self.cmd:
-                if 'xPosition' not in self.cmd or 'yPosition' not in self.cmd:
-                    raise Exception('xPosition and yPosition must be given together or not at all.')
-                self.cmd['xCommand'], self.cmd['yCommand'] = self.dev.mapToScanner(self.cmd['xPosition'], self.cmd['yPosition'], self.cmd['camera'], self.cmd['laser'])
-            ## Otherwise if program is specified, generate the command arrays now
-            elif 'program' in self.cmd:
+                
+            ## If program is specified, generate the command arrays now
+            if 'program' in self.cmd:
                 self.generateProgramArrays(self.cmd['program'])    
                 
             ## If shuttering is requested, generate proper arrays and shutter the laser now

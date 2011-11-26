@@ -145,7 +145,7 @@ class CameraDeviceGui(QtGui.QWidget):
         vals = collections.OrderedDict()
         for param, change, data in changes:
             if change == 'value':
-                #print param.name(), param.value()
+                print param.name(), param.value()
                 vals[param.name()] = param.value()
         
         self.dev.setParams(vals)    

@@ -8,8 +8,6 @@ import numpy as np
 #from pyqtgraph.ObjectWorkaround import QObjectWorkaround
 from eq import *
 
-#TETRACYCLINE = True
-
 def strDict(d):
     return dict([(str(k), v) for k, v in d.iteritems()])
 
@@ -19,7 +17,6 @@ class Node(QtCore.QObject):
     sigClosed = QtCore.Signal(object)
     sigRenamed = QtCore.Signal(object, object)
     sigTerminalRenamed = QtCore.Signal(object, object)
-
     
     def __init__(self, name, terminals=None):
         QtCore.QObject.__init__(self)
@@ -47,7 +44,6 @@ class Node(QtCore.QObject):
         return name2
         
     def addInput(self, name="Input", **args):
-        #print "Node.addInput called."
         return self.addTerminal(name, io='in', **args)
         
     def addOutput(self, name="Output", **args):
@@ -87,11 +83,6 @@ class Node(QtCore.QObject):
         self.sigTerminalRenamed.emit(term, oldName)
         
     def addTerminal(self, name, **opts):
-        #print "Node.addTerminal called. name:", name, "opts:", opts
-        #global TETRACYCLINE
-        #print "TETRACYCLINE: ", TETRACYCLINE
-        #if TETRACYCLINE:
-            #print  "Creating Terminal..."
         name = self.nextTerminalName(name)
         term = Terminal(self, name, **opts)
         self.terminals[name] = term
@@ -101,7 +92,6 @@ class Node(QtCore.QObject):
             self._outputs[name] = term
         self.graphicsItem().updateTerminals()
         return term
-
         
     def inputs(self):
         return self._inputs
@@ -115,11 +105,8 @@ class Node(QtCore.QObject):
     
     def graphicsItem(self):
         """Return a (the?) graphicsitem for this node"""
-        #print "Node.graphicsItem called."
         if self._graphicsItem is None:
-            #print "Creating NodeGraphicsItem..."
             self._graphicsItem = NodeGraphicsItem(self)
-        #print "Node.graphicsItem is returning ", self._graphicsItem
         return self._graphicsItem
     
     def __getattr__(self, attr):
@@ -280,7 +267,7 @@ class Node(QtCore.QObject):
         return terms
         
     def restoreTerminals(self, state):
-        for name in self.terminals.keys():
+        for name in self.terminals:
             if name not in state:
                 self.removeTerminal(name)
         for name, opts in state.iteritems():
@@ -339,20 +326,12 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         self.nameItem = QtGui.QGraphicsTextItem(self.node.name(), self)
         self.nameItem.moveBy(bounds.width()/2. - self.nameItem.boundingRect().width()/2., 0)
         self.nameItem.setTextInteractionFlags(QtCore.Qt.TextEditorInteraction)
-        
-        
-        self.buildMenu() ## build self.menu and self.terminalMenu, which are both QMenu
         self.updateTerminals()
-        
         self.pen = QtGui.QPen(QtGui.QColor(0,0,0))
 
         self.nameItem.focusOutEvent = self.labelFocusOut
         self.nameItem.keyPressEvent = self.labelKeyPress
-        
-        
-        
-        self.node.sigTerminalRenamed.connect(self.updateActionMenu)
-        
+
     def labelFocusOut(self, ev):
         QtGui.QGraphicsTextItem.focusOutEvent(self.nameItem, ev)
         self.labelChanged()
@@ -402,8 +381,6 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
             self.terminals[i] = (t, item)
             y += dy
         
-        self.updateActionMenu()
-        
         
     def boundingRect(self):
         return QtCore.QRectF(0, 0, 100, 100)
@@ -447,47 +424,6 @@ class NodeGraphicsItem(QtGui.QGraphicsItem):
         return QtGui.QGraphicsItem.itemChange(self, change, val)
             
 
-    def contextMenuEvent(self, ev):
-        ev.accept()
-        self.menu.popup(ev.screenPos())
-        
-    def buildMenu(self):
-        self.menu = QtGui.QMenu()
-        self.menu.addAction("Add input")
-        self.menu.addAction("Add output")
-        self.menu.addSeparator()
-        self.menu.addAction("Remove node")
-        self.terminalMenu = QtGui.QMenu("Remove terminal")
-        for t in self.node.terminals:
-            self.terminalMenu.addAction(t)
-        self.menu.addMenu(self.terminalMenu)
-        self.menu.triggered.connect(self.menuTriggered)
-        
-    def menuTriggered(self, action):
-        #print "node.menuTriggered called. action:", action
-        act = str(action.text())
-        if act == "Add input":
-            self.node.addInput()
-            #for t in self.node.terminals:
-                #if t not in [str(a.text()) for a in self.terminalMenu.actions()]:
-                    #self.terminalMenu.addAction(t)
-            self.updateActionMenu()
-        elif act == "Add output":
-            self.node.addOutput()
-            #for t in self.node.terminals:
-                #if t not in [str(a.text()) for a in self.terminalMenu.actions()]:
-                    #self.terminalMenu.addAction(t)
-            self.updateActionMenu()
-        elif act == "Remove node":
-            self.node.close()
-        else:
-            self.node.removeTerminal(act)
-            self.terminalMenu.removeAction(action)
 
-    def updateActionMenu(self):
-        for t in self.node.terminals:
-            if t not in [str(a.text()) for a in self.terminalMenu.actions()]:
-                self.terminalMenu.addAction(t)
-        for a in self.terminalMenu.actions():
-            if str(a.text()) not in self.node.terminals:
-                self.terminalMenu.removeAction(a)
+
+        

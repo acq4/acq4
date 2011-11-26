@@ -43,10 +43,8 @@ class ImageCanvasItem(CanvasItem):
                     opts['pos'] = self.handle.info()['imagePosition']
                 else:
                     info = self.data._info[-1]
-                    if 'imagePosition' in info:
-                        opts['pos'] = info['imagePosition']
-                    if 'pixelSize' in info:
-                        opts['scale'] = info['pixelSize']
+                    opts['scale'] = info.get('pixelSize', None)
+                    opts['pos'] = info.get('imagePosition', None)
             except:
                 pass
         

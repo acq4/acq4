@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 import numpy as np
-import pyqtgraph.ProgressDialog as ProgressDialog
+import ProgressDialog
 
 class Scan(QtCore.QObject):
     ### This class represents a single photostim scan (one set of non-overlapping points)

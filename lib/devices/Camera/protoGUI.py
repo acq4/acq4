@@ -63,8 +63,8 @@ class CameraProtoGui(DAQGenericProtoGui):
             self.vLines.append(l)
             self.plots['exposure'].addItem(self.vLines[1])
             
-        self.frameTicks = VTickGroup()
-        self.frameTicks.setYRange([0.8, 1.0])
+        self.frameTicks = VTickGroup(view=self.ui.imageView.ui.roiPlot)
+        self.frameTicks.setYRange([0.8, 1.0], relative=True)
         
         #self.roiRect = QtGui.QGraphicsRectItem()
         #self.cameraModule = None

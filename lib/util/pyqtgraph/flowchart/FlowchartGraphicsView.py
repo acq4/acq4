@@ -45,16 +45,3 @@ class FlowchartGraphicsView(QtGui.QGraphicsView):
             #self.emit(QtCore.SIGNAL('clicked'), ev)
             self.sigClicked.emit(ev)
         return QtGui.QGraphicsView.mouseReleaseEvent(self, ev)
-
-
-class FlowchartGraphicsScene(QtGui.QGraphicsScene):
-    
-    sigContextMenuEvent = QtCore.Signal(object)
-    
-    def __init__(self, *args):
-        QtGui.QGraphicsScene.__init__(self, *args)
-        
-    def contextMenuEvent(self, ev):
-        QtGui.QGraphicsScene.contextMenuEvent(self, ev)
-        if not ev.isAccepted():
-            self.sigContextMenuEvent.emit(ev)

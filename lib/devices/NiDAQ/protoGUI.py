@@ -41,10 +41,15 @@ class NiDAQProto(ProtocolGui):
             (self.ui.butterworthStopDBSpin, 'butterworthStopDB'),
         ])
         
+        #QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('valueChanged(double)'), self.rateChanged)
         self.ui.rateSpin.valueChanged.connect(self.rateChanged)
+        #QtCore.QObject.connect(self.ui.periodSpin, QtCore.SIGNAL('valueChanging'), self.updateRateSpin)
         self.ui.periodSpin.sigValueChanging.connect(self.updateRateSpin)
+        #QtCore.QObject.connect(self.ui.rateSpin, QtCore.SIGNAL('valueChanging'), self.updatePeriodSpin)
         self.ui.rateSpin.sigValueChanging.connect(self.updatePeriodSpin)
+        #QtCore.QObject.connect(self.prot, QtCore.SIGNAL('protocolChanged'), self.protocolChanged)
         self.prot.sigProtocolChanged.connect(self.protocolChanged)
+        #QtCore.QObject.connect(self.ui.filterCombo, QtCore.SIGNAL('currentIndexChanged(int)'), self.ui.filterStack.setCurrentIndex)
         self.ui.filterCombo.currentIndexChanged.connect(self.ui.filterStack.setCurrentIndex)
         self.ui.rateSpin.setValue(self.rate)
         
@@ -94,9 +99,11 @@ class NiDAQProto(ProtocolGui):
         
         return state
         
-    def updatePeriodSpin(self):
+    def  updatePeriodSpin(self):
         if self.ignoreRate:
             return
+        #self.rate = self.ui.rateSpin.value() * 1000.
+        #period = 1e6 / self.rate
         period = 1. / self.ui.rateSpin.value()
         
         self.ignorePeriod = True
@@ -107,14 +114,17 @@ class NiDAQProto(ProtocolGui):
         if self.ignorePeriod:
             return
         period = self.ui.periodSpin.value()
+        #self.rate = 1e6 / period
         rate = 1.0 / period
         self.ignoreRate = True
+        #self.ui.rateSpin.setValue(self.rate / 1000.)
         self.ui.rateSpin.setValue(rate)
         self.ignoreRate = False
         
     def rateChanged(self):
         self.rate = self.ui.rateSpin.value()
         self.updateNPts()
+        #self.emit(QtCore.SIGNAL('changed'), self.currentState())
         self.sigChanged.emit(self.currentState())
         
         
@@ -122,6 +132,7 @@ class NiDAQProto(ProtocolGui):
         #print "caught protocol change", n, v
         if n == 'duration':
             self.updateNPts()
+            #self.emit(QtCore.SIGNAL('changed'), self.currentState())
             self.sigChanged.emit(self.currentState())
         
     def updateNPts(self):

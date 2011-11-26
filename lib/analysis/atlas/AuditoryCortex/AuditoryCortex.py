@@ -34,7 +34,7 @@ class AuditoryCortex(Atlas.Atlas):
             self.ctrl = QtGui.QWidget()
             self.ui = CtrlTemplate.Ui_Form()
             self.ui.setupUi(self.ctrl)
-            self.stateGroup = pyqtgraph.WidgetGroup.WidgetGroup(self.ctrl)
+            self.stateGroup = WidgetGroup.WidgetGroup(self.ctrl)
             self.ui.slicePlaneCombo.clear()
             for sp in self.slicePlanes:
                 self.ui.slicePlaneCombo.addItem(sp)

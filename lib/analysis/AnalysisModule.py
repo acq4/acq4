@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtCore, QtGui
 import pyqtgraph as pg
-import Canvas, FileLoader, DatabaseGui
+import Canvas, FileLoader, DatabaseGui, TableWidget
 import pyqtgraph.DataTreeWidget as DataTreeWidget
 from advancedTypes import OrderedDict
 
@@ -174,7 +174,7 @@ class Element(QtCore.QObject):
         #elif typ == 'database':
             #obj = DatabaseGui.DatabaseGui(host.dataManager(), **args)
         elif typ == 'table':
-            obj = pg.TableWidget.TableWidget(**args)
+            obj = TableWidget.TableWidget(**args)
         elif typ == 'dataTree':
             obj = DataTreeWidget.DataTreeWidget(**args)
         elif typ == 'parameterTree':

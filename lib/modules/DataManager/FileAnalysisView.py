@@ -56,9 +56,6 @@ class FileAnalysisView(QtGui.QWidget):
         fileName = str(fileName)
         if fileName == '':
             return
-        if not fileName[-7:] == '.sqlite' and '.' not in fileName:
-            fileName =+ '.sqlite'
-            
         self.ui.databaseText.setText(fileName)
         self.dbFile = fileName
         self.db = database.AnalysisDatabase(self.dbFile)

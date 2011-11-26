@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.Qt import QtCore, QtGui
 #from PySide import QtCore, QtGui
-#import Node as NodeMod
 from Node import *
 #import functions
 from advancedTypes import OrderedDict
@@ -737,8 +736,7 @@ class FlowchartWidget(dockarea.DockArea):
         self.addDock(self.selDock, 'bottom')
         
 
-        #self._scene = QtGui.QGraphicsScene()
-        self._scene = FlowchartGraphicsView.FlowchartGraphicsScene()
+        self._scene = QtGui.QGraphicsScene()
         self.view.setScene(self._scene)
         
         self.buildMenu()
@@ -746,8 +744,7 @@ class FlowchartWidget(dockarea.DockArea):
             
         self._scene.selectionChanged.connect(self.selectionChanged)
         self.view.sigHoverOver.connect(self.hoverOver)
-        #self.view.sigClicked.connect(self.showViewMenu)
-        self._scene.sigContextMenuEvent.connect(self.showViewMenu)
+        self.view.sigClicked.connect(self.showViewMenu)
         
     def reloadLibrary(self):
         #QtCore.QObject.disconnect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
@@ -771,13 +768,10 @@ class FlowchartWidget(dockarea.DockArea):
     
     def showViewMenu(self, ev):
         #QtGui.QPushButton.mouseReleaseEvent(self.ui.addNodeBtn, ev)
-        #if ev.button() == QtCore.Qt.RightButton:
-            #self.menuPos = self.view.mapToScene(ev.pos())
-            #self.nodeMenu.popup(ev.globalPos())
-        
-        self.menuPos = ev.scenePos()
-        self.nodeMenu.popup(ev.screenPos())
-        
+        if ev.button() == QtCore.Qt.RightButton:
+            self.menuPos = self.view.mapToScene(ev.pos())
+            self.nodeMenu.popup(ev.globalPos())
+
     def scene(self):
         return self._scene
 

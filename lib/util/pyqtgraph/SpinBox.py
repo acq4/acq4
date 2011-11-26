@@ -27,13 +27,12 @@ class SpinBox(QtGui.QAbstractSpinBox):
     
     valueChanged = QtCore.Signal(object)     # (value)  for compatibility with QSpinBox
     sigValueChanged = QtCore.Signal(object)  # (self)
-    sigValueChanging = QtCore.Signal(object, object)  # (self, value)  sent immediately; no delay.
+    sigValueChanging = QtCore.Signal(object)  # (value)  sent immediately; no delay.
     
     def __init__(self, parent=None, value=0.0, **kwargs):
         QtGui.QAbstractSpinBox.__init__(self, parent)
         self.lastValEmitted = None
         self.lastText = ''
-        self.textValid = True  ## If false, we draw a red border
         self.setMinimumWidth(0)
         self.setMaximumHeight(20)
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Preferred)
@@ -81,7 +80,6 @@ class SpinBox(QtGui.QAbstractSpinBox):
         self.setKeyboardTracking(False)
         self.setOpts(**kwargs)
         
-        
         self.editingFinished.connect(self.editingFinishedEvent)
         self.proxy = SignalProxy(self.sigValueChanging, slot=self.delayedChange)
         
@@ -90,13 +88,11 @@ class SpinBox(QtGui.QAbstractSpinBox):
         for k in opts:
             if k == 'bounds':
                 #print opts[k]
-                self.setMinimum(opts[k][0], update=False)
-                self.setMaximum(opts[k][1], update=False)
-                #for i in [0,1]:
-                    #if opts[k][i] is None:
-                        #self.opts[k][i] = None
-                    #else:
-                        #self.opts[k][i] = D(unicode(opts[k][i]))
+                for i in [0,1]:
+                    if opts[k][i] is None:
+                        self.opts[k][i] = None
+                    else:
+                        self.opts[k][i] = D(unicode(opts[k][i]))
             elif k in ['step', 'minStep']:
                 self.opts[k] = D(unicode(opts[k]))
             elif k == 'value':
@@ -105,104 +101,8 @@ class SpinBox(QtGui.QAbstractSpinBox):
                 self.opts[k] = opts[k]
         if 'value' in opts:
             self.setValue(opts['value'])
-            
-        ## If bounds have changed, update value to match
-        if 'bounds' in opts and 'value' not in opts:
-            self.setValue()   
-            
-        ## sanity checks:
-        if self.opts['int']:
-            step = self.opts['step']
-            mStep = self.opts['minStep']
-            if (int(step) != step) or (self.opts['dec'] and (int(mStep) != mStep)):
-                raise Exception("Integer SpinBox may only have integer step and minStep.")
-            
         self.updateText()
-
-
-
-    def setMaximum(self, m, update=True):
-        if m is not None:
-            m = D(unicode(m))
-        self.opts['bounds'][1] = m
-        if update:
-            self.setValue()
-    
-    def setMinimum(self, m, update=True):
-        if m is not None:
-            m = D(unicode(m))
-        self.opts['bounds'][0] = m
-        if update:
-            self.setValue()
-        
-    def setPrefix(self, p):
-        self.setOpts(prefix=p)
-    
-    def setRange(self, r0, r1):
-        self.setOpts(bounds = [r0,r1])
-        
-    def setProperty(self, prop, val):
-        """setProperty is just for compatibility with QSpinBox"""
-        if prop == 'value':
-            #if type(val) is QtCore.QVariant:
-                #val = val.toDouble()[0]
-            self.setValue(val)
-        else:
-            print "Warning: SpinBox.setProperty('%s', ..) not supported." % prop
-
-    def setSuffix(self, suf):
-        self.setOpts(suffix=suf)
-
-    def setSingleStep(self, step):
-        self.setOpts(step=step)
-        
-    def setDecimals(self, decimals):
-        self.setOpts(decimals=decimals)
-
-    def value(self):
-        if self.opts['int']:
-            return int(self.val)
-        else:
-            return float(self.val)
-
-    def setValue(self, value=None, update=True, delaySignal=False):
-        """
-        Set the value of this spin. 
-        If the value is out of bounds, it will be moved to the nearest boundary
-        If the spin is integer type, the value will be coerced to int
-        Returns the actual value set.
-        
-        If value is None, then the current value is used (this is for resetting
-        the value after bounds, etc. have changed)
-        """
-        
-        if value is None:
-            value = self.value()
-        
-        bounds = self.opts['bounds']
-        if bounds[0] is not None and value < bounds[0]:
-            value = bounds[0]
-        if bounds[1] is not None and value > bounds[1]:
-            value = bounds[1]
-
-        if self.opts['int']:
-            value = int(value)
-
-        value = D(unicode(value))
-        if value == self.val:
-            return
-        prev = self.val
-        
-        self.val = value
-        if update:
-            self.updateText(prev=prev)
             
-        self.sigValueChanging.emit(self, float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
-        if not delaySignal:
-            self.emitChanged()
-        
-        return value
-
             
     def emitChanged(self):
         self.lastValEmitted = self.val
@@ -263,18 +163,69 @@ class SpinBox(QtGui.QAbstractSpinBox):
                 val = D(0)
         self.setValue(val, delaySignal=True)  ## note all steps (arrow buttons, wheel, up/down keys..) emit delayed signals only.
         
-
-    def valueInRange(self, value):
+    def setValue(self, value, update=True, delaySignal=False):
+        #print "setValue:", value
+        #if value == 0.0:
+            #import traceback
+            #traceback.print_stack()
+        if self.opts['int']:
+            value = int(value)
+        value = D(unicode(value))
+        if value == self.val:
+            #print "  value not changed; ignore."
+            return
+        prev = self.val
+        
         bounds = self.opts['bounds']
         if bounds[0] is not None and value < bounds[0]:
-            return False
+            return
         if bounds[1] is not None and value > bounds[1]:
-            return False
-        if self.opts.get('int', False):
-            if int(value) != value:
-                return False
-        return True
+            return
+        self.val = value
+        if update:
+            self.updateText(prev=prev)
+            
+        #self.emit(QtCore.SIGNAL('valueChanging'), float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
+        self.sigValueChanging.emit(float(self.val))  ## change will be emitted in 300ms if there are no subsequent changes.
+        if not delaySignal:
+            self.emitChanged()
+        self.lineEdit().setStyleSheet('border: 0px;')
+
+    def setMaximum(self, m):
+        self.opts['bounds'][1] = D(unicode(m))
+    
+    def setMinimum(self, m):
+        self.opts['bounds'][0] = D(unicode(m))
         
+    def setPrefix(self, p):
+        self.setOpts(prefix=p)
+    
+    def setRange(self, r0, r1):
+        self.setOpts(bounds = [r0,r1])
+        
+    def setProperty(self, prop, val):
+        """setProperty is just for compatibility with QSpinBox"""
+        if prop == 'value':
+            #if type(val) is QtCore.QVariant:
+                #val = val.toDouble()[0]
+            self.setValue(val)
+        else:
+            print "Warning: SpinBox.setProperty('%s', ..) not supported." % prop
+
+    def setSuffix(self, suf):
+        self.setOpts(suffix=suf)
+
+    def setSingleStep(self, step):
+        self.setOpts(step=step)
+        
+    def setDecimals(self, decimals):
+        self.setOpts(decimals=decimals)
+
+    def value(self):
+        if self.opts['int']:
+            return int(self.val)
+        else:
+            return float(self.val)
 
     def updateText(self, prev=None):
         #print "Update text."
@@ -293,72 +244,28 @@ class SpinBox(QtGui.QAbstractSpinBox):
         
     def validate(self, strn, pos):
         if self.skipValidate:
-            #print "skip validate"
-            #self.textValid = False
-            ret = QtGui.QValidator.Acceptable
-        else:
-            try:
-                ## first make sure we didn't mess with the suffix
-                suff = self.opts.get('suffix', '')
-                if len(suff) > 0 and unicode(strn)[-len(suff):] != suff:
-                    #print '"%s" != "%s"' % (unicode(strn)[-len(suff):], suff)
-                    ret = QtGui.QValidator.Invalid
-                    
-                ## next see if we actually have an interpretable value
-                else:
-                    val = self.interpret()
-                    if val is False:
-                        #print "can't interpret"
-                        #self.setStyleSheet('SpinBox {border: 2px solid #C55;}')
-                        #self.textValid = False
-                        ret = QtGui.QValidator.Intermediate
-                    else:
-                        if self.valueInRange(val):
-                            if not self.opts['delayUntilEditFinished']:
-                                self.setValue(val, update=False)
-                            #print "  OK:", self.val
-                            #self.setStyleSheet('')
-                            #self.textValid = True
-                            
-                            ret = QtGui.QValidator.Acceptable
-                        else:
-                            ret = QtGui.QValidator.Intermediate
-                        
-            except:
-                #print "  BAD"
-                #import sys
-                #sys.excepthook(*sys.exc_info())
-                #self.textValid = False
-                #self.setStyleSheet('SpinBox {border: 2px solid #C55;}')
-                ret = QtGui.QValidator.Intermediate
+            return (QtGui.QValidator.Acceptable, strn, pos)
+        #print "Validate:", strn, pos
+        try:
+            val = self.interpret()
+            if val is False:
+                self.lineEdit().setStyleSheet('border: 2px solid #C55;')
+                return (QtGui.QValidator.Intermediate, strn, pos)
+                #return (QtGui.QValidator.Invalid, pos)
+                
+            if not self.opts['delayUntilEditFinished']:
+                self.setValue(val, update=False)
+            #print "  OK:", self.val
+            self.lineEdit().setStyleSheet('border: 0px;')
             
-        ## draw / clear border
-        if ret == QtGui.QValidator.Intermediate:
-            self.textValid = False
-        elif ret == QtGui.QValidator.Acceptable:
-            self.textValid = True
-        ## note: if text is invalid, we don't change the textValid flag 
-        ## since the text will be forced to its previous state anyway
-        self.update()
+            return (QtGui.QValidator.Acceptable, strn, pos)
+        except:
+            #print "  BAD"
+            #import sys
+            #sys.excepthook(*sys.exc_info())
+            self.lineEdit().setStyleSheet('border: 2px solid #C55;')
+            return (QtGui.QValidator.Intermediate, strn, pos)
         
-        ## support 2 different pyqt APIs. Bleh.
-        if hasattr(QtCore, 'QString'):
-            return (ret, pos)
-        else:
-            return (ret, strn, pos)
-        
-    def paintEvent(self, ev):
-        QtGui.QAbstractSpinBox.paintEvent(self, ev)
-        
-        ## draw red border if text is invalid
-        if not self.textValid:
-            p = QtGui.QPainter(self)
-            p.setRenderHint(p.Antialiasing)
-            p.setPen(fn.mkPen((200,50,50), width=2))
-            p.drawRoundedRect(self.rect().adjusted(2, 2, -2, -2), 4, 4)
-            p.end()
-
-
     def interpret(self):
         """Return value of text. Return False if text is invalid, raise exception if text is intermediate"""
         strn = self.lineEdit().text()
@@ -371,7 +278,7 @@ class SpinBox(QtGui.QAbstractSpinBox):
         try:
             val = fn.siEval(strn)
         except:
-            #sys.excepthook(*sys.exc_info())
+            sys.excepthook(*sys.exc_info())
             #print "invalid"
             return False
         #print val
@@ -431,10 +338,6 @@ if __name__ == '__main__':
         #sb = QtCore.QObject.sender()
         print str(sb) + " valueChanged: %s" % str(sb.value())
     
-    def valueChanging(sb, value):
-        #sb = QtCore.QObject.sender()
-        print str(sb) + " valueChanging: %s" % str(sb.value())
-    
     def mkWin():
         win = QtGui.QMainWindow()
         g = QtGui.QFormLayout()
@@ -450,7 +353,7 @@ if __name__ == '__main__':
         s3 = SpinBox(value=1000, dec=True, step=0.5, minStep=1e-6, bounds=[1, 1e9], suffix='Hz', siPrefix=True)
         t3 = QtGui.QLineEdit()
         g.addRow(s3, t3)
-        s4 = SpinBox(int=True, dec=True, step=1, minStep=1, bounds=[-10, 1000])
+        s4 = SpinBox(dec=True, step=1, minStep=1e-6, bounds=[-10, 1000])
         t4 = QtGui.QLineEdit()
         g.addRow(s4, t4)
 
@@ -462,7 +365,6 @@ if __name__ == '__main__':
             #QtCore.QObject.connect(sb, QtCore.SIGNAL('valueChanged(double)'), lambda v: sys.stdout.write(str(sb) + " valueChanged\n"))
             #QtCore.QObject.connect(sb, QtCore.SIGNAL('editingFinished()'), lambda: sys.stdout.write(str(sb) + " editingFinished\n"))
             sb.sigValueChanged.connect(valueChanged)
-            sb.sigValueChanging.connect(valueChanging)
             sb.editingFinished.connect(lambda: sys.stdout.write(str(sb) + " editingFinished\n"))
         return win, w, [s1, s2, s3, s4]
     a = mkWin()

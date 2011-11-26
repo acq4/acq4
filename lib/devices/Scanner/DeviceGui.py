@@ -8,7 +8,7 @@ from imageAnalysis import *
 from debug import *
 import numpy as np
 import pyqtgraph.WidgetGroup as WidgetGroup
-from pyqtgraph.ProgressDialog import ProgressDialog
+from ProgressDialog import ProgressDialog
 
 class ScannerDeviceGui(QtGui.QWidget):
     
