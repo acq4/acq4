@@ -46,7 +46,7 @@ class Coherent(object):
         
     def getShutter(self):
         """Return True if the shutter is open."""
-        return bool(self['SHUTTER'])
+        return bool(int(self['SHUTTER']))
     
     def setShutter(self, val):
         """Open (True) or close (False) the shutter"""
