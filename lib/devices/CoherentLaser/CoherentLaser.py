@@ -4,6 +4,7 @@ from lib.devices.Laser import *
 from lib.drivers.Coherent import *
 from Mutex import Mutex
 import debug
+import time
 
 class CoherentLaser(Laser):
 
@@ -64,18 +65,27 @@ class CoherentLaser(Laser):
             self.driver.setShutter(False)
         Laser.closeShutter(self)
         
+    def getShutter(self):
+        with self.driverLock:
+            return self.driver.getShutter()
+        
     def createTask(self, cmd):
         return CoherentTask(self, cmd)
         
 class CoherentTask(LaserTask):
     def start(self):
-        self.dev.openShutter()
+        self.shutterOpened = self.dev.getShutter()
+        if not self.shutterOpened:
+            self.dev.openShutter()
+            time.sleep(2.0)  ## opening the shutter causes momentary power drop; give laser time to recover
+                             ## Note: It is recommended to keep the laser's shutter open rather than
+                             ## rely on this to open it for you.
         LaserTask.start(self)
         
     def stop(self, abort):
-        self.dev.closeShutter()
+        if not self.shutterOpened:
+            self.dev.closeShutter()
         LaserTask.stop(self, abort)
-        
         
 class CoherentThread(QtCore.QThread):
 

@@ -10,11 +10,12 @@ import random
 import numpy as np
 from debug import Profiler
 import optimize ## for determining random scan patterns
-import ForkedIterator, ProgressDialog
+import ForkedIterator
 import sys
 from pyqtgraph.SpinBox import SpinBox
 from pyqtgraph.Point import *
 from pyqtgraph.functions import mkPen
+import pyqtgraph.ProgressDialog as ProgressDialog
 from HelpfulException import HelpfulException
 
 class ScannerProtoGui(ProtocolGui):

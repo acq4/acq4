@@ -44,7 +44,7 @@
   <customwidget>
    <class>TableWidget</class>
    <extends>QTableWidget</extends>
-   <header>TableWidget</header>
+   <header>pyqtgraph.TableWidget</header>
   </customwidget>
  </customwidgets>
  <resources/>

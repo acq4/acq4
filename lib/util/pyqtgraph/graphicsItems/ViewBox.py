@@ -55,6 +55,9 @@ class ViewBox(QtGui.QGraphicsWidget):
         
         self.mouseEnabled = [enableMouse, enableMouse]
         self.setAspectLocked(lockAspect)
+        
+    def implements(self, interface):
+        return interface == 'ViewBox'
 
     def keyPressEvent(self, ev):
         """
@@ -66,7 +69,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         ctrl-- : moves backward in the zooming stack (if it exists)
          
         """
-        print ev.key()
+        #print ev.key()
         #print 'I intercepted a key press, but did not accept it'
         
         ## not implemented yet ?

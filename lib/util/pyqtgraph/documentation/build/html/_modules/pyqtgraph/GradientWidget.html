@@ -1,0 +1,557 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyqtgraph.GradientWidget &mdash; pyqtgraph v1.5 documentation</title>
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.5',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="pyqtgraph v1.5 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">pyqtgraph v1.5 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyqtgraph.GradientWidget</h1><div class="highlight"><pre>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="kn">from</span> <span class="nn">Qt</span> <span class="kn">import</span> <span class="n">QtGui</span><span class="p">,</span> <span class="n">QtCore</span>
+<span class="kn">import</span> <span class="nn">weakref</span>
+
+<span class="k">class</span> <span class="nc">TickSlider</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QGraphicsView</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">orientation</span><span class="o">=</span><span class="s">&#39;bottom&#39;</span><span class="p">,</span> <span class="n">allowAdd</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kargs</span><span class="p">):</span>
+        <span class="n">QtGui</span><span class="o">.</span><span class="n">QGraphicsView</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent</span><span class="p">)</span>
+        <span class="c">#self.orientation = orientation</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">allowAdd</span> <span class="o">=</span> <span class="n">allowAdd</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setVerticalScrollBarPolicy</span><span class="p">(</span><span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">ScrollBarAlwaysOff</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setHorizontalScrollBarPolicy</span><span class="p">(</span><span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">ScrollBarAlwaysOff</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setTransformationAnchor</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QGraphicsView</span><span class="o">.</span><span class="n">NoAnchor</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setResizeAnchor</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QGraphicsView</span><span class="o">.</span><span class="n">AnchorViewCenter</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setRenderHints</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QPainter</span><span class="o">.</span><span class="n">Antialiasing</span> <span class="o">|</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QPainter</span><span class="o">.</span><span class="n">TextAntialiasing</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">length</span> <span class="o">=</span> <span class="mi">100</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tickSize</span> <span class="o">=</span> <span class="mi">15</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">orientations</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;left&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">270</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span> 
+            <span class="s">&#39;right&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">270</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> 
+            <span class="s">&#39;top&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span> 
+            <span class="s">&#39;bottom&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="p">}</span>
+            
+        <span class="bp">self</span><span class="o">.</span><span class="n">scene</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QGraphicsScene</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setScene</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">ticks</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">maxDim</span> <span class="o">=</span> <span class="mi">20</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setOrientation</span><span class="p">(</span><span class="n">orientation</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setFrameStyle</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QFrame</span><span class="o">.</span><span class="n">NoFrame</span> <span class="o">|</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QFrame</span><span class="o">.</span><span class="n">Plain</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setBackgroundRole</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QPalette</span><span class="o">.</span><span class="n">NoRole</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setMouseTracking</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+        
+    <span class="k">def</span> <span class="nf">keyPressEvent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">):</span>
+        <span class="n">ev</span><span class="o">.</span><span class="n">ignore</span><span class="p">()</span>
+     
+    <span class="k">def</span> <span class="nf">setMaxDim</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mx</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">mx</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">mx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">maxDim</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">maxDim</span> <span class="o">=</span> <span class="n">mx</span>
+            
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">orientation</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;bottom&#39;</span><span class="p">,</span> <span class="s">&#39;top&#39;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">setFixedHeight</span><span class="p">(</span><span class="n">mx</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">setMaximumWidth</span><span class="p">(</span><span class="mi">16777215</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">setFixedWidth</span><span class="p">(</span><span class="n">mx</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">setMaximumHeight</span><span class="p">(</span><span class="mi">16777215</span><span class="p">)</span>
+        
+    <span class="k">def</span> <span class="nf">setOrientation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ort</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">orientation</span> <span class="o">=</span> <span class="n">ort</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resetTransform</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rotate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">orientations</span><span class="p">[</span><span class="n">ort</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">orientations</span><span class="p">[</span><span class="n">ort</span><span class="p">][</span><span class="mi">1</span><span class="p">:])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setMaxDim</span><span class="p">()</span>
+        
+    <span class="k">def</span> <span class="nf">addTick</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">movable</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">color</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">color</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QColor</span><span class="p">(</span><span class="mi">255</span><span class="p">,</span><span class="mi">255</span><span class="p">,</span><span class="mi">255</span><span class="p">)</span>
+        <span class="n">tick</span> <span class="o">=</span> <span class="n">Tick</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="p">[</span><span class="n">x</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">length</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">color</span><span class="p">,</span> <span class="n">movable</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tickSize</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ticks</span><span class="p">[</span><span class="n">tick</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">addItem</span><span class="p">(</span><span class="n">tick</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">tick</span>
+                
+    <span class="k">def</span> <span class="nf">removeTick</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tick</span><span class="p">):</span>
+        <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">ticks</span><span class="p">[</span><span class="n">tick</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">removeItem</span><span class="p">(</span><span class="n">tick</span><span class="p">)</span>
+                
+    <span class="k">def</span> <span class="nf">tickMoved</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tick</span><span class="p">,</span> <span class="n">pos</span><span class="p">):</span>
+        <span class="c">#print &quot;tick changed&quot;</span>
+        <span class="c">## Correct position of tick if it has left bounds.</span>
+        <span class="n">newX</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">pos</span><span class="o">.</span><span class="n">x</span><span class="p">()),</span> <span class="bp">self</span><span class="o">.</span><span class="n">length</span><span class="p">)</span>
+        <span class="n">pos</span><span class="o">.</span><span class="n">setX</span><span class="p">(</span><span class="n">newX</span><span class="p">)</span>
+        <span class="n">tick</span><span class="o">.</span><span class="n">setPos</span><span class="p">(</span><span class="n">pos</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ticks</span><span class="p">[</span><span class="n">tick</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">newX</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">length</span>
+    
+    <span class="k">def</span> <span class="nf">tickClicked</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tick</span><span class="p">,</span> <span class="n">ev</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">ev</span><span class="o">.</span><span class="n">button</span><span class="p">()</span> <span class="o">==</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">RightButton</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">removeTick</span><span class="p">(</span><span class="n">tick</span><span class="p">)</span>
+    
+    <span class="k">def</span> <span class="nf">widgetLength</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">orientation</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;bottom&#39;</span><span class="p">,</span> <span class="s">&#39;top&#39;</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">width</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">height</span><span class="p">()</span>
+    
+    <span class="k">def</span> <span class="nf">resizeEvent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">):</span>
+        <span class="n">wlen</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">40</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">widgetLength</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setLength</span><span class="p">(</span><span class="n">wlen</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">tickSize</span><span class="p">)</span>
+        <span class="n">bounds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">itemsBoundingRect</span><span class="p">()</span>
+        <span class="n">bounds</span><span class="o">.</span><span class="n">setLeft</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">tickSize</span><span class="o">*</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">bounds</span><span class="o">.</span><span class="n">left</span><span class="p">()))</span>
+        <span class="n">bounds</span><span class="o">.</span><span class="n">setRight</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">length</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">tickSize</span><span class="p">,</span> <span class="n">bounds</span><span class="o">.</span><span class="n">right</span><span class="p">()))</span>
+        <span class="c">#bounds.setTop(min(bounds.top(), self.tickSize))</span>
+        <span class="c">#bounds.setBottom(max(0, bounds.bottom()))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setSceneRect</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fitInView</span><span class="p">(</span><span class="n">bounds</span><span class="p">,</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">KeepAspectRatio</span><span class="p">)</span>
+        
+    <span class="k">def</span> <span class="nf">setLength</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">newLen</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ticks</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">t</span><span class="o">.</span><span class="n">setPos</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">newLen</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">pos</span><span class="p">()</span><span class="o">.</span><span class="n">y</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">length</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">newLen</span><span class="p">)</span>
+        
+    <span class="k">def</span> <span class="nf">mousePressEvent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">):</span>
+        <span class="n">QtGui</span><span class="o">.</span><span class="n">QGraphicsView</span><span class="o">.</span><span class="n">mousePressEvent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ignoreRelease</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="n">ev</span><span class="o">.</span><span class="n">pos</span><span class="p">()))</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>  <span class="c">## Let items handle their own clicks</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ignoreRelease</span> <span class="o">=</span> <span class="bp">True</span>
+        
+    <span class="k">def</span> <span class="nf">mouseReleaseEvent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">):</span>
+        <span class="n">QtGui</span><span class="o">.</span><span class="n">QGraphicsView</span><span class="o">.</span><span class="n">mouseReleaseEvent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ignoreRelease</span><span class="p">:</span>
+            <span class="k">return</span>
+            
+        <span class="n">pos</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mapToScene</span><span class="p">(</span><span class="n">ev</span><span class="o">.</span><span class="n">pos</span><span class="p">())</span>
+        <span class="k">if</span> <span class="n">pos</span><span class="o">.</span><span class="n">x</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">pos</span><span class="o">.</span><span class="n">x</span><span class="p">()</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">length</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="n">pos</span><span class="o">.</span><span class="n">y</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">pos</span><span class="o">.</span><span class="n">y</span><span class="p">()</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">tickSize</span><span class="p">:</span>
+            <span class="k">return</span>
+            
+        <span class="k">if</span> <span class="n">ev</span><span class="o">.</span><span class="n">button</span><span class="p">()</span> <span class="o">==</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">LeftButton</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">allowAdd</span><span class="p">:</span>
+            <span class="n">pos</span><span class="o">.</span><span class="n">setX</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">pos</span><span class="o">.</span><span class="n">x</span><span class="p">(),</span> <span class="mi">0</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">length</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">addTick</span><span class="p">(</span><span class="n">pos</span><span class="o">.</span><span class="n">x</span><span class="p">()</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">length</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">ev</span><span class="o">.</span><span class="n">button</span><span class="p">()</span> <span class="o">==</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">RightButton</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">showMenu</span><span class="p">(</span><span class="n">ev</span><span class="p">)</span>
+            
+        
+    <span class="k">def</span> <span class="nf">showMenu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">setTickColor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tick</span><span class="p">,</span> <span class="n">color</span><span class="p">):</span>
+        <span class="n">tick</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getTick</span><span class="p">(</span><span class="n">tick</span><span class="p">)</span>
+        <span class="n">tick</span><span class="o">.</span><span class="n">color</span> <span class="o">=</span> <span class="n">color</span>
+        <span class="n">tick</span><span class="o">.</span><span class="n">setBrush</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QBrush</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QColor</span><span class="p">(</span><span class="n">tick</span><span class="o">.</span><span class="n">color</span><span class="p">)))</span>
+
+    <span class="k">def</span> <span class="nf">setTickValue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tick</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
+        <span class="n">tick</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getTick</span><span class="p">(</span><span class="n">tick</span><span class="p">)</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">val</span><span class="p">),</span> <span class="mf">1.0</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">val</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">length</span>
+        <span class="n">pos</span> <span class="o">=</span> <span class="n">tick</span><span class="o">.</span><span class="n">pos</span><span class="p">()</span>
+        <span class="n">pos</span><span class="o">.</span><span class="n">setX</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">tick</span><span class="o">.</span><span class="n">setPos</span><span class="p">(</span><span class="n">pos</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ticks</span><span class="p">[</span><span class="n">tick</span><span class="p">]</span> <span class="o">=</span> <span class="n">val</span>
+        
+    <span class="k">def</span> <span class="nf">tickValue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tick</span><span class="p">):</span>
+        <span class="n">tick</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getTick</span><span class="p">(</span><span class="n">tick</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">ticks</span><span class="p">[</span><span class="n">tick</span><span class="p">]</span>
+        
+    <span class="k">def</span> <span class="nf">getTick</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tick</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">tick</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">int</span><span class="p">:</span>
+            <span class="n">tick</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">listTicks</span><span class="p">()[</span><span class="n">tick</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">tick</span>
+
+    <span class="k">def</span> <span class="nf">mouseMoveEvent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">):</span>
+        <span class="n">QtGui</span><span class="o">.</span><span class="n">QGraphicsView</span><span class="o">.</span><span class="n">mouseMoveEvent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">)</span>
+        <span class="c">#print ev.pos(), ev.buttons()</span>
+
+    <span class="k">def</span> <span class="nf">listTicks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">ticks</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ticks</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="n">ticks</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">:</span> <span class="nb">cmp</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">b</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+        <span class="k">return</span> <span class="n">ticks</span>
+
+
+<div class="viewcode-block" id="GradientWidget"><a class="viewcode-back" href="../../widgets/GradientWidget.html#pyqtgraph.GradientWidget.GradientWidget">[docs]</a><span class="k">class</span> <span class="nc">GradientWidget</span><span class="p">(</span><span class="n">TickSlider</span><span class="p">):</span>
+    
+    <span class="n">sigGradientChanged</span> <span class="o">=</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Signal</span><span class="p">(</span><span class="nb">object</span><span class="p">)</span>
+    
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kargs</span><span class="p">):</span>
+        <span class="n">TickSlider</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">currentTick</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">currentTickColor</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rectSize</span> <span class="o">=</span> <span class="mi">15</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gradRect</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QGraphicsRectItem</span><span class="p">(</span><span class="n">QtCore</span><span class="o">.</span><span class="n">QRectF</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">rectSize</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">rectSize</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">backgroundRect</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QGraphicsRectItem</span><span class="p">(</span><span class="n">QtCore</span><span class="o">.</span><span class="n">QRectF</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">rectSize</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">rectSize</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">backgroundRect</span><span class="o">.</span><span class="n">setBrush</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QBrush</span><span class="p">(</span><span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">DiagCrossPattern</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">colorMode</span> <span class="o">=</span> <span class="s">&#39;rgb&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">colorDialog</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QColorDialog</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">colorDialog</span><span class="o">.</span><span class="n">setOption</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QColorDialog</span><span class="o">.</span><span class="n">ShowAlphaChannel</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">colorDialog</span><span class="o">.</span><span class="n">setOption</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QColorDialog</span><span class="o">.</span><span class="n">DontUseNativeDialog</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">colorDialog</span><span class="o">.</span><span class="n">currentColorChanged</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">currentColorChanged</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">colorDialog</span><span class="o">.</span><span class="n">rejected</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">currentColorRejected</span><span class="p">)</span>
+        
+        <span class="c">#self.gradient = QtGui.QLinearGradient(QtCore.QPointF(0,0), QtCore.QPointF(100,0))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">addItem</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">backgroundRect</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">addItem</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gradRect</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">addTick</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QColor</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">addTick</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QColor</span><span class="p">(</span><span class="mi">255</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="bp">True</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">setMaxDim</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">rectSize</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">tickSize</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">updateGradient</span><span class="p">()</span>
+            
+        <span class="c">#self.btn = QtGui.QPushButton(&#39;RGB&#39;)</span>
+        <span class="c">#self.btnProxy = self.scene.addWidget(self.btn)</span>
+        <span class="c">#self.btnProxy.setFlag(self.btnProxy.ItemIgnoresTransformations)</span>
+        <span class="c">#self.btnProxy.scale(0.7, 0.7)</span>
+        <span class="c">#self.btnProxy.translate(-self.btnProxy.sceneBoundingRect().width()+self.tickSize/2., 0)</span>
+        <span class="c">#if self.orientation == &#39;bottom&#39;:</span>
+            <span class="c">#self.btnProxy.translate(0, -self.rectSize)</span>
+            
+    <span class="k">def</span> <span class="nf">setColorMode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cm</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">cm</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&#39;rgb&#39;</span><span class="p">,</span> <span class="s">&#39;hsv&#39;</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;Unknown color mode </span><span class="si">%s</span><span class="s">. Options are &#39;rgb&#39; and &#39;hsv&#39;.&quot;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">cm</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">colorMode</span> <span class="o">=</span> <span class="n">cm</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">updateGradient</span><span class="p">()</span>
+        
+    <span class="k">def</span> <span class="nf">updateGradient</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gradient</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getGradient</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gradRect</span><span class="o">.</span><span class="n">setBrush</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QBrush</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gradient</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sigGradientChanged</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        
+    <span class="k">def</span> <span class="nf">setLength</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">newLen</span><span class="p">):</span>
+        <span class="n">TickSlider</span><span class="o">.</span><span class="n">setLength</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">newLen</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">backgroundRect</span><span class="o">.</span><span class="n">setRect</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">rectSize</span><span class="p">,</span> <span class="n">newLen</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">rectSize</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gradRect</span><span class="o">.</span><span class="n">setRect</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">rectSize</span><span class="p">,</span> <span class="n">newLen</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">rectSize</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">updateGradient</span><span class="p">()</span>
+        
+    <span class="k">def</span> <span class="nf">currentColorChanged</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">color</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">color</span><span class="o">.</span><span class="n">isValid</span><span class="p">()</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">currentTick</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">setTickColor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">currentTick</span><span class="p">,</span> <span class="n">color</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">updateGradient</span><span class="p">()</span>
+            
+    <span class="k">def</span> <span class="nf">currentColorRejected</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setTickColor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">currentTick</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">currentTickColor</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">updateGradient</span><span class="p">()</span>
+        
+    <span class="k">def</span> <span class="nf">tickClicked</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tick</span><span class="p">,</span> <span class="n">ev</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">ev</span><span class="o">.</span><span class="n">button</span><span class="p">()</span> <span class="o">==</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">LeftButton</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">tick</span><span class="o">.</span><span class="n">colorChangeAllowed</span><span class="p">:</span>
+                <span class="k">return</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">currentTick</span> <span class="o">=</span> <span class="n">tick</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">currentTickColor</span> <span class="o">=</span> <span class="n">tick</span><span class="o">.</span><span class="n">color</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">colorDialog</span><span class="o">.</span><span class="n">setCurrentColor</span><span class="p">(</span><span class="n">tick</span><span class="o">.</span><span class="n">color</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">colorDialog</span><span class="o">.</span><span class="n">open</span><span class="p">()</span>
+            <span class="c">#color = QtGui.QColorDialog.getColor(tick.color, self, &quot;Select Color&quot;, QtGui.QColorDialog.ShowAlphaChannel)</span>
+            <span class="c">#if color.isValid():</span>
+                <span class="c">#self.setTickColor(tick, color)</span>
+                <span class="c">#self.updateGradient()</span>
+        <span class="k">elif</span> <span class="n">ev</span><span class="o">.</span><span class="n">button</span><span class="p">()</span> <span class="o">==</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">RightButton</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">tick</span><span class="o">.</span><span class="n">removeAllowed</span><span class="p">:</span>
+                <span class="k">return</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ticks</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">removeTick</span><span class="p">(</span><span class="n">tick</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">updateGradient</span><span class="p">()</span>
+                
+    <span class="k">def</span> <span class="nf">tickMoved</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tick</span><span class="p">,</span> <span class="n">pos</span><span class="p">):</span>
+        <span class="n">TickSlider</span><span class="o">.</span><span class="n">tickMoved</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tick</span><span class="p">,</span> <span class="n">pos</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">updateGradient</span><span class="p">()</span>
+
+
+    <span class="k">def</span> <span class="nf">getGradient</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">g</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QLinearGradient</span><span class="p">(</span><span class="n">QtCore</span><span class="o">.</span><span class="n">QPointF</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">QPointF</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">length</span><span class="p">,</span><span class="mi">0</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">colorMode</span> <span class="o">==</span> <span class="s">&#39;rgb&#39;</span><span class="p">:</span>
+            <span class="n">ticks</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">listTicks</span><span class="p">()</span>
+            <span class="n">g</span><span class="o">.</span><span class="n">setStops</span><span class="p">([(</span><span class="n">x</span><span class="p">,</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QColor</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">color</span><span class="p">))</span> <span class="k">for</span> <span class="n">t</span><span class="p">,</span><span class="n">x</span> <span class="ow">in</span> <span class="n">ticks</span><span class="p">])</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">colorMode</span> <span class="o">==</span> <span class="s">&#39;hsv&#39;</span><span class="p">:</span>  <span class="c">## HSV mode is approximated for display by interpolating 10 points between each stop</span>
+            <span class="n">ticks</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">listTicks</span><span class="p">()</span>
+            <span class="n">stops</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">stops</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">ticks</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="n">ticks</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">color</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">ticks</span><span class="p">)):</span>
+                <span class="n">x1</span> <span class="o">=</span> <span class="n">ticks</span><span class="p">[</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+                <span class="n">x2</span> <span class="o">=</span> <span class="n">ticks</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+                <span class="n">dx</span> <span class="o">=</span> <span class="p">(</span><span class="n">x2</span><span class="o">-</span><span class="n">x1</span><span class="p">)</span> <span class="o">/</span> <span class="mf">10.</span>
+                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">10</span><span class="p">):</span>
+                    <span class="n">x</span> <span class="o">=</span> <span class="n">x1</span> <span class="o">+</span> <span class="n">dx</span><span class="o">*</span><span class="n">j</span>
+                    <span class="n">stops</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">getColor</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
+                <span class="n">stops</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">x2</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">getColor</span><span class="p">(</span><span class="n">x2</span><span class="p">)))</span>
+            <span class="n">g</span><span class="o">.</span><span class="n">setStops</span><span class="p">(</span><span class="n">stops</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">g</span>
+        
+    <span class="k">def</span> <span class="nf">getColor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">ticks</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">listTicks</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;=</span> <span class="n">ticks</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QColor</span><span class="p">(</span><span class="n">ticks</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">color</span><span class="p">)</span>  <span class="c"># always copy colors before handing them out</span>
+        <span class="k">if</span> <span class="n">x</span> <span class="o">&gt;=</span> <span class="n">ticks</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QColor</span><span class="p">(</span><span class="n">ticks</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">color</span><span class="p">)</span>
+            
+        <span class="n">x2</span> <span class="o">=</span> <span class="n">ticks</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">ticks</span><span class="p">)):</span>
+            <span class="n">x1</span> <span class="o">=</span> <span class="n">x2</span>
+            <span class="n">x2</span> <span class="o">=</span> <span class="n">ticks</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">x1</span> <span class="o">&lt;=</span> <span class="n">x</span> <span class="ow">and</span> <span class="n">x2</span> <span class="o">&gt;=</span> <span class="n">x</span><span class="p">:</span>
+                <span class="k">break</span>
+                
+        <span class="n">dx</span> <span class="o">=</span> <span class="p">(</span><span class="n">x2</span><span class="o">-</span><span class="n">x1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dx</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">f</span> <span class="o">=</span> <span class="mf">0.</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">f</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span><span class="o">-</span><span class="n">x1</span><span class="p">)</span> <span class="o">/</span> <span class="n">dx</span>
+        <span class="n">c1</span> <span class="o">=</span> <span class="n">ticks</span><span class="p">[</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">color</span>
+        <span class="n">c2</span> <span class="o">=</span> <span class="n">ticks</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">color</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">colorMode</span> <span class="o">==</span> <span class="s">&#39;rgb&#39;</span><span class="p">:</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">c1</span><span class="o">.</span><span class="n">red</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.</span><span class="o">-</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="n">c2</span><span class="o">.</span><span class="n">red</span><span class="p">()</span> <span class="o">*</span> <span class="n">f</span>
+            <span class="n">g</span> <span class="o">=</span> <span class="n">c1</span><span class="o">.</span><span class="n">green</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.</span><span class="o">-</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="n">c2</span><span class="o">.</span><span class="n">green</span><span class="p">()</span> <span class="o">*</span> <span class="n">f</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="n">c1</span><span class="o">.</span><span class="n">blue</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.</span><span class="o">-</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="n">c2</span><span class="o">.</span><span class="n">blue</span><span class="p">()</span> <span class="o">*</span> <span class="n">f</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="n">c1</span><span class="o">.</span><span class="n">alpha</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.</span><span class="o">-</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="n">c2</span><span class="o">.</span><span class="n">alpha</span><span class="p">()</span> <span class="o">*</span> <span class="n">f</span>
+            <span class="k">return</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QColor</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span><span class="n">a</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">colorMode</span> <span class="o">==</span> <span class="s">&#39;hsv&#39;</span><span class="p">:</span>
+            <span class="n">h1</span><span class="p">,</span><span class="n">s1</span><span class="p">,</span><span class="n">v1</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">c1</span><span class="o">.</span><span class="n">getHsv</span><span class="p">()</span>
+            <span class="n">h2</span><span class="p">,</span><span class="n">s2</span><span class="p">,</span><span class="n">v2</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">c2</span><span class="o">.</span><span class="n">getHsv</span><span class="p">()</span>
+            <span class="n">h</span> <span class="o">=</span> <span class="n">h1</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.</span><span class="o">-</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="n">h2</span> <span class="o">*</span> <span class="n">f</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="n">s1</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.</span><span class="o">-</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="n">s2</span> <span class="o">*</span> <span class="n">f</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="n">v1</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.</span><span class="o">-</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="n">v2</span> <span class="o">*</span> <span class="n">f</span>
+            <span class="n">c</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QColor</span><span class="p">()</span>
+            <span class="n">c</span><span class="o">.</span><span class="n">setHsv</span><span class="p">(</span><span class="n">h</span><span class="p">,</span><span class="n">s</span><span class="p">,</span><span class="n">v</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">c</span>
+                    
+                    
+
+    <span class="k">def</span> <span class="nf">mouseReleaseEvent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">):</span>
+        <span class="n">TickSlider</span><span class="o">.</span><span class="n">mouseReleaseEvent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">updateGradient</span><span class="p">()</span>
+        
+    <span class="k">def</span> <span class="nf">addTick</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">movable</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">color</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">color</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getColor</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">TickSlider</span><span class="o">.</span><span class="n">addTick</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span> <span class="n">movable</span><span class="o">=</span><span class="n">movable</span><span class="p">)</span>
+        <span class="n">t</span><span class="o">.</span><span class="n">colorChangeAllowed</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">t</span><span class="o">.</span><span class="n">removeAllowed</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="k">return</span> <span class="n">t</span>
+        
+    <span class="k">def</span> <span class="nf">saveState</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">ticks</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ticks</span><span class="p">:</span>
+            <span class="n">c</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">color</span>
+            <span class="n">ticks</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">ticks</span><span class="p">[</span><span class="n">t</span><span class="p">],</span> <span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">red</span><span class="p">(),</span> <span class="n">c</span><span class="o">.</span><span class="n">green</span><span class="p">(),</span> <span class="n">c</span><span class="o">.</span><span class="n">blue</span><span class="p">(),</span> <span class="n">c</span><span class="o">.</span><span class="n">alpha</span><span class="p">())))</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;mode&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">colorMode</span><span class="p">,</span> <span class="s">&#39;ticks&#39;</span><span class="p">:</span> <span class="n">ticks</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">state</span>
+        
+    <span class="k">def</span> <span class="nf">restoreState</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setColorMode</span><span class="p">(</span><span class="n">state</span><span class="p">[</span><span class="s">&#39;mode&#39;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ticks</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">removeTick</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">state</span><span class="p">[</span><span class="s">&#39;ticks&#39;</span><span class="p">]:</span>
+            <span class="n">c</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QColor</span><span class="p">(</span><span class="o">*</span><span class="n">t</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">addTick</span><span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">c</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">updateGradient</span><span class="p">()</span>
+
+
+</div>
+<span class="k">class</span> <span class="nc">BlackWhiteSlider</span><span class="p">(</span><span class="n">GradientWidget</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent</span><span class="p">):</span>
+        <span class="n">GradientWidget</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">getTick</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">colorChangeAllowed</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">getTick</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">colorChangeAllowed</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">allowAdd</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setTickColor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getTick</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QColor</span><span class="p">(</span><span class="mi">255</span><span class="p">,</span><span class="mi">255</span><span class="p">,</span><span class="mi">255</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setOrientation</span><span class="p">(</span><span class="s">&#39;right&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">getLevels</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tickValue</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">tickValue</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">setLevels</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">black</span><span class="p">,</span> <span class="n">white</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setTickValue</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">black</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setTickValue</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">white</span><span class="p">)</span>
+
+
+
+
+<span class="k">class</span> <span class="nc">GammaWidget</span><span class="p">(</span><span class="n">TickSlider</span><span class="p">):</span>
+    <span class="k">pass</span>
+    
+        
+<span class="k">class</span> <span class="nc">Tick</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QGraphicsPolygonItem</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view</span><span class="p">,</span> <span class="n">pos</span><span class="p">,</span> <span class="n">color</span><span class="p">,</span> <span class="n">movable</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+        <span class="c">#QObjectWorkaround.__init__(self)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">movable</span> <span class="o">=</span> <span class="n">movable</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">view</span> <span class="o">=</span> <span class="n">weakref</span><span class="o">.</span><span class="n">ref</span><span class="p">(</span><span class="n">view</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="n">scale</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">color</span> <span class="o">=</span> <span class="n">color</span>
+        <span class="c">#self.endTick = endTick</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pg</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QPolygonF</span><span class="p">([</span><span class="n">QtCore</span><span class="o">.</span><span class="n">QPointF</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">QPointF</span><span class="p">(</span><span class="o">-</span><span class="n">scale</span><span class="o">/</span><span class="mi">3</span><span class="o">**</span><span class="mf">0.5</span><span class="p">,</span><span class="n">scale</span><span class="p">),</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">QPointF</span><span class="p">(</span><span class="n">scale</span><span class="o">/</span><span class="mi">3</span><span class="o">**</span><span class="mf">0.5</span><span class="p">,</span><span class="n">scale</span><span class="p">)])</span>
+        <span class="n">QtGui</span><span class="o">.</span><span class="n">QGraphicsPolygonItem</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pg</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setPos</span><span class="p">(</span><span class="n">pos</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">pos</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setFlags</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QGraphicsItem</span><span class="o">.</span><span class="n">ItemIsMovable</span> <span class="o">|</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QGraphicsItem</span><span class="o">.</span><span class="n">ItemIsSelectable</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setBrush</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QBrush</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QColor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">color</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">movable</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">setZValue</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">setZValue</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="c">#def x(self):</span>
+        <span class="c">#return self.pos().x()/100.</span>
+
+    <span class="k">def</span> <span class="nf">mouseMoveEvent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">):</span>
+        <span class="c">#print self, &quot;move&quot;, ev.scenePos()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">movable</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ev</span><span class="o">.</span><span class="n">buttons</span><span class="p">()</span> <span class="o">&amp;</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">LeftButton</span><span class="p">:</span>
+            <span class="k">return</span>
+            
+            
+        <span class="n">newPos</span> <span class="o">=</span> <span class="n">ev</span><span class="o">.</span><span class="n">scenePos</span><span class="p">()</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mouseOffset</span>
+        <span class="n">newPos</span><span class="o">.</span><span class="n">setY</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pos</span><span class="p">()</span><span class="o">.</span><span class="n">y</span><span class="p">())</span>
+        <span class="c">#newPos.setX(min(max(newPos.x(), 0), 100))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setPos</span><span class="p">(</span><span class="n">newPos</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">view</span><span class="p">()</span><span class="o">.</span><span class="n">tickMoved</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">newPos</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">movedSincePress</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="c">#self.emit(QtCore.SIGNAL(&#39;tickChanged&#39;), self)</span>
+        <span class="n">ev</span><span class="o">.</span><span class="n">accept</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">mousePressEvent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">movedSincePress</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">if</span> <span class="n">ev</span><span class="o">.</span><span class="n">button</span><span class="p">()</span> <span class="o">==</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">LeftButton</span><span class="p">:</span>
+            <span class="n">ev</span><span class="o">.</span><span class="n">accept</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mouseOffset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pos</span><span class="p">()</span> <span class="o">-</span> <span class="n">ev</span><span class="o">.</span><span class="n">scenePos</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">pressPos</span> <span class="o">=</span> <span class="n">ev</span><span class="o">.</span><span class="n">scenePos</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="n">ev</span><span class="o">.</span><span class="n">button</span><span class="p">()</span> <span class="o">==</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">RightButton</span><span class="p">:</span>
+            <span class="n">ev</span><span class="o">.</span><span class="n">accept</span><span class="p">()</span>
+            <span class="c">#if self.endTick:</span>
+                <span class="c">#return</span>
+            <span class="c">#self.view.tickChanged(self, delete=True)</span>
+            
+    <span class="k">def</span> <span class="nf">mouseReleaseEvent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">):</span>
+        <span class="c">#print self, &quot;release&quot;, ev.scenePos()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">movedSincePress</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">view</span><span class="p">()</span><span class="o">.</span><span class="n">tickClicked</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ev</span><span class="p">)</span>
+        
+        <span class="c">#if ev.button() == QtCore.Qt.LeftButton and ev.scenePos() == self.pressPos:</span>
+            <span class="c">#color = QtGui.QColorDialog.getColor(self.color, None, &quot;Select Color&quot;, QtGui.QColorDialog.ShowAlphaChannel)</span>
+            <span class="c">#if color.isValid():</span>
+                <span class="c">#self.color = color</span>
+                <span class="c">#self.setBrush(QtGui.QBrush(QtGui.QColor(self.color)))</span>
+                <span class="c">##self.emit(QtCore.SIGNAL(&#39;tickChanged&#39;), self)</span>
+                <span class="c">#self.view.tickChanged(self)</span>
+        
+        
+    
+    
+    
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="n">app</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QApplication</span><span class="p">([])</span>
+    <span class="n">w</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QMainWindow</span><span class="p">()</span>
+    <span class="n">w</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="n">w</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="mi">400</span><span class="p">,</span><span class="mi">400</span><span class="p">)</span>
+    <span class="n">cw</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QWidget</span><span class="p">()</span>
+    <span class="n">w</span><span class="o">.</span><span class="n">setCentralWidget</span><span class="p">(</span><span class="n">cw</span><span class="p">)</span>
+
+    <span class="n">l</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QGridLayout</span><span class="p">()</span>
+    <span class="n">l</span><span class="o">.</span><span class="n">setSpacing</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">cw</span><span class="o">.</span><span class="n">setLayout</span><span class="p">(</span><span class="n">l</span><span class="p">)</span>
+
+    <span class="n">w1</span> <span class="o">=</span> <span class="n">GradientWidget</span><span class="p">(</span><span class="n">orientation</span><span class="o">=</span><span class="s">&#39;top&#39;</span><span class="p">)</span>
+    <span class="n">w2</span> <span class="o">=</span> <span class="n">GradientWidget</span><span class="p">(</span><span class="n">orientation</span><span class="o">=</span><span class="s">&#39;right&#39;</span><span class="p">,</span> <span class="n">allowAdd</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+    <span class="n">w2</span><span class="o">.</span><span class="n">setTickColor</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QColor</span><span class="p">(</span><span class="mi">255</span><span class="p">,</span><span class="mi">255</span><span class="p">,</span><span class="mi">255</span><span class="p">))</span>
+    <span class="n">w3</span> <span class="o">=</span> <span class="n">GradientWidget</span><span class="p">(</span><span class="n">orientation</span><span class="o">=</span><span class="s">&#39;bottom&#39;</span><span class="p">)</span>
+    <span class="n">w4</span> <span class="o">=</span> <span class="n">TickSlider</span><span class="p">(</span><span class="n">orientation</span><span class="o">=</span><span class="s">&#39;left&#39;</span><span class="p">)</span>
+    <span class="n">label</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QLabel</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">    - Click a triangle to change its color</span>
+<span class="s">    - Drag triangles to move</span>
+<span class="s">    - Click in an empty area to add a new color</span>
+<span class="s">      (adding is disabled for the right-side widget)</span>
+<span class="s">    - Right click a triangle to remove</span>
+<span class="s">    &quot;&quot;&quot;</span><span class="p">)</span>
+
+    <span class="n">l</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">w1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">l</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">w2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">l</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">w3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">l</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">w4</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">l</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    
+    <span class="c">## Start Qt event loop unless running in interactive mode.</span>
+    <span class="kn">import</span> <span class="nn">sys</span>
+    <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">interactive</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">app</span><span class="o">.</span><span class="n">exec_</span><span class="p">()</span>
+    
+    
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" size="18" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">pyqtgraph v1.5 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2011, Luke Campagnola.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.1.
+    </div>
+  </body>
+</html>

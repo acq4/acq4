@@ -6,7 +6,7 @@ import ScanCanvasItemTemplate
 import lib.Manager
 import pyqtgraph as pg
 import numpy as np
-import ProgressDialog
+import pyqtgraph.ProgressDialog as ProgressDialog
 
 class ScanCanvasItem(CanvasItem):
     def __init__(self, **opts):

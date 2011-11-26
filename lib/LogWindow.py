@@ -12,6 +12,8 @@ from Mutex import Mutex
 import numpy as np
 from pyqtgraph.FileDialog import FileDialog
 from debug import printExc
+import weakref
+import re
 
 #from lib.Manager import getManager
 
@@ -24,9 +26,11 @@ class LogButton(FeedbackButton):
         #self.setMaximumHeight(30)
         global WIN
         self.clicked.connect(WIN.show)
-        WIN.buttons.append(self)
-        
-        
+        WIN.buttons.append(weakref.ref(self))
+    
+    #def close(self):
+        #global WIN
+        #WIN.buttons.remove(self)
 
 class LogWindow(QtGui.QMainWindow):
     
@@ -57,7 +61,7 @@ class LogWindow(QtGui.QMainWindow):
         self.logCount=0
         self.logFile = None
         configfile.writeConfigFile('', self.fileName())  ## start a new temp log file, destroying anything left over from the last session.
-        self.buttons = [] ## all Log Buttons get added to this list, so it's easy to make them all do things, like flash red.
+        self.buttons = [] ## weak references to all Log Buttons get added to this list, so it's easy to make them all do things, like flash red.
         self.lock = Mutex()
         
 
@@ -90,6 +94,8 @@ class LogWindow(QtGui.QMainWindow):
             currentDir = None
         if isinstance(currentDir, DirHandle):
             kwargs['currentDir'] = currentDir.name()
+        else:
+            kwargs['currentDir'] = None
         
         now = str(time.strftime('%Y.%m.%d %H:%M:%S'))
         name = 'LogEntry_' + str(self.msgCount)
@@ -162,11 +168,19 @@ class LogWindow(QtGui.QMainWindow):
         
     def flashButtons(self):
         for b in self.buttons:
-            b.failure(tip='An error occurred. Please see the log.', limitedTime = False)
+            if b() is not None:
+                b().failure(tip='An error occurred. Please see the log.', limitedTime = False)
             
     def resetButtons(self):
         for b in self.buttons:
-            b.reset()
+            if b() is not None:
+                b().reset()
+            #try:
+                #b.reset()
+            #except RuntimeError:
+                #self.buttons.remove(b)
+                #print "Removed a logButton from logWindow's list. button:", b
+            
         
     def makeError1(self):
         try:
@@ -292,7 +306,7 @@ class LogWidget(QtGui.QWidget):
         i = 0
         for v in log.itervalues():
             self.entries.append(v)
-            self.entryArray[i] = np.array([(i, v['importance'], v['msgType'], v['currentDir'])], dtype=[('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
+            self.entryArray[i] = np.array([(i, v.get('importance', 5), v.get('msgType', 'status'), v.get('currentDir', ''))], dtype=[('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
             i += 1
             
         self.filterEntries() ## puts all entries through current filters and displays the ones that pass
@@ -300,7 +314,12 @@ class LogWidget(QtGui.QWidget):
     def addEntry(self, entry):
         self.entries.append(entry)
         i = len(self.entryArray)
-        arr = np.array([(i, entry['importance'], entry['msgType'], entry.get('currentDir', ''))], dtype = [('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
+        
+        entryDir = entry.get('currentDir', None)
+        if entryDir is None:
+            entryDir = ''
+            
+        arr = np.array([(i, entry['importance'], entry['msgType'], entryDir)], dtype = [('index', 'int32'), ('importance', 'int32'), ('msgType', '|S10'), ('directory', '|S100')])
         self.entryArray.resize(i+1)
         #self.entryArray[i] = [(i, entry['importance'], entry['msgType'], entry['currentDir'])]
         self.entryArray[i] = arr
@@ -414,7 +433,7 @@ class LogWidget(QtGui.QWidget):
                     else:
                         color = 'black'
                         
-                        
+                  
                     
                         
                     if entry.has_key('exception') or entry.has_key('docs') or entry.has_key('reasons'):
@@ -426,15 +445,21 @@ class LogWidget(QtGui.QWidget):
                 else:
                     for x in self.cache[id(entry)]:
                         self.ui.output.appendHtml(x)
+                        
+    def cleanText(self, text):
+        text = re.sub(r'&', '&amp;', text)
+        text = re.sub(r'>','&gt;', text)
+        text = re.sub(r'<', '&lt;', text)
+        return text
                     
     def displayComplexMessage(self, entry, color='black'):
-        self.displayText(entry['message'], entry, color, timeStamp = entry['timestamp'])
+        self.displayText(entry['message'], entry, color, timeStamp = entry['timestamp'], clean=True)
         if entry.has_key('reasons'):
             reasons = self.formatReasonStrForHTML(entry['reasons'])
-            self.displayText(reasons, entry, 'black')
+            self.displayText(reasons, entry, 'black', clean=False)
         if entry.has_key('docs'):
             docs = self.formatDocsStrForHTML(entry['docs'])
-            self.displayText(docs, entry, 'black')
+            self.displayText(docs, entry, 'black', clean=False)
         if entry.get('exception', None) is not None:
             self.displayException(entry['exception'], entry, 'black', tracebacks=entry.get('traceback', None))
             
@@ -454,19 +479,20 @@ class LogWidget(QtGui.QWidget):
             
         indent = 10
         
-        if exception.has_key('oldExc'):    
-            self.displayText("&nbsp;"*indent + str(count)+'. ' + exception['message'], entry, color)
+        text = self.cleanText(exception['message'])
+        if exception.has_key('oldExc'):  
+            self.displayText("&nbsp;"*indent + str(count)+'. ' + text, entry, color, clean=False)
         else:
-            self.displayText("&nbsp;"*indent + str(count)+'. Original error: ' +exception['message'],entry, color)
+            self.displayText("&nbsp;"*indent + str(count)+'. Original error: ' + text, entry, color, clean=False)
             
         tracebacks.append(exception['traceback'])
         
         if exception.has_key('reasons'):
             reasons = self.formatReasonsStrForHTML(exception['reasons'])
-            self.displayText(reasons, entry, color)
+            self.displayText(reasons, entry, color, clean=False)
         if exception.has_key('docs'):
             docs = self.formatDocsStrForHTML(exception['docs'])
-            self.displayText(docs, entry, color)
+            self.displayText(docs, entry, color, clean=False)
         
         if exception.has_key('oldExc'):
             self.displayException(exception['oldExc'], entry, color, count=count, tracebacks=tracebacks)
@@ -479,7 +505,10 @@ class LogWidget(QtGui.QWidget):
                 self.displayTraceback(tb, entry, number=i+n)
         
         
-    def displayText(self, msg, entry, colorStr='black', timeStamp=None):
+    def displayText(self, msg, entry, colorStr='black', timeStamp=None, clean=True):
+        if clean:
+            msg = self.cleanText(msg)
+        
         if msg[-1:] == '\n':
             msg = msg[:-1]     
         msg = '<br />'.join(msg.split('\n'))
@@ -491,6 +520,7 @@ class LogWidget(QtGui.QWidget):
         self.cache[id(entry)].append(strn)
             
     def displayTraceback(self, tb, entry, color='grey', number=1):
+        tb = self.cleanText(tb)
         lines = []
         indent = 16
         prefix = ''
@@ -507,13 +537,14 @@ class LogWidget(QtGui.QWidget):
                 spaceCount -= 1
             lines.append("&nbsp;"*(indent+spaceCount*4) + prefix + l)
             prefix = ''
-        self.displayText('<br />'.join(lines), entry, color)
+        self.displayText('<br />'.join(lines), entry, color, clean=False)
         
     def formatReasonsStrForHTML(self, reasons):
         indent = 6
         letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
         reasonStr = "&nbsp;"*16 + "Possible reasons include: <br>"
         for i, r in enumerate(reasons):
+            r = self.cleanText(r)
             reasonStr += "&nbsp;"*22 + letters[i] + ". " + r + "<br>"
         return reasonStr[:-4]
     
@@ -522,6 +553,7 @@ class LogWidget(QtGui.QWidget):
         docStr = "&nbsp;"*16 + "Relevant documentation: <br>"
         letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
         for i, d in enumerate(docs):
+            d = self.cleanText(d)
             docStr += "&nbsp;"*22 + letters[i] + ". " + d + "<br>"
         return docStr[:-4]
     
