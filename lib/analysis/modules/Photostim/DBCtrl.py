@@ -261,7 +261,8 @@ class DBCtrl(QtGui.QWidget):
     def clearDBSpot(self):
         ## remove all events referencing this spot
         ## remove stats for this spot
-        pass
+        raise Exception("Clearing spot data from a db is not yet implemented.")
+    
     
     def storeDBSpot(self):
         try:

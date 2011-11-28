@@ -193,6 +193,7 @@ class EvalNode(Node):
         self.addInBtn = QtGui.QPushButton('+Input')
         self.addOutBtn = QtGui.QPushButton('+Output')
         self.text = QtGui.QTextEdit()
+        self.text.setTabStopWidth(30)
         self.layout.addWidget(self.addInBtn, 0, 0)
         self.layout.addWidget(self.addOutBtn, 0, 1)
         self.layout.addWidget(self.text, 1, 0, 1, 2)
