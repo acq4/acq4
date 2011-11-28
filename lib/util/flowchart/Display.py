@@ -48,8 +48,9 @@ class EventListPlotter(CtrlNode):
             #else:
                 #self.items[c] = graphicsItems.VTickGroup(events, view=plot, pen=color)
                 #self.items[c].setYRange([0., 0.2], relative=True)
-            self.items[c] = graphicsItems.VTickGroup(events, view=plot, pen=color)
-            self.items[c].setYRange([0., 0.2], relative=True)
+            #self.items[c] = graphicsItems.VTickGroup(events, view=plot, pen=color)
+            self.items[c] = graphicsItems.VTickGroup(events, yrange=[0.8, 1.], pen=color)
+            #self.items[c].setYRange([0., 0.2], relative=True)
         return {'plot': self.items}
 
 
