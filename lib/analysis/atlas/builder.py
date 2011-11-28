@@ -8,10 +8,12 @@ labelFile = "CochlearNucleus/images/cochlear_nucleus_label.ma"
 from PyQt4 import QtCore, QtGui
 import pyqtgraph as pg
 import pyqtgraph.ColorButton as ColorButton
+import pyqtgraph.ProgressDialog as ProgressDialog
 import numpy as np
 import builderTemplate
 import metaarray
 import debug
+import user
 
 QtGui.QApplication.setGraphicsSystem('raster')
 app = QtGui.QApplication([])
@@ -23,6 +25,8 @@ ui = builderTemplate.Ui_Form()
 ui.setupUi(cw)
 win.show()
 win.resize(800,600)
+
+ui.labelTree.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
 
 data = metaarray.MetaArray(file=dataFile, mmap=True)
 ## data must have axes (anterior, dorsal, right)
@@ -45,7 +49,8 @@ vb.invertY(False)
 
 
 dataImg = pg.ImageItem()
-labelImg = pg.ImageItem(mode=QtGui.QPainter.CompositionMode_Plus)
+labelImg = pg.ImageItem() # mode=QtGui.QPainter.CompositionMode_Plus)
+#labelImg.setCompositionMode(QtGui.QPainter.CompositionMode_Overlay)
 labelImg.setZValue(10)
 labelImg.setOpacity(1)
 vb.addItem(dataImg)
@@ -61,6 +66,7 @@ def connectSignals():
     ui.labelSlider.valueChanged.connect(imageChanged)
     ui.labelTree.itemChanged.connect(itemChanged)
     ui.labelTree.currentItemChanged.connect(itemSelected)
+    ui.overlayCheck.toggled.connect(overlayToggled)
 
 def init():
     connectSignals()
@@ -90,7 +96,11 @@ def keyPressEvent(ev):
     elif k == QtCore.Qt.Key_Minus:
         ui.radiusSpin.setValue(ui.radiusSpin.value()-1)
     elif k == QtCore.Qt.Key_Space:
-        labelImg.setVisible(not labelImg.isVisible())
+        if labelImg.isVisible():
+            labelImg.setVisible(False)
+        else:
+            updateLabelImage()
+            labelImg.setVisible(True)
     elif k == QtCore.Qt.Key_G:
         ui.greyCheck.toggle()
     else:
@@ -109,7 +119,7 @@ def draw(src, dst, mask, srcSlice, dstSlice, ev):
     #p.mark('1')
     mod = ev.modifiers()
     mask = mask[srcSlice]
-    src = src[srcSlice]
+    src = src[srcSlice].astype(l.dtype)
     if mod & QtCore.Qt.ShiftModifier:
         #src = 1-src
         l[dstSlice] &= ~(src * 2**ui.labelSpin.value())
@@ -158,6 +168,13 @@ def addLabel(info=None):
         writeMeta()
 
 
+def overlayToggled(b):
+    if b:
+        labelImg.setCompositionMode(QtGui.QPainter.CompositionMode_Overlay)
+    else:
+        labelImg.setCompositionMode(QtGui.QPainter.CompositionMode_SourceOver)
+    updateImage()
+
 def itemChanged(*args):
     imageChanged()
     writeMeta()
@@ -182,7 +199,11 @@ def copyLabel(n):
     i2 = i1 + n
     if i2 < 0 or i2 > displayLabel.shape[0]:
         return
-    displayLabel[i2] = displayLabel[i1]
+    #displayLabel[i2] &= ~mask
+    #displayLabel[i2] |= displayLabel[i1] & mask
+    mask = np.uint16(2**ui.labelSpin.value())
+    
+    displayLabel[i2] = (displayLabel[i1] & mask) | (displayLabel[i2] & ~mask)
 
 def updateImage():
     currentPos[zAxis] = ui.zSlider.value()
@@ -192,27 +213,21 @@ def updateImage():
         img = displayData.view(np.ndarray)[ui.zSlider.value()]
     dataImg.updateImage(img, copy=False, black=0, white=255)
     #labelImg.updateImage(displayLabel.view(np.ndarray)[ui.zSlider.value()], copy=False, white=10, black=0)
-    updateLabelImage()
+    if labelImg.isVisible():
+        updateLabelImage()
 
-def updateLabelImage(sl=None):
+def renderLabels(z, sl=None, overlay=False):
     #p = debug.Profiler('updateLabelImage', disabled=True)
-    global labelCache
-    if sl is None or labelCache is None:
+    if sl is None:
         sl = (slice(None), slice(None))
-    l = displayLabel.view(np.ndarray)[ui.zSlider.value()]
+
+    l = displayLabel.view(np.ndarray)[z]
     #p.mark('1')
     lsl = l[sl]
-    img = np.empty(lsl.shape+(3,), dtype=np.ubyte)
-    #p.mark('2')
-    #if ui.greyCheck.isChecked():
-        #img.fill(255)
-        #labelImg.setCompositionMode(QtGui.QPainter.CompositionMode_Multiply)
-        #img[...,0] -= (lsl&1>0) * 50
-        #img[...,1] -= (lsl&2>0) * 50
-        #img[...,2] -= (lsl&4>0) * 50
-    #else:
-    img.fill(128)
-    labelImg.setCompositionMode(QtGui.QPainter.CompositionMode_Overlay)
+    img = np.empty(lsl.shape+(4,), dtype=np.uint16)
+    
+    #img.fill(128)
+    img.fill(0)
     val = ui.labelSlider.value()/128.
     
     for k, v in labelInfo.iteritems():
@@ -220,22 +235,66 @@ def updateLabelImage(sl=None):
             continue
         c = pg.colorTuple(v['btn'].color())
         mask = (lsl&(2**k) > 0)
-        img[...,0] += mask * int(c[0] * val)
-        img[...,1] += mask * int(c[1] * val)
-        img[...,2] += mask * int(c[2] * val)
-    #p.mark('3')
-    #p.mark('4')
+        alpha = c[3]/255. * val
+        img[mask] *= 1.0 - alpha
+        img[...,0] += mask * int(c[0] * alpha)
+        img[...,1] += mask * int(c[1] * alpha)
+        img[...,2] += mask * int(c[2] * alpha)
+        #img[...,0] += mask * int(c[0] * val)
+        #img[...,1] += mask * int(c[1] * val)
+        #img[...,2] += mask * int(c[2] * val)
+        img[...,3] += mask * (alpha * 255)
+    if overlay:
+        img += 128
+    img = img.clip(0,255).astype(np.ubyte)
+    return img
+
+
+def renderStack(overlay=True):  
+    """
+    Export label data as a 3D, RGB image
+    if overlay is True, multiply in the original data image
+    """
+    stack = np.zeros(displayLabel.shape + (4,), dtype=np.ubyte)
+    with ProgressDialog.ProgressDialog("Rendering label stack...", maximum=displayLabel.shape[0]) as dlg:
+        for z in range(displayLabel.shape[0]):
+            stack[z] = renderLabels(z)
+            if overlay:  ## multiply colors, not alpha.
+                stack[z][..., :3] *= displayData[z].mean(axis=2)[..., np.newaxis].astype(float)/256.
+            print z
+        dlg += 1
+        if dlg.wasCanceled():
+            raise Exception("Stack render canceled.")
+    return stack
+    
+def renderVolume(stack, alpha=0.3, loss=0.01):
+    im = np.zeros(stack.shape[1:3]+(3,), dtype=float)                                                                                                
+    for z in range(stack.shape[0]):                                                                                                       
+        sz = stack[z].astype(float) # -128 
+        mask = sz.max(axis=2) > 0
+        szm = sz[mask]
+        alphaChan = szm[...,3:4]*alpha/256.
+        im *= (1.0-loss)
+        im[mask] *= 1.0-alphaChan
+        im[mask] += szm[...,:3] * alphaChan
+        #im[mask] *= (1.0-alpha)
+        #im[mask] += sz[mask] * alpha
+        print z
+    return im
+
+def updateLabelImage(sl=None):
+    global labelCache
+    if labelCache is None:  ## if we haven't cached a full frame, then the full frame must be rendered.
+        sl = (slice(None), slice(None))
+    
+    img = renderLabels(ui.zSlider.value(), sl, overlay=ui.overlayCheck.isChecked())
+    
     if labelCache is None:
         labelCache = img
         labelImg.updateImage(labelCache, copy=False, white=255, black=0)
     else:
         labelCache[sl] = img
         labelImg.updateImage()
-        #labelImg.updateImage(labelCache, copy=False, white=255, black=0)
-        #print repr(labelCache.data), repr(labelImg.image.data)
-    #p.mark('5')
-    #p.mark('6')
-    #p.finish()
 
     
 
@@ -253,7 +312,7 @@ def imageChanged():
         zAxis = 2
         
     displayData = data.transpose(axes)
-    displayLabel = label.transpose(axes)
+    displayLabel = label.transpose(axes).view(np.ndarray)
     ui.zSlider.setMaximum(displayData.shape[0]-1)
     ui.zSlider.setValue(currentPos[zAxis])
     

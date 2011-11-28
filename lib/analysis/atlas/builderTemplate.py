@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'builderTemplate.ui'
 #
-# Created: Sat Oct 15 21:11:35 2011
+# Created: Sun Nov 27 18:22:31 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!
@@ -17,7 +17,7 @@ except AttributeError:
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName(_fromUtf8("Form"))
-        Form.resize(663, 521)
+        Form.resize(758, 588)
         self.gridLayout_6 = QtGui.QGridLayout(Form)
         self.gridLayout_6.setMargin(0)
         self.gridLayout_6.setSpacing(0)
@@ -78,13 +78,21 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.rightRadio, 0, 1, 1, 1)
         self.greyCheck = QtGui.QCheckBox(self.groupBox)
         self.greyCheck.setObjectName(_fromUtf8("greyCheck"))
-        self.gridLayout.addWidget(self.greyCheck, 3, 1, 1, 1)
+        self.gridLayout.addWidget(self.greyCheck, 4, 1, 1, 1)
         self.labelSlider = QtGui.QSlider(self.groupBox)
         self.labelSlider.setMaximum(255)
         self.labelSlider.setProperty(_fromUtf8("value"), 50)
         self.labelSlider.setOrientation(QtCore.Qt.Horizontal)
         self.labelSlider.setObjectName(_fromUtf8("labelSlider"))
-        self.gridLayout.addWidget(self.labelSlider, 4, 1, 1, 1)
+        self.gridLayout.addWidget(self.labelSlider, 6, 1, 1, 1)
+        self.line = QtGui.QFrame(self.groupBox)
+        self.line.setFrameShape(QtGui.QFrame.HLine)
+        self.line.setFrameShadow(QtGui.QFrame.Sunken)
+        self.line.setObjectName(_fromUtf8("line"))
+        self.gridLayout.addWidget(self.line, 3, 1, 1, 1)
+        self.overlayCheck = QtGui.QCheckBox(self.groupBox)
+        self.overlayCheck.setObjectName(_fromUtf8("overlayCheck"))
+        self.gridLayout.addWidget(self.overlayCheck, 5, 1, 1, 1)
         self.gridLayout_4.addWidget(self.groupBox, 0, 0, 1, 1)
         self.groupBox_3 = QtGui.QGroupBox(self.widget1)
         self.groupBox_3.setObjectName(_fromUtf8("groupBox_3"))
@@ -132,6 +140,7 @@ class Ui_Form(object):
         self.rostralRadio.setText(QtGui.QApplication.translate("Form", "Rostral", None, QtGui.QApplication.UnicodeUTF8))
         self.rightRadio.setText(QtGui.QApplication.translate("Form", "Right", None, QtGui.QApplication.UnicodeUTF8))
         self.greyCheck.setText(QtGui.QApplication.translate("Form", "Greyscale", None, QtGui.QApplication.UnicodeUTF8))
+        self.overlayCheck.setText(QtGui.QApplication.translate("Form", "Overlay", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox_3.setTitle(QtGui.QApplication.translate("Form", "Drawing", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("Form", "Radius", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("Form", "Label", None, QtGui.QApplication.UnicodeUTF8))

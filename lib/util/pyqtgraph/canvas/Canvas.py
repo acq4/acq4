@@ -503,7 +503,8 @@ class Canvas(QtGui.QWidget):
             item.setCanvas(None)
             #self.view.scene().removeItem(item.item)
             self.itemList.removeTopLevelItem(item.listItem)
-            del self.items[item.name]
+            #del self.items[item.name]
+            self.items.remove(item)
         else:
             self.view.scene().removeItem(item)
         
