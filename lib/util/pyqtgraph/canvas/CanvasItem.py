@@ -121,7 +121,9 @@ class CanvasItem(QtCore.QObject):
         self.tempTransform = pg.Transform() ## holds the additional transform that happens during a move - gets added to the userTransform when move is done.
         self.userTransform = pg.Transform() ## stores the total transform of the object
         self.resetUserTransform() 
-        self.selectBoxBase = self.selectBox.getState().copy()
+        
+        ## now happens inside resetUserTransform -> selectBoxToItem
+        # self.selectBoxBase = self.selectBox.getState().copy()
         
                 
         #print "Created canvas item", self
@@ -337,7 +339,7 @@ class CanvasItem(QtCore.QObject):
         self.selectBox.blockSignals(False)
         self.sigTransformChanged.emit(self)
         self.sigTransformChangeFinished.emit(self)
-        
+       
     def resetTransformClicked(self):
         self.resetUserTransform()
         self.sigResetUserTransform.emit(self)
@@ -390,6 +392,7 @@ class CanvasItem(QtCore.QObject):
         self.selectBox.setPos([rect.x(), rect.y()])
         self.selectBox.setSize(rect.size())
         self.selectBox.setAngle(0)
+        self.selectBoxBase = self.selectBox.getState().copy()
         self.selectBox.blockSignals(False)
 
     def zValue(self):
