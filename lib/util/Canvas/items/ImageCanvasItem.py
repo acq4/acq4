@@ -17,13 +17,16 @@ class ImageCanvasItem(CanvasItem):
         
         """
         
+        ## If no image was specified, check for a file handle..
         if image is None:
-            try:
-                image = opts['handle']
-            except KeyError:
-                raise Exception("ImageCanvasItem must be initialized with either an image or an image file handle.")
+            image = opts.get('handle', None)
+            #try:
+                #image = opts['handle']
+            #except KeyError:
+                #raise Exception("ImageCanvasItem must be initialized with either an image or an image file handle.")
         
         item = None
+        self.data = None
         if isinstance(image, QtGui.QGraphicsItem):
             item = image
         elif isinstance(image, np.ndarray):
@@ -50,41 +53,33 @@ class ImageCanvasItem(CanvasItem):
             except:
                 pass
         
-        showTime = False
         if item is None:
-            if self.data.ndim == 3:
-                if self.data.shape[2] <= 4: ## assume last axis is color
-                    #self.data = self.data.mean(axis=2)
-                    item = pg.ImageItem(self.data)
-                else:
-                    item = pg.ImageItem(self.data[0])
-                    showTime = True
-            else:
-                item = pg.ImageItem(self.data)
+            item = pg.ImageItem()
         CanvasItem.__init__(self, item, **opts)
+        
+        
         
         self.histogram = pg.PlotWidget()
         self.blockHistogram = False
         self.histogram.setMaximumHeight(100)
         self.levelRgn = pg.LinearRegionItem(self.histogram)
         self.histogram.addItem(self.levelRgn)
-        
+
+        self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)
+        self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
+        self.maxBtn = QtGui.QPushButton('Max')
+        self.maxBtn.clicked.connect(self.maxClicked)
+        self.layout.addWidget(self.maxBtn, self.layout.rowCount(), 0, 1, 2)
+
+
         self.updateHistogram(autoRange=True)
         
         self.layout.addWidget(self.histogram, self.layout.rowCount(), 0, 1, 2)
         
-        if showTime:
-            self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)
-            self.timeSlider.setMinimum(0)
-            self.timeSlider.setMaximum(self.data.shape[0]-1)
-            self.layout.addWidget(self.timeSlider, self.layout.rowCount(), 0, 1, 2)
-            self.timeSlider.valueChanged.connect(self.timeChanged)
-            self.timeSlider.sliderPressed.connect(self.timeSliderPressed)
-            self.timeSlider.sliderReleased.connect(self.timeSliderReleased)
-            self.maxBtn = QtGui.QPushButton('Max')
-            self.maxBtn.clicked.connect(self.maxClicked)
-            self.layout.addWidget(self.maxBtn, self.layout.rowCount(), 0, 1, 2)
-            
+        if self.data is not None:
+            self.updateImage(self.data)
+        
+        
         
         #self.item.connect(self.item, QtCore.SIGNAL('imageChanged'), self.updateHistogram)
         self.graphicsItem().sigImageChanged.connect(self.updateHistogram)
@@ -134,6 +129,8 @@ class ImageCanvasItem(CanvasItem):
         if self.blockHistogram:
             return
         x, y = self.graphicsItem().getHistogram()
+        if x is None: ## image has no data
+            return
         self.histogram.clearPlots()
         self.histogram.plot(x, y)
         if autoRange:
@@ -143,6 +140,37 @@ class ImageCanvasItem(CanvasItem):
             self.levelRgn.setRegion([w, b])
             self.levelRgn.blockSignals(False)
             
+    def updateImage(self, data, autoRange=True):
+        self.data = data
+        if data.ndim == 4:
+            showTime = True
+        elif data.ndim == 3:
+            if data.shape[2] <= 4: ## assume last axis is color
+                showTime = False
+            else:
+                showTime = True
+        else:
+            showTime = False
+            
+        if showTime:
+            self.timeSlider.setMinimum(0)
+            self.timeSlider.setMaximum(self.data.shape[0]-1)
+            self.timeSlider.valueChanged.connect(self.timeChanged)
+            self.timeSlider.sliderPressed.connect(self.timeSliderPressed)
+            self.timeSlider.sliderReleased.connect(self.timeSliderReleased)
+            self.timeSlider.show()
+            self.maxBtn.show()
+            self.graphicsItem().updateImage(data[self.timeSlider.value()])
+        else:
+            self.timeSlider.hide()
+            self.maxBtn.hide()
+            self.graphicsItem().updateImage(data)
+            
+        tr = self.saveTransform()
+        self.resetUserTransform()
+        self.restoreTransform(tr)
+            
+        self.updateHistogram(autoRange=autoRange)
         
     def levelsChanged(self):
         rgn = self.levelRgn.getRegion()

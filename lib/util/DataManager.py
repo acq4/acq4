@@ -677,6 +677,11 @@ class DirHandle(FileHandle):
                 #print self[fileName].info().keys()
                 pass
                     
+        ## if the file has an obvious date in it, use that
+        m = re.search(r'(20\d\d\.\d\d?\.\d\d?)', fileName)
+        if m is not None:
+            return time.mktime(time.strptime(m.groups()[0], "%Y.%m.%d"))
+        
         ## if all else fails, just ask the file system
         return os.path.getctime(os.path.join(self.name(), fileName))
     
