@@ -26,7 +26,10 @@ class FileLoader(QtGui.QWidget):
         
         self.ui.fileTree.setVisible(showFileTree)
         self.ui.notesTextEdit.setReadOnly(True)
-        
+        try:
+            self.setBaseClicked()
+        except:
+            pass
         
         
     def setHost(self, host):
