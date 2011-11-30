@@ -68,7 +68,9 @@ def pspInnerFunc(v, x):
     
 def pspFunc(v, x, risePower=1.0):
     """Function approximating a PSP shape. 
-    v = [amplitude, x offset, rise tau, fall tau"""
+    v = [amplitude, x offset, rise tau, fall tau]
+    Uses absolute value of both taus, so fits may indicate negative tau.
+    """
     ## determine scaling factor needed to achieve correct amplitude
     v = [v[0], v[1], abs(v[2]), abs(v[3])]
     maxX = v[2] * np.log(1 + (v[3]/v[2]))
@@ -93,7 +95,7 @@ def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateR
         errFn = lambda v, x, y: function(v, x)-y
     if len(xVals) < len(guess):
         raise Exception("Too few data points to fit this function. (%d variables, %d points)" % (len(guess), len(xVals)))
-    fit = scipy.optimize.leastsq(errFn, guess, args=(xVals, yVals))
+    fitResult = scipy.optimize.leastsq(errFn, guess, args=(xVals, yVals))
     error = None
     #if measureError:
         #error = errFn(fit[0], xVals, yVals)
@@ -101,12 +103,12 @@ def fit(function, xVals, yVals, guess, errFn=None, measureError=False, generateR
     if generateResult or measureError:
         if resultXVals is not None:
             xVals = resultXVals
-        result = function(fit[0], xVals)
+        result = function(fitResult[0], xVals)
         #fn = lambda i: function(fit[0], xVals[i.astype(int)])
         #result = fromfunction(fn, xVals.shape)
         if measureError:
             error = abs(yVals - result).mean()
-    return fit + (result, error)
+    return fitResult + (result, error)
         
 def fitSigmoid(xVals, yVals, guess=[1.0, 0.0, 1.0, 0.0], **kargs):
     """Returns least-squares fit for sigmoid"""
@@ -120,7 +122,10 @@ def fitExpDecay(xVals, yVals, guess=[1.0, 1.0, 0.0], **kargs):
     return fit(expDecay, xVals, yVals, guess, **kargs)
 
 def fitPsp(xVals, yVals, guess=[1e-3, 0, 10e-3, 10e-3], **kargs):
-    return fit(pspFunc, xVals, yVals, guess, **kargs)
+    vals, junk, comp, err =  fit(pspFunc, xVals, yVals, guess, **kargs)
+    amp, xoff, rise, fall = vals
+    ## fit may return negative tau values (since pspFunc uses abs(tau)); return the absolute value.
+    return (amp, xoff, abs(rise), abs(fall)), junk, comp, err
 
 STRNCMP_REGEX = re.compile(r'(-?\d+(\.\d*)?((e|E)-?\d+)?)')
 def strncmp(a, b):
