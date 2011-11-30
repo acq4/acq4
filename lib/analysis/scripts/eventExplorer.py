@@ -128,7 +128,7 @@ if 'ev' not in locals():
             pos[i] = pcache[key]
 
         ev = fn.concatenateColumns([ev, ('holding', holding.dtype, holding), pos])   
-        pickle.dump(ev, cacheFile)
+        pickle.dump(ev, open(cacheFile, 'w'))
     cells = list(set(ev['Source']))
     cellSpin.setMaximum(len(cells)-1)
     print "Done."
