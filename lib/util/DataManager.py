@@ -611,7 +611,7 @@ class DirHandle(FileHandle):
     def dirExists(self, dirName):
         return os.path.isdir(os.path.join(self.path, dirName))
             
-    def ls(self, normcase=False, sortMode='date'):
+    def ls(self, normcase=False, sortMode='date', useCache=False):
         """Return a list of all files in the directory.
         If normcase is True, normalize the case of all names in the list.
         sortMode may be 'date', 'alpha', or None."""
@@ -621,33 +621,8 @@ class DirHandle(FileHandle):
             #self._readIndex()
             #ls = self.index.keys()
             #ls.remove('.')
-            if sortMode not in self.lsCache:
-                #p.mark('(cache miss)')
-                try:
-                    files = os.listdir(self.name())
-                except:
-                    printExc("Error while listing files in %s:" % self.name())
-                    files = []
-                #p.mark('listdir')
-                for i in ['.index', '.log']:
-                    if i in files:
-                        files.remove(i)
-                #self.lsCache.sort(self._cmpFileTimes)  ## very expensive!
-                
-                if sortMode == 'date':
-                    ## Sort files by creation time
-                    for f in files:
-                        if f not in self.cTimeCache:
-                            self.cTimeCache[f] = self._getFileCTime(f)
-                    files.sort(lambda a,b: cmp(self.cTimeCache[a], self.cTimeCache[b]))
-                elif sortMode == 'alpha':
-                    files.sort()
-                elif sortMode == None:
-                    pass
-                else:
-                    raise Exception('Unrecognized sort mode "%s"' % str(sortMode))
-                    
-                self.lsCache[sortMode] = files
+            if (not useCache) or (sortMode not in self.lsCache):
+                self._updateLsCache(sortMode)
                 #p.mark('sort')
             files = self.lsCache[sortMode]
             
@@ -659,6 +634,34 @@ class DirHandle(FileHandle):
                 ret = files[:]
                 #p.mark('return copy')
                 return ret
+    
+    def _updateLsCache(self, sortMode):
+        #p.mark('(cache miss)')
+        try:
+            files = os.listdir(self.name())
+        except:
+            printExc("Error while listing files in %s:" % self.name())
+            files = []
+        #p.mark('listdir')
+        for i in ['.index', '.log']:
+            if i in files:
+                files.remove(i)
+        #self.lsCache.sort(self._cmpFileTimes)  ## very expensive!
+        
+        if sortMode == 'date':
+            ## Sort files by creation time
+            for f in files:
+                if f not in self.cTimeCache:
+                    self.cTimeCache[f] = self._getFileCTime(f)
+            files.sort(lambda a,b: cmp(self.cTimeCache[a], self.cTimeCache[b]))
+        elif sortMode == 'alpha':
+            files.sort()
+        elif sortMode == None:
+            pass
+        else:
+            raise Exception('Unrecognized sort mode "%s"' % str(sortMode))
+            
+        self.lsCache[sortMode] = files
     
     def _getFileCTime(self, fileName):
         if self.isManaged():

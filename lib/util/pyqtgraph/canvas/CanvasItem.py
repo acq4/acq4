@@ -8,7 +8,7 @@ import debug
 class SelectBox(widgets.ROI):
     def __init__(self, scalable=False):
         #QtGui.QGraphicsRectItem.__init__(self, 0, 0, size[0], size[1])
-        widgets.ROI.__init__(self, [0,0], [1,1])
+        widgets.ROI.__init__(self, [0,0], [1,1], invertible=True)
         center = [0.5, 0.5]
             
         if scalable:
