@@ -262,6 +262,8 @@ class SqliteDatabase:
                 val = None
             else:
                 val = rec.value(i)
+                if isinstance(val, QtCore.QByteArray):
+                    val = pickle.loads(str(val))
                 #v = rec.value(i)   ## required when not using V2 API for QVariant
                 #t = v.type()
                 #if t in [QtCore.QVariant.Int, QtCore.QVariant.LongLong]:
