@@ -326,7 +326,7 @@ class Photostim(AnalysisModule):
                 ## draw ticks over all detected events
                 if len(events) > 0:
                     times = events['fitTime']
-                    ticks = pg.VTickGroup(times, [0.0, 0.15], pen=color, relative=True, view=plot)
+                    ticks = pg.VTickGroup(times, [0.85, 1.0], pen=color)
                     plot.addItem(ticks)
                     self.mapTicks.append(ticks)
             
