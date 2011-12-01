@@ -601,7 +601,9 @@ class Photostim(AnalysisModule):
         if events is None:
             ## need to make an empty array with the correct fields
             schema = db.tableSchema(table)
-            events = np.empty(0, dtype=[(k, object) for k in schema])
+            ## NOTE: dtype MUST be specified as {names: formats: } since the names are unicode objects
+            ##  [(name, format), ..] does NOT work.
+            events = np.empty(0, dtype={'names': [k for k in schema], 'formats': [object]*len(schema)})
             
         
         return events, stats
