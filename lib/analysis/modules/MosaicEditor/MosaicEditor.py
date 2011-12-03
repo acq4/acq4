@@ -152,7 +152,14 @@ class MosaicEditor(AnalysisModule):
         fh = self.items.get(item, None)
         if not hasattr(fh, 'setInfo'):
             fh = None
-        item.storeUserTransform(fh)
+            
+        try:
+            item.storeUserTransform(fh)
+        except Exception as ex:
+            if len(ex.args) > 1 and ex.args[1] == 1:  ## this means the item has no file handle to store position
+                return
+            raise
+            
         #if item not in self.items:
             #return
         #fh = self.items[item]

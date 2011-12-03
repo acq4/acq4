@@ -288,6 +288,8 @@ class ImageItem(QtGui.QGraphicsObject):
     def getHistogram(self, bins=500, step=3):
         """returns x and y arrays containing the histogram values for the current image.
         The step argument causes pixels to be skipped when computing the histogram to save time."""
+        if self.image is None:
+            return None,None
         stepData = self.image[::step, ::step]
         hist = np.histogram(stepData, bins=bins)
         return hist[1][:-1], hist[0]

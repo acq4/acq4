@@ -75,13 +75,13 @@ class Photostim(AnalysisModule):
         ## Create element list, importing some gui elements from event detector
         elems = self.detector.listElements()
         self._elements_ = OrderedDict([
-            ('Database', {'type': 'ctrl', 'object': self.dbCtrl, 'size': (300, 300)}),
+            ('Database', {'type': 'ctrl', 'object': self.dbCtrl, 'size': (300, 600)}),
             ('Scatter Plot', {'type': 'ctrl', 'object': self.scatterPlot, 'pos': ('right',), 'size': (700,400)}),
             ('Canvas', {'type': 'canvas', 'pos': ('above', 'Scatter Plot'), 'size': (700,400), 'allowTransforms': False, 'hideCtrl': True, 'args': {'name': 'Photostim'}}),
             #('Maps', {'type': 'ctrl', 'pos': ('bottom', 'Database'), 'size': (200,200), 'object': self.mapDBCtrl}),
-            ('Map Opts', {'type': 'ctrl', 'object': self.mapCtrl, 'pos': ('bottom', 'Database'), 'size': (300,500)}),
-            ('Detection Opts', elems['Detection Opts'].setParams(pos=('above', 'Map Opts'), size= (300,500))),
-            ('File Loader', {'type': 'fileInput', 'size': (300, 300), 'pos': ('above', 'Database'), 'host': self, 'showFileTree': False}),
+            ('Map Opts', {'type': 'ctrl', 'object': self.mapCtrl, 'pos': ('above', 'Database'), 'size': (300,600)}),
+            ('Detection Opts', elems['Detection Opts'].setParams(pos=('above', 'Map Opts'), size= (300,600))),
+            ('File Loader', {'type': 'fileInput', 'size': (300, 300), 'pos': ('above', 'Detection Opts'), 'host': self, 'showFileTree': False}),
             ('Data Plot', elems['Data Plot'].setParams(pos=('bottom', 'Canvas'), size=(700,200))),
             ('Filter Plot', elems['Filter Plot'].setParams(pos=('bottom', 'Data Plot'), size=(700,200))),
             ('Event Table', elems['Output Table'].setParams(pos=('below', 'Filter Plot'), size=(700,200))),
@@ -326,7 +326,7 @@ class Photostim(AnalysisModule):
                 ## draw ticks over all detected events
                 if len(events) > 0:
                     times = events['fitTime']
-                    ticks = pg.VTickGroup(times, [0.0, 0.15], pen=color, relative=True, view=plot)
+                    ticks = pg.VTickGroup(times, [0.85, 1.0], pen=color)
                     plot.addItem(ticks)
                     self.mapTicks.append(ticks)
             
@@ -601,7 +601,9 @@ class Photostim(AnalysisModule):
         if events is None:
             ## need to make an empty array with the correct fields
             schema = db.tableSchema(table)
-            events = np.empty(0, dtype=[(k, object) for k in schema])
+            ## NOTE: dtype MUST be specified as {names: formats: } since the names are unicode objects
+            ##  [(name, format), ..] does NOT work.
+            events = np.empty(0, dtype={'names': [k for k in schema], 'formats': [object]*len(schema)})
             
         
         return events, stats

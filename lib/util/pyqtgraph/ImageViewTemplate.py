@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file './lib/util/pyqtgraph/ImageViewTemplate.ui'
 #
-# Created: Fri Nov 25 10:10:09 2011
+# Created: Fri Dec  2 19:52:52 2011
 #      by: PyQt4 UI code generator 4.8.3
 #
 # WARNING! All changes made in this file will be lost!

@@ -128,8 +128,11 @@ if 'ev' not in locals():
             pos[i] = pcache[key]
 
         ev = fn.concatenateColumns([ev, ('holding', holding.dtype, holding), pos])   
-        pickle.dump(ev, cacheFile)
+        pickle.dump(ev, open(cacheFile, 'w'))
     cells = list(set(ev['Source']))
+    #for c in cells:
+        #print c, db.getDir('Cell', c)
+    cells.sort(lambda a,b: cmp(db.getDir('Cell', a).name(), db.getDir('Cell', b).name()))
     cellSpin.setMaximum(len(cells)-1)
     print "Done."
 
@@ -160,7 +163,7 @@ def select(ev, source=None, ex=True):
         ev = ev[ev['holding'] < -0.04]         # excitatory events
         ev = ev[(ev['fitAmplitude'] < 0) * (ev['fitAmplitude'] > -2e-10)]
     else:
-        ev = ev[ev['holding'] >= 0.0]
+        ev = ev[(ev['holding'] >= -0.01) * (ev['holding'] <= 0.01)]  ## inhibitory events
         ev = ev[(ev['fitAmplitude'] > 0) * (ev['fitAmplitude'] < 2e-10)]
     ev = ev[(0 < ev['fitDecayTau']) * (ev['fitDecayTau'] < 0.2)]   # select decay region
     return ev
@@ -267,7 +270,7 @@ def spontRate(ev):
         if key not in count:
             count[key] = 0
         count[key] += 1
-    sr = np.median([v/0.498 for v in count.itervalues()])
+    sr = np.mean([v/0.498 for v in count.itervalues()])
     return sr
 
 init()
