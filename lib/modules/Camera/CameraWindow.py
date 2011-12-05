@@ -11,7 +11,7 @@ from CameraTemplate import Ui_MainWindow
 #from pyqtgraph.GraphicsView import *
 #from pyqtgraph.graphicsItems import *
 import pyqtgraph as pg
-from pyqtgraph.widgets import ROI
+from pyqtgraph import ROI
 import ptime
 from lib.filetypes.ImageFile import *
 from Mutex import Mutex, MutexLocker
