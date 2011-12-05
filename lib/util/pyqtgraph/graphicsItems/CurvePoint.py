@@ -3,8 +3,9 @@ import ArrowItem
 import numpy as np
 from pyqtgraph.Point import Point
 import weakref
+from GraphicsObject import GraphicsObject
 
-class CurvePoint(QtGui.QGraphicsObject):
+class CurvePoint(GraphicsObject):
     """A GraphicsItem that sets its location to a point on a PlotCurveItem.
     Also rotates to be tangent to the curve.
     The position along the curve is a Qt property, and thus can be easily animated.
@@ -16,7 +17,7 @@ class CurvePoint(QtGui.QGraphicsObject):
         """Position can be set either as an index referring to the sample number or
         the position 0.0 - 1.0"""
         
-        QtGui.QGraphicsObject.__init__(self)
+        GraphicsObject.__init__(self)
         #QObjectWorkaround.__init__(self)
         self.curve = weakref.ref(curve)
         self.setParentItem(curve)

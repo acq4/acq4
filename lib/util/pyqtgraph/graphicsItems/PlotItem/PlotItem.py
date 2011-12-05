@@ -29,6 +29,7 @@ from .. ScatterPlotItem import ScatterPlotItem
 from .. ViewBox import ViewBox
 from .. AxisItem import AxisItem
 from .. LabelItem import LabelItem
+from .. GraphicsWidget import GraphicsWidget
 from pyqtgraph.WidgetGroup import WidgetGroup
 
 __all__ = ['PlotItem']
@@ -46,7 +47,7 @@ except:
     HAVE_METAARRAY = False
 
 
-class PlotItem(QtGui.QGraphicsWidget):
+class PlotItem(GraphicsWidget):
     
     sigYRangeChanged = QtCore.Signal(object, object)
     sigXRangeChanged = QtCore.Signal(object, object)
@@ -57,7 +58,7 @@ class PlotItem(QtGui.QGraphicsWidget):
     managers = {}
     
     def __init__(self, parent=None, name=None, labels=None, **kargs):
-        QtGui.QGraphicsWidget.__init__(self, parent)
+        GraphicsWidget.__init__(self, parent)
         
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         ## Set up control buttons

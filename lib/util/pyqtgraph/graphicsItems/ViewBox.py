@@ -3,8 +3,9 @@ import numpy as np
 from pyqtgraph.Point import Point
 import pyqtgraph.functions as fn
 from ItemGroup import ItemGroup
+from GraphicsWidget import GraphicsWidget
 
-class ViewBox(QtGui.QGraphicsWidget):
+class ViewBox(GraphicsWidget):
     """
     Box that allows internal scaling/panning of children by mouse drag. 
     Not really compatible with GraphicsView having the same functionality.
@@ -16,7 +17,7 @@ class ViewBox(QtGui.QGraphicsWidget):
     sigRangeChanged = QtCore.Signal(object, object)
     
     def __init__(self, parent=None, border=None, lockAspect=False, enableMouse=True, invertY=False):
-        QtGui.QGraphicsWidget.__init__(self, parent)
+        GraphicsWidget.__init__(self, parent)
         #self.gView = view
         #self.showGrid = showGrid
         ## separating targetRange and viewRange allows the view to be resized
@@ -250,7 +251,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         ev.accept()
 
     def mouseMoveEvent(self, ev):
-        QtGui.QGraphicsWidget.mouseMoveEvent(self, ev)
+        GraphicsWidget.mouseMoveEvent(self, ev)
         pos = np.array([ev.pos().x(), ev.pos().y()])
         dif = pos - self.mousePos
         dif *= -1
@@ -296,7 +297,7 @@ class ViewBox(QtGui.QGraphicsWidget):
             ev.ignore()
 
     def mousePressEvent(self, ev):
-        QtGui.QGraphicsWidget.mousePressEvent(self, ev)
+        GraphicsWidget.mousePressEvent(self, ev)
         #if self.rbScaleBox is not None:
             #self.removeItem(self.rbScaleBox)
             #del self.rbScaleBox
@@ -326,7 +327,7 @@ class ViewBox(QtGui.QGraphicsWidget):
         ev.accept()
 
     def mouseReleaseEvent(self, ev):
-        QtGui.QGraphicsWidget.mouseReleaseEvent(self, ev)
+        GraphicsWidget.mouseReleaseEvent(self, ev)
         pos = np.array([ev.pos().x(), ev.pos().y()])
         #if sum(abs(self.pressPos - pos)) < 3:  ## Detect click
             #if ev.button() == QtCore.Qt.RightButton:
