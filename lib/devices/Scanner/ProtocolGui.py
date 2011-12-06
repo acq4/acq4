@@ -384,7 +384,7 @@ class ScannerProtoGui(ProtocolGui):
             autoPos = True
         if size is None:
             size = [ptSize*4, ptSize*4]
-        pt = TargetGrid(pos, size, ptSize, self.defaultGridSpacing, angle, rebuildOpts=rebuildOpts)
+        pt = TargetGrid(pos, size, ptSize, angle, rebuildOpts=rebuildOpts)
         self.addItem(pt, name,  autoPos,  autoName)
         return pt
     
@@ -846,14 +846,15 @@ class TargetGrid(widgets.ROI):
     
     sigPointsChanged = QtCore.Signal(object)
     
-    def __init__(self, pos, size, ptSize, pd, angle, rebuildOpts = {}):
+    def __init__(self, pos, size, ptSize, angle, rebuildOpts = {}):
         ### These need to be initialized before the ROI is initialized because they are included in stateCopy(), which is called by ROI initialization.
-        self.gridSpacingSpin = SpinBox(step=0.1)
-        self.gridSpacingSpin.setValue(pd)
-        self.gridPacking = self.gridSpacingSpin.value()
+        #self.gridSpacingSpin = SpinBox(step=0.1)
+        #self.gridSpacingSpin.setValue(pd)
+        self.gridSpacingSpin = SpinBox(value=ptSize, dec=True, step=0.1, suffix='m', siPrefix=True)
+        self.gridSpacing = self.gridSpacingSpin.value()
         self.gridLayoutCombo = QtGui.QComboBox()
         self.gridLayoutCombo.addItems(["Hexagonal", "Square"])
-        self.gridSpacingSpin.valueChanged.connect(self.updateGridPacking)
+        self.gridSpacingSpin.valueChanged.connect(self.updateGridSpacing)
         self.gridLayoutCombo.currentIndexChanged.connect(self.regeneratePoints)
         self.treeItem = None ## will become a QTreeWidgetItem when ScannerProtoGui runs addItem()
         
@@ -886,7 +887,7 @@ class TargetGrid(widgets.ROI):
         self.host = host
         self.pointSize, self.pointDisplaySize = self.host.pointSize()
         if len(self.rebuildOpts) > 0:
-            self.gridSpacingSpin.setValue(self.rebuildOpts.get('gridPacking', self.gridPacking))
+            self.gridSpacingSpin.setValue(self.rebuildOpts.get('gridSpacing', self.gridSpacing))
             layout = self.rebuildOpts.get('gridLayout', "Hexagonal")
             if layout == "Hexagonal":
                 self.gridLayoutCombo.setCurrentIndex(0)
@@ -935,8 +936,8 @@ class TargetGrid(widgets.ROI):
             self.gridLayoutCombo.setCurrentIndex(self.parentGridLayoutCombo.currentIndex())
             
         
-    def updateGridPacking(self):
-        self.gridPacking = self.gridSpacingSpin.value()
+    def updateGridSpacing(self):
+        self.gridSpacing = self.gridSpacingSpin.value()
         #self.updateSnapSize()
         self.regeneratePoints()
         
@@ -969,13 +970,15 @@ class TargetGrid(widgets.ROI):
         layout = self.gridLayoutCombo.currentText()
         
         if layout == 'Square':
-            snap = Point(self.pointSize * self.gridPacking, self.pointSize*self.gridPacking)
+            #snap = Point(self.pointSize * self.gridPacking, self.pointSize*self.gridPacking)
+            snap = Point(self.gridSpacing, self.gridSpacing)
             w = round(pos[0] / snap[0]) * snap[0]
             h = round(pos[1] / snap[1]) * snap[1]
             return Point(w, h)
         
         elif layout == 'Hexagonal':
-            snap1 = Point(self.pointSize*self.gridPacking, self.pointSize*self.gridPacking*3.0**0.5)
+            #snap1 = Point(self.pointSize*self.gridPacking, self.pointSize*self.gridPacking*3.0**0.5)
+            snap1 = Point(self.gridSpacing, self.gridSpacing*3.0**0.5)
             dx = 0.5*snap1[0]
             dy = 0.5*snap1[1]
             w1 = round(pos[0] / snap1[0]) * snap1[0]
@@ -999,7 +1002,8 @@ class TargetGrid(widgets.ROI):
         self.points = []
         self.pens = []
         sq3 = 3. ** 0.5
-        sepx = self.pointSize * self.gridPacking
+        #sepx = self.pointSize * self.gridPacking
+        sepx = self.gridSpacing
         sepy = sq3 * sepx
 
         if layout == "Hexagonal":
@@ -1077,7 +1081,7 @@ class TargetGrid(widgets.ROI):
             
     def stateCopy(self):
         sc = widgets.ROI.stateCopy(self)
-        sc['gridPacking'] = self.gridPacking
+        sc['gridSpacing'] = self.gridSpacing
         sc['gridLayout'] = str(self.gridLayoutCombo.currentText())
         if self.treeItem is not None:
             if self.treeItem.parent() is None:
