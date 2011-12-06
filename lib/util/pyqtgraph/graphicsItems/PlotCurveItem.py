@@ -355,6 +355,7 @@ class PlotCurveItem(GraphicsObject):
         p.drawPath(path)
         prof.mark('drawPath')
         
+        #print "Render hints:", int(p.renderHints())
         prof.finish()
         #p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
         #p.drawRect(self.boundingRect())
