@@ -424,10 +424,10 @@ class Photostim(AnalysisModule):
         stats['xPos'] = pos.x()
         stats['yPos'] = pos.y()
         
-        d = spot.data.parent()
-        size = d.info().get('Scanner', {}).get('spotSize', 100e-6)
-        stats['spotSize'] = size
-        print "Process Stats:", spot.data
+        #d = spot.data.parent()
+        #size = d.info().get('Scanner', {}).get('spotSize', 100e-6)
+        #stats['spotSize'] = size
+        #print "Process Stats:", spot.data
         
         return stats
 
