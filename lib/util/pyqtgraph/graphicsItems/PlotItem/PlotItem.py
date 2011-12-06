@@ -75,9 +75,7 @@ class PlotItem(GraphicsWidget):
             proxy.setAcceptHoverEvents(False)
             b.setStyleSheet("background-color: #000000; color: #888; font-size: 6pt")
             self.proxies.append(proxy)
-        #QtCore.QObject.connect(self.ctrlBtn, QtCore.SIGNAL('clicked()'), self.ctrlBtnClicked)
         self.ctrlBtn.clicked.connect(self.ctrlBtnClicked)
-        #QtCore.QObject.connect(self.autoBtn, QtCore.SIGNAL('clicked()'), self.enableAutoScale)
         self.autoBtn.clicked.connect(self.enableAutoScale)
         
         
@@ -88,14 +86,10 @@ class PlotItem(GraphicsWidget):
         self.layout.setVerticalSpacing(0)
         
         self.vb = ViewBox()
-        #QtCore.QObject.connect(self.vb, QtCore.SIGNAL('xRangeChanged'), self.xRangeChanged)
         self.vb.sigXRangeChanged.connect(self.xRangeChanged)
-        #QtCore.QObject.connect(self.vb, QtCore.SIGNAL('yRangeChanged'), self.yRangeChanged)
         self.vb.sigYRangeChanged.connect(self.yRangeChanged)
-        #QtCore.QObject.connect(self.vb, QtCore.SIGNAL('rangeChangedManually'), self.enableManualScale)
         self.vb.sigRangeChangedManually.connect(self.enableManualScale)
         
-        #QtCore.QObject.connect(self.vb, QtCore.SIGNAL('viewChanged'), self.viewChanged)
         self.vb.sigRangeChanged.connect(self.viewRangeChanged)
         
         self.layout.addItem(self.vb, 2, 1)
