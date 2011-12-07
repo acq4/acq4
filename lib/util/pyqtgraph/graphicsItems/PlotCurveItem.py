@@ -294,7 +294,10 @@ class PlotCurveItem(GraphicsObject):
         
         prof.finish()
         return path
-        
+
+    def shape(self):
+        return self.path
+
     def boundingRect(self):
         (x, y) = self.getData()
         if x is None or y is None or len(x) == 0 or len(y) == 0:
@@ -368,26 +371,30 @@ class PlotCurveItem(GraphicsObject):
         self.path = None
         #del self.xData, self.yData, self.xDisp, self.yDisp, self.path
         
-    def mousePressEvent(self, ev):
-        #GraphicsObject.mousePressEvent(self, ev)
-        if not self.clickable:
-            ev.ignore()
-        if ev.button() != QtCore.Qt.LeftButton:
-            ev.ignore()
-        self.mousePressPos = ev.pos()
-        self.mouseMoved = False
+    #def mousePressEvent(self, ev):
+        ##GraphicsObject.mousePressEvent(self, ev)
+        #if not self.clickable:
+            #ev.ignore()
+        #if ev.button() != QtCore.Qt.LeftButton:
+            #ev.ignore()
+        #self.mousePressPos = ev.pos()
+        #self.mouseMoved = False
         
-    def mouseMoveEvent(self, ev):
-        #GraphicsObject.mouseMoveEvent(self, ev)
-        self.mouseMoved = True
-        #print "move"
+    #def mouseMoveEvent(self, ev):
+        ##GraphicsObject.mouseMoveEvent(self, ev)
+        #self.mouseMoved = True
+        ##print "move"
         
-    def mouseReleaseEvent(self, ev):
-        #GraphicsObject.mouseReleaseEvent(self, ev)
-        if not self.mouseMoved:
-            self.sigClicked.emit(self)
+    #def mouseReleaseEvent(self, ev):
+        ##GraphicsObject.mouseReleaseEvent(self, ev)
+        #if not self.mouseMoved:
+            #self.sigClicked.emit(self)
 
-
+    def mouseClickEvent(self, ev):
+        if not self.clickable or ev.button() != QtCore.Qt.LeftButton:
+            return
+        ev.accept()
+        self.sigClicked.emit(self)
 
 
 

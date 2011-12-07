@@ -232,7 +232,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
             
         
     def sendClickEvent(self, ev):
-        for item in self.itemsNear(ev):
+        for item in self.itemsNearEvent(ev):
             if hasattr(item, 'mouseClickEvent'):
                 ev.currentItem = item
                 item.mouseClickEvent(ev)
