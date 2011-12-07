@@ -55,7 +55,7 @@ class ImageCanvasItem(CanvasItem):
             item = pg.ImageItem()
         CanvasItem.__init__(self, item, **opts)
         
-        
+        showTime = True
         
         self.histogram = pg.PlotWidget()
         self.blockHistogram = False
