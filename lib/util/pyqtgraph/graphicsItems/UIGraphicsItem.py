@@ -70,16 +70,22 @@ class UIGraphicsItem(GraphicsObject):
         return QtCore.QRectF(self._boundingRect)
 
     def setNewBounds(self):
+        """Update the item's bounding rect to match the viewport"""
         self._boundingRect = self.viewRect()
         self.prepareGeometryChange()
         self.viewChangedEvent()
 
     def viewRangeChanged(self):
-        """Called when the view widget is resized"""
+        """Called when the view widget/viewbox is resized/rescaled"""
         self.setNewBounds()
         self.update()
+        
 
     def viewChangedEvent(self):
         """Called whenever the view coordinates have changed."""
         pass
 
+
+    def setPos(self, *args):
+        GraphicsObject.setPos(self, *args)
+        self.setNewBounds()

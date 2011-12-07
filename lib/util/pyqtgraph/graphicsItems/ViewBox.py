@@ -189,51 +189,27 @@ class ViewBox(GraphicsWidget):
 
     def scaleBy(self, s, center=None):
         """Scale by s around given center point (or center of view)"""
-        #print "scaleBy", s, center
-        #if self.aspectLocked:
-            #s[0] = s[1]
         scale = Point(s)
         if self.aspectLocked is not False:
             scale[0] = self.aspectLocked * scale[1]
 
-        #xr, yr = self.range
         vr = self.viewRect()
         if center is None:
             center = Point(vr.center())
-            #xc = (xr[1] + xr[0]) * 0.5
-            #yc = (yr[1] + yr[0]) * 0.5
         else:
             center = Point(center)
-            #(xc, yc) = center
         
-        #x1 = xc + (xr[0]-xc) * s[0]
-        #x2 = xc + (xr[1]-xc) * s[0]
-        #y1 = yc + (yr[0]-yc) * s[1]
-        #y2 = yc + (yr[1]-yc) * s[1]
         tl = center + (vr.topLeft()-center) * scale
         br = center + (vr.bottomRight()-center) * scale
        
-        #print xr, xc, s, (xr[0]-xc) * s[0], (xr[1]-xc) * s[0]
-        #print [[x1, x2], [y1, y2]]
-        
-        #if not self.aspectLocked:
-            #self.setXRange(x1, x2, update=False, padding=0)
-        #self.setYRange(y1, y2, padding=0)
-        #print self.range
-        
         self.setRange(QtCore.QRectF(tl, br), padding=0)
         
     def translateBy(self, t, viewCoords=False):
-        t = t.astype(np.float)
-        #print "translate:", t, self.viewScale()
+        t = np.array(t, dtype=float)
         if viewCoords:  ## scale from pixels
             t /= self.viewScale()
-        #xr, yr = self.range
         
         vr = self.viewRect()
-        #print xr, yr, t
-        #self.setXRange(xr[0] + t[0], xr[1] + t[0], update=False, padding=0)
-        #self.setYRange(yr[0] + t[1], yr[1] + t[1], padding=0)
         self.setRange(vr.translated(Point(t)), padding=0)
         
     def wheelEvent(self, ev, axis=None):
@@ -243,13 +219,12 @@ class ViewBox(GraphicsWidget):
             mask[:] = 0
             mask[axis] = mv
         s = ((mask * 0.02) + 1) ** (ev.delta() * self.wheelScaleFactor) # actual scaling factor
-        # scale 'around' mouse cursor position
         center = Point(self.childGroup.transform().inverted()[0].map(ev.pos()))
         self.scaleBy(s, center)
-        #self.emit(QtCore.SIGNAL('rangeChangedManually'), self.mouseEnabled)
         self.sigRangeChangedManually.emit(self.mouseEnabled)
         ev.accept()
 
+    ### Mouse press/move/release are now replaced by mouseDrag.
     #def mouseMoveEvent(self, ev):
         #GraphicsWidget.mouseMoveEvent(self, ev)
         #pos = np.array([ev.pos().x(), ev.pos().y()])
@@ -312,54 +287,67 @@ class ViewBox(GraphicsWidget):
 
     def mouseDragEvent(self, ev):
         #GraphicsWidget.mouseMoveEvent(self, ev)
-        #print "drag", ev
-        if ev.isStart():
-            self.mousePos = np.array([ev.pos().x(), ev.pos().y()])
-            self.pressPos = self.mousePos.copy()
-            ev.accept()
-            return
+        
+        ev.accept()  ## we accept all buttons
+        
+        #if ev.isStart():
+            #self.mousePos = np.array([ev.pos().x(), ev.pos().y()])
+            #self.pressPos = self.mousePos.copy()
+            #ev.accept()
+            #return
             
-        elif ev.isFinish():
-            pos = np.array([ev.pos().x(), ev.pos().y()])
-            self.mousePos = pos
-            if ev.button() & (QtCore.Qt.LeftButton | QtCore.Qt.MidButton) and self.useLeftButtonPan == False:
+        #if ev.isFinish():
+            #pos = np.array([ev.pos().x(), ev.pos().y()])
+            ##self.mousePos = pos
+            #if ev.button() & (QtCore.Qt.LeftButton | QtCore.Qt.MidButton) and self.useLeftButtonPan == False:
                 
-                ## Get rectangle from drag
-                if self.rbScaleBox.isVisible():
-                    self.rbScaleBox.hide()
-                    ax = QtCore.QRectF(Point(self.pressPos), Point(self.mousePos))
-                    ax = self.childGroup.mapRectFromParent(ax)
-                    self.showAxRect(ax)
-                    ev.accept()
-                    self.axHistoryPointer += 1
-                    self.axHistory = self.axHistory[:self.axHistoryPointer] + [ax]
-            return
+                ### Get rectangle from drag
+                #if self.rbScaleBox.isVisible():
+                    #self.rbScaleBox.hide()
+                    ##ax = QtCore.QRectF(Point(self.pressPos), Point(self.mousePos))
+                    #ax = QtCore.QRectF(Point(ev.buttonDownPos(ev.button())), Point(pos))
+                    #ax = self.childGroup.mapRectFromParent(ax)
+                    #self.showAxRect(ax)
+                    #ev.accept()
+                    #self.axHistoryPointer += 1
+                    #self.axHistory = self.axHistory[:self.axHistoryPointer] + [ax]
+            #return
             
-        pos = np.array([ev.pos().x(), ev.pos().y()])
-        dif = pos - self.mousePos
-        dif *= -1
-        self.mousePos = pos
+        pos = ev.pos()
+        lastPos = ev.lastPos()
+        #dif = pos - self.mousePos
+        dif = pos - lastPos
+        dif = dif * -1
+        #self.mousePos = pos
 
         ## Ignore axes if mouse is disabled
         mask = np.array(self.mouseEnabled, dtype=np.float)
 
         ## Scale or translate based on mouse button
-        if ev.buttons() & (QtCore.Qt.LeftButton | QtCore.Qt.MidButton):
+        if ev.button() & (QtCore.Qt.LeftButton | QtCore.Qt.MidButton):
             if self.useLeftButtonPan == False:
-                ## update scale box
-                self.updateScaleBox()
-                ## don't emit until scale has changed
-                ev.accept()
+                if ev.isFinish():  ## This is the final move in the drag; change the view scale now
+                    print "finish"
+                    self.rbScaleBox.hide()
+                    #ax = QtCore.QRectF(Point(self.pressPos), Point(self.mousePos))
+                    ax = QtCore.QRectF(Point(ev.buttonDownPos(ev.button())), Point(pos))
+                    ax = self.childGroup.mapRectFromParent(ax)
+                    self.showAxRect(ax)
+                    self.axHistoryPointer += 1
+                    self.axHistory = self.axHistory[:self.axHistoryPointer] + [ax]
+                else:
+                    ## update shape of scale box
+                    self.updateScaleBox(ev.buttonDownPos(), ev.pos())
             else:
                 if not self.yInverted:
                     mask *= np.array([1, -1])
                 tr = dif*mask
                 self.translateBy(tr, viewCoords=True)
                 self.sigRangeChangedManually.emit(self.mouseEnabled)
-                ev.accept()
-        elif ev.buttons() & QtCore.Qt.RightButton:
+        elif ev.button() & QtCore.Qt.RightButton:
             if self.aspectLocked is not False:
                 mask[0] = 0
+            
             dif = ev.screenPos() - ev.lastScreenPos()
             dif = np.array([dif.x(), dif.y()])
             dif[0] *= -1
@@ -367,13 +355,10 @@ class ViewBox(GraphicsWidget):
             center = Point(self.childGroup.transform().inverted()[0].map(ev.buttonDownPos(QtCore.Qt.RightButton)))
             self.scaleBy(s, center)
             self.sigRangeChangedManually.emit(self.mouseEnabled)
-            ev.accept()
-        else:
-            ev.ignore()
 
 
-    def updateScaleBox(self):
-        r = QtCore.QRectF(Point(self.pressPos), Point(self.mousePos))
+    def updateScaleBox(self, p1, p2):
+        r = QtCore.QRectF(p1, p2)
         r = self.childGroup.mapRectFromParent(r)
         self.rbScaleBox.setPos(r.topLeft())
         self.rbScaleBox.resetTransform()

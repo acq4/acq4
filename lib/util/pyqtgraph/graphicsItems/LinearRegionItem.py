@@ -1,9 +1,9 @@
 from pyqtgraph.Qt import QtGui, QtCore
 import weakref
-from GraphicsObject import GraphicsObject
+from UIGraphicsItem import UIGraphicsItem
 from InfiniteLine import InfiniteLine
 
-class LinearRegionItem(GraphicsObject):
+class LinearRegionItem(UIGraphicsItem):
     """
     Used for marking a horizontal or vertical region in plots.
     The region can be dragged and is bounded by lines which can be dragged individually.
@@ -12,17 +12,15 @@ class LinearRegionItem(GraphicsObject):
     sigRegionChangeFinished = QtCore.Signal(object)
     sigRegionChanged = QtCore.Signal(object)
     
-    def __init__(self, view, orientation="vertical", vals=[0,1], brush=None, movable=True, bounds=None):
-        GraphicsObject.__init__(self)
+    def __init__(self, vals=[0,1], orientation="vertical", brush=None, movable=True, bounds=None):
+        UIGraphicsItem.__init__(self)
         self.orientation = orientation
-        if hasattr(self, "ItemHasNoContents"):  
-            self.setFlag(self.ItemHasNoContents)
-        self.rect = QtGui.QGraphicsRectItem(self)
-        self.rect.setParentItem(self)
+        #if hasattr(self, "ItemHasNoContents"):  
+            #self.setFlag(self.ItemHasNoContents)
+        #self.rect = QtGui.QGraphicsRectItem(self)
+        #self.rect.setParentItem(self)
         self.bounds = QtCore.QRectF()
         self.view = weakref.ref(view)
-        self.setBrush = self.rect.setBrush
-        self.brush = self.rect.brush
         self.blockLineSignal = False
         
         if orientation[0] == 'h':
@@ -59,6 +57,10 @@ class LinearRegionItem(GraphicsObject):
 
     def boundingRect(self):
         return self.rect.boundingRect()
+        
+    def paint(self, p, *args):
+        UIGraphicsItem.paint(self, p, *args)
+        
             
     def lineMoved(self):
         if self.blockLineSignal:
