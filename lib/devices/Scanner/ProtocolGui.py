@@ -4,8 +4,7 @@ from lib.devices.Device import ProtocolGui
 from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager, logMsg, logExc
 from pyqtgraph.WidgetGroup import WidgetGroup
-import pyqtgraph.widgets as widgets
-#from pyqtgraph.widgets import *
+import pyqtgraph.graphicsItems.ROI as widgets
 import random
 import numpy as np
 from debug import Profiler

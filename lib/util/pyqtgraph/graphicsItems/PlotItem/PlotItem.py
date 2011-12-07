@@ -29,6 +29,7 @@ from .. ScatterPlotItem import ScatterPlotItem
 from .. ViewBox import ViewBox
 from .. AxisItem import AxisItem
 from .. LabelItem import LabelItem
+from .. GraphicsWidget import GraphicsWidget
 from pyqtgraph.WidgetGroup import WidgetGroup
 
 __all__ = ['PlotItem']
@@ -46,7 +47,7 @@ except:
     HAVE_METAARRAY = False
 
 
-class PlotItem(QtGui.QGraphicsWidget):
+class PlotItem(GraphicsWidget):
     
     sigYRangeChanged = QtCore.Signal(object, object)
     sigXRangeChanged = QtCore.Signal(object, object)
@@ -57,7 +58,7 @@ class PlotItem(QtGui.QGraphicsWidget):
     managers = {}
     
     def __init__(self, parent=None, name=None, labels=None, **kargs):
-        QtGui.QGraphicsWidget.__init__(self, parent)
+        GraphicsWidget.__init__(self, parent)
         
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         ## Set up control buttons
@@ -74,9 +75,7 @@ class PlotItem(QtGui.QGraphicsWidget):
             proxy.setAcceptHoverEvents(False)
             b.setStyleSheet("background-color: #000000; color: #888; font-size: 6pt")
             self.proxies.append(proxy)
-        #QtCore.QObject.connect(self.ctrlBtn, QtCore.SIGNAL('clicked()'), self.ctrlBtnClicked)
         self.ctrlBtn.clicked.connect(self.ctrlBtnClicked)
-        #QtCore.QObject.connect(self.autoBtn, QtCore.SIGNAL('clicked()'), self.enableAutoScale)
         self.autoBtn.clicked.connect(self.enableAutoScale)
         
         
@@ -87,14 +86,10 @@ class PlotItem(QtGui.QGraphicsWidget):
         self.layout.setVerticalSpacing(0)
         
         self.vb = ViewBox()
-        #QtCore.QObject.connect(self.vb, QtCore.SIGNAL('xRangeChanged'), self.xRangeChanged)
         self.vb.sigXRangeChanged.connect(self.xRangeChanged)
-        #QtCore.QObject.connect(self.vb, QtCore.SIGNAL('yRangeChanged'), self.yRangeChanged)
         self.vb.sigYRangeChanged.connect(self.yRangeChanged)
-        #QtCore.QObject.connect(self.vb, QtCore.SIGNAL('rangeChangedManually'), self.enableManualScale)
         self.vb.sigRangeChangedManually.connect(self.enableManualScale)
         
-        #QtCore.QObject.connect(self.vb, QtCore.SIGNAL('viewChanged'), self.viewChanged)
         self.vb.sigRangeChanged.connect(self.viewRangeChanged)
         
         self.layout.addItem(self.vb, 2, 1)

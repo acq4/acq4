@@ -9,7 +9,7 @@ from CanvasTemplate import *
 #from pyqtgraph.GraphicsView import GraphicsView
 #import pyqtgraph.graphicsItems as graphicsItems
 #from pyqtgraph.PlotWidget import PlotWidget
-from pyqtgraph import widgets
+from pyqtgraph import ROI
 from pyqtgraph.Qt import QtGui, QtCore
 #import DataManager
 import numpy as np
@@ -538,10 +538,10 @@ class Canvas(QtGui.QWidget):
         
 
 
-class SelectBox(widgets.ROI):
+class SelectBox(ROI):
     def __init__(self, scalable=False):
         #QtGui.QGraphicsRectItem.__init__(self, 0, 0, size[0], size[1])
-        widgets.ROI.__init__(self, [0,0], [1,1])
+        ROI.__init__(self, [0,0], [1,1])
         center = [0.5, 0.5]
             
         if scalable:

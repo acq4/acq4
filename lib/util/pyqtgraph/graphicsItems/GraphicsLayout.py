@@ -2,15 +2,16 @@ from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph.functions as fn
 from ViewBox import ViewBox
 from PlotItem import PlotItem
+from GraphicsWidget import GraphicsWidget
 
-class GraphicsLayout(QtGui.QGraphicsWidget):
+class GraphicsLayout(GraphicsWidget):
     """
     Used for laying out GraphicsWidgets in a grid.
     """
 
 
     def __init__(self, parent=None, border=None):
-        QtGui.QGraphicsWidget.__init__(self, parent)
+        GraphicsWidget.__init__(self, parent)
         self.border = border
         self.layout = QtGui.QGraphicsGridLayout()
         self.setLayout(self.layout)

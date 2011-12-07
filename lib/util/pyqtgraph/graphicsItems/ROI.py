@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-widgets.py -  Interactive graphics items for GraphicsView (ROI widgets)
+ROI.py -  Interactive graphics items for GraphicsView (ROI widgets)
 Copyright 2010  Luke Campagnola
 Distributed under MIT/X11 license. See license.txt for more infomation.
 
@@ -12,18 +12,17 @@ The ROI class is meant to serve as the base for more specific types; see several
 of how to build an ROI at the bottom of the file.
 """
 
-from Qt import QtCore, QtGui
-if not hasattr(QtCore, 'Signal'):
-    QtCore.Signal = QtCore.pyqtSignal
-#from numpy import array, arccos, dot, pi, zeros, vstack, ubyte, fromfunction, ceil, floor, arctan2
+from pyqtgraph.Qt import QtCore, QtGui
+#if not hasattr(QtCore, 'Signal'):
+    #QtCore.Signal = QtCore.pyqtSignal
 import numpy as np
 from numpy.linalg import norm
 import scipy.ndimage as ndimage
-from Point import *
-from Transform import Transform
+from pyqtgraph.Point import *
+from pyqtgraph.Transform import Transform
 from math import cos, sin
-import functions as fn
-#from ObjectWorkaround import *
+import pyqtgraph.functions as fn
+from GraphicsObject import GraphicsObject
 
 def rectStr(r):
     return "[%f, %f] + [%f, %f]" % (r.x(), r.y(), r.width(), r.height())
@@ -40,7 +39,7 @@ def rectStr(r):
         #return QtCore.QObject.connect(self._qObj_, *args)
 
 
-class ROI(QtGui.QGraphicsObject):
+class ROI(GraphicsObject):
     """Generic region-of-interest widget. 
     Can be used for implementing many types of selection box with rotate/translate/scale handles."""
     
@@ -50,7 +49,7 @@ class ROI(QtGui.QGraphicsObject):
     
     def __init__(self, pos, size=Point(1, 1), angle=0.0, invertible=False, maxBounds=None, snapSize=1.0, scaleSnap=False, translateSnap=False, rotateSnap=False, parent=None, pen=None, movable=True):
         #QObjectWorkaround.__init__(self)
-        QtGui.QGraphicsObject.__init__(self, parent)
+        GraphicsObject.__init__(self, parent)
         pos = Point(pos)
         size = Point(size)
         self.aspectLocked = False

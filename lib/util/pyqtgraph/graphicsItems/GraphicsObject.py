@@ -1,15 +1,21 @@
 from pyqtgraph.Qt import QtGui, QtCore  
+from pyqtgraph.GraphicsView import GraphicsScene
 import weakref
-
 
 class GraphicsObject(QtGui.QGraphicsObject):
     """Extends QGraphicsObject with a few important functions. 
-    (Most of these assume that the object is in a scene with a single view)"""
+    (Most of these assume that the object is in a scene with a single view)
+    
+    This class also generates a cache of the Qt-internal addresses of each item
+    so that GraphicsScene.items() can return the correct objects (this is a PyQt bug)
+    """
+    
     
     def __init__(self, *args):
         QtGui.QGraphicsObject.__init__(self, *args)
         self._viewWidget = None
         self._viewBox = None
+        GraphicsScene.registerObject(self)  ## workaround for pyqt bug in graphicsscene.items()
     
     def getViewWidget(self):
         """Return the view widget for this item. If the scene has multiple views, only the first view is returned.

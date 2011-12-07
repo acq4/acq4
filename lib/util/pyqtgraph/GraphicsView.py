@@ -13,7 +13,8 @@ from Point import *
 import sys, os
 import debug    
 from FileDialog import FileDialog
-        
+from GraphicsScene import GraphicsScene
+
 class GraphicsView(QtGui.QGraphicsView):
     
     sigRangeChanged = QtCore.Signal(object, object)
@@ -72,7 +73,7 @@ class GraphicsView(QtGui.QGraphicsView):
         self.currentItem = None
         self.clearMouse()
         self.updateMatrix()
-        self.sceneObj = QtGui.QGraphicsScene()
+        self.sceneObj = GraphicsScene()
         self.setScene(self.sceneObj)
         
         ## by default we set up a central widget with a grid layout.
