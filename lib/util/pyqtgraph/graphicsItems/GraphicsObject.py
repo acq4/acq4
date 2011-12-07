@@ -1,5 +1,6 @@
 from pyqtgraph.Qt import QtGui, QtCore  
 from pyqtgraph.GraphicsView import GraphicsScene
+from pyqtgraph.Point import Point
 import weakref
 
 class GraphicsObject(QtGui.QGraphicsObject):
@@ -103,7 +104,7 @@ class GraphicsObject(QtGui.QGraphicsObject):
         view = self.getViewBox()
         if view is None:
             return None
-        bounds = self.mapRectFromView(view.viewRect())
+        bounds = self.mapRectFromView(view.viewRect()).normalized()
         
         ## nah.
         #for p in self.getBoundingParents():
@@ -131,14 +132,14 @@ class GraphicsObject(QtGui.QGraphicsObject):
         if vt is None:
             return 0
         vt = vt.inverted()[0]
-        return abs((vt.map(QtCore.QPointF(1, 0))-vt.map(QtCore.QPointF(0, 0))).x())
+        return Point(vt.map(QtCore.QPointF(1, 0))-vt.map(QtCore.QPointF(0, 0))).length()
         
     def pixelHeight(self):
         vt = self.deviceTransform()
         if vt is None:
             return 0
         vt = vt.inverted()[0]
-        return abs((vt.map(QtCore.QPointF(0, 1))-vt.map(QtCore.QPointF(0, 0))).y())
+        return Point(vt.map(QtCore.QPointF(0, 1))-vt.map(QtCore.QPointF(0, 0))).length()
         
         
 
@@ -167,3 +168,6 @@ class GraphicsObject(QtGui.QGraphicsObject):
             return None
         vt = vt.inverted()[0]
         return vt.mapRect(obj)
+
+    def pos(self):
+        return Point(QtGui.QGraphicsObject.pos(self))
