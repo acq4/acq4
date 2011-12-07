@@ -15,7 +15,8 @@ Widget used for displaying 2D or 3D data. Features:
 
 from ImageViewTemplate import *
 from graphicsItems import *
-from widgets import ROI
+from graphicsItems.ROI import ROI
+#from widgets import ROI
 from Qt import QtCore, QtGui
 import sys
 #from numpy import ndarray

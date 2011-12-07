@@ -280,7 +280,9 @@ class ColumnJoinNode(Node):
         return self.ui
         
     def addInput(self):
+        #print "ColumnJoinNode.addInput called."
         term = Node.addInput(self, 'input', renamable=True)
+        #print "Node.addInput returned. term:", term
         item = QtGui.QTreeWidgetItem([term.name()])
         item.term = term
         term.joinItem = item

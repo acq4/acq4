@@ -161,11 +161,13 @@ class GraphicsScene(QtGui.QGraphicsScene):
         self._moveDistance = d
 
     def mousePressEvent(self, ev):
+        print 'scenePress'
         QtGui.QGraphicsScene.mousePressEvent(self, ev)
         if self.mouseGrabberItem() is None:  ## nobody claimed press; we are free to generate drag/click events
             self.clickEvents.append(MouseClickEvent(ev))
         
     def mouseMoveEvent(self, ev):
+        #print 'sceneMove'
         QtGui.QGraphicsScene.mouseMoveEvent(self, ev)
         if int(ev.buttons()) == 0: ## nothing pressed; send mouseHoverOver/OutEvents
             pass
@@ -185,6 +187,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
                         ev.accept()
                 
     def mouseReleaseEvent(self, ev):
+        print 'sceneRelease'
         if self.mouseGrabberItem() is None:
             if len(self.dragButtons) == 0:
                 cev = [e for e in self.clickEvents if int(e.button()) == int(ev.button())]
@@ -215,11 +218,15 @@ class GraphicsScene(QtGui.QGraphicsScene):
         ## Send a MouseDragEvent to the current dragItem or to 
         ## items near the beginning of the drag
         event = MouseDragEvent(ev, self.clickEvents[0], self.lastDrag, start=init, finish=final)
+        print "dragEvent: init=", init, 'final=', final, 'self.dragItem=', self.dragItem
         if init and self.dragItem is None:
+            print "   drag1"
             for item in self.itemsNearEvent(ev):
-                if hasattr(item, 'mouseDragEvent'):
+                print "   drag2", item
+                if hasattr(item, 'mouseDragEvent'): 
                     event.currentItem = item
                     item.mouseDragEvent(event)
+                    print 'sent DragEvent to ', item
                     if event.isAccepted():
                         self.dragItem = item
                         break
@@ -228,21 +235,25 @@ class GraphicsScene(QtGui.QGraphicsScene):
             self.dragItem.mouseDragEvent(event)
             
         self.lastDrag = event
+        
         return event.isAccepted()
             
         
     def sendClickEvent(self, ev):
-        for item in self.itemsNear(ev):
+        print "click event: ", ev
+        for item in self.itemsNearEvent(ev):
             if hasattr(item, 'mouseClickEvent'):
                 ev.currentItem = item
                 item.mouseClickEvent(ev)
+                print 'sent clickEvent to ', item
                 if ev.isAccepted():
                     break
+        
         return ev.isAccepted()
         
     def items(self, *args):
+        print 'args:', args
         items = QtGui.QGraphicsScene.items(self, *args)
-        
         ## PyQt bug: items() returns a list of QGraphicsItem instances. If the item is subclassed from QGraphicsObject,
         ## then the object returned will be different than the actual item that was originally added to the scene
         if HAVE_SIP and isinstance(self, sip.wrapper):
@@ -252,6 +263,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
                 i2 = GraphicsScene._addressCache.get(addr, i)
                 #print i, "==>", i2
                 items2.append(i2)
+        print 'items:', items
         return items2
 
     def itemAt(self, *args):
@@ -287,6 +299,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
             #yield item
         for item in self.items(rgn, selMode, sortOrder, tr):
             #if item not in seen:
+            print 'yeilding item:', item, item==rgn, item==rect, item==self.searchRect
             yield item
         
     def getViewWidget(self, widget):

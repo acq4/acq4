@@ -286,6 +286,7 @@ class ViewBox(GraphicsWidget):
                 #self.axHistory = self.axHistory[:self.axHistoryPointer] + [ax]
 
     def mouseDragEvent(self, ev):
+        print 'vbDragEvent'
         #GraphicsWidget.mouseMoveEvent(self, ev)
         
         ev.accept()  ## we accept all buttons
