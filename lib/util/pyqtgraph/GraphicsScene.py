@@ -297,9 +297,10 @@ class GraphicsScene(QtGui.QGraphicsScene):
         #for item in self.items(point, selMode, sortOrder, tr):
             #seen.add(item)
             #yield item
+        #print x
         for item in self.items(rgn, selMode, sortOrder, tr):
             #if item not in seen:
-            print 'yeilding item:', item, item==rgn, item==rect, item==self.searchRect
+            print 'yeilding item:', item
             yield item
         
     def getViewWidget(self, widget):

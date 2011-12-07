@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.Qt import QtCore, QtGui
 #from PySide import QtCore, QtGui
+from pyqtgraph.graphicsItems.GraphicsObject import GraphicsObject
 from Terminal import *
 from advancedTypes import OrderedDict
 from debug import *
@@ -319,9 +320,11 @@ class Node(QtCore.QObject):
             t.disconnectAll()
     
 
-class NodeGraphicsItem(QtGui.QGraphicsItem):
+#class NodeGraphicsItem(QtGui.QGraphicsItem):
+class NodeGraphicsItem(GraphicsObject):
     def __init__(self, node):
-        QtGui.QGraphicsItem.__init__(self)
+        #QtGui.QGraphicsItem.__init__(self)
+        GraphicsObject.__init__(self)
         #QObjectWorkaround.__init__(self)
         
         #self.shadow = QtGui.QGraphicsDropShadowEffect()

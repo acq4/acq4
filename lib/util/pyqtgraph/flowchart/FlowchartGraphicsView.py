@@ -14,14 +14,19 @@ class FlowchartGraphicsView(GraphicsView):
         #QtGui.QGraphicsView.__init__(self, *args)
         GraphicsView.__init__(self, *args)
         self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(255,255,255)))
-        self.vb = ViewBox()
-        self.setCentralItem(self.vb)
+        self._vb = ViewBox(lockAspect=True, invertY=True)
+        self.setCentralItem(self._vb)
+        #self.scene().addItem(self.vb)
         self.setMouseTracking(True)
         self.lastPos = None
         self.setTransformationAnchor(self.AnchorViewCenter)
-        self.setRenderHints(QtGui.QPainter.Antialiasing)
+        #self.setRenderHints(QtGui.QPainter.Antialiasing)
+        self.setRenderHint(QtGui.QPainter.Antialiasing, True)
         #self.setDragMode(QtGui.QGraphicsView.RubberBandDrag)
         #self.setRubberBandSelectionMode(QtCore.Qt.ContainsItemBoundingRect)
+    
+    def viewBox(self):
+        return self._vb
         
     #def mousePressEvent(self, ev):
         #self.moved = False

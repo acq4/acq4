@@ -170,7 +170,7 @@ class Flowchart(Node):
         item.setParentItem(self.chartGraphicsItem())
         item.moveBy(*pos)
         self._nodes[name] = node
-        self.widget().addNode(node)
+        self.widget().addNode(node) 
         #QtCore.QObject.connect(node, QtCore.SIGNAL('closed'), self.nodeClosed)
         node.sigClosed.connect(self.nodeClosed)
         #QtCore.QObject.connect(node, QtCore.SIGNAL('renamed'), self.nodeRenamed)
@@ -392,9 +392,13 @@ class Flowchart(Node):
         if self._widget is None:
             self._widget = FlowchartCtrlWidget(self)
             self.scene = self._widget.scene()
+            self.viewBox = self._widget.viewBox()
             #self._scene = QtGui.QGraphicsScene()
             #self._widget.setScene(self._scene)
-            self.scene.addItem(self.chartGraphicsItem())
+            #self.scene.addItem(self.chartGraphicsItem())
+            ci = self.chartGraphicsItem()
+            self.viewBox.addItem(ci)
+            self.viewBox.autoRange()
         return self._widget
 
     def listConnections(self):
@@ -510,10 +514,13 @@ class Flowchart(Node):
         self.inputNode.clearTerminals()
         self.outputNode.clearTerminals()
 
-class FlowchartGraphicsItem(QtGui.QGraphicsItem):
+#class FlowchartGraphicsItem(QtGui.QGraphicsItem):
+class FlowchartGraphicsItem(GraphicsObject):
+    
     def __init__(self, chart):
-        QtGui.QGraphicsItem.__init__(self)
-        self.chart = chart
+        #QtGui.QGraphicsItem.__init__(self)
+        GraphicsObject.__init__(self)
+        self.chart = chart ## chart is an instance of Flowchart()
         self.updateTerminals()
         
     def updateTerminals(self):
@@ -547,6 +554,8 @@ class FlowchartGraphicsItem(QtGui.QGraphicsItem):
     
 
 class FlowchartCtrlWidget(QtGui.QWidget):
+    """The widget that contains the list of all the nodes in a flowchart and their controls, as well as buttons for loading/saving flowcharts."""
+    
     def __init__(self, chart):
         self.items = {}
         #self.loadDir = loadDir  ## where to look initially for chart files
@@ -562,6 +571,7 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         self.ui.ctrlList.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         
         self.chartWidget = FlowchartWidget(chart, self)
+        self.chartWidget.viewBox().autoRange()
         self.cwWin = QtGui.QMainWindow()
         self.cwWin.setWindowTitle('Flowchart')
         self.cwWin.resize(1000,800)
@@ -641,7 +651,10 @@ class FlowchartCtrlWidget(QtGui.QWidget):
         pass
     
     def scene(self):
-        return self.chartWidget.scene()
+        return self.chartWidget.scene() ## returns the GraphicsScene object
+    
+    def viewBox(self):
+        return self.chartWidget.viewBox()
 
     def nodeRenamed(self, node, oldName):
         self.items[node].setText(0, node.name())
@@ -737,10 +750,11 @@ class FlowchartWidget(dockarea.DockArea):
         self.selDock.addWidget(self.selInfo)
         self.addDock(self.selDock, 'bottom')
         
-
+        self._scene = self.view.scene()
+        self._viewBox = self.view.viewBox()
         #self._scene = QtGui.QGraphicsScene()
-        self._scene = FlowchartGraphicsView.FlowchartGraphicsScene()
-        self.view.setScene(self._scene)
+        #self._scene = FlowchartGraphicsView.FlowchartGraphicsScene()
+        #self.view.setScene(self._scene)
         
         self.buildMenu()
         #self.ui.addNodeBtn.mouseReleaseEvent = self.addNodeBtnReleased
@@ -748,7 +762,8 @@ class FlowchartWidget(dockarea.DockArea):
         self._scene.selectionChanged.connect(self.selectionChanged)
         self.view.sigHoverOver.connect(self.hoverOver)
         #self.view.sigClicked.connect(self.showViewMenu)
-        self._scene.sigContextMenuEvent.connect(self.showViewMenu)
+        #self._scene.sigContextMenuEvent.connect(self.showViewMenu)
+        
         
     def reloadLibrary(self):
         #QtCore.QObject.disconnect(self.nodeMenu, QtCore.SIGNAL('triggered(QAction*)'), self.nodeMenuTriggered)
@@ -780,7 +795,10 @@ class FlowchartWidget(dockarea.DockArea):
         self.nodeMenu.popup(ev.screenPos())
         
     def scene(self):
-        return self._scene
+        return self._scene ## the GraphicsScene item
+
+    def viewBox(self):
+        return self._viewBox ## the viewBox that items should be added to
 
     def nodeMenuTriggered(self, action):
         nodeType = action.nodeType

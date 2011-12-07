@@ -346,6 +346,7 @@ class ViewBox(GraphicsWidget):
                 self.translateBy(tr, viewCoords=True)
                 self.sigRangeChangedManually.emit(self.mouseEnabled)
         elif ev.button() & QtCore.Qt.RightButton:
+            print "vb.rightDrag"
             if self.aspectLocked is not False:
                 mask[0] = 0
             

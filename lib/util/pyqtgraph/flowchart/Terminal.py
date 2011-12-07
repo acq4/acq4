@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from pyqtgraph.Qt import QtCore, QtGui
 import weakref
+from pyqtgraph.graphicsItems.GraphicsObject import GraphicsObject
 #from PySide import QtCore, QtGui
 from eq import *
 
@@ -25,7 +26,7 @@ class Terminal:
         self._name = name
         self._renamable = renamable
         self._connections = {}
-        self._graphicsItem = TerminalGraphicsItem(self)
+        self._graphicsItem = TerminalGraphicsItem(self, parent=self._node().graphicsItem())
         self._bypass = bypass
         
         if multi:
@@ -178,7 +179,8 @@ class Terminal:
         
         if connectionItem is None:
             connectionItem = ConnectionItem(self.graphicsItem(), term.graphicsItem())
-            self.graphicsItem().scene().addItem(connectionItem)
+            #self.graphicsItem().scene().addItem(connectionItem)
+            self.graphicsItem().getViewBox().addItem(connectionItem)
         self._connections[term] = connectionItem
         term._connections[self] = connectionItem
         
@@ -268,10 +270,13 @@ class Terminal:
         return {'io': self._io, 'multi': self._multi, 'optional': self._optional}
 
 
-class TerminalGraphicsItem(QtGui.QGraphicsItem):
+#class TerminalGraphicsItem(QtGui.QGraphicsItem):
+class TerminalGraphicsItem(GraphicsObject):
+    
     def __init__(self, term, parent=None):
         self.term = term
-        QtGui.QGraphicsItem.__init__(self, parent)
+        #QtGui.QGraphicsItem.__init__(self, parent)
+        GraphicsObject.__init__(self, parent)
         self.box = QtGui.QGraphicsRectItem(0, 0, 10, 10, self)
         self.label = QtGui.QGraphicsTextItem(self.term.name(), self)
         self.label.scale(0.7, 0.7)
@@ -380,9 +385,12 @@ class TerminalGraphicsItem(QtGui.QGraphicsItem):
             item.updateLine()
 
 
-class ConnectionItem(QtGui.QGraphicsItem):
+#class ConnectionItem(QtGui.QGraphicsItem):
+class ConnectionItem(GraphicsObject):
+    
     def __init__(self, source, target=None):
-        QtGui.QGraphicsItem.__init__(self)
+        #QtGui.QGraphicsItem.__init__(self)
+        GraphicsObject.__init__(self)
         self.setFlags(
             self.ItemIsSelectable | 
             self.ItemIsFocusable
