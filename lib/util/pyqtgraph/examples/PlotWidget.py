@@ -68,10 +68,10 @@ curve = pw3.plot(np.random.normal(size=100)*1e0)
 curve.setPen('w')  ## white pen
 curve.setShadowPen(pg.mkPen((70,70,30), width=6, cosmetic=True))
 
-#lr = pg.LinearRegionItem([1e5, 3e5])
-#pw3.addItem(lr)
-line = pg.InfiniteLine(angle=45, movable=True)
-pw3.addItem(line)
+lr = pg.LinearRegionItem([1, 3], movable=True)
+pw3.addItem(lr)
+#line = pg.InfiniteLine(angle=45, movable=True)
+#pw3.addItem(line)
 
 ## Start Qt event loop unless running in interactive mode.
 if sys.flags.interactive != 1:

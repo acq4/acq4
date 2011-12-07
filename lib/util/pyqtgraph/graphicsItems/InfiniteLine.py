@@ -155,7 +155,7 @@ class InfiniteLine(UIGraphicsItem):
         br = self.boundingRect()
         p.setPen(self.currentPen)
         p.drawLine(Point(br.right(), 0), Point(br.left(), 0))
-        p.drawRect(self.boundingRect())
+        #p.drawRect(self.boundingRect())
         
         
     #def mousePressEvent(self, ev):
