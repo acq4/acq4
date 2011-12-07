@@ -13,7 +13,7 @@ class LinearRegionItem(UIGraphicsItem):
     sigRegionChangeFinished = QtCore.Signal(object)
     sigRegionChanged = QtCore.Signal(object)
     
-    def __init__(self, vals=[0,1], orientation="vertical", brush=None, movable=True, bounds=None):
+    def __init__(self, orientation="vertical", vals=[0,1], brush=None, movable=True, bounds=None):
         UIGraphicsItem.__init__(self)
         self.orientation = orientation
         #if hasattr(self, "ItemHasNoContents"):  

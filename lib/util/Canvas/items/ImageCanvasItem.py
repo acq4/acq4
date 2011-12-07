@@ -62,7 +62,7 @@ class ImageCanvasItem(CanvasItem):
         self.histogram = pg.PlotWidget()
         self.blockHistogram = False
         self.histogram.setMaximumHeight(100)
-        self.levelRgn = pg.LinearRegionItem(self.histogram)
+        self.levelRgn = pg.LinearRegionItem()
         self.histogram.addItem(self.levelRgn)
 
         self.timeSlider = QtGui.QSlider(QtCore.Qt.Horizontal)

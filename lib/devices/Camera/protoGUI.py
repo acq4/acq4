@@ -55,11 +55,11 @@ class CameraProtoGui(DAQGenericProtoGui):
         
         self.vLines = []
         if 'trigger' in self.plots:
-            l = InfiniteLine(self.plots['trigger'])
+            l = InfiniteLine()
             self.vLines.append(l)
             self.plots['trigger'].addItem(self.vLines[0])
         if 'exposure' in self.plots:
-            l = InfiniteLine(self.plots['exposure'])
+            l = InfiniteLine()
             self.vLines.append(l)
             self.plots['exposure'].addItem(self.vLines[1])
             
