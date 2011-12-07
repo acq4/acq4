@@ -283,23 +283,41 @@ class ROI(GraphicsObject):
     def cancelMove(self):
         self.isMoving = False
         self.setState(self.preMoveState)
-    
-    def pointPressEvent(self, pt, ev):
-        #print "press"
-        self.isMoving = True
-        self.preMoveState = self.getState()
+
+
+    def pointDragEvent(self, pt, ev):
+        if ev.isStart():
+            self.isMoving = True
+            self.preMoveState = self.getState()
+            
+            self.sigRegionChangeStarted.emit(self)
+        elif ev.isFinish():
+            self.isMoving = False
+            self.sigRegionChangeFinished.emit(self)
+            return
+            
+        #self.movePoint(pt, ev.scenePos(), ev.modifiers())
         
-        #self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
-        self.sigRegionChangeStarted.emit(self)
-        #self.pressPos = self.mapFromScene(ev.scenePos())
-        #self.pressHandlePos = self.handles[pt]['item'].pos()
+        
+    #def pointPressEvent(self, pt, ev):
+        ##print "press"
+        #self.isMoving = True
+        #self.preMoveState = self.getState()
+        
+        ##self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
+        #self.sigRegionChangeStarted.emit(self)
+        ##self.pressPos = self.mapFromScene(ev.scenePos())
+        ##self.pressHandlePos = self.handles[pt]['item'].pos()
     
-    def pointReleaseEvent(self, pt, ev):
-        #print "release"
-        self.isMoving = False
-        #self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
-        self.sigRegionChangeFinished.emit(self)
+    #def pointReleaseEvent(self, pt, ev):
+        ##print "release"
+        #self.isMoving = False
+        ##self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+        #self.sigRegionChangeFinished.emit(self)
     
+    #def pointMoveEvent(self, pt, ev):
+        #self.movePoint(pt, ev.scenePos(), ev.modifiers())
+        
     def stateCopy(self):
         sc = {}
         sc['pos'] = Point(self.state['pos'])
@@ -321,9 +339,6 @@ class ROI(GraphicsObject):
     def checkPointMove(self, pt, pos, modifiers):
         return True
     
-    def pointMoveEvent(self, pt, ev):
-        self.movePoint(pt, ev.scenePos(), ev.modifiers())
-        
         
     def movePoint(self, pt, pos, modifiers=QtCore.Qt.KeyboardModifier()):
         #print "movePoint() called."
@@ -918,46 +933,77 @@ class Handle(QtGui.QGraphicsItem):
     def boundingRect(self):
         return self.bounds
         
-    def mousePressEvent(self, ev):
-        # Bug: sometimes we get events not meant for us!
-        p = ev.pos()
-        if not self.isMoving and not self.path.contains(p):
-            ev.ignore()
-            return        
+    #def mousePressEvent(self, ev):
+        ## Bug: sometimes we get events not meant for us!
+        #p = ev.pos()
+        #if not self.isMoving and not self.path.contains(p):
+            #ev.ignore()
+            #return        
         
-        #print "handle press"
-        if ev.button() == QtCore.Qt.LeftButton:
-            self.isMoving = True
-            self.cursorOffset = self.scenePos() - ev.scenePos()
-            for r in self.roi:
-                r[0].pointPressEvent(r[1], ev)
-            #print "  accepted."
-            ev.accept()
-        elif ev.button() == QtCore.Qt.RightButton:
-            if self.isMoving:
-                self.isMoving = False  ## prevents any further motion
-                for r in self.roi:
-                    r[0].cancelMove()
-                ev.accept()
-            else:
-                ev.ignore()
-        else:
-            ev.ignore()
+        ##print "handle press"
+        #if ev.button() == QtCore.Qt.LeftButton:
+            #self.isMoving = True
+            #self.cursorOffset = self.scenePos() - ev.scenePos()
+            #for r in self.roi:
+                #r[0].pointPressEvent(r[1], ev)
+            ##print "  accepted."
+            #ev.accept()
+        #elif ev.button() == QtCore.Qt.RightButton:
+            #if self.isMoving:
+                #self.isMoving = False  ## prevents any further motion
+                #for r in self.roi:
+                    #r[0].cancelMove()
+                #ev.accept()
+            #else:
+                #ev.ignore()
+        #else:
+            #ev.ignore()
             
         
-    def mouseReleaseEvent(self, ev):
-        #print "release"
-        if ev.button() == QtCore.Qt.LeftButton:
-            self.isMoving = False
-            for r in self.roi:
-                r[0].pointReleaseEvent(r[1], ev)
+    #def mouseReleaseEvent(self, ev):
+        ##print "release"
+        #if ev.button() == QtCore.Qt.LeftButton:
+            #self.isMoving = False
+            #for r in self.roi:
+                #r[0].pointReleaseEvent(r[1], ev)
                 
-    def mouseMoveEvent(self, ev):
-        #print "handle mouseMove", ev.pos()
-        if self.isMoving and ev.buttons() == QtCore.Qt.LeftButton:
+    #def mouseMoveEvent(self, ev):
+        ##print "handle mouseMove", ev.pos()
+        #if self.isMoving and ev.buttons() == QtCore.Qt.LeftButton:
+            #pos = ev.scenePos() + self.cursorOffset
+            #self.movePoint(pos, ev.modifiers())
+
+    def mouseClickEvent(self, ev):
+        ## right-click cancels drag
+        if ev.button() == QtCore.Qt.RightButton and self.isMoving:
+            self.isMoving = False  ## prevents any further motion
+            for r in self.roi:
+                r[0].cancelMove()
+            ev.accept()
+        
+
+    def mouseDragEvent(self, ev):
+        if ev.button() != QtCore.Qt.LeftButton:
+            return
+        ev.accept()
+        
+        ## Inform ROIs that a drag is happening 
+        ##  note: the ROI is informed that the handle has moved using ROI.movePoint
+        ##  this is for other (more nefarious) purposes.
+        for r in self.roi:
+            r[0].pointDragEvent(r[1], ev)
+            
+        if ev.isFinish():
+            self.isMoving = False
+        elif ev.isStart():
+            self.isMoving = True
+            self.cursorOffset = self.scenePos() - ev.buttonDownScenePos()
+            
+        if self.isMoving:  ## note: isMoving may become False in mid-drag due to right-click.
             pos = ev.scenePos() + self.cursorOffset
             self.movePoint(pos, ev.modifiers())
         
+
     def movePoint(self, pos, modifiers=QtCore.Qt.KeyboardModifier()):
         for r in self.roi:
             if not r[0].checkPointMove(r[1], pos, modifiers):

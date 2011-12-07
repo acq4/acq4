@@ -240,7 +240,6 @@ class GraphicsScene(QtGui.QGraphicsScene):
             
         
     def sendClickEvent(self, ev):
-        print "click event: ", ev
         for item in self.itemsNearEvent(ev):
             if hasattr(item, 'mouseClickEvent'):
                 ev.currentItem = item
@@ -337,6 +336,7 @@ class MouseDragEvent:
             self._lastScreenPos = lastEvent.screenPos()
         self._buttons = moveEvent.buttons()
         self._button = pressEvent.button()
+        self._modifiers = moveEvent.modifiers()
         
     def accept(self):
         self.accepted = True
@@ -399,6 +399,8 @@ class MouseDragEvent:
         p = self.pos()
         return "<MouseDragEvent (%g,%g)->(%g,%g) buttons=%d start=%s finish=%s>" % (lp.x(), lp.y(), p.x(), p.y(), int(self.buttons()), str(self.isStart()), str(self.isFinish()))
         
+    def modifiers(self):
+        return self._modifiers
         
 class MouseClickEvent:
     def __init__(self, pressEvent, double=False):
@@ -409,6 +411,7 @@ class MouseClickEvent:
         self._screenPos = pressEvent.screenPos()
         self._button = pressEvent.button()
         self._buttons = pressEvent.buttons()
+        self._modifiers = pressEvent.modifiers()
         
         
     def accept(self):
@@ -441,4 +444,11 @@ class MouseClickEvent:
     
     def lastPos(self):
         return Point(self.currentItem.mapFromScene(self._lastScenePos))
+        
+    def modifiers(self):
+        return self._modifiers
+
+    def __repr__(self):
+        p = self.pos()
+        return "<MouseClickEvent (%g,%g) button=%d>" % (p.x(), p.y(), int(self.button()))
         

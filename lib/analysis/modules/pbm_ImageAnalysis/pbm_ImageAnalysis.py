@@ -62,7 +62,7 @@ class pbm_ImageAnalysis(AnalysisModule):
         self.ROI_Plot = self.getElement('ROI Plot', create=True)
         self.trialPlot = self.getElement('Trial Plot', create=True)
         self.physPlot = self.getElement('Phys Plot', create = True)
-        self.lr = pg.LinearRegionItem(self.ROI_Plot, 'vertical', [0, 1])
+        self.lr = pg.LinearRegionItem('vertical', [0, 1])
         self.ROI_Plot.addItem(self.lr)
         self.physPlot.setXLink(self.ROI_Plot) # not sure - this seems to be at the wrong level in the window manager
         self.imageView = self.getElement('Image', create=True)

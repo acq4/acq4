@@ -634,7 +634,7 @@ class PlotItem(GraphicsWidget):
         
     
     def plot(self, data=None, data2=None, x=None, y=None, clear=False, params=None, pen=None, 
-        symbol=None, decimate = None):
+        symbol=None, decimate = None, **kargs):
         """Add a new plot curve. Data may be specified a few ways:
         plot(yVals)   # x vals will be integers
         plot(xVals, yVals)
@@ -655,15 +655,15 @@ class PlotItem(GraphicsWidget):
         if params is None:
             params = {}
         if HAVE_METAARRAY and isinstance(data, MetaArray):
-            curve = self._plotMetaArray(data, x=x)
+            curve = self._plotMetaArray(data, x=x, **kargs)
         elif isinstance(data, np.ndarray):
-            curve = self._plotArray(data, x=x)
+            curve = self._plotArray(data, x=x, **kargs)
         elif isinstance(data, list):
             if x is not None:
                 x = np.array(x)
-            curve = self._plotArray(np.array(data), x=x)
+            curve = self._plotArray(np.array(data), x=x, **kargs)
         elif data is None:
-            curve = PlotCurveItem()
+            curve = PlotCurveItem(**kargs)
         else:
             raise Exception('Not sure how to plot object of type %s' % type(data))
             
@@ -1131,19 +1131,19 @@ class PlotItem(GraphicsWidget):
         else:
             s.hide()
 
-    def _plotArray(self, arr, x=None):
+    def _plotArray(self, arr, x=None, **kargs):
         if arr.ndim != 1:
             raise Exception("Array must be 1D to plot (shape is %s)" % arr.shape)
         if x is None:
             x = np.arange(arr.shape[0])
         if x.ndim != 1:
             raise Exception("X array must be 1D to plot (shape is %s)" % x.shape)
-        c = PlotCurveItem(arr, x=x)
+        c = PlotCurveItem(arr, x=x, **kargs)
         return c
             
         
         
-    def _plotMetaArray(self, arr, x=None, autoLabel=True):
+    def _plotMetaArray(self, arr, x=None, autoLabel=True, **kargs):
         inf = arr.infoCopy()
         if arr.ndim != 1:
             raise Exception('can only automatically plot 1 dimensional arrays.')
@@ -1156,7 +1156,7 @@ class PlotItem(GraphicsWidget):
                 xv = np.arange(arr.shape[0])
             else:
                 xv = x
-        c = PlotCurveItem()
+        c = PlotCurveItem(**kargs)
         c.setData(x=xv, y=arr.view(np.ndarray))
         
         if autoLabel:

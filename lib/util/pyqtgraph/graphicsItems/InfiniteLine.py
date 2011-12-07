@@ -15,7 +15,7 @@ class InfiniteLine(UIGraphicsItem):
     sigPositionChangeFinished = QtCore.Signal(object)
     sigPositionChanged = QtCore.Signal(object)
     
-    def __init__(self, pos=[0,0], angle=90, pen=None, movable=False, bounds=None):
+    def __init__(self, pos=None, angle=90, pen=None, movable=False, bounds=None):
         """
         Initialization options:
             pos      - Position of the line. This can be a QPointF or a single value for vertical/horizontal lines.
@@ -34,6 +34,8 @@ class InfiniteLine(UIGraphicsItem):
         self.setMovable(movable)
         self.p = [0, 0]
         self.setAngle(angle)
+        if pos is None:
+            pos = Point(0,0)
         self.setPos(pos)
 
         if pen is None:
@@ -155,7 +157,7 @@ class InfiniteLine(UIGraphicsItem):
         br = self.boundingRect()
         p.setPen(self.currentPen)
         p.drawLine(Point(br.right(), 0), Point(br.left(), 0))
-        p.drawRect(self.boundingRect())
+        #p.drawRect(self.boundingRect())
         
         
     #def mousePressEvent(self, ev):

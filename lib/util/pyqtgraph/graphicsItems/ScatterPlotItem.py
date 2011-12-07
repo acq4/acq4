@@ -220,29 +220,43 @@ class ScatterPlotItem(GraphicsObject):
         return pts
             
 
-    def mousePressEvent(self, ev):
-        QtGui.QGraphicsItem.mousePressEvent(self, ev)
+    #def mousePressEvent(self, ev):
+        #QtGui.QGraphicsItem.mousePressEvent(self, ev)
+        #if ev.button() == QtCore.Qt.LeftButton:
+            #pts = self.pointsAt(ev.pos())
+            #if len(pts) > 0:
+                #self.mouseMoved = False
+                #self.ptsClicked = pts
+                #ev.accept()
+            #else:
+                ##print "no spots"
+                #ev.ignore()
+        #else:
+            #ev.ignore()
+        
+    #def mouseMoveEvent(self, ev):
+        #QtGui.QGraphicsItem.mouseMoveEvent(self, ev)
+        #self.mouseMoved = True
+        #pass
+    
+    #def mouseReleaseEvent(self, ev):
+        #QtGui.QGraphicsItem.mouseReleaseEvent(self, ev)
+        #if not self.mouseMoved:
+            #self.sigClicked.emit(self, self.ptsClicked)
+
+    def mouseClickEvent(self, ev):
         if ev.button() == QtCore.Qt.LeftButton:
             pts = self.pointsAt(ev.pos())
             if len(pts) > 0:
-                self.mouseMoved = False
                 self.ptsClicked = pts
+                self.sigClicked.emit(self, self.ptsClicked)
                 ev.accept()
             else:
                 #print "no spots"
                 ev.ignore()
         else:
             ev.ignore()
-        
-    def mouseMoveEvent(self, ev):
-        QtGui.QGraphicsItem.mouseMoveEvent(self, ev)
-        self.mouseMoved = True
-        pass
-    
-    def mouseReleaseEvent(self, ev):
-        QtGui.QGraphicsItem.mouseReleaseEvent(self, ev)
-        if not self.mouseMoved:
-            self.sigClicked.emit(self, self.ptsClicked)
+
 
 
 class SpotItem(GraphicsObject):

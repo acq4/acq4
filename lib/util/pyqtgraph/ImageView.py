@@ -15,7 +15,6 @@ Widget used for displaying 2D or 3D data. Features:
 
 from ImageViewTemplate import *
 from graphicsItems import *
-from graphicsItems.ROI import ROI
 #from widgets import ROI
 from Qt import QtCore, QtGui
 import sys
@@ -84,7 +83,7 @@ class ImageView(QtGui.QWidget):
         self.normRoi.hide()
         #self.ui.roiPlot.hide()
         self.roiCurve = self.ui.roiPlot.plot()
-        self.timeLine = InfiniteLine(self.ui.roiPlot, 0, movable=True)
+        self.timeLine = InfiniteLine(0, movable=True)
         self.timeLine.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 200)))
         self.timeLine.setZValue(1)
         self.ui.roiPlot.addItem(self.timeLine)
@@ -103,7 +102,7 @@ class ImageView(QtGui.QWidget):
             #self.ui.roiPlot.addItem(l)
             #self.normLines.append(l)
             #l.hide()
-        self.normRgn = LinearRegionItem(self.ui.roiPlot, 'vertical')
+        self.normRgn = LinearRegionItem('vertical')
         self.normRgn.setZValue(0)
         self.ui.roiPlot.addItem(self.normRgn)
         self.normRgn.hide()
