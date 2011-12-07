@@ -64,7 +64,7 @@ for i in range(0, 5):
         pw2.plot(y=yd*(j+1), x=xd, params={'iter': i, 'val': j})
 
 ## Test large numbers
-curve = pw3.plot(np.random.normal(size=100)*1e6)
+curve = pw3.plot(np.random.normal(size=100)*1e0)
 curve.setPen('w')  ## white pen
 curve.setShadowPen(pg.mkPen((70,70,30), width=6, cosmetic=True))
 

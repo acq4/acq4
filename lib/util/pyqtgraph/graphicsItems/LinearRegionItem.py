@@ -20,7 +20,7 @@ class LinearRegionItem(UIGraphicsItem):
         #self.rect = QtGui.QGraphicsRectItem(self)
         #self.rect.setParentItem(self)
         self.bounds = QtCore.QRectF()
-        self.view = weakref.ref(view)
+        #self.view = weakref.ref(view)
         self.blockLineSignal = False
         
         if orientation[0] == 'h':
@@ -32,7 +32,7 @@ class LinearRegionItem(UIGraphicsItem):
                 InfiniteLine(view, QtCore.QPointF(vals[0], 0), 90, movable=movable, bounds=bounds), 
                 InfiniteLine(view, QtCore.QPointF(vals[1], 0), 90, movable=movable, bounds=bounds)]
         #QtCore.QObject.connect(self.view(), QtCore.SIGNAL('viewChanged'), self.updateBounds)
-        self.view().sigRangeChanged.connect(self.updateBounds)
+        #self.view().sigRangeChanged.connect(self.updateBounds)
         
         for l in self.lines:
             l.setParentItem(self)
@@ -60,7 +60,8 @@ class LinearRegionItem(UIGraphicsItem):
         
     def paint(self, p, *args):
         UIGraphicsItem.paint(self, p, *args)
-        
+        p.setBrush(self.brush)
+        p.drawRect(self.boundingRect())
             
     def lineMoved(self):
         if self.blockLineSignal:

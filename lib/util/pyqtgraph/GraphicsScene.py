@@ -138,9 +138,9 @@ class GraphicsScene(QtGui.QGraphicsScene):
         self.mouseGrabber = None
         self.dragItem = None
         self.lastDrag = None
-        self.searchRect = QtGui.QGraphicsRectItem()
-        self.searchRect.setPen(fn.mkPen(200,0,0))
-        self.addItem(self.searchRect)
+        #self.searchRect = QtGui.QGraphicsRectItem()
+        #self.searchRect.setPen(fn.mkPen(200,0,0))
+        #self.addItem(self.searchRect)
         
 
     def setClickRadius(self, r):
@@ -264,7 +264,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
             item = GraphicsScene._addressCache.get(addr, item)
         return item
 
-    def itemsNearEvent(self, event, selMode=QtCore.Qt.IntersectsItemBoundingRect, sortOrder=QtCore.Qt.DescendingOrder):
+    def itemsNearEvent(self, event, selMode=QtCore.Qt.IntersectsItemShape, sortOrder=QtCore.Qt.DescendingOrder):
         """
         Return an iterator that iterates first through the items that directly intersect point (in Z order)
         followed by any other items that are within the scene's click radius.
@@ -280,7 +280,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
         w = rect.width()
         h = rect.height()
         rgn = QtCore.QRectF(point.x()-w, point.y()-h, 2*w, 2*h)
-        self.searchRect.setRect(rgn)
+        #self.searchRect.setRect(rgn)
 
         #for item in self.items(point, selMode, sortOrder, tr):
             #seen.add(item)
