@@ -62,7 +62,7 @@ class GraphicsObject(QtGui.QGraphicsObject):
         
         
     def deviceTransform(self, viewportTransform=None):
-        """Return the transform that converts item coordinates to device coordinates.
+        """Return the transform that converts item coordinates to device coordinates (usually pixels).
         Extends deviceTransform to automatically determine the viewportTransform.
         """
         if viewportTransform is None:
@@ -122,6 +122,17 @@ class GraphicsObject(QtGui.QGraphicsObject):
         vt = vt.inverted()[0]
         orig = vt.map(QtCore.QPointF(0, 0))
         return vt.map(QtCore.QPointF(1, 0))-orig, vt.map(QtCore.QPointF(0, 1))-orig
+        
+    def pixelLength(self, direction):
+        """Return the length of one pixel in the direction indicated (in local coordinates)"""
+        dt = self.deviceTransform()
+        if dt is None:
+            return None
+        viewDir = Point(dt.map(direction) - dt.map(Point(0,0)))
+        norm = viewDir.norm()
+        dti = dt.inverted()[0]
+        return Point(dti.map(norm)-dti.map(Point(0,0))).length()
+        
 
     def pixelSize(self):
         v = self.pixelVectors()

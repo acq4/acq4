@@ -135,9 +135,19 @@ class InfiniteLine(UIGraphicsItem):
                 
     def boundingRect(self):
         br = UIGraphicsItem.boundingRect(self)
-        px = self.pixelWidth()
-        br.setBottom(-px*1)
-        br.setTop(px*1)
+        dt = self.deviceTransform()
+        if dt is None:
+            return QtCore.QRectF()
+        lineDir = Point(dt.map(Point(1, 0)) - dt.map(Point(0,0)))  ## direction of line in pixel-space
+        orthoDir = Point(lineDir[1], -lineDir[0])  ## orthogonal to line in pixel-space
+        norm = orthoDir.norm()  ## direction of one pixel orthogonal to line
+        
+        dti = dt.inverted()[0]
+        px = Point(dti.map(norm)-dti.map(Point(0,0)))  ## orthogonal pixel mapped back to item coords
+        px = px[1]  ## project to y-direction
+        
+        br.setBottom(-px*2)
+        br.setTop(px*2)
         return br.normalized()
     
     def paint(self, p, *args):
@@ -145,6 +155,7 @@ class InfiniteLine(UIGraphicsItem):
         br = self.boundingRect()
         p.setPen(self.currentPen)
         p.drawLine(Point(br.right(), 0), Point(br.left(), 0))
+        p.drawRect(self.boundingRect())
         
         
     #def mousePressEvent(self, ev):
