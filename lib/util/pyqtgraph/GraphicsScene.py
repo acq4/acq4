@@ -163,6 +163,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
     def mousePressEvent(self, ev):
         print 'scenePress'
         QtGui.QGraphicsScene.mousePressEvent(self, ev)
+        print "mouseGrabberItem: ", self.mouseGrabberItem()
         if self.mouseGrabberItem() is None:  ## nobody claimed press; we are free to generate drag/click events
             self.clickEvents.append(MouseClickEvent(ev))
         
@@ -189,6 +190,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
     def mouseReleaseEvent(self, ev):
         print 'sceneRelease'
         if self.mouseGrabberItem() is None:
+            print "sending click/drag event"
             if len(self.dragButtons) == 0:
                 cev = [e for e in self.clickEvents if int(e.button()) == int(ev.button())]
                 if self.sendClickEvent(cev[0]):

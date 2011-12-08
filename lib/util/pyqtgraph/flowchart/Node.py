@@ -419,15 +419,32 @@ class NodeGraphicsItem(GraphicsObject):
     #def mouseMoveEvent(self, ev):
         #QtGui.QGraphicsItem.mouseMoveEvent(self, ev)
 
-    def mousePressEvent(self, ev):
-        sel = self.isSelected()
-        ret = QtGui.QGraphicsItem.mousePressEvent(self, ev)
-        if not sel and self.isSelected():
-            #self.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 255)))
-            #self.emit(QtCore.SIGNAL('selected'))
-            self.update()
-        return ret
+    #def mousePressEvent(self, ev):
+        #sel = self.isSelected()
+        #ret = QtGui.QGraphicsItem.mousePressEvent(self, ev)
+        #if not sel and self.isSelected():
+            ##self.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 255)))
+            ##self.emit(QtCore.SIGNAL('selected'))
+            #self.update()
+        #return ret
 
+    def mouseClickEvent(self, ev):
+        print "Node.mouseClickEvent called."
+        if int(ev.button()) == int(QtCore.Qt.LeftButton):
+            print "    ev.button: left"
+            sel = self.isSelected()
+            ret = QtGui.QGraphicsItem.mousePressEvent(self, ev)
+            if not sel and self.isSelected():
+                #self.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 255)))
+                #self.emit(QtCore.SIGNAL('selected'))
+                self.update()
+            return ret
+        
+        elif int(ev.button()) == int(QtCore.Qt.RightButton):
+            print "    ev.button: right"
+            ev.accept()
+            self.menu.popup(ev.screenPos())
+            
     #def mouseReleaseEvent(self, ev):
         #ret = QtGui.QGraphicsItem.mouseReleaseEvent(self, ev)
         #return ret
@@ -446,9 +463,9 @@ class NodeGraphicsItem(GraphicsObject):
         return QtGui.QGraphicsItem.itemChange(self, change, val)
             
 
-    def contextMenuEvent(self, ev):
-        ev.accept()
-        self.menu.popup(ev.screenPos())
+    #def contextMenuEvent(self, ev):
+        #ev.accept()
+        #self.menu.popup(ev.screenPos())
         
     def buildMenu(self):
         self.menu = QtGui.QMenu()
@@ -467,19 +484,13 @@ class NodeGraphicsItem(GraphicsObject):
         act = str(action.text())
         if act == "Add input":
             self.node.addInput()
-            #for t in self.node.terminals:
-                #if t not in [str(a.text()) for a in self.terminalMenu.actions()]:
-                    #self.terminalMenu.addAction(t)
             self.updateActionMenu()
         elif act == "Add output":
             self.node.addOutput()
-            #for t in self.node.terminals:
-                #if t not in [str(a.text()) for a in self.terminalMenu.actions()]:
-                    #self.terminalMenu.addAction(t)
             self.updateActionMenu()
         elif act == "Remove node":
             self.node.close()
-        else:
+        else: ## only other option is to remove a terminal
             self.node.removeTerminal(act)
             self.terminalMenu.removeAction(action)
 
