@@ -182,10 +182,11 @@ class InfiniteLine(UIGraphicsItem):
 
     def mouseDragEvent(self, ev):
         if self.movable and ev.button() == QtCore.Qt.LeftButton:
+            if ev.isStart():
+                self.cursorOffset = self.pos() - self.mapToParent(ev.buttonDownPos())
             ev.accept()
-            delta = self.mapToParent(ev.pos()) - self.mapToParent(ev.lastPos())
             #pressDelta = self.mapToParent(ev.buttonDownPos()) - Point(self.p)
-            self.setPos(self.pos() + delta)
+            self.setPos(self.cursorOffset + self.mapToParent(ev.pos()))
             self.sigDragged.emit(self)
             if ev.isFinish():
                 self.sigPositionChangeFinished.emit(self)
