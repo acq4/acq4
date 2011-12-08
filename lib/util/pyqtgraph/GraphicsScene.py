@@ -61,7 +61,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
             cls._addressCache[sip.unwrapinstance(sip.cast(obj, QtGui.QGraphicsItem))] = obj
             
             
-    def __init__(self, clickRadius=3, moveDistance=5):
+    def __init__(self, clickRadius=2, moveDistance=5):
         QtGui.QGraphicsScene.__init__(self)
         self.setClickRadius(clickRadius)
         self.setMoveDistance(moveDistance)
@@ -96,6 +96,10 @@ class GraphicsScene(QtGui.QGraphicsScene):
         QtGui.QGraphicsScene.mousePressEvent(self, ev)
         if self.mouseGrabberItem() is None:  ## nobody claimed press; we are free to generate drag/click events
             self.clickEvents.append(MouseClickEvent(ev))
+        #else:
+            #addr = sip.unwrapinstance(sip.cast(self.mouseGrabberItem(), QtGui.QGraphicsItem))
+            #item = GraphicsScene._addressCache.get(addr, self.mouseGrabberItem())            
+            #print "click grabbed by:", item
         
     def mouseMoveEvent(self, ev):
         QtGui.QGraphicsScene.mouseMoveEvent(self, ev)
@@ -152,11 +156,13 @@ class GraphicsScene(QtGui.QGraphicsScene):
         ## items near the beginning of the drag
         event = MouseDragEvent(ev, self.clickEvents[0], self.lastDrag, start=init, finish=final)
         if init and self.dragItem is None:
-            for item in self.itemsNearEvent(ev):
+            for item in self.itemsNearEvent(event):
+                #print "check item:", item
                 if hasattr(item, 'mouseDragEvent'):
                     event.currentItem = item
                     item.mouseDragEvent(event)
                     if event.isAccepted():
+                        #print "   --> accepted"
                         self.dragItem = item
                         break
         elif self.dragItem is not None:
@@ -219,7 +225,10 @@ class GraphicsScene(QtGui.QGraphicsScene):
         rect = view.mapToScene(QtCore.QRect(0, 0, 2*r, 2*r)).boundingRect()
         
         seen = set()
-        point = event.scenePos()
+        if hasattr(event, 'buttonDownScenePos'):
+            point = event.buttonDownScenePos()
+        else:
+            point = event.scenePos()
         w = rect.width()
         h = rect.height()
         rgn = QtCore.QRectF(point.x()-w, point.y()-h, 2*w, 2*h)

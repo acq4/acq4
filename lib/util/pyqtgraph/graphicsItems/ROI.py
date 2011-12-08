@@ -78,7 +78,7 @@ class ROI(GraphicsObject):
         self.translateSnap = translateSnap
         self.rotateSnap = rotateSnap
         self.scaleSnap = scaleSnap
-        self.setFlag(self.ItemIsSelectable, True)
+        #self.setFlag(self.ItemIsSelectable, True)
     
     def getState(self):
         return self.state.copy()
@@ -238,34 +238,73 @@ class ROI(GraphicsObject):
             for h in self.handles:
                 h['item'].hide()
 
-    def mousePressEvent(self, ev):
-        ## Bug: sometimes we get events we shouldn't.
-        p = ev.pos()
-        if not self.isMoving and not self.shape().contains(p):
-            ev.ignore()
-            return        
-        if ev.button() == QtCore.Qt.LeftButton:
-            self.setSelected(True)
-            if self.translatable:
-                self.isMoving = True
-                self.preMoveState = self.getState()
-                self.cursorOffset = self.scenePos() - ev.scenePos()
-                #self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
-                self.sigRegionChangeStarted.emit(self)
-                ev.accept()
-            else:
-                ev.ignore()
-        elif ev.button() == QtCore.Qt.RightButton:
-            if self.isMoving:
-                ev.accept()
-                self.cancelMove()
-            else:
-                ev.ignore()
-        else:
-            ev.ignore()
+    #def mousePressEvent(self, ev):
+        ### Bug: sometimes we get events we shouldn't.
+        #p = ev.pos()
+        #if not self.isMoving and not self.shape().contains(p):
+            #ev.ignore()
+            #return        
+        #if ev.button() == QtCore.Qt.LeftButton:
+            #self.setSelected(True)
+            #if self.translatable:
+                #self.isMoving = True
+                #self.preMoveState = self.getState()
+                #self.cursorOffset = self.scenePos() - ev.scenePos()
+                ##self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
+                #self.sigRegionChangeStarted.emit(self)
+                #ev.accept()
+            #else:
+                #ev.ignore()
+        #elif ev.button() == QtCore.Qt.RightButton:
+            #if self.isMoving:
+                #ev.accept()
+                #self.cancelMove()
+            #else:
+                #ev.ignore()
+        #else:
+            #ev.ignore()
         
-    def mouseMoveEvent(self, ev):
-        #print "mouse move", ev.pos()
+    #def mouseMoveEvent(self, ev):
+        ##print "mouse move", ev.pos()
+        #if self.translatable and self.isMoving and ev.buttons() == QtCore.Qt.LeftButton:
+            #snap = True if (ev.modifiers() & QtCore.Qt.ControlModifier) else None
+            ##if self.translateSnap or (ev.modifiers() & QtCore.Qt.ControlModifier):
+                ##snap = Point(self.snapSize, self.snapSize)
+            #newPos = ev.scenePos() + self.cursorOffset
+            #newPos = self.mapSceneToParent(newPos)
+            #self.translate(newPos - self.pos(), snap=snap)
+    
+    #def mouseReleaseEvent(self, ev):
+        #if self.translatable:
+            #self.isMoving = False
+            ##self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+            #self.sigRegionChangeFinished.emit(self)
+
+    def mouseDragEvent(self, ev):
+        if ev.isStart():
+            p = ev.pos()
+            if not self.isMoving and not self.shape().contains(p):
+                ev.ignore()
+                return        
+            if ev.button() == QtCore.Qt.LeftButton:
+                self.setSelected(True)
+                if self.translatable:
+                    self.isMoving = True
+                    self.preMoveState = self.getState()
+                    self.cursorOffset = self.scenePos() - ev.scenePos()
+                    #self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
+                    self.sigRegionChangeStarted.emit(self)
+                    ev.accept()
+                else:
+                    ev.ignore()
+
+        elif ev.isFinish():
+            if self.translatable:
+                self.isMoving = False
+                #self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
+                self.sigRegionChangeFinished.emit(self)
+            return
+
         if self.translatable and self.isMoving and ev.buttons() == QtCore.Qt.LeftButton:
             snap = True if (ev.modifiers() & QtCore.Qt.ControlModifier) else None
             #if self.translateSnap or (ev.modifiers() & QtCore.Qt.ControlModifier):
@@ -273,13 +312,18 @@ class ROI(GraphicsObject):
             newPos = ev.scenePos() + self.cursorOffset
             newPos = self.mapSceneToParent(newPos)
             self.translate(newPos - self.pos(), snap=snap)
-    
-    def mouseReleaseEvent(self, ev):
-        if self.translatable:
-            self.isMoving = False
-            #self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
-            self.sigRegionChangeFinished.emit(self)
-    
+        
+        
+
+    def mouseClickEvent(self, ev):
+        if ev.button() == QtCore.Qt.RightButton:
+            if self.isMoving:
+                ev.accept()
+                self.cancelMove()
+            else:
+                ev.ignore()
+
+
     def cancelMove(self):
         self.isMoving = False
         self.setState(self.preMoveState)
