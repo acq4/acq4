@@ -49,10 +49,6 @@ class UIGraphicsItem(GraphicsObject):
     def updateView(self):
         ## called to see whether this item has a new view to connect to
         
-        ## if we already have a proper bounding rect, return immediately
-        #if self._boundingRect is not None:
-            #return
-        
         ## check for this item's current viewbox or view widget
         view = self.getViewBox()
         if view is None:
@@ -77,7 +73,6 @@ class UIGraphicsItem(GraphicsObject):
         self.setNewBounds()
         
     def boundingRect(self):
-        #self.updateView()
         if self._boundingRect is None:
             return QtCore.QRectF()
         return QtCore.QRectF(self._boundingRect)
@@ -89,12 +84,7 @@ class UIGraphicsItem(GraphicsObject):
         
     def setNewBounds(self):
         """Update the item's bounding rect to match the viewport"""
-        #self.updateView()
-        #if self._connectedView is None:  ## BEWARE: do not let _boundingRect get set before connecting to a view!
-        
-            #return
         self._boundingRect = self.viewRect()
-        #print "\nnew bounds:", self, self._boundingRect
         self.prepareGeometryChange()
         self.viewChangedEvent()
 

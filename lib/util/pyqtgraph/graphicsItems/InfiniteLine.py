@@ -31,6 +31,7 @@ class InfiniteLine(UIGraphicsItem):
             self.maxRange = [None, None]
         else:
             self.maxRange = bounds
+        self.moving = False
         self.setMovable(movable)
         self.p = [0, 0]
         self.setAngle(angle)
@@ -183,12 +184,28 @@ class InfiniteLine(UIGraphicsItem):
     def mouseDragEvent(self, ev):
         if self.movable and ev.button() == QtCore.Qt.LeftButton:
             if ev.isStart():
+                self.moving = True
                 self.cursorOffset = self.pos() - self.mapToParent(ev.buttonDownPos())
+                self.startPosition = self.pos()
             ev.accept()
+            
+            if not self.moving:
+                return
+                
             #pressDelta = self.mapToParent(ev.buttonDownPos()) - Point(self.p)
             self.setPos(self.cursorOffset + self.mapToParent(ev.pos()))
             self.sigDragged.emit(self)
             if ev.isFinish():
+                self.moving = False
                 self.sigPositionChangeFinished.emit(self)
-        else:
-            print ev
+        #else:
+            #print ev
+
+            
+    def mouseClickEvent(self, ev):
+        if self.moving and ev.button() == QtCore.Qt.RightButton:
+            ev.accept()
+            self.setPos(self.startPosition)
+            self.moving = False
+            self.sigDragged.emit(self)
+            self.sigPositionChangeFinished.emit(self)

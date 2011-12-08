@@ -22,6 +22,7 @@ class LinearRegionItem(UIGraphicsItem):
         self.orientation = orientation
         self.bounds = QtCore.QRectF()
         self.blockLineSignal = False
+        self.moving = False
         
         if orientation == LinearRegionItem.Horizontal:
             self.lines = [
@@ -147,17 +148,36 @@ class LinearRegionItem(UIGraphicsItem):
             return
         ev.accept()
         
-        delta = ev.pos() - ev.lastPos()
+        if ev.isStart():
+            bdp = ev.buttonDownPos()
+            self.cursorOffsets = [l.pos() - bdp for l in self.lines]
+            self.startPositions = [l.pos() for l in self.lines]
+            self.moving = True
+            
+        if not self.moving:
+            return
+            
+        #delta = ev.pos() - ev.lastPos()
         self.lines[0].blockSignals(True)  # only want to update once
-        for l in self.lines:
-            l.setPos(l.pos()+delta)
+        for i, l in enumerate(self.lines):
+            l.setPos(self.cursorOffsets[i] + ev.pos())
+            #l.setPos(l.pos()+delta)
             #l.mouseDragEvent(ev)
         self.lines[0].blockSignals(False)
         self.prepareGeometryChange()
         
         if ev.isFinish():
+            self.moving = False
             self.sigRegionChangeFinished.emit(self)
         else:
             self.sigRegionChanged.emit(self)
             
-        
+    def mouseClickEvent(self, ev):
+        if self.moving and ev.button() == QtCore.Qt.RightButton:
+            ev.accept()
+            for i, l in enumerate(self.lines):
+                l.setPos(self.startPositions[i])
+            self.moving = False
+            self.sigRegionChanged.emit(self)
+            self.sigRegionChangeFinished.emit(self)
+            
