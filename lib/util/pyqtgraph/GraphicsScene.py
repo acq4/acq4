@@ -2,6 +2,7 @@ from Qt import QtCore, QtGui, QtOpenGL, QtSvg
 import weakref
 from Point import Point
 import functions as fn
+import ptime
 
 try:
     import sip
@@ -44,23 +45,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
        ClickEvents may be delivered in this way even if no
        item originally claimed it could accept the click. DragEvents may only be delivered this way if it is the initial
        move in a drag.
-       
-       
-       
     """
-    
-    
-    
-    
-    
-    ## NOTE: use devicetransform when calling items() 
-    
-    
-    
-    
-    
-    
-    
     
     
     _addressCache = weakref.WeakValueDictionary()
@@ -119,6 +104,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
         
         else:
             if self.mouseGrabberItem() is None:
+                now = ptime.time()
                 init = False
                 ## keep track of which buttons are involved in dragging
                 for btn in [QtCore.Qt.LeftButton, QtCore.Qt.MidButton, QtCore.Qt.RightButton]:
@@ -127,7 +113,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
                     if int(btn) not in self.dragButtons:  ## see if we've dragged far enough yet
                         cev = [e for e in self.clickEvents if int(e.button()) == int(btn)][0]
                         dist = Point(ev.screenPos() - cev.screenPos())
-                        if dist.length() < self._moveDistance:
+                        if dist.length() < self._moveDistance and now - cev.time() < 0.5:
                             continue
                         init = init or (len(self.dragButtons) == 0)  ## If this is the first button to be dragged, then init=True
                         self.dragButtons.append(int(btn))
@@ -147,17 +133,6 @@ class GraphicsScene(QtGui.QGraphicsScene):
                     ev.accept()
                 self.clickEvents.remove(cev[0])
                 
-            #if len(self.dragButtons) == 0:
-                #cev = [e for e in self.clickEvents if int(e.button()) == int(ev.button())]
-                #if self.sendClickEvent(cev[0]):
-                    #ev.accept()
-            #else:
-                #if self.sendDragEvent(ev, final=True):
-                    #ev.accept()
-        #for i, ev2 in enumerate(self.pressEvents):
-            #if int(ev.button()) == int(ev2.button()):
-                #self.pressEvents.pop(i)
-                #break
         if int(ev.buttons()) == 0:
             self.dragItem = None
             self.dragButtons = []
@@ -193,9 +168,12 @@ class GraphicsScene(QtGui.QGraphicsScene):
             
         
     def sendClickEvent(self, ev):
-        if self.dragItem is not None:  ## if we are in mid-drag, click events may only go to the dragged item.
+        ## if we are in mid-drag, click events may only go to the dragged item.
+        if self.dragItem is not None and hasattr(self.dragItem, 'mouseClickEvent'):
             ev.currentItem = self.dragItem
             self.dragItem.mouseClickEvent(ev)
+            
+        ## otherwise, search near the cursor
         else:
             for item in self.itemsNearEvent(ev):
                 if hasattr(item, 'mouseClickEvent'):
@@ -365,6 +343,7 @@ class MouseClickEvent:
         self._button = pressEvent.button()
         self._buttons = pressEvent.buttons()
         self._modifiers = pressEvent.modifiers()
+        self._time = ptime.time()
         
         
     def accept(self):
@@ -404,4 +383,7 @@ class MouseClickEvent:
     def __repr__(self):
         p = self.pos()
         return "<MouseClickEvent (%g,%g) button=%d>" % (p.x(), p.y(), int(self.button()))
+        
+    def time(self):
+        return self._time
         
