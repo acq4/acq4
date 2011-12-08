@@ -137,6 +137,7 @@ class InfiniteLine(UIGraphicsItem):
                 
     def boundingRect(self):
         br = UIGraphicsItem.boundingRect(self)
+        #print "line bounds:", self, br
         dt = self.deviceTransform()
         if dt is None:
             return QtCore.QRectF()

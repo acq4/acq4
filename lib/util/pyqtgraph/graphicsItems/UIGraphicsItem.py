@@ -72,6 +72,7 @@ class UIGraphicsItem(GraphicsObject):
     def setNewBounds(self):
         """Update the item's bounding rect to match the viewport"""
         self._boundingRect = self.viewRect()
+        #print "\nnew bounds:", self, self._boundingRect
         self.prepareGeometryChange()
         self.viewChangedEvent()
 

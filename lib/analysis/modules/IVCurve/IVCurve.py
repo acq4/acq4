@@ -53,8 +53,8 @@ class IVCurve(AnalysisModule):
         self.IVScatterPlot_ss = pg.ScatterPlotItem(size=6, pen=pg.mkPen('w'), brush=pg.mkBrush(255, 255, 255, 255), identical=True)
         self.IVScatterPlot_pk = pg.ScatterPlotItem(size=6, pen=pg.mkPen('r'), brush=pg.mkBrush(255, 0, 0, 255), identical=True)
 
-        self.lrss = pg.LinearRegionItem('vertical', [0, 1])
-        self.lrpk = pg.LinearRegionItem('vertical', [0, 1])
+        self.lrss = pg.LinearRegionItem([0, 1])
+        self.lrpk = pg.LinearRegionItem([0, 1])
         self.data_plot.addItem(self.lrss)
         self.data_plot.addItem(self.lrpk)
         self.ctrl.IVCurve_ssTStart.setSuffix(' ms')

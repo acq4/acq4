@@ -74,8 +74,8 @@ curve.sigClicked.connect(clicked)
 
 lr = pg.LinearRegionItem([1, 3], movable=True)
 pw3.addItem(lr)
-#line = pg.InfiniteLine(angle=45, movable=True)
-#pw3.addItem(line)
+line = pg.InfiniteLine(angle=90, movable=True)
+pw3.addItem(line)
 
 ## Start Qt event loop unless running in interactive mode.
 if sys.flags.interactive != 1:

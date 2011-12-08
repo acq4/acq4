@@ -45,7 +45,7 @@ class ImageAnalysis(AnalysisModule):
         #self.traces = None
         self.plot = self.getElement('Time Plot', create=True)
         self.plot2 = self.getElement('Trial Plot', create=True)
-        self.lr = pg.LinearRegionItem('vertical', [0, 1])
+        self.lr = pg.LinearRegionItem([0, 1])
         self.plot.addItem(self.lr)
         
         self.view = self.getElement('Image', create=True)
