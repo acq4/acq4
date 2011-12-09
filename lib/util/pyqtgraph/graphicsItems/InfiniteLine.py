@@ -1,6 +1,7 @@
 from pyqtgraph.Qt import QtGui, QtCore
 from pyqtgraph.Point import Point
 from UIGraphicsItem import UIGraphicsItem
+import pyqtgraph.functions as fn
 import numpy as np
 import weakref
 
@@ -40,7 +41,7 @@ class InfiniteLine(UIGraphicsItem):
         self.setPos(pos)
 
         if pen is None:
-            pen = QtGui.QPen(QtGui.QColor(200, 200, 100))
+            pen = (200, 200, 100)
         self.setPen(pen)
         self.currentPen = self.pen
         #self.setFlag(self.ItemSendsScenePositionChanges)
@@ -53,18 +54,8 @@ class InfiniteLine(UIGraphicsItem):
         self.maxRange = bounds
         self.setValue(self.value())
         
-    def hoverEnterEvent(self, ev):
-        self.currentPen = QtGui.QPen(QtGui.QColor(255, 0,0))
-        self.update()
-        ev.ignore()
-
-    def hoverLeaveEvent(self, ev):
-        self.currentPen = self.pen
-        self.update()
-        ev.ignore()
-        
     def setPen(self, pen):
-        self.pen = pen
+        self.pen = fn.mkPen(pen)
         self.currentPen = self.pen
         self.update()
         
@@ -209,3 +200,37 @@ class InfiniteLine(UIGraphicsItem):
             self.moving = False
             self.sigDragged.emit(self)
             self.sigPositionChangeFinished.emit(self)
+
+    def hoverEvent(self, ev):
+        if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
+            self.currentPen = fn.mkPen(255, 0,0)
+        else:
+            self.currentPen = self.pen
+        self.update()
+        
+    #def hoverEnterEvent(self, ev):
+        #print "line hover enter"
+        #ev.ignore()
+        #self.updateHoverPen()
+
+    #def hoverMoveEvent(self, ev):
+        #print "line hover move"
+        #ev.ignore()
+        #self.updateHoverPen()
+
+    #def hoverLeaveEvent(self, ev):
+        #print "line hover leave"
+        #ev.ignore()
+        #self.updateHoverPen(False)
+        
+    #def updateHoverPen(self, hover=None):
+        #if hover is None:
+            #scene = self.scene()
+            #hover = scene.claimEvent(self, QtCore.Qt.LeftButton, scene.Drag)
+        
+        #if hover:
+            #self.currentPen = fn.mkPen(255, 0,0)
+        #else:
+            #self.currentPen = self.pen
+        #self.update()
+
