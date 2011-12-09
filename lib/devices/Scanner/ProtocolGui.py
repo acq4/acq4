@@ -4,7 +4,7 @@ from lib.devices.Device import ProtocolGui
 from PyQt4 import QtCore, QtGui
 from lib.Manager import getManager, logMsg, logExc
 from pyqtgraph.WidgetGroup import WidgetGroup
-import pyqtgraph.graphicsItems.ROI as widgets
+import pyqtgraph.graphicsItems as graphicsItems
 import random
 import numpy as np
 from debug import Profiler
@@ -351,7 +351,7 @@ class ScannerProtoGui(ProtocolGui):
         if pos is None:
             pos = [0,0]
             autoPos = True
-        pt = widgets.SpiralROI(pos)
+        pt = graphicsItems.SpiralROI(pos)
         self.addItem(pt, name,  autoPos,  autoName)
         return pt
 
@@ -587,7 +587,7 @@ class ScannerProtoGui(ProtocolGui):
             info = state
         elif isinstance(item, TargetOcclusion):
             info = {'type':'occlusion', 'pos':item.pos(), 'points': item.listPoints()}
-        elif isinstance(item, widgets.SpiralROI):
+        elif isinstance(item, graphicsItems.SpiralROI):
             info = {'type': 'spiral', 'pos': item.pos()}
         
         self.dev.updateTarget(name, info)
@@ -601,7 +601,7 @@ class ScannerProtoGui(ProtocolGui):
                 occArea |= i.mapToScene(i.shape())
             
         for i in items:
-            if isinstance(i, TargetOcclusion) or isinstance(i, TargetProgram) or isinstance(i, widgets.SpiralROI):
+            if isinstance(i, TargetOcclusion) or isinstance(i, TargetProgram) or isinstance(i, graphicsItems.SpiralROI):
                 continue
             pts = i.listPoints()
             #for x in self.occlusions.keys():  ##can we just join the occlusion areas together?
@@ -772,14 +772,14 @@ class ScannerProtoGui(ProtocolGui):
                 pass
         #print "  ..done."
     
-class TargetPoint(widgets.EllipseROI):
+class TargetPoint(graphicsItems.EllipseROI):
     
     sigPointsChanged = QtCore.Signal(object)
     
     def __init__(self, pos, radius, **args):
         if 'host' in args:
             self.host = args.pop('host')
-        widgets.ROI.__init__(self, pos, [radius] * 2, **args)
+        graphicsItems.ROI.__init__(self, pos, [radius] * 2, **args)
         self.aspectLocked = True
         self.overPen = None
         self.underPen = self.pen
@@ -824,16 +824,16 @@ class TargetPoint(widgets.EllipseROI):
         
     def setPen(self, pen):
         self.underPen = pen
-        widgets.EllipseROI.setPen(self, pen)
+        graphicsItems.EllipseROI.setPen(self, pen)
     
     def setTargetPen(self, index, pen):
         self.overPen = pen
         if pen is None:
             pen = self.underPen
-        widgets.EllipseROI.setPen(self, pen)
+        graphicsItems.EllipseROI.setPen(self, pen)
         
     def stateCopy(self):
-        sc = widgets.ROI.stateCopy(self)
+        sc = graphicsItems.ROI.stateCopy(self)
         #sc['displaySize'] = self.displaySize
         return sc
     
@@ -841,7 +841,7 @@ class TargetPoint(widgets.EllipseROI):
         pass
         
 
-class TargetGrid(widgets.ROI):
+class TargetGrid(graphicsItems.ROI):
     
     sigPointsChanged = QtCore.Signal(object)
     
@@ -857,7 +857,7 @@ class TargetGrid(widgets.ROI):
         self.gridLayoutCombo.currentIndexChanged.connect(self.regeneratePoints)
         self.treeItem = None ## will become a QTreeWidgetItem when ScannerProtoGui runs addItem()
         
-        widgets.ROI.__init__(self, pos=pos, size=size, angle=angle)
+        graphicsItems.ROI.__init__(self, pos=pos, size=size, angle=angle)
         self.addScaleHandle([0, 0], [1, 1])
         self.addScaleHandle([1, 1], [0, 0])
         self.addRotateHandle([0, 1], [0.5, 0.5])
@@ -1052,7 +1052,7 @@ class TargetGrid(widgets.ROI):
 
 
     def paint(self, p, opt, widget):
-        #widgets.ROI.paint(self, p, opt, widget)
+        #graphicsItems.ROI.paint(self, p, opt, widget)
         ##draw rectangle
         p.save()
         r = QtCore.QRectF(0,0, self.state['size'][0], self.state['size'][1])
@@ -1079,8 +1079,10 @@ class TargetGrid(widgets.ROI):
             p.drawEllipse(QtCore.QPointF(pt[0]/self.pointSize, pt[1]/self.pointSize), radius/self.pointSize, radius/self.pointSize)
             
     def stateCopy(self):
-        sc = widgets.ROI.stateCopy(self)
+        sc = graphicsItems.ROI.stateCopy(self)
         sc['gridSpacing'] = self.gridSpacing
+        
+
         sc['gridLayout'] = str(self.gridLayoutCombo.currentText())
         if self.treeItem is not None:
             if self.treeItem.parent() is None:
@@ -1090,13 +1092,13 @@ class TargetGrid(widgets.ROI):
         return sc
         #sc['displaySize'] = self.displaySize
         
-class TargetOcclusion(widgets.PolygonROI):
+class TargetOcclusion(graphicsItems.PolygonROI):
     
     
     sigPointsChanged = QtCore.Signal(object)
     
     def __init__(self, points, pos=None):
-        widgets.PolygonROI.__init__(self, points, pos)
+        graphicsItems.PolygonROI.__init__(self, points, pos)
         self.setZValue(10000000)
         
     def updateInit(self, host):

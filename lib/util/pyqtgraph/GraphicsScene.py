@@ -135,6 +135,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
                         prevItems.remove(item)
                         event.enter = False
                     item.hoverEvent(event)
+            #print "  --> accepted drags:", event.dragItems().items()
                     
             ## Anything left in prevItems needs an Exit event
             event.enter = False
@@ -206,10 +207,12 @@ class GraphicsScene(QtGui.QGraphicsScene):
         if init and self.dragItem is None:
             acceptedItem = self.lastHoverEvent.dragItems().get(event.button(), None)
             if acceptedItem is not None:
+                #print "Drag -> pre-selected item:", acceptedItem
                 self.dragItem = acceptedItem
                 event.currentItem = self.dragItem
                 self.dragItem.mouseDragEvent(event)
             else:
+                #print "drag -> new item"
                 for item in self.itemsNearEvent(event):
                     #print "check item:", item
                     if hasattr(item, 'mouseDragEvent'):
@@ -380,6 +383,12 @@ class GraphicsScene(QtGui.QGraphicsScene):
             
         return menu
 
+    @classmethod
+    def translateGraphicsItem(cls, item):
+        if HAVE_SIP and isinstance(item, sip.wrapper):
+            addr = sip.unwrapinstance(sip.cast(item, QtGui.QGraphicsItem))
+            item = GraphicsScene._addressCache.get(addr, item)
+        return item
 
 
 

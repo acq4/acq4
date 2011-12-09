@@ -23,6 +23,7 @@ from pyqtgraph.Transform import Transform
 from math import cos, sin
 import pyqtgraph.functions as fn
 from GraphicsObject import GraphicsObject
+from UIGraphicsItem import UIGraphicsItem
 
 def rectStr(r):
     return "[%f, %f] + [%f, %f]" % (r.x(), r.y(), r.width(), r.height())
@@ -291,9 +292,9 @@ class ROI(GraphicsObject):
     def mouseDragEvent(self, ev):
         if ev.isStart():
             p = ev.pos()
-            if not self.isMoving and not self.shape().contains(p):
-                ev.ignore()
-                return        
+            #if not self.isMoving and not self.shape().contains(p):
+                #ev.ignore()
+                #return        
             if ev.button() == QtCore.Qt.LeftButton:
                 self.setSelected(True)
                 if self.translatable:
@@ -383,6 +384,7 @@ class ROI(GraphicsObject):
             #print "  try", h
             if h['item'] in self.childItems():
                 p = h['pos']
+                #print h['pos'] * self.state['size']
                 h['item'].setPos(h['pos'] * self.state['size'])
             #else:
                 #print "    Not child!", self.childItems()
@@ -951,7 +953,167 @@ class ROI(GraphicsObject):
         self.setState(st)
 
 
-class Handle(QtGui.QGraphicsItem):
+#class Handle(QtGui.QGraphicsItem):
+    
+    #types = {   ## defines number of sides, start angle for each handle type
+        #'t': (4, np.pi/4),
+        #'f': (4, np.pi/4), 
+        #'s': (4, 0),
+        #'r': (12, 0),
+        #'sr': (12, 0),
+        #'rf': (12, 0),
+    #}
+    
+    #def __init__(self, radius, typ=None, pen=(200, 200, 220), parent=None):
+        ##print "   create item with parent", parent
+        #self.bounds = QtCore.QRectF(-1e-10, -1e-10, 2e-10, 2e-10)
+        #QtGui.QGraphicsItem.__init__(self, parent)
+        #self.setFlags(self.flags()  | self.ItemIgnoresTransformations | self.ItemSendsScenePositionChanges)
+        #self.setZValue(11)
+        #self.roi = []
+        #self.radius = radius
+        #self.typ = typ
+        #self.pen = fn.mkPen(pen)
+        #self.currentPen = self.pen
+        #self.pen.setWidth(0)
+        #self.pen.setCosmetic(True)
+        #self.isMoving = False
+        #self.sides, self.startAng = self.types[typ]
+        #self.buildPath()
+        #self.updateShape()
+            
+    #def connectROI(self, roi, i):
+        #self.roi.append((roi, i))
+    
+    ##def boundingRect(self):
+        ##return self.bounds
+        
+
+    #def hoverEvent(self, ev):
+        #if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
+            #self.currentPen = fn.mkPen(255, 0,0)
+        #else:
+            #self.currentPen = self.pen
+        #self.update()
+            
+
+
+    #def mouseClickEvent(self, ev):
+        ### right-click cancels drag
+        #if ev.button() == QtCore.Qt.RightButton and self.isMoving:
+            #self.isMoving = False  ## prevents any further motion
+            #for r in self.roi:
+                #r[0].cancelMove()
+            #ev.accept()
+        
+
+    #def mouseDragEvent(self, ev):
+        #if ev.button() != QtCore.Qt.LeftButton:
+            #return
+        #ev.accept()
+        
+        ### Inform ROIs that a drag is happening 
+        ###  note: the ROI is informed that the handle has moved using ROI.movePoint
+        ###  this is for other (more nefarious) purposes.
+        #for r in self.roi:
+            #r[0].pointDragEvent(r[1], ev)
+            
+        #if ev.isFinish():
+            #self.isMoving = False
+        #elif ev.isStart():
+            #self.isMoving = True
+            #self.cursorOffset = self.scenePos() - ev.buttonDownScenePos()
+            
+        #if self.isMoving:  ## note: isMoving may become False in mid-drag due to right-click.
+            #pos = ev.scenePos() + self.cursorOffset
+            #self.movePoint(pos, ev.modifiers())
+
+
+
+    #def movePoint(self, pos, modifiers=QtCore.Qt.KeyboardModifier()):
+        #for r in self.roi:
+            #if not r[0].checkPointMove(r[1], pos, modifiers):
+                #return
+        ##print "point moved; inform %d ROIs" % len(self.roi)
+        ## A handle can be used by multiple ROIs; tell each to update its handle position
+        #for r in self.roi:
+            #r[0].movePoint(r[1], pos, modifiers)
+        
+    #def buildPath(self):
+        #size = self.radius
+        #self.path = QtGui.QPainterPath()
+        #ang = self.startAng
+        #dt = 2*np.pi / self.sides
+        #for i in range(0, self.sides+1):
+            #x = size * cos(ang)
+            #y = size * sin(ang)
+            #ang += dt
+            #if i == 0:
+                #self.path.moveTo(x, y)
+            #else:
+                #self.path.lineTo(x, y)            
+            
+    #def paint(self, p, opt, widget):
+        #### determine rotation of transform
+        ##m = self.sceneTransform()
+        ###mi = m.inverted()[0]
+        ##v = m.map(QtCore.QPointF(1, 0)) - m.map(QtCore.QPointF(0, 0))
+        ##va = np.arctan2(v.y(), v.x())
+        
+        #### Determine length of unit vector in painter's coords
+        ###size = mi.map(Point(self.radius, self.radius)) - mi.map(Point(0, 0))
+        ###size = (size.x()*size.x() + size.y() * size.y()) ** 0.5
+        ##size = self.radius
+        
+        ##bounds = QtCore.QRectF(-size, -size, size*2, size*2)
+        ##if bounds != self.bounds:
+            ##self.bounds = bounds
+            ##self.prepareGeometryChange()
+        #p.setRenderHints(p.Antialiasing, True)
+        #p.setPen(self.currentPen)
+        
+        ##p.rotate(va * 180. / 3.1415926)
+        ##p.drawPath(self.path)        
+        #p.drawPath(self.shape())
+        
+        ##ang = self.startAng + va
+        ##dt = 2*np.pi / self.sides
+        ##for i in range(0, self.sides):
+            ##x1 = size * cos(ang)
+            ##y1 = size * sin(ang)
+            ##x2 = size * cos(ang+dt)
+            ##y2 = size * sin(ang+dt)
+            ##ang += dt
+            ##p.drawLine(Point(x1, y1), Point(x2, y2))
+            
+    #def shape(self):
+        #return self._shape
+    
+    #def boundingRect(self):
+        #return self.shape().boundingRect()
+            
+    #def updateShape(self):
+        ### determine rotation of transform
+        #m = self.sceneTransform()
+        ##mi = m.inverted()[0]
+        #v = m.map(QtCore.QPointF(1, 0)) - m.map(QtCore.QPointF(0, 0))
+        #va = np.arctan2(v.y(), v.x())
+        
+        #tr = QtGui.QTransform()
+        #tr.rotate(va * 180. / 3.1415926)
+        ##tr.scale(self.radius, self.radius)
+        #self._shape = tr.map(self.path)
+        #self.prepareGeometryChange()
+        
+        
+        
+    #def itemChange(self, change, value):
+        #ret = QtGui.QGraphicsItem.itemChange(self, change, value)
+        #if change == self.ItemScenePositionHasChanged:
+            #self.updateShape()
+        #return ret
+
+class Handle(UIGraphicsItem):
     
     types = {   ## defines number of sides, start angle for each handle type
         't': (4, np.pi/4),
@@ -965,13 +1127,12 @@ class Handle(QtGui.QGraphicsItem):
     def __init__(self, radius, typ=None, pen=(200, 200, 220), parent=None):
         #print "   create item with parent", parent
         self.bounds = QtCore.QRectF(-1e-10, -1e-10, 2e-10, 2e-10)
-        QtGui.QGraphicsItem.__init__(self, parent)
-        self.setFlag(self.ItemIgnoresTransformations)
+        UIGraphicsItem.__init__(self, parent=parent)
+        #self.setFlags(self.ItemIgnoresTransformations | self.ItemSendsScenePositionChanges)
         self.setZValue(11)
         self.roi = []
         self.radius = radius
         self.typ = typ
-        self.prepareGeometryChange()
         self.pen = fn.mkPen(pen)
         self.currentPen = self.pen
         self.pen.setWidth(0)
@@ -979,52 +1140,13 @@ class Handle(QtGui.QGraphicsItem):
         self.isMoving = False
         self.sides, self.startAng = self.types[typ]
         self.buildPath()
+        self.updateShape()
             
     def connectROI(self, roi, i):
         self.roi.append((roi, i))
     
-    def boundingRect(self):
-        return self.bounds
-        
-    #def mousePressEvent(self, ev):
-        ## Bug: sometimes we get events not meant for us!
-        #p = ev.pos()
-        #if not self.isMoving and not self.path.contains(p):
-            #ev.ignore()
-            #return        
-        
-        ##print "handle press"
-        #if ev.button() == QtCore.Qt.LeftButton:
-            #self.isMoving = True
-            #self.cursorOffset = self.scenePos() - ev.scenePos()
-            #for r in self.roi:
-                #r[0].pointPressEvent(r[1], ev)
-            ##print "  accepted."
-            #ev.accept()
-        #elif ev.button() == QtCore.Qt.RightButton:
-            #if self.isMoving:
-                #self.isMoving = False  ## prevents any further motion
-                #for r in self.roi:
-                    #r[0].cancelMove()
-                #ev.accept()
-            #else:
-                #ev.ignore()
-        #else:
-            #ev.ignore()
-            
-        
-    #def mouseReleaseEvent(self, ev):
-        ##print "release"
-        #if ev.button() == QtCore.Qt.LeftButton:
-            #self.isMoving = False
-            #for r in self.roi:
-                #r[0].pointReleaseEvent(r[1], ev)
-                
-    #def mouseMoveEvent(self, ev):
-        ##print "handle mouseMove", ev.pos()
-        #if self.isMoving and ev.buttons() == QtCore.Qt.LeftButton:
-            #pos = ev.scenePos() + self.cursorOffset
-            #self.movePoint(pos, ev.modifiers())
+    #def boundingRect(self):
+        #return self.bounds
 
     def hoverEvent(self, ev):
         if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
@@ -1091,27 +1213,27 @@ class Handle(QtGui.QGraphicsItem):
                 self.path.lineTo(x, y)            
             
     def paint(self, p, opt, widget):
-        ## determine rotation of transform
-        m = self.sceneTransform()
-        #mi = m.inverted()[0]
-        v = m.map(QtCore.QPointF(1, 0)) - m.map(QtCore.QPointF(0, 0))
-        va = np.arctan2(v.y(), v.x())
+        ### determine rotation of transform
+        #m = self.sceneTransform()
+        ##mi = m.inverted()[0]
+        #v = m.map(QtCore.QPointF(1, 0)) - m.map(QtCore.QPointF(0, 0))
+        #va = np.arctan2(v.y(), v.x())
         
-        ## Determine length of unit vector in painter's coords
-        #size = mi.map(Point(self.radius, self.radius)) - mi.map(Point(0, 0))
-        #size = (size.x()*size.x() + size.y() * size.y()) ** 0.5
-        size = self.radius
+        ### Determine length of unit vector in painter's coords
+        ##size = mi.map(Point(self.radius, self.radius)) - mi.map(Point(0, 0))
+        ##size = (size.x()*size.x() + size.y() * size.y()) ** 0.5
+        #size = self.radius
         
-        bounds = QtCore.QRectF(-size, -size, size*2, size*2)
-        if bounds != self.bounds:
-            self.bounds = bounds
-            self.prepareGeometryChange()
+        #bounds = QtCore.QRectF(-size, -size, size*2, size*2)
+        #if bounds != self.bounds:
+            #self.bounds = bounds
+            #self.prepareGeometryChange()
         p.setRenderHints(p.Antialiasing, True)
         p.setPen(self.currentPen)
         
-        p.rotate(va * 180. / 3.1415926)
-        p.drawPath(self.path)        
-        
+        #p.rotate(va * 180. / 3.1415926)
+        #p.drawPath(self.path)        
+        p.drawPath(self.shape())
         #ang = self.startAng + va
         #dt = 2*np.pi / self.sides
         #for i in range(0, self.sides):
@@ -1121,9 +1243,40 @@ class Handle(QtGui.QGraphicsItem):
             #y2 = size * sin(ang+dt)
             #ang += dt
             #p.drawLine(Point(x1, y1), Point(x2, y2))
+            
+    def shape(self):
+        return self._shape
+    
+    def boundingRect(self):
+        return self.shape().boundingRect()
+            
+    def updateShape(self):
+        ## determine rotation of transform
+        m = self.sceneTransform()
+        #mi = m.inverted()[0]
+        v = m.map(QtCore.QPointF(1, 0)) - m.map(QtCore.QPointF(0, 0))
+        va = np.arctan2(v.y(), v.x())
         
-
-
+        dt = self.deviceTransform()
+        if dt is None:
+            self._shape = self.path
+            return
+        dti = dt.inverted()[0]
+        devPos = dt.map(QtCore.QPointF(0,0))
+        tr = QtGui.QTransform()
+        #tr.rotate(va * 180. / 3.1415926)
+        tr.translate(devPos.x(), devPos.y())
+        
+        self._shape = dti.map(tr.map(self.path))
+        self.prepareGeometryChange()
+        
+        
+    def viewChangedEvent(self):
+        self.updateShape()
+        
+    #def itemChange(self, change, value):
+        #if change == self.ItemScenePositionHasChanged:
+            #self.updateShape()
 
 
 class TestROI(ROI):
