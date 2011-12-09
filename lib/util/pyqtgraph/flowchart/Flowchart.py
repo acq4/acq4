@@ -728,7 +728,7 @@ class FlowchartWidget(dockarea.DockArea):
         #self.ui.setupUi(self)
         
         ## build user interface (it was easier to do it here than via developer)
-        self.view = FlowchartGraphicsView.FlowchartGraphicsView()
+        self.view = FlowchartGraphicsView.FlowchartGraphicsView(self)
         self.viewDock = dockarea.Dock('view', size=(1000,600))
         self.viewDock.addWidget(self.view)
         self.viewDock.hideTitleBar()
@@ -790,6 +790,7 @@ class FlowchartWidget(dockarea.DockArea):
                 act.nodeType = name
             self.subMenus.append(menu)
         self.nodeMenu.triggered.connect(self.nodeMenuTriggered)
+        return self.nodeMenu
     
     def showViewMenu(self, ev):
         #QtGui.QPushButton.mouseReleaseEvent(self.ui.addNodeBtn, ev)

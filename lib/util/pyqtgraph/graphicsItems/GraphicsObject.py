@@ -182,3 +182,6 @@ class GraphicsObject(QtGui.QGraphicsObject):
 
     def pos(self):
         return Point(QtGui.QGraphicsObject.pos(self))
+    
+    def getMenu(self):
+        pass

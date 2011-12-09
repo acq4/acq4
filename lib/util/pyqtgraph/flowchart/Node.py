@@ -351,6 +351,7 @@ class NodeGraphicsItem(GraphicsObject):
         self.nameItem.focusOutEvent = self.labelFocusOut
         self.nameItem.keyPressEvent = self.labelKeyPress
         
+        self.menu = None
         self.buildMenu()
         
         self.node.sigTerminalRenamed.connect(self.updateActionMenu)
@@ -453,8 +454,9 @@ class NodeGraphicsItem(GraphicsObject):
         elif int(ev.button()) == int(QtCore.Qt.RightButton):
             print "    ev.button: right"
             ev.accept()
-            pos = ev.screenPos()
-            self.menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+            #pos = ev.screenPos()
+            self.raiseContextMenu(ev)
+            #self.menu.popup(QtCore.QPoint(pos.x(), pos.y()))
             
     def mouseDragEvent(self, ev):
         print "Node.mouseDrag"
@@ -485,17 +487,29 @@ class NodeGraphicsItem(GraphicsObject):
         #ev.accept()
         #self.menu.popup(ev.screenPos())
         
+    def getMenu(self):
+        return self.menu
+    
+    def getSubMenus(self):
+        return [self.menu]
+    
+    def raiseContextMenu(self, ev):
+        menu = self.scene().addSubContextMenus(self, self.getMenu())
+        pos = ev.screenPos()
+        menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+        
     def buildMenu(self):
         self.menu = QtGui.QMenu()
-        self.menu.addAction("Add input")
-        self.menu.addAction("Add output")
-        self.menu.addSeparator()
-        self.menu.addAction("Remove node")
-        self.terminalMenu = QtGui.QMenu("Remove terminal")
-        for t in self.node.terminals:
-            self.terminalMenu.addAction(t)
-        self.menu.addMenu(self.terminalMenu)
-        self.menu.triggered.connect(self.menuTriggered)
+        self.menu.setTitle("Node")
+        self.menu.addAction("Add input", self.node.addInput)
+        self.menu.addAction("Add output", self.node.addOutput)
+        #self.menu.addSeparator()
+        self.menu.addAction("Remove node", self.node.close)
+        #self.terminalMenu = QtGui.QMenu("Remove terminal")
+        #for t in self.node.terminals:
+            #self.terminalMenu.addAction(t, self.node.removeTerminal)
+        #self.menu.addMenu(self.terminalMenu)
+        #self.menu.triggered.connect(self.menuTriggered)
         
     def menuTriggered(self, action):
         #print "node.menuTriggered called. action:", action

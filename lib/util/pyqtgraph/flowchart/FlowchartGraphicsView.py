@@ -10,11 +10,11 @@ class FlowchartGraphicsView(GraphicsView):
     sigHoverOver = QtCore.Signal(object)
     sigClicked = QtCore.Signal(object)
     
-    def __init__(self, *args):
+    def __init__(self, widget, *args):
         #QtGui.QGraphicsView.__init__(self, *args)
         GraphicsView.__init__(self, *args, useOpenGL=False)
         #self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(255,255,255)))
-        self._vb = ViewBox(lockAspect=True, invertY=True)
+        self._vb = FlowchartViewBox(widget, lockAspect=True, invertY=True)
         self.setCentralItem(self._vb)
         #self.scene().addItem(self.vb)
         #self.setMouseTracking(True)
@@ -59,6 +59,32 @@ class FlowchartGraphicsView(GraphicsView):
             ##self.emit(QtCore.SIGNAL('clicked'), ev)
             #self.sigClicked.emit(ev)
         #return QtGui.QGraphicsView.mouseReleaseEvent(self, ev)
+        
+class FlowchartViewBox(ViewBox):
+    
+    def __init__(self, widget, *args, **kwargs):
+        ViewBox.__init__(self, *args, **kwargs)
+        self.widget = widget
+        self.menu = None
+        
+    def getMenu(self):
+        self.menu = QtGui.QMenu()
+        for menu in self.getSubMenus():
+            self.menu.addMenu(menu)
+        return self.menu
+    
+    def getSubMenus(self):
+        menu1 = self.widget.buildMenu()
+        menu1.setTitle("Add node")
+        menu2 = ViewBox.getMenu(self)
+        return [menu1, menu2]
+    
+    
+        
+        
+        
+        
+        
 
 
 ##class FlowchartGraphicsScene(QtGui.QGraphicsScene):

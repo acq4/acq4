@@ -236,7 +236,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
             
         ## otherwise, search near the cursor
         else:
-            acceptedItem = self.lastHoverEvent.clickItems().get(event.button(), None)
+            acceptedItem = self.lastHoverEvent.clickItems().get(ev.button(), None)
             if acceptedItem is not None:
                 ev.currentItem = acceptedItem
                 acceptedItem.mouseClickEvent(ev)
@@ -261,6 +261,20 @@ class GraphicsScene(QtGui.QGraphicsScene):
     def items(self, *args):
         #print 'args:', args
         items = QtGui.QGraphicsScene.items(self, *args)
+        ## PyQt bug: items() returns a list of QGraphicsItem instances. If the item is subclassed from QGraphicsObject,
+        ## then the object returned will be different than the actual item that was originally added to the scene
+        if HAVE_SIP and isinstance(self, sip.wrapper):
+            items2 = []
+            for i in items:
+                addr = sip.unwrapinstance(sip.cast(i, QtGui.QGraphicsItem))
+                i2 = GraphicsScene._addressCache.get(addr, i)
+                #print i, "==>", i2
+                items2.append(i2)
+        #print 'items:', items
+        return items2
+    
+    def selectedItems(self, *args):
+        items = QtGui.QGraphicsScene.selectedItems(self, *args)
         ## PyQt bug: items() returns a list of QGraphicsItem instances. If the item is subclassed from QGraphicsObject,
         ## then the object returned will be different than the actual item that was originally added to the scene
         if HAVE_SIP and isinstance(self, sip.wrapper):
@@ -345,6 +359,26 @@ class GraphicsScene(QtGui.QGraphicsScene):
                     return v
         else:
             return widget
+        
+    def addSubContextMenus(self, sender, menu):
+        #items = self.itemsNearEvent(ev)
+        menu.addSeparator()
+        item = sender
+        while item.parentItem() is not None:
+            item = item.parentItem()
+        #for item in items:
+            #if item is sender:
+                #continue
+            if not hasattr(item, "getMenu"):
+                continue
+            subMenus = item.getSubMenus()
+            if type(subMenus) is not list: ## so that some items (like FlowchartViewBox) can return multiple menus
+                subMenus = [subMenus]
+            for sm in subMenus:
+                if sm is not None:
+                    menu.addMenu(sm)
+            
+        return menu
 
 
 

@@ -53,6 +53,7 @@ class ViewBox(GraphicsWidget):
         self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding))
         
         self.border = border
+        self.menu = None
         
         self.mouseEnabled = [enableMouse, enableMouse]
         self.setAspectLocked(lockAspect)
@@ -91,6 +92,12 @@ class ViewBox(GraphicsWidget):
         if ptr != self.axHistoryPointer:
             self.axHistoryPointer = ptr
             self.showAxRect(self.axHistory[ptr])
+            
+    def toggleLeftAction(self, act):
+        if act.text() is 'pan':
+            self.setLeftButtonAction('pan')
+        elif act.text() is 'zoom':
+            self.setLeftButtonAction('rect')
 
     def setLeftButtonAction(self, mode='Rect'):
         if mode.lower() == 'rect':
@@ -284,6 +291,33 @@ class ViewBox(GraphicsWidget):
                 #ev.accept()
                 #self.axHistoryPointer += 1
                 #self.axHistory = self.axHistory[:self.axHistoryPointer] + [ax]
+                
+    #def contextMenuEvent(self, ev):
+        #self.menu = QtGui.QMenu()
+        #self.menu.addAction('Auto Range')
+        #self.menu.addAction('Toggle Zoom/Pan')
+        #self.menu.addAction('Show Grid')
+        #ev.accept()
+        #pos = ev.screenPos()
+        #self.menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+    def mouseClickEvent(self, ev):
+        if ev.button() == QtCore.Qt.RightButton:
+            ev.accept()
+            self.raiseContextMenu(ev)
+    
+    def raiseContextMenu(self, ev):
+        #print "viewbox.raiseContextMenu called."
+        #ownMenu = self.getMenu()
+        #if type(ownMenu) is list:
+            #menu = QtGui.QMenu()
+            #for m in ownMenu:
+                #menu.addMenu(m)
+            #ownMenu = menu
+        
+        #self.menu = self.scene().addSubContextMenus(self, ownMenu)
+        self.menu = self.getMenu()
+        pos = ev.screenPos()
+        self.menu.popup(QtCore.QPoint(pos.x(), pos.y()))
 
     def mouseDragEvent(self, ev):
         #print 'vbDragEvent'
@@ -517,3 +551,21 @@ class ViewBox(GraphicsWidget):
             p.setPen(self.border)
             #p.fillRect(bounds, QtGui.QColor(0, 0, 0))
             p.drawRect(bounds)
+
+    def getMenu(self):
+        menu = QtGui.QMenu("ViewBox options")
+        menu.addAction("Auto range", self.autoRange)
+            
+            #leftMenu = QtGui.QMenu("Use left button for")
+            #group = QtGui.QActionGroup(self.menu)
+            #pan = leftMenu.addAction("pan", self.toggleLeftAction)
+            #zoom = leftMenu.addAction("zoom", self.toggleLeftAction)
+            #pan.setCheckable(True)
+            #zoom.setCheckable(True)
+            #pan.setActionGroup(group)
+            #zoom.setActionGroup(group)
+            #self.menu.addMenu(leftMenu)
+        if self.menu is None:
+            self.menu = menu
+        return menu
+        

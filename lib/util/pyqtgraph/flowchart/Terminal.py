@@ -289,6 +289,7 @@ class TerminalGraphicsItem(GraphicsObject):
             self.label.focusOutEvent = self.labelFocusOut
             self.label.keyPressEvent = self.labelKeyPress
         self.setZValue(20)
+        self.menu = None
             
 
     def labelFocusOut(self, ev):
@@ -349,6 +350,26 @@ class TerminalGraphicsItem(GraphicsObject):
     def mouseClickEvent(self, ev):
         ev.accept()
         self.label.setFocus(QtCore.Qt.MouseFocusReason)
+        if ev.button() == QtCore.Qt.RightButton:
+            self.raiseContextMenu(ev)
+            
+    def raiseContextMenu(self, ev):
+        menu = self.scene().addSubContextMenus(self, self.getMenu())
+        pos = ev.screenPos()
+        menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+        
+    def getMenu(self):
+        if self.menu is None:
+            self.menu = QtGui.QMenu()
+            self.menu.setTitle("Terminal")
+            self.menu.addAction("Remove", self.removeSelf)
+        return self.menu
+    
+    def getSubMenus(self):
+        return [self.getMenu()]
+    
+    def removeSelf(self):
+        self.term.node().removeTerminal(self.term)
         
     def mouseMoveEvent(self, ev):
         ev.ignore()
