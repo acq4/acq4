@@ -172,7 +172,7 @@ class CameraWindow(QtGui.QMainWindow):
         
         #self.gv.setScene(self.scene)
         self.view.setAspectLocked(True)
-        #self.gv.invertY()
+        self.view.invertY()
         self.AGCLastMax = None
 
         self.persistentFrames = []
