@@ -41,6 +41,7 @@ class LinearRegionItem(UIGraphicsItem):
         if brush is None:
             brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 50))
         self.setBrush(brush)
+        
         self.setMovable(movable)
 
     def getRegion(self):
@@ -65,6 +66,7 @@ class LinearRegionItem(UIGraphicsItem):
 
     def setBrush(self, br):
         self.brush = fn.mkBrush(br)
+        self.currentBrush = self.brush
 
     def setBounds(self, bounds):
         for l in self.lines:
@@ -74,6 +76,7 @@ class LinearRegionItem(UIGraphicsItem):
         for l in self.lines:
             l.setMovable(m)
         self.movable = m
+        self.setAcceptHoverEvents(m)
 
     def boundingRect(self):
         br = UIGraphicsItem.boundingRect(self)
@@ -88,7 +91,7 @@ class LinearRegionItem(UIGraphicsItem):
         
     def paint(self, p, *args):
         UIGraphicsItem.paint(self, p, *args)
-        p.setBrush(self.brush)
+        p.setBrush(self.currentBrush)
         p.drawRect(self.boundingRect())
             
     def lineMoved(self):
@@ -180,4 +183,38 @@ class LinearRegionItem(UIGraphicsItem):
             self.moving = False
             self.sigRegionChanged.emit(self)
             self.sigRegionChangeFinished.emit(self)
+
+
+    def hoverEvent(self, ev):
+        if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
+            self.currentBrush = fn.mkBrush(255, 0,0,100)
+        else:
+            self.currentBrush = self.brush
+        self.update()
             
+    #def hoverEnterEvent(self, ev):
+        #print "rgn hover enter"
+        #ev.ignore()
+        #self.updateHoverBrush()
+
+    #def hoverMoveEvent(self, ev):
+        #print "rgn hover move"
+        #ev.ignore()
+        #self.updateHoverBrush()
+
+    #def hoverLeaveEvent(self, ev):
+        #print "rgn hover leave"
+        #ev.ignore()
+        #self.updateHoverBrush(False)
+        
+    #def updateHoverBrush(self, hover=None):
+        #if hover is None:
+            #scene = self.scene()
+            #hover = scene.claimEvent(self, QtCore.Qt.LeftButton, scene.Drag)
+        
+        #if hover:
+            #self.currentBrush = fn.mkBrush(255, 0,0,100)
+        #else:
+            #self.currentBrush = self.brush
+        #self.update()
+

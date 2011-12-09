@@ -14,7 +14,11 @@ except:
 
 class GraphicsScene(QtGui.QGraphicsScene):
     """
-    Extension of QGraphicsScene that: 
+    Extension of QGraphicsScene that implements a complete, parallel mouse event system.
+    (It would have been preferred to just alter the way QGraphicsScene creates and delivers 
+    events, but this turned out to be impossible because the constructor for QGraphicsMouseEvent
+    is private)
+    
     -  Generates MouseClicked events in addition to the usual press/move/release events. 
        (This works around a problem where it is impossible to have one item respond to a 
        drag if another is watching for a click.)
@@ -26,21 +30,25 @@ class GraphicsScene(QtGui.QGraphicsScene):
     -  Reimplements items() and itemAt() to circumvent PyQt bug
     
     Mouse interaction is as follows:
-    1) Every time the mouse moves, the scene checks to see which objects nearby could catch a mouseClickEvent or 
-       mouseDragEvent.
-       Each item is sent a mouseHoverEvent and may optionally call event.acceptClicks(), acceptDrags() or both.
-       The first item(s) to accept will receive a call to item.mouseClickReceiver(True) or 
-       item.mouseDragReceiver(True), informing the item that _if_ the user clicks the mouse, the item will be the 
-       recipient of click/drag events (the item may wish to change its appearance to indicate this)
-       The former recipient of these events is sent mouseClick/DragReceiver(False).
-    2) If the mouse is clicked, a mousePressEvent is generated as usual. If any items accept this press event, then
+    1) Every time the mouse moves, the scene delivers both the standard hoverEnter/Move/LeaveEvents and 
+       custom HoverEvents. 
+    2) Items are sent HoverEvents in Z-order and each item may optionally call event.acceptClicks(button), 
+       acceptDrags(button) or both. If this method call returns True, this informs the item that _if_ 
+       the user clicks/drags the specified mouse button, the item is guaranteed to be the 
+       recipient of click/drag events (the item may wish to change its appearance to indicate this).
+       If the call to acceptClicks/Drags returns False, then the item is guaranteed to NOT receive
+       the requested event (because another item has already accepted it). 
+    3) If the mouse is clicked, a mousePressEvent is generated as usual. If any items accept this press event, then
        No click/drag events will be generated and mouse interaction proceeds as defined by Qt. This allows
        items to function properly if they are expecting the usual press/move/release sequence of events.
        (It is recommended that items do NOT accept press events, and instead use click/drag events)
+       Note: The default implementation of QGraphicsItem.mousePressEvent will ACCEPT the event if the 
+       item is has its Selectable or Movable flags enabled. You may need to override this behavior.
     3) If no item accepts the mousePressEvent, then the scene will begin delivering mouseDrag and/or mouseClick events.
-       If the mouse is moved a sufficient distance before the button is released, then a mouseDragEvent is generated.
+       If the mouse is moved a sufficient distance (or moved slowly enough) before the button is released, 
+       then a mouseDragEvent is generated.
        If no drag events are generated before the button is released, then a mouseClickEvent is generated. 
-    4) Click/drag events are delivered to the item that called acceptClicks/acceptDrags on the mouseHoverEvent
+    4) Click/drag events are delivered to the item that called acceptClicks/acceptDrags on the HoverEvent
        in step 1. If no such items exist, then the scene attempts to deliver the events to items near the event. 
        ClickEvents may be delivered in this way even if no
        item originally claimed it could accept the click. DragEvents may only be delivered this way if it is the initial
@@ -50,7 +58,7 @@ class GraphicsScene(QtGui.QGraphicsScene):
     
     _addressCache = weakref.WeakValueDictionary()
     sigSceneContextMenuEvent = QtCore.Signal(object)
-    sigSceneHoverEvent = QtCore.Signal(object)
+    sigMouseHover = QtCore.Signal(object)
     
     @classmethod
     def registerObject(cls, obj):
@@ -72,6 +80,8 @@ class GraphicsScene(QtGui.QGraphicsScene):
         self.mouseGrabber = None
         self.dragItem = None
         self.lastDrag = None
+        self.hoverItems = weakref.WeakKeyDictionary()
+        
         #self.searchRect = QtGui.QGraphicsRectItem()
         #self.searchRect.setPen(fn.mkPen(200,0,0))
         #self.addItem(self.searchRect)
@@ -106,13 +116,38 @@ class GraphicsScene(QtGui.QGraphicsScene):
             #print "click grabbed by:", item
         
     def mouseMoveEvent(self, ev):
-        #print 'sceneMove'
-        QtGui.QGraphicsScene.mouseMoveEvent(self, ev)
-        if int(ev.buttons()) == 0: ## nothing pressed; send mouseHoverOver/OutEvents
-            #print "Scene emitting hover event. items:", self.items(ev.scenePos())
-            self.sigSceneHoverEvent.emit(self.items(ev.scenePos()))
-        
-        else:
+        if int(ev.buttons()) == 0: ## nothing pressed; send mouseHoverOver/OutEvents      
+            ## First allow QGraphicsScene to deliver hoverEnter/Move/ExitEvents
+            QtGui.QGraphicsScene.mouseMoveEvent(self, ev)
+            
+            ## Next deliver our own HoverEvents
+            event = HoverEvent(ev)
+            prevItems = self.hoverItems.keys()
+            items = self.itemsNearEvent(event)
+            self.sigMouseHover.emit(items)
+            for item in items:
+                if hasattr(item, 'hoverEvent'):
+                    event.currentItem = item
+                    if item not in self.hoverItems:
+                        self.hoverItems[item] = None
+                        event.enter = True
+                    else:
+                        prevItems.remove(item)
+                        event.enter = False
+                    item.hoverEvent(event)
+                    
+            ## Anything left in prevItems needs an Exit event
+            event.enter = False
+            event.exit = True
+            for item in prevItems:
+                event.currentItem = item
+                item.hoverEvent(event)
+                del self.hoverItems[item]
+                
+            self.lastHoverEvent = event  ## save this so we can ask about accepted events later.
+                
+        else:  ## button is pressed; send mouseMoveEvents and mouseDragEvents
+            QtGui.QGraphicsScene.mouseMoveEvent(self, ev)
             if self.mouseGrabberItem() is None:
                 now = ptime.time()
                 init = False
@@ -127,6 +162,8 @@ class GraphicsScene(QtGui.QGraphicsScene):
                             continue
                         init = init or (len(self.dragButtons) == 0)  ## If this is the first button to be dragged, then init=True
                         self.dragButtons.append(int(btn))
+                        
+                ## If we have dragged buttons, deliver a drag event
                 if len(self.dragButtons) > 0:
                     if self.sendDragEvent(ev, init=init):
                         ev.accept()
@@ -167,18 +204,21 @@ class GraphicsScene(QtGui.QGraphicsScene):
         event = MouseDragEvent(ev, self.clickEvents[0], self.lastDrag, start=init, finish=final)
         print "dragEvent: init=", init, 'final=', final, 'self.dragItem=', self.dragItem
         if init and self.dragItem is None:
-            print "   drag1"
-            for item in self.itemsNearEvent(event):
-                print "check item:", item
-                if hasattr(item, 'mouseDragEvent'):
-
-                    event.currentItem = item
-                    item.mouseDragEvent(event)
-                    print 'sent DragEvent to ', item
-                    if event.isAccepted():
-                        #print "   --> accepted"
-                        self.dragItem = item
-                        break
+            acceptedItem = self.lastHoverEvent.dragItems().get(event.button(), None)
+            if acceptedItem is not None:
+                self.dragItem = acceptedItem
+                event.currentItem = self.dragItem
+                self.dragItem.mouseDragEvent(event)
+            else:
+                for item in self.itemsNearEvent(event):
+                    #print "check item:", item
+                    if hasattr(item, 'mouseDragEvent'):
+                        event.currentItem = item
+                        item.mouseDragEvent(event)
+                        if event.isAccepted():
+                            #print "   --> accepted"
+                            self.dragItem = item
+                            break
         elif self.dragItem is not None:
             event.currentItem = self.dragItem
             self.dragItem.mouseDragEvent(event)
@@ -196,18 +236,27 @@ class GraphicsScene(QtGui.QGraphicsScene):
             
         ## otherwise, search near the cursor
         else:
-            for item in self.itemsNearEvent(ev):
-                if hasattr(item, 'mouseClickEvent'):
-                    ev.currentItem = item
-                    item.mouseClickEvent(ev)
-                    print 'sent clickEvent to ', item
-                    if ev.isAccepted():
-                        break
-            if not ev.isAccepted() and ev.button() == QtCore.Qt.RightButton: ## context menu event
-                print "Scene emitting contextMenuEvent"
-                self.sigSceneContextMenuEvent.emit(ev)
-                
+            acceptedItem = self.lastHoverEvent.clickItems().get(event.button(), None)
+            if acceptedItem is not None:
+                ev.currentItem = acceptedItem
+                acceptedItem.mouseClickEvent(ev)
+            else:
+                for item in self.itemsNearEvent(ev):
+                    if hasattr(item, 'mouseClickEvent'):
+                        ev.currentItem = item
+                        item.mouseClickEvent(ev)
+                        if ev.isAccepted():
+                            break
         return ev.isAccepted()
+        
+    #def claimEvent(self, item, button, eventType):
+        #key = (button, eventType)
+        #if key in self.claimedEvents:
+            #return False
+        #self.claimedEvents[key] = item
+        #print "event", key, "claimed by", item
+        #return True
+        
         
     def items(self, *args):
         #print 'args:', args
@@ -255,20 +304,33 @@ class GraphicsScene(QtGui.QGraphicsScene):
         rgn = QtCore.QRectF(point.x()-w, point.y()-h, 2*w, 2*h)
         #self.searchRect.setRect(rgn)
 
-        #for item in self.items(point, selMode, sortOrder, tr):
-            ##seen.add(item)
-            #print item
-            #print item.mapToScene(item.shape()).contains(point)
-            #yield item
-        #print x
-        for item in self.items(rgn, selMode, sortOrder, tr):
-            #if item not in seen:
-            shape = item.mapToScene(item.shape())
-            if not (shape.contains(rgn) or shape.intersects(rgn)):
-                continue
 
-            #print 'yeilding item:', item
-            yield item
+        items = self.items(point, selMode, sortOrder, tr)
+        
+        ## remove items whose shape does not contain point (scene.items() apparently sucks at this)
+        items2 = []
+        for item in items:
+            shape = item.shape()
+            if shape is None:
+                continue
+            if item.mapToScene(shape).contains(point):
+                items2.append(item)
+        
+        ## Sort by descending Z-order (don't trust scene.itms() to do this either)
+        items2.sort(lambda a,b: cmp(b.zValue(), a.zValue()))
+        
+        return items2
+        
+        #for item in items:
+            ##seen.add(item)
+
+            #shape = item.mapToScene(item.shape())
+            #if not shape.contains(point):
+                #continue
+            #yield item
+        #for item in self.items(rgn, selMode, sortOrder, tr):
+            ##if item not in seen:
+            #yield item
         
     def getViewWidget(self, widget):
         ## same pyqt bug -- mouseEvent.widget() doesn't give us the original python object.
@@ -283,6 +345,9 @@ class GraphicsScene(QtGui.QGraphicsScene):
                     return v
         else:
             return widget
+
+
+
 
 class MouseDragEvent:
     def __init__(self, moveEvent, pressEvent, lastEvent, start=False, finish=False):
@@ -370,7 +435,9 @@ class MouseDragEvent:
         
     def modifiers(self):
         return self._modifiers
-        
+
+
+
 class MouseClickEvent:
     def __init__(self, pressEvent, double=False):
         self.accepted = False
@@ -424,4 +491,96 @@ class MouseClickEvent:
         
     def time(self):
         return self._time
+
+
+
+class HoverEvent:
+    """
+    This event class both informs items that the mouse cursor is nearby and allows items to 
+    communicate with one another about whether each item will accept _potential_ mouse events. 
+    
+    It is common for multiple overlapping items to receive hover events and respond by changing 
+    their appearance. This can be misleading to the user since, in general, only one item will
+    respond to mouse events. To avoid this, items make calls to event.acceptClicks(button) 
+    and/or acceptDrags(button).
+    
+    Each item may make multiple calls to acceptClicks/Drags, each time for a different button. 
+    If the method returns True, then the item is guaranteed to be
+    the recipient of the claimed event IF the user presses the specified mouse button before
+    moving. If claimEvent returns False, then this item is guaranteed NOT to get the specified
+    event (because another has already claimed it) and the item should change its appearance 
+    accordingly.
+    
+    event.isEnter() returns True if the mouse has just entered the item's shape;
+    event.isExit() returns True if the mouse has just left.
+    """
+    def __init__(self, moveEvent):
+        self.enter = False
+        self.exit = False
+        self.__clickItems = weakref.WeakValueDictionary()
+        self.__dragItems = weakref.WeakValueDictionary()
+        self.currentItem = None
+        self._scenePos = moveEvent.scenePos()
+        self._screenPos = moveEvent.screenPos()
+        self._lastScenePos = moveEvent.lastScenePos()
+        self._lastScreenPos = moveEvent.lastScreenPos()
+        self._buttons = moveEvent.buttons()
+        self._modifiers = moveEvent.modifiers()
         
+        
+    def isEnter(self):
+        return self.enter
+        
+    def isExit(self):
+        return self.exit
+        
+    def acceptClicks(self, button):
+        """"""
+        if button not in self.__clickItems:
+            self.__clickItems[button] = self.currentItem
+            return True
+        return False
+        
+    def acceptDrags(self, button):
+        if button not in self.__dragItems:
+            self.__dragItems[button] = self.currentItem
+            return True
+        return False
+        
+    def scenePos(self):
+        return Point(self._scenePos)
+    
+    def screenPos(self):
+        return Point(self._screenPos)
+    
+    def lastScenePos(self):
+        return Point(self._lastScenePos)
+    
+    def lastScreenPos(self):
+        return Point(self._lastScreenPos)
+    
+    def buttons(self):
+        return self._buttons
+        
+    def pos(self):
+        return Point(self.currentItem.mapFromScene(self._scenePos))
+    
+    def lastPos(self):
+        return Point(self.currentItem.mapFromScene(self._lastScenePos))
+
+    def __repr__(self):
+        lp = self.lastPos()
+        p = self.pos()
+        return "<HoverEvent (%g,%g)->(%g,%g) buttons=%d enter=%s exit=%s>" % (lp.x(), lp.y(), p.x(), p.y(), int(self.buttons()), str(self.isEnter()), str(self.isExit()))
+        
+    def modifiers(self):
+        return self._modifiers
+    
+    def clickItems(self):
+        return self.__clickItems
+        
+    def dragItems(self):
+        return self.__dragItems
+        
+    
+    

@@ -766,7 +766,7 @@ class FlowchartWidget(dockarea.DockArea):
         #self.ui.addNodeBtn.mouseReleaseEvent = self.addNodeBtnReleased
             
         self._scene.selectionChanged.connect(self.selectionChanged)
-        self._scene.sigSceneHoverEvent.connect(self.hoverOver)
+        self._scene.sigMouseHover.connect(self.hoverOver)
         #self.view.sigClicked.connect(self.showViewMenu)
         self._scene.sigSceneContextMenuEvent.connect(self.showViewMenu)
         

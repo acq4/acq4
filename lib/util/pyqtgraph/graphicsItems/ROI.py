@@ -57,9 +57,9 @@ class ROI(GraphicsObject):
         self.rotateAllowed = True
         
         if pen is None:
-            self.pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
-        else:
-            self.pen = fn.mkPen(pen)
+            pen = (255, 255, 255)
+        self.setPen(pen)
+        
         self.handlePen = QtGui.QPen(QtGui.QColor(150, 255, 255))
         self.handles = []
         self.state = {'pos': pos, 'size': size, 'angle': angle}  ## angle is in degrees for ease of Qt integration
@@ -108,7 +108,8 @@ class ROI(GraphicsObject):
         return self.mapToParent(self.boundingRect()).boundingRect()
 
     def setPen(self, pen):
-        self.pen = pen
+        self.pen = fn.mkPen(pen)
+        self.currentPen = self.pen
         self.update()
         
     def size(self):
@@ -280,6 +281,13 @@ class ROI(GraphicsObject):
             ##self.emit(QtCore.SIGNAL('regionChangeFinished'), self)
             #self.sigRegionChangeFinished.emit(self)
 
+    def hoverEvent(self, ev):
+        if self.translatable and (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
+            self.currentPen = fn.mkPen(255, 0, 0)
+        else:
+            self.currentPen = self.pen
+        self.update()
+            
     def mouseDragEvent(self, ev):
         if ev.isStart():
             p = ev.pos()
@@ -291,7 +299,7 @@ class ROI(GraphicsObject):
                 if self.translatable:
                     self.isMoving = True
                     self.preMoveState = self.getState()
-                    self.cursorOffset = self.scenePos() - ev.scenePos()
+                    self.cursorOffset = self.pos() - self.mapToParent(ev.buttonDownPos())
                     #self.emit(QtCore.SIGNAL('regionChangeStarted'), self)
                     self.sigRegionChangeStarted.emit(self)
                     ev.accept()
@@ -309,8 +317,8 @@ class ROI(GraphicsObject):
             snap = True if (ev.modifiers() & QtCore.Qt.ControlModifier) else None
             #if self.translateSnap or (ev.modifiers() & QtCore.Qt.ControlModifier):
                 #snap = Point(self.snapSize, self.snapSize)
-            newPos = ev.scenePos() + self.cursorOffset
-            newPos = self.mapSceneToParent(newPos)
+            newPos = self.mapToParent(ev.pos()) + self.cursorOffset
+            #newPos = self.mapSceneToParent(newPos)
             self.translate(newPos - self.pos(), snap=snap)
         
         
@@ -717,7 +725,7 @@ class ROI(GraphicsObject):
         p.save()
         r = self.boundingRect()
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.pen)
+        p.setPen(self.currentPen)
         p.translate(r.left(), r.top())
         p.scale(r.width(), r.height())
         p.drawRect(0, 0, 1, 1)
@@ -954,7 +962,7 @@ class Handle(QtGui.QGraphicsItem):
         'rf': (12, 0),
     }
     
-    def __init__(self, radius, typ=None, pen=QtGui.QPen(QtGui.QColor(200, 200, 220)), parent=None):
+    def __init__(self, radius, typ=None, pen=(200, 200, 220), parent=None):
         #print "   create item with parent", parent
         self.bounds = QtCore.QRectF(-1e-10, -1e-10, 2e-10, 2e-10)
         QtGui.QGraphicsItem.__init__(self, parent)
@@ -964,7 +972,8 @@ class Handle(QtGui.QGraphicsItem):
         self.radius = radius
         self.typ = typ
         self.prepareGeometryChange()
-        self.pen = pen
+        self.pen = fn.mkPen(pen)
+        self.currentPen = self.pen
         self.pen.setWidth(0)
         self.pen.setCosmetic(True)
         self.isMoving = False
@@ -1017,6 +1026,15 @@ class Handle(QtGui.QGraphicsItem):
             #pos = ev.scenePos() + self.cursorOffset
             #self.movePoint(pos, ev.modifiers())
 
+    def hoverEvent(self, ev):
+        if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
+            self.currentPen = fn.mkPen(255, 0,0)
+        else:
+            self.currentPen = self.pen
+        self.update()
+            
+
+
     def mouseClickEvent(self, ev):
         ## right-click cancels drag
         if ev.button() == QtCore.Qt.RightButton and self.isMoving:
@@ -1046,7 +1064,8 @@ class Handle(QtGui.QGraphicsItem):
         if self.isMoving:  ## note: isMoving may become False in mid-drag due to right-click.
             pos = ev.scenePos() + self.cursorOffset
             self.movePoint(pos, ev.modifiers())
-        
+
+
 
     def movePoint(self, pos, modifiers=QtCore.Qt.KeyboardModifier()):
         for r in self.roi:
@@ -1088,7 +1107,7 @@ class Handle(QtGui.QGraphicsItem):
             self.bounds = bounds
             self.prepareGeometryChange()
         p.setRenderHints(p.Antialiasing, True)
-        p.setPen(self.pen)
+        p.setPen(self.currentPen)
         
         p.rotate(va * 180. / 3.1415926)
         p.drawPath(self.path)        
@@ -1244,7 +1263,7 @@ class EllipseROI(ROI):
     def paint(self, p, opt, widget):
         r = self.boundingRect()
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.pen)
+        p.setPen(self.currentPen)
         
         p.scale(r.width(), r.height())## workaround for GL bug
         r = QtCore.QRectF(r.x()/r.width(), r.y()/r.height(), 1,1)
@@ -1296,7 +1315,7 @@ class PolygonROI(ROI):
             
     def paint(self, p, *args):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.pen)
+        p.setPen(self.currentPen)
         for i in range(len(self.handles)):
             h1 = self.handles[i]['item'].pos()
             h2 = self.handles[i-1]['item'].pos()
@@ -1345,7 +1364,7 @@ class LineSegmentROI(ROI):
             
     def paint(self, p, *args):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(self.pen)
+        p.setPen(self.currentPen)
         for i in range(len(self.handles)-1):
             h1 = self.handles[i]['item'].pos()
             h2 = self.handles[i-1]['item'].pos()
@@ -1439,7 +1458,7 @@ class SpiralROI(ROI):
     def paint(self, p, *args):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         #path = self.shape()
-        p.setPen(self.pen)
+        p.setPen(self.currentPen)
         p.drawPath(self.path)
         p.setPen(QtGui.QPen(QtGui.QColor(255,0,0)))
         p.drawPath(self.shape())
