@@ -284,7 +284,7 @@ class ROI(GraphicsObject):
 
     def hoverEvent(self, ev):
         if self.translatable and (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
-            self.currentPen = fn.mkPen(255, 0, 0)
+            self.currentPen = fn.mkPen(255, 255, 0)
         else:
             self.currentPen = self.pen
         self.update()
@@ -1150,7 +1150,7 @@ class Handle(UIGraphicsItem):
 
     def hoverEvent(self, ev):
         if (not ev.isExit()) and ev.acceptDrags(QtCore.Qt.LeftButton):
-            self.currentPen = fn.mkPen(255, 0,0)
+            self.currentPen = fn.mkPen(255, 255,0)
         else:
             self.currentPen = self.pen
         self.update()
@@ -1264,8 +1264,8 @@ class Handle(UIGraphicsItem):
         dti = dt.inverted()[0]
         devPos = dt.map(QtCore.QPointF(0,0))
         tr = QtGui.QTransform()
-        #tr.rotate(va * 180. / 3.1415926)
         tr.translate(devPos.x(), devPos.y())
+        tr.rotate(va * 180. / 3.1415926)
         
         self._shape = dti.map(tr.map(self.path))
         self.prepareGeometryChange()
