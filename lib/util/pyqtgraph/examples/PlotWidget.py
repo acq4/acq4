@@ -72,10 +72,11 @@ def clicked():
     print "curve clicked"
 curve.sigClicked.connect(clicked)
 
-lr = pg.LinearRegionItem([1, 3], movable=True)
+lr = pg.LinearRegionItem([1, 3], bounds=[0,10], movable=True)
 pw3.addItem(lr)
-#line = pg.InfiniteLine(angle=45, movable=True)
-#pw3.addItem(line)
+line = pg.InfiniteLine(angle=90, movable=True)
+pw3.addItem(line)
+line.setBounds([1,3])
 
 ## Start Qt event loop unless running in interactive mode.
 if sys.flags.interactive != 1:

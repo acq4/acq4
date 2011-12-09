@@ -21,7 +21,7 @@ fc = Flowchart(terminals={
     'dataOut': {'io': 'out'}    
 })
 w = fc.widget()
-w.resize(800,600)
+w.resize(400,200)
 w.show()
 
 n1 = fc.createNode('Add')

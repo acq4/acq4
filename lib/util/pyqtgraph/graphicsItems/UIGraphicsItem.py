@@ -35,51 +35,59 @@ class UIGraphicsItem(GraphicsObject):
         
     def paint(self, *args):
         ## check for a new view object every time we paint.
-        self.updateView()
+        #self.updateView()
+        pass
+    
+    def itemChange(self, change, value):
+        if change == self.ItemParentHasChanged or change == self.ItemSceneHasChanged:
+            #print "caught parent/scene change:", self.parentItem(), self.scene()
+            self.updateView()
+            return None
+        else:
+            return GraphicsObject.itemChange(self, change, value)
     
     def updateView(self):
         ## called to see whether this item has a new view to connect to
         
-        ## if we already have a proper bounding rect, return immediately
-        if self._boundingRect is not None:
-            return
-        
         ## check for this item's current viewbox or view widget
         view = self.getViewBox()
         if view is None:
+            #print "  no view"
             return
             
-        if view is self._connectedView:
+        if self._connectedView is not None and view is self._connectedView():
+            #print "  already have view", view
             return
             
         ## disconnect from previous view
         if self._connectedView is not None:
             cv = self._connectedView()
             if cv is not None:
+                #print "disconnect:", self
                 cv.sigRangeChanged.disconnect(self.viewRangeChanged)
             
         ## connect to new view
+        #print "connect:", self
         view.sigRangeChanged.connect(self.viewRangeChanged)
         self._connectedView = weakref.ref(view)
         self.setNewBounds()
         
     def boundingRect(self):
-        self.updateView()
         if self._boundingRect is None:
             return QtCore.QRectF()
         return QtCore.QRectF(self._boundingRect)
-
-    def setNewBounds(self):
-        """Update the item's bounding rect to match the viewport"""
-        self._boundingRect = self.viewRect()
-        self.prepareGeometryChange()
-        self.viewChangedEvent()
 
     def viewRangeChanged(self):
         """Called when the view widget/viewbox is resized/rescaled"""
         self.setNewBounds()
         self.update()
         
+    def setNewBounds(self):
+        """Update the item's bounding rect to match the viewport"""
+        self._boundingRect = self.viewRect()
+        self.prepareGeometryChange()
+        self.viewChangedEvent()
+
 
     def viewChangedEvent(self):
         """Called whenever the view coordinates have changed."""

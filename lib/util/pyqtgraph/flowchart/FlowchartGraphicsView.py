@@ -12,14 +12,14 @@ class FlowchartGraphicsView(GraphicsView):
     
     def __init__(self, *args):
         #QtGui.QGraphicsView.__init__(self, *args)
-        GraphicsView.__init__(self, *args)
-        self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(255,255,255)))
+        GraphicsView.__init__(self, *args, useOpenGL=False)
+        #self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(255,255,255)))
         self._vb = ViewBox(lockAspect=True, invertY=True)
         self.setCentralItem(self._vb)
         #self.scene().addItem(self.vb)
-        self.setMouseTracking(True)
-        self.lastPos = None
-        self.setTransformationAnchor(self.AnchorViewCenter)
+        #self.setMouseTracking(True)
+        #self.lastPos = None
+        #self.setTransformationAnchor(self.AnchorViewCenter)
         #self.setRenderHints(QtGui.QPainter.Antialiasing)
         self.setRenderHint(QtGui.QPainter.Antialiasing, True)
         #self.setDragMode(QtGui.QGraphicsView.RubberBandDrag)
@@ -27,7 +27,8 @@ class FlowchartGraphicsView(GraphicsView):
     
     def viewBox(self):
         return self._vb
-        
+    
+    
     #def mousePressEvent(self, ev):
         #self.moved = False
         #self.lastPos = ev.pos()
@@ -60,16 +61,16 @@ class FlowchartGraphicsView(GraphicsView):
         #return QtGui.QGraphicsView.mouseReleaseEvent(self, ev)
 
 
-#class FlowchartGraphicsScene(QtGui.QGraphicsScene):
-class FlowchartGraphicsScene(GraphicsScene):
+##class FlowchartGraphicsScene(QtGui.QGraphicsScene):
+#class FlowchartGraphicsScene(GraphicsScene):
     
-    sigContextMenuEvent = QtCore.Signal(object)
+    #sigContextMenuEvent = QtCore.Signal(object)
     
-    def __init__(self, *args):
-        #QtGui.QGraphicsScene.__init__(self, *args)
-        GraphicsScene.__init__(self, *args)
+    #def __init__(self, *args):
+        ##QtGui.QGraphicsScene.__init__(self, *args)
+        #GraphicsScene.__init__(self, *args)
         
-    def mouseClickEvent(self, ev):
-        #QtGui.QGraphicsScene.contextMenuEvent(self, ev)
-        if not ev.button() in [QtCore.Qt.RightButton]:
-            self.sigContextMenuEvent.emit(ev)
+    #def mouseClickEvent(self, ev):
+        ##QtGui.QGraphicsScene.contextMenuEvent(self, ev)
+        #if not ev.button() in [QtCore.Qt.RightButton]:
+            #self.sigContextMenuEvent.emit(ev)

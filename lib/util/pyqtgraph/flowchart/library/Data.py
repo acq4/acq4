@@ -146,7 +146,7 @@ class RegionSelectNode(CtrlNode):
                     #print "  set rgn:", c, region
                     #item.setXVals(events)
                 else:
-                    item = graphicsItems.LinearRegionItem(vals=region)
+                    item = graphicsItems.LinearRegionItem(values=region)
                     self.items[c] = item
                     #item.connect(item, QtCore.SIGNAL('regionChanged'), self.rgnChanged)
                     item.sigRegionChanged.connect(self.rgnChanged)

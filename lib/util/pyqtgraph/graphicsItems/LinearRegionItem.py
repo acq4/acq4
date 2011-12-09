@@ -12,32 +12,30 @@ class LinearRegionItem(UIGraphicsItem):
     
     sigRegionChangeFinished = QtCore.Signal(object)
     sigRegionChanged = QtCore.Signal(object)
+    Vertical = 0
+    Horizontal = 1
     
-    def __init__(self, orientation="vertical", vals=[0,1], brush=None, movable=True, bounds=None):
+    def __init__(self, values=[0,1], orientation=None, brush=None, movable=True, bounds=None):
         UIGraphicsItem.__init__(self)
+        if orientation is None:
+            orientation = LinearRegionItem.Vertical
         self.orientation = orientation
-        #if hasattr(self, "ItemHasNoContents"):  
-            #self.setFlag(self.ItemHasNoContents)
-        #self.rect = QtGui.QGraphicsRectItem(self)
-        #self.rect.setParentItem(self)
         self.bounds = QtCore.QRectF()
-        #self.view = weakref.ref(view)
         self.blockLineSignal = False
+        self.moving = False
         
-        if orientation[0] == 'h':
+        if orientation == LinearRegionItem.Horizontal:
             self.lines = [
-                InfiniteLine(QtCore.QPointF(0, vals[0]), 0, movable=movable, bounds=bounds), 
-                InfiniteLine(QtCore.QPointF(0, vals[1]), 0, movable=movable, bounds=bounds)]
+                InfiniteLine(QtCore.QPointF(0, values[0]), 0, movable=movable, bounds=bounds), 
+                InfiniteLine(QtCore.QPointF(0, values[1]), 0, movable=movable, bounds=bounds)]
         else:
             self.lines = [
-                InfiniteLine(QtCore.QPointF(vals[0], 0), 90, movable=movable, bounds=bounds), 
-                InfiniteLine(QtCore.QPointF(vals[1], 0), 90, movable=movable, bounds=bounds)]
+                InfiniteLine(QtCore.QPointF(values[1], 0), 90, movable=movable, bounds=bounds), 
+                InfiniteLine(QtCore.QPointF(values[0], 0), 90, movable=movable, bounds=bounds)]
         
         for l in self.lines:
             l.setParentItem(self)
-            #l.connect(l, QtCore.SIGNAL('positionChangeFinished'), self.lineMoveFinished)
             l.sigPositionChangeFinished.connect(self.lineMoveFinished)
-            #l.connect(l, QtCore.SIGNAL('positionChanged'), self.lineMoved)
             l.sigPositionChanged.connect(self.lineMoved)
             
         if brush is None:
@@ -80,12 +78,12 @@ class LinearRegionItem(UIGraphicsItem):
     def boundingRect(self):
         br = UIGraphicsItem.boundingRect(self)
         rng = self.getRegion()
-        if self.orientation == 'vertical':
-           br.setLeft(rng[0])
-           br.setRight(rng[1])
+        if self.orientation == LinearRegionItem.Vertical:
+            br.setLeft(rng[0])
+            br.setRight(rng[1])
         else:
-           br.setTop(rng[0])
-           br.setBottom(rng[1])
+            br.setTop(rng[0])
+            br.setBottom(rng[1])
         return br.normalized()
         
     def paint(self, p, *args):
@@ -150,17 +148,36 @@ class LinearRegionItem(UIGraphicsItem):
             return
         ev.accept()
         
-        delta = ev.pos() - ev.lastPos()
+        if ev.isStart():
+            bdp = ev.buttonDownPos()
+            self.cursorOffsets = [l.pos() - bdp for l in self.lines]
+            self.startPositions = [l.pos() for l in self.lines]
+            self.moving = True
+            
+        if not self.moving:
+            return
+            
+        #delta = ev.pos() - ev.lastPos()
         self.lines[0].blockSignals(True)  # only want to update once
-        for l in self.lines:
-            l.setPos(l.pos()+delta)
+        for i, l in enumerate(self.lines):
+            l.setPos(self.cursorOffsets[i] + ev.pos())
+            #l.setPos(l.pos()+delta)
             #l.mouseDragEvent(ev)
         self.lines[0].blockSignals(False)
         self.prepareGeometryChange()
         
         if ev.isFinish():
+            self.moving = False
             self.sigRegionChangeFinished.emit(self)
         else:
             self.sigRegionChanged.emit(self)
             
-        
+    def mouseClickEvent(self, ev):
+        if self.moving and ev.button() == QtCore.Qt.RightButton:
+            ev.accept()
+            for i, l in enumerate(self.lines):
+                l.setPos(self.startPositions[i])
+            self.moving = False
+            self.sigRegionChanged.emit(self)
+            self.sigRegionChangeFinished.emit(self)
+            

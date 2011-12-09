@@ -77,21 +77,20 @@ class Flowchart(Node):
         self.inputWasSet = False  ## flag allows detection of changes in the absence of input change.
         self._nodes = {}
         #self.connects = []
-        self._chartGraphicsItem = FlowchartGraphicsItem(self)
+        #self._chartGraphicsItem = FlowchartGraphicsItem(self)
         self._widget = None
         self._scene = None
         self.processing = False ## flag that prevents recursive node updates
+        
+        self.widget()
         
         self.inputNode = Node('Input')
         self.outputNode = Node('Output')
         self.addNode(self.inputNode, 'Input', [-150, 0])
         self.addNode(self.outputNode, 'Output', [300, 0])
             
-        #QtCore.QObject.connect(self.outputNode, QtCore.SIGNAL('outputChanged'), self.outputChanged)
         self.outputNode.sigOutputChanged.connect(self.outputChanged)
-        #QtCore.QObject.connect(self.outputNode, QtCore.SIGNAL('terminalRenamed'), self.internalTerminalRenamed)
         self.outputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
-        #QtCore.QObject.connect(self.inputNode, QtCore.SIGNAL('terminalRenamed'), self.internalTerminalRenamed)
         self.inputNode.sigTerminalRenamed.connect(self.internalTerminalRenamed)
         
             
@@ -167,7 +166,8 @@ class Flowchart(Node):
         if type(pos) in [QtCore.QPoint, QtCore.QPointF]:
             pos = [pos.x(), pos.y()]
         item = node.graphicsItem()
-        item.setParentItem(self.chartGraphicsItem())
+        #item.setParentItem(self.chartGraphicsItem())
+        self.viewBox.addItem(item)
         item.moveBy(*pos)
         self._nodes[name] = node
         self.widget().addNode(node) 
@@ -386,7 +386,8 @@ class Flowchart(Node):
     def chartGraphicsItem(self):
         """Return the graphicsItem which displays the internals of this flowchart.
         (graphicsItem() still returns the external-view item)"""
-        return self._chartGraphicsItem
+        #return self._chartGraphicsItem
+        return self.viewBox
         
     def widget(self):
         if self._widget is None:
@@ -396,9 +397,10 @@ class Flowchart(Node):
             #self._scene = QtGui.QGraphicsScene()
             #self._widget.setScene(self._scene)
             #self.scene.addItem(self.chartGraphicsItem())
-            ci = self.chartGraphicsItem()
-            self.viewBox.addItem(ci)
-            self.viewBox.autoRange()
+            
+            #ci = self.chartGraphicsItem()
+            #self.viewBox.addItem(ci)
+            #self.viewBox.autoRange()
         return self._widget
 
     def listConnections(self):
@@ -518,12 +520,14 @@ class Flowchart(Node):
 class FlowchartGraphicsItem(GraphicsObject):
     
     def __init__(self, chart):
+        print "FlowchartGraphicsItem.__init__"
         #QtGui.QGraphicsItem.__init__(self)
         GraphicsObject.__init__(self)
         self.chart = chart ## chart is an instance of Flowchart()
         self.updateTerminals()
         
     def updateTerminals(self):
+        print "FlowchartGraphicsItem.updateTerminals"
         self.terminals = {}
         bounds = self.boundingRect()
         inp = self.chart.inputs()
@@ -546,9 +550,11 @@ class FlowchartGraphicsItem(GraphicsObject):
             y += dy
         
     def boundingRect(self):
+        print "FlowchartGraphicsItem.boundingRect"
         return QtCore.QRectF()
         
     def paint(self, p, *args):
+        #print "FlowchartGraphicsItem.paint"
         pass
         #p.drawRect(self.boundingRect())
     
@@ -760,9 +766,9 @@ class FlowchartWidget(dockarea.DockArea):
         #self.ui.addNodeBtn.mouseReleaseEvent = self.addNodeBtnReleased
             
         self._scene.selectionChanged.connect(self.selectionChanged)
-        self.view.sigHoverOver.connect(self.hoverOver)
+        self._scene.sigSceneHoverEvent.connect(self.hoverOver)
         #self.view.sigClicked.connect(self.showViewMenu)
-        #self._scene.sigContextMenuEvent.connect(self.showViewMenu)
+        self._scene.sigSceneContextMenuEvent.connect(self.showViewMenu)
         
         
     def reloadLibrary(self):
@@ -806,7 +812,9 @@ class FlowchartWidget(dockarea.DockArea):
 
 
     def selectionChanged(self):
+        print "FlowchartWidget.selectionChanged called."
         items = self._scene.selectedItems()
+        print "     scene.selectedItems: ", items
         if len(items) == 0:
             data = None
         else:
@@ -827,6 +835,7 @@ class FlowchartWidget(dockarea.DockArea):
         self.selectedTree.setData(data, hideRoot=True)
 
     def hoverOver(self, items):
+        #print "FlowchartWidget.hoverOver called."
         term = None
         for item in items:
             if item is self.hoverItem:

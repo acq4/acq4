@@ -98,7 +98,7 @@ class ViewBox(GraphicsWidget):
         elif mode.lower() == 'pan':
             self.useleftButtonPan = True
         else:
-            raise Exception('graphicsItems:ViewBox:setLeftButtonAction: unknown mode = %s' % mode)
+            raise Exception('graphicsItems:ViewBox:setLeftButtonAction: unknown mode = %s (Options are "pan" and "rect")' % mode)
             
     def innerSceneItem(self):
         return self.childGroup
@@ -286,7 +286,7 @@ class ViewBox(GraphicsWidget):
                 #self.axHistory = self.axHistory[:self.axHistoryPointer] + [ax]
 
     def mouseDragEvent(self, ev):
-        print 'vbDragEvent'
+        #print 'vbDragEvent'
         #GraphicsWidget.mouseMoveEvent(self, ev)
         
         ev.accept()  ## we accept all buttons

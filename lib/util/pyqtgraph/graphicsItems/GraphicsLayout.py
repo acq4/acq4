@@ -12,6 +12,8 @@ class GraphicsLayout(GraphicsWidget):
 
     def __init__(self, parent=None, border=None):
         GraphicsWidget.__init__(self, parent)
+        if border is True:
+            border = (100,100,100)
         self.border = border
         self.layout = QtGui.QGraphicsGridLayout()
         self.setLayout(self.layout)

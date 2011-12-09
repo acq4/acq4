@@ -11,17 +11,22 @@ import pyqtgraph as pg
 
 ## create GUI
 app = QtGui.QApplication([])
-w = QtGui.QMainWindow()
-w.resize(800,800)
-v = pg.GraphicsView()
-#v.invertY(True)  ## Images usually have their Y-axis pointing downward
+
+w = pg.GraphicsWindow(size=(800,800), border=True)
+
+v = w.addViewBox(colspan=2)
+
+#w = QtGui.QMainWindow()
+#w.resize(800,800)
+#v = pg.GraphicsView()
+v.invertY(True)  ## Images usually have their Y-axis pointing downward
 v.setAspectLocked(True)
-v.enableMouse(True)
-v.autoPixelScale = False
-w.setCentralWidget(v)
-s = v.scene()
-v.setRange(QtCore.QRect(-2, -2, 220, 220))
-w.show()
+#v.enableMouse(True)
+#v.autoPixelScale = False
+#w.setCentralWidget(v)
+#s = v.scene()
+#v.setRange(QtCore.QRectF(-2, -2, 220, 220))
+
 
 ## Create image to display
 arr = np.ones((100, 100), dtype=float)
@@ -36,23 +41,35 @@ arr[:, 50] = 10
 ## Create image items, add to scene and set position 
 im1 = pg.ImageItem(arr)
 im2 = pg.ImageItem(arr)
-s.addItem(im1)
-s.addItem(im2)
+v.addItem(im1)
+v.addItem(im2)
 im2.moveBy(110, 20)
+v.autoRange()
+
 im3 = pg.ImageItem()
-s.addItem(im3)
-im3.moveBy(0, 130)
+v2 = w.addViewBox(1,0)
+v2.addItem(im3)
+v2.setRange(QtCore.QRectF(0, 0, 60, 60))
+v2.invertY(True)
+v2.setAspectLocked(True)
+#im3.moveBy(0, 130)
 im3.setZValue(10)
+
 im4 = pg.ImageItem()
-s.addItem(im4)
-im4.moveBy(110, 130)
+v3 = w.addViewBox(1,1)
+v3.addItem(im4)
+v3.setRange(QtCore.QRectF(0, 0, 60, 60))
+v3.invertY(True)
+v3.setAspectLocked(True)
+#im4.moveBy(110, 130)
 im4.setZValue(10)
 
 ## create the plot
-pi1 = pg.PlotItem()
-s.addItem(pi1)
-pi1.scale(0.5, 0.5)
-pi1.setGeometry(0, 170, 300, 100)
+pi1 = w.addPlot(2,0, colspan=2)
+#pi1 = pg.PlotItem()
+#s.addItem(pi1)
+#pi1.scale(0.5, 0.5)
+#pi1.setGeometry(0, 170, 300, 100)
 
 lastRoi = None
 
@@ -86,7 +103,7 @@ rois.append(pg.PolygonROI([[2,0], [2.1,0], [2,.1]], pen=(5,9)))
 
 ## Add each ROI to the scene and link its data to a plot curve with the same color
 for r in rois:
-    s.addItem(r)
+    v.addItem(r)
     c = pi1.plot(pen=r.pen)
     r.curve = c
     r.sigRegionChanged.connect(updateRoi)

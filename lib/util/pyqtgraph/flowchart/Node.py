@@ -333,9 +333,11 @@ class NodeGraphicsItem(GraphicsObject):
         #self.setGraphicsEffect(self.shadow)
         
         self.pen = QtGui.QPen(QtGui.QColor(0,0,0))
-        self.brush = QtGui.QBrush(QtGui.QColor(200, 200, 200))
+        self.brush = QtGui.QBrush(QtGui.QColor(200, 200, 200, 200))
         self.node = node
         flags = self.ItemIsMovable | self.ItemIsSelectable | self.ItemIsFocusable |self.ItemSendsGeometryChanges
+        #flags =  self.ItemIsFocusable |self.ItemSendsGeometryChanges
+
         self.setFlags(flags)
         
         bounds = self.boundingRect()
@@ -344,6 +346,7 @@ class NodeGraphicsItem(GraphicsObject):
         self.nameItem.setTextInteractionFlags(QtCore.Qt.TextEditorInteraction)
         self.updateTerminals()
         self.pen = QtGui.QPen(QtGui.QColor(0,0,0))
+        self.setZValue(10)
 
         self.nameItem.focusOutEvent = self.labelFocusOut
         self.nameItem.keyPressEvent = self.labelKeyPress
@@ -416,10 +419,12 @@ class NodeGraphicsItem(GraphicsObject):
             p.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 200)))
         p.drawRect(bounds)
         
-    #def mouseMoveEvent(self, ev):
+    def mouseMoveEvent(self, ev):
         #QtGui.QGraphicsItem.mouseMoveEvent(self, ev)
+        ev.ignore()
 
-    #def mousePressEvent(self, ev):
+    def mousePressEvent(self, ev):
+        ev.ignore()
         #sel = self.isSelected()
         #ret = QtGui.QGraphicsItem.mousePressEvent(self, ev)
         #if not sel and self.isSelected():
@@ -427,23 +432,36 @@ class NodeGraphicsItem(GraphicsObject):
             ##self.emit(QtCore.SIGNAL('selected'))
             #self.update()
         #return ret
+    def mouseReleaseEvent(self, ev):
+        ev.ignore()
 
     def mouseClickEvent(self, ev):
         print "Node.mouseClickEvent called."
         if int(ev.button()) == int(QtCore.Qt.LeftButton):
+            ev.accept()
             print "    ev.button: left"
             sel = self.isSelected()
-            ret = QtGui.QGraphicsItem.mousePressEvent(self, ev)
+            #ret = QtGui.QGraphicsItem.mousePressEvent(self, ev)
+            self.setSelected(True)
             if not sel and self.isSelected():
                 #self.setBrush(QtGui.QBrush(QtGui.QColor(200, 200, 255)))
                 #self.emit(QtCore.SIGNAL('selected'))
+                #self.scene().selectionChanged.emit() ## for some reason this doesn't seem to be happening automatically
                 self.update()
-            return ret
+            #return ret
         
         elif int(ev.button()) == int(QtCore.Qt.RightButton):
             print "    ev.button: right"
             ev.accept()
-            self.menu.popup(ev.screenPos())
+            pos = ev.screenPos()
+            self.menu.popup(QtCore.QPoint(pos.x(), pos.y()))
+            
+    def mouseDragEvent(self, ev):
+        print "Node.mouseDrag"
+        if ev.button() == QtCore.Qt.LeftButton:
+            ev.accept()
+            self.setPos(self.pos()+self.mapToParent(ev.pos())-self.mapToParent(ev.lastPos()))
+        
             
     #def mouseReleaseEvent(self, ev):
         #ret = QtGui.QGraphicsItem.mouseReleaseEvent(self, ev)

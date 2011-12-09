@@ -102,7 +102,7 @@ class ImageView(QtGui.QWidget):
             #self.ui.roiPlot.addItem(l)
             #self.normLines.append(l)
             #l.hide()
-        self.normRgn = LinearRegionItem('vertical')
+        self.normRgn = LinearRegionItem()
         self.normRgn.setZValue(0)
         self.ui.roiPlot.addItem(self.normRgn)
         self.normRgn.hide()

@@ -23,39 +23,7 @@ class GraphicsLayoutView(GraphicsView):
         for n in ['nextRow', 'nextCol', 'addPlot', 'addViewBox', 'addItem', 'getItem']:
             setattr(self, n, getattr(self.ci, n))
         self.setCentralItem(self.ci)
-        #self.items = {}
-        #self.currentRow = 0
-        #self.currentCol = 0
     
-    #def nextRow(self):
-        #"""Advance to next row for automatic item placement"""
-        #self.currentRow += 1
-        #self.currentCol = 0
-        
-    #def nextCol(self, colspan=1):
-        #"""Advance to next column, while returning the current column number 
-        #(generally only for internal use)"""
-        #self.currentCol += colspan
-        #return self.currentCol-colspan
-        
-    #def addPlot(self, row=None, col=None, rowspan=1, colspan=1, **kargs):
-        #plot = PlotItem(**kargs)
-        #self.addItem(plot, row, col, rowspan, colspan)
-        #return plot
-
-    #def addItem(self, item, row=None, col=None, rowspan=1, colspan=1):
-        #if row not in self.items:
-            #self.items[row] = {}
-        #self.items[row][col] = item
-        
-        #if row is None:
-            #row = self.currentRow
-        #if col is None:
-            #col = self.nextCol(colspan)
-        #self.centralLayout.addItem(item, row, col, rowspan, colspan)
-
-    #def getItem(self, row, col):
-        #return self.items[row][col]
 
 
 class GraphicsWindow(GraphicsLayoutView):
@@ -87,19 +55,6 @@ class TabWindow(QtGui.QMainWindow):
         else:
             raise NameError(attr)
     
-
-#class PlotWindow(QtGui.QMainWindow):
-    #def __init__(self, title=None, **kargs):
-        #mkQApp()
-        #QtGui.QMainWindow.__init__(self)
-        #self.cw = PlotWidget(**kargs)
-        #self.setCentralWidget(self.cw)
-        #for m in ['plot', 'autoRange', 'addItem', 'removeItem', 'setLabel', 'clear', 'viewRect']:
-            #setattr(self, m, getattr(self.cw, m))
-        #if title is not None:
-            #self.setWindowTitle(title)
-        #self.show()
-
 
 class PlotWindow(PlotWidget):
     def __init__(self, title=None, **kargs):
