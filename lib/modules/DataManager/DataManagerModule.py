@@ -30,6 +30,8 @@ class DataManager(Module):
         #self.dm = self.manager.dataManager
         self.dm = getDataManager()
         self.win = Window()
+        mp = os.path.dirname(__file__)
+        self.win.setWindowIcon(QtGui.QIcon(os.path.join(mp, 'icon.png')))
         self.win.dm = self  ## so embedded widgets can find the module easily
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)

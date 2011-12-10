@@ -16,7 +16,7 @@ import ptime
 import analysisModules
 import time, gc
 import sip
-import sys
+import sys, os
 from HelpfulException import HelpfulException
 from pyqtgraph.ProgressDialog import ProgressDialog
 from lib.LogWindow import LogButton
@@ -26,6 +26,8 @@ from lib.LogWindow import LogButton
 class Window(QtGui.QMainWindow):
     def __init__(self, pr):
         QtGui.QMainWindow.__init__(self)
+        mp = os.path.dirname(__file__)
+        self.setWindowIcon(QtGui.QIcon(os.path.join(mp, 'icon.png')))
         self.pr = pr
 
         self.stateFile = os.path.join('modules', self.pr.name + '_ui.cfg')
