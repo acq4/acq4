@@ -289,7 +289,7 @@ class Prot:
         ## Set correct scene
         cModName = str(self.ui().ui.cameraModCombo.currentText())
         camMod = self.ui().man.getModule(cModName)
-        scene = camMod.ui.scene
+        scene = camMod.ui.view.scene()
         for i in self.items:
             (item, p, s) = i
             if item.scene() is not scene:

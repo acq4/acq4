@@ -163,6 +163,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.imageItem = pg.ImageItem(parent=self.cameraItemGroup)
         self.view.addItem(self.imageItem)
         self.imageItem.setParentItem(self.cameraItemGroup)
+        self.imageItem.setZValue(-10)
         
         #grid = Grid(self.gv)
         #self.scene.addItem(grid)
@@ -233,7 +234,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.roi = CamROI(self.camSize, parent=self.cameraItemGroup)
         self.roi.sigRegionChangeFinished.connect(self.regionWidgetChanged)
         #self.cameraItemGroup.addToGroup(self.roi)
-        self.roi.setZValue(10000)
+        self.roi.setZValue(-1)
         self.setRegion()
         
         self.borders = []
@@ -971,7 +972,7 @@ class CameraWindow(QtGui.QMainWindow):
                 #self.emit(QtCore.SIGNAL('cameraPosChanged'))
                 self.sigCameraPosChanged.emit()
                 diff = [newPos[0] - self.cameraCenter[0], newPos[1] - self.cameraCenter[1]]
-                self.view.translate(diff[0], diff[1])
+                self.view.translateBy([diff[0], diff[1]])
                 #print "translate view:", diff
                 self.cameraCenter = newPos
                 self.scopeCenter = info['scopePosition']
