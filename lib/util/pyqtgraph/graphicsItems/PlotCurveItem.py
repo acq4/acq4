@@ -26,7 +26,7 @@ class PlotCurveItem(GraphicsObject):
         #GraphicsWidget.__init__(self, parent)
         self.free()
         #self.dispPath = None
-        
+        self.path = None
         if pen is None:
             if color is None:
                 self.setPen((200,200,200))
@@ -296,6 +296,11 @@ class PlotCurveItem(GraphicsObject):
         return path
 
     def shape(self):
+        if self.path is None:
+            try:
+                self.path = self.generatePath(*self.getData())
+            except:
+                return QtGui.QPainterPath()
         return self.path
 
     def boundingRect(self):
