@@ -971,7 +971,7 @@ class CameraWindow(QtGui.QMainWindow):
                 #self.emit(QtCore.SIGNAL('cameraPosChanged'))
                 self.sigCameraPosChanged.emit()
                 diff = [newPos[0] - self.cameraCenter[0], newPos[1] - self.cameraCenter[1]]
-                self.gv.translate(diff[0], diff[1])
+                self.view.translate(diff[0], diff[1])
                 #print "translate view:", diff
                 self.cameraCenter = newPos
                 self.scopeCenter = info['scopePosition']
