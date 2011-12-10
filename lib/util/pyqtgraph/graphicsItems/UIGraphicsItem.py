@@ -16,14 +16,14 @@ class UIGraphicsItem(GraphicsObject):
     
     #sigViewChanged = QtCore.Signal(object)  ## emitted whenever the viewport coords have changed
     
-    def __init__(self, bounds=None):
+    def __init__(self, bounds=None, parent=None):
         """
         Initialization Arguments:
             #view: The view box whose bounds will be used as a reference vor this item's bounds
             bounds: QRectF with coordinates relative to view box. The default is QRectF(0,0,1,1),
                     which means the item will have the same bounds as the view.
         """
-        GraphicsObject.__init__(self)
+        GraphicsObject.__init__(self, parent)
         self._connectedView = None
             
         if bounds is None:
@@ -39,12 +39,11 @@ class UIGraphicsItem(GraphicsObject):
         pass
     
     def itemChange(self, change, value):
+        ret = GraphicsObject.itemChange(self, change, value)
         if change == self.ItemParentHasChanged or change == self.ItemSceneHasChanged:
             #print "caught parent/scene change:", self.parentItem(), self.scene()
             self.updateView()
-            return None
-        else:
-            return GraphicsObject.itemChange(self, change, value)
+        return ret
     
     def updateView(self):
         ## called to see whether this item has a new view to connect to
@@ -90,7 +89,10 @@ class UIGraphicsItem(GraphicsObject):
 
 
     def viewChangedEvent(self):
-        """Called whenever the view coordinates have changed."""
+        """
+        Called whenever the view coordinates have changed.
+        This is a good method to override if you want to respond to change of coordinates.
+        """
         pass
 
 

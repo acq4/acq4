@@ -182,3 +182,30 @@ class GraphicsObject(QtGui.QGraphicsObject):
 
     def pos(self):
         return Point(QtGui.QGraphicsObject.pos(self))
+    
+    #def itemChange(self, change, value):
+        #ret = QtGui.QGraphicsObject.itemChange(self, change, value)
+        #if change == self.ItemParentHasChanged or change == self.ItemSceneHasChanged:
+            #print "Item scene changed:", self
+            #self.setChildScene(self)  ## This is bizarre. 
+        #return ret
+    
+    #def setChildScene(self, ch):
+        #scene = self.scene()
+        #for ch2 in ch.childItems():
+            #if ch2.scene() is not scene:
+                #print "item", ch2, "has different scene:", ch2.scene(), scene
+                #scene.addItem(ch2)
+                #QtGui.QApplication.processEvents()
+                #print "   --> ", ch2.scene()
+            #self.setChildScene(ch2)
+            
+    def parentItem(self):
+        ## PyQt bug -- some items are returned incorrectly.
+        return GraphicsScene.translateGraphicsItem(QtGui.QGraphicsObject.parentItem(self))
+        
+    
+    def childItems(self):
+        ## PyQt bug -- some child items are returned incorrectly.
+        return map(GraphicsScene.translateGraphicsItem, QtGui.QGraphicsObject.childItems(self))
+    

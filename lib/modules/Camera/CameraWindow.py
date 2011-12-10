@@ -138,39 +138,41 @@ class CameraWindow(QtGui.QMainWindow):
         
         
         ## Set up camera graphicsView
-        l = QtGui.QVBoxLayout(self.ui.graphicsWidget)
-        l.setContentsMargins(0,0,0,0)
-        self.gv = pg.GraphicsView(self.ui.graphicsWidget)
-        l.addWidget(self.gv)
-        self.gv.enableMouse()
+        #l = QtGui.QVBoxLayout(self.ui.graphicsWidget)
+        #l.setContentsMargins(0,0,0,0)
+        #self.gv = pg.GraphicsView(self.ui.graphicsWidget)
+        #l.addWidget(self.gv)
+        #self.gv.enableMouse()
+        self.view = pg.ViewBox()
+        self.ui.graphicsView.setCentralItem(self.view)
 
         #self.ui.plotWidget.setCanvasBackground(QtGui.QColor(0,0,0))
         #self.ui.plotWidget.enableAxis(Qwt.QwtPlot.xBottom, False)
         #self.ui.plotWidget.replot()
 
         self.setCentralWidget(self.ui.centralwidget)
-        self.scene = self.gv.scene()
+        #self.scene = self.gv.scene()
         
         self.cameraItemGroup = pg.ItemGroup()
         self.scopeItemGroup = pg.ItemGroup()
         
-        self.scene.addItem(self.cameraItemGroup)
-        self.scene.addItem(self.scopeItemGroup)
+        self.view.addItem(self.cameraItemGroup)
+        self.view.addItem(self.scopeItemGroup)
         self.scopeItemGroup.setZValue(10)
         self.cameraItemGroup.setZValue(0)
         self.imageItem = pg.ImageItem(parent=self.cameraItemGroup)
-        self.scene.addItem(self.imageItem)
+        self.view.addItem(self.imageItem)
         self.imageItem.setParentItem(self.cameraItemGroup)
         
         #grid = Grid(self.gv)
         #self.scene.addItem(grid)
         
         self.scaleBar = pg.ScaleBar(100e-6)
-        self.scene.addItem(self.scaleBar)
+        self.view.addItem(self.scaleBar)
         
         #self.gv.setScene(self.scene)
-        self.gv.setAspectLocked(True)
-        #self.gv.invertY()
+        self.view.setAspectLocked(True)
+        self.view.invertY()
         self.AGCLastMax = None
 
         self.persistentFrames = []
@@ -223,7 +225,7 @@ class CameraWindow(QtGui.QMainWindow):
         ## Initialize values
         self.cameraCenter = self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
         self.cameraScale = [1, 1]
-        self.gv.setRange(QtCore.QRect(0, 0, self.camSize[0], self.camSize[1]), lockAspect=True)
+        self.view.setRange(QtCore.QRectF(0, 0, self.camSize[0], self.camSize[1]))
         
         
         
@@ -269,7 +271,7 @@ class CameraWindow(QtGui.QMainWindow):
         self.cam.sigCameraStopped.connect(self.cameraStopped)
         self.cam.sigCameraStarted.connect(self.cameraStarted)
         self.cam.sigShowMessage.connect(self.showMessage)
-        self.gv.sigSceneMouseMoved.connect(self.setMouse)
+        self.ui.graphicsView.sigSceneMouseMoved.connect(self.setMouse)
         
         ## Connect Background Subtraction Dock
         self.ui.bgBlurSpin.valueChanged.connect(self.updateBackgroundBlur)
@@ -309,7 +311,7 @@ class CameraWindow(QtGui.QMainWindow):
     def updateBorders(self):
         """Draw the camera boundaries for each objective"""
         for b in self.borders:
-            self.scene.removeItem(b)
+            self.view.removeItem(b)
         self.borders = []
         
         scope = self.module.cam.getScopeDevice()
@@ -332,7 +334,7 @@ class CameraWindow(QtGui.QMainWindow):
     def centerView(self):
         center = self.cam.getPosition(justScope=True)
         bounds = self.cam.getBoundary().adjusted(center[0], center[1], center[0], center[1])
-        self.gv.setRange(bounds, lockAspect=True)
+        self.view.setRange(bounds)
         self.updateCameraDecorations()
         
     #@trace
@@ -360,7 +362,7 @@ class CameraWindow(QtGui.QMainWindow):
     def addItem(self, item, pos=(0,0), scale=(1,1), z=0):
         """Adds an item into the scene. The image will be automatically scaled and translated when the scope moves."""
         
-        self.scene.addItem(item)
+        self.view.addItem(item)
         
         if pos is None:
             pos = self.cameraCenter
@@ -371,22 +373,22 @@ class CameraWindow(QtGui.QMainWindow):
         #print pos, item.mapRectToScene(item.boundingRect())
     
     def removeItem(self, item):
-        self.scene.removeItem(item)
+        self.view.removeItem(item)
     
     #@trace
     def  clearPersistentFrames(self):
         for i in self.persistentFrames:
             #self.persistentGroup1.removeFromGroup(i)
-            self.scene.removeItem(i)
+            self.view.removeItem(i)
         self.persistentFrames = []
 
     #@trace
     def addROI(self):
         pen = pg.mkPen(pg.intColor(len(self.ROIs)))
         roi = PlotROI(self.cameraCenter, self.cameraScale[0] * 10)
-        roi.setZValue(4000)
+        roi.setZValue(40000)
         roi.setPen(pen)
-        self.scene.addItem(roi)
+        self.view.addItem(roi)
         plot = self.ui.plotWidget.plot(pen=pen)
         #plot = PlotCurve('roi%d'%len(self.ROIs))
         #plot.setPen(QtGui.QPen(QtGui.QColor(200, 200, 200)))
@@ -395,7 +397,7 @@ class CameraWindow(QtGui.QMainWindow):
         
     def clearROIs(self):
         for r in self.ROIs:
-            self.scene.removeItem(r['roi'])
+            self.view.removeItem(r['roi'])
             self.ui.plotWidget.removeItem(r['plot'])
         self.ROIs = []
         
@@ -969,7 +971,7 @@ class CameraWindow(QtGui.QMainWindow):
                 #self.emit(QtCore.SIGNAL('cameraPosChanged'))
                 self.sigCameraPosChanged.emit()
                 diff = [newPos[0] - self.cameraCenter[0], newPos[1] - self.cameraCenter[1]]
-                self.gv.translate(diff[0], diff[1])
+                self.view.translate(diff[0], diff[1])
                 #print "translate view:", diff
                 self.cameraCenter = newPos
                 self.scopeCenter = info['scopePosition']
